@@ -100,10 +100,8 @@ function mergePrCheckRow(check: MergeCheck, requirements: GithubMergeRequirement
 
 function mergePrChecks(pr: MergePr, requirements: GithubMergeRequirements): ForgePrCheck[] {
   const checks: ForgePrCheck[] = (pr.statusCheckRollup ?? []).map((check) => mergePrCheckRow(check, requirements));
-  if (requirements.readable) {
-    for (const name of requirements.requiredChecks) {
-      if (!checks.some((check) => check.name === name)) checks.push({ name, state: 'pending', required: true });
-    }
+  for (const name of requirements.requiredChecks) {
+    if (!checks.some((check) => check.name === name)) checks.push({ name, state: 'pending', required: true });
   }
   return checks;
 }
@@ -237,10 +235,7 @@ function mergePrEligibility(input: MergeEligibilityInput): MergeEligibility {
 export function normalizeMergeState(
   raw: unknown,
   policyRaw: unknown,
-  requirements: GithubMergeRequirements = {
-    readable: false,
-    requiredChecks: [],
-  },
+  requirements: GithubMergeRequirements,
 ): ForgePrMergeState {
   const pr = mergePrSchema.parse(raw);
   const policy = repoMergePolicySchema.parse(policyRaw);

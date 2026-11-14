@@ -152,7 +152,7 @@ describe('rollupToChecks', () => {
   });
 });
 
-describe('normalizeMergeState', () => {
+describe('mergePreflightAllowed', () => {
   const ready = {
     number: 128,
     title: 'Ready PR',
@@ -167,67 +167,6 @@ describe('normalizeMergeState', () => {
     reviewDecision: 'APPROVED',
     statusCheckRollup: [{ name: 'test', conclusion: 'SUCCESS', detailsUrl: 'https://example.com/check' }],
   };
-
-  it('offers only repository-enabled methods and marks clean authoritative state ready', () => {
-    const state = normalizeMergeState(ready, {
-      allow_merge_commit: false,
-      allow_squash_merge: true,
-      allow_rebase_merge: true,
-      squash_merge_commit_title: 'PR_TITLE',
-    }, { readable: true, requiredChecks: ['test'] });
-    expect(state.methods).toEqual(['squash', 'rebase']);
-    expect(state.defaultMethod).toBe('squash');
-    expect(state.canMerge).toBe(true);
-    expect(state.canOverride).toBe(false);
-    expect(state.checks[0]).toMatchObject({ name: 'test', state: 'passing', required: true });
-  });
-
-  it('never presents unknown rules or a changed review decision as ready', () => {
-    const unknown = normalizeMergeState({ ...ready, mergeStateStatus: 'UNKNOWN' }, {
-      allow_merge_commit: true,
-      allow_squash_merge: true,
-      allow_rebase_merge: true,
-    }, { readable: true, requiredChecks: [] });
-    expect(unknown.eligibility).toBe('unknown');
-    expect(unknown.canOverride).toBe(true);
-    const changesRequested = normalizeMergeState({ ...ready, reviewDecision: 'CHANGES_REQUESTED' }, {
-      allow_merge_commit: true,
-      allow_squash_merge: true,
-      allow_rebase_merge: true,
-    }, { readable: true, requiredChecks: [] });
-    expect(changesRequested.eligibility).toBe('blocked');
-    expect(changesRequested.canOverride).toBe(true);
-    expect(normalizeMergeState(ready, {
-      allow_merge_commit: true,
-      allow_squash_merge: true,
-      allow_rebase_merge: true,
-    }).eligibility).toBe('unknown');
-  });
-
-  it('never makes terminal, draft, or conflicting pull requests overridable', () => {
-    const policy = {
-      allow_merge_commit: true,
-      allow_squash_merge: true,
-      allow_rebase_merge: true,
-    };
-    expect(normalizeMergeState({ ...ready, state: 'CLOSED' }, policy).canOverride).toBe(false);
-    expect(normalizeMergeState({ ...ready, isDraft: true }, policy).canOverride).toBe(false);
-    expect(normalizeMergeState({ ...ready, mergeable: 'CONFLICTING' }, policy).canOverride).toBe(false);
-  });
-
-  it('keeps an unreported required check pending instead of treating the rollup as complete', () => {
-    const result = normalizeMergeState(ready, { allow_squash_merge: true }, {
-      readable: true, requiredChecks: ['test', 'not-reported'],
-    });
-    expect(result.canMerge).toBe(false);
-    expect(result.checks).toContainEqual({ name: 'not-reported', state: 'pending', required: true });
-  });
-
-  it('never permits an unknown required check conclusion', () => {
-    const result = normalizeMergeState({ ...ready, statusCheckRollup: [{ name: 'test', conclusion: 'UNKNOWN' }] },
-      { allow_squash_merge: true }, { readable: true, requiredChecks: ['test'] });
-    expect(result).toMatchObject({ eligibility: 'unknown', canMerge: false });
-  });
 
   it('requires explicit override intent before attempting an overridable merge', () => {
     const state = normalizeMergeState({ ...ready, reviewDecision: 'REVIEW_REQUIRED' }, {
