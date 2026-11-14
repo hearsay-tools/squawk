@@ -3,11 +3,13 @@ import { once } from 'node:events';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { Home, homePaths } from './home.ts';
+import { Home, homePaths, kindHomePaths } from './home.ts';
+import { platformKindRoots } from './kind-roots.ts';
 import { migrateLegacyHome, commitLegacyMigration, rollbackLegacyMigration } from './migrate.ts';
 import { planLegacyMigration } from './migration-plan.ts';
 import { readMigrationRecord } from './migration-record.ts';
-import { readInstallMarker } from './install-marker.ts';
+import { createInstallMarker, readInstallMarker } from './install-marker.ts';
+import * as installMarker from './install-marker.ts';
 import { getHomeRecovery } from './recovery.ts';
 import { HomeStore } from './store.ts';
 import { holdCockpitLease } from './leases.ts';
@@ -448,12 +450,72 @@ it('a retry after a staged copy removes the managed install that the legacy home
   expect(existsSync(target.versions)).toBe(false);
 });
 
-it('migrating a legacy home without a managed install keeps the managed install already in the target', () => {
+it.each(['settled', 'rechecked'] as const)('migrating a legacy home without a managed install keeps the managed install already in the target (%s copy)', copy => {
   const { legacy, target } = migrationFixture();
   rawJson(join(target.versions, 'v2/package.json'), { version: '2.0.0' });
-  expect(migrateLegacyHome(legacy, target, { env: {} }).status).toBe('migrated');
+  expect(migrateLegacyHome(legacy, target, { env: {}, onStep(step, attempt) {
+    if (copy === 'rechecked' && step === 'recheck' && attempt === 0) rawJson(legacy.workspaceConfig, { projects: [], saved: 'newer' });
+  } }).status).toBe('migrated');
   expect(json(join(target.versions, 'v2/package.json')).version).toBe('2.0.0');
 });
+
+it('after a crash inside a fresh decision, a later legacy write migrates without removing the target managed install', () => {
+  const root = storeRoot(), old = join(root, 'legacy');
+  mkdirSync(old);
+  const legacy = homePaths(old, join(root, 'cache'), old);
+  const target = Home.sandbox(join(root, 'new'), { layout: 'split' });
+  const write = installMarker.writeMigrationMarker;
+  vi.spyOn(installMarker, 'writeMigrationMarker').mockImplementation((path, from, state) => {
+    if (state === 'committed') throw new Error('crash before the committed marker');
+    return write(path, from, state);
+  });
+  expect(() => migrateLegacyHome(legacy, target)).toThrow('crash before the committed marker');
+  vi.restoreAllMocks();
+  expect(readMigrationRecord(target)?.files).toEqual([]);
+  rawJson(join(target.versions, 'v2/package.json'), { version: '2.0.0' });
+  rawJson(legacy.workspaceConfig, { projects: [], saved: 'older binary' });
+  expect(migrateLegacyHome(legacy, target, { env: {} }).status).toBe('migrated');
+  expect(json(join(target.versions, 'v2/package.json')).version).toBe('2.0.0');
+  expect(json(target.workspaceConfig).saved).toBe('older binary');
+});
+
+it.skipIf(process.platform === 'win32')('a retry with shared XDG roots discards only migration copies and keeps the first attempt backup', () => {
+  const { legacy } = migrationFixture();
+  const shared = storeRoot();
+  const roots = platformKindRoots(storeRoot(), { XDG_CONFIG_HOME: shared, XDG_STATE_HOME: shared, XDG_DATA_HOME: shared }, 'linux');
+  expect(roots.data).toBe(roots.config);
+  const target = kindHomePaths(roots, 'split', 'linux');
+  createInstallMarker(target.config, 'test');
+  rawJson(join(legacy.versions, 'v1/package.json'), { version: '1.0.0' });
+  const first = migrateLegacyHome(legacy, target, { env: {}, commit: false }).record!;
+  rollbackLegacyMigration(target);
+  const retry = migrateLegacyHome(legacy, target, { env: {} });
+  expect(retry.status).toBe('migrated');
+  expect(existsSync(first.backup)).toBe(true);
+  expect(readInstallMarker(target.config)?.state).toBe('committed');
+  expect(json(target.workspaceConfig).saved).toBe('original');
+  expect(json(join(target.versions, 'v1/package.json')).version).toBe('1.0.0');
+});
+
+it.each(['pending versions directory', 'legacy MOVED.json', 'rolled-back marker'] as const)(
+  'a %s that links outside its home is refused and its link target stays untouched', kind => {
+    const { legacy, target } = migrationFixture();
+    const outside = storeRoot();
+    rawJson(join(outside, 'kept.json'), { owner: 'outside' });
+    rawJson(join(legacy.versions, 'v1/package.json'), { version: '1.0.0' });
+    if (kind === 'legacy MOVED.json') symlinkSync(join(outside, 'kept.json'), join(legacy.root, 'MOVED.json'));
+    else migrateLegacyHome(legacy, target, { env: {}, commit: false });
+    if (kind === 'pending versions directory') {
+      rmSync(target.versions, { recursive: true });
+      symlinkSync(outside, target.versions, 'dir');
+    }
+    if (kind === 'rolled-back marker') symlinkSync(join(outside, 'kept.json'), join(target.config, 'install.json.failed'));
+    const act = () => kind === 'rolled-back marker' ? rollbackLegacyMigration(target) : migrateLegacyHome(legacy, target, { env: {} });
+    expect(act).toThrow(/escapes canonical HomeStore root/);
+    expect(readdirSync(outside)).toEqual(['kept.json']);
+    expect(json(join(outside, 'kept.json'))).toEqual({ owner: 'outside' });
+    if (kind === 'rolled-back marker') expect(readInstallMarker(target.config)?.state).toBe('pending');
+  });
 
 it('an older binary that deletes a connection file during the copy leaves no copy of it', () => {
   const { legacy, target } = migrationFixture();

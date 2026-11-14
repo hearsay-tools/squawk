@@ -242,27 +242,10 @@
   {
     "file": "packages/cezar/src/home/migrate.ts",
     "function": "discardPendingCopies",
-    "mutator": "StringLiteral",
-    "original": "'accounts'",
-    "replacement": "\"\"",
-    "reason": "Accepted difference, not equivalent: the split data root holds only versions/, bin/ and accounts/ (written by managed-install/launcher.ts and home/legacy-account-paths.ts), so the only difference is that the pending copy's bin/ launchers are removed too; no committed path reads them, because PATH is updated only when versions/ exists.",
-    "site": "for (const directory of [target.versions, join(target.data, "
-  },
-  {
-    "file": "packages/cezar/src/home/migrate.ts",
-    "function": "discardPendingCopies",
-    "mutator": "CallExpression",
-    "original": "assertHomePath(target.data, directory);",
-    "replacement": ";",
-    "reason": "Defense in depth: each directory is a fixed single component under target.data, and rmSync removes a link at that name without following it; the remaining effect is the test-run sandbox check, which only a write into the real account home could show."
-  },
-  {
-    "file": "packages/cezar/src/home/migrate.ts",
-    "function": "discardPendingCopies",
     "mutator": "ConditionalExpression",
     "original": "copy.path.startsWith('versions/') || copy.path.startsWith('accounts/')",
     "replacement": "false",
-    "reason": "The loop above already removed versions/ and accounts/ recursively, so removing a recorded file below them again is a no-op (rmSync force); the skip only saves per-file calls.",
+    "reason": "The loop above has just removed target.versions and data/accounts recursively, after assertHomePath refused a link at either name, and nothing writes the target while its locks are held; so a recorded file below them is already gone (also with shared XDG roots, where both names stay under the one root) and rmSync force makes the per-file removal a no-op.",
     "site": "if ("
   },
   {
@@ -271,7 +254,7 @@
     "mutator": "LogicalOperator",
     "original": "copy.path.startsWith('versions/') || copy.path.startsWith('accounts/')",
     "replacement": "copy.path.startsWith('versions/') && copy.path.startsWith('accounts/')",
-    "reason": "The loop above already removed versions/ and accounts/ recursively, so removing a recorded file below them again is a no-op (rmSync force); the skip only saves per-file calls.",
+    "reason": "The loop above has just removed target.versions and data/accounts recursively, after assertHomePath refused a link at either name, and nothing writes the target while its locks are held; so a recorded file below them is already gone (also with shared XDG roots, where both names stay under the one root) and rmSync force makes the per-file removal a no-op.",
     "site": "if ("
   },
   {
@@ -280,7 +263,7 @@
     "mutator": "MethodExpression",
     "original": "copy.path.startsWith('versions/')",
     "replacement": "copy.path.endsWith('versions/')",
-    "reason": "The loop above already removed versions/ and accounts/ recursively, so removing a recorded file below them again is a no-op (rmSync force); the skip only saves per-file calls.",
+    "reason": "The loop above has just removed target.versions and data/accounts recursively, after assertHomePath refused a link at either name, and nothing writes the target while its locks are held; so a recorded file below them is already gone (also with shared XDG roots, where both names stay under the one root) and rmSync force makes the per-file removal a no-op.",
     "site": "if ("
   },
   {
@@ -289,17 +272,8 @@
     "mutator": "MethodExpression",
     "original": "copy.path.startsWith('accounts/')",
     "replacement": "copy.path.endsWith('accounts/')",
-    "reason": "The loop above already removed versions/ and accounts/ recursively, so removing a recorded file below them again is a no-op (rmSync force); the skip only saves per-file calls.",
+    "reason": "The loop above has just removed target.versions and data/accounts recursively, after assertHomePath refused a link at either name, and nothing writes the target while its locks are held; so a recorded file below them is already gone (also with shared XDG roots, where both names stay under the one root) and rmSync force makes the per-file removal a no-op.",
     "site": "if (copy.path.startsWith('versions/') || "
-  },
-  {
-    "file": "packages/cezar/src/home/migrate.ts",
-    "function": "migrateLocked",
-    "mutator": "ConditionalExpression",
-    "original": "disposable",
-    "replacement": "true",
-    "reason": "A target that is neither pending nor rolled back and passes the registry refusal holds a migration record only after a crash inside recordFreshDecision, whose record lists no files, so discardPendingCopies removes only directories that do not exist yet.",
-    "site": "if ("
   },
   {
     "file": "packages/cezar/src/home/migrate.ts",
@@ -307,7 +281,7 @@
     "mutator": "MethodExpression",
     "original": "changed.filter(file => file.hash === null)",
     "replacement": "changed",
-    "reason": "Changed entries with a hash are already in next.files; listing them twice in the intermediate record only makes discardPendingCopies remove a path twice, and the final record is rebuilt from next.files plus hash-null entries.",
+    "reason": "Changed entries with a hash are already in next.files. Only discardPendingCopies reads an unstaged record (legacy-source reads committed records; boot reads only stagedAt), and it removes a listed path twice harmlessly; the final record is rebuilt from next.files plus hash-null entries, so a crash at any point leaves the same discard outcome.",
     "site": "record.files = [...next.files, ..."
   },
   {
@@ -316,26 +290,8 @@
     "mutator": "ConditionalExpression",
     "original": "file.hash === null",
     "replacement": "true",
-    "reason": "Changed entries with a hash are already in next.files; listing them twice in the intermediate record only makes discardPendingCopies remove a path twice, and the final record is rebuilt from next.files plus hash-null entries.",
+    "reason": "Changed entries with a hash are already in next.files. Only discardPendingCopies reads an unstaged record (legacy-source reads committed records; boot reads only stagedAt), and it removes a listed path twice harmlessly; the final record is rebuilt from next.files plus hash-null entries, so a crash at any point leaves the same discard outcome.",
     "site": "record.files = [...next.files, ...changed.filter(file => "
-  },
-  {
-    "file": "packages/cezar/src/home/migrate.ts",
-    "function": "settleCopies",
-    "mutator": "ConditionalExpression",
-    "original": "changed.some(file => file.path.startsWith('versions/'))",
-    "replacement": "true",
-    "reason": "With no versions/ change, copyManagedInstall rebuilds the same managed tree and launchers from an unchanged legacy versions/ (or removes an absent one again), so the extra recopy leaves the same pending copy.",
-    "site": "if ("
-  },
-  {
-    "file": "packages/cezar/src/home/migrate.ts",
-    "function": "settleCopies",
-    "mutator": "StringLiteral",
-    "original": "'versions/'",
-    "replacement": "\"\"",
-    "reason": "With no versions/ change, copyManagedInstall rebuilds the same managed tree and launchers from an unchanged legacy versions/ (or removes an absent one again), so the extra recopy leaves the same pending copy.",
-    "site": "if (changed.some(file => file.path.startsWith("
   },
   {
     "file": "packages/cezar/src/home/migrate.ts",
@@ -343,24 +299,8 @@
     "mutator": "StringLiteral",
     "original": "'.cache'",
     "replacement": "\"\"",
-    "reason": "commitLegacyMigration never reads legacy.cache: the claim, planLegacyMigration, MOVED.json and updateManagedPath use only paths under legacy.root.",
+    "reason": "commitLegacyMigration never reads legacy.cache: the claim, planLegacyMigration (migrationRoots is called for the target only), MOVED.json and updateManagedPath use only paths under legacy.root.",
     "site": "const legacy = homePaths(record.legacyRoot, join(record.legacyRoot, "
-  },
-  {
-    "file": "packages/cezar/src/home/migrate.ts",
-    "function": "commitLegacyMigration",
-    "mutator": "CallExpression",
-    "original": "assertHomePath(record.legacyRoot, moved);",
-    "replacement": ";",
-    "reason": "Defense in depth: MOVED.json is a fixed single component under the legacy root, and replacePrivate renames over a link at that name without following it; the remaining effect is the test-run sandbox check, which only a write into the real account home could show."
-  },
-  {
-    "file": "packages/cezar/src/home/migrate.ts",
-    "function": "rollbackLegacyMigration",
-    "mutator": "CallExpression",
-    "original": "assertHomePath(target.config, failed);",
-    "replacement": ";",
-    "reason": "Defense in depth: install.json.failed is a fixed single component under the config root, and renameSync replaces a link at that name without following it; the remaining effect is the test-run sandbox check, which only a write into the real account home could show."
   },
   {
     "file": "packages/cezar/src/home/migrate.ts",
