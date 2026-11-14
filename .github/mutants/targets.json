@@ -273,7 +273,6 @@
   "packages/cezar/src/server-install/platforms/ubuntu-vps.ts": {
     "tier": "guards",
     "guards": [
-      "check",
       "systemdUnit",
       "upstreamHost",
       "ufwIsActive",
@@ -286,8 +285,7 @@
       "legacyCandidateOwned",
       "launchdServices",
       "agentCandidates",
-      "bootstrapVerified",
-      "check"
+      "bootstrapVerified"
     ]
   }
 }

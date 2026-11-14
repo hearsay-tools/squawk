@@ -60,13 +60,13 @@ test('ast-grep assigns nested names, methods, anonymous callbacks, and module co
   assert.equal(at(10), 'arrow');
 });
 
-test('every target names a file at head with a declared tier and guard functions that exist in it', () => {
+test('every target names a file at head with a declared tier and guard names that match exactly one function in it', () => {
   const targets = require('../mutants/targets.json');
   assert.equal(m.validateTargets(targets), targets);
   for (const [file, target] of Object.entries(targets)) {
     assert.ok(fs.existsSync(path.join(root, file)), file);
     const names = m.functionRanges(file, root).map(r => r.name);
-    for (const guard of target.guards) assert.ok(names.includes(guard), `${file}: ${guard}`);
+    for (const guard of target.guards) assert.equal(names.filter(name => name === guard).length, 1, `${file}: ${guard}`);
   }
 });
 

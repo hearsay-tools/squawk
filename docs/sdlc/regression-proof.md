@@ -138,7 +138,9 @@ A guard target passes when the function exists in the file and has no undetected
 text included. Name a function as a guard when a wrong branch in it deletes or moves user data,
 leaves a half-done migration, reports success for a failed step, widens exposure (firewall, proxy,
 origin) or shows a wrong merge state. Do not name a function whose undetected mutants are mostly
-argument lists or message text. Name a method as `Class.method`. The scripts refuse an unknown tier,
+argument lists or message text. A guard name must match exactly one function in the file: name a
+class method as `Class.method`. An object-literal method, such as an install step's `check`, has no
+unique name and cannot be a guard. The scripts refuse an unknown tier,
 an empty guard name and a `guards` entry with no guard.
 
 A changed file without an entry is a **candidate**. The weekly run measures it, but it has no target
