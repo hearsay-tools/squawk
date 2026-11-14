@@ -167,5 +167,125 @@
   "packages/web/src/routes/task-thread/counterpart-task.tsx": {
     "tier": "component",
     "guards": []
+  },
+  "packages/cezar/src/home/migrate.ts": {
+    "tier": "logic",
+    "guards": [
+      "migrateLocked",
+      "discardPendingCopies",
+      "settleCopies",
+      "copyFile",
+      "commitLegacyMigration",
+      "rollbackLegacyMigration"
+    ]
+  },
+  "packages/cezar/src/project-migration/auto.ts": {
+    "tier": "logic",
+    "guards": [
+      "precheck",
+      "move",
+      "attempt",
+      "moveProjectWhenIdle"
+    ]
+  },
+  "packages/cezar/src/delegation/workspace-removal.ts": {
+    "tier": "logic",
+    "guards": [
+      "removeBranch",
+      "removePresentWorktree",
+      "preparePresentWorktree",
+      "prepareMissingWorktree",
+      "ownedWorktreePresent"
+    ]
+  },
+  "packages/cezar/src/server-install/group-migrate.ts": {
+    "tier": "logic",
+    "guards": [
+      "migrateGroup",
+      "recover",
+      "rollbackGroup",
+      "moveAndCheck",
+      "commitGroup"
+    ]
+  },
+  "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts": {
+    "tier": "logic",
+    "guards": [
+      "planUnit",
+      "assertRollbackEntry",
+      "restoreUnit",
+      "rollbackUbuntuMigration",
+      "checkPublicSite"
+    ]
+  },
+  "packages/cezar/src/server/forge/github-merge-state.ts": {
+    "tier": "logic",
+    "guards": [
+      "mergeCheckState",
+      "mergePrEligibility",
+      "mergePrChecksFailingBlocker",
+      "mergePrConflictsBlocker",
+      "mergePrPendingBlocker",
+      "mergePrUnknownBlocker"
+    ]
+  },
+  "packages/cezar/src/server/project-context.ts": {
+    "tier": "logic",
+    "guards": [
+      "ProjectContexts.coldMaintenance",
+      "ProjectContexts.maintainColdStore",
+      "ProjectContexts.withMaintenanceStore",
+      "ProjectContexts.context"
+    ]
+  },
+  "packages/cezar/src/index.ts": {
+    "tier": "guards",
+    "guards": [
+      "openBootStore",
+      "runCommand"
+    ]
+  },
+  "packages/cezar/src/server/start-server.ts": {
+    "tier": "guards",
+    "guards": [
+      "shutdownForRestart",
+      "setTaskWebhookOrigin"
+    ]
+  },
+  "packages/cezar/src/server-command.ts": {
+    "tier": "guards",
+    "guards": [
+      "resolveServerStrategy",
+      "resolveServerPort",
+      "buildRunOptions",
+      "runAndReportServerCommand"
+    ]
+  },
+  "packages/cezar/src/ci-wait/tools.ts": {
+    "tier": "guards",
+    "guards": [
+      "scheduleHint",
+      "invokeDoneTool",
+      "invokeWaitTool",
+      "invokeScheduleTaskTool"
+    ]
+  },
+  "packages/cezar/src/server-install/platforms/ubuntu-vps.ts": {
+    "tier": "guards",
+    "guards": [
+      "systemdUnit",
+      "upstreamHost",
+      "ufwIsActive",
+      "isSquawkUp"
+    ]
+  },
+  "packages/cezar/src/server-install/platforms/macosx-ngrok.ts": {
+    "tier": "guards",
+    "guards": [
+      "legacyCandidateOwned",
+      "launchdServices",
+      "agentCandidates",
+      "bootstrapVerified"
+    ]
   }
 }
