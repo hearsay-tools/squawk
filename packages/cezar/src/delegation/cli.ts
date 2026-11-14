@@ -128,7 +128,7 @@ const WORKER_FLAG_HELP: Record<string, string> = {
   '--resume': '                         Resume an owned finished worker; request deadline defaults to 600 s, --timeout-seconds accepts up to 86400 s.',
 };
 function workerHelp(operation?: string): string {
-  const operations = WORKER_USAGE.operations.filter(entry => !REMOVED_WORKER_VERBS[entry.name] && !(entry.name === 'wait' && entry.positionals === 0) && (operation === undefined || entry.name === operation));
+  const operations = WORKER_USAGE.operations.filter(entry => !(entry.name === 'wait' && entry.positionals === 0) && (operation === undefined || entry.name === operation));
   const names = [...new Set(operations.map(entry => entry.name))];
   const flags = [...new Set(operations.flatMap(entry => [...(entry.required ?? []), ...(entry.optional ?? [])]))];
   return [
@@ -301,10 +301,6 @@ async function runDelegationCommand(argv: string[], env: NodeJS.ProcessEnv, help
 }
 
 
-const REMOVED_WORKER_VERBS: Record<string, string> = {
-  send: 'request', progress: 'progress', 'follow-up': 'follow-up', reply: 'reply',
-  conversation: 'conversation', inbox: 'inbox', 'cancel-request': 'cancel-request', 'wait-requests': 'wait --request',
-};
 function usageFailure(error: string): number {
   console.log(JSON.stringify({ code: 'invalid_input', error }));
   return 64;
@@ -315,12 +311,10 @@ export async function runWorkerCommand(argv: string[], env: NodeJS.ProcessEnv): 
     return 0;
   }
   if (argv.length === 0) {
-    console.log(JSON.stringify({ code: 'invalid_input', error: 'Invalid worker command arguments', usage: { operations: WORKER_USAGE.operations.filter(entry => !REMOVED_WORKER_VERBS[entry.name] && !(entry.name === 'wait' && entry.positionals === 0)) } }));
+    console.log(JSON.stringify({ code: 'invalid_input', error: 'Invalid worker command arguments', usage: { operations: WORKER_USAGE.operations.filter(entry => !(entry.name === 'wait' && entry.positionals === 0)) } }));
     return 1;
   }
-  const replacement = Object.hasOwn(REMOVED_WORKER_VERBS, argv[0] ?? '') ? REMOVED_WORKER_VERBS[argv[0]!] : undefined;
   const flags = optionArguments(argv);
-  if (replacement) return usageFailure(commandText(`Use cez message ${replacement}; cez worker ${argv[0]} was removed.`));
   if (argv[0] === 'wait' && flags.some(arg => arg === '--request' || arg.startsWith('--request='))) return usageFailure(commandText('Use cez message wait --request <UUID>.'));
   if (argv[0] === 'wait' && flags.some(arg => arg === '--peer' || arg.startsWith('--peer='))) return usageFailure(commandText('Use cez message wait --peer <task-id>.'));
   if (argv[0] === 'resume') {
@@ -329,6 +323,10 @@ export async function runWorkerCommand(argv: string[], env: NodeJS.ProcessEnv): 
     return runDelegationCommand(['send', '--kind', 'request', '--resume', ...argv.slice(1)], env, () => workerHelp('resume'));
   }
   if (argv[0] === 'tasks') return usageFailure(commandText('Use cez message tasks.'));
+  if (!WORKER_USAGE.operations.some(entry => entry.name === argv[0])) {
+    console.log(JSON.stringify({ code: 'invalid_input', error: `unknown operation '${argv[0]}'` }));
+    return 1;
+  }
   return runDelegationCommand(argv, env);
 }
 const MESSAGE_HELP: Record<string, string> = {
