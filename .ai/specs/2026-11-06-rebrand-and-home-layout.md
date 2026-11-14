@@ -373,7 +373,7 @@ release are the single user-visible change.
 Dependencies: P1(a-1) before every other P1 slice and P2; P0(c) before P1(b) and P1(c) (same writers); P1(b) before P1(c) and P1(d); P0(b) before P1(d); P0(c) before P2(b); P1(a-2) before P1(b) (they share the test files); every P1 slice before P2(a-2); P2(a-1) before P2(a-2) before P2(b-1) and P2(d); P2(b-1) before P2(b-2); P2(b-1) and P2(d) before P2(c); P1(b) before P2(b). P0 and P3(a–b) do not depend on P1 and run in parallel with it.
 The switch needs P0 to P4 accepted on `main`, including the per-project write root that follows moved state (hearsay-tools/cezarion#3150); P5 follows the release.
 
-Every slice follows `BACKWARD_COMPATIBILITY.md` and updates `.env.example`, the README env table and the area docs it touches.
+Every slice updates `.env.example`, the README env table and the area docs it touches.
 
 ### Switch fix: first project use
 

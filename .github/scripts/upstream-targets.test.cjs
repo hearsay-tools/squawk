@@ -19,7 +19,7 @@ const SHA_U = '2b5411e479c63870f857d12314a87572f2cc2ec0';
 
 // Captured from `git format-patch -1 --stdout 2b5411e4 | git apply --check --3way -` on main (2026-10-16).
 const REAL_APPLY_OUTPUT = [
-  'Applied patch to \'BACKWARD_COMPATIBILITY.md\' with conflicts.',
+  'Applied patch to \'CODE_REVIEW.md\' with conflicts.',
   'error: packages/web/src/components/project-groups.tsx: does not exist in index',
   'Performing three-way merge...',
   'Applied patch to \'packages/web/src/lib/project-order.ts\' with conflicts.',
@@ -27,7 +27,7 @@ const REAL_APPLY_OUTPUT = [
 
 test('parseApplyCheckByFile reads the real 3-way dry run per file', () => {
   const byFile = parseApplyCheckByFile(REAL_APPLY_OUTPUT);
-  assert.equal(byFile.get('BACKWARD_COMPATIBILITY.md'), 'conflict');
+  assert.equal(byFile.get('CODE_REVIEW.md'), 'conflict');
   assert.equal(byFile.get('packages/web/src/components/project-groups.tsx'), 'missing');
   assert.equal(byFile.get('packages/web/src/lib/project-order.ts'), 'conflict');
   assert.equal(byFile.size, 3);
@@ -53,14 +53,14 @@ test('parseApplyCheckByFile knows the clean and patch-failed forms', () => {
 test('dryRunOf reads a file the output never mentions as unknown, and a rename by its old path', () => {
   const byFile = parseApplyCheckByFile(REAL_APPLY_OUTPUT);
   assert.equal(dryRunOf(byFile, { path: 'CHANGELOG.md' }), 'unknown');
-  assert.equal(dryRunOf(byFile, { path: 'BACKWARD_COMPATIBILITY.md' }), 'conflict');
+  assert.equal(dryRunOf(byFile, { path: 'CODE_REVIEW.md' }), 'conflict');
   assert.equal(dryRunOf(byFile, { from: 'packages/web/src/components/project-groups.tsx', path: 'packages/web/src/components/groups.tsx' }), 'missing');
 });
 
 test('parseNameStatus reads `git diff-tree -z --name-status -M` including renames', () => {
-  const text = ['M', 'BACKWARD_COMPATIBILITY.md', 'A', 'packages/web/src/lib/project-order.ts', 'D', 'old.md', 'R087', 'packages/a.ts', 'packages/b.ts', ''].join('\0');
+  const text = ['M', 'CODE_REVIEW.md', 'A', 'packages/web/src/lib/project-order.ts', 'D', 'old.md', 'R087', 'packages/a.ts', 'packages/b.ts', ''].join('\0');
   assert.deepEqual(parseNameStatus(text), [
-    { status: 'M', path: 'BACKWARD_COMPATIBILITY.md' },
+    { status: 'M', path: 'CODE_REVIEW.md' },
     { status: 'A', path: 'packages/web/src/lib/project-order.ts' },
     { status: 'D', path: 'old.md' },
     { status: 'R', from: 'packages/a.ts', path: 'packages/b.ts' },

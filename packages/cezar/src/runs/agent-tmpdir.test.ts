@@ -317,8 +317,8 @@ describe('reaping the per-run temp directories (#785)', () => {
     }
   });
 
-  // BACKWARD_COMPATIBILITY.md: `.ai/cezar/` is a protected surface. The sweep is
-  // confined to its own `tmp/` subtree and must never see a sibling.
+  // `.ai/cezar/` holds saved run state. The sweep is confined to its own `tmp/`
+  // subtree and must never see a sibling.
   it('never touches sibling run state', () => {
     agentTmpEnv(dataDir, 'orphan', {});
     seedRuns(dataDir, []);

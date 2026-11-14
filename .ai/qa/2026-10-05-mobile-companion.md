@@ -30,7 +30,7 @@ the clean launchers. Network screenshots containing private hostnames remain loc
 No credentials were entered during automated verification. Authenticated task
 creation, message sending, MFA, device background/resume behavior, and file upload
 still need the operator's signed-in device smoke test described in
-[the installation guide](../../docs/mobile.md#connect-and-test). Store distribution
+[the installation guide](https://github.com/hearsay-tools/squawk/blob/523bac443f9629950c0bb23a37af12a31a3861da/docs/mobile.md#connect-and-test). Store distribution
 is not exercised.
 
 The first GitHub Android job also passed and its downloaded APK signature verified.

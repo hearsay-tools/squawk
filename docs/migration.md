@@ -32,9 +32,8 @@ What changes in the Squawk release:
 - **Servers.** An install made with `server-install` (Ubuntu or macOS + ngrok)
   does not migrate at boot. It keeps the old home until you run
   `hsq server-migrate`.
-- **Desktop and mobile.** The apps get new IDs. A bridge build of the old desktop
-  app installs the new app and hands over its state. The mobile app is a new
-  store listing.
+- **Desktop.** The app gets a new ID. A bridge build of the old desktop app
+  installs the new app and hands over its state.
 - **Older binaries.** An older build opens `.ai/cezar/` directly. It does not see
   the tasks of a project that a newer cockpit moved, but no data is lost.
 
@@ -275,7 +274,7 @@ launchd agents stay untouched. The macOS path is checked by unit tests with a fa
 See the [Ubuntu guide](server-install/ubuntu-vps.md) and
 [macOS guide](server-install/macosx-ngrok.md) for platform details.
 
-## Desktop and mobile
+## Desktop
 
 The desktop identity changes from `tools.hearsay.cezarion` to
 `tools.hearsay.squawk`. The owner publishes a final bridge on the old feed.
@@ -295,10 +294,6 @@ macOS asks again for permissions tied to the app ID, including notifications
 and automation. Squawk has no app-managed Keychain or password store. macOS 14+
 closed WebKit stores carry cookies and site storage through the bridge;
 macOS 12–13 remote profiles remain temporary.
-
-The mobile ID becomes `tools.hearsay.squawk.mobile`. The final old app links to
-the new store listing. Install it, connect and sign in again. Mobile connection
-and browser state are not copied. See [mobile setup](mobile.md).
 
 ## Rollback and the deprecation window
 

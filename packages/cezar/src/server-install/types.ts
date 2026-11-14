@@ -59,9 +59,9 @@ export const stepOutcomeSchema = z.object({
 export type StepOutcome = z.infer<typeof stepOutcomeSchema>;
 
 /**
- * `~/.cezar/server.json` — host-level, install-once. Additive-safe: every new
- * field is optional / defaulted so an older Squawk still parses a newer file
- * (BACKWARD_COMPATIBILITY cross-version-state rule). No secrets live here.
+ * `~/.cezar/server.json` — host-level, install-once. Every new field is
+ * optional / defaulted, so a newer Squawk opens a file an older one wrote
+ * (AGENTS.md, Changing what already works). No secrets live here.
  */
 export const serverStateSchema = z
   .object({

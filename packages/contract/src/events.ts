@@ -16,10 +16,10 @@ import { agentInputSchema, workerOutcomeSchema } from './delegation.ts';
 /**
  * One line of a run transcript.
  *
- * Open by design: `type` is a plain string and unknown keys pass through, because the event
- * vocabulary is an APPEND-ONLY on-disk format (BACKWARD_COMPATIBILITY.md) that old NDJSON
- * recordings must keep replaying forever. Closing this schema would make a recording written by
- * a newer Squawk unreadable by an older one — the opposite of what the format promises.
+ * Open by design: `type` is a plain string and unknown keys pass through, because old NDJSON
+ * recordings on disk must keep replaying after an upgrade (AGENTS.md, Changing what already
+ * works). A closed schema would reject a recording that carries a type or key this build does
+ * not list.
  */
 export const runEventSchema = z.looseObject({
   seq: z.number(),

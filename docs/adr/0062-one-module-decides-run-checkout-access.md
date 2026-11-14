@@ -37,7 +37,7 @@ deletes its option in its own pull request, with a red test first. One such chan
 here: `git/commit` and `git/push` refuse a run whose `status` is `running`, and still accept
 `queued` and `waiting` runs. They check the status once, at admission, and take no claim.
 
-ADR 0002 (the text `/diff` stays a protected surface), ADR 0003, ADR 0006, ADR 0009, ADR 0016,
+ADR 0002, ADR 0003, ADR 0006, ADR 0009, ADR 0016,
 ADR 0032, ADR 0043 and ADR 0053 still hold.
 
 Implementation: [2026-11-10-run-checkout-module.md](../../.ai/specs/2026-11-10-run-checkout-module.md),

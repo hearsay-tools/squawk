@@ -101,7 +101,7 @@ At the baseline:
 4. **Unchanged:** the contract package (wire schemas and attention facts stay there; it is
    Node-free, and the clone gate refuses a cross-package clone), the web package, the CLI
    worker-wait output shape (`workerWaitEntryToLegacy`, `packages/contract/src/waits.ts:680`,
-   stays as a boundary view under `BACKWARD_COMPATIBILITY.md`), and every error code and message.
+   stays as a boundary view), and every error code and message.
    Only slice 4.2 changes behavior.
 
 ## Slices
@@ -376,7 +376,7 @@ pattern over production files of `packages/cezar/src` (a `kind` compared with `=
 |---|---|---|---|
 | 1 | `activity/wait.ts` | `:37-77` (`case` labels and `kind` literals) | allow-list: boundary view. It builds the contract's `ActivityWait` wire kinds from `WaitingOn` |
 | 2 | `delegation/park-notice.ts` | `:28` worker; `:60` human | `:28` 2.5 worker selector; `:60` 2.1 `userAnswers` |
-| 3 | `delegation/service.ts` | `:670` worker; `:733-734` worker and request; `:739` peer | allow-list: CLI boundary. It routes `cez worker cancel-wait` and `cez message cancel-wait` by stored kind and answers in each kind's CLI shape (`BACKWARD_COMPATIBILITY.md`) |
+| 3 | `delegation/service.ts` | `:670` worker; `:733-734` worker and request; `:739` peer | allow-list: CLI boundary. It routes `cez worker cancel-wait` and `cez message cancel-wait` by stored kind and answers in each kind's CLI shape |
 | 4 | `runs/archive-family.ts` | `:129` human | 2.1 `userAnswers`: an open wait the user answers blocks the automatic archive |
 | 5 | `runs/legacy-waits.ts` | `:25`, `:67`, `:120`, `:135`, `:171`, `:235`, `:242`, `:249` | allow-list: the read-time upgrade of schema-3 rows and `ci` entries |
 | 6 | `runs/outcome-commit.ts` | `:157` human; `:168` subagent | `:157` 2.1 `userAnswers` (the `answered` handler settles the open waits the user answers); `:168` 2.3 superseded-cancel result |

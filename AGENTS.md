@@ -39,6 +39,11 @@ Follow [CODE_REVIEW.md § Changing working behavior](CODE_REVIEW.md#changing-wor
 when replacing working behavior or changing a shared name, value or default.
 Use the case tables in [the spec template](.ai/specs/TEMPLATE.md#case-tables).
 
+Squawk makes no compatibility promise. Change or remove any command, flag, route, env var,
+URL or format. Add no alias, fallback, deprecation window or compatibility note unless the
+issue asks. Exception: an upgrade still opens or migrates saved runs, transcripts and home
+config. Mark a break with `!` in the PR title.
+
 ## Repository layout
 
 Four pnpm workspaces under a `private` root. Read
@@ -118,9 +123,6 @@ Read the matching document before you:
 
 - change a runner, the event streams or a parity matrix: `AGENT_PROTOCOL.md` (§6 mapper
   capabilities, §7 session and lifecycle, the new-runner checklist);
-- change a CLI command, flag or exit code, an HTTP route, a state file under `.ai/cezar/`
-  or the user home, the workflow or skill format, the npm package surface, the event
-  protocol or an in-band marker: `BACKWARD_COMPATIBILITY.md`;
 - apply a label, claim an issue, pass the QA gate or change the process itself: `SDLC.md`;
 - review a change or assign a severity: `CODE_REVIEW.md`;
 - change what the `om-*` pipeline skills read (base branch, validation commands, labels):

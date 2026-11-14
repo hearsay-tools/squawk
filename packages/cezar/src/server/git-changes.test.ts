@@ -34,7 +34,7 @@ import { GIT_OVERFLOW_REASON } from '../git-command.ts';
  * structured /changes, /files browsing, git/commit and git/push — against
  * real fixture git repos in tmp dirs. Every predictable git failure must be
  * a 409 with a human reason (never HTML, never a 500); 404 only for unknown
- * run ids. The text-blob /diff endpoint is a protected surface and untested
+ * run ids. The text-blob /diff endpoint is untested
  * here on purpose — nothing in this step touches it.
  */
 
@@ -889,7 +889,7 @@ describe('session git API routes', () => {
     const negotiated = await files('path=page.html', 'image/avif,image/webp,image/*,*/*;q=0.8');
     expect(negotiated.status).toBe(200);
     expect((await negotiated.json()) as object).toMatchObject({ type: 'file', path: 'page.html' });
-    // The flag still says why, verbatim — that 409 is the protected surface.
+    // The flag still says why, verbatim, in a 409.
     const asked = await files('path=page.html&raw=1', 'image/*');
     expect(asked.status).toBe(409);
     expect(((await asked.json()) as { error: string }).error).toContain('limited to images');
@@ -1185,8 +1185,7 @@ describe('repo git API routes (R5 Step 1.3 — main working tree)', () => {
   // ---- content negotiation: `Accept` as the ADDITIVE fallback to `?structured=` --------------
   //
   // Precedence is flag → Accept → this route's TEXT default (see `negotiate` in server.ts). The
-  // default deliberately stays the legacy blob: it is the answer every pre-Accept caller gets and
-  // a protected surface (BACKWARD_COMPATIBILITY.md), so "JSON by default" was not on offer.
+  // default stays the legacy blob, the answer every pre-Accept caller gets.
 
   const commit = (suffix: string, accept?: string) =>
     apiRequest(app, `/api/v1/repo/commit/${g(repoRoot, 'rev-parse', 'HEAD').trim()}${suffix}`, {

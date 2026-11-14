@@ -32,8 +32,7 @@ exist. It is supplied by you rather than imported here, so this package installs
 without the service package present — `createSquawkClient()` with no type argument is a working,
 untyped client.
 
-Only the versioned surface (`/api/v1/*`) is typed. The unversioned `/api/*` paths are frozen for
-consumers that already call them and are not part of what this client offers.
+Every route lives under `/api/v1/*`; the server no longer answers the unversioned `/api/*` paths.
 
 ## Also exported
 

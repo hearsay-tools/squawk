@@ -369,7 +369,7 @@ export const runRecordSchema = z.object({
   pinned: z.boolean().optional(),
   /** When the pin was set. Deliberately WRITE-ONLY today, like the `archivedAt` above it:
    *  ordering inside `Pinned` uses the ordinary status/recency rules, so nothing reads this
-   *  yet. It is here because a field on a protected surface is far cheaper to add now than to
+   *  yet. It is here because a field on the saved run record is far cheaper to add now than to
    *  add later — "pinned oldest first" and "unpin what you pinned a month ago" both need it,
    *  and neither can be reconstructed after the fact. */
   pinnedAt: z.string().optional(),
