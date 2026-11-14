@@ -20,6 +20,11 @@ const OWN_CONFIG = 'stryker.mutants-file.config.json';
 const STATUS = { Killed: 'killed', Timeout: 'timeout', Survived: 'survived', NoCoverage: 'noCoverage', CompileError: 'error', RuntimeError: 'error', Ignored: 'ignored' };
 const undetected = m => ['Survived', 'NoCoverage'].includes(m.status);
 const flat = text => text.replace(/\s+/g, ' ').trim();
+// The score each tier needs; the guards tier has none and the logic tier also needs every line covered.
+const TIER_SCORE = { logic: 85, component: 75 };
+const TIERS = ['logic', 'component', 'guards'];
+const UNDECLARED = 'undeclared';
+validateTargets(TARGETS);
 
 function classText(text) {
   const words = text.replace(/^['"`]|['"`]$/g, '').trim().split(/\s+/);
@@ -51,8 +56,19 @@ function kindOf(m, file) {
   return 'Value';
 }
 
+/** A file's declared tier. A file without an entry is measured for its score and has no target. */
 function tierOf(file, targets = TARGETS) {
-  return targets[file] ?? { tier: file.startsWith('packages/web/') && file.endsWith('.tsx') ? 'component' : 'logic', guards: [] };
+  return Object.hasOwn(targets, file) ? targets[file] : { tier: UNDECLARED, guards: [] };
+}
+
+/** Refuse an entry the weekly run cannot judge: an unknown tier, a bad guard name, a guards tier with no guard. */
+function validateTargets(targets) {
+  for (const [file, target] of Object.entries(targets)) {
+    if (!TIERS.includes(target?.tier)) throw new Error(`targets.json: ${file} has tier ${JSON.stringify(target?.tier)}; use one of ${TIERS.join(', ')}`);
+    if (!Array.isArray(target.guards) || !target.guards.every(name => typeof name === 'string' && name.length > 0)) throw new Error(`targets.json: ${file} needs a list of guard function names`);
+    if (target.tier === 'guards' && target.guards.length === 0) throw new Error(`targets.json: ${file} has tier guards and no guard`);
+  }
+  return targets;
 }
 
 function countsOf(mutants) {
@@ -77,7 +93,7 @@ function evaluate(mutants, target, ranges, allMutants = mutants) {
     const survivors = mutants.filter(m => m.function === name && m.kind !== 'Class name' && undetected(m));
     return { name, found, survivors, staticCount: allMutants.filter(m => m.function === name && m.static).length, pass: found && survivors.length === 0 };
   });
-  const targets = [{ name: `${target.tier} score`, pass: scoreOf(counts) >= (target.tier === 'logic' ? 85 : 75) }];
+  const targets = Object.hasOwn(TIER_SCORE, target.tier) ? [{ name: `${target.tier} score`, pass: scoreOf(counts) >= TIER_SCORE[target.tier] }] : [];
   if (target.tier === 'logic') targets.push({ name: 'covered lines', pass: counts.noCoverage === 0 });
   targets.push(...guards.map(g => ({ name: g.name, pass: g.pass })));
   return { counts, score: scoreOf(counts), rawCounts: countsOf(mutants), rawScore: scoreOf(countsOf(mutants)), survivors: counted.filter(undetected), guards, targets };
@@ -192,7 +208,7 @@ function measure(report, file, head, ranges, targets = TARGETS, entries = []) {
 }
 
 function summary(result) {
-  const lines = [`File: ${result.file}`, `HEAD: ${result.head}`, `Tier: ${result.tier}`, `Counts: ${JSON.stringify(result.counts)}`, `Counted score: ${result.score.toFixed(1)}%`];
+  const lines = [`File: ${result.file}`, `HEAD: ${result.head}`, `Tier: ${result.tier === UNDECLARED ? 'none: no entry in .github/mutants/targets.json, so no target' : result.tier}`, `Counts: ${JSON.stringify(result.counts)}`, `Counted score: ${result.score.toFixed(1)}%`];
   if (result.rescored) lines.push('Rescored stored outcomes under current counting; tests were not rerun.');
   lines.push(`Static outcomes (counted): ${JSON.stringify(result.staticCounts)}`);
   for (const group of result.staticByFunction) lines.push(`Static outcomes in ${group.name} (counted): ${JSON.stringify(group.counts)}`);
@@ -378,5 +394,5 @@ async function cli(argv, deps = defaultDeps(), events = process) {
   }
 }
 
-module.exports = { standaloneCheckout, isolatedEnv, classText, kindOf, namedRanges, functionRanges, functionOf, tierOf, countsOf, scoreOf, evaluate, compareResults, parseArgs, importsModule, consumerTests, consumerConfig, mergeReports, measure, summary, strykerReport, runMeasurement, runConsumers, consumerFailure, defaultDeps, cli };
+module.exports = { UNDECLARED, standaloneCheckout, isolatedEnv, classText, kindOf, namedRanges, functionRanges, functionOf, tierOf, validateTargets, countsOf, scoreOf, evaluate, compareResults, parseArgs, importsModule, consumerTests, consumerConfig, mergeReports, measure, summary, strykerReport, runMeasurement, runConsumers, consumerFailure, defaultDeps, cli };
 if (require.main === module) cli(process.argv.slice(2)).then(code => { process.exitCode = code; }, error => { console.error(error.message); process.exitCode = 1; });
