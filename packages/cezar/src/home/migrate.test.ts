@@ -209,16 +209,29 @@ it.each(['outside-write', 'reset'])('step 5: refuses unresolved %s recovery with
   expect(existsSync(join(legacy.root, '.migrating'))).toBe(false);
 });
 
+it('step 5: the recovery refusal names every file that needs recovery', () => {
+  const { legacy, target } = migrationFixture();
+  Home.seed(legacy, legacy.workspaceUiState, { sidebar: 'open' });
+  rawJson(legacy.workspaceConfig, { projects: [], outside: true });
+  rawJson(legacy.workspaceUiState, { sidebar: 'outside' });
+  expect(() => migrateLegacyHome(legacy, target)).toThrow('config.json (outside-write), ui-state.json (outside-write)');
+  expect(readInstallMarker(target.config)?.state).toBeUndefined();
+});
+
 it('step 6: recopies an older-binary write before commit, including new and deleted files', () => {
   const { legacy, target } = migrationFixture();
   Home.seed(legacy, legacy.serverState('deleted'), { existed: true });
+  const steps: string[] = [];
   const result = migrateLegacyHome(legacy, target, { onStep(step, attempt) {
+    steps.push(`${step} ${attempt}`);
     if (step === 'recheck' && attempt === 0) {
       rawJson(legacy.workspaceConfig, { projects: [], saved: 'newer' });
       rawJson(join(legacy.remoteSettings, '7777.json'), { token: 'added' });
       rmSync(legacy.serverState('deleted')); // Older writers do not use HomeStore.
     }
   } });
+  // Accounts copy only once the legacy inventory settles.
+  expect(steps).toEqual(['recovered 0', 'claimed 0', 'pending 0', 'archived 0', 'copied 0', 'recheck 0', 'recheck 1', 'accounts 1', 'committed 1']);
   expect(json(target.workspaceConfig).saved).toBe('newer');
   expect(json(join(target.remoteSettings, '7777.json')).token).toBe('added');
   expect(existsSync(target.serverState('deleted'))).toBe(false);
@@ -318,9 +331,12 @@ it('step 8: final commit refuses changes made to legacy during a pending group h
 it('a pending home with a live target cockpit cannot be overwritten by another migration', () => {
   const { legacy, target } = migrationFixture();
   migrateLegacyHome(legacy, target, { commit: false });
+  const releaseLegacy = holdCockpitLease(legacy, 4321, 'old');
   const release = holdCockpitLease(target, 4333, 'health-check');
-  try { expect(() => migrateLegacyHome(legacy, target)).toThrow(/port 4333, instance health-check/); }
-  finally { release(); }
+  try {
+    expect(() => migrateLegacyHome(legacy, target))
+      .toThrow(`pid ${process.pid}, port 4321, instance old; pid ${process.pid}, port 4333, instance health-check`);
+  } finally { release(); releaseLegacy(); }
   expect(json(target.workspaceConfig).saved).toBe('original');
 });
 
