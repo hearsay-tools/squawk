@@ -125,6 +125,30 @@ lines changed in the last 7 days, at most 64 files in all. Its run summary lists
 cap. It opens one issue per file that misses a target, `Mutation targets missed: <file>`. A fix PR
 runs the whole-file command, cites its PASS lines and says `Fixes #N`.
 
+Each entry in `.github/mutants/targets.json` declares a tier and a list of guard functions. Only a
+declared tier has targets:
+
+| Tier | Targets |
+| --- | --- |
+| `logic` | Counted score at least 85%, no not-covered line, and each guard |
+| `component` | Counted score at least 75%, and each guard |
+| `guards` | Each guard only. The list must name at least one guard. |
+
+A guard target passes when the function exists in the file and has no undetected mutant, message
+text included. Name a function as a guard when a wrong branch in it deletes or moves user data,
+leaves a half-done migration, reports success for a failed step, widens exposure (firewall, proxy,
+origin) or shows a wrong merge state. Do not name a function whose undetected mutants are mostly
+argument lists or message text. A guard name must match exactly one function in the file: name a
+class method as `Class.method`. An object-literal method, such as an install step's `check`, has no
+unique name and cannot be a guard. The scripts refuse an unknown tier,
+an empty guard name and a `guards` entry with no guard.
+
+A changed file without an entry is a **candidate**. The weekly run measures it, but it has no target
+and opens no issue: the run summary lists it under "Candidates" with its changed lines and counted
+score. Give it a tier, or leave it out. The weekly run closes an open issue for a file without an
+entry with a comment that states this rule. The whole-file command prints `Tier: none` for such a
+file and no target lines. A contract file still prints its consumer-test PASS or FAIL line.
+
 ## Test-only change that removes a hidden dependency
 
 A **test-only change that removes a hidden dependency** needs this proof even
