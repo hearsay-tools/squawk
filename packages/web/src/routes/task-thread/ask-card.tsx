@@ -1,10 +1,9 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useState } from 'react'
 
-import type { ApiRun, VoiceAnswer } from '@open-mercato/cezar-api-client'
+import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Link } from '@/lib/project-router'
-import { voiceStore, useVoiceProposal } from '@/lib/voice/proposal-store'
 import { cn } from '@/lib/utils'
 
 import { useAskAnswer } from './ask-answer'
@@ -206,77 +205,16 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
         .join('\n'),
     )
 
-  // ---- voice proposal (spec 2026-10-21-voice-mode) -----------------------------------------
-  // The store registers this card once per mount, so its methods read `latest`, which every
-  // render (and every apply) refreshes, never the render that registered them.
-  const rootRef = useRef<HTMLDivElement>(null)
-  const latest = useRef({ selections, otherAnswers, sendAll, canSend: !delivery.isPending && !blocked })
-  latest.current = { ...latest.current, selections, otherAnswers, sendAll, canSend: !delivery.isPending && !blocked }
-  const proposal = useVoiceProposal()
-  const voiceAnswers =
-    proposal?.kind === 'answer' && proposal.runId === run.id && proposal.askRequestId === ask.id
-      ? proposal.answers
-      : undefined
-
-  useEffect(() => {
-    const setBoth = (nextSelections: Record<number, string[]>, nextOthers: Record<number, string>) => {
-      latest.current = { ...latest.current, selections: nextSelections, otherAnswers: nextOthers }
-      setSelections(nextSelections)
-      setOtherAnswers(nextOthers)
-    }
-    return voiceStore.registerAskCard({
-      runId: run.id,
-      requestId: ask.id,
-      headers: questions.map((question) => question.header),
-      // The store keeps what the card held before voice, so a remount can still be put back.
-      read: () => ({ selections: latest.current.selections, otherAnswers: latest.current.otherAnswers }),
-      apply: (answers: VoiceAnswer[], options = { reveal: true }) => {
-        const { selections: current, otherAnswers: currentOthers } = latest.current
-        const nextSelections = { ...current }
-        const nextOthers = { ...currentOthers }
-        for (const answer of answers) {
-          const question = questions[answer.question]
-          if (!question) continue
-          if (answer.kind === 'option' && question.options) {
-            nextSelections[answer.question] = question.multiSelect === true ? answer.labels : answer.labels.slice(0, 1)
-            delete nextOthers[answer.question]
-          } else if (answer.kind === 'other') {
-            nextSelections[answer.question] = []
-            nextOthers[answer.question] = answer.text
-          }
-        }
-        setBoth(nextSelections, nextOthers)
-        if (options.reveal) rootRef.current?.scrollIntoView?.({ block: 'nearest' })
-      },
-      restore: (values) => setBoth(values.selections, values.otherAnswers),
-      unanswered: () =>
-        questions.flatMap((_, index) =>
-          (latest.current.selections[index]?.length ?? 0) > 0 || Boolean(latest.current.otherAnswers[index]?.trim())
-            ? []
-            : [index],
-        ),
-      send: () => {
-        // The card's own state says why it cannot send (pending, provider gate); the voice-filled
-        // answers and the proposal stay, so a later confirm or cancel still works.
-        if (!latest.current.canSend) return false
-        latest.current.sendAll()
-        return true
-      },
-    })
-  }, [run.id, ask.id])
-
   // The session ended before the question was answered — say so, because sending the
   // answer now does more than reply: it reopens the agent's session to deliver it.
   const resuming = delivery.mode === 'resume'
 
   return (
     <div
-      ref={rootRef}
       data-slot="ask-card"
       data-resolved="false"
       data-pinned={ask.placement === 'pinned' ? 'true' : undefined}
       data-delivery={delivery.mode}
-      data-voice-proposal={voiceAnswers ? 'true' : undefined}
       className="rounded-lg border border-accent-strong/25 bg-accent-strong/[0.04] [html:not(.light)_&]:bg-card px-4 pt-3.5 pb-3.5"
     >
       <div className="mb-2.5 flex items-center gap-2">
@@ -291,13 +229,10 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
             selected={selections[index] ?? []}
             isOther={otherAnswers[index] !== undefined}
             otherAnswer={otherAnswers[index] ?? ''}
-            voiceFilled={voiceAnswers?.some((answer) => answer.question === index) ?? false}
             onSelect={(labels) => {
               if (blocked) return
               clearOtherAnswer(index)
-              // A voice proposal never takes the one-tap path: the chip only changes the answer,
-              // and the confirmation sends what the card shows.
-              if (oneTap && !voiceAnswers) void delivery.send(formatAnswer(question, labels))
+              if (oneTap) void delivery.send(formatAnswer(question, labels))
               else setQuestion(index, labels)
             }}
             onOtherToggle={() => {
@@ -337,7 +272,7 @@ function PendingAsk({ ask, run, onShowOrigin }: { ask: ThreadAsk; run: ApiRun; o
   )
 }
 
-/** Submission controls have no question-selection or voice state of their own. */
+/** Submission controls have no question-selection state of their own. */
 function AskSubmit({ oneTap, hasOtherAnswer, resuming, disabled, questionCount, onSend }: {
   oneTap: boolean; hasOtherAnswer: boolean; resuming: boolean; disabled: boolean
   questionCount: number; onSend: () => void
@@ -369,7 +304,6 @@ function AskQuestionBlock({
   selected,
   isOther,
   otherAnswer,
-  voiceFilled,
   onSelect,
   onOtherToggle,
   onOtherChange,
@@ -379,8 +313,6 @@ function AskQuestionBlock({
   selected: string[]
   isOther: boolean
   otherAnswer: string
-  /** A voice proposal filled this question. */
-  voiceFilled: boolean
   onSelect: (labels: string[]) => void
   onOtherToggle: () => void
   onOtherChange: (answer: string) => void
@@ -400,7 +332,7 @@ function AskQuestionBlock({
   }
 
   return (
-    <div data-slot="ask-question" role="group" aria-label={question.question} data-voice-filled={voiceFilled ? 'true' : undefined}>
+    <div data-slot="ask-question" role="group" aria-label={question.question}>
       <div className="mb-0.5 flex items-center gap-2">
         <span className="rounded-md bg-accent-strong px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-accent-strong-foreground">
           {question.header}

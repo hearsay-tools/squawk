@@ -380,7 +380,7 @@ pattern over production files of `packages/cezar/src` (a `kind` compared with `=
 | 4 | `runs/archive-family.ts` | `:129` human | 2.1 `userAnswers`: an open wait the user answers blocks the automatic archive |
 | 5 | `runs/legacy-waits.ts` | `:25`, `:67`, `:120`, `:135`, `:171`, `:235`, `:242`, `:249` | allow-list: the read-time upgrade of schema-3 rows and `ci` entries |
 | 6 | `runs/outcome-commit.ts` | `:157` human; `:168` subagent | `:157` 2.1 `userAnswers` (the `answered` handler settles the open waits the user answers); `:168` 2.3 superseded-cancel result |
-| 7 | `voice/pending-ask.ts` | `:42` human | 2.5 human selector |
+| 7 | `voice/pending-ask.ts` | `:42` human | removed with voice mode (hearsay-tools/squawk#3576) |
 | 8 | `workflows/run-scheduling.ts` | `:46-50` pr, worker, subagent | 2.4 sessionless wake prompt and its priority |
 | 9 | `run/completion-gate.ts` | `:50` worker | 2.5 worker selector |
 | 10 | `run/continuation-session.ts` | `:219` human | 2.1 `userAnswers` |

@@ -103,7 +103,6 @@ const HOST_BIN_AND_MODE_KEYS = [
   'CEZ_REMOTE', // Keep local-mode capabilities unless the test opts into hosted mode.
   'CEZ_AUTOMATIONS', // Restore default-on automations unless the test opts out.
   'CEZ_PREVIEW', // Keep preview capabilities and tool registration opt-in for each test.
-  'CEZ_VOICE', // Keep voice mode opt-in for each test (hearsay-tools/cezarion#1470).
   'CEZ_HIDE_TOKEN_METRICS', // Keep token and cost metrics shown unless the test hides them.
   'CEZ_HIDE_TOKEN_USAGE',
   'CEZ_HIDE_COST',
@@ -115,8 +114,7 @@ const clearHostBinAndModeOverrides = (): void => {
 
 // The other flags `resolveCapabilities` reads. Like the task keys below, these are
 // cleared once per test file, not per test: `system-prompt.test.ts` sets both in
-// `beforeAll` for the whole file. `TYPESAFE_API_KEY` stays: it turns nothing on
-// without CEZ_VOICE, which the list above clears.
+// `beforeAll` for the whole file.
 const HOST_FILE_MODE_KEYS = [
   'CEZ_FOLLOWUPS', // Keep the follow-up inbox opt-in for each file.
   'CEZ_DRY_RUN', // Run the real runner paths unless the file opts into the mocks.

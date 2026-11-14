@@ -705,7 +705,6 @@ describe('workspace projects API', () => {
         remoteSettingsAdmin: false,
         automations: true,
         preview: false,
-        voice: false,
         tokenMetrics: true,
         tokenUsageMetrics: true,
         costMetrics: true,

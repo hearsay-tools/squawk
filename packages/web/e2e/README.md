@@ -436,7 +436,7 @@ with a "Next step" question card. `packages/cezar/scripts/mock-nudge.mjs` is the
 card. A spec that needs a task parked `waiting` with no question card sets
 `CEZ_MOCK_NUDGE_REPLY=plain` on its fixture server: the mocks then answer the nudge in plain text,
 and the run reaches the no-wait fallback. A spec that boots its own server passes
-`fixtureServeEnv(root, { CEZ_MOCK_NUDGE_REPLY: 'plain' })`, as `voice.e2e.ts` does. On the shared
+`fixtureServeEnv(root, { CEZ_MOCK_NUDGE_REPLY: 'plain' })`. On the shared
 server, pass `--server-env=CEZ_MOCK_NUDGE_REPLY=plain`.
 
 ## Full local suite in four lanes

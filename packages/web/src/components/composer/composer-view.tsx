@@ -159,13 +159,6 @@ export function composerDictationBlocked(
   return disabled || stopPending || (busy && (alsoSend || retainDraftUntilSuccess))
 }
 
-/** 'empty' when the draft is already blank, 'blocked' while a send owns it or the user edited it, else 'clear'. */
-export function composerVoiceClear(current: string, busy: boolean, voiceText: string): 'empty' | 'blocked' | 'clear' {
-  if (current === '') return 'empty'
-  if (busy || current !== voiceText) return 'blocked'
-  return 'clear'
-}
-
 export function composerStopRefused(onStop: unknown, stopping: boolean, busy: boolean): boolean {
   return !onStop || stopping || busy
 }
