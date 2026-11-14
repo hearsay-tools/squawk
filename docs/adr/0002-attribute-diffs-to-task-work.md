@@ -22,6 +22,6 @@ reviewable work empty; a review gate still depends on the run’s settings.
 - **One merge-base for every surface.** Kept for whole-branch consumers; insufficient for task attribution after a branch change.
 - **Always use `HEAD` after a branch change.** Retained as the fallback; otherwise it loses commits the task made on its new branch.
 
-Implementation: [git-diff-base.ts](../../packages/cezar/src/git-diff-base.ts), [git-worktree.ts](../../packages/cezar/src/git-worktree.ts), [BACKWARD_COMPATIBILITY.md](../../BACKWARD_COMPATIBILITY.md).
+Implementation: [git-diff-base.ts](../../packages/cezar/src/git-diff-base.ts) and [git-worktree.ts](../../packages/cezar/src/git-worktree.ts).
 
 Coverage: [git-diff-base.test.ts](../../packages/cezar/src/git-diff-base.test.ts), [git-changes.test.ts](../../packages/cezar/src/server/git-changes.test.ts).

@@ -51,8 +51,7 @@ import type {
  * The GitHub forge driver — all `gh`-CLI logic in one place, moved here from
  * `src/server/github.ts` (tab listing) and `src/server/pr.ts` (draft PRs)
  * behind the `ForgeDriver` seam. Those modules remain as thin delegates.
- * `/api/github`'s response shape is this driver's serialization and is
- * protected by BACKWARD_COMPATIBILITY.md — additive changes only.
+ * `/api/github`'s response shape is this driver's serialization.
  */
 
 export const GH_PR_DIFF_FILE_CAP = 300;
@@ -2329,8 +2328,8 @@ function mockGithubRefStatus(prs: number[], issues: number[]): GithubRefStatusDa
  *
  * Since #525 the thread is sourced from `/issues/{n}/timeline`, which returns comments AND events
  * in one stream: `commented` rows go through the unchanged `normalizeComments`, the rest through
- * `normalizeEvents`. `comments[]` therefore keeps its exact pre-#525 shape, contents and cap
- * (BACKWARD_COMPATIBILITY.md) — see the top-up below for the one case that needed defending.
+ * `normalizeEvents`. `comments[]` therefore keeps its exact pre-#525 shape, contents and cap;
+ * see the top-up below for the one case that needed defending.
  */
 function commentsCacheKey(repoRoot: string, kind: 'issue' | 'pr', number: number): string {
   // NUL separator: cannot appear in a filesystem path, so roots can never alias.

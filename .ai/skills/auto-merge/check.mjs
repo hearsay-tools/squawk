@@ -43,7 +43,7 @@ const NEVER = [
     'packages/web/src/test/{api-client-subpaths,e2e-wait-discipline}.test.ts', 'packages/web/src/design-guardian.test.ts',
   ] },
   { why: 'agent instructions or contracts', globs: [
-    '**/AGENTS.md', '**/CLAUDE.md', 'CODE_REVIEW.md', 'SDLC.md', 'BACKWARD_COMPATIBILITY.md', 'AGENT_PROTOCOL.md',
+    '**/AGENTS.md', '**/CLAUDE.md', 'CODE_REVIEW.md', 'SDLC.md', 'AGENT_PROTOCOL.md',
     '.ai/specs/2026-09-04-harness-parity-matrix.md', '.ai/skills/**', '.ai/agentic.config.json', '.ai/trackers/**',
     '.ai/browsers/**', 'docs/sdlc/**', '.ai/upstream/README.md', 'packages/web/e2e/README.md', 'packages/web/docs/**',
     '{.agents,.claude,.codex,.cursor,.opencode}/**',

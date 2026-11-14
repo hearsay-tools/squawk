@@ -317,7 +317,7 @@ commits planning files, or posts a standalone Plan handoff to the issue. A missi
 `dev-flow` skill is a blocker, not permission to substitute a documentation PR.
 
 The design records current load-bearing guarantees, alternatives and trade-offs,
-defaults, cost/authority boundaries, persistence/compatibility, acceptance criteria
+defaults, cost/authority boundaries, saved data, acceptance criteria
 and verification. Run-state changes include a **Transitions out** table covering
 failure and no-session recovery. Automatic launch and labels never grant design
 approval. The task pauses for questions and explicit approval before product
@@ -361,7 +361,6 @@ the tasks it governs already read:
 | Regression proof | `docs/sdlc/regression-proof.md` |
 | What a reviewer checks, and severities | `CODE_REVIEW.md` |
 | Labels, claims, the QA gate or process | `SDLC.md`, or this file for friction |
-| A protected public surface | `BACKWARD_COMPATIBILITY.md` |
 | Work every task does | `AGENTS.md` |
 
 When the rule lands outside `AGENTS.md`, confirm that a pointer reaches it: a Task

@@ -441,7 +441,7 @@ describe('the global settings area (/settings/global)', () => {
   }
 })
 
-/** Legacy flat URLs (BACKWARD_COMPATIBILITY.md): every pre-multi-project path redirects to the
+/** Legacy flat URLs: every pre-multi-project path redirects to the
  *  boot project's scoped twin with params intact — old bookmarks keep landing. */
 describe('legacy flat URLs redirect to the boot project', () => {
   it('restores the last settled project page from the exact bare root', () => {

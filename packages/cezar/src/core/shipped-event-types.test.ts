@@ -2,9 +2,9 @@
  * The shipped event `type` strings are additive-only.
  *
  * A run's events are saved as NDJSON, so every `type` string that shipped is in transcripts on
- * users' disks. Removing or renaming one makes those transcripts unreadable: it is a breaking
- * change (`BACKWARD_COMPATIBILITY.md`). `tsc` holds the rule here, as it does in
- * `ui-events.test.ts`; the typecheck runs over test files.
+ * users' disks. Removing or renaming one makes those transcripts unreadable, and saved runs on
+ * disk must stay readable after an upgrade (AGENTS.md, Changing what already works). `tsc`
+ * holds the rule here, as it does in `ui-events.test.ts`; the typecheck runs over test files.
  *
  * v2 `UiEvent` types are pinned in `ui-events.test.ts`: the keys of its `renderRelevance` map are
  * the exact `UiEventType` set. This file pins v1.

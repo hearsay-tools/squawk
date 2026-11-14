@@ -132,10 +132,9 @@ export function runTitle(run: RunTitleInput): string {
  * (`packages/cezar/src/runs/auto-name.ts`), split off the display title — issue #788, option C.
  *
  * RENDER-ONLY. The stored `title`/`titleSummary` keep the prefix: it is what makes a run findable
- * by number in search, in the Tasks table and in the page title, and `runs.json` field semantics
- * are a protected surface. This only lets a surface that ALREADY paints the number elsewhere —
- * the sidebar row, whose leading chip is the reference — stop spending five characters of a
- * ~10-character title budget saying it twice.
+ * by number in search, in the Tasks table and in the page title. This only lets a surface that
+ * ALREADY paints the number elsewhere — the sidebar row, whose leading chip is the reference —
+ * stop spending five characters of a ~10-character title budget saying it twice.
  *
  * The shape is exactly what `postValidateTitle` produces (`^\d+: `) and nothing looser, so a title
  * that merely contains a colon (`"fix: the login bug"`) or a number in prose is left alone. The

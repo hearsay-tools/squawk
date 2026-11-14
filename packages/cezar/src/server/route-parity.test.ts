@@ -21,7 +21,7 @@ import { createRunManager } from './run-manager.testkit.ts';
  * Alias parity for the mirrored project-route table (spec
  * 2026-07-20-multi-project-workspace, step 2.2): every project-scoped route is
  * registered once and mounted under BOTH the legacy unprefixed `/api/v1/<path>`
- * (bound to the boot project — the protected surface) and
+ * (bound to the boot project) and
  * `/api/v1/p/:projectId/<path>`, where `default` and the boot project's own id
  * resolve to the same boot context. The suite iterates the route manifest
  * exported by server.ts (derived from the app's actual registrations, so it
@@ -156,7 +156,7 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
     const unprefixed = await answer(a, init?.());
     const scoped = await answer(b, init?.());
     const aliased = await answer(c, init?.());
-    // Compare against the legacy spelling — THE protected surface.
+    // Compare against the legacy spelling.
     for (const other of [scoped, aliased]) {
       expect(other.status, `${other.url} vs ${unprefixed.url}`).toBe(unprefixed.status);
       expect(other.contentType, other.url).toBe(unprefixed.contentType);

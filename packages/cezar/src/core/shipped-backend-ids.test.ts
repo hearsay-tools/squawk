@@ -2,8 +2,9 @@
  * A shipped backend id never stops parsing.
  *
  * Run records and transcripts on users' disks carry the backend id that started them, so removing
- * or repurposing one makes that history unreadable: it is a breaking change
- * (`BACKWARD_COMPATIBILITY.md`). `claude-cli` is the legacy id of `claude`.
+ * or repurposing one makes that history unreadable, and saved runs on disk must stay readable
+ * after an upgrade (AGENTS.md, Changing what already works). `claude-cli` is the legacy id of
+ * `claude`.
  */
 import { describe, expect, it } from 'vitest';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
