@@ -29,7 +29,7 @@ runner id. Each runner's `*_SPEC_SUPPORT` constant, next to its class, says whic
 `AgentEvent` in `packages/cezar/src/core/agent-runner.ts` is the v1 stream. Every runner
 emits it beside v2: `hsq run` renders it and saved runs hold it. New consumers read runner
 output from v2. A Squawk-owned run event, such as `provider-auth-required`, has no v2 form
-and arrives as `run-event` (§9). The v1 `type` strings are additive-only (§ Compatibility).
+and arrives as `run-event` (§9). Saved runs keep the v1 `type` strings readable (§ Saved events).
 
 ---
 
@@ -323,12 +323,10 @@ the existing backends hold their channels.
 
 ---
 
-## Compatibility
+## Saved events
 
-v1 `AgentEvent` `type` strings, v2 `UiEvent` dotted types and the names `run-event` and
-`ui-event` (§9) are additive-only: saved runs and shipped clients read them. A
-test pins the shipped type strings. To remove or rename one, or to break the parity
-requirement (§6, §7), is a breaking change under `BACKWARD_COMPATIBILITY.md`.
+Saved runs keep their NDJSON events on disk, so an upgrade must still read every v1
+`AgentEvent` `type` string and v2 `UiEvent` dotted type that shipped. A test pins them.
 
 ## Related documents
 

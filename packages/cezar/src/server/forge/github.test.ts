@@ -1261,10 +1261,10 @@ describe('fetchGithubComments timeline integration (#525)', () => {
     expect(data.events?.[1]).toMatchObject({ sha: SHA, actor: 'Ada' });
   });
 
-  it('returns comments[] byte-identical to the pre-#525 output for the same rows (§2)', async () => {
-    // THE backward-compatibility guarantee. The timeline's `commented` rows are shape-identical to
-    // the legacy endpoint's, and they go through the SAME normalizeComments — so the array a
-    // consumer sees must not move by a single field.
+  it('returns comments[] byte-identical to the pre-#525 output for the same rows', async () => {
+    // The timeline's `commented` rows are shape-identical to the legacy endpoint's, and they go
+    // through the SAME normalizeComments — so the array a consumer sees does not move by a
+    // single field.
     const raw = [comment(1), comment(2), comment(3)];
     const expected = normalizeComments(raw);
 
@@ -1521,7 +1521,7 @@ describe('mergeThread is unaffected by events (#525)', () => {
     expect(out).toHaveLength(THREAD_ENTRY_CAP);
     expect(truncated).toBe(true);
     // Still the OLDEST 200 — the pre-existing head-slice, deliberately not switched to slice(-cap)
-    // like normalizeEvents. It is pre-existing behavior on a §2-frozen surface.
+    // like normalizeEvents.
     expect(out[0]!.id).toBe(0);
     expect(out[out.length - 1]!.id).toBe(199);
   });

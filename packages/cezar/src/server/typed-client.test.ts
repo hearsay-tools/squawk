@@ -121,8 +121,8 @@ describe('createSquawkClient<AppType>', () => {
   });
 
   it('does not offer the legacy surface', () => {
-    // Only `/api/v1/*` is typed: the legacy paths stay frozen for existing callers
-    // (BACKWARD_COMPATIBILITY.md) rather than being advertised to new ones.
+    // Only `/api/v1/*` is typed: the legacy paths serve existing callers rather than
+    // being advertised to new ones.
     expectTypeOf(client.api).not.toHaveProperty('agent-config');
   });
 

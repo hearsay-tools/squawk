@@ -442,7 +442,7 @@ describe('the global settings area (/settings/global)', () => {
   }
 })
 
-/** Legacy flat URLs (BACKWARD_COMPATIBILITY.md): every pre-multi-project path redirects to the
+/** Legacy flat URLs: every pre-multi-project path redirects to the
  *  boot project's scoped twin with params intact — old bookmarks keep landing. */
 describe('legacy flat URLs redirect to the boot project', () => {
   it('restores the last settled project page from the exact bare root', () => {
@@ -856,7 +856,7 @@ describe('unknown project ids', () => {
   })
 })
 
-/** The bookmarklet contract (spec 011), protected by BACKWARD_COMPATIBILITY.md:
+/** The URL saved bookmarklets open (spec 011):
  *  `/new?skill=&ref=&auto=1&key=`. Since R4 Step 1.3 `auto=1` arms the real unattended start
  *  (the full matrix lives in routes/new-task.test.tsx); this file keeps the URL contract —
  *  through the legacy redirect, exactly as a saved bookmarklet arrives. */

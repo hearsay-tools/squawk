@@ -2689,8 +2689,8 @@ describe('RunStore — pinned tasks (#935)', () => {
   });
 
   it('unpinning DELETES both keys rather than writing pinned:false', () => {
-    // The compatibility promise (BACKWARD_COMPATIBILITY.md): an unpinned record is
-    // byte-identical to one written by a Squawk that never heard of pins.
+    // An unpinned record is byte-identical to one written by a Squawk that never
+    // heard of pins.
     const store = RunStore.open(dataDir);
     const id = newRun(store);
     store.setPinned(id, true);

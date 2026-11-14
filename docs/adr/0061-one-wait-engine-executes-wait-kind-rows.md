@@ -37,7 +37,7 @@ a warning, and the test setup fails the test. Nothing throws in the write path.
 
 The contract package keeps the wire schemas and the attention facts: it stays Node-free and
 shares no code with the table. The web package does not change. The CLI keeps the legacy
-`WorkerWait` answer shape as a boundary view (`BACKWARD_COMPATIBILITY.md`). Every refusal code and
+`WorkerWait` answer shape as a boundary view. Every refusal code and
 message stays as it was. One P4 slice changes one refusal, in its own pull request.
 
 A provider-error or usage-limit hold is a run state, not a wait-kind row

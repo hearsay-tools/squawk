@@ -97,9 +97,8 @@ describe('ReferenceChip with a status', () => {
   })
 
   it('renders a status from a LATER version as the neutral chip rather than throwing', () => {
-    // The vocabulary is additive by contract (BACKWARD_COMPATIBILITY.md, `/github/ref-status`):
-    // "an unknown one renders neutral". Two real paths reach this bundle with a value it has
-    // never heard of — a newer server answering an older tab, and a `sessionStorage` payload a
+    // An unknown `/github/ref-status` value renders neutral. Two real paths reach this bundle
+    // with a value it has never heard of — a newer server answering an older tab, and a `sessionStorage` payload a
     // newer cockpit wrote in this same tab — and each used to be a `TypeError` inside the
     // accessible name, which takes the whole table down rather than the one chip.
     const chip = chipOf(

@@ -60,9 +60,9 @@ test('safeRemoteFor accepts the documented safe source shapes', () => {
   assert.equal(safeRemoteFor('../rel'), '../rel');
 });
 
-test('safeRemoteFor keeps Windows local paths working (BC §5: local path)', () => {
-  // win32 is a supported platform and these worked before the hardening —
-  // narrowing the `skillsRepos` source shape would be a breaking change.
+test('safeRemoteFor keeps Windows local paths working', () => {
+  // win32 is a supported platform and these worked before the hardening. A saved
+  // `skillsRepos` entry may hold one (AGENTS.md, Changing what already works).
   assert.equal(safeRemoteFor('C:\\skills'), 'C:\\skills');
   assert.equal(safeRemoteFor('C:/skills'), 'C:/skills');
   assert.equal(safeRemoteFor('d:\\team\\skills'), 'd:\\team\\skills');

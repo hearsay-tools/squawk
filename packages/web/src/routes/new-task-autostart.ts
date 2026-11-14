@@ -4,9 +4,9 @@ import { buildCreateRunBody, type TaskSource } from './new-task-form'
 import type { NewTaskParams } from './new-task-params'
 
 /**
- * Bookmarklet auto-start (spec 011) — the React half of `handleDeepLink()` in web/app.js,
- * protected by BACKWARD_COMPATIBILITY.md: `/new?skill=&ref=&auto=1&key=` from a saved
- * bookmarklet must behave EXACTLY as it did on the legacy page.
+ * Bookmarklet auto-start (spec 011) — the React half of `handleDeepLink()` in web/app.js.
+ * Saved bookmarklets open `/new?skill=&ref=&auto=1&key=`, and it behaves as it did on the
+ * legacy page.
  *
  * Legacy semantics, verified against `web/app.js`:
  *  - no `ref` (nor the `task` alias) → nothing to do beyond a plain composer;

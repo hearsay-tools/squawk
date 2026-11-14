@@ -83,7 +83,7 @@ describe('src/contract projects/workspace schemas match the routes exactly', () 
    * What that still proves, measured against this app type: a named key whose TYPE drifts fails
    * (`runsView: z.number()` → `schema-is-wider`), and a key the schema makes REQUIRED that the
    * route does not send fails (`route-is-wider`). What it cannot prove is an extra OPTIONAL key —
-   * but that is not drift here: an open bag round-trips whatever it was PUT (§3), so a key the
+   * but that is not drift here: an open bag round-trips whatever it was PUT, so a key the
    * server has never heard of is a key it may genuinely answer with.
    */
   type ExactOpen<Schema, Route> = Mutual<JSONParsed<Schema>, Route>;

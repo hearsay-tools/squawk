@@ -117,7 +117,7 @@ restore` behavior is unchanged.
 Before migration, `hsq migrate --resolve-legacy <file> restore|accept` resolves
 an outside-write or reset incident on the legacy home. It uses the pinned restore
 or acceptance writer directly, without preparing or migrating the split home.
-Help lists both actions. See `BACKWARD_COMPATIBILITY.md` for output and exit codes.
+Help lists both actions.
 
 Product task-context reads accept `HSQ_*` first with `CEZ_*` fallback during
 the deprecation window. The `CEZ_HOME` fallback is permanent.
