@@ -24,7 +24,6 @@ interface HealthBody {
   forge: { kind: string; available: boolean; reason?: string } | null;
   capabilities: {
     localHandoff: boolean;
-    followups: boolean;
     automations: boolean;
     tokenMetrics: boolean;
     tokenUsageMetrics: boolean;

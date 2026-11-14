@@ -54,7 +54,6 @@ interface HealthBody {
   forge: unknown;
   capabilities: {
     localHandoff: boolean;
-    followups: boolean;
     automations: boolean;
     tokenMetrics: boolean;
   };
