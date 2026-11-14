@@ -317,9 +317,9 @@ test('a changed file without an entry in targets.json opens no issue and gets on
   const filesDir = resultDir(t, [[declared, result(declared, { fail: ['covered lines'] })], [changed, candidate(changed)]]);
   const github = fakeGithub();
   const summaries = [];
-  const core = { warning() {}, info() {}, summary: { addRaw(text) { summaries.push(text); return this; }, async write() {} } };
+  const core = { summary: { addRaw(text) { summaries.push(text); return this; }, async write() {} } };
   const context = { repo: { owner: 'o', repo: 'r' }, runId: 9, serverUrl: 'https://github.test' };
-  const { outcomes } = await publish({ github, context, core, planDir, filesDir, outDir: path.join(dir, 'out'), readArchive, exists: () => true,
+  const { outcomes } = await publish({ github, context, core, planDir, filesDir, outDir: path.join(dir, 'out'), readArchive,
     targets: { [declared]: { tier: 'logic', guards: [] } } });
   assert.deepEqual(outcomes.map(o => [o.file, o.state]), [[declared, 'missed'], [changed, 'candidate']]);
   assert.deepEqual(github.state.issues.map(i => i.title), [`Mutation targets missed: ${declared}`]);

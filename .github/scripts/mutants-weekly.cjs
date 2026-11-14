@@ -245,7 +245,12 @@ async function syncOne({ github, owner, repo, issue, outcome, earlier, head, run
   return { action: 'created', number: created.data.number };
 }
 
-const undeclaredBody = (file, head, runUrl) => `\`${file}\` has no entry in \`.github/mutants/targets.json\` at \`${short(head)}\` ([weekly mutation run](${runUrl})). ${NO_ENTRY_RULE} Closing.`;
+/** A file without an entry keeps no issue: close an open one with the rule. */
+async function closeUndeclared({ github, owner, repo, issue, file, head, runUrl }) {
+  const body = `\`${file}\` has no entry in \`.github/mutants/targets.json\` at \`${short(head)}\` ([weekly mutation run](${runUrl})). ${NO_ENTRY_RULE} Closing.`;
+  await closeIssue({ github, owner, repo, issue, reason: 'not_planned', body });
+  return { file, action: 'closed-undeclared', number: issue.number };
+}
 
 async function syncIssues({ github, owner, repo, outcomes, earlier, head, runUrl, exists, declared, cut = [], date }) {
   const issues = await findIssues({ github, owner, repo });
@@ -253,9 +258,7 @@ async function syncIssues({ github, owner, repo, outcomes, earlier, head, runUrl
   for (const outcome of outcomes) {
     const issue = issues.get(outcome.file);
     if (!declared(outcome.file)) {
-      if (issue?.state !== 'open') continue;
-      await closeIssue({ github, owner, repo, issue, reason: 'not_planned', body: undeclaredBody(outcome.file, head, runUrl) });
-      actions.push({ file: outcome.file, action: 'closed-undeclared', number: issue.number });
+      if (issue?.state === 'open') actions.push(await closeUndeclared({ github, owner, repo, issue, file: outcome.file, head, runUrl }));
       continue;
     }
     const done = await syncOne({ github, owner, repo, issue, outcome, earlier, head, runUrl, date });
@@ -266,8 +269,7 @@ async function syncIssues({ github, owner, repo, outcomes, earlier, head, runUrl
   for (const [file, issue] of issues) {
     if (issue.state !== 'open' || planned.has(file)) continue;
     if (exists(file) && !declared(file)) {
-      await closeIssue({ github, owner, repo, issue, reason: 'not_planned', body: undeclaredBody(file, head, runUrl) });
-      actions.push({ file, action: 'closed-undeclared', number: issue.number });
+      actions.push(await closeUndeclared({ github, owner, repo, issue, file, head, runUrl }));
       continue;
     }
     if (exists(file)) {
