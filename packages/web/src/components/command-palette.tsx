@@ -330,6 +330,31 @@ export function CommandPalette() {
   )
 }
 
+/** A headed group of task rows. Recently finished and Tasks share it. */
+function TaskGroup({ heading, tasks, projectName, showProject, now, onSelect }: {
+  heading: string
+  tasks: PaletteTask[]
+  projectName: (task: PaletteTask) => string | null
+  showProject: boolean
+  now: number
+  onSelect: (task: PaletteTask) => void
+}) {
+  return (
+    <CommandGroup heading={heading}>
+      {tasks.map((task) => (
+        <TaskItem
+          key={taskKey(task)}
+          task={task}
+          projectName={projectName(task)}
+          showProject={showProject}
+          now={now}
+          onSelect={onSelect}
+        />
+      ))}
+    </CommandGroup>
+  )
+}
+
 /** One task row. Shared by Unread and Tasks so the two groups can never drift into rendering
  *  or filtering the same task differently — only which group holds it changes. */
 function TaskItem({
@@ -493,18 +518,15 @@ function paletteGroups({
       // Scored only during a search, so the default view never pays for a pass over every task.
       rows: searching ? otherTasks.map((task) => taskMatch(task, taskProjectName(task))) : [],
       node: (
-        <CommandGroup key="tasks" heading="Tasks">
-          {otherTasks.map((task) => (
-            <TaskItem
-              key={taskKey(task)}
-              task={task}
-              projectName={taskProjectName(task)}
-              showProject={showProjectOnTasks}
-              now={now}
-              onSelect={selectTask}
-            />
-          ))}
-        </CommandGroup>
+        <TaskGroup
+          key="tasks"
+          heading="Tasks"
+          tasks={otherTasks}
+          projectName={taskProjectName}
+          showProject={showProjectOnTasks}
+          now={now}
+          onSelect={selectTask}
+        />
       ),
     })
   }
@@ -611,18 +633,14 @@ function paletteResults({ search, searching, recentlyFinished, groups, taskProje
           floats a section of near-misses above the exact match you are looking for, purely
           because that section renders first. Searching gets one ranked Tasks list. */}
       {!searching && recentlyFinished.length > 0 ? (
-        <CommandGroup heading="Recently finished">
-          {recentlyFinished.map((task) => (
-            <TaskItem
-              key={taskKey(task)}
-              task={task}
-              projectName={taskProjectName(task)}
-              showProject={showProjectOnTasks}
-              now={now}
-              onSelect={selectTask}
-            />
-          ))}
-        </CommandGroup>
+        <TaskGroup
+          heading="Recently finished"
+          tasks={recentlyFinished}
+          projectName={taskProjectName}
+          showProject={showProjectOnTasks}
+          now={now}
+          onSelect={selectTask}
+        />
       ) : null}
 
       {rankGroups(groups, search).map((group) => group.node)}
