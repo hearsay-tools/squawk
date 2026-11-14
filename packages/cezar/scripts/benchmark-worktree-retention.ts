@@ -103,9 +103,11 @@ export async function measureRetention(options: RetentionBenchOptions): Promise<
   }
 }
 
-async function main(): Promise<void> {
-  const ownHome = prepareBenchmarkEnv();
-  const { values } = parseArgs({ options: {
+export interface RetentionBenchArgs { sizes: number[]; base: Omit<RetentionBenchOptions, 'workers'>; out: string | undefined }
+
+/** The command line as one run's settings; throws on a size or count it cannot use. */
+export function parseRetentionBenchArgs(args: string[]): RetentionBenchArgs {
+  const { values } = parseArgs({ args, options: {
     workers: { type: 'string', default: '100,1000,3000' },
     'workers-per-parent': { type: 'string', default: '7' },
     'parent-kb': { type: 'string', default: '640' },
@@ -120,14 +122,27 @@ async function main(): Promise<void> {
   if (sizes.some(size => !Number.isInteger(size) || size < 0) || !(base.workersPerParent >= 1) || !(base.passes >= 1)) {
     throw new Error('--workers takes whole numbers >= 0; --workers-per-parent and --passes take numbers >= 1');
   }
+  return { sizes, base, out: values.out };
+}
+
+/** The result as a Markdown table under one line naming the settings and the host. */
+export function formatRetentionTable(base: RetentionBenchArgs['base'], rows: readonly RetentionBenchRow[]): string {
+  return [
+    `parent ${base.parentKb} KB, worker ${base.workerKb} KB, ${base.workersPerParent} workers per parent, ${base.liveRoots} live roots, median of ${base.passes} passes, ${cpus().length} cores, Node ${process.version}`,
+    '| destroyed workers | parents | rows listed | list ms | pass ms |',
+    '| ---: | ---: | ---: | ---: | ---: |',
+    ...rows.map(row => `| ${row.workers} | ${row.parents} | ${row.candidates} | ${row.listMs} | ${row.passMs} |`),
+  ].join('\n');
+}
+
+async function main(): Promise<void> {
+  const { sizes, base, out } = parseRetentionBenchArgs(process.argv.slice(2));
+  const ownHome = prepareBenchmarkEnv();
   try {
-    const results: RetentionBenchRow[] = [];
-    for (const workers of sizes) results.push(await measureRetention({ ...base, workers }));
-    console.log(`parent ${base.parentKb} KB, worker ${base.workerKb} KB, ${base.workersPerParent} workers per parent, ${base.liveRoots} live roots, median of ${base.passes} passes, ${cpus().length} cores, Node ${process.version}`);
-    console.log('| destroyed workers | parents | rows listed | list ms | pass ms |');
-    console.log('| ---: | ---: | ---: | ---: | ---: |');
-    for (const row of results) console.log(`| ${row.workers} | ${row.parents} | ${row.candidates} | ${row.listMs} | ${row.passMs} |`);
-    if (values.out) writeFileSync(values.out, `${JSON.stringify(results, null, 2)}\n`);
+    const rows: RetentionBenchRow[] = [];
+    for (const workers of sizes) rows.push(await measureRetention({ ...base, workers }));
+    console.log(formatRetentionTable(base, rows));
+    if (out) writeFileSync(out, `${JSON.stringify(rows, null, 2)}\n`);
   } finally {
     if (ownHome) rmSync(ownHome, { recursive: true, force: true });
   }
