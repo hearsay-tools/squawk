@@ -98,7 +98,6 @@ describe('the new-task draft store', () => {
       agentProfile: null,
       model: null,
       effort: null,
-      retiredVariants: false,
       planFirst: false,
       worktree: null,
       autonomous: null,
@@ -117,7 +116,6 @@ describe('the new-task draft store', () => {
       agentProfile: null,
       model: 'gpt-5-codex',
       effort: 'high',
-      retiredVariants: false,
       planFirst: false,
       worktree: false,
       autonomous: null,
@@ -141,7 +139,6 @@ describe('the new-task draft store', () => {
       agentProfile: null,
       model: 'opus',
       effort: 'max',
-      retiredVariants: false,
       planFirst: true,
       worktree: null,
       autonomous: null,
@@ -160,7 +157,6 @@ describe('the new-task draft store', () => {
       // Runner/model/plan-first are a way of working — they survive, as they always did.
       model: 'opus',
       effort: 'max',
-      retiredVariants: false,
       planFirst: true,
       worktree: null,
       autonomous: null,
@@ -179,7 +175,6 @@ describe('the new-task draft store', () => {
       agentProfile: null,
       model: 'sonnet',
       effort: 'low',
-      retiredVariants: false,
       planFirst: true,
       worktree: false,
       autonomous: null,
@@ -193,7 +188,6 @@ describe('the new-task draft store', () => {
     const raw = localStorage.getItem('cez-new-task-draft') as string
     expect(JSON.parse(raw)).toMatchObject({
       text: 'do not lose me',
-      retiredVariants: false,
       worktree: false,
       autonomous: null,
       archiveWhenDone: false,
@@ -215,7 +209,6 @@ describe('the new-task draft store', () => {
       agentProfile: null,
       model: null,
       effort: null,
-      retiredVariants: false,
       planFirst: false,
       worktree: null,
       autonomous: null,
@@ -234,7 +227,6 @@ describe('the new-task draft store', () => {
       agentProfile: null,
       model: null,
       effort: null,
-      retiredVariants: false,
       planFirst: false,
       worktree: null,
       autonomous: null,
@@ -282,9 +274,3 @@ describe('composerRunModeNote (#793)', () => {
   })
 })
 
-it('requires an explicit migration choice for an old multi-candidate draft', () => {
-  localStorage.setItem('cez-new-task-draft', JSON.stringify({ text: 'Keep this task', variants: 2 }))
-  expect(readDraft()).toMatchObject({ text: 'Keep this task', retiredVariants: true })
-  writeDraft({ ...readDraft(), retiredVariants: false })
-  expect(readDraft()).toMatchObject({ text: 'Keep this task', retiredVariants: false })
-})

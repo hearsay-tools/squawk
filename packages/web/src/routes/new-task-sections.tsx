@@ -43,15 +43,6 @@ export function NewTaskHeader() {
   )
 }
 
-export function RetiredVariantsNotice({ onUseOneTask }: { onUseOneTask: () => void }) {
-  return (
-    <section role="alert" className="flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-4">
-      <p>Parallel variants are removed. This saved draft requested multiple candidates. Use owned workers to compare approaches, or start one task.</p>
-      <Button variant="outline" className="min-h-11" onClick={onUseOneTask}>Use one task</Button>
-    </section>
-  )
-}
-
 /** Runner (with its accounts), model and effort. Controls stay with the editor; the compact
  *  layout puts effort before model, and the DOM order follows that visual order. */
 export function AgentOptions({

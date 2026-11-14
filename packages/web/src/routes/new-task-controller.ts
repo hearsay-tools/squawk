@@ -446,7 +446,6 @@ export function useNewTaskSubmit(input: {
 
   const submit = async (text: string, images: AttachmentInput[]) => {
     const submittedRevision = draftRevision(draftProjectId)
-    if (draft.retiredVariants) throw new Error('Parallel variants are removed. Choose Use one task before starting this saved draft.')
     if (!providersReady || runner === null) throw new Error(providerUnavailableReason(providers))
     // Rejection restores the draft — nothing typed is lost to a race with the pickers.
     if (!input.sourcesReady) throw new Error('Still loading workflows and skills — try again in a second.')

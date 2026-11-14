@@ -5,7 +5,7 @@ import { createAutomationInputSchema, updateAutomationInputSchema } from './auto
 import { storedAutomationTaskSchema } from './automation-storage.ts';
 
 it('strips retired variants from run creation like other unknown keys', () => {
-  expect(createRunInputSchema.parse({ task: 'work', variants: 3 })).not.toHaveProperty('variants');
+  expect(createRunInputSchema.parse({ workflow: 'quick-task', task: 'work', variants: 3 })).not.toHaveProperty('variants');
 });
 
 it.each([automationCreateSchema, automationUpdateSchema, createAutomationInputSchema, updateAutomationInputSchema])(
