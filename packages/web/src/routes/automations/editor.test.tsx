@@ -237,6 +237,19 @@ const stored = {
   task: { prompt: 'Go', workflow: 'quick-task' }, createdAt: '', updatedAt: '',
 } as AutomationDefinition
 
+it('saves a stored variant automation as one task without the retired key', async () => {
+  let persisted: AutomationDefinition | undefined
+  stubFetch((call) => {
+    persisted = { ...stored, ...(call.body as object) }
+    return json({ automation: persisted })
+  })
+  const onSaved = mount({ automation: { ...stored, task: { ...stored.task, variants: 2 } } })
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+  await waitFor(() => expect(onSaved).toHaveBeenCalled())
+  expect(persisted?.task).toMatchObject({ prompt: 'Go' })
+  expect(persisted?.task).not.toHaveProperty('variants')
+})
+
 it('a 409 shows the reload action and keeps the typed name', async () => {
   stubFetch(() => json({ error: 'automation revision conflict' }, 409))
   const onReload = vi.fn()

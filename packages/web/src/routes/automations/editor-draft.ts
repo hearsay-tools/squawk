@@ -1,3 +1,4 @@
+import { writableAutomationTask } from '@open-mercato/cezar-api-client/contract/automations'
 import {
   normalizeSchedule,
   type AutomationSchedule,
@@ -61,7 +62,7 @@ type DraftSource = Partial<{
 }>
 
 export function fromDefinition(source: DraftSource = {}): AutomationDraft {
-  const { prompt, workflow, runner, model, autonomous, archiveWhenDone, autoMergePr, allowWorkers, allowMessaging, variants, ...taskExtra } = (source.task ?? { prompt: '' }) as AutomationTask
+  const { prompt, workflow, runner, model, autonomous, archiveWhenDone, autoMergePr, allowWorkers, allowMessaging, ...taskExtra } = writableAutomationTask(source.task ?? { prompt: '' })
   const fresh = source.task === undefined
   return {
     name: source.name ?? '',

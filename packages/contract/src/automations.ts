@@ -80,6 +80,12 @@ export const automationTaskSchema = createRunInputBaseSchema
   });
 export type AutomationTask = z.infer<typeof automationTaskSchema>;
 
+/** Remove a saved-only field before building a write request; never apply to caller input. */
+export function writableAutomationTask<T extends object>(task: T): Omit<T, 'variants'> {
+  const { variants: _variants, ...writable } = task as T & { variants?: unknown };
+  return writable;
+}
+
 /**
  * A one-time schedule's archive record (hearsay-tools/cezarion#1465): written after its task
  * exists (`launched`, with the run and receipt) or when it was cancelled. An archived definition

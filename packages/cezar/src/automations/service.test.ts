@@ -102,6 +102,13 @@ describe('one-time writes that race or keep the due time (#1465 review)', () => 
     return { service, project, automationStore };
   }
 
+  it.each(['enable', 'pause'] as const)('clears saved variants when the service %s a repeating automation', async (action) => {
+    const { service, project, automationStore } = fixture();
+    const saved = automationStore.create({ name: 'Saved', kind: 'schedule', enabled: false, schedule: { type: 'daily', hour: 4 }, task: { prompt: 'Go', variants: 2 } });
+    expect(await service[action](project, saved.id)).toMatchObject({ ok: true });
+    expect(automationStore.get(saved.id)?.task).not.toHaveProperty('variants');
+  });
+
   it('an edit of only the latest start on a past-due Missed schedule is saved', async () => {
     const { service, project, automationStore } = fixture();
     const stored = automationStore.create({ name: 'Once', enabled: false, kind: 'schedule', schedule: { type: 'once', at: '2026-10-20T09:00', timeZone: 'UTC' }, task: { prompt: 'Go' } });
