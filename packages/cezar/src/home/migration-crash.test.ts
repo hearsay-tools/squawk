@@ -32,12 +32,18 @@ it('a crash between committed marker and MOVED publication keeps the committed t
   expect(json(target.workspaceConfig).saved).toBe('original');
 });
 
-it('a thrown fault releases .migrating and a later run overwrites its pending copy', () => {
-  const { legacy, target } = migrationFixture();
-  expect(() => runCrashMigration(legacy.root, dirname(target.config), 'copied', () => { throw new Error('injected'); })).toThrow('injected');
-  expect(existsSync(join(legacy.root, '.migrating'))).toBe(false);
-  expect(migrateLegacyHome(legacy, target).status).toBe('migrated');
-});
+it.each([['recovered', undefined, 'migrated'], ['pending', 'pending', 'migrated'], ['archived', 'pending', 'migrated'],
+  ['copied', 'pending', 'migrated'], ['committed', 'committed', 'unchanged']] as const)(
+  'a thrown fault at %s releases .migrating, leaves a %s marker, and the next run reports %s', (step, marker, status) => {
+    const { legacy, target } = migrationFixture();
+    expect(() => runCrashMigration(legacy.root, dirname(target.config), step, () => { throw new Error('injected'); })).toThrow('injected');
+    expect(existsSync(join(legacy.root, '.migrating'))).toBe(false);
+    expect(readInstallMarker(target.config)?.state).toBe(marker);
+    if (marker === 'pending') rawJson(target.workspaceConfig, { crashedPendingCopy: true });
+    expect(migrateLegacyHome(legacy, target).status).toBe(status);
+    expect(readInstallMarker(target.config)?.state).toBe('committed');
+    expect(json(target.workspaceConfig)).toEqual({ projects: [], saved: 'original' });
+  });
 
 it('an operator migration from a legacy test marker creates a live target marker and a test process still cannot write it', () => {
   const { legacy, target } = migrationFixture();
