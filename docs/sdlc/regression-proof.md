@@ -147,7 +147,7 @@ A changed file without an entry is a **candidate**. The weekly run measures it, 
 and opens no issue: the run summary lists it under "Candidates" with its changed lines and counted
 score. Give it a tier, or leave it out. The weekly run closes an open issue for a file without an
 entry with a comment that states this rule. The whole-file command prints `Tier: none` for such a
-file and no PASS or FAIL line.
+file and no target lines. A contract file still prints its consumer-test PASS or FAIL line.
 
 ## Test-only change that removes a hidden dependency
 
