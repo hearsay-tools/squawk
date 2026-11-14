@@ -104,7 +104,10 @@ describe('normalizeMergeState', () => {
     ['a blocked merge state is unconfirmed', { ...readyPr, mergeStateStatus: 'BLOCKED' }, readableRules, unconfirmed()],
     ['a clean status is not trusted while mergeability is computed', { ...readyPr, mergeable: 'UNKNOWN' }, readableRules,
       unconfirmed('unknown')],
-    ['a missing merge state status is unconfirmed', { ...readyPr, mergeStateStatus: null }, readableRules, unconfirmed()],
+    ['GitHub has not computed the merge state yet', { ...readyPr, mergeable: 'UNKNOWN', mergeStateStatus: 'UNKNOWN' }, readableRules,
+      unconfirmed('unknown')],
+    ['a malformed state without a merge state status is unconfirmed', { ...readyPr, mergeStateStatus: null }, readableRules,
+      unconfirmed()],
     ['branch rules that allow no enabled method are unconfirmed', readyPr, { ...readableRules, allowedMergeMethods: [] },
       unconfirmed('mergeable', false)],
   ])('%s', (_name, pr, rules, expected) => {
