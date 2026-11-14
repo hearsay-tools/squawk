@@ -2,7 +2,6 @@
 
 // Guards Squeal shared results (hearsay-tools/squeal spec 018 D17): merge-group Vitest shards run
 // their unchanged command under `squeal ci record`, and an optional job publishes refs/squeal/<sha>.
-// A Squeal gate trial dispatch records too (ci-squeal-gate-trial.workflow.test.cjs).
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
@@ -27,10 +26,10 @@ function expression(raw, context) {
   return runInNewContext(code, context);
 }
 
-function context(event, { vitest = 'success', exported = 'success', trial = false, pr = '' } = {}) {
+function context(event, { vitest = 'success', exported = 'success', pr = '' } = {}) {
   return {
     github: { event_name: event },
-    inputs: { pr_number: pr, squeal_gate_trial: trial },
+    inputs: { pr_number: pr },
     needs: {
       vitest: { result: vitest },
       'squeal-export': { result: exported },
@@ -54,7 +53,7 @@ test('the Vitest shards and the Squeal jobs read one exact Node version from .no
   const readers = Object.entries(jobs).filter(([, job]) => (job.steps ?? []).some((s) => s.with?.['node-version-file']))
     .map(([id]) => id);
   assert.deepEqual(readers.sort(), ['cockpit-browser', 'prepare-pr-snapshot', 'publish-snapshot', 'squeal-coverage-proof',
-    'squeal-coverage-proof-compare', 'squeal-export', 'squeal-gate-trial', 'squeal-package-trial', 'squeal-publish', 'vitest',
+    'squeal-coverage-proof-compare', 'squeal-export', 'squeal-package-trial', 'squeal-publish', 'vitest',
     'vitest-coverage-merge'], 'the minimum-Node jobs keep engines.node');
   for (const id of readers) {
     const setup = jobs[id].steps.find((s) => s.uses?.startsWith('actions/setup-node@'));
@@ -63,15 +62,12 @@ test('the Vitest shards and the Squeal jobs read one exact Node version from .no
   }
 });
 
-test('merge groups and Squeal gate trial dispatches run the shard under squeal ci record; every other run as before', () => {
+test('only merge groups run the shard under squeal ci record; every other run as before', () => {
   const vitest = ci().jobs.vitest;
   const collect = step(vitest, 'collect');
   const record = step(vitest, 'record');
   const recorded = ['Set up Squeal', 'record', 'Upload Squeal parts'].map((id) => step(vitest, id));
-  // [event, inputs, recorded]: only a dispatch with squeal_gate_trial and no pr_number takes the trial.
-  const runs = [...EVENTS.map((event) => [event, {}, event === 'merge_group']),
-    ['workflow_dispatch', { trial: true }, true], ['workflow_dispatch', { trial: true, pr: '42' }, false],
-    ['workflow_dispatch', { trial: 'true' }, false], ['pull_request_target', { trial: true }, false]];
+  const runs = EVENTS.map((event) => [event, {}, event === 'merge_group']);
   for (const [event, inputs, recording] of runs) {
     const ctx = context(event, inputs);
     const name = `${event} ${JSON.stringify(inputs)}`;
@@ -80,7 +76,7 @@ test('merge groups and Squeal gate trial dispatches run the shard under squeal c
   }
   assert.equal(record.env.VITEST_FILE_DURATION_CAP, collect.env.VITEST_FILE_DURATION_CAP);
   // Test failures block: a merge group continues past them only to its rerun, which blocks
-  // (ci-queue-rerun.workflow.test.cjs); a trial dispatch never continues.
+  // (ci-queue-rerun.workflow.test.cjs).
   for (const [event, inputs] of runs) {
     assert.equal(expression(record['continue-on-error'], context(event, inputs)), event === 'merge_group', `${event} ${JSON.stringify(inputs)}`);
   }
@@ -121,8 +117,6 @@ test('the merge-group step runs the test command under squeal ci record and retu
     assert.equal(recorded.status, 3, 'the step\'s exit code is the command\'s');
     assert.equal(recorded.stdout, 'squeal ci record --out /runner/temp/squeal-parts -- npm test -- --shard=2/8 --maxWorkers=4\n'
       + 'npm test -- --shard=2/8 --maxWorkers=4\n');
-    // A trial dispatch records the same command, with no --coverage.enabled for Squeal's provider to yield to.
-    assert.equal(run('workflow_dispatch').stdout, recorded.stdout);
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }
@@ -130,7 +124,7 @@ test('the merge-group step runs the test command under squeal ci record and retu
 
 // The coverage proof (ci-squeal-coverage-proof.workflow.test.cjs) and the packaged test trial
 // (ci-squeal-package-trial.workflow.test.cjs) run only on a manual dispatch, and gate nothing either.
-const SQUEAL_JOBS = ['squeal-export', 'squeal-publish', 'squeal-gate-trial', 'squeal-coverage-proof', 'squeal-coverage-proof-compare',
+const SQUEAL_JOBS = ['squeal-export', 'squeal-publish', 'squeal-coverage-proof', 'squeal-coverage-proof-compare',
   'squeal-package-trial'];
 
 test('squeal-export runs after passing merge-group shards and only reads', () => {
@@ -253,7 +247,7 @@ test('every job that runs squeal sets up Squeal\'s pinned action once, after its
   for (const pin of pins) assert.equal(pin.trim(), SQUEAL_PIN);
   const users = Object.entries(jobs).filter(([, job]) => (job.steps ?? []).some((s) => /(^|\s)squeal (ci|code)\b/m.test(s.run ?? '')))
     .map(([id]) => id);
-  assert.deepEqual(users.sort(), ['squeal-coverage-proof', 'squeal-export', 'squeal-gate-trial', 'squeal-package-trial', 'squeal-publish', 'vitest']);
+  assert.deepEqual(users.sort(), ['squeal-coverage-proof', 'squeal-export', 'squeal-package-trial', 'squeal-publish', 'vitest']);
   for (const [id, job] of Object.entries(jobs)) {
     const { steps = [] } = job;
     const action = steps.filter((s) => s.uses?.startsWith('hearsay-tools/squeal/'));
