@@ -77,12 +77,33 @@ export class RunSettlement {
     removeAgentTmpDir(this.context.dataDir, runId);
   }
 
+  /** The retention pass running now, and the one pass queued behind it. */
+  private retentionRunning: Promise<void> | undefined;
+  private retentionQueued: Promise<void> | undefined;
+
   /** Reclaim finished worktrees beyond the keep-limit (#483) — directory only,
    *  `cez/<id8>` branch kept — then sweep the branches whose work landed
    *  (hearsay-tools/cezarion#2268). Best-effort; a failure never affects run
    *  lifecycle. `review`/live runs are excluded by the selector. */
-  async enforceRetention(): Promise<void> {
-    return this.context.work.track('enforceRetention', this.enforceRetentionWork());
+  enforceRetention(): Promise<void> {
+    // One pass at a time: a run that settles during a pass asks for one more after it, since the
+    // running pass may have listed the runs before that one settled.
+    if (this.retentionQueued) return this.retentionQueued;
+    if (!this.retentionRunning) return this.startRetentionPass();
+    const queued = this.retentionRunning.then(() => {
+      this.retentionQueued = undefined;
+      return this.context.disposed() ? undefined : this.startRetentionPass();
+    });
+    this.retentionQueued = this.context.work.track('enforceRetention', queued);
+    return this.retentionQueued;
+  }
+
+  private startRetentionPass(): Promise<void> {
+    const pass: Promise<void> = this.context.work.track('enforceRetention', this.enforceRetentionWork()).finally(() => {
+      if (this.retentionRunning === pass) this.retentionRunning = undefined;
+    });
+    this.retentionRunning = pass;
+    return pass;
   }
 
   private async enforceRetentionWork(): Promise<void> {
