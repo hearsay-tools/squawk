@@ -183,8 +183,7 @@ Reporter tests cover trusted event eligibility, cancelled-run failures,
 evidence before routing, multiple causes and jobs, signature reuse, expired-log
 replay, interrupted writes, lost responses, complete manifests and closed-summary
 replay. The workflow test pins the trigger, permissions, trusted checkout and shared
-lock. Release, Nightly and sweep reporting retain their existing coverage. The
-prompt helper test validates that its CLI output updates only the prompt.
+lock. Release, Nightly and sweep reporting retain their existing coverage.
 
 Merge-group failures do not enter this push-only repair path. They remain visible
 in the queue and leave the PR unmerged. Main push failures still enter it,
