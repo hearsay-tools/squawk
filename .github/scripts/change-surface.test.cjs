@@ -131,7 +131,6 @@ test('classifies infra harness and unnamed github paths as full-matrix', () => {
     '.github/workflows/coderabbit-reconcile.yml',
     '.github/workflows/coderabbit-review-signal.yml',
     '.coderabbit.yaml',
-    '.github/workflows/ci-benchmark.yml',
     '.github/scripts/change-surface.cjs',
     '.github/scripts/change-surface.test.cjs',
     '.github/scripts/change-surface-readers.test.cjs',
