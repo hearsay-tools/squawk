@@ -141,7 +141,6 @@ describe('ProjectContexts', () => {
     const first = await contexts.context('a');
     expect(first.id).toBe('a');
     expect(first.dataDir).toBe(projectPaths(rootA).write);
-    expect(existsSync(join(projectPaths(rootA).write, 'launch-key'))).toBe(false);
     // Only the accessed project was built.
     expect(existsSync(join(rootB, '.ai/cezar'))).toBe(false);
     expect(contexts.ids()).toEqual(['a']);

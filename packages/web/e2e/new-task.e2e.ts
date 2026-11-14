@@ -425,10 +425,10 @@ describe('prefill links on full /new loads', () => {
   const runCount = async (): Promise<number> =>
     (await getJson<unknown[]>(`${baseUrl}/api/v1/runs`)).length
 
-  it('a flat /new link with auto=1 and a key only prefills — the composer, a toast, and NOT one run more', async () => {
+  it('a flat /new prefill link fills the composer — a toast, and NOT one run more', async () => {
     const before = await runCount()
 
-    browser.goto(`${baseUrl}/new?skill=lint-fix&ref=hello&auto=1&key=any`)
+    browser.goto(`${baseUrl}/new?skill=lint-fix&ref=hello`)
     browser.waitForFunction(`document.querySelector('[data-route="new"] [data-slot="composer"]') !== null`)
 
     expect(browser.evaluate(`document.querySelector('[data-slot="composer"] textarea').value`)).toBe('hello')

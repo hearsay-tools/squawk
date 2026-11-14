@@ -20,7 +20,6 @@ describe('parseNewTaskParams', () => {
     ['`ref` wins over `task` when both are present', '?ref=a&task=b', { ...empty, ref: 'a' }],
     ['whitespace around skill/ref is trimmed', '?skill=%20om-fix%20&ref=%20x%20', { ...empty, skill: 'om-fix', ref: 'x' }],
     ['unknown params are ignored', '?skill=om-fix&nope=1', { ...empty, skill: 'om-fix' }],
-    ['auto and key are ignored', '?skill=om-fix&ref=x&auto=1&key=k', { skill: 'om-fix', ref: 'x' }],
   ]
 
   for (const [name, search, expected] of cases) {

@@ -16,7 +16,7 @@ dist/
 # package by packages/cezar/scripts/sync-readme.mjs. Never edit the copy.
 /packages/cezar/README.md
 
-# cezar runtime state in this repo (runs, worktrees, launch-key)
+# cezar runtime state in this repo (runs, worktrees)
 # Cezar's run data stays out; a shared session-context rule file may be committed (#1584).
 /.ai/cezar/*
 !/.ai/cezar/context.yaml

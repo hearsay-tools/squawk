@@ -28,7 +28,6 @@ export function ensureDataGitignore(repoRoot: string): void {
     't/', // per-run agent TMPDIRs, short enough for Chromium's socket (hearsay-tools/cezarion#1022)
     'todos.json',
     'todos.json.tmp',
-    'launch-key',
     'cockpit.lock*',
     'automations.json',
     'automations.json.tmp',

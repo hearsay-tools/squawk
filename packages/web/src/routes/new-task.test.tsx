@@ -428,15 +428,6 @@ describe('prefill links', () => {
     )
   })
 
-  it('auto=1 and key= start nothing: the link only prefills', async () => {
-    serve()
-    renderNewTask('/new?skill=deploy&ref=hello&auto=1&key=k-real')
-    await pillReady('deploy')
-    await screen.findByText('Prefilled from link — review and press Start')
-    expect(textarea().value).toBe('hello')
-    expect(runsPosted()).toHaveLength(0)
-  })
-
   it('the legacy `task` alias prefills like `ref`', async () => {
     serve()
     renderNewTask('/new?task=hello')

@@ -1,5 +1,5 @@
 import { testHome } from '../home/test-home.testkit.ts';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -148,14 +148,13 @@ describe('createBootContext', () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('seeds the context from the caller deps and writes no launch key', () => {
+  it('seeds the context from the caller deps', () => {
     const automationStore = {} as AutomationStore;
     const context = createBootContext({ home: testHome(), bootProjectId: 'boot', store, manager, automationStore }, root, dataDir);
     expect(context).toMatchObject({ id: 'boot', root, dataDir });
     expect(context.store).toBe(store);
     expect(context.manager).toBe(manager);
     expect(context.automationStore).toBe(automationStore);
-    expect(existsSync(join(dataDir, 'launch-key'))).toBe(false);
   });
 
   it('names the boot project `default` and opens its own automation store when none is injected', () => {
