@@ -39,9 +39,9 @@ export type AutomaticMove =
  *  caller that comes while the attempt runs waits on it instead of reading the project first. */
 const attempts = new WeakMap<CockpitOwnership, Map<string, Promise<AutomaticMove>>>();
 
-/** Why the move does not run now, or undefined when no other writer is live. The caller's own process never counts. */
-async function blocker(root: string, homes: readonly Home[], self: number): Promise<string | undefined> {
-  const cockpits = await projectCockpits(root, homes, self);
+/** Why the move does not run now, or '' when no other writer is live. The caller's own process never counts. */
+async function blocker(root: string, homes: readonly Home[]): Promise<string> {
+  const cockpits = await projectCockpits(root, homes);
   const tasks = projectForeignTasksOffline(root);
   const reasons = [
     // A lease this process holds would be renamed from under its holder (a schedule fire opening the project).
@@ -49,19 +49,19 @@ async function blocker(root: string, homes: readonly Home[], self: number): Prom
     ...cockpits.map(cockpit => `cockpit pid ${cockpit.pid}${cockpit.url ? ` at ${cockpit.url}` : cockpit.port ? ` on port ${cockpit.port}` : ''} serves it`),
     ...tasks.map(task => `task ${task.id} ${task.title} is live in another process (${task.state})`),
   ];
-  return reasons.length > 0 ? reasons.join('; ') : undefined;
+  return reasons.join('; ');
 }
 
 
 /** 'nothing' when there is nothing to move, a reason when the move must wait, or undefined to go ahead. */
-async function precheck(root: string, homes: readonly Home[], self: number): Promise<'nothing' | { reason: string } | undefined> {
+async function precheck(root: string, homes: readonly Home[]): Promise<'nothing' | { reason: string } | undefined> {
   try {
     const plan = await planProjectMigration(root, { keep: projectKeptRunIds(root) });
     const refusals = [...plan.blockers, ...plan.conflicts.map(conflict => `${conflict.path}: ${conflict.reason}`)];
     if (refusals.length > 0) return { reason: refusals.join('; ') };
     // An unmarked project moves while its `.ai/cezar/` exists, even with nothing in it to carry: the move marks it.
     if (plan.alreadyMoved || (!projectMoveMarked(root) && !pathPresent(plan.source))) return 'nothing';
-    const live = await blocker(root, homes, self);
+    const live = await blocker(root, homes);
     return live ? { reason: live } : undefined;
   } catch (error) {
     return { reason: error instanceof Error ? error.message : String(error) };
@@ -78,8 +78,8 @@ async function move(root: string, ownership: CockpitOwnership, fault: MigrationF
     const answer = await moveUnderFence(root, ownership, fault);
     return { gitMv: answer.gitMv, leftovers: answer.leftovers };
   } catch (error) {
-    const journal = migrationFencePaths(projectPaths(root).write)?.journal;
-    if (journal && pathPresent(journal)) throw new ProjectMigrationRecoveryError(journal, root, error);
+    const journal = migrationFencePaths(projectPaths(root).write)!.journal;
+    if (pathPresent(journal)) throw new ProjectMigrationRecoveryError(journal, root, error);
     return { reason: error instanceof Error ? error.message : String(error) };
   }
 }
@@ -102,7 +102,7 @@ export function movedNotice(root: string, leftovers: readonly string[]): string 
  * attempt per project per cockpit run: a later or concurrent call gets that attempt's promise.
  */
 export function moveProjectWhenIdle(root: string, options: {
-  ownership?: CockpitOwnership | undefined; homes: readonly Home[]; self?: number; fault?: MigrationFault;
+  ownership?: CockpitOwnership | undefined; homes: readonly Home[]; fault?: MigrationFault;
   log?: (line: string) => void;
 }): Promise<AutomaticMove> {
   if (!options.ownership) return attempt(root, options);
@@ -127,7 +127,7 @@ async function attempt(root: string, options: Parameters<typeof moveProjectWhenI
     noticeLegacyProject(root, { reason, warn: log });
     return { status: 'blocked', reason };
   };
-  const check = await precheck(root, options.homes, options.self ?? process.pid);
+  const check = await precheck(root, options.homes);
   if (check === 'nothing') return { status: 'nothing' };
   if (check) return blocked(check.reason);
   const ownership = options.ownership ?? new CockpitOwnership();
@@ -151,7 +151,7 @@ async function attempt(root: string, options: Parameters<typeof moveProjectWhenI
 export async function prepareProject(root: string, options: {
   ownership?: CockpitOwnership | undefined; homes: readonly Home[]; keep?: boolean;
 }): Promise<void> {
-  await recoverProjectMigration(root, { ownership: options.ownership, keep: options.keep ?? false });
+  await recoverProjectMigration(root, options);
   await moveProjectWhenIdle(root, { ownership: options.ownership, homes: options.homes });
 }
 

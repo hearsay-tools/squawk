@@ -13,6 +13,7 @@ import { isFallbackProjectPath } from '../project-paths.ts';
 import { RUNS_DB_FILE } from '../runs/run-database.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RunStore } from '../runs/store.ts';
+import { moveProjectWhenIdle } from './auto.ts';
 import { fence, moved, rows, TIMEOUT } from './engine.testkit.ts';
 import { migrateProject } from './engine.ts';
 import { projectKeptRunIds } from './live.ts';
@@ -220,6 +221,12 @@ describe('a project move with tasks that can still resume', { timeout: TIMEOUT }
     expect(() => projectKeptRunIds(project.root)).toThrow(`these tasks are not archived but their records cannot be read: ${TASK}`);
     const held = await fence(project);
     try { await expect(migrateProject({ repoRoot: project.root, fence: held })).rejects.toThrow(TASK); } finally { held.release(); }
+    // The cockpit's automatic move waits too, and its notice says why.
+    const lines: string[] = [];
+    const unreadable = `these tasks are not archived but their records cannot be read: ${TASK}`;
+    expect(await moveProjectWhenIdle(project.root, { homes: [], log: line => lines.push(line) }))
+      .toEqual({ status: 'blocked', reason: expect.stringContaining(unreadable) });
+    expect(lines).toEqual([expect.stringContaining(unreadable)]);
     expect(existsSync(join(project.newDir, RUNS_DB_FILE))).toBe(false);
 
     const archived = new DatabaseSync(join(project.dataDir, RUNS_DB_FILE));
