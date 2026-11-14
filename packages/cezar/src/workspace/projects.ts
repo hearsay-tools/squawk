@@ -100,8 +100,7 @@ function isInsideTaskWorktree(path: string): boolean {
  * `repoRoot` is:
  *
  * - inside any `…/.ai/cezar/worktrees/…` path (task worktrees and nested
- *   `cez` invocations — the same nesting reality the `CEZ_TODOS_FILE=''`
- *   guard in `workflows/run.ts` acknowledges), checked on both the raw and
+ *   `cez` invocations), checked on both the raw and
  *   realpath'd spelling so neither a symlinked prefix nor a literal one
  *   slips through; or
  * - the user's home directory itself (realpath-compared, so a symlinked

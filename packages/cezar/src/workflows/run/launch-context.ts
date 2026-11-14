@@ -45,8 +45,6 @@ export function agentEnv({ dataDir }: LaunchContext, cockpit: CockpitAddress, ru
     ...productEnvEntries('ARTIFACTS_DIR', provisionArtifactDirectory(dataDir, runId)),
     ...productEnvEntries('HANDOFF_FILE', handoffPath(dataDir, runId)),
     ...productEnvEntries('TASK_ID', runId),
-    // Shadow a path inherited from an older parent process.
-    ...productEnvEntries('TODOS_FILE', ''),
     ...agentTmpEnv(dataDir, runId),
     ...(cockpit ? { ...productEnvEntries('COCKPIT_URL', cockpit.origin), ...productEnvEntries('PROJECT_ID', cockpit.projectId) } : {}),
   };

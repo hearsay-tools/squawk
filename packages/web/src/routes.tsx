@@ -17,7 +17,6 @@ import { locationToRestore, readStoredLastLocation } from './lib/last-location'
 import { Navigate as ScopedNavigate } from './lib/project-router'
 import { ActivityLoading } from './routes/activity/activity-loading'
 import { GithubLoading } from './routes/github/github-loading'
-import { InboxRoute } from './routes/inbox'
 import { NewTaskRoute } from './routes/new-task'
 import { NotFoundRoute } from './routes/not-found'
 import { RepoGitLoading } from './routes/repo-git/repo-git-loading'
@@ -567,9 +566,6 @@ function projectScopeRoute() {
           </Suspense>
         }
       />
-      {/* Export guidance for old Inbox bookmarks: light — no markdown stack — so it rides the main
-          bundle like the overview does. */}
-      <Route path="inbox" element={<InboxRoute />} />
       {/* The workflow builder (R6 Step 1.6): /workflows opens the canvas on the repo's first
           saved chain, /workflows/:name deep-links a specific one. */}
       <Route

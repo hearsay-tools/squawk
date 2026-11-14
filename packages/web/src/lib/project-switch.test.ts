@@ -46,7 +46,6 @@ describe('projectSwitchTarget', () => {
     '/p/other/git/',
     '/p/other/Git',
     '/p/other/new',
-    '/p/other/inbox',
     '/p/other/skills',
     '/p/other/workflows',
     '/p/other/automations/new',
