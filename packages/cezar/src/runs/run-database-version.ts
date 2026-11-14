@@ -25,8 +25,9 @@ export const DESTROYED_WORKTREE_MIGRATION = `
   -- for a reclaimed run, because the destroy removed the directory. Worktree retention lists the
   -- worktree_path rows on every pass and decoded each destroyed worker to drop it. This clears the
   -- rows older builds wrote. The record in data is unchanged, so a row read by a schema-11 build
-  -- answers the same; the bump follows the rule that every entry raises the version.
+  -- answers the same; the bump follows the rule that every entry raises the version. A row whose
+  -- data is not JSON keeps its column: the store skips that row, and the migration must not fail.
   UPDATE runs SET worktree_path = NULL
     WHERE worktree_path IS NOT NULL AND parent_run_id IS NOT NULL
-      AND json_extract(data, '$.delegation.destroy.phase') = 'complete';
+      AND CASE WHEN json_valid(data) THEN json_extract(data, '$.delegation.destroy.phase') = 'complete' ELSE 0 END;
   `;

@@ -609,18 +609,19 @@ describe('RunDatabase', () => {
       expect(() => RunDatabase.openReadOnly(path, 10)).toThrow(RunDatabaseUnsupportedSchemaError);
     });
 
-    it('migrates schema 11 by clearing worktree_path of completely destroyed workers only', () => {
+    it('migrates schema 11 by clearing worktree_path of completely destroyed workers only, past an unreadable row', () => {
       const worker = (id: string, phase: string) => row(id, { parentRunId: 'parent', worktreePath: `/w/${id}`,
         data: JSON.stringify({ id, delegation: { role: 'worker', parentRunId: 'parent', destroy: { phase } } }) });
       const db = openDb();
       db.transaction({ upserts: [worker('gone', 'complete'), worker('stuck', 'incomplete'),
-        row('alive', { parentRunId: 'parent', worktreePath: '/w/alive' }), row('root', { worktreePath: '/w/root' })], deletes: [] });
+        row('alive', { parentRunId: 'parent', worktreePath: '/w/alive' }), row('root', { worktreePath: '/w/root' }),
+        row('unreadable', { parentRunId: 'parent', worktreePath: '/w/unreadable', data: 'not a record' })], deletes: [] });
       db.close(); open.length = 0;
       const previous = new DatabaseSync(path);
       previous.exec('PRAGMA user_version = 11');
       previous.close();
       const migrated = openDb();
-      expect(migrated.listWithWorktree().map((r) => r.id).sort()).toEqual(['alive', 'root', 'stuck']);
+      expect(migrated.listWithWorktree().map((r) => r.id).sort()).toEqual(['alive', 'root', 'stuck', 'unreadable']);
       expect(migrated.get('gone')?.data).toBe(worker('gone', 'complete').data);
     });
 
