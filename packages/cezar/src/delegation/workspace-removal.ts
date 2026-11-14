@@ -104,8 +104,7 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
         await inspectCompletedCleanup(receipt);
         return result();
       }
-      // Each refusal leaves the checkout, and each later step stops while it is there.
-      if (await exists(workspace.path)) await removePresentWorktree(receipt);
+      if (await exists(workspace.path) && !await removePresentWorktree(receipt)) return result();
       if (!checkpoint) {
         checkpoint = await prepareMissingWorktree(receipt);
         if (!checkpoint) return result();
@@ -167,9 +166,9 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
         return checkpoint;
       }
 
-      async function removePresentWorktree(receipt: Receipt): Promise<void> {
+      async function removePresentWorktree(receipt: Receipt): Promise<boolean> {
         const prepared = await preparePresentWorktree(receipt);
-        if (!prepared) return;
+        if (!prepared) return false;
         await writeCleanup(checkpointPath, prepared, assertCurrent);
         assertCurrent?.();
         await beforeRemove?.();
@@ -178,9 +177,10 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
         // afterwards, immediately before destructive Git; they are never signalled.
         assertUnheld?.();
         const holders = inspectGeneration({ paths: [workspace.path] });
-        if (holders.liveness !== 'gone') { if (holders.pids.length) held(holders.pids); else report.unexplained(); return; }
-        if (!(await mutationGit(repoRoot, ['worktree', 'remove', '--force', workspace.path])).ok) { report.unexplained(); return; }
+        if (holders.liveness !== 'gone') { if (holders.pids.length) held(holders.pids); else report.unexplained(); return false; }
+        if (!(await mutationGit(repoRoot, ['worktree', 'remove', '--force', workspace.path])).ok) { report.unexplained(); return false; }
         remaining = ['branch'];
+        return true;
       }
 
       async function prepareMissingWorktree(receipt: Receipt): Promise<Cleanup | undefined> {
