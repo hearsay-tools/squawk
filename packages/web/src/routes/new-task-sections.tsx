@@ -1,4 +1,3 @@
-import { Button } from '@/components/ui/button'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckIcon, ChevronDownIcon, CpuIcon, GaugeIcon, SlidersHorizontalIcon, TerminalIcon } from '@/components/design-icons'
 import type { RefObject } from 'react'
