@@ -117,19 +117,19 @@ it('scrubs inherited CEZ flags but preserves test-owned flags (hearsay-tools/cez
     writeFileSync(fixture, `
 import { beforeAll, expect, it } from 'vitest';
 import { basename } from 'node:path';
-const inheritedKeys = ['CEZ_TEST_INHERITED_SENTINEL', 'CEZ_VOICE', 'CEZ_PROJECT_WARMUP'];
+const inheritedKeys = ['CEZ_TEST_INHERITED_SENTINEL', 'CEZ_PREVIEW', 'CEZ_PROJECT_WARMUP'];
 for (const key of inheritedKeys) expect(process.env[key], key).toBeUndefined();
 expect(basename(process.env.CEZ_HOME!)).toMatch(/^cez-vitest-home-/);
 expect(process.env.UNIT_ENV_SENTINEL).toBe('preserved');
 beforeAll(() => { process.env.CEZ_DRY_RUN = 'from-beforeAll'; });
 it('permits a test-owned flag', () => {
   expect(process.env.CEZ_DRY_RUN).toBe('from-beforeAll');
-  process.env.CEZ_VOICE = '1';
-  expect(process.env.CEZ_VOICE).toBe('1');
+  process.env.CEZ_PREVIEW = '1';
+  expect(process.env.CEZ_PREVIEW).toBe('1');
 });
 it('keeps the file flag and existing per-test cleanup', () => {
   expect(process.env.CEZ_DRY_RUN).toBe('from-beforeAll');
-  expect(process.env.CEZ_VOICE).toBeUndefined();
+  expect(process.env.CEZ_PREVIEW).toBeUndefined();
 });
 `);
     const config = join(scratch, 'vitest.config.mjs');
@@ -145,7 +145,7 @@ it('keeps the file flag and existing per-test cleanup', () => {
     const output = execFileSync(process.execPath, [join(repo, 'node_modules/vitest/vitest.mjs'),
       'run', '--config', config], {
       cwd: repo, encoding: 'utf8', timeout: 60_000,
-      env: { ...env, CEZ_TEST_INHERITED_SENTINEL: 'inherited', CEZ_VOICE: '1',
+      env: { ...env, CEZ_TEST_INHERITED_SENTINEL: 'inherited', CEZ_PREVIEW: '1',
         CEZ_PROJECT_WARMUP: '0', CEZ_HOME: scratch, UNIT_ENV_SENTINEL: 'preserved' },
     });
     expect(output).toContain('2 passed');

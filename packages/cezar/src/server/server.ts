@@ -86,9 +86,6 @@ import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
 import { matchedRoutes } from 'hono/route';
 import { jsonZodValidator, paramZodValidator, queryZodValidator } from './validators.ts';
-import { RecentVoiceActions } from '../voice/decision-log.ts';
-import { selectVoiceEngine } from '../voice/engine.ts';
-import { createVoiceRoutes } from '../voice/routes.ts';
 import { deliverOnce, registryEntry, sendAgentReport, TaskWebhooks } from '../runs/webhook.ts';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { z } from 'zod';
@@ -4650,13 +4647,6 @@ export function createApp(deps: ServerDeps) {
   // `/api/v1`. One surface means one thing to keep working, and
   // it is the one the typed client describes.
   //
-  // ---- chained family: voice mode (project-scoped, gated on CEZ_VOICE) ----
-  const voiceRoutes = createVoiceRoutes({
-    voiceEnabled: () => capabilities().voice,
-    engine: () => selectVoiceEngine(process.env),
-    recent: new RecentVoiceActions(),
-  });
-
   // MOUNT ORDER IS REGISTRATION ORDER. Hono matches in the order routes were added, so each
   // family keeps its internal order and the families keep theirs relative to each other.
   //
@@ -4710,8 +4700,7 @@ export function createApp(deps: ServerDeps) {
     .route('/', githubRoutes)
     .route('/', repoRoutes)
     .route('/', configRoutes)
-    .route('/', agentConfigRoutes)
-    .route('/', voiceRoutes);
+    .route('/', agentConfigRoutes);
   projectRoutePaths = new Set(v1.routes.filter((route) => route.method !== 'ALL')
     .flatMap((route) => [V1_PREFIX, V1_SCOPED_PREFIX].map((prefix) => `${route.method} ${prefix}${route.path}`)));
 

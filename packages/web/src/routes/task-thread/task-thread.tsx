@@ -1,7 +1,7 @@
 import './session-layout.css'
 import { deriveAttention } from '@/lib/attention'
 import { MessageSquareTextIcon, SearchXIcon } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useParams } from 'react-router'
 
 import { Link, useActiveProjectId } from '@/lib/project-router'
@@ -23,12 +23,11 @@ import { pendingAskOf } from '@open-mercato/cezar-api-client/contract/pending-as
 import { asksQuestion } from '@open-mercato/cezar-api-client/contract/waits'
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
-import { Composer, type ComposerHandle } from '@/components/composer/composer'
+import { Composer } from '@/components/composer/composer'
 import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { useKeyboardInsetVar } from '@/lib/keyboard-inset'
 import { isUnread } from '@/lib/read-state'
-import { useVoiceProposal, voiceStore } from '@/lib/voice/proposal-store'
 import { taskIssueUrl, taskPrUrl } from '@/lib/tasks-table'
 import { cn, isHttpUrl } from '@/lib/utils'
 
@@ -194,30 +193,9 @@ export function ThreadView({
 }) {
   useActiveProjectId()
   const runs = useRuns()
-  // A voice "tell it" proposal fills this composer's draft (spec 2026-10-21-voice-mode). The
-  // store reaches the composer through its handle, registered for this run while it is mounted.
-  const composerRef = useRef<ComposerHandle>(null)
-  const voiceProposal = useVoiceProposal()
-  const tellProposed = voiceProposal?.kind === 'tell' && voiceProposal.runId === run.id
-  useEffect(
-    () =>
-      voiceStore.registerComposer({
-        runId: run.id,
-        getDraft: () => composerRef.current?.getDraft() ?? '',
-        setDraft: (text) => composerRef.current?.setDraft(text) ?? false,
-        // A composer that is already gone holds no draft.
-        clearVoiceDraft: (text) => composerRef.current?.clearVoiceDraft(text) ?? true,
-        submit: () => composerRef.current?.submit() ?? false,
-      }),
-    [run.id],
-  )
   // Attention reads the open human wait on the record; the transcript's unanswered ask only
   // decides whether the composer answers it (hearsay-tools/cezarion#1236, split by fact).
   const { pendingAsk, transcriptAsk, pendingAskId, historyLoading } = pendingThreadAsk(history, currentThread)
-  useEffect(() => {
-    if (!historyLoading) voiceStore.syncPendingAsk(run.id, pendingAskId)
-  }, [run.id, pendingAskId, historyLoading])
-  useEffect(() => () => voiceStore.leaveTask(run.id), [run.id])
   const attention = deriveAttention(run)
   const footer = threadFooter(run.status, run.error)
   // The Agents dock's data: the current fan-out's sub-agents, or [] when there is none to
@@ -431,8 +409,6 @@ export function ThreadView({
         queued={queued}
         continuable={continuable}
         continueAction={continueAction}
-        composerRef={composerRef}
-        tellProposed={tellProposed}
         stopAction={stopAction}
         finishAction={finishAction}
         needsAnswer={needsAnswer}
@@ -456,9 +432,7 @@ function pendingThreadAsk(history: RunHistoryState | undefined, currentThread: T
   const transcriptAsk = history
     ? pendingAsk !== undefined
     : currentThread.turns.some(turn => turn.items.some(item => item.kind === 'ask' && !item.resolved))
-  // A voice answer proposal outlives its card (a virtualized row unmounts while the question is
-  // open), so the thread says when the question itself settled or the user left the task. The
-  // id comes from the transcript, the same source the ask card renders from.
+  // The id comes from the transcript, the same source the ask card renders from.
   const pendingAskId = history
     ? pendingAsk?.requestId
     : currentThread.turns.flatMap(turn => turn.items).reverse().find(item => item.kind === 'ask' && !item.resolved)?.id
@@ -610,8 +584,6 @@ function ThreadTranscript({
 type ThreadComposerProps = {
   run: ApiRun
   thread: ThreadState
-  composerRef: RefObject<ComposerHandle | null>
-  tellProposed: boolean
   stopAction: ReturnType<typeof useStopAction>
   finishAction: ReturnType<typeof useFinishRun>
   attention: ReturnType<typeof deriveAttention>
@@ -637,8 +609,8 @@ type ThreadFooterDockProps = ThreadComposerProps & {
 
 function ThreadFooterDock({
   run, thread, currentThread, currentComplete, scroll, pendingQuestions, onJump, onOpenWorker,
-  sessionOpen, attention, queued, continuable, continueAction, composerRef,
-  tellProposed, stopAction, finishAction, needsAnswer, sendMessage, reply,
+  sessionOpen, attention, queued, continuable, continueAction,
+  stopAction, finishAction, needsAnswer, sendMessage, reply,
   providerBlocked, providerReason,
 }: ThreadFooterDockProps) {
   /* The footer follows the transcript; desktop keeps it visible while reading history. */
@@ -696,8 +668,6 @@ function ThreadFooterDock({
         <ThreadComposer
           run={run}
           thread={thread}
-          composerRef={composerRef}
-          tellProposed={tellProposed}
           stopAction={stopAction}
           finishAction={finishAction}
           attention={attention}
@@ -717,15 +687,13 @@ function ThreadFooterDock({
 }
 
 function ThreadComposer({
-  run, thread, composerRef, tellProposed, stopAction, finishAction, attention,
+  run, thread, stopAction, finishAction, attention,
   needsAnswer, continuable, continueAction, queued, sendMessage, reply,
   providerBlocked, providerReason, sessionOpen,
 }: ThreadComposerProps) {
   const workersLive = useWorkersLive(run)
   return (
     <Composer
-      ref={composerRef}
-      voiceProposal={tellProposed}
       onStop={runActionFlags(run, workersLive).cancel ? stopAction.stop : undefined}
       onFinish={
         offersComposerFinish(run)
