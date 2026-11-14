@@ -3,8 +3,7 @@ name: Weekly mutation targets
 # Measures whole files on main with mutants-file.cjs against .github/mutants/targets.json: every
 # listed file, then the product files main changed in the last 7 days, at most 64 in all. One matrix
 # job per file; a file that times out or fails is reported as not measured, never as passing. The
-# report job keeps one rolling issue per listed file that misses a target and closes it when the file
-# passes. A changed file with no entry has no target: the summary lists it as a candidate, no issue.
+# report job keeps one rolling issue per file that misses a target and closes it when the file passes.
 # Advisory: it never blocks a merge. No required check, queue entry or failure reporter lists it. The
 # measure jobs have a read-only token and no secrets; only the report job can write, and it runs no
 # measured code.
