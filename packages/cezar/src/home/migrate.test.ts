@@ -281,7 +281,9 @@ it.each(['one file', 'the whole install'] as const)('step 6: recopy removes mana
   migrateLegacyHome(legacy, target, { env: {}, onStep(step, attempt) {
     if (step !== 'recheck' || attempt !== 0) return;
     rmSync(removed === 'one file' ? join(legacy.versions, 'v1/removed.json') : legacy.versions, { recursive: true });
+    rawJson(legacy.workspaceConfig, { projects: [], saved: 'same recheck' });
   } });
+  expect(json(target.workspaceConfig).saved).toBe('same recheck');
   expect(existsSync(join(target.versions, 'v1/removed.json'))).toBe(false);
   if (removed === 'one file') expect(json(join(target.versions, 'v1/kept.json'))).toEqual({ kept: true });
   else expect(existsSync(target.versions)).toBe(false);
@@ -399,6 +401,23 @@ it('a retry after a failed copy removes copies of legacy files deleted in betwee
   expect(existsSync(join(target.config, 'tracker-connections/github.json'))).toBe(false);
   expect(json(join(target.config, 'tracker-connections/zz-invalid.json'))).toEqual({ fixed: true });
   expect(journals(target).sort()).toEqual(['agent-accounts.json/HEAD', 'config.json/HEAD', 'remote-settings/4321.json/HEAD']);
+  expect(getHomeRecovery(target)).toEqual({ files: [] });
+});
+
+it('a retry removes a file that an older binary added during the recheck of a failed run', () => {
+  const { legacy, target } = migrationFixture();
+  const added = join(legacy.remoteSettings, '7777.json'), invalid = join(legacy.root, 'tracker-connections/invalid.json');
+  expect(() => migrateLegacyHome(legacy, target, { onStep(step, attempt) {
+    if (step !== 'recheck' || attempt !== 0) return;
+    rawJson(added, { token: 'added during recheck' });
+    rawJson(invalid, {});
+    writeFileSync(invalid, 'invalid JSON');
+  } })).toThrow(SyntaxError);
+  expect(json(join(target.remoteSettings, '7777.json')).token).toBe('added during recheck');
+  rmSync(added);
+  rawJson(invalid, { fixed: true });
+  expect(migrateLegacyHome(legacy, target).status).toBe('migrated');
+  expect(existsSync(join(target.remoteSettings, '7777.json'))).toBe(false);
   expect(getHomeRecovery(target)).toEqual({ files: [] });
 });
 
