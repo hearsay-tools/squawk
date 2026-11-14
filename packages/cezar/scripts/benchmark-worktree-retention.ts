@@ -29,49 +29,45 @@ import { performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
 import { makeRunRecord } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { prepareBenchmarkEnv } from './benchmark-home.ts';
-import type { RunRecord } from '../src/runs/store.ts';
+import { reclaimWorktrees } from '../src/runs/retention.ts';
+import { seedRuns } from '../src/runs/run-store.testkit.ts';
+import { RunStore, type RunRecord } from '../src/runs/store.ts';
 
-const ownHome = prepareBenchmarkEnv();
+export interface RetentionBenchOptions {
+  /** Destroyed workers in the project. */
+  workers: number;
+  workersPerParent: number;
+  parentKb: number;
+  workerKb: number;
+  /** Finished roots whose worktree directory exists: what a pass can select. */
+  liveRoots: number;
+  passes: number;
+}
 
-const { values } = parseArgs({ options: {
-  workers: { type: 'string', default: '100,1000,3000' },
-  'workers-per-parent': { type: 'string', default: '7' },
-  'parent-kb': { type: 'string', default: '640' },
-  'worker-kb': { type: 'string', default: '50' },
-  'live-roots': { type: 'string', default: '20' },
-  passes: { type: 'string', default: '3' },
-  out: { type: 'string' },
-} });
-const sizes = values.workers.split(',').map(Number);
-const perParent = Number(values['workers-per-parent']), parentKb = Number(values['parent-kb']), workerKb = Number(values['worker-kb']);
-const liveRoots = Number(values['live-roots']), passes = Number(values.passes);
-if (sizes.some(size => !Number.isInteger(size) || size < 0) || !(perParent >= 1) || !(passes >= 1)) throw new Error('--workers takes whole numbers >= 0; --workers-per-parent and --passes take numbers >= 1');
-
-const { RunStore } = await import('../src/runs/store.ts');
-const { reclaimWorktrees } = await import('../src/runs/retention.ts');
-const { seedRuns } = await import('../src/runs/run-store.testkit.ts');
+export interface RetentionBenchRow { workers: number; parents: number; candidates: number; listMs: number; passMs: number }
 
 const pad = (kb: number) => 'x'.repeat(kb * 1024);
 const at = (minute: number) => new Date(Date.UTC(2026, 9, 1) + minute * 60_000).toISOString();
+const median = (samples: number[]) => [...samples].sort((a, b) => a - b)[Math.floor(samples.length / 2)]!;
 
 /** One project's rows: destroyed worker families, then finished roots that still have a directory. */
-function records(workers: number, root: string): RunRecord[] {
+function records(options: RetentionBenchOptions, root: string): RunRecord[] {
   const rows: RunRecord[] = [];
-  const parentTask = pad(parentKb), workerTask = pad(workerKb);
-  for (let made = 0, family = 0; made < workers; family++) {
+  const parentTask = pad(options.parentKb), workerTask = pad(options.workerKb);
+  for (let made = 0, family = 0; made < options.workers; family++) {
     const parentId = randomUUID();
     rows.push(makeRunRecord({ id: parentId, status: 'done', archived: true, task: parentTask, createdAt: at(family * 10), finishedAt: at(family * 10 + 9),
       delegation: { role: 'root', permissions: ['spawn'], receipts: [] } }));
-    for (let i = 0; i < perParent && made < workers; i++, made++) {
-      const id = randomUUID();
+    for (let i = 0; i < options.workersPerParent && made < options.workers; i++, made++) {
+      const id = randomUUID(), path = join(root, '.ai/cezar/worktrees', id), branch = `cez/${id.slice(0, 8)}`;
       rows.push(makeRunRecord({ id, status: 'done', archived: true, task: workerTask, createdAt: at(family * 10 + 1), finishedAt: at(family * 10 + 2),
-        worktreePath: join(root, '.ai/cezar/worktrees', id), branch: `cez/${id.slice(0, 8)}`,
+        worktreePath: path, branch,
         delegation: { role: 'worker', permissions: [], parentRunId: parentId,
-          workspace: { ownerRunId: id, resourceId: randomUUID(), kind: 'owned-isolated', path: join(root, '.ai/cezar/worktrees', id), branch: `cez/${id.slice(0, 8)}`, baselineSha: 'a'.repeat(40) },
+          workspace: { ownerRunId: id, resourceId: randomUUID(), kind: 'owned-isolated', path, branch, baselineSha: 'a'.repeat(40) },
           destroy: { requestedAt: at(family * 10 + 3), phase: 'complete', remaining: [] } } }));
     }
   }
-  for (let i = 0; i < liveRoots; i++) {
+  for (let i = 0; i < options.liveRoots; i++) {
     const id = randomUUID(), worktreePath = join(root, '.ai/cezar/worktrees', id);
     mkdirSync(worktreePath, { recursive: true });
     rows.push(makeRunRecord({ id, status: 'done', task: workerTask, createdAt: at(1e6 + i), finishedAt: at(1e6 + i + 1), worktreePath, branch: `cez/${id.slice(0, 8)}` }));
@@ -79,27 +75,26 @@ function records(workers: number, root: string): RunRecord[] {
   return rows;
 }
 
-const median = (samples: number[]) => [...samples].sort((a, b) => a - b)[Math.floor(samples.length / 2)]!;
-
-const results = [];
-for (const workers of sizes) {
+/** Seed one temporary project, open its store and time `--passes` retention passes. */
+export async function measureRetention(options: RetentionBenchOptions): Promise<RetentionBenchRow> {
   const root = mkdtempSync(join(tmpdir(), 'cez-bench-retention-'));
   try {
     const dataDir = join(root, '.ai/cezar');
-    seedRuns(dataDir, records(workers, root));
+    seedRuns(dataDir, records(options, root));
     const store = RunStore.open(dataDir, { keepLive: true });
     try {
       const pass = async () => { const t = performance.now(); await reclaimWorktrees(root, store, 10, { claim: () => null }); return performance.now() - t; };
-      const list = () => { const t = performance.now(); const runs = store.listRunsWithWorktree(); return [performance.now() - t, runs.length] as const; };
       await pass();
       const passMs: number[] = [], listMs: number[] = [];
       let candidates = 0;
-      for (let i = 0; i < passes; i++) {
+      for (let i = 0; i < options.passes; i++) {
         passMs.push(await pass());
-        const [ms, count] = list();
-        listMs.push(ms); candidates = count;
+        const t = performance.now();
+        candidates = store.listRunsWithWorktree().length;
+        listMs.push(performance.now() - t);
       }
-      results.push({ workers, parents: Math.ceil(workers / perParent), candidates, listMs: Math.round(median(listMs)), passMs: Math.round(median(passMs)) });
+      return { workers: options.workers, parents: Math.ceil(options.workers / options.workersPerParent), candidates,
+        listMs: Math.round(median(listMs)), passMs: Math.round(median(passMs)) };
     } finally {
       store.close();
     }
@@ -108,10 +103,34 @@ for (const workers of sizes) {
   }
 }
 
-console.log(`parent ${parentKb} KB, worker ${workerKb} KB, ${perParent} workers per parent, ${liveRoots} live roots, median of ${passes} passes, ${cpus().length} cores, Node ${process.version}`);
-console.log('| destroyed workers | parents | rows listed | list ms | pass ms |');
-console.log('| ---: | ---: | ---: | ---: | ---: |');
-for (const row of results) console.log(`| ${row.workers} | ${row.parents} | ${row.candidates} | ${row.listMs} | ${row.passMs} |`);
-if (values.out) writeFileSync(values.out, `${JSON.stringify(results, null, 2)}\n`);
-if (ownHome) rmSync(ownHome, { recursive: true, force: true });
-process.exit(0);
+async function main(): Promise<void> {
+  const ownHome = prepareBenchmarkEnv();
+  const { values } = parseArgs({ options: {
+    workers: { type: 'string', default: '100,1000,3000' },
+    'workers-per-parent': { type: 'string', default: '7' },
+    'parent-kb': { type: 'string', default: '640' },
+    'worker-kb': { type: 'string', default: '50' },
+    'live-roots': { type: 'string', default: '20' },
+    passes: { type: 'string', default: '3' },
+    out: { type: 'string' },
+  } });
+  const sizes = values.workers.split(',').map(Number);
+  const base = { workersPerParent: Number(values['workers-per-parent']), parentKb: Number(values['parent-kb']), workerKb: Number(values['worker-kb']),
+    liveRoots: Number(values['live-roots']), passes: Number(values.passes) };
+  if (sizes.some(size => !Number.isInteger(size) || size < 0) || !(base.workersPerParent >= 1) || !(base.passes >= 1)) {
+    throw new Error('--workers takes whole numbers >= 0; --workers-per-parent and --passes take numbers >= 1');
+  }
+  try {
+    const results: RetentionBenchRow[] = [];
+    for (const workers of sizes) results.push(await measureRetention({ ...base, workers }));
+    console.log(`parent ${base.parentKb} KB, worker ${base.workerKb} KB, ${base.workersPerParent} workers per parent, ${base.liveRoots} live roots, median of ${base.passes} passes, ${cpus().length} cores, Node ${process.version}`);
+    console.log('| destroyed workers | parents | rows listed | list ms | pass ms |');
+    console.log('| ---: | ---: | ---: | ---: | ---: |');
+    for (const row of results) console.log(`| ${row.workers} | ${row.parents} | ${row.candidates} | ${row.listMs} | ${row.passMs} |`);
+    if (values.out) writeFileSync(values.out, `${JSON.stringify(results, null, 2)}\n`);
+  } finally {
+    if (ownHome) rmSync(ownHome, { recursive: true, force: true });
+  }
+}
+
+if (import.meta.main) await main();
