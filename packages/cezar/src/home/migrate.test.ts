@@ -245,9 +245,13 @@ it('step 6: recopies an older-binary write before commit, including new and dele
 
 it('step 6: three older-binary writes abort with the filename and process diagnostic', () => {
   const { legacy, target } = migrationFixture();
+  let checks = 0;
   expect(() => migrateLegacyHome(legacy, target, { onStep(step, attempt) {
-    if (step === 'recheck') rawJson(legacy.workspaceConfig, { projects: [], attempt });
+    if (step !== 'recheck') return;
+    if (++checks > 3) throw new Error('a fourth check ran');
+    rawJson(legacy.workspaceConfig, { projects: [], attempt });
   } })).toThrow(/config.json.*Stop older binaries.*Running processes/s);
+  expect(checks).toBe(3);
   expect(readInstallMarker(target.config)?.state).toBe('pending');
   expect(existsSync(join(legacy.root, 'MOVED.json'))).toBe(false);
   expect(existsSync(join(legacy.root, '.migrating'))).toBe(false);
