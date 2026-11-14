@@ -574,6 +574,20 @@ it('the legacy backup archive keeps every legacy file and directory except insta
   expect(json(target.workspaceConfig).saved).toBe('original');
 });
 
+it('rollback makes the rolled-back marker durable by flushing the config directory after the rename', () => {
+  const { legacy, target } = migrationFixture();
+  migrateLegacyHome(legacy, target, { commit: false });
+  const marker = join(target.config, 'install.json');
+  const flushed: Array<{ failed: boolean; marker: boolean }> = [];
+  const sync = privateFiles.syncDirectory;
+  vi.spyOn(privateFiles, 'syncDirectory').mockImplementation(path => {
+    if (path === target.config) flushed.push({ failed: existsSync(`${marker}.failed`), marker: existsSync(marker) });
+    sync(path);
+  });
+  rollbackLegacyMigration(target);
+  expect(flushed).toContainEqual({ failed: true, marker: false });
+});
+
 it('rollback refuses a committed migration and keeps the committed marker', () => {
   const { legacy, target } = migrationFixture();
   migrateLegacyHome(legacy, target);

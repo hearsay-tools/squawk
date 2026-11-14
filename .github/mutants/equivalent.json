@@ -301,14 +301,5 @@
     "replacement": "\"\"",
     "reason": "commitLegacyMigration never reads legacy.cache: the claim, planLegacyMigration (migrationRoots is called for the target only), MOVED.json and updateManagedPath use only paths under legacy.root.",
     "site": "const legacy = homePaths(record.legacyRoot, join(record.legacyRoot, "
-  },
-  {
-    "file": "packages/cezar/src/home/migrate.ts",
-    "function": "rollbackLegacyMigration",
-    "mutator": "CallExpression",
-    "original": "syncDirectory(target.config);",
-    "replacement": ";",
-    "reason": "Defense in depth: the directory fsync makes the rename durable across power loss, which a process-level test cannot observe.",
-    "site": "renameSync(path, failed); "
   }
 ]
