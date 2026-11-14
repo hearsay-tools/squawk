@@ -209,7 +209,7 @@ test('the issue body stays inside the GitHub limit and counts what it leaves out
 const issueOf = (number, file, state = 'open', body = `${marker(file)}\nold`) => ({ number, title: `Mutation targets missed: ${file}`, body, state, labels: [], user: { login: 'github-actions[bot]' } });
 const outcome = (file, state, extra = {}) => ({ file, state, entryReason: 'target', ...(state === 'not-measured' ? { reason: 'no result: the job timed out, failed or was cancelled' } : {}),
   ...(state !== 'not-measured' ? { result: result(file, { fail: state === 'missed' ? ['covered lines'] : [] }), failures: state === 'missed' ? ['covered lines'] : [] } : {}), ...extra });
-const sync = (github, outcomes, exists = () => true, cut = []) => syncIssues({ github, owner: 'o', repo: 'r', outcomes, earlier: new Map(), head: HEAD, runUrl: RUN_URL, exists, cut, date: '2026-11-07' });
+const sync = (github, outcomes, exists = () => true, cut = [], declared = () => true) => syncIssues({ github, owner: 'o', repo: 'r', outcomes, earlier: new Map(), head: HEAD, runUrl: RUN_URL, exists, declared, cut, date: '2026-11-07' });
 
 test('a miss creates one issue with the title, marker and labels, and a re-run updates that issue instead of adding one', async () => {
   const github = fakeGithub();
@@ -266,7 +266,7 @@ test('a file that is not measured never closes its issue: an open one gets one n
   const file = 'packages/cezar/src/a.ts';
   const github = fakeGithub({ issues: [issueOf(7, file), issueOf(8, 'packages/cezar/src/b.ts', 'closed')] });
   await sync(github, [outcome(file, 'not-measured'), outcome('packages/cezar/src/b.ts', 'not-measured'), outcome('packages/cezar/src/c.ts', 'not-measured')]);
-  await syncIssues({ github, owner: 'o', repo: 'r', outcomes: [outcome(file, 'not-measured', { reason: 'unreadable result' })], earlier: new Map(), head: HEAD, runUrl: RUN_URL, exists: () => true, date: '2026-11-14' });
+  await syncIssues({ github, owner: 'o', repo: 'r', outcomes: [outcome(file, 'not-measured', { reason: 'unreadable result' })], earlier: new Map(), head: HEAD, runUrl: RUN_URL, exists: () => true, declared: () => true, date: '2026-11-14' });
   const [open, closed] = github.state.issues;
   assert.equal(open.state, 'open');
   assert.ok(open.body.startsWith(`${marker(file)}\nold`), 'the last measured body stays');
@@ -301,6 +301,49 @@ test('an open issue for a file this run did not select gets the not-measured not
   assert.ok(github.state.issues[0].body.startsWith(`${marker(over)}\nold`), 'the last measured body stays');
   assert.equal(github.state.issues[2].body.includes('Not measured'), false);
   assert.deepEqual(github.state.writes, ['issue.update', 'issue.update']);
+});
+
+const candidate = (file, score = 61.5) => result(file, { tier: 'undeclared', targets: [], score });
+
+test('a changed file without an entry in targets.json opens no issue and gets one candidate line with its score', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mutants-weekly-candidate-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const declared = 'packages/cezar/src/declared.ts';
+  const changed = 'packages/cezar/src/changed.ts';
+  const planDir = path.join(dir, 'plan');
+  fs.mkdirSync(planDir);
+  fs.writeFileSync(path.join(planDir, 'plan.json'), JSON.stringify({ version: 1, head: HEAD, since: 'x', cap: 64, cut: [], skipped: [],
+    selected: [entry(declared), { ...entry(changed), reason: 'changed', lines: 12 }] }));
+  const filesDir = resultDir(t, [[declared, result(declared, { fail: ['covered lines'] })], [changed, candidate(changed)]]);
+  const github = fakeGithub();
+  const summaries = [];
+  const core = { warning() {}, info() {}, summary: { addRaw(text) { summaries.push(text); return this; }, async write() {} } };
+  const context = { repo: { owner: 'o', repo: 'r' }, runId: 9, serverUrl: 'https://github.test' };
+  const { outcomes } = await publish({ github, context, core, planDir, filesDir, outDir: path.join(dir, 'out'), readArchive, exists: () => true,
+    targets: { [declared]: { tier: 'logic', guards: [] } } });
+  assert.deepEqual(outcomes.map(o => [o.file, o.state]), [[declared, 'missed'], [changed, 'candidate']]);
+  assert.deepEqual(github.state.issues.map(i => i.title), [`Mutation targets missed: ${declared}`]);
+  const summary = summaries.join('');
+  assert.match(summary, /2 measured, 1 missed, 1 candidate, 0 not measured/);
+  assert.equal(summary.split('\n').filter(line => line.includes(changed)).length, 1);
+  assert.ok(summary.includes(`- \`${changed}\` (12 changed lines): counted score 61.5%.`));
+});
+
+test('the weekly run closes an open issue for a file without an entry, naming the rule, and leaves a closed one alone', async () => {
+  const measured = 'packages/cezar/src/measured.ts';
+  const failed = 'packages/cezar/src/failed.ts';
+  const unplanned = 'packages/cezar/src/unplanned.ts';
+  const shut = 'packages/cezar/src/shut.ts';
+  const github = fakeGithub({ issues: [issueOf(7, measured), issueOf(8, failed), issueOf(9, unplanned), issueOf(10, shut, 'closed')] });
+  const outcomes = [classify(entry(measured), { result: candidate(measured) }), outcome(failed, 'not-measured'), classify(entry(shut), { result: candidate(shut) })];
+  const actions = await sync(github, outcomes, () => true, [], () => false);
+  assert.deepEqual(actions, [{ file: measured, action: 'closed-undeclared', number: 7 }, { file: failed, action: 'closed-undeclared', number: 8 },
+    { file: unplanned, action: 'closed-undeclared', number: 9 }]);
+  assert.deepEqual(github.state.issues.map(i => [i.number, i.state, i.state_reason]), [[7, 'closed', 'not_planned'], [8, 'closed', 'not_planned'], [9, 'closed', 'not_planned'], [10, 'closed', undefined]]);
+  assert.deepEqual(github.state.comments.map(c => c.issue_number), [7, 8, 9]);
+  for (const comment of github.state.comments) assert.match(comment.body, /has no entry in `\.github\/mutants\/targets\.json`.*lists it as a candidate in the run summary, but keeps no issue for it/s);
+  const summary = renderSummary({ plan: { head: HEAD, cut: [], skipped: [], selected: [] }, outcomes, actions });
+  assert.match(summary, /### Issues closed: no entry in `\.github\/mutants\/targets\.json`\n\n- #7 `packages\/cezar\/src\/measured\.ts`\n- #8 .*\n- #9 /);
 });
 
 const combined = (results) => Buffer.from(JSON.stringify({ version: 1, results }));
@@ -391,7 +434,8 @@ test('publish writes the combined results before it syncs issues, compares a mis
   const core = { warning() {}, info() {}, summary: { addRaw(text) { summaries.push(text); return this; }, async write() {} } };
   const context = { repo: { owner: 'o', repo: 'r' }, runId: 9, serverUrl: 'https://github.test' };
   const outDir = path.join(dir, 'out');
-  await publish({ github, context, core, planDir, filesDir, outDir, readArchive, exists: () => true });
+  const targets = Object.fromEntries([...files, 'packages/cezar/src/cut.ts'].map(file => [file, { tier: 'logic', guards: [] }]));
+  await publish({ github, context, core, planDir, filesDir, outDir, readArchive, exists: () => true, targets });
   const written = JSON.parse(fs.readFileSync(path.join(outDir, 'results.json'), 'utf8'));
   assert.deepEqual(Object.keys(written.results), files.slice(0, 2));
   assert.equal(written.head, HEAD);

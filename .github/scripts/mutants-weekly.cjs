@@ -8,7 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
-const { parseArgs, compareResults } = require('./mutants-file.cjs');
+const { parseArgs, compareResults, UNDECLARED } = require('./mutants-file.cjs');
 const { mutableTarget } = require('./mutants-scope.cjs');
 const TARGETS = require('../mutants/targets.json');
 
@@ -26,6 +26,7 @@ const NOTE = '<!-- cez-mutants-weekly:not-measured -->';
 const MARKER = /<!-- cez-mutants-weekly:v1:(\S+) -->/;
 const AREA = { cezar: 'area-cezar', web: 'area-web', contract: 'area-contract', 'api-client': 'area-api-client' };
 const NO_RESULT = 'no result: the job timed out, failed or was cancelled';
+const NO_ENTRY_RULE = 'A file without an entry in `.github/mutants/targets.json` has no target: the weekly run measures it when it changed and lists it as a candidate in the run summary, but keeps no issue for it. Give the file a tier there to track it again.';
 
 const marker = file => `<!-- cez-mutants-weekly:v1:${file} -->`;
 const short = sha => String(sha).slice(0, 7);
@@ -127,6 +128,7 @@ function readResult(dir, entry, head) {
 function classify(entry, { result, reason }) {
   const base = { file: entry.file, entryReason: entry.reason };
   if (!result) return { ...base, state: 'not-measured', reason };
+  if (result.tier === UNDECLARED) return { ...base, state: 'candidate', result, failures: [] };
   const failures = result.targets.filter(t => !t.pass).map(t => t.name);
   if (result.consumers?.state === 'failed') failures.push(`consumer tests: failed — ${result.consumers.reason}`);
   return { ...base, state: failures.length ? 'missed' : 'passed', result, failures };
@@ -243,11 +245,19 @@ async function syncOne({ github, owner, repo, issue, outcome, earlier, head, run
   return { action: 'created', number: created.data.number };
 }
 
-async function syncIssues({ github, owner, repo, outcomes, earlier, head, runUrl, exists, cut = [], date }) {
+const undeclaredBody = (file, head, runUrl) => `\`${file}\` has no entry in \`.github/mutants/targets.json\` at \`${short(head)}\` ([weekly mutation run](${runUrl})). ${NO_ENTRY_RULE} Closing.`;
+
+async function syncIssues({ github, owner, repo, outcomes, earlier, head, runUrl, exists, declared, cut = [], date }) {
   const issues = await findIssues({ github, owner, repo });
   const actions = [];
   for (const outcome of outcomes) {
     const issue = issues.get(outcome.file);
+    if (!declared(outcome.file)) {
+      if (issue?.state !== 'open') continue;
+      await closeIssue({ github, owner, repo, issue, reason: 'not_planned', body: undeclaredBody(outcome.file, head, runUrl) });
+      actions.push({ file: outcome.file, action: 'closed-undeclared', number: issue.number });
+      continue;
+    }
     const done = await syncOne({ github, owner, repo, issue, outcome, earlier, head, runUrl, date });
     if (typeof done === 'string') actions.push({ file: outcome.file, action: done, number: issue.number });
     else if (done) actions.push({ file: outcome.file, ...done });
@@ -255,6 +265,11 @@ async function syncIssues({ github, owner, repo, outcomes, earlier, head, runUrl
   const planned = new Set(outcomes.map(o => o.file));
   for (const [file, issue] of issues) {
     if (issue.state !== 'open' || planned.has(file)) continue;
+    if (exists(file) && !declared(file)) {
+      await closeIssue({ github, owner, repo, issue, reason: 'not_planned', body: undeclaredBody(file, head, runUrl) });
+      actions.push({ file, action: 'closed-undeclared', number: issue.number });
+      continue;
+    }
     if (exists(file)) {
       const reason = cut.includes(file) ? 'over the weekly cap' : 'not a target and not changed in the last 7 days';
       await github.rest.issues.update({ owner, repo, issue_number: issue.number, body: withNote(issue.body ?? '', { date, head, runUrl, reason }) });
@@ -303,16 +318,19 @@ async function findEarlier({ github, owner, repo, runId, files, readArchive = un
 function renderSummary({ plan: chosen, outcomes, actions }) {
   const issueOf = file => actions.find(a => a.file === file)?.number;
   const of = state => outcomes.filter(o => o.state === state);
-  const [passed, missed, notMeasured] = ['passed', 'missed', 'not-measured'].map(of);
+  const [passed, missed, candidates, notMeasured] = ['passed', 'missed', 'candidate', 'not-measured'].map(of);
   const section = (title, lines) => lines.length ? [`### ${title}`, '', ...lines, ''] : [];
+  const changedLines = file => chosen.selected.find(e => e.file === file)?.lines ?? 0;
   return [`## Weekly mutation targets`, '',
-    `Head \`${chosen.head}\`: ${passed.length + missed.length} measured, ${missed.length} missed, ${notMeasured.length} not measured, ${chosen.cut.length} over the weekly cap.`, '',
+    `Head \`${chosen.head}\`: ${passed.length + missed.length + candidates.length} measured, ${missed.length} missed, ${plural(candidates.length, 'candidate')}, ${notMeasured.length} not measured, ${chosen.cut.length} over the weekly cap.`, '',
     ...section('Missed', missed.map(o => `- \`${o.file}\`${issueOf(o.file) ? ` (#${issueOf(o.file)})` : ''}: ${o.failures.map(name => `FAIL: ${name}`).join('; ')}`)),
     ...section('Passed', passed.map(o => `- \`${o.file}\``)),
+    ...section('Candidates: changed, no entry in `.github/mutants/targets.json`', candidates.map(o => `- \`${o.file}\` (${changedLines(o.file)} changed lines): counted score ${o.result.score.toFixed(1)}%. Give it a tier or leave it out.`)),
     ...section('Not measured', notMeasured.map(o => `- \`${o.file}\`: ${o.reason}`)),
     ...section('Not measured: over the weekly cap', chosen.cut.map(e => `- \`${e.file}\` (${e.lines} changed lines)`)),
     ...section('Skipped', chosen.skipped.map(e => `- \`${e.file}\`: ${e.reason}`)),
     ...section('Issues closed: file deleted', actions.filter(a => a.action === 'closed-deleted').map(a => `- #${a.number} \`${a.file}\``)),
+    ...section('Issues closed: no entry in `.github/mutants/targets.json`', actions.filter(a => a.action === 'closed-undeclared').map(a => `- #${a.number} \`${a.file}\``)),
   ].join('\n');
 }
 
@@ -324,7 +342,7 @@ function readPlan(dir) {
   return chosen;
 }
 
-async function publish({ github, context, core, planDir, filesDir, outDir, root = process.cwd(), exists, readArchive, now = new Date() }) {
+async function publish({ github, context, core, planDir, filesDir, outDir, root = process.cwd(), exists, readArchive, now = new Date(), targets = TARGETS }) {
   const { owner, repo } = context.repo;
   const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
   let chosen;
@@ -340,7 +358,7 @@ async function publish({ github, context, core, planDir, filesDir, outDir, root 
   const missed = outcomes.filter(o => o.state === 'missed').map(o => o.file);
   const earlier = await findEarlier({ github, owner, repo, runId: context.runId, files: missed, readArchive, warn: core.warning, now });
   const actions = await syncIssues({ github, owner, repo, outcomes, earlier, head: chosen.head, runUrl,
-    exists: exists ?? (file => fs.existsSync(path.join(root, file))), cut: chosen.cut.map(e => e.file), date: now.toISOString().slice(0, 10) });
+    exists: exists ?? (file => fs.existsSync(path.join(root, file))), declared: file => Object.hasOwn(targets, file), cut: chosen.cut.map(e => e.file), date: now.toISOString().slice(0, 10) });
   await core.summary.addRaw(renderSummary({ plan: chosen, outcomes, actions })).write();
   return { outcomes, actions };
 }

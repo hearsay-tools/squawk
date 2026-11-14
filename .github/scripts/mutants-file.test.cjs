@@ -60,16 +60,43 @@ test('ast-grep assigns nested names, methods, anonymous callbacks, and module co
   assert.equal(at(10), 'arrow');
 });
 
-test('targets have the 32 baseline paths, derived tiers, and eight guard groups', () => {
+test('every target names a file at head with a declared tier and guard functions that exist in it', () => {
   const targets = require('../mutants/targets.json');
-  assert.equal(Object.keys(targets).length, 32);
+  assert.equal(m.validateTargets(targets), targets);
   for (const [file, target] of Object.entries(targets)) {
     assert.ok(fs.existsSync(path.join(root, file)), file);
-    assert.equal(target.tier, file.startsWith('packages/web/') && file.endsWith('.tsx') ? 'component' : 'logic');
+    const names = m.functionRanges(file, root).map(r => r.name);
+    for (const guard of target.guards) assert.ok(names.includes(guard), `${file}: ${guard}`);
   }
-  assert.equal(Object.values(targets).filter(t => t.guards.length).length, 8);
-  assert.deepEqual(m.tierOf('packages/web/src/new.tsx', {}), { tier: 'component', guards: [] });
-  assert.deepEqual(m.tierOf('packages/contract/src/new.ts', {}), { tier: 'logic', guards: [] });
+});
+
+test('a file without an entry has no tier and no target; a declared file keeps its entry', () => {
+  for (const file of ['packages/web/src/new.tsx', 'packages/contract/src/new.ts']) assert.deepEqual(m.tierOf(file, {}), { tier: m.UNDECLARED, guards: [] });
+  const declared = { 'packages/cezar/src/a.ts': { tier: 'guards', guards: ['guard'] } };
+  assert.equal(m.tierOf('packages/cezar/src/a.ts', declared), declared['packages/cezar/src/a.ts']);
+  const result = m.evaluate([mutant({ status: 'NoCoverage', kind: 'Not covered' })], m.tierOf('packages/cezar/src/new.ts', {}), []);
+  assert.equal(result.score, 0);
+  assert.deepEqual(result.targets, []);
+});
+
+test('targets.json validation refuses an unknown tier, a bad guard list and a guards tier with no guard', () => {
+  const file = 'packages/cezar/src/a.ts';
+  for (const [target, message] of [[{ tier: 'strict', guards: [] }, /tier "strict"; use one of logic, component, guards/], [{ tier: 'logic' }, /list of guard function names/],
+    [{ tier: 'logic', guards: [''] }, /list of guard function names/], [{ tier: 'guards', guards: [] }, /tier guards and no guard/]]) {
+    assert.throws(() => m.validateTargets({ [file]: target }), message);
+  }
+  assert.doesNotThrow(() => m.validateTargets({ [file]: { tier: 'guards', guards: ['guard'] }, 'packages/web/src/b.tsx': { tier: 'component', guards: [] } }));
+});
+
+test('a guards file passes with a low score when no guard has an undetected mutant, and fails when one guard has one', () => {
+  const target = { tier: 'guards', guards: ['guard', 'other'] };
+  const ranges = [{ name: 'guard' }, { name: 'other' }];
+  const low = [mutant({ status: 'Killed' }), mutant({ function: 'other', status: 'Killed' }), ...Array.from({ length: 8 }, () => mutant({ function: 'rest' }))];
+  const passing = m.evaluate(low, target, ranges);
+  assert.equal(passing.score, 20);
+  assert.deepEqual(passing.targets, [{ name: 'guard', pass: true }, { name: 'other', pass: true }]);
+  const failing = m.evaluate([...low, mutant({ function: 'other', kind: 'Text', original: "'two words'" })], target, ranges);
+  assert.deepEqual(failing.targets, [{ name: 'guard', pass: true }, { name: 'other', pass: false }]);
 });
 
 test('scores exclude errors and ignored rows; timeout detects; empty counts score 100', () => {
@@ -194,7 +221,8 @@ test('command installs, builds, measures own tests then consumers, writes versio
   const configWrite = calls.find(c => c[0] === 'write' && c[1].endsWith('stryker.mutants-consumers.config.json'));
   assert.deepEqual(JSON.parse(configWrite[2]), { ...deps.readJson(), ignoreStatic: true, plugins: ['./cezar-mutation-progress.cjs'], reporters: ['json', 'cezar-progress'], vitest: { pool: 'forks', configFile: 'vitest.mutants-consumers.config.ts' } });
   assert.deepEqual(calls.slice(-1), [['remove-scratch', '/cache/scratch']]);
-  assert.match(m.summary(result), /FAIL: logic score/);
+  assert.deepEqual(result.targets, []);
+  assert.match(m.summary(result), /Tier: none: no entry in \.github\/mutants\/targets\.json, so no target/);
 });
 
 test('non-contract run uses its own package; no consumers means no second contract run', async () => {
@@ -321,12 +349,7 @@ test('measurement records source slices, function names and raw counts; compare 
 });
 
 
-test('qualified guard names find actual methods without matching another class', () => {
-  const targets = require('../mutants/targets.json');
-  for (const file of ['packages/cezar/src/preview/host.ts', 'packages/cezar/src/automations/scheduler.ts']) {
-    const names = m.functionRanges(file, root).map(r => r.name);
-    for (const guard of targets[file].guards) assert.ok(names.includes(guard), guard);
-  }
+test('a qualified guard name does not match the same method of another class', () => {
   const target = { tier: 'logic', guards: ['One.check'] };
   const result = m.evaluate([mutant({ function: 'Two.check' })], target, [{ name: 'One.check' }]);
   assert.equal(result.guards[0].pass, true);
