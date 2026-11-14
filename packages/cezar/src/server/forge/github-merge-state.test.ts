@@ -143,16 +143,20 @@ describe('normalizeMergeState', () => {
         { __typename: 'CheckRun', name: 'test', status: 'COMPLETED', conclusion: 'SUCCESS', detailsUrl: 'https://ci.example/1' },
         { __typename: 'StatusContext', context: 'ci/jenkins', state: 'SUCCESS', targetUrl: 'http://jenkins.local/2' },
         { __typename: 'StatusContext', context: 'deploy', state: 'SUCCESS', targetUrl: 'javascript:alert(1)' },
-        { status: 'COMPLETED', conclusion: 'SUCCESS' },
       ],
     };
     expect(normalizeMergeState(pr, allMethodsPolicy, { ...readableRules, requiredChecks: ['test', 'lint'] }).checks).toEqual([
       { name: 'test', state: 'passing', required: true, url: 'https://ci.example/1' },
       { name: 'ci/jenkins', state: 'passing', required: false, url: 'http://jenkins.local/2' },
       { name: 'deploy', state: 'passing', required: false },
-      { name: 'Check', state: 'passing', required: false },
       { name: 'lint', state: 'pending', required: true },
     ]);
+  });
+
+  it('gives a malformed rollup entry without a name or context a placeholder name', () => {
+    const pr = { ...readyPr, statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'SUCCESS' }] };
+    expect(normalizeMergeState(pr, allMethodsPolicy, { ...readableRules, requiredChecks: [] }).checks)
+      .toEqual([{ name: 'Check', state: 'passing', required: false }]);
   });
 
   it('does not know which checks are required when branch rules are unreadable', () => {
