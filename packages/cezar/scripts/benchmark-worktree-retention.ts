@@ -29,9 +29,13 @@ import { performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
 import { makeRunRecord } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { prepareBenchmarkEnv } from './benchmark-home.ts';
+import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
 import { reclaimWorktrees } from '../src/runs/retention.ts';
 import { seedRuns } from '../src/runs/run-store.testkit.ts';
 import { RunStore, type RunRecord } from '../src/runs/store.ts';
+
+// The store reaches the worker ownership policy, which needs the host's identity store (ADR 0032).
+installWindowsIdentityStore();
 
 export interface RetentionBenchOptions {
   /** Destroyed workers in the project. */
