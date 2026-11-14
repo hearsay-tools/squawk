@@ -61,7 +61,7 @@ type DraftSource = Partial<{
 }>
 
 export function fromDefinition(source: DraftSource = {}): AutomationDraft {
-  const { prompt, workflow, runner, model, autonomous, archiveWhenDone, autoMergePr, allowWorkers, allowMessaging, variants, ...taskExtra } = source.task ?? { prompt: '' }
+  const { prompt, workflow, runner, model, autonomous, archiveWhenDone, autoMergePr, allowWorkers, allowMessaging, variants, ...taskExtra } = (source.task ?? { prompt: '' }) as AutomationTask
   const fresh = source.task === undefined
   return {
     name: source.name ?? '',
