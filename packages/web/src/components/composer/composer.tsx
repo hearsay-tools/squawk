@@ -70,7 +70,6 @@ import {
   composerShowStop,
   composerStopRefused,
   composerSubmitLabel,
-  composerVoiceClear,
   composerWidthChanged,
   type ComposerMenuCandidate,
   type ComposerSubmitMode,
@@ -172,9 +171,6 @@ export interface ComposerProps {
    * plain text.
    */
   getMentionCandidates?: () => string[]
-  /** A voice proposal is filling this draft (spec 2026-10-21-voice-mode): marks the root so the
-   *  host's confirm prompt and a test can find it. Changes nothing else. */
-  voiceProposal?: boolean
   /** Exposes `ComposerHandle` — see there for why this exists. */
   ref?: Ref<ComposerHandle>
 }
@@ -186,17 +182,6 @@ export interface ComposerHandle {
   /** Insert `snippet` at the caret, blank-line separated (`insertTemplate`), then refocus with
    *  the caret parked end after it. */
   insertAtCaret: (snippet: string) => void
-  /** The draft as the textarea shows it now. */
-  getDraft: () => string
-  /** Replace the draft. True when the draft now holds `text`; false (nothing written) while edits
-   *  are blocked by a pending Stop or a retained send, like every other edit. */
-  setDraft: (text: string) => boolean
-  /** Empty the draft only when it still equals `text` (voice-owned, unedited) and no send is in
-   *  flight; it does not check the Stop-pending guard. True when the draft is empty afterwards. */
-  clearVoiceDraft: (text: string) => boolean
-  /** Run the send button's path (`submitDraft`): the same guards, the same `onSubmit`. True when the
-   *  send started; false when the composer is disabled, stopping, busy or the draft is empty. */
-  submit: () => boolean
 }
 
 const QUICK_REPLIES: Record<string, string> = { KeyA: 'Yes, approved.', KeyC: 'Continue.' }
@@ -220,7 +205,6 @@ const COMPOSER_DEFAULTS = {
   ariaLabel: 'Reply to the agent',
   autocompleteSkills: true,
   quickReplies: false,
-  voiceProposal: false,
 }
 
 // Optionally controlled: `value` (when given) shadows the internal state, and every write is
@@ -230,7 +214,7 @@ function defined<T>(value: T | undefined, fallback: T): T {
 }
 
 function composerInput(props: ComposerProps): Required<Pick<ComposerProps,
-  'retainDraftUntilSuccess' | 'finishing' | 'stopOnEmpty' | 'stopping' | 'compactFeedback' | 'pendingLabel' | 'failureHint' | 'clearOnSuccess' | 'autoFocus' | 'mobileCollapsible' | 'sendAriaLabel' | 'disabled' | 'disabledReason' | 'allowEmptySubmit' | 'placeholder' | 'ariaLabel' | 'autocompleteSkills' | 'quickReplies' | 'voiceProposal'
+  'retainDraftUntilSuccess' | 'finishing' | 'stopOnEmpty' | 'stopping' | 'compactFeedback' | 'pendingLabel' | 'failureHint' | 'clearOnSuccess' | 'autoFocus' | 'mobileCollapsible' | 'sendAriaLabel' | 'disabled' | 'disabledReason' | 'allowEmptySubmit' | 'placeholder' | 'ariaLabel' | 'autocompleteSkills' | 'quickReplies'
 >> & ComposerProps {
   return {
     ...props,
@@ -252,7 +236,6 @@ function composerInput(props: ComposerProps): Required<Pick<ComposerProps,
     ariaLabel: defined(props.ariaLabel, COMPOSER_DEFAULTS.ariaLabel),
     autocompleteSkills: defined(props.autocompleteSkills, COMPOSER_DEFAULTS.autocompleteSkills),
     quickReplies: defined(props.quickReplies, COMPOSER_DEFAULTS.quickReplies),
-    voiceProposal: defined(props.voiceProposal, COMPOSER_DEFAULTS.voiceProposal),
   }
 }
 
@@ -338,7 +321,7 @@ export function Composer(props: ComposerProps) {
     clearOnSuccess, onPendingChange, value, onValueChange, autoFocus, mobileCollapsible,
     mobileDisclosureKey, footerStart, footerEnd, sessionControls, executionOptions, agentOptions,
     sendAriaLabel, disabled, disabledReason, allowEmptySubmit, placeholder, ariaLabel,
-    autocompleteSkills, quickReplies, getMentionCandidates, voiceProposal, ref,
+    autocompleteSkills, quickReplies, getMentionCandidates, ref,
   } = composerInput(props)
   const { text, textRef, setText } = useComposerText(value, onValueChange)
   const [images, setImages] = useState<PendingAttachment[]>([])
@@ -586,26 +569,7 @@ export function Composer(props: ComposerProps) {
       pendingCaretRef.current = result.caret
       element?.focus()
     },
-    // The voice proposal (spec 2026-10-21-voice-mode) reads, fills and sends the draft. Both
-    // writes keep the composer's own guards: `submit` is the send button's `submitDraft`.
-    getDraft: () => textRef.current,
-    setDraft: (next: string) => {
-      if (editsBlocked()) return false
-      setText(next)
-      return true
-    },
-    // Removes text a voice proposal put there, never the user's own: it ignores the Stop-pending
-    // guard (a draft left behind would become the next task's), but not a send in flight, which
-    // owns the text now, nor an edit, which makes the draft the user's.
-    clearVoiceDraft: (voiceText: string) => {
-      const outcome = composerVoiceClear(textRef.current, busyRef.current, voiceText)
-      if (outcome === 'empty') return true
-      if (outcome === 'blocked') return false
-      setText('')
-      return true
-    },
-    submit: submitDraft,
-  }), [setText, retainDraftUntilSuccess, submitDraft])
+  }), [setText, retainDraftUntilSuccess])
 
   const stop = async () => {
     if (composerStopRefused(onStop, stopping, busyRef.current)) return
@@ -765,7 +729,6 @@ export function Composer(props: ComposerProps) {
       onClose={closeMenu}
       rootRef={rootRef}
       disabled={disabled}
-      voiceProposal={voiceProposal}
       onDrop={onDrop}
       className={composerRootClass(executionOptions, sessionControls, disabled)}
       menu={(

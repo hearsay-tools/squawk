@@ -223,7 +223,6 @@ describe('resolveCapabilities — automations', () => {
     expect(resolveCapabilities({ CEZ_AUTOMATIONS: '1' })).toMatchObject({
       automations: true,
       preview: false,
-      voice: false,
     });
   });
 });
@@ -280,17 +279,11 @@ describe('resolveCapabilities — preview (#781)', () => {
   });
 });
 
-describe('voice capability', () => {
-  it.each([
-    [{}, false],
-    [{ CEZ_VOICE: '1' }, false],
-    [{ CEZ_VOICE: '1', TYPESAFE_API_KEY: 'k' }, true],
-    [{ CEZ_VOICE: '1', CEZ_DRY_RUN: '1' }, true],
-    [{ CEZ_VOICE: 'true', TYPESAFE_API_KEY: 'k' }, false],
-    [{ CEZ_VOICE: '1', TYPESAFE_API_KEY: '' }, false],
-  ])('resolves %j to voice=%s', (env, expected) => {
-    expect(resolveCapabilities(env).voice).toBe(expected);
-  });
+// Voice mode is removed (hearsay-tools/squawk#3576): its old flags turn nothing on.
+it('ignores the removed voice flags', () => {
+  const env = { HSQ_VOICE: '1', CEZ_VOICE: '1', TYPESAFE_API_KEY: 'k', CEZ_DRY_RUN: '1' };
+  expect(resolveCapabilities(env)).toEqual(resolveCapabilities({ CEZ_DRY_RUN: '1' }));
+  expect(resolveCapabilities(env)).not.toHaveProperty('voice');
 });
 
 // D8: old CEZ-only units must remain hosted before their env aliases are repaired.

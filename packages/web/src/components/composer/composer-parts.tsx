@@ -689,7 +689,6 @@ export function ComposerFrame({
   onClose,
   rootRef,
   disabled,
-  voiceProposal,
   onDrop,
   className,
   children,
@@ -699,7 +698,6 @@ export function ComposerFrame({
   onClose: () => void
   rootRef: React.RefObject<HTMLDivElement | null>
   disabled: boolean
-  voiceProposal: boolean
   onDrop: (event: React.DragEvent) => void
   className: string
   children: ReactNode
@@ -712,7 +710,6 @@ export function ComposerFrame({
           ref={rootRef}
           data-slot="composer"
           data-disabled={disabled || undefined}
-          data-voice-proposal={voiceProposal || undefined}
           onDrop={onDrop}
           onDragOver={(event) => event.preventDefault()}
           className={className}

@@ -42,7 +42,6 @@ export function ensureDataGitignore(repoRoot: string): void {
     'automation-poll.lock',
     'automation-poll.reclaim*/',
     'preview/', // live preview: per-task Chromium profile, dev-server logs and pid records (#781)
-    'voice/', // voice mode: the local decision log (spec 2026-10-21-voice-mode)
     'automations.lock',
     'automations.reclaim*/',
     'automation-state.lock',

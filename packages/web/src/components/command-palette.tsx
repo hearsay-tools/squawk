@@ -29,9 +29,6 @@ import { orderSkillsByUsage } from '@/lib/skills'
 import { isOwnedWorker, runTitle } from '@/lib/task-groups'
 import { useCommandShortcut, useKeyShortcut } from '@/lib/use-command-shortcut'
 import { useProjectOrder } from '@/lib/use-project-order'
-import { useVoiceProposal } from '@/lib/voice/proposal-store'
-import { useVoiceCommand } from '@/components/voice/use-voice-command'
-import { CONFIRM_PLACEHOLDER, VoiceConfirm, VoiceRows } from '@/components/voice/voice-rows'
 
 /**
  * The ⌘K command palette (spec, "Cross-cutting"): projects, tasks, views, actions, skills —
@@ -102,7 +99,7 @@ export type PaletteMatch = { value: string; keywords?: string[] }
  * hearsay-tools/cezarion#1476) looks each group up as `[cmdk-group][data-value="<its internal
  * id>"]`, while a group's `data-value` holds its heading. The lookup never matches, so cmdk never
  * moves a group, and the order React renders here is the order the user sees. If a cmdk upgrade
- * fixes that lookup, cmdk will also rank the pinned groups (voice rows, New task) by score, so
+ * fixes that lookup, cmdk will also rank the pinned group (New task) by score, so
  * check this palette's order again then.
  */
 export function rankGroups<Group extends { rows: readonly PaletteMatch[] }>(groups: Group[], search: string): Group[] {
@@ -287,13 +284,6 @@ export function orderProjects(
 
 export function CommandPalette() {
   const [open, setOpen] = React.useState(false)
-  // cmdk's selected row, controlled so voice mode can tell whether Return targets its Will do row
-  // (hearsay-tools/cezarion#1461). An empty value lets cmdk select the first row on open.
-  const [selected, setSelected] = React.useState('')
-  // A closed palette forgets it, so the next open pre-selects New task again.
-  React.useEffect(() => {
-    if (!open) setSelected('')
-  }, [open])
   const navigate = useNavigate()
 
   useCommandShortcut('k', () => setOpen((current) => !current))
@@ -313,16 +303,6 @@ export function CommandPalette() {
     return () => window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, onOpen)
   }, [])
 
-  // Voice mode (spec 2026-10-21-voice-mode, § Confirmation): while a proposal waits for its
-  // confirmation, the palette docks over a clear overlay, away from what the proposal filled, so
-  // the highlighted question card or composer stays visible and the input keeps focus for "yes,
-  // confirmed". The composer sits at the bottom of the thread, so a tell docks at the top; a
-  // question card sits above it, so an answer docks at the bottom (ruling R23). Only the palette
-  // makes proposals, so with voice off this never docks.
-  const proposal = useVoiceProposal()
-  const docked = open && proposal !== undefined
-  const dock = !docked ? 'top-[10vh]' : proposal?.kind === 'tell' ? 'top-[2vh]' : 'top-auto bottom-[2vh]'
-
   return (
     <CommandDialog
       open={open}
@@ -331,8 +311,6 @@ export function CommandPalette() {
       description="Search projects, tasks, views, actions, and skills"
       showCloseButton={false}
       filter={paletteScore}
-      value={selected}
-      onValueChange={setSelected}
       // Two overrides of the shared dialog, both for this surface only — every other dialog in
       // the cockpit is a form, which wants to stay narrow and centred.
       //
@@ -343,14 +321,37 @@ export function CommandPalette() {
       // the result count changes, so the whole modal — search box included — jumps under the
       // cursor as you type. Anchored near the top it only ever grows downward, and the input you
       // are typing into never moves.
-      className={`${dock} translate-y-0 sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl`}
-      overlayClassName={docked ? 'bg-transparent' : undefined}
-      contentProps={docked ? { 'data-voice-proposal': 'true', 'data-dock': proposal?.kind === 'tell' ? 'top' : 'bottom' } : undefined}
+      className={`top-[10vh] translate-y-0 sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl`}
     >
       {/* The body mounts only while the dialog is open (Radix portals nothing when closed), so
           its queries — notably the skills fetch — run on first open, never on app boot. */}
-      <PaletteContent open={open} docked={docked} selected={selected} close={() => setOpen(false)} />
+      <PaletteContent close={() => setOpen(false)} />
     </CommandDialog>
+  )
+}
+
+/** A headed group of task rows. Recently finished and Tasks share it. */
+function TaskGroup({ heading, tasks, projectName, showProject, now, onSelect }: {
+  heading: string
+  tasks: PaletteTask[]
+  projectName: (task: PaletteTask) => string | null
+  showProject: boolean
+  now: number
+  onSelect: (task: PaletteTask) => void
+}) {
+  return (
+    <CommandGroup heading={heading}>
+      {tasks.map((task) => (
+        <TaskItem
+          key={taskKey(task)}
+          task={task}
+          projectName={projectName(task)}
+          showProject={showProject}
+          now={now}
+          onSelect={onSelect}
+        />
+      ))}
+    </CommandGroup>
   )
 }
 
@@ -424,9 +425,8 @@ function paletteViews({ multiProject, health }: { multiProject: boolean; health:
 }
 
 /** The ranked groups, in their default order. Each carries the matches of its rows, so a search
- *  can order the groups by their best row (`rankGroups`). The voice rows and New task render
- *  above them and are never ranked: the voice rows answer the sentence itself, and New task is
- *  the palette's default action, headless, so ranked below a heading it would read as that
+ *  can order the groups by their best row (`rankGroups`). New task renders above them and is
+ *  never ranked: it is the palette's default action, headless, so ranked below a heading it would read as that
  *  group's row. */
 function paletteGroups({
   views, go, goGlobal, orderedProjects, activeProjectId, goProject, otherTasks, searching,
@@ -518,18 +518,15 @@ function paletteGroups({
       // Scored only during a search, so the default view never pays for a pass over every task.
       rows: searching ? otherTasks.map((task) => taskMatch(task, taskProjectName(task))) : [],
       node: (
-        <CommandGroup key="tasks" heading="Tasks">
-          {otherTasks.map((task) => (
-            <TaskItem
-              key={taskKey(task)}
-              task={task}
-              projectName={taskProjectName(task)}
-              showProject={showProjectOnTasks}
-              now={now}
-              onSelect={selectTask}
-            />
-          ))}
-        </CommandGroup>
+        <TaskGroup
+          key="tasks"
+          heading="Tasks"
+          tasks={otherTasks}
+          projectName={taskProjectName}
+          showProject={showProjectOnTasks}
+          now={now}
+          onSelect={selectTask}
+        />
       ),
     })
   }
@@ -581,29 +578,23 @@ function paletteGroups({
   return groups
 }
 
-/** The query input. Return confirms a voice proposal while one is open. */
-function paletteInput({ voice, search, setSearch }: {
-  voice: ReturnType<typeof useVoiceCommand>
+/** The query input. */
+function paletteInput({ search, setSearch }: {
   search: string
   setSearch: (value: string) => void
 }) {
   return (
     <CommandInput
-      placeholder={voice.confirm ? CONFIRM_PLACEHOLDER : 'Search projects, tasks, views, actions, skills…'}
+      placeholder="Search projects, tasks, views, actions, skills…"
       value={search}
       onValueChange={setSearch}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' && !event.nativeEvent.isComposing) voice.onEnter(event)
-      }}
     />
   )
 }
 
-/** The results list: voice rows or the ranked groups, with New task pinned first and the
- *  recently-finished section only in the default view. */
-function paletteResults({ docked, voice, search, searching, recentlyFinished, groups, taskProjectName, showProjectOnTasks, now, selectTask, go }: {
-  docked: boolean
-  voice: ReturnType<typeof useVoiceCommand>
+/** The results list: the ranked groups, with New task pinned first and the recently-finished
+ *  section only in the default view. */
+function paletteResults({ search, searching, recentlyFinished, groups, taskProjectName, showProjectOnTasks, now, selectTask, go }: {
   search: string
   searching: boolean
   recentlyFinished: PaletteTask[]
@@ -619,59 +610,40 @@ function paletteResults({ docked, voice, search, searching, recentlyFinished, gr
     // to the viewport instead, so a large screen actually shows the list it has room for.
     // `min-h` keeps a short result set from collapsing the box to nothing, which would move
     // the bottom edge as violently as the old centring moved the top.
-    // Docked, the list stays short so the palette covers less of the card behind it.
-    <CommandList className={docked ? 'max-h-[28vh]' : 'max-h-[55vh] min-h-[14rem] sm:max-h-[60vh] lg:max-h-[68vh]'}>
-      {/* A proposal waiting for its confirmation replaces the search: one panel, so the screen
-          says what Return does (hearsay-tools/cezarion#1461). Typing brings the search back. */}
-      {voice.confirm ? (
-        <VoiceConfirm
-          confirm={voice.confirm}
-          notice={voice.row?.kind === 'notice' ? voice.row.text : undefined}
-          onConfirm={voice.onConfirm}
+    <CommandList className="max-h-[55vh] min-h-[14rem] sm:max-h-[60vh] lg:max-h-[68vh]">
+      <CommandEmpty>Nothing matches.</CommandEmpty>
+
+      {/* First, headless, and the row an empty query pre-selects: opening ⌘K and pressing
+          Enter starts a task. It used to sit ninth in Views with a duplicate down in Actions;
+          one authoritative row at the top is what "New task" being the default means. */}
+      <CommandGroup>
+        <CommandItem
+          value="new task"
+          data-slot="palette-view"
+          data-nav-to="/new"
+          onSelect={() => go('/new')}
+        >
+          <PlusIcon aria-hidden="true" />
+          New task
+          <CommandShortcut>C</CommandShortcut>
+        </CommandItem>
+      </CommandGroup>
+
+      {/* Only in the DEFAULT view. Once you type, splitting tasks by read-state is noise: it
+          floats a section of near-misses above the exact match you are looking for, purely
+          because that section renders first. Searching gets one ranked Tasks list. */}
+      {!searching && recentlyFinished.length > 0 ? (
+        <TaskGroup
+          heading="Recently finished"
+          tasks={recentlyFinished}
+          projectName={taskProjectName}
+          showProject={showProjectOnTasks}
+          now={now}
+          onSelect={selectTask}
         />
-      ) : (
-        <>
-          <VoiceRows row={voice.row} committable={search.trim() !== ''} onSelect={voice.onSelect} />
-          {/* A voice row answers the sentence; "nothing matches" would contradict it. */}
-          {voice.row ? null : <CommandEmpty>Nothing matches.</CommandEmpty>}
+      ) : null}
 
-          {/* First, headless, and the row an empty query pre-selects: opening ⌘K and pressing
-              Enter starts a task. It used to sit ninth in Views with a duplicate down in Actions;
-              one authoritative row at the top is what "New task" being the default means. */}
-          <CommandGroup>
-            <CommandItem
-              value="new task"
-              data-slot="palette-view"
-              data-nav-to="/new"
-              onSelect={() => go('/new')}
-            >
-              <PlusIcon aria-hidden="true" />
-              New task
-              <CommandShortcut>C</CommandShortcut>
-            </CommandItem>
-          </CommandGroup>
-
-          {/* Only in the DEFAULT view. Once you type, splitting tasks by read-state is noise: it
-              floats a section of near-misses above the exact match you are looking for, purely
-              because that section renders first. Searching gets one ranked Tasks list. */}
-          {!searching && recentlyFinished.length > 0 ? (
-            <CommandGroup heading="Recently finished">
-              {recentlyFinished.map((task) => (
-                <TaskItem
-                  key={taskKey(task)}
-                  task={task}
-                  projectName={taskProjectName(task)}
-                  showProject={showProjectOnTasks}
-                  now={now}
-                  onSelect={selectTask}
-                />
-              ))}
-            </CommandGroup>
-          ) : null}
-
-          {rankGroups(groups, search).map((group) => group.node)}
-        </>
-      )}
+      {rankGroups(groups, search).map((group) => group.node)}
     </CommandList>
   )
 }
@@ -686,17 +658,7 @@ function paletteCappedNote({ cappedProjects }: { cappedProjects: string[] }) {
   )
 }
 
-function PaletteContent({
-  open,
-  docked,
-  selected,
-  close,
-}: {
-  open: boolean
-  docked: boolean
-  selected: string
-  close: () => void
-}) {
+function PaletteContent({ close }: { close: () => void }) {
   const navigate = useNavigate()
   // The UNSCOPED twin, for the handful of targets that live outside every project (`/tasks`).
   const routerNavigate = useRouterNavigate()
@@ -720,20 +682,6 @@ function PaletteContent({
   // the palette must not offer a GitHub view the sidebar honestly hides.
   const health = useHealth()
   const now = Date.now()
-  // Health loading counts as off: no request, no row, and the palette renders as it always has.
-  const voice = useVoiceCommand({
-    enabled: health.data?.capabilities.voice === true,
-    text: search,
-    selected,
-    close,
-    clearText: () => setSearch(''),
-  })
-  // The body outlives `open` for the length of the exit animation; the hook's unmount cleanup
-  // covers the rest. Both are safe to run twice.
-  const { onClose: closeVoice } = voice
-  React.useEffect(() => {
-    if (!open) closeVoice()
-  }, [open, closeVoice])
 
   // Same threshold as the sidebar's grouped nav (`app-shell-container.tsx`): with one registered
   // project there is nowhere to switch TO, and a one-row group would be pure noise.
@@ -840,10 +788,8 @@ function PaletteContent({
 
   return (
     <>
-      {paletteInput({ voice, search, setSearch })}
+      {paletteInput({ search, setSearch })}
       {paletteResults({
-        docked,
-        voice,
         search,
         searching,
         recentlyFinished,

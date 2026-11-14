@@ -88,7 +88,7 @@ plus start-token liveness and token-checked release.
   nothing and throws, as on a closed store. The same check guards the automation store:
   definition and state writes throw before memory changes; receipts, logs and compaction
   skip; no lock directory is recreated. It also guards the artifact writer (cleanup in
-  `finally` included), the data `.gitignore` and the voice log (skipped), and config
+  `finally` included) and the data `.gitignore` (skipped), and config
   updates, project ui-state and the launch key (they throw, nothing written). Each fence
   logs its first skipped write once. Read-only paths skip while fenced: health answers the
   last config it read (`healthConfig`), the activity publisher stops its foreign-claim

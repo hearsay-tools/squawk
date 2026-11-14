@@ -29,7 +29,6 @@ export * from './automation-schedule.ts';
 export * from './automations.ts';
 export * from './scheduled-tasks.ts';
 export * from './preview.ts';
-export * from './voice.ts';
 
 export * from './conversations.ts';
 export * from './ci-wait.ts';

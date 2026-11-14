@@ -128,7 +128,6 @@ export function isLoopbackHostHeader(host: string | null | undefined): boolean {
 /** `CEZ_REMOTE=1` or a non-loopback bind host ⇒ hosted mode (no local handoff).
  *  `CEZ_AUTOMATIONS=0` ⇒ automations are disabled.
  *  `CEZ_PREVIEW=1` ⇒ live preview exists (#781); same boot-time-flag caveat as `automations`.
- *  `CEZ_VOICE=1` plus `TYPESAFE_API_KEY` (or `CEZ_DRY_RUN=1`) ⇒ voice mode exists; same caveat.
  *
  *  Read per request. The automations flag is a boot-time setting: the workspace scheduler is
  *  started once, on the server's `listening` event, so flipping the flag on afterwards gates
@@ -149,9 +148,6 @@ export function resolveCapabilities(env: NodeJS.ProcessEnv = process.env, bindHo
     remoteSettingsAdmin,
     automations: automationsEnabled(env),
     preview: productEnv('PREVIEW', env) === '1',
-    // Boot-time flag, like `automations`. The key is read here only as present or absent; the
-    // fake engine under CEZ_DRY_RUN needs none.
-    voice: productEnv('VOICE', env) === '1' && (!!env.TYPESAFE_API_KEY || productEnv('DRY_RUN', env) === '1'),
     tokenMetrics: tokenUsageMetrics && costMetrics,
     tokenUsageMetrics,
     costMetrics,

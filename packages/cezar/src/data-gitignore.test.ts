@@ -12,14 +12,25 @@ describe('ensureDataGitignore', () => {
   });
   afterEach(() => rmSync(repo, { recursive: true, force: true }));
 
-  it('ignores the voice decision log', () => {
+  it('writes each rule once and keeps a retired line a project already has', async () => {
+    const { mkdirSync, writeFileSync } = await import('node:fs');
+    const dir = projectPaths(repo).write;
+    mkdirSync(dir, { recursive: true });
+    // Voice mode wrote `voice/` here; its removal leaves the line and the directory alone.
+    writeFileSync(join(dir, '.gitignore'), 'voice/\n', 'utf8');
     ensureDataGitignore(repo);
-    const read = () => readFileSync(join(projectPaths(repo).write, '.gitignore'), 'utf8');
+    const read = () => readFileSync(join(dir, '.gitignore'), 'utf8');
     const first = read();
     expect(first.split('\n')).toContain('voice/');
+    expect(first.split('\n')).toContain('preview/');
     ensureDataGitignore(repo);
     expect(read()).toBe(first);
-    expect(read().split('\n').filter((line) => line === 'voice/')).toHaveLength(1);
+    expect(read().split('\n').filter((line) => line === 'preview/')).toHaveLength(1);
+  });
+
+  it('gives a new project no voice rule', () => {
+    ensureDataGitignore(repo);
+    expect(readFileSync(join(projectPaths(repo).write, '.gitignore'), 'utf8').split('\n')).not.toContain('voice/');
   });
 });
 
