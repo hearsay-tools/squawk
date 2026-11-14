@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createOwnedWorkspace, planOwnedWorkspace } from './workspace.ts';
 import { removeOwnedWorkspace } from './workspace-removal.ts';
-import { fixture, git, receiptPath, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
+import { fixture, git, receiptPath, recordingReport, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
 
 describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, () => {
   it('completes bookkeeping when recorded worktree, gitDir and branch are already gone without a checkpoint', async () => {
@@ -56,7 +56,11 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     const workspace = await createOwnedWorkspace(root, randomUUID(), first);
     const other = join(root, 'other-checkout');
     git(root, 'worktree', 'add', '--force', other, workspace.branch);
-    expect.soft(await removeOwnedWorkspace(root, workspace)).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
+    const { calls, report } = recordingReport();
+    expect.soft(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report))
+      .toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
+    expect(calls).toEqual([['unexplained']]);
+    expect(existsSync(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'))).toBe(false);
     expect.soft(existsSync(workspace.path)).toBe(true);
     expect(existsSync(other)).toBe(true);
     expect(git(root, 'branch', '--list', workspace.branch)).not.toBe('');

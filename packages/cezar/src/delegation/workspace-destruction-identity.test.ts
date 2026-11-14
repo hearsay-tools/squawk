@@ -8,7 +8,7 @@ import { projectMovedMarker } from '../project-paths.ts';
 import { describeProcesses } from './process-liveness.ts';
 import { createOwnedWorkspace } from './workspace.ts';
 import { ownedWorktreePresent, removeOwnedWorkspace } from './workspace-removal.ts';
-import { fixture, git, receiptPath, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
+import { fixture, git, receiptPath, recordingReport, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
 
 describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, () => {
   it('preserves owned resources when shared mutation coordination is unavailable', async () => {
@@ -99,7 +99,11 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     expect(await readFile(join(parentPath, 'tracked.txt'), 'utf8')).toBe('dirty');
   });
 
-  for (const attack of ['symlink', 'moved', 'moved, path reused', 'replacement', 'foreign checkout', 'detached', 'same-tip branch', 'missing identity', 'rewritten reflog', 'symlink reflog', 'resource collision', 'workspace names another baseline'] as const) {
+  // Refusals that a retrying caller cannot explain from what it observes report unexplained, once.
+  const unexplained = [['unexplained']];
+  for (const [attack, reported] of [['symlink', unexplained], ['moved', []], ['moved, path reused', []], ['replacement', unexplained],
+    ['foreign checkout', unexplained], ['detached', unexplained], ['same-tip branch', unexplained], ['missing identity', unexplained],
+    ['rewritten reflog', unexplained], ['symlink reflog', unexplained], ['resource collision', unexplained], ['workspace names another baseline', []]] as const) {
     it(`preserves ambiguous resources: ${attack}`, async () => {
       const { root, first, second } = await fixture();
       const workspace = await createOwnedWorkspace(root, randomUUID(), first);
@@ -130,8 +134,11 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
       if (attack === 'symlink reflog') { await rename(log, log + '-real'); await symlink(log + '-real', log); }
       const target = attack === 'resource collision' ? { ...workspace, resourceId: randomUUID() }
         : attack === 'workspace names another baseline' ? { ...workspace, baselineSha: second } : workspace;
-      const result = await removeOwnedWorkspace(root, target);
+      const { calls, report } = recordingReport();
+      const result = await removeOwnedWorkspace(root, target, undefined, undefined, undefined, report);
       expect(result).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
+      expect(calls).toEqual(reported);
+      expect(existsSync(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'))).toBe(false);
       expect(git(root, 'branch', '--list', workspace.branch)).not.toBe('');
       expect(existsSync(attack === 'moved' ? workspace.path + '-moved' : workspace.path)).toBe(true);
       if (attack === 'moved, path reused') expect(existsSync(workspace.path + '-moved')).toBe(true);
@@ -178,13 +185,13 @@ describe('removeOwnedWorkspace refusals that keep every resource', { timeout: WO
     const workspace = await createOwnedWorkspace(root, randomUUID(), first);
     const holder = spawn('sleep', ['30'], { cwd: workspace.path, stdio: 'ignore' });
     const exited = new Promise(resolve => holder.once('exit', resolve));
-    const held: number[][] = []; let unexplained = 0;
+    const { calls, report } = recordingReport();
     try {
-      const result = await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined,
-        { held: pids => { held.push([...pids]); }, unexplained: () => { unexplained += 1; } });
+      const result = await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report);
       expect(result).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
       expect(result.error).toContain(describeProcesses([holder.pid!]));
-      expect({ held, unexplained }).toEqual({ held: [[holder.pid]], unexplained: 0 });
+      expect(calls).toEqual([['held', [holder.pid]]]);
+      expect(JSON.parse(await readFile(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'), 'utf8'))).toMatchObject({ phase: 'prepared' });
       expect(existsSync(workspace.path)).toBe(true);
       expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
     } finally { holder.kill(); await exited; }
@@ -201,11 +208,11 @@ describe('removeOwnedWorkspace refusals that keep every resource', { timeout: WO
       if (path === '/proc') throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
       return (scoped as (path: fs.PathLike, options?: unknown) => unknown)(path, options);
     }) as typeof fs.readdirSync);
-    const held: number[][] = []; let unexplained = 0;
-    const result = await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined,
-      { held: pids => { held.push([...pids]); }, unexplained: () => { unexplained += 1; } });
+    const { calls, report } = recordingReport();
+    const result = await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report);
     expect(result).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
-    expect({ held, unexplained }).toEqual({ held: [], unexplained: 1 });
+    expect(calls).toEqual([['unexplained']]);
+    expect(JSON.parse(await readFile(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'), 'utf8'))).toMatchObject({ phase: 'prepared' });
     expect(existsSync(workspace.path)).toBe(true);
     expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
   });

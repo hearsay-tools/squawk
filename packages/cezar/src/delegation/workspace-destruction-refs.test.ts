@@ -68,6 +68,19 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     },
   );
 
+  it('deletes a stranded branch still at its baseline after the parent branch was rewritten', async () => {
+    const { root, first } = await fixture();
+    // The worker starts from a parent commit that a later rewrite of the parent branch drops.
+    const parentCommit = git(root, 'commit-tree', `${first}^{tree}`, '-p', first, '-m', 'parent work');
+    git(root, 'branch', 'feature', parentCommit);
+    const workspace = await createOwnedWorkspace(root, randomUUID(), parentCommit);
+    git(root, 'branch', '-f', 'feature', first);
+    git(root, 'reflog', 'expire', '--expire=now', 'refs/heads/feature');
+    await strand(root, workspace, 'externally removed');
+    expect(await removeOwnedWorkspace(root, workspace)).toMatchObject({ state: 'complete', remaining: [] });
+    expect(git(root, 'branch', '--list', workspace.branch)).toBe('');
+  });
+
   // hearsay-tools/squawk#911: commits another ref keeps are no work the delete would lose.
   it('deletes a stranded branch moved behind its baseline onto a commit another branch keeps', async () => {
     const { root, first, second } = await fixture();
