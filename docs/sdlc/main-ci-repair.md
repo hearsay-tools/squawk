@@ -142,42 +142,14 @@ explicit action owner or blocker. Record that final table in the handoff. Failed
 or protected writes remain visible blockers, not successful cleanup. Apply the
 same rules to a legacy individual report without closing unrelated reports.
 
-These instructions live in the automation's task prompt. Changing the checked-in
-helper does not update a running cockpit's saved prompt. Apply and verify the
-prompt-only migration below for future tasks. Tasks already launched retain their
-original prompt and need an explicit continuation instruction for this cleanup.
+These instructions live in the automation's task prompt. Tasks already launched
+retain their original prompt and need an explicit continuation instruction for
+this cleanup.
 
 GitHub issues retain the diagnostic evidence and summary. Squawk retains matching
 receipts and the task handoff. Each reported main CI attempt adds one summary
 issue. A paused automation spends no runner tokens. When enabled, each newly
 routed summary can start one repair task and consume tokens.
-
-## Upgrade the repair prompt before reporter rollout
-
-The previous automation prompt accepts only a signature report. Install the
-compatible prompt **before** deploying summary routing. Otherwise a new summary
-starts a task that rejects its evidence format. The compatible prompt accepts both
-legacy reports and summaries; existing tasks keep their original instructions.
-Do not cancel or relabel those tasks. Check their claims before starting repairs.
-
-The checked-in prompt helper emits a partial update for the existing automation:
-
-```sh
-node .github/scripts/main-ci-repair-automation.cjs > /tmp/main-ci-repair-prompt.json
-hsq automation list
-hsq automation show <existing-id>
-hsq automation update <existing-id> --file /tmp/main-ci-repair-prompt.json
-hsq automation show <existing-id>
-hsq automation check <existing-id>
-```
-
-Use the ID of **Main CI — guarded repair**, not a new automation. Review its current
-prompt before updating, so local policy is not lost. The patch contains only
-`task.prompt`; the CLI merges task keys. Verify that enablement, runner settings,
-filters, cursor and receipts remain intact. The final command previews matching
-without launching tasks. Do not pass `--execute`, enable a paused automation or
-create a duplicate. This implementation prepares the update; it does not change
-a live automation. After the prompt update is verified, deploy the reporter.
 
 ## Flake reports from the merge queue
 
