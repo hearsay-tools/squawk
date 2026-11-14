@@ -53,7 +53,7 @@ test('the Vitest shards and the Squeal jobs read one exact Node version from .no
   const readers = Object.entries(jobs).filter(([, job]) => (job.steps ?? []).some((s) => s.with?.['node-version-file']))
     .map(([id]) => id);
   assert.deepEqual(readers.sort(), ['cockpit-browser', 'prepare-pr-snapshot', 'publish-snapshot', 'squeal-coverage-proof',
-    'squeal-coverage-proof-compare', 'squeal-export', 'squeal-package-trial', 'squeal-publish', 'vitest',
+    'squeal-coverage-proof-compare', 'squeal-export', 'squeal-publish', 'vitest',
     'vitest-coverage-merge'], 'the minimum-Node jobs keep engines.node');
   for (const id of readers) {
     const setup = jobs[id].steps.find((s) => s.uses?.startsWith('actions/setup-node@'));
@@ -122,10 +122,8 @@ test('the merge-group step runs the test command under squeal ci record and retu
   }
 });
 
-// The coverage proof (ci-squeal-coverage-proof.workflow.test.cjs) and the packaged test trial
-// (ci-squeal-package-trial.workflow.test.cjs) run only on a manual dispatch, and gate nothing either.
-const SQUEAL_JOBS = ['squeal-export', 'squeal-publish', 'squeal-coverage-proof', 'squeal-coverage-proof-compare',
-  'squeal-package-trial'];
+// The coverage proof (ci-squeal-coverage-proof.workflow.test.cjs) gates nothing either.
+const SQUEAL_JOBS = ['squeal-export', 'squeal-publish', 'squeal-coverage-proof', 'squeal-coverage-proof-compare'];
 
 test('squeal-export runs after passing merge-group shards and only reads', () => {
   const { jobs, permissions } = ci();
@@ -247,7 +245,7 @@ test('every job that runs squeal sets up Squeal\'s pinned action once, after its
   for (const pin of pins) assert.equal(pin.trim(), SQUEAL_PIN);
   const users = Object.entries(jobs).filter(([, job]) => (job.steps ?? []).some((s) => /(^|\s)squeal (ci|code)\b/m.test(s.run ?? '')))
     .map(([id]) => id);
-  assert.deepEqual(users.sort(), ['squeal-coverage-proof', 'squeal-export', 'squeal-package-trial', 'squeal-publish', 'vitest']);
+  assert.deepEqual(users.sort(), ['squeal-coverage-proof', 'squeal-export', 'squeal-publish', 'vitest']);
   for (const [id, job] of Object.entries(jobs)) {
     const { steps = [] } = job;
     const action = steps.filter((s) => s.uses?.startsWith('hearsay-tools/squeal/'));
