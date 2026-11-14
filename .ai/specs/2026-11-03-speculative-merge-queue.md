@@ -1,4 +1,5 @@
 # Parallel speculative merge-queue builds
+Status: done
 
 Issue: hearsay-tools/cezarion#2610. Status: **approved** by the owner on 2026-11-03.
 Owner decisions recorded 2026-11-03. Implementation follows in separate issues (§ Follow-up issues).

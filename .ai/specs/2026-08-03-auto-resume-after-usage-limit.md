@@ -1,4 +1,5 @@
 # Auto-resume a task after a provider usage limit
+Status: superseded by 2026-11-12-provider-error-hold.md
 
 > Historical source: `open-mercato/cezar` (upstream), preserved at fork point
 > `feb85666` (2026-08-31). Unqualified cezar issue/PR citations below belong to

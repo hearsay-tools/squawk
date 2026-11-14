@@ -1,4 +1,5 @@
 # Recover incomplete structured questions — issue hearsay-tools/cezarion#88
+Status: done
 
 Approved by the user on 2026-09-05.
 

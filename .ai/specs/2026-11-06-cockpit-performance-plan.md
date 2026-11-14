@@ -1,4 +1,5 @@
 # Reduce cockpit work during concurrent tasks
+Status: done
 
 Epic: hearsay-tools/cezarion#2728. Baseline: `main` at `b47be7af6`. Planner task
 `4935efd3`. The owner approved this plan and decisions D1-D9 on 2026-11-06. Line numbers are as of the baseline; each slice moves them.

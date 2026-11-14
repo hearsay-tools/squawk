@@ -1,4 +1,5 @@
 # Live preview v2: the agent drives the task's preview browser
+Status: done
 
 hearsay-tools/cezarion#784. Slice v2 of [live preview](2026-10-02-live-preview-v1.md#slices).
 Behind `CEZ_PREVIEW=1`, as v1.

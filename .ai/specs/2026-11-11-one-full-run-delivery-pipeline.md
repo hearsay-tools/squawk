@@ -1,6 +1,7 @@
 # Delivery pipeline: one full run, in the merge queue
+Status: active
 
-Status: **draft**. The owner chose this direction on 2026-11-11, in place of the
+Recorded status: **draft**. The owner chose this direction on 2026-11-11, in place of the
 post-merge verification design of hearsay-tools/cezarion#3217 (epic
 hearsay-tools/cezarion#3208). Implementation follows in separate issues (§ Phases).
 Amended 2026-11-13 with the result of Squeal's coverage proof, squeal row 020-26c

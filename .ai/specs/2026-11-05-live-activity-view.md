@@ -1,4 +1,5 @@
 # Live activity view
+Status: done
 
 A cockpit view that shows what is happening right now, in one project and in all
 projects. It shows what each task and each worker is doing or waiting for, and which

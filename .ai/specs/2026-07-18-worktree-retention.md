@@ -1,4 +1,5 @@
 # Worktree Retention & Management (open-mercato/cezar#483)
+Status: done
 
 ## TLDR
 

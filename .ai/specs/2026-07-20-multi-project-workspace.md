@@ -1,6 +1,7 @@
 # Multi-project workspace
+Status: done
 
-> Status: draft
+> Recorded status: draft
 > Supersedes: PR open-mercato/cezar#406 *multi-project switcher* (closed unmerged — the per-process
 > instances + loopback-proxy design is abandoned; this spec replaces it with a
 > single-process workspace).

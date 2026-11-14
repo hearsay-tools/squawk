@@ -1,6 +1,7 @@
 # Recurring CI failure sweeps (hearsay-tools/cezarion#205)
+Status: done
 
-Status: approved by the task owner on 2026-09-10. Extends the reporter shipped by hearsay-tools/cezarion#204 / PR hearsay-tools/cezarion#207.
+Recorded status: approved by the task owner on 2026-09-10. Extends the reporter shipped by hearsay-tools/cezarion#204 / PR hearsay-tools/cezarion#207.
 
 ## Outcome and scope
 

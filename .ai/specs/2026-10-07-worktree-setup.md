@@ -1,4 +1,5 @@
 # Worktree setup (hearsay-tools/cezarion#917)
+Status: done
 
 > Design record for hearsay-tools/cezarion#917. Approved 2026-10-07.
 

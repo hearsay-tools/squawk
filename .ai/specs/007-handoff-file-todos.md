@@ -1,11 +1,12 @@
 # 007 — `handoff.md` per task + globalny inbox `todos.json`
+Status: done
 
 > Historical source: `open-mercato/cezar` (upstream), preserved at fork point
 > `feb85666` (2026-08-31). Unqualified cezar issue/PR citations below belong to
 > that upstream tracker; example numbers, UI values and command literals retain
 > their original meaning. New citations must name their repository.
 
-Status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 2 · Zależy od: 002 · Wzorzec: janitor `seedHandoffFile`/`appendHandoffHeartbeat` + `todos.ts` (to jest to "sprytne globalne zarządzanie")
+Recorded status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 2 · Zależy od: 002 · Wzorzec: janitor `seedHandoffFile`/`appendHandoffHeartbeat` + `todos.ts` (to jest to "sprytne globalne zarządzanie")
 
 > **Aktualizacja 2026-07-17 (#471) — globalny inbox jest domyślnie WYŁĄCZONY.**
 > Agenty potrafiły zawiesić się na nieaktualnych, wcześniej zapisanych follow-upach, przez co

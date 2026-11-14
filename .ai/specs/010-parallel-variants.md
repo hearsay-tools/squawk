@@ -1,8 +1,9 @@
 # 010 — Warianty: N agentów na jeden task, wybierasz najlepszy diff
+Status: superseded by 2026-09-06-owned-workers-isolated-worktrees.md
 
 Retired by hearsay-tools/cezarion#1542 on 2026-10-23. Kept as historical design evidence; new tasks use owned workers.
 
-Status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 3 · Zależy od: 006 (worktree), 009 (diff/PR) · Wzorzec: własny — realne "multi-agent przez CLI" z wymagań Piotra
+Recorded status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 3 · Zależy od: 006 (worktree), 009 (diff/PR) · Wzorzec: własny — realne "multi-agent przez CLI" z wymagań Piotra
 
 ## Cel
 

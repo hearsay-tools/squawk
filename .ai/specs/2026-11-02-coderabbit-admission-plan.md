@@ -1,4 +1,5 @@
 # CodeRabbit admission replacement
+Status: done
 
 2026-11-05: heavy verification no longer waits for review admission. It runs beside the
 native review gate after preflight, and `verify` requires both (hearsay-tools/cezarion#2727).

@@ -1,4 +1,5 @@
 # Admit the trusted CodeRabbit no-files decision
+Status: done
 
 Proof base: `666efc213`. Parent owns integration, review, push, CI and landing.
 No push or GitHub write belongs to this worker.

@@ -1,4 +1,5 @@
 # Live activity view: plan
+Status: done
 
 Spec: [2026-11-05-live-activity-view.md](2026-11-05-live-activity-view.md). Read it
 first. Decisions are cited as D1–D9.

@@ -1,4 +1,5 @@
 # Native Codex park observation proof
+Status: done
 
 Subject: hearsay-tools/cezarion#1641.
 `proof_base`: `6c92bf4d85ec0cc73d58bf0dab3f25b5fcd407c1`.

@@ -1,4 +1,5 @@
 # Immediate worker delivery and parent-routed questions — hearsay-tools/cezarion#505
+Status: done
 
 Parent/worker messages waited for the recipient's whole turn to end. In task
 `45914a6c-564d-4792-bdad-c84eb09cf8ec` the median parent → worker delay was 31

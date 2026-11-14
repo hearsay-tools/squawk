@@ -1,8 +1,9 @@
 # Owned workers in isolated worktrees
+Status: done
 
 Date: 2026-09-06
 Issue: https://github.com/wjarka/cezar/issues/111
-Status: Complete written spec approved by the owner on 2026-09-06.
+Recorded status: Complete written spec approved by the owner on 2026-09-06.
 
 ## Goal and scope
 
