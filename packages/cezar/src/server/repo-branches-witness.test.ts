@@ -5,7 +5,7 @@ import { chmodSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } 
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { promisify } from 'node:util';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { createOwnedWorkspace } from '../delegation/workspace.ts';
 import type { WorktreeGit } from '../git-worktree-lock.ts';
 import { commit, fakeForge, owners, runRecord, taskBranch } from './repo-branches.testkit.ts';
@@ -426,10 +426,18 @@ process.exit(result.status ?? 1);
     ]);
     expect((await classify()).payload.branches.find((row) => row.name === 'cez/aaaaaaaa')).toMatchObject({ ahead: 0, class: 'orphan' });
   });
-  it('refreshes diff stats when the configured global attribute file changes', async () => {
-    const attributes = join(root, 'global-attributes');
+  // Git reads core.attributesFile, else $XDG_CONFIG_HOME/git/attributes, else ~/.config/git/attributes.
+  it.each([
+    ['the configured', 'global-attributes', { XDG_CONFIG_HOME: 'xdg', HOME: 'home' }],
+    ['the XDG', 'xdg/git/attributes', { XDG_CONFIG_HOME: 'xdg', HOME: 'home' }],
+    ['the home', 'home/.config/git/attributes', { XDG_CONFIG_HOME: '', HOME: 'home' }],
+  ] as const)('refreshes diff stats when %s global attribute file changes', async (source, file, env) => {
+    for (const [key, dir] of Object.entries(env)) vi.stubEnv(key, dir && join(root, dir));
+    onTestFinished(() => { vi.unstubAllEnvs(); });
+    const attributes = join(root, file);
+    mkdirSync(join(attributes, '..'), { recursive: true });
     writeFileSync(attributes, '');
-    await git(root, 'config', 'core.attributesFile', attributes);
+    if (source === 'the configured') await git(root, 'config', 'core.attributesFile', attributes);
     expect((await classify()).payload.branches.find((row) => row.name === 'cez/aaaaaaaa')?.diffStat).toEqual({ additions: 2, deletions: 0 });
     writeFileSync(attributes, '* -diff\n');
     expect((await classify()).payload.branches.find((row) => row.name === 'cez/aaaaaaaa')?.diffStat).toEqual({ additions: 0, deletions: 0 });

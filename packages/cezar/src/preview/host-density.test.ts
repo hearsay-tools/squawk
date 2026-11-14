@@ -39,3 +39,28 @@ it.each([1, 2, undefined])('same-viewer open with ratio %s restarts only for a c
   await flush();
   expect(browser.cdpFake.sent('Page.startScreencast')).toHaveLength(before + (dpr === 1 ? 1 : 0));
 });
+
+it.each([
+  { opened: 1, resized: 2, attached: 2 },
+  { opened: 2, resized: undefined, attached: 1 },
+])('a browser restarted after the pane moved from ratio $opened to $resized attaches at $attached', async ({ opened, resized, attached }) => {
+  const { host, ctx, answering, browsers } = make();
+  answering.add(5173);
+  const viewer = fakeViewer();
+  await host.handle(ctx, viewer, { t: 'open', target: { port: 5173 }, quality: 'ultra', dpr: opened });
+  await flush();
+  // The pane omits the ratio at 1, as the cockpit sends it; other messages leave the ratio alone.
+  await host.handle(ctx, viewer, { t: 'resize', w: 1280, h: 800, ...(resized === undefined ? {} : { dpr: resized }) });
+  await host.handle(ctx, viewer, { t: 'ping', ts: 1 });
+  browsers[0]!.exit({ stderrTail: 'crash' });
+  await flush();
+  const attach = vi.spyOn(PreviewSession.prototype, 'attach');
+  try {
+    await host.handle(ctx, viewer, { t: 'retryBrowser' });
+    await flush();
+    expect(browsers).toHaveLength(2);
+    expect(attach.mock.calls).toEqual([[viewer, attached]]);
+  } finally {
+    attach.mockRestore();
+  }
+});

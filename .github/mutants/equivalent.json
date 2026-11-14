@@ -301,5 +301,23 @@
     "replacement": "\"\"",
     "reason": "commitLegacyMigration never reads legacy.cache: the claim, planLegacyMigration (migrationRoots is called for the target only), MOVED.json and updateManagedPath use only paths under legacy.root.",
     "site": "const legacy = homePaths(record.legacyRoot, join(record.legacyRoot, "
+  },
+  {
+    "file": "packages/cezar/src/server/repo-branches.ts",
+    "function": "deletionVerdicts",
+    "mutator": "StringLiteral",
+    "original": "'cezar'",
+    "replacement": "\"\"",
+    "reason": "productName ignores its argument and returns the build's display name, so an empty literal renders the same text; remove this entry when hearsay-tools/squawk#3509 replaces productName calls with literals.",
+    "site": "refused.push({ name, reason: `not a ${productName("
+  },
+  {
+    "file": "packages/cezar/src/server/repo-branches.ts",
+    "function": "deleteBranches",
+    "mutator": "StringLiteral",
+    "original": "'cezar'",
+    "replacement": "\"\"",
+    "reason": "productName ignores its argument and returns the build's display name, so an empty literal renders the same text; remove this entry when hearsay-tools/squawk#3509 replaces productName calls with literals.",
+    "site": "refused.push({ name, reason: `not a ${productName("
   }
 ]
