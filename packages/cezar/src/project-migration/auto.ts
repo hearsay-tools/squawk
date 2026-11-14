@@ -4,9 +4,10 @@ import { markFreshProject } from './fresh.ts';
 import type { Home } from '../home/home.ts';
 import { noticeLegacyProject, pathPresent, projectMoveMarked, projectPaths } from '../project-paths.ts';
 import { CockpitOwnership, migrationFencePaths } from '../server/cockpit-ownership.ts';
-import { projectCockpits, projectForeignTasksOffline, projectKeptRunIds } from './live.ts';
+import { ProjectMigrationRefusedError, resolveKeptRunIds } from './engine.ts';
+import { projectCockpits, projectForeignTasksOffline } from './live.ts';
 import { moveUnderFence } from './offline.ts';
-import { LEGACY_PROJECT_DIR, legacyStateLeft, MIGRATED_PROJECT_DIR, planProjectMigration } from './plan.ts';
+import { LEGACY_PROJECT_DIR, legacyStateLeft, MIGRATED_PROJECT_DIR, planProjectMigration, type ProjectMigrationPlan } from './plan.ts';
 import { ProjectMigrationRecoveryError, recoverProjectMigration } from './recovery.ts';
 import type { ArchiveOnMergeDeps } from '../server/archive-on-merge.ts';
 import { automationLeaseHeld } from '../automations/store.ts';
@@ -53,17 +54,26 @@ async function blocker(root: string, homes: readonly Home[]): Promise<string> {
 }
 
 
-/** 'nothing' when there is nothing to move, a reason when the move must wait, or undefined to go ahead. */
+/** The plan's blockers and conflicts in one line, or '' when it has none. */
+function refusal(plan: ProjectMigrationPlan): string {
+  return [...plan.blockers, ...plan.conflicts.map(conflict => `${conflict.path}: ${conflict.reason}`)].join('; ');
+}
+
+/**
+ * 'nothing' when there is nothing to move, a reason when the move must wait, or undefined to go ahead.
+ * As in the move itself, a plan refused anyway names its own refusal, not a failure to read the kept tasks.
+ */
 async function precheck(root: string, homes: readonly Home[]): Promise<'nothing' | { reason: string } | undefined> {
   try {
-    const plan = await planProjectMigration(root, { keep: projectKeptRunIds(root) });
-    const refusals = [...plan.blockers, ...plan.conflicts.map(conflict => `${conflict.path}: ${conflict.reason}`)];
-    if (refusals.length > 0) return { reason: refusals.join('; ') };
+    const plan = await planProjectMigration(root, { keep: await resolveKeptRunIds({ repoRoot: root }) });
+    const refused = refusal(plan);
+    if (refused) return { reason: refused };
     // An unmarked project moves while its `.ai/cezar/` exists, even with nothing in it to carry: the move marks it.
     if (plan.alreadyMoved || (!projectMoveMarked(root) && !pathPresent(plan.source))) return 'nothing';
     const live = await blocker(root, homes);
     return live ? { reason: live } : undefined;
   } catch (error) {
+    if (error instanceof ProjectMigrationRefusedError) return { reason: refusal(error.plan) };
     return { reason: error instanceof Error ? error.message : String(error) };
   }
 }

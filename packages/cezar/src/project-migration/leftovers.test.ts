@@ -1,5 +1,7 @@
-import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
+import { once } from 'node:events';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -7,6 +9,7 @@ import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
 import { parentFileSnapshotPath, verifyWorkerContext } from '../delegation/context.ts';
 import { ownedWorkflow, workerContextHash, workerWorkflowHash } from '../delegation/execution-identity.ts';
 import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
+import { processStartToken } from '../delegation/process-liveness.ts';
 import { handoffPath } from '../handoff.ts';
 import { LEGACY_RUNS_FILE } from '../legacy-runs.ts';
 import { isFallbackProjectPath } from '../project-paths.ts';
@@ -227,6 +230,20 @@ describe('a project move with tasks that can still resume', { timeout: TIMEOUT }
     expect(await moveProjectWhenIdle(project.root, { homes: [], log: line => lines.push(line) }))
       .toEqual({ status: 'blocked', reason: expect.stringContaining(unreadable) });
     expect(lines).toEqual([expect.stringContaining(unreadable)]);
+    // Another cockpit serving the project does not hide the record the operator must fix first.
+    const other = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1 << 30)'], { stdio: 'ignore' });
+    try {
+      const startToken = processStartToken(other.pid!);
+      writeFileSync(join(project.dataDir, 'cockpit.lock'), JSON.stringify({
+        pid: other.pid, token: randomUUID(), url: 'http://127.0.0.1:4999', ...(startToken ? { startToken } : {}) }));
+      expect(await moveProjectWhenIdle(project.root, { homes: [], log: () => undefined }))
+        .toEqual({ status: 'blocked', reason: expect.stringContaining(unreadable) });
+    } finally {
+      const exited = once(other, 'exit');
+      other.kill('SIGKILL');
+      await exited;
+      rmSync(join(project.dataDir, 'cockpit.lock'), { force: true });
+    }
     expect(existsSync(join(project.newDir, RUNS_DB_FILE))).toBe(false);
 
     const archived = new DatabaseSync(join(project.dataDir, RUNS_DB_FILE));
