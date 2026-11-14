@@ -60,7 +60,6 @@ export async function serveCommand(
   preferredPort: number,
   openBrowser: boolean,
   bindHost: string | undefined,
-  restartExact: boolean,
   deps: ServeDeps,
 ): Promise<void> {
   const ownership = new deps.CockpitOwnership();
@@ -164,12 +163,6 @@ export async function serveCommand(
   if (!address || typeof address === 'string') throw new Error('cockpit TCP listener is unavailable');
   boundPort = address.port;
   const boundHost = address.address;
-  // Releases v0.14.9 to v0.18.0 shipped a cockpit Update button. It starts the new version with
-  // `--restart-exact` over an IPC channel and rolls back unless the new version reports this listener.
-  if (restartExact && deps.process.send) {
-    deps.process.send({ type: 'application-update-listening', host: boundHost, port: boundPort, repoRoot, version },
-      () => deps.process.disconnect?.());
-  }
   const url = `http://${boundHost.includes(':') ? `[${boundHost}]` : boundHost}:${boundPort}`;
 
   ownership.publishUrl(url);

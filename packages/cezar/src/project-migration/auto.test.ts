@@ -101,7 +101,7 @@ describe('the automatic project move', { timeout: TIMEOUT }, () => {
     const process = new EventEmitter();
     const log = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
-      const boot = serveCommand(testHome(), project.root, 0, false, undefined, false, { ...defaultServeDeps, acquireServeListener: listener, process,
+      const boot = serveCommand(testHome(), project.root, 0, false, undefined, { ...defaultServeDeps, acquireServeListener: listener, process,
         moveProjectWhenIdle: (root: string, options: Parameters<typeof moveProjectWhenIdle>[1]) => {
           // The move ran before the listener: nothing served the project yet.
           expect(listener).not.toHaveBeenCalled();
