@@ -1,16 +1,8 @@
-/** The `/new` deep link the saved bookmarklets rely on (spec 011):
- *  `?skill=&ref=&auto=1&key=`.
- *
- *  Parsing lives apart from the component so it stays table-testable and so the
- *  real composer (Step R4) can consume the same shape without re-deriving it.
- *  Kept byte-for-byte compatible with `initFromQuery()` in web/app.js: `ref`
- *  falls back to the older `task` spelling, `auto` is the exact string `1`.
- */
+/** The `/new` prefill query: `?skill=&ref=`. `ref` falls back to the older `task` spelling.
+ *  Parsing lives apart from the component so it stays table-testable. */
 export interface NewTaskParams {
   skill: string
   ref: string
-  auto: boolean
-  key: string
 }
 
 export function parseNewTaskParams(search: string | URLSearchParams): NewTaskParams {
@@ -18,18 +10,11 @@ export function parseNewTaskParams(search: string | URLSearchParams): NewTaskPar
   return {
     skill: (params.get('skill') ?? '').trim(),
     ref: (params.get('ref') ?? params.get('task') ?? '').trim(),
-    auto: params.get('auto') === '1',
-    key: params.get('key') ?? '',
   }
 }
 
-/**
- * Build a same-origin `/new` href from this contract — the counterpart to `parseNewTaskParams`
- * for in-app callers. Deliberately never sets `auto`/`key`:
- * those arm the bookmarklet's unattended start, but an in-app link always lands on the
- * editable composer so the user can review before launching.
- *
- */
+/** Build a same-origin `/new` href from this contract — the counterpart to `parseNewTaskParams`
+ *  for in-app callers. */
 export function newTaskPrefillHref(params: { skill?: string | undefined; ref?: string }): string {
   const search = new URLSearchParams()
   if (params.skill) search.set('skill', params.skill)

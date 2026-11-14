@@ -9,14 +9,14 @@ dist/
 # Browser-spec fixtures served from the Vite root (packages/web/e2e/run-header-ci-wait.e2e.ts)
 /packages/web/.e2e-fixtures/
 # Project skills the browser specs seed into this repo and delete again (settings-skills,
-# settings-bookmarklets, workflows). Discovery reads the directory, not the index.
+# workflows). Discovery reads the directory, not the index.
 /.ai/skills/e2e-*.md
 
 # Build artifact: the one README lives at the repo root and is copied into the published
 # package by packages/cezar/scripts/sync-readme.mjs. Never edit the copy.
 /packages/cezar/README.md
 
-# cezar runtime state in this repo (runs, worktrees, launch-key)
+# cezar runtime state in this repo (runs, worktrees)
 # Cezar's run data stays out; a shared session-context rule file may be committed (#1584).
 /.ai/cezar/*
 !/.ai/cezar/context.yaml

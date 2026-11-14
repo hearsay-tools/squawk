@@ -74,7 +74,6 @@ import type {
   GithubPrChangesData,
   HealthResponse,
   AttachmentInput,
-  LaunchKeyResponse,
   MessageInput,
   EditQueuedMessageResponse,
   MessageResponse,
@@ -457,18 +456,6 @@ export async function getProviderStatus(
       ),
       '/providers/status',
     ),
-  )
-}
-
-/** The bookmarklet auto-start secret (spec 011). Fetched to compare against `/new?key=` —
- *  never rendered, never logged, never put back into a URL. */
-export async function getLaunchKey(opts?: ReadOptions): Promise<LaunchKeyResponse> {
-  return unwrap(
-    await cez.api.v1.p[':projectId']['launch-key'].$get(
-      { param: { projectId: queryScope() } },
-      init(opts),
-    ),
-    '/launch-key',
   )
 }
 

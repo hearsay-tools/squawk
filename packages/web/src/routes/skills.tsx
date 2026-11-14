@@ -8,7 +8,6 @@ import {
   RefreshCwIcon,
   SearchIcon,
   TriangleAlertIcon,
-  ZapIcon,
 } from '@/components/design-icons'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
@@ -38,12 +37,11 @@ import {
 import { isProjectSkill, orderSkills, skillUsedBy } from '@/lib/skills'
 import { teamSkillRef, teamSkillRows, useTeamSkillSwitches } from '@/lib/use-skill-selection'
 import { cn } from '@/lib/utils'
-import { BookmarkletPanel } from './settings/bookmarklets-section'
 
 /**
  * `/skills` — the skills catalog as its own top-level surface (was `/settings/skills`, moved
  * out of the Settings shell so it stops carrying the settings sub-nav): the grouped table,
- * Refresh and the bookmarklet panel. `/settings/skills` now redirects here (routes.tsx) so
+ * and Refresh. `/settings/skills` now redirects here (routes.tsx) so
  * pasted links keep working. Skills are playbooks agents follow, not a knob — so this is a page,
  * not a settings section.
  *
@@ -62,11 +60,9 @@ import { BookmarkletPanel } from './settings/bookmarklets-section'
  * re-renders them in place and keeps the open skill and the scroll position (#384). Repositories
  * start open and plugin or directory groups start folded; the fold state lives in this page only.
  *
- * The legacy `__bm` sentinel opens the bookmarklet panel (spec 011), and `__import` opens the
- * first disabled skill.
+ * The `__import` sentinel opens the first disabled skill.
  */
 
-const BOOKMARKLETS = '__bm'
 const IMPORT = '__import'
 
 /** A team row's identity: the same name can come from two sources. */
@@ -156,7 +152,6 @@ function SkillsCatalog() {
     )
   }
 
-  const showBookmarklets = param === BOOKMARKLETS
   const rows = skillsQuery.isPending
     ? []
     : tableRows({
@@ -181,25 +176,7 @@ function SkillsCatalog() {
           <h1 className="text-[25px] font-semibold md:text-[30px]">Skills</h1>
           <p className="mt-2 text-xs text-muted-foreground md:text-[13px]">Markdown playbooks your agents can follow.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            to={showBookmarklets ? '/skills' : `/skills?skill=${BOOKMARKLETS}`}
-            data-slot="bookmarklets-row"
-            aria-current={showBookmarklets ? 'page' : undefined}
-            aria-expanded={showBookmarklets}
-            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium aria-[current=page]:bg-accent-strong/10 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            <ZapIcon aria-hidden="true" className="size-4 text-link-foreground" />
-            Run from GitHub
-          </Link>
-        </div>
       </header>
-
-      {showBookmarklets ? (
-        <section data-slot="skills-bookmarklets" className="min-w-0 rounded-xl border border-border bg-card p-5">
-          <BookmarkletPanel skills={listed.filter((item) => isOn(item.skill) && !item.hiddenBy).map((item) => item.skill)} />
-        </section>
-      ) : null}
 
       {/* Adding a source happens here, and the page names no vendor (hearsay-tools/cezarion#1494 and hearsay-tools/cezarion#279). */}
       <TeamSourcesPanel />
@@ -299,7 +276,7 @@ function skillEntries(catalog: readonly Skill[], team: readonly Skill[] | null, 
  * opens the first switched-off skill.
  */
 function findOpenEntry(listed: readonly Entry[], param: string | null, repo: string | null, isOn: (skill: Skill) => boolean) {
-  if (param === null || param === BOOKMARKLETS) return null
+  if (param === null) return null
   if (param === IMPORT) return listed.find((item) => !isOn(item.skill)) ?? null
   const named = listed.filter((item) => item.skill.name === param)
   return named.find((item) => repo === null || item.skill.team?.repo === repo) ?? named[0] ?? null

@@ -404,8 +404,7 @@ Task and project views share one browser window and live updates over Server-Sen
 
 The cockpit is a React app served pre-built from the package — `npx -p @hearsay-tools/squawk hsq`
 still means no build step and no dev server on your machine — with a dark/light
-theme, a ⌘K command palette, and bookmarklets that launch a task straight from
-a GitHub page.
+theme and a ⌘K command palette.
 
 GitHub issue and PR lists refresh every 60 seconds while mounted in a foreground browser tab.
 Automatic reads retain the server's 60-second cache: while online and visible, upstream edits
@@ -491,7 +490,7 @@ server stopped, and `HSQ_HOME` (`CEZ_HOME` fallback) selects which workspace the
 
 Settings split along the same line: **General** (the project's folder, its
 registry facts, its parallel-task ceiling, and Remove), **Agents**, **Agent config**,
-**Worktrees**, **Sidebar**, **Bookmarklets** and **Prompt templates** describe one
+**Worktrees**, **Sidebar** and **Prompt templates** describe one
 repo and live under `/p/<projectId>/settings`; **Appearance**,
 **Notifications**, **Resources**, **Skills**, **Agent accounts** and **Projects**
 are yours or the machine's and live at `/settings/global`.
@@ -607,7 +606,7 @@ a queue or a routing rule. Removing one changes what you see and nothing else.
 **Old page URLs keep working.** Every unprefixed page path — `/`, `/tasks/<id>`,
 `/settings` — still answers, bound to the project Squawk was started in; the
 cockpit redirects flat paths to their `/p/<boot>/…` twin, so existing bookmarks
-and bookmarklets need no change. The HTTP API is the exception: it moved to
+need no change. The HTTP API is the exception: it moved to
 `/api/v1/…` (see the CHANGELOG), so a script that calls it needs the extra
 segment.
 

@@ -241,7 +241,6 @@ const ROUTE_CASES: Array<[url: string, route: string]> = [
   ['/settings/agents', 'settings-agents'],
   ['/settings/agent-config', 'settings-agent-config'],
   ['/settings/worktrees', 'settings-worktrees'],
-  ['/settings/bookmarklets', 'settings-bookmarklets'],
   ['/settings/prompt-templates', 'settings-prompt-templates'],
 ]
 
@@ -712,7 +711,7 @@ describe('legacy flat URLs redirect to the boot project', () => {
   it('preserves a query byte-for-byte across the redirect', () => {
     // /skills keeps its `?skill=` selection in the URL, so the address bar itself proves the
     // redirect carried the query untouched (the /new composer consumes-then-clears its own).
-    const search = '?skill=om-code-review&x=a%2Fb&auto=1'
+    const search = '?skill=om-code-review&x=a%2Fb'
     renderAt(`/skills${search}`)
     expect(currentPathname()).toBe(`/p/${BOOT}/skills`)
     expect(currentSearch()).toBe(search)
@@ -729,13 +728,13 @@ describe('legacy flat URLs redirect to the boot project', () => {
     expect(routeName()).toBe('skills')
   })
 
-  it('delivers the full bookmarklet grammar into the composer (spec 011 contract)', () => {
-    renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1&auto=1&key=s3cret')
+  it('delivers the prefill query into the composer', () => {
+    renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1')
     expect(currentPathname()).toBe(`/p/${BOOT}/new`)
     expect(routeName()).toBe('new')
-    // auto=1 + key armed the unattended start — only possible if every param survived.
-    expect(document.querySelector('[data-slot="auto-starting"]')).not.toBeNull()
-    expect(document.body.textContent).not.toContain('s3cret')
+    expect((screen.getByLabelText('Describe a task for the agent') as HTMLTextAreaElement).value).toBe(
+      'https://github.com/o/r/pull/1',
+    )
   })
 
   it('renders the quiet resolving state while the boot id is unknown — never a wrong screen', () => {
@@ -856,40 +855,21 @@ describe('unknown project ids', () => {
   })
 })
 
-/** The URL saved bookmarklets open (spec 011):
- *  `/new?skill=&ref=&auto=1&key=`. Since R4 Step 1.3 `auto=1` arms the real unattended start
- *  (the full matrix lives in routes/new-task.test.tsx); this file keeps the URL contract —
- *  through the legacy redirect, exactly as a saved bookmarklet arrives. */
+/** The `/new?skill=&ref=` prefill through the flat-path redirect (the full matrix lives in
+ *  routes/new-task.test.tsx). */
 describe('/new query params', () => {
   const textarea = () =>
     screen.getByLabelText('Describe a task for the agent') as HTMLTextAreaElement
 
-  it('prefills the composer from a non-auto deep link', () => {
+  it('prefills the composer from a deep link', () => {
     renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1')
     expect(routeName()).toBe('new')
     expect(textarea().value).toBe('https://github.com/o/r/pull/1')
   })
 
-  it('an armed auto=1 link shows the starting surface, never the composer mid-flight', () => {
-    // fetch never answers here, so the key check is honestly in flight: no composer to type
-    // into, no run POSTed, and the key nowhere in the DOM.
-    renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1&auto=1&key=s3cret')
-    expect(routeName()).toBe('new')
-    expect(document.querySelector('[data-slot="auto-starting"]')).not.toBeNull()
-    expect(screen.queryByLabelText('Describe a task for the agent')).toBeNull()
-    expect(document.body.textContent).not.toContain('s3cret')
-  })
-
   it('renders an empty composer without params', () => {
     renderAt('/new')
     expect(routeName()).toBe('new')
-    expect(textarea().value).toBe('')
-  })
-
-  it('never prints the launch key anywhere on the page', () => {
-    renderAt('/new?key=s3cret')
-    expect(routeName()).toBe('new')
-    expect(document.body.textContent).not.toContain('s3cret')
     expect(textarea().value).toBe('')
   })
 })

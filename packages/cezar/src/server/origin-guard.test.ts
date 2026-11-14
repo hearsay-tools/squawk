@@ -271,7 +271,7 @@ describe('request-origin guard (#426)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('leaves /api/v1/health open cross-origin on a loopback Host (the bookmarklet discovery probe) → 200', async () => {
+  it('leaves /api/v1/health open cross-origin on a loopback Host → 200', async () => {
     const res = await app.request('/api/v1/health', {
       headers: { host: LOOPBACK, origin: 'https://github.com' },
     });

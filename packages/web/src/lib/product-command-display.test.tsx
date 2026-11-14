@@ -9,7 +9,6 @@ import { skillSourcesKey } from '@/api/skill-sources-client'
 import { TeamSourcesPanel } from '@/components/team-sources-panel'
 import { CopyAsCliCard } from '@/routes/automations/copy-as-cli-card'
 import { fromDefinition } from '@/routes/automations/editor-draft'
-import { BookmarkletPanel } from '@/routes/settings/bookmarklets-section'
 import { cliOf } from './automation-cli'
 
 const state = vi.hoisted(() => ({ identity: undefined as DisplayIdentity | undefined }))
@@ -18,7 +17,6 @@ vi.mock('./product-name', async importOriginal => {
   return {
     ...actual,
     productCommand: () => actual.productCommand(state.identity),
-    productNpx: () => actual.productNpx(state.identity),
     productName: (legacy: 'cezar' | 'Cezar' | 'Cezarion') => actual.productName(legacy, state.identity),
   }
 })
@@ -48,7 +46,7 @@ describe('browser command hints', () => {
       .toContain(`with ${state.identity.command} worker resume`)
   })
 
-  it('renders the automation, remote settings and npm hints from the shared identity', () => {
+  it('renders the automation and remote settings hints from the shared identity', () => {
     state.identity = readProductIdentity()
     // Queries stay pending; seeded sources expose the remote hint without a network dependency.
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})))
@@ -59,14 +57,11 @@ describe('browser command hints', () => {
         <MemoryRouter initialEntries={['/p/sample/settings']}>
           <CopyAsCliCard draft={draft} />
           <TeamSourcesPanel />
-          <BookmarkletPanel skills={[]} />
         </MemoryRouter>
       </QueryClientProvider>,
     )
     expect(screen.getByText(`${state.identity.command} automation schema`)).toBeTruthy()
     expect(screen.getByText(`${state.identity.command} remote-settings enable`)).toBeTruthy()
-    expect(screen.getByText(state.identity.npx)).toBeTruthy()
-    expect(state.identity.npx).toBe('npx -p @hearsay-tools/squawk hsq')
     expect(screen.getAllByText((text) => text.includes(`${state.identity!.command} automation add`)).length).toBeGreaterThan(0)
   })
 })

@@ -664,8 +664,8 @@ export function createApp(deps: ServerDeps) {
   const { version, update, bindHost, bootProjectId } = deps;
   const resolveProjectForge = (info: Awaited<ReturnType<typeof getRepoInfo>>) => resolveForge(info, deps.forgeFactory);
   // Boot singletons keep DELIBERATELY distinct names (`boot*`): every
-  // project-scoped handler must resolve its `{store, manager, root, dataDir,
-  // launchKey}` from `c.get('project')` — a bare `store`/`repoRoot` in a
+  // project-scoped handler must resolve its `{store, manager, root, dataDir}`
+  // from `c.get('project')` — a bare `store`/`repoRoot` in a
   // handler body would silently pin it to the boot project, which the rename
   // turns into a compile error instead.
   const bootRoot = deps.repoRoot;
@@ -679,7 +679,7 @@ export function createApp(deps: ServerDeps) {
   const { resolveBootProject } = workspaceProjects;
   // Health's workspace garnish: id+name ONLY — never `root` (#431, see the
   // health route). Reads only the registry file; no per-root status probes,
-  // so health stays cheap enough for the bookmarklet's 800 ms port sweep.
+  // so health stays cheap.
   const workspaceSummary = async (): Promise<{
     projects: { id: string; name: string }[];
     bootProject: string;
@@ -994,10 +994,8 @@ export function createApp(deps: ServerDeps) {
   app.get('/cezarion-mark-dark.svg', staticFile('cezarion-mark-dark.svg', 'image/svg+xml'));
 
   // ---- meta ----------------------------------------------------------------
-  // CORS — deliberately for /api/health ONLY (spec 011): the bookmarklets
-  // fetch it cross-origin from github.com to discover which local ports run a
-  // cockpit and which repo each serves. Health exposes no secrets beyond the
-  // repo path/remote; every other endpoint stays same-origin.
+  // CORS — deliberately for /api/health ONLY. Health exposes no secrets beyond
+  // the repo path/remote; every other endpoint stays same-origin.
   const healthCors = async (c: Context, next: Next): Promise<Response | void> => {
     c.header('access-control-allow-origin', '*');
     if (c.req.method === 'OPTIONS') {
@@ -1067,7 +1065,7 @@ export function createApp(deps: ServerDeps) {
       checks,
       defaultRunner: config.defaultRunner,
       // Non-blocking: cached availability or null-until-warm — health must never pay a `gh`
-      // shell-out (the bookmarklet aborts its port probe at 800 ms). See detectGithubCached.
+      // shell-out. See detectGithubCached.
       forge: forge ? { kind: forge.kind, ...forge.detectCached() } : null,
       capabilities: caps,
       // Workspace enumeration (multi-project spec) — additive, id+name ONLY.
@@ -2655,10 +2653,6 @@ export function createApp(deps: ServerDeps) {
         return c.json(result.body);
       },
     );
-
-  // ---- chained family: launch-key (project-scoped) ----
-  const launchKeyRoutes = new Hono<ProjectApiEnv>()
-    .get('/launch-key', (c) => c.json({ key: c.get('project').launchKey }));
 
   // ---- chained family: skills (project-scoped) ----
   const skillsRoutes = new Hono<ProjectApiEnv>()
@@ -4683,7 +4677,6 @@ export function createApp(deps: ServerDeps) {
 
   const v1 = new Hono<ProjectApiEnv>()
     .use('*', resolveProjectScope)
-    .route('/', launchKeyRoutes)
     .route('/', skillsRoutes)
     .route('/', uiStateRoutes)
     .route('/', workflowsRoutes)

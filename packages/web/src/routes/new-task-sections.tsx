@@ -9,7 +9,6 @@ import { putConfig } from '@/api/client'
 import { hasAccountChoice } from '@/api/agent-accounts'
 import { queryKeys } from '@/api/queries'
 import type { RepoResponse } from '@open-mercato/cezar-api-client'
-import { TwinkleBackdrop } from '@/components/centered-state'
 import { CompletionControls } from '@/components/completion-controls'
 import { TaskAccessControls } from '@/components/task-access-controls'
 import { PickerPill, PickerPillGroup, RunnerPill } from '@/components/picker-pill'
@@ -27,26 +26,6 @@ import { effortOptionsForModel, modelCatalogStatus, resolveEffort, RUNNERS } fro
 type Engine = ReturnType<typeof useEngineSelection>
 type Accounts = ReturnType<typeof useAccountSelection>
 type DraftUpdate = (patch: Partial<NewTaskDraft>) => void
-
-/** The unattended bookmarklet start in flight: no composer, no params echoed anywhere —
- *  just an honest "working on it" until the POST answers (success navigates to the thread;
- *  failure drops back to the prefilled composer with a toast). */
-export function AutoStartingSurface() {
-  return (
-    <div
-      data-route="new"
-      className="relative isolate flex min-h-full flex-col items-center justify-center overflow-x-clip px-6"
-    >
-      <TwinkleBackdrop />
-      <div data-slot="auto-starting" role="status" className="text-center">
-        <h1 className="animate-pulse text-lg font-semibold tracking-tight">Starting task…</h1>
-        <p className="mt-1.5 text-[14px] text-muted-foreground">
-          Launched from a bookmarklet — taking you to the run.
-        </p>
-      </div>
-    </div>
-  )
-}
 
 export function NewTaskHeader() {
   return (

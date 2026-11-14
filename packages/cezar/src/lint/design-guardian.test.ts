@@ -27,7 +27,7 @@ describe('design guardian scanner', () => {
   });
 
   it.each(DESIGN_RULES.filter((rule) => rule.allowed))('%s keeps allowed file predicates', (rule) => {
-    const files = ['src/styles/index.css', 'src/components/ui/button.tsx', 'src/routes/tasks-overview.tsx', 'src/routes/task-thread/thread-items.tsx', 'src/routes/task-git/commit-list.tsx', 'src/components/centered-state.tsx', 'src/components/ui/dialog.tsx', 'src/components/zoomable-image.tsx', 'src/lib/bookmarklet.ts'];
+    const files = ['src/styles/index.css', 'src/components/ui/button.tsx', 'src/routes/tasks-overview.tsx', 'src/routes/task-thread/thread-items.tsx', 'src/routes/task-git/commit-list.tsx', 'src/components/centered-state.tsx', 'src/components/ui/dialog.tsx', 'src/components/zoomable-image.tsx'];
     for (const file of files.filter((file) => rule.allowed!(file))) {
       expect(guardianFindings(`packages/web/${file}`, DESIGN_SAMPLES[rule.name]!).filter((finding) => finding.message.startsWith(rule.name))).toEqual([]);
     }

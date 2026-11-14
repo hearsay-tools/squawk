@@ -24,7 +24,6 @@ import { RunDatabase, RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY } from '../runs/run
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { RunManager } from '../workflows/run.ts';
 import type { ToolActivityTracker } from '../activity/tool-activity.ts';
-import { ensureLaunchKey } from './launch-key.ts';
 import { getRepoInfo } from './git.ts';
 import { assertProjectAdmitted, ownedByAnotherCockpit, projectAdmissionRefusal, withProjectAdmission, CockpitOwnership } from './cockpit-ownership.ts';
 import { prepareProject } from '../project-migration/auto.ts';
@@ -32,7 +31,7 @@ import { prepareProject } from '../project-migration/auto.ts';
 export { projectLiveTasks } from '../runs/live-tasks.ts';
 
 /**
- * One store/manager/dataDir/launchKey context per project, built on demand or by post-listen
+ * One store/manager/dataDir context per project, built on demand or by post-listen
  * warm-up. Build includes retention and recovery. Missing roots yield a typed 409; unknown
  * projects yield 404.
  */
@@ -49,8 +48,6 @@ export interface ProjectContext {
   store: RunStore;
   manager: RunManager;
   automationStore: AutomationStore;
-  /** Bookmarklet auto-start secret (spec 011), ensured at context build. */
-  launchKey: string;
 }
 
 /** Minimal registry shape the context map needs — matches
@@ -529,7 +526,6 @@ export class ProjectContexts {
     try {
       const cleanup = this.deps.prepareManager?.({ id: project.id, root: project.root, store, manager, home: this.deps.home });
       if (cleanup) this.managerCleanups.set(manager, cleanup);
-      const launchKey = ensureLaunchKey(dataDir);
       // Startup reconcile (spec 006) + count-based retention (#483) — the same
       // best-effort sweeps serveCommand runs for the boot project, gated on the
       // root actually being a git repo.
@@ -563,7 +559,7 @@ export class ProjectContexts {
       this.repoHandleControllers.set(store, repoHandleController);
       armRepoHandle(store, project.root, repoHandleController.signal, this.deps.forgeFactory);
       reportsIndex(store).start();
-      return { home: this.deps.home, id: project.id, root: project.root, dataDir, store, manager, automationStore, launchKey };
+      return { home: this.deps.home, id: project.id, root: project.root, dataDir, store, manager, automationStore };
     } catch (err) {
       // A failed build must not leak the half-built context's subscriptions, nor its sweep.
       this.sweepControllers.get(store)?.abort();

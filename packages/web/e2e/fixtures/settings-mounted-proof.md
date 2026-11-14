@@ -31,7 +31,7 @@ The audit covers every e2e file referring to settings, all direct settings prope
 | `settings-resources` / `settings-monitoring` | Worktrees/Resources sections mount with their config forms. Setters already wait for enabled targets; the wake field is conditional on local mode in that same form and has an explicit target wait before edit. Cold reads mount with the saved config. No independently loaded unguarded control found. |
 | `composer-defaults` Resources setter | Its `resources-composer-defaults` target wait mounts the same config form and select atomically; one action after navigation. No independent target mount. |
 | `settings-agent-config`, `settings-skills`, `skills-update` | Async catalog/list/detail work uses target-specific waits before dependent reads or actions. No matching unguarded conditional control found. |
-| `settings-bookmarklets`, webhook settings in `task-handoff` | Imperatively generated href uses its own href wait; filter reads follow native attachment actions. Webhook values use bounded target-value waits. No matching site found. |
+| Webhook settings in `task-handoff` | Webhook values use bounded target-value waits. No matching site found. |
 | `settings-sidebar`, navigation/project/menu specs, `ios-sweep` | Shell/navigation targets have their own waits; no unguarded independently loaded settings form property/action found. The iOS runner task failure is a separate parent-owned diagnosis. |
 | `settings-appearance`, `worker-relationships`, other appearance setup | Previously reviewed appearance readiness remains unchanged. |
 | Accounts, notifications, projects, prompt-template settings | No matching direct mounted-control e2e read/setter in the existing specs. No changes. |

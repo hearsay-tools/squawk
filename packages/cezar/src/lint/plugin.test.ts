@@ -96,7 +96,6 @@ const APPROVED: Record<string, string> = {
   'packages/web/src/routes/unknown-project.tsx': '<div className="bg-card-2"><span className="font-mono text-[11px] font-normal text-soft-foreground">old</span></div>',
 
   'packages/web/src/styles/index.ts': 'export const value = "h-dvh";',
-  'packages/web/src/lib/bookmarklet.ts': 'alert("hello");',
   'packages/web/src/design-guardian.test.ts': 'confirm();',
   // contract-root-import: the listed barrel, and type imports anywhere.
   'packages/api-client/src/index.ts': "export * from '@open-mercato/cezar-contract';\n",

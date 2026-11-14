@@ -1,7 +1,7 @@
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 
-import { createRun, getLaunchKey, postPlan, putUiState } from '@/api/client'
+import { createRun, postPlan, putUiState } from '@/api/client'
 import { useAgentAccounts } from '@/api/agent-accounts'
 import {
   queryKeys,
@@ -28,12 +28,7 @@ import { usableRunners } from '@/lib/provider-status'
 import { taskWebhooks } from '@/lib/webhook'
 import { useNavigate } from '@/lib/project-router'
 
-import {
-  bookmarkletRunBody,
-  deepLinkToast,
-  unknownSkillPrefillText,
-  type DeepLinkNotice,
-} from './new-task-autostart'
+import { prefillToast, unknownSkillPrefillText } from './new-task-prefill'
 import {
   clearStartedDraft,
   draftRevision,
@@ -300,7 +295,7 @@ export function useNotifyWebhook(urlProjectId: string | undefined) {
  * Keep keyboard order aligned with the compact visual order, including a wide sidebar
  * on a desktop viewport. CSS uses the same 550px group-width boundary.
  */
-export function useCompactAgentOptions(groupRef: RefObject<HTMLDivElement | null>, autoStarting: boolean) {
+export function useCompactAgentOptions(groupRef: RefObject<HTMLDivElement | null>) {
   const [compact, setCompact] = useState(() =>
     typeof window !== 'undefined' && window.innerWidth <= 767,
   )
@@ -316,103 +311,31 @@ export function useCompactAgentOptions(groupRef: RefObject<HTMLDivElement | null
       observer?.disconnect()
       window.removeEventListener('resize', measure)
     }
-  }, [autoStarting]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   return compact
 }
 
-/** The unattended start's outcome: `null` when the run started and the route navigated. */
-async function launchBookmarkletRun(input: {
-  deepLink: NewTaskParams
-  runner: Runner
-  defaultRunner: Runner
-  draftProjectId: string | null
-  queryClient: QueryClient
-  navigate: Navigate
-  mounted: MountedRef
-  clearStarted: (revision: number) => void
-}): Promise<DeepLinkNotice | null> {
-  const submittedRevision = draftRevision(input.draftProjectId)
-  let launchKey = ''
-  try {
-    launchKey = (await getLaunchKey()).key
-  } catch {
-    // key endpoint unreachable → the blocked path, exactly like legacy
-  }
-  // Wrong or missing key: a drive-by page guessing the URL gets a form, never a run.
-  if (launchKey === '' || input.deepLink.key !== launchKey) return { kind: 'blocked' }
-  try {
-    const created = await createRun(bookmarkletRunBody(input.deepLink, input.runner, input.defaultRunner))
-    input.clearStarted(submittedRevision)
-    void input.queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
-    if (input.mounted.current) void input.navigate(startedRunPath(created))
-    return null
-  } catch (error) {
-    return { kind: 'failed', message: error instanceof Error ? error.message : String(error) }
-  }
-}
-
 /**
- * The bookmarklet deep-link (spec 011 — legacy handleDeepLink, verbatim). `auto=1` with a ref
- * arms the unattended start; the composer stays hidden behind a "Starting…" surface until the
- * key check + POST settle (or fail into the prefill path). Returns whether that start is armed.
+ * The `/new?skill=&ref=` prefill: a link with a ref fills in the composer and shows one toast
+ * once the pickers' data has loaded. It never starts a task.
  */
-export function useBookmarkletDeepLink(input: {
+export function useNewTaskDeepLink(input: {
   deepLink: NewTaskParams
   search: URLSearchParams
-  engine: ReturnType<typeof useEngineSelection>
-  config: ConfigQuery
-  draftProjectId: string | null
-  mounted: MountedRef
-  clearStarted: (revision: number) => void
   sourcesReady: boolean
   skillList: readonly Skill[]
   update: DraftUpdate
 }) {
-  const { deepLink } = input
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const [autoStarting, setAutoStarting] = useState(() => deepLink.auto && deepLink.ref !== '')
-  const [notice, setNotice] = useState<DeepLinkNotice | null>(() =>
-    !deepLink.auto && deepLink.ref !== '' ? { kind: 'prefill' } : null,
-  )
+  const [pending, setPending] = useState(() => input.deepLink.ref !== '')
   useDeepLinkUrlCleanup(input.search, navigate)
-  const { providers, providersReady, runner, defaultRunner } = input.engine
-  const deepLinkHandled = useRef(false)
-  useEffect(() => {
-    if (deepLinkHandled.current) return
-    if (!deepLink.auto || deepLink.ref === '') return
-    if (providers.isPending) return
-    // Authentication could not be established: keep the deep-link intent in the disabled
-    // composer and let the provider gate explain whether this is an error or missing setup.
-    const providerGate = !providersReady || runner === null
-    // Provider status often resolves before project config on a cold load. The protected
-    // bookmarklet body may omit runner only against that scoped authoritative default, never
-    // our display fallback; a failed config read degrades to the prefilled composer.
-    if (!providerGate && input.config.isPending) return
-    deepLinkHandled.current = true
-    if (providerGate || defaultRunner === undefined) {
-      setNotice({ kind: 'prefill' })
-      setAutoStarting(false)
-      return
-    }
-    void launchBookmarkletRun({
-      deepLink, runner, defaultRunner, draftProjectId: input.draftProjectId, queryClient, navigate, mounted: input.mounted, clearStarted: input.clearStarted,
-    }).then((failure) => {
-      if (failure === null) return
-      setNotice(failure)
-      setAutoStarting(false)
-    })
-  }, [input.config.isPending, defaultRunner, providers.isPending, providersReady, runner]) // eslint-disable-line react-hooks/exhaustive-deps
-  usePrefillNotice({ notice, setNotice, deepLink, sourcesReady: input.sourcesReady, skillList: input.skillList, update: input.update })
-  return autoStarting
+  usePrefillNotice({ pending, setPending, deepLink: input.deepLink, sourcesReady: input.sourcesReady, skillList: input.skillList, update: input.update })
 }
 
 /**
  * The deep-link params are captured ONCE (the route's `useState`), because this cleans them out
- * of the URL. Legacy cleans the URL FIRST (`history.replaceState({}, '', '/')` — before anything
- * async): the launch key never lingers in the address bar or history, and a reload can never
- * re-trigger the start. Same move here, staying on this route. (The router's own search, not
- * window.location — MemoryRouter under test never touches the window.)
+ * of the URL, so a reload opens the saved draft instead of prefilling again. (The router's own
+ * search, not window.location — MemoryRouter under test never touches the window.)
  */
 function useDeepLinkUrlCleanup(search: URLSearchParams, navigate: Navigate) {
   const deepLinkUrlCleaned = useRef(false)
@@ -426,39 +349,38 @@ function useDeepLinkUrlCleanup(search: URLSearchParams, navigate: Navigate) {
 
 /**
  * The prefill toast waits for the pickers' data: whether the skill exists decides the
- * wording, and the unknown-skill case rewrites the draft the way legacy did (intent into
- * the text, quick-task as the source — its planner resolves skills from prose).
+ * wording, and the unknown-skill case rewrites the draft (intent into the text, quick-task
+ * as the source — its planner resolves skills from prose).
  */
 function usePrefillNotice(input: {
-  notice: DeepLinkNotice | null
-  setNotice: (notice: DeepLinkNotice | null) => void
+  pending: boolean
+  setPending: (pending: boolean) => void
   deepLink: NewTaskParams
   sourcesReady: boolean
   skillList: readonly Skill[]
   update: DraftUpdate
 }) {
-  const { notice, sourcesReady, deepLink } = input
+  const { pending, sourcesReady, deepLink } = input
   useEffect(() => {
-    if (notice === null || !sourcesReady) return
-    input.setNotice(null)
+    if (!pending || !sourcesReady) return
+    input.setPending(false)
     const unknownSkill =
       deepLink.skill !== '' && !input.skillList.some((s) => s.name === deepLink.skill)
         ? deepLink.skill
         : ''
     if (unknownSkill !== '') {
-      // Legacy put the intent into the text and ran quick-task; `null` IS that run now, and
-      // needs no catalog lookup to say so.
+      // `null` is the quick-task run, and needs no catalog lookup to say so.
       input.update({ text: unknownSkillPrefillText(deepLink.skill, deepLink.ref), source: null })
     }
-    const { message, tone } = deepLinkToast(notice, unknownSkill)
+    const { message, tone } = prefillToast(unknownSkill)
     toast(message, { tone })
-    // Legacy focused the Run button so a bare Enter submits the reviewed form.
+    // Focus the Start button so a bare Enter submits the reviewed form.
     document
       .querySelector<HTMLButtonElement>(
         '[data-slot="composer"] button[aria-label="Start task"], [data-slot="composer"] button[aria-label="Plan task"]',
       )
       ?.focus()
-  }, [notice, sourcesReady]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pending, sourcesReady]) // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 /** The one sentence every "providers are not ready" surface on this route shows. */

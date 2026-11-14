@@ -171,7 +171,6 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
     // additive routes never break this suite.
     expect(manifest.length).toBeGreaterThanOrEqual(50);
     for (const expected of [
-      'GET /launch-key',
       'GET /events',
       'GET /runs/:id/events',
       'GET /runs/:id/history',
@@ -354,18 +353,6 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
     expect(runs.status).toBe(200);
     expect(await runs.json()).toEqual([]); // its own (empty) store, not boot's
     expect(contexts.peek(other.id)).toBeDefined();
-    // Its launch key is its own — never the boot project's secret.
-    const bootKey = (
-      (await (await apiRequest(app, '/api/v1/launch-key')).json()) as {
-        key: string;
-      }
-    ).key;
-    const otherKey = (
-      (await (await apiRequest(app, `/api/v1/p/${other.id}/launch-key`)).json()) as {
-        key: string;
-      }
-    ).key;
-    expect(otherKey).not.toBe(bootKey);
   });
 
   it('agent config resolves repo-local files from the selected project only', async () => {

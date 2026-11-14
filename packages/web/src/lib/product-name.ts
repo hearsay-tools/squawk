@@ -10,12 +10,7 @@ export function productName(
   return identity.displayName
 }
 
-/** The installed command and one-off npx command come from the same build identity as product prose. */
+/** The installed command comes from the same build identity as product prose. */
 export function productCommand(identity = __PRODUCT_IDENTITY__): string {
   return identity.command
-}
-
-/** Runs the cockpit without a global install, for example `npx -p @hearsay-tools/squawk hsq`. */
-export function productNpx(identity = __PRODUCT_IDENTITY__): string {
-  return identity.npx
 }

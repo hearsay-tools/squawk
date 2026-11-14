@@ -60,7 +60,7 @@ test('live docs and code do not cite a compatibility policy', () => {
     .filter(line => !isHistory(line.slice(0, line.indexOf(':'))));
   assert.deepEqual(hits, [], [
     'Squawk makes no compatibility promise (AGENTS.md, Changing what already works).',
-    'State the behavior and its reason instead, e.g. "saved bookmarklets use this URL".',
+    'State the behavior and its reason instead, e.g. "old bookmarks use this flat URL".',
   ].join('\n'));
 });
 

@@ -1,5 +1,7 @@
 # 011 — Bookmarklety: odpal skill z poziomu GitHuba jednym kliknięciem
 
+Retired by hearsay-tools/squawk#3578 on 2026-11-14. Kept as historical design evidence; start a task from the GitHub tab or an automation.
+
 Status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 3 · Zależy od: 005 (team skille), 008 (start runu z inline stepem) · Wzorzec: janitor `/bookmarklets` — plus dwa ulepszenia własne (auto-discovery portu/repo, launch-key)
 
 ## Cel

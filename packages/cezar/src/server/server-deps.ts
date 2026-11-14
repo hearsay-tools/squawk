@@ -20,7 +20,6 @@ import { applyProviderEnablement } from '../core/provider-availability.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import type { TaskWebhooks } from '../runs/webhook.ts';
 import { loadWorkspaceConfig, mergeWriteWorkspaceConfig } from '../workspace/config.ts';
-import { ensureLaunchKey } from './launch-key.ts';
 import { openFileInDefaultApp, openInApp } from './open-in-app.ts';
 import { openInTerminal } from './open-in-terminal.ts';
 import type { ProjectContext, ProjectContexts } from './project-context.ts';
@@ -102,7 +101,7 @@ export function emitProviderRow(workspaceEvents: WorkspaceEventBus, providers: P
 
 /**
  * The boot project's context is SEEDED from the deps the caller already built (src/index.ts
- * `serveCommand` did the recover/prune/launch-key work at startup — observable boot behavior
+ * `serveCommand` did the recover/prune work at startup — observable boot behavior
  * unchanged); it never enters the lazy map, so its `.ai/cezar` state is never double-opened. `id`
  * starts as the reserved alias when registration was suppressed — handlers never read it; API
  * payloads name the boot project via `resolveBootProject` instead.
@@ -122,7 +121,6 @@ export function createBootContext(
     get automationStore() {
       return typeof automationStore === 'function' ? automationStore() : automationStore;
     },
-    launchKey: ensureLaunchKey(bootDataDir), // bookmarklet auto-start secret (spec 011)
   };
 }
 

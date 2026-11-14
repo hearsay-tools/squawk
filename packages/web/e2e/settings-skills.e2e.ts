@@ -367,34 +367,4 @@ describe('settings → skills against the live dry-run server', () => {
       before,
     )
   })
-
-  it('the pinned bookmarklet panel generates javascript: launchers against /new', () => {
-    browser.goto(`${baseUrl}${scoped('/skills')}`)
-    browser.waitForFunction(`document.querySelector('${row(BETA)}') !== null`)
-    // The pinned row sits at the bottom of the (viewport-tall) list column, which a long
-    // skill detail can push past the fold — scroll it in before the click, as a user would.
-    browser.evaluate(
-      `document.querySelector('[data-slot="bookmarklets-row"]').scrollIntoView({ block: 'center' })`,
-    )
-    browser.click('[data-slot="bookmarklets-row"]')
-    browser.waitForFunction(`document.querySelector('[data-slot="bookmarklet-panel"]') !== null`)
-    // The imperative href lands after mount — wait for the real javascript: URL.
-    browser.waitForFunction(
-      `(document.querySelector('[data-slot="bm-generic"] [data-slot="bm-link"]')?.getAttribute('href') ?? '').startsWith('javascript:')`,
-    )
-
-    const generic = String(
-      browser.evaluate(`document.querySelector('[data-slot="bm-generic"] [data-slot="bm-link"]').getAttribute('href')`),
-    )
-    // The protected /new deep-link grammar, baked with the server's real launch key — now
-    // under this project's own URL prefix (multi-project spec, step 3.6).
-    expect(decodeURIComponent(generic)).toContain(`${scoped('/new')}?'+q`)
-    expect(decodeURIComponent(generic)).toMatch(/auto=0&key=[^&]+&ref=/)
-
-    // One launcher per catalog skill, the seeded ones included.
-    browser.waitForFunction(
-      `[...document.querySelectorAll('[data-slot="bm-list"] [data-slot="bm-link"]')].some((a) => a.textContent.includes('/${ALPHA}'))`,
-    )
-    browser.screenshot(`${artifactsDir}/settings-skills-bookmarklets.png`)
-  })
 })
