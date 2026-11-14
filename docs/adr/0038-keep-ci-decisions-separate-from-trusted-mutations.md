@@ -27,8 +27,8 @@ Only the new admission marker permits promotion. A green historical execution-on
 CodeRabbit job supports revocation after a fresh validated rejection shared by both
 policies. A failed historical job requires a fresh native run, so no-files admission
 cannot create a retry loop. Reusable model workflows are never rerun.
-See [the replacement plan](../../.ai/specs/2026-11-02-coderabbit-admission-plan.md)
-and [the no-files policy](../../.ai/specs/2026-11-03-coderabbit-skipped-recovery-plan.md).
+See [the replacement plan](https://github.com/hearsay-tools/cezarion/pull/2501)
+and [the no-files policy](https://github.com/hearsay-tools/cezarion/pull/2584).
 
 This separation constrains what a model or artifact can request; it does not make arbitrary
 same-user shell access an isolation boundary. Keep workflow permission and timing comments

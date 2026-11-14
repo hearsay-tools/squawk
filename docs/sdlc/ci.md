@@ -449,7 +449,7 @@ The shared reader enforces request cancellation through an abort signal; the
 numeric timeout option alone is ignored by github-script v9. The job has a
 25-minute limit for checkout, waiting and reporting. This holds an
 Actions runner during the wait. Readiness, queue admission and reconciliation
-still use the immediate reader. See [the pending-review plan](../../.ai/specs/2026-11-03-coderabbit-pending-plan.md).
+still use the immediate reader. See [the pending-review plan](https://github.com/hearsay-tools/cezarion/pull/2604).
 
 Settled blocked admission or an expired provider wait logs a notice and exits unsuccessfully. Existing reconciliation can retry after a late review finishes. Broken API/schema evidence is an error. Findings must not become error annotations because the CI sweep groups identical errors across PRs. Heavy unit, build/package, Vitest and browser jobs do not depend on this gate; they start once their skip inputs are ready and run beside typecheck, preflight and review admission. A blocked gate fails `verify`, which reads the gate and every heavy result. Docs-only and infra-only retain their suite skips but still require review admission. Cancellation never releases heavy work. Both protected checks remain required; branch protections are unchanged.
 
