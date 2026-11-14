@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { chmodSync } from 'node:fs';
+import { chmodSync, existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -10,8 +10,22 @@ import { fixture, git, receiptPath, recordingReport, WORKSPACE_TEST_TIMEOUT_MS }
 const hook = vi.hoisted(() => ({
   beforeContains: undefined as ((sha: string) => void) | undefined,
   after: undefined as ((args: readonly string[], ok: boolean) => void) | undefined,
+  afterHead: undefined as ((refusal: string | undefined) => void) | undefined,
 }));
-afterEach(() => { hook.beforeContains = undefined; hook.after = undefined; });
+afterEach(() => { hook.beforeContains = undefined; hook.after = undefined; hook.afterHead = undefined; });
+
+// The HEAD read seam: an outside change can land right after destroy reads the worktree HEAD.
+vi.mock('../task-branch-head.ts', async (original) => {
+  const real = await original<typeof import('../task-branch-head.ts')>();
+  return {
+    ...real,
+    headLeftTaskBranch: async (worktree: string, branch: string) => {
+      const refusal = await real.headLeftTaskBranch(worktree, branch);
+      hook.afterHead?.(refusal);
+      return refusal;
+    },
+  };
+});
 
 // The lock seam: a ref that keeps the worker's commits can move between two reads of it, as an
 // outside process (a shell, an IDE) that does not follow Squawk's lock can move it.
@@ -55,6 +69,23 @@ describe('the result after an outside change during destroy', { timeout: WORKSPA
         .toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
     } finally { chmodSync(worktrees, 0o755); }
     expect(calls).toEqual([['unexplained']]);
+    expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
+  });
+
+  // Root ignores directory modes, so the unreadable parent cannot be made there.
+  it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)('reports a worktree HEAD refusal once when the worktree parent turns unreadable', async () => {
+    const { root, first } = await fixture();
+    const workspace = await createOwnedWorkspace(root, randomUUID(), first);
+    git(workspace.path, 'checkout', '-q', '--detach');
+    const worktrees = dirname(workspace.path);
+    hook.afterHead = (refusal) => { if (refusal) chmodSync(worktrees, 0o000); };
+    const { calls, report } = recordingReport();
+    try {
+      expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report))
+        .toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
+    } finally { chmodSync(worktrees, 0o755); }
+    expect(calls).toEqual([['unexplained']]);
+    expect(existsSync(workspace.path)).toBe(true);
     expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
   });
 
