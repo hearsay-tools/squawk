@@ -90,9 +90,9 @@ handoff journal, **Continue**, live follow-up messages, and `hsq message inbox` 
 available.
 ## What Squawk does best 🏆
 
-**On your phone:** the [iPhone and Android companion apps](docs/mobile.md) connect
-to your existing HTTPS cockpit. Personal installation and device testing are
-documented; agents continue running on your server.
+**On your phone:** open your HTTPS cockpit in the phone's browser and add it to
+the home screen. [Squawk on your phone](docs/mobile.md) shows how; agents continue
+running on your server.
 
 Plenty of tools wrap a single coding agent in a nicer window — a "Codex GUI", a
 conductor-style app, one-agent front-ends. Squawk's bet is different. Three things

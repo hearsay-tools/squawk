@@ -8,7 +8,7 @@ describe('shared product identity', () => {
     expect(productIdentity(false)).toEqual({
       rebrand: false, displayName: 'Cezarion', command: 'cez', npmPackage: '@wjarka/cezarion',
       npmAlias: 'cezarion', npmAliasDirectory: 'alias-cezarion', npx: 'npx cezarion', envPrefix: 'CEZ_', desktopAppId: 'tools.hearsay.cezarion',
-      mobileAppId: 'tools.hearsay.cezarion.mobile', desktopExecutable: 'cezar-desktop',
+      desktopExecutable: 'cezar-desktop',
     });
   });
   it('selects the new identity by default', () => {
@@ -16,7 +16,7 @@ describe('shared product identity', () => {
     expect(productIdentity(true)).toEqual({
       rebrand: true, displayName: 'Squawk', command: 'hsq', npmPackage: '@hearsay-tools/squawk',
       npmAlias: null, npmAliasDirectory: null, npx: 'npx -p @hearsay-tools/squawk hsq', envPrefix: 'HSQ_', desktopAppId: 'tools.hearsay.squawk',
-      mobileAppId: 'tools.hearsay.squawk.mobile', desktopExecutable: 'squawk-desktop',
+      desktopExecutable: 'squawk-desktop',
     });
   });
   it('runs the scoped package for a one-off command, because npm refuses the name hsq', () => {
