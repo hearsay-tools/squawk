@@ -570,7 +570,7 @@ const UI_STATE_BODY_LIMIT = 128 * 1024; // 128 KiB
  * ## Precedence — flag, then Accept, then the route's own default
  *
  * 1. **The query flag wins whenever the request carries it.** `?structured=1` and `?raw=1` are the
- *    live wire and a protected surface (BACKWARD_COMPATIBILITY.md); `Accept` is ADDITIVE and
+ *    live wire; `Accept` is ADDITIVE and
  *    may never override a caller that said what it wanted in the URL. The flag counts as "carried"
  *    when the key is PRESENT, so `?raw=0` is an explicit opt-out of the raw representation and not
  *    an invitation to re-decide from a header.
@@ -631,7 +631,7 @@ function negotiate<O extends string>(accept: string | undefined, offers: readonl
 }
 
 /** What `GET /repo/commit/:sha` offers, DEFAULT FIRST: the legacy `text/plain` blob is what a
- *  request with no opinion has always received (§2), so it also wins an Accept tie. */
+ *  request with no opinion has always received, so it also wins an Accept tie. */
 const COMMIT_FORMATS = ['text/plain', 'application/json'] as const;
 
 /** What `GET /runs/:id/files` offers, DEFAULT FIRST. `image/*` rather than a concrete type: which
@@ -1048,8 +1048,7 @@ export function createApp(deps: ServerDeps) {
       healthConfig(bootRoot, deps.home),
       workspaceSummary(),
     ]);
-    // Additive fields only below — the pre-forge shape is the most
-    // externally-depended-on JSON in the app (BACKWARD_COMPATIBILITY.md).
+    // Callers outside the cockpit read this JSON.
     const forge = resolveProjectForge(repo);
     const caps = capabilities();
     return {
@@ -1061,8 +1060,8 @@ export function createApp(deps: ServerDeps) {
       ...(update?.latest !== undefined ? { latestVersion: update.latest } : {}),
       // Health is CORS-open and, in hosted mode, reachable off the loopback —
       // so any site/host that reads it would learn the developer's absolute
-      // checkout path and username (#431). Local mode keeps the full path (the
-      // protected bookmarklet shape); hosted/remote mode trims it to a basename.
+      // checkout path and username (#431). Local mode keeps the full path;
+      // hosted/remote mode trims it to a basename.
       // The field is always present and a string, but under CEZ_REMOTE it is
       // no longer an absolute path. A hosted cockpit's paths are on a machine
       // the reader does not have anyway.
@@ -1101,8 +1100,7 @@ export function createApp(deps: ServerDeps) {
   // the same number — but the normal state of a background `hsq serve` is NO
   // subscriber, and then nothing refreshes the cache at all: the next `GET
   // /api/health`, an hour later, would answer with the boot pre-warm's payload
-  // and only the request AFTER it would see the truth. That endpoint is the
-  // bookmarklet contract (BACKWARD_COMPATIBILITY.md) and `repo.branch` going stale is
+  // and only the request AFTER it would see the truth. `repo.branch` going stale there is
   // literally #369, so past this age correctness beats the latency win and the
   // read waits for the compute. `refreshHealth` dedupes, so waiting costs one.
   const HEALTH_MAX_STALE_MS = 60_000;
@@ -2704,7 +2702,7 @@ export function createApp(deps: ServerDeps) {
 
     .put('/ui-state', jsonZodValidator(uiStateBody), async (c) => {
       const { root: repoRoot, dataDir } = c.get('project');
-      // `.passthrough()` keeps unknown prefs (BACKWARD_COMPATIBILITY.md), but a
+      // `.passthrough()` keeps unknown prefs, but a
       // single request may not stuff an unbounded key set (#429) — the shared
       // schema+cap half of both ui-state routes lives in `uiStateBody`.
       const parsed = { data: c.req.valid('json') };
@@ -3783,8 +3781,8 @@ export function createApp(deps: ServerDeps) {
       if (wantsRaw) {
         const mime = imageMimeType(result.path);
         if (mime === null || result.tooLarge) {
-          // `?raw=1` ASKED for bytes, so it hears why it cannot have them — that 409 and its
-          // wording are the protected surface (§2). An `Accept` is only a preference, so a
+          // `?raw=1` ASKED for bytes, so it hears why it cannot have them (a 409 with the
+          // reason). An `Accept` is only a preference, so a
           // resource with no image representation falls THROUGH to the JSON answer below rather
           // than turning a browser's navigation to a text file into an error.
           if (query.raw !== undefined) {
@@ -4451,8 +4449,8 @@ export function createApp(deps: ServerDeps) {
     // One commit's message + stat + patch — the Repo view expands it inline.
     // `?structured=1` is the ADDITIVE sibling (R5 Step 1.7): the new repo view's commit-diff
     // shape `{sha, subject, author, when, files, stat}` with 409 + reason on failure. The
-    // legacy text answer below is a protected surface (BACKWARD_COMPATIBILITY.md) — its
-    // shape, including the in-band failure sentences, stays exactly as it was.
+    // legacy text answer below is what the route returns without the flag, in-band failure
+    // sentences included.
     //
     // `Accept: application/json` reaches the same structured answer without the flag, and
     // `Accept: text/plain` asks for the blob; the flag still wins whenever it is present, and a
@@ -4649,7 +4647,7 @@ export function createApp(deps: ServerDeps) {
   // ---- assemble the chained families --------------------------------------
   // Every chained family is registered ONCE and mounted into the versioned table. There is no
   // second, unversioned spelling: `/api/*` was removed once the whole API was reachable under
-  // `/api/v1` (BACKWARD_COMPATIBILITY.md). One surface means one thing to keep working, and
+  // `/api/v1`. One surface means one thing to keep working, and
   // it is the one the typed client describes.
   //
   // ---- chained family: voice mode (project-scoped, gated on CEZ_VOICE) ----

@@ -345,9 +345,8 @@ export function ReferenceChip({
   const status = explicitStatus ?? entry.status
   // A status this bundle has never heard of resolves to `undefined` here and is then treated
   // exactly like no status at all — the neutral chip, no glyph, no claim in the accessible name.
-  // That is what the vocabulary being ADDITIVE means in practice (BACKWARD_COMPATIBILITY.md):
-  // a value added server-side after this bundle shipped, or restored from a `sessionStorage`
-  // payload a newer bundle wrote, must not be able to take a table down.
+  // So a value added server-side after this bundle shipped, or restored from a `sessionStorage`
+  // payload a newer bundle wrote, cannot take a table down.
   const statusPresentation = referenceStatusPresentation(status)
   // The second axis, and it takes the chip over when it is true. A pull request that will not
   // merge is the thing to say about it first — `ready` next to a PR GitHub is refusing is the

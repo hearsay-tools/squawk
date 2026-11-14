@@ -4,8 +4,7 @@
  *
  * Why browser-local (#788): the right sidebar width is a property of the SCREEN you are sitting
  * at, not of the workspace. The same checkout opened on a 13" laptop and a 34" ultrawide wants
- * two different answers, and `~/.cezar/config.json` can only hold one. That also keeps this out
- * of a protected surface — nothing an older Squawk has to be able to read.
+ * two different answers, and `~/.cezar/config.json` can only hold one.
  */
 
 /** One key, one preference. Namespaced `cez-` like `cez-theme` and `cez-density`. */

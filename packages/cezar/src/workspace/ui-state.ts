@@ -22,7 +22,7 @@ import type { WorkspaceUiState } from '@open-mercato/cezar-contract';
  *  Typed by the CONTRACT (`WorkspaceUiState`) for the same reason as its per-repo twin in
  *  `src/ui-state.ts`: `GET /api/v1/workspace/ui-state` answers this value verbatim, so a loose
  *  record left the route naming no key. The schema is a `z.looseObject`, so unknown prefs keep
- *  round-tripping (BACKWARD_COMPATIBILITY.md) — the type only adds the known names. */
+ *  round-tripping — the type only adds the known names. */
 function readWorkspaceUiStateSync(path: string, home?: Home): WorkspaceUiState {
   try {
     const parsed: unknown = JSON.parse(readHomeFile(path, home));

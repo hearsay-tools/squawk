@@ -96,8 +96,8 @@ describe('src/contract github + repo schemas match the routes exactly', () => {
     200
   >;
   /**
-   * `/repo/commit/:sha` answers the legacy TEXT blob without `?structured=1` (`server.ts:3524`,
-   * a protected surface), on the same status as the structured JSON. `string` is that branch and
+   * `/repo/commit/:sha` answers the legacy TEXT blob without `?structured=1` (`server.ts:3524`),
+   * on the same status as the structured JSON. `string` is that branch and
    * nothing else, so it is excluded by name rather than papered over — everything that IS JSON on
    * this route is still compared mutually.
    */

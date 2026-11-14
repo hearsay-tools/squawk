@@ -306,7 +306,7 @@ function legacyScopedNavigate(
 /**
  * Legacy flat URLs — every pre-multi-project path, `/tasks/:id` bookmarks and the `/new?...`
  * bookmarklet grammar included — redirect to the boot project's scoped twin, preserving path,
- * query and hash byte-for-byte (BACKWARD_COMPATIBILITY.md protects the bookmarklet contract).
+ * query and hash byte-for-byte, so saved bookmarklets keep landing.
  * The exact bare root is the sole exception: once health and the registry settle, it may restore
  * the last valid project-scoped page THIS browser was on (localStorage, so a second client never
  * decides where this one lands). Any query/hash makes `/` explicit, so pasted links always win.

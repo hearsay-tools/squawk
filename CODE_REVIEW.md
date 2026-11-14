@@ -10,8 +10,10 @@ Check current code and evidence before applying an old example or assumption.
    user work and reach their required outcomes.
 2. **Working defaults and graceful degradation.** Keep the zero-config path and
    supported behavior when optional tools, network or configuration are absent.
-3. **Saved data and interface compatibility.** Preserve existing data and documented
-   interfaces under [BACKWARD_COMPATIBILITY.md](BACKWARD_COMPATIBILITY.md).
+3. **Saved data.** An upgrade still opens or migrates saved runs, transcripts and home
+   config. Commands, routes, flags, env vars, URLs and formats may change freely: do not
+   ask for aliases, fallbacks, deprecation windows or compatibility notes
+   ([AGENTS.md § Changing what already works](AGENTS.md#changing-what-already-works)).
 4. **Security.** Review the actual local or hosted deployment boundary, including
    access to agent processes, files and task content.
 5. **Simplicity.** Challenge dependencies and abstractions the change does not need.
@@ -97,7 +99,7 @@ themselves. A dated note alone preserves old rules only in a superseded spec.
 Find every construction site of a shared in-memory
 object by grepping its type, not its field, and give it one factory where a new
 required field fails to compile. For saved data and user-facing messages, search both
-the old and new form. Follow [saved-format compatibility](BACKWARD_COMPATIBILITY.md).
+the old and new form.
 
 Changes to a run state or how a run leaves an existing state (an exit trigger or
 recovery path), cross-run relationship, ToolGrant mapping, running task's

@@ -379,7 +379,7 @@ export async function collectRunCommits(dir: string, baseBranch: string): Promis
 
 /** `GET /api/repo/commit/:sha?structured=1` — one commit's metadata plus the same
  *  structured `{files, stat}` shape the working-tree routes serve (R5 Step 1.7). The
- *  legacy text-blob answer of that route is a protected surface and stays untouched. */
+ *  legacy text-blob answer is what that route returns without the flag. */
 export interface CommitPayload {
   sha: string;
   subject: string;

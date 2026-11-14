@@ -341,7 +341,7 @@ describe('task quick-list', () => {
 
   it('lights the row for the task the route has open', () => {
     // A LEGACY flat deep link, on purpose: pre-multi-project bookmarks must still land, and the
-    // cockpit rewrites them onto the boot project's scoped twin (BACKWARD_COMPATIBILITY.md).
+    // cockpit rewrites them onto the boot project's scoped twin.
     browser.goto(`${baseUrl}/tasks/fix-done`)
     browser.waitForFunction(`location.pathname === '${scoped('/tasks/fix-done')}'`)
     browser.waitForFunction(`document.querySelector('[data-route="task-thread"]') !== null`)

@@ -26,12 +26,12 @@ export function uiStatePath(repoRoot: string): string {
  * Typed by the CONTRACT (`UiState`), not by a loose record: `GET /api/v1/ui-state` answers this
  * value verbatim, so a `Record<string, unknown>` here made the route name no key at all and the
  * per-route parity guard vacuous — the same defect `healthSnapshot` had. `UiState` is a
- * `z.looseObject`, so the index signature (and with it the round-trip promise of
- * BACKWARD_COMPATIBILITY.md) survives; what it adds is the NAMES of the keys the server knows.
+ * `z.looseObject`, so the index signature (and with it the round-trip of
+ * unknown keys) survives; what it adds is the NAMES of the keys the server knows.
  *
  * Only sidebarLimits is normalized field by field through its contract schema. Unrelated
  * preferences retain their existing open-bag behavior. The file is user-editable JSON and is
- * deliberately NOT parsed through the whole schema, because a single malformed pref must not discard the whole bag (§3). What
+ * deliberately NOT parsed through the whole schema, because a single malformed pref must not discard the whole bag. What
  * the type asserts is the wire shape the route promises; the write side (`PUT /ui-state`, validated
  * by `uiStateBody`) is what actually enforces it.
  */

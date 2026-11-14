@@ -18,9 +18,8 @@ import { pollJson, pollFor } from './poll'
  * client navigation from the sidebar CTA reaches the React hero, the cmdk source dropdown lists
  * this repo's project skills first, picking one + typing + submitting starts a real run — and
  * the API readback pins the created run to the exact skill-chain shape plus the persisted
- * `lastTask`. The second describe proves the protected bookmarklet contract (spec 011,
- * BACKWARD_COMPATIBILITY.md) on full document loads of /new, with the REAL launch key read
- * from `.ai/cezar/launch-key` — the documented on-disk contract.
+ * `lastTask`. The second describe proves the saved-bookmarklet URL (spec 011) on full
+ * document loads of /new, with the REAL launch key read from `.ai/cezar/launch-key`.
  */
 
 const artifactsDir = resolve(import.meta.dirname, '../../../.ai/qa/artifacts_e2e')
@@ -470,7 +469,7 @@ describe('the bookmarklet contract on full /new loads (spec 011, Step 1.3)', () 
     // The key (right or wrong) never survives in the URL, and no run started.
     browser.waitForFunction(`location.search === ''`)
     // The legacy flat `/new?…` the bookmarklet grammar guarantees landed on the scoped twin —
-    // the redirect BACKWARD_COMPATIBILITY.md's bookmarklet contract now rests on.
+    // the redirect saved bookmarklets now rest on.
     expect(browser.url()).toBe(`${baseUrl}${scoped('/new')}`)
     expect(await runCount()).toBe(before)
   }, 90_000)

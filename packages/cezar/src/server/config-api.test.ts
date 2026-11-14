@@ -20,8 +20,7 @@ import { apiRequest } from './loopback-request.testkit.ts';
  * the RAW config.json (user keys survive, defaults never materialize); the R6
  * keys (`systemPrompt`, `defaultModels`) are additive — `null`/`''` clears,
  * per-runner model writes merge instead of clobbering; and the pre-R6 answer
- * fields (`baseBranch`, `defaultRunner`) stay exactly as they were
- * (BACKWARD_COMPATIBILITY.md — additive only).
+ * fields (`baseBranch`, `defaultRunner`) stay exactly as they were.
  */
 describe('the config API', () => {
   let repoRoot: string;

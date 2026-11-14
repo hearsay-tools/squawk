@@ -39,7 +39,7 @@ may also lack it. This storage optionality does not permit a new `cezar_ask` cal
 
 The current run store uses schema 9. The [process-wait compatibility bump](#store-and-compatibility)
 requires it; the PR-only change added no bump. The durable version and downgrade rules are in
-[BACKWARD_COMPATIBILITY.md §3](../../BACKWARD_COMPATIBILITY.md#3-aicezar-state-files-packagescezarsrcrunsstorets-and-friends).
+[the run-store rules](../../docs/areas/runs-store.md).
 
 ## Why
 
@@ -366,20 +366,17 @@ outcome.
   first phase that stops writing a legacy field also appends a run-store
   migration that raises `RUN_DATABASE_SCHEMA_VERSION`; an older cezar then refuses
   the store with `unsupported-schema` (`run-database.ts` `663`) instead of
-  misreading it. Document the recovery step (upgrade again) in
-  `BACKWARD_COMPATIBILITY.md` §3.
+  misreading it.
 - **Status.** `waiting` now also covers worker, CI, timer and usage-limit parks;
   webhook consumers of `task.status` get one `waiting` transition per park and read
   `task.attention` to know whether a human is needed. `task.activity` events stop
-  for new parks. Document in `BACKWARD_COMPATIBILITY.md` and `.env.example`
-  (no env var changes expected).
+  for new parks.
 - **Markers.** Kept as aliases; documented as such in `AGENT_PROTOCOL.md`.
 - **`cezar_wait_for_ci`.** Deprecated in phase 1, removed in phase 4. Phase 1 keeps
   it working as an alias with an unchanged receipt, but its description points to
   `cezar_wait` and the tool instructions only suggest `cezar_wait` for CI, so new
   sessions stop choosing it. Phase 4 removes the tool and its private route, and
-  records the break and its migration ("call `cezar_wait` with `kind: "ci"`") in
-  `BACKWARD_COMPATIBILITY.md`, which lists the name as a model-facing surface today.
+  records the break in `CHANGELOG.md`.
 - **Parity.** R69–R71 pin "human input withdraws CI" and are retired with that
   rule. New cells (below) replace them.
 
@@ -1150,7 +1147,7 @@ Calls made by the owner (2026-10-21):
 - **The split.** 4a is this section and references the issue without closing it. 4b, the next
   pull request on the same issue, closes it: the rest of the `deriveAttention` rewrite on
   `waitingOn`, removal of the legacy park state, removal of `cezar_wait_for_ci` and its private
-  route (with its `BACKWARD_COMPATIBILITY.md` entry), and removal of
+  route, and removal of
   `RunStore.commitCiWaitWithdrawal` and the `human_ask_pending` / `human_ask_unanswered` codes.
   4b gets its own decisions section and Transitions out table.
 - **A withdrawn appointment ends `failed`.** A per-task cancel, an archive, the setting switched
@@ -1253,8 +1250,8 @@ private route, and removes `RunStore.commitCiWaitWithdrawal` and the `human_ask_
 Calls made by the owner (2026-10-21):
 
 - **Drop both wire fields.** `activity` and `hasPendingHumanAsk` leave the contract, the API,
-  `cez task` JSON, worker inspection and the webhook payload. `BACKWARD_COMPATIBILITY.md` §2
-  names the migration: read `waitingOn`, the open human wait, or `attention` / `attentionLabel`.
+  `cez task` JSON, worker inspection and the webhook payload. Readers use `waitingOn`, the
+  open human wait, or `attention` / `attentionLabel`.
 - **Split by fact.** "A pending question" was two facts: the user has not answered (the human
   wait, settled when the answer is accepted) and the agent has not received the answer (the
   transcript receipt: `ask.requested` without a matching `human-input-delivered`, retired at
@@ -1454,8 +1451,7 @@ The wake text names the PID and note and tells the agent to read its own log.
 
 - `RUN_DATABASE_SCHEMA_VERSION` 9, no table change, as every earlier kind did: a schema-8 build
   has no path that skips an unknown `kind` in `waits` and would drop the row's wait list.
-  `BACKWARD_COMPATIBILITY.md` gets the additive entry, the schema-9 downgrade note, the new
-  refusal codes and the tool-surface change; `AGENT_PROTOCOL.md` names the kind.
+  `AGENT_PROTOCOL.md` names the kind.
 
 ### Background jobs across a park
 
@@ -1620,8 +1616,8 @@ or `cancelled`. Stored `ci` entries and a stored summary's `waitingOn` of `{ kin
 as checks waits. The PR-only change left `RUN_DATABASE_SCHEMA_VERSION` at 8; it added no bump.
 The combined implementation uses schema 9, required by the
 [process-wait compatibility bump](#store-and-compatibility). See
-[BACKWARD_COMPATIBILITY.md §3](../../BACKWARD_COMPATIBILITY.md#3-aicezar-state-files-packagescezarsrcrunsstorets-and-friends)
-for the durable store version and downgrade rules.
+[the run-store rules](../../docs/areas/runs-store.md) for the durable store version and
+downgrade rules.
 
 ### Transitions out (merge wait)
 
