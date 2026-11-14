@@ -322,7 +322,6 @@ export async function runWorkerCommand(argv: string[], env: NodeJS.ProcessEnv): 
     if (flags.some(arg => /^--(?:kind|resume|request-id)(?:=|$)/.test(arg))) return usageFailure(commandText('Use cez worker resume <worker-id> "<instruction>" --id <UUID> [--timeout-seconds <1-86400>].'));
     return runDelegationCommand(['send', '--kind', 'request', '--resume', ...argv.slice(1)], env, () => workerHelp('resume'));
   }
-  if (argv[0] === 'tasks') return usageFailure(commandText('Use cez message tasks.'));
   if (!WORKER_USAGE.operations.some(entry => entry.name === argv[0])) {
     console.log(JSON.stringify({ code: 'invalid_input', error: `unknown operation '${argv[0]}'` }));
     return 1;
