@@ -70,10 +70,6 @@ class Group {
       save: async () => {}, dryRun, assumeYes: this.opts.assumeYes, reconfigure: new Set(), repoRoot: this.opts.repoRoot, now: this.opts.now, prefs: this.prefs };
   }
 
-  migratedContext(member: Member): InstallContext {
-    return this.context(member.instance, applyMigrationReport(member.state, member.moved ?? member.planned), false);
-  }
-
   member(instance: string, state: ServerState): Member['strategy'] | string {
     const strategy = this.opts.strategy(state.platform ?? '');
     if (!supportsServerMigration(strategy)) {
@@ -108,11 +104,8 @@ function describePlan(group: Group, members: Member[]): void {
     const plan = planLegacyMigration(legacy, target);
     group.say(`home: ${legacy.root} → config ${target.config}, state ${target.state}, data ${target.data} (${plan.files.length} files copied; the legacy home stays)`);
   }
-  for (const { instance, planned } of members) {
-    // A platform's details name each of its moves; the raw moves print only when it gives none.
-    const lines = planned.details?.length ? planned.details : planned.moved.map(({ stepId, from, to }) => `${stepId} ${from.path ?? from.name} → ${to.path ?? to.name}`);
-    for (const line of lines) group.say(`${instance}: ${line}`);
-  }
+  // Every registered platform names each of its moves in its details.
+  for (const { instance, planned } of members) for (const line of planned.details ?? []) group.say(`${instance}: ${line}`);
   group.say(`group: ${names} succeed or fail together. Each instance starts under its new name and passes its health check before the group commits.`);
   if (!homeCommitted) group.say(`marker: ${join(target.config, 'install.json')} stays pending (the new home is read-only) until every instance passes, then commits.`);
   group.say(`rollback: any failure restores every old service definition (systemd units and nginx sites, launchd plists), starts the old services${homeCommitted ? '' : ' and renames the marker to install.json.failed; the legacy home stays in use'}. A restore error leaves its instance stopped and the rollback journal in place: fix the reported error and re-run server-migrate to finish the rollback. A restored service that fails its start check is reported as a warning.`);
@@ -156,14 +149,14 @@ async function rollbackGroup(group: Group, members: Member[]): Promise<boolean> 
 }
 
 /** Finish or reverse an interrupted run before planning a new one. */
-async function recover(group: Group, journal: ServerMigrateJournal): Promise<'committed' | 'rolled-back' | 'failed'> {
+async function recover(group: Group, journal: ServerMigrateJournal): Promise<'migrated' | 'rolled-back' | 'failed'> {
   const { target } = group.opts;
   const loaded = journal.instances.map(({ instance, planned, moved }) => ({ instance, planned, moved, state: loadServerState(instance, group.records) }));
   // A staged home whose marker committed belongs to a group that passed every check.
   if (journal.phase === 'committing' || (journal.stagedHome && committed(target))) {
     group.say('Finishing an interrupted server-migrate commit.');
     commitGroup(group, loaded, journal.stagedHome);
-    return 'committed';
+    return 'migrated';
   }
   group.say('Rolling back an interrupted server-migrate run.');
   const members: Member[] = [];
@@ -172,7 +165,6 @@ async function recover(group: Group, journal: ServerMigrateJournal): Promise<'co
     if (typeof strategy === 'string') { group.say(strategy, 'error'); return 'failed'; }
     members.push({ ...entry, strategy });
   }
-  if (!members.length && pending(target)) rollbackLegacyMigration(target);
   return await rollbackGroup(group, members) ? 'rolled-back' : 'failed';
 }
 
@@ -183,20 +175,22 @@ async function stopAll(group: Group, members: Member[]): Promise<void> {
 async function moveAndCheck(group: Group, members: Member[]): Promise<void> {
   const { legacy, target, env } = group.opts;
   if (!committed(target)) {
-    const staged = migrateLegacyHome(legacy, target, { commit: false, ...(env ? { env } : {}) });
+    const staged = migrateLegacyHome(legacy, target, { commit: false });
     if (staged.status !== 'pending') throw new Error(`Expected a staged home, got ${staged.status}`);
     group.staged = true;
   }
   writeServerMigrateJournal(target, journalFor(group, members, 'migrating'));
+  const checks: Array<[Member, PlatformMigrationReport]> = [];
   for (const member of members) {
-    member.moved = await member.strategy.migrate(group.context(member.instance, member.state, false));
+    const moved = member.moved = await member.strategy.migrate(group.context(member.instance, member.state, false));
     writeServerMigrateJournal(target, journalFor(group, members, 'migrating'));
-    const [error] = member.moved.errors;
+    const [error] = moved.errors;
     if (error) throw new Error(`${member.instance}: ${error.artifact.path ?? error.artifact.name}: ${error.message}`);
+    checks.push([member, moved]);
   }
-  for (const member of members) {
+  for (const [member, moved] of checks) {
     group.say(`${member.instance}: checking health`);
-    await member.strategy.startService(group.migratedContext(member), { probeAuth: true });
+    await member.strategy.startService(group.context(member.instance, applyMigrationReport(member.state, moved), false), { probeAuth: true });
   }
   // The last refusal point: a legacy write during the checks refuses here and rolls the group back.
   if (pending(target)) commitLegacyMigration(target, env);
@@ -207,7 +201,7 @@ async function migrateGroup(group: Group): Promise<ServerMigrateStatus> {
   const journal = readServerMigrateJournal(group.opts.target);
   if (journal && !group.opts.dryRun) {
     const recovered = await recover(group, journal);
-    if (recovered !== 'rolled-back') return recovered === 'committed' ? 'migrated' : 'failed';
+    if (recovered !== 'rolled-back') return recovered;
   }
   const { members, errors } = await planGroup(group);
   for (const error of errors) group.say(error, 'error');

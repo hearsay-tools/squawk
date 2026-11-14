@@ -2,9 +2,10 @@ import { join } from 'node:path';
 import { Home } from '../home/home.ts';
 import { migrationFixture } from '../home/migration.testkit.ts';
 import { runServerMigrate, type ServerMigrateOptions } from './group-migrate.ts';
-import { createUbuntuVps, nginxVhost, systemdUnit } from './platforms/ubuntu-vps.ts';
+import { nginxVhost, systemdUnit } from './platforms/ubuntu-vps.ts';
 import { ubuntuNames } from './platforms/ubuntu-vps-names.ts';
 import { fakeHash, FakeUbuntuHost } from './platforms/ubuntu-host.testkit.ts';
+import { getStrategy } from './strategies.ts';
 import { createAutoUi } from './ui.ts';
 import { STEP_STATUSES, type ServerState, type StepArtifact } from './types.ts';
 import { z } from 'zod';
@@ -23,6 +24,8 @@ export interface InstanceSpec {
   listen?: string;
   /** A server_name other than the recorded domain. */
   serverName?: string;
+  /** Installed by a release that already uses the new names, into the new home. */
+  current?: boolean;
 }
 
 export function serverFixture() {
@@ -42,9 +45,9 @@ export function certbotSite(site: string, domain: string, listen = '443 ssl'): s
     `    listen 80;\n    server_name ${domain};\n    return 404; # managed by Certbot\n}\n`;
 }
 
-/** A completed pre-switch install: running unit, enabled site, htpasswd and its server record. */
-export function installInstance({ host, legacy }: ServerFixture, spec: InstanceSpec): ServerState {
-  const names = ubuntuNames(spec.instance, { legacy: true });
+/** A completed install: running unit, enabled site, htpasswd and its server record. */
+export function installInstance({ host, legacy, target }: ServerFixture, spec: InstanceSpec): ServerState {
+  const names = ubuntuNames(spec.instance, { legacy: !spec.current });
   const scope = spec.scope ?? 'user';
   const unitPath = scope === 'user' ? join(host.userUnitDir, names.unit) : `/etc/systemd/system/${names.unit}`;
   const unit = systemdUnit('/srv/repo', spec.port, scope, '/usr/bin/node /opt/cezar/dist/index.js')
@@ -76,13 +79,14 @@ export function installInstance({ host, legacy }: ServerFixture, spec: InstanceS
     ...(spec.tls ? { publicUrl: `https://${spec.domain}` } : {}),
     ...(spec.externalProxy ? { externalProxy: true, bindHost: '127.0.0.1' } : {}),
   };
-  Home.seed(legacy, legacy.serverState(spec.instance), state);
+  const home = spec.current ? target : legacy;
+  Home.seed(home, home.serverState(spec.instance), state);
   return state;
 }
 
 export function serverMigrate(f: ServerFixture, over: Partial<ServerMigrateOptions> = {}) {
   return runServerMigrate({
-    legacy: f.legacy, target: f.target, strategy: () => createUbuntuVps(), dryRun: false, assumeYes: true,
+    legacy: f.legacy, target: f.target, strategy: getStrategy, dryRun: false, assumeYes: true,
     repoRoot: '/srv/repo', now: '2026-11-07T00:00:00.000Z', ui: createAutoUi(), runner: f.host, env: f.env, ...over,
   });
 }
