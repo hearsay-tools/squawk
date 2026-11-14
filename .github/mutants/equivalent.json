@@ -301,5 +301,40 @@
     "replacement": "\"\"",
     "reason": "commitLegacyMigration never reads legacy.cache: the claim, planLegacyMigration (migrationRoots is called for the target only), MOVED.json and updateManagedPath use only paths under legacy.root.",
     "site": "const legacy = homePaths(record.legacyRoot, join(record.legacyRoot, "
+  },
+  {
+    "file": "packages/cezar/src/delegation/workspace-removal.ts",
+    "function": "removePresentWorktree",
+    "mutator": "BooleanLiteral",
+    "site": "if (!prepared) return ",
+    "original": "false",
+    "replacement": "true",
+    "reason": "preparePresentWorktree refused, so the worktree path still exists. With true, removeOwnedWorkspace in packages/cezar/src/delegation/workspace-removal.ts goes on to prepareMissingWorktree when no checkpoint exists, whose worktreeGone() check returns undefined because the path exists, or else to removeBranch, whose first check returns before any write because the path exists. remaining and every file stay unchanged."
+  },
+  {
+    "file": "packages/cezar/src/delegation/workspace-removal.ts",
+    "function": "removePresentWorktree",
+    "mutator": "BooleanLiteral",
+    "site": "if (holders.liveness !== 'gone') { if (holders.pids.length) held(holders.pids); else report.unexplained(); return ",
+    "original": "false",
+    "replacement": "true",
+    "reason": "A possible holder stops the removal before git worktree remove runs, so the worktree is untouched. With true, removeOwnedWorkspace in packages/cezar/src/delegation/workspace-removal.ts calls removeBranch, because preparePresentWorktree already set the checkpoint. removeBranch's first check returns before any write while the worktree path, its Git admin directory or its registration exists; remaining and every file stay unchanged."
+  },
+  {
+    "file": "packages/cezar/src/delegation/workspace-removal.ts",
+    "function": "removePresentWorktree",
+    "mutator": "BooleanLiteral",
+    "site": "if (!(await mutationGit(repoRoot, ['worktree', 'remove', '--force', workspace.path])).ok) { report.unexplained(); return ",
+    "original": "false",
+    "replacement": "true",
+    "reason": "git worktree remove failed, so the path, its Git admin directory or its registration remains. With true, removeOwnedWorkspace in packages/cezar/src/delegation/workspace-removal.ts calls removeBranch, because preparePresentWorktree already set the checkpoint. removeBranch's first check returns before any write while the worktree path, its Git admin directory or its registration exists; remaining and every file stay unchanged."
+  },
+  {
+    "file": "packages/cezar/src/delegation/workspace-removal.ts",
+    "function": "prepareMissingWorktree",
+    "mutator": "StringLiteral",
+    "original": "'prepared'",
+    "replacement": "\"\"",
+    "reason": "removeOwnedWorkspace in packages/cezar/src/delegation/workspace-removal.ts passes this checkpoint only to removeBranch, which replaces the phase with 'worktree-removed' before its first checkpoint write; the value is never written or read."
   }
 ]

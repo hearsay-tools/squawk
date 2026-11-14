@@ -2,26 +2,34 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { installIdentityFileStore, type IdentityFileStore } from './identity-file-store.ts';
 import { createOwnedWorkspace, verifyOwnedWorkspace } from './workspace.ts';
 import { ownedWorkspaceRecordFiles } from './workspace-record.ts';
-import { removeOwnedWorkspace } from './workspace-removal.ts';
+import { ownedWorktreePresent, removeOwnedWorkspace } from './workspace-removal.ts';
 
 // The ownership policy runs on Linux through a store that, like the Windows store, keeps no POSIX
 // mode bits: it writes world-readable files and replaces in place. The store alone decides which
-// identity files are safe, so the policy must still prove ownership through it.
+// identity files are safe, so the policy must still prove ownership through it. As the Windows
+// store does, it refuses a private-parent read or write outside a directory it made private, such
+// as Git's admin directory that holds the identity marker.
 type Operation = { op: keyof IdentityFileStore; name: string; flag?: boolean };
 function windowsStyleStore() {
   const log: Operation[] = [];
   const unsafe = new Set<string>();
-  const refuse = (path: string) => { if (unsafe.has(path)) throw new Error('Identity grants access to Everyone'); };
+  const privateDirectories = new Set<string>();
+  const refuse = (path: string, privateParent = false) => {
+    if (unsafe.has(path) || (privateParent && !privateDirectories.has(dirname(path)))) throw new Error('Identity grants access to Everyone');
+  };
   const store: IdentityFileStore = {
-    async directory(path, create) { log.push({ op: 'directory', name: basename(path), flag: create }); refuse(path); if (create) await mkdir(path, { recursive: true, mode: 0o755 }); },
-    async read(path, cap, privateParent) { log.push({ op: 'read', name: basename(path), flag: privateParent }); refuse(path); return (await readFile(path, 'utf8')).slice(0, cap); },
-    async write(path, content, privateParent) { log.push({ op: 'write', name: basename(path), flag: privateParent }); await writeFile(path, content, { flag: 'wx', mode: 0o644 }); },
-    async replace(path, content) { log.push({ op: 'replace', name: basename(path) }); refuse(path); await writeFile(path, content, { mode: 0o644 }); },
+    async directory(path, create) {
+      log.push({ op: 'directory', name: basename(path), flag: create }); refuse(path);
+      if (create) { await mkdir(path, { recursive: true, mode: 0o755 }); privateDirectories.add(path); }
+    },
+    async read(path, cap, privateParent) { log.push({ op: 'read', name: basename(path), flag: privateParent }); refuse(path, privateParent); return (await readFile(path, 'utf8')).slice(0, cap); },
+    async write(path, content, privateParent) { log.push({ op: 'write', name: basename(path), flag: privateParent }); refuse(path, privateParent); await writeFile(path, content, { flag: 'wx', mode: 0o644 }); },
+    async replace(path, content) { log.push({ op: 'replace', name: basename(path) }); refuse(path, true); await writeFile(path, content, { mode: 0o644 }); },
   };
   return { store, log, unsafe };
 }
@@ -53,6 +61,7 @@ it('creates, verifies and removes an owned workspace through the installed store
   expect(await ownedWorkspaceRecordFiles(f.root)).toEqual([join(f.root, '.git', 'cezar-owned-workspaces', receipt)]);
   const run = { id: f.workspace.ownerRunId, delegation: { role: 'worker', parentRunId: randomUUID(), permissions: [], workspace: f.workspace } };
   await expect(verifyOwnedWorkspace(f.root, run as never)).resolves.toEqual(f.workspace);
+  expect(await ownedWorktreePresent(f.root, f.workspace)).toBe(true);
   f.log.length = 0;
 
   expect(await removeOwnedWorkspace(f.root, f.workspace)).toMatchObject({ state: 'complete', remaining: [] });
