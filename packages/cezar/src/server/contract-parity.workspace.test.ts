@@ -22,7 +22,6 @@ import type {
   sendAgentReportResponseSchema,
   testProjectWebhookResponseSchema,
   fsBrowseResponseSchema,
-  launchKeyResponseSchema,
   projectsResponseSchema,
   registerProjectResponseSchema,
   removeProjectResponseSchema,
@@ -104,7 +103,6 @@ describe('src/contract projects/workspace schemas match the routes exactly', () 
   type AgentWebhooks200 = InferResponseType<(typeof client.api.v1)['agent-webhooks']['$get'], 200>;
   type SendAgentReport200 = InferResponseType<(typeof client.api.v1)['agent-webhooks'][':webhook']['$post'], 200>;
   type FsBrowse200 = InferResponseType<typeof client.api.v1.fs.browse.$get, 200>;
-  type LaunchKey200 = InferResponseType<(typeof client.api.v1)['launch-key']['$get'], 200>;
 
   // ---- workspace settings + the per-repo agent knobs ---------------------------------------
   type WorkspaceConfig200 = InferResponseType<typeof client.api.v1.workspace.config.$get, 200>;
@@ -197,7 +195,6 @@ describe('src/contract projects/workspace schemas match the routes exactly', () 
     Assert<Exact<z.infer<typeof agentWebhooksResponseSchema>, AgentWebhooks200>>,
     Assert<Exact<z.infer<typeof sendAgentReportResponseSchema>, SendAgentReport200>>,
     Assert<Exact<z.infer<typeof fsBrowseResponseSchema>, FsBrowse200>>,
-    Assert<Exact<z.infer<typeof launchKeyResponseSchema>, LaunchKey200>>,
     // workspace settings + prefs
     Assert<Exact<z.infer<typeof workspaceConfigResponseSchema>, WorkspaceConfig200>>,
     Assert<Exact<z.infer<typeof workspaceConfigResponseSchema>, SetWorkspaceConfig200>>,

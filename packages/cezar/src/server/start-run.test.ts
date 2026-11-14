@@ -13,7 +13,7 @@ import { connectedProviderAuth } from './provider-auth.testkit.ts';
 
 /**
  * `POST /api/v1/runs` `systemPrompt` (R2 2.3) — the programmatic per-run
- * override (bookmarklets, scripts; deliberately no composer-UI control).
+ * override (scripts; deliberately no composer-UI control).
  * Validation contract: trimmed, blank degrades to absent, 20k cap.
  */
 describe('POST /api/v1/runs systemPrompt', () => {

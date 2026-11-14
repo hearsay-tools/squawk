@@ -105,8 +105,7 @@ const GlobalActivityRoute = lazy(() =>
 const SkillsRoute = lazy(() => import('./routes/skills').then((m) => ({ default: m.SkillsRoute })))
 
 /** `/settings/skills` moved to the top-level `/skills` (out of the Settings shell). Redirect —
- *  preserving the `?skill=` selection and any hash — so pasted links and saved bookmarklets
- *  still land. The scoped Navigate keeps the redirect inside the active project. */
+ *  preserving the `?skill=` selection and any hash — so pasted links still land. The scoped Navigate keeps the redirect inside the active project. */
 function SettingsSkillsRedirect() {
   const location = useLocation()
   return (
@@ -304,9 +303,9 @@ function legacyScopedNavigate(
 }
 
 /**
- * Legacy flat URLs — every pre-multi-project path, `/tasks/:id` bookmarks and the `/new?...`
- * bookmarklet grammar included — redirect to the boot project's scoped twin, preserving path,
- * query and hash byte-for-byte (BACKWARD_COMPATIBILITY.md protects the bookmarklet contract).
+ * Legacy flat URLs — every pre-multi-project path, `/tasks/:id` bookmarks and `/new?...`
+ * prefill links included — redirect to the boot project's scoped twin, preserving path,
+ * query and hash byte-for-byte.
  * The exact bare root is the sole exception: once health and the registry settle, it may restore
  * the last valid project-scoped page THIS browser was on (localStorage, so a second client never
  * decides where this one lands). Any query/hash makes `/` explicit, so pasted links always win.
@@ -327,7 +326,7 @@ function LegacyPathRedirect() {
   const location = useLocation()
   const health = useHealth()
   const projects = useProjects()
-  // Only a run-id-shaped task link pays for the index; every other flat (bookmarklet `/new`,
+  // Only a run-id-shaped task link pays for the index; every other flat (`/new`,
   // `/git`, moved settings) has nothing to resolve and must not fetch anything new.
   const flatRunId = FLAT_TASK_RUN_ID.exec(location.pathname)?.[1] ?? null
   const runsIndex = useRunsIndex(flatRunId !== null)

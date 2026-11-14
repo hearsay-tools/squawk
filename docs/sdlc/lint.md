@@ -335,7 +335,7 @@ regexes, applicability, allowed predicates and their reasons remain unchanged.
 | `no-action-color-as-chrome` | Moved: same rule and CSS runner; original deliberate gold surfaces kept |
 | `no-fill-accent-as-ink` | Moved: same rule and CSS runner; all original ink spellings kept |
 | `no-raw-black-white` | Moved: same rule and CSS runner; original overlay exceptions kept |
-| `no-native-dialogs` | Moved: same rule over executable src and e2e, including tests; bookmarklet exception kept |
+| `no-native-dialogs` | Moved: same rule over executable src and e2e, including tests; no exception |
 | `no-dark-variant` | Moved: same rule and CSS runner; same matched token |
 | `fixture-serve-must-pin-cez-home` | Moved: same rule over e2e; still a same-line heuristic, not proof of a child's environment |
 | `no-100vh` | Moved: same rule and CSS runner |

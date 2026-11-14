@@ -303,12 +303,11 @@ export function resolveSource(
 
 /**
  * The exact `POST /api/runs` body the legacy form sends:
- *  - a skill runs as a one-step inline chain (spec 008's API — the same shape the inbox and
- *    the bookmarklet auto-start use): `steps: [{ id: 'task', name, skill, prompt: '{{task}}' }]`;
+ *  - a skill runs as a one-step inline chain (spec 008's API): `steps: [{ id: 'task', name, skill, prompt: '{{task}}' }]`;
  *  - a workflow goes by name;
  *  - NO source (`null` — the composer's empty state) goes by the built-in `quick-task` name,
  *    because `POST /runs` requires exactly one of `workflow`/`steps`. That name is also what
- *    the server resolves an inbox/bookmarklet run to, so "nothing selected" and "quick-task
+ *    the server resolves a sourceless run to, so "nothing selected" and "quick-task
  *    selected" are the same run, which is exactly why the picker offers only one of them;
  *  - an explicit/sticky `runner` always rides the request; an untouched runner is omitted only
  *    when it equals the active project's known default (unknown defaults and connected fallbacks

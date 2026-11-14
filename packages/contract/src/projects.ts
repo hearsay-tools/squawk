@@ -16,7 +16,7 @@ import {
 
 /**
  * The project-registry family: `GET/POST/PATCH/DELETE /api/v1/projects`, the folder picker
- * (`GET /api/v1/fs/browse`) that feeds it, and the launch-key read.
+ * (`GET /api/v1/fs/browse`) that feeds it.
  *
  * Node-free by construction (see README rule 1) — `zod` and nothing else.
  */
@@ -382,15 +382,6 @@ export const fsBrowseResponseSchema = z.object({
   truncated: z.boolean(),
 });
 export type FsBrowseResponse = z.infer<typeof fsBrowseResponseSchema>;
-
-/** `GET /api/v1/launch-key` — the bookmarklet auto-start secret (spec 011). Fetched to COMPARE
- *  against the `?key=` query param and to bake into the `javascript:` links the Settings → Skills
- *  bookmarklet panel generates. The value never renders as text, never logs, and never goes back
- *  into the address bar. */
-export const launchKeyResponseSchema = z.object({
-  key: z.string(),
-});
-export type LaunchKeyResponse = z.infer<typeof launchKeyResponseSchema>;
 
 export const checkoutProgressParamsSchema = z.object({ checkoutId: z.string().min(1).max(128) });
 export const checkoutProgressResponseSchema = z.object({ progress: checkoutProgressEventSchema.nullable() });

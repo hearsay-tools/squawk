@@ -38,9 +38,9 @@ import {
   providerUnavailableReason,
   routeRunMode,
   useAccountSelection,
-  useBookmarkletDeepLink,
   useCompactAgentOptions,
   useEngineSelection,
+  useNewTaskDeepLink,
   useNewTaskDraft,
   useNewTaskSubmit,
   useNotifyWebhook,
@@ -53,7 +53,6 @@ import { QUICK_TASK, type TaskSource } from './new-task-form'
 import { parseNewTaskParams } from './new-task-params'
 import {
   AgentOptions,
-  AutoStartingSurface,
   ComposerFooterEnd,
   ExecutionSettings,
   NewTaskHeader,
@@ -86,10 +85,7 @@ const COMPOSER_MODE = {
  * In plan-first mode (#383, the `Start | Plan first` segment) submit runs `POST /api/plan`
  * and opens the review page (plan-review.tsx) instead of starting a run.
  *
- * This route also owns the saved-bookmarklet contract (spec 011, BACKWARD_COMPATIBILITY.md):
- * a full document load of `/new?skill=&ref=&auto=1&key=` auto-starts a run unattended when the
- * key matches `GET /api/launch-key`, and only prefills otherwise — `handleDeepLink()` in
- * web/app.js, verbatim (see new-task-autostart.ts for the verified semantics).
+ * `/new?skill=&ref=` prefills the composer (new-task-params.ts); it never starts a task.
  *
  * State and effects live in new-task-controller.ts, layout sections in new-task-sections.tsx.
  */
@@ -110,9 +106,8 @@ export function NewTaskRoute() {
   const { projectId: urlProjectId } = useParams()
   const draftProjectId = useProjectScope().projectId
 
-  // The deep-link params, captured ONCE: the bookmarklet hook strips them from the URL
-  // (legacy's `history.replaceState` — the launch key must not survive in history or survive
-  // a reload to re-trigger), so live search params would vanish under us.
+  // The deep-link params, captured ONCE: the prefill hook strips them from the URL, so live
+  // search params would vanish under us.
   const [deepLink] = useState(() => parseNewTaskParams(search))
 
   const repo = useRepo()
@@ -146,12 +141,8 @@ export function NewTaskRoute() {
     mounted,
     clearStarted,
   })
-  const autoStarting = useBookmarkletDeepLink({
-    deepLink, search, engine, config, draftProjectId, mounted, clearStarted, sourcesReady, skillList, update,
-  })
-  const compactAgentOptions = useCompactAgentOptions(agentOptionsRef, autoStarting)
-
-  if (autoStarting) return <AutoStartingSurface />
+  useNewTaskDeepLink({ deepLink, search, sourcesReady, skillList, update })
+  const compactAgentOptions = useCompactAgentOptions(agentOptionsRef)
 
   const { providers, providersReady } = engine
   const mode = draft.planFirst ? COMPOSER_MODE.plan : COMPOSER_MODE.start

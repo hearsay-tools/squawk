@@ -1,6 +1,5 @@
-import { projectPaths } from '../../cezar/src/project-paths.ts'
 import { execFileSync, type ChildProcess } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -18,9 +17,8 @@ import { pollJson, pollFor } from './poll'
  * client navigation from the sidebar CTA reaches the React hero, the cmdk source dropdown lists
  * this repo's project skills first, picking one + typing + submitting starts a real run — and
  * the API readback pins the created run to the exact skill-chain shape plus the persisted
- * `lastTask`. The second describe proves the protected bookmarklet contract (spec 011,
- * BACKWARD_COMPATIBILITY.md) on full document loads of /new, with the REAL launch key read
- * from `.ai/cezar/launch-key` — the documented on-disk contract.
+ * `lastTask`. The second describe proves a full document load of `/new?skill=&ref=` only
+ * prefills the composer.
  */
 
 const artifactsDir = resolve(import.meta.dirname, '../../../.ai/qa/artifacts_e2e')
@@ -423,56 +421,27 @@ describe('the full-screen /new against a live dry-run server', () => {
   }, 90_000)
 })
 
-describe('the bookmarklet contract on full /new loads (spec 011, Step 1.3)', () => {
+describe('prefill links on full /new loads', () => {
   const runCount = async (): Promise<number> =>
     (await getJson<unknown[]>(`${baseUrl}/api/v1/runs`)).length
 
-  it('auto=1 with the REAL launch key starts a run unattended and lands in its thread', async () => {
-    // The documented on-disk contract: the server bakes this secret into the bookmarklets it
-    // generates; only a page holding it may start runs. Read it exactly where users can.
-    const key = readFileSync(join(projectPaths(dataRoot).write, 'launch-key'), 'utf8').trim()
-    expect(key).not.toBe('')
+  it('a flat /new link with auto=1 and a key only prefills — the composer, a toast, and NOT one run more', async () => {
     const before = await runCount()
 
-    browser.goto(
-      `${baseUrl}/new?skill=lint-fix&ref=hello&auto=1&key=${encodeURIComponent(key)}`,
-    )
-    // Unattended: no clicks from here — the cockpit takes us to the thread by itself.
-    browser.waitForFunction(`location.pathname.startsWith('${scoped('/tasks/')}')`)
-
-    const runId = (browser.evaluate(`location.pathname.split('/').pop()`) as string) ?? ''
-    const record = await getJson<{
-      task: string
-      workflowDef?: { steps?: Array<Record<string, unknown>> }
-    }>(`${baseUrl}/api/v1/runs/${runId}`)
-    expect(record.task).toBe('hello')
-    expect(record.workflowDef?.steps).toEqual([
-      expect.objectContaining({ id: 'task', name: 'lint-fix', skill: 'lint-fix', prompt: '{{task}}' }),
-    ])
-    expect(await runCount()).toBe(before + 1)
-  }, 90_000)
-
-  it('a wrong key only prefills — the composer, a toast, and NOT one run more', async () => {
-    const before = await runCount()
-
-    browser.goto(`${baseUrl}/new?skill=lint-fix&ref=hello&auto=1&key=definitely-wrong`)
+    browser.goto(`${baseUrl}/new?skill=lint-fix&ref=hello&auto=1&key=any`)
     browser.waitForFunction(`document.querySelector('[data-route="new"] [data-slot="composer"]') !== null`)
 
-    // Prefilled, blocked, and honest about it.
     expect(browser.evaluate(`document.querySelector('[data-slot="composer"] textarea').value`)).toBe('hello')
     browser.waitForFunction(
       `document.querySelector('[data-slot="source-pill"]')?.textContent.includes('lint-fix')`,
     )
     browser.waitForFunction(`document.querySelector('[data-slot="toast"]') !== null`)
-    expect(browser.text('[data-slot="toast"]')).toContain('Auto-start blocked')
-    browser.screenshot(`${artifactsDir}/new-task-bookmarklet-blocked.png`)
+    expect(browser.text('[data-slot="toast"]')).toContain('Prefilled from link')
+    browser.screenshot(`${artifactsDir}/new-task-prefill-link.png`)
 
-    // The key (right or wrong) never survives in the URL, and no run started.
+    // The params leave the URL, the flat link landed on the scoped twin, and no run started.
     browser.waitForFunction(`location.search === ''`)
-    // The legacy flat `/new?…` the bookmarklet grammar guarantees landed on the scoped twin —
-    // the redirect BACKWARD_COMPATIBILITY.md's bookmarklet contract now rests on.
     expect(browser.url()).toBe(`${baseUrl}${scoped('/new')}`)
     expect(await runCount()).toBe(before)
   }, 90_000)
-
 })

@@ -1,6 +1,6 @@
 import { TasksSection } from './archive-on-merge-field'
 import { BellIcon, BotIcon, FoldersIcon, GaugeIcon, KeyRoundIcon, PaletteIcon } from '@/components/design-icons'
-import { BookmarkIcon, FileCogIcon, FileTextIcon, FolderGit2Icon, KeyboardIcon } from 'lucide-react'
+import { FileCogIcon, FileTextIcon, FolderGit2Icon, KeyboardIcon } from 'lucide-react'
 import type { ComponentType, SVGProps } from 'react'
 
 import { CenteredState } from '@/components/centered-state'
@@ -8,7 +8,6 @@ import { AccountsSection } from './accounts-section'
 import { AgentConfigSection } from './agent-config-section'
 import { AgentsSection } from './agents-section'
 import { AppearanceSection } from './appearance'
-import { BookmarkletsSection } from './bookmarklets-section'
 import { NotificationsSection } from './notifications-section'
 import { ProjectsSection } from './projects-section'
 import { PromptTemplatesSection } from './prompt-templates-section'
@@ -25,7 +24,7 @@ import { WorktreesSection } from './worktrees-section'
  * its `scope`, and that single field decides everything downstream — which URL the section
  * lives at (`/p/<id>/settings/<id>` vs `/settings/global/<id>`), which nav lists it, and which
  * store it writes. The rule of thumb: does the setting describe THIS REPO (agents, worktrees,
- * bookmarklets, prompt templates) or the person/machine (appearance, notifications, host
+ * prompt templates) or the person/machine (appearance, notifications, host
  * resources, the project registry)?
  *
  * `hidden` sections are declared but not routed and not listed: keyboard remains a later
@@ -34,7 +33,6 @@ import { WorktreesSection } from './worktrees-section'
 
 export type SettingsSectionId =
   | 'sidebar'
-  | 'bookmarklets'
   | 'appearance'
   | 'accounts'
   | 'agents'
@@ -110,14 +108,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     description: 'How many finished task worktrees this project keeps on disk.',
     icon: FolderGit2Icon,
     component: WorktreesSection,
-    scope: 'project',
-  },
-  {
-    id: 'bookmarklets',
-    title: 'Bookmarklets',
-    description: 'Launch skills from a GitHub PR or issue.',
-    icon: BookmarkIcon,
-    component: BookmarkletsSection,
     scope: 'project',
   },
   {

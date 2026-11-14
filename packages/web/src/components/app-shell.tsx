@@ -624,9 +624,8 @@ function SidebarContent({
         {/* On /new it wears a selected nav item's fill and ink (#617 01c); its hover is the rows'. */}
         <Button asChild variant="ghost" className={cn("relative h-[32px] max-md:min-h-11 rounded-[7px] bg-muted w-full min-w-0 justify-start gap-2 px-2.5 text-[12.5px] font-medium text-foreground hover:bg-sidebar-row-hover hover:text-foreground", activeTo === "/new" && SIDEBAR_SELECTED_CLASS)}>
           {/* A Router Link since R4 Step 1.1: the React /new composer is real, so deliberate
-              New task affordances stay inside the SPA. Full document loads of /new (the
-              bookmarklet contract) land on the shell like any route (static-ui.ts) — the
-              React composer has owned auto-start parity since R4 Step 1.3. */}
+              New task affordances stay inside the SPA. Full document loads of /new land on
+              the shell like any route (static-ui.ts). */}
           {/* `data-sidebar-item`, not `data-slot`: Slot would let it replace the Button's
               `data-slot="button"`, which is what holds the mobile 44px floor. */}
           <Link to="/new" onClick={onNavigate} data-sidebar-item="new-task" aria-current={activeTo === '/new' ? 'page' : undefined}>

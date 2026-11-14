@@ -60,7 +60,6 @@ describe('settings → appearance against the live dry-run server', () => {
     expect(browser.count(`${nav} [data-section="projects"]`)).toBe(1)
     // Project sections live in the OTHER area; hidden registry entries are nowhere at all.
     expect(browser.count(`${nav} [data-section="agents"]`)).toBe(0)
-    expect(browser.count(`${nav} [data-section="bookmarklets"]`)).toBe(0)
     expect(browser.count(`${nav} [data-section="mcp"]`)).toBe(0)
     expect(browser.count(`${nav} [aria-current="page"][data-section="appearance"]`)).toBe(1)
   })

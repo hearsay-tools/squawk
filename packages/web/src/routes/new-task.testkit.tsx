@@ -193,8 +193,6 @@ export function serve(overrides: {
   createRun?: unknown
   /** Non-2xx `POST /api/v1/runs` answers (the auto-start failure path). */
   createRunStatus?: number
-  /** What `GET /api/v1/launch-key` answers — the bookmarklet auto-start secret. */
-  launchKey?: string
   /** `POST /api/v1/plan` — a payload, or a handler for delayed/failing answers. */
   plan?: unknown | (() => Promise<Response>)
   /** `POST /api/v1/workflows` — answers in call order (409-then-201 for the overwrite flow). */
@@ -224,7 +222,6 @@ export function serve(overrides: {
     uiStateStatus: 200,
     createRun: { id: 'r1' },
     createRunStatus: 201,
-    launchKey: 'k-real',
     plan: PLAN,
     saveWorkflow: [{ status: 201, body: { path: '.ai/cezar/workflows/my-chain.yaml', name: 'my chain' } }],
     ...overrides,
@@ -251,7 +248,6 @@ export function serve(overrides: {
     },
     { method: 'POST', path: '/api/v1/plan', respond: () => answerFixture(data.plan) },
     { path: '/api/v1/repo', respond: () => answerFixture(data.repo) },
-    { path: '/api/v1/launch-key', respond: () => jsonResponse({ key: data.launchKey }) },
     { method: 'GET', path: '/api/v1/ui-state', respond: () => jsonResponse(data.uiState, data.uiStateStatus) },
     { method: 'PUT', path: '/api/v1/ui-state', respond: ({ body }) => jsonResponse(body ?? {}) },
     { method: 'POST', path: '/api/v1/runs', respond: () => answerFixture(data.createRun, data.createRunStatus) },

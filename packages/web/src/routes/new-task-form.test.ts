@@ -402,7 +402,7 @@ describe('buildCreateRunBody — the exact POST /api/v1/runs payloads legacy sen
     expect(JSON.parse(JSON.stringify(body))).toEqual({ task: 'just do it', workflow: 'quick-task' })
   })
 
-  it('skill source → the one-step inline chain (spec 008: same shape as inbox/bookmarklet)', () => {
+  it('skill source → the one-step inline chain (spec 008)', () => {
     const body = buildCreateRunBody({
       task: 'fix the flake',
       source: { source: 'skill', ref: 'om-fix' },

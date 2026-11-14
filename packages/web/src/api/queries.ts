@@ -55,7 +55,6 @@ import {
   getGithubPrChanges,
   getGithubRefStatus,
   getHealth,
-  getLaunchKey,
   getOpenTargets,
   getProviderStatus,
   getProjects,
@@ -196,9 +195,6 @@ export const queryKeys = {
   },
   get importableSkillsReady() {
     return [queryScope(), 'skills', 'importable', 'ready'] as const
-  },
-  get launchKey() {
-    return [queryScope(), 'launch-key'] as const
   },
   get repo() {
     return [queryScope(), 'repo'] as const
@@ -1313,18 +1309,6 @@ export function useImportableSkills(enabled = true) {
   }, [queryClient, ready.data, scope])
 
   return importable
-}
-
-/** The bookmarklet auto-start secret (spec 011). Mounted ONLY by the Settings → Skills
- *  bookmarklet panel, which bakes it into the generated `javascript:` links exactly like the
- *  legacy generator did. The key never renders as text and never goes back into a URL bar. */
-export function useLaunchKey() {
-  return useQuery({
-    queryKey: queryKeys.launchKey,
-    queryFn: ({ signal }) => getLaunchKey({ signal }),
-    // The key is stable for the server's lifetime — refetching it buys nothing.
-    staleTime: Infinity,
-  })
 }
 
 export function useRepo() {

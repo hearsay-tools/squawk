@@ -63,14 +63,14 @@ const NEVER = [
     'packages/cezar/src/pack-check.ts', 'packages/web/vite.config.ts', 'packages/web/index.html',
   ] },
   { why: 'security', source: true, globs: [
-    'packages/cezar/src/server/{capabilities,validators,upgrade-router,ws,launch-key,provider-auth-runtime,provider-action-gate,fs-browse,open-in-app,open-in-terminal,wsl}.ts',
+    'packages/cezar/src/server/{capabilities,validators,upgrade-router,ws,provider-auth-runtime,provider-action-gate,fs-browse,open-in-app,open-in-terminal,wsl}.ts',
     'packages/cezar/src/agent-config/**',
     'packages/cezar/src/core/{secret-redaction,agent-env,shell-env,provider-auth,agent-profiles,codex-permissions,opencode-permissions,codex-approvals}.ts',
     'packages/cezar/src/workspace/{agent-accounts,agent-profiles}.ts',
     'packages/cezar/src/delegation/{credentials,execution-identity,policy}.ts', 'packages/cezar/src/workflows/types.ts',
     'packages/cezar/src/server-install/**',
     'packages/cezar/src/{skills-remote,install-as-command}.ts',
-    'packages/web/src/lib/bookmarklet.ts', 'packages/web/src/api/agent-accounts.ts',
+    'packages/web/src/api/agent-accounts.ts',
     'packages/web/src/routes/task-thread/{link-safety-dialog,task-link}.tsx',
   ] },
   { why: 'stored state or deletion', source: true, globs: [

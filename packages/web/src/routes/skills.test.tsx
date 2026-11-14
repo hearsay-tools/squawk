@@ -13,9 +13,8 @@ import { AppRoutes } from '@/routes'
 /**
  * `/skills` (R6 Step 1.4, grouped table since hearsay-tools/cezarion#1607): the table and its
  * inline details against fixture payloads, the #377 ordering/bold rendering, the #384 refresh
- * contract (the open skill and the scroll survive), the group controls, and the bookmarklet
- * panel's protected link generation. The pure rules themselves are pinned in
- * lib/skills.test.ts and lib/bookmarklet.test.ts — this file asserts the SURFACE honors them.
+ * contract (the open skill and the scroll survive) and the group controls. The pure rules
+ * themselves are pinned in lib/skills.test.ts — this file asserts the SURFACE honors them.
  */
 
 // ---- fixtures --------------------------------------------------------------------------------
@@ -55,7 +54,6 @@ let requests: Array<{ method: string; url: string; body?: unknown }> = []
  *  team-sources-panel.test.tsx. */
 const FIXED_ANSWERS: Record<string, unknown> = {
   '/api/v1/workflows': WORKFLOWS,
-  '/api/v1/launch-key': { key: 'sekret' },
   '/api/v1/skills/sources': { sources: [], editable: true, configIssue: null },
 }
 
@@ -253,7 +251,7 @@ describe('the grouped table', () => {
     expect(requests.some((r) => r.method === 'PUT')).toBe(false)
   })
 
-  it('the filter narrows the rows but never hides the pinned bookmarklet entry', async () => {
+  it('the filter narrows the rows', async () => {
     serve()
     renderAt('/skills')
     await waitFor(() => expect(rowNames()).toHaveLength(3))
@@ -263,7 +261,6 @@ describe('the grouped table', () => {
     })
     expect(rowNames()).toEqual(['om-review'])
     expect(groupLabels()).toEqual(['This project'])
-    expect(document.querySelector('[data-slot="bookmarklets-row"]')).not.toBeNull()
     fireEvent.change(document.querySelector('[data-slot="skills-filter"]')!, { target: { value: 'zzz-none' } })
     expect(document.querySelector('[data-slot="skill-rows"]')?.textContent).toContain('(no skills match)')
   })
@@ -279,17 +276,6 @@ describe('the grouped table', () => {
       expect(text).toContain('.ai/cezar/skills/')
       expect(text).toContain('.agents/skills/')
     })
-  })
-
-  it('Run from GitHub opens the bookmarklet panel above the table, and a second click closes it', async () => {
-    serve()
-    renderAt('/skills')
-    await waitFor(() => expect(rowNames()).toHaveLength(3))
-    fireEvent.click(document.querySelector('[data-slot="bookmarklets-row"]')!)
-    await waitFor(() => expect(document.querySelector('[data-slot="bookmarklet-panel"]')).not.toBeNull())
-    expect(rowNames()).toHaveLength(3)
-    fireEvent.click(document.querySelector('[data-slot="bookmarklets-row"]')!)
-    await waitFor(() => expect(document.querySelector('[data-slot="bookmarklet-panel"]')).toBeNull())
   })
 })
 
@@ -749,96 +735,5 @@ describe('group controls (#1607)', () => {
     fireEvent.click(fold)
     expect(offListPuts()).toEqual([])
     expect(groupSwitch('sdlc')?.getAttribute('aria-checked')).toBe('true')
-  })
-})
-
-describe('the bookmarklet panel (spec 011)', () => {
-  it('says it is loading rather than claiming there are no skills while the catalog is in flight', async () => {
-    // The panel's empty state reads "(no skills yet …)". Rendering it against an unresolved
-    // catalog would state that as fact on every cold load of the subpage — so the section
-    // must gate on the pending query the way its sibling sections do.
-    const json = (payload: unknown) =>
-      new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } })
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input)
-        if (url === '/api/v1/launch-key') return json({ key: 'sekret' })
-        if (url === '/api/v1/ui-state') return json({})
-        return new Promise<never>(() => {}) // /api/v1/skills never settles
-      }),
-    )
-    renderAt('/settings/bookmarklets')
-
-    await waitFor(() =>
-      expect(document.querySelector('[data-slot="bookmarklets-loading"]')).not.toBeNull(),
-    )
-    expect(document.querySelector('[data-slot="bookmarklet-panel"]')).toBeNull()
-    expect(document.body.textContent).not.toContain('no skills yet')
-  })
-
-  it('is a first-class Settings page that generates protected links and auto-arms per-skill links only', async () => {
-    serve()
-    renderAt('/settings/bookmarklets')
-
-    await waitFor(() => expect(document.querySelector('[data-slot="bookmarklet-panel"]')).not.toBeNull())
-    // The key landed in the links (the panel is its one legitimate DOM use).
-    await waitFor(() => {
-      const generic = document.querySelector('[data-slot="bm-generic"] [data-slot="bm-link"]')
-      expect(decodeURIComponent(generic?.getAttribute('href') ?? '')).toContain('auto=0&key=sekret&ref=')
-    })
-    const links = [...document.querySelectorAll('[data-slot="bm-list"] [data-slot="bm-link"]')]
-    expect(links).toHaveLength(3) // one per skill, project-first like the catalog
-    expect(links[0]?.textContent).toContain('/om-fix')
-    for (const link of links) {
-      expect(link.getAttribute('href')?.startsWith('javascript:')).toBe(true)
-      expect(decodeURIComponent(link.getAttribute('href') ?? '')).toContain('auto=0&key=sekret')
-    }
-
-    // Auto-submit arms the per-skill links; the generic launcher stays prefill-only.
-    fireEvent.click(document.querySelector('[data-slot="bm-auto"]')!)
-    await waitFor(() => {
-      const first = document.querySelector('[data-slot="bm-list"] [data-slot="bm-link"]')
-      expect(decodeURIComponent(first?.getAttribute('href') ?? '')).toContain('auto=1&key=sekret')
-    })
-    const generic = document.querySelector('[data-slot="bm-generic"] [data-slot="bm-link"]')
-    expect(decodeURIComponent(generic?.getAttribute('href') ?? '')).toContain('auto=0&key=sekret')
-  })
-
-  it('filters the per-skill rows and copies a link to the clipboard', async () => {
-    serve()
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
-    renderAt('/skills?skill=__bm')
-    await waitFor(() =>
-      expect(document.querySelectorAll('[data-slot="bm-list"] [data-slot="bm-row"]')).toHaveLength(3),
-    )
-    // Copy is disabled until the launch key has loaded (hearsay-tools/cezarion#896).
-    await waitFor(() => expect(document.querySelector('[data-slot="bm-list"] [data-slot="bm-link"]')?.getAttribute('href')).toMatch(/^javascript:/))
-
-    fireEvent.change(document.querySelector('[data-slot="bm-filter"]')!, { target: { value: 'zebra' } })
-    const rows = [...document.querySelectorAll('[data-slot="bm-list"] [data-slot="bm-row"]')]
-    expect(rows).toHaveLength(1)
-    expect(rows[0]?.textContent).toContain('/zebra-global')
-
-    fireEvent.click(rows[0]!.querySelector('[data-slot="bm-copy"]')!)
-    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
-    expect(String(writeText.mock.calls[0]?.[0])).toMatch(/^javascript:/)
-  })
-
-  it('a clicked drag-source link never navigates — it only explains the gesture', async () => {
-    serve()
-    renderAt('/skills?skill=__bm')
-    // The launcher is a drag source only once the launch key has loaded (hearsay-tools/cezarion#896).
-    await waitFor(() =>
-      expect(document.querySelector('[data-slot="bm-generic"] [data-slot="bm-link"]')?.getAttribute('data-ready')).toBe('true'),
-    )
-
-    fireEvent.click(document.querySelector('[data-slot="bm-generic"] [data-slot="bm-link"]')!)
-    await waitFor(() =>
-      expect(document.querySelector('[data-slot="toaster"]')?.textContent).toContain(
-        'Drag me to your bookmarks bar',
-      ),
-    )
   })
 })

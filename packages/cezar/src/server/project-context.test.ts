@@ -133,7 +133,7 @@ describe('ProjectContexts', () => {
       { id: 'b', root: rootB, status: 'not-git' },
     ]);
 
-    // Construction instantiated nothing — no store dir, no launch-key.
+    // Construction instantiated nothing — no store dir.
     expect(existsSync(join(rootA, '.ai/cezar'))).toBe(false);
     expect(existsSync(join(rootB, '.ai/cezar'))).toBe(false);
     expect(contexts.ids()).toEqual([]);
@@ -141,8 +141,7 @@ describe('ProjectContexts', () => {
     const first = await contexts.context('a');
     expect(first.id).toBe('a');
     expect(first.dataDir).toBe(projectPaths(rootA).write);
-    expect(first.launchKey).not.toBe('');
-    expect(existsSync(join(projectPaths(rootA).write, 'launch-key'))).toBe(true);
+    expect(existsSync(join(projectPaths(rootA).write, 'launch-key'))).toBe(false);
     // Only the accessed project was built.
     expect(existsSync(join(rootB, '.ai/cezar'))).toBe(false);
     expect(contexts.ids()).toEqual(['a']);
