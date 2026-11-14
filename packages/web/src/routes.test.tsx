@@ -291,6 +291,8 @@ describe('scoped route map (/p/:projectId)', () => {
     '/settings/keyboard',
     '/tasks/abc123/nope',
     '/compare',
+    '/compare/g1',
+    '/inbox',
   ]
   for (const url of unknown) {
     it(`/p/${BOOT}${url} → the 404 route`, () => {

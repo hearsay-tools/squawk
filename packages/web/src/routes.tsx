@@ -439,9 +439,6 @@ function projectScopeRoute() {
           }
         />
       </Route>
-      {/* The parallel-variant compare page is retired (hearsay-tools/cezarion#1760): old
-          bookmarks land on the task list. */}
-      <Route path="compare/:groupId" element={<ScopedNavigate to="/" replace />} />
       {/* The Git view (issue 06 §3): each section is a URL — /git (Recently on main; a phone's
           Git screen unless ?view=repo), /git/commits (+ /:sha, one commit inside Recently on
           main), /git/not-landed (issue 08), /git/cleanup, /git/branches, and /git/changes (the main tree's uncommitted
