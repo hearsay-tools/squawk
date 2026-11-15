@@ -81,6 +81,22 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     expect(git(root, 'branch', '--list', workspace.branch)).toBe('');
   });
 
+  // hearsay-tools/squawk#3619: git follows a symbolic ref on delete unless told not to.
+  it('never deletes the branch a stranded worker branch now points at', async () => {
+    const { root, first } = await fixture();
+    const workspace = await createOwnedWorkspace(root, randomUUID(), first);
+    await strand(root, workspace, 'externally removed');
+    expect(git(root, 'rev-parse', 'refs/heads/main')).toBe(first);
+    git(root, 'symbolic-ref', `refs/heads/${workspace.branch}`, 'refs/heads/main');
+    const { calls, report } = recordingReport();
+    expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report)).toEqual({
+      workerId: workspace.ownerRunId, state: 'complete', remaining: [], deleted: [
+        { kind: 'worktree', path: workspace.path }, { kind: 'branch', ref: `refs/heads/${workspace.branch}` }] });
+    expect(calls).toEqual([]);
+    expect(git(root, 'rev-parse', 'refs/heads/main')).toBe(first);
+    expect(git(root, 'for-each-ref', '--format=%(refname)', `refs/heads/${workspace.branch}`)).toBe('');
+  });
+
   // hearsay-tools/squawk#911: commits another ref keeps are no work the delete would lose.
   it('deletes a stranded branch moved behind its baseline onto a commit another branch keeps', async () => {
     const { root, first, second } = await fixture();

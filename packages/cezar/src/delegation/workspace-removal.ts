@@ -268,10 +268,10 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
           assertCurrent?.();
           assertUnheld?.();
           // The refs that keep its commits must not have moved either: one ref transaction checks them.
-          const removed = witnesses.length === 0
-            ? await mutationGit(repoRoot, ['update-ref', '-d', `refs/heads/${workspace.branch}`, checkpoint.sha])
-            : await mutationGit(repoRoot, ['update-ref', '--no-deref', '--stdin'], undefined,
-              [...witnesses.map(({ ref, sha }) => `verify ${ref} ${sha}`), `delete refs/heads/${workspace.branch} ${checkpoint.sha}`].join('\n') + '\n');
+          // --no-deref deletes a branch replaced by a symbolic ref, never the ref it points at
+          // (hearsay-tools/squawk#3619).
+          const removed = await mutationGit(repoRoot, ['update-ref', '--no-deref', '--stdin'], undefined,
+            [...witnesses.map(({ ref, sha }) => `verify ${ref} ${sha}`), `delete refs/heads/${workspace.branch} ${checkpoint.sha}`].join('\n') + '\n');
           if (!removed.ok || await branchExists()) { report.unexplained(); return; }
         }
         await writeCleanup(checkpointPath, { ...checkpoint, phase: 'complete' }, assertCurrent);
