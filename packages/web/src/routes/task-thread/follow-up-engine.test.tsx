@@ -62,8 +62,6 @@ const HEALTH_MULTI: HealthResponse = {
     { name: 'git', available: true },
   ],
   forge: null,
-  // `followups` became a required capability in #471 (merged from main): irrelevant to the
-  // Continue pills these tests drive, but the shape must be whole.
   capabilities: { localHandoff: true, settingsAdmin: true, remoteSettingsAdmin: false, tokenMetrics: true, tokenUsageMetrics: true, costMetrics: true, automations: false, preview: false },
 }
 

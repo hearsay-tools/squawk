@@ -54,6 +54,9 @@ function props(extra: Partial<PreviewToolbarProps> = {}): PreviewToolbarProps {
 /** Radix opens its menus on pointerdown, not click. */
 const openMenu = (trigger: HTMLElement) => fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' })
 
+/** Which menu rows assistive technology announces as current. */
+const currentRows = () => screen.getAllByRole('menuitem').map(row => row.getAttribute('aria-current') === 'true')
+
 describe('PreviewToolbar', () => {
   // Rule: .ai/specs/2026-10-02-live-preview-v1.md § Pane.
   it('orders its controls: back, forward, reload, URL, viewport, quality, stats, badge, More, close', () => {
@@ -404,16 +407,19 @@ describe('PreviewToolbar', () => {
     render(<PreviewToolbar {...p} />)
     const name = viewport === 'fit' ? 'Viewport size: Fit' : `Viewport size: ${viewport.w} × ${viewport.h}`
     openMenu(screen.getByRole('button', { name }))
-    expect(screen.getAllByRole('menuitem').map(row => row.getAttribute('aria-current') === 'true')).toEqual(current)
+    expect(currentRows()).toEqual(current)
     fireEvent.click(screen.getByRole('menuitem', { name: /^Fit/ }))
     expect(p.onViewport).toHaveBeenCalledExactlyOnceWith('fit')
   })
 
-  it('marks only the server currently shown as current', () => {
-    render(<PreviewToolbar {...props({ servers: [web, storybook], current: storybook })} />)
-    openMenu(screen.getByRole('button', { name: 'Server: storybook :6006' }))
-    expect(screen.getByRole('menuitem', { name: /web:5173/ }).hasAttribute('aria-current')).toBe(false)
-    expect(screen.getByRole('menuitem', { name: /storybook:6006/ }).getAttribute('aria-current')).toBe('true')
+  it.each([
+    ['storybook', { current: storybook }, [false, true, false]],
+    ['web beside the live agent', { current: web, agentLive: true, onPickAgent: vi.fn() }, [false, true, false, false]],
+    ["the agent's page", { current: undefined, agentLive: true, agentShown: true, onPickAgent: vi.fn() }, [true, false, false, false]],
+  ] as const)('marks only the page shown as current in the switcher: %s', (_name, shown, current) => {
+    render(<PreviewToolbar {...props({ servers: [web, storybook], ...shown })} />)
+    openMenu(screen.getByRole('button', { name: /^Server: / }))
+    expect(currentRows()).toEqual(current)
   })
 
   it.each([

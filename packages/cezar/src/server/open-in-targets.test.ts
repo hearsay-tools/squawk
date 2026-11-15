@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fallbackProjectWriteError } from '../project-paths.ts';
 import { RunStore } from '../runs/store.ts';
 import * as agentProfiles from '../workspace/agent-profiles.ts';
 import type { RunManager } from '../workflows/run.ts';
@@ -136,6 +137,18 @@ describe('run open-in target dispatch and refusals', () => {
     expect(existsSync(join(root, 'backtick-marker'))).toBe(false);
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout.trim()).toBe(worktree);
+  });
+
+  it('refuses an agent terminal in a worktree under the data folder this binary has not migrated to', async () => {
+    const worktree = join(root, '.ai/squawk/worktrees', runId);
+    mkdirSync(worktree, { recursive: true });
+    store.updateRun(runId, { worktreePath: worktree });
+    const refusal = fallbackProjectWriteError(worktree);
+    expect(refusal).toMatch(/binary that migrated/);
+    const res = await post('cli:claude');
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: refusal });
+    expect(openTerminal).not.toHaveBeenCalled();
   });
 
   it.each([

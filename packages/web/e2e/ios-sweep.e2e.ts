@@ -148,9 +148,6 @@ describe('iOS sweep — every primary view at 390×844', () => {
     sweep('tasks', '/', '[data-slot="tasks-table"], [data-slot="task-cards"], [data-slot="tasks-empty"]')
   })
 
-  it('/inbox (retained-file export guidance)', () => {
-    sweep('inbox', '/inbox', '[data-route="inbox"] h1')
-  })
 
   it('/git (Git screen)', () => {
     // Bare /git is the Git screen below md (issue 06 §3): the checkout block and the sections.

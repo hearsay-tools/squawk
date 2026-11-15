@@ -257,7 +257,7 @@ export async function rollbackUbuntuMigration(ctx: InstallContext, migrated: Pla
   for (const [moves, run] of undo) {
     try {
       assertRollbackEntry(ctx, moves);
-      if (!ctx.dryRun) await run();
+      await run();
       report.moved.push(...moves.map((m) => ({ stepId: m.stepId, from: m.to, to: m.from, ...(m.backup ? { backup: m.backup } : {}) })));
     } catch (error) {
       report.errors.push({ artifact: moves[0]!.to, message: message(error) });
@@ -268,7 +268,6 @@ export async function rollbackUbuntuMigration(ctx: InstallContext, migrated: Pla
 
 async function systemctl(ctx: InstallContext, verb: 'start' | 'stop'): Promise<void> {
   const unit = recordedUnit(ctx);
-  if (ctx.dryRun) { ctx.ui.info(`DRY RUN — would ${verb} ${unit.name}.`); return; }
   const active = async (c: InstallContext) => {
     return (await c.runner.capture('systemctl', [...(unit.scope === 'user' ? ['--user'] : []), 'is-active', '--quiet', unit.name])).code === 0;
   };
@@ -306,13 +305,9 @@ async function withProbeLogin(ctx: InstallContext, htpasswd: string, run: (login
     description: `Add a temporary probe login to ${htpasswd}.`,
     command: `cat >> ${shquote(htpasswd)}`, input: `${user}:${hashed.stdout.trim()}\n`, inputLabel: 'probe credential line', verify: present,
   });
-  const previous = ctx.prefs.cockpit;
   try {
-    ctx.prefs.cockpit = { user, password };
     await run({ user, password });
   } finally {
-    if (previous) ctx.prefs.cockpit = previous;
-    else delete ctx.prefs.cockpit;
     await sudoStep(ctx, { description: `Remove the probe login from ${htpasswd}.`, command: `sed -i ${shquote(`/^${user}:/d`)} ${shquote(htpasswd)}`, verify: present });
   }
 }
@@ -366,7 +361,6 @@ async function checkPublicSite(ctx: InstallContext, vhostAvailable: string, logi
 /** Start the recorded unit and check health: the bind address for an external proxy, else the public site. */
 export async function startUbuntuService(ctx: InstallContext, health: UbuntuHealth, opts: { probeAuth?: boolean } = {}): Promise<void> {
   await systemctl(ctx, 'start');
-  if (ctx.dryRun) return;
   if (ctx.state.externalProxy) { await health.identity.run(ctx); return; }
   const unit = recordedUnit(ctx).name;
   if (!(await health.waitForSquawk(ctx, ctx.state.primaryPort))) throw new StepAborted(`${unit} did not answer on port ${ctx.state.primaryPort}`);

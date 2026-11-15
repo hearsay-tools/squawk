@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Home } from '../../home/home.ts';
@@ -274,6 +274,10 @@ describe('macOS launchd migration', () => {
     const old = plant('ngrok');
     ctx.dryRun = true;
     const report = await strategy.migrate!(ctx);
+    expect(report.errors).toEqual([]);
+    // The preview names the health check under the label the agent has after its move.
+    expect(report.details).toEqual([expect.stringContaining('launchd ai.cezar.ngrok → tools.hearsay.squawk.ngrok'),
+      expect.stringContaining('health check: tools.hearsay.squawk.ngrok is loaded')]);
     expect(report.moved).toHaveLength(1);
     expect(existsSync(old.path!)).toBe(true);
     expect(existsSync(report.moved[0]!.to.path!)).toBe(false);
@@ -383,6 +387,34 @@ describe('macOS launchd migration', () => {
     expect(readFileSync(foreign.path!, 'utf8')).toBe(original);
     expect(loaded).toEqual(new Set([foreign.name!]));
     expect(commands.filter((c) => c[1] === 'bootout').map((c) => c[2])).toEqual([`gui/${process.getuid?.() ?? 0}/${name}`]);
+  });
+
+  it('undo leaves a symlink at the legacy cockpit path and its target alone when no ledger records it', async () => {
+    const ours = plant('cockpit', false);
+    const target = join(root, 'elsewhere.plist');
+    writeFileSync(target, readFileSync(ours.path!, 'utf8'));
+    rmSync(ours.path!);
+    symlinkSync(target, ours.path!);
+    const bytes = readFileSync(target, 'utf8');
+    await strategy.steps(ctx).find((s) => s.id === 'autostart')!.undo(ctx, null);
+    expect(lstatSync(ours.path!).isSymbolicLink()).toBe(true);
+    expect(readFileSync(target, 'utf8')).toBe(bytes);
+    expect(loaded).toEqual(new Set([ours.name!]));
+    expect(commands.filter((c) => c[1] === 'bootout').map((c) => c[2])).toEqual([`gui/${process.getuid?.() ?? 0}/tools.hearsay.squawk.cockpit`]);
+  });
+
+  it('undo removes the plist at the recorded path when the LaunchAgents directory differs from the install', async () => {
+    const name = 'tools.hearsay.squawk.cockpit';
+    const installDir = join(root, 'install-home', 'LaunchAgents');
+    mkdirSync(installDir, { recursive: true });
+    const path = join(installDir, `${name}.plist`);
+    writeFileSync(path, squawkLaunchdPlist('/repo', 4321, ['/n/npx', '--yes', 'cezarion']));
+    loaded.add(name);
+    const created = { artifacts: [{ kind: 'owned' as const, type: 'launchd', name, path }] };
+    ctx.state.steps.autostart = { status: STEP_STATUSES[1], created };
+    await strategy.steps(ctx).find((s) => s.id === 'autostart')!.undo(ctx, created);
+    expect(existsSync(path)).toBe(false);
+    expect(loaded).toEqual(new Set());
   });
 
   it.each(['cockpit', 'ngrok'] as const)('reconfigure replaces the recorded old %s agent after the new job loads', async (agent) => {

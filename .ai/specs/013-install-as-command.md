@@ -1,6 +1,7 @@
 # 013 — `install-as-command`: global `cezar` from a local checkout (no publish)
+Status: draft
 
-Status: READY (spec complete, reviewed) · Wave: — · Depends on: 001 (packaging/`npx`)
+Recorded status: READY (spec complete, reviewed) · Wave: — · Depends on: 001 (packaging/`npx`)
 
 ## TLDR
 

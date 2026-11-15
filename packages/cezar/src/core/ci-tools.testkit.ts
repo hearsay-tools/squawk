@@ -128,7 +128,7 @@ describe('CI tool injection', () => {
       try {
         const file = join(dir, 'wire');
         if (backend === 'opencode' && resume) seedOpencodeMockSession(file);
-        const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: descriptor, resume, restrictCrossSessionMessaging: true, env: { CEZ_MOCK_ARGS_FILE: file, CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '' } } });
+        const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: descriptor, resume, restrictCrossSessionMessaging: true, env: { CEZ_MOCK_ARGS_FILE: file, CEZ_HANDOFF_FILE: '', } } });
         expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
         const rows = readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line));
         if (backend === 'claude') expect(rows[0]).toContain('--mcp-config');
@@ -184,7 +184,7 @@ describe('CI H1 executable harness parity', () => {
         const resultFile = join(dir, 'result');
         const file = join(dir, 'wire');
         if (backend === 'opencode' && resume) seedOpencodeMockSession(file);
-        const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: session.descriptor, resume, userPrompt: `mock:ci-wait ${valid ? wait.prUrl : 'https://github.com/owner/repo/issues/1'}`, env: { ...session.env, CEZ_MOCK_ARGS_FILE: file, CEZ_MOCK_CI_RESULT: resultFile, CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '' } } });
+        const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: session.descriptor, resume, userPrompt: `mock:ci-wait ${valid ? wait.prUrl : 'https://github.com/owner/repo/issues/1'}`, env: { ...session.env, CEZ_MOCK_ARGS_FILE: file, CEZ_MOCK_CI_RESULT: resultFile, CEZ_HANDOFF_FILE: '', } } });
         expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
         expect(registrations).toBe(valid ? 1 : 0);
         const result = JSON.parse(readFileSync(resultFile, 'utf8'));
@@ -263,7 +263,7 @@ describe('U0 wait tools on every native wire', () => {
         const resultFile = join(dir, 'result');
         const file = join(dir, 'wire');
         if (backend === 'opencode' && resume) seedOpencodeMockSession(file);
-        const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: session.descriptor, resume, toolGrant, restrictCrossSessionMessaging: true, userPrompt: call(tool, args), env: { ...session.env, CEZ_MOCK_ARGS_FILE: file, CEZ_MOCK_CI_RESULT: resultFile, CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '' } } });
+        const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: session.descriptor, resume, toolGrant, restrictCrossSessionMessaging: true, userPrompt: call(tool, args), env: { ...session.env, CEZ_MOCK_ARGS_FILE: file, CEZ_MOCK_CI_RESULT: resultFile, CEZ_HANDOFF_FILE: '', } } });
         expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
         const result = JSON.parse(readFileSync(resultFile, 'utf8'));
         expect(result.names).toEqual(['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_scheduled_tasks']);

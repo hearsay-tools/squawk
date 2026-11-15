@@ -1,11 +1,12 @@
 # Agent config, grouped by agent — descriptor-driven Settings pane
+Status: done
 
 > Historical source: `open-mercato/cezar` (upstream), preserved at fork point
 > `feb85666` (2026-08-31). Unqualified cezar issue/PR citations below belong to
 > that upstream tracker; example numbers, UI values and command literals retain
 > their original meaning. New citations must name their repository.
 
-Status: approved (owner direction on PR #418) · Date: 2026-07-17 · Amends: `.ai/specs/2026-07-16-agent-config-files.md` (#404)
+Recorded status: approved (owner direction on PR #418) · Date: 2026-07-17 · Amends: `.ai/specs/2026-07-16-agent-config-files.md` (#404)
 
 ## Why this amendment
 

@@ -1,8 +1,9 @@
 # Complete worker delegation inputs, results, and lifecycle
+Status: done
 
 Date: 2026-09-08
 Issue: https://github.com/wjarka/cezar/issues/116
-Status: Detailed spec approved by the owner on 2026-09-08.
+Recorded status: Detailed spec approved by the owner on 2026-09-08.
 
 ## Approved direction
 

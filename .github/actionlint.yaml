@@ -1,8 +1,7 @@
 # actionlint configuration for the `Lint workflows` step in ci.yml
 # (hearsay-tools/cezarion#1130).
 self-hosted-runner:
-  # Blacksmith runners: CI typecheck uses 2 vCPU, ci-benchmark.yml 4 vCPU,
-  # and release.yml 8 vCPU.
+  # Blacksmith runners: CI typecheck uses 2 vCPU and release.yml 8 vCPU.
   labels:
     - blacksmith-*-ubuntu-2404
     - cezarion-lxc-canary

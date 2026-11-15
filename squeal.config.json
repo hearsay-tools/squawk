@@ -168,7 +168,7 @@
       ".ai/scripts/e2e-served-repo.mjs",
       ".ai/scripts/e2e-lanes.mjs",
       ".ai/browsers/agent-browser.md",
-      "packages/web/e2e/**/*.{ts,mjs}",
+      "packages/web/e2e/**/*.{ts,mts,mjs}",
       "packages/web/e2e/fixtures/**"
     ],
     ".github/scripts/*.test.cjs": [
@@ -181,9 +181,6 @@
     ],
     ".github/scripts/no-compat-policy.test.cjs": [
       "**/*.{md,ts,tsx,cjs,mjs,js,yaml,yml,json}"
-    ],
-    ".github/scripts/coderabbit.workflow.test.cjs": [
-      ".coderabbit.yaml"
     ],
     ".github/scripts/issue-template.test.cjs": [
       ".github/ISSUE_TEMPLATE/task.yml"

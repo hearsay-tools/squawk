@@ -24,7 +24,6 @@ interface HealthBody {
   forge: { kind: string; available: boolean; reason?: string } | null;
   capabilities: {
     localHandoff: boolean;
-    followups: boolean;
     automations: boolean;
     tokenMetrics: boolean;
     tokenUsageMetrics: boolean;
@@ -36,7 +35,6 @@ describe('GET /api/v1/health — forge + capabilities', () => {
   let repoRoot: string;
   let store: RunStore;
   const savedRemote = process.env.CEZ_REMOTE;
-  const savedFollowups = process.env.CEZ_FOLLOWUPS;
   const savedAutomations = process.env.CEZ_AUTOMATIONS;
   const savedHideTokenMetrics = process.env.CEZ_HIDE_TOKEN_METRICS;
   const savedHideTokenUsage = process.env.CEZ_HIDE_TOKEN_USAGE;
@@ -47,9 +45,6 @@ describe('GET /api/v1/health — forge + capabilities', () => {
     repoRoot = mkdtempSync(join(tmpdir(), 'cez-health-'));
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
     delete process.env.CEZ_REMOTE;
-    // #471: the inbox is opt-in, so an ambient CEZ_FOLLOWUPS on the dev box
-    // must not decide what these assertions see.
-    delete process.env.CEZ_FOLLOWUPS;
     // #801: clear any ambient automation opt-out so the suite sees the default.
     delete process.env.CEZ_AUTOMATIONS;
     delete process.env.CEZ_HIDE_TOKEN_METRICS;
@@ -65,8 +60,6 @@ describe('GET /api/v1/health — forge + capabilities', () => {
     rmSync(repoRoot, { recursive: true, force: true });
     if (savedRemote === undefined) delete process.env.CEZ_REMOTE;
     else process.env.CEZ_REMOTE = savedRemote;
-    if (savedFollowups === undefined) delete process.env.CEZ_FOLLOWUPS;
-    else process.env.CEZ_FOLLOWUPS = savedFollowups;
     if (savedAutomations === undefined) delete process.env.CEZ_AUTOMATIONS;
     else process.env.CEZ_AUTOMATIONS = savedAutomations;
     if (savedHideTokenMetrics === undefined) delete process.env.CEZ_HIDE_TOKEN_METRICS;

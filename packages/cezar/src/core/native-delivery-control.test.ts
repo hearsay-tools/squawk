@@ -127,7 +127,7 @@ const EXEMPT: Partial<Record<RunnerId, Partial<Record<DeliveryKind, string>>>> =
   claude: { reject: 'U13', 'hold-ack': 'U12' },
   cursor: { reject: 'U13' },
 };
-const ENV_BASE = { CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '', CEZ_MOCK_ARGS_FILE: '' };
+const ENV_BASE = { CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: '' };
 type Wire = { v1: readonly AgentEvent[]; v2: readonly UiEvent[] };
 /** A baseline turn on a fresh native subprocess, then `exercise` once it has ended. */
 function seam(runner: RunnerId, path: string, exercise?: (session: AgentSession, wire: Wire) => Promise<void>) {

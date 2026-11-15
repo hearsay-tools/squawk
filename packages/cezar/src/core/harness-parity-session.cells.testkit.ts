@@ -89,7 +89,7 @@ async function observeFollowOn(backend: RunnerId): Promise<FollowOnObservation> 
   const consumed: string[] = [];
   const obs = await driveSeam(backend, 'steer-tool', {
     // The OpenCode mock answers steers in a follow-on run 300 ms after the idle; other mocks ignore it.
-    spec: { env: { CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '', CEZ_MOCK_ARGS_FILE: '', CEZ_MOCK_OPENCODE_FOLLOW_ON_MS: '300' } },
+    spec: { env: { CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: '', CEZ_MOCK_OPENCODE_FOLLOW_ON_MS: '300' } },
     sessionOptions: { onAgentInputConsumed: ids => { consumed.push(...ids); } },
     whileOpen: async (session, { v1 }) => {
       const turnEnded = () => v1.some(e => e.type === 'turn-end');
@@ -228,7 +228,7 @@ export const SESSION_GROUPS = {
         for (const resume of [false, true]) {
           it(`${backend} S14 ${resume ? 'resumes' : 'starts'} and completes repeated human messages under provider policy`, async () => {
             const obs = await driveSeam(backend, 'baseline', {
-              spec: { resume, ...(backend === 'codex' ? { sessionId: 'th_mock_1' } : {}), env: { MOCK_CODEX_REQUIREMENTS: JSON.stringify({ allowedSandboxModes: ['read-only', 'workspace-write'] }), CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '' } },
+              spec: { resume, ...(backend === 'codex' ? { sessionId: 'th_mock_1' } : {}), env: { MOCK_CODEX_REQUIREMENTS: JSON.stringify({ allowedSandboxModes: ['read-only', 'workspace-write'] }), CEZ_HANDOFF_FILE: '', } },
               whileOpen: async (session, { v1 }) => {
                 for (let count = 1; count <= 3; count++) {
                   await waitFor(() => v1.filter(e => e.type === 'turn-end').length >= count);
@@ -401,7 +401,7 @@ export const SESSION_GROUPS = {
                   cwd: dir, resume, toolGrant: explicitToolGrant(['Read', 'Bash'], ['git status']),
                   systemPrompt: 'Use native subagents for research; use Squawk workers for work that needs a worktree.',
                   ...(governed ? { restrictCrossSessionMessaging: true } : {}),
-                  env: { CEZ_MOCK_ARGS_FILE: path, CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '' },
+                  env: { CEZ_MOCK_ARGS_FILE: path, CEZ_HANDOFF_FILE: '', },
                 } });
                 expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
                 expect(obs.v1.at(-1)?.type).toBe('done');
@@ -455,7 +455,7 @@ export const SESSION_GROUPS = {
               if (backend === 'opencode' && resume) seedOpencodeMockSession(path);
               const obs = await driveSeam(backend, 'baseline', { spec: {
                 cwd: dir, resume,
-                env: { CEZ_MOCK_ARGS_FILE: path, CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '' },
+                env: { CEZ_MOCK_ARGS_FILE: path, CEZ_HANDOFF_FILE: '', },
               } });
               expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
               expect(obs.v1.at(-1)?.type).toBe('done');
@@ -598,7 +598,7 @@ export const SESSION_GROUPS = {
           const dir = mkdtempSync(join(tmpdir(), 'cez-tools-list-'));
           try {
             const session = controller.provision({ registerWait: async () => ({ answer: { ok: true, wait_id: wait.id, kind: WAIT_KIND.pr, deadline: wait.deadline, open_waits: [] }, wait: { ...wait, kind: WAIT_KIND.pr, source: WAIT_SOURCE.agent, via: WAIT_VIA.cezar_wait, phase: WAIT_PHASE.open } }), ask: async () => ({ ok: false, code: 'unavailable', message: 'none' }), cancelWait: async () => ({ cancelled: false, code: 'not_found', message: 'none' }), finishTurn: async () => ({ ok: true, finishes: 'at_turn_end', completes: 'task', open_waits: [] }) });
-            const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: session.descriptor, toolGrant, env: { ...session.env, CEZ_MOCK_ARGS_FILE: join(dir, 'wire'), CEZ_MOCK_CI_PR: wait.prUrl, CEZ_MOCK_CI_RESULT: join(dir, 'result'), CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '' } } });
+            const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: session.descriptor, toolGrant, env: { ...session.env, CEZ_MOCK_ARGS_FILE: join(dir, 'wire'), CEZ_MOCK_CI_PR: wait.prUrl, CEZ_MOCK_CI_RESULT: join(dir, 'result'), CEZ_HANDOFF_FILE: '', } } });
             expect(obs.v1.filter((event) => event.type === 'error')).toEqual([]);
             const waits = ['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done'];
             const expected = [...waits, ...(value === '1' ? ['cezar_preview_serve', 'cezar_preview_stop'] : []), ...(value !== '0' ? ['cezar_schedule_task', 'cezar_scheduled_tasks'] : [])];
@@ -644,7 +644,7 @@ export const SESSION_GROUPS = {
             const record = join(dir, 'env.json');
             const recorder = pathToFileURL(fileURLToPath(new URL('../../scripts/mock-env-record.mjs', import.meta.url))).href;
             const preload = `${process.env.NODE_OPTIONS ?? ''} --import=${recorder}`.trim();
-            const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: session.descriptor, env: { ...session.env, NODE_OPTIONS: preload, CEZ_MOCK_ENV_RECORD: record, CEZ_MOCK_ENV_RECORD_NAMES: 'CEZ_PREVIEW_CDP_URL', CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '' } } });
+            const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: session.descriptor, env: { ...session.env, NODE_OPTIONS: preload, CEZ_MOCK_ENV_RECORD: record, CEZ_MOCK_ENV_RECORD_NAMES: 'CEZ_PREVIEW_CDP_URL', CEZ_HANDOFF_FILE: '', } } });
             expect(obs.v1.filter((event) => event.type === 'error')).toEqual([]);
             const seen = JSON.parse(readFileSync(record, 'utf8')) as { CEZ_PREVIEW_CDP_URL: string | null };
             if (!enabled) {

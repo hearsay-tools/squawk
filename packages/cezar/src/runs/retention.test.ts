@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS, makeRunRecord } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { RunRecord, RunStatus } from './store.ts';
 import { isReclaimable, selectReclaimableWorktrees } from './retention.ts';
@@ -178,6 +178,23 @@ describe('selectReclaimableWorktrees (#483)', () => {
     expect(isReclaimable(run({ id: 'w', status: RUN_STATUS.review, role: 'worker' }))).toBe(false);
     expect(isReclaimable(run({ id: 'w', status: RUN_STATUS.done, role: 'worker', destroying: true }))).toBe(false);
     expect(isReclaimable(run({ id: 'w', status: RUN_STATUS.done, role: 'invalid' }))).toBe(false);
+  });
+
+  it('reads no parent for a worker its own record rules out, and each parent once per selection', () => {
+    const lookup = vi.fn(() => run({ id: 'parent', status: RUN_STATUS.done, worktreePath: null }));
+    const ruledOut = [
+      run({ id: 'destroyed', status: RUN_STATUS.done, role: 'worker', destroying: true }),
+      run({ id: 'gone', status: RUN_STATUS.done, role: 'worker', worktreePath: join(process.cwd(), 'no-such-worktree') }),
+      run({ id: 'reclaimed', status: RUN_STATUS.done, role: 'worker', worktreeReclaimedAt: '2026-07-01T00:00:00Z' }),
+      run({ id: 'running', status: RUN_STATUS.running, role: 'worker' }),
+    ];
+    for (const worker of ruledOut) expect(isReclaimable(worker, lookup), worker.id).toBe(false);
+    expect(lookup).not.toHaveBeenCalled();
+    const workers = ['a', 'b', 'c'].map((id) => run({ id, status: RUN_STATUS.done, role: 'worker' }));
+    const workersOf = vi.fn(() => workers);
+    expect(selectReclaimableWorktrees([...ruledOut, ...workers], 1, lookup, workersOf)).toHaveLength(2);
+    expect(lookup).toHaveBeenCalledOnce();
+    expect(workersOf).toHaveBeenCalledOnce();
   });
 
   it('reclaims a finished-worker majority when over keep (#575)', () => {

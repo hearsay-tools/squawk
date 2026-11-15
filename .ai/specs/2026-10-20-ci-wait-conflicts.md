@@ -1,4 +1,5 @@
 # Resolve a CI wait on an observed PR conflict
+Status: done
 
 Proposal for [hearsay-tools/cezarion#1339](https://github.com/hearsay-tools/cezarion/issues/1339). Status: **accepted for implementation in this session on 2026-10-21**. After the design and trade-offs were presented with accept/amend/reject choices, the human instructed this same task to continue autonomously to completion without further confirmation. Implementation follows that instruction; do not relabel to dispatch another task.
 
