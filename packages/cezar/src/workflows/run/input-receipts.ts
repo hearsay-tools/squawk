@@ -18,6 +18,7 @@ import { withFailuresCleared } from './wake-ledger.ts';
 
 export interface InputReceiptsHost {
   reconcileWorkerWaits(): void;
+  openDeliveryScope(runId: string, state: ActiveRun, session: AgentSession): void;
   flushAgentInputs(runId: string): void;
   isCurrentState(runId: string, state: ActiveRun): boolean;
 }
@@ -195,6 +196,7 @@ export function inputReceiptCallbacks(context: RunModuleContext, host: InputRece
 
 /** Setup precedes the result wait; close waits for acknowledgement before unread requeue. */
 export function sessionResultWithReceipts(context: RunModuleContext, host: InputReceiptsHost, steps: InputReceiptSteps, runId: string, state: ActiveRun, session: AgentSession, prepared: () => void): AgentSession['result'] {
+  host.openDeliveryScope(runId, state, session);
   steps.flushDeferred(runId);
   host.flushAgentInputs(runId);
   if (session.pid !== undefined) { registerRunProcess(runId, session.pid); steps.recordProcess(runId, session.pid); }

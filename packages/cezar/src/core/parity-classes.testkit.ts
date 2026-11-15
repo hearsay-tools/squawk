@@ -124,6 +124,7 @@ export const PARITY_FAMILIES = {
     U7k: NATIVE_ASK_SCENARIO,
     U8l: 'asserts an opencode-only session state',
     U14m: 'the wake fails through Claude\'s own unread exit on Claude, and no failing opening turn may read the steered message; S44 holds neither',
+    U14i: 'the idle close ends each runner\'s own session, and no runner may receive a message the scheduler did not admit',
     U22k: 'reads the U22s exemption', U22r: 'reads the U22s exemption and holds the acknowledgement on opencode only',
   }),
   'waits-subagents': everyRunner('reads the nativeSubagents fact'),

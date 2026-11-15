@@ -195,6 +195,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
   };
   modules.inputReceiptHost = {
     reconcileWorkerWaits: () => host.reconcileWorkerWaits(),
+    openDeliveryScope: (id, state, session) => modules.inputDelivery.openDeliveryScope(id, state, session),
     flushAgentInputs: id => modules.inputDelivery.flushAgentInputs(id),
     isCurrentState: (id, state) => host.active.get(id) === state,
   };
@@ -474,7 +475,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
       settleSuccess: (id, durable, keep) => modules.runSettlement.settleSuccess(id, durable, keep),
       deferParentCompletion: id => modules.runFinish.deferParentCompletion(id),
       closingWakeDecision: (id, holds, cancelled, error) => modules.wakeAdmission.closingWakeDecision(id, holds, cancelled, error),
-      owesDelivery: id => modules.wakeAdmission.owesDelivery(id), preserveRunAfterDisposal: (id, state) => preserveRunAfterDisposal(context.store, () => context.disposed(), id, state),
+      cleanCloseFailsDelivery: (id, state) => modules.wakeAdmission.cleanCloseFailsDelivery(id, state), preserveRunAfterDisposal: (id, state) => preserveRunAfterDisposal(context.store, () => context.disposed(), id, state),
       isDisposedDelegatedRun: id => isDisposedDelegatedRun(context.store, () => context.disposed(), id), queueWaitWake: id => modules.wakeAdmission.queueWaitWake(id),
       reconcileWorkerWaits: id => host.reconcileWorkerWaits(id), releaseSlot: () => modules.line.releaseSlot(),
       workerScratchCleanup: modules.workerScratchCleanup, hasClaim: id => modules.claims.has(id),
@@ -503,7 +504,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     waitEngine: modules.waitEngine,
     active: host.active, move: (id, exit, patch) => host.move(id, exit, patch), dropActive: id => host.dropActive(id),
     closingWakeDecision: (id, holds, cancelled, error) => modules.wakeAdmission.closingWakeDecision(id, holds, cancelled, error),
-    owesDelivery: id => modules.wakeAdmission.owesDelivery(id),
+    cleanCloseFailsDelivery: (id, state) => modules.wakeAdmission.cleanCloseFailsDelivery(id, state),
     workerExecutionStopped: id => host.workerExecutionStopped(id),
     executionBlockedByRootFinish: run => host.executionBlockedByRootFinish(run),
   }, modules.line, modules.worktreeAutosave, modules.humanWaits, modules.runSettlement, modules.stepSession,

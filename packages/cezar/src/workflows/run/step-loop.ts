@@ -40,7 +40,7 @@ interface StepLoopHost {
   waitEngine: WaitEngine;
   active: Map<string, ActiveRun>;
   closingWakeDecision(id: string, holds: boolean, cancelled: boolean, error: string | undefined): 'park' | 'settle' | 'capped';
-  owesDelivery(id: string): boolean;
+  cleanCloseFailsDelivery(id: string, state: ActiveRun): boolean;
   move(id: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): RunRecord | undefined;
   dropActive(id: string): void;
   workerExecutionStopped(id: string): boolean;
@@ -431,8 +431,8 @@ export class StepLoop {
       this.finishStep(runId, stepId, 'failed', failure, emit);
       loop.runError = `step "${stepId}" failed: ${failure}`;
     }
-    // A clean close that leaves results undelivered is a failed delivery too.
-    const undelivered = failure ?? (this.host.owesDelivery(runId) ? this.wakeSessionClosedError : undefined);
+    // A clean close after a delivery attempt that leaves results undelivered is a failed delivery too.
+    const undelivered = failure ?? (this.host.cleanCloseFailsDelivery(runId, state) ? this.wakeSessionClosedError : undefined);
     const delivery = this.host.closingWakeDecision(runId, holdsClosingWakes(this.context, this.completionGateHost, runId), state.liveSession.cancelled, undelivered || undefined);
     if (delivery === 'capped') {
       loop.deliveryCapped = true;
