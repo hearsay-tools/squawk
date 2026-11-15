@@ -1,6 +1,7 @@
 import { testHome } from '../home/test-home.testkit.ts';
 import { AttachmentWriter } from './run/attachment-writer.ts';
 import { QueuedInput } from './run/queued-input.ts';
+import { RunMemory } from './run/run-memory.ts';
 import { TurnBookkeeper } from './run/turn-bookkeeping.ts';
 import { TrackedWork } from './run/tracked-work.ts';
 import { seedWaits, setRunStatus } from '../runs/run-store.testkit.ts';
@@ -224,7 +225,7 @@ describe('TurnBookkeeper.recordTurnEnd', () => {
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
     bookkeeper = new TurnBookkeeper({ createRunner: noRunners, home: testHome(), store, repoRoot, dataDir: join(repoRoot, '.ai/cezar'),
       work: new TrackedWork(), semaphore: new WorkspaceSemaphore({ home: testHome() }), disposed: () => false,
-    }, unused<ConstructorParameters<typeof TurnBookkeeper>[1]>('TurnBookkeeper.host', { isDisposedDelegatedRun: () => false }));
+    }, unused<ConstructorParameters<typeof TurnBookkeeper>[1]>('TurnBookkeeper.host', { isDisposedDelegatedRun: () => false }), new RunMemory());
   });
 
   afterAll(async () => {
@@ -805,6 +806,7 @@ describe('AttachmentWriter.persistAttachment without a session (#472)', () => {
   let repoRoot: string;
   let store: RunStore;
   let attachments: AttachmentWriter;
+  let memory: RunMemory;
   const PNG = Buffer.from('fake-png-bytes').toString('base64');
 
   const persist = (id: string, prefix?: string) =>
@@ -814,9 +816,10 @@ describe('AttachmentWriter.persistAttachment without a session (#472)', () => {
   beforeEach(() => {
     repoRoot = mkdtempSync(join(tmpdir(), 'cez-persist-'));
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
+    memory = new RunMemory();
     attachments = new AttachmentWriter({ createRunner: noRunners, home: testHome(), store, repoRoot, dataDir: join(repoRoot, '.ai/cezar'),
       work: new TrackedWork(), semaphore: new WorkspaceSemaphore({ home: testHome() }), disposed: () => false,
-    }, unused('AttachmentWriter.host'));
+    }, unused('AttachmentWriter.host'), memory);
   });
 
   afterEach(async () => {
@@ -854,7 +857,7 @@ describe('AttachmentWriter.persistAttachment without a session (#472)', () => {
     mkdirSync(imagesDir('run-d'), { recursive: true });
     // Force a stale counter: the map says 0, but pasted-1 already exists.
     writeFileSync(join(imagesDir('run-d'), 'pasted-1.png'), 'original');
-    attachments.queuedImageSeq.set('run-d', 0);
+    memory.write('run-d', 'imageSeq', 0);
 
     const saved = persist('run-d', 'pasted');
     expect(saved?.name).toBe('pasted-2.png');
@@ -1155,7 +1158,7 @@ describe('RunManager queued-stack mutators (#472)', () => {
       startingHas: () => true, activeGet: () => undefined,
       canProceedWithRun: (_id, run): run is RunRecord => run !== undefined,
       sendMessage: (_id, content) => { if (accepts) delivered.push(content); return accepts; },
-    }));
+    }), new RunMemory());
     expect(queuedInput.deferMessage(r.id, text('buffer me'))).toBe(true);
     queuedInput.flushDeferred(r.id);
     expect(delivered).toEqual([]);
@@ -1199,7 +1202,7 @@ describe('QueuedInput.hydrateQueuedInput (#472)', () => {
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
     queuedInput = new QueuedInput({ createRunner: noRunners, home: testHome(), store, repoRoot, dataDir: join(repoRoot, '.ai/cezar'),
       work: new TrackedWork(), semaphore: new WorkspaceSemaphore({ home: testHome() }), disposed: () => false,
-    }, unused('QueuedInput.host'));
+    }, unused('QueuedInput.host'), new RunMemory());
   });
 
   afterEach(async () => {

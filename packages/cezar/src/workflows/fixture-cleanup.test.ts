@@ -26,6 +26,7 @@ import * as workflows from './load.ts';
 import * as fixtureCleanup from './fixture-claude.testkit.ts';
 import { createFixtureManager, removeFixtureRepo, fixtureWorkSettled, unused, fixtureWork, managerDisposed } from './fixture-claude.testkit.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
+import { RunMemory } from './run/run-memory.ts';
 
 const roots: string[] = [];
 async function cleanupFixtureRoots() {
@@ -237,22 +238,22 @@ function moduleContext(root: string, store: RunStore, manager: RunManager, work:
 }
 
 function settlementModule(context: RunModuleContext): RunSettlement {
-  const host = unused<ConstructorParameters<typeof RunSettlement>[9]>('RunSettlement.host', {
+  const host = unused<ConstructorParameters<typeof RunSettlement>[8]>('RunSettlement.host', {
     active: new Map(), generation: () => undefined, deferParentCompletion: () => true, claimWorktreeReclaim: () => null, preview: undefined,
   });
   return new RunSettlement(context, unused('HumanWaits'), unused('WorkerQuestions'), unused('WorktreeAutosave'),
-    unused('TurnBookkeeper'), unused('RunLine'), unused('AutoResumeScheduler'), unused('WorkerExecutions'),
+    unused('RunLine'), unused('AutoResumeScheduler'), unused('WorkerExecutions'),
     unused('CompletionGateHost'), host, '', '');
 }
 
 const ownedOperations: Array<{ label: string; invoke(context: RunModuleContext, id: string): Promise<void> }> = [
-  { label: 'pump', invoke: context => new RunLine({ ...context, disposed: () => true }).pump() },
-  { label: 'rescueStalledQueue', invoke: context => new RunLine({ ...context, disposed: () => true }).rescueStalledQueue() },
-  { label: 'finishWorkerExecution', invoke: (context, id) => new WorkerExecutions(context, unused('WorkerCleanup'), unused('WorkerExecutions.host')).finishWorkerExecution(id) },
+  { label: 'pump', invoke: context => new RunLine(new RunMemory(), { ...context, disposed: () => true }).pump() },
+  { label: 'rescueStalledQueue', invoke: context => new RunLine(new RunMemory(), { ...context, disposed: () => true }).rescueStalledQueue() },
+  { label: 'finishWorkerExecution', invoke: (context, id) => new WorkerExecutions(context, unused('WorkerCleanup'), unused('WorkerExecutions.host'), new RunMemory()).finishWorkerExecution(id) },
   { label: 'recordTurnEnd', invoke: (context, id) => new TurnBookkeeper(context, unused('TurnBookkeeper.host', {
     isDisposedDelegatedRun: () => true, discoverSkills: async () => [], reviveWorkflow: async () => null, trackTurn() {},
-  })).recordTurnEnd(id, 'hello') },
-  { label: 'autoNameRun', invoke: (context, id) => new TurnBookkeeper(context, unused('TurnBookkeeper.host')).autoNameRun(id, undefined, 'hello') },
+  }), new RunMemory()).recordTurnEnd(id, 'hello') },
+  { label: 'autoNameRun', invoke: (context, id) => new TurnBookkeeper(context, unused('TurnBookkeeper.host'), new RunMemory()).autoNameRun(id, undefined, 'hello') },
   { label: 'saveWorktree', invoke: (context, id) => new WorktreeAutosave(context, unused('WorktreeAutosave.host')).saveWorktree(id, createActiveRun({ cwd: context.repoRoot, pendingHumanAsk: false, autonomous: false }), 'turn end') },
   { label: 'settleSuccess', invoke: (context, id) => settlementModule(context).settleSuccess(id) },
   { label: 'enforceRetention', invoke: context => settlementModule(context).enforceRetention() },
@@ -322,7 +323,7 @@ it('keeps a session until close, interrupts it after dispose, and shares ownersh
     interrupt: vi.fn(closed.release), end: closed.release, open: true,
     sendMessage: () => false, sendAgentMessage: () => false, discardQueuedMessages() {}, holdsHumanInput: () => false,
   };
-  const promise = new WorkerExecutions(moduleContext(root, store, manager, work), unused('WorkerCleanup'), unused('WorkerExecutions.host')).trackWorkerSessionResult('sessionless', session);
+  const promise = new WorkerExecutions(moduleContext(root, store, manager, work), unused('WorkerCleanup'), unused('WorkerExecutions.host'), new RunMemory()).trackWorkerSessionResult('sessionless', session);
   expect(work.pending.get(promise)).toBe('session');
   expect(work.liveSessions.has(session)).toBe(true);
   manager.dispose();

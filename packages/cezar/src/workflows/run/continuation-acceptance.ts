@@ -46,7 +46,10 @@ export class ContinuationAcceptance {
     private readonly routedQuestionRefusal: string, private readonly restartContinuationPrompt: string) {}
   /** Accepted Continues supersede in-flight settlement even before launch or after
    * idle close. Retain these across dropActive/dispose so absence cannot look like
-   * the earlier execution again; disposal alone never revokes terminal intent. */
+   * the earlier execution again; disposal alone never revokes terminal intent.
+   * Kept here, not in `RunMemory`, which releases on dispose: `successSuperseded`
+   * compares this token after its diff and config I/O, also for an accepted Finish
+   * that survives disposal (ADR 0064). */
   private readonly continuationGenerations = new Map<string, symbol>();
   generation(runId: string): symbol | undefined { return this.continuationGenerations.get(runId); }
 

@@ -222,6 +222,17 @@ literal, case labels with one, and `kind:` entry literals, including `as const` 
 Its exceptions are the reasoned allow-list in the rule's `ignores`, kept current by the stale-entry test.
 It does not follow kinds held in variables, indexes or types, and excludes the request kind `request`.
 
+### Per-run memory fields (`run-memory-field-outside-owner`)
+
+The rule checks production `.ts` files in `packages/cezar/src/workflows/run/` and
+`workflows/run.ts`; it ignores tests and testkits (hearsay-tools/squawk#2064, ADR 0064).
+It reports a class field, public or `#private`, static or not, whose initializer is `new Map`,
+`new Set` or `new WeakMap` by bare name. Per-run memory goes into `RunSlot` in `run-memory.ts`,
+which releases it when the run ends, is deleted or the manager is disposed.
+Its exceptions are the reasoned allow-list in the rule's `ignores`, kept current by
+`run-memory-field-rule.test.ts`. It does not follow a map assigned in a constructor or a method,
+a member constructor such as `new globalThis.Map()`, or a map a helper call builds.
+
 ### `ChildProcess.killed` reads (`child-killed-read`)
 
 The ast-grep rule checks production `.ts` files in `packages/cezar/src`; it ignores tests and

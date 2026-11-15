@@ -26,7 +26,6 @@ import type { HumanWaits } from './human-waits.ts';
 import type { WorkerQuestions } from './worker-questions.ts';
 import type { WorktreeAutosave } from './worktree-autosave.ts';
 import type { RunLine } from './run-line.ts';
-import type { TurnBookkeeper } from './turn-bookkeeping.ts';
 import type { AutoResumeScheduler } from './auto-resume.ts';
 import type { WorkerExecutions } from './worker-executions.ts';
 import { settledRunFamilies } from '../../delegation/conversations.ts';
@@ -53,12 +52,15 @@ interface RunSettlementHost {
   autosaveCleanupBlocker(id: string): string | undefined;
   claimWorktreeReclaim(id: string): (() => void) | null;
   preview: PreviewHostLike | undefined;
-  forgetMemoryPause(id: string): void;
+  /** Forget what the run's last execution held in `RunMemory`. */
+  forgetExecutionMemory(id: string): void;
+  /** Release the run's `RunMemory` slot when the run has ended (`runMemoryReleases`). */
+  releaseRunMemory(id: string): void;
 }
 export class RunSettlement {
   constructor(private readonly context: RunModuleContext, private readonly humanWaits: HumanWaits,
     private readonly workerQuestions: WorkerQuestions, private readonly worktreeAutosave: WorktreeAutosave,
-    private readonly turnBookkeeper: TurnBookkeeper, private readonly line: RunLine,
+    private readonly line: RunLine,
     private readonly autoResumeScheduler: AutoResumeScheduler, private readonly workerExecutions: WorkerExecutions,
     private readonly completionGateHost: completionGateReads.CompletionGateHost, private readonly host: RunSettlementHost,
     private readonly wakeSessionClosedError: string, private readonly wakeDeliveryCapNote: string) {}
@@ -517,9 +519,7 @@ export class RunSettlement {
     if (!this.context.disposed() && (this.context.store.getRun(runId)?.waits?.length || completionGateReads.owesCompletionRefusal(this.context, this.completionGateHost, runId))) this.host.queueWaitWake(runId);
     if (!this.workerExecutions.has(runId) && this.context.store.getRun(runId)?.stopping) this.context.store.updateRun(runId, { stopping: undefined });
     this.republishFinishVerdict(runId);
-    this.host.forgetMemoryPause(runId);
-    this.turnBookkeeper.forget(runId);
-    this.line.clearForced(runId);
+    this.host.forgetExecutionMemory(runId);
     if (this.host.isDisposedDelegatedRun(runId)) return; // teardown above, no autonomous durable side effects
     // The run's slot is gone from busySlots() as of the deletes above — hand it
     // to the workspace's oldest queued run, in ANY project. Every terminal path
@@ -551,6 +551,7 @@ export class RunSettlement {
     // the lifecycle.
     void this.enforceRetention();
     this.reapTerminalScratch(runId);
+    this.host.releaseRunMemory(runId);
   }
 }
 
