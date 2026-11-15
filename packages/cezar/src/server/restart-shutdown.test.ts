@@ -22,7 +22,7 @@ import { startServer } from './start-server.ts';
 const HANG_GUARD_MS = 10_000;
 
 /**
- * `shutdownForRestart` (#779): the old process stops its work, writes what is pending and frees
+ * `shutdownForRestart` (hearsay-tools/cezarion#779): the old process stops its work, writes what is pending and frees
  * the port and every run claim, so the replacement process finds the live runs nobody's.
  */
 describe('restart shutdown', () => {
