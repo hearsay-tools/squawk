@@ -7,6 +7,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { launchBrowser, waitForExit, type BrowserHandle } from './browser-launch.ts';
 import { resolveChromium } from './chromium.ts';
 import { PreviewSession, type Viewer } from './session.ts';
+import { allowLaunches } from '../test-launch-guard.testkit.ts';
+
+// This file streams from a real Chromium on purpose (hearsay-tools/squawk#2369).
+allowLaunches('browser');
 
 /**
  * Ultra against a real Chromium (hearsay-tools/cezarion#2069): the frames are the viewport times
