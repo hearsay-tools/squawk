@@ -38,6 +38,21 @@ function fixture(address?: { origin: string; projectId: string }) {
 }
 
 describe('createAutomationToolService', () => {
+  it('updates a saved variant schedule without persisting the retired count', async () => {
+    const { project, tools } = fixture();
+    const saved = project.automationStore.create({ name: 'Saved', kind: 'schedule', enabled: false, schedule: { type: 'once', at: '2026-10-29T05:00', timeZone: 'UTC' }, task: { prompt: 'Go', variants: 2 } });
+    expect(await tools.scheduledTasks({ action: 'update', id: saved.id, name: 'Updated' })).toMatchObject({ ok: true });
+    expect(project.automationStore.get(saved.id)).toMatchObject({ name: 'Updated', task: { prompt: 'Go' } });
+    expect(project.automationStore.get(saved.id)?.task).not.toHaveProperty('variants');
+  });
+
+  it.each(['enable', 'pause'] as const)('clears saved variants when tools %s a schedule', async (action) => {
+    const { project, tools } = fixture();
+    const saved = project.automationStore.create({ name: 'Saved', kind: 'schedule', enabled: false, schedule: { type: 'once', at: '2026-10-29T05:00', timeZone: 'UTC' }, task: { prompt: 'Go', variants: 2 } });
+    expect(await tools.scheduledTasks({ action, id: saved.id })).toMatchObject({ ok: true });
+    expect(project.automationStore.get(saved.id)?.task).not.toHaveProperty('variants');
+  });
+
   it('delay 7d at 2026-10-22T13:00Z in Europe/Warsaw answers 2026-10-29T13:00Z and stores 14:00 local', async () => {
     const { project, tools } = fixture();
     const answer = await tools.scheduleTask({ name: 'Check', prompt: 'Check it', delay: '7d' });

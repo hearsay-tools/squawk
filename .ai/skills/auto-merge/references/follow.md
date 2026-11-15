@@ -73,8 +73,8 @@ that has not been requested.
 
 - Leave every review thread for the reviewer to resolve. Fix the code and push:
   the reviewer resolves a thread it judges Addressed. When you disagree with a
-  finding, reply with your reason and continue the discussion with CodeRabbit. The trusted reconciler refreshes admission;
-  for eventless thread reopening or resolution, see AGENTS.md § Dev flow bindings.
+  finding, reply with your reason and continue the discussion with the reviewer.
+  After a thread is reopened or resolved by hand, see AGENTS.md § Dev flow bindings, Board.
 - Fix a CI failure at its cause. When a wait or a timeout must change, give the
   reason at the site (`// bound: <reason>`) and list the change under Disclosed.
   List every re-run of a failed job there too.

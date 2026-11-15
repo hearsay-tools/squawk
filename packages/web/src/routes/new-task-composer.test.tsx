@@ -309,7 +309,7 @@ describe('picker data flows', () => {
 
   it('drops a persisted model preset that belongs to another runner', async () => {
     writeDraft({
-      text: '', source: null, runner: 'codex', agentProfile: null, model: 'claude-opus-4-8', effort: null, retiredVariants: false,
+      text: '', source: null, runner: 'codex', agentProfile: null, model: 'claude-opus-4-8', effort: null,
       planFirst: false, worktree: null, autonomous: null, archiveWhenDone: false, autoMergePr: false, allowWorkers: true, allowMessaging: true,
     })
     serve({ health: HEALTH_MULTI, providerStatus: PROVIDERS_MULTI })

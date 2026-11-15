@@ -380,7 +380,7 @@ function opencodeRestrictedSessions(r: HarnessRegistrar): void {
           });
           const obs = await driveSeam('opencode', 'baseline', { spec: {
             cwd: dir, resume: true, restrictCrossSessionMessaging: true,
-            env: { CEZ_MOCK_ARGS_FILE: path, CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '' },
+            env: { CEZ_MOCK_ARGS_FILE: path, CEZ_HANDOFF_FILE: '', },
           } });
           expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
           const rows = readMockRecords<OpencodeRequestRow>(path);
@@ -396,7 +396,7 @@ function opencodeRestrictedSessions(r: HarnessRegistrar): void {
         try {
           const obs = await driveSeam('opencode', 'baseline', { spec: {
             cwd: dir, resume: true, restrictCrossSessionMessaging: true,
-            env: { CEZ_MOCK_ARGS_FILE: path, CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '' },
+            env: { CEZ_MOCK_ARGS_FILE: path, CEZ_HANDOFF_FILE: '', },
           } });
           expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
           const rows = readMockRecords<OpencodeRequestRow>(path);

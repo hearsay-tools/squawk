@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve, type ServerType } from '@hono/node-server';
+import { AutomationStore } from '../automations/store.ts';
 import { RunStore } from '../runs/store.ts';
 import { connectedProviderAuth } from '../server/provider-auth.testkit.ts';
 import { createApp } from '../server/server.ts';
@@ -21,6 +22,7 @@ import { createRunner } from '../core/runner-factory.ts';
 export interface TestCockpit {
   repoRoot: string;
   store: RunStore;
+  automationStore: AutomationStore;
   manager: RunManager;
   cockpit: Cockpit;
   close(): Promise<void>;
@@ -32,13 +34,14 @@ export async function startTestCockpit(): Promise<TestCockpit> {
   const repoRoot = mkdtempSync(join(tmpdir(), 'cez-task-cli-'));
   const store = RunStore.open(join(repoRoot, '.ai/cezar'));
   const manager = new RunManager(store, repoRoot, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome(), semaphore: new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 0 } }) });
-  const app = createApp({ home: testHome(), repoRoot, store, manager, version: '0.0.0-test', providerAuth: connectedProviderAuth() });
+  const automationStore = AutomationStore.open(join(repoRoot, '.ai/cezar'));
+  const app = createApp({ home: testHome(), repoRoot, store, manager, automationStore, version: '0.0.0-test', providerAuth: connectedProviderAuth() });
   const server = await new Promise<ServerType>((resolve) => {
     const started = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' }, () => resolve(started));
   });
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   return {
-    repoRoot, store, manager,
+    repoRoot, store, manager, automationStore,
     cockpit: { origin, projectId: 'default', api: `${origin}/api/v1/p/default` },
     async close() {
       // SSE handlers hold connections open; drop them so close() can finish.

@@ -4,8 +4,8 @@ import { testHome } from '../../home/test-home.testkit.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync, execSync, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { tmpdir, userInfo } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   isForeignNpxExecStart,
@@ -85,7 +85,7 @@ describe('ubuntu-vps ssl step', () => {
     expect(ids).not.toContain('ssl');
   });
 
-  it('external-proxy verify passes when cezar answers on the bound host', async () => {
+  it.each(['172.17.0.1', ' 172.17.0.1\n'])('external-proxy verify passes when cezar answers on the bound host (%j)', async (bindHost) => {
     const seen: string[] = [];
     const runner: Runner = {
       capture: async (program, args) => {
@@ -94,7 +94,7 @@ describe('ubuntu-vps ssl step', () => {
       },
       interactive: async () => 0,
     };
-    const ctx = ctxWith({ runner, state: { externalProxy: true, bindHost: '172.17.0.1' } });
+    const ctx = ctxWith({ runner, state: { externalProxy: true, bindHost } });
     await expect(stepById('identity').run(ctx)).resolves.toBeTruthy();
     // It must probe the bind host, not loopback — a container proxy can't use 127.0.0.1.
     expect(seen.some((a) => a.includes('http://172.17.0.1:4321/'))).toBe(true);
@@ -477,17 +477,46 @@ describe('ubuntu-vps nginx-proxy identity (interactive, dry-run)', () => {
 });
 
 describe('systemdUnit', () => {
-  it('runs cezar serve loopback with CEZ_REMOTE=1 and the port', () => {
-    const unit = systemdUnit('/srv/app', 4321, 'user', '/usr/local/bin/cezar');
-    expect(unit).toContain('Environment=CEZ_REMOTE=1');
-    expect(unit).toContain('ExecStart=/usr/local/bin/cezar serve --no-open --port 4321');
-    expect(unit).toContain('WorkingDirectory=/srv/app');
-    expect(unit).toContain('WantedBy=default.target');
+  afterEach(() => { vi.unstubAllEnvs(); });
+
+  /** The unit's `Key=value` lines by key, in any order; Environment lines by variable. */
+  function unitFields(unit: string): { keys: Map<string, string[]>; env: Map<string, string> } {
+    const keys = new Map<string, string[]>();
+    const env = new Map<string, string>();
+    for (const line of unit.split('\n')) {
+      const at = line.indexOf('=');
+      if (at <= 0 || line.startsWith('#')) continue;
+      const [key, value] = [line.slice(0, at), line.slice(at + 1)];
+      keys.set(key, [...keys.get(key) ?? [], value]);
+      if (key === 'Environment') env.set(value.slice(0, value.indexOf('=')), value.slice(value.indexOf('=') + 1));
+    }
+    return { keys, env };
+  }
+
+  it('runs cezar serve loopback with CEZ_REMOTE=1 and the port, as the user unit\'s own user', () => {
+    const { keys, env } = unitFields(systemdUnit('/srv/app', 4321, 'user', '/usr/local/bin/cezar'));
+    expect(env.get('CEZ_REMOTE')).toBe('1');
+    expect(keys.get('ExecStart')).toEqual(['/usr/local/bin/cezar serve --no-open --port 4321']);
+    expect(keys.get('WorkingDirectory')).toEqual(['/srv/app']);
+    expect(keys.get('User')).toBeUndefined();
+    expect(keys.get('WantedBy')).toEqual(['default.target']);
   });
   it('system scope pins User= and multi-user.target', () => {
-    const unit = systemdUnit('/srv/app', 5000, 'system', '/usr/local/bin/cezar');
-    expect(unit).toContain('User=');
-    expect(unit).toContain('WantedBy=multi-user.target');
+    const { keys } = unitFields(systemdUnit('/srv/app', 5000, 'system', '/usr/local/bin/cezar'));
+    expect(keys.get('User')).toEqual([userInfo().username]);
+    expect(keys.get('WorkingDirectory')).toEqual(['/srv/app']);
+    expect(keys.get('WantedBy')).toEqual(['multi-user.target']);
+  });
+
+  it.each([
+    { name: 'the node dir and the login PATH, without blanks, "." or repeats', path: '/home/op/.local/bin:.::/usr/bin:/home/op/.local/bin',
+      dirs: ['/home/op/.local/bin', '/usr/bin', '/usr/local/bin', '/bin'] },
+    { name: 'the node dir and the system dirs when the installer has no PATH', path: undefined, dirs: ['/usr/local/bin', '/usr/bin', '/bin'] },
+  ])('gives the service $name', ({ path, dirs }) => {
+    vi.stubEnv('PATH', path);
+    const entries = unitFields(systemdUnit('/srv/app', 4321, 'user', '/usr/local/bin/cezar')).env.get('PATH')!.split(':');
+    expect(new Set(entries).size).toBe(entries.length);
+    expect(new Set(entries)).toEqual(new Set([dirname(process.execPath), ...dirs]));
   });
 
   it('takes an absolute "<node> <entry.js>" ExecStart verbatim (no bare name → no 203/EXEC)', () => {
@@ -495,14 +524,14 @@ describe('systemdUnit', () => {
     expect(unit).toContain('ExecStart=/usr/bin/node /srv/app/dist/index.js serve --no-open --port 4321');
   });
 
-  it('passes --bind-host when an external-proxy install needs a reachable interface', () => {
-    const unit = systemdUnit('/srv/app', 4321, 'user', '/usr/local/bin/cezar', '172.17.0.1');
-    expect(unit).toContain('ExecStart=/usr/local/bin/cezar serve --no-open --port 4321 --bind-host 172.17.0.1');
+  it.each(['172.17.0.1', ' 172.17.0.1\n'])('passes --bind-host when an external-proxy install needs a reachable interface (%j)', (bindHost) => {
+    const unit = systemdUnit('/srv/app', 4321, 'user', '/usr/local/bin/cezar', bindHost);
+    expect(unit).toContain('ExecStart=/usr/local/bin/cezar serve --no-open --port 4321 --bind-host 172.17.0.1\n');
   });
 
-  it('stays flag-free for loopback so existing units are unchanged', () => {
+  it.each(['127.0.0.1', ' 127.0.0.1 ', '  '])('stays flag-free for loopback so existing units are unchanged (%j)', (bindHost) => {
     const plain = systemdUnit('/srv/app', 4321, 'user', '/usr/local/bin/cezar');
-    expect(systemdUnit('/srv/app', 4321, 'user', '/usr/local/bin/cezar', '127.0.0.1')).toBe(plain);
+    expect(systemdUnit('/srv/app', 4321, 'user', '/usr/local/bin/cezar', bindHost)).toBe(plain);
     expect(plain).not.toContain('--bind-host');
   });
 });

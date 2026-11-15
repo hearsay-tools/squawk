@@ -1,5 +1,4 @@
 import { productName } from '../home/display.ts';
-import { PARALLEL_VARIANTS_REMOVED } from '@open-mercato/cezar-contract/runs';
 import { zonedParts } from '@open-mercato/cezar-contract/zoned-time';
 import { loadWorkflows } from '../workflows/load.ts';
 import { stepsIssue, type WorkflowDef } from '../workflows/types.ts';
@@ -148,7 +147,6 @@ export async function launchAutomationRun(options: {
   poller?: GithubPoller;
 }): Promise<{ runId: string; existing?: boolean }> {
   const { definition, candidate } = options;
-  if ((definition.task.variants ?? 1) !== 1) throw new Error(PARALLEL_VARIANTS_REMOVED);
   const workflow = await resolveWorkflow(options.root, definition);
   const issueRepositories = candidate.event.startsWith('issue.') ? await issueRepositoryNames(options.root, candidate.repo) : [];
   if (definition.filters.requireCurrentLabels && !await (options.poller ?? new GithubPoller()).matchesCurrentLabels(candidate, definition)) {
@@ -193,7 +191,6 @@ export async function launchScheduledRun(options: {
   timeZone: string;
 }): Promise<{ runId: string }> {
   const { definition, occurrence } = options;
-  if ((definition.task.variants ?? 1) !== 1) throw new Error(PARALLEL_VARIANTS_REMOVED);
   const workflow = await resolveWorkflow(options.root, definition);
   const task = renderScheduleTask(definition, occurrence, { projectName: options.projectName, timeZone: options.timeZone });
   const provenance = {

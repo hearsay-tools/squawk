@@ -555,7 +555,7 @@ export const SETTLEMENT_GROUPS = {
             const argsFile = `${release}.args.ndjson`;
             let inputReady = 0;
             const observation = await driveSeam(backend, 'permission-classify', {
-              spec: { env: { CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '', CEZ_MOCK_ARGS_FILE: argsFile, CEZ_MOCK_RELEASE_FILE: release } },
+              spec: { env: { CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: argsFile, CEZ_MOCK_RELEASE_FILE: release } },
               sessionOptions: { onAgentInputReady: () => { inputReady += 1; } },
               whileOpen: async (session, observed) => {
                 await waitFor(() => existsSync(`${release}.config-read`));

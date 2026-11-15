@@ -58,7 +58,7 @@ Before any later push to a PR with auto-merge armed, turn it off
 arm it again only when both preconditions hold for the new head.
 
 Like the review round, this arming rule is an agent rule: queue admission
-checks native CI and CodeRabbit only, never the local report. GitHub enqueues
+checks native CI and review threads only, never the local report. GitHub enqueues
 the PR when its required checks pass.
 
 ## Labeled PRs

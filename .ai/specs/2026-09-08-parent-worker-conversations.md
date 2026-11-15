@@ -1,8 +1,9 @@
 # Parent and worker conversations — accepted design
+Status: done
 
 Issue: https://github.com/hearsay-tools/cezarion/issues/112
 
-Status: accepted by the user on 2026-09-08.
+Recorded status: accepted by the user on 2026-09-08.
 
 ## Foundation and approach
 

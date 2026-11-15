@@ -1,6 +1,7 @@
 # PR auto-discovery from the conversation (open-mercato/cezar#407)
+Status: done
 
-Status: IMPLEMENTED 2026-07-16 · Fixes: open-mercato/cezar#407 · Extends: the `#fake-pr` janitor guard `scanEventReferences` in `src/runs/run-references.ts`, spec 009 (review gate / draft PR)
+Recorded status: IMPLEMENTED 2026-07-16 · Fixes: open-mercato/cezar#407 · Extends: the `#fake-pr` janitor guard `scanEventReferences` in `src/runs/run-references.ts`, spec 009 (review gate / draft PR)
 
 ## Problem
 

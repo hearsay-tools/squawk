@@ -45,53 +45,16 @@ Each item must hold at the same current head:
 4. **CI:** every required check passes on `H`; an absent or pending required
    result is not a pass. Read failures before classifying them. A flake needs
    its tracking issue and still needs a passing required check.
-5. **Review and QA:** the required automated review check passes on `H` under
-   [the repo's review policy](../../../docs/sdlc/ci.md#ci-verification).
-   Accept an intentional skipped review only with the trusted classification
-   and documented exemption that allow it; a missing or failed review is no
-   exemption. A caller requiring actual model execution still needs that
-   evidence. Zero threads remain open, and `needs-qa` has `qa-approved` when
-   present. Follow the repo's CodeRabbit admission and reconciliation rules for new heads and finding replies.
-
-   Before enqueueing, read live evidence in the order used by
-   [the shared queue admission reader](../../../.github/scripts/queue-coderabbit-admission.cjs)
-   (`readQueueCodeRabbitAdmission`), which also uses the general admission reader:
-
-   - Read the PR and require its live head to equal the reviewed head `H`
-     and `draft=false`. Read its **first-ever** `ready_for_review` event through
-     `timelineItems(first: 1, itemTypes: [READY_FOR_REVIEW_EVENT])`. For an actual
-     provider review, require a valid check `started_at`. If it is after first
-     ready, require the newest execution to complete successfully; pending or
-     failed execution blocks admission. If no current-head execution started
-     after first ready, return `awaiting-checks` while the shared helper's
-     `POST_READY_SETTLE_MS` (three-minute) window is open. After that window,
-     existing current-head admission decides. A non-draft PR with no ready
-     event was opened ready and uses current-head admission without a cutoff.
-     Use the first event across later ready flips and pushes. A later ready
-     flip does not reset the window or require another review.
-     Preserve the trusted no-files, release-stamps and upstream-ledger exceptions.
-   - List all CodeRabbit check runs on `H` (the commits check-runs API with
-     `filter=all`, `check_name=CodeRabbit`, `app_id=347564`). Select the newest
-     trusted execution: App ID `347564`, slug `coderabbitai`, name `CodeRabbit`,
-     and `head_sha=H`. Require `status=completed` and `conclusion=success`, or
-     the exact trusted `No files to review` skip allowed by the shared policy.
-     Preserve its verified release-stamps and upstream-ledger exceptions;
-     branch names alone do not establish an exception.
-   - After observing completion (or verifying a shared-policy exception),
-     fetch every page of the PR's review threads.
-     Require zero unresolved threads, including outdated and human threads.
-     An earlier zero-thread snapshot is not evidence for this gate.
-   - Reread the newest trusted execution for non-exempt PRs and the PR itself.
-     Require the same check
-     identity, status, conclusion, timestamps and output title, and unchanged
-     PR head, base and exception identity. Changed or incomplete evidence
-     blocks enqueueing; repeat the gate on fresh evidence.
-
-   A green commit status or historical native review job alone is insufficient.
-   A queued or in-progress check returns `awaiting-checks`: report that the
-   current CodeRabbit execution must complete. Missing, failed or unreadable
-   evidence blocks admission with its specific reason. A later same-head review
-   invalidates earlier evidence; no snapshot prevents a new review from starting.
+5. **Review and QA:** CI runs no automated reviewer
+   ([the repo's review policy](../../../docs/sdlc/ci.md#ci-verification)); a
+   caller that requires a review names its own evidence. Immediately before
+   enqueueing, read the PR and require its live head to equal the reviewed
+   head `H` and `draft=false`, then fetch every page of the PR's review
+   threads. Require zero unresolved threads, including outdated and human
+   threads; an earlier zero-thread snapshot is not evidence for this gate.
+   Queue admission reads the same threads again
+   ([merge-queue-admission.cjs](../../../.github/scripts/merge-queue-admission.cjs)).
+   `needs-qa` has `qa-approved` when present.
 6. **Owner paths:** run `node .ai/skills/auto-merge/check.mjs --title '<title>'`
    against the PR's committed head in its checkout (quote the actual title with
    `shellQuote`). A "gate or test harness" result or an `AGENTS.md` edit needs
@@ -102,12 +65,6 @@ Each item must hold at the same current head:
    evidence match the diff. Use closing keywords only for fully completed
    issues; partial work references the issue without closing it. Add any
    owner-approved gate labels before the first push that needs them.
-   Finish PR body edits before the last push and final review pass, because a
-   body edit can start another CodeRabbit review. After a later body edit,
-   return to implementation: finish the body edits, push a new head, and obtain
-   review and live admission evidence for that new head before reporting
-   readiness or enqueueing. Repeating the gate on the old head can still read
-   the previous completed check before the post-edit execution appears.
 8. **Main:** main CI passes. A failure confined to Publish npm snapshot does
    not block a code merge; other failures wait for the named repair task.
 
@@ -124,7 +81,7 @@ includes waiting for its required checks. A changed head invalidates the gate.
 
 ## 3. Merge or wait
 
-Agents open PRs ready, and `coderabbit-reconcile.yml` never changes draft state. A
+Agents open PRs ready, and `pr-readiness.yml` never changes draft state. A
 draft PR is a human's: leave it as it is and tell the owner it needs promotion,
 because no workflow promotes a draft. When the gate holds but owner action is required, send the
 owner the PR, `H`, gate evidence and the specific missing approval. Register

@@ -1,4 +1,5 @@
 # Periodically wake monitoring sessions
+Status: done
 
 > Issue: open-mercato/cezar#654 · Amended by: open-mercato/cezar#810, hearsay-tools/cezarion#59 · Depends on: `2026-07-24-long-running-waiting-sessions.md`
 

@@ -1,4 +1,3 @@
-import { Button } from '@/components/ui/button'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckIcon, ChevronDownIcon, CpuIcon, GaugeIcon, SlidersHorizontalIcon, TerminalIcon } from '@/components/design-icons'
 import type { RefObject } from 'react'
@@ -40,15 +39,6 @@ export function NewTaskHeader() {
         Describe the outcome. Configure the run. Review everything before it lands.
       </p>
     </header>
-  )
-}
-
-export function RetiredVariantsNotice({ onUseOneTask }: { onUseOneTask: () => void }) {
-  return (
-    <section role="alert" className="flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-4">
-      <p>Parallel variants are removed. This saved draft requested multiple candidates. Use owned workers to compare approaches, or start one task.</p>
-      <Button variant="outline" className="min-h-11" onClick={onUseOneTask}>Use one task</Button>
-    </section>
   )
 }
 
