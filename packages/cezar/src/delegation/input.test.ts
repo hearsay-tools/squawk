@@ -286,7 +286,7 @@ it.each(['replacement session', 'replacement state'] as const)(
     const active = new Map([[record.id, state]]), move = vi.fn();
     const owner = new InputDelivery({ createRunner: noRunners, home: testHome(), store, repoRoot: dir, dataDir: dir, semaphore: new WorkspaceSemaphore({ home: testHome() }),
       work: new TrackedWork(), disposed: () => false }, unused<DeliveryHost>({
-      active, move, owesWake: () => false,
+      active, move, owesWake: () => false, endParkHold: vi.fn(),
       line: unused<DeliveryHost['line']>({ isAdmitted: () => false, unpark: vi.fn() }),
       workerExecutions: unused<DeliveryHost['workerExecutions']>({ trackDelivery: vi.fn() }),
     }), 10, 'unused');
