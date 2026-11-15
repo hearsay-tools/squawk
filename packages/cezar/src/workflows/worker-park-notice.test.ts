@@ -13,7 +13,7 @@ import { productName } from '../home/display.ts';
 /** hearsay-tools/cezarion#1327: the single-runner paths of the park notice. The RUNNER_IDS cells
  *  U3n, U3r and U3d (`waits-parity-mixed-cells.testkit.ts`) pin it on every native wire. */
 describe('a parked worker tells its waiting parent why (hearsay-tools/cezarion#1327)', { timeout: 45_000 }, () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
   useWorkerWaitFixture();
   const conversationOf = (id: string): ConversationMessage[] => {
     const delegation = store.getRun(id)?.delegation;
@@ -52,9 +52,10 @@ describe('a parked worker tells its waiting parent why (hearsay-tools/cezarion#1
     await until(() => parked(w.id) && (store.getRun(w.id)?.waits ?? []).some(entry => entry.kind === 'timer' && entry.phase === 'open'), () => timeline(w.id));
     expect(notices(p.id, w.id)).toEqual([]);
     expect(lostNotice.mock.calls.some(args => args[2]?.input.conversation?.senderRunId === w.id)).toBe(true);
-    // Without a live controller, recovery finalizes the parked worker's execution and then posts no
-    // notice (hearsay-tools/squawk#3502).
-    await restart(false, undefined, eventCheckpoint(), { liveController: true });
+    // Recovery finalizes the parked worker's execution, and the worker still parked by its own turn
+    // (hearsay-tools/squawk#3502).
+    await restart(false, undefined, eventCheckpoint());
+    expect(store.readWorkerExecution(w.id)?.phase).toBe('complete');
     await until(() => notices(p.id, w.id).length > 0, () => timeline(w.id));
     const [notice, ...more] = notices(p.id, w.id);
     expect(more).toEqual([]);
@@ -71,6 +72,21 @@ describe('a parked worker tells its waiting parent why (hearsay-tools/cezarion#1
     // Recovery again finds the same message and posts nothing more.
     await restart();
     expect(notices(p.id, w.id)).toHaveLength(1);
+  });
+
+  // The product decision of hearsay-tools/squawk#3502: the hold resumes the worker by itself.
+  it('sends no notice for a worker on an auto-resume hold, also after recovery', async () => {
+    vi.stubEnv('CEZ_MOCK_LIMIT_RESET_SECONDS', '3600');
+    const { p } = await family();
+    const w = await worker(p.id, 'mock:limit Waiting on the account.');
+    manager.enqueueOwnedRun(w.id);
+    await until(() => parked(w.id) && store.getRun(w.id)?.autoResumeAt !== undefined && store.readWorkerExecution(w.id)?.phase === 'complete', () => timeline(w.id));
+    register(p.id, [w.id]);
+    expect(notices(p.id, w.id)).toEqual([]);
+    // Recovery's sweep passes over the held worker too.
+    await restart(false, undefined, eventCheckpoint());
+    expect(store.getRun(w.id)).toMatchObject({ status: RUN_STATUS.waiting, autoResumeAt: expect.any(String) });
+    expect(notices(p.id, w.id)).toEqual([]);
   });
 
   it('sends no notice when the turn that parked already messaged the parent', async () => {

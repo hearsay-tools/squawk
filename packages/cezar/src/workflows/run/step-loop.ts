@@ -443,7 +443,7 @@ export class StepLoop {
     }
     if (delivery !== 'park') return false;
     this.humanWaits.surfaceHumanWait(runId, state);
-    this.host.move(runId, 'park', {
+    this.host.move(runId, 'park-closing-wakes', {
       ...(failure ? { error: loop.runError! } : {}) });
     this.context.store.flush(); // checkpoint the failed attempt and its recoverable workflow cursor before parking
     this.host.dropActive(runId);
