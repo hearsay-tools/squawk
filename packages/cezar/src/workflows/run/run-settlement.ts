@@ -206,7 +206,7 @@ export class RunSettlement {
     if (delivery === 'park') {
       // No turn end will show a human wait this session registered (hearsay-tools/cezarion#1234).
       this.humanWaits.surfaceHumanWait(runId, state);
-      this.host.move(runId, 'park');
+      this.host.move(runId, 'park-closing-wakes');
       return;
     }
     this.context.store.updateStep(runId, stepId, { status: 'failed', error: this.wakeSessionClosedError, finishedAt: new Date().toISOString() });
@@ -293,7 +293,7 @@ export class RunSettlement {
       // settleSuccess only completes running/waiting steps, so its failure is durable.
       this.humanWaits.surfaceHumanWait(runId, state);
       this.context.store.appendEvent(runId, { type: 'step-end', stepId, status: 'failed' });
-      this.host.move(runId, 'park', { error: `continue failed: ${message}` });
+      this.host.move(runId, 'park-closing-wakes', { error: `continue failed: ${message}` });
       return;
     }
     if (this.autoResumeScheduler.holdFailure(runId, `continue failed: ${message}`)) return;

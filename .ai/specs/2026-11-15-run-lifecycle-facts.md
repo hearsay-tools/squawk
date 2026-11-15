@@ -61,6 +61,12 @@ Accepted at the design gate on 2026-11-15:
 | `deliveryAttempt` | `{ session; inputIds; outcome?: 'acknowledged' \| 'closed' \| 'failed' }` | `InputGroup` (memory) | `input-delivery.ts` | `failedWakeDelivery`, the close paths, the acknowledgement handler |
 | `nudge` | `{ session; cause: 'autonomous' \| 'no-wait' \| 'completion'; state: 'refused' \| 'submitted' \| 'acknowledged' }` | `BoundaryGroup` (memory) | `turn-nudges.ts` | turn settlement, readiness retry, idle settle |
 
+`park` and `park-release` record `parkReason: 'turn'`; a session that closes while the run holds
+wakes parks through its own exit, `park-closing-wakes`, which records `closing-wakes`; `hold` and
+`hold-failure` record `hold`. A park of a run already `waiting` keeps the reason it parked for, so
+an idle close or a restart keeps a turn's `turn`. A saved row without `parkReason` reads as `hold`
+when it is a usage-limit hold, else as `turn`.
+
 `workflowCursor` replaces `workflowResumeStepId`. A saved row with `workflowResumeStepId` is read
 as `{ stepId, mode: 'resume' }` at load. `nudge` replaces `autonomousNudgePending`. `doneAccepted`
 replaces `doneRequested` and `doneAtBoundary` as the done record; the boundary keeps read views.

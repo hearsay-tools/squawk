@@ -129,6 +129,15 @@ const failedStep = (step: StepState, _run: ExitRead, { finishedAt, error }: Step
 const parkedStep = (step: StepState, run: ExitRead, { stepId }: StepSettlement): StepState =>
   step.id === (stepId ?? run.currentStepId) && (step.status === 'running' || step.status === 'pending') ? { ...step, status: 'waiting' } : step;
 
+/** The park fact (ADR 0064): the exit that parks a run records why. A run already `waiting` keeps
+ *  the reason it parked for: a session that closes, or a restart, re-parks a run its own turn
+ *  parked, and that run still waits on what its turn registered. */
+const parkedFor = (reason: NonNullable<RunRecord['parkReason']>) => (run: ExitRead): RunPatch =>
+  run.status === 'waiting' ? {} : { parkReason: reason };
+
+/** A hold records `hold` over any earlier reason: the run waits on its automatic resume. */
+const HOLD: RunPatch = { finishedAt: undefined, parkReason: 'hold' };
+
 /** A released park: the legacy `activity` cleared. */
 function settleParkRelease(run: RunRecord): RunRecord {
   const settled: WithLegacyActivity = { ...run, activity: undefined };
@@ -149,15 +158,18 @@ export const RUN_EXITS = {
   // The step it runs is the caller's: `currentStepId` is an extra.
   'continue-now': { durability: 'debounced', from: ['waiting', 'review', 'done', 'failed', 'cancelled'], to: 'running',
     fields: () => ({ error: undefined, finishedAt: undefined }) },
-  park: { durability: 'debounced', from: ['running', 'queued', 'waiting'], to: 'waiting', steps: parkedStep },
+  park: { durability: 'debounced', from: ['running', 'queued', 'waiting'], to: 'waiting', fields: parkedFor('turn'), steps: parkedStep },
   // A park that gives up its slot (hearsay-tools/cezarion#1235): committed at once, so a refused
   // write throws with nothing changed and the caller keeps the slot.
-  'park-release': { durability: 'committed', from: ['running', 'queued', 'waiting'], to: 'waiting', settle: settleParkRelease, steps: parkedStep },
+  'park-release': { durability: 'committed', from: ['running', 'queued', 'waiting'], to: 'waiting', fields: parkedFor('turn'), settle: settleParkRelease, steps: parkedStep },
+  // The session closed while the run held wakes: no turn parked it, so a parent gets no park
+  // notice (hearsay-tools/squawk#3502).
+  'park-closing-wakes': { durability: 'debounced', from: ['running', 'queued', 'waiting'], to: 'waiting', fields: parkedFor('closing-wakes'), steps: parkedStep },
   'park-for-wake': { durability: 'debounced', from: ['queued', 'waiting'], to: 'waiting' },
-  hold: { durability: 'debounced', from: ['failed', 'waiting'], to: 'waiting', fields: () => ({ finishedAt: undefined }) },
+  hold: { durability: 'debounced', from: ['failed', 'waiting'], to: 'waiting', fields: () => HOLD },
   // A provider error or usage limit holds the failing run in its failure's own write
   // (hearsay-tools/squawk#3337): never a transient `failed` a worker cascade or a parent's wait reads.
-  'hold-failure': { durability: 'debounced', from: ['running', 'waiting'], to: 'waiting', fields: () => ({ finishedAt: undefined }), steps: failedStep },
+  'hold-failure': { durability: 'debounced', from: ['running', 'waiting'], to: 'waiting', fields: () => HOLD, steps: failedStep },
   resume: { durability: 'debounced', from: ['waiting'], to: 'running' },
   succeed: { durability: 'debounced', from: ['running', 'waiting'], to: 'done', fields: succeeded, steps: succeededStep },
   'succeed-review': { durability: 'debounced', from: ['running', 'waiting'], to: 'review', fields: succeeded, steps: succeededStep },
