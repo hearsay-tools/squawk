@@ -12,6 +12,7 @@ import { reconcileConversationState, projectConversationEvents, settledRunFamili
 import { reconcileWorkerEntry } from '../../delegation/wait.ts';
 import { workerOutcome } from '../../runs/delegation-state.ts';
 import { workerOutcomeKey } from '../../runs/transcript-facts.ts';
+import { LivenessTimers } from './liveness-timers.ts';
 
 interface FamilyReconcilerHost {
   reapTerminalScratch(id: string): void;
@@ -44,16 +45,15 @@ export class FamilyReconciler {
     this.host.waitEngine.resolvePeerWaits(runsAwaitingPeer(run, () => this.context.store.listRuns())); // never in recovery: an interrupted peer fails, then continues
   };
 
-  private readonly requestDeadlineTimers = new Map<string, NodeJS.Timeout>();
   private reconcilingWorkers = false;
   private reconcilingFamily: string | undefined;
   private readonly pendingReconciliations = new Set<string | undefined>();
   recoveryFactsPending = false;
-  constructor(private readonly context: RunModuleContext, private readonly host: FamilyReconcilerHost) {}
+  constructor(private readonly context: RunModuleContext, private readonly host: FamilyReconcilerHost,
+    private readonly timers = new LivenessTimers()) {}
   setRecoveryFactsPending(value: boolean): void { this.recoveryFactsPending = value; }
   dispose(): void {
-    for (const timer of this.requestDeadlineTimers.values()) clearTimeout(timer);
-    this.requestDeadlineTimers.clear();
+    this.timers.clearKind('request-deadline');
   }
 
   /** A turn of this run is executing now: a recovered run's is not, whatever it last recorded. */
@@ -62,7 +62,7 @@ export class FamilyReconciler {
     return !!state?.liveSession.session?.open && !state.liveSession.cancelled && !this.host.recoveringRun(runId) && state.boundary.atTurnBoundary !== state.liveSession.session;
   }
 
-  /** Request deadlines share the existing reconciliation timer registry, never a polling loop. */
+  /** Each root's earliest request deadline is one `request-deadline` bound, never a polling loop. */
   private reconcileConversations(family: readonly RunRecord[]): void {
     const now = new Date().toISOString();
     for (const root of family) {
@@ -72,15 +72,12 @@ export class FamilyReconciler {
       if (next && next !== root.delegation.conversation) this.context.store.commitConversation(root.id, next);
       projectConversationEvents(this.context.store, this.context.store.getRun(root.id)!);
       this.host.retireSettledQuestions(root.id);
-      const key = `conversation:${root.id}`;
-      const timer = this.requestDeadlineTimers.get(key);
-      if (timer) { clearTimeout(timer); this.requestDeadlineTimers.delete(key); }
+      this.timers.clear('request-deadline', root.id);
       const deadlines = next?.messages.filter(message => message.kind === 'request' && message.deadline &&
         !next.outcomes.some(outcome => outcome.requestId === message.id)).map(message => Date.parse(message.deadline!)) ?? [];
       if (deadlines.length) {
         const arm = (delay: number) => {
-          const handle = setTimeout(() => {
-            this.requestDeadlineTimers.delete(key);
+          this.timers.arm({ kind: 'request-deadline', runId: root.id, delayMs: delay }, () => {
             // This root's own family by name: it may have no live member left by its deadline
             // (#779), which the pass over live families would skip.
             try { this.host.reconcileWorkerWaits(root.id); this.host.reconcileWorkerWaits(); }
@@ -89,8 +86,7 @@ export class FamilyReconciler {
               // same failure policy as worker wait deadlines, never drops an unhandled error.
               if (!this.context.disposed()) arm(1_000);
             }
-          }, delay);
-          handle.unref?.(); this.requestDeadlineTimers.set(key, handle);
+          });
         };
         arm(Math.max(0, Math.min(...deadlines) - Date.now()));
       }

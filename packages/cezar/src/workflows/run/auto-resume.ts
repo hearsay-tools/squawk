@@ -7,6 +7,7 @@ import type { ContinueRunOptions } from '../continuation-admission.ts';
 import { formatWakeInstant } from '../run-scheduling.ts';
 import type { RunExitId } from '../../runs/run-exits.ts';
 import type { RunModuleContext } from './types.ts';
+import { LivenessTimers } from './liveness-timers.ts';
 import { atContinue } from './launch-read-resolver.ts';
 import { productName } from '../../home/display.ts';
 
@@ -67,18 +68,16 @@ export function retryPrompt(run: RunRecord): string {
 export type HoldPlan = { autoResumeAt: string; autoResumeReason: 'usage-limit' | 'provider-error'; message: string };
 
 export class AutoResumeScheduler {
-  /** Armed usage-limit resumes, keyed by run id (spec
+  /** Armed resumes are `auto-resume` bounds, keyed by run id (spec
    *  2026-08-03-auto-resume-after-usage-limit). The DEADLINE itself lives on the record
-   *  (`autoResumeAt`) — this map holds only the process-local timer, so a restart rebuilds it
-   *  from the record rather than losing the wait. Runs here are `failed` and therefore NOT in
-   *  `active`, which is why the timer cannot live on an `ActiveRun` like the monitoring one. */
-  readonly autoResumeTimers = new Map<string, NodeJS.Timeout>();
-
-  constructor(private readonly context: RunModuleContext, private readonly host: AutoResumeHost) {}
+   *  (`autoResumeAt`) — the owner holds only the process-local timer, so a restart rebuilds it
+   *  from the record rather than losing the wait. Runs here are not in `active`, which is why the
+   *  bound has run scope, not execution scope like the monitoring one. */
+  constructor(private readonly context: RunModuleContext, private readonly host: AutoResumeHost,
+    private readonly timers = new LivenessTimers()) {}
 
   dispose(): void {
-    for (const timer of this.autoResumeTimers.values()) clearTimeout(timer);
-    this.autoResumeTimers.clear();
+    this.timers.clearKind('auto-resume');
   }
 
   /**
@@ -134,7 +133,7 @@ export class AutoResumeScheduler {
 
   /** Arm the timer of a hold the settlement wrote. Runs before the slot is released (see the caller). */
   armHeldResume(runId: string): void {
-    if (this.autoResumeTimers.has(runId)) return;
+    if (this.timers.has('auto-resume', runId)) return;
     const run = this.context.store.getRun(runId);
     if (!run || !isUsageLimitHold(run)) return;
     const deadline = Date.parse(run.autoResumeAt);
@@ -145,9 +144,7 @@ export class AutoResumeScheduler {
    *  run waits for it (hearsay-tools/cezarion#1236): `waiting`, its error kept for a withdrawal. */
   private armAutoResume(runId: string, deadline: number, reason?: HoldPlan['autoResumeReason']): void {
     this.host.move(runId, 'hold', { autoResumeAt: new Date(deadline).toISOString(), ...(reason ? { autoResumeReason: reason } : {}) });
-    const timer = setTimeout(() => this.fireAutoResume(runId), Math.max(0, deadline - Date.now()));
-    timer.unref?.();
-    this.autoResumeTimers.set(runId, timer);
+    this.timers.arm({ kind: 'auto-resume', runId, delayMs: Math.max(0, deadline - Date.now()) }, () => this.fireAutoResume(runId));
   }
 
   /**
@@ -156,7 +153,6 @@ export class AutoResumeScheduler {
    * ordinary queued-continuation path so it obeys both concurrency caps like any other work.
    */
   private fireAutoResume(runId: string): void {
-    this.autoResumeTimers.delete(runId);
     const run = this.context.store.getRun(runId);
     if (!run || !isUsageLimitHold(run)) return;
     // Belt and braces against the one gap `reconcileAutoResumes` cannot close: the setting going
@@ -211,7 +207,7 @@ export class AutoResumeScheduler {
       // ones too, so this one loop is the whole cancellation. It reads any resume time, not
       // `isUsageLimitHold`, so a stale one is retired too.
       const pending = new Set([
-        ...this.autoResumeTimers.keys(),
+        ...this.timers.runsOf('auto-resume'),
         ...this.context.store.listRuns().filter((run) => run.autoResumeAt !== undefined).map((run) => run.id),
       ]);
       for (const runId of pending) this.withdrawAutoResume(runId, 'automatic resume cancelled — auto-resume is switched off');
@@ -219,7 +215,7 @@ export class AutoResumeScheduler {
     }
     for (const run of this.context.store.listRuns()) {
       if (!isUsageLimitHold(run)) continue;
-      if (this.autoResumeTimers.has(run.id)) continue;
+      if (this.timers.has('auto-resume', run.id)) continue;
       const deadline = Date.parse(run.autoResumeAt);
       // A deadline that is unreadable, belongs to a run that has spent its cap, or belongs to a
       // task the user has archived is retired rather than re-armed: it can only mislead. One
@@ -255,7 +251,7 @@ export class AutoResumeScheduler {
     const run = this.context.store.getRun(runId);
     if (!run) return false;
     // Any resume time, not `isUsageLimitHold`: a withdrawal also retires one a record kept by mistake.
-    const pending = run.autoResumeAt !== undefined || this.autoResumeTimers.has(runId);
+    const pending = run.autoResumeAt !== undefined || this.timers.has('auto-resume', runId);
     this.withdrawAutoResume(runId, pending ? 'automatic resume cancelled for this task' : undefined);
     if (pending) {
       // This run may have been the last thing holding its account's queue — nothing else will
@@ -268,9 +264,7 @@ export class AutoResumeScheduler {
   /** Retire a pending resume — timer, deadline and counter. The counter goes too because every
    *  caller is a fresh epoch: a human Continue, or a resume that re-stamps its own count. */
   clearAutoResume(runId: string): void {
-    const timer = this.autoResumeTimers.get(runId);
-    if (timer) clearTimeout(timer);
-    this.autoResumeTimers.delete(runId);
+    this.timers.clear('auto-resume', runId);
     const run = this.context.store.getRun(runId);
     if (!run) return;
     // A continuation's own status write retires the appointment of a run on hold
@@ -297,9 +291,7 @@ export class AutoResumeScheduler {
     // Committed first: a store that cannot write throws here with the timer still armed, and the
     // note is written only once the withdrawal is on disk (hearsay-tools/cezarion#1236).
     if (this.context.store.getRun(runId)) this.context.store.commitAutoResumeWithdrawal(runId);
-    const timer = this.autoResumeTimers.get(runId);
-    if (timer) clearTimeout(timer);
-    this.autoResumeTimers.delete(runId);
+    this.timers.clear('auto-resume', runId);
     if (note && this.context.store.getRun(runId)) this.context.store.appendEvent(runId, { type: 'note', message: note });
   }
 }

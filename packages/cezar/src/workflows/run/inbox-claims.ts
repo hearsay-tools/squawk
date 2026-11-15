@@ -6,6 +6,7 @@ import type { InboxClaim } from '@open-mercato/cezar-contract/delegation';
 import type { RunRecord } from '../../runs/store.ts';
 import type { ActiveRun } from '../active-run.ts';
 import { historyDeletionPending } from './run-guards.ts';
+import { LivenessTimers } from './liveness-timers.ts';
 import type { RunModuleContext } from './types.ts';
 
 interface InboxClaimsHost {
@@ -23,13 +24,11 @@ interface InboxClaimsHost {
 }
 
 export class InboxClaims {
-  readonly inboxClaimTimers = new Map<string, NodeJS.Timeout>();
-
-  constructor(private readonly context: RunModuleContext, private readonly host: InboxClaimsHost) {}
+  constructor(private readonly context: RunModuleContext, private readonly host: InboxClaimsHost,
+    private readonly timers = new LivenessTimers()) {}
 
   dispose(): void {
-    for (const timer of this.inboxClaimTimers.values()) clearTimeout(timer);
-    this.inboxClaimTimers.clear();
+    this.timers.clearKind('inbox-claim');
   }
 
   /** A wait wake is only a pointer. Only provider submission/opening prompts own delivery. */
@@ -86,16 +85,13 @@ export class InboxClaims {
 
   /** Expiry is an independent wake source, including after the provider's last turn. */
   armInboxClaimExpiry(runId: string): void {
-    const previous = this.inboxClaimTimers.get(runId);
-    if (previous) clearTimeout(previous);
-    this.inboxClaimTimers.delete(runId);
+    this.timers.clear('inbox-claim', runId);
     if (this.context.disposed()) return;
     const deadlines = (this.context.store.getRun(runId)?.agentInputs ?? []).flatMap(input =>
       input.inboxClaim && !input.inboxClaim.acknowledgedAt ? [Date.parse(input.inboxClaim.expiresAt)] : []);
     if (!deadlines.length) return;
     let warned = false;
     const expire = () => {
-      this.inboxClaimTimers.delete(runId);
       if (this.context.disposed() || !this.context.store.getRun(runId)) return;
       try {
         this.context.store.clearExpiredInboxClaims(runId, new Date().toISOString());
@@ -109,10 +105,7 @@ export class InboxClaims {
         if (!this.context.disposed()) arm(1_000);
       }
     };
-    const arm = (delay: number) => {
-      const timer = setTimeout(expire, delay);
-      timer.unref?.(); this.inboxClaimTimers.set(runId, timer);
-    };
+    const arm = (delay: number) => { this.timers.arm({ kind: 'inbox-claim', runId, delayMs: delay }, expire); };
     arm(Math.max(0, Math.min(...deadlines) - Date.now()));
   }
 

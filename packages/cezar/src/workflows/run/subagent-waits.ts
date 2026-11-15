@@ -14,6 +14,7 @@ import type { RunRecord } from '../../runs/store.ts';
 import type { ActiveRun } from '../active-run.ts';
 import { openWaits } from '../waits.ts';
 import type { RunModuleContext } from './types.ts';
+import { LivenessTimers } from './liveness-timers.ts';
 
 /**
  * Squawk's wait on the native subagents a turn left running (hearsay-tools/cezarion#2431). The
@@ -91,13 +92,9 @@ export function openSubagentWaitOf(run: Pick<RunRecord, 'waits'> | undefined): S
 }
 
 export class SubagentWaits {
-  /** The grace after the last child ended, by run id. */
-  private readonly graces = new Map<string, NodeJS.Timeout>();
-  /** The retry of an interruption whose transcript write failed, by run id. */
-  private readonly retries = new Map<string, NodeJS.Timeout>();
-
   constructor(private readonly context: RunModuleContext, private readonly host: SubagentWaitsHost,
-    private readonly graceMs = SUBAGENT_WAIT_GRACE_SECONDS * 1000, private readonly deadlineMs = SUBAGENT_WAIT_DEADLINE_SECONDS * 1000) {}
+    private readonly graceMs = SUBAGENT_WAIT_GRACE_SECONDS * 1000, private readonly deadlineMs = SUBAGENT_WAIT_DEADLINE_SECONDS * 1000,
+    private readonly timers = new LivenessTimers()) {}
 
   /**
    * One UI event of the run's session. A background root task item is tracked from its first event;
@@ -184,10 +181,8 @@ export class SubagentWaits {
 
   /** Every child ended: unless the runner starts a parent turn first, the wait resolves `settled`. */
   private armGrace(runId: string): void {
-    if (this.graces.has(runId)) return;
-    const timer = setTimeout(() => {
-      if (this.graces.get(runId) !== timer) return;
-      this.graces.delete(runId);
+    if (this.timers.has('subagent-grace', runId)) return;
+    this.timers.arm({ kind: 'subagent-grace', runId, delayMs: this.graceMs }, () => {
       const state = this.host.active.get(runId);
       const wait = openSubagentWaitOf(this.context.store.getRun(runId));
       // A parent turn that started in the grace (a human message, another wake) sees the ends
@@ -195,15 +190,11 @@ export class SubagentWaits {
       if (!state || !wait || liveSubagents(state) || this.context.disposed() || !this.host.isParked(runId)) return;
       if (!this.refreshWait(runId, state, wait)) return;
       this.host.waitEngine.settleWait(runId, wait.id, { reason: 'settled' });
-    }, this.graceMs);
-    timer.unref?.();
-    this.graces.set(runId, timer);
+    });
   }
 
   private clearGrace(runId: string): void {
-    const timer = this.graces.get(runId);
-    if (timer) clearTimeout(timer);
-    this.graces.delete(runId);
+    this.timers.clear('subagent-grace', runId);
   }
 
   /**
@@ -251,21 +242,15 @@ export class SubagentWaits {
   /** Write the stopped children's ends again later: through the wait while it is open, or on their
    *  own when no wait held them. */
   private armRetry(runId: string, waitId?: string): void {
-    const timer = setTimeout(() => {
-      if (this.retries.get(runId) !== timer) return;
-      this.retries.delete(runId);
+    this.timers.arm({ kind: 'subagent-retry', runId, delayMs: Math.min(this.deadlineMs / 2, INTERRUPT_RETRY_MS) }, () => {
       if (this.context.disposed()) return;
       if (waitId === undefined) { if (!this.endStoppedChildren(runId)) this.armRetry(runId); return; }
       if (openWaits(this.context.store.getRun(runId) ?? {}).some(entry => entry.id === waitId)) this.interrupt(runId, waitId);
-    }, Math.min(this.deadlineMs / 2, INTERRUPT_RETRY_MS));
-    timer.unref?.();
-    this.retries.set(runId, timer);
+    });
   }
 
   private clearRetry(runId: string): void {
-    const timer = this.retries.get(runId);
-    if (timer) clearTimeout(timer);
-    this.retries.delete(runId);
+    this.timers.clear('subagent-retry', runId);
   }
 
   /**
@@ -297,8 +282,7 @@ export class SubagentWaits {
   }
 
   dispose(): void {
-    for (const timer of [...this.graces.values(), ...this.retries.values()]) clearTimeout(timer);
-    this.graces.clear();
-    this.retries.clear();
+    this.timers.clearKind('subagent-grace');
+    this.timers.clearKind('subagent-retry');
   }
 }

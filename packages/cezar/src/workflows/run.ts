@@ -31,7 +31,7 @@ import { delegationExecutionSettings, selectDelegationExecutionSettings } from '
 export { agentDirectories, composeSystemPrompt, expandRegistrySlashSkill, expandRegistrySlashSkillText, leadingSlashSkillName, resolveExtraSystemPrompt, skillSystemPrompt } from './run/prompts.ts';
 export { stepLabel } from './run/steps.ts';
 export { makeRunTitle } from '../runs/run-title.ts';
-import { clearHeldHumanInputTimer, clearIdleTimer, clearAutosaveTimer } from './run/input-timers.ts';
+import { clearHeldHumanInputTimer, clearIdleTimer, clearAutosaveTimer, clearUnreadInputTimer } from './run/input-timers.ts';
 import * as pendingAskFacts from './run/pending-ask-facts.ts';
 import * as workflowPosition from './run/workflow-position.ts';
 import { type RunExitId, type RunPatch, type ExitCall } from '../runs/run-exits.ts';
@@ -240,13 +240,20 @@ export class RunManager {
     // Memory guard (#memory-guard): the shared process-tree sampler already ticks ~every 2 s for
     // the runs table; piggyback on it to enforce the per-task memory ceiling.
     this.#offUsage = onUsage((snapshot) => void this.#enforceMemoryLimit(snapshot));
+    // The manager's own intervals watch every run, not one run's liveness.
+    // ast-grep-ignore: liveness-timer-outside-owner
     this.#queueWatchdog = setInterval(() => void this.#modules.line.rescueStalledQueue(), QUEUE_WATCHDOG_MS);
     this.#queueWatchdog.unref?.();
+    // ast-grep-ignore: liveness-timer-outside-owner
     this.#repoRediscovery = setInterval(() => this.#modules.line.rediscoverRepo(), REPO_REDISCOVERY_MS);
     this.#repoRediscovery.unref?.();
     this.#store.on('run', this.#onDelegationRun);
     this.#store.on('deleted', this.#modules.wakeAdmission.onRunDeleted);
+    this.#store.on('deleted', this.#releaseLiveness);
   }
+
+  /** A deleted run is released: none of its liveness bounds fires for it. */
+  readonly #releaseLiveness = (runId: string): void => this.#modules.liveness.clearScope(runId, 'run');
 
   /**
    * Release everything this manager owns without touching run records
@@ -274,6 +281,7 @@ export class RunManager {
     this.#modules.workerExecutions.dispose();
     this.#store.off('run', this.#onDelegationRun);
     this.#store.off('deleted', this.#modules.wakeAdmission.onRunDeleted);
+    this.#store.off('deleted', this.#releaseLiveness);
     this.#toolActivity?.detach();
     this.#modules.familyReconciler.dispose();
     this.#modules.inboxClaims.dispose();
@@ -295,6 +303,7 @@ export class RunManager {
     this.#modules.memoryGuard.dispose();
     this.#modules.turnBookkeeper.clear();
     this.#modules.worktreeAutosave.dispose();
+    this.#modules.liveness.dispose();
   }
 
   async #enforceMemoryLimit(snapshot: Record<string, ProcessUsage>): Promise<void> {
@@ -439,7 +448,10 @@ export class RunManager {
       clearIdleTimer(state);
       clearAutosaveTimer(state);
       clearHeldHumanInputTimer(state);
+      clearUnreadInputTimer(state);
     }
+    // Every execution-scope liveness bound ends with the execution.
+    this.#modules.liveness.clearScope(runId, 'execution');
     this.#modules.line.forget(runId);
     this.#active.delete(runId);
     this.#store.unpin(runId, 'active');

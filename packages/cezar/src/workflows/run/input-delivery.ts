@@ -35,6 +35,7 @@ import type { RunSkills } from './run-skills.ts';
 import type { AttachmentWriter } from './attachment-writer.ts';
 import type { HumanWaits } from './human-waits.ts';
 import type { QuestionAnswerSource, WorkerQuestions } from './worker-questions.ts';
+import { cancelLivenessTimer, LivenessTimers } from './liveness-timers.ts';
 
 // The flight keeps its identity across asynchronous acknowledgement. Only this module can
 // change the reservation or attach the settled promise; readers receive getters only.
@@ -149,13 +150,13 @@ export class InputGroup {
   retainUnreadTimer(timer: NodeJS.Timeout): void { this.#unreadInputTimer = timer; }
   unreadTimerFired(): void { this.#unreadInputTimer = undefined; }
   clearUnreadTimer(): void {
-    if (this.#unreadInputTimer) clearTimeout(this.#unreadInputTimer);
+    cancelLivenessTimer(this.#unreadInputTimer);
     this.#unreadInputTimer = undefined;
   }
   retainHeldTimer(timer: NodeJS.Timeout): void { this.#heldHumanInputTimer = timer; }
   heldTimerFired(): void { this.#heldHumanInputTimer = undefined; }
   clearHeldTimer(resetClock = true): void {
-    if (this.#heldHumanInputTimer) clearTimeout(this.#heldHumanInputTimer);
+    cancelLivenessTimer(this.#heldHumanInputTimer);
     this.#heldHumanInputTimer = undefined;
     if (resetClock) {
       this.#heldHumanInputSince = undefined;
@@ -226,7 +227,8 @@ function unreadInputUnconfirmedNote(count: number): string {
 }
 
 export class InputDelivery {
-  constructor(private readonly context: RunModuleContext, private readonly host: InputDeliveryHost, private readonly maxAutoContinues: number, private readonly routedQuestionRefusal: string) {}
+  constructor(private readonly context: RunModuleContext, private readonly host: InputDeliveryHost, private readonly maxAutoContinues: number, private readonly routedQuestionRefusal: string,
+    private readonly timers = new LivenessTimers()) {}
 
   steerWorker(runId: string, input: AgentInput): 'queued' | 'delivered' {
     const run = this.context.store.getRun(runId);
@@ -395,9 +397,9 @@ export class InputDelivery {
     clearUnreadInputTimer(state);
     const session = state.liveSession.session;
     if (!session?.open || state.boundary.pendingHumanAsk || !harnessOwesInput(state) || state.inputState.agentInputFlight) return;
-    const timer = setTimeout(() => {
-      state.inputState.unreadTimerFired();
-      if (this.context.disposed() || this.host.active.get(runId) !== state || state.liveSession.session !== session || !session.open || state.liveSession.cancelled ||
+    const timer = this.timers.arm({ kind: 'unread-input', runId, delayMs: this.host.unreadInputGraceMs(),
+      session: { armed: session, current: () => state.liveSession.session }, forget: () => state.inputState.unreadTimerFired() }, () => {
+      if (this.context.disposed() || this.host.active.get(runId) !== state || !session.open || state.liveSession.cancelled ||
         state.boundary.pendingHumanAsk || state.inputState.agentInputFlight || !harnessOwesInput(state)) return;
       const ids = [...state.inputState.unreadInputIds!];
       const retried = ids.filter(id => state.inputState.unreadRetried?.has(id));
@@ -418,8 +420,7 @@ export class InputDelivery {
         if (state.boundary.parkAfterAck?.session !== session) transitionTurnBoundary(state, { kind: 'unread-expired', phase: 'restore-ack', session });
         this.settleIdleBoundary(runId, state, session);
       }
-    }, this.host.unreadInputGraceMs());
-    timer.unref?.();
+    });
     state.inputState.retainUnreadTimer(timer);
   }
 
@@ -432,9 +433,9 @@ export class InputDelivery {
       return;
     }
     state.inputState.beginHeldClock();
-    const timer = setTimeout(() => {
-      state.inputState.heldTimerFired();
-      if (this.context.disposed() || this.host.active.get(runId) !== state || state.liveSession.session !== session || !session.open ||
+    const timer = this.timers.arm({ kind: 'held-human-input', runId, delayMs: HELD_HUMAN_INPUT_RECHECK_MS,
+      session: { armed: session, current: () => state.liveSession.session }, forget: () => state.inputState.heldTimerFired() }, () => {
+      if (this.context.disposed() || this.host.active.get(runId) !== state || !session.open ||
         state.liveSession.cancelled || state.boundary.idleClosed || state.boundary.atTurnBoundary !== session) return;
       if (harnessHoldsHumanInput(state)) {
         // An in-flight ACK still owns this boundary; its .then re-settles.
@@ -458,8 +459,7 @@ export class InputDelivery {
         return;
       }
       this.settleIdleBoundary(runId, state, session);
-    }, HELD_HUMAN_INPUT_RECHECK_MS);
-    timer.unref?.();
+    });
     state.inputState.retainHeldTimer(timer);
   }
 
