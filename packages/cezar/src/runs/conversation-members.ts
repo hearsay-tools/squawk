@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { guardedJsonSql } from './guarded-json-sql.ts';
 import type { RunIndexTable } from './run-index-rows.ts';
 
 /**
@@ -13,8 +14,8 @@ export function conversationMembersSelect(source: string, where = '1'): string {
   return `WITH conversation_roots AS MATERIALIZED (
       SELECT s.id AS root_id, CASE WHEN json_type(s.data, '$.delegation.conversation.messages') = 'array'
         THEN json_extract(s.data, '$.delegation.conversation.messages') END AS messages FROM ${source} s
-      WHERE ${where} AND CASE WHEN json_valid(s.summary) AND json_valid(s.data) THEN json_extract(s.summary, '$.delegation.role') = 'root'
-        AND json_extract(s.data, '$.delegation.conversation') IS NOT NULL ELSE 0 END)
+      WHERE ${where} AND ${guardedJsonSql(`json_extract(s.summary, '$.delegation.role') = 'root'
+        AND json_extract(s.data, '$.delegation.conversation') IS NOT NULL`, 0, ['s.summary', 's.data'])})
     SELECT root_id, '' AS member_id FROM conversation_roots UNION ${messageMembers('senderRunId')} UNION ${messageMembers('recipientRunId')}`;
 }
 

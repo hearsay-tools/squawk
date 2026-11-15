@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { RunSummaryRow } from './run-database.ts';
+import { guardedJsonSql } from './guarded-json-sql.ts';
 
 export type PeerSummaryPageQuery = { all: boolean; excluded: readonly string[]; offset: number; limit: number };
 
@@ -10,10 +11,8 @@ export function readPeerSummaryPage(db: DatabaseSync, options: PeerSummaryPageQu
   const selects = archives.map(archived => `SELECT seq, id, created_at, revision, summary FROM runs
     WHERE parent_run_id IS NULL AND archived = ${archived}
       AND id NOT IN (SELECT value FROM json_each(?))
-      AND CASE WHEN json_valid(data) THEN
-        (json_extract(data, '$.delegation.role') IS NULL OR json_extract(data, '$.delegation.role') = 'root')
-        AND json_extract(data, '$.delegation.historyDeletion') IS NULL
-        ELSE 0 END`);
+      AND ${guardedJsonSql(`(json_extract(data, '$.delegation.role') IS NULL OR json_extract(data, '$.delegation.role') = 'root')
+        AND json_extract(data, '$.delegation.historyDeletion') IS NULL`, 0, ['data'])}`);
   const excluded = JSON.stringify(options.excluded);
   return db.prepare(`${selects.join(' UNION ALL ')} ORDER BY created_at DESC, seq LIMIT ? OFFSET ?`)
     .all(...archives.map(() => excluded), options.limit, options.offset).map(toSummaryRow);
