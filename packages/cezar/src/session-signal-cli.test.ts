@@ -122,8 +122,9 @@ print('signal %d' % os.WTERMSIG(status) if os.WIFSIGNALED(status) else 'code %d'
 
 /**
  * A `--import` preload for `serve`. Recovery resumes an agent without waiting for its spawn, so
- * the preload holds serve's recovery step until that spawn: the first agent session records its
- * pid, then Squawk sends itself SIGTERM while recovery has not returned.
+ * the preload holds serve's recovery step open for good once recovery returns. The first agent
+ * session records its pid, then Squawk sends itself SIGTERM. Boot never gets past recovery, so
+ * only a handler installed before recovery can act on the signal.
  */
 function signalInRecoveryPreload(pidFile: string): string {
   return `
@@ -131,23 +132,21 @@ import childProcess from 'node:child_process';
 import { renameSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { defaultServeDeps } from ${JSON.stringify(pathToFileURL(SERVE_COMMAND).href)};
-let launched;
-const agentLaunched = new Promise((resolve) => { launched = resolve; });
 const spawn = childProcess.spawn;
+let raised = false;
 childProcess.spawn = function (...args) {
   const child = spawn.apply(this, args);
-  if (launched && Array.isArray(args[1]) && args[1].includes('--input-format')) {
+  if (!raised && Array.isArray(args[1]) && args[1].includes('--input-format')) {
+    raised = true;
     writeFileSync(${JSON.stringify(`${pidFile}.tmp`)}, String(child.pid));
     renameSync(${JSON.stringify(`${pidFile}.tmp`)}, ${JSON.stringify(pidFile)});
-    launched();
-    launched = undefined;
     process.kill(process.pid, 'SIGTERM');
   }
   return child;
 };
 syncBuiltinESMExports();
 const recover = defaultServeDeps.recoverServeProject;
-defaultServeDeps.recoverServeProject = async (...args) => { await recover(...args); await agentLaunched; };
+defaultServeDeps.recoverServeProject = async (...args) => { await recover(...args); await new Promise(() => {}); };
 `;
 }
 
