@@ -301,5 +301,93 @@
     "replacement": "\"\"",
     "reason": "commitLegacyMigration never reads legacy.cache: the claim, planLegacyMigration (migrationRoots is called for the target only), MOVED.json and updateManagedPath use only paths under legacy.root.",
     "site": "const legacy = homePaths(record.legacyRoot, join(record.legacyRoot, "
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "launchdServices",
+    "mutator": "ConditionalExpression",
+    "original": "a.kind === 'owned' && a.type === 'launchd'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every ledger the product writes for these steps that has an artifact has an owned launchd one, and the shared ngrok-config entry fails both the original and the mutated predicate: some() over a non-empty ledger is true either way, and an empty one is false either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "launchdServices",
+    "mutator": "LogicalOperator",
+    "original": "a.kind === 'owned' && a.type === 'launchd'",
+    "replacement": "a.kind === 'owned' || a.type === 'launchd'",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every ledger the product writes for these steps that has an artifact has an owned launchd one, and the shared ngrok-config entry fails both the original and the mutated predicate: some() finds the owned launchd artifact either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "launchdServices",
+    "mutator": "ConditionalExpression",
+    "original": "a.kind === 'owned'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every ledger the product writes for these steps that has an artifact has an owned launchd one, and the shared ngrok-config entry fails both the original and the mutated predicate: no shared launchd artifact exists, so some() finds the owned launchd artifact either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "launchdServices",
+    "mutator": "ConditionalExpression",
+    "original": "a.type === 'launchd'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every ledger the product writes for these steps that has an artifact has an owned launchd one, and the shared ngrok-config entry fails both the original and the mutated predicate: no owned artifact other than the launchd one exists, so some() finds it either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "agentCandidates",
+    "mutator": "LogicalOperator",
+    "original": "a.kind === 'owned' && a.type === 'launchd'",
+    "replacement": "a.kind === 'owned' || a.type === 'launchd'",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every ledger the product writes for these steps that has an artifact has an owned launchd one, and the shared ngrok-config entry fails both the original and the mutated predicate: find() skips the shared ngrok-config entry and returns the owned launchd artifact either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "agentCandidates",
+    "mutator": "ConditionalExpression",
+    "original": "a.kind === 'owned'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every ledger the product writes for these steps that has an artifact has an owned launchd one, and the shared ngrok-config entry fails both the original and the mutated predicate: no shared launchd artifact exists, so find() returns the owned launchd artifact either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "agentCandidates",
+    "mutator": "ConditionalExpression",
+    "original": "a.type === 'launchd'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every ledger the product writes for these steps that has an artifact has an owned launchd one, and the shared ngrok-config entry fails both the original and the mutated predicate: no owned artifact other than the launchd one exists, so find() returns it either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "legacyCandidateOwned",
+    "mutator": "BlockStatement",
+    "original": "{\n    return false;\n  }",
+    "replacement": "{}",
+    "reason": "The only caller, agentCandidates, uses the result only as a ternary condition; an unreadable legacy plist returning undefined instead of false selects the same candidate list."
+  },
+  {
+    "file": "packages/cezar/src/server-command.ts",
+    "function": "runAndReportServerCommand",
+    "mutator": "ConditionalExpression",
+    "original": "mode === 'uninstall'",
+    "replacement": "true",
+    "reason": "ServerCommandMode has three values and install and deploy with a complete status take the two earlier branches, so the third branch sees a complete status only in uninstall."
+  },
+  {
+    "file": "packages/cezar/src/ci-wait/tools.ts",
+    "function": "invokeDoneTool",
+    "mutator": "StringLiteral",
+    "original": "'Cezar'",
+    "replacement": "\"\"",
+    "reason": "productName ignores its argument (_legacy) and returns productIdentity().displayName, so the hint text is the same for any argument."
+  },
+  {
+    "file": "packages/cezar/src/server/start-server.ts",
+    "function": "shutdownForRestart",
+    "mutator": "ConditionalExpression",
+    "original": "'closeAllConnections' in server",
+    "replacement": "true",
+    "reason": "server is always a node:http Server: the listener parameter is typed node:http Server and serve() is called without createServer, which makes a node:http server; the check only narrows the ServerType union for TypeScript."
   }
 ]

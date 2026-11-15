@@ -15,6 +15,7 @@ import { WorkspaceAutomationScheduler } from '../automations/scheduler.ts';
 import { AutomationProjectUnavailableError } from '../automations/schedule-runner.ts';
 import { launchAutomationRun, launchScheduledRun, rebaselineIdleAutomations, reconcileAutomationReceipts } from '../automations/task-template.ts';
 import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { basename } from 'node:path';
 import { getRequestListener, serve, type ServerType } from '@hono/node-server';
 import type { RunManager } from '../workflows/run.ts';
@@ -303,16 +304,11 @@ export function startServer(deps: ServerDeps, port: number, listener?: Server): 
   // asks for an ephemeral one, so the requested number is not an address. Deliveries queue
   // behind this, so none goes out before it is set.
   const setTaskWebhookOrigin = () => {
-    const address = server.address();
-    const bound = address && typeof address === 'object' ? address.port : port;
+    const bound = (server.address() as AddressInfo).port;
     listeningPort = bound;
     cockpitOrigin = cockpitOriginFor(deps.bindHost, bound);
     taskWebhooks.setOrigin(cockpitOrigin);
     addressManager({ id: bootProjectId, manager: deps.manager });
-    for (const id of sharedContexts.ids()) {
-      const context = sharedContexts.peek(id);
-      if (context) addressManager(context);
-    }
   };
   if (server.listening) setTaskWebhookOrigin();
   else server.once('listening', setTaskWebhookOrigin);
