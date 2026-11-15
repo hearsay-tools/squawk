@@ -102,6 +102,13 @@ describe('installTailwindConfig', () => {
     expect(document.head.firstElementChild!.textContent).toBe(`${variant}@theme {\n\n}`)
   })
 
+  it('skips theme keys that name an Object.prototype member (hearsay-tools/squawk#2890)', () => {
+    const tailwind = install()
+    const own = '"toString":{"a":"1"},"constructor":{"a":"1"},"__proto__":{"a":"1"}'
+    tailwind.config = JSON.parse(`{"theme":{${own},"extend":{${own}}}}`)
+    expect(document.head.firstElementChild!.textContent).toBe('@theme {\n\n}')
+  })
+
   it('tolerates a config that is not an object', () => {
     const tailwind = install()
     tailwind.config = null

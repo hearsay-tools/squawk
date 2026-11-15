@@ -5,6 +5,9 @@
  * the libraries in `LIBRARIES`, `prepareReport` puts the cockpit's own pinned copy into the page
  * instead. The code is loaded lazily, only for a report that names the library.
  */
+
+import { ownLookup } from '@open-mercato/cezar-api-client/contract/own-lookup'
+
 export type ReportLibraryId = 'tailwind' | 'tailwind-v3' | 'mermaid'
 
 /** The library code `prepareReport` copies into the page, by id. A missing id stays blocked. */
@@ -99,11 +102,15 @@ export function installTailwindConfig(): void {
     const theme = isRecord(settings.theme) ? settings.theme : {}
     const lines: string[] = []
     for (const [key, value] of Object.entries(theme)) {
-      if (!NAMESPACES[key]) continue
-      lines.push(`--${NAMESPACES[key]}-*: initial;`)
-      declare(lines, NAMESPACES[key], '', value)
+      const namespace = ownLookup(NAMESPACES, key)
+      if (!namespace) continue
+      lines.push(`--${namespace}-*: initial;`)
+      declare(lines, namespace, '', value)
     }
-    for (const [key, value] of Object.entries(isRecord(theme.extend) ? theme.extend : {})) if (NAMESPACES[key]) declare(lines, NAMESPACES[key], '', value)
+    for (const [key, value] of Object.entries(isRecord(theme.extend) ? theme.extend : {})) {
+      const namespace = ownLookup(NAMESPACES, key)
+      if (namespace) declare(lines, namespace, '', value)
+    }
     return `${darkVariant(settings.darkMode)}@theme {\n${lines.join('\n')}\n}`
   }
   const sheet = document.createElement('style')
