@@ -5,5 +5,6 @@ export const waitingBeforeFinalWorkflowStep = atContinue.waitingBeforeFinalWorkf
 export const waitingWorkflowStepIndex = atContinue.waitingWorkflowStepIndex;
 export const continuationNextStep = atContinue.continuationNextStep;
 export const ciWorkflowResumeStepIndex = atContinue.ciWorkflowResumeStepIndex;
+export const workflowStartIndex = atContinue.workflowStartIndex;
 export const resumableSessionId = atContinue.resumableSessionId;
 export const isSyntheticContinuation = atContinue.isSyntheticContinuation;

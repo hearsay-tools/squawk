@@ -11,7 +11,7 @@ import type { UiEventSink } from '../../runs/ui-event-sink.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { WorkflowDef, WorkflowStepDef } from '../types.ts';
 import type { ContinuationClose, SessionTurn, StepLoop, RunModuleContext } from './types.ts';
-import type { RunExitId } from '../../runs/run-exits.ts';
+import type { ExitCall, RunExitId } from '../../runs/run-exits.ts';
 import { atTaskHead, atContinue, narrowReviewConfig } from './launch-read-resolver.ts';
 import { worktreeDiff } from '../../git-worktree.ts';
 import type { AutosaveReason } from '../../autosave-commit.ts';
@@ -19,7 +19,7 @@ import { reviewGateEnabled } from '../../runs/review-gate.ts';
 import { settlesAsDone } from './steps.ts';
 import { clearIdleTimer, clearAutosaveTimer } from './input-timers.ts';
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
-import { waitingBeforeFinalWorkflowStep, waitingWorkflowStepIndex, ciWorkflowResumeStepIndex } from './workflow-position.ts';
+import { waitingBeforeFinalWorkflowStep, waitingWorkflowStepIndex, ciWorkflowResumeStepIndex, workflowStartIndex } from './workflow-position.ts';
 import * as stepDecisions from './step-decisions.ts';
 import * as completionGateReads from './completion-gate.ts';
 import type { HumanWaits } from './human-waits.ts';
@@ -36,7 +36,7 @@ interface RunSettlementHost {
   isSyntheticContinuation(run: RunRecord, step: StepState): boolean;
   generation(id: string): symbol | undefined;
   isActive(id: string): boolean;
-  move(id: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): RunRecord | undefined;
+  move(id: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>, call?: ExitCall): RunRecord | undefined;
   dropActive(id: string): void;
   saveWorktree(id: string, state: ActiveRun, reason: AutosaveReason): Promise<void>;
   settleSuccess(id: string, durableRootFinish?: boolean, keepStepId?: string): Promise<void>;
@@ -222,16 +222,20 @@ export class RunSettlement {
     this.host.move(runId, 'cancel');
   }
 
-  /** The Continue's step is done: settle the run, or the workflow step it resumed. Returns the
-   *  settlement to wait for, or undefined when it queued the workflow remainder. */
+  /** The Continue's step is done: queue the workflow from its `start` cursor (a Continue that
+   *  repaired what stopped the next step, hearsay-tools/squawk#1621), settle the workflow step it
+   *  resumed, or settle the run. Returns the settlement to wait for, or undefined when it queued
+   *  the workflow remainder. */
   settleDoneContinuation(runId: string, state: ActiveRun, stepId: string, close: ContinuationClose): Promise<void> | undefined {
     this.context.store.updateStep(runId, stepId, { status: 'done', finishedAt: new Date().toISOString() });
     this.context.store.appendEvent(runId, { type: 'step-end', stepId, status: 'done' });
     const completed = this.context.store.getRun(runId);
-    const waitingIndex = completed ? this.waitingWorkflowStepIndex(completed) : -1;
-    if (completed && atContinue.storedWorkflow(completed) && waitingIndex >= 0) {
-      return this.settleResumedWorkflowStep(runId, state, stepId, completed, atContinue.storedWorkflow(completed)!, waitingIndex, close);
-    }
+    const workflow = completed ? atContinue.storedWorkflow(completed) : undefined;
+    if (!completed || !workflow) return this.succeedContinuation(runId);
+    const startIndex = workflowStartIndex(completed, workflow);
+    if (startIndex >= 0) return this.queueWorkflowRemainder(runId, state, completed, workflow, startIndex, close);
+    const waitingIndex = this.waitingWorkflowStepIndex(completed);
+    if (waitingIndex >= 0) return this.settleResumedWorkflowStep(runId, state, stepId, completed, workflow, waitingIndex, close);
     return this.succeedContinuation(runId);
   }
 
@@ -248,22 +252,36 @@ export class RunSettlement {
   ): Promise<void> | undefined {
     const waitingStep = atContinue.workflowStep(workflow, waitingIndex)!;
     // The continuation succeeded, not the failed attempt it recovered.
-    if (waitingStep.id !== completed.workflowResumeStepId) {
+    if (completed.workflowCursor?.mode !== 'resume' || waitingStep.id !== completed.workflowCursor.stepId) {
       this.context.store.updateStep(runId, waitingStep.id, { status: 'done', finishedAt: new Date().toISOString() });
       this.context.store.appendEvent(runId, { type: 'step-end', stepId: waitingStep.id, status: 'done' });
     }
+    return this.queueWorkflowRemainder(runId, state, completed, workflow, waitingIndex + 1, close);
+  }
+
+  /** Queue the workflow from step `next`, which becomes the run's `start` cursor, or settle the run
+   *  when no step is left or Finish was requested. */
+  queueWorkflowRemainder(
+    runId: string,
+    state: ActiveRun,
+    completed: RunRecord,
+    workflow: WorkflowDef,
+    next: number,
+    close: ContinuationClose,
+  ): Promise<void> | undefined {
     // Finish accepts this resumed step before the async settlement gate,
     // but must not launch the remaining workflow. A later cancellation
     // may cancel still-live steps, never this completed one (R30).
-    if (!state.liveSession.finishRequested && waitingIndex < atContinue.workflowLength(workflow) - 1) {
-      close.resumeWorkflow = atTaskHead.resumedPayload(workflow, waitingIndex + 1, atTaskHead.recoveryInput(completed));
-      this.host.move(runId, 'requeue', { workflowResumeStepId: undefined });
+    if (!state.liveSession.finishRequested && next < atContinue.workflowLength(workflow)) {
+      close.resumeWorkflow = atTaskHead.resumedPayload(workflow, next, atTaskHead.recoveryInput(completed));
+      // The cursor holds the position until the step loop enters that step, so a setup that fails
+      // first leaves it for the next Continue (hearsay-tools/squawk#1621).
+      this.host.move(runId, 'requeue', {}, { stepId: atContinue.workflowStep(workflow, next)!.id, cursor: 'start' });
       // The workflow remainder is a crash boundary. Persist it before the
       // finally block awaits worktree autosave and installs its in-memory job.
       this.context.store.flush();
       return undefined;
     }
-    this.context.store.updateRun(runId, { workflowResumeStepId: undefined });
     return this.succeedContinuation(runId);
   }
 
@@ -324,7 +342,7 @@ export class RunSettlement {
     if (settlement.kind === 'cancelled') {
       this.settleCancelledRun(runId);
     } else if (settlement.kind === 'failed') {
-      this.settleFailedRun(runId, settlement.error, loop.deliveryCapped);
+      this.settleFailedRun(runId, settlement.error, loop.deliveryCapped, loop.resumeStepId);
     } else if (settlement.kind === 'incomplete') {
       await this.settleIncompleteStep(runId, settlement.stepId);
     } else if (settlement.kind === 'idle') {
@@ -343,10 +361,11 @@ export class RunSettlement {
     this.host.move(runId, 'cancel');
   }
 
-  /** The failed settlement. A capped wake delivery adds the cap's note. */
-  settleFailedRun(runId: string, runError: string, deliveryCapped: boolean): void {
+  /** The failed settlement. A capped wake delivery adds the cap's note. A failed step whose
+   *  wakes were owed stays the workflow cursor a Continue resumes. */
+  settleFailedRun(runId: string, runError: string, deliveryCapped: boolean, resumeStepId?: string): void {
     if (this.autoResumeScheduler.holdFailure(runId, runError)) return;
-    this.host.move(runId, 'fail', { error: runError });
+    this.host.move(runId, 'fail', { error: runError }, resumeStepId ? { stepId: resumeStepId, cursor: 'resume' } : {});
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: `run failed — ${runError}` });
     if (deliveryCapped) this.context.store.appendEvent(runId, { type: 'note', message: this.wakeDeliveryCapNote });
   }

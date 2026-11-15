@@ -1,0 +1,25 @@
+id: run-fact-write-outside-owner
+valid:
+  # The exit call that names the cursor.
+  - "this.host.move(runId, 'requeue', {}, { stepId: next.id, cursor: 'start' })"
+  # Schemas.
+  - 'const row = z.object({ workflowCursor: workflowCursorSchema.optional() })'
+  - 'const salvaged = { workflowCursor: contractRunRecordSchema.shape.workflowCursor.catch(undefined) }'
+  - "const row = z.object({ parkReason: z.enum(['turn', 'hold', 'closing-wakes']).optional() })"
+  - 'const reason = run.parkReason'
+  # Reads, comparisons, destructuring and type members.
+  - "const resumed = run.workflowCursor?.mode === 'resume' ? run.workflowCursor.stepId : undefined"
+  - 'if (run.workflowCursor) start(run.workflowCursor.stepId)'
+  - 'const { workflowCursor } = run'
+  - 'const { workflowCursor: _cursor, ...rest } = run'
+  - 'type Read = { workflowCursor?: WorkflowCursor }'
+  - 'interface Row { workflowCursor?: { stepId: string } }'
+invalid:
+  - "this.context.store.updateRun(runId, { workflowCursor: { stepId, mode: 'start' } })"
+  - 'this.context.store.updateRun(runId, { workflowCursor: undefined })'
+  - "this.host.move(runId, 'requeue', { workflowCursor: { stepId: next.id, mode: 'start' } })"
+  - 'const next = { ...run, workflowCursor }'
+  - 'run.workflowCursor = undefined'
+  - "record.workflowCursor = { stepId: 'review', mode: 'resume' }"
+  - "this.context.store.updateRun(runId, { parkReason: 'turn' })"
+  - 'const parked = { ...run, parkReason }'

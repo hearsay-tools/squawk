@@ -230,7 +230,8 @@ export function continuationDefStep(store: RunStore, record: RunRecord | undefin
   if (defSteps === undefined) return undefined;
   const owningStep = sessionId === undefined ? undefined : record?.steps.find((s) => s.sessionId === sessionId);
   if (sessionId !== undefined && owningStep === undefined) return undefined;
-  const ciSource = defSteps.find(step => step.id === record?.workflowResumeStepId && stepKind(step) === 'agent');
+  const resumed = record?.workflowCursor?.mode === 'resume' ? record.workflowCursor.stepId : undefined;
+  const ciSource = resumed === undefined ? undefined : defSteps.find(step => step.id === resumed && stepKind(step) === 'agent');
   if (ciSource && record?.steps.find(step => step.id === ciSource.id)?.status === 'failed') return ciSource;
   return defSteps.find((s) => s.id === owningStep?.id) ?? [...defSteps].reverse().find((s) => stepKind(s) === 'agent');
 }

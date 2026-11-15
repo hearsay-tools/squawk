@@ -15,7 +15,7 @@
  * the test setup fails the test after it ran. Outside strict mode each violation is one
  * `console.warn` and nothing is recorded.
  */
-import type { RunRecord, RunStatus, StepState } from '@open-mercato/cezar-contract';
+import type { RunRecord, RunStatus, StepState, WorkflowCursor } from '@open-mercato/cezar-contract';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 
 /** The fields a write that applies a run exit patches beside it: never the status, which the exit
@@ -23,8 +23,9 @@ import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold'
 export type RunPatch = Partial<Omit<RunRecord, 'id' | 'steps' | 'status' | 'waits' | 'lastWaits'>> & { status?: never; waits?: never; lastWaits?: never };
 
 /** What a caller names beside an exit's extras: the step the exit settles apart from the others,
- *  and the text of the lifecycle event the exit writes, when the caller's says more. */
-export type ExitCall = { stepId?: string | undefined; event?: string | undefined };
+ *  the text of the lifecycle event the exit writes, when the caller's says more, and, on an exit
+ *  that records the workflow cursor (`cursorFields`), how the workflow goes on from that step. */
+export type ExitCall = { stepId?: string | undefined; event?: string | undefined; cursor?: WorkflowCursor['mode'] | undefined };
 
 /** What an exit reads beside the record: one time for every field it stamps, and the step the
  *  caller names. */
@@ -39,7 +40,7 @@ export type StepSettlement = ExitSettlement & { finishedAt: string; error?: stri
 export type ExitDurability = 'debounced' | 'committed';
 
 /** What an exit's `fields` and `steps` read off the record a write applies it to. */
-export type ExitRead = Pick<RunRecord, 'status' | 'delegation'> & Partial<Pick<RunRecord, 'finishedAt' | 'currentStepId' | 'error'>> & { steps?: readonly StepState[] };
+export type ExitRead = Pick<RunRecord, 'status' | 'delegation'> & Partial<Pick<RunRecord, 'finishedAt' | 'currentStepId' | 'error' | 'workflowCursor'>> & { steps?: readonly StepState[] };
 
 /**
  * One kind of status write: the statuses it may leave from and the one it writes. `fields` are
@@ -97,10 +98,20 @@ const settledRun = (run: ExitRead, write: RunPatch, { now }: ExitSettlement): Ru
 /** The legacy `activity` cleared: a key no patch type takes (`WithLegacyActivity`). */
 const CLEARED_ACTIVITY = { activity: undefined } as RunPatch;
 
-/** A run that succeeded: its resume counter and the legacy `activity` retired. A run that got all
- *  the way to a settled turn is not in a usage-limit loop, so its resume counter starts over
- *  instead of creeping toward the cap. */
-const succeeded = (): RunPatch => ({ autoResumeAttempts: undefined, ...CLEARED_ACTIVITY });
+/** A run that succeeded: its resume counter, its workflow cursor and the legacy `activity` retired.
+ *  A run that got all the way to a settled turn is not in a usage-limit loop, so its resume counter
+ *  starts over instead of creeping toward the cap. */
+const succeeded = (): RunPatch => ({ autoResumeAttempts: undefined, workflowCursor: undefined, ...CLEARED_ACTIVITY });
+
+/** The workflow cursor (ADR 0064) a caller names: the step it names, which a Continue resumes
+ *  (`resume`) or the step loop starts (`start`). Nothing when the caller names no mode: the run
+ *  keeps its cursor. */
+const cursorFields = (at: ExitSettlement): RunPatch =>
+  at.cursor && at.stepId ? { workflowCursor: { stepId: at.stepId, mode: at.cursor } } : {};
+
+/** The step loop entered the cursor's step: the run is on it now, so the cursor is spent. */
+const enteredStep = (run: ExitRead, { stepId }: ExitSettlement): RunPatch =>
+  run.workflowCursor && run.workflowCursor.stepId === stepId ? { workflowCursor: undefined } : {};
 
 /** A step that is running or waiting. */
 const openStep = (step: StepState) => step.status === 'running' || step.status === 'waiting';
@@ -141,15 +152,15 @@ export const RUN_CANCELLED = 'run cancelled';
 const rootFinishWaiting = (run: RunRecord) => run.status === 'waiting' && rootFinishPending(run);
 
 export const RUN_EXITS = {
-  start: { durability: 'debounced', from: ['queued', 'running', 'waiting'], to: 'running' },
+  start: { durability: 'debounced', from: ['queued', 'running', 'waiting'], to: 'running', fields: enteredStep },
   'start-held': { durability: 'debounced', from: ['queued'], to: 'queued' },
-  requeue: { durability: 'debounced', from: ['queued', 'running', 'failed'], to: 'queued', fields: () => ({ currentStepId: undefined }) },
+  requeue: { durability: 'debounced', from: ['queued', 'running', 'failed'], to: 'queued', fields: (_run, at) => ({ currentStepId: undefined, ...cursorFields(at) }) },
   'continue-line': { durability: 'debounced', from: ['waiting', 'review', 'done', 'failed', 'cancelled'], to: 'queued',
     fields: () => ({ error: undefined, finishedAt: undefined, currentStepId: undefined }) },
   // The step it runs is the caller's: `currentStepId` is an extra.
   'continue-now': { durability: 'debounced', from: ['waiting', 'review', 'done', 'failed', 'cancelled'], to: 'running',
     fields: () => ({ error: undefined, finishedAt: undefined }) },
-  park: { durability: 'debounced', from: ['running', 'queued', 'waiting'], to: 'waiting', steps: parkedStep },
+  park: { durability: 'debounced', from: ['running', 'queued', 'waiting'], to: 'waiting', fields: (_run, at) => cursorFields(at), steps: parkedStep },
   // A park that gives up its slot (hearsay-tools/cezarion#1235): committed at once, so a refused
   // write throws with nothing changed and the caller keeps the slot.
   'park-release': { durability: 'committed', from: ['running', 'queued', 'waiting'], to: 'waiting', settle: settleParkRelease, steps: parkedStep },
@@ -157,7 +168,7 @@ export const RUN_EXITS = {
   hold: { durability: 'debounced', from: ['failed', 'waiting'], to: 'waiting', fields: () => ({ finishedAt: undefined }) },
   // A provider error or usage limit holds the failing run in its failure's own write
   // (hearsay-tools/squawk#3337): never a transient `failed` a worker cascade or a parent's wait reads.
-  'hold-failure': { durability: 'debounced', from: ['running', 'waiting'], to: 'waiting', fields: () => ({ finishedAt: undefined }), steps: failedStep },
+  'hold-failure': { durability: 'debounced', from: ['running', 'waiting'], to: 'waiting', fields: (_run, at) => ({ finishedAt: undefined, ...cursorFields(at) }), steps: failedStep },
   resume: { durability: 'debounced', from: ['waiting'], to: 'running' },
   succeed: { durability: 'debounced', from: ['running', 'waiting'], to: 'done', fields: succeeded, steps: succeededStep },
   'succeed-review': { durability: 'debounced', from: ['running', 'waiting'], to: 'review', fields: succeeded, steps: succeededStep },
@@ -169,7 +180,7 @@ export const RUN_EXITS = {
   // settled run that is published reads done too. The route refuses a usage-limit hold (spec B13).
   'draft-pr': { durability: 'debounced', from: ['review', 'done', 'failed', 'cancelled'], to: 'done' },
   'fail-start': { durability: 'debounced', from: ['queued', 'running'], to: 'failed', steps: failedStep },
-  fail: { durability: 'debounced', from: ['running', 'waiting'], to: 'failed', steps: failedStep },
+  fail: { durability: 'debounced', from: ['running', 'waiting'], to: 'failed', fields: (_run, at) => cursorFields(at), steps: failedStep },
   // settleFailedContinuation alone: a worker Stop can record cancelled before it settles.
   'fail-continue': { durability: 'debounced', from: ['running', 'waiting', 'cancelled'], to: 'failed', steps: failedStep },
   'fail-interrupted': { durability: 'debounced', from: ['queued', 'running', 'waiting'], to: 'failed',

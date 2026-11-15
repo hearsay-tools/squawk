@@ -1,0 +1,35 @@
+id: run-fact-write-outside-owner
+language: typescript
+severity: warning
+message: >-
+  A run lifecycle fact has one owner that records it when the thing happens (ADR 0064,
+  .ai/specs/2026-11-15-run-lifecycle-facts.md). `workflowCursor` and `parkReason` are written only
+  by the exits' fields() in runs/run-exits.ts: for the cursor, name the step and the mode in the
+  ExitCall (`{ stepId, cursor: 'start' | 'resume' }`) of the exit you move the run with.
+files:
+  - packages/cezar/src/**/*.ts
+  - packages/contract/src/**/*.ts
+ignores:
+  - packages/cezar/src/**/*.test.ts
+  - packages/cezar/src/**/*.testkit.ts
+  - packages/contract/src/**/*.test.ts
+  - packages/contract/src/**/*.testkit.ts
+  # The owner: each exit's fields() writes the cursor (cursorFields, enteredStep, succeeded) and the
+  # park reason.
+  - packages/cezar/src/runs/run-exits.ts
+  # The read-time upgrade of a saved `workflowResumeStepId` (upgradeLegacyWorkflowCursor).
+  - packages/cezar/src/runs/legacy-workflow-cursor.ts
+utils:
+  run-fact: { regex: '^(workflowCursor|parkReason)$' }
+rule:
+  all:
+    - any:
+        # `{ workflowCursor: … }` and `{ workflowCursor }` in a patch, a record or a spread.
+        - { kind: pair, has: { field: key, matches: run-fact } }
+        - { kind: shorthand_property_identifier, matches: run-fact }
+        # `run.workflowCursor = …`
+        - { kind: assignment_expression, has: { field: left, kind: member_expression, has: { field: property, matches: run-fact } } }
+    # Left out: a schema (`z.…`, `…Schema.…`), which declares the field. Reads, destructuring and
+    # type members are other node kinds. A patch built under another name, or with a computed key,
+    # is not seen: the rule sees literals.
+    - not: { has: { field: value, regex: '^z\.|Schema\b|Schema\.' } }

@@ -188,6 +188,7 @@ export const STEP_COMPLETION_CRITERIA = [
   { id: 'C4', scenario: 'baseline', name: 'an idle close leaves the earlier step waiting; a Continue without done parks on it again' },
   { id: 'C5', scenario: 'baseline', name: 'restart recovery keeps the parked earlier step; Continue with done runs the tail' },
   { id: 'C6', scenario: 'autonomous', name: 'an autonomous earlier step is nudged to its done, then the tail runs' },
+  { id: 'C7', scenario: 'baseline', name: 'a worktree setup that fails before the tail keeps its position across a restart; the repair Continue with done runs the tail once' },
 ] as const;
 
 /** #470: exercised in workflow-timeout-parity.testkit.ts against every native wire. */

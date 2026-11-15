@@ -188,6 +188,10 @@ export const runPullRequestSchema = z.object({
   Number(/\/pull\/(\d+)/i.exec(entry.url)?.[1]) === entry.number, { message: 'PR URL and number must agree' });
 export type RunPullRequest = z.infer<typeof runPullRequestSchema>;
 
+/** The workflow step a run goes on from, and how (ADR 0064). */
+export const workflowCursorSchema = z.object({ stepId: z.string(), mode: z.enum(['resume', 'start']) });
+export type WorkflowCursor = z.infer<typeof workflowCursorSchema>;
+
 export const runRecordSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -205,8 +209,10 @@ export const runRecordSchema = z.object({
   stopping: z.boolean().optional(),
   /** Opening Continue message, retained until its first completed turn for crash recovery. */
   continuationMessage: continuationMessageSchema.optional(),
-  /** Original workflow agent awaiting CI recovery; independent of its failed attempt status. */
-  workflowResumeStepId: z.string().optional(),
+  /** The workflow step the run goes on from (ADR 0064): `resume` continues that step's session (a
+   *  failed attempt awaiting CI recovery or a provider retry), `start` runs it after a Continue
+   *  completed the step before it. Only the run exits write it (`runs/run-exits.ts`). */
+  workflowCursor: workflowCursorSchema.optional(),
   /** The last turn carried a malformed explicit structured question. */
   invalidAsk: z.boolean().optional(),
   /** Owned-run authority; absence is legacy, invalid is explicitly quarantined. */

@@ -72,6 +72,7 @@ import { listBranchOwners, type BranchOwner } from './branch-owners.ts';
 import { restoreLostReferencedPullRequest } from './loaded-run-healing.ts';
 import { failLoadedInterruptedRun, restoreLoadedUsageLimitHold, settleLoadedStop } from './loaded-run-exits.ts';
 import { hasLegacyWaitFields, upgradeLegacyWaits, UNREADABLE_WAIT } from './legacy-waits.ts';
+import { upgradeLegacyWorkflowCursor } from './legacy-workflow-cursor.ts';
 export { ciWaitEntry, holdsWorkerWait, upgradeLegacyWaits, workerWaitEntry } from './legacy-waits.ts';
 import { ExitEvents } from './exit-events.ts';
 import { encodeRunRow, isLiveRecord, isLiveStatus, materializedWorktreePath } from './run-row.ts';
@@ -147,6 +148,7 @@ export const runRecordSchema = contractRunRecordSchema.extend({
       })
     : undefined, z.array(runPullRequestSchema).optional()),
   worktreeSetup: contractRunRecordSchema.shape.worktreeSetup.catch(undefined),
+  workflowCursor: contractRunRecordSchema.shape.workflowCursor.catch(undefined),
   archived: z.boolean().default(false),
   workflowDef: workflowDefSchema.optional().catch(undefined),
   steps: z.array(stepStateSchema),
@@ -167,6 +169,7 @@ export function parseRunRecords(raw: unknown) {
   if (Array.isArray(raw)) for (const row of raw) {
     if (!row || typeof row !== 'object') continue;
     upgradeLegacyWaits(row);
+    upgradeLegacyWorkflowCursor(row);
     // One unreadable wait must not evict the run, nor its readable siblings.
     for (const key of ['waits', 'lastWaits'] as const) {
       if (row[key] === undefined) continue;

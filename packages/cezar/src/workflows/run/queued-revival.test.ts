@@ -26,7 +26,7 @@ it('revives a queued continuation with no earlier session as that continuation',
     makeStepState({ id: 'continue-1', kind: STEP_KIND.agent, status: STEP_STATUS.pending, synthetic: 'continuation' }),
   ];
   const created = store.createRun({ title: 'held', task: 'build it', workflow: 'quick-task', steps: [] });
-  const run = makeRunRecord({ id: created.id, status: RUN_STATUS.queued, runner: 'codex', steps, workflowResumeStepId: 'build', autoResumeReason: 'provider-error',
+  const run = makeRunRecord({ id: created.id, status: RUN_STATUS.queued, runner: 'codex', steps, workflowCursor: { stepId: 'build', mode: 'resume' as const }, autoResumeReason: 'provider-error',
     continuationMessage: { id: 'continue-1', text: 'A provider error stopped this step. Your instructions: build it', origin: 'lifecycle', createdAt: new Date().toISOString() } });
   const enqueueContinuation = vi.fn(); const enqueueJob = vi.fn();
   const host = { isActive: () => false, workerExecutionStopped: () => false, isSyntheticContinuation: (_run: unknown, step: { synthetic?: string }) => step.synthetic === 'continuation',
