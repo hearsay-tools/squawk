@@ -1,7 +1,7 @@
 import { testHome } from '../home/test-home.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { createAutoUi } from './ui.ts';
-import { aptInstallTool, brewInstallTool, depCheckStep, generatePassword, sudoStep, StepAborted, StepSkipped, verifyCommand } from './steps.ts';
+import { aptInstallTool, brewInstallTool, brewRemoveHint, depCheckStep, generatePassword, sudoStep, StepAborted, StepSkipped, verifyCommand } from './steps.ts';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import type { BackendCheck } from '../core/backend-detect.ts';
 import type { CommandResult, InstallContext, Runner, Ui } from './types.ts';
@@ -274,5 +274,18 @@ describe('agent CLI installers', () => {
     const npm = /npm install -g \S+$/.exec(EXPECTED[runner]);
     expect(lines).toEqual([npm ? `info: DRY RUN — would run: sudo bash -lc '${npm[0]}'` : EXPECTED[runner]]);
     expect(interactive).not.toHaveBeenCalled();
+  });
+});
+
+describe('brewRemoveHint', () => {
+  it.each([
+    ['claude', 'npm rm -g @anthropic-ai/claude-code'],
+    ['codex', 'npm rm -g @openai/codex'],
+    ['opencode', '# remove opencode manually'],
+    ['pi', '# remove pi manually'],
+    ['gh', 'brew uninstall gh'],
+    ['git', '# remove git manually'],
+  ])('names how to remove %s', (name, hint) => {
+    expect(brewRemoveHint(name)).toBe(hint);
   });
 });
