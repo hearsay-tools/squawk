@@ -121,6 +121,20 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     expect(git(root, 'rev-parse', 'keeper')).toBe(tip);
   });
 
+  it('deletes a stranded branch whose commits a remote-tracking branch keeps (hearsay-tools/squawk#911)', async () => {
+    const { root, first } = await fixture();
+    const workspace = await createOwnedWorkspace(root, randomUUID(), first);
+    await writeFile(join(workspace.path, 'tracked.txt'), 'worker');
+    git(workspace.path, 'commit', '-qam', 'worker');
+    const tip = git(workspace.path, 'rev-parse', 'HEAD');
+    // The worker pushed its branch: only the remote-tracking ref keeps the commit locally.
+    git(root, 'update-ref', `refs/remotes/origin/${workspace.branch}`, tip);
+    await strand(root, workspace, 'deleted and pruned');
+    expect(await removeOwnedWorkspace(root, workspace)).toMatchObject({ state: 'complete', remaining: [] });
+    expect(git(root, 'branch', '--list', workspace.branch)).toBe('');
+    expect(git(root, 'rev-parse', `refs/remotes/origin/${workspace.branch}`)).toBe(tip);
+  });
+
   it('keeps a stranded branch when the branch that keeps its commits moves before the delete (hearsay-tools/squawk#911)', async () => {
     const { root, first } = await fixture();
     const workspace = await createOwnedWorkspace(root, randomUUID(), first);
