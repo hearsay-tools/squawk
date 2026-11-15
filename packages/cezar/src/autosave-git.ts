@@ -1,10 +1,9 @@
 import { logPrefix } from './home/display.ts';
 import { productEnvEntries } from './core/product-env.ts';
-import { gitEnv } from './git-command.ts';
+import { spawnGit } from './git-command.ts';
 import { autosaveGroupExists, autosaveGroupSnapshotAlive, groupInspectionFailed } from './autosave-group.ts';
 import type { AutosaveCleanupProof } from './autosave-cleanup.ts';
 import { describeProcesses, processStartToken } from './delegation/process-liveness.ts';
-import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { watchAutosaveHolders, type AutosaveHolders } from './autosave-holders.ts';
@@ -199,8 +198,8 @@ async function runAutosaveGit(save: AutosaveSave, args: string[]): Promise<Autos
     const grouped = process.platform !== 'win32';
     // Git maintenance detaches and may move to the shared git directory.
     // Suppress it for this command only; never rewrite the repository config.
-    const child = spawn('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args], {
-      cwd, detached: grouped, stdio: ['ignore', 'pipe', 'pipe'], env: autosaveOwnerEnv(save.marker, gitEnv()),
+    const child = spawnGit(['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args], {
+      cwd, detached: grouped, stdio: ['ignore', 'pipe', 'pipe'], baseEnv: autosaveOwnerEnv(save.marker),
     });
     save.leader = child.pid;
     let stdout = '';

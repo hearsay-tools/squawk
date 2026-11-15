@@ -135,9 +135,8 @@ function searchDatabase(db: RunDatabase, dataDir: string, query: string, { handl
  *  nothing is left out. */
 function projectRows(db: RunDatabase, rows: readonly RunSummaryRow[], dataDir: string, handle?: RepoHandle | null): RunSummary[] {
   const summaries = rows.map((row) => parseSummary(row.summary));
-  // `json_extract` throws on a summary that is not JSON; such a row is decoded anyway.
   const repaired = new Set(rows.length === 0 ? [] : db.listKeysWhere(
-    `id IN (SELECT value FROM json_each(?)) AND CASE WHEN json_valid(summary) THEN (${LOAD_REPAIR_SQL}) ELSE 1 END`,
+    `id IN (SELECT value FROM json_each(?)) AND (${LOAD_REPAIR_SQL})`,
     [JSON.stringify(rows.map((row) => row.id))],
   ).map((key) => key.id));
   const decode = rows.map((row, i) => {

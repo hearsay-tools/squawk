@@ -3,6 +3,7 @@ import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { productEnv } from './product-env.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { runGit } from '../git-command.ts';
 
 const exec = promisify(execFile);
 
@@ -205,7 +206,7 @@ async function probeGh(): Promise<BackendCheck> {
 
 async function probeGit(): Promise<BackendCheck> {
   try {
-    const { stdout } = await exec('git', ['--version'], { timeout: 10_000 });
+    const { stdout } = await runGit(['--version'], { timeout: 10_000 });
     return { name: 'git', available: true, version: stdout.trim() };
   } catch {
     return { name: 'git', available: false, hint: 'install git' };

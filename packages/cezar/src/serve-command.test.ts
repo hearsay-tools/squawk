@@ -15,10 +15,11 @@ function fixture() {
   const store = { close: vi.fn() };
   const webhooks = { attach: vi.fn() };
   const manager = {};
-  const delegation = { attachProject: vi.fn(), service: { setDiscovery: vi.fn() } };
+  const delegation = { attachProject: vi.fn(), service: { setDiscovery: vi.fn() }, close: vi.fn().mockResolvedValue(undefined) };
   const discovery = { models: {} };
+  const preview = { close: vi.fn().mockResolvedValue(undefined) };
   const events = { emit: vi.fn() };
-  const listener = { address: vi.fn(() => ({ address: '127.0.0.1', port: 4322 })) };
+  const listener = { address: vi.fn(() => ({ address: '127.0.0.1', port: 4322 })), close: vi.fn(), closeAllConnections: vi.fn() };
   const server = Object.assign(new EventEmitter(), {
     listening: true,
     address: vi.fn<() => { address: string; port: number } | string | null>(() => ({ address: '127.0.0.1', port: 4322 })),
@@ -27,13 +28,15 @@ function fixture() {
   const effects = {
     ...defaultServeDeps,
     CockpitOwnership: vi.fn(function () { return ownership; }),
+    recoverProjectMigration: vi.fn().mockResolvedValue(undefined),
+    moveProjectWhenIdle: vi.fn().mockResolvedValue(undefined),
     acquireServeListener: vi.fn().mockResolvedValue(listener),
     initWorkspace: vi.fn().mockResolvedValue('boot-id'),
     WorkspaceSemaphore: vi.fn(function () { return semaphore; }),
     openBootStore: vi.fn(() => store),
     TaskWebhooks: vi.fn(function () { return webhooks; }),
     previewToolEnabled: vi.fn(() => false),
-    PreviewHost: vi.fn(function () { return {}; }),
+    PreviewHost: vi.fn(function () { return preview; }),
     ToolActivityTracker: vi.fn(function () { return {}; }),
     RunManager: vi.fn(function (_store: unknown, _root: string, _opts: ManagerOptions) { return manager; }),
     DelegationController: { start: vi.fn(async (_cleanup?: WorkerCleanupFactory) => delegation) },
@@ -66,7 +69,7 @@ function fixture() {
   const run = (openBrowser = false, bindHost: string | undefined = undefined) => {
     return serveCommand(home, '/repo', 0, openBrowser, bindHost, deps);
   };
-  return { home, ownership, semaphore, store, webhooks, manager, delegation, discovery, events, listener, server, processStub, effects, deps, run };
+  return { home, ownership, semaphore, store, webhooks, manager, delegation, discovery, preview, events, listener, server, processStub, effects, deps, run };
 }
 
 describe('serveCommand', () => {
@@ -205,6 +208,75 @@ describe('serveCommand', () => {
     finish();
     await exited;
     expect(f.processStub.exit).toHaveBeenCalledWith(0);
+  });
+
+  it('installs the stop before the first boot step', async () => {
+    const f = fixture();
+    let listenersAtFirstStep: number[] = [];
+    f.effects.recoverProjectMigration.mockImplementation(async () => {
+      listenersAtFirstStep = (['SIGINT', 'SIGTERM', 'SIGHUP'] as const).map((signal) => f.processStub.listenerCount(signal));
+    });
+    await f.run();
+    expect(listenersAtFirstStep).toEqual([1, 1, 1]);
+    expect(f.effects.watchSupervisor).toHaveBeenCalledBefore(f.effects.recoverProjectMigration);
+  });
+
+  it.each(['SIGINT', 'SIGTERM', 'SIGHUP'] as const)('stops the parts boot built when %s arrives during recovery, and serves nothing', async (signal) => {
+    const f = fixture();
+    f.effects.previewToolEnabled.mockReturnValue(true);
+    f.effects.recoverServeProject.mockImplementation(async () => { f.processStub.emit(signal); });
+    await f.run();
+    expect(f.effects.stopServe).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ shutdownForRestart: expect.any(Function) }), signal, { store: f.store });
+    expect(f.effects.stopServe.mock.calls[0]![0]).not.toBe(f.server);
+    expect(f.effects.startServer).not.toHaveBeenCalled();
+    expect(f.effects.printServeBanner).not.toHaveBeenCalled();
+    expect(f.processStub.exit).toHaveBeenCalledWith(0);
+    await f.effects.stopServe.mock.calls[0]![0].shutdownForRestart();
+    expect(f.preview.close).toHaveBeenCalledBefore(f.delegation.close);
+    expect(f.delegation.close).toHaveBeenCalledBefore(f.listener.close);
+    expect(f.listener.closeAllConnections).toHaveBeenCalledOnce();
+    expect(f.listener.close).toHaveBeenCalledBefore(f.store.close);
+  });
+
+  it('stops before recovery when the signal arrives earlier, and closes only what exists', async () => {
+    const f = fixture();
+    f.effects.initWorkspace.mockImplementation(async () => { f.processStub.emit('SIGTERM'); return 'boot-id'; });
+    await f.run();
+    expect(f.effects.recoverServeProject).not.toHaveBeenCalled();
+    expect(f.effects.startServer).not.toHaveBeenCalled();
+    await f.effects.stopServe.mock.calls[0]![0].shutdownForRestart();
+    expect(f.listener.close).toHaveBeenCalledOnce();
+    expect(f.store.close).toHaveBeenCalledOnce();
+  });
+
+  it('waits for the stop instead of failing when a boot step fails under it', async () => {
+    const f = fixture();
+    let finish!: () => void;
+    let stopStarted!: () => void;
+    const started = new Promise<void>((resolve) => { stopStarted = resolve; });
+    f.effects.stopServe.mockImplementation(() => {
+      stopStarted();
+      return new Promise<void>((resolve) => { finish = resolve; });
+    });
+    f.effects.recoverServeProject.mockImplementation(async () => {
+      f.processStub.emit('SIGINT');
+      throw new Error('store closed');
+    });
+    let settled = false;
+    const serving = f.run().then(() => { settled = true; });
+    await started;
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    finish();
+    await serving;
+    expect(f.processStub.exit).toHaveBeenCalledWith(0);
+  });
+
+  it('still fails a boot step that fails with no stop', async () => {
+    const f = fixture();
+    f.effects.recoverServeProject.mockRejectedValue(new Error('recovery failed'));
+    await expect(f.run()).rejects.toThrow('recovery failed');
+    expect(f.effects.stopServe).not.toHaveBeenCalled();
   });
 
   it('ignores off-terminal hangups and maps supervisor loss to SIGTERM', async () => {

@@ -2,7 +2,7 @@ import { projectPaths } from './project-paths.ts';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ensureDataGitignore } from './data-gitignore.ts';
 
 describe('ensureDataGitignore', () => {
@@ -60,4 +60,28 @@ it('uses the common Git exclude in linked worktrees and leaves authored inputs c
     writeFileSync(join(linked, '.ai/squawk/runs.db'), 'runtime');
     expect(execFileSync('git', ['-C', linked, 'check-ignore', '.ai/squawk/runs.db'], { encoding: 'utf8' }).trim()).toBe('.ai/squawk/runs.db');
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+it('writes the shared exclude of its own repository when the process inherited GIT_DIR (hearsay-tools/squawk#3207)', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { existsSync } = await import('node:fs');
+  const { gitEnv } = await import('./git-command.ts');
+  const root = mkdtempSync(join(tmpdir(), 'cez-inherited-git-dir-'));
+  const repo = join(root, 'repo');
+  const other = join(root, 'other');
+  const exclude = (dir: string) => {
+    const path = join(dir, '.git/info/exclude');
+    return existsSync(path) ? readFileSync(path, 'utf8') : '';
+  };
+  try {
+    for (const dir of [repo, other]) execFileSync('git', ['init', '-q', dir], { env: gitEnv() });
+    vi.stubEnv('GIT_DIR', join(other, '.git'));
+    ensureDataGitignore(repo);
+    vi.unstubAllEnvs();
+    expect(exclude(repo)).toContain('/.ai/squawk/runs.db-shm');
+    expect(exclude(other)).not.toContain('/.ai/squawk/');
+  } finally {
+    vi.unstubAllEnvs();
+    rmSync(root, { recursive: true, force: true });
+  }
 });

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const yaml = require('yaml');
 const { classify } = require('./jev-friction-intake.cjs');
+const { LABELS } = require('./friction-policy.cjs');
 const workflow = () => yaml.parse(fs.readFileSync(path.join(__dirname, '../workflows/friction-intake.yml'), 'utf8'));
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
 
@@ -61,7 +62,7 @@ test('the real workflow entrypoints turn a Jev classification into only the expe
   const current = { number: 12, title: 'Missing evidence', body: 'Print events.', state: 'open', labels: [{ name: 'friction' }, { name: 'area-cezar' }] };
   let artifact;
   const github = { rest: { issues: {
-    get: async () => ({ data: structuredClone(current) }), getLabel: async () => ({}),
+    get: async () => ({ data: structuredClone(current) }), getLabel: async ({ name }) => ({ data: LABELS.find(l => l.name === name) }),
     addLabels: async ({ labels }) => { current.labels.push(...labels.map(name => ({ name }))); },
     removeLabel: async ({ name }) => { current.labels = current.labels.filter(l => l.name !== name); },
   } } };

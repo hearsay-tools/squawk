@@ -1,12 +1,9 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { runGit } from './git-command.ts';
 import { shellQuote } from './core/shell-env.ts';
-
-const run = promisify(execFile);
 
 async function git(cwd: string, args: string[]): Promise<{ code: number; stdout: string }> {
   try {
-    const { stdout } = await run('git', args, { cwd, encoding: 'utf8', timeout: 30_000 });
+    const { stdout } = await runGit(args, { cwd, timeout: 30_000 });
     return { code: 0, stdout: String(stdout).trim() };
   } catch (error) {
     const code = (error as { code?: unknown }).code;

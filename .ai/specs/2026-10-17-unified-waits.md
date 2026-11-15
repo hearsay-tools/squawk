@@ -1513,7 +1513,8 @@ depend on the runner's shell, so the omp reason for the `sh -c` wrapper no longe
 | Starter interrupted after the supervisor starts | Nothing stops the job | The supervisor claims the name and runs the command without a starter. No PID was printed: `status` gives it. A retry is refused and names the PID. |
 | Several starts of one name at once | Nothing | One supervisor claims the name. The others exit without running the command, and their starts are refused with the claimant's PID. |
 | Supervisor ends inside its claim | The kernel | The transaction rolls back, so the earlier record stands. The operating system drops the file lock. A first claim that ends this way leaves a database with nothing in it, which is a free name. |
-| The task ends (Finish, Stop, `cezar_done`) while a job with the default `<dir>` runs | Nothing stops the command | Cezar removes the task's temp directory with the record, the log and the place for the exit file. The command runs to its end and its output and exit code are lost. `--dir` avoids it. |
+| The task ends (Finish, Stop, `cezar_done`) while a job with the default `<dir>` runs | Nothing stops the command | Squawk keeps the task's temp directory, with the record, the log and the exit file, while the job runs (hearsay-tools/squawk#3138). The task's next end (after a Continue), its archive, or the next Squawk start removes the directory once no job in it runs, so a Continue after the job ended still reads its log and exit code. |
+| The task's history is deleted while a job with the default `<dir>` runs | Nothing stops the command | Squawk removes the temp directory at once. The command runs to its end; its output and exit code are lost. |
 | A name is started again while a process wait is open on its earlier start | Nothing | The earlier wait keeps its own exit file and reports the earlier start's code. |
 | Record deleted while the job runs | Nothing stops the job | `status` answers that no job has that name. A start of the name runs a second job beside the first. Each start has its own log and exit file, but the record is the only handle on the first job. |
 | Record unreadable, not a database, another program's database, or without its job row (damaged or forged) | Nothing | `start` and `status` refuse and name the file; nothing is replaced. A human deletes it after checking that no process of the job runs. |
@@ -1534,9 +1535,16 @@ starts nothing itself.
   new for each start: the process wait reads the exit file before the PID, so a wait still open
   on an earlier start of the name must never find a later start's code in its file. A command
   that cannot run exits 127; a signalled command exits 128 plus the signal.
-- `<dir>` defaults to `$TMPDIR`, the task's temp directory. Cezar removes it when the task ends
-  (`reapTerminalScratch`), so a job that must outlive the task takes `--dir` with a git-ignored
-  directory in the worktree, which a process wait also accepts for `exit_file`. The tool
+- `<dir>` defaults to `$TMPDIR`, the task's temp directory. A job recorded in it that still runs
+  keeps it when the task ends (hearsay-tools/squawk#3138, `jobRunsIn` in `jobs/job.ts`): the
+  task-end reap (`terminalScratchDisposition`), archive and the startup sweep spare it, and the
+  first of them that finds no job running removes it; the deferred cleanup does the same for a
+  worker's scratch. A reap that keeps it writes `.hsq-job-kept` with the run's `finishedAt`, so a
+  later reap of that same end (a read mark, any other run event) keeps it after the job exits too
+  (`jobHoldsScratch`); a Continue clears `finishedAt`, and the next end sets a new one. An archived
+  run's mark holds nothing: every archive path (manual, `archiveFinished`, archive on merge,
+  retention) removes the directory once no job in it runs. A record that cannot be read counts as running. Deleting the task's history
+  removes it at once. So a Continue after the job ended still finds the job by name. The tool
   description and the command's help say so.
 - It prints one JSON object: `name`, `pid` (the supervisor's), `log`, `exitFile`, `replaced`.
 - The supervisor, not its starter, claims the name: it is the process that lives as long as the

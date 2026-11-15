@@ -6,11 +6,13 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runRecordSchema as contractRunRecordSchema , runWorktreeSetupSchema } from '@open-mercato/cezar-contract/runs';
+import { claimJob, jobPaths } from '../jobs/job.ts';
+import { processStartToken } from '../detached-process.ts';
 import { historyPaths } from './history-file.ts';
 import { readRunIndexFromDisk } from './run-index.ts';
 import { RUNS_DB_FILE, RunDatabase } from './run-database.ts';
 import { RunStore, runRecordSchema } from './store.ts';
-import { setRunStatus, blockRunWrites, readPersistedRuns, readPersistedText, seedRuns } from './run-store.testkit.ts';
+import { setRunStatus, blockRunWrites, overwriteRunColumns, readPersistedRuns, readPersistedText, readStoredSummary, runIds, seedRuns } from './run-store.testkit.ts';
 import {
   STEP_KIND,
   RUN_STATUS,
@@ -72,6 +74,25 @@ describe('RunStore save lifecycle (#124)', () => {
       expect(existsSync(join(dataDir, 'tmp', status)), status).toBe(live);
       if (live) expect(readFileSync(join(dataDir, 'tmp', status, 'note.txt'), 'utf8')).toBe(status);
     }
+    store.flush();
+  });
+
+  it('archive keeps the scratch of a run whose job still runs (hearsay-tools/squawk#3138)', () => {
+    const ids = ['job-done', 'job-live'];
+    seedRuns(dataDir, [...ids.map((id) => ({ ...LEGACY_RUN, id, status: RUN_STATUS.done, archived: false })),
+      ...Array.from({ length: 300 }, (_, index) => ({ ...LEGACY_RUN, id: `newer-${index}`, archived: false, createdAt: '2026-02-01T00:00:00.000Z' }))]);
+    for (const id of ids) {
+      const scratch = join(dataDir, 'tmp', id);
+      mkdirSync(scratch, { recursive: true });
+      // A record naming this live process stands for a running supervisor; one with its exit code has ended.
+      const start = processStartToken(process.pid), exitFile = join(scratch, 'bench.1.exit');
+      claimJob(jobPaths(scratch, 'bench'), { name: 'bench', pid: process.pid, ...(start === undefined ? {} : { start }), command: ['x'],
+        startedAt: new Date().toISOString(), log: join(scratch, 'bench.1.log'), exitFile });
+      if (id === 'job-done') writeFileSync(exitFile, '0\n');
+    }
+    const store = RunStore.open(dataDir, { keepLive: true });
+    store.createRun({ title: 'trigger retention', workflow: 'w', task: 'task', steps: [] });
+    expect(ids.map((id) => [store.getRun(id)?.archived, existsSync(join(dataDir, 'tmp', id))])).toEqual([[true, false], [true, true]]);
     store.flush();
   });
 
@@ -3146,5 +3167,71 @@ describe('RunRecord.handoffRecords (hearsay-tools/cezarion#1809)', () => {
     expect(runRecordSchema.parse(LEGACY_RUN).handoffRecords).toBeUndefined();
     const previous = contractRunRecordSchema.omit({ handoffRecords: true });
     expect('handoffRecords' in previous.parse({ ...LEGACY_RUN, handoffRecords: records })).toBe(false);
+  });
+});
+
+describe('RunStore — a row whose stored summary is not JSON (hearsay-tools/squawk#3530)', () => {
+  let dataDir: string;
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'cez-store-'));
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  const BAD = { ...LEGACY_RUN, id: 'bad-summary', title: 'bad summary', createdAt: '2026-01-02T00:00:00.000Z' };
+  const HANDLE = { owner: 'o', name: 'r' };
+
+  it('opens, lists the run from its record, and the next save rewrites a valid summary', () => {
+    seedRuns(dataDir, [BAD]);
+    overwriteRunColumns(dataDir, BAD.id, { summary: 'malformed JSON' });
+    const store = RunStore.open(dataDir);
+    expect(store.listRunSummaries().runs.map((run) => [run.id, run.title])).toEqual([[BAD.id, BAD.title]]);
+    store.flush();
+    expect(JSON.parse(readStoredSummary(dataDir, BAD.id)!)).toMatchObject({ id: BAD.id, title: BAD.title });
+    store.close();
+  });
+
+  it('rewrites the bad summary of a live row that open keeps live', () => {
+    seedRuns(dataDir, [{ ...BAD, status: RUN_STATUS.queued }]);
+    overwriteRunColumns(dataDir, BAD.id, { summary: 'malformed JSON' });
+    const store = RunStore.open(dataDir, { keepLive: true });
+    expect(store.getRun(BAD.id)?.status).toBe(RUN_STATUS.queued);
+    store.flush();
+    expect(JSON.parse(readStoredSummary(dataDir, BAD.id)!)).toMatchObject({ id: BAD.id, status: RUN_STATUS.queued });
+    store.close();
+  });
+
+  it('arms a repository handle while the bad summary is still stored', () => {
+    seedRuns(dataDir, [BAD]);
+    overwriteRunColumns(dataDir, BAD.id, { summary: 'malformed JSON' });
+    const store = RunStore.open(dataDir);
+    expect(() => store.setRepoHandle(HANDLE)).not.toThrow();
+    expect(store.getRun(BAD.id)?.title).toBe(BAD.title);
+    store.close();
+  });
+
+  it('counts an undecodable row as unreadable, and every stored-row query skips it', () => {
+    seedRuns(dataDir, [BAD, LEGACY_RUN]);
+    overwriteRunColumns(dataDir, BAD.id, { data: 'not json', summary: 'not json' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const store = RunStore.open(dataDir);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('1 run(s)'));
+    expect(runIds(store)).toEqual([LEGACY_RUN.id]);
+    store.setRepoHandle(HANDLE);
+    expect(store.markAllRead()).toBe(0);
+    expect(store.listQuarantinedRunIds()).toEqual([]);
+    expect(store.countAutomationRuns('automation')).toBe(0);
+    expect(store.findNonArchivedRunByIssue('o/r', 1)).toBeUndefined();
+    expect(store.findRunIdsByAutomationReceipt(['receipt']).size).toBe(0);
+    expect(store.listBranchOwners()).toEqual([]);
+    expect(store.archiveFinished().ids).toEqual([LEGACY_RUN.id]);
+    store.close();
+    const db = RunDatabase.open(join(dataDir, RUNS_DB_FILE));
+    try {
+      expect(db.listCompletionCandidates(0, 64)).toEqual([]);
+      expect(db.archiveFamilyHasPullRequests(BAD.id)).toBe(false);
+    } finally { db.close(); }
   });
 });

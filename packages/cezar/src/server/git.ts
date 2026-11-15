@@ -1,10 +1,7 @@
-import { execFile } from 'node:child_process';
 import { readdir, stat } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
-import { promisify } from 'node:util';
 import { isSafeGitRef } from '../git-refs.ts';
-
-const exec = promisify(execFile);
+import { runGit } from '../git-command.ts';
 
 export interface RepoInfo {
   root: string;
@@ -41,7 +38,7 @@ export interface RepoTracking {
 }
 
 async function git(root: string, args: string[]): Promise<string> {
-  const { stdout } = await exec('git', args, { cwd: root, maxBuffer: 10 * 1024 * 1024 });
+  const { stdout } = await runGit(args, { cwd: root, maxBuffer: 10 * 1024 * 1024 });
   return stdout;
 }
 

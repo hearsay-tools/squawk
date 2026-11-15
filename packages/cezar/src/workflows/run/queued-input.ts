@@ -10,6 +10,7 @@ import { makeRunTitle } from '../../runs/run-title.ts';
 import { type PastedContent, type PersistedAttachment } from '../pasted-content.ts';
 import type { WorkflowDef } from '../types.ts';
 import type { PendingContinuation, RunModuleContext, StartRunInput } from './types.ts';
+import type { RunMemory } from './run-memory.ts';
 
 interface PersistedAttachments { blocks: ContentBlock[]; attachments: PersistedAttachment[] }
 interface QueuedInputHost {
@@ -46,10 +47,10 @@ function buildEditedQueuedMessage(current: QueuedMessage, msgId: string, text: s
 }
 
 export class QueuedInput {
-  /** Messages after hydration in the dequeue → session-open gap (#472).
-   * Wait-withdrawing entries also retain a durable queue ID until delivered. */
-  readonly deferredMessages = new Map<string, Array<{ content: PastedContent[]; messageId?: string }>>();
-  constructor(private readonly context: RunModuleContext, private readonly host: QueuedInputHost) {}
+  /** Messages after hydration in the dequeue → session-open gap (open-mercato/cezar#472) live
+   *  in `RunMemory` (`deferredMessages`). Wait-withdrawing entries also retain a durable queue ID
+   *  until delivered. */
+  constructor(private readonly context: RunModuleContext, private readonly host: QueuedInputHost, private readonly memory: RunMemory) {}
 
   /**
    * Fold the persisted task and queued message stack immediately before execution. Keep durable
@@ -217,10 +218,13 @@ export class QueuedInput {
    * backend, so there is nothing left to amend and no session to deliver into —
    * without this rung the message would 409, a genuinely dropped message in the
    * feature built to stop dropping them. Flushed as an ordinary follow-up turn
-   * the instant the session opens; dropped if the run never starts, which the
-   * existing error path already surfaces.
+   * the instant a session opens. A run that ends before one opens (failed or
+   * cancelled, with no open wait) releases its memory, and the buffer goes with
+   * it: a later Continue does not deliver it (hearsay-tools/squawk#2064). The
+   * failed or cancelled run is what the user sees. An entry accepted beside a
+   * wait keeps its durable queue entry.
    *
-   * The buffer lives on the manager rather than the `ActiveRun` because the
+   * The buffer lives in `RunMemory` rather than on the `ActiveRun` because the
    * `ActiveRun` does not exist yet for part of this window.
    */
   deferMessage(runId: string, content: PastedContent[]): boolean {
@@ -240,20 +244,19 @@ export class QueuedInput {
     // (hearsay-tools/cezarion#1235), so a crash before delivery replays it.
     const message = run.waits?.length ? this.host.toQueuedMessage(runId, content) : undefined;
     if (message) this.context.store.commitHumanMessageBesideWaits(runId, message);
-    const pending = this.deferredMessages.get(runId) ?? [];
-    pending.push({ content, ...(message ? { messageId: message.id } : {}) });
-    this.deferredMessages.set(runId, pending);
+    const pending = this.memory.read(runId, 'deferredMessages') ?? [];
+    this.memory.write(runId, 'deferredMessages', [...pending, { content, ...(message ? { messageId: message.id } : {}) }]);
     return true;
   }
 
   /** Deliver anything `deferMessage` buffered, once the session is live. */
   flushDeferred(runId: string): void {
-    const pending = this.deferredMessages.get(runId);
+    const pending = this.memory.read(runId, 'deferredMessages');
     if (!pending?.length) return;
     // Re-buffer whatever the session refused rather than dropping it. `sendMessage`
     // answers false when the session is not open yet — and silently losing a message
     // here would be precisely the failure `deferMessage` exists to prevent. Anything
-    // left over is retried by the next session that opens on this run.
+    // left over is retried by the next session that opens before the run ends.
     const unsent = [];
     for (const entry of pending) {
       const state = this.host.activeGet(runId);
@@ -261,8 +264,7 @@ export class QueuedInput {
       if (state?.inputState.agentInputError || !this.host.sendMessage(runId, entry.content, entry.messageId) ||
         (entry.messageId && atLiveInput.queuedMessages(this.context.store.getRun(runId))?.some(message => message.id === entry.messageId))) unsent.push(entry);
     }
-    if (unsent.length) this.deferredMessages.set(runId, unsent);
-    else this.deferredMessages.delete(runId);
+    this.memory.write(runId, 'deferredMessages', unsent.length ? unsent : undefined);
   }
 
 }

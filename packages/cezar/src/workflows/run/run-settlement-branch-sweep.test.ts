@@ -38,9 +38,9 @@ function settlement(root: string, store: RunStore, sweepBranches?: (keep: number
   const semaphore = new WorkspaceSemaphore({ home: testHome() });
   createFixtureManager(store, root, { home: testHome(), work, semaphore });
   const context = { createRunner: noRunners, home: testHome(), store, repoRoot: root, dataDir: join(root, '.ai/cezar'), work, semaphore, disposed: () => false, sweepBranches };
-  const host = unused<ConstructorParameters<typeof RunSettlement>[9]>('RunSettlement.host', { claimWorktreeReclaim: () => null, preview: undefined });
+  const host = unused<ConstructorParameters<typeof RunSettlement>[8]>('RunSettlement.host', { claimWorktreeReclaim: () => null, preview: undefined });
   return new RunSettlement(context, unused('HumanWaits'), unused('WorkerQuestions'), unused('WorktreeAutosave'),
-    unused('TurnBookkeeper'), unused('RunLine'), unused('AutoResumeScheduler'), unused('WorkerExecutions'),
+    unused('RunLine'), unused('AutoResumeScheduler'), unused('WorkerExecutions'),
     unused('CompletionGateHost'), host, '', '');
 }
 

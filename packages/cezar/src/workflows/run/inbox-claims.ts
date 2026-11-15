@@ -23,6 +23,8 @@ interface InboxClaimsHost {
 }
 
 export class InboxClaims {
+  /** The expiry of a run's inbox claim, by run id. Kept here: a timer handle, which slice S5
+   *  (hearsay-tools/squawk#3662) moves into `LivenessTimers`. */
   readonly inboxClaimTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(private readonly context: RunModuleContext, private readonly host: InboxClaimsHost) {}

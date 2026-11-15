@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { guardedJsonSql } from './guarded-json-sql.ts';
 import type { RunIndexTable } from './run-index-rows.ts';
 
 /**
@@ -10,16 +11,16 @@ import type { RunIndexTable } from './run-index-rows.ts';
 export function automationRunsSelect(source: string, where = '1'): string {
   return `WITH automation_sources AS MATERIALIZED (
       SELECT s.id AS run_id, ${provenance('automation')} AS launched, ${provenance('automationTrigger')} AS triggered FROM ${source} s
-      WHERE ${where} AND instr(s.data, '"automation') > 0 AND json_valid(s.data))
+      WHERE ${where} AND instr(s.data, '"automation') > 0 AND ${guardedJsonSql('1', 0, ['s.data'])})
     SELECT run_id, json_extract(launched, '$.automationId') AS automation_id, json_extract(launched, '$.receiptId') AS receipt_id
       FROM automation_sources WHERE json_type(launched, '$.automationId') = 'text'
     UNION SELECT run_id, json_extract(triggered, '$.automationId'), json_extract(triggered, '$.receiptId')
       FROM automation_sources WHERE json_type(triggered, '$.automationId') = 'text'`;
 }
 
-/** One provenance object of a record whose data is valid JSON, or NULL when it is not an object. */
+/** One provenance object of a record the guarded selection kept, or NULL when it is not an object. */
 function provenance(field: 'automation' | 'automationTrigger'): string {
-  return `CASE WHEN json_valid(s.data) AND json_type(s.data, '$.${field}') = 'object' THEN json_extract(s.data, '$.${field}') END`;
+  return `CASE WHEN json_type(s.data, '$.${field}') = 'object' THEN json_extract(s.data, '$.${field}') END`;
 }
 
 /** The index's rows: `[automation_id, receipt_id]` per run, the run id implied. */

@@ -28,6 +28,7 @@ const CODEX_TURN_STATUS = z.enum(CODEX_TURN_STATUSES).enum;
 const UNSUPPORTED_HOOK_RUNNING_STATUS = 'running';
 
 const TOOL_STATUS = z.enum(Object.values(CODEX_TOOL_STATUS_MAP)).enum;
+const PROTOTYPE_KEYS = ['toString', 'constructor', '__proto__'] as const;
 const WIRE_HOOK_STATUS = z.enum(Object.keys(CODEX_HOOK_STATUS_MAP)).enum;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -128,6 +129,12 @@ describe('codex hook/completed (#961)', () => {
     expect(mapCodexNotification(frame('hook/completed', { status: UNSUPPORTED_HOOK_RUNNING_STATUS, entries: [{ kind: 'context', text: 'x' }] }), createCodexUiState()).events).toEqual([]);
   });
 
+  it('ignores a hook/completed whose status is an Object.prototype member (hearsay-tools/squawk#2890)', () => {
+    for (const status of PROTOTYPE_KEYS) {
+      expect(mapCodexNotification(frame('hook/completed', { status, entries: [{ kind: 'context', text: 'x' }] }), createCodexUiState()).events).toEqual([]);
+    }
+  });
+
   it('turns a completed statusMessage into a warning entry', () => {
     const { events } = mapCodexNotification(frame('hook/completed', { statusMessage: 'slow' }), createCodexUiState());
     expect((events[0] as { item: { entries: unknown[] } }).item.entries).toEqual([{ kind: 'warning', text: 'slow' }]);
@@ -210,6 +217,11 @@ describe('mapCodexNotification edge cases', () => {
       [undefined, 'item/completed', 'completed'],
       ['somethingNew', 'item/started', 'running'],
       ['somethingNew', 'item/completed', 'completed'],
+      // Object.prototype members are unknown statuses too (hearsay-tools/squawk#2890).
+      ...PROTOTYPE_KEYS.flatMap((key): Array<[string, string, string]> => [
+        [key, 'item/started', 'running'],
+        [key, 'item/completed', 'completed'],
+      ]),
     ];
     for (const [status, method, expected] of cases) {
       const item: Record<string, unknown> = { type: 'commandExecution', id: 'item_s', command: 'ls' };

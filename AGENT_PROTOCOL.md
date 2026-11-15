@@ -292,7 +292,9 @@ force, or force only in part. The item numbers are stable: code cites them.
    tests of the matrix hold what an entry may say.
    Choose the ask path: `cezar_ask` alone, or also a native bridge onto `ask.requested`. A
    native bridge keeps its pending request in the session and routes the next human answer
-   back through it. It answers a malformed native request with an error and never leaves
+   back through it. A parked native ask idle-closes like a `cezar_ask` park; the close drops
+   the pending request, and the answer opens the reopened session as its first message
+   (hearsay-tools/squawk#2701, parity R129). It answers a malformed native request with an error and never leaves
    the turn blocked. Each native ask kind that a human can answer needs an entry in
    `askResumeCases`. Prove the Squawk tools as
    [Waits](#ci-wait-tool-contract-474) requires.

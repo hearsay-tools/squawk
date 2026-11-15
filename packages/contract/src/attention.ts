@@ -248,6 +248,22 @@ export function deriveAttention(run: AttentionInput): Attention {
   return attentionOfRung(rung);
 }
 
+/** The buckets every cockpit view counts as "Needs you": a waiting or review gate, and a pending
+ *  permission request (hearsay-tools/squawk#2275). */
+const NEEDS_YOU_BUCKETS: ReadonlySet<AttentionBucket> = new Set(['waiting', 'permission']);
+
+/** Whether a rung asks for a person, for a reader that holds only the rung id (the Activity
+ *  snapshot). `needsYou` reads the same rule from a run. */
+export function rungNeedsYou(rung: AttentionRung): boolean {
+  return NEEDS_YOU_BUCKETS.has(PRESENTATION_OF_RUNG[rung].bucket);
+}
+
+/** Whether a run sits under "Needs you" and counts toward its dots. An archived run never does.
+ *  Notifications (`wantsAttention`) and `cez task wait --until attention` keep their wider rule. */
+export function needsYou(run: AttentionInput & { archived?: boolean }): boolean {
+  return run.archived !== true && rungNeedsYou(deriveAttention(run).rung);
+}
+
 /**
  * The task states a project's webhook can send deliveries for (hearsay-tools/cezarion#1356),
  * named as the cockpit names them. `waiting-other` is every wait kind without an option of its

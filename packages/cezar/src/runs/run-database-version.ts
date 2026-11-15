@@ -1,3 +1,5 @@
+import { guardedJsonSql } from './guarded-json-sql.ts';
+
 /** `PRAGMA user_version` of a database this build created. A higher number means a newer Squawk
  *  wrote it; that is refused rather than read, because a newer schema may store what this one
  *  would silently drop on its next write. */
@@ -29,5 +31,5 @@ export const DESTROYED_WORKTREE_MIGRATION = `
   -- data is not JSON keeps its column: the store skips that row, and the migration must not fail.
   UPDATE runs SET worktree_path = NULL
     WHERE worktree_path IS NOT NULL AND parent_run_id IS NOT NULL
-      AND CASE WHEN json_valid(data) THEN json_extract(data, '$.delegation.destroy.phase') = 'complete' ELSE 0 END;
+      AND ${guardedJsonSql("json_extract(data, '$.delegation.destroy.phase') = 'complete'", 0, ['data'])};
   `;
