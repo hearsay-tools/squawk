@@ -19,25 +19,32 @@ const MAX_FILES = 10
 const MAX_LINES = 400
 const BLOCKED_TYPES = new Set(['feat'])
 
-// Paths that never auto-merge. A `source` rule skips test files. `unless` lets a
-// file through when its diff only deletes ('deletes') or only adds ('adds') lines.
-const NEVER = [
+// Lint scanners whose cases may grow without owner review.
+const LINT_CASES = 'packages/cezar/src/lint/{blank,server-wait-*,test-wait-discipline,unit-wait-*,wait-baseline,wait-discipline-runner}.ts'
+
+// Paths that never auto-merge. A `source` rule skips test files; `except` skips the
+// globs it names. `unless` lets a file through when its diff only deletes
+// ('deletes') or only adds ('adds') lines.
+export const NEVER = [
   { why: 'gate or test harness', globs: [
     '.github/workflows/**', '.github/codex/**', '.github/schemas/**', '.github/actionlint.yaml',
     '.github/scripts/{baseline-growth*,change-surface,change-surface-readers,queue-ci-proof,pr-test-proof,pr-test-input,review-threads,review-signal,pr-readiness,require-e2e-passed,release-*,pr-snapshot,node-floor-reporter,ci-test-sequencer,cockpit-test-sequencer,vitest-rerun-reset,merge-queue-admission,merge-recommendation*}.*',
-    '.github/scripts/*.workflow.test.cjs',
+    '.github/scripts/{check-clones,check-spec-status,check-citations,change-coupling,api-budget,missing-patches,merge-vitest-coverage,failure-diagnostics}.*',
+    '.github/scripts/*.workflow.test.cjs', '.github/actions/**',
     '**/vitest.config.ts', '**/vitest.setup.ts',
     'packages/web/e2e/{agent-browser,failure-setup,environment,fixture-server,held-browser-daemon,poll}.ts',
-    'squeal.config.json', 'scripts/{test-changed,test-git-env}.mjs', '.ai/scripts/**', '**/tsconfig*.json',
+    'squeal.config.json',
+    'scripts/{test-changed,test-git-env,prepr,check-typecheck-coverage,test-home-env,test-home-setup,test-install-marker,test-sandbox,test-package,e2e-affected,ci-test-selection,check-workspace-resolution}.mjs',
+    '.ai/scripts/**', '**/tsconfig*.json', 'packages/cezar/src/ast-grep-rules.testkit.ts',
+  ] },
+  { why: 'lint gate', source: true, except: [LINT_CASES], globs: [
+    'packages/cezar/src/lint/**', '.oxlintrc.json', 'sgconfig.yml',
+    '.ai/ast-grep/*', '.ai/ast-grep/{rules,utils,launch-read-normalization}/**',
   ] },
   { why: 'guard test change', unless: 'adds', globs: [
     'packages/cezar/src/server/{contract-parity*,route-parity,versioned-surface,bc-route-inventory,typed-bodies,api-types,origin-guard,host-guard}.test.ts',
     'packages/cezar/src/{contract-import-boundaries,contract-subpaths,test-wait-discipline,pack-check}.test.ts',
-    'packages/cezar/src/lint/card-2-contrast.test.ts',
-    'packages/cezar/src/lint/design-guardian.test.ts',
-    'packages/cezar/src/lint/wait-discipline-runner.test.ts',
-    'packages/cezar/src/lint/{blank,server-wait-*,test-wait-discipline,unit-wait-*,wait-baseline,wait-discipline-runner}.ts',
-
+    'packages/cezar/src/lint/**/*.{test,testkit}.ts', LINT_CASES, '.ai/ast-grep/{rule-tests,fixtures}/**',
     'packages/cezar/test/e2e/inline-contract.test.ts',
 
     'packages/web/src/test/{api-client-subpaths,e2e-wait-discipline}.test.ts', 'packages/web/src/design-guardian.test.ts',
@@ -80,7 +87,7 @@ const NEVER = [
   ] },
 ]
 
-const TEST_FILE = /\.(test|spec|e2e|testkit)\.[cm]?[jt]sx?$/
+export const TEST_FILE = /\.(test|spec|e2e|testkit)\.[cm]?[jt]sx?$/
 const isSource = (path) => /^packages\/[^/]+\/src\//.test(path) && !TEST_FILE.test(path) && !path.includes('__fixtures__')
 // Mock-only variables (CEZ_MOCK_*) configure offline test runners, not Squawk.
 const ENV_NAME = /CEZ_(?!MOCK_)[A-Z0-9_]+/g
@@ -167,6 +174,12 @@ function parseDiff(base, head) {
   }
 }
 
+const guards = (rule, path) => !(rule.source && TEST_FILE.test(path)) && !rule.except?.some((g) => matchesGlob(path, g))
+  && rule.globs.some((g) => matchesGlob(path, g))
+
+/** The first NEVER rule that guards a path, or undefined. */
+export const neverRule = (path) => NEVER.find((rule) => guards(rule, path))
+
 function pathReasons(diff) {
   const reasons = []
   for (const f of diff.files) {
@@ -174,8 +187,7 @@ function pathReasons(diff) {
     if ([f.oldMode, f.newMode].some((m) => m === '120000' || m === '160000')) reasons.push(`symlink or submodule: ${f.path}`)
     else if (f.status === 'M' && f.oldMode !== f.newMode) reasons.push(`changes the file mode: ${f.path}`)
     for (const rule of NEVER) {
-      if (rule.source && TEST_FILE.test(f.path)) continue
-      if (!rule.globs.some((g) => matchesGlob(f.path, g))) continue
+      if (!guards(rule, f.path)) continue
       if (rule.unless === 'deletes' && f.adds.length === 0) continue
       if (rule.unless === 'adds' && f.dels.length === 0) continue
       reasons.push(`${rule.why}: ${f.path}`)
@@ -209,17 +221,19 @@ function check({ title, base, head }) {
   return { qualifies: reasons.length === 0, files: numstat.length, lines, reasons }
 }
 
-try {
-  const { values } = parseArgs({ options: { title: { type: 'string' }, base: { type: 'string' }, head: { type: 'string' } } })
-  const head = values.head ?? 'HEAD'
-  const base = values.base ?? git('merge-base', 'origin/main', head).trim()
-  const result = check({ title: values.title, base, head })
-  console.log(result.qualifies ? 'QUALIFIES' : 'DOES NOT QUALIFY')
-  console.log(`${result.files} files, ${result.lines} lines`)
-  for (const reason of result.reasons) console.log(`- ${reason}`)
-  process.exit(result.qualifies ? 0 : 1)
-} catch (error) {
-  console.log('DOES NOT QUALIFY')
-  console.log(`- the check failed: ${String(error.stderr || error.message).trim().split('\n')[0]}`)
-  process.exit(2)
+if (import.meta.main) {
+  try {
+    const { values } = parseArgs({ options: { title: { type: 'string' }, base: { type: 'string' }, head: { type: 'string' } } })
+    const head = values.head ?? 'HEAD'
+    const base = values.base ?? git('merge-base', 'origin/main', head).trim()
+    const result = check({ title: values.title, base, head })
+    console.log(result.qualifies ? 'QUALIFIES' : 'DOES NOT QUALIFY')
+    console.log(`${result.files} files, ${result.lines} lines`)
+    for (const reason of result.reasons) console.log(`- ${reason}`)
+    process.exit(result.qualifies ? 0 : 1)
+  } catch (error) {
+    console.log('DOES NOT QUALIFY')
+    console.log(`- the check failed: ${String(error.stderr || error.message).trim().split('\n')[0]}`)
+    process.exit(2)
+  }
 }
