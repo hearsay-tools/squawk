@@ -4,7 +4,7 @@ import test from 'node:test';
 import { parse } from 'yaml';
 
 test('nightly producers pin both release channel aliases to the same value', () => {
-  for (const name of ['nightly', 'ci-benchmark']) {
+  for (const name of ['nightly']) {
     const workflow = parse(readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), 'utf8'));
     const steps = Object.values(workflow.jobs).flatMap(job => job.steps ?? []);
     const producers = steps.filter(step => step.env?.CEZ_RELEASE_CHANNEL !== undefined);

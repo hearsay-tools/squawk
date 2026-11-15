@@ -275,7 +275,7 @@ export class ProjectContexts {
     const lease = this.coldMaintenance(projectId, work, current, finish);
     this.maintenance.set(projectId, lease);
     try { return await lease; }
-    finally { if (this.maintenance.get(projectId) === lease) this.maintenance.delete(projectId); }
+    finally { this.maintenance.delete(projectId); }
   }
 
   /** The cold half of `withMaintenanceStore`, refused under a fence or an unfinished journal. */
@@ -296,7 +296,7 @@ export class ProjectContexts {
     // Skip empty projects, but let the established fenced importer discover legacy-only
     // history. Maintenance mode never normalizes live rows or recovers a manager.
     const reader = RunDatabase.openReadOnly(join(dataDir, RUNS_DB_FILE));
-    let imported = false;
+    let imported: boolean;
     try { imported = reader?.getMeta(RUNS_IMPORT_COMPLETE_KEY) !== undefined; }
     finally { reader?.close(); }
     if (!imported && !existsSync(join(dataDir, 'runs.json')) &&
@@ -450,11 +450,9 @@ export class ProjectContexts {
       // without one is a no-op for the host.
       for (const id of ctx.store.listRunIds()) void this.deps.preview.release(id).catch(() => undefined);
     }
-    this.repoHandleControllers.get(ctx.store)?.abort();
-    this.repoHandleControllers.delete(ctx.store);
+    this.repoHandleControllers.get(ctx.store)!.abort();
     this.sweepControllers.get(ctx.store)?.abort();
     this.managerCleanups.get(ctx.manager)?.();
-    this.managerCleanups.delete(ctx.manager);
     teardown(ctx);
   }
 
@@ -564,11 +562,10 @@ export class ProjectContexts {
       // A failed build must not leak the half-built context's subscriptions, nor its sweep.
       this.sweepControllers.get(store)?.abort();
       this.managerCleanups.get(manager)?.();
-      this.managerCleanups.delete(manager);
       teardown({ store, manager });
       throw err;
     } finally {
-      if (this.buildingManagers.get(projectId) === manager) this.buildingManagers.delete(projectId);
+      this.buildingManagers.delete(projectId);
     }
   }
 }

@@ -9,7 +9,6 @@ import { agentEnv } from '../workflows/run/launch-context.ts';
 import { worktreeSetupEnv } from '../worktree-setup.ts';
 import { withPreviewCdp } from '../preview/agent-address.ts';
 import { buildChildEnv } from './agent-env.ts';
-import { productEnvEntries } from './product-env.ts';
 import { squawkToolEnvNames } from '../ci-wait/tools.ts';
 import { systemdUnit } from '../server-install/platforms/ubuntu-vps.ts';
 import { squawkLaunchdPlist } from '../server-install/platforms/macosx-ngrok.ts';
@@ -21,11 +20,10 @@ it('launch context and continuation env generate matching names', () => {
   const root = mkdtempSync(join(tmpdir(), 'env-launch-')); roots.push(root);
   const context = {dataDir: root, repoRoot: root, home: Home.sandbox(join(root, 'home'))} as Parameters<typeof agentEnv>[0];
   const generated = agentEnv(context, {origin: 'http://127.0.0.1:4321', projectId: 'project'}, 'run-id');
-  for (const suffix of ['ARTIFACTS_DIR', 'HANDOFF_FILE', 'TASK_ID', 'TODOS_FILE', 'COCKPIT_URL', 'PROJECT_ID']) {
+  for (const suffix of ['ARTIFACTS_DIR', 'HANDOFF_FILE', 'TASK_ID', 'COCKPIT_URL', 'PROJECT_ID']) {
     expect(generated[`CEZ_${suffix}`]).toBeDefined();
     expect(generated[`HSQ_${suffix}`]).toBe(generated[`CEZ_${suffix}`]);
   }
-  expect(generated.CEZ_TODOS_FILE).toBe('');
   expect(agentEnv(context, undefined, 'run-id').CEZ_COCKPIT_URL).toBeUndefined();
   for (const full of ['0', '1']) {
     const env = buildChildEnv({backend: 'codex', source: {CEZ_HOME: '/host', HSQ_HOME: '/host-new', HSQ_AGENT_ENV_FULL: full, HSQ_ENV_PASSTHROUGH: 'HSQ_PROJECT_ID,HSQ_TOOL_TOKEN', HSQ_PROJECT_ID: 'wrong', HSQ_TOOL_TOKEN: 'parent'}, extraEnv: generated});
@@ -54,7 +52,6 @@ it('preview capability binds matching aliases and revokes both resources', () =>
 });
 
 it('generated intentional clears and native adapter allowlists preserve preferred empty values', () => {
-  expect(productEnvEntries('TODOS_FILE', '')).toEqual({HSQ_TODOS_FILE: '', CEZ_TODOS_FILE: ''});
   expect(squawkToolEnvNames({CEZ_AUTOMATIONS: '0', HSQ_AUTOMATIONS: '', HSQ_TOOL_TOKEN: 'token'})).toEqual([
     'CEZ_TOOL_TOKEN', 'HSQ_TOOL_TOKEN', 'CEZ_TOOL_SOCKET', 'CEZ_AUTOMATIONS', 'HSQ_AUTOMATIONS',
   ]);

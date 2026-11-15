@@ -39,10 +39,8 @@ describe('model identity wiring (dry run)', () => {
     argsFile = join(repoRoot, 'mock-args.ndjson');
     savedEnv.CEZ_DRY_RUN = process.env.CEZ_DRY_RUN;
     savedEnv.CEZ_MOCK_ARGS_FILE = process.env.CEZ_MOCK_ARGS_FILE;
-    savedEnv.CEZ_FOLLOWUPS = process.env.CEZ_FOLLOWUPS;
     process.env.CEZ_DRY_RUN = '1';
     process.env.CEZ_MOCK_ARGS_FILE = argsFile;
-    delete process.env.CEZ_FOLLOWUPS;
     await run('git', ['init', '-q', '-b', 'main'], { cwd: repoRoot });
     await run('git', ['config', 'gc.auto', '0'], { cwd: repoRoot });
     await run('git', ['config', 'maintenance.auto', 'false'], { cwd: repoRoot });

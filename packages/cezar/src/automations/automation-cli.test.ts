@@ -57,6 +57,25 @@ describe('cez automation', () => {
     return rest;
   };
 
+  it.each([{ name: 'Rename' }, { task: { prompt: 'Revised' } }])('updates a saved variant automation with %j', async (patch) => {
+    const store = harness.automationStore;
+    const saved = store.create({ name: 'Saved', kind: 'schedule', enabled: false, schedule: { type: 'daily', hour: 4 }, task: { prompt: 'Go', variants: 2 } });
+    expect(await run(['update', saved.id, '--json', JSON.stringify(patch)]), out.join('\n')).toBe(EXIT.ok);
+    expect((posted.at(-1)!.body as { task: object }).task).not.toHaveProperty('variants');
+    store.reload();
+    expect(store.get(saved.id)?.task).toMatchObject({ prompt: 'task' in patch ? 'Revised' : 'Go' });
+    expect(store.get(saved.id)?.task).not.toHaveProperty('variants');
+  });
+
+  it('still rejects caller variants when updating a saved variant automation', async () => {
+    const store = harness.automationStore;
+    const saved = store.create({ name: 'Saved', kind: 'schedule', enabled: false, schedule: { type: 'daily', hour: 4 }, task: { prompt: 'Go', variants: 2 } });
+    expect(await run(['update', saved.id, '--json', JSON.stringify({ task: { variants: 1 } })])).not.toBe(EXIT.ok);
+    expect(posted.at(-1)?.body).toMatchObject({ task: { variants: 1 } });
+    store.reload();
+    expect(store.get(saved.id)?.task.variants).toBe(2);
+  });
+
   it('list reads a catalog larger than the ordinary 3 MiB response cap', async () => {
     const prompt = 'x'.repeat(100_000);
     for (let index = 0; index < 32; index += 1) {

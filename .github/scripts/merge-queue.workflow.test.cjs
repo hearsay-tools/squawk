@@ -70,8 +70,8 @@ function context(event = 'merge_group') {
 
       'change-surface': { result: 'success', outputs: { surface: 'full-matrix' } },
       'classify-pr': { result: 'success', outputs: { bump_pr: 'false' } },
-      preflight: { result: 'success' }, 'review-result': { result: 'skipped' }, verify: { result: 'success' }, review: { result: 'skipped' }, 'queue-admission': { result: 'success' } },
-    cancelled: () => false, always: () => true };
+      preflight: { result: 'success' }, verify: { result: 'success' }, 'queue-admission': { result: 'success' } },
+    cancelled: () => false, failure: () => false, always: () => true };
 }
 function evaluate(expression, ctx) {
   const raw = expression.replace(/^\$\{\{\s*|\s*\}\}$/g, '').replace(/needs\.([\w]+-[\w-]+)/g, "needs['$1']");
@@ -83,7 +83,7 @@ function evaluate(expression, ctx) {
 }
 function shell(command, env = {}) {
   return spawnSync('bash', ['-eu', '-c', command], { encoding: 'utf8', env: { PATH: process.env.PATH,
-    CANCELLED: 'false', PREFLIGHT_RESULT: 'success', BASE_REF: '', REVIEW_RESULT: 'skipped', EVENT_NAME: 'merge_group', CLASSIFY_RESULT: 'success', SURFACE_RESULT: 'success', COMPLEXITY_GATE_RESULT: 'success', CLONE_GATE_RESULT: 'success',
+    CANCELLED: 'false', PREFLIGHT_RESULT: 'success', QUEUE_ADMISSION_RESULT: 'success', EVENT_NAME: 'merge_group', CLASSIFY_RESULT: 'success', SURFACE_RESULT: 'success', COMPLEXITY_GATE_RESULT: 'success', CLONE_GATE_RESULT: 'success',
     TYPECHECK_RESULT: 'success', UNIT_TESTS_RESULT: 'success', BUILD_AND_PACKAGE_RESULT: 'success', VITEST_RESULT: 'success',
     COCKPIT_BROWSER_RESULT: 'success', CHANGE_SURFACE: 'full-matrix', BUMP_PR: 'false',
     VERIFIED_SHA: 'a'.repeat(40), PROOF_RESULT: 'success', PROOF_VERIFIED: 'false', PROOF_SOURCE: '', GITHUB_STEP_SUMMARY: '/dev/null', ...env } });
@@ -97,13 +97,12 @@ test('proof roster expands every verification matrix and queue admission', () =>
       if (id === 'unit-tests') return j.strategy.matrix.suite.map(suite => j.name.replace('${{ matrix.suite }}', suite));
       return j.strategy ? j.strategy.matrix.shard.map(n => j.name.replace('${{ matrix.shard }}', String(n))) : [j.name];
     });
-  names.push(evaluate(ci.jobs['queue-review-result'].name, context()));
   const eight = prefix => [1, 2, 3, 4, 5, 6, 7, 8].map(n => `${prefix} ${n}/8`);
   assert.deepEqual(names.filter(name => name.startsWith('Vitest shard ')), eight('Vitest shard'));
   assert.deepEqual(names.filter(name => name.startsWith('Cockpit browser E2E shard ')), eight('Cockpit browser E2E shard'));
   assert.deepEqual(names.sort(), [...REQUIRED_QUEUE_JOBS].sort());
 });
-test('queue always runs the complete immutable combined revision and no paid review or publication', () => {
+test('queue always runs the complete immutable combined revision and no publication', () => {
   const ci = workflow(), ctx = context();
   for (const id of ['typecheck', 'unit-tests', 'build-and-package', 'vitest', 'cockpit-browser']) {
     assert.equal(evaluate(ci.jobs[id].if, ctx), true, id);
@@ -112,7 +111,7 @@ test('queue always runs the complete immutable combined revision and no paid rev
     assert.equal(checkout.with['persist-credentials'], false);
     assert.ok(Object.values(ci.jobs[id].permissions).every(p => p === 'read'));
   }
-  for (const id of ['review-result', 'publish-snapshot', 'prepare-pr-snapshot']) assert.equal(evaluate(ci.jobs[id].if, ctx), false, id);
+  for (const id of ['publish-snapshot', 'prepare-pr-snapshot']) assert.equal(evaluate(ci.jobs[id].if, ctx), false, id);
   assert.equal(evaluate(ci.jobs['queue-admission'].if, ctx), true);
   const checkout = ci.jobs['queue-admission'].steps[0];
   assert.equal(evaluate(checkout.with.ref, ctx), ctx.github.event.merge_group.base_sha);
@@ -168,19 +167,21 @@ test('the main probe accepts exactly the job names GitHub gives skipped queue su
   assert.match(proof.steps.find(s => s.id === 'proof').with.script,
     /surfaceOf: base => mainCommitSurface\(\{ sha: context\.sha, base, tmpDir: process\.env\.RUNNER_TEMP \}\)/);
 });
-test('required review name cannot pass from a skipped model call on a queue event', () => {
-  const ci = workflow(), ctx = context(); const j = ci.jobs['queue-review-result'];
-  assert.equal(evaluate(j.if, ctx), true);
-  assert.equal(evaluate(j.name, ctx), 'Automated Code Review');
+test('the required aggregate cannot pass a queue entry without queue admission', () => {
+  const ci = workflow(), ctx = context();
+  assert.ok(ci.jobs.verify.needs.includes('queue-admission'));
+  assert.equal(evaluate(ci.jobs.verify.if, ctx), true);
   for (const result of ['success', 'skipped', 'failure', 'cancelled', '']) {
-    const r = shell(j.steps[0].run, { VERIFY_RESULT: 'success', REVIEW_RESULT: 'skipped', QUEUE_RESULT: result });
+    const r = shell(ci.jobs.verify.steps[0].run, { QUEUE_ADMISSION_RESULT: result });
     assert.equal(r.status === 0, result === 'success', result);
   }
+  // A failed verification job leaves admission skipped, and the aggregate red.
+  assert.equal(evaluate(ci.jobs['queue-admission'].if, { ...ctx, failure: () => true }), false);
 });
 test('dispatch remains full verification and cancellation prevents publishing', () => {
   const ci = workflow(); const ctx = context('workflow_dispatch');
   for (const id of ['typecheck', 'unit-tests', 'build-and-package', 'vitest', 'cockpit-browser']) assert.equal(evaluate(ci.jobs[id].if, ctx), true);
-  for (const id of ['queue-admission', 'review-result', 'publish-snapshot', 'prepare-pr-snapshot']) assert.equal(evaluate(ci.jobs[id].if, ctx), false, id);
+  for (const id of ['queue-admission', 'publish-snapshot', 'prepare-pr-snapshot']) assert.equal(evaluate(ci.jobs[id].if, ctx), false, id);
   ctx.github.event_name = 'push'; ctx.cancelled = () => true;
   assert.equal(evaluate(ci.jobs['publish-snapshot'].if, ctx), false);
 });

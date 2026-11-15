@@ -1,4 +1,5 @@
 # Fast unit suites — Phase 3
+Status: done
 
 Design for hearsay-tools/cezarion#2516, slice 3.1 of
 hearsay-tools/cezarion#2487. This document implements the measurement and design

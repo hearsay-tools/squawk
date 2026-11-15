@@ -83,7 +83,9 @@ describe('ProjectContexts', () => {
     const gate = new Promise<void>(resolve => { release = resolve; });
     let entered!: () => void;
     const started = new Promise<void>(resolve => { entered = resolve; });
+    let leased!: () => boolean;
     const lease = contexts.withMaintenanceStore('a', async (store, current) => {
+      leased = current;
       expect(current()).toBe(true);
       expect(store.getRun('interrupted')?.status).toBe('running');
       entered(); await gate;
@@ -95,6 +97,7 @@ describe('ProjectContexts', () => {
     expect(readPersistedRuns(dataDir)[0].status).toBe('running');
     const build = contexts.context('a');
     release(); await lease; await build;
+    expect(leased()).toBe(false);
     expect(prepared).toHaveBeenCalledTimes(1);
     contexts.disposeAll();
   });
@@ -164,6 +167,11 @@ describe('ProjectContexts', () => {
       expect((await registerPreviewServer(ctx.store, ctx.manager.previewHost, observed.options.get(ctx.manager)?.squawkPort, () => false, run.id, { command: 'npm run dev', port: 5173 })).code).toBe('registered');
       ctx.store.deleteRun(run.id);
       expect(release).toHaveBeenCalledWith(run.id, { deleteProfile: true, dataDir: ctx.dataDir });
+
+      // Shutdown leaves running previews to the host's own close.
+      const running = ctx.store.createRun({ title: 'still previewing', workflow: 'quick-task', task: 't', steps: [] });
+      await contexts.disposeAll();
+      expect(release).not.toHaveBeenCalledWith(running.id);
     } finally {
       contexts.disposeAll();
       vi.unstubAllEnvs();
@@ -205,17 +213,21 @@ describe('ProjectContexts', () => {
     expect(one).toBe(two);
   });
 
-  it('arms project cleanup only after recovery and once per live context', async () => {
+  it('arms project cleanup only after recovery and once per live context, and undoes it on disposal', async () => {
     const order: string[] = [];
+    const seen: unknown[] = [];
     const contexts = new ProjectContexts({ createRunner, createManager, home: testHome(),
       listProjects: async () => [{ id: 'a', root: rootA, status: 'not-git' }],
-      prepareManager: () => { order.push('prepare'); },
-      afterRecover: () => { order.push('recovered'); },
+      prepareManager: (project) => { order.push('prepare'); seen.push(project); return () => { order.push('released'); }; },
+      afterRecover: (project) => { order.push('recovered'); seen.push(project); },
     });
-    await contexts.context('a');
+    const ctx = await contexts.context('a');
     await contexts.context('a');
     expect(order).toEqual(['prepare', 'recovered']);
+    const project = { id: 'a', root: rootA, store: ctx.store, manager: ctx.manager, home: ctx.home };
+    expect(seen).toEqual([project, project]);
     contexts.disposeAll();
+    expect(order).toEqual(['prepare', 'recovered', 'released']);
   });
 
   it('uses the injected coordinator-owned automation store', async () => {
@@ -278,7 +290,7 @@ describe('ProjectContexts', () => {
     ctx.store.updateRun(run.id, { title: 'after dispose' });
     ctx.store.flush();
     expect(readPersistedRuns(projectPaths(rootA).write)[0]?.title).toBe('pending');
-    expect(ctx.store.listenerCount('event')).toBe(0);
+    expect(ctx.store.eventNames()).toEqual([]);
 
     // Disposed id is gone from the map; the next access builds a fresh context.
     expect(contexts.peek('a')).toBeUndefined();

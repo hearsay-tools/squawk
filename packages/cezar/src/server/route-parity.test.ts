@@ -40,7 +40,6 @@ const spellings = (bootId: string, path: string): [string, string, string] => [
 describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/p/default)', () => {
   const savedHome = process.env.CEZ_HOME;
   const savedRemote = process.env.CEZ_REMOTE;
-  const savedFollowups = process.env.CEZ_FOLLOWUPS;
   const savedAutomations = process.env.CEZ_AUTOMATIONS;
   const savedDryRun = process.env.CEZ_DRY_RUN;
   let home: string;
@@ -58,7 +57,6 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
     otherRoot = mkdtempSync(join(tmpdir(), 'cez-parity-other-'));
     useTestHome(home ? Home.sandbox(home) : undefined); // paths.ts sends all workspace paths here
     delete process.env.CEZ_REMOTE;
-    delete process.env.CEZ_FOLLOWUPS;
     // #801: automations can be disabled, and this suite compares the REAL answers of every mirrored
     // route. If disabled, the whole `/automations*` family would answer an identical 409 under all
     // three spellings — parity would pass while testing nothing about those routes.
@@ -97,8 +95,6 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
     else useTestHome(savedHome ? Home.sandbox(savedHome) : undefined);
     if (savedRemote === undefined) delete process.env.CEZ_REMOTE;
     else process.env.CEZ_REMOTE = savedRemote;
-    if (savedFollowups === undefined) delete process.env.CEZ_FOLLOWUPS;
-    else process.env.CEZ_FOLLOWUPS = savedFollowups;
     if (savedAutomations === undefined) delete process.env.CEZ_AUTOMATIONS;
     else process.env.CEZ_AUTOMATIONS = savedAutomations;
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
@@ -240,7 +236,7 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
     await expectParity('/workflows/no-such-workflow', () => ({
       method: 'DELETE',
     }));
-    // 409: the follow-up inbox is off (CEZ_FOLLOWUPS unset).
+    // Unknown routes return the same response under every project alias.
     await expectParity('/todos/t1/start', json('POST', {}));
     // 200 non-GET without observable side effects (no worktrees exist).
     await expectParity('/worktrees/reclaim', json('POST', {}));

@@ -1,4 +1,5 @@
 # Owned workers acceptance and QA
+Status: done
 
 Date: 2026-09-07. Issue hearsay-tools/cezarion#111. The five ordered gates and all eight issue-specific
 browser cases passed. The full browser run remains failed on two separately

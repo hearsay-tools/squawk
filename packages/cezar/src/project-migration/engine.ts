@@ -111,7 +111,7 @@ async function resumeHeld(options: ProjectMigrationOptions): Promise<ProjectMigr
  * The tasks that can still resume: live or not archived. When their records cannot be read, a plan that is refused anyway reports its
  * own conflicts and blockers rather than the read failure.
  */
-async function resolveKeptRunIds(options: { repoRoot: string; keptRunIds?: () => ReadonlySet<string> }): Promise<ReadonlySet<string>> {
+export async function resolveKeptRunIds(options: { repoRoot: string; keptRunIds?: () => ReadonlySet<string> }): Promise<ReadonlySet<string>> {
   try { return (options.keptRunIds ?? (() => projectKeptRunIds(options.repoRoot)))(); }
   catch (error) {
     const plan = await planProjectMigration(options.repoRoot);

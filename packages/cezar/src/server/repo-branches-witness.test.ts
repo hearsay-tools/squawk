@@ -5,7 +5,7 @@ import { chmodSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } 
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { promisify } from 'node:util';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { createOwnedWorkspace } from '../delegation/workspace.ts';
 import type { WorktreeGit } from '../git-worktree-lock.ts';
 import { commit, fakeForge, owners, runRecord, taskBranch } from './repo-branches.testkit.ts';
@@ -136,8 +136,9 @@ describe('branch deletion with a controlled mutation lock', () => {
         await git(root, 'update-ref', `refs/heads/${workspace.branch}`, away);
         await git(root, 'update-ref', `refs/heads/${workspace.branch}`, tip);
       };
-      const result = await deleteBranches({ ...input(), runs: [owner] }, [workspace.branch], workspace.branch);
-      expect(result.deleted).toEqual([]);
+      expect(await deleteBranches({ ...input(), runs: [owner] }, [workspace.branch], workspace.branch)).toEqual({
+        deleted: [], refused: [{ name: workspace.branch, reason: 'it, main or the branch that keeps its commits changed since it was classified — refresh and try again' }],
+      });
       expect(await git(root, 'rev-parse', workspace.branch)).toBe(tip);
     });
 
@@ -154,9 +155,27 @@ describe('branch deletion with a controlled mutation lock', () => {
       hook.command = (args) => args[0] === 'reflog'
         ? exec('git', args, { cwd: root }).then(({ stdout }) => ({ ok: false, stdout, stderr: 'failed' }))
         : undefined;
-      const result = await deleteBranches({ ...input(), runs: [owner] }, [workspace.branch], workspace.branch);
-      expect(result.deleted).toEqual([]);
+      expect(await deleteBranches({ ...input(), runs: [owner] }, [workspace.branch], workspace.branch)).toEqual({
+        deleted: [], refused: [{ name: workspace.branch, reason: 'it, main or the branch that keeps its commits changed since it was classified — refresh and try again' }],
+      });
       expect(await git(root, 'rev-parse', workspace.branch)).toBe(tip);
+    });
+
+    it('deletes an ended worker branch reset to its base after another branch took the commits its reflog recorded', async () => {
+      const base = await git(root, 'rev-parse', 'HEAD');
+      const workspace = await createOwnedWorkspace(root, 'dddddddd-1111-4111-8111-111111111111', base);
+      for (const file of ['one.txt', 'two.txt']) {
+        writeFileSync(join(workspace.path, file), `${file}\n`);
+        await git(workspace.path, 'add', '-A');
+        await git(workspace.path, 'commit', '-q', '-m', file);
+      }
+      await git(root, 'branch', 'parent', workspace.branch);
+      await git(workspace.path, 'reset', '-q', '--hard', base);
+      await git(root, 'worktree', 'remove', workspace.path);
+      const owner = { ...branchOwnerOf(runRecord(workspace.ownerRunId, RUN_STATUS.done, { branch: workspace.branch }))!, endedWorker: true as const };
+      expect(await deleteBranches({ ...input(), runs: [owner] }, [workspace.branch])).toEqual({ deleted: [workspace.branch], refused: [] });
+      expect(await git(root, 'branch', '--list', workspace.branch)).toBe('');
+      expect(await git(root, 'rev-list', '--count', `${base}..parent`)).toBe('2');
     });
 
     it('refuses a delegated workspace owner appearing after classification at the mutation lock', async () => {
@@ -224,23 +243,27 @@ describe('branch deletion with a controlled mutation lock', () => {
       for (const name of names.slice(1)) expect(await git(root, 'branch', '--list', name)).toContain(name);
     });
 
-    it('refuses an empty branch when its retention lookup fails with partial output', async () => {
+    // A branch at the base has no commits of its own, so it needs no other ref to keep them.
+    it.each([
+      ['refuses an empty branch whose commits only another branch keeps', 'topic', false],
+      ['deletes an empty branch at the base', 'main', true],
+    ] as const)('%s when its retention lookup fails with partial output', async (_case, start, deletes) => {
       await git(root, 'checkout', '-q', '-b', 'topic');
       writeFileSync(join(root, 'topic.txt'), 'unmerged\n');
       await git(root, 'add', '-A');
       await git(root, 'commit', '-q', '-m', 'topic');
-      const tip = await git(root, 'rev-parse', 'HEAD');
       await git(root, 'checkout', '-q', 'main');
+      const tip = await git(root, 'rev-parse', start);
       const name = 'cez/aaaaaaaa';
-      await git(root, 'branch', name, 'topic');
+      await git(root, 'branch', name, start);
       hook.command = (args) => args[0] === 'for-each-ref'
         ? Promise.resolve({ ok: false, stdout: `refs/heads/topic\0${tip}\0\n`, stderr: 'interrupted' })
         : undefined;
       const runs = owners([runRecord('aaaaaaaa-1', 'done', { baseBranch: tip })]);
-      expect(await deleteBranches({ ...input(), runs }, [name])).toEqual({
+      expect(await deleteBranches({ ...input(), runs }, [name])).toEqual(deletes ? { deleted: [name], refused: [] } : {
         deleted: [], refused: [{ name, reason: 'its commits are not on main and only branches in this request keep them — delete it on its own, with confirmation' }],
       });
-      expect(await git(root, 'rev-parse', name)).toBe(tip);
+      expect(await git(root, 'for-each-ref', '--format=%(objectname)', `refs/heads/${name}`)).toBe(deletes ? '' : tip);
     });
 
     it('does not use symbolic or incomplete refs as retention witnesses', async () => {
@@ -426,10 +449,18 @@ process.exit(result.status ?? 1);
     ]);
     expect((await classify()).payload.branches.find((row) => row.name === 'cez/aaaaaaaa')).toMatchObject({ ahead: 0, class: 'orphan' });
   });
-  it('refreshes diff stats when the configured global attribute file changes', async () => {
-    const attributes = join(root, 'global-attributes');
+  // Git reads core.attributesFile, else $XDG_CONFIG_HOME/git/attributes, else ~/.config/git/attributes.
+  it.each([
+    ['the configured', 'global-attributes', { XDG_CONFIG_HOME: 'xdg', HOME: 'home' }],
+    ['the XDG', 'xdg/git/attributes', { XDG_CONFIG_HOME: 'xdg', HOME: 'home' }],
+    ['the home', 'home/.config/git/attributes', { XDG_CONFIG_HOME: '', HOME: 'home' }],
+  ] as const)('refreshes diff stats when %s global attribute file changes', async (source, file, env) => {
+    for (const [key, dir] of Object.entries(env)) vi.stubEnv(key, dir && join(root, dir));
+    onTestFinished(() => { vi.unstubAllEnvs(); });
+    const attributes = join(root, file);
+    mkdirSync(join(attributes, '..'), { recursive: true });
     writeFileSync(attributes, '');
-    await git(root, 'config', 'core.attributesFile', attributes);
+    if (source === 'the configured') await git(root, 'config', 'core.attributesFile', attributes);
     expect((await classify()).payload.branches.find((row) => row.name === 'cez/aaaaaaaa')?.diffStat).toEqual({ additions: 2, deletions: 0 });
     writeFileSync(attributes, '* -diff\n');
     expect((await classify()).payload.branches.find((row) => row.name === 'cez/aaaaaaaa')?.diffStat).toEqual({ additions: 0, deletions: 0 });

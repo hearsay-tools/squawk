@@ -52,7 +52,6 @@ describe('provider action gating', () => {
   let continueRun: ReturnType<typeof vi.fn>;
   const savedModelsLocked = process.env.CEZ_AGENT_MODELS_LOCKED;
   const savedDryRun = process.env.CEZ_DRY_RUN;
-  const savedFollowups = process.env.CEZ_FOLLOWUPS;
 
   const makeRun = (input: StartRunInput): RunRecord => store.createRun({
     title: 'Task',
@@ -83,7 +82,6 @@ describe('provider action gating', () => {
   beforeEach(() => {
     delete process.env.CEZ_AGENT_MODELS_LOCKED;
     process.env.CEZ_DRY_RUN = '1';
-    process.env.CEZ_FOLLOWUPS = '1';
     repoRoot = mkdtempSync(join(tmpdir(), 'cez-provider-action-gating-'));
     dataDir = join(repoRoot, '.ai/cezar');
     store = RunStore.open(dataDir);
@@ -109,8 +107,6 @@ describe('provider action gating', () => {
     else process.env.CEZ_AGENT_MODELS_LOCKED = savedModelsLocked;
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
     else process.env.CEZ_DRY_RUN = savedDryRun;
-    if (savedFollowups === undefined) delete process.env.CEZ_FOLLOWUPS;
-    else process.env.CEZ_FOLLOWUPS = savedFollowups;
   });
 
   const expectDisabled = async (response: Response) => {

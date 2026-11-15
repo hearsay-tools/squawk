@@ -10,7 +10,7 @@ import { agentHomePaths } from './paths.ts';
 // The dry-run mocks appended to its real handoff file, and fixtures could reach its
 // delegation API and tool socket. Both test entry points drop these before any test runs.
 const TASK_KEYS = [
-  'CEZ_ARTIFACTS_DIR', 'CEZ_HANDOFF_FILE', 'CEZ_TODOS_FILE', 'CEZ_TASK_ID', 'CEZ_PROJECT_ROOT',
+  'CEZ_ARTIFACTS_DIR', 'CEZ_HANDOFF_FILE', 'CEZ_TASK_ID', 'CEZ_PROJECT_ROOT',
   'CEZ_DELEGATION_URL', 'CEZ_DELEGATION_TOKEN', 'CEZ_TOOL_SOCKET', 'CEZ_TOOL_TOKEN',
 ];
 

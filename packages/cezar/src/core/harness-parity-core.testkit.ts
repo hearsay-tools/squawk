@@ -1039,7 +1039,7 @@ export async function driveSeam(
         sessionId: PINNED_SESSION_ID,
         // The claude mock writes to these when set; empty keeps a row from
         // touching a handoff file it does not own.
-        env: { CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '', CEZ_MOCK_ARGS_FILE: '',
+        env: { CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: '',
           ...(scenario === 'closed-input' && backend === 'omp' ? { CEZ_MOCK_OMP_CLOSED_INPUT: '1' } : {}),
           ...(scenario === 'auto-resumed' ? { CEZ_MOCK_OMP_AUTO_RESUME: '1' } : {}),
           ...(scenario === 'serve-start-exit' ? {

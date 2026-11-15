@@ -15,7 +15,7 @@ import {
 import { parseDurationMinutes, resolveDelay, SCHEDULED_TASK_NOTE } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { isValidTimeZone } from '@open-mercato/cezar-contract/zoned-time';
 import type { AutomationEvent, CreateAutomationInput } from '@open-mercato/cezar-contract';
-import { AUTOMATION_FAILURE_NOTICE_AFTER, automationFailureNotice, type AutomationRuntimeState } from '@open-mercato/cezar-contract/automations';
+import { AUTOMATION_FAILURE_NOTICE_AFTER, automationFailureNotice, writableAutomationTask, type AutomationRuntimeState } from '@open-mercato/cezar-contract/automations';
 import { EXIT } from '../task-cli/cli.ts';
 import { resolveCockpit, type DiscoverOptions } from '../task-cli/discovery.ts';
 import { fetchJson, refuse, TaskCliError, type Cockpit, type HttpResult } from '../task-cli/http.ts';
@@ -424,15 +424,16 @@ async function executeCreate(ctx: ExecuteContext): Promise<number> {
 /** `update`: read the stored definition, apply the editable keys, PUT with the revision echoed. */
 async function executeUpdate(ctx: ExecuteContext): Promise<number> {
   const { automation: current } = await ctx.call(ctx.path()) as { automation: Definition };
+  const stored: Definition = { ...current, task: isRecord(current.task) ? writableAutomationTask(current.task) : current.task };
   const next: Record<string, unknown> = {};
   for (const key of EDITABLE_KEYS) {
-    const value = key in ctx.body! ? ctx.body![key] : current[key];
+    const value = key in ctx.body! ? ctx.body![key] : stored[key];
     if (value !== undefined) next[key] = value;
   }
   // `task` merges key by key, so a prompt-only update keeps the workflow, runner, model and
   // the rest; `null` removes a key. Every other key replaces what is stored.
-  if (isRecord(ctx.body!.task) && isRecord(current.task)) {
-    const task: Record<string, unknown> = { ...current.task, ...ctx.body!.task };
+  if (isRecord(ctx.body!.task) && isRecord(stored.task)) {
+    const task: Record<string, unknown> = { ...stored.task, ...ctx.body!.task };
     for (const [key, value] of Object.entries(task)) if (value === null) delete task[key];
     next.task = task;
   }

@@ -3,7 +3,8 @@ import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { prepareOperatorHome } from './entry.ts';
-import { Home, kindHomePaths } from './home.ts';
+import { Home, homePaths, kindHomePaths } from './home.ts';
+import { migrateLegacyHome } from './migrate.ts';
 import { nativePathPlatform, oneRootKinds } from './kind-roots.ts';
 import { createInstallMarker, readInstallMarker, underTestRunner } from './install-marker.ts';
 import { accountProtectedRoots, insideRoot, protectedRootsFor } from './protected-roots.ts';
@@ -139,4 +140,17 @@ it.each([['an empty', ''], ['a relative', 'relative-home']])('fails closed when 
   expect(() => Home.sandbox(sandbox)).toThrow(refusal);
   expect(() => createInstallMarker(sandbox, 'test')).toThrow(refusal);
   expect(existsSync(sandbox)).toBe(false);
+});
+
+it.each(['empty', 'registry', '.bak-only'] as const)('a plain process migrating an unmarked %s legacy home marks the homes it creates live', kind => {
+  const root = join(fixture, 'legacy');
+  mkdirSync(root);
+  const projects = JSON.stringify({ projects: [{ id: 'kept', root: '/kept' }] });
+  if (kind === 'registry') writeFileSync(join(root, 'config.json'), projects);
+  if (kind === '.bak-only') writeFileSync(join(root, 'config.json.bak'), projects);
+  const legacy = homePaths(root, join(root, '.cache'), root);
+  const target = kindHomePaths(oneRootKinds(join(fixture, 'new'), nativePathPlatform), 'split', nativePathPlatform);
+  expect(migrateLegacyHome(legacy, target).status).toBe(kind === 'empty' ? 'fresh' : 'migrated');
+  expect(readInstallMarker(target.config)).toMatchObject({ kind: 'live', state: 'committed' });
+  expect(readInstallMarker(legacy.root)?.kind).toBe(kind === 'empty' ? undefined : 'live');
 });

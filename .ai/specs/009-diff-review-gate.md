@@ -1,6 +1,7 @@
 # 009 — Diff-first review gate: obejrzyj kod → uwagi → PR
+Status: draft
 
-Status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 3 · Zależy od: 002, 006 · Wzorzec: własny (janitor pokazuje transkrypt; my pokazujemy KOD)
+Recorded status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 3 · Zależy od: 002, 006 · Wzorzec: własny (janitor pokazuje transkrypt; my pokazujemy KOD)
 
 ## Cel
 
