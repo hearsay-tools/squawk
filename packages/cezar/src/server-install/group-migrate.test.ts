@@ -8,7 +8,7 @@ import { Home } from '../home/home.ts';
 import { prepareMigrationHome } from '../home/migration-boot.ts';
 import { HomeStore } from '../home/store.ts';
 import { cleanStoreRoots } from '../home/store.testkit.ts';
-import { readServerMigrateJournal } from './migrate-journal.ts';
+import { readServerMigrateJournal, writeServerMigrateJournal } from './migrate-journal.ts';
 import { loadServerState } from './state.ts';
 import { fakeHash } from './platforms/ubuntu-host.testkit.ts';
 import { listenAddress } from './platforms/ubuntu-vps-migration.ts';
@@ -357,6 +357,66 @@ describe('server-migrate rollback and recovery', () => {
     expect(result.lines).toContain('shop: server-migrate does not support platform unknown');
     expect(readServerMigrateJournal(f.target)).toEqual(journal);
     expect(f.host.commands).toHaveLength(commands);
+  });
+});
+
+/** The group migrated after a recovery: every new unit runs and passed its health check, ledgers name it, no journal is left. */
+function expectRecoveredAndMigrated(f: ServerFixture, lines: string[]): void {
+  expect(lines).toEqual(expect.arrayContaining(['Rolling back an interrupted server-migrate run.', 'default: checking health', 'shop: checking health']));
+  expect(f.host.unit('user', 'hearsay-squawk.service')).toMatchObject({ enabled: true, active: true });
+  expect(f.host.unit('system', 'hearsay-squawk-shop.service')).toMatchObject({ enabled: true, active: true });
+  expect(f.host.unit('user', 'cezar.service')).toMatchObject({ enabled: false, active: false });
+  expect(f.host.unit('system', 'cezar-shop.service')).toMatchObject({ enabled: false, active: false });
+  expect(f.host.enabledSites()).toEqual(['hearsay-squawk', 'hearsay-squawk-shop']);
+  expect([unitName(f, 'default'), unitName(f, 'shop')]).toEqual(['hearsay-squawk.service', 'hearsay-squawk-shop.service']);
+  expect(readInstallMarker(f.target.config)?.state).toBe('committed');
+  expect(readServerMigrateJournal(f.target)).toBeUndefined();
+}
+
+describe('server-migrate after hsq migrate committed the home a crashed run staged', () => {
+  it.each([
+    ['before any instance moved', (command: string) => command === 'systemctl --user disable cezar.service'],
+    ["during the second instance's move", (command: string) => command.includes('hearsay-squawk-shop.service')],
+    ['at the first health check, after every instance moved', (command: string) => command === 'systemctl --user start hearsay-squawk.service'],
+  ])('rolls the services back and migrates the group again after a crash %s', async (_point, matches) => {
+    const f = sharedHome();
+    const crash = crashAt(f, matches);
+    void serverMigrate(f);
+    await crash;
+    delete f.host.hang;
+    expect(migrateLegacyHome(f.legacy, f.target, { env: f.env }).status).toBe('migrated');
+    const result = await serverMigrate(f);
+    expect(result.status).toBe('migrated');
+    expectRecoveredAndMigrated(f, result.lines);
+  });
+
+  it('finishes the new rollback on the next run after a second crash, then migrates', async () => {
+    const f = sharedHome();
+    const first = crashAt(f, command => command.includes('hearsay-squawk-shop.service'));
+    void serverMigrate(f);
+    await first;
+    expect(migrateLegacyHome(f.legacy, f.target, { env: f.env }).status).toBe('migrated');
+    // The rollback restores shop first, then default; it crashes while it enables default's old unit.
+    const second = crashAt(f, command => command === 'systemctl --user enable cezar.service');
+    const run = serverMigrate(f).then(({ status }) => { throw new Error(`the run ended ${status} without rolling back`); });
+    await Promise.race([second, run]);
+    delete f.host.hang;
+    expect(readServerMigrateJournal(f.target)).toMatchObject({ phase: 'rolling-back', stagedHome: false });
+    const result = await serverMigrate(f);
+    expect(result.status).toBe('migrated');
+    expectRecoveredAndMigrated(f, result.lines);
+  });
+
+  it('rolls back and migrates again from a hand-edited committing journal that lacks a moved instance', async () => {
+    const f = sharedHome();
+    const crash = crashAt(f, command => command.includes('hearsay-squawk-shop.service'));
+    void serverMigrate(f);
+    await crash;
+    delete f.host.hang;
+    writeServerMigrateJournal(f.target, { ...readServerMigrateJournal(f.target)!, phase: 'committing' });
+    const result = await serverMigrate(f);
+    expect(result.status).toBe('migrated');
+    expectRecoveredAndMigrated(f, result.lines);
   });
 });
 

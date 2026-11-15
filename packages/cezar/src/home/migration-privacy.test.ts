@@ -6,6 +6,8 @@ import { copyPrivateTree, replacePrivateTree, writeLegacyArchive } from './migra
 import { cleanStoreRoots, storeRoot } from './store.testkit.ts';
 import { migrationFixture, rawJson } from './migration.testkit.ts';
 import { migrateLegacyHome } from './migrate.ts';
+import { BINARY_NAMES } from './identity.ts';
+import { launcherFile } from '../managed-install/launcher.ts';
 
 vi.mock('node:child_process', async original => ({
   ...await original<typeof import('node:child_process')>(), execFileSync: vi.fn(() => Buffer.alloc(0)),
@@ -45,8 +47,8 @@ it('migration copies and archives request the split Windows private ACL', () => 
   expect(aclCalls.some(([, args]) => String(args).includes(join(archive, '..')))).toBe(true);
   expect(aclCalls.some(([, args]) => String(args).includes(home.target.config))).toBe(true);
   expect(aclCalls.some(([, args]) => String(args).includes(home.target.state))).toBe(true);
-  for (const launcher of ['cez.cmd', 'cezarion.cmd']) {
-    expect(aclCalls.some(([, args]) => String(args).includes(join(home.target.bin, launcher))), launcher).toBe(true);
+  for (const name of BINARY_NAMES) {
+    expect(aclCalls.some(([, args]) => String(args).includes(launcherFile(home.target.bin, name, 'win32'))), name).toBe(true);
   }
   expect(readFileSync(join(target, 'auth.json'), 'utf8')).toBe('{"secret":"credential"}');
   expect(statSync(archive).size).toBeGreaterThan(0);

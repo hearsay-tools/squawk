@@ -4,6 +4,7 @@ import type { Home } from '../home/home.ts';
 import { readInstallMarker } from '../home/install-marker.ts';
 import { commitLegacyMigration, migrateLegacyHome, rollbackLegacyMigration } from '../home/migrate.ts';
 import { planLegacyMigration } from '../home/migration-plan.ts';
+import { readMigrationRecord } from '../home/migration-record.ts';
 import { withInstallLocks } from './engine.ts';
 import { applyMigrationReport } from './migration-report.ts';
 import { readServerMigrateJournal, removeServerMigrateJournal, writeServerMigrateJournal, type ServerMigrateJournal } from './migrate-journal.ts';
@@ -42,6 +43,8 @@ interface Member {
   planned: PlatformMigrationReport;
   moved?: PlatformMigrationReport | undefined;
 }
+type MovedMember = Pick<Member, 'instance' | 'state'> & { moved: PlatformMigrationReport };
+const hasMoved = <T extends { moved?: PlatformMigrationReport | undefined }>(entry: T): entry is T & { moved: PlatformMigrationReport } => entry.moved !== undefined;
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 const pending = (target: Home) => readInstallMarker(target.config)?.state === 'pending';
@@ -117,12 +120,10 @@ function journalFor(group: Group, members: Member[], phase: ServerMigrateJournal
 
 /** The home marker is committed by now; apply the ledgers. Recovery also finishes the home's
  *  publication (MOVED.json, PATH), which commitLegacyMigration repeats safely. */
-function commitGroup(group: Group, members: Array<Pick<Member, 'instance' | 'state' | 'moved'>>, finishHome: boolean): void {
+function commitGroup(group: Group, members: MovedMember[], finishHome: boolean): void {
   const { target, env, now } = group.opts;
   if (finishHome) commitLegacyMigration(target, env);
-  for (const { instance, state, moved } of members) {
-    if (moved) saveServerState({ ...applyMigrationReport(state, moved), updatedAt: now }, instance, target);
-  }
+  for (const { instance, state, moved } of members) saveServerState({ ...applyMigrationReport(state, moved), updatedAt: now }, instance, target);
   removeServerMigrateJournal(target);
 }
 
@@ -152,8 +153,11 @@ async function rollbackGroup(group: Group, members: Member[]): Promise<boolean> 
 async function recover(group: Group, journal: ServerMigrateJournal): Promise<'migrated' | 'rolled-back' | 'failed'> {
   const { target } = group.opts;
   const loaded = journal.instances.map(({ instance, planned, moved }) => ({ instance, planned, moved, state: loadServerState(instance, group.records) }));
-  // A staged home whose marker committed belongs to a group that passed every check.
-  if (journal.phase === 'committing' || (journal.stagedHome && committed(target))) {
+  // Only this group's own commit, made after every move and check, finishes forward. `hsq migrate`
+  // can commit the staged copy too, but it copies the home again and drops the record's stagedAt.
+  // A committed home always has a migration record.
+  const ownCommit = journal.phase === 'committing' || (journal.stagedHome && committed(target) && readMigrationRecord(target)!.stagedAt !== undefined);
+  if (ownCommit && loaded.every(hasMoved)) {
     group.say('Finishing an interrupted server-migrate commit.');
     commitGroup(group, loaded, journal.stagedHome);
     return 'migrated';
@@ -198,6 +202,11 @@ async function moveAndCheck(group: Group, members: Member[]): Promise<void> {
   writeServerMigrateJournal(target, journalFor(group, members, 'committing'));
 }
 
+/** moveAndCheck sets every member's moved report before the home can commit. */
+function movedMembers(members: Member[]): MovedMember[] {
+  return members.map(member => ({ ...member, moved: member.moved! }));
+}
+
 async function migrateGroup(group: Group): Promise<ServerMigrateStatus> {
   const journal = readServerMigrateJournal(group.opts.target);
   if (journal && !group.opts.dryRun) {
@@ -224,10 +233,10 @@ async function migrateGroup(group: Group): Promise<ServerMigrateStatus> {
     }
     // The home committed after every check passed: finish forward, never roll a committed home back.
     group.say(`server-migrate committed the home, then failed: ${message(error)}. Finishing the commit.`, 'warn');
-    commitGroup(group, members, true);
+    commitGroup(group, movedMembers(members), true);
     return 'migrated';
   }
-  commitGroup(group, members, false);
+  commitGroup(group, movedMembers(members), false);
   group.say(`Migrated ${members.length} server install${members.length === 1 ? '' : 's'}.`, 'info');
   return 'migrated';
 }

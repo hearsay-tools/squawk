@@ -3,6 +3,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, s
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Home } from './home.ts';
+import { BINARY_NAMES } from './identity.ts';
 import { migrateLegacyHome } from './migrate.ts';
 import { readMigrationRecord } from './migration-record.ts';
 import { prepareMigrationHome } from './migration-boot.ts';
@@ -258,7 +259,7 @@ it.skipIf(process.platform === 'win32')('managed install copies offline, replace
   expect(readFileSync(join(directory, '.bashrc'), 'utf8')).toContain(target.bin);
   expect(readFileSync(join(directory, '.bashrc'), 'utf8')).toContain('# user setting');
   expect(statSync(target.bin).mode & 0o777).toBe(0o700);
-  for (const name of ['cez', 'cezarion']) expect(statSync(join(target.bin, name)).mode & 0o777, name).toBe(0o700);
+  for (const name of BINARY_NAMES) expect(statSync(join(target.bin, name)).mode & 0o777, name).toBe(0o700);
   for (const bin of [legacy.bin, target.bin]) expect(execFileSync(join(bin, 'cez'), [], { env: { ...process.env, ...env }, encoding: 'utf8' })).toBe('launcher-ok');
 });
 
