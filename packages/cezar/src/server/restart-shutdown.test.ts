@@ -18,8 +18,12 @@ import { ProjectContexts } from './project-context.ts';
 import { createRunManager } from './run-manager.testkit.ts';
 import { startServer } from './start-server.ts';
 
-/** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
-const HANG_GUARD_MS = 10_000;
+// bound: a hang guard only. Each awaited promise is the product's own signal and settles at once when it works.
+function bounded<T>(signal: Promise<T>, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const guard = new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error(`${what} never came`)), 10_000); });
+  return Promise.race([signal, guard]).finally(() => clearTimeout(timer));
+}
 
 /**
  * `shutdownForRestart` (hearsay-tools/cezarion#779): the old process stops its work, writes what is pending and frees
@@ -48,12 +52,12 @@ describe('restart shutdown', () => {
     for (const dir of [home, bootRoot, otherRoot]) rmSync(dir, { recursive: true, force: true });
   });
 
-  function connect(url: string): Promise<{ closed: () => boolean }> {
+  /** A cockpit client socket and the promise of its close. */
+  function connect(url: string): Promise<{ ws: WebSocket; closed: Promise<void> }> {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(url);
-      let closed = false;
-      ws.once('close', () => { closed = true; });
-      ws.once('open', () => resolve({ closed: () => closed }));
+      const closed = new Promise<void>(done => { ws.once('close', () => done()); });
+      ws.once('open', () => resolve({ ws, closed }));
       ws.once('error', reject);
     });
   }
@@ -71,32 +75,46 @@ describe('restart shutdown', () => {
     // A dev server that will not stop must not abort the restart halfway.
     const previewHost = { handle: async () => undefined, detach: () => undefined, release: async () => undefined,
       close: async () => { throw new Error('dev server would not stop'); } } as unknown as PreviewHost;
-    let delegationClosing = false;
+    let delegationClosing!: () => void;
+    const closingDelegation = new Promise<void>(resolve => { delegationClosing = resolve; });
     let finishDelegation!: () => void;
     const delegationClosed = new Promise<void>(resolve => { finishDelegation = resolve; });
-    const delegation = { close: () => { delegationClosing = true; return delegationClosed; } } as unknown as DelegationController;
+    const delegation = { close: () => { delegationClosing(); return delegationClosed; } } as unknown as DelegationController;
     const server = startServer({ home: testHome(), repoRoot: bootRoot, bootProjectId: bootId, store, manager: {} as RunManager,
       version: '0.0.0-test', contexts, previewHost, delegation }, 0);
-    if (!server.listening) await once(server, 'listening');
-    const base = `ws://127.0.0.1:${(server.address() as AddressInfo).port}`;
-    const bus = await connect(`${base}/api/v1/ws`);
-    const pane = await connect(`${base}/api/v1/runs/${run.id}/preview/ws`);
-    store.updateRun(run.id, { title: 'Renamed before the restart' });
+    const sockets: WebSocket[] = [];
+    let shutDown = false;
+    try {
+      if (!server.listening) await once(server, 'listening');
+      const base = `ws://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const bus = await connect(`${base}/api/v1/ws`);
+      const pane = await connect(`${base}/api/v1/runs/${run.id}/preview/ws`);
+      sockets.push(bus.ws, pane.ws);
+      store.updateRun(run.id, { title: 'Renamed before the restart' });
 
-    let finished = false;
-    const shutdown = server.shutdownForRestart().then(() => { finished = true; });
-    await vi.waitFor(() => expect(delegationClosing).toBe(true), { timeout: HANG_GUARD_MS });
-    await vi.waitFor(() => expect({ bus: bus.closed(), pane: pane.closed() }).toEqual({ bus: true, pane: true }), { timeout: HANG_GUARD_MS });
-    expect(contexts.peek(otherId)).toBeUndefined();
-    const reader = RunStore.open(dataDir, { keepLive: true });
-    try { expect(reader.getRun(run.id)?.title).toBe('Renamed before the restart'); }
-    finally { reader.close(); }
-    expect(server.listening).toBe(true);
+      const shutdown = server.shutdownForRestart();
+      await bounded(closingDelegation, 'the delegation close');
+      await bounded(Promise.all([bus.closed, pane.closed]), 'the socket closes');
+      expect(contexts.peek(otherId)).toBeUndefined();
+      const reader = RunStore.open(dataDir, { keepLive: true });
+      try { expect(reader.getRun(run.id)?.title).toBe('Renamed before the restart'); }
+      finally { reader.close(); }
+      expect(server.listening).toBe(true);
 
-    finishDelegation();
-    await vi.waitFor(() => expect(finished).toBe(true), { timeout: HANG_GUARD_MS });
-    await shutdown;
-    expect(server.listening).toBe(false);
+      finishDelegation();
+      await bounded(shutdown, 'the restart shutdown');
+      shutDown = true;
+      expect(server.listening).toBe(false);
+    } finally {
+      finishDelegation();
+      for (const ws of sockets) ws.terminate();
+      if (!shutDown) {
+        if ('closeAllConnections' in server) server.closeAllConnections();
+        server.close();
+        store.close();
+      }
+      await contexts.disposeAll();
+    }
   });
 
   it('ends open event streams and releases every run claim for the replacement process', async () => {
@@ -105,27 +123,33 @@ describe('restart shutdown', () => {
     const run = store.createRun({ title: 'Running across the restart', workflow: 'quick-task', task: 't', steps: [] });
     store.move(run.id, 'start');
     const server = startServer({ home: testHome(), repoRoot: bootRoot, store, manager: {} as RunManager, version: '0.0.0-test' }, 0);
-    if (!server.listening) await once(server, 'listening');
-    const port = (server.address() as AddressInfo).port;
-    let streamEnded = false;
-    await new Promise<void>((resolve, reject) => {
-      get({ host: '127.0.0.1', port, path: '/api/v1/events' }, response => {
-        expect(response.headers['content-type']).toContain('text/event-stream');
-        response.on('close', () => { streamEnded = true; });
-        response.resume();
-        resolve();
-      }).on('error', reject);
-    });
-
-    let finished = false;
-    void server.shutdownForRestart().then(() => { finished = true; });
-    // bound: an event stream left open would hold `server.close` forever.
-    await vi.waitFor(() => expect({ finished, streamEnded }).toEqual({ finished: true, streamEnded: true }), { timeout: HANG_GUARD_MS });
-    expect(server.listening).toBe(false);
-    const replacement = RunStore.open(dataDir, { keepLive: true });
+    let shutDown = false;
     try {
-      expect(replacement.getRun(run.id)?.status).toBe('running');
-      expect(replacement.listForeignClaimedRunIds()).toEqual([]);
-    } finally { replacement.close(); }
+      if (!server.listening) await once(server, 'listening');
+      const port = (server.address() as AddressInfo).port;
+      const stream = await new Promise<{ closed: Promise<void> }>((resolve, reject) => {
+        get({ host: '127.0.0.1', port, path: '/api/v1/events' }, response => {
+          expect(response.headers['content-type']).toContain('text/event-stream');
+          response.resume();
+          resolve({ closed: new Promise<void>(done => { response.once('close', () => done()); }) });
+        }).on('error', reject);
+      });
+
+      // An event stream left open would hold `server.close` forever.
+      await bounded(Promise.all([server.shutdownForRestart(), stream.closed]), 'the restart shutdown and the stream close');
+      shutDown = true;
+      expect(server.listening).toBe(false);
+      const replacement = RunStore.open(dataDir, { keepLive: true });
+      try {
+        expect(replacement.getRun(run.id)?.status).toBe('running');
+        expect(replacement.listForeignClaimedRunIds()).toEqual([]);
+      } finally { replacement.close(); }
+    } finally {
+      if (!shutDown) {
+        if ('closeAllConnections' in server) server.closeAllConnections();
+        server.close();
+        store.close();
+      }
+    }
   });
 });

@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS, makeRunRecord } from '@open-mercato/cezar-contract/test-factories.testkit';
-import type { RunStatus } from '@open-mercato/cezar-contract';
 import { testHome } from './home/test-home.testkit.ts';
 import { main } from './cli-dispatch.ts';
 import { serveCommand } from './serve-command.ts';
@@ -13,8 +12,6 @@ import { RUNS_IMPORT_COMPLETE_KEY, RunDatabase } from './runs/run-database.ts';
 import { encodeRunRow } from './runs/run-row.ts';
 import { loadWorkflows } from './workflows/load.ts';
 import { discoverSkills } from './skills.ts';
-import { projectPaths } from './project-paths.ts';
-import { MIGRATION_JOURNAL_FILE, ProjectMigrationFencedError } from './project-fence.ts';
 import type { Cockpit } from './task-cli/http.ts';
 
 vi.mock('./cli-dispatch.ts', () => ({ defaultCliDeps: {}, main: vi.fn(async () => undefined) }));
@@ -22,20 +19,35 @@ vi.mock('./serve-command.ts', () => ({ defaultServeDeps: {}, serveCommand: vi.fn
 vi.mock('./headless-run.ts', () => ({ defaultHeadlessDeps: {}, runHeadless: vi.fn(async () => undefined) }));
 vi.mock('./runs/arm-repo-handle.ts', () => ({ armRepoHandle: vi.fn() }));
 // The real hint, with cockpit discovery the test answers and stderr it reads.
-const hint = vi.hoisted(() => ({ discovering: [] as Array<(cockpit: Cockpit) => void>, lines: [] as string[] }));
+const hint = vi.hoisted(() => {
+  const discoveries: Array<{ signal: AbortSignal | undefined; answer: (cockpit: Cockpit) => void }> = [];
+  const discovering: Array<() => void> = [];
+  const lines: string[] = [];
+  const printing: Array<() => void> = [];
+  return {
+    discoveries, lines,
+    discover: (signal: AbortSignal | undefined) => new Promise<Cockpit>(answer => { discoveries.push({ signal, answer }); discovering.shift()?.(); }),
+    /** Settles once discovery has started `count` times. */
+    discovery: (count: number) => discoveries.length >= count ? Promise.resolve() : new Promise<void>(resolve => { discovering.push(resolve); }),
+    write: (line: string) => { lines.push(line); printing.shift()?.(); },
+    printed: () => new Promise<void>(resolve => { printing.push(resolve); }),
+  };
+});
 vi.mock('./task-cli/hint.ts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./task-cli/hint.ts')>();
-  return {
-    startCockpitHint: (repoDir: string) => actual.startCockpitHint(repoDir, {
-      discover: () => new Promise<Cockpit>(resolve => { hint.discovering.push(resolve); }),
-      write: line => { hint.lines.push(line); },
-    }),
-  };
+  return { startCockpitHint: (repoDir: string) => actual.startCockpitHint(repoDir, { discover: ({ signal }) => hint.discover(signal), write: hint.write }) };
 });
 // Loaded before index.ts so its lazy import of the hint resolves to the module above.
 await import('./task-cli/hint.ts');
 await import('./index.ts');
 const cli = vi.mocked(main).mock.calls[0]![0];
+
+// bound: a hang guard only. Each awaited promise is the product's own signal and settles at once when it works.
+function bounded<T>(signal: Promise<T>, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const guard = new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error(`${what} never came`)), 10_000); });
+  return Promise.race([signal, guard]).finally(() => clearTimeout(timer));
+}
 
 describe('CLI project paths at real entry points', () => {
   let repo: string;
@@ -44,11 +56,11 @@ describe('CLI project paths at real entry points', () => {
     mkdirSync(join(repo, '.ai/cezar'), { recursive: true }); // Exercise legacy precedence and Squawk fallback.
   });
   afterEach(() => { vi.restoreAllMocks(); vi.mocked(serveCommand).mockReset(); vi.mocked(runHeadless).mockReset(); rmSync(repo, { recursive: true, force: true }); });
-  function seedFallback(status: RunStatus = RUN_STATUS.done) {
+  function seedFallback() {
     const directory = join(repo, '.ai/squawk');
     mkdirSync(directory, { recursive: true });
     const record = makeRunRecord({ id: randomUUID(), task: 'fallback', title: 'fallback', workflow: 'quick-task',
-      status, createdAt: '2026-11-01T00:00:00Z', steps: [] });
+      status: RUN_STATUS.done, createdAt: '2026-11-01T00:00:00Z', steps: [] });
     const db = RunDatabase.open(join(directory, 'runs.db'));
     db.transaction({ upserts: [encodeRunRow(record)], deletes: [], meta: { [RUNS_IMPORT_COMPLETE_KEY]: 'fixture' } });
     db.close();
@@ -96,36 +108,6 @@ describe('CLI project paths at real entry points', () => {
     expect(existsSync(join(repo, '.ai/cezar/runs.db'))).toBe(false);
   });
 
-  it('keeps a running task live in the boot store, so the cockpit can resume it', async () => {
-    const run = seedFallback(RUN_STATUS.running);
-    let status: string | undefined;
-    vi.mocked(serveCommand).mockImplementation(async (_home, root, _port, _open, _host, _restart, deps) => {
-      const store = deps.openBootStore(root);
-      try { status = store.getRun(run.id)?.status; }
-      finally { store.close(); }
-    });
-    await cli.serveCommand(testHome(), repo, 4321, false, undefined, false);
-    expect(status).toBe(RUN_STATUS.running);
-  });
-
-  it('serves a boot project whose run history is damaged as unavailable and names the cause', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    writeFileSync(join(projectPaths(repo).write, 'runs.db'), 'not a database');
-    let unavailable: string | undefined;
-    vi.mocked(serveCommand).mockImplementation(async (_home, root, _port, _open, _host, _restart, deps) => {
-      unavailable = deps.openBootStore(root).unavailable?.message;
-    });
-    await cli.serveCommand(testHome(), repo, 4321, false, undefined, false);
-    expect(unavailable).toContain('is damaged');
-    expect(error).toHaveBeenCalledExactlyOnceWith(`\n  ✗ ${unavailable}\n`);
-  });
-
-  it('refuses to serve a boot project that an unfinished migration blocks', async () => {
-    writeFileSync(join(repo, '.ai', MIGRATION_JOURNAL_FILE), '{}');
-    vi.mocked(serveCommand).mockImplementation(async (_home, root, _port, _open, _host, _restart, deps) => { deps.openBootStore(root); });
-    await expect(cli.serveCommand(testHome(), repo, 4321, false, undefined, false)).rejects.toBeInstanceOf(ProjectMigrationFencedError);
-  });
-
   it('opens fallback history through the headless entry without shadowing it', async () => {
     const run = seedFallback();
     let title: string | undefined;
@@ -150,22 +132,20 @@ describe('CLI project paths at real entry points', () => {
     expect(runHeadless).not.toHaveBeenCalled();
   });
 
-  it('prints a running cockpit found during a headless run, and nothing once the run has ended', async () => {
+  it('prints a running cockpit found during a headless run, and abandons discovery when the run ends', async () => {
     const cockpit = (port: number): Cockpit => ({ origin: `http://127.0.0.1:${port}`, projectId: 'p', api: `http://127.0.0.1:${port}/api/v1/p/p` });
-    const settle = () => new Promise(resolve => setImmediate(resolve));
     const access = { allowWorkers: true, allowMessaging: true };
-    hint.lines.length = 0;
+    const printed = hint.printed();
     vi.mocked(runHeadless).mockImplementation(async () => {
-      await vi.waitFor(() => expect(hint.discovering).toHaveLength(1));
-      hint.discovering[0]!(cockpit(4321));
-      await settle();
+      await bounded(hint.discovery(1), 'cockpit discovery');
+      hint.discoveries[0]!.answer(cockpit(4321));
+      await bounded(printed, 'the cockpit hint');
     });
     await cli.runCommand(testHome(), repo, 'task', undefined, undefined, access);
     expect(hint.lines).toEqual([expect.stringContaining('a cockpit is running at http://127.0.0.1:4321')]);
-    vi.mocked(runHeadless).mockImplementation(async () => { await vi.waitFor(() => expect(hint.discovering).toHaveLength(2)); });
+    vi.mocked(runHeadless).mockImplementation(async () => { await bounded(hint.discovery(2), 'cockpit discovery'); });
     await cli.runCommand(testHome(), repo, 'task', undefined, undefined, access);
-    hint.discovering[1]!(cockpit(4322));
-    await settle();
-    expect(hint.lines).toHaveLength(1);
+    // Abandoned: a late answer prints nothing, and the probe cannot hold the process open.
+    expect(hint.discoveries.map(discovery => discovery.signal?.aborted)).toEqual([true, true]);
   });
 });

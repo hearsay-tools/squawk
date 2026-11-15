@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Home } from '../../home/home.ts';
@@ -395,8 +395,10 @@ describe('macOS launchd migration', () => {
     writeFileSync(target, readFileSync(ours.path!, 'utf8'));
     rmSync(ours.path!);
     symlinkSync(target, ours.path!);
+    const bytes = readFileSync(target, 'utf8');
     await strategy.steps(ctx).find((s) => s.id === 'autostart')!.undo(ctx, null);
-    expect(readFileSync(ours.path!, 'utf8')).toBe(readFileSync(target, 'utf8'));
+    expect(lstatSync(ours.path!).isSymbolicLink()).toBe(true);
+    expect(readFileSync(target, 'utf8')).toBe(bytes);
     expect(loaded).toEqual(new Set([ours.name!]));
     expect(commands.filter((c) => c[1] === 'bootout').map((c) => c[2])).toEqual([`gui/${process.getuid?.() ?? 0}/tools.hearsay.squawk.cockpit`]);
   });

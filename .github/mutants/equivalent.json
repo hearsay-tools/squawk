@@ -308,7 +308,7 @@
     "mutator": "ConditionalExpression",
     "original": "a.kind === 'owned' && a.type === 'launchd'",
     "replacement": "true",
-    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every ledger the product writes for these steps that has an artifact has an owned launchd one, and the shared ngrok-config entry fails both the original and the mutated predicate: some() over a non-empty ledger is true either way, and an empty one is false either way."
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. some() is true for a non-empty ledger either way, because the owned launchd artifact matches the original predicate (the shared ngrok-config artifact matches only the mutant), and false for an empty ledger either way."
   },
   {
     "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
@@ -316,7 +316,7 @@
     "mutator": "LogicalOperator",
     "original": "a.kind === 'owned' && a.type === 'launchd'",
     "replacement": "a.kind === 'owned' || a.type === 'launchd'",
-    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every ledger the product writes for these steps that has an artifact has an owned launchd one, and the shared ngrok-config entry fails both the original and the mutated predicate: some() finds the owned launchd artifact either way."
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact is neither owned nor launchd, so it fails the mutant too, and some() finds the owned launchd artifact either way."
   },
   {
     "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
@@ -324,7 +324,7 @@
     "mutator": "ConditionalExpression",
     "original": "a.kind === 'owned'",
     "replacement": "true",
-    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every ledger the product writes for these steps that has an artifact has an owned launchd one, and the shared ngrok-config entry fails both the original and the mutated predicate: no shared launchd artifact exists, so some() finds the owned launchd artifact either way."
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact fails the mutant because its type is not launchd, and some() finds the owned launchd artifact either way."
   },
   {
     "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
@@ -332,7 +332,7 @@
     "mutator": "ConditionalExpression",
     "original": "a.type === 'launchd'",
     "replacement": "true",
-    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every ledger the product writes for these steps that has an artifact has an owned launchd one, and the shared ngrok-config entry fails both the original and the mutated predicate: no owned artifact other than the launchd one exists, so some() finds it either way."
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact fails the mutant because it is not owned, and some() finds the owned launchd artifact either way."
   },
   {
     "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
@@ -340,7 +340,7 @@
     "mutator": "LogicalOperator",
     "original": "a.kind === 'owned' && a.type === 'launchd'",
     "replacement": "a.kind === 'owned' || a.type === 'launchd'",
-    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every ledger the product writes for these steps that has an artifact has an owned launchd one, and the shared ngrok-config entry fails both the original and the mutated predicate: find() skips the shared ngrok-config entry and returns the owned launchd artifact either way."
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact is neither owned nor launchd, so it fails the mutant too, and find() returns the owned launchd artifact either way."
   },
   {
     "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
@@ -348,7 +348,7 @@
     "mutator": "ConditionalExpression",
     "original": "a.kind === 'owned'",
     "replacement": "true",
-    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every ledger the product writes for these steps that has an artifact has an owned launchd one, and the shared ngrok-config entry fails both the original and the mutated predicate: no shared launchd artifact exists, so find() returns the owned launchd artifact either way."
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact fails the mutant because its type is not launchd, and find() returns the owned launchd artifact either way."
   },
   {
     "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
@@ -356,7 +356,7 @@
     "mutator": "ConditionalExpression",
     "original": "a.type === 'launchd'",
     "replacement": "true",
-    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every ledger the product writes for these steps that has an artifact has an owned launchd one, and the shared ngrok-config entry fails both the original and the mutated predicate: no owned artifact other than the launchd one exists, so find() returns it either way."
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact fails the mutant because it is not owned, and find() returns the owned launchd artifact either way."
   },
   {
     "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
@@ -389,5 +389,13 @@
     "original": "'closeAllConnections' in server",
     "replacement": "true",
     "reason": "server is always a node:http Server: the listener parameter is typed node:http Server and serve() is called without createServer, which makes a node:http server; the check only narrows the ServerType union for TypeScript."
+  },
+  {
+    "file": "packages/cezar/src/server/start-server.ts",
+    "function": "setTaskWebhookOrigin",
+    "mutator": "ConditionalExpression",
+    "original": "context",
+    "replacement": "true",
+    "reason": "ids() returns the keys of the same map peek() reads, and the loop reads both synchronously, so peek() returns a context for every id it is given."
   }
 ]

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { scheduledTaskSchema, type ScheduleTaskAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
-import type { SquawkDoneAnswer, SquawkWaitAnswer } from '@open-mercato/cezar-contract/waits';
+import { scheduleTaskRequestSchema, scheduledTaskSchema, type ScheduleTaskAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
+import { squawkDoneRequestSchema, squawkWaitRequestSchema, type SquawkDoneAnswer, type SquawkWaitAnswer } from '@open-mercato/cezar-contract/waits';
 import { productName } from '../home/display.ts';
 import { callScheduleTask, callSquawkDone, callSquawkWait } from './client.ts';
 import { invokeDoneTool, invokeScheduleTaskTool, invokeWaitTool } from './tools.ts';
@@ -20,6 +20,10 @@ function shown(result: { content: Array<{ type: string; text: string }>; isError
 }
 
 describe('Squawk tool answers', () => {
+  // Requests the tool server accepts.
+  const done = squawkDoneRequestSchema.parse({ summary: 'Tests pass.' });
+  const wait = squawkWaitRequestSchema.parse({ kind: WAIT_KIND.timer, seconds: 600, note: 'deploy' });
+  const schedule = scheduleTaskRequestSchema.parse({ name: 'Check the rollout', prompt: 'Check it', delay: '7d' });
   const accepted = { ok: true as const, finishes: 'at_turn_end' as const, open_waits: [] };
   it.each<[string, SquawkDoneAnswer, string]>([
     ['a refused finish', { ok: false, code: 'workers_outstanding', message: 'One worker still runs.' }, 'Not finished. Do what the message says'],
@@ -27,7 +31,7 @@ describe('Squawk tool answers', () => {
     ['an accepted task', { ...accepted, completes: 'task' }, `${productName('Cezar')} finishes the task at its end.`],
   ])('cezar_done answers %s with the hint for it', async (_name, answer, hint) => {
     vi.mocked(callSquawkDone).mockResolvedValue(answer);
-    expect(shown(await invokeDoneTool({}))).toEqual({ parts: 1, type: 'text', answer, hint: expect.stringContaining(hint), isError: !answer.ok, details: answer });
+    expect(shown(await invokeDoneTool(done))).toEqual({ parts: 1, type: 'text', answer, hint: expect.stringContaining(hint), isError: !answer.ok, details: answer });
   });
 
   it.each<[string, SquawkWaitAnswer, string]>([
@@ -36,7 +40,7 @@ describe('Squawk tool answers', () => {
     ['a known refusal', { ok: false, effect: 'refused', code: 'capacity', message: 'full' }, 'Not registered by this call'],
   ])('cezar_wait answers %s with the hint for it', async (_name, answer, hint) => {
     vi.mocked(callSquawkWait).mockResolvedValue(answer);
-    expect(shown(await invokeWaitTool({}))).toEqual({ parts: 1, type: 'text', answer, hint: expect.stringContaining(hint), isError: !answer.ok, details: answer });
+    expect(shown(await invokeWaitTool(wait))).toEqual({ parts: 1, type: 'text', answer, hint: expect.stringContaining(hint), isError: !answer.ok, details: answer });
   });
 
   const task = { id: 'a1', name: 'Check the rollout', status: scheduledTaskSchema.shape.status.enum.waiting, due_at: '2026-10-29T08:00Z' };
@@ -47,6 +51,6 @@ describe('Squawk tool answers', () => {
     ['an invalid call', { ok: false, code: 'invalid_request', message: 'delay: required' }, 'Not changed. Fix the call'],
   ])('cezar_schedule_task answers %s with the hint for it', async (_name, answer, hint) => {
     vi.mocked(callScheduleTask).mockResolvedValue(answer);
-    expect(shown(await invokeScheduleTaskTool({}))).toEqual({ parts: 1, type: 'text', answer, hint: expect.stringContaining(hint), isError: !answer.ok, details: answer });
+    expect(shown(await invokeScheduleTaskTool(schedule))).toEqual({ parts: 1, type: 'text', answer, hint: expect.stringContaining(hint), isError: !answer.ok, details: answer });
   });
 });

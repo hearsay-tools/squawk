@@ -479,27 +479,44 @@ describe('ubuntu-vps nginx-proxy identity (interactive, dry-run)', () => {
 describe('systemdUnit', () => {
   afterEach(() => { vi.unstubAllEnvs(); });
 
+  /** The unit's `Key=value` lines by key, in any order; Environment lines by variable. */
+  function unitFields(unit: string): { keys: Map<string, string[]>; env: Map<string, string> } {
+    const keys = new Map<string, string[]>();
+    const env = new Map<string, string>();
+    for (const line of unit.split('\n')) {
+      const at = line.indexOf('=');
+      if (at <= 0 || line.startsWith('#')) continue;
+      const [key, value] = [line.slice(0, at), line.slice(at + 1)];
+      keys.set(key, [...keys.get(key) ?? [], value]);
+      if (key === 'Environment') env.set(value.slice(0, value.indexOf('=')), value.slice(value.indexOf('=') + 1));
+    }
+    return { keys, env };
+  }
+
   it('runs cezar serve loopback with CEZ_REMOTE=1 and the port, as the user unit\'s own user', () => {
-    const unit = systemdUnit('/srv/app', 4321, 'user', '/usr/local/bin/cezar');
-    expect(unit).toContain('Environment=CEZ_REMOTE=1');
-    expect(unit).toContain('ExecStart=/usr/local/bin/cezar serve --no-open --port 4321');
-    expect(unit).toContain('Type=simple\nWorkingDirectory=/srv/app\n');
-    expect(unit).toContain('WantedBy=default.target');
+    const { keys, env } = unitFields(systemdUnit('/srv/app', 4321, 'user', '/usr/local/bin/cezar'));
+    expect(env.get('CEZ_REMOTE')).toBe('1');
+    expect(keys.get('ExecStart')).toEqual(['/usr/local/bin/cezar serve --no-open --port 4321']);
+    expect(keys.get('WorkingDirectory')).toEqual(['/srv/app']);
+    expect(keys.get('User')).toBeUndefined();
+    expect(keys.get('WantedBy')).toEqual(['default.target']);
   });
   it('system scope pins User= and multi-user.target', () => {
-    const unit = systemdUnit('/srv/app', 5000, 'system', '/usr/local/bin/cezar');
-    expect(unit).toContain(`Type=simple\nUser=${userInfo().username}\nWorkingDirectory=/srv/app\n`);
-    expect(unit).toContain('WantedBy=multi-user.target');
+    const { keys } = unitFields(systemdUnit('/srv/app', 5000, 'system', '/usr/local/bin/cezar'));
+    expect(keys.get('User')).toEqual([userInfo().username]);
+    expect(keys.get('WorkingDirectory')).toEqual(['/srv/app']);
+    expect(keys.get('WantedBy')).toEqual(['multi-user.target']);
   });
 
   it.each([
-    { name: 'the node dir and the login PATH, without blanks, "." or repeats', path: '/home/op/.local/bin:.::/usr/bin:/home/op/.local/bin', dirs: ['/home/op/.local/bin', '/usr/bin'] },
-    { name: 'the node dir and the system dirs when the installer has no PATH', path: undefined, dirs: [] },
+    { name: 'the node dir and the login PATH, without blanks, "." or repeats', path: '/home/op/.local/bin:.::/usr/bin:/home/op/.local/bin',
+      dirs: ['/home/op/.local/bin', '/usr/bin', '/usr/local/bin', '/bin'] },
+    { name: 'the node dir and the system dirs when the installer has no PATH', path: undefined, dirs: ['/usr/local/bin', '/usr/bin', '/bin'] },
   ])('gives the service $name', ({ path, dirs }) => {
     vi.stubEnv('PATH', path);
-    const unit = systemdUnit('/srv/app', 4321, 'user', '/usr/local/bin/cezar');
-    const expected = [...new Set([dirname(process.execPath), ...dirs, '/usr/local/bin', '/usr/bin', '/bin'])];
-    expect(unit.match(/^Environment=PATH=(.*)$/m)?.[1]?.split(':')).toEqual(expected);
+    const entries = unitFields(systemdUnit('/srv/app', 4321, 'user', '/usr/local/bin/cezar')).env.get('PATH')!.split(':');
+    expect(new Set(entries).size).toBe(entries.length);
+    expect(new Set(entries)).toEqual(new Set([dirname(process.execPath), ...dirs]));
   });
 
   it('takes an absolute "<node> <entry.js>" ExecStart verbatim (no bare name → no 203/EXEC)', () => {
