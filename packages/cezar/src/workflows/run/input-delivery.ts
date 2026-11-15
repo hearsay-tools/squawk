@@ -183,7 +183,10 @@ for (const type of [InputGroup, InputFlight]) {
 }
 export function createInputGroup(): InputGroup { return new InputGroup(); }
 
-type HumanAnswerBudget = { spent: number };
+/** The budget a human answer resets, as its flush saw it before the answer. `atTurnBoundary` is
+ *  the turn boundary before Squawk wrote the answer: a runner may report the answer's turn inside
+ *  that write (`RunnerFacts.turnStart`), and the cap decision must not depend on it. */
+type HumanAnswerBudget = { spent: number; atTurnBoundary?: boolean };
 
 /** Charging results cancelled by this flush, before a human answer resets its budget. */
 export function cappedTimersBeforeFlush(run: RunRecord, beforeHumanReset: HumanAnswerBudget | undefined, reads: {
@@ -638,7 +641,7 @@ export class InputDelivery {
     const owedTimers = cappedTimersBeforeFlush(run, beforeHumanReset, {
       countAutomaticWakes: before => this.host.countAutomaticWakes(runId, before),
       isAdmitted: () => this.host.line.isAdmitted(runId),
-      atTurnBoundary: () => state.boundary.atTurnBoundary === state.liveSession.session,
+      atTurnBoundary: () => beforeHumanReset?.atTurnBoundary ?? state.boundary.atTurnBoundary === state.liveSession.session,
     }, this.maxAutoContinues);
     if (owedTimers.length) {
       this.host.cancelAutomaticAtCap(runId, owedTimers);
@@ -716,9 +719,10 @@ export class InputDelivery {
     const prepared = this.prepareMessageContent(runId, state, content);
     const { blocks, expanded, deliverable } = prepared;
     const session = state.liveSession.session;
+    const atTurnBoundary = state.boundary.atTurnBoundary === session;
     const delivered = state.inputState.writeInput(() => session.sendMessage(deliverable));
     if (delivered && expanded !== blocks) this.host.runSkills.provisionLiveSlashSkill(runId, state, blocks);
-    if (delivered) this.applyHumanMessageDelivery(runId, state, prepared, messageId);
+    if (delivered) this.applyHumanMessageDelivery(runId, state, prepared, messageId, atTurnBoundary);
     return delivered;
   }
 
@@ -755,9 +759,9 @@ export class InputDelivery {
     return { blocks, expanded, deliverable, answeringAskSeq, bundle };
   }
 
-  private applyHumanMessageDelivery(runId: string, state: ActiveRun, prepared: ReturnType<InputDelivery['prepareMessageContent']>, messageId: string | undefined): void {
+  private applyHumanMessageDelivery(runId: string, state: ActiveRun, prepared: ReturnType<InputDelivery['prepareMessageContent']>, messageId: string | undefined, atTurnBoundary: boolean): void {
     const { answeringAskSeq, bundle } = prepared;
-    const beforeHumanReset = { spent: this.context.store.getRun(runId)?.automaticWakes ?? 0 };
+    const beforeHumanReset = { spent: this.context.store.getRun(runId)?.automaticWakes ?? 0, atTurnBoundary };
     // The turn that would have finished now answers the user (hearsay-tools/cezarion#1234).
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'human-delivered', session: state.liveSession.session });
     // A human message starts a fresh completion cycle (hearsay-tools/cezarion#1301).

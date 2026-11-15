@@ -1,4 +1,4 @@
-import { waitPartDescribers, sessionOf, runnerBoundary, prompted, nativeWire, ASK_CONTEXT, questions, pendingQuestion, humanOpen, answerOf, settled, answered, inputsFor } from './waits-parity-fixture.testkit.ts';
+import { waitPartDescribers, sessionOf, runnerBoundary, prompted, nativeWire, ASK_CONTEXT, questions, pendingQuestion, humanOpen, answerOf, settled, answered, inputsFor, fireTimer } from './waits-parity-fixture.testkit.ts';
 import { MAX_AUTO_CONTINUES } from './run.ts';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -194,6 +194,43 @@ export function answersCells(runners: RunnerId[], it: typeof registerTest = regi
       expect(store.readEvents(run.id).filter(event => event.type === 'note').slice(notesBefore)).toEqual([]);
       commits.expectEveryCommit(run.id, row => !row.lastWaits?.some(wait => wait.id === human!.id && wait.phase === 'delivered') ||
         (row.automaticWakes === 0 && row.waitDeliveryFailures === undefined), 'a live answer and its reset wake budget');
+      await until(() => answered(run.id, human!.askSeq!));
+      expect(manager.finish(run.id)).toBe(true);
+      await until(() => terminal.includes(store.getRun(run.id)?.status ?? ''));
+    });
+
+    // hearsay-tools/squawk#2702: the public route to an owed timer at the cap. Its wake is admitted
+    // and the session refuses it; the budget is then spent and the human answers. Claude, Pi and
+    // OMP report the answer's turn inside the write (`turnStart`), the other wires later: the
+    // answer's flush decides the same on both.
+    it(`${runner} U7b a live answer at the spent budget cancels a refused owed timer with the same notes`, async () => {
+      nativeWire(runner);
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: toolCall('cezar_ask', { context: ASK_CONTEXT, questions }), runner });
+      await until(() => pendingQuestion(run.id) && humanOpen(run.id)[0]?.askSeq !== undefined && store.getRun(run.id)?.status === 'waiting');
+      const [human] = humanOpen(run.id);
+      const tools = manager.squawkToolHandlers(run.id, toolGenerationOf(run.id));
+      const registered = await tools.registerWait({ kind: WAIT_KIND.timer, seconds: 60, note: 'answer cap guard' }, 'cezar_wait', new AbortController().signal);
+      if (!('wait' in registered) || registered.wait.kind !== 'timer') throw Error('registration refused');
+      const timer = registered.wait;
+      const session = sessionOf(run.id);
+      const send = session.sendAgentMessage.bind(session);
+      let refused = 0;
+      const refuse = vi.spyOn(session, 'sendAgentMessage').mockImplementation((content, inputIds) => {
+        if (inputIds?.includes(timer.id)) { refused++; return false; }
+        return send(content, inputIds);
+      });
+      fireTimer(timer.id);
+      await until(() => refused > 0);
+      refuse.mockRestore();
+      expect(settled(run.id, timer.id)).toBeUndefined();
+      store.updateRun(run.id, { automaticWakes: MAX_AUTO_CONTINUES });
+      const notesBefore = store.readEvents(run.id).filter(event => event.type === 'note').length;
+      expect(manager.sendMessage(run.id, [{ type: 'text', text: answerOf(run.id) }])).toBe(true);
+      expect(store.readEvents(run.id).filter(event => event.type === 'note').slice(notesBefore).map(event => event.message))
+        .toEqual([`automatic timer wake-up cap reached (${MAX_AUTO_CONTINUES}); timer ${timer.id} cancelled`]);
+      expect(settled(run.id, timer.id)?.phase).toBe(WAIT_PHASE.cancelled);
+      expect(inputsFor(run.id, timer.id)).toEqual([]);
+      expect(store.getRun(run.id)).toMatchObject({ automaticWakes: 0 });
       await until(() => answered(run.id, human!.askSeq!));
       expect(manager.finish(run.id)).toBe(true);
       await until(() => terminal.includes(store.getRun(run.id)?.status ?? ''));

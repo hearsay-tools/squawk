@@ -69,6 +69,13 @@ export interface RunnerFacts {
   /** The CLI takes Claude's model aliases (`sonnet`, `haiku`). The `plannerModel` and `namerModel`
    *  presets are such aliases, so only such a runner gets them; another runs on its own default. */
   readonly claudeModelAliases: boolean;
+  /**
+   * When the runner reports the turn that Squawk's own write opens. `on-write`: `turn.started` is
+   * emitted inside `sendMessage`/`sendAgentMessage`, before the call returns. `on-wire`: it comes
+   * later, from a wire frame or a later process. Shared code must not read it; tests use it to pick
+   * runners.
+   */
+  readonly turnStart: 'on-write' | 'on-wire';
 }
 
 export const RUNNER_FACTS = {
@@ -89,6 +96,8 @@ export const RUNNER_FACTS = {
     systemPromptOnResume: 'resent',
     nativeAsk: 'none', nativeSubagents: 'reported', nativeTimerTool: 'ScheduleWakeup', costReport: 'cumulative', sessionIdSource: 'launch',
     claudeModelAliases: true,
+    // A stdin user line to an idle session emits claudeTurnStarted in the same write.
+    turnStart: 'on-write',
   },
   codex: {
     // childWork: a child thread's items nest under its spawnAgent item through collabParentItemId
@@ -110,6 +119,8 @@ export const RUNNER_FACTS = {
     systemPromptOnResume: 'in-thread',
     nativeAsk: 'answerable', nativeSubagents: 'reported', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'native',
     claudeModelAliases: false,
+    // The turn/started notification after the turn/start or turn/steer response.
+    turnStart: 'on-wire',
   },
   opencode: {
     // childWork: a subtask's child-session parts nest under the subtask part (opencode-ui-mapper.ts).
@@ -127,6 +138,8 @@ export const RUNNER_FACTS = {
     systemPromptOnResume: 'in-thread',
     nativeAsk: 'answerable', nativeSubagents: 'turn-held', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'native',
     claudeModelAliases: false,
+    // Emitted when the queued prompt_async POST goes out, after sendMessage returns.
+    turnStart: 'on-wire',
   },
   pi: {
     // childWork: Pi RPC has no child session; a task tool is a plain tool call on the parent
@@ -144,6 +157,8 @@ export const RUNNER_FACTS = {
     systemPromptOnResume: 'resent',
     nativeAsk: 'none', nativeSubagents: 'unreported', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'launch',
     claudeModelAliases: false,
+    // A prompt to an idle session emits piTurnStarted in the same write.
+    turnStart: 'on-write',
   },
   // Every Cursor session runs on print (hearsay-tools/cezarion#1267).
   cursor: {
@@ -162,6 +177,8 @@ export const RUNNER_FACTS = {
     systemPromptOnResume: 'in-thread',
     nativeAsk: 'auto-skipped', nativeSubagents: 'unreported', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'native',
     claudeModelAliases: false,
+    // The init frame of the next print process.
+    turnStart: 'on-wire',
   },
   omp: {
     // childWork: subagent_event frames carry subagent_lifecycle.parentToolCallId of their task call
@@ -181,6 +198,8 @@ export const RUNNER_FACTS = {
     systemPromptOnResume: 'resent',
     nativeAsk: 'none', nativeSubagents: 'turn-held', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'native',
     claudeModelAliases: false,
+    // A prompt to an idle session emits ompTurnStarted in the same write.
+    turnStart: 'on-write',
   },
 } as const satisfies Readonly<Record<RunnerId, RunnerFacts>>;
 
