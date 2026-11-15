@@ -117,6 +117,8 @@ export async function shouldRegisterProject(repoRoot: string): Promise<boolean> 
  * Register `root` in the workspace registry (idempotent). Known root (by
  * realpath) → bump its `lastOpenedAt` and return the existing entry, id and
  * all. Unknown → allocate a slug and append a new entry via merge-write.
+ * Either way the root's cached probe is dropped, so a root that came back
+ * (re-cloned after it was deleted) probes fresh (hearsay-tools/squawk#1086).
  */
 export async function registerProject(
   root: string,
@@ -126,7 +128,6 @@ export async function registerProject(
   const real = await normalizeRoot(root);
   const now = new Date().toISOString();
   let entry: WorkspaceProject | undefined;
-  let added = false;
   await mergeWriteWorkspaceConfig((config) => {
     const existing = config.projects.find((p) => p.root === real);
     if (existing) {
@@ -134,7 +135,6 @@ export async function registerProject(
       entry = existing;
       return;
     }
-    added = true;
     entry = {
       id: allocateProjectSlug(real, config.projects.map((p) => p.id)),
       root: real,
@@ -147,7 +147,7 @@ export async function registerProject(
   }, home);
   // The mutator always runs, so `entry` is always set — this satisfies TS.
   if (!entry) throw new Error('registerProject: merge-write did not run the mutator');
-  if (added) invalidateProjectProbe(real);
+  invalidateProjectProbe(real);
   return entry;
 }
 
