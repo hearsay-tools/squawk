@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { promisify } from 'node:util'
-import type { Reporter, TestSpecification } from 'vitest/node'
+import type { Reporter, TestModule, TestSpecification } from 'vitest/node'
 import { acquireTestEnvLease } from '../../../.ai/scripts/test-env-lease.mjs'
 import { setup as pinWorkspaceRegistry } from './workspace-registry.ts'
 import { tmpdirExceedsSocketBudget } from '../../../.ai/scripts/resolve-browser-launch.mjs'
@@ -102,17 +102,21 @@ type RunEnvironmentOptions = { project?: string; prepare?: () => Promise<() => v
  * runs only when that instance closes. A long-lived host, such as the Squeal daemon, would
  * keep its holder row for its whole life, and the app's idle watcher would never stop the app.
  *
- * Vitest awaits a run's `onTestRunStart` before it waits for an earlier run, so runs can
- * overlap here. They share one environment, released when the last of them ends. Vitest calls
- * `onTestRunEnd` only for a run whose `onTestRunStart` resolved, in the order those starts
- * resolved: a unit-only run that starts while a browser run still boots can end first.
+ * Runs can overlap, and Vitest can end them in any order: it reports a run's start before the
+ * run waits for an earlier one, and several runs that wait for the same earlier run all start
+ * when it ends. So an end is never paired with a start by position. Each end is classified from
+ * its own test modules: a browser run's modules include this project's. A run that ended before
+ * Vitest registered any module (a crash before collection) has none, so it counts as a browser
+ * run only when no other run is open. The browser count therefore never drops below the number
+ * of browser runs still open, and the environment goes only when the last of them ends.
  */
 export default class RunEnvironment implements Reporter {
   readonly #project: string
   readonly #prepare: () => Promise<() => void>
-  /** One entry per run whose start resolved, in that order: whether the run holds the environment. */
-  readonly #runs: boolean[] = []
-  #holders = 0
+  /** Started browser runs that have not ended, including those still waiting for the environment. */
+  #browserRuns = 0
+  /** Started runs without this project's specs that have not ended. */
+  #otherRuns = 0
   #environment: Promise<() => void> | undefined
 
   constructor({ project = 'e2e', prepare = setup }: RunEnvironmentOptions = {}) {
@@ -121,27 +125,32 @@ export default class RunEnvironment implements Reporter {
   }
 
   async onTestRunStart(specifications: ReadonlyArray<TestSpecification>): Promise<void> {
-    const holds = specifications.some(spec => spec.project.name === this.#project)
-    if (holds) {
-      this.#holders++
-      const environment = (this.#environment ??= this.#prepare())
-      try {
-        await environment
-      } catch (error) {
-        // Vitest never ends a run whose start failed.
-        this.#holders--
-        if (this.#environment === environment) this.#environment = undefined
-        throw error
-      }
+    if (!specifications.some(spec => spec.project.name === this.#project)) {
+      this.#otherRuns++
+      return
     }
-    this.#runs.push(holds)
+    this.#browserRuns++
+    const environment = (this.#environment ??= this.#prepare())
+    try {
+      await environment
+    } catch (error) {
+      // Vitest never ends a run whose start failed.
+      this.#browserRuns--
+      if (this.#environment === environment) this.#environment = undefined
+      throw error
+    }
   }
 
-  async onTestRunEnd(): Promise<void> {
-    if (!this.#runs.shift() || --this.#holders > 0) return
+  async onTestRunEnd(testModules: ReadonlyArray<TestModule>): Promise<void> {
+    const browser = testModules.some(module => module.project.name === this.#project) || this.#otherRuns === 0
+    if (!browser) {
+      this.#otherRuns--
+      return
+    }
+    if (this.#browserRuns === 0 || --this.#browserRuns > 0) return
     const environment = this.#environment
     this.#environment = undefined
-    // Every start that shares it has resolved: a pending one would still count as a holder.
+    // No browser run is open, so none still waits for this environment: it has resolved.
     ;(await environment)?.()
   }
 }

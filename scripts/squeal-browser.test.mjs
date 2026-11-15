@@ -189,43 +189,34 @@ test('each browser test run holds the lease only while it runs, in a host that k
       const db = new DatabaseSync('.ai/qa/test-env-lease.sqlite', { readOnly: true });
       try { return db.prepare('SELECT count(*) AS n FROM holders').get().n; } finally { db.close(); }
     };
+    // A run's specifications at its start, and its test modules at its end.
     const e2e = [{ project: { name: 'e2e' } }];
     const unit = [{ project: { name: 'web' } }];
     const host = new RunEnvironment({ project: 'e2e' });
     const seen = [];
-    await host.onTestRunStart(unit); seen.push(['unit run', holders()]); await host.onTestRunEnd();
+    await host.onTestRunStart(unit); seen.push(['unit run', holders()]); await host.onTestRunEnd(unit);
     await host.onTestRunStart(e2e); seen.push(['browser run', holders()]);
-    await host.onTestRunEnd(); seen.push(['browser run ended', holders()]);
+    await host.onTestRunEnd(e2e); seen.push(['browser run ended', holders()]);
     rmSync('registry-restored');
-    // Vitest reports a second run's start before the first run ends.
+    // Overlapping runs share one environment; Vitest's real orderings are pinned below.
     await host.onTestRunStart(e2e); await host.onTestRunStart(unit); await host.onTestRunStart(e2e);
     seen.push(['overlapping runs', holders()]);
-    await host.onTestRunEnd(); seen.push(['first ended', holders()]);
-    await host.onTestRunEnd(); seen.push(['unit ended', holders()]);
+    await host.onTestRunEnd(e2e); seen.push(['first ended', holders()]);
+    await host.onTestRunEnd(unit); seen.push(['unit ended', holders()]);
     const restoredEarly = existsSync('registry-restored');
-    await host.onTestRunEnd(); seen.push(['last ended', holders()]);
+    await host.onTestRunEnd(e2e); seen.push(['last ended', holders()]);
     let prepared = 0, released = 0;
     const flaky = new RunEnvironment({ project: 'e2e', prepare: async () => {
       if (++prepared === 1) throw new Error('boot failed');
       return () => { released++; };
     } });
     const failure = await flaky.onTestRunStart(e2e).then(() => 'resolved', error => error.message);
-    await flaky.onTestRunStart(e2e); await flaky.onTestRunEnd();
-    // Vitest awaits a run's start before it queues the run, so a unit run that starts while a
-    // browser run still boots can end first. That end must not release the browser run's env.
-    let boot, booted = 0, freed = 0;
-    const slow = new RunEnvironment({ project: 'e2e', prepare: () => new Promise(done => { boot = done; }) });
-    const browserStart = slow.onTestRunStart(e2e);
-    await slow.onTestRunStart(unit); await slow.onTestRunEnd();
-    boot(() => { freed++; }); await browserStart; booted = freed;
-    await slow.onTestRunEnd();
-    const interleaved = { freedDuringBrowserRun: booted, freedAfter: freed };
-    console.log(JSON.stringify({ seen, interleaved, boots: readFileSync('booted', 'utf8').split('\\n').filter(Boolean).length,
+    await flaky.onTestRunStart(e2e); await flaky.onTestRunEnd(e2e);
+    console.log(JSON.stringify({ seen, boots: readFileSync('booted', 'utf8').split('\\n').filter(Boolean).length,
       restoredEarly, restored: existsSync('registry-restored'), failure, prepared, released }));
   ` });
   assert.equal(result.status, 0, result.stderr);
-  const { seen, boots, restoredEarly, restored, failure, prepared, released, interleaved } = report(result);
-  assert.deepEqual(interleaved, { freedDuringBrowserRun: 0, freedAfter: 1 });
+  const { seen, boots, restoredEarly, restored, failure, prepared, released } = report(result);
   assert.deepEqual(seen, [
     ['unit run', 0], ['browser run', 1], ['browser run ended', 0],
     ['overlapping runs', 1], ['first ended', 1], ['unit ended', 1], ['last ended', 0],
@@ -234,4 +225,113 @@ test('each browser test run holds the lease only while it runs, in a host that k
   assert.equal(restoredEarly, false);
   assert.equal(restored, true);
   assert.deepEqual({ failure, prepared, released }, { failure: 'boot failed', prepared: 2, released: 1 });
+});
+
+// hearsay-tools/squawk#3538: Vitest's own run ordering, with a pool whose runs end on command.
+// The installed Vitest.runFiles decides when each run starts and ends; only the pool is a stub.
+// Each stub run registers its modules as Vitest's pool does, unless it crashes before that.
+async function runHost(t, { prepare } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'cez-run-env-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'b.e2e.ts'), '');
+  writeFileSync(join(dir, 'u.test.ts'), '');
+  writeFileSync(join(dir, 'vitest.config.mjs'), `export default { test: { projects: [
+    { test: { name: 'e2e', include: ['b.e2e.ts'] } }, { test: { name: 'web', include: ['u.test.ts'] } },
+  ] } }`);
+  const env = { prepared: 0, released: 0 };
+  const environment = fileURLToPath(new URL('../packages/web/e2e/environment.ts', import.meta.url));
+  const vitest = await createVitest('test', { root: dir, watch: false, reporters: [[environment, {
+    project: 'e2e',
+    prepare: prepare ?? (async () => { env.prepared++; return () => { env.released++; }; }),
+  }]] });
+  // Vitest marks its host process failed after a failed run, as the crash case is meant to be.
+  const exitCode = process.exitCode;
+  t.after(async () => { await vitest.close(); process.exitCode = exitCode; });
+  await vitest.standalone();
+  const specs = await vitest.globTestSpecifications();
+  const spec = name => specs.find(s => s.project.name === name);
+  /** Started runs per project, in start order, until the pool takes them. */
+  const pooled = { e2e: [], web: [] };
+  const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+  vitest.pool = {
+    name: 'stub',
+    async runTests(specifications) {
+      // Vitest reaches the pool in its own order: take the oldest started run of this project.
+      const run = pooled[specifications[0].project.name].shift();
+      run.entered.resolve();
+      if (!run.crash) for (const s of specifications) vitest.state.clearFiles(s.project, [s.moduleId]);
+      await run.promise;
+      if (run.crash) throw new Error('pool crashed before collection');
+    },
+    async collectTests() {},
+    async close() {},
+  };
+  /** Start a run; its pool entry ends when `finish()` is called. */
+  const start = (name, { crash = false } = {}) => {
+    const run = { ...deferred(), entered: deferred(), crash };
+    pooled[name].push(run);
+    const done = vitest.runTestSpecifications([spec(name)]);
+    return { done, entered: run.entered.promise, finish: () => run.resolve() };
+  };
+  return { env, start };
+}
+
+// bound: one macrotask turn lets every queued microtask of runFiles settle; nothing waits on time.
+const settle = () => new Promise(resolve => setImmediate(resolve));
+
+test('several runs released by one earlier run: a unit run that ends first keeps the browser environment', async t => {
+  const { env, start } = await runHost(t);
+  const u0 = start('web'); await u0.entered;
+  // The browser run's start resolves first, then the unit run's; both then wait for u0's run.
+  const browser = start('e2e'); await settle();
+  const u1 = start('web'); await settle();
+  u0.finish(); await u0.done;
+  await Promise.all([browser.entered, u1.entered]);
+  u1.finish(); await u1.done;
+  assert.deepEqual(env, { prepared: 1, released: 0 }, 'the unit end released the browser environment');
+  browser.finish(); await browser.done;
+  assert.deepEqual(env, { prepared: 1, released: 1 });
+});
+
+test('two browser runs that end in reverse order share one environment until the last ends', async t => {
+  const { env, start } = await runHost(t);
+  const u0 = start('web'); await u0.entered;
+  const first = start('e2e'); await settle();
+  const second = start('e2e'); await settle();
+  u0.finish(); await u0.done;
+  await Promise.all([first.entered, second.entered]);
+  second.finish(); await second.done;
+  assert.deepEqual(env, { prepared: 1, released: 0 });
+  first.finish(); await first.done;
+  assert.deepEqual(env, { prepared: 1, released: 1 });
+});
+
+test('a browser run that crashes before collection still releases, after the unit run beside it', async t => {
+  const { env, start } = await runHost(t);
+  const u0 = start('web'); await u0.entered;
+  const browser = start('e2e', { crash: true }); await settle();
+  const u1 = start('web'); await settle();
+  u0.finish(); await u0.done;
+  await Promise.all([browser.entered, u1.entered]);
+  browser.finish(); await browser.done;
+  assert.deepEqual(env, { prepared: 1, released: 0 }, 'a run with no modules is not known to be the browser run while a unit run is open');
+  u1.finish(); await u1.done;
+  assert.deepEqual(env, { prepared: 1, released: 1 }, 'no holder may outlive the last run');
+  const alone = start('e2e', { crash: true }); await alone.entered;
+  alone.finish(); await alone.done;
+  assert.deepEqual(env, { prepared: 2, released: 2 });
+});
+
+test('a unit run that starts and ends while a browser run boots keeps the browser environment', async t => {
+  let boot;
+  const env = { released: 0 };
+  const { start } = await runHost(t, { prepare: () => new Promise(resolve => { boot = resolve; }) });
+  const browser = start('e2e');
+  const unit = start('web'); await unit.entered;
+  unit.finish(); await unit.done;
+  boot(() => { env.released++; });
+  await browser.entered;
+  assert.equal(env.released, 0);
+  browser.finish(); await browser.done;
+  assert.equal(env.released, 1);
 });
