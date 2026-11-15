@@ -20,7 +20,6 @@ Request: Extend PR #441 so every isolated Git task either receives a proper work
 ## Spec Updates
 
 - `.ai/specs/006-worktree-queue.md`: added the 2026-07-16 fail-closed and recovery contract.
-- `.ai/WORKLIST.md`: added verifiable implementation and validation tasks.
 
 ## Tasks
 
