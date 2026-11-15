@@ -90,6 +90,22 @@ describe('project run sources', () => {
     expect(new Set(store.listConversationRootIds())).toEqual(new Set([legacy.id, fallback.id, duplicate.id]));
   });
 
+  it.each([false, true])('counts fallback runs by automation, lets a legacy duplicate win, and keeps them through adoption (JSON=%s)', json => {
+    const launched = (automationId: string, receiptId: string): Partial<RunRecord> => ({ automation: { automationId, automationRevision: 1, receiptId, event: 'issue.opened', githubUrl: 'https://github.com/o/r/issues/1' } });
+    const legacy = record('legacy run', launched('daily', 'r-legacy'));
+    const fallback = record('fallback run', launched('daily', 'r-fallback'));
+    const duplicate = record('legacy duplicate', launched('weekly', 'r-dup'));
+    seed('cezar', [legacy, duplicate]);
+    seed('squawk', [fallback, { ...duplicate, ...launched('daily', 'r-dup') }], json);
+    const store = open();
+    expect(store.countAutomationRuns('daily')).toBe(2);
+    expect(store.countAutomationRuns('weekly')).toBe(1);
+    expect(store.findRunIdsByAutomationReceipt(['r-fallback', 'r-dup'])).toEqual(new Map([['r-fallback', fallback.id], ['r-dup', duplicate.id]]));
+    expect(store.adoptFallbackFamily(fallback.id)).toBe(true);
+    expect(store.countAutomationRuns('daily')).toBe(2);
+    expect(store.findRunIdsByAutomationReceipt(['r-fallback']).get('r-fallback')).toBe(fallback.id);
+  });
+
   it('unions disjoint IDs and keeps duplicate records and all their sidecars together', () => {
     const duplicate = record('legacy duplicate');
     const old = record('legacy only');

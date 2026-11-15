@@ -38,7 +38,7 @@ afterAll(() => {
 function keeps(run: RunSearchRun, tokens: readonly string[]): boolean {
   const summary = JSON.stringify({ status: RUN_STATUS.done, createdAt: '2026-10-03T21:09:02.000Z', archived: true, tokensUsed: 0, ...run });
   db.transaction({
-    upserts: [{ id: 'row', createdAt: '2026-10-03T21:09:02.000Z', status: RUN_STATUS.done, archived: true, live: false, data: '{}', summary, conversationMembers: null }],
+    upserts: [{ id: 'row', createdAt: '2026-10-03T21:09:02.000Z', status: RUN_STATUS.done, archived: true, live: false, data: '{}', summary, conversationMembers: null, automationRuns: null }],
     deletes: [],
   });
   let kept = false;
