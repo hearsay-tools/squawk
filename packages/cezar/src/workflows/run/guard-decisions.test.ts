@@ -4,9 +4,16 @@ import type { RunRecord } from '../../runs/store.ts';
 import { createActiveRun } from '../active-run.ts';
 import { workerExecutionStopped } from './run-guards.ts';
 import { staleContinuationDisposition } from './continuation-session.ts';
-import { sessionCloseKeepsWaiting, terminalScratchDisposition } from './run-settlement.ts';
+import { jobHoldsScratch, sessionCloseKeepsWaiting, terminalScratchDisposition } from './run-settlement.ts';
 import { latchInputFault } from './input-delivery.ts';
 import { selectSessionFault } from './session-events.ts';
+import { randomUUID } from 'node:crypto';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { agentTmpDir } from '../../runs/agent-tmpdir.ts';
+import { claimJob, jobPaths } from '../../jobs/job.ts';
+import { processStartToken } from '../../detached-process.ts';
 
 function root(deleting = false): RunRecord {
   return makeRunRecord({ id: 'parent', delegation: { role: 'root', permissions: [], receipts: [], historyDeletion: deleting ? 'pending' : undefined } });
@@ -135,7 +142,7 @@ function scratchReads(calls: string[], stop?: string, evidence: () => string[] |
     active: () => flag('active'), starting: () => flag('starting'), queued: () => flag('queued'), claimed: () => flag('claimed'),
     autosaveBlocker: () => flag('autosave') ? 'saving' : undefined,
     privateWorkers: () => { calls.push('evidence'); return evidence(); },
-    jobRuns: () => { calls.push('job'); return job; },
+    jobHolds: () => { calls.push('job'); return job; },
   };
 }
 
@@ -187,5 +194,23 @@ describe('terminalScratchDisposition', () => {
     expect(calls.slice(0, 6)).toEqual(['active', 'starting', 'queued', 'claimed', 'autosave', 'evidence']);
     expect(calls[6]).toBe('delegation');
     expect(calls.filter(value => value === 'evidence')).toHaveLength(1);
+  });
+});
+
+describe('jobHoldsScratch', () => {
+  it('holds scratch for the end a job was running at, after the job exits, and not for a later end', () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'cez-job-hold-')), runId = randomUUID();
+    try {
+      const scratch = agentTmpDir(dataDir, runId), exitFile = join(scratch, 'bench.1.exit'), start = processStartToken(process.pid);
+      mkdirSync(scratch, { recursive: true });
+      expect(jobHoldsScratch(dataDir, runId, 'end-1')).toBe(false);
+      // A record naming this live process stands for a running supervisor.
+      claimJob(jobPaths(scratch, 'bench'), { name: 'bench', pid: process.pid, ...(start === undefined ? {} : { start }), command: ['x'],
+        startedAt: new Date().toISOString(), log: join(scratch, 'bench.1.log'), exitFile });
+      expect(jobHoldsScratch(dataDir, runId, 'end-1')).toBe(true);
+      writeFileSync(exitFile, '0\n');
+      expect(jobHoldsScratch(dataDir, runId, 'end-1')).toBe(true);
+      expect(jobHoldsScratch(dataDir, runId, 'end-2')).toBe(false);
+    } finally { rmSync(dataDir, { recursive: true, force: true }); }
   });
 });

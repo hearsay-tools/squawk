@@ -128,7 +128,7 @@ describe('RunManager — task-scoped agent TMPDIR (#785)', () => {
     const unexpected = vi.fn((): never => { throw new Error('nonterminal scratch must not read reap dependencies'); });
     expect(terminalScratchDisposition(run.id, store.getRun(run.id), {
       active: unexpected, starting: unexpected, queued: unexpected, claimed: unexpected,
-      autosaveBlocker: unexpected, privateWorkers: unexpected, jobRuns: unexpected,
+      autosaveBlocker: unexpected, privateWorkers: unexpected, jobHolds: unexpected,
     })).toBe('keep');
     expect(unexpected).not.toHaveBeenCalled();
   });
@@ -193,7 +193,8 @@ describe('RunManager — task-scoped agent TMPDIR (#785)', () => {
 
     const finishIdle = async (runId: string) => {
       store.updateStep(runId, 's', { status: STEP_STATUS.waiting });
-      setRunStatus(store, runId, RUN_STATUS.waiting, { currentStepId: 's' });
+      // As a Continue does: the next end sets a new `finishedAt`.
+      setRunStatus(store, runId, RUN_STATUS.waiting, { currentStepId: 's', finishedAt: undefined });
       expect(manager.finish(runId)).toBe(true);
       await vi.waitFor(() => expect(store.getRun(runId)?.status).toBe('done'), { timeout: HANG_GUARD_MS });
     };
@@ -205,6 +206,8 @@ describe('RunManager — task-scoped agent TMPDIR (#785)', () => {
       await finishIdle(run.id);
       expect(jobStatus(dir, 'bench')).toMatchObject({ state: 'running', pid: job.pid });
       await end();
+      // Opening the ended task in the cockpit marks it read: a run event that reaps, but no end.
+      store.setRead(run.id);
       expect(jobStatus(dir, 'bench')).toMatchObject({ state: 'exited', exitCode: 5 });
       expect(readFileSync(job.log, 'utf8')).toBe('measured\n');
       // A Continue that ends again finds no job running, so the directory goes.
