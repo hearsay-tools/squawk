@@ -635,6 +635,9 @@ jobs:
         if: github.event_name != 'push'
         run: node .github/scripts/check-citations.cjs --base HEAD^1
 
+      - name: Check spec statuses
+        run: node .github/scripts/check-spec-status.cjs
+
       # The repository's own lint rules and the ast-grep baselines (hearsay-tools/cezarion#2416).
       # This job runs on every change surface, so no test selection can skip them.
       - name: Lint

@@ -1,6 +1,7 @@
 # Unified waits: one list, four tools, one turn-end rule
+Status: done
 
-Status: approved by the owner (2026-10-17). Phase 1: hearsay-tools/cezarion#1233; the
+Recorded status: approved by the owner (2026-10-17). Phase 1: hearsay-tools/cezarion#1233; the
 calls its build made are under [Phase 1 decisions](#phase-1-decisions). On 2026-10-18 the owner
 split the human wait out of `cezar_wait` into its own tool, `cezar_ask`, with a required card
 that may hold open questions (hearsay-tools/cezarion#1234, [Phase 2 decisions](#phase-2-decisions)).

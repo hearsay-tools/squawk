@@ -1,11 +1,13 @@
 # Live activity view
+Status: done
 
 A cockpit view that shows what is happening right now, in one project and in all
 projects. It shows what each task and each worker is doing or waiting for, and which
 tasks wait for a reply from which other task. The view moves: it changes as the work
 changes, without a reload and without a poll in local mode.
 
-Plan: [2026-11-05-live-activity-view-plan.md](2026-11-05-live-activity-view-plan.md).
+Implementation completed with
+[hearsay-tools/cezarion#2754](https://github.com/hearsay-tools/cezarion/pull/2754).
 Prototype (accepted by the owner on 2026-11-05):
 [assets/2026-11-05-live-activity-view/prototype.html](assets/2026-11-05-live-activity-view/prototype.html).
 Open it in a browser. It runs a scripted 50-second loop with sample data.

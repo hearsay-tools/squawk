@@ -1,4 +1,5 @@
 # Post-first-ready provider proof for queue admission
+Status: done
 
 Owner decision: three-minute settle window, 2026-11-09. Subject: hearsay-tools/cezarion#3046.
 

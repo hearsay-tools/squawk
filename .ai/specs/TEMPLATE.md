@@ -1,4 +1,15 @@
 # <Feature name>
+Status: draft
+
+<!--
+Use `Status: draft`, `Status: active`, `Status: done` or `Status: superseded`
+directly under the first heading. If a successor exists, use
+`Status: superseded by <file>.md` with its spec filename.
+A draft has no approved implementation in progress; active work still binds;
+done work has shipped; superseded work has been replaced.
+Delete a `-plan.md` file when its work is merged or superseded, and fix every link to it.
+Git history keeps the finished plan. Keep other specs as design records.
+-->
 
 ## Goal
 

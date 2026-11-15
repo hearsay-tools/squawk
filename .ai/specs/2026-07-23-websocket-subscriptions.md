@@ -1,4 +1,5 @@
 # WebSocket subscription bus (`/api/ws`)
+Status: done
 
 A single per-cockpit WebSocket carrying **topic subscriptions**: the frontend subscribes to the
 named event streams it currently needs and unsubscribes the moment it stops needing them, and the
