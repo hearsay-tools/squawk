@@ -109,7 +109,7 @@ describe('a migration journal that names a path outside the project', () => {
     writeProjectMigrationJournal(journal, journalWith(root, { kind: 'artifact-metadata', file: user.path, field: ['value'], from: '/old', to: '/new' }));
     const listener = vi.fn().mockRejectedValue(new Error('listener reached'));
     const process = new EventEmitter();
-    const boot = serveCommand(testHome(), root, 0, false, undefined, false, { ...defaultServeDeps, acquireServeListener: listener, process } as unknown as ServeDeps)
+    const boot = serveCommand(testHome(), root, 0, false, undefined, { ...defaultServeDeps, acquireServeListener: listener, process } as unknown as ServeDeps)
       .finally(() => process.emit('exit'));
     await expect(boot).rejects.toBeInstanceOf(ProjectMigrationRecoveryError);
     await expect(boot).rejects.toThrow(/is refused: .* is not inside .*\. Nothing was changed\./);

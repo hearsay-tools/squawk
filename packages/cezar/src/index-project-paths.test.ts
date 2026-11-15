@@ -75,12 +75,12 @@ describe('CLI project paths at real entry points', () => {
 
   it('serves fallback history without creating an empty legacy runs database', async () => {
     const run = seedFallback();
-    vi.mocked(serveCommand).mockImplementation(async (_home, root, _port, _open, _host, _restart, deps) => {
+    vi.mocked(serveCommand).mockImplementation(async (_home, root, _port, _open, _host, deps) => {
       const store = deps.openBootStore(root);
       try { expect(store.getRun(run.id)?.title).toBe('fallback'); }
       finally { store.close(); }
     });
-    await cli.serveCommand(testHome(), repo, 4321, false, undefined, false);
+    await cli.serveCommand(testHome(), repo, 4321, false, undefined);
     expect(existsSync(join(repo, '.ai/cezar/runs.db'))).toBe(false);
   });
 
