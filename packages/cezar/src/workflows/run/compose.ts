@@ -176,7 +176,7 @@ export interface FacadeHost {
 export function composeRunModules(context: RunModuleContext, host: FacadeHost, memory: RunMemory): RunModules {
   const modules = {} as RunModules;
   modules.memory = memory;
-  const releaseRunMemory = (id: string) => modules.memory.releaseIfEnded(id, context.store.getRun(id), () => host.isActive(id));
+  const releaseRunMemory = (id: string) => modules.memory.releaseIfEnded(id, () => context.store.getRun(id), () => host.isActive(id));
   modules.liveness = memory.liveness;
   modules.workerScratchCleanup = new WorkerScratchCleanup(context.store, context.dataDir, id => host.isActive(id) || modules.workerExecutions.has(id) || modules.claims.has(id) || !!host.autosaveCleanupBlocker(id));
   modules.completionGateHost = {

@@ -65,23 +65,33 @@ export function cancelLivenessTimer(handle: NodeJS.Timeout | undefined): void {
  * The one timer owner of a run's liveness bounds (hearsay-tools/squawk#3662). `arm` replaces the
  * handle armed for the same kind, run and key. An expiry runs only while its handle is current
  * and its session still matches. `clearScope` ends every bound of one scope of a run.
+ * `runScopeEnded` hears when a run's last run-scope bound ends, by expiry, clear or cancel; an
+ * expiry that arms the bound again keeps it.
  */
 export class LivenessTimers {
   readonly #armed = new Map<string, Armed>();
 
+  constructor(private readonly runScopeEnded?: (runId: string) => void) {}
+
   arm(bound: LivenessBound, expire: () => void): NodeJS.Timeout {
     const slot = slotOf(bound.kind, bound.runId, bound.key);
-    this.#cancel(slot);
+    this.#remove(slot);
     const handle = setTimeout(() => {
       if (this.#armed.get(slot)?.handle !== handle) return;
       this.#armed.delete(slot);
-      bound.forget?.();
-      if (bound.session && bound.session.current() !== bound.session.armed) return;
-      expire();
+      try {
+        bound.forget?.();
+        if (bound.session && bound.session.current() !== bound.session.armed) return;
+        expire();
+      } finally { this.#ended(bound.kind, bound.runId); }
     }, bound.delayMs);
     handle.unref?.();
     this.#armed.set(slot, { kind: bound.kind, runId: bound.runId, handle });
-    owners.set(handle, () => { if (this.#armed.get(slot)?.handle === handle) this.#armed.delete(slot); });
+    owners.set(handle, () => {
+      if (this.#armed.get(slot)?.handle !== handle) return;
+      this.#armed.delete(slot);
+      this.#ended(bound.kind, bound.runId);
+    });
     return handle;
   }
 
@@ -116,10 +126,20 @@ export class LivenessTimers {
   }
 
   #cancel(slot: string): void {
+    const armed = this.#remove(slot);
+    if (armed) this.#ended(armed.kind, armed.runId);
+  }
+
+  #remove(slot: string): Armed | undefined {
     const armed = this.#armed.get(slot);
-    if (!armed) return;
+    if (!armed) return undefined;
     this.#armed.delete(slot);
     clearTimeout(armed.handle);
+    return armed;
+  }
+
+  #ended(kind: LivenessKind, runId: string): void {
+    if (LIVENESS_BOUNDS[kind].scope === 'run' && !this.armedIn(runId, 'run').length) this.runScopeEnded?.(runId);
   }
 }
 

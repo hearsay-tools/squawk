@@ -47,14 +47,19 @@ export function runMemoryReleases(run: Pick<RunRecord, 'status' | 'waits'> | und
  * new map on a run module: the `run-memory-field-outside-owner` rule refuses one.
  *
  * It also holds the manager's liveness bounds (hearsay-tools/squawk#3662). A released run holds no
- * run-scope bound: `release` clears them, and an ended run is released only once none is armed,
- * so an expiry that still has work for it (a transcript retry, a claim expiry, a request deadline)
- * runs first.
+ * run-scope bound: `release` clears them. An ended run is released once none is armed, so an
+ * expiry that still has work for it (a transcript retry, a claim expiry, a request deadline) runs
+ * first; the last one to end, by expiry, clear or cancel, runs the held release again.
  */
 export class RunMemory {
   readonly #slots = new Map<string, RunSlot>();
-
-  constructor(readonly liveness = new LivenessTimers()) {}
+  /** The release decision of an ended run held by a run-scope bound, run again when the last one ends. */
+  readonly #heldReleases = new Map<string, () => void>();
+  readonly liveness = new LivenessTimers(runId => {
+    const retry = this.#heldReleases.get(runId);
+    this.#heldReleases.delete(runId);
+    retry?.();
+  });
 
   read<K extends keyof RunSlot>(runId: string, field: K): RunSlot[K] | undefined {
     return this.#slots.get(runId)?.[field];
@@ -66,7 +71,7 @@ export class RunMemory {
     if (value === undefined) {
       if (!slot) return;
       delete slot[field];
-      if (Object.keys(slot).length === 0) this.#slots.delete(runId);
+      if (Object.keys(slot).length === 0) { this.#slots.delete(runId); this.#heldReleases.delete(runId); }
       return;
     }
     const next = slot ?? {};
@@ -83,16 +88,22 @@ export class RunMemory {
   holds(runId: string): boolean { return this.#slots.has(runId); }
 
   /** Release the run's slot when `runMemoryReleases` says the run has ended and no run-scope
-   *  liveness bound is armed. `live` is asked only when the run holds a slot. */
-  releaseIfEnded(runId: string, run: Pick<RunRecord, 'status' | 'waits'> | undefined, live: () => boolean): void {
-    if (!this.#slots.has(runId) || this.liveness.armedIn(runId, 'run').length) return;
-    if (runMemoryReleases(run, live())) this.release(runId);
+   *  liveness bound is armed. While one is, the decision is held and runs again, reading the run
+   *  afresh, when the last one ends. `read` and `live` are asked only when the run holds a slot. */
+  releaseIfEnded(runId: string, read: () => Pick<RunRecord, 'status' | 'waits'> | undefined, live: () => boolean): void {
+    if (!this.#slots.has(runId)) return;
+    if (this.liveness.armedIn(runId, 'run').length) {
+      this.#heldReleases.set(runId, () => this.releaseIfEnded(runId, read, live));
+      return;
+    }
+    if (runMemoryReleases(read(), live())) this.release(runId);
   }
 
   release(runId: string): void {
     this.#slots.delete(runId);
+    this.#heldReleases.delete(runId);
     this.liveness.clearScope(runId, 'run');
   }
 
-  dispose(): void { this.#slots.clear(); }
+  dispose(): void { this.#slots.clear(); this.#heldReleases.clear(); }
 }

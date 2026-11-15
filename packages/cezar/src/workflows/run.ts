@@ -140,7 +140,7 @@ export class RunManager {
 
   /** A run that ended releases its memory (hearsay-tools/squawk#2064); so does a deleted one. */
   readonly #releaseEndedRunMemory = (run: RunRecord): void => {
-    this.#modules.memory.releaseIfEnded(run.id, run, () => this.isActive(run.id));
+    this.#modules.memory.releaseIfEnded(run.id, () => this.#store.getRun(run.id), () => this.isActive(run.id));
   };
   readonly #releaseDeletedRunMemory = (runId: string): void => { this.#modules.memory.release(runId); };
 

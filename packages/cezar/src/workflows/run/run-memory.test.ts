@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS, WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { RunRecord } from '../../runs/store.ts';
+import { cancelLivenessTimer } from './liveness-timers.ts';
 import { RunMemory, runMemoryReleases } from './run-memory.ts';
 
 const openWait = [{ kind: WAIT_KIND.timer }] as unknown as RunRecord['waits'];
@@ -38,13 +39,13 @@ describe('RunMemory', () => {
     const memory = new RunMemory();
     let asked = 0;
     const live = (value: boolean) => () => { asked += 1; return value; };
-    memory.releaseIfEnded('none', { status: RUN_STATUS.done }, live(false));
+    memory.releaseIfEnded('none', () => ({ status: RUN_STATUS.done }), live(false));
     expect(asked).toBe(0);
     memory.write('run', 'imageSeq', 1);
-    memory.releaseIfEnded('run', { status: RUN_STATUS.review }, live(false));
-    memory.releaseIfEnded('run', { status: RUN_STATUS.done }, live(true));
+    memory.releaseIfEnded('run', () => ({ status: RUN_STATUS.review }), live(false));
+    memory.releaseIfEnded('run', () => ({ status: RUN_STATUS.done }), live(true));
     expect(memory.holds('run')).toBe(true);
-    memory.releaseIfEnded('run', { status: RUN_STATUS.done }, live(false));
+    memory.releaseIfEnded('run', () => ({ status: RUN_STATUS.done }), live(false));
     expect(memory.holds('run')).toBe(false);
   });
 
@@ -74,16 +75,59 @@ describe('RunMemory', () => {
     memory.liveness.dispose();
   });
 
-  it('keeps an ended run until no run-scope bound is armed, so a pending expiry still runs', () => {
-    const memory = new RunMemory();
-    memory.write('run', 'imageSeq', 1);
-    memory.liveness.arm({ kind: 'subagent-retry', runId: 'run', delayMs: 60_000 }, () => {});
-    memory.releaseIfEnded('run', { status: RUN_STATUS.done }, () => false);
-    expect(memory.holds('run')).toBe(true);
-    expect(memory.liveness.has('subagent-retry', 'run')).toBe(true);
-    memory.liveness.clear('subagent-retry', 'run');
-    memory.releaseIfEnded('run', { status: RUN_STATUS.done }, () => false);
-    expect(memory.holds('run')).toBe(false);
+  describe('an ended run held by a run-scope bound', () => {
+    afterEach(() => { vi.useRealTimers(); });
+    const ended = (memory: RunMemory, run: Pick<RunRecord, 'status' | 'waits'> = { status: RUN_STATUS.done }) => {
+      memory.write('run', 'imageSeq', 1);
+      let current = run;
+      memory.releaseIfEnded('run', () => current, () => false);
+      return { reopen: (next: Pick<RunRecord, 'status' | 'waits'>) => { current = next; } };
+    };
+
+    it('is released when its last bound expires, with no further call', () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const memory = new RunMemory();
+      memory.liveness.arm({ kind: 'subagent-retry', runId: 'run', delayMs: 1_000 }, () => {});
+      ended(memory);
+      expect(memory.holds('run')).toBe(true);
+      vi.advanceTimersByTime(1_000);
+      expect(memory.holds('run')).toBe(false);
+    });
+
+    it('is kept while its expiry arms the bound again, and released when that one expires', () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const memory = new RunMemory();
+      let retries = 1;
+      const arm = (): void => { memory.liveness.arm({ kind: 'subagent-retry', runId: 'run', delayMs: 1_000 }, () => { if (retries-- > 0) arm(); }); };
+      arm();
+      ended(memory);
+      vi.advanceTimersByTime(1_000);
+      expect(memory.holds('run')).toBe(true);
+      vi.advanceTimersByTime(1_000);
+      expect(memory.holds('run')).toBe(false);
+    });
+
+    it('is released when its last bound is cleared or cancelled, by any path', () => {
+      const memory = new RunMemory();
+      memory.liveness.arm({ kind: 'inbox-claim', runId: 'run', delayMs: 60_000 }, () => {});
+      memory.liveness.arm({ kind: 'wake-backoff', runId: 'run', delayMs: 60_000 }, () => {});
+      const deadline = memory.liveness.arm({ kind: 'request-deadline', runId: 'run', delayMs: 60_000 }, () => {});
+      ended(memory);
+      memory.liveness.clear('inbox-claim', 'run');
+      memory.liveness.clearKind('wake-backoff');
+      expect(memory.holds('run')).toBe(true);
+      cancelLivenessTimer(deadline);
+      expect(memory.holds('run')).toBe(false);
+    });
+
+    it('reads the run again when its bound ends, and keeps it when it no longer ended', () => {
+      const memory = new RunMemory();
+      memory.liveness.arm({ kind: 'request-deadline', runId: 'run', delayMs: 60_000 }, () => {});
+      const run = ended(memory);
+      run.reopen({ status: RUN_STATUS.waiting });
+      memory.liveness.clearScope('run', 'run');
+      expect(memory.holds('run')).toBe(true);
+    });
   });
 });
 

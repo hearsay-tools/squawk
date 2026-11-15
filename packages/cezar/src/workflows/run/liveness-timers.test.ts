@@ -72,3 +72,16 @@ it('clears one scope of one run and leaves the other scope and other runs armed'
   timers.dispose();
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it('tells its owner once a run holds no run-scope bound, not on a replacement or an execution bound', () => {
+  const ended = vi.fn();
+  const timers = new LivenessTimers(ended);
+  timers.arm({ kind: 'wake-retry', runId: 'a', delayMs: 10 }, () => {});
+  timers.arm({ kind: 'wake-retry', runId: 'a', delayMs: 10 }, () => {});
+  timers.arm({ kind: 'auto-resume', runId: 'a', delayMs: 20 }, () => {});
+  timers.arm({ kind: 'idle-close', runId: 'a', delayMs: 5 }, () => {});
+  vi.advanceTimersByTime(10);
+  expect(ended).not.toHaveBeenCalled();
+  vi.advanceTimersByTime(10);
+  expect(ended.mock.calls).toEqual([['a']]);
+});
