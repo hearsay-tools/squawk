@@ -1,7 +1,7 @@
 import { productIdentity } from '../home/identity.ts';
 import { productEnv } from '../core/product-env.ts';
 import { spawn } from 'node:child_process';
-import { gitEnv } from '../git-command.ts';
+import { gitEnv, spawnGit } from '../git-command.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PROJECT_NAME_PATTERN } from '@open-mercato/cezar-contract/project-limits';
@@ -41,15 +41,14 @@ export type CommandRunner = (
 
 export const spawnCommandRunner: CommandRunner = (cmd, args, opts) =>
   new Promise((resolvePromise) => {
-    const child = spawn(cmd, args, {
-      cwd: opts.cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: COMMAND_TIMEOUT_MS,
-      // Non-interactive on purpose: a prompt nobody can see would pin the request. GH_HOST is
-      // pinned because every URL, remote and command this flow names is github.com — an ambient
-      // GH_HOST (GitHub Enterprise) would list owners on, and create the repository on, another server.
-      env: gitEnv({ GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0', ...(cmd === 'gh' ? { GH_HOST: 'github.com' } : {}) }),
-    });
+    // Non-interactive on purpose: a prompt nobody can see would pin the request. GH_HOST is
+    // pinned because every URL, remote and command this flow names is github.com — an ambient
+    // GH_HOST (GitHub Enterprise) would list owners on, and create the repository on, another server.
+    const options = { cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'] as ['ignore', 'pipe', 'pipe'], timeout: COMMAND_TIMEOUT_MS };
+    const env = { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' };
+    const child = cmd === 'git'
+      ? spawnGit(args, { ...options, env })
+      : spawn(cmd, args, { ...options, env: gitEnv({ ...env, GH_HOST: 'github.com' }) });
     let stdout = '';
     let settled = false;
     const finish = (result: CommandResult): void => {

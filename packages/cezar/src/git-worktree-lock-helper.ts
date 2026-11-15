@@ -1,5 +1,6 @@
 import * as fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { runGit, type RunGitError } from './git-command.ts';
 
 type Claim = { pid: number; ticket: number; gitRunning: boolean };
 
@@ -8,16 +9,11 @@ type KeeperMessage = { kind: string; id: number; cwd: string; args: string[]; ti
 type CommandResult = { ok: boolean; stdout: string; stderr: string };
 
 /** Run one queued Git command; without input git sees an empty stdin, exactly as before. */
-function runGitCommand(
-  execFile: typeof import('node:child_process').execFile, message: KeeperMessage,
-): Promise<CommandResult> {
-  return new Promise(resolve => {
-    const child = execFile('git', message.args, { cwd: message.cwd, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: message.timeout }, (error, stdout, stderr) => {
-      resolve({ ok: !error, stdout: stdout ?? '', stderr: stderr || error?.message || '' });
-    });
-    child.stdin?.on('error', () => undefined);
-    child.stdin?.end(message.input ?? '');
-  });
+function runGitCommand(message: KeeperMessage): Promise<CommandResult> {
+  return runGit(message.args, { cwd: message.cwd, maxBuffer: 32 * 1024 * 1024, timeout: message.timeout, input: message.input ?? '' }).then(
+    ({ stdout, stderr }) => ({ ok: true, stdout, stderr }),
+    (error: RunGitError) => ({ ok: false, stdout: error.stdout ?? '', stderr: error.stderr || error.message || '' }),
+  );
 }
 
 export async function readMutationClaim(
@@ -106,7 +102,6 @@ async function waitForTurn(
 async function keepWorktreeLock(): Promise<void> {
   const { join } = await import('node:path');
   const { randomUUID } = await import('node:crypto');
-  const { execFile } = await import('node:child_process');
   const directory = process.argv[2]!;
   const name = `${process.pid}-${randomUUID()}.json`;
   const path = join(directory, name);
@@ -141,7 +136,7 @@ async function keepWorktreeLock(): Promise<void> {
       if (stopping || message.kind !== 'git') return;
       commands = commands.then(async () => {
         await write(ticket, true);
-        const result = await runGitCommand(execFile, message);
+        const result = await runGitCommand(message);
         await write(ticket);
         send({ kind: 'result', id: message.id, result });
       }).catch(error => {

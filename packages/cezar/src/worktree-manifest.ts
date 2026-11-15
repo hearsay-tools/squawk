@@ -1,14 +1,12 @@
 import { fallbackProjectWriteError } from './project-paths.ts';
 import { productName } from './home/display.ts';
-import { execFile } from 'node:child_process';
 import { createHash, randomBytes, type Hash } from 'node:crypto';
 import { copyFile, cp, lstat, mkdir, readdir, readFile, readlink, realpath, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
-import { promisify } from 'node:util';
 import { z } from 'zod';
 import { landsInside } from './skills-remote.ts';
+import { runGit } from './git-command.ts';
 
-const execFileAsync = promisify(execFile);
 
 /**
  * The record of every path Squawk wrote into a task worktree (hearsay-tools/cezarion#1814), for
@@ -258,7 +256,7 @@ function alive(pid: number): boolean {
 
 async function gitDirOf(worktree: string): Promise<string | null> {
   try {
-    const { stdout } = await execFileAsync('git', ['rev-parse', '--absolute-git-dir'], { cwd: worktree, timeout: 10_000 });
+    const { stdout } = await runGit(['rev-parse', '--absolute-git-dir'], { cwd: worktree, timeout: 10_000 });
     return stdout.trim() || null;
   } catch {
     return null;

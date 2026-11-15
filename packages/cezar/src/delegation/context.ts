@@ -1,16 +1,14 @@
 import { runDataDir } from '../legacy-runs.ts';
 import { fallbackProjectWriteError } from '../project-paths.ts';
-import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { constants, type Stats } from 'node:fs';
 import { lstat, mkdir, open, realpath, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { promisify } from 'node:util';
 import { parentFileRefusal, type WorkerInput, type WorkerInputRecipe, type WorkerSpawnRequest, type WorkerWorkspace } from '@open-mercato/cezar-contract/delegation';
 import { resolveAttachmentPath } from '../workflows/attachment-path.ts';
 import { DelegationPolicyError } from './policy.ts';
+import { runGit } from '../git-command.ts';
 
-const git = promisify(execFile);
 export const WORKER_CONTEXT_BYTES = 8 * 1024 * 1024;
 const hash = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex');
 const invalid = () => new DelegationPolicyError('invalid_input', 'Worker context input is missing, redirected, changed, or exceeds its limit');
@@ -115,7 +113,7 @@ async function parentFile(parentCwd: string, path: string): Promise<{ read(limit
   } };
 }
 async function ignoredByGit(cwd: string, path: string): Promise<boolean> {
-  return git('git', ['check-ignore', '-q', '--', path], { cwd, maxBuffer: 16_384, timeout: 30_000 }).then(() => true, (error: { code?: unknown }) => {
+  return runGit(['check-ignore', '-q', '--', path], { cwd, maxBuffer: 16_384, timeout: 30_000 }).then(() => true, (error: { code?: unknown }) => {
     if (error.code === 1) return false;
     throw error;
   });
@@ -155,10 +153,10 @@ export async function prepareWorkerContext(options: {
   try {
     for (const [index, source] of (context.artifacts ?? []).entries()) {
       if (source.kind === 'baseline-file') {
-        const { stdout } = await git('git', ['ls-tree', '-z', workspace.baselineSha, '--', source.path], { cwd: repoRoot, maxBuffer: 16_384, timeout: 30_000 });
+        const { stdout } = await runGit(['ls-tree', '-z', workspace.baselineSha, '--', source.path], { cwd: repoRoot, maxBuffer: 16_384, timeout: 30_000 });
         const match = /^(100644|100755) blob ([0-9a-f]{40,64})\t([^\0]+)\0$/.exec(stdout);
         if (!match || match[3] !== source.path) throw invalid();
-        const size = await git('git', ['cat-file', '-s', match[2]!], { cwd: repoRoot, maxBuffer: 1024, timeout: 30_000 });
+        const size = await runGit(['cat-file', '-s', match[2]!], { cwd: repoRoot, maxBuffer: 1024, timeout: 30_000 });
         inputs.push({ source, path: join(workspace.path, source.path), bytes: Number(size.stdout.trim()), sha256: hash(match[2]!) });
       } else if (source.kind === 'parent-file') {
         // Only an ignored file may enter the worker worktree: anything else would come back
@@ -166,7 +164,7 @@ export async function prepareWorkerContext(options: {
         // which dies outright on a path beyond a symlink.
         const refusal = parentFileRefusal(source.path);
         if (refusal) throw refuse(refusal);
-        const { stdout } = await git('git', ['ls-tree', '-z', workspace.baselineSha, '--', source.path], { cwd: repoRoot, maxBuffer: 16_384, timeout: 30_000 });
+        const { stdout } = await runGit(['ls-tree', '-z', workspace.baselineSha, '--', source.path], { cwd: repoRoot, maxBuffer: 16_384, timeout: 30_000 });
         if (stdout) throw refuse(`--attach path is tracked by git: ${source.path}; commit your changes and spawn from that commit instead of attaching it`);
         const file = await parentFile(options.parentCwd, source.path);
         if (!await ignoredByGit(options.parentCwd, source.path)) throw refuse(`--attach path is not ignored by git: ${source.path}; commit it and spawn from that commit instead of attaching it`);
@@ -292,10 +290,8 @@ async function placeParentFileAttachment(options: {
 /** A placed file can change the rules for another (a nested `.gitignore` re-including it). */
 async function recheckAttachedIgnoreRules(root: string, attached: string[]): Promise<void> {
   if (!attached.length) return;
-  const check = git('git', ['check-ignore', '-z', '--stdin'], { cwd: root, maxBuffer: 1024 * 1024, timeout: 30_000 });
-  // A git that exits early fails the promise below; its EPIPE on stdin must not crash the process.
-  check.child.stdin?.on('error', () => {}).end(attached.map(path => `${path}\0`).join(''));
-  const result = await check
+  const input = attached.map(path => `${path}\0`).join('');
+  const result = await runGit(['check-ignore', '-z', '--stdin'], { cwd: root, maxBuffer: 1024 * 1024, timeout: 30_000, input })
     .then(({ stdout }) => stdout, (error: { code?: unknown; message?: string }) => {
       if (error.code === 1) return '';
       throw refuse(`--attach paths could not be checked against the worker baseline: ${attached[0]} (${attachmentDetail(error)})`);
