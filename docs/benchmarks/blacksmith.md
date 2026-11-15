@@ -4,7 +4,7 @@ Status: complete. The optimized-balance and release-verification campaigns suppo
 
 ## Scope and method
 
-This experiment compares the real CI workflow on GitHub's `ubuntu-latest` runner with Blacksmith's `blacksmith-4vcpu-ubuntu-2404` runner. It also tests the three-weight shard-balance candidate described in [the experiment README](../../.github/benchmarks/blacksmith/README.md). The application baseline is `252b749d464a8f630f7446a6ff29e6f8fa076b10`; provider refs differ only where their workflow runner labels must differ. PR #154 itself is unchanged.
+This experiment compares the real CI workflow on GitHub's `ubuntu-latest` runner with Blacksmith's `blacksmith-4vcpu-ubuntu-2404` runner. It also tests the three-weight shard-balance candidate described in [the experiment README](https://github.com/hearsay-tools/squawk/blob/f2debe826a5ff477b9efa7596498b9c00bdf778e/.github/benchmarks/blacksmith/README.md). The application baseline is `252b749d464a8f630f7446a6ff29e6f8fa076b10`; provider refs differ only where their workflow runner labels must differ. PR #154 itself is unchanged.
 
 The driver dispatches three matched provider pairs through `ci.yml`, reversing dispatch order on the middle repetition. Each pair completes before the next starts. A manual dispatch exercises the normal three parallel verification jobs and the aggregate required check. Snapshot publication is ineligible and skipped. The measurements retain normal `actions/setup-node` npm caching and the production four-worker shard arguments.
 
@@ -83,4 +83,6 @@ Neither scenario is changed by the runner-label candidate. Repetition 1 and repe
 
 Use `blacksmith-4vcpu-ubuntu-2404` for the three CI verification jobs and `release.yml`'s read-only `Verify before release` job. Keep the aggregate CI gate and every snapshot/publish job on `ubuntu-latest`; npm trusted publishing and provenance require GitHub-hosted infrastructure. The CI runner and weight selection was committed at `a4a372ac`; the release label was measured and selected separately for the final PR diff. Local verification passed all gates: 376 Vitest files and 7,803 cases, 37 workspace tests, 81 GitHub script tests and 24 package tests. The 20 Python benchmark tests also passed. The hosted failures above remain part of the record. This report establishes the measured runner decision and local correctness, not final PR acceptance or a successful npm publication.
 
-Raw run objects, job metadata, workflow logs and collector artifacts are archived under `docs/benchmarks/blacksmith/raw/`: `ci-current.tar.gz`, `ci-candidate.tar.gz` and `release-34286016241.tar.gz`. The release archive includes all six artifact directories plus `jobs.json`, `run.json`, `aggregate.json` and the complete workflow log used for cache observations.
+Raw run objects, job metadata, workflow logs and collector artifacts were archived under `docs/benchmarks/blacksmith/raw/`: `ci-current.tar.gz`, `ci-candidate.tar.gz` and `release-34286016241.tar.gz`. The release archive includes all six artifact directories plus `jobs.json`, `run.json`, `aggregate.json` and the complete workflow log used for cache observations.
+
+The raw archives are no longer tracked (hearsay-tools/cezarion#3591). The run links above retain the measurement provenance.

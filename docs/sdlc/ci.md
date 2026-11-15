@@ -407,7 +407,7 @@ For split files, measure each resulting file separately. Keep browser E2E weight
 in their separate manifest. The paragraph above gives the
 sequencer's balancing-only role and upper-quartile fallback for unlisted files.
 
-The push-only `.github/workflows/ci-benchmark.yml` workflow runs controlled experiments on `bench/156-*` branches. It uses a fixed application baseline, records failures and resource usage, and performs publication experiments only as dry runs. Reproduction instructions and retained results are in [the issue 156 benchmark report](../benchmarks/ci-performance-156.md). Automated review remains enabled throughout.
+The completed CI performance campaign is recorded in [the benchmark report](../benchmarks/ci-performance-156.md). Its temporary workflow and raw archives were removed after the measured improvements shipped.
 
 CodeRabbit starts automatic reviews on push, including drafts and incremental changes. `.coderabbit.yaml` clears label filtering and sets `auto_pause_after_reviewed_commits: 0`. The used keys were checked against the live [v2 schema](https://www.coderabbit.ai/integrations/schema.v2.json) on 2026-11-02. The owner removed the custom round/spend cap because this open-source integration is free. Automatic provider execution now starts before preflight; the native admission gate still follows cheap preflight. No review model keys, commands, provider output artifacts, posting schema or PAT fallback remain. Issue intake keeps its independent model integration.
 
