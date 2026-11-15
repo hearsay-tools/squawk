@@ -12,7 +12,7 @@ it('reads its settings from the command line and refuses ones it cannot use', ()
   expect(parseRetentionBenchArgs([])).toEqual({ sizes: [100, 1000, 3000], out: undefined,
     base: { workersPerParent: 7, parentKb: 640, workerKb: 50, liveRoots: 20, passes: 3 } });
   expect(parseRetentionBenchArgs(['--workers', '5,10', '--passes', '1', '--out', 'r.json'])).toMatchObject({ sizes: [5, 10], out: 'r.json', base: { passes: 1 } });
-  for (const args of [['--workers', '1.5'], ['--workers=-1'], ['--passes', '0'], ['--workers-per-parent', '0']]) {
+  for (const args of [['--workers', '1.5'], ['--workers=-1'], ['--passes', '0'], ['--passes', 'Infinity'], ['--workers-per-parent', '0'], ['--workers-per-parent', '1.5']]) {
     expect(() => parseRetentionBenchArgs(args), args.join(' ')).toThrow('--workers takes whole numbers');
   }
 });

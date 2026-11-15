@@ -60,6 +60,7 @@ function seedRow(record: Record<string, unknown>): RunRowInput {
     live: 'activity' in record || hasDelegationWait(record) || (encoded?.live ?? ['queued', 'running', 'waiting'].includes(String(record.status))),
     data: JSON.stringify(record),
     summary: encoded?.summary ?? '{}',
+    conversationMembers: encoded?.conversationMembers ?? null,
   };
 }
 

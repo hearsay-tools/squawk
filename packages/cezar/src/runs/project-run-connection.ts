@@ -1,4 +1,5 @@
 import { RUN_DATABASE_READABLE_FROM, RUN_DATABASE_SCHEMA_VERSION } from './run-database-version.ts';
+import { conversationMembersSelect } from './conversation-members.ts';
 import { claimOwnerLive } from './run-claims.ts';
 import { warnFallbackRunSource } from './project-run-sources.ts';
 import { cpSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
@@ -143,6 +144,9 @@ export class ProjectRunConnection {
       sourceNames.has(name) ? String(name) : `${dflt_value ?? 'NULL'} AS ${name}`).join(', ');
     db.exec(`CREATE TEMP VIEW project_runs AS SELECT * FROM main.runs UNION ALL
       SELECT ${sourceColumns} FROM ${table} source WHERE NOT EXISTS (SELECT 1 FROM main.runs legacy WHERE legacy.id = source.id)`);
+    // A fallback row's members come from its record: an older fallback has no conversation_members.
+    db.exec(`CREATE TEMP VIEW project_conversation_members AS SELECT root_id, member_id FROM main.conversation_members UNION ALL
+      SELECT root_id, member_id FROM (${conversationMembersSelect(table)}) source WHERE NOT EXISTS (SELECT 1 FROM main.runs legacy WHERE legacy.id = source.root_id)`);
     this.attached = attached;
     this.sourceTable = table;
     const claims = attached ? 'SELECT * FROM project_fallback.run_claims' : 'SELECT * FROM main.run_claims WHERE 0';
@@ -213,6 +217,7 @@ export class ProjectRunConnection {
         const columns = Object.keys(row).filter(key => key !== 'seq');
         this.current.prepare(`INSERT INTO main.runs (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`)
           .run(...columns.map(key => row[key] as string | number | null));
+        this.current.prepare(`INSERT OR IGNORE INTO main.conversation_members (root_id, member_id) ${conversationMembersSelect('main.runs', 's.id = :id')}`).run({ id });
       }
     }
     // Inside the transaction, after the fence: another process may have added a fallback copy since the
@@ -252,14 +257,16 @@ export class ProjectRunConnection {
 }
 
 /** Match only table references. Quoted text and comments are opaque to the projection. */
+const PROJECT_VIEWS: Record<string, string> = { runs: 'project_runs', run_claims: 'project_claims', conversation_members: 'project_conversation_members' };
+
 function projectReadTables(sql: string): string {
-  return sql.replace(/('(?:''|[^'])*'|"(?:""|[^"])*"|`[^`]*`|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?\*\/)|\b(FROM|JOIN)(\s+)(runs|run_claims)\b/gi,
+  return sql.replace(/('(?:''|[^'])*'|"(?:""|[^"])*"|`[^`]*`|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?\*\/)|\b(FROM|JOIN)(\s+)(runs|run_claims|conversation_members)\b/gi,
     (match, quoted: string | undefined, keyword: string, space: string, table: string, offset: number) => {
       // A DELETE target stays the primary table; every other reference, nested reads in writes included, is a read.
       if (quoted || /\bDELETE\s*$/i.test(sql.slice(0, offset))) return match;
       const next = /^\s+(?:AS\s+)?([a-z_]\w*|"|`|\[)/i.exec(sql.slice(offset + match.length))?.[1];
       const aliased = next && !/^(WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|CROSS|GROUP|ORDER|LIMIT|UNION|INTERSECT|EXCEPT|ON|USING|NOT|INDEXED)$/i.test(next);
-      return `${keyword}${space}${table.toLowerCase() === 'runs' ? 'project_runs' : 'project_claims'}${aliased ? '' : ` AS ${table}`}`;
+      return `${keyword}${space}${PROJECT_VIEWS[table.toLowerCase()]}${aliased ? '' : ` AS ${table}`}`;
     });
 }
 

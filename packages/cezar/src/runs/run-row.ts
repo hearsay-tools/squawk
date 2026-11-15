@@ -40,6 +40,14 @@ export function materializedWorktreePath(run: RunRecord): string | undefined {
   return run.worktreePath;
 }
 
+/** What `conversation_members` holds for a run: for a root with a conversation, the marker `''`
+ *  and every distinct sender and recipient of its messages; null for any other run. */
+export function conversationMembersOf(run: RunRecord): string[] | null {
+  const conversation = run.delegation?.role === 'root' ? run.delegation.conversation : undefined;
+  if (!conversation) return null;
+  return [...new Set(['', ...conversation.messages.flatMap(message => [message.senderRunId, message.recipientRunId])])];
+}
+
 /**
  * Encode a record, its summary and all query columns for one upsert. data may include preserved
  * raw fields. Live process usage is attached by readers and is never persisted here.
@@ -61,6 +69,7 @@ export function encodeRunRow(run: RunRecord, data: string = JSON.stringify(run))
     baseBranch: run.baseBranch ?? null,
     data,
     summary: JSON.stringify(toRunSummary(run)),
+    conversationMembers: conversationMembersOf(run),
   };
 }
 

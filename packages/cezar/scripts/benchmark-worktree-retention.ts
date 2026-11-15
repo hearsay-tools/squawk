@@ -22,20 +22,15 @@
  * - Times are the median of `--passes` passes, after one warm-up pass.
  */
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { cpus, tmpdir } from 'node:os';
+import { mkdirSync } from 'node:fs';
+import { cpus } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
 import { makeRunRecord } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { prepareBenchmarkEnv } from './benchmark-home.ts';
-import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
+import { benchAt as at, median, runSizes, withSeededStore } from './benchmark-store-fixture.ts';
 import { reclaimWorktrees } from '../src/runs/retention.ts';
-import { seedRuns } from '../src/runs/run-store.testkit.ts';
-import { RunStore, type RunRecord } from '../src/runs/store.ts';
-
-// The store reaches the worker ownership policy, which needs the host's identity store (ADR 0032).
-installWindowsIdentityStore();
+import type { RunRecord } from '../src/runs/store.ts';
 
 export interface RetentionBenchOptions {
   /** Destroyed workers in the project. */
@@ -51,8 +46,6 @@ export interface RetentionBenchOptions {
 export interface RetentionBenchRow { workers: number; parents: number; candidates: number; listMs: number; passMs: number }
 
 const pad = (kb: number) => 'x'.repeat(kb * 1024);
-const at = (minute: number) => new Date(Date.UTC(2026, 9, 1) + minute * 60_000).toISOString();
-const median = (samples: number[]) => [...samples].sort((a, b) => a - b)[Math.floor(samples.length / 2)]!;
 
 /** One project's rows: destroyed worker families, then finished roots that still have a directory. */
 function records(options: RetentionBenchOptions, root: string): RunRecord[] {
@@ -81,30 +74,20 @@ function records(options: RetentionBenchOptions, root: string): RunRecord[] {
 
 /** Seed one temporary project, open its store and time `--passes` retention passes. */
 export async function measureRetention(options: RetentionBenchOptions): Promise<RetentionBenchRow> {
-  const root = mkdtempSync(join(tmpdir(), 'cez-bench-retention-'));
-  try {
-    const dataDir = join(root, '.ai/cezar');
-    seedRuns(dataDir, records(options, root));
-    const store = RunStore.open(dataDir, { keepLive: true });
-    try {
-      const pass = async () => { const t = performance.now(); await reclaimWorktrees(root, store, 10, { claim: () => null }); return performance.now() - t; };
-      await pass();
-      const passMs: number[] = [], listMs: number[] = [];
-      let candidates = 0;
-      for (let i = 0; i < options.passes; i++) {
-        passMs.push(await pass());
-        const t = performance.now();
-        candidates = store.listRunsWithWorktree().length;
-        listMs.push(performance.now() - t);
-      }
-      return { workers: options.workers, parents: Math.ceil(options.workers / options.workersPerParent), candidates,
-        listMs: Math.round(median(listMs)), passMs: Math.round(median(passMs)) };
-    } finally {
-      store.close();
+  return withSeededStore('cez-bench-retention-', root => records(options, root), async (store, root) => {
+    const pass = async () => { const t = performance.now(); await reclaimWorktrees(root, store, 10, { claim: () => null }); return performance.now() - t; };
+    await pass();
+    const passMs: number[] = [], listMs: number[] = [];
+    let candidates = 0;
+    for (let i = 0; i < options.passes; i++) {
+      passMs.push(await pass());
+      const t = performance.now();
+      candidates = store.listRunsWithWorktree().length;
+      listMs.push(performance.now() - t);
     }
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
+    return { workers: options.workers, parents: Math.ceil(options.workers / options.workersPerParent), candidates,
+      listMs: Math.round(median(listMs)), passMs: Math.round(median(passMs)) };
+  });
 }
 
 export interface RetentionBenchArgs { sizes: number[]; base: Omit<RetentionBenchOptions, 'workers'>; out: string | undefined }
@@ -123,8 +106,8 @@ export function parseRetentionBenchArgs(args: string[]): RetentionBenchArgs {
   const sizes = values.workers.split(',').map(Number);
   const base = { workersPerParent: Number(values['workers-per-parent']), parentKb: Number(values['parent-kb']), workerKb: Number(values['worker-kb']),
     liveRoots: Number(values['live-roots']), passes: Number(values.passes) };
-  if (sizes.some(size => !Number.isInteger(size) || size < 0) || !(base.workersPerParent >= 1) || !(base.passes >= 1)) {
-    throw new Error('--workers takes whole numbers >= 0; --workers-per-parent and --passes take numbers >= 1');
+  if (sizes.some(size => !Number.isInteger(size) || size < 0) || !(Number.isInteger(base.workersPerParent) && base.workersPerParent >= 1) || !(Number.isInteger(base.passes) && base.passes >= 1)) {
+    throw new Error('--workers takes whole numbers >= 0; --workers-per-parent and --passes take whole numbers >= 1');
   }
   return { sizes, base, out: values.out };
 }
@@ -141,15 +124,7 @@ export function formatRetentionTable(base: RetentionBenchArgs['base'], rows: rea
 
 async function main(): Promise<void> {
   const { sizes, base, out } = parseRetentionBenchArgs(process.argv.slice(2));
-  const ownHome = prepareBenchmarkEnv();
-  try {
-    const rows: RetentionBenchRow[] = [];
-    for (const workers of sizes) rows.push(await measureRetention({ ...base, workers }));
-    console.log(formatRetentionTable(base, rows));
-    if (out) writeFileSync(out, `${JSON.stringify(rows, null, 2)}\n`);
-  } finally {
-    if (ownHome) rmSync(ownHome, { recursive: true, force: true });
-  }
+  await runSizes(sizes, out, workers => measureRetention({ ...base, workers }), rows => formatRetentionTable(base, rows));
 }
 
 if (import.meta.main) await main();
