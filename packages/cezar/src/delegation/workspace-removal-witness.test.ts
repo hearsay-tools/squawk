@@ -89,7 +89,8 @@ describe('the result after an outside change during destroy', { timeout: WORKSPA
     expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
   });
 
-  it.runIf(process.platform !== 'win32')('reports the removed worktree as deleted when a check after the removal fails', async () => {
+  // Root ignores directory modes, so the unreadable parent cannot be made there.
+  it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)('reports the removed worktree as deleted when a check after the removal fails', async () => {
     const { root, first } = await fixture();
     const workspace = await createOwnedWorkspace(root, randomUUID(), first);
     // The worktrees directory turns unreadable once the checkout is gone, so the next check throws.
