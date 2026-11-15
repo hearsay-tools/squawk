@@ -307,7 +307,7 @@ export function browserSpawnPlan(
   if (!command.includes('--json')) argv.push('--json')
   // Temp dirs are decided from this caller's own env, never the descriptor's runtimeEnv: that is
   // the answer for whoever booted the shared env (hearsay-tools/cezarion#1090). The e2e
-  // globalSetup already shortens an over-budget one; this covers callers outside it, such as
+  // run setup (environment.ts) already shortens an over-budget one; this covers callers outside it, such as
   // scripts/benchmark-tabs.ts. runtimeEnv's other keys still apply (held-browser-daemon.ts).
   const spawnEnv: NodeJS.ProcessEnv = { ...env }
   for (const [key, value] of Object.entries(browser.runtimeEnv ?? {})) {

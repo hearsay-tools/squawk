@@ -14,7 +14,7 @@ async function list(options = {}) {
   const vitest = await createVitest('test', { root, watch: false, reporters: [], ...options });
   try {
     await vitest.standalone();
-    return await vitest.globTestSpecifications();
+    return Object.assign(await vitest.globTestSpecifications(), { reporters: vitest.reporters });
   } finally {
     await vitest.close();
   }
@@ -24,6 +24,8 @@ test('Squeal can discover browser E2E through the root Vitest configuration', as
   const specs = await list();
   assert.ok(specs.some(spec => spec.project.name === 'e2e' && spec.moduleId.endsWith('/smoke.e2e.ts')),
     'the root configuration must expose browser E2E to Squeal');
+  // hearsay-tools/squawk#3538: the per-run environment survives a caller's own `reporters`.
+  assert.ok(specs.reporters.some(reporter => reporter.constructor.name === 'RunEnvironment'));
 });
 
 test('npm test selects only the four unit projects without starting a browser', async () => {
@@ -35,9 +37,9 @@ test('npm test selects only the four unit projects without starting a browser', 
   assert.ok(specs.every(spec => !spec.moduleId.endsWith('.e2e.ts')));
 });
 
-function bootstrap(t, { installed = true, bootExit = 0, tmp, registryFailure, borrowed = false } = {}) {
+function bootstrap(t, { installed = true, bootExit = 0, tmp, registryFailure, borrowed = false, script } = {}) {
   const source = new URL('../packages/web/e2e/environment.ts', import.meta.url);
-  assert.ok(existsSync(source), 'browser E2E needs an environment globalSetup');
+  assert.ok(existsSync(source), 'browser E2E needs a run environment');
   const fixture = mkdtempSync(join(tmpdir(), 'cez-squeal-browser-'));
   t.after(() => rmSync(fixture, { recursive: true, force: true }));
   mkdirSync(join(fixture, 'packages/web/e2e'), { recursive: true });
@@ -85,13 +87,13 @@ function bootstrap(t, { installed = true, bootExit = 0, tmp, registryFailure, bo
     installed, notes: 'Chrome fixture unavailable', runtimeEnv: { TMPDIR: runtimeTmp },
   } }).replace(/'/g, "'\\''");
   writeFileSync(join(fixture, '.ai/scripts/test-env-up.sh'), `#!/bin/sh
-printf 'booted\\n' > booted
+printf 'booted\\n' >> booted
 mkdir -p .ai/qa
 printf '%s\\n' '${descriptor}' > .ai/qa/test-env.json
 exit ${bootExit}
 `);
   const callerTmp = tmp ?? '/tmp';
-  const result = spawnSync(process.execPath, ['--input-type=module', '--eval', `
+  const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script?.(modulePath) ?? `
     import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
     import { acquireTestEnvLease } from ${JSON.stringify(pathToFileURL(join(fixture, '.ai/scripts/test-env-lease.mjs')).href)};
     import { setup } from ${JSON.stringify(pathToFileURL(modulePath).href)};
@@ -122,8 +124,8 @@ function report(result) {
 }
 
 // hearsay-tools/cezarion#1090: the descriptor's runtimeEnv is the answer for whoever booted
-// the shared env; globalSetup decides the socket-safe TMPDIR from its own caller's env.
-test('browser globalSetup runs the project bootstrap and keeps its caller’s short TMPDIR', t => {
+// the shared env; run setup decides the socket-safe TMPDIR from its own caller's env.
+test('browser run setup runs the project bootstrap and keeps its caller’s short TMPDIR', t => {
   const result = bootstrap(t);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(readFileSync(join(result.fixture, 'booted'), 'utf8'), 'booted\n');
@@ -132,7 +134,7 @@ test('browser globalSetup runs the project bootstrap and keeps its caller’s sh
   assert.equal(readFileSync(join(result.fixture, 'registry-restored'), 'utf8'), 'restored');
 });
 
-test('browser globalSetup gives an over-budget caller a short TMPDIR and removes it at teardown', t => {
+test('browser run setup gives an over-budget caller a short TMPDIR and removes it at teardown', t => {
   const result = bootstrap(t, { tmp: `/${'x'.repeat(120)}` });
   assert.equal(result.status, 0, result.stderr);
   const { tmp, existed, removed, restored } = report(result);
@@ -154,7 +156,7 @@ test('failed browser environment bootstrap prevents test execution', t => {
   assert.match(result.stderr, /bootstrap failed/);
 });
 
-test('wrapper-owned globalSetup joins the live lease without bootstrapping a second time', t => {
+test('wrapper-owned run setup joins the live lease without bootstrapping a second time', t => {
   const result = bootstrap(t, { borrowed: true });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(existsSync(join(result.fixture, 'booted')), false);
@@ -165,7 +167,7 @@ for (const [failure, reason] of [
   [{ installed: false }, /Chrome fixture unavailable/], [{ bootExit: 9 }, /bootstrap failed/],
   [{ registryFailure: 'setup' }, /registry setup failed/], [{ registryFailure: 'restore' }, /registry restore failed/],
 ]) {
-  test(`globalSetup releases its committed lease after failure ${JSON.stringify(failure)}`, t => {
+  test(`run setup releases its committed lease after failure ${JSON.stringify(failure)}`, t => {
     const result = bootstrap(t, failure);
     assert.notEqual(result.status, 0, result.stderr);
     assert.match(result.stderr, reason);
@@ -174,3 +176,52 @@ for (const [failure, reason] of [
     finally { db.close(); }
   });
 }
+
+// hearsay-tools/squawk#3538: a long-lived host such as the Squeal daemon runs many test runs.
+// Each run that needs the browser holds the lease only until it ends; the host lives on.
+test('each browser test run holds the lease only while it runs, in a host that keeps running', t => {
+  const result = bootstrap(t, { script: modulePath => `
+    import { existsSync, readFileSync, rmSync } from 'node:fs';
+    import { DatabaseSync } from 'node:sqlite';
+    import RunEnvironment from ${JSON.stringify(pathToFileURL(modulePath).href)};
+    const holders = () => {
+      if (!existsSync('.ai/qa/test-env-lease.sqlite')) return 0;
+      const db = new DatabaseSync('.ai/qa/test-env-lease.sqlite', { readOnly: true });
+      try { return db.prepare('SELECT count(*) AS n FROM holders').get().n; } finally { db.close(); }
+    };
+    const e2e = [{ project: { name: 'e2e' } }];
+    const unit = [{ project: { name: 'web' } }];
+    const host = new RunEnvironment({ project: 'e2e' });
+    const seen = [];
+    await host.onTestRunStart(unit); seen.push(['unit run', holders()]); await host.onTestRunEnd();
+    await host.onTestRunStart(e2e); seen.push(['browser run', holders()]);
+    await host.onTestRunEnd(); seen.push(['browser run ended', holders()]);
+    rmSync('registry-restored');
+    // Vitest reports a second run's start before the first run ends.
+    await host.onTestRunStart(e2e); await host.onTestRunStart(unit); await host.onTestRunStart(e2e);
+    seen.push(['overlapping runs', holders()]);
+    await host.onTestRunEnd(); seen.push(['first ended', holders()]);
+    await host.onTestRunEnd(); seen.push(['unit ended', holders()]);
+    const restoredEarly = existsSync('registry-restored');
+    await host.onTestRunEnd(); seen.push(['last ended', holders()]);
+    let prepared = 0, released = 0;
+    const flaky = new RunEnvironment({ project: 'e2e', prepare: async () => {
+      if (++prepared === 1) throw new Error('boot failed');
+      return () => { released++; };
+    } });
+    const failure = await flaky.onTestRunStart(e2e).then(() => 'resolved', error => error.message);
+    await flaky.onTestRunStart(e2e); await flaky.onTestRunEnd();
+    console.log(JSON.stringify({ seen, boots: readFileSync('booted', 'utf8').split('\\n').filter(Boolean).length,
+      restoredEarly, restored: existsSync('registry-restored'), failure, prepared, released }));
+  ` });
+  assert.equal(result.status, 0, result.stderr);
+  const { seen, boots, restoredEarly, restored, failure, prepared, released } = report(result);
+  assert.deepEqual(seen, [
+    ['unit run', 0], ['browser run', 1], ['browser run ended', 0],
+    ['overlapping runs', 1], ['first ended', 1], ['unit ended', 1], ['last ended', 0],
+  ]);
+  assert.equal(boots, 2);
+  assert.equal(restoredEarly, false);
+  assert.equal(restored, true);
+  assert.deepEqual({ failure, prepared, released }, { failure: 'boot failed', prepared: 2, released: 1 });
+});

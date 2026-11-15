@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { promisify } from 'node:util'
+import type { Reporter, TestSpecification } from 'vitest/node'
 import { acquireTestEnvLease } from '../../../.ai/scripts/test-env-lease.mjs'
 import { setup as pinWorkspaceRegistry } from './workspace-registry.ts'
 import { tmpdirExceedsSocketBudget } from '../../../.ai/scripts/resolve-browser-launch.mjs'
@@ -37,8 +38,9 @@ export function useSocketSafeTmpdir(
   }
 }
 
-/** Prepare browser E2E even when Vitest is driven directly by Squeal. The lease keeps a stale
- * TTL from tearing down an env a caller still uses (hearsay-tools/cezarion#1304). */
+/** Prepare browser E2E for one test run, even when Squeal drives Vitest directly, and return
+ * the release. The lease keeps a stale TTL from tearing down an env a caller still uses
+ * (hearsay-tools/cezarion#1304). */
 export async function setup(): Promise<() => void> {
   const previousToken = process.env.TEST_ENV_LEASE_TOKEN
   const lease = await acquireTestEnvLease(root, {
@@ -80,10 +82,65 @@ export async function setup(): Promise<() => void> {
     // Decide from THIS caller's TMPDIR only after boot: the detached server must not
     // inherit a temporary directory that test teardown later removes.
     restoreTmpdir = useSocketSafeTmpdir()
+    // Pin the shared env's workspace registry to the one-project shape before any spec runs,
+    // and restore it before the lease goes. Otherwise whatever the operator last registered in
+    // the gitignored `.ai/qa/cez-home` decides whether the sidebar renders its flat or its
+    // grouped shell, and every spec that asserts flat-shell selectors becomes a coin flip.
     restoreRegistry = await pinWorkspaceRegistry()
     return release
   } catch (cause) {
     release()
     throw new Error('Browser E2E environment bootstrap failed', { cause })
+  }
+}
+
+type RunEnvironmentOptions = { project?: string; prepare?: () => Promise<() => void> }
+
+/**
+ * Holds the environment, and so the lease, for each test run that needs it
+ * (hearsay-tools/squawk#3538). A globalSetup runs once per Vitest instance and its teardown
+ * runs only when that instance closes. A long-lived host, such as the Squeal daemon, would
+ * keep its holder row for its whole life, and the app's idle watcher would never stop the app.
+ *
+ * Vitest reports the start of a run before it waits for an earlier run, so two runs can
+ * overlap here. They share one environment, released when the last of them ends. Vitest calls
+ * `onTestRunEnd` only for a run whose `onTestRunStart` resolved, in start order.
+ */
+export default class RunEnvironment implements Reporter {
+  readonly #project: string
+  readonly #prepare: () => Promise<() => void>
+  /** One entry per started run, oldest first: whether that run holds the environment. */
+  readonly #runs: { holds: boolean }[] = []
+  #holders = 0
+  #environment: Promise<() => void> | undefined
+
+  constructor({ project = 'e2e', prepare = setup }: RunEnvironmentOptions = {}) {
+    this.#project = project
+    this.#prepare = prepare
+  }
+
+  async onTestRunStart(specifications: ReadonlyArray<TestSpecification>): Promise<void> {
+    const run = { holds: specifications.some(spec => spec.project.name === this.#project) }
+    this.#runs.push(run)
+    if (!run.holds) return
+    this.#holders++
+    const environment = (this.#environment ??= this.#prepare())
+    try {
+      await environment
+    } catch (error) {
+      // Vitest never ends a run whose start failed.
+      this.#runs.splice(this.#runs.indexOf(run), 1)
+      this.#holders--
+      if (this.#environment === environment) this.#environment = undefined
+      throw error
+    }
+  }
+
+  async onTestRunEnd(): Promise<void> {
+    if (!this.#runs.shift()?.holds || --this.#holders > 0) return
+    const environment = this.#environment
+    this.#environment = undefined
+    // Every start that shares it has resolved: a pending one would still count as a holder.
+    ;(await environment)?.()
   }
 }
