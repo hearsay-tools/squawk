@@ -129,8 +129,10 @@ function missingPatches(files, stats, changedFiles, local = new Map()) {
     const counts = stats.get(file.filename);
     if (file.status === 'removed' && file.additions === 0 && !local.get(file.filename)?.nul) continue;
     if (counts?.added === '-' && counts.deleted === '-') continue;
-    if (file.additions === 0 && file.deletions === 0 && counts?.added === '0' && counts.deleted === '0') continue;
-    if (['renamed', 'copied'].includes(file.status) && file.additions === 0 && file.deletions === 0) continue;
+    if (file.additions === 0 && file.deletions === 0) {
+      if (counts?.added === '0' && counts.deleted === '0') continue;
+      if (['renamed', 'copied'].includes(file.status)) continue;
+    }
     const cause = patchCause(local.get(file.filename), totals(files).lines);
     reasons.push(`${JSON.stringify(file.filename)}: ${file.status}, +${file.additions}/-${file.deletions}, has no GitHub patch: ${cause}. Split the PR so each file's diff is small enough for GitHub to return a patch.`);
   }
