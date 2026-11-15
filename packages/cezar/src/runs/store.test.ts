@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runRecordSchema as contractRunRecordSchema , runWorktreeSetupSchema } from '@open-mercato/cezar-contract/runs';
+import { claimJob, jobPaths } from '../jobs/job.ts';
+import { processStartToken } from '../detached-process.ts';
 import { historyPaths } from './history-file.ts';
 import { readRunIndexFromDisk } from './run-index.ts';
 import { RUNS_DB_FILE, RunDatabase } from './run-database.ts';
@@ -72,6 +74,25 @@ describe('RunStore save lifecycle (#124)', () => {
       expect(existsSync(join(dataDir, 'tmp', status)), status).toBe(live);
       if (live) expect(readFileSync(join(dataDir, 'tmp', status, 'note.txt'), 'utf8')).toBe(status);
     }
+    store.flush();
+  });
+
+  it('archive keeps the scratch of a run whose job still runs (hearsay-tools/squawk#3138)', () => {
+    const ids = ['job-done', 'job-live'];
+    seedRuns(dataDir, [...ids.map((id) => ({ ...LEGACY_RUN, id, status: RUN_STATUS.done, archived: false })),
+      ...Array.from({ length: 300 }, (_, index) => ({ ...LEGACY_RUN, id: `newer-${index}`, archived: false, createdAt: '2026-02-01T00:00:00.000Z' }))]);
+    for (const id of ids) {
+      const scratch = join(dataDir, 'tmp', id);
+      mkdirSync(scratch, { recursive: true });
+      // A record naming this live process stands for a running supervisor; one with its exit code has ended.
+      const start = processStartToken(process.pid), exitFile = join(scratch, 'bench.1.exit');
+      claimJob(jobPaths(scratch, 'bench'), { name: 'bench', pid: process.pid, ...(start === undefined ? {} : { start }), command: ['x'],
+        startedAt: new Date().toISOString(), log: join(scratch, 'bench.1.log'), exitFile });
+      if (id === 'job-done') writeFileSync(exitFile, '0\n');
+    }
+    const store = RunStore.open(dataDir, { keepLive: true });
+    store.createRun({ title: 'trigger retention', workflow: 'w', task: 'task', steps: [] });
+    expect(ids.map((id) => [store.getRun(id)?.archived, existsSync(join(dataDir, 'tmp', id))])).toEqual([[true, false], [true, true]]);
     store.flush();
   });
 

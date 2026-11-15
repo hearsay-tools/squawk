@@ -86,7 +86,7 @@ export function warnServeBind(bindHost: string | undefined, port: number): void 
   }
 }
 
-type StoppableServer = Pick<ReturnType<typeof startServer>, 'shutdownForRestart'>;
+export type StoppableServer = Pick<ReturnType<typeof startServer>, 'shutdownForRestart'>;
 
 /** How long a stop waits for the server's own shutdown. A socket the listener still holds, or a
  *  step that hangs, must not keep this process, its store or its agents alive. */
