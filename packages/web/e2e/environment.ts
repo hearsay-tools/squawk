@@ -102,15 +102,16 @@ type RunEnvironmentOptions = { project?: string; prepare?: () => Promise<() => v
  * runs only when that instance closes. A long-lived host, such as the Squeal daemon, would
  * keep its holder row for its whole life, and the app's idle watcher would never stop the app.
  *
- * Vitest reports the start of a run before it waits for an earlier run, so two runs can
+ * Vitest awaits a run's `onTestRunStart` before it waits for an earlier run, so runs can
  * overlap here. They share one environment, released when the last of them ends. Vitest calls
- * `onTestRunEnd` only for a run whose `onTestRunStart` resolved, in start order.
+ * `onTestRunEnd` only for a run whose `onTestRunStart` resolved, in the order those starts
+ * resolved: a unit-only run that starts while a browser run still boots can end first.
  */
 export default class RunEnvironment implements Reporter {
   readonly #project: string
   readonly #prepare: () => Promise<() => void>
-  /** One entry per started run, oldest first: whether that run holds the environment. */
-  readonly #runs: { holds: boolean }[] = []
+  /** One entry per run whose start resolved, in that order: whether the run holds the environment. */
+  readonly #runs: boolean[] = []
   #holders = 0
   #environment: Promise<() => void> | undefined
 
@@ -120,24 +121,24 @@ export default class RunEnvironment implements Reporter {
   }
 
   async onTestRunStart(specifications: ReadonlyArray<TestSpecification>): Promise<void> {
-    const run = { holds: specifications.some(spec => spec.project.name === this.#project) }
-    this.#runs.push(run)
-    if (!run.holds) return
-    this.#holders++
-    const environment = (this.#environment ??= this.#prepare())
-    try {
-      await environment
-    } catch (error) {
-      // Vitest never ends a run whose start failed.
-      this.#runs.splice(this.#runs.indexOf(run), 1)
-      this.#holders--
-      if (this.#environment === environment) this.#environment = undefined
-      throw error
+    const holds = specifications.some(spec => spec.project.name === this.#project)
+    if (holds) {
+      this.#holders++
+      const environment = (this.#environment ??= this.#prepare())
+      try {
+        await environment
+      } catch (error) {
+        // Vitest never ends a run whose start failed.
+        this.#holders--
+        if (this.#environment === environment) this.#environment = undefined
+        throw error
+      }
     }
+    this.#runs.push(holds)
   }
 
   async onTestRunEnd(): Promise<void> {
-    if (!this.#runs.shift()?.holds || --this.#holders > 0) return
+    if (!this.#runs.shift() || --this.#holders > 0) return
     const environment = this.#environment
     this.#environment = undefined
     // Every start that shares it has resolved: a pending one would still count as a holder.

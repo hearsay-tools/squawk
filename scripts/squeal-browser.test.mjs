@@ -211,11 +211,21 @@ test('each browser test run holds the lease only while it runs, in a host that k
     } });
     const failure = await flaky.onTestRunStart(e2e).then(() => 'resolved', error => error.message);
     await flaky.onTestRunStart(e2e); await flaky.onTestRunEnd();
-    console.log(JSON.stringify({ seen, boots: readFileSync('booted', 'utf8').split('\\n').filter(Boolean).length,
+    // Vitest awaits a run's start before it queues the run, so a unit run that starts while a
+    // browser run still boots can end first. That end must not release the browser run's env.
+    let boot, booted = 0, freed = 0;
+    const slow = new RunEnvironment({ project: 'e2e', prepare: () => new Promise(done => { boot = done; }) });
+    const browserStart = slow.onTestRunStart(e2e);
+    await slow.onTestRunStart(unit); await slow.onTestRunEnd();
+    boot(() => { freed++; }); await browserStart; booted = freed;
+    await slow.onTestRunEnd();
+    const interleaved = { freedDuringBrowserRun: booted, freedAfter: freed };
+    console.log(JSON.stringify({ seen, interleaved, boots: readFileSync('booted', 'utf8').split('\\n').filter(Boolean).length,
       restoredEarly, restored: existsSync('registry-restored'), failure, prepared, released }));
   ` });
   assert.equal(result.status, 0, result.stderr);
-  const { seen, boots, restoredEarly, restored, failure, prepared, released } = report(result);
+  const { seen, boots, restoredEarly, restored, failure, prepared, released, interleaved } = report(result);
+  assert.deepEqual(interleaved, { freedDuringBrowserRun: 0, freedAfter: 1 });
   assert.deepEqual(seen, [
     ['unit run', 0], ['browser run', 1], ['browser run ended', 0],
     ['overlapping runs', 1], ['first ended', 1], ['unit ended', 1], ['last ended', 0],
