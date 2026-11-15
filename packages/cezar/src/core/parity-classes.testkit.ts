@@ -98,7 +98,7 @@ export const PARITY_FAMILIES = {
     'tools', 'cdp', 'tool-grants', 'diagnostics', 'child', 'hooks', 'prs', 'permission', 'default-permission',
     'retirement-P3', 'retirement-P4', 'permission-failure', 'malformed', 'early-permission', 'late-permission', 'mcp']
     .map(group => [`harness:${group}`, everyRunner(HARNESS_SEAM)])),
-  'harness:answer': everyRunner(`R26 resumes a different native ask kind on each runner (askResumeCases); R129 ${NATIVE_ASK_SCENARIO}`),
+  'harness:answer': everyRunner(`R26 resumes a different native ask kind on each runner (askResumeCases); R130 ${NATIVE_ASK_SCENARIO}`),
   'harness:owner': everyRunner(`R50 parks on the ask scenario: ${NATIVE_ASK_SCENARIO}`),
   // Harness run tier: RunManager cells whose outcome is Squawk's.
   'harness:run': shared('RunManager cells over the native wire', {
