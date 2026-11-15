@@ -5,7 +5,6 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { setImmediate as nextMacrotask } from 'node:timers/promises';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRunner } from '../core/runner-factory.ts';
 import { processStartToken } from '../delegation/process-liveness.ts';
@@ -206,10 +205,17 @@ describe('ProjectContexts.withMaintenanceStore', () => {
     const other = new CockpitOwnership();
     await other.acquire(legacyDir(root));
     const contexts = makeContexts();
+    const claim = CockpitOwnership.prototype.acquire;
+    let claiming!: () => void;
+    const atClaim = new Promise<void>(resolve => { claiming = resolve; });
+    vi.spyOn(CockpitOwnership.prototype, 'acquire').mockImplementation(function (this: CockpitOwnership, dataDir: string) {
+      claiming();
+      return claim.call(this, dataDir);
+    });
 
     const lease = contexts.withMaintenanceStore('p', async () => 'ran');
-    // Every step before the claim's retry wait runs in microtasks.
-    await nextMacrotask();
+    // The lease's claim has started; its first attempt found the other claim and now retries.
+    await atClaim;
     contexts.dispose('p');
     other.releaseAll();
 

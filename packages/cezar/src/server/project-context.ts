@@ -238,8 +238,8 @@ export class ProjectContexts {
     const epoch = this.epochs.get(projectId) ?? 0;
     const stale = () => generation !== this.generation || epoch !== (this.epochs.get(projectId) ?? 0);
     const build = (async () => {
-      // A removal during this wait is caught by `build`'s first check, before any side effect.
       await this.maintenance.get(projectId)?.catch(() => undefined);
+      if (stale()) throw new ProjectContextsClosedError();
       return this.build(projectId, stale);
     })();
     this.building.set(projectId, build);
@@ -345,8 +345,11 @@ export class ProjectContexts {
         await this.context(project.id);
         warmed.push(project.id);
       } catch (err) {
-        // Removed mid-build: the next project. Shut down: the check at the top of the loop stops.
-        if (err instanceof ProjectContextsClosedError) continue;
+        if (err instanceof ProjectContextsClosedError) {
+          // Shut down: stop. Removed mid-build: the next project.
+          if (generation !== this.generation) break;
+          continue;
+        }
         // Removed from the registry after this list was read: nothing to prepare, nothing to say.
         if (err instanceof ProjectContextError && err.reason === 'unknown-project') continue;
         console.warn(`${logPrefix()} project ${project.id} could not be prepared in the background: ${err instanceof Error ? err.message : String(err)}`);

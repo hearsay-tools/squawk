@@ -23,9 +23,6 @@ vi.mock('../project-migration/auto.ts', async (original) => {
   } };
 });
 
-/** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
-const HANG_GUARD_MS = 15_000;
-
 /** A gate a test opens, and a signal the product reaches. */
 function latch(): { promise: Promise<void>; open: () => void } {
   let open!: () => void;
@@ -112,19 +109,49 @@ describe('a project build that removal or a failure overtakes', () => {
   });
 
   it('closes the store of a project removed while its build recovered, and registers nothing', async () => {
-    const recovering = latch();
-    const recover = vi.spyOn(RunManager.prototype, 'recover').mockImplementation(() => recovering.promise);
+    const entered = latch(), recovering = latch();
+    vi.spyOn(RunManager.prototype, 'recover').mockImplementation(() => { entered.open(); return recovering.promise; });
     const contexts = makeContexts(root());
     const stores = watchStores(contexts);
 
     const building = contexts.context('p');
-    await vi.waitFor(() => expect(recover).toHaveBeenCalled(), { timeout: HANG_GUARD_MS });
+    await entered.promise;
     expect(contexts.dispose('p')).toBe(false);
     recovering.open();
 
     await expect(building).rejects.toBeInstanceOf(ProjectContextsClosedError);
     expect(contexts.peek('p')).toBeUndefined();
     expect(stores).toEqual({ opened: 1, closed: 1 });
+  });
+
+  it.each(['dispose', 'disposeAll'] as const)('a build that waited for a maintenance lease fails as closed after %s, without asking the registry', async (removal) => {
+    const project = root();
+    seedRuns(join(project, '.ai/cezar'), []);
+    let reads = 0;
+    const asked = latch(), registry = latch();
+    const contexts = makeContexts(project, {
+      // The lease reads the registry first; any later read is the build's, and it stays pending.
+      listProjects: async () => {
+        reads += 1;
+        if (reads > 1) { asked.open(); await registry.promise; }
+        return [{ id: 'p', root: project, status: 'ok' }];
+      },
+    });
+    const leased = latch(), held = latch();
+    const lease = contexts.withMaintenanceStore('p', async () => { leased.open(); await held.promise; });
+    await leased.promise;
+
+    const building = contexts.context('p');
+    if (removal === 'dispose') contexts.dispose('p');
+    else void contexts.disposeAll();
+    held.open();
+    await lease;
+
+    const outcome = await Promise.race([building.catch((error: unknown) => error), asked.promise.then(() => 'asked the registry')]);
+    expect(outcome).toBeInstanceOf(ProjectContextsClosedError);
+    await contexts.settle('p');
+    expect(contexts.peek('p')).toBeUndefined();
+    registry.open();
   });
 
   it.each([
