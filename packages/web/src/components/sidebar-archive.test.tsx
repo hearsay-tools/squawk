@@ -1,7 +1,7 @@
 import { RUN_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
 import { projectAddress, runAddress, type RunAddress } from '@/api/run-address'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -52,7 +52,7 @@ describe('undoArchive', () => {
     })
     api.pinRun.mockImplementation(async ({ runId: id }: RunAddress) => { order.push(`pin ${id}`); return {} })
     const done = undoArchive('proj', ['a', 'b'], ['b'])
-    await vi.waitFor(() => expect(order).toEqual(['unarchive a']))
+    await waitFor(() => expect(order).toEqual(['unarchive a']))
     expect(api.pinRun).not.toHaveBeenCalled()
     releaseB()
     await done
@@ -88,7 +88,7 @@ describe('useSidebarArchive', () => {
   it('archives one row in its own project and offers Undo bound to that project', async () => {
     const { result, rerender } = renderHook(({ project }: { project: string }) => useSidebarArchive(projectAddress({ projectId: project })), { wrapper, initialProps: { project: 'p1' } })
     act(() => { void result.current.archiveOne(record({ id: 'r1', pinned: true })) })
-    await vi.waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1))
     expect(api.archiveRun).toHaveBeenCalledWith(runAddress('r1', { projectId: 'p1' }), true)
     expect(toastMock.mock.calls[0]![0]).toBe('Archived "Fix the thing"')
     // The user navigates to another project before pressing Undo (Review Focus 5).
@@ -96,7 +96,7 @@ describe('useSidebarArchive', () => {
     api.archiveRun.mockClear()
     await act(async () => { toastMock.mock.calls[0]![1].action.onAction() })
     // bound: hang guard; the mock resolves on the next microtask
-    await vi.waitFor(() => expect(api.pinRun).toHaveBeenCalledWith(runAddress('r1', { projectId: 'p1' }), true), { timeout: 3000 })
+    await waitFor(() => expect(api.pinRun).toHaveBeenCalledWith(runAddress('r1', { projectId: 'p1' }), true))
     expect(api.archiveRun).toHaveBeenCalledWith(runAddress('r1', { projectId: 'p1' }), false)
   })
 
@@ -105,13 +105,13 @@ describe('useSidebarArchive', () => {
     const { result } = renderHook(() => useSidebarArchive(projectAddress({ projectId: 'p1' })), { wrapper })
     act(() => result.current.sweep('unpinned'))
     expect(result.current.sweeping).toBe('unpinned')
-    await vi.waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1))
     expect(api.archiveFinished).toHaveBeenCalledWith(projectAddress({ projectId: 'p1' }), 'unpinned', undefined)
     expect(toastMock.mock.calls[0]![0]).toBe('Archived 3 tasks')
-    await vi.waitFor(() => expect(result.current.sweeping).toBeNull())
+    await waitFor(() => expect(result.current.sweeping).toBeNull())
     await act(async () => { toastMock.mock.calls[0]![1].action.onAction() })
     // bound: hang guard; the mock resolves on the next microtask
-    await vi.waitFor(() => expect(api.pinRun).toHaveBeenCalledWith(runAddress('y', { projectId: 'p1' }), true), { timeout: 3000 })
+    await waitFor(() => expect(api.pinRun).toHaveBeenCalledWith(runAddress('y', { projectId: 'p1' }), true))
     expect(api.archiveRun).toHaveBeenCalledWith(runAddress('ghost', { projectId: 'p1' }), false)
     expect(api.pinRun).toHaveBeenCalledTimes(1)
   })
@@ -120,7 +120,7 @@ describe('useSidebarArchive', () => {
     api.archiveFinished.mockResolvedValue({ archived: 0, ids: [], pinnedIds: [] })
     const { result } = renderHook(() => useSidebarArchive(projectAddress({ projectId: 'p1' })), { wrapper })
     act(() => result.current.sweep('pinned'))
-    await vi.waitFor(() => expect(result.current.sweeping).toBeNull())
+    await waitFor(() => expect(result.current.sweeping).toBeNull())
     expect(toastMock).not.toHaveBeenCalled()
   })
 
@@ -128,7 +128,7 @@ describe('useSidebarArchive', () => {
     api.archiveRun.mockRejectedValue(new Error('Nope'))
     const { result } = renderHook(() => useSidebarArchive(projectAddress({ projectId: 'p1' })), { wrapper })
     act(() => { void result.current.archiveOne(record()) })
-    await vi.waitFor(() => expect(toastMock).toHaveBeenCalledWith('Nope', { tone: 'danger' }))
+    await waitFor(() => expect(toastMock).toHaveBeenCalledWith('Nope', { tone: 'danger' }))
   })
 })
 
@@ -154,13 +154,13 @@ describe('useSidebarArchive guards and focus (#780)', () => {
     const { result } = renderHook(() => useSidebarArchive(projectAddress({ projectId: 'p1' })), { wrapper })
     act(() => { void result.current.archiveOne(record({ id: 'r1' })); void result.current.archiveOne(record({ id: 'r1' })) })
     await act(async () => resolve({}))
-    await vi.waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1))
     expect(api.archiveRun).toHaveBeenCalledTimes(1)
     // Settled: the same row may be archived again (after an Undo, say).
     api.archiveRun.mockResolvedValue({})
     act(() => { void result.current.archiveOne(record({ id: 'r1' })) })
     // bound: hang guard; the mock resolves on the next microtask
-    await vi.waitFor(() => expect(api.archiveRun).toHaveBeenCalledTimes(2), { timeout: 3000 })
+    await waitFor(() => expect(api.archiveRun).toHaveBeenCalledTimes(2))
   })
 
   function mountBucket(ids: string[]) {
@@ -177,7 +177,7 @@ describe('useSidebarArchive guards and focus (#780)', () => {
     const { result } = renderHook(() => useSidebarArchive(projectAddress({ projectId: 'p1' })), { wrapper })
     ui.button(id).focus()
     act(() => { void result.current.archiveOne(record({ id })) })
-    await vi.waitFor(() => expect(toastMock).toHaveBeenCalled())
+    await waitFor(() => expect(toastMock).toHaveBeenCalled())
     // The SSE removes the row a moment after the request answers.
     act(() => ui.row(id).remove())
   }
@@ -187,17 +187,17 @@ describe('useSidebarArchive guards and focus (#780)', () => {
   it('moves focus to the next row, else the previous one, after the focused row leaves', async () => {
     const ui = mountBucket(['a', 'b', 'c'])
     await archiveAndRemove(ui, 'b')
-    await vi.waitFor(() => expect(document.activeElement).toBe(ui.link('c')))
+    await waitFor(() => expect(document.activeElement).toBe(ui.link('c')))
     toastMock.mockClear()
     ui.button('c').focus()
     await archiveAndRemove(ui, 'c')
-    await vi.waitFor(() => expect(document.activeElement).toBe(ui.link('a')))
+    await waitFor(() => expect(document.activeElement).toBe(ui.link('a')))
   })
 
   it('falls back to the list container when the group emptied', async () => {
     const ui = mountBucket(['only'])
     await archiveAndRemove(ui, 'only')
-    await vi.waitFor(() => expect(document.activeElement).toBe(ui.list))
+    await waitFor(() => expect(document.activeElement).toBe(ui.list))
   })
 
   it('leaves focus alone when the user already moved it', async () => {
@@ -208,7 +208,7 @@ describe('useSidebarArchive guards and focus (#780)', () => {
     ui.button('a').focus()
     act(() => { void result.current.archiveOne(record({ id: 'a' })) })
     elsewhere.focus()
-    await vi.waitFor(() => expect(toastMock).toHaveBeenCalled())
+    await waitFor(() => expect(toastMock).toHaveBeenCalled())
     // Observers hear a mutation in the order they were created: the hook's own observer is
     // registered when the toast is offered, so this one runs after it has acted on the removal.
     const delivered = new Promise<void>((resolve) => {
@@ -229,8 +229,8 @@ describe('useSidebarArchive guards and focus (#780)', () => {
     const { result } = renderHook(() => useSidebarArchive(projectAddress({ projectId: 'p1' })), { wrapper })
     button.focus()
     act(() => result.current.sweep('unpinned'))
-    await vi.waitFor(() => expect(toastMock).toHaveBeenCalled())
+    await waitFor(() => expect(toastMock).toHaveBeenCalled())
     act(() => host.querySelector('[data-bucket="Finished"]')!.remove())
-    await vi.waitFor(() => expect(document.activeElement).toBe(host.querySelector('a[href="#z"]')))
+    await waitFor(() => expect(document.activeElement).toBe(host.querySelector('a[href="#z"]')))
   })
 })

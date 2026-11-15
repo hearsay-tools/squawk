@@ -133,8 +133,9 @@ describe('configurable composer run defaults', () => {
         ) !== 'true') {
           browser.click(`[data-slot="${slot}"]`)
         }
-        expect(browser.evaluate(
+        expect(browser.waitForValue(
           `document.querySelector('[data-slot="${slot}"]')?.getAttribute('aria-checked')`,
+          (checked: string | null | undefined) => checked === 'true',
         )).toBe('true')
       }
 
