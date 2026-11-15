@@ -165,6 +165,7 @@ async function recover(group: Group, journal: ServerMigrateJournal): Promise<'mi
     if (typeof strategy === 'string') { group.say(strategy, 'error'); return 'failed'; }
     members.push({ ...entry, strategy });
   }
+  if (!members.length && pending(target)) rollbackLegacyMigration(target);
   return await rollbackGroup(group, members) ? 'rolled-back' : 'failed';
 }
 

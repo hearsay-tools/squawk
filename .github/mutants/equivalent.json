@@ -261,6 +261,6 @@
     "mutator": "MethodExpression",
     "original": "restored.reverse()",
     "replacement": "restored",
-    "reason": "It changes only the order in which restored services start. Each instance has its own systemd unit (After= and Wants= name only network-online.target) or launchd plist, its own port and its own nginx site, no unit names another instance, and every site and unit restore ends before the first start; the journal is already removed, so a crash between two starts leaves one instance stopped in either order."
+    "reason": "It changes only the order in which restored services start. Each instance has its own systemd unit (After= and Wants= name only network-online.target) or launchd plist, its own port and its own nginx site; no unit names another instance, and every site and unit restore ends before the first start, so the starts commute and a failed start only warns. A crash between two starts: after a complete rollback the journal is gone and one instance stays stopped in either order; after a partial rollback the journal stays, and the retry restores again from disk and starts every restored instance, again in an order that cannot matter."
   }
 ]

@@ -208,6 +208,7 @@ describe('server-migrate group', () => {
     // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
     await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'failed' });
     expect(readServerMigrateJournal(f.target)?.phase).toBe('rolling-back');
+    expect(readInstallMarker(f.target.config)?.state).toBe('pending');
     expect(f.host.unit('system', 'hearsay-squawk-shop.service').starts).toBe(starts);
     f.host.failDisable.clear();
     await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'migrated' });
@@ -235,18 +236,14 @@ describe('server-migrate group', () => {
 });
 
 describe('server-migrate refusals', () => {
-  it('refuses the whole group, changing nothing, when an install is on a platform it cannot migrate', async () => {
+  it('refuses the whole group, changing nothing, when a newer release recorded a platform this release does not ship', async () => {
     const f = sharedHome();
-    const shop = loadServerState('shop', f.legacy);
-    Home.seed(f.legacy, f.legacy.serverState('api'), { ...shop, instance: 'api', platform: 'windows-service' });
-    Home.seed(f.legacy, f.legacy.serverState('old'), { ...shop, instance: 'old', platform: undefined });
+    // serverStateSchema keeps an unknown platform id so that a downgrade still opens the record.
+    Home.seed(f.legacy, f.legacy.serverState('api'), { ...loadServerState('shop', f.legacy), instance: 'api', platform: 'windows-service' });
     const result = await serverMigrate(f);
     // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
     expect(result.status).toBe('failed');
-    expect(result.lines).toEqual(expect.arrayContaining([
-      'api: server-migrate does not support platform windows-service',
-      'old: server-migrate does not support platform unknown',
-    ]));
+    expect(result.lines).toContain('api: server-migrate does not support platform windows-service');
     expect(f.host.commands).toEqual([]);
     expect(readInstallMarker(f.target.config)?.state).toBeUndefined();
   });
@@ -337,7 +334,7 @@ describe('server-migrate rollback and recovery', () => {
     expect(readServerMigrateJournal(f.target)).toBeUndefined();
   });
 
-  it('keeps the journal and changes nothing when an interrupted instance has no server record left', async () => {
+  it('keeps the journal and changes nothing when the operator deleted the server record of an interrupted instance', async () => {
     const f = sharedHome();
     const crash = crashAt(f, command => command.includes('hearsay-squawk-shop.service'));
     void serverMigrate(f);

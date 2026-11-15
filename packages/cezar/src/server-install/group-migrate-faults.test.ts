@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readInstallMarker } from '../home/install-marker.ts';
 import { migrateLegacyHome } from '../home/migrate.ts';
 import { cleanStoreRoots } from '../home/store.testkit.ts';
-import { readServerMigrateJournal } from './migrate-journal.ts';
+import { readServerMigrateJournal, writeServerMigrateJournal } from './migrate-journal.ts';
 import { loadServerState } from './state.ts';
 import { installInstance, serverFixture, serverMigrate, type ServerFixture } from './server-migrate.testkit.ts';
 
@@ -59,6 +59,18 @@ describe('server-migrate under write faults and a concurrent home migration', ()
     expect(unitName(f)).toBe('hearsay-squawk.service');
     expect(f.host.unit('user', 'hearsay-squawk.service')).toMatchObject({ enabled: true, active: true });
     expect(f.host.unit('user', 'cezar.service')).toMatchObject({ active: false, starts: 0 });
+    expect(readServerMigrateJournal(f.target)).toBeUndefined();
+  });
+
+  it('rolls a staged home back from a hand-edited journal that lists no instance, without rewriting that journal', async () => {
+    const f = serverFixture();
+    expect(migrateLegacyHome(f.legacy, f.target, { commit: false }).status).toBe('pending');
+    writeServerMigrateJournal(f.target, { version: 1, phase: 'migrating', stagedHome: true, instances: [] });
+    failRenameOnce(join(f.target.state, 'server-migrate.json'));
+    // The recovery rolls the home back; then no completed install is left to migrate.
+    await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'unchanged' });
+    expect(readInstallMarker(f.target.config)?.state).toBeUndefined();
+    expect(existsSync(join(f.target.config, 'install.json.failed'))).toBe(true);
     expect(readServerMigrateJournal(f.target)).toBeUndefined();
   });
 
