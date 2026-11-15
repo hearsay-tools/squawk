@@ -816,6 +816,15 @@ describe('TaskQuickList', () => {
       expect(activeDot()).toBeNull()
     })
 
+    it('flags a tab for its pending permission request (hearsay-tools/squawk#2275)', () => {
+      const { unmount } = renderList({ runs: [run({ id: 'x', status: RUN_STATUS.running, hasPendingPermission: true })], view: 'automations' })
+      expect(screen.getByRole('button', { name: /Active/ }).querySelector('[data-slot="waiting-dot"]')?.getAttribute('data-tone')).toBe('pending')
+      unmount()
+
+      renderList({ runs: [run({ id: 'x' }), auto({ id: 'asks', status: RUN_STATUS.waiting, hasPendingPermission: true })], view: 'active' })
+      expect(screen.getByRole('button', { name: /Automations/ }).querySelector('[data-slot="waiting-dot"]')).not.toBeNull()
+    })
+
     it('lists automation tasks in their status sections on the Automations tab', () => {
       renderList({ runs: [...runs(), auto({ id: 'asks', status: RUN_STATUS.waiting })], view: 'automations' })
       expect(rowsIn('Needs you')).toHaveLength(1)
