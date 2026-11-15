@@ -283,10 +283,13 @@ export function subagentEntries(visibleTurns: ThreadTurn[], currentTurns: Thread
   if (spawnIndex === -1) return []
   const current = childrenFrom(currentTurns, parentId, spawnIndex)
   if (visibleTurns === currentTurns) return current.map(({ entry }) => entry)
-  // A history page can begin after the spawn, so the visible view is then scanned from its start.
+  // The current state holds the spawn's first event. Loaded pages can skip that spawn and still
+  // hold an earlier agent with the same id, so a visible child must start after the spawn.
+  const spawnSeq = currentTurns[spawnIndex]!.itemSeqs?.get(parentId)?.first
+  const afterSpawn = (child: SeqEntry) => spawnSeq === undefined || child.seqs === undefined || child.seqs.first > spawnSeq
   const merged = new Map<string, SeqEntry>()
   for (const child of childrenFrom(visibleTurns, parentId, Math.max(spawnTurnIndex(visibleTurns, parentId), 0))) {
-    if (!merged.has(child.entry.id)) merged.set(child.entry.id, child)
+    if (afterSpawn(child) && !merged.has(child.entry.id)) merged.set(child.entry.id, child)
   }
   for (const child of current) {
     const kept = merged.get(child.entry.id)

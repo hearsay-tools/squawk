@@ -625,6 +625,30 @@ describe('subagentEntries — the visible transcript and the current state are o
     expect(collectSubagents(current, false, visible)[0]).toMatchObject({ toolCalls: 1, activity: 'Ran the new probe' })
   })
 
+  describe('a later workflow step reuses the agent id and the views are partial', () => {
+    const step = (seq: number, stepId: string, entry: ThreadEntry, type = 'item.completed'): RunEvent =>
+      ({ seq, ts: at, stepId, type, item: entry }) as RunEvent
+    const turnStarted = (seq: number, turnId: string): RunEvent => ({ seq, ts: at, type: 'turn.started', turnId }) as RunEvent
+    const oldPage = [turnStarted(1, 'turn-1'), step(2, 'review', task('a', 'completed')), step(3, 'review', childTool('old', 'a', 'Ran the old probe'))]
+    const newSpawn = step(101, 'fix', task('a', 'running'), 'item.started')
+    const newChild = step(102, 'fix', childTool('new', 'a', 'Ran the new probe'))
+
+    it('keeps the old page children out when the new spawn falls in the unloaded gap', () => {
+      const visible = reduceThread([...oldPage, newChild]).turns
+      const current = reduceThread([turnStarted(100, 'turn-2'), newSpawn, newChild]).turns
+      expect(ids(subagentEntries(visible, current, 'a'))).toEqual(['new'])
+      expect(collectSubagents(current, false, visible)[0]).toMatchObject({ toolCalls: 1 })
+    })
+
+    it('keeps the new agent children when the page holds only a later event of its spawn', () => {
+      const message = step(103, 'fix', childText('m-new', 'a', 'Found it'))
+      const settled = step(104, 'fix', task('a', 'completed'))
+      const visible = reduceThread([message, settled]).turns
+      const current = reduceThread([turnStarted(100, 'turn-2'), newSpawn, newChild, settled]).turns
+      expect(ids(subagentEntries(visible, current, 'a'))).toEqual(['new', 'm-new'])
+    })
+  })
+
   it('is empty when the current state holds no spawning item', () => {
     expect(subagentEntries(reduceThread([message]).turns, reduceThread([firstTool]).turns, 'a')).toEqual([])
   })
