@@ -25,10 +25,18 @@
       "deleteBranches",
       "deletionVerdicts",
       "claimDeletionRuns",
-      "retainingRef",
       "classifyBranches",
       "mergedPrBranches",
       "recordedPrs"
+    ]
+  },
+  "packages/cezar/src/git-worktree.ts": {
+    "tier": "guards",
+    "guards": [
+      "pruneOrphansLocked",
+      "deleteKeptOrphanBranch",
+      "branchesInUse",
+      "retainingRef"
     ]
   },
   "packages/web/src/routes/task-thread/preview/use-preview-pane-transport.ts": {
