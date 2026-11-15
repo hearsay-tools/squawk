@@ -5,13 +5,15 @@ import type { DatabaseSync } from 'node:sqlite';
  * `where` selects, read from each row's record: the marker `''` for a root with a conversation,
  * then each sender and recipient (`conversationMembersOf`, run-row.ts). A root is what the stored
  * summary calls one, as the scan this table replaces read it. A row whose data or summary is not
- * JSON gives none: the store skips that row. Each record is parsed once, for its message list.
+ * JSON gives none: the store skips that row. A message list that is not an array gives the marker
+ * only. Each record is parsed once, for its message list.
  */
 export function conversationMembersSelect(source: string, where = '1'): string {
   const member = (field: string) => `SELECT root_id, CASE WHEN m.type = 'object' THEN json_extract(m.value, '$.${field}') END AS member_id
     FROM conversation_roots, json_each(coalesce(messages, '[]')) m WHERE member_id IS NOT NULL`;
   return `WITH conversation_roots AS MATERIALIZED (
-      SELECT s.id AS root_id, json_extract(s.data, '$.delegation.conversation.messages') AS messages FROM ${source} s
+      SELECT s.id AS root_id, CASE WHEN json_type(s.data, '$.delegation.conversation.messages') = 'array'
+        THEN json_extract(s.data, '$.delegation.conversation.messages') END AS messages FROM ${source} s
       WHERE ${where} AND CASE WHEN json_valid(s.summary) AND json_valid(s.data) THEN json_extract(s.summary, '$.delegation.role') = 'root'
         AND json_extract(s.data, '$.delegation.conversation') IS NOT NULL ELSE 0 END)
     SELECT root_id, '' AS member_id FROM conversation_roots UNION ${member('senderRunId')} UNION ${member('recipientRunId')}`;

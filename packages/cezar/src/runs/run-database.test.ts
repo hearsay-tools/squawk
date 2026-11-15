@@ -424,13 +424,15 @@ describe('RunDatabase', () => {
       const messages = [{ senderRunId: 'talker', recipientRunId: 'peer' }, { senderRunId: 'peer', recipientRunId: 'talker' }, 'not a message'];
       const db = openDb();
       db.transaction({ upserts: [root('talker', { messages, outcomes: [] }), root('quiet', { messages: [], outcomes: [] }), root('none', undefined),
-        root('worker', { messages, outcomes: [] }, 'worker'), row('broken', { data: 'not a record' })], deletes: [] });
+        root('worker', { messages, outcomes: [] }, 'worker'), row('broken', { data: 'not a record' }),
+        root('odd', { messages: 'bad messages', outcomes: [] })], deletes: [] });
       db.close(); open.length = 0;
       const previous = new DatabaseSync(path);
       previous.exec('DROP TABLE conversation_members; PRAGMA user_version = 12');
       previous.close();
       const migrated = openDb();
-      expect(migrated.listConversationRoots().sort()).toEqual(['quiet', 'talker']);
+      expect(migrated.listConversationRoots().sort()).toEqual(['odd', 'quiet', 'talker']);
+      expect(migrated.conversationMembers('odd')).toEqual(['']);
       expect(migrated.listConversationRoots('peer')).toEqual(['talker']);
       expect(migrated.conversationMembers('talker')).toEqual(['', 'peer', 'talker']);
       expect(migrated.conversationMembers('worker')).toBeNull();
