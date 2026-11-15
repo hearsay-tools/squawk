@@ -163,6 +163,9 @@ export interface ThreadTurn {
    *  left-hand side of the turn duration. */
   startedAt?: string | undefined
   items: ThreadEntry[]
+  /** Item id → seq of the event that first placed the item in this turn. Two views of one run
+   *  (a history page and the current-state context) order their entries by it. */
+  itemSeqs?: ReadonlyMap<string, number>
   /** Latest `plan.updated` snapshot seen during this turn (full-replacement semantics). */
   planEntries?: PlanEntry[]
   completed?: { stopReason: StopReason; costUsd?: number; ts?: string | undefined }
@@ -372,7 +375,16 @@ function finishTurn(draft: DraftTurn, provisionalAsk: boolean): ThreadTurn {
         ? { ...entry, text: stripDoneMarker(entry.text, stripAsk) }
         : entry,
     ),
+    itemSeqs: firstSeqs(draft.entries),
   }
+}
+
+function firstSeqs(entries: DraftEntry[]): Map<string, number> {
+  const seqs = new Map<string, number>()
+  for (const { entry, seq } of entries) {
+    if (!seqs.has(entry.id)) seqs.set(entry.id, seq)
+  }
+  return seqs
 }
 
 export function reduceThread(events: RunEvent[], options: ThreadReduceOptions = {}): ThreadState {

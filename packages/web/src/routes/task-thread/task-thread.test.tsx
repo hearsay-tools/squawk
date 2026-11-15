@@ -1902,6 +1902,50 @@ describe('the composer action row (#281)', () => {
 })
 
 
+describe('subagent sheet on a cold load (hearsay-tools/squawk#2463)', () => {
+  const child = (seq: number, item: Record<string, unknown>) =>
+    line(seq, 'item.completed', { stepId: 'task', item: { parentItemId: 'agent_a', ...item } })
+  const spawn = line(1, 'item.completed', {
+    stepId: 'task',
+    item: { kind: 'tool', id: 'agent_a', name: 'Task', toolKind: 'task', title: 'Task: Audit the auth flow', status: TOOL_STATUS.running },
+  })
+  const firstTool = child(2, { kind: 'tool', id: 'tool_1', name: 'Bash', toolKind: 'execute', title: 'Ran first probe', status: 'completed' })
+  const message = child(3, { kind: 'message', id: 'msg_1', role: 'assistant', text: 'The middleware skips the token check.' })
+  const secondTool = child(4, { kind: 'tool', id: 'tool_2', name: 'Bash', toolKind: 'execute', title: 'Ran second probe', status: 'completed' })
+
+  it('shows the agent message the history page holds between the tools the current state holds', () => {
+    renderView(
+      <ThreadView
+        run={run('running')}
+        thread={reduceThread([message, secondTool])}
+        currentThread={reduceThread([spawn, firstTool, secondTool])}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Session activity/ }))
+    fireEvent.click(document.querySelector<HTMLButtonElement>('[data-slot="run-activity-subagents"] > button')!)
+    fireEvent.click(document.querySelector<HTMLButtonElement>('[data-agent-id="agent_a"]')!)
+    const text = document.querySelector('[data-slot="subagent-stream"]')?.textContent ?? ''
+    const order = ['first probe', 'The middleware skips the token check.', 'second probe'].map((part) => text.indexOf(part))
+    expect(order.every((index) => index >= 0)).toBe(true)
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+    expect(text.split('The middleware skips the token check.')).toHaveLength(2)
+  })
+
+  it('gives the dock row the activity line of a message only the history page holds', () => {
+    const lastMessage = child(5, { kind: 'message', id: 'msg_2', role: 'assistant', text: 'Report written.' })
+    renderView(
+      <ThreadView
+        run={run('running')}
+        thread={reduceThread([lastMessage])}
+        currentThread={reduceThread([spawn, firstTool, secondTool])}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Session activity/ }))
+    fireEvent.click(document.querySelector<HTMLButtonElement>('[data-slot="run-activity-subagents"] > button')!)
+    expect(document.querySelector('[data-agent-id="agent_a"] [data-slot="agent-activity"]')?.textContent).toBe('Report written.')
+  })
+})
+
 describe('native approval transcript integration', () => {
   const request = line(1, 'permission.requested', {
     requestId: 'native-a', title: 'Run a native command?', details: 'npm test',

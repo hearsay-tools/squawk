@@ -86,6 +86,7 @@ function reducePreviewRegistered(fold: FoldState, event: RunEvent): void {
   const turn = currentTurn(fold)
   const draft: DraftEntry = {
     origin: 'meta',
+    seq: event.seq,
     entry: {
       kind: 'preview-server',
       id: `preview-server:${server.data.port}`,
@@ -255,6 +256,7 @@ function reduceText(fold: FoldState, event: RunEvent): void {
   const ts = stamp(event.ts)
   turn.entries.push({
     origin: 'v1',
+    seq: event.seq,
     entry: { kind: 'message', id: `v1:${event.seq}`, role: 'assistant', text, ...(ts !== undefined ? { ts } : {}) },
   })
 }
@@ -306,7 +308,7 @@ function reduceToolCall(fold: FoldState, event: RunEvent): void {
     status: 'running',
     input: event.input,
   }
-  const draft: DraftEntry = { origin: 'v1', entry: item }
+  const draft: DraftEntry = { origin: 'v1', entry: item, seq: event.seq }
   turn.entries.push(draft)
   fold.itemsById.set(item.id, { turn, entry: draft })
 }
@@ -601,5 +603,6 @@ const THREAD_EVENT_REDUCERS: ReadonlyMap<string, EventReducer> = new Map<string,
  * nothing rather than as debug output.)
  */
 export function applyThreadEvent(fold: FoldState, event: RunEvent): void {
+  fold.eventSeq = event.seq
   THREAD_EVENT_REDUCERS.get(event.type)?.(fold, event)
 }
