@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { PassThrough, type Readable } from 'node:stream';
 import { StringDecoder } from 'node:string_decoder';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from './runs/store.ts';
 import { requirePid } from './pid-file.testkit.ts';
@@ -29,6 +29,7 @@ const HANG_GUARD_MS = 15_000;
  */
 
 const CLI = fileURLToPath(new URL('./index.ts', import.meta.url));
+const SERVE_COMMAND = fileURLToPath(new URL('./serve-command.ts', import.meta.url));
 const PACKAGE_DIR = fileURLToPath(new URL('../', import.meta.url));
 const MOCK_CLAUDE = fileURLToPath(new URL('../scripts/mock-claude.mjs', import.meta.url));
 const STALLING_AGENT = `#!/usr/bin/env node
@@ -159,6 +160,36 @@ function bannerUrl(output: Readable): { url: Promise<string>; last: Promise<stri
   return { url, last };
 }
 
+/**
+ * A `--import` preload for `serve`. Recovery resumes an agent without waiting for its spawn, so
+ * the preload holds serve's recovery step open for good once recovery returns. The first agent
+ * session records its pid, then Squawk sends itself SIGTERM. Boot never gets past recovery, so
+ * only a handler installed before recovery can act on the signal.
+ */
+function signalInRecoveryPreload(pidFile: string): string {
+  return `
+import childProcess from 'node:child_process';
+import { renameSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+import { defaultServeDeps } from ${JSON.stringify(pathToFileURL(SERVE_COMMAND).href)};
+const spawn = childProcess.spawn;
+let raised = false;
+childProcess.spawn = function (...args) {
+  const child = spawn.apply(this, args);
+  if (!raised && Array.isArray(args[1]) && args[1].includes('--input-format')) {
+    raised = true;
+    writeFileSync(${JSON.stringify(`${pidFile}.tmp`)}, String(child.pid));
+    renameSync(${JSON.stringify(`${pidFile}.tmp`)}, ${JSON.stringify(pidFile)});
+    process.kill(process.pid, 'SIGTERM');
+  }
+  return child;
+};
+syncBuiltinESMExports();
+const recover = defaultServeDeps.recoverServeProject;
+defaultServeDeps.recoverServeProject = async (...args) => { await recover(...args); await new Promise(() => {}); };
+`;
+}
+
 function onPty(args: string[]): { hangUp: () => void; ended: Promise<string>; url: Promise<string> } {
   const hangup = join(root, 'hangup');
   const host = spawn('python3', ['-I', '-c', PTY_HOST, hangup, process.execPath, '--import', 'tsx', CLI, ...args], {
@@ -196,6 +227,28 @@ describe.skipIf(process.platform === 'win32')('Squawk forwards SIGINT and SIGTER
     const store = RunStore.open(projectPaths(root).write, { keepLive: true });
     try { expect(store.getRun(id)?.status).toBe('running'); } finally { store.close(); }
   }, 60_000);
+
+  it('SIGTERM during startup recovery stops the agent recovery launched (hearsay-tools/cezarion#991)', async () => {
+    const id = await stalledRun(await serve());
+    await agentPid();
+    const stopped = once(cez!, 'exit');
+    process.kill(-cez!.pid!, 'SIGINT');
+    await stopped;
+    const agentPidFile = join(root, 'recovered-agent.pid');
+    const preload = join(root, 'signal-in-recovery.mjs');
+    writeFileSync(preload, signalInRecoveryPreload(agentPidFile));
+    cez = spawn(process.execPath, ['--import', 'tsx', '--import', pathToFileURL(preload).href, CLI, 'serve', '--repo', root, '--port', '0', '--no-open'], {
+      cwd: PACKAGE_DIR, env: env(), stdio: ['ignore', 'pipe', 'pipe'], detached: true,
+    });
+    cez.stdout!.resume(); cez.stderr!.resume();
+    const exited = once(cez, 'exit');
+    const agent = await vi.waitFor(() => requirePid(agentPidFile), { timeout: 30_000, interval: 100 });
+    agents.push(agent);
+    await exited;
+    await vi.waitFor(() => expect(alive(agent)).toBe(false), { timeout: HANG_GUARD_MS });
+    const store = RunStore.open(projectPaths(root).write, { keepLive: true });
+    try { expect(store.getRun(id)?.status).toBe('running'); } finally { store.close(); }
+  }, 90_000);
 
   it('SIGTERM to cez serve alone stops the agent', async () => {
     await stalledRun(await serve());

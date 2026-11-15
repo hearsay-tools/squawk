@@ -494,6 +494,17 @@ describe('omp ui mapper (golden fixtures)', () => {
     expect(failed.events.some((event) => event.type === 'plan.updated')).toBe(false);
   });
 
+  it('drops a todo task whose status is an Object.prototype member (hearsay-tools/squawk#2890)', () => {
+    const tasks = ['toString', 'constructor', '__proto__', 'somethingNew'].map((status) => ({ content: status, status }));
+    const plan = fold([
+      { type: 'tool_execution_start', toolCallId: 't', toolName: 'todo', args: { op: 'init' } },
+      { type: 'tool_execution_end', toolCallId: 't', toolName: 'todo', result: { content: [], details: {
+        op: 'init', phases: [{ name: 'P', tasks: [...tasks, { content: 'Kept', status: 'blocked' }] }],
+      } } },
+    ]).events.filter((event) => event.type === 'plan.updated');
+    expect(plan).toEqual([{ type: 'plan.updated', entries: [{ content: 'Kept', status: PLAN_STATUS.pending }] }]);
+  });
+
   it('holds turn usage and cost for turn.completed and clears it with the turn', () => {
     const events = replay('rpc-lifecycle');
     expect(events.at(-1)).toEqual({

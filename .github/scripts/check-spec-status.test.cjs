@@ -31,3 +31,39 @@ test('checks only Markdown files directly in the spec directory', (t) => {
   writeFileSync(join(directory, 'assets', 'nested.md'), '# Asset');
   assert.deepEqual(checkDirectory(directory), [join(directory, 'missing.md')]);
 });
+
+test('ignores a heading and status inside an HTML comment or a code fence', () => {
+  for (const source of [
+    '<!-- # Example\nStatus: done -->\nBody',
+    '<!--\n# Example\nStatus: done\n-->\nBody',
+    '<!-- note --> <!--\n# Example\nStatus: done\n-->\nBody',
+    '```md\n# Example\nStatus: done\n```\nBody',
+    '~~~\n# Example\nStatus: done\n~~~\nBody',
+    '````\n```\n# Example\nStatus: done\n```\n````\nBody',
+    '```\n# Example\nStatus: done\n~~~\nBody',
+    '<!-- unclosed\n# Example\nStatus: done\n',
+  ]) {
+    assert.equal(hasValidStatus(source), false, source);
+  }
+});
+
+test('finds the real title after a commented or fenced decoy', () => {
+  for (const source of [
+    '<!-- # Example\nStatus: draft -->\n# Design\nStatus: done\n',
+    '<!-- one --><!-- two -->\n# Design\nStatus: done\n',
+    '<!--\n# Example\n-->\n# Design\nStatus: done\n',
+    '```\n# Example\n```\n# Design\nStatus: done\n',
+    '~~~~\n~~~\n# Example\n~~~~\n# Design\nStatus: done\n',
+  ]) {
+    assert.equal(hasValidStatus(source), true, source);
+  }
+});
+
+test('every current spec passes', () => {
+  assert.deepEqual(checkDirectory(join(__dirname, '../../.ai/specs')), []);
+});
+
+test('a fence opener or a title that opens a comment hides what follows', () => {
+  assert.equal(hasValidStatus('```html <!--\n```\n# Design\nStatus: done\n'), true);
+  assert.equal(hasValidStatus('# Design <!--\nStatus: done\n-->\n'), false);
+});

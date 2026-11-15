@@ -83,6 +83,7 @@ interface ParityFamily {
 
 const NATIVE_ASK_SCENARIO = 'its scenario asks through the native ask on codex and opencode (nativeAsk answerable), which the scenario runner does not declare';
 const SMOKE = 'per-runner smoke row';
+const SETTLEMENT_RULES = 'RunManager and store ownership, settlement and scratch rules';
 const PROVIDER_ERROR_START = 'its step fails through the runner\'s own provider-error path';
 
 const everyRunner = (why: string): ParityFamily => ({ class: 'every-runner', why });
@@ -114,8 +115,9 @@ export const PARITY_FAMILIES = {
   'harness:owned': shared('owned input is delivered by run.ts; R8 differs only by steer or boundary delivery', {
     R6: NATIVE_ASK_SCENARIO, R7: NATIVE_ASK_SCENARIO, R9: NATIVE_ASK_SCENARIO,
   }),
-  ...Object.fromEntries(['continue', 'restart', 'adopt', 'stop', 'cleanup', 'multi-continue', 'superseded', 'disposal', 'scratch']
-    .map(group => [`harness:${group}`, shared('RunManager and store ownership, settlement and scratch rules')])),
+  ...Object.fromEntries(['continue', 'restart', 'adopt', 'stop', 'cleanup', 'multi-continue', 'superseded', 'disposal']
+    .map(group => [`harness:${group}`, shared(SETTLEMENT_RULES)])),
+  'harness:scratch': shared(SETTLEMENT_RULES, { R23: `R23 ${NATIVE_ASK_SCENARIO}`, R129: `R129 ${NATIVE_ASK_SCENARIO}` }),
   // Waits.
   waits: shared('the wait list, its wakes and its refusals are Squawk\'s; steer or boundary and the acknowledgement are turn-path facts', {
     U1: `${SMOKE}: registration through each runner's own tool transport`,

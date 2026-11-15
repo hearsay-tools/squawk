@@ -1,0 +1,17 @@
+{
+  "$comment": "Matches the rule found when it landed (hearsay-tools/squawk#2275), keyed by file and the first line of the match so a moved line does not churn it. This list only shrinks: fix a match, then run AST_GREP_RULES_UPDATE=1 npm run lint. Rules: .ai/ast-grep/README.md. The two sites keep rules of their own (hearsay-tools/squawk#2275): run-actions.ts offers Finish only on a waiting reply, never during a permission approval, and task-origin.ts paints the Finished heading red when a member failed.",
+  "sites": [
+    {
+      "file": "packages/web/src/lib/task-origin.ts",
+      "rule": "attention-bucket-compare-outside-owner",
+      "site": "deriveAttention(run).bucket === 'error'",
+      "count": 1
+    },
+    {
+      "file": "packages/web/src/routes/task-thread/run-actions.ts",
+      "rule": "attention-bucket-compare-outside-owner",
+      "site": "deriveAttention(run).bucket === 'waiting'",
+      "count": 1
+    }
+  ]
+}

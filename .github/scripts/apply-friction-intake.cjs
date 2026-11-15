@@ -4,20 +4,28 @@ const { HANDLING, LABELS, validateClassification } = require('./friction-policy.
 const managed = new Set(LABELS.map(l => l.name));
 const namesOf = issue => (issue.labels ?? []).map(l => typeof l === 'string' ? l : l.name);
 
+// GitHub trims label descriptions and caps them at 100 characters.
+const liveDescription = text => (text ?? '').trim().slice(0, 100).trim();
+
 async function ensureLabel(github, repo, label) {
+  const wanted = { name: label.name, color: label.color, description: liveDescription(label.description) };
+  let live;
   try {
-    await github.rest.issues.getLabel({ ...repo, name: label.name });
+    ({ data: live } = await github.rest.issues.getLabel({ ...repo, name: label.name }));
   } catch (error) {
     if (error.status !== 404) throw error;
     try {
-      await github.rest.issues.createLabel({ ...repo, ...label, description: label.description.slice(0, 100) });
+      await github.rest.issues.createLabel({ ...repo, ...wanted });
     } catch (createError) {
       // Concurrent classifications may both find the label absent. Verify it
       // now exists; never treat an unrelated validation error as success.
       if (createError.status !== 422) throw createError;
       await github.rest.issues.getLabel({ ...repo, name: label.name });
     }
+    return;
   }
+  if (liveDescription(live.description) === wanted.description && live.color?.toLowerCase() === wanted.color.toLowerCase()) return;
+  await github.rest.issues.updateLabel({ ...repo, ...wanted });
 }
 
 function assertTriggerMatches(issueNumber, input) {

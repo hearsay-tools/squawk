@@ -321,7 +321,7 @@ describe('capture config', () => {
     const capture = specMapConfig.test!
     expect(capture.include).toEqual(base.include)
     expect(capture.root).toBe(base.root)
-    expect(capture.globalSetup).toEqual(base.globalSetup)
+    expect(specMapConfig.plugins).toEqual(e2eConfig.plugins)
     expect(capture.sequence).toEqual(base.sequence)
     expect(capture.fileParallelism).toBe(false)
     const setup = capture.setupFiles as string[]

@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { currentUsage } from '../core/process-usage.ts';
 import { bookkeeping, executions, manager, parent, register, reopenRuntime, root, semaphore, store, until, useWorkerWaitFixture, waitOf, worker, work } from './worker-wait.testkit.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
+import { RunMemory } from './run/run-memory.ts';
 
 // Real Git, durable fsync checkpoints and process shutdown share this outer budget.
 // Keep the separate 15s state/termination assertions and actual runner timers intact.
@@ -55,7 +56,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     const disposed = () => true;
     const context = { createRunner: noRunners, home: testHome(), store, repoRoot: root, dataDir: join(root, '.ai/cezar'), semaphore, work, disposed };
     const host = unused<ConstructorParameters<typeof TurnBookkeeper>[1]>('TurnBookkeeperHost', { isDisposedDelegatedRun: disposed });
-    const bookkeeper = new TurnBookkeeper(context, host);
+    const bookkeeper = new TurnBookkeeper(context, host, new RunMemory());
     const snapshot = structuredClone(store.getRun(run.id));
     await bookkeeper.recordTurnEnd(run.id, 'CEZ:TITLE=late disposed callback');
     expect(store.getRun(run.id)).toEqual(snapshot);

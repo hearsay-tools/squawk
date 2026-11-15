@@ -4,7 +4,11 @@ import { MIGRATIONS } from './run-database-migrations.ts';
 export { RUN_DATABASE_READABLE_FROM, RUN_DATABASE_SCHEMA_VERSION } from './run-database-version.ts';
 import { validateChanges, toRunClaim, toRunRow, toRunBindings, writeMetadata, readOnlyTarget } from './run-database-row.ts';
 import { reportRows, type IndexedArtifact } from './report-rows.ts';
-import { conversationMembers } from './conversation-members.ts';
+import { automationRuns } from './automation-runs.ts';
+import { conversationRoots } from './conversation-members.ts';
+import { runIndexRows, type RunIndexRow, type RunIndexTable } from './run-index-rows.ts';
+import { RUN_INDEXES } from './run-indexes.ts';
+import { guardedJsonSql } from './guarded-json-sql.ts';
 import { readPeerSummaryPage, toSummaryRow, type PeerSummaryPageQuery } from './run-database-peer-page.ts';
 import { accessSync, closeSync, constants, existsSync, openSync, readSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -49,6 +53,8 @@ export interface RunRowInput {
   summary: string;
   /** Its `conversation_members` rows (`conversationMembersOf`, run-row.ts): null for none. */
   conversationMembers: readonly string[] | null;
+  /** Its `automation_runs` rows, `[automation_id, receipt_id]` (`automationRunsOf`, run-row.ts): null for none. */
+  automationRuns: readonly RunIndexRow[] | null;
 }
 
 export interface RunRow {
@@ -546,7 +552,7 @@ export class RunDatabase {
     opts: { includeIssueMarked?: boolean } = {}): void {
     const tokens = prefilter.map(() => 'instr(lower(summary), ?) > 0').join(' AND ');
     const matches = opts.includeIssueMarked && tokens
-      ? `(${tokens}) OR CASE WHEN json_valid(summary) THEN json_extract(summary, '$.markerRefs.issue') IS NOT NULL ELSE 1 END` : tokens;
+      ? `(${tokens}) OR ${guardedJsonSql("json_extract(summary, '$.markerRefs.issue') IS NOT NULL", 1)}` : tokens;
     const where = ['parent_run_id IS NULL', ...(matches ? [`(${matches})`] : [])].join(' AND ');
     this.run(() => {
       for (const row of this.db.prepare(`${SUMMARY_SELECT} WHERE ${where} ${NEWEST_FIRST}`).iterate(...prefilter)) {
@@ -577,9 +583,13 @@ export class RunDatabase {
 
   /** The roots whose conversation names `memberId` as a sender or recipient, newest first; with no
    *  id, every root that has one. An index read (`conversation_members`, schema 13). */
-  listConversationRoots(memberId = ''): string[] { return this.run(() => this.conversations.roots(memberId)); }
-  /** A row's stored `conversation_members`, for a write that keeps them: null for none. */
-  conversationMembers(rootId: string): string[] | null { return this.run(() => this.conversations.membersOf(rootId)); }
+  listConversationRoots(memberId = ''): string[] { return this.run(() => conversationRoots(this.db, work => this.run(work)).roots(memberId)); }
+  /** The runs `automationId` launched or triggered, and the runs with one of `receiptIds`, newest
+   *  first: index reads (`automation_runs`, schema 14). */
+  listAutomationRuns(automationId: string): string[] { return this.run(() => automationRuns(this.db, work => this.run(work)).runsOf(automationId)); }
+  listRunsByAutomationReceipt(receiptIds: readonly string[]): string[] { return this.run(() => automationRuns(this.db, work => this.run(work)).runsByReceipt(receiptIds)); }
+  /** A run's stored rows in `index`, for a write that keeps them: null for none. */
+  indexRows(index: RunIndexTable, runId: string): RunIndexRow[] | null { return this.run(() => this.indexTable(index).rowsOf(runId)); }
 
   /** The id of every worker row, in no particular order. */
   listWorkerIds(): string[] {
@@ -656,7 +666,7 @@ export class RunDatabase {
   listCompletionCandidates(afterSeq: number, limit: number): Array<{ id: string; seq: number }> {
     return this.run(() => this.db.prepare(`SELECT id, seq FROM runs
       WHERE archived = 0 AND status = 'done' AND seq > ?
-        AND json_extract(data, '$.completionAction.phase') IN ('pending', 'blocked')
+        AND ${guardedJsonSql("json_extract(data, '$.completionAction.phase') IN ('pending', 'blocked')", 0, ['data'])}
       ORDER BY seq LIMIT ?`).all(afterSeq, Math.max(1, Math.min(64, limit))))
       .map(row => ({ id: row.id as string, seq: row.seq as number }));
   }
@@ -664,8 +674,8 @@ export class RunDatabase {
   /** Indexed point/family lookup, after the bounded root page has been selected. */
   archiveFamilyHasPullRequests(id: string): boolean {
     return this.run(() => this.db.prepare(`SELECT 1 FROM runs WHERE (id = ? OR parent_run_id = ?)
-      AND (json_array_length(json_extract(data, '$.pullRequests')) > 0
-        OR json_extract(data, '$.pullRequestUrl') IS NOT NULL) LIMIT 1`).get(id, id)) !== undefined;
+      AND ${guardedJsonSql(`json_array_length(json_extract(data, '$.pullRequests')) > 0
+        OR json_extract(data, '$.pullRequestUrl') IS NOT NULL`, 0, ['data'])} LIMIT 1`).get(id, id)) !== undefined;
   }
 
   /** Every id with its revision, ordered by id. */
@@ -677,7 +687,7 @@ export class RunDatabase {
   }
 
   get reports() { return this.run(() => reportRows(this.db, work => this.run(work))); }
-  private get conversations() { return this.run(() => conversationMembers(this.db, work => this.run(work))); }
+  private indexTable(index: RunIndexTable) { return runIndexRows(this.db, index, work => this.run(work)); }
   replaceArtifacts(id: string, artifacts: readonly IndexedArtifact[], revision?: number): void { this.run(() => this.reports.replace(id, artifacts, revision)); }
   listArtifacts(): IndexedArtifact[] { return this.run(() => this.reports.list()); }
 
@@ -714,13 +724,13 @@ export class RunDatabase {
           this.reports.deleteRun(id);
           this.statements.delete.run(id);
           this.statements.deleteMeta.run(`issue-attribution:${id}`);
-          this.conversations.deleteRun(id);
+          for (const { index } of RUN_INDEXES) this.indexTable(index).deleteRun(id);
         }
         const revision = changes.upserts.length > 0 ? this.nextSequence(COMMIT_SEQ_KEY) : 0;
         for (const row of changes.upserts) {
           this.reports.markDirty(row.id, row.live, revision);
           const inserted = this.statements.upsert.get(toRunBindings(row, revision));
-          this.conversations.replace(row.id, row.conversationMembers);
+          for (const { index, rowsOf } of RUN_INDEXES) this.indexTable(index).replace(row.id, rowsOf(row));
           // Revision binding makes an older writer invalidate this optional repair cache.
           if (row.issueAttributionCurrent) this.statements.setMeta.run(`issue-attribution:${row.id}`, String(revision));
           else this.statements.deleteMeta.run(`issue-attribution:${row.id}`);

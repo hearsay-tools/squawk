@@ -1161,7 +1161,7 @@ describe('useGlobalEvents — run events', () => {
 
     source.emit('project-ready', JSON.stringify({ project: 'some-other-project' }))
 
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith({ queryKey: workspaceQueryKeys.runsIndex }),
     )
     // Not registry news: the project list is unchanged.

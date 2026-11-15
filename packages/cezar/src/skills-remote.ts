@@ -1,7 +1,6 @@
 import { productName, logPrefix } from './home/display.ts';
 import type { Home } from './home/home.ts';
-import { execFile } from 'node:child_process';
-import { gitEnv } from './git-command.ts';
+import { runGit, type RunGitError } from './git-command.ts';
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { lstat, mkdir, readdir, readFile, realpath, rename, rm, rmdir, stat, unlink, utimes, writeFile } from 'node:fs/promises';
@@ -47,21 +46,16 @@ const GIT_HARDENING_ENV = {
 };
 
 function git(args: string[], timeoutMs: number, cwd?: string): Promise<GitResult> {
-  return new Promise((resolve) => {
-    execFile(
-      'git',
-      [...GIT_HARDENING_ARGS, ...args],
-      {
-        cwd,
-        timeout: timeoutMs,
-        killSignal: 'SIGKILL',
-        maxBuffer: 16 * 1024 * 1024,
-        encoding: 'utf8',
-        env: gitEnv(GIT_HARDENING_ENV),
-      },
-      (err, stdout, stderr) => resolve({ ok: !err, stdout: stdout ?? '', stderr: stderr ?? '' }),
-    );
-  });
+  return runGit([...GIT_HARDENING_ARGS, ...args], {
+    cwd,
+    timeout: timeoutMs,
+    killSignal: 'SIGKILL',
+    maxBuffer: 16 * 1024 * 1024,
+    env: GIT_HARDENING_ENV,
+  }).then(
+    ({ stdout, stderr }) => ({ ok: true, stdout, stderr }),
+    (error: RunGitError) => ({ ok: false, stdout: error.stdout ?? '', stderr: error.stderr ?? '' }),
+  );
 }
 
 /**

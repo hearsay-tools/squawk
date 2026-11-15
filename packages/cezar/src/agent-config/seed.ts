@@ -1,6 +1,6 @@
-import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { relative, sep } from 'node:path';
+import { git } from '../git-command.ts';
 import { agentHomePaths } from '../paths.ts';
 import { excludeFromGit } from '../skills-remote.ts';
 import { copyIdentity, withWorktreeFiles, type WorktreeFilesOptions } from '../worktree-manifest.ts';
@@ -10,14 +10,6 @@ import { CONFIG_FILES } from './catalog.ts';
  * Seed only supported gitignored personal config into task worktrees and exclude it from Git.
  * Tracked files apply through commits and are never copied here.
  */
-
-function git(cwd: string, args: string[]): Promise<{ ok: boolean; stdout: string }> {
-  return new Promise((resolve) => {
-    execFile('git', args, { cwd, encoding: 'utf8' }, (err, stdout) =>
-      resolve({ ok: !err, stdout: stdout ?? '' }),
-    );
-  });
-}
 
 async function fileExists(path: string): Promise<boolean> {
   try {

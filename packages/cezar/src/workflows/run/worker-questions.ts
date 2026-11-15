@@ -13,7 +13,7 @@ import { askRequestOf } from '@open-mercato/cezar-contract/pending-ask';
 import { enqueueAgentInput, hasLiveInboxClaim } from '../../delegation/input.ts';
 import { commitNewMessage, inboxSlotsUsed, projectConversationEvents } from '../../delegation/conversations.ts';
 import { answersQuestion, questionMessage, reservedReplies, uuidFrom } from '../../delegation/questions.ts';
-import { messagedParentSince, parkNoticeIdInUse, parkNoticeMessage, parkNoticeWait, parkingTurn } from '../../delegation/park-notice.ts';
+import { messagedParentSince, parkedByTurn, parkNoticeIdInUse, parkNoticeMessage, parkNoticeWait, parkingTurn } from '../../delegation/park-notice.ts';
 import { workerQuestionRouting } from '../question-routing.ts';
 import { WORKER_FALLBACK_NOTE, WORKER_FALLBACK_REPLY_NOTE } from '../turn-end.ts';
 import { historyDeletionPending, rootFinishRequested } from './run-guards.ts';
@@ -216,13 +216,14 @@ export class WorkerQuestions {
     this.host.deliverConversationInput(parentId);
   }
 
-  /** A worker parked before finishing: waiting, not stopping or complete, with no pending question
-   *  and no queued input. */
+  /** A worker parked before finishing: waiting because its own turn parked it, not stopping, with no
+   *  pending question and no queued input. A turn's park holds after a crash or an idle close ends
+   *  its execution; a hold or a closing session's park gets no notice (hearsay-tools/squawk#3502). */
   parkedBeforeFinishing(worker: RunRecord): boolean {
     // A question goes to the parent through `routeWorkerQuestion`; a prose gate does not, so it gets a notice.
     // Queued input wakes the worker, so the turn that takes it decides at its own park.
-    return worker.status === 'waiting' && !worker.stopping && !this.context.store.transcriptFacts(worker.id).pendingAsk &&
-      !this.host.active(worker.id)?.boundary.pendingHumanAsk && this.context.store.readWorkerExecution(worker.id)?.phase !== 'complete' &&
+    return worker.status === 'waiting' && parkedByTurn(worker) && !worker.stopping &&
+      !this.context.store.transcriptFacts(worker.id).pendingAsk && !this.host.active(worker.id)?.boundary.pendingHumanAsk &&
       !this.host.hasQueuedAgentInputs(worker.id);
   }
 

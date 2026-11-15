@@ -128,6 +128,8 @@ export interface SessionHelperHost {
   supersedeOnRunnerResume(runId: string): void;
   releaseSlot(): void;
   routeWorkerQuestion(runId: string): void;
+  /** `TurnSettler.holdChildrenOrArmIdle`: a park for the user holds for native subagents or arms its idle close. */
+  holdChildrenOrArmIdle(runId: string, state: ActiveRun): void;
 }
 
 /** Shutdown left this delegated run to restart recovery: its session's events are dropped, and an
@@ -337,10 +339,10 @@ export function handleNativeAskRequested(context: RunModuleContext, host: Sessio
   const questions = askRequestOf({ questions: ask.questions })?.questions;
   const wait = host.humanWaits.openHumanAlias(runId, state, 'native-ask', questions ? { questions } : undefined);
   if (wait) host.humanWaits.markHumanWaitSurfaced(runId, wait, questions ? { questions } : undefined);
-  clearIdleTimer(state);
-  host.line.leavePool(runId); // released below; its waits stay open
   host.line.park(runId);
   host.move(runId, 'park', {}, { stepId: state.liveSession.currentStepId });
+  // The open turn holds the question; the idle close drops it, and the answer reopens the session.
+  host.holdChildrenOrArmIdle(runId, state);
   host.releaseSlot();
   host.routeWorkerQuestion(runId);
 }

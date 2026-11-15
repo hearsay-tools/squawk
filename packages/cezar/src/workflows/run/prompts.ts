@@ -63,7 +63,7 @@ export function withResumeContext(prompt: string, message: RunRecord['continuati
 
 
 export function applyTemplate(template: string, task: string): string {
-  return template.replaceAll('{{task}}', task);
+  return template.replaceAll('{{task}}', () => task);
 }
 
 /**

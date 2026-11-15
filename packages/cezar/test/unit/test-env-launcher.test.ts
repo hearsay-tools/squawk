@@ -351,7 +351,7 @@ test('the bootstrap builds into the ignored mirror and never writes the producti
   launchedPids.delete(descriptor(fixture.root).app.pid);
 });
 
-// hearsay-tools/cezarion#1087: Squeal drives the e2e Vitest project directly, so its globalSetup
+// hearsay-tools/cezarion#1087: Squeal drives the e2e Vitest project directly, so its run setup
 // runs test-env-up.sh -> build-e2e.sh with Vitest's NODE_ENV=test inherited. Vite then built a
 // development bundle (import.meta.env.DEV true): the cockpit pointed its SharedWorker at the
 // dev-server-only `/assets/live-worker-*.ts`, the worker failed, every document fell back to

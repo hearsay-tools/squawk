@@ -1,0 +1,58 @@
+id: git-spawn-outside-helper
+language: typescript
+severity: warning
+message: >-
+  Start git through packages/cezar/src/git-command.ts (hearsay-tools/squawk#3207): git, runGit,
+  gitSync or spawnGit. They drop the inherited GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE family,
+  so git acts on cwd and not on the repository a hook or `rebase --exec` step named.
+files:
+  - packages/cezar/src/**/*.ts
+ignores:
+  - packages/cezar/src/git-command.ts
+  - packages/cezar/src/**/*.test.ts
+  - packages/cezar/src/**/*.testkit.ts
+# A call whose first argument is the literal `git` (a string or a template with no substitution),
+# through a child_process launcher: `execFile`, `execFileSync`, `spawn` or `spawnSync`, bare or as
+# a member (`cp.spawn`); `promisify(...)` called in place; or a name this file binds to
+# `promisify(...)` (`const run = promisify(execFile)`). `exec` and `execSync` count when their
+# shell command starts with `git `. The rule sees syntax, not values: it leaves out a command held
+# in a variable (`spawn(cmd, …)`) and a launcher alias imported from another module.
+utils:
+  git-literal:
+    any:
+      - { kind: string, regex: '^[''"]git[''"]$' }
+      - { kind: template_string, regex: '^`git`$' }
+  git-shell-literal:
+    any:
+      - { kind: string, regex: '^[''"]git\s' }
+      - { kind: template_string, regex: '^`git\s' }
+  file-launcher:
+    any:
+      - { kind: identifier, regex: '^(execFile|execFileSync|spawn|spawnSync)$' }
+      - { kind: member_expression, has: { field: property, regex: '^(execFile|execFileSync|spawn|spawnSync)$' } }
+      - { kind: call_expression, has: { field: function, regex: '^promisify$' } }
+      - all:
+          - kind: identifier
+          - pattern: $LAUNCHER
+          - inside:
+              kind: program
+              stopBy: end
+              has:
+                stopBy: end
+                kind: variable_declarator
+                all:
+                  - has: { field: name, pattern: $LAUNCHER }
+                  - has: { field: value, kind: call_expression, has: { field: function, regex: '^promisify$' } }
+  shell-launcher:
+    any:
+      - { kind: identifier, regex: '^(exec|execSync)$' }
+      - { kind: member_expression, has: { field: property, regex: '^(exec|execSync)$' } }
+rule:
+  kind: call_expression
+  any:
+    - all:
+        - has: { field: function, matches: file-launcher }
+        - has: { field: arguments, has: { nthChild: 1, matches: git-literal } }
+    - all:
+        - has: { field: function, matches: shell-launcher }
+        - has: { field: arguments, has: { nthChild: 1, matches: git-shell-literal } }

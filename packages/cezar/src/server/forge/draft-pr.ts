@@ -2,8 +2,8 @@ import { productName } from '../../home/display.ts';
 import { fallbackProjectWriteError } from '../../project-paths.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { withoutHomeEnv } from '../../core/agent-env.ts';
-import { execFile } from 'node:child_process';
-import { gitEnv } from '../../git-command.ts';
+import { execFile, type ExecFileException } from 'node:child_process';
+import { gitEnv, runGit, type RunGitError } from '../../git-command.ts';
 import { exactLineIndex, nextLineIndex } from '@open-mercato/cezar-contract/handoff';
 import { autosaveCommit } from '../../autosave-commit.ts';
 import { headLeftTaskBranch } from '../../task-branch-head.ts';
@@ -134,30 +134,28 @@ interface ExecResult {
   notFound: boolean;
 }
 
-function execTool(args: string[], cwd: string, bin: string, timeoutMs = 30_000): Promise<ExecResult> {
+function execTool(args: string[], cwd: string, bin: 'git' | 'gh', timeoutMs = 30_000): Promise<ExecResult> {
+  // Nobody can answer a prompt here: git opens /dev/tty directly, so
+  // piped stdio is not enough to stop it. Without this a `git push` that
+  // cannot authenticate hangs for the whole timeout and surfaces as a
+  // blank one-minute stall instead of git's own "could not read Username".
+  const env = { GIT_TERMINAL_PROMPT: '0' };
+  const baseEnv = withoutHomeEnv(process.env);
+  const options = { cwd, timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 };
   return new Promise((resolve) => {
-    execFile(
-      bin,
-      args,
-      {
-        cwd,
-        timeout: timeoutMs,
-        maxBuffer: 4 * 1024 * 1024,
-        encoding: 'utf8',
-        // Nobody can answer a prompt here: git opens /dev/tty directly, so
-        // piped stdio is not enough to stop it. Without this a `git push` that
-        // cannot authenticate hangs for the whole timeout and surfaces as a
-        // blank one-minute stall instead of git's own "could not read Username".
-        env: gitEnv({ GIT_TERMINAL_PROMPT: '0' }, withoutHomeEnv(process.env)),
-      },
-      (err, stdout, stderr) =>
-        resolve({
-          ok: !err,
-          stdout: stdout ?? '',
-          stderr: stderr ?? '',
-          notFound: err?.code === 'ENOENT',
-        }),
-    );
+    const done = (err: ExecFileException | null, stdout: string | undefined, stderr: string | undefined): void =>
+      resolve({
+        ok: !err,
+        stdout: stdout ?? '',
+        stderr: stderr ?? '',
+        notFound: err?.code === 'ENOENT',
+      });
+    if (bin === 'git') {
+      runGit(args, { ...options, env, baseEnv })
+        .then(({ stdout, stderr }) => done(null, stdout, stderr), (error: RunGitError) => done(error, error.stdout, error.stderr));
+    } else {
+      execFile(bin, args, { ...options, encoding: 'utf8', env: gitEnv(env, baseEnv) }, done);
+    }
   });
 }
 

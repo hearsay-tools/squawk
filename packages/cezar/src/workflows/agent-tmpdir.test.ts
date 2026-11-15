@@ -23,6 +23,7 @@ import {
 } from '../runs/agent-tmpdir.ts';
 import { registerProject } from '../workspace/projects.ts';
 import { RunManager, agentDirectories } from './run.ts';
+import { jobStatus, startJob } from '../jobs/job.ts';
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;
@@ -127,7 +128,7 @@ describe('RunManager — task-scoped agent TMPDIR (#785)', () => {
     const unexpected = vi.fn((): never => { throw new Error('nonterminal scratch must not read reap dependencies'); });
     expect(terminalScratchDisposition(run.id, store.getRun(run.id), {
       active: unexpected, starting: unexpected, queued: unexpected, claimed: unexpected,
-      autosaveBlocker: unexpected, privateWorkers: unexpected,
+      autosaveBlocker: unexpected, privateWorkers: unexpected, jobHolds: unexpected,
     })).toBe('keep');
     expect(unexpected).not.toHaveBeenCalled();
   });
@@ -169,6 +170,77 @@ describe('RunManager — task-scoped agent TMPDIR (#785)', () => {
     expect(manager.finish(run.id)).toBe(true);
     await vi.waitFor(() => expect(store.getRun(run.id)?.status).toBe('done'), { timeout: HANG_GUARD_MS });
     expect(existsSync(env.TMPDIR!)).toBe(false);
+  });
+
+  // hearsay-tools/squawk#3138: a job started with the default directory outlives its task, and so
+  // do its log and exit code; the directory goes once no job in it runs.
+  describe.runIf(process.platform !== 'win32')('a job started in the task temp directory', () => {
+    const pids: number[] = [];
+    afterEach(() => { for (const pid of pids.splice(0)) { try { process.kill(-pid, 'SIGKILL'); } catch { /* already ended */ } } });
+
+    /** A job that prints and exits 5 once `gate` exists. */
+    async function gatedJob(dir: string) {
+      const gate = join(dir, 'gate');
+      const script = `const fs=require('fs');console.log('measured');const t=setInterval(()=>{if(fs.existsSync(${JSON.stringify(gate)})){clearInterval(t);process.exit(5)}},20)`;
+      const job = await startJob({ name: 'bench', dir, command: [process.execPath, '-e', script] });
+      pids.push(job.pid);
+      return { job, end: async () => {
+        writeFileSync(gate, '');
+        // bound: hang guard; the exit file is the job's own end signal.
+        await vi.waitFor(() => expect(existsSync(job.exitFile)).toBe(true), { timeout: HANG_GUARD_MS });
+      } };
+    }
+
+    const finishIdle = async (runId: string) => {
+      store.updateStep(runId, 's', { status: STEP_STATUS.waiting });
+      // As a Continue does: the next end sets a new `finishedAt`.
+      setRunStatus(store, runId, RUN_STATUS.waiting, { currentStepId: 's', finishedAt: undefined });
+      expect(manager.finish(runId)).toBe(true);
+      await vi.waitFor(() => expect(store.getRun(runId)?.status).toBe('done'), { timeout: HANG_GUARD_MS });
+    };
+
+    it('keeps the directory when the task ends, gives the log and exit code after the job ends, and goes at the next end', async () => {
+      const run = newRun();
+      const dir = (await resolveStepEnv(run.id, 'claude')).env.TMPDIR!;
+      const { job, end } = await gatedJob(dir);
+      await finishIdle(run.id);
+      expect(jobStatus(dir, 'bench')).toMatchObject({ state: 'running', pid: job.pid });
+      await end();
+      // Opening the ended task in the cockpit marks it read: a run event that reaps, but no end.
+      store.setRead(run.id);
+      expect(jobStatus(dir, 'bench')).toMatchObject({ state: 'exited', exitCode: 5 });
+      expect(readFileSync(job.log, 'utf8')).toBe('measured\n');
+      // A Continue that ends again finds no job running, so the directory goes.
+      await finishIdle(run.id);
+      expect(existsSync(dir)).toBe(false);
+    }, 30_000);
+
+    it('a manual archive keeps the directory while the job runs and removes it after the job exits', async () => {
+      const run = newRun();
+      const dir = (await resolveStepEnv(run.id, 'claude')).env.TMPDIR!;
+      const { end } = await gatedJob(dir);
+      await finishIdle(run.id);
+      store.setArchived(run.id, true);
+      expect(jobStatus(dir, 'bench')).toMatchObject({ state: 'running' });
+      store.setArchived(run.id, false);
+      await end();
+      store.setRead(run.id);
+      expect(jobStatus(dir, 'bench')).toMatchObject({ state: 'exited', exitCode: 5 });
+      store.setArchived(run.id, true);
+      expect(existsSync(dir)).toBe(false);
+    }, 30_000);
+
+    it('the startup sweep spares the directory while the job runs and removes it after', async () => {
+      const run = newRun();
+      const dir = (await resolveStepEnv(run.id, 'claude')).env.TMPDIR!;
+      const { end } = await gatedJob(dir);
+      setRunStatus(store, run.id, RUN_STATUS.done, { finishedAt: new Date().toISOString() });
+      await manager.recover();
+      expect(existsSync(dir)).toBe(true);
+      await end();
+      await manager.recover();
+      expect(existsSync(dir)).toBe(false);
+    }, 30_000);
   });
 
   // The whole point of the preflight: refuse to start rather than spawn an agent

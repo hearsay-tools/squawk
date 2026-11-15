@@ -1,8 +1,8 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { projectPaths } from './project-paths.ts';
 import { projectWriteRefused } from './server/cockpit-ownership.ts';
+import { gitSync } from './git-command.ts';
 
 /**
  * Keep run data out of the user's repo history; workflows/skills stay committable. Best effort:
@@ -60,7 +60,7 @@ export function ensureDataGitignore(repoRoot: string): void {
       }
     }
     // Shared Git excludes also cover linked worktrees without adding a tracked input.
-    const common = execFileSync('git', ['-C', repoRoot, 'rev-parse', '--git-common-dir'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    const common = gitSync(['-C', repoRoot, 'rev-parse', '--git-common-dir'], { stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     const sharedPath = join(resolve(repoRoot, common), 'info', 'exclude');
     mkdirSync(join(resolve(repoRoot, common), 'info'), { recursive: true });
     const shared = existsSync(sharedPath) ? readFileSync(sharedPath, 'utf8') : '';

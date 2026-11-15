@@ -425,4 +425,18 @@ describe('Cursor print logical session', () => {
     expect(missingEffort.some(event => event.type === 'error' && /effort/i.test(event.message))).toBe(true);
     expect(existsSync(log)).toBe(false);
   });
+
+  it('rejects an image type that is an Object.prototype member before the first process (hearsay-tools/squawk#2890)', async () => {
+    const { spec, log } = fixture();
+    for (const mediaType of ['toString', 'constructor', '__proto__']) {
+      const events: AgentEvent[] = [];
+      await new CursorPrintRunner({ bin: mock }).run({
+        ...spec, images: [{ type: 'image', source: { type: 'base64', media_type: mediaType, data: 'AA==' } }],
+      }, event => events.push(event));
+      expect(events).toContainEqual(expect.objectContaining({
+        type: 'error', message: `Cursor print image type '${mediaType}' is unsupported`,
+      }));
+    }
+    expect(existsSync(log)).toBe(false);
+  });
 });

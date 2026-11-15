@@ -1,4 +1,5 @@
 import { checkWorkspaceResolution } from '../../../scripts/check-workspace-resolution.mjs'
+import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 import CockpitTestSequencer, { fileShuffleRequested } from '../../../.github/scripts/cockpit-test-sequencer.mjs'
 
@@ -11,14 +12,24 @@ class CliCockpitTestSequencer extends CockpitTestSequencer {
 
 /**
  * The root configuration exposes this project to Squeal's slow tier. `npm test` selects
- * only unit projects, so the fast gate never needs a server or browser. Project globalSetup
- * prepares the environment when Squeal runs a browser file directly; `npm run test:e2e`
- * also bootstraps first so it can preserve the wrapper's passed/failed/skipped contract.
+ * only unit projects, so the fast gate never needs a server or browser. The run environment
+ * (`environment.ts`) prepares the environment for each test run, also when Squeal runs a
+ * browser file directly; `npm run test:e2e` also bootstraps first so it can preserve the
+ * wrapper's passed/failed/skipped contract.
  *
  * Plain node environment and no React plugin — the specs shell out to agent-browser and drive
  * a real Chrome; nothing here is bundled or rendered in jsdom.
  */
 export default defineConfig({
+  plugins: [{
+    name: 'cez-e2e-run-environment',
+    // A reporter sees each test run start and end, where a globalSetup sees only the Vitest
+    // instance. Added here, before Vitest creates its reporters, because Squeal and other
+    // callers replace the configured `reporters` (hearsay-tools/squawk#3538).
+    configureVitest({ vitest, project }) {
+      vitest.config.reporters.push([resolve(import.meta.dirname, 'environment.ts'), { project: project.name }])
+    },
+  }],
   test: {
     name: 'e2e',
     root: import.meta.dirname,
@@ -30,12 +41,6 @@ export default defineConfig({
     // One browser session, one server: parallel specs would fight over both.
     fileParallelism: false,
     sequence: { sequencer: CliCockpitTestSequencer },
-    // Pins the shared env's workspace registry to the one-project shape before any spec runs,
-    // and restores it afterwards — otherwise whatever the operator last registered in the
-    // gitignored `.ai/qa/cez-home` decides whether the sidebar renders its flat or its grouped
-    // shell, and every spec asserting flat-shell selectors becomes a coin flip. See the module.
-    // Environment owns registry setup/restore so it releases its lease AFTER restoration.
-    globalSetup: ['./environment.ts'],
     // A real browser is slower than jsdom, but a smoke test that needs more than this is broken.
     testTimeout: 60_000,
     hookTimeout: 60_000,

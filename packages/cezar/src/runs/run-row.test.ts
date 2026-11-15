@@ -2,7 +2,7 @@ import { RUN_STATUS, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factor
 import { describe, expect, it } from 'vitest';
 
 import { branchFor } from '../git-worktree.ts';
-import { conversationMembersOf, encodeRunRow, isLiveRecord, isLiveStatus } from './run-row.ts';
+import { automationRunsOf, conversationMembersOf, encodeRunRow, isLiveRecord, isLiveStatus } from './run-row.ts';
 import type { RunRecord } from './store.ts';
 
 const ID = '0123abcd-0000-4000-8000-000000000000';
@@ -88,6 +88,18 @@ describe('conversationMembersOf', () => {
     expect(conversationMembersOf(record({ delegation: root() }))).toBeNull();
     expect(conversationMembersOf(record({ delegation: worker() }))).toBeNull();
     expect(conversationMembersOf(record())).toBeNull();
+  });
+});
+
+describe('automationRunsOf', () => {
+  it('lists the launching and the triggering automation with their receipts', () => {
+    const automation = { automationId: 'daily', receiptId: 'r1' } as unknown as RunRecord['automation'];
+    const automationTrigger = { automationId: 'poll', receiptId: 'r2' } as unknown as RunRecord['automationTrigger'];
+    expect(automationRunsOf(record({ automation }))).toEqual([['daily', 'r1']]);
+    expect(automationRunsOf(record({ automationTrigger }))).toEqual([['poll', 'r2']]);
+    expect(automationRunsOf(record({ automation, automationTrigger }))).toEqual([['daily', 'r1'], ['poll', 'r2']]);
+    expect(encodeRunRow(record({ automation })).automationRuns).toEqual([['daily', 'r1']]);
+    expect(automationRunsOf(record())).toBeNull();
   });
 });
 
