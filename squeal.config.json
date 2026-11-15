@@ -168,7 +168,7 @@
       ".ai/scripts/e2e-served-repo.mjs",
       ".ai/scripts/e2e-lanes.mjs",
       ".ai/browsers/agent-browser.md",
-      "packages/web/e2e/**/*.{ts,mjs}",
+      "packages/web/e2e/**/*.{ts,mts,mjs}",
       "packages/web/e2e/fixtures/**"
     ],
     ".github/scripts/*.test.cjs": [
