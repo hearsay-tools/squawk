@@ -75,7 +75,7 @@ export function resetActivityDisclosureForTests(): void {
 
 type SectionKey = 'status' | 'workflow' | 'subagents' | 'workers' | 'plan' | 'usage' | 'workspace'
 
-export function RunActivityDock(props: {
+interface RunActivityDockProps {
   run: ApiRun
   /** The loaded transcript. Absent: `currentThread` is the whole transcript. */
   thread?: ThreadState | undefined
@@ -86,7 +86,9 @@ export function RunActivityDock(props: {
   onOpenWorker?: ((id: string) => void) | undefined
   /** The transcript's reader scroll signals (`useThreadScroll().subscribeReaderScroll`). */
   readerScroll?: ((listener: ReaderScrollListener) => () => void) | undefined
-}) {
+}
+
+export function RunActivityDock(props: RunActivityDockProps) {
   // Own provider for the Workspace chips and the conflict roll-up. The app root's registry unions
   // its requests with the header's, so it costs no extra request.
   const { referenceProjectId, repoBase, references, requests } = useRunReferenceRequests(props.run)
@@ -112,13 +114,7 @@ function SessionActivityCard({
   prNumbers,
   hasReferences,
   references,
-}: {
-  run: ApiRun
-  thread?: ThreadState | undefined
-  currentThread: ThreadState
-  currentComplete?: boolean | undefined
-  onOpenWorker?: ((id: string) => void) | undefined
-  readerScroll?: ((listener: ReaderScrollListener) => () => void) | undefined
+}: RunActivityDockProps & {
   prNumbers: number[]
   hasReferences: boolean
   references: TaskReference[]
