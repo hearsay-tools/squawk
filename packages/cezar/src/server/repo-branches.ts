@@ -13,7 +13,7 @@ import type { BranchClass, BranchPrState, RepoBranchCountsResponse, RepoBranchEn
 import { git as runGit, type GitResult } from '../git-command.ts';
 import { isSafeGitRef } from '../git-refs.ts';
 import { withWorktreeMutation, type WorktreeGitResult } from '../git-worktree-lock.ts';
-import { ownedCleanupProtection, parseShortstat } from '../git-worktree.ts';
+import { ownedCleanupProtection, parseShortstat, retainingRef } from '../git-worktree.ts';
 import { loadConfig } from '../config.ts';
 import type { BranchOwner, RunStatus, RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
@@ -368,24 +368,6 @@ async function remoteDefault(root: string, base: string, at: (ref: string) => Pr
   if ((await git(root, ['symbolic-ref', '-q', target])).ok) return none;
   const sha = await at(target);
   return sha ? { ref: `origin/${name}`, fullRef: target, sha, prBase: name } : none;
-}
-
-/** A local or remote-tracking ref OUTSIDE `excluded` (full ref names) that also reaches `sha`, with
- *  its own tip — the witness a delete verifies in its transaction — or null when none does. */
-async function retainingRef(
-  run: (args: string[]) => Promise<WorktreeGitResult>,
-  sha: string,
-  excluded: ReadonlySet<string>,
-): Promise<{ ref: string; sha: string } | null> {
-  const res = await run(['for-each-ref', '--contains', sha, '--format=%(refname)%00%(objectname)%00%(symref)', 'refs/heads', 'refs/remotes']);
-  if (!res.ok) return null;
-  for (const line of res.stdout.split('\n')) {
-    const [ref, tip, symref] = line.split('\0');
-    // Never an alias (origin/HEAD, a symbolic branch): it may point at the very branch being
-    // deleted, and a `--no-deref` verify of its name protects nothing it points at.
-    if (ref && tip && !symref && !excluded.has(ref)) return { ref, sha: tip };
-  }
-  return null;
 }
 
 /** The PR a row SHOWS: one at the branch's current tip first, then an open one, then the newest.

@@ -5,12 +5,12 @@ import { inspectGeneration } from './delegation/process-liveness.ts';
 import { git } from './git-command.ts';
 import { workerWorkspaceSchema } from '@open-mercato/cezar-contract/delegation';
 import { existsSync, realpathSync, type Dirent } from 'node:fs';
-import { lstat, mkdir, readdir, readFile, rm } from 'node:fs/promises';
+import { lstat, mkdir, readdir, readFile, rm, rmdir } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { resolveTaskDiffBase } from './git-diff-base.ts';
 import { withPrivateIndex, type IndexGit, type LiveIndexCheck, type DiffRefusal } from './git-private-index.ts';
 import { isSafeGitRef } from './git-refs.ts';
-import { withWorktreeMutation, type WorktreeGit } from './git-worktree-lock.ts';
+import { withWorktreeMutation, type WorktreeGit, type WorktreeGitResult } from './git-worktree-lock.ts';
 
 /** One worktree per task (spec 006). Only createWorktree throws; its caller reports failure. */
 
@@ -530,10 +530,28 @@ export async function worktreeShortstat(
   });
 }
 
+/** A local or remote-tracking ref OUTSIDE `excluded` (full ref names) that also reaches `sha`, with
+ *  its own tip — the witness a delete verifies in its transaction — or null when none does. */
+export async function retainingRef(
+  run: (args: string[]) => Promise<WorktreeGitResult>,
+  sha: string,
+  excluded: ReadonlySet<string>,
+): Promise<{ ref: string; sha: string } | null> {
+  const res = await run(['for-each-ref', '--contains', sha, '--format=%(refname)%00%(objectname)%00%(symref)', 'refs/heads', 'refs/remotes']);
+  if (!res.ok) return null;
+  for (const line of res.stdout.split('\n')) {
+    const [ref, tip, symref] = line.split('\0');
+    // Never an alias (origin/HEAD, a symbolic branch): it may point at the very branch being
+    // deleted, and a `--no-deref` verify of its name protects nothing it points at.
+    if (ref && tip && !symref && !excluded.has(ref)) return { ref, sha: tip };
+  }
+  return null;
+}
+
 /**
- * Startup reconcile: `git worktree prune` + remove every directory under
- * `.ai/cezar/worktrees/` whose run id is no longer in the store (and its
- * branch). Returns the removed run ids for the boot log. Never throws.
+ * Startup reconcile: `git worktree prune`, then remove each clean directory under
+ * `.ai/cezar/worktrees/` whose run id is no longer in the store, and its branch when another
+ * ref holds it. Returns the removed run ids for the boot log. Never throws.
  */
 export async function pruneOrphans(
   repoRoot: string,
@@ -555,11 +573,34 @@ async function pruneOrphansLocked(repoRoot: string, validIds: ReadonlySet<string
   const fallbackEntries = await readdir(join(projectPaths(repoRoot).reads[1]!, 'worktrees'), { withFileTypes: true }).catch(() => []);
   const skipped = fallbackEntries.filter(entry => entry.isDirectory() && !validIds.has(entry.name)).length;
   if (skipped) console.info(`${logPrefix()} Orphan cleanup skipped ${skipped} read-only fallback worktree(s) under ${projectPaths(repoRoot).reads[1]}.`);
+  // A missing run record alone never permits a delete (hearsay-tools/cezarion#2272): the store may
+  // simply have been reset. A directory goes only on the reclaim rule (clean, HEAD kept by a ref),
+  // and its branch goes only when another ref holds its tip, as the branch sweep's `empty` rule
+  // (hearsay-tools/cezarion#2268). The Git view lists every kept branch as `orphan`.
   const removed: string[] = [];
   for (const entry of entries) {
-    if (!entry.isDirectory() || validIds.has(entry.name) || protection.paths.has(worktreePathFor(repoRoot, entry.name))) continue;
-    await removeWorktreeLocked(repoRoot, worktreePathFor(repoRoot, entry.name), branchFor(entry.name), undefined, git);
+    const path = worktreePathFor(repoRoot, entry.name);
+    if (!entry.isDirectory() || validIds.has(entry.name) || protection.paths.has(path)) continue;
+    await removeWorktreeLocked(repoRoot, path, undefined, { onlyClean: true }, git);
+    await rmdir(path).catch(() => undefined); // Only an empty leftover; a directory with files stays.
+    if (existsSync(path)) continue;
+    await deleteKeptOrphanBranch(repoRoot, branchFor(entry.name), protection, git);
     removed.push(entry.name);
   }
   return removed;
+}
+
+/** Delete an orphan's branch only when another branch or remote-tracking ref holds its tip, the
+ *  branch sweep's `empty` evidence. One ref transaction verifies that ref and the tip it read, so a
+ *  commit landing in between keeps the branch. Any other branch stays for the Git view. */
+async function deleteKeptOrphanBranch(repoRoot: string, branch: string, protection: OwnedCleanupProtection, git: WorktreeGit): Promise<void> {
+  const ref = `refs/heads/${branch}`;
+  if (protection.branches.has(branch) || (await git(repoRoot, ['symbolic-ref', '-q', ref])).ok) return;
+  const tip = await git(repoRoot, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
+  const sha = tip.stdout.trim();
+  if (!tip.ok || !sha) return;
+  const witness = await retainingRef((args) => git(repoRoot, args), sha, new Set([ref]));
+  if (!witness) return;
+  const deleted = await git(repoRoot, ['update-ref', '--no-deref', '--stdin'], undefined, `verify ${witness.ref} ${witness.sha}\ndelete ${ref} ${sha}\n`);
+  if (deleted.ok) await git(repoRoot, ['config', '--remove-section', `branch.${branch}`]);
 }
