@@ -55,6 +55,7 @@ describe('ProjectContexts.warmAll', () => {
       { id: 'gone', root: join(tmpdir(), 'cez-warm-missing'), status: 'missing', lastOpenedAt: '2026-10-11T00:00:00.000Z' },
       { id: 'new', root: root(), status: 'not-git', lastOpenedAt: '2026-10-10T00:00:00.000Z' },
       { id: 'open', root: root(), status: 'not-git', lastOpenedAt: '2026-10-12T00:00:00.000Z' },
+      { id: 'later', root: root(), status: 'not-git' },
     ];
     const { contexts, built } = makeContexts(projects);
     try {
@@ -63,9 +64,10 @@ describe('ProjectContexts.warmAll', () => {
 
       const warmed = await contexts.warmAll(projects);
 
-      expect(warmed).toEqual(['new', 'old', 'never']);
-      expect(built).toEqual(['new', 'old', 'never']);
-      expect(contexts.ids().sort()).toEqual(['never', 'new', 'old', 'open']);
+      // Never-opened projects come last, in registry order.
+      expect(warmed).toEqual(['new', 'old', 'never', 'later']);
+      expect(built).toEqual(['new', 'old', 'never', 'later']);
+      expect(contexts.ids().sort()).toEqual(['later', 'never', 'new', 'old', 'open']);
       expect(warn).not.toHaveBeenCalled();
     } finally {
       contexts.disposeAll();
