@@ -151,3 +151,150 @@ stdio; only the mock's own writes and its leader exit enter that transcript.
 Dry-run backend version banners use the release identity's environment prefix:
 `mock (HSQ_DRY_RUN=1)`.
 This display change does not change the accepted environment aliases.
+
+## How it runs agents
+
+Squawk shells out to your locally installed, logged-in agent CLI —
+**your subscription, no API key**. With the default Claude Code backend that
+means headless `stream-json` mode, tool access via `--allowedTools`, with
+unapproved tools denied without prompting (`--permission-mode dontAsk`) inside
+the task's worktree — but note the zero-config default list (`Read`, `Edit`,
+`Write`, `Grep`, `Glob`, `Bash`) grants unrestricted `Bash` unless a step sets
+`bashAllowlist`, so treat a run as having full shell access in its worktree,
+not a sandboxed allowlist. Set `HSQ_APPROVAL_GATE=1` (`CEZ_APPROVAL_GATE` fallback) to opt into Claude's
+interactive approval UI. Codex, OpenCode and Cursor are driven through their
+own native protocols and don't honor `allowedTools` at all; OpenCode's own
+permission config decides what it asks. pi and OMP map `allowedTools` onto
+their own tool allowlists — see
+[Coding agent backends](runners.md#coding-agent-backends) for what each one actually
+locks down. Nothing runs on a server you don't own.
+
+Live Preview lets Chromium use host graphics when available. Chromium selects the
+backend and falls back to software when hardware is unavailable or blocked. This
+needs no Squawk setting or VirGL-specific setup. On Linux, GPU access may also
+need a working display in the cockpit process environment. JPEG streaming is
+unchanged; GPU rendering does not guarantee hardware frame encoding.
+
+## Coding agent backends
+
+Squawk is not married to one vendor. Every agent step runs through a single
+`AgentRunner` seam with six built-in backends:
+
+| Backend | CLI | How Squawk drives it | Tool access |
+|---|---|---|---|
+| **Claude Code** (default) | [`claude`](https://github.com/anthropics/claude-code) | Headless `stream-json` mode. | Per-tool `--allowedTools` (`bashAllowlist` scopes `Bash`); an empty `allowedTools` sends `--tools ""`, which removes every built-in tool, and pre-approves Squawk's own tools (other MCP tools follow the permission mode); `dontAsk` denies unapproved tools without prompting (`HSQ_APPROVAL_GATE=1` (`CEZ_APPROVAL_GATE` fallback) → `acceptEdits` + approval UI; `HSQ_CLAUDE_PERMISSION_MODE=bypass` (`CEZ_CLAUDE_PERMISSION_MODE` fallback) → `--dangerously-skip-permissions`). |
+| **Codex** | [`codex`](https://github.com/openai/codex) | `codex app-server` — JSON-RPC over stdio, the same transport the Codex IDE extensions use. | Ignores `allowedTools`; inherits managed permissions and Codex approval defaults. Confirmed unmanaged sessions use `danger-full-access`. `HSQ_CODEX_NETWORK=0` (`CEZ_CODEX_NETWORK` fallback) requires network restriction: unmanaged sessions use network-blocked `workspace-write`; managed filesystem rules remain intact, and an unconfirmed network restriction stops before any turn. If requirements discovery is unavailable, Codex permission defaults apply. |
+| **OpenCode** _(experimental)_ | [`opencode`](https://opencode.ai) | `opencode serve` — a local HTTP server with an SSE event stream. | Ignores `allowedTools` entirely; OpenCode's own permission config governs. Squawk answers OpenCode's built-in asks (outside-worktree reads, `.env` reads, the repeated-call guard) once, unless your config has a rule for that permission. Any other ask shows a permission card in the cockpit, and the run waits for your answer. |
+| **Cursor** | [`agent`](https://cursor.com/docs/cli/installation) | Resumable `--print --output-format stream-json` turns on a qualified build; an unqualified build fails the task before inference. | Print mode admits marketplace plugins, including user and team plugins. Per-run `allowedTools` and `bashAllowlist` are unsupported. |
+| **pi** _(experimental)_ | [`pi`](https://github.com/badlogic/pi-mono) | Persistent `--mode rpc` over JSONL; models are picked with the `provider/model` convention. | Maps `allowedTools` onto pi tool names. The default list, which adds the harness extras `Subagent`, `SubagentSupervisor` and `SubagentWait`, sends no allowlist: `--no-builtin-tools` plus a bundled extension that activates those built-ins, so MCP servers (`direct`, `codemode` and `deferred` exposure) and other pi extensions' tools stay callable. The six base tools alone, the list a worker inherits from a Claude parent, take the same path. A narrowed `allowedTools`, or one that names any tool outside that default set (an `mcp__` tool, `WebFetch` or a custom tool), uses pi's `--tools` allowlist, so a step that grants named tools reaches only those; a list that maps to nothing becomes `--no-tools` (or only the Squawk tools). A configured `bashAllowlist` disables Bash because pi cannot express command-prefix rules. |
+| **OMP** _(experimental)_ | [`omp`](https://github.com/can1357/oh-my-pi) | Persistent `--mode rpc` over JSONL (Oh My Pi, a pi fork); models use the `provider/model` convention and are discovered from `omp models --json`. | Maps `allowedTools` onto OMP's `--tools` allowlist (`[]` becomes `--no-tools`); default sessions also pass `todo`, `lsp`, `ast_edit`, `task` and `wait`. A configured `bashAllowlist` disables `bash` because OMP cannot express command-prefix rules. `--tools` filters built-in tools only, so MCP and extension tools stay callable under a narrowed list. |
+
+> ⚠️ **OpenCode, pi and OMP support are experimental.** These runners work but are less
+> battle-tested than the Claude Code and Codex backends, and OpenCode ignores
+> `allowedTools` (its own permission config governs what it asks). Treat them as
+> previews and expect rough edges.
+
+On startup Squawk probes which CLIs are installed and the cockpit only offers
+the backends it found — install any one of the six and you're operational.
+
+### Cursor CLI
+
+Install [Cursor CLI](https://cursor.com/docs/cli/installation) and run `agent login`,
+or set `CURSOR_API_KEY`. Squawk discovers `agent` on PATH; `HSQ_CURSOR_BIN` (`CEZ_CURSOR_BIN` fallback) overrides
+its location. Select **Cursor** in the runner picker. On build
+`2026.10.01-e373342` or newer, new sessions use print mode so marketplace plugins
+are available. Squawk checks `agent --version` and the native tool catalog before
+the first turn; `agent --version` is also the quick way to check your installation.
+Squawk starts the CLI with `--disable-auto-update`, so a task never updates it;
+update it yourself with `agent update`. An older build, or a build missing a core
+tool, fails the task before any inference, with the reason and the fix: run
+`agent update`, or update Squawk if your build is newer than it supports.
+ACP-tagged and untagged Cursor sessions cannot resume after ACP removal: Continue
+on one reports that, and you start a new task to carry the work on. Existing
+print-tagged sessions can still resume.
+A missing CLI leaves the other backends available. `HSQ_DRY_RUN=1` (`CEZ_DRY_RUN` fallback) uses the mock.
+Cursor questions from a plugin may be automatically skipped by print mode. Squawk's
+own `cezar_ask` questions remain answerable in the cockpit; plugins that require
+native questions may not work fully. Project-local Claude plugin settings may
+not disable a user or team marketplace copy. A previously confirmed Cursor
+session ID can also lose history inside Cursor without an error; Squawk resumes
+the recorded ID and checks that Cursor returns the same ID.
+Cursor provides no qualified token-usage telemetry; Squawk leaves usage unavailable
+instead of estimating it. Squawk discovers Cursor's canonical model IDs and advertised
+effort levels through Cursor's read-only ACP model catalog (`agent acp`), which opens
+no session. Print mode accepts those IDs and applies effort using a complete native
+parameter selection passed with `--model`, retaining the account catalog's defaults for
+other parameters. Advertised legacy print variants remain supported. An unsupported
+explicit effort fails instead of silently choosing another level.
+
+Settings → Agent config exposes Cursor’s global `cli-config.json`, project
+`.cursor/cli.json` permissions, `.cursor/mcp.json`, and shared `AGENTS.md`.
+[Cursor’s configuration reference](https://cursor.com/docs/cli/reference/configuration)
+documents `CURSOR_CONFIG_DIR` and the Linux/BSD `XDG_CONFIG_HOME/cursor` override.
+These select configuration; Squawk does not offer alternate Cursor account profiles
+because a complete credential-and-session home override has not been verified.
+
+### OMP (Oh My Pi)
+
+Install [OMP](https://github.com/can1357/oh-my-pi) (`curl -fsSL https://omp.sh/install | sh`
+installs a prebuilt binary; Bun is needed only for `--source`) and run `omp login`. Squawk discovers `omp` on PATH;
+`HSQ_OMP_BIN` (`CEZ_OMP_BIN` fallback) overrides its location. `omp` is a separate backend from `pi`: a host with
+both binaries keeps both, and `HSQ_PI_BIN` (`CEZ_PI_BIN` fallback) never selects OMP. Select **OMP** in the runner
+picker to use a persistent `--mode rpc` session. A missing CLI leaves the other backends
+available and shows OMP as unavailable. `HSQ_DRY_RUN=1` (`CEZ_DRY_RUN` fallback) uses the mock.
+
+Agents ask questions through Squawk's `cezar_ask` tool, and OMP's own sub-agents appear in the
+Agents drawer. Settings → Agent config exposes OMP's `config.yml`, `mcp.json` and
+`AGENTS.md` files. Named OMP profiles and accounts are not supported yet.
+
+**Pick a backend at three levels** (most specific wins):
+
+1. **Config default** — `"defaultRunner": "codex"` in `.ai/cezar/config.json`.
+2. **Per task** — the backend picker next to the task box in the cockpit.
+3. **Per workflow step** — `runner:` on any step in the YAML.
+
+Per-step overrides are what make **mixed-agent strategies** a one-liner:
+implement with one agent, review with another, and let a shell check referee:
+
+```yaml
+name: implement-and-cross-review
+steps:
+  - id: implement
+    name: Implement
+    prompt: "{{task}}"
+    runner: codex                # one vendor writes the code…
+    effort: medium               # …with a cheaper reasoning pass
+  - id: review
+    name: Cross-review
+    prompt: "Review the diff produced for: {{task}}. Fix real issues only."
+    runner: claude               # …another one reviews it
+    effort: high                 # …with more reasoning for review
+  - id: verify
+    name: Verify
+    command: "npm test"
+    onFail: { retry: implement, max: 2 }
+```
+
+Owned workers can compare approaches in separate worktrees. Each worker has its own
+runner and model selection; see [Owned workers](../workers.md#owned-workers).
+
+**Models come from your own machine.** For Claude, Codex, OpenCode, and Pi, the model picker
+is not a list Squawk ships — it asks the installed CLI what it can actually run
+(Claude stream-json `list_models`, `codex app-server`'s `model/list`,
+`opencode models`, and `pi --list-models`), caches the answer in
+memory for five minutes, and shows it. A model your provider rolled out
+yesterday is selectable without a Squawk release, and one it retired stops being
+offered. Claude discovery starts no model turn and uses safe mode with no session
+persistence. It has a 15-second deadline and a 200-model cap, with child cleanup
+on every outcome. Unsupported or unavailable Claude CLIs fall back to the
+`opus`, `sonnet`, and `haiku` aliases. `auto` (let the agent decide) is always
+available, including when the CLI is missing, logged out, or slow — discovery
+never blocks the cockpit, and a model you pinned yourself stays selectable even
+if it is absent from the discovered list.
+
+The seam is deliberately small: a backend is one class implementing the
+`AgentRunner` interface (`packages/cezar/src/core/agent-runner.ts`) that turns a prompt into
+a stream of normalized events. Other CLIs — pi, aider, whatever ships next —
+can slot in the same way.
+
+---

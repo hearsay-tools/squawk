@@ -12,7 +12,7 @@ were removed: they only showed the same cockpit in a web view.
 
 The phone must reach your Squawk server over HTTPS. When the server is private,
 connect the phone to the same VPN first. To host Squawk on a server, see
-[Remote access](../README.md#remote-access-host-squawk-on-a-server) and the
+[Remote access](remote-access.md#remote-access-host-squawk-on-a-server) and the
 [server install guides](server-install/README.md). Your server's remote-mode
 restrictions apply to the phone too.
 

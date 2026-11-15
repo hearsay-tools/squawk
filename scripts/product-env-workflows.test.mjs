@@ -27,8 +27,8 @@ test('both E2E builders pin the preferred flag over a conflicting inherited valu
   }
 });
 
-test('the public README table includes each supported preferred name', () => {
+test('the public configuration table includes each supported preferred name', () => {
   const contract = readFileSync(new URL('../.env.example', import.meta.url), 'utf8');
-  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8').split('Useful environment variables:')[1].split('### Troubleshooting:')[0];
-  for (const name of new Set(contract.match(/(?:VITE_)?HSQ_[A-Z0-9_]+/g))) assert.ok(readme.includes('`' + name), name);
+  const configuration = readFileSync(new URL('../docs/configuration.md', import.meta.url), 'utf8').split('Useful environment variables:')[1].split('### Troubleshooting:')[0];
+  for (const name of new Set(contract.match(/(?:VITE_)?HSQ_[A-Z0-9_]+/g))) assert.ok(configuration.includes('`' + name), name);
 });
