@@ -41,6 +41,7 @@ import type {
 } from './ui-events.ts';
 import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
 import { codexTurnOutcome } from './codex-turn-outcome.ts';
+import { ownLookup } from './own-lookup.ts';
 
 export type { CodexUiMapperState, ReasoningAccumulator } from './codex-ui-mapper-state.ts';
 export { HOOK_STATUS } from './codex-hook-mapper.ts';
@@ -631,8 +632,7 @@ export const STATUS_MAP: Readonly<Record<string, ToolStatus>> = {
 };
 
 function toolStatus(raw: Record<string, unknown>, eventType: ItemEventType): ToolStatus {
-  const mapped = typeof raw.status === 'string' ? STATUS_MAP[raw.status] : undefined;
-  return mapped ?? (eventType === 'item.completed' ? 'completed' : 'running');
+  return ownLookup(STATUS_MAP, raw.status) ?? (eventType === 'item.completed' ? 'completed' : 'running');
 }
 
 function toolItem(

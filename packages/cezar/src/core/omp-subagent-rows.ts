@@ -10,6 +10,7 @@ import type {
 } from './omp-ui-mapper.ts';
 import type { PlanEntry, UiEvent, UiToolItem } from './ui-events.js';
 import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
+import { ownLookup } from './own-lookup.ts';
 import { isRecord, number, string } from './pi-rpc-wire.ts';
 
 const TODO_STATUS: Readonly<Record<string, PlanEntry['status']>> = {
@@ -35,7 +36,7 @@ export function ompToolPlan(name: string, result: Record<string, unknown>): Plan
     for (const task of phase.tasks) {
       if (!isRecord(task)) continue;
       const content = string(task.content);
-      const status = TODO_STATUS[string(task.status) ?? ''];
+      const status = ownLookup(TODO_STATUS, task.status);
       if (content && status) entries.push({ content, status });
     }
   }

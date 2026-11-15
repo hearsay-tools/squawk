@@ -6,6 +6,7 @@
 
 import type { CodexUiMapperState } from './codex-ui-mapper-state.ts';
 import { hookEventName, isVisibleHookItem } from './hook-items.ts';
+import { ownLookup } from './own-lookup.ts';
 import { isRecord, number as num } from './pi-rpc-wire.ts';
 import type { HookEntryKind, HookStatus, UiEvent, UiHookItem } from './ui-events.ts';
 
@@ -24,7 +25,7 @@ function mapHookCompleted(params: Record<string, unknown>, state: CodexUiMapperS
   const run = isRecord(params.run) ? params.run : undefined;
   const id = str(run?.id);
   const eventName = str(run?.eventName);
-  const status = typeof run?.status === 'string' ? HOOK_STATUS[run.status] : undefined;
+  const status = ownLookup(HOOK_STATUS, run?.status);
   if (!run || id === undefined || eventName === undefined || status === undefined) return [];
   const entries = hookEntries(run, status);
   const item = hookItem(run, id, eventName, status, entries, params, state);
