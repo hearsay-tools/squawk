@@ -8,11 +8,16 @@ it('seeds root conversations and finds the two roots that name the target', asyn
   expect(row).toMatchObject({ roots: 9, conversations: 5, awaiting: 2 });
 });
 
+it('reports the conversations it seeded when every root but the target talks', async () => {
+  const row = await measureConversationLookup({ roots: 4, conversationShare: 1, messages: 1, rootKb: 1, passes: 1 });
+  expect(row).toMatchObject({ roots: 4, conversations: 3 });
+});
+
 it('reads its settings from the command line and refuses ones it cannot use', () => {
   expect(parseConversationBenchArgs([])).toEqual({ sizes: [100, 1000, 3000], out: undefined,
     base: { conversationShare: 0.33, messages: 40, rootKb: 300, passes: 5 } });
   expect(parseConversationBenchArgs(['--roots', '5,10', '--passes', '1', '--out', 'r.json'])).toMatchObject({ sizes: [5, 10], out: 'r.json', base: { passes: 1 } });
-  for (const args of [['--roots', '1'], ['--roots', '2.5'], ['--conversation-share', '2'], ['--messages', '0'], ['--passes', '0']]) {
+  for (const args of [['--roots', '1'], ['--roots', '2.5'], ['--conversation-share', '2'], ['--messages', '0'], ['--messages', '1.5'], ['--passes', '0'], ['--passes', 'Infinity']]) {
     expect(() => parseConversationBenchArgs(args), args.join(' ')).toThrow('--roots takes whole numbers');
   }
 });

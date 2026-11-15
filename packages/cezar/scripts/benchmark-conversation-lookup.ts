@@ -34,10 +34,11 @@ export interface ConversationBenchRow { roots: number; conversations: number; aw
 
 /** The roots, and the one root (`target`) that two conversations send an open request to: a
  *  lookup finds a few roots among many conversations, as a real one does. */
-function records(options: ConversationBenchOptions): { rows: RunRecord[]; target: string } {
+function records(options: ConversationBenchOptions): { rows: RunRecord[]; target: string; conversations: number } {
   const ids = Array.from({ length: options.roots }, () => randomUUID());
   const target = ids[0]!, task = 'x'.repeat(options.rootKb * 1024);
-  const talking = Math.round(options.roots * options.conversationShare);
+  // Root 0 is the target, so at most every other root talks.
+  const talking = Math.min(Math.round(options.roots * options.conversationShare), options.roots - 1);
   const rows = ids.map((id, index) => {
     const messages: ConversationMessage[] = index > 0 && index <= talking ? Array.from({ length: options.messages }, (_, n) => ({
       id: randomUUID(), senderRunId: id, recipientRunId: n === 0 && index <= 2 ? target : ids[1 + ((index + n) % (ids.length - 1))]!, kind: 'request', relationship: 'peer',
@@ -46,12 +47,12 @@ function records(options: ConversationBenchOptions): { rows: RunRecord[]; target
     return makeRunRecord({ id, status: 'done', archived: true, task, createdAt: at(index), finishedAt: at(index + 1),
       delegation: { role: 'root', permissions: ['spawn'], receipts: [], ...(messages.length ? { conversation: { messages, outcomes: [] } } : {}) } });
   });
-  return { rows, target };
+  return { rows, target, conversations: talking };
 }
 
 /** Seed one temporary project, open its store and time the two lookups. */
 export async function measureConversationLookup(options: ConversationBenchOptions): Promise<ConversationBenchRow> {
-  const { rows, target } = records(options);
+  const { rows, target, conversations } = records(options);
   return withSeededStore('cez-bench-conversations-', () => rows, async (store) => {
     const time = (call: () => unknown) => { const t = performance.now(); call(); return performance.now() - t; };
     const awaiting = rootsAwaitingPeer(store, target).length;
@@ -61,7 +62,7 @@ export async function measureConversationLookup(options: ConversationBenchOption
       lookupMs.push(time(() => rootsAwaitingPeer(store, target)));
       listMs.push(time(() => store.listConversationRootIds()));
     }
-    return { roots: options.roots, conversations: Math.round(options.roots * options.conversationShare), awaiting,
+    return { roots: options.roots, conversations, awaiting,
       lookupMs: Math.round(median(lookupMs)), listMs: Math.round(median(listMs)) };
   });
 }
@@ -80,8 +81,8 @@ export function parseConversationBenchArgs(args: string[]): ConversationBenchArg
   } });
   const sizes = values.roots.split(',').map(Number);
   const base = { conversationShare: Number(values['conversation-share']), messages: Number(values.messages), rootKb: Number(values['root-kb']), passes: Number(values.passes) };
-  if (sizes.some(size => !Number.isInteger(size) || size < 2) || !(base.conversationShare >= 0 && base.conversationShare <= 1) || !(base.messages >= 1) || !(base.passes >= 1)) {
-    throw new Error('--roots takes whole numbers >= 2; --conversation-share takes 0 to 1; --messages and --passes take numbers >= 1');
+  if (sizes.some(size => !Number.isInteger(size) || size < 2) || !(base.conversationShare >= 0 && base.conversationShare <= 1) || !(Number.isInteger(base.messages) && base.messages >= 1) || !(Number.isInteger(base.passes) && base.passes >= 1)) {
+    throw new Error('--roots takes whole numbers >= 2; --conversation-share takes 0 to 1; --messages and --passes take whole numbers >= 1');
   }
   return { sizes, base, out: values.out };
 }

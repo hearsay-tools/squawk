@@ -106,8 +106,8 @@ export function parseRetentionBenchArgs(args: string[]): RetentionBenchArgs {
   const sizes = values.workers.split(',').map(Number);
   const base = { workersPerParent: Number(values['workers-per-parent']), parentKb: Number(values['parent-kb']), workerKb: Number(values['worker-kb']),
     liveRoots: Number(values['live-roots']), passes: Number(values.passes) };
-  if (sizes.some(size => !Number.isInteger(size) || size < 0) || !(base.workersPerParent >= 1) || !(base.passes >= 1)) {
-    throw new Error('--workers takes whole numbers >= 0; --workers-per-parent and --passes take numbers >= 1');
+  if (sizes.some(size => !Number.isInteger(size) || size < 0) || !(Number.isInteger(base.workersPerParent) && base.workersPerParent >= 1) || !(Number.isInteger(base.passes) && base.passes >= 1)) {
+    throw new Error('--workers takes whole numbers >= 0; --workers-per-parent and --passes take whole numbers >= 1');
   }
   return { sizes, base, out: values.out };
 }
