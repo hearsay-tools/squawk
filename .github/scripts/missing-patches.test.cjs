@@ -206,7 +206,7 @@ test('a file with no local diff to read is named as unclassified', () => {
 test('only whole-file removals bypass a missing oversized patch', () => {
   const filename = 'large.txt';
   const local = new Map([[filename, { bytes: GITHUB_PATCH_LIMITS.fileBytes + 1, nul: false }]]);
-  for (const [status, additions] of [['removed', 0], ['modified', 1], ['modified', 2000], ['renamed', 1000], ['removed', 1]]) {
+  for (const [status, additions] of [['removed', 0], ['modified', 0], ['modified', 1], ['modified', 2000], ['renamed', 1000], ['removed', 1]]) {
     const file = { filename, status, additions, deletions: 2000 };
     const reasons = missingPatches([file], new Map(), 1, local);
     assert.equal(reasons.length, status === 'removed' && additions === 0 ? 0 : 2);

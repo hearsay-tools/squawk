@@ -349,12 +349,13 @@ test('patch limits read a type change, which Git writes as two patch blocks for 
   assert.match(line.text, /3 changed lines \(\+2\/-1\) in 2 files/);
 });
 
-for (const change of ['removed', 'modified', 'readded', 'renamed']) {
+for (const change of ['removed', 'modified', 'readded', 'renamed', 'deletion-only', 'removed-nul']) {
   test(`patch limits preserve the rule for oversized ${change} files`, t => {
     const large = LINE.repeat(Math.ceil(GITHUB_PATCH_LIMITS.fileBytes / 100) + 10);
     const io = fixtureRepo(t, (cwd, git) => {
       const file = path.join(cwd, 'large.txt');
-      if (change === 'removed') fs.unlinkSync(file);
+      if (change === 'removed' || change === 'removed-nul') fs.unlinkSync(file);
+      if (change === 'deletion-only') fs.writeFileSync(file, LINE);
       if (change === 'modified') fs.writeFileSync(file, 'changed\n'.repeat(20000));
       if (change === 'readded') {
         fs.unlinkSync(file);
@@ -366,7 +367,12 @@ for (const change of ['removed', 'modified', 'readded', 'renamed']) {
         fs.renameSync(file, path.join(cwd, 'renamed.txt'));
         fs.appendFileSync(path.join(cwd, 'renamed.txt'), large.repeat(2));
       }
-    }, cwd => fs.writeFileSync(path.join(cwd, 'large.txt'), change === 'renamed' ? large.repeat(4) : large));
+    }, cwd => fs.writeFileSync(path.join(cwd, 'large.txt'),
+      change === 'renamed' ? large.repeat(4) : change === 'removed-nul' ? large + '\0\n' : large));
+    if (change === 'deletion-only') {
+      assert.match(io.git('diff', '--name-status', 'main', 'HEAD'), /^M/m);
+      assert.match(io.git('diff', '--numstat', 'main', 'HEAD'), /^0\t/m);
+    }
     if (change === 'renamed') assert.match(io.git('diff', '--name-status', '--find-renames', 'main', 'HEAD'), /^R/m);
     const lines = patchLimitLines('main', io);
     assert.equal(lines.every(line => line.ok), change === 'removed', lines.map(line => line.text).join('\n'));
