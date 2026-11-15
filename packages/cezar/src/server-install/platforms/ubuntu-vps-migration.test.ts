@@ -160,32 +160,33 @@ describe('ubuntu-vps migrate and rollback', () => {
       errors: [{ artifact: unitRecord(migrated), message: 'Cannot read /etc/nginx/sites-available/hearsay-squawk' }] });
   });
 
-  type Refusal = [string, InstanceSpec, (f: ServerFixture, state: ServerState) => Record<string, string> | undefined, (f: ServerFixture) => string];
+  type Message = string | ((f: ServerFixture) => string);
+  type Refusal = [string, InstanceSpec, (f: ServerFixture, state: ServerState) => Record<string, string> | undefined, Message];
   it.each<Refusal>([
-    ['no autostart record', DEFAULT, (_f, s) => { delete s.steps.autostart; }, () => 'No recorded autostart unit'],
-    ['a skipped autostart step', DEFAULT, (_f, s) => { s.steps.autostart = { status: skipped, created: null }; }, () => 'No recorded autostart unit'],
-    ['the unit of another instance', DEFAULT, (_f, s) => { unitRecord(s).name = 'cezar-shop.service'; }, () => 'Unexpected unit name: cezar-shop.service'],
-    ['a unit record without a path', DEFAULT, (_f, s) => { delete unitRecord(s).path; }, () => 'No recorded unit path for cezar.service'],
-    ['a unit record without a scope', DEFAULT, (_f, s) => { delete unitRecord(s).scope; }, () => 'No recorded unit path for cezar.service'],
-    ['a system unit file that is gone', SHOP, f => { f.host.shell('rm -f /etc/systemd/system/cezar-shop.service'); }, () => 'Cannot read /etc/systemd/system/cezar-shop.service'],
+    ['no autostart record', DEFAULT, (_f, s) => { delete s.steps.autostart; }, 'No recorded autostart unit'],
+    ['a skipped autostart step', DEFAULT, (_f, s) => { s.steps.autostart = { status: skipped, created: null }; }, 'No recorded autostart unit'],
+    ['the unit of another instance', DEFAULT, (_f, s) => { unitRecord(s).name = 'cezar-shop.service'; }, 'Unexpected unit name: cezar-shop.service'],
+    ['a unit record without a path', DEFAULT, (_f, s) => { delete unitRecord(s).path; }, 'No recorded unit path for cezar.service'],
+    ['a unit record without a scope', DEFAULT, (_f, s) => { delete unitRecord(s).scope; }, 'No recorded unit path for cezar.service'],
+    ['a system unit file that is gone', SHOP, f => { f.host.shell('rm -f /etc/systemd/system/cezar-shop.service'); }, 'Cannot read /etc/systemd/system/cezar-shop.service'],
     ['a user unit file with the new name', DEFAULT, f => ({ [userUnit(f, 'hearsay-squawk.service')]: 'operator unit\n' }),
       f => `Destination already exists: ${userUnit(f, 'hearsay-squawk.service')}`],
     ['an older backup of the old unit', DEFAULT, f => ({ [`${userUnit(f, 'cezar.service')}.migrated`]: 'older backup\n' }),
       f => `Destination already exists: ${userUnit(f, 'cezar.service')}.migrated`],
     ['a system unit file with the new name', SHOP, () => ({ '/etc/systemd/system/hearsay-squawk-shop.service': 'operator unit\n' }),
-      () => 'Destination already exists: /etc/systemd/system/hearsay-squawk-shop.service'],
-    ['an htpasswd with the new name', DEFAULT, () => ({ '/etc/hearsay-squawk/htpasswd': 'ops:other\n' }), () => 'Destination already exists: /etc/hearsay-squawk/htpasswd'],
+      'Destination already exists: /etc/systemd/system/hearsay-squawk-shop.service'],
+    ['an htpasswd with the new name', DEFAULT, () => ({ '/etc/hearsay-squawk/htpasswd': 'ops:other\n' }), 'Destination already exists: /etc/hearsay-squawk/htpasswd'],
     ['a site that reads another htpasswd', DEFAULT, f => {
       f.host.write('/etc/nginx/sites-available/cezar', f.host.read('/etc/nginx/sites-available/cezar').replace('/etc/cezar/htpasswd', '/etc/nginx/.htpasswd'));
-    }, () => 'The site does not read /etc/cezar/htpasswd'],
-    ['no nginx record', DEFAULT, (_f, s) => { delete s.steps['nginx-proxy']; }, () => 'No recorded nginx-proxy step'],
+    }, 'The site does not read /etc/cezar/htpasswd'],
+    ['no nginx record', DEFAULT, (_f, s) => { delete s.steps['nginx-proxy']; }, 'No recorded nginx-proxy step'],
   ])('changes nothing for %s', async (_case, spec, arrange, message) => {
     const { f, state } = install(spec);
     const planted = arrange(f, state) ?? {};
     for (const [path, content] of Object.entries(planted)) f.host.write(path, content);
     const ctx = context(f, state);
     const artifact = state.steps.autostart?.created ? unitRecord(state) : { kind: 'owned', type: 'service', name: 'hearsay-squawk.service' };
-    await expect(migrateUbuntu(ctx)).resolves.toEqual({ moved: [], leftAloneForeign: [], errors: [{ artifact, message: message(f) }] });
+    await expect(migrateUbuntu(ctx)).resolves.toEqual({ moved: [], leftAloneForeign: [], errors: [{ artifact, message: typeof message === 'string' ? message : message(f) }] });
     expect(f.host.commands).toEqual([]);
     for (const [path, content] of Object.entries(planted)) expect(f.host.read(path)).toBe(content);
     const scope = spec.scope ?? 'user';
@@ -331,7 +332,7 @@ describe('ubuntu-vps rollback refusals', () => {
     expect(existsSync(userUnit(f, 'hearsay-squawk-api.service'))).toBe(false);
   });
 
-  it.each<[string, (f: ServerFixture) => string | undefined, (f: ServerFixture) => string]>([
+  it.each<[string, (f: ServerFixture) => string | undefined, string | ((f: ServerFixture) => string)]>([
     ['the old unit file exists again next to its backup', f => {
       writeFileSync(userUnit(f, 'cezar.service'), 'restored by hand\n');
       return userUnit(f, 'cezar.service');
@@ -340,18 +341,18 @@ describe('ubuntu-vps rollback refusals', () => {
       f.host.unit('user', 'hearsay-squawk.service').active = false;
       f.host.failDisable.add('hearsay-squawk.service');
       return userUnit(f, 'hearsay-squawk.service');
-    }, () => 'Could not stop and disable hearsay-squawk.service'],
+    }, 'Could not stop and disable hearsay-squawk.service'],
     ['systemd does not enable the old unit', f => {
       f.host.failing = w => w.join(' ') === 'systemctl --user enable cezar.service';
       return undefined;
-    }, () => 'Could not enable cezar.service'],
+    }, 'Could not enable cezar.service'],
   ])('reports a user unit restore as failed when %s', async (_case, arrange, message) => {
     const { f, state } = install(DEFAULT);
     const report = await migrateUbuntu(context(f, state));
     const kept = arrange(f);
     const content = kept && readFileSync(kept, 'utf8');
     const result = await rollbackUbuntuMigration(context(f, state), report);
-    expect(result.errors).toEqual([{ artifact: report.moved[0]!.to, message: message(f) }]);
+    expect(result.errors).toEqual([{ artifact: report.moved[0]!.to, message: typeof message === 'string' ? message : message(f) }]);
     if (kept) expect(readFileSync(kept, 'utf8')).toBe(content);
   });
 
