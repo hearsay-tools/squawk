@@ -22,7 +22,7 @@ vi.mock('node:child_process', async original => {
   Object.defineProperty(execFile, promisify.custom, {
     value: (...args: unknown[]) => args[0] === 'gh'
       ? new Promise((resolve, reject) => execFileMock(...args, (error: Error | null, result: unknown) => error ? reject(error) : resolve(result)))
-      : promisify(actual.execFile)(...(args as Parameters<typeof actual.execFile>)),
+      : (promisify(actual.execFile) as (...args: unknown[]) => Promise<unknown>)(...args),
   });
   return { ...actual, execFile };
 });
