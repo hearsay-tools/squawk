@@ -125,6 +125,25 @@ describe('pruneOrphans keeps work no other ref holds', () => {
     expect(await tip(root, wt.branch)).not.toBeNull();
   });
 
+  it('keeps a held branch that a paused rebase --update-refs in another worktree will move', async () => {
+    const root = await repo();
+    const wt = await createWorktree(root, 'stacked00000', 'main');
+    await commitIn(wt.path, 'a.txt');
+    await run('git', ['switch', '-q', '--detach'], { cwd: wt.path });
+    await run('git', ['branch', 'keeper', wt.branch], { cwd: root });
+    // A topic stacked on the task branch; its rebase reserves the task branch in update-refs only.
+    const other = join(root, 'other');
+    await run('git', ['worktree', 'add', '-q', '-b', 'topic', other, wt.branch], { cwd: root });
+    await commitIn(other, 'b.txt');
+    await run('git', [...GIT_ID, 'rebase', '--no-ff', '--update-refs', '--exec', 'false', 'main'], { cwd: other }).catch(() => undefined);
+    const reserved = readFileSync(join(root, '.git/worktrees/other/rebase-merge/update-refs'), 'utf8');
+    expect(reserved).toContain(`refs/heads/${wt.branch}`);
+
+    await expect(pruneOrphans(root, new Set())).resolves.toEqual(['stacked00000']);
+
+    expect(await tip(root, wt.branch)).not.toBeNull();
+  });
+
   it('sorts a mixed set over an empty run store, and keeps live runs untouched', async () => {
     const root = await repo();
     const dirty = await createWorktree(root, 'mixdirty0000', 'main');
