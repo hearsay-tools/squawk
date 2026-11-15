@@ -1,6 +1,6 @@
 'use strict';
 const { positive, validSha } = require('./queue-ci-proof.cjs');
-const SIGNAL_PATH = '.github/workflows/coderabbit-review-signal.yml';
+const SIGNAL_PATH = '.github/workflows/review-signal.yml';
 // A newer review event in the same PR cancels the older signal run, so a burst
 // ends in one completed run. A cancelled or skipped run wakes nothing only when
 // a newer run of this workflow covers the same PR; a lone one (manual cancel,
@@ -38,16 +38,16 @@ function associationTarget(run) {
 }
 async function signalTarget(read, payload, fullName) {
   const source = payload.workflow_run;
-  if (payload.action !== 'completed' || source?.name !== 'CodeRabbit review signal'
+  if (payload.action !== 'completed' || source?.name !== 'Review signal'
     || !positive(source.id) || !positive(source.run_attempt)) return null;
   if (SKIPPED_CONCLUSIONS.has(source.conclusion) && await superseded(read, source)) return null;
-  const workflow = await read('GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}', { workflow_id: 'coderabbit-review-signal.yml' });
+  const workflow = await read('GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}', { workflow_id: 'review-signal.yml' });
   if (!positive(workflow?.id) || workflow.path !== SIGNAL_PATH || workflow.state !== 'active') return null;
   const run = await read('GET /repos/{owner}/{repo}/actions/runs/{run_id}', { run_id: source.id });
   if (!signalRun(run, workflow, fullName) || run.id !== source.id || run.run_attempt !== source.run_attempt
     || run.head_sha !== source.head_sha || run.event !== source.event) return null;
   // Signal merge SHA is not the PR head. Official association identifies only
-  // a candidate; every consumer must read live admission independently.
+  // a candidate; the consumer reads the live PR itself.
   return associationTarget(run);
 }
 module.exports = { signalTarget, SIGNAL_PATH };

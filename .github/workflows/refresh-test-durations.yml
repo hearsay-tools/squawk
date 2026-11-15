@@ -102,8 +102,8 @@ jobs:
           git add .github/cockpit-test-durations.json .github/test-durations.json
           git commit -m 'ci: refresh measured test durations'
           git push origin "$BRANCH"
-      # The existing release App creates the PR so native PR CI and CodeRabbit run.
-      # A PR created with GITHUB_TOKEN would suppress those events.
+      # The existing release App creates the PR so native PR CI runs.
+      # A PR created with GITHUB_TOKEN would not start it.
       - name: Create refresh PR token
         id: app
         if: steps.existing.outputs.count == '0'

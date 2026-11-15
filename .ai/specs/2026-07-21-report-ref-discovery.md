@@ -1,6 +1,7 @@
 # Report-tier reference discovery — skill report lines and issue links
+Status: done
 
-Status: implemented · Date: 2026-07-21 · Relates: spec 2026-07-18-task-ref-markers
+Recorded status: implemented · Date: 2026-07-21 · Relates: spec 2026-07-18-task-ref-markers
 (the CEZ:* tier above this one), spec 2026-07-16-pr-autodiscovery (the fuzzy URL
 tier below it), open-mercato/skills#38 (the emitter-side contract change)
 

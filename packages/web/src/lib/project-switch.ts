@@ -141,8 +141,7 @@ const checkAutomation: EntityChecker = async (check) => {
 /**
  * The checker for each routed entity page, tried in this order; the first whose pattern matches
  * answers. The task children come before `/tasks/:id`, which is a prefix of every task pattern. A
- * routed page with no entry (`/compare/:groupId`, the retired page's redirect) has nothing to
- * verify.
+ * routed page with no entry has nothing to verify.
  */
 const ENTITY_CHECKERS: readonly { matches: (pattern: string) => boolean; check: EntityChecker }[] = [
   { matches: (pattern) => pattern === '/tasks/:id/commits/:sha', check: checkTaskCommit },

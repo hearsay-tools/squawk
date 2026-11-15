@@ -1,6 +1,6 @@
 import { POWERSHELL, powershellEnv } from '../core/process-stat.ts';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, readFileSync, realpathSync, renameSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homeFileSchema } from '@open-mercato/cezar-contract/home-recovery';
 import { homePaths, type Home } from './home.ts';
@@ -19,7 +19,8 @@ import { LEGACY_RECOVERY_COMMAND } from './migration-cli.ts';
 import { withHomeLock } from './write-lock.ts';
 import { digest, readBytes, VersionLog } from './version-log.ts';
 import { loadWorkspaceConfigSync, mergeWriteWorkspaceConfigSync } from '../workspace/config.ts';
-import { pathHook, writeLaunchers } from '../managed-install/launcher.ts';
+import { launcherFile, pathHook, writeLaunchers } from '../managed-install/launcher.ts';
+import { BINARY_NAMES } from './identity.ts';
 import { readManifest, PACKAGE_NAME } from '../managed-install/layout.ts';
 
 export type MigrationStep = 'recovered' | 'claimed' | 'pending' | 'archived' | 'copied' | 'recheck' | 'accounts' | 'committed';
@@ -71,7 +72,7 @@ function copyFile(legacy: Home, target: Home, file: MigrationFile): void {
   if (digest(readBytes(path)) !== digest(bytes)) throw new Error(`Migration copy verification failed: ${file.path}`);
 }
 
-function copyManagedInstall(legacy: Home, target: Home, env: NodeJS.ProcessEnv): void {
+function copyManagedInstall(legacy: Home, target: Home, env: NodeJS.ProcessEnv | undefined): void {
   assertHomePath(target.data, target.versions);
   if (!existsSync(legacy.versions)) { rmSync(target.versions, { recursive: true, force: true }); return; }
   replacePrivateTree(legacy.versions, target.versions, (key, destination) => {
@@ -129,13 +130,24 @@ function writerDiagnostic(files: MigrationFile[]): Error {
   return new Error(`Legacy files kept changing after three checks: ${files.map(file => file.path).join(', ')}. Stop older binaries and retry. Running processes (pid and command):\n${processes}`);
 }
 
-/** Pending copies are disposable. Remove only paths that the prior migration recorded. */
+/** Pending copies are disposable. Remove only the migration's own copies: the managed install,
+ *  its launcher files, account trees, and the paths that the prior migration recorded. */
 function discardPendingCopies(target: Home): void {
   const prior = readMigrationRecord(target);
   if (!prior) return;
   for (const directory of [target.versions, join(target.data, 'accounts')]) {
     assertHomePath(target.data, directory);
     rmSync(directory, { recursive: true, force: true });
+  }
+  // Only a copy of a managed install writes launchers, and its record lists the legacy versions/
+  // files. Those launchers would start the removed versions/ tree; other bin/ entries are not the copy's.
+  if (prior.files.some(file => file.path.startsWith('versions/'))) {
+    for (const name of BINARY_NAMES) {
+      const launcher = launcherFile(target.bin, name);
+      assertHomePath(target.data, launcher);
+      rmSync(launcher, { force: true });
+    }
+    if (existsSync(target.bin) && !readdirSync(target.bin).length) rmdirSync(target.bin);
   }
   // Step 7 can publish agent-accounts.json from a config.json import that has no recorded source.
   const copies = [...prior.files.flatMap(file => file.target ? [file.target] : []), { kind: 'config' as const, path: 'agent-accounts.json' }];
@@ -171,13 +183,13 @@ function migrateLocked(legacy: Home, target: Home, options: MigrationOptions): M
   options.onStep?.('archived', 0);
   writeMigrationRecord(target, record);
   for (const file of plan.files) copyFile(legacy, target, file);
-  if (plan.managedInstall) copyManagedInstall(legacy, target, options.env ?? process.env);
+  if (plan.managedInstall) copyManagedInstall(legacy, target, options.env);
   options.onStep?.('copied', 0);
   return settleCopies(legacy, target, options, record);
 }
 
 function settleCopies(legacy: Home, target: Home, options: MigrationOptions, record: MigrationRecord): MigrationResult {
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; ; attempt++) {
     options.onStep?.('recheck', attempt);
     let next = planLegacyMigration(legacy, target);
     let changed = changedFiles(record.files, next.files);
@@ -189,8 +201,8 @@ function settleCopies(legacy: Home, target: Home, options: MigrationOptions, rec
       changed = changedFiles(record.files, next.files);
     }
     if (!changed.length) {
-      const present = new Set(next.files.map(file => file.path));
-      record.files = [...next.files, ...record.files.filter(file => file.hash === null && !present.has(file.path))];
+      // A deleted file that came back would count as changed: every hash-null entry is still absent.
+      record.files = [...next.files, ...record.files.filter(file => file.hash === null)];
       // Only a complete commit:false copy is a staged home. Any other pending home is a crash.
       if (options.commit === false) record.stagedAt = new Date().toISOString();
       writeMigrationRecord(target, record);
@@ -204,9 +216,8 @@ function settleCopies(legacy: Home, target: Home, options: MigrationOptions, rec
     record.files = [...next.files, ...changed.filter(file => file.hash === null)];
     writeMigrationRecord(target, record);
     for (const file of changed) copyFile(legacy, target, file);
-    if (changed.some(file => file.path.startsWith('versions/'))) copyManagedInstall(legacy, target, options.env ?? process.env);
+    if (changed.some(file => file.path.startsWith('versions/'))) copyManagedInstall(legacy, target, options.env);
   }
-  throw new Error('Unreachable migration state');
 }
 
 /** A pending or rolled-back copy may be the only copy left once the legacy registry is gone.
@@ -264,7 +275,8 @@ export function commitLegacyMigration(target: Home, env: NodeJS.ProcessEnv = pro
   const record = migrationRecordSchema.parse(readMigrationRecord(target));
   const legacy = homePaths(record.legacyRoot, join(record.legacyRoot, '.cache'), record.legacyRoot);
   withMigration(legacy.root, () => withHomeLock(target.config, () => withHomeLock(target.state, () => {
-    const committed = readInstallMarker(target.config)?.state === 'committed';
+    // A target without its marker (rolled back or removed) is never committed.
+    const committed = assertHomeReadable(target.config).state === 'committed';
     if (!committed) {
       const changed = changedFiles(record.files, planLegacyMigration(legacy, target).files);
       if (changed.length) throw writerDiagnostic(changed);

@@ -1,8 +1,9 @@
 # Owned workers in isolated worktrees
+Status: done
 
 Date: 2026-09-06
 Issue: https://github.com/wjarka/cezar/issues/111
-Status: Complete written spec approved by the owner on 2026-09-06.
+Recorded status: Complete written spec approved by the owner on 2026-09-06.
 
 ## Goal and scope
 
@@ -514,9 +515,8 @@ pass. Record observed UI QA under PR Experience; no intended observations.
   authored configuration, or unrelated refactors are required.
 
 The owner approved this complete spec, including its transport, command,
-finite-limit, persistence and retention details. The implementation plan is
-`.ai/specs/2026-09-06-owned-workers-isolated-worktrees-plan.md`; execution follows
-the plan's TDD and verification gates.
+finite-limit, persistence and retention details. The implementation shipped in
+[hearsay-tools/cezarion#138](https://github.com/hearsay-tools/cezarion/pull/138).
 
 
 ### Recorded verification outcome (2026-09-07)

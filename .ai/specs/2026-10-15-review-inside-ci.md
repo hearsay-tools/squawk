@@ -1,11 +1,12 @@
 # Automated review inside the CI run
+Status: superseded
 
-Superseded 2026-11-02: [CodeRabbit admission replacement](2026-11-02-coderabbit-admission-plan.md) replaces custom provider execution, caps and manual rejudge. Historical design retained below.
+Superseded 2026-11-02: [CodeRabbit admission replacement](https://github.com/hearsay-tools/cezarion/pull/2501) replaces custom provider execution, caps and manual rejudge. Historical design retained below.
 
 
-Status: implemented · Date: 2026-10-15 · Relates: `.github/workflows/ci.yml`, `.github/workflows/automated-code-review.yml`, ruleset **Protect main** (required checks `Unit, build, E2E, and package` and `Automated Code Review`)
+Recorded status: implemented · Date: 2026-10-15 · Relates: `.github/workflows/ci.yml`, `.github/workflows/automated-code-review.yml`, ruleset **Protect main** (required checks `Unit, build, E2E, and package` and `Automated Code Review`)
 
-Timing superseded on 2026-10-29 by [review-first CI](2026-10-29-review-first-ci-plan.md).
+Timing superseded on 2026-10-29 by [review-first CI](https://github.com/hearsay-tools/cezarion/pull/2211).
 The following text records the original implementation and its evidence.
 
 ## TLDR

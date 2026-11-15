@@ -79,8 +79,9 @@ describe('serverCommand', () => {
     expect(process.exitCode).toBeUndefined();
   });
 
-  it('reports a missing platform without selecting a strategy', async () => {
+  it('reports a missing platform without selecting a strategy, even when an install remembers one', async () => {
     const f = fixture();
+    f.modules.loadServerState.mockReturnValue({ installed: true, platform: 'ubuntu-vps' });
     await serverCommand('install', f.home, '/repo', undefined, { yes: true }, f.deps as unknown as typeof defaultServerCommandDeps);
     expect(f.output.error).toHaveBeenCalledExactlyOnceWith('--platform is required. Valid platforms: ubuntu-vps, macosx-ngrok');
     expect(process.exitCode).toBe(1);
@@ -95,6 +96,14 @@ describe('serverCommand', () => {
     expect(f.output.error).toHaveBeenCalledExactlyOnceWith('unknown platform: unknown (valid: ubuntu-vps, macosx-ngrok)');
     expect(process.exitCode).toBe(1);
     expect(f.modules.runInstall).not.toHaveBeenCalled();
+  });
+
+  it('installs the default instance on a platform without multi-instance support', async () => {
+    const f = fixture();
+    await f.run('install', 'macosx-ngrok', { yes: true });
+    expect(f.output.error).not.toHaveBeenCalled();
+    expect(f.trace).toEqual(['path', 'load', 'install']);
+    expect(process.exitCode).toBe(0);
   });
 
   it('rejects a named instance on a platform that does not support it', async () => {

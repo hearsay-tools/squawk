@@ -22,10 +22,10 @@ test('successful current same-repo target verification permits only its attempt 
     assert.deepEqual(await resolveSnapshot(f.options), { pr: 7, head: SHA, runId: 42, runNumber: 15, attempt: 1, artifactId: 90 });
   }
 });
-test('review findings that fail the CI run do not block a verified, prepared snapshot', async () => {
+test('a failed job outside verification and preparation does not block a verified, prepared snapshot', async () => {
   const f = fixture();
   f.state.run.conclusion = 'failure';
-  f.state.jobs.push({ name: 'Automated Code Review', conclusion: 'failure', status: 'completed' });
+  f.state.jobs.push({ name: 'Publish dev snapshot', conclusion: 'failure', status: 'completed' });
   assert.deepEqual(await resolveSnapshot(f.options), { pr: 7, head: SHA, runId: 42, runNumber: 15, attempt: 1, artifactId: 90 });
 });
 for (const [name, mutate] of Object.entries({

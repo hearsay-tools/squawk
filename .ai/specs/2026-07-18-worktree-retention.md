@@ -1,4 +1,5 @@
 # Worktree Retention & Management (open-mercato/cezar#483)
+Status: done
 
 ## TLDR
 
@@ -58,7 +59,9 @@ An always-on **count-based retention policy** layered on the existing
   `git worktree add`. Autosave already commits all worktree changes to the
   branch, so nothing is lost.
 - **Enforced** after every terminal transition and at startup, plus a manual
-  "Reclaim now" button in the management panel (Phase 2).
+  "Reclaim now" button in the management panel (Phase 2). A project's run
+  manager runs one pass at a time: transitions during a pass share one more
+  pass after it, which sees every run they settled.
 
 Alternatives considered:
 
@@ -223,9 +226,11 @@ explicit `aria-label`s and a confirm step; respects existing light/dark theming.
 - **`worktreeReclaimedAt` set but dir re-materialized out-of-band** (user ran
   `git worktree add` manually) — panel reflects on-disk truth from
   `GET /api/worktrees`; a stamped-but-present dir is shown as present.
-- **Two runs finish simultaneously** — both may select the same over-limit
-  path; `removeWorktree` (`--force` + `prune`) and a repeated stamp are
-  idempotent, so no corruption results.
+- **Two runs finish simultaneously** — the second transition queues behind
+  the first one's pass, so one manager never selects the same path twice. The
+  startup sweep, **Reclaim now** and another process are separate passes: they
+  may still select the same over-limit path, and `removeWorktree` (`--force` +
+  `prune`) and a repeated stamp are idempotent, so no corruption results.
 
 ## Branch lifecycle (hearsay-tools/cezarion#2268)
 

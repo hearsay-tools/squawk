@@ -1,6 +1,7 @@
 # 008 — Chain-z-prompta: AI składa łańcuch skilli
+Status: draft
 
-Status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 3 · Zależy od: 005 · Wzorzec: własny (janitor tego nie ma — nasz wyróżnik)
+Recorded status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 3 · Zależy od: 005 · Wzorzec: własny (janitor tego nie ma — nasz wyróżnik)
 
 ## Cel
 

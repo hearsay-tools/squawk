@@ -22,10 +22,10 @@ function expression(raw, context) {
   return runInNewContext(code, context);
 }
 
-function context(event, { surface = 'full-matrix', bump = 'false', verified = 'false', shards = 'success', cancelled = false, trial = false, pr = '' } = {}) {
+function context(event, { surface = 'full-matrix', bump = 'false', verified = 'false', shards = 'success', cancelled = false, pr = '' } = {}) {
   return {
     github: { event_name: event },
-    inputs: { pr_number: pr, squeal_gate_trial: trial },
+    inputs: { pr_number: pr },
     needs: {
       'queue-proof': { result: 'success', outputs: { verified } },
       'pr-test-input': { result: 'success', outputs: { sha: '' } },
@@ -52,7 +52,7 @@ test('the required shards run once, with coverage only on PRs and dispatches', (
   }
 });
 
-test('coverage publication follows eligible shards, including failures, but never main, the merge queue or a Squeal gate trial', () => {
+test('coverage publication follows eligible shards, including failures, but never main, the merge queue', () => {
   const { jobs } = ci();
   const merge = jobs['vitest-coverage-merge'].if;
   const upload = named(jobs.vitest, 'Upload shard coverage').if;
@@ -70,15 +70,7 @@ test('coverage publication follows eligible shards, including failures, but neve
     assert.equal(expression(merge, context(event)), false);
   }
   assert.equal(expression(merge, context('pull_request_target', { cancelled: true })), false);
-  // A Squeal gate trial dispatch records Squeal's coverage in place of V8's (ci-squeal-gate-trial.workflow.test.cjs),
-  // so it has no V8 report to upload, merge or miss. A release PR dispatch takes no trial and keeps coverage.
-  const trial = { trial: true };
-  assert.equal(expression(upload, context('workflow_dispatch', trial)), false);
-  assert.equal(expression(merge, context('workflow_dispatch', trial)), false);
-  assert.equal(expression(missing, shardContext('workflow_dispatch', trial)), false);
-  const release = { trial: true, pr: '42' };
-  assert.equal(expression(upload, context('workflow_dispatch', release)), true);
-  assert.equal(expression(merge, context('workflow_dispatch', release)), true);
+
 });
 
 test('no coverage job is a required check, a verify dependency or a merge-queue roster entry', () => {

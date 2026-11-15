@@ -683,7 +683,7 @@ describe('admission sweep', () => {
       return main(deps as unknown as CliDeps).then(() => [deps.runCommand, deps.initCommand].every((spy) => spy.mock.calls.length === 0), (error) => error instanceof ProjectMigrationFencedError);
     };
     const serveListener = vi.fn().mockRejectedValue(new Error('listener reached'));
-    const serve = () => serveCommand(testHome(), cold.root, 0, false, undefined, false,
+    const serve = () => serveCommand(testHome(), cold.root, 0, false, undefined,
       { ...defaultServeDeps, acquireServeListener: serveListener, process: new EventEmitter() } as unknown as ServeDeps)
       .then(() => false, (error: Error) => error instanceof ProjectMigrationFencedError && !error.message.includes('\n') && serveListener.mock.calls.length === 0);
     const route = async (path: string) => { return (await apiRequest(app, path)).status; };

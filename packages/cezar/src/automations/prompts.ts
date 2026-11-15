@@ -81,7 +81,6 @@ Top-level keys:
 - "prompt": required, the prompt template.
 - "workflow": a workflow name. OR "steps", never both. To run a skill, use one agent step naming it: "steps": [{ "id": "task", "skill": "some-skill", "prompt": "{{task}}" }].
 - "runner": ${RUNNER_IDS.join(' | ')}. "model" and "effort": optional overrides.
-- Legacy "variants" counts above 1 are refused: parallel variants are removed. Use owned workers for explicit comparisons.
 - "worktree": isolate each run in its own git worktree (recommended: true).
 - "autonomous": never park to ask; an automation has no one watching (recommended: true).
 - "archiveWhenDone": boolean (default false). Archive each launched task after Done. Without a PR, archive on Done even when autoMergePr is true.

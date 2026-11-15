@@ -172,7 +172,9 @@ it('step 7: a live registered run defers its account; the next boot copies it af
   store.flush();
   try {
     expect(planLegacyMigration(legacy, target).deferredAccounts).toEqual([{ id: account.id, configDir: account.configDir }]);
-    migrateLegacyHome(legacy, target);
+    const copiedAt: string[] = [];
+    migrateLegacyHome(legacy, target, { onStep(step) { if (existsSync(join(target.data, 'accounts', account.id))) copiedAt.push(step); } });
+    expect(copiedAt).toEqual([]);
     expect(readMigrationRecord(target)!.deferredAccounts).toEqual([{ id: account.id, configDir: account.configDir }]);
     expect(json(target.agentAccounts).accounts[0].configDir).toBe(account.configDir);
     expect(existsSync(join(target.data, 'accounts', account.id))).toBe(false);
@@ -255,20 +257,25 @@ it.skipIf(process.platform === 'win32')('managed install copies offline, replace
   expect(readFileSync(join(legacy.bin, 'cez'))).toEqual(oldLauncher);
   expect(readFileSync(join(directory, '.bashrc'), 'utf8')).toContain(target.bin);
   expect(readFileSync(join(directory, '.bashrc'), 'utf8')).toContain('# user setting');
+  expect(statSync(target.bin).mode & 0o777).toBe(0o700);
+  for (const name of ['cez', 'cezarion']) expect(statSync(join(target.bin, name)).mode & 0o777, name).toBe(0o700);
   for (const bin of [legacy.bin, target.bin]) expect(execFileSync(join(bin, 'cez'), [], { env: { ...process.env, ...env }, encoding: 'utf8' })).toBe('launcher-ok');
 });
 
-it.skipIf(process.platform === 'win32').each(['matched', 'mismatched', 'unmanifested'])(
+it.skipIf(process.platform === 'win32').each(['matched', 'mismatched', 'unmanifested', 'checkout-less', 'other package', 'nested package'])(
   'a %s linked development version preserves only its recorded external checkout', kind => {
     const { legacy, target, env } = migrationFixture();
-    const checkout = storeRoot(), packageLink = join(legacy.versions, 'v1/node_modules/@wjarka/cezarion');
+    const packagePath = kind === 'other package' ? 'v1/node_modules/left-pad'
+      : kind === 'nested package' ? 'v1/nested/node_modules/@wjarka/cezarion' : 'v1/node_modules/@wjarka/cezarion';
+    const checkout = storeRoot(), packageLink = join(legacy.versions, packagePath);
     mkdirSync(join(checkout, 'dist'));
     writeFileSync(join(checkout, 'dist/index.js'), "process.stdout.write('same-checkout')");
     mkdirSync(join(packageLink, '..'), { recursive: true });
     symlinkSync(checkout, packageLink, 'dir');
     symlinkSync('v1', join(legacy.versions, 'current'));
     if (kind !== 'unmanifested') rawJson(join(legacy.versions, 'v1/.cezar-install.json'), {
-      version: '1.0.0', source: 'link', installedAt: new Date().toISOString(), checkout: kind === 'matched' ? checkout : storeRoot(),
+      version: '1.0.0', source: 'link', installedAt: new Date().toISOString(),
+      ...kind === 'checkout-less' ? {} : { checkout: kind === 'mismatched' ? storeRoot() : checkout },
     });
     if (kind === 'matched') {
       migrateLegacyHome(legacy, target, { env });
@@ -298,4 +305,19 @@ it.skipIf(process.platform === 'win32').each(['outside', 'legacy', 'retry'])(
     } else migrateLegacyHome(legacy, target, { env });
     expect(readlinkSync(join(directory, '.bashrc'))).toBe(profile);
     expect(readFileSync(profile, 'utf8')).toBe(kind === 'legacy' ? before : `export PATH='${target.bin}':"$PATH" # cezar managed install\n`);
+  });
+
+it.skipIf(process.platform === 'win32').each(['no managed install', 'no marked PATH line'])(
+  'the shell profile stays untouched when the legacy home has %s', kind => {
+    const { legacy, target, env, directory } = migrationFixture();
+    const profile = join(directory, '.bashrc');
+    const before = kind === 'no marked PATH line' ? '# user setting\n' : `export PATH='${legacy.bin}':"$PATH" # cezar managed install\n`;
+    writeFileSync(profile, before);
+    chmodSync(profile, 0o644);
+    if (kind === 'no marked PATH line') rawJson(join(legacy.versions, 'v1/package.json'), { version: '1.0.0' });
+    const stat = statSync(profile);
+    expect(migrateLegacyHome(legacy, target, { env }).status).toBe('migrated');
+    expect(migrateLegacyHome(legacy, target, { env }).status).toBe('unchanged');
+    expect(readFileSync(profile, 'utf8')).toBe(before);
+    expect(statSync(profile)).toMatchObject({ ino: stat.ino, mode: stat.mode });
   });

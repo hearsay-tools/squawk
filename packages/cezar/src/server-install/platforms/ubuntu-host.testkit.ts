@@ -42,6 +42,8 @@ export class FakeUbuntuHost implements Runner {
   readonly unhealthy = new Set<string>();
   /** Units whose `systemctl disable` fails and leaves them as they are. */
   readonly failDisable = new Set<string>();
+  /** Commands that fail before they change anything, such as a program that is not installed. */
+  failing?: (words: string[]) => boolean;
   nginxTestFailures = 0;
   tlsBroken = false;
   hang?: (command: string) => boolean;
@@ -127,14 +129,16 @@ export class FakeUbuntuHost implements Runner {
     return list();
   }
 
-  private exec([program, ...args]: string[], stdin: string): CommandResult {
+  private exec(words: string[], stdin: string): CommandResult {
+    if (this.failing?.(words)) return fail(1, `fake host: ${words[0]} failed`);
+    const [program, ...args] = words;
     const run = this.programs[program!];
     return run ? run(args, stdin) : fail(127, `fake host: unknown command ${program}`);
   }
 
   private readonly programs: Record<string, (args: string[], stdin: string) => CommandResult> = {
     true: () => ok(), chown: () => ok(), chmod: () => ok(), sleep: () => ok(), false: () => fail(),
-    sh: (args, stdin) => this.shell(args[1]!, stdin),
+    sh: ([flag, script], stdin) => flag === '-c' ? this.shell(script!, stdin) : fail(2, 'fake sh supports only -c'),
     sudo: (args) => args[0] === '-n' && args[1] === 'true' ? ok() : fail(),
     printf: (args) => ok(args[1]),
     base64: (_args, stdin) => ok(Buffer.from(stdin, 'base64').toString('utf8')),
@@ -169,7 +173,9 @@ export class FakeUbuntuHost implements Runner {
       this.link(target, path);
       return ok();
     },
-    test: ([flag, path]) => {
+    test: (args) => {
+      const [flag, path] = args;
+      if (args.length !== 2 || !['-e', '-f', '-L'].includes(flag!)) return fail(2, 'fake test supports only -e, -f and -L');
       if (!this.exists(path!)) return fail();
       if (flag === '-L') return lstatSync(this.path(path!)).isSymbolicLink() ? ok() : fail();
       return flag !== '-f' || existsSync(this.path(path!)) ? ok() : fail();

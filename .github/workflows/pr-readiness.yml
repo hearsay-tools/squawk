@@ -1,0 +1,154 @@
+name: PR Readiness
+
+# Default-branch control plane only. No PR checkout and no repository write. One
+# per-PR job reads the live head once and syncs the board
+# (hearsay-tools/cezarion#3288). It never changes draft state.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, converted_to_draft]
+    branches:
+      - main
+  workflow_run:
+    workflows: [CI, Review signal]
+    types: [completed]
+  # Actions has no review-thread event: after a manual thread change, dispatch
+  # this workflow with the PR number.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: PR to re-check after resolving a thread by hand
+        required: true
+        type: number
+permissions: {}
+# Discovery validates the event and supplies reliable PR numbers before locking.
+# One event selects at most four associated PRs.
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    outputs:
+      numbers: ${{ steps.discover.outputs.numbers }}
+    steps:
+      - name: Check out trusted discovery scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      # Optional: reads use the release App's own API budget. Without the App or
+      # its read permissions this step fails quietly and reads use GITHUB_TOKEN.
+      - name: Create read token
+        id: read_app
+        if: vars.RELEASE_APP_CLIENT_ID != ''
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-actions: read
+          permission-pull-requests: read
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        id: discover
+        env:
+          READ_TOKEN: ${{ steps.read_app.outputs.token }}
+        with:
+          retries: 0
+          script: |
+            const { discover, countTokens } = require('./.github/scripts/pr-readiness.cjs');
+            core.info(process.env.READ_TOKEN ? 'Reads use the release App token.' : 'Reads use GITHUB_TOKEN.');
+            const reads = process.env.READ_TOKEN ? getOctokit(process.env.READ_TOKEN) : github;
+            // One line per token at the end, also when the job fails.
+            const summaries = countTokens([['GITHUB_TOKEN', github], ['Release App token (reads)', reads]]);
+            try {
+              const result = await discover({ github: reads, ...context.repo, eventName: context.eventName,
+                payload: context.payload, log: message => core.info(message) });
+              core.setOutput('numbers', JSON.stringify(result.numbers));
+            } finally {
+              for (const line of summaries()) core.info(line);
+            }
+  sync:
+    needs: discover
+    if: needs.discover.outputs.numbers != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        pr: ${{ fromJSON(needs.discover.outputs.numbers) }}
+    # Different trigger kinds use the same lock after trusted PR discovery.
+    # A coalesced job still reads this PR's live state when it gets the lock.
+    concurrency:
+      group: pr-readiness-pr-${{ matrix.pr }}
+      cancel-in-progress: false
+    # GITHUB_TOKEN keeps every read permission for the fallback.
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+      statuses: read
+    steps:
+      - name: Check out trusted readiness scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A dispatch may name any branch; the script always comes from main.
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      # Optional: reads use the release App's own API budget. Without the App or
+      # its read permissions this step fails quietly and reads use GITHUB_TOKEN.
+      - name: Create read token
+        id: read_app
+        if: vars.RELEASE_APP_CLIENT_ID != ''
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-checks: read
+          permission-contents: read
+          permission-pull-requests: read
+          permission-statuses: read
+      # Optional: board sync needs the release App's Organization projects
+      # permission. Without it this step fails quietly and the sync skips.
+      - name: Create board token
+        id: board_app
+        if: vars.RELEASE_APP_CLIENT_ID != ''
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-organization-projects: write
+      - name: Follow the head with board status
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          READ_TOKEN: ${{ steps.read_app.outputs.token }}
+          BOARD_TOKEN: ${{ steps.board_app.outputs.token }}
+          READINESS_PR: ${{ matrix.pr }}
+        with:
+          retries: 0
+          script: |
+            const { syncPull, countTokens } = require('./.github/scripts/pr-readiness.cjs');
+            core.info(process.env.READ_TOKEN ? 'Reads use the release App token.' : 'Reads use GITHUB_TOKEN.');
+            const reads = process.env.READ_TOKEN ? getOctokit(process.env.READ_TOKEN) : github;
+            const projectGithub = process.env.BOARD_TOKEN ? getOctokit(process.env.BOARD_TOKEN) : null;
+            // One line per token at the end, also when the job fails. Under the
+            // read token's core floor the sync skips.
+            const summaries = countTokens([['GITHUB_TOKEN', github], ['Release App token (reads)', reads],
+              ['Release App token (board)', projectGithub]]);
+            try {
+              const result = await syncPull({ github: reads, projectGithub, ...context.repo,
+                pullNumber: Number(process.env.READINESS_PR), log: message => core.info(message) });
+              core.info(JSON.stringify(result));
+            } finally {
+              for (const line of summaries()) core.info(line);
+            }

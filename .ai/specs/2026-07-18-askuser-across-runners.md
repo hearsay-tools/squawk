@@ -1,4 +1,5 @@
 # AskUser — structured questions across claude, codex & opencode
+Status: draft
 
 ## TLDR
 

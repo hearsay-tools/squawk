@@ -1,4 +1,5 @@
 # Reclaimable worker capacity (hearsay-tools/cezarion#816)
+Status: done
 
 > Design record for hearsay-tools/cezarion#816. Approved 2026-10-04. Supersedes the limits paragraph of `2026-09-06-owned-workers-isolated-worktrees.md`.
 

@@ -1,6 +1,7 @@
 # 004 — Lista tasków: PR-link, archiwizacja, koszt $
+Status: draft
 
-Status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 1 · Zależy od: — · Wzorzec: janitor `TasksTable` + `extractPullRequestUrl` + `cost`
+Recorded status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 1 · Zależy od: — · Wzorzec: janitor `TasksTable` + `extractPullRequestUrl` + `cost`
 
 ## Cel
 
