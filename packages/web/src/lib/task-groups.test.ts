@@ -549,6 +549,26 @@ it('counts a parked parent question as Needs you from the run summary', () => {
   expect(bucketOf(run(parked), 'active')).toBe('Working')
 })
 
+describe('a pending permission request needs you (hearsay-tools/squawk#2275)', () => {
+  const asking = (status: RunStatus, over: Partial<RunRecord> = {}) => run({ status, hasPendingPermission: true, ...over })
+
+  it.each([RUN_STATUS.waiting, RUN_STATUS.running])('a %s run with a pending request sits under Needs you and is counted', (status) => {
+    const record = asking(status)
+    expect(bucketOf(record, 'active')).toBe('Needs you')
+    expect(shape(groupRuns([record], 'active'))).toEqual([`Needs you: ${record.id}`])
+    expect(listCounts([record])).toEqual({ active: 1, archived: 0, waiting: 1 })
+    expect(sidebarCounts([record])).toEqual({ active: 1, automations: 0, activeWaiting: 1, automationsWaiting: 0 })
+    expect(sidebarCounts([{ ...record, automationId: 'auto-1' }])).toEqual({ active: 0, automations: 1, activeWaiting: 0, automationsWaiting: 1 })
+  })
+
+  it('an archived run with a pending request is history, never counted', () => {
+    const record = asking(RUN_STATUS.waiting, { archived: true })
+    expect(bucketOf(record, 'archived')).toBe('Archived')
+    expect(listCounts([record])).toEqual({ active: 0, archived: 1, waiting: 0 })
+    expect(sidebarCounts([record])).toEqual({ active: 0, automations: 0, activeWaiting: 0, automationsWaiting: 0 })
+  })
+})
+
 function ownedWorker(over: Partial<RunRecord> = {}, parentRunId = 'parent'): RunSummary {
   const base = run(over)
   return {

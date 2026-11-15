@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ACTIVITY_WAIT_KIND, NOW, RUN_STATUS, iso, project, request, run, worker } from './activity.testkit'
-import { directionOf, lineTexts, linkedByWaits, peerWaits, replyDueText, runIndex, sentPeerWaits } from './activity-model'
+import { directionOf, lineTexts, linkedByWaits, peerWaits, replyDueText, runIndex, sentPeerWaits, summarize } from './activity-model'
 
 describe('directionOf', () => {
   const parent = run({ runId: 'parent', workers: [worker({ runId: 'w' })] })
@@ -18,6 +18,21 @@ describe('directionOf', () => {
   it('reads the direction from the sender when it is on the view', () => {
     expect(directionOf(request({ relationship: 'family', senderRunId: 'w', recipientRunId: 'parent' }), index).relation).toBe('Worker → parent')
     expect(directionOf(request({ relationship: 'family', senderRunId: 'parent', recipientRunId: 'w' }), index).relation).toBe('Parent → worker')
+  })
+})
+
+describe('summarize', () => {
+  it('counts a pending permission request under Needs you, as the sidebar does (hearsay-tools/squawk#2275)', () => {
+    const tasks = [
+      run({ runId: 'asks', status: RUN_STATUS.waiting, rung: 'needs-you' }),
+      run({ runId: 'permission-parked', status: RUN_STATUS.waiting, rung: 'needs-permission' }),
+      run({ runId: 'permission-live', status: RUN_STATUS.running, rung: 'needs-permission' }),
+      run({ runId: 'works', status: RUN_STATUS.running, rung: 'running' }),
+      run({ runId: 'parked', status: RUN_STATUS.waiting, rung: 'waiting-on-workers' }),
+      run({ runId: 'slot', status: RUN_STATUS.queued, rung: 'queued' }),
+      run({ runId: 'review', status: RUN_STATUS.review, rung: 'needs-review' }),
+    ]
+    expect(summarize([project({ tasks })])).toMatchObject({ needsYou: 3, working: 1, waiting: 1, queued: 1 })
   })
 })
 
