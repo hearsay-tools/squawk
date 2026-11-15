@@ -28,15 +28,33 @@ const TOOL_CONFIG = /(?:^|\/)(?:vitest(?:\.[\w-]+)?\.config\.[cm]?[jt]s|vitest\.
 // The tests that hold the policy in place.
 const POLICY_TESTS = ['.github/scripts/auto-merge-gates.test.cjs', '.github/scripts/auto-merge-admission.test.cjs'];
 // A module specifier: static and dynamic import, export from, require and require.resolve.
-const SPECIFIER = /(?:\bfrom|\bimport|\bimport\s*\(|\brequire(?:\.resolve)?\s*\()\s*(['"])(\.{1,2}\/[^'"\n]+)\1/g;
+const SPECIFIER = /(?:\bfrom|\bimport|\bimport\s*\(|\brequire(?:\.resolve)?\s*\()\s*(['"`])(\.{1,2}\/[^'"`\n]*)\1/g;
+// A computed module specifier, which the scan cannot follow.
+const COMPUTED_SPECIFIER = /(?:\bimport\s*\(|\brequire(?:\.resolve)?\s*\()\s*`([^`]*\$\{[^`]*)`/g;
 // A path in a string literal: a setup file, a reporter, a file a script reads.
 const LITERAL = /(['"`])([\w.@-][^'"`\s$*{}<>|;]*\/[^'"`\s$*{}<>|;]*|\.{1,2}\/[^'"`\s$*{}<>|;]+)\1/g;
 // The string arguments of path.join/resolve, joined: join(root, '.github', 'x.json').
 const JOIN = /\b(?:join|resolve)\(([^()]*)\)/g;
+// A string or a comment in code; the scan drops the comments.
+const STRING_OR_COMMENT = /(['"`])(?:\\[\s\S]|(?!\1)[^\\])*\1|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g;
+// Shell variables the environment sets, which name no repository path.
+const SHELL_ENVIRONMENT = new Set(['HOME', 'TMPDIR', 'RUNNER_TEMP', 'PWD', 'XDG_CACHE_HOME']);
 const MODULE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.mjs', '.cjs', '.json'];
 // Files whose code runs: the scan follows what they load and read. Data files (JSON, YAML)
 // name the files a gate checks, so the scan does not follow them.
 const FOLLOWED = /\.(?:[cm]?[jt]sx?|sh|ps1)$/;
+const SHELL = /\.(?:sh|ps1)$/;
+// A tool config in JSON or YAML: the scan follows every path it names.
+const CONFIG_DATA = /\.(?:json|ya?ml)$/;
+// Config keys the scan skips, with the reason each names no gate input.
+const SKIPPED_KEYS = new Map([
+  ['include', 'picks the files a tool checks'],
+  ['exclude', 'picks the files a tool skips'],
+  ['files', 'picks the files tsc checks'],
+  ['rootDir', 'names the source tree tsc checks'],
+  ['inputs', 'names the files a Squeal test reads, for cache keys'],
+  ['cwd', 'names a working directory, which loads nothing'],
+]);
 // Product source is what the gates check. The scan records the product files a gate
 // loads or reads, and stops there.
 const PRODUCT = /^packages\/[^/]+\/src\/(?!lint\/)(?!.*\.testkit\.)/;
@@ -157,39 +175,100 @@ function resolveModule(files, from, specifier) {
     .find((f) => files.has(f));
 }
 
-// Every repository file a gate file loads or names by path: its imports, the
-// literal paths it reads, runs or hands to a tool, and joined path segments.
-function references(files, file, text = read(file)) {
-  const found = new Set();
+// Looks a path up as written and relative to the file that names it; with
+// `directories`, a directory stands for every file in it.
+function lookup(files, file) {
+  const candidates = (p) => [path.posix.join(path.posix.dirname(file), p), p]
+    .map((c) => path.posix.normalize(c).replace(/^\.\//, '').replace(/\/$/, ''));
+  return (written, { directories = false } = {}) => {
+    for (const p of candidates(written)) {
+      if (files.has(p)) return [p];
+      const inside = directories && p !== '.' && !p.startsWith('..') ? [...files].filter((f) => f.startsWith(`${p}/`)) : [];
+      if (inside.length > 0) return inside;
+    }
+    return [];
+  };
+}
+
+const withoutComments = (text) => text.replace(STRING_OR_COMMENT, (match) => (match.startsWith('/') ? ' ' : match));
+
+function codeReferences(files, file, text) {
+  const found = [];
   const unresolved = [];
-  const inRepo = (candidate) => [path.posix.join(path.posix.dirname(file), candidate), candidate]
-    .map((p) => path.posix.normalize(p).replace(/^\.\//, '')).find((p) => files.has(p));
-  for (const [, , specifier] of text.matchAll(SPECIFIER)) {
+  const find = lookup(files, file);
+  const code = withoutComments(text);
+  for (const [, quote, specifier] of code.matchAll(SPECIFIER)) {
+    if (quote === '`' && specifier.includes('${')) continue;
     const target = resolveModule(files, file, specifier);
-    if (target) found.add(target);
+    if (target) found.push(target);
     else unresolved.push(`${file}: ${specifier}`);
   }
-  for (const [, , literal] of text.matchAll(LITERAL)) {
-    const target = (literal.startsWith('.') && resolveModule(files, file, literal)) || inRepo(literal);
-    if (target) found.add(target);
+  for (const [, specifier] of code.matchAll(COMPUTED_SPECIFIER)) unresolved.push(`${file}: \`${specifier}\``);
+  for (const [, , literal] of code.matchAll(LITERAL)) {
+    const target = literal.startsWith('.') && resolveModule(files, file, literal);
+    found.push(...(target ? [target] : find(literal)));
   }
-  if (/\.(?:sh|ps1)$/.test(file)) {
-    for (const [token] of text.matchAll(/[\w.@-]*\/[\w.@/-]+/g)) {
-      const target = inRepo(token);
-      if (target) found.add(target);
-    }
-  }
-  for (const [, args] of text.matchAll(JOIN)) {
+  for (const [, args] of code.matchAll(JOIN)) {
     const parts = [...args.matchAll(/(['"`])([^'"`$]*)\1/g)].map(([, , part]) => part);
-    const target = parts.length > 0 && inRepo(parts.join('/'));
-    if (target) found.add(target);
+    if (parts.length > 0) found.push(...find(parts.join('/')));
   }
-  found.delete(file);
   return { found, unresolved };
 }
 
+// Variables a shell script sets to a repository path: its own directory, a literal
+// path, or a path under such a variable. A variable built from the environment
+// names no repository path.
+function shellVariables(file, text) {
+  const variables = new Map([['PSScriptRoot', path.posix.dirname(file)]]);
+  const environment = new Set(SHELL_ENVIRONMENT);
+  for (const [, name, value] of text.matchAll(/^\s*(?:export\s+)?([A-Za-z_]\w*)=(.*)$/gm)) {
+    if (variables.has(name) || environment.has(name)) continue;
+    const based = /\$\{?([A-Za-z_]\w*)\}?((?:\/[\w.@-]+)*)/.exec(value);
+    const literal = /^["']?([\w.@-]+(?:\/[\w.@-]+)+)["']?\s*$/.exec(value);
+    if (/dirname\b.*\$0/.test(value)) variables.set(name, path.posix.dirname(file));
+    else if (literal) variables.set(name, path.posix.normalize(literal[1]));
+    else if (based && variables.has(based[1])) variables.set(name, path.posix.normalize(variables.get(based[1]) + based[2]));
+    else if (based && environment.has(based[1])) environment.add(name);
+  }
+  return { variables, environment };
+}
+
+function shellReferences(files, file, text) {
+  const found = [];
+  const unresolved = [];
+  const find = lookup(files, file);
+  const { variables, environment } = shellVariables(file, text);
+  for (const [, name, rest] of text.matchAll(/\$\{?([A-Za-z_]\w*)\}?((?:\/[\w.@-]+)+)/g)) {
+    if (variables.has(name)) found.push(...find(path.posix.normalize(variables.get(name) + rest)));
+    else if (!environment.has(name)) unresolved.push(`${file}: $${name}${rest}`);
+  }
+  for (const [token] of text.matchAll(/(?<![\w$}])[\w.@-]*\/[\w.@/-]+/g)) found.push(...find(token));
+  return { found, unresolved };
+}
+
+// Every string in a JSON or YAML tool config that names a repository file or directory.
+function configReferences(files, file, text) {
+  const find = lookup(files, file);
+  const strings = [];
+  const walk = (value) => {
+    if (typeof value === 'string') strings.push(value);
+    else if (Array.isArray(value)) value.forEach(walk);
+    else if (value && typeof value === 'object') for (const [key, child] of Object.entries(value)) if (!SKIPPED_KEYS.has(key)) walk(child);
+  };
+  walk(yaml.parse(file.endsWith('.json') ? withoutComments(text) : text));
+  const paths = strings.filter((value) => value !== '' && !/[\s*{}]/.test(value));
+  return { found: paths.flatMap((value) => find(value, { directories: true })), unresolved: [] };
+}
+
+// Every repository file a gate file loads, reads, runs or names by path.
+function references(files, file, text = read(file)) {
+  const kind = CONFIG_DATA.test(file) ? configReferences : SHELL.test(file) ? shellReferences : codeReferences;
+  const { found, unresolved } = kind(files, file, text);
+  return { found: new Set(found.filter((f) => f !== file)), unresolved };
+}
+
 async function followReferences({ files, refs, refer }) {
-  const followed = (f) => FOLLOWED.test(f) && !TEST_ONLY.test(f) && !notAGate(f);
+  const followed = (f) => (FOLLOWED.test(f) || (TOOL_CONFIG.test(f) && CONFIG_DATA.test(f))) && !TEST_ONLY.test(f) && !notAGate(f);
   const queue = [...refs.keys()].filter(followed);
   const seen = new Set(queue);
   const unresolved = [];
@@ -219,7 +298,7 @@ test('every gate file a workflow or npm script runs is on the auto-merge never-l
   const found = await discover();
   for (const gate of ['.github/scripts/check-clones.cjs', 'packages/cezar/src/lint/run.ts', '.github/actions/node-dist/action.yml', 'scripts/test-home-env.mjs', '.oxlintrc.json', 'vitest.config.ts', '.github/scripts/vitest-worker-count.cjs',
     'scripts/test-browser-home-env.mjs', 'packages/web/product-identity.ts', 'packages/web/e2e/wait-support.ts', 'packages/web/e2e/visual-ready.ts',
-    'packages/cezar/src/core/agent-runner.ts']) {
+    'packages/cezar/src/core/agent-runner.ts', '.ai/ast-grep/rules/active-run-boundary-write-outside-owner.yml', '.ai/scripts/e2e-served-repo.mjs']) {
     assert.ok(found.refs.has(gate), `the scan no longer finds ${gate}`);
   }
   const unguarded = [...found.refs]
@@ -247,6 +326,37 @@ test('references read the unquoted paths a shell script runs or sources', () => 
   const files = new Set(['s/run.sh', 's/env.sh', 'scripts/tool.mjs', 'packages/x/scripts/start.ps1']);
   const text = 'set -e\nsource ./env.sh\nnode scripts/tool.mjs --flag\npwsh -File packages/x/scripts/start.ps1\nls /tmp/out\n';
   assert.deepEqual([...references(files, 's/run.sh', text).found].sort(), ['packages/x/scripts/start.ps1', 's/env.sh', 'scripts/tool.mjs']);
+});
+
+test('references follow the files and directories a JSON or YAML tool config loads', () => {
+  const files = new Set(['.oxlintrc.json', 'lint/plugin.ts', 'sgconfig.yml', 'rules/a.yml', 'rules/b.yml', 'utils/u.yml',
+    'tsconfig.json', 'tsconfig.base.json', 'src/app.ts']);
+  const oxlint = references(files, '.oxlintrc.json', '{\n  // plugins\n  "jsPlugins": ["./lint/plugin.ts"]\n}\n').found;
+  assert.deepEqual([...oxlint], ['lint/plugin.ts']);
+  const sg = references(files, 'sgconfig.yml', 'ruleDirs:\n  - rules\nutilDirs:\n  - utils\n').found;
+  assert.deepEqual([...sg].sort(), ['rules/a.yml', 'rules/b.yml', 'utils/u.yml']);
+  const ts = references(files, 'tsconfig.json', '{ "extends": "./tsconfig.base.json", "include": ["src"] }').found;
+  assert.deepEqual([...ts], ['tsconfig.base.json']);
+});
+
+test('references resolve the path variables a shell script sets and fail on an unknown one', () => {
+  const files = new Set(['tools/run.sh', 'tools/helper.mjs', 'build/cache/out.txt', 'scripts/tool.mjs']);
+  const text = [
+    'SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)', 'ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd)', 'OUT=build/cache',
+    'CACHE=${XDG_CACHE_HOME:-"$HOME/.cache"}', 'node "$SCRIPT_DIR/helper.mjs"', 'node "$ROOT/scripts/tool.mjs"', 'cat "$OUT/out.txt"',
+    'ls "$CACHE/tools"', 'ls "$HOME/.config"', 'node "$UNKNOWN/thing.mjs"',
+  ].join('\n');
+  const { found, unresolved } = references(files, 'tools/run.sh', text);
+  assert.deepEqual([...found].sort(), ['build/cache/out.txt', 'scripts/tool.mjs', 'tools/helper.mjs']);
+  assert.deepEqual(unresolved, ['tools/run.sh: $UNKNOWN/thing.mjs']);
+});
+
+test('references see specifiers behind comments and in templates, and fail on a computed one', () => {
+  const files = new Set(['g/gate.mjs', 'g/a.cjs', 'g/b.mjs', 'g/c.mjs']);
+  const text = 'require(/* c */ "./a.cjs")\nimport v from /* c */ "./b.mjs"\nawait import(`./c.mjs`)\n// import gone from "./gone.mjs"\nawait import(`./${name}.mjs`)\n';
+  const { found, unresolved } = references(files, 'g/gate.mjs', text);
+  assert.deepEqual([...found].sort(), ['g/a.cjs', 'g/b.mjs', 'g/c.mjs']);
+  assert.deepEqual(unresolved, ['g/gate.mjs: `./${name}.mjs`']);
 });
 
 test('the tests that hold the policy are themselves guarded against any edit', async () => {
