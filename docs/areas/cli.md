@@ -152,3 +152,252 @@ without spending automatic-wake budget. Peer messages and substantive peer and
 process outcomes retain their charging rules. Explicit timer and native-subagent
 safety deadlines remain charged. See [ADR 0061](../adr/0061-one-wait-engine-executes-wait-kind-rows.md#longer-dependency-waits-and-empty-deadline-wakes)
 for mixed batches, spent budgets and restart behavior.
+
+## From the terminal: `hsq task` and `hsq message`
+
+`hsq task` starts, watches and steers tasks **in the running cockpit** from a shell — for you, or
+for a bot driving one. Every command prints one JSON object and exits with a code the caller can
+branch on, so nothing has to parse prose. It never starts a server: it finds the cockpit whose
+project registry holds this checkout (ports 4321–4370; a task worktree resolves to its parent
+project), or you point it at one with `--url` / `HSQ_URL` (`CEZ_URL` fallback).
+
+```text
+hsq task [--url <origin> | --repo <dir>] <operation> …
+```
+
+The shared `--url`, `--repo` and `--help`/`-h` flags also work before the operation;
+`--url` and `--repo` accept both `--flag value` and `--flag=value`. A shared flag repeated
+before the operation or on both sides is a usage error. Operation flags stay after the
+operation. `hsq task --help <operation>` shows that operation's help without discovery.
+An explicit `--url` wins over `HSQ_URL` (`CEZ_URL` fallback); `--repo` selects the checkout to discover.
+
+`hsq task send` is human input. It can answer a pending human question. It refuses
+inside a task (`HSQ_TASK_ID` (`CEZ_TASK_ID` fallback) is set). Agents use `hsq message` for task messages,
+including peer and parent/worker conversations; see [Owned workers](../workers.md#owned-workers).
+
+```bash
+id=$(hsq task start --task-file - <<'EOF' | jq -r .id
+Fix the `hsq task` docs. Keep $(example) and "quotes" literal.
+EOF
+)
+hsq task wait "$id" --timeout-seconds 900                     # 0 done/review/needs you · 1 failed · 3 timeout
+hsq task list                                                # currentStepId (running), pullRequestUrl (done/review), capped error (failed)
+hsq task status "$id"                                       # slim JSON: status, attention, question, branch, handoffUrl…
+hsq task send "$id" 'Use the retry helper instead'            # delivered live, queued before start
+hsq task send "$id" --resume 'Continue with the next step'    # resumed: reopen a settled session
+hsq task log "$id" --follow --timeout-seconds 300             # JSON lines until it needs you or ends
+```
+
+`list --status` accepts comma-separated values: `queued`, `running`, `waiting`, `review`,
+`done`, `failed`, `cancelled`. Default rows include only the next-action field for their status
+when defined; errors use the first line, at most 200 characters including `…` when cut.
+Default `status` includes `handoffUrl`, a URL to the existing handoff endpoint even before
+contents are seeded, and keeps the full error. `--full` still prints the contract unchanged.
+To answer a pending `question`, use the same `send` with the answer text. Without `--resume`,
+a closed session returns `delivery: not-delivered` and the `next` command. For multi-line or
+shell-sensitive messages use `send <id> --text-file <path|->` (`-` reads stdin); the quoting
+rules below apply to messages too.
+
+Use `--task-file PATH` to read a saved task (for example, `hsq task start --task-file task.md`),
+or `--task-file -` to read stdin as above. The quoted heredoc delimiter (`<<'EOF'`) keeps
+backticks and `$()` literal in the task text.
+
+POSIX shells, including Bash, expand backticks and `$()` in double-quoted arguments before
+hsq receives the text. **Do not put raw backticks in double-quoted task arguments.** This can
+execute parts of your prompt as shell commands and leave holes in the stored task, including
+when starting tasks through SSH and `bash -lc`. Prefer a task file or stdin with a quoted
+heredoc delimiter. A single-quoted positional argument still works for short tasks:
+`hsq task start 'Fix the typo'`.
+
+`hsq task start --task-file task.md --skill <name>` names one skill as the task's agent step;
+`--skill` and `--workflow` are mutually exclusive. The CLI checks `GET /skills` first and
+includes a `warning` in its JSON result if the skill is missing or the catalog cannot be
+checked; it still starts the run. Like a cockpit skill start, if the skill is missing at
+execution, the agent uses the plain prompt and the run logs a note. CLI starts do not change
+the cockpit composer's recent picks or skill-usage ranking.
+Without either flag, `start` still runs `quick-task`.
+
+`--runner <claude|codex|opencode|pi|cursor|omp>` picks the runner, as in a workflow step and
+`hsq discover --runner`; `--model` and `--effort` pin the rest. `--backend` is a permanent
+alias of `--runner` with no warning. Giving both with different values exits 64.
+
+`--archive-when-done` archives the task after **Done**. `--auto-merge-pr` merges its
+PR after **Done** only when current-head CI and GitHub rules pass. It can mark a
+draft PR ready. Both controls are off by default. They also appear as switches in
+the task composer and task details. With both on, Squawk merges before it archives;
+without a PR, it archives on Done. Pending or blocked completion actions show their
+reason in task details. Use `status <id> --full` to read the saved `archiveWhenDone`,
+`autoMergePr` and `completionAction` fields. Existing task choices can be changed
+through `PATCH /api/v1/p/:projectId/runs/:id` with the matching boolean fields.
+
+`start` is retry-safe: it sends a request id (`--request-id <UUID>` to pick your own), and a
+retry with the same id and start options answers with the run the first one created
+(`created: false`) instead of starting a second. Changing a completion control on that
+retry is a payload conflict. Also: `list`, `stop`, `finish`, `diff [--stat]`, `open`.
+Use `archive <id>` to hide a task from `list`, `unarchive <id>` to restore it, and
+`list --all` to include archived tasks. `list` never shows owned workers, with or without
+`--all`: they are steer targets of their parent task. Id-addressed commands (`status`, `wait`,
+`send`, `log`, `stop`, …) still accept a worker's id. `archive-finished` sweeps finished tasks (not scheduled runs waiting on a usage limit, and not owned workers, which leave with their parent) and prints
+`{"archived": count, "ids": [...], "pinnedIds": [...]}`. The single-task commands print `{"id": "…", "archived": true|false}`.
+Exit codes:
+`0` ok (`wait`/`start --wait`/`log --follow`: the task ended `done`/`review` or stopped for attention), `1` task
+failed/cancelled or a message was not delivered, `2` no cockpit or the cockpit refused (its `error`
+is passed through), `3` timed out, `64` usage error. `hsq task --help` lists every flag.
+
+**When a task needs you.** `status`, `list`, `wait` and the final `log --follow` line carry `attention` and `attentionLabel`,
+derived by the same function the cockpit's Needs You uses, so the CLI and the cockpit cannot
+disagree. Read those rather than the raw status:
+
+- `attention: waiting` (`attentionLabel` "needs you" / "needs review"), `error` or `permission`
+  means the task wants a human. A `waiting` task is attention **even when no question is
+  pending** — a finished turn parks the task for follow-up without a structured question —
+  unless its top open wait is CI or a timer (below). A pending question shows as `question`
+  on `status`, with the agent's Markdown context as `questionContext` when it sent one, and as
+  `waitingOn` `{ kind: 'human' }`; never clear a task on its absence alone.
+- `attention: running` with `attentionLabel` "waiting for CI", "waiting for merge" or "monitoring"
+  (`status: waiting` with an open PR wait or timer in `waitingOn`) is neither settled nor attention: the agent is
+  still working on its own sub-agents or a watched command, whatever its last log line says.
+- `attention: none` with "waiting on 2 workers" is a task parked on its own workers; it will wake
+  by itself.
+
+`wait`, `start --wait` and `log --follow` stop as soon as a task needs you or ends
+(`--until attention`, the default); `--until settled` waits for a terminal status only — for
+`--autonomous` runs, or a bot that wants an outcome:
+
+```bash
+hsq task wait "$id"                                        # stops when the task needs you, or ends
+hsq task wait "$id" --until settled                        # done/review/failed/cancelled only
+hsq task start --task-file task.md --wait                  # returns as soon as the agent parks
+hsq task start --task-file task.md --wait --autonomous --until settled   # runs to completion
+hsq task log "$id" --follow                                # streams until the task needs you, or ends
+hsq task log "$id" --follow --until settled                # streams until done/review/failed/cancelled
+```
+
+*Migrating from `--until settled`.* Before 0.16, `wait` and `start --wait` defaulted to
+`settled`, so an ordinary interactive task ran out the timeout (exit 3) although the agent had
+parked within seconds. The default is now `attention`. A bot that polls for terminal state adds
+`--until settled` to its `wait` / `start --wait` calls; nothing else about `settled` changed. Each
+run in the `wait` output (and the `start --wait` object) now carries `attention` +
+`attentionLabel`, and the output's top level says which `until` was in force, so a caller can tell
+"parked for follow-up" (`status: waiting`, `attention: waiting`) from "finished" (`status: done`,
+`attention: none`) without knowing Squawk's status vocabulary.
+
+*`log --follow` (#931).* `log --follow` used to stop on a terminal status only, so tailing an
+interactive task streamed until `--timeout-seconds` and exited 3 after the agent had parked. It
+now takes the same `--until` with the same `attention` default, judged by the same function as
+`wait`; `--until` without `--follow` is a usage error. Every event is still printed before the
+final line, which is now `{"id", "status", "attention", "attentionLabel", "until", "timedOut"}`. A
+bot that tails to terminal state adds `--until settled`. `log` without `--follow` is unchanged.
+
+**A bot that lives behind an HTTP endpoint** does not have to poll. Add a webhook (a name, a
+description, a URL and an optional Bearer token) under **Webhooks** in the project's **Settings →
+General** and turn on **Task notifications**. Every task that opts in then POSTs one delivery to
+each such webhook when it enters a state that webhook selects: **Needs you**, **Failed**,
+**Done** and **Cancelled** by default, plus **Running**, **Waiting for agents**, **Waiting on CI**,
+**Waiting** (a timer) and **Any other wait** when you tick them. A question that puts the task in
+Needs you is `task.question`; every other entry is `task.status`, and the body's `state` names the
+state. `task.subscribed` (when it opts in, at start or on hand-off) and **Send test** always go out.
+Each body carries the same slim projection `hsq task status` prints, under `task`. `hsq task start`
+opts in only with `--notify` (off by default); the cockpit's New task form
+has a **Notify webhook** toggle; and a running task's **Hand off** button (or
+`hsq task notify <id> --message '…'`) turns it on later with a note for the bot. `notify` (and
+`send --notify`) on a worker's id is a usage error that names the parent to notify instead;
+`notify --off` still works on one. The note goes to
+the webhook only, never to the agent. Delivery is best-effort: 10 s timeout, 3 attempts, and a
+failure shows in the thread without touching the task. The token is stored in `<config>` and never
+sent back to a browser. Under `HSQ_DRY_RUN=1` (`CEZ_DRY_RUN` fallback) nothing is sent; the payload is logged in the thread.
+
+A project can hold several webhooks, each with its own states, and each body names the webhook it
+went to under `webhook`. One failing webhook never delays or stops another.
+
+### Reports from agents: `hsq webhook`
+
+Turn on **Let agents send reports** for a webhook, and agents in that project can send it a report
+on demand: a friction report to a triage bot instead of a new GitHub issue, for example. Agents see
+each such webhook's name and description in their system prompt, so write the description as
+instructions ("Send friction you hit with tools here instead of filing a GitHub issue"). A webhook
+without that switch cannot be reached this way.
+
+```sh
+hsq webhook list                                         # the webhooks open to agents
+hsq webhook send 'Friction reports' --message-file report.md --title 'Squeal skipped an edit'
+hsq webhook send <name|id> --message 'Short report' [--data '{"severity":"low"}']
+```
+
+The body is `event: "agent.report"` with `webhook`, `title`, the Markdown `message`, your `data`,
+and the reporting task's `runId`, thread `url` and `task` projection. The command prints the
+outcome as JSON and exits 0 delivered, 1 not delivered, 2 refused or no cockpit, 64 usage.
+
+### Automations from a task: `hsq automation`
+
+`hsq automation` creates and manages automations (on by default; `HSQ_AUTOMATIONS=0` (`CEZ_AUTOMATIONS` fallback) disables them) on the cockpit that
+runs the task, so an agent asked to "do X every morning" or "whenever a PR opens" sets up an
+automation instead of a cron job. Like `hsq task`, it prints one JSON object per invocation and
+exits 0 ok, 1 check failed, 2 refused or no cockpit, 3 check timed out, 64 usage.
+
+```sh
+hsq automation schema                                    # the definition reference (needs no cockpit)
+hsq automation add --name 'Weekday triage' --cron '0 7 * * 1-5' --prompt 'Triage new issues'
+hsq automation add --name 'Review PRs' --on pull_request.opened --every 5m --label bug --prompt-file p.md
+hsq automation add --name 'Agent triage' --on issue.labeled --changed-label needs-agent --prompt 'Triage #{{github.number}}'
+hsq automation create --file def.json [--enable]         # full JSON form; stdin when no flag is given
+hsq automation update <id> --json '{"task":{"prompt":"…"}}'
+hsq automation add --name 'Check the rollout' --at 2026-10-29T09:00 --tz Europe/Warsaw --prompt 'Check the rollout'
+hsq automation add --name 'Follow up' --in 7d --latest-start 6h --prompt 'Follow up on the migration'
+hsq automation check <id> [--execute] · run <id> · list [--archived include|only] · show <id> · enable <id> · pause <id> · cancel <id> · delete <id>
+```
+
+`add` and `create` send the same body and create the automation **paused** unless `--enable` is
+given; `--cron` accepts the four shapes a schedule can take (daily, weekdays, one weekday, every N
+hours) and anything else is a usage error pointing to the JSON form. `update` replaces each key
+it is given, except `task`, which merges key by key (`null` removes one); it restates `enabled`
+and echoes the revision it read, so a concurrent edit in the cockpit is refused (exit 2), never
+overwritten. Mutating commands print the automation's cockpit page as `url`.
+
+`add` accepts `--archive-when-done` and `--auto-merge-pr` with the same behavior as
+`hsq task start`. The JSON keys are `task.archiveWhenDone` and `task.autoMergePr`.
+Both are optional booleans and default to off. The automation editor has the same
+switches. Editing these choices affects future tasks only; it does not change tasks
+the automation already launched. Enabling an automation or making its tasks autonomous
+does not enable either completion control.
+
+GitHub automations exclude events before enablement by default. Turn on **Include existing items**
+in the editor, pass `--include-existing` to `add`, or set `"filters": {"includeExisting": true,
+"lookbackDays": 7, "maxRecords": 25}` in a JSON definition to include older matches within the
+lookback (1–90 days). Turning this on for an enabled automation reopens that window on its next
+check. Changing only the lookback preserves the completed cursor; pause and re-enable to
+reopen the wider history window. Previously processed matches stay deduplicated across edits, pauses and restarts, and
+per-check limits still apply. Historical scans resume across checks and restarts when capped.
+GitHub search is limited to 1,000 items per window and label timelines to 100 events per item;
+reaching either limit reports an error with guidance to narrow the filters or lookback. **Test filter** previews the selected window independently of the
+execution cursor; it never launches tasks. For label triggers, the window applies to the label
+event's time, so a newly added label can match an old issue even with history off. Historical
+label discovery revisits the rolling window because later comments can move issues between pages;
+receipts prevent those repeated observations from launching duplicate tasks.
+
+A **one-time schedule** (**Once** in the editor, `--at` or `--in` on `add`, `"schedule":
+{"type": "once", "at": "2026-10-29T09:00", "timeZone": "Europe/Warsaw"}` in JSON) starts one
+ordinary task at a wall-clock time in an explicit IANA zone. It is created paused like every
+automation; **Enable** arms it. When it is due, Squawk starts the task and moves the schedule to
+**Archived** with a link to that task; **Run now** does the same at once, so it never runs twice.
+**Cancel** archives it without a task. An archived schedule cannot change, and the list hides it
+until you pick the **Archived** filter. Squawk must be running at the due time. If it was not,
+the schedule starts on the next boot only within its **Latest start** (no limit by default; 10
+minutes to 30 days); after that it is marked **Missed** and stays until you edit, cancel or run it.
+A launch that fails marks it **Failed**, and nothing retries on its own; **Retry** or **Run now**
+relaunches the same receipt, so one schedule starts at most one task. Agents can create and manage
+one-time schedules with the `cezar_schedule_task` and `cezar_scheduled_tasks` tools, which exist
+by default unless `HSQ_AUTOMATIONS=0` (`CEZ_AUTOMATIONS` fallback) and also create schedules paused unless the user asked for them to run.
+These tools take and answer the due time in UTC, like every other time in a Squawk tool; the
+schedule keeps a wall time in the cockpit's time zone, so the cockpit shows it in local time.
+
+Automation list counters use two windows. **Launched** counts every stored task with that
+automation's provenance, across definition revisions, including historical variants, completed and
+archived tasks. Restarting or compacting automation logs and receipts does not change it;
+deleting a task removes it from the count. **Matches**, **Duplicates** and **Errors** describe
+only that automation's latest 100 activity-log rows. Recent activity remains a separate log view.
+
+The address comes from `HSQ_COCKPIT_URL` (`CEZ_COCKPIT_URL` fallback) and `HSQ_PROJECT_ID` (`CEZ_PROJECT_ID` fallback), which the cockpit puts in a task's
+environment. Without them, only an explicit `--url`, `--repo` or `HSQ_URL` (`CEZ_URL` fallback) looks for a cockpit;
+otherwise the command exits 2 and never starts a server. With automations off, the cockpit's `409`
+is relayed verbatim (exit 2).
