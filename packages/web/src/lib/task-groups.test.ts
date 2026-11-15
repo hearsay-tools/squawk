@@ -557,8 +557,8 @@ describe('a pending permission request needs you (hearsay-tools/squawk#2275)', (
     expect(bucketOf(record, 'active')).toBe('Needs you')
     expect(shape(groupRuns([record], 'active'))).toEqual([`Needs you: ${record.id}`])
     expect(listCounts([record])).toEqual({ active: 1, archived: 0, waiting: 1 })
-    expect(sidebarCounts([record])).toEqual({ active: 1, automations: 0, activeWaiting: 1, automationsWaiting: 0 })
-    expect(sidebarCounts([{ ...record, automationId: 'auto-1' }])).toEqual({ active: 0, automations: 1, activeWaiting: 0, automationsWaiting: 1 })
+    expect(sidebarCounts([record], true)).toEqual({ active: 1, automations: 0, activeWaiting: 1, automationsWaiting: 0 })
+    expect(sidebarCounts([{ ...record, automationId: 'auto-1' }], true)).toEqual({ active: 0, automations: 1, activeWaiting: 0, automationsWaiting: 1 })
   })
 
   it('leaves Needs you when the last request resolves, unless a human gate is still open', () => {
@@ -566,20 +566,20 @@ describe('a pending permission request needs you (hearsay-tools/squawk#2275)', (
     const resolved: RunSummary = { ...running, hasPendingPermission: false }
     expect(bucketOf(resolved, 'active')).toBe('Working')
     expect(listCounts([resolved])).toEqual({ active: 1, archived: 0, waiting: 0 })
-    expect(sidebarCounts([resolved])).toEqual({ active: 1, automations: 0, activeWaiting: 0, automationsWaiting: 0 })
+    expect(sidebarCounts([resolved], true)).toEqual({ active: 1, automations: 0, activeWaiting: 0, automationsWaiting: 0 })
 
     const gated = asking(RUN_STATUS.waiting, { waits: [openHumanWait()] } as Partial<RunRecord>)
     const stillAsks: RunSummary = { ...gated, hasPendingPermission: false }
     expect(bucketOf(stillAsks, 'active')).toBe('Needs you')
     expect(listCounts([stillAsks])).toEqual({ active: 1, archived: 0, waiting: 1 })
-    expect(sidebarCounts([stillAsks])).toEqual({ active: 1, automations: 0, activeWaiting: 1, automationsWaiting: 0 })
+    expect(sidebarCounts([stillAsks], true)).toEqual({ active: 1, automations: 0, activeWaiting: 1, automationsWaiting: 0 })
   })
 
   it('an archived run with a pending request is history, never counted', () => {
     const record = asking(RUN_STATUS.waiting, { archived: true })
     expect(bucketOf(record, 'archived')).toBe('Archived')
     expect(listCounts([record])).toEqual({ active: 0, archived: 1, waiting: 0 })
-    expect(sidebarCounts([record])).toEqual({ active: 0, automations: 0, activeWaiting: 0, automationsWaiting: 0 })
+    expect(sidebarCounts([record], true)).toEqual({ active: 0, automations: 0, activeWaiting: 0, automationsWaiting: 0 })
   })
 })
 
