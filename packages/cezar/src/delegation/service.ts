@@ -13,8 +13,6 @@ import { collectWorkerEvidence, revalidateRetainedWorkerResult, workerRevision }
 import { prepareWorkerContext, workerContextTask } from './context.ts';
 import { acceptedWorkerIdentitySchema, workerContextHash, workerWorkflowHash } from './execution-identity.ts';
 import { createHash, randomUUID } from 'node:crypto';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import {
   discoveryRequestSchema,
   type DiscoveryRequest,
@@ -82,6 +80,7 @@ import { isAuthenticatedCaller } from './credentials.ts';
 import { parseDelegationEffort } from './effort.ts';
 import { authorizeWorkerList, authorizeSpawn, authorizeSpawnReplay, authorizeWorker, authorizeCancelWait, authorizeRetainedResult, DelegationPolicyError, MessagingOffError, requireWorkersAllowed } from './policy.ts';
 import { planOwnedWorkspace, readOwnedDiff, resolveWorkerBaseline, verifyOwnedWorkspace } from './workspace.ts';
+import { runGit } from '../git-command.ts';
 
 export type DelegationManager = Pick<RunManager,
   | 'acknowledgeInbox' | 'awaitRunTermination' | 'builtinSkills' | 'canClaimInboxInput'
@@ -397,7 +396,7 @@ export class DelegationService {
     try {
       const workspace = await verifyOwnedWorkspace(project.root, recipient);
       // The branch is the work a fresh session reads from (its notice says `git log`): prove its ref too.
-      await execFileAsync('git', ['rev-parse', '--verify', '--quiet', `refs/heads/${workspace.branch}^{commit}`], { cwd: project.root, timeout: 30_000 })
+      await runGit(['rev-parse', '--verify', '--quiet', `refs/heads/${workspace.branch}^{commit}`], { cwd: project.root, timeout: 30_000 })
         .catch(() => { throw new Error(`branch ${workspace.branch} is missing`); });
     } catch (error) {
       throw new DelegationPolicyError('incompatible_state', `Worker worktree or branch is gone (${error instanceof Error ? error.message : String(error)}); --resume cannot restart it. Spawn a new worker with the follow-up instruction`);
@@ -810,4 +809,3 @@ export class DelegationService {
 export const freshWorkerSession = (run: RunRecord): boolean => !run.steps.some(step => step.sessionId);
 export const FRESH_SESSION_NOTICE = 'Your earlier agent session is lost. Your work so far is in this worktree: read its files and its branch commits (git log) before you continue.';
 
-const execFileAsync = promisify(execFile);

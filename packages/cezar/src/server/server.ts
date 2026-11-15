@@ -182,6 +182,7 @@ import { worktreeDiff, worktreeSizeBytes } from '../git-worktree.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { isReclaimable, reclaimWorktree, reclaimWorktrees, selectReclaimableWorktrees } from '../runs/retention.ts';
 import { getBranches, getCommit, getDiff, getLogWithParents, getRepoInfo, getStatus, getTracking } from './git.ts';
+import { createHealthCache, HEALTH_TTL_MS } from './health-cache.ts';
 import { createGithubBranchForge } from './repo-branch-forge.ts';
 import { attributeLog, classifyInputFor, deleteBranches, forgetRepoBranches, readRepoBranchCounts, readRepoBranches, type BranchForge, type ClassifyProject } from './repo-branches.ts';
 import { claimRepoGitMutation, localPullBranches, pullRepoCheckout } from './repo-pull.ts';
@@ -251,7 +252,7 @@ import { createProject, listGithubOwners, type CommandRunner } from './create-pr
 import { createWorkspaceRunFeed } from './workspace-run-feed.ts';
 import { ProjectContexts, type ProjectContext, type RunManagerFactory } from './project-context.ts';
 
-import { readProjectUiState, readUiState, writeProjectUiState } from '../ui-state.ts';
+import { mergeWriteProjectUiState, readUiState } from '../ui-state.ts';
 import { agentHomePaths, expandTilde } from '../paths.ts';
 import { isLoopbackHostHeader, normalizeHostname, resolveCapabilities } from './capabilities.ts';
 import type { SocketHub, WsUpgradeVerdict } from './ws.ts';
@@ -1027,11 +1028,9 @@ export function createApp(deps: ServerDeps) {
         .finally(() => { backendChecksAt = Date.now(); backendChecksPending = undefined; })
         .then((changed) => {
           if (!changed) return;
-          // Probe is settled; finish any cold snapshot, then refresh both transports separately.
-          void (async () => {
-            await healthInFlight?.catch(() => {});
-            await refreshHealth();
-          })().catch(() => {});
+          // Probe is settled; publish the new checks to both transports. Only availability changed:
+          // re-reading Git would spawn processes on this loop (hearsay-tools/squawk#3355).
+          void healthCache.patch((payload) => ({ ...payload, checks: backendChecks })).catch(() => {});
         });
     }
     return backendChecks;
@@ -1079,67 +1078,24 @@ export function createApp(deps: ServerDeps) {
       bootProject: workspace.bootProject,
     };
   };
-  // ---- server-side health cache (stale-while-revalidate) -------------------
-  // The snapshot still reads git and workspace state. Agent-CLI availability
-  // probes have their own nonblocking cache above. Paying that on the browser's FIRST `GET /api/health` is
-  // exactly the few-seconds-blank the cockpit showed at load. So on the live
-  // server the snapshot is computed at the server's OWN pace: both the GET and
-  // the WS `health` topic serve the cached value immediately and revalidate
-  // behind the response, and the cache is pre-warmed at boot so that first
-  // request lands on a warm value instead of the cold compute.
-  const HEALTH_TTL_MS = 5_000;
-  // The staleness CEILING, which is a different job from the TTL above. The TTL
-  // decides how often a revalidation is kicked off; on its own it bounds nothing,
-  // because the revalidation is fire-and-forget. While a cockpit holds the
-  // `health` topic the publisher's interval keeps the cache warm and the two are
-  // the same number — but the normal state of a background `hsq serve` is NO
-  // subscriber, and then nothing refreshes the cache at all: the next `GET
-  // /api/health`, an hour later, would answer with the boot pre-warm's payload
-  // and only the request AFTER it would see the truth. `repo.branch` going stale there is
-  // literally #369, so past this age correctness beats the latency win and the
-  // read waits for the compute. `refreshHealth` dedupes, so waiting costs one.
-  const HEALTH_MAX_STALE_MS = 60_000;
-  /** Whatever `healthSnapshot` actually returns — see the note there. */
-  type HealthPayload = Awaited<ReturnType<typeof healthSnapshot>>;
-  let healthCache: { at: number; payload: HealthPayload; body: string } | undefined;
-  let healthInFlight: Promise<HealthPayload> | undefined;
-  // Set while the topic has a subscriber; a change a refresh detects is pushed
-  // here (a noop when nobody is listening).
+  // Stale-while-revalidate cache over the snapshot; see health-cache.ts.
+  // Set while the topic has a subscriber (a noop when nobody is listening).
   let publishHealth: (data: unknown) => void = () => {};
-
-  const refreshHealth = (): Promise<HealthPayload> => {
-    // Dedupe: a GET's background revalidation and the topic's interval tick
-    // share ONE repository/workspace compute rather than racing two.
-    if (healthInFlight) return healthInFlight;
-    healthInFlight = (async () => {
-      try {
-        const payload = await healthSnapshot();
-        const body = JSON.stringify(payload);
-        const changed = body !== healthCache?.body;
-        healthCache = { at: Date.now(), payload, body };
-        if (changed) {
-          publishHealth(payload);
-          workspaceEvents.emit('health', payload);
-        } // only a real change reaches either transport
-        return payload;
-      } finally {
-        healthInFlight = undefined;
-      }
-    })();
-    return healthInFlight;
-  };
+  const healthCache = createHealthCache({
+    snapshot: healthSnapshot,
+    publish: (payload) => {
+      publishHealth(payload);
+      workspaceEvents.emit('health', payload);
+    },
+  });
+  const refreshHealth = () => healthCache.refresh();
 
   // The read the GET and the topic snapshot share. On the live server (a hub is
-  // injected) it answers from cache instantly and revalidates behind the
-  // response; without a hub — a bare app in tests — there is no refresher
-  // keeping a cache coherent, so it computes fresh, exactly as before.
-  const readHealth = async (): Promise<HealthPayload> => {
+  // injected) it answers from cache; without a hub — a bare app in tests — there is
+  // no refresher keeping a cache coherent, so it computes fresh, exactly as before.
+  const readHealth = async () => {
     if (!deps.socketHub) return healthSnapshot();
-    if (!healthCache) return refreshHealth(); // first ever: nothing to serve yet
-    const age = Date.now() - healthCache.at;
-    if (age > HEALTH_MAX_STALE_MS) return refreshHealth(); // too old to serve — wait for the truth
-    if (age > HEALTH_TTL_MS) void refreshHealth(); // stale: refresh, don't wait on it
-    return { ...healthCache.payload, capabilities: capabilities() }; // per request, like the gates (ADR 0055)
+    return healthCache.read((payload) => ({ ...payload, capabilities: capabilities() })); // per request, like the gates (ADR 0055)
   };
 
   // ---- chained family: health (workspace-level) ----------------------------
@@ -2000,6 +1956,12 @@ export function createApp(deps: ServerDeps) {
       const parsed = { data: c.req.valid('json') };
       const registered = await registerFolder(parsed.data.root, 'local');
       if (registered.status !== 200) return c.json(registered.body, registered.status);
+      if (registered.existing) {
+        // 409 with the EXISTING entry (spec): the dialog treats it as "you already have this one"
+        // and navigates there rather than dead-ending.
+        const { project } = registered.body;
+        return c.json({ project, error: `already registered as ${project.id}` }, 409);
+      }
       return c.json(registered.body, 200);
     })
 
@@ -2246,15 +2208,15 @@ export function createApp(deps: ServerDeps) {
           result.status,
         );
       }
+      // An existing entry for the same root (its folder had been deleted) is a success too: the
+      // project the user asked for is there (hearsay-tools/squawk#1086).
       const registered = await registerFolder(result.target, 'checkout');
       if (registered.status !== 200) {
         // The clone SUCCEEDED and its files are legitimately the user's, so this
         // path deliberately does NOT clean up — an unregisterable checkout is a
         // registry problem, not a reason to delete a repo we just fetched. Say
         // where it is so they can register it by hand.
-        const { body } = registered;
-        const error = 'error' in body && body.error ? body.error : 'could not register the checkout';
-        return c.json({ error: `${error} (the clone is at ${result.target})` }, registered.status);
+        return c.json({ error: `${registered.body.error} (the clone is at ${result.target})` }, registered.status);
       }
       return c.json(registered.body, 200);
     })
@@ -2307,23 +2269,16 @@ export function createApp(deps: ServerDeps) {
       }
       // GitHub-backed projects register as `checkout` (they have an origin the
       // clone flow would also produce); a local-only repo is `local`.
+      // A new entry, or the existing one for the same root — what creating a registered project
+      // whose folder had been deleted produces. Both are a success.
       const registered = await registerFolder(result.target, result.slug ? 'checkout' : 'local');
-      // A new entry (200), or the existing one for the same root (409 "already registered") — what
-      // creating a registered project whose folder had been deleted produces. The user asked for
-      // that project and it is there, so both are a success. (An if/else chain, not a helper:
-      // only narrowing `registered` keeps the error bodies out of the route's 200 type.)
-      let project: CreateProjectResponse['project'];
-      if (registered.status === 200) project = registered.body.project;
-      else if (registered.status === 409 && 'project' in registered.body) project = registered.body.project;
-      else {
+      if (registered.status !== 200) {
         // As with a clone: the repository is the user's now, so it stays — and a GitHub warning
         // rides along, since its finishing commands are the only record of what is left to do.
-        const { body } = registered;
-        const error = 'error' in body && body.error ? body.error : 'could not register the new project';
         const warning = result.warning ? `\n${result.warning}` : '';
-        return c.json({ error: `${error} (the project is at ${result.target})${warning}` }, registered.status);
+        return c.json({ error: `${registered.body.error} (the project is at ${result.target})${warning}` }, registered.status);
       }
-      const body: CreateProjectResponse = { project, ...(result.warning ? { warning: result.warning } : {}) };
+      const body: CreateProjectResponse = { project: registered.body.project, ...(result.warning ? { warning: result.warning } : {}) };
       return c.json(body, 200);
     });
 
@@ -2351,7 +2306,8 @@ export function createApp(deps: ServerDeps) {
    * The register-a-folder half of `POST /api/projects`, factored out so the
    * checkout route (step 4.3) commits its fresh clone through the SAME guards
    * and the same `project-added` emission rather than a second copy of them.
-   * Returns the status + body for the caller to answer with.
+   * A root the registry already holds is a success with `existing: true`; each
+   * route decides how to answer it.
    */
   const registerFolder = async (
     spelled: string,
@@ -2362,8 +2318,8 @@ export function createApp(deps: ServerDeps) {
     // `c.json(body, status)` type the route's 200 as carrying the ERROR bodies too, which is a
     // shape neither POST route can answer with (`contract-parity.workspace.test.ts` pins it).
     // Split here so the success branch narrows at the call site instead.
-    | { status: 200; body: RegisterProjectResponse }
-    | { status: 400 | 409 | 500; body: RegisterProjectResponse | { error: string } }
+    | { status: 200; body: RegisterProjectResponse; existing: boolean }
+    | { status: 400 | 500; body: { error: string } }
   > => {
     // `~` is expanded for the same reason `/api/fs/browse` expands it: the
     // dialog hands back absolute paths, but a hand-written body (curl, a
@@ -2452,18 +2408,10 @@ export function createApp(deps: ServerDeps) {
         body: { error: err instanceof Error ? err.message : String(err) },
       };
     }
-    if (known) {
-      // 409 with the EXISTING entry (spec): the dialog treats it as "you
-      // already have this one" and navigates there rather than dead-ending.
-      return {
-        status: 409,
-        body: { project, error: `already registered as ${project.id}` },
-      };
-    }
     // Only a genuinely new project is an event — a re-add is a no-op for every
     // open cockpit's sidebar.
-    workspaceEvents.emit('project-added', { project });
-    return { status: 200, body: { project } };
+    if (!known) workspaceEvents.emit('project-added', { project });
+    return { status: 200, body: { project }, existing: known };
   };
 
   // Deregister a project (multi-project spec, step 4.4 — Settings → Projects,
@@ -2692,19 +2640,15 @@ export function createApp(deps: ServerDeps) {
     .use('/ui-state', bodyLimit({ maxSize: UI_STATE_BODY_LIMIT }))
 
     .put('/ui-state', jsonZodValidator(uiStateBody), async (c) => {
-      const { root: repoRoot, dataDir } = c.get('project');
       // `.passthrough()` keeps unknown prefs, but a
       // single request may not stuff an unbounded key set (#429) — the shared
       // schema+cap half of both ui-state routes lives in `uiStateBody`.
-      const parsed = { data: c.req.valid('json') };
-      const merged = { ...(await readProjectUiState(repoRoot)), ...parsed.data };
+      const patch = c.req.valid('json');
       try {
-        await mkdir(dataDir, { recursive: true });
-        await writeProjectUiState(repoRoot, merged);
+        return c.json(await mergeWriteProjectUiState(c.get('project').root, (current) => ({ ...current, ...patch })));
       } catch (err) {
         return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
       }
-      return c.json(merged);
     });
 
   // ---- chained family: workflows (project-scoped) --------------------------

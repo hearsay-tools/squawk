@@ -2,14 +2,14 @@ import { projectPaths, readProjectPath } from './project-paths.ts';
 import { assertProjectWritable } from './project-fence.ts';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { normalizeSidebarLimits, type UiState } from '@open-mercato/cezar-contract/workspace';
 
 /**
  * `.ai/cezar/ui-state.json` — small GUI preferences the cockpit persists (files, not a DB).
- * The server owns the schema and the writes (`PUT /api/ui-state` in `src/server/server.ts`);
- * this is the shared read path, so the CLI can honour a preference the cockpit set (for example
+ * The server owns the schema (`PUT /api/ui-state` in `src/server/server.ts`); this module owns
+ * the one write path, `mergeWriteProjectUiState`, and the shared read path, so the CLI can honour a preference the cockpit set (for example
  * `disabledTeamSkills`) without a second notion of where the file lives.
  *
  * Same zero-config rule as `src/config.ts`: missing, unreadable or malformed all degrade to
@@ -60,13 +60,42 @@ export function readProjectUiStateSync(repoRoot: string): UiState {
   }
 }
 
+const pendingWrites = new Map<string, Promise<void>>();
+
+/**
+ * Read-modify-write for the project's file, one at a time per project root and in call order
+ * (hearsay-tools/squawk#1047): each call reads what the previous call wrote, so two overlapping
+ * writes keep both changes and the later call wins a shared key. The mutator may change its
+ * argument in place or return a replacement. Throws on a write failure.
+ */
+export function mergeWriteProjectUiState(
+  repoRoot: string,
+  mutator: (state: UiState) => UiState | void,
+): Promise<UiState> {
+  const key = resolve(repoRoot);
+  const write = (pendingWrites.get(key) ?? Promise.resolve()).then(async () => {
+    const current = await readProjectUiState(repoRoot);
+    const next = mutator(current) ?? current;
+    await writeProjectUiState(repoRoot, next);
+    return next;
+  });
+  const settled = write.then(() => undefined, () => undefined);
+  pendingWrites.set(key, settled);
+  void settled.then(() => {
+    if (pendingWrites.get(key) === settled) pendingWrites.delete(key);
+  });
+  return write;
+}
+
 /**
  * Replace the project's file in one step: write a sibling temporary file, then rename it over
  * the old one. A reader, the synchronous one included, sees the old file or the new one, never
  * a partial write it would read as `{}` and so as an empty team-skill off-list (#1494).
  */
-export async function writeProjectUiState(repoRoot: string, state: UiState): Promise<void> {
-  assertProjectWritable(projectPaths(repoRoot).write);
+async function writeProjectUiState(repoRoot: string, state: UiState): Promise<void> {
+  const dataDir = projectPaths(repoRoot).write;
+  assertProjectWritable(dataDir);
+  await mkdir(dataDir, { recursive: true });
   const file = uiStatePath(repoRoot);
   const temporary = `${file}.${randomUUID()}.tmp`;
   try {

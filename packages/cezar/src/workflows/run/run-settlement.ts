@@ -1,11 +1,13 @@
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { workerEvidenceRunIds } from '../../runs/worker-execution.ts';
-import { removeAgentTmpDir } from '../../runs/agent-tmpdir.ts';
+import { agentTmpDirLocations, removeAgentTmpDir } from '../../runs/agent-tmpdir.ts';
+import { jobRunsIn } from '../../jobs/job.ts';
 import { resolveWorktreeRetention } from '../../config.ts';
 import { reclaimWorktrees } from '../../runs/retention.ts';
 import type { PreviewHostLike } from '../../preview/registration.ts';
 import type { WorkerScratchCleanup } from '../../delegation/scratch-cleanup.ts';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { RunRecord, RunStore, StepState } from '../../runs/store.ts';
 import type { UiEventSink } from '../../runs/ui-event-sink.ts';
 import type { ActiveRun } from '../active-run.ts';
@@ -26,7 +28,6 @@ import type { HumanWaits } from './human-waits.ts';
 import type { WorkerQuestions } from './worker-questions.ts';
 import type { WorktreeAutosave } from './worktree-autosave.ts';
 import type { RunLine } from './run-line.ts';
-import type { TurnBookkeeper } from './turn-bookkeeping.ts';
 import type { AutoResumeScheduler } from './auto-resume.ts';
 import type { WorkerExecutions } from './worker-executions.ts';
 import { settledRunFamilies } from '../../delegation/conversations.ts';
@@ -53,12 +54,15 @@ interface RunSettlementHost {
   autosaveCleanupBlocker(id: string): string | undefined;
   claimWorktreeReclaim(id: string): (() => void) | null;
   preview: PreviewHostLike | undefined;
-  forgetMemoryPause(id: string): void;
+  /** Forget what the run's last execution held in `RunMemory`. */
+  forgetExecutionMemory(id: string): void;
+  /** Release the run's `RunMemory` slot when the run has ended (`runMemoryReleases`). */
+  releaseRunMemory(id: string): void;
 }
 export class RunSettlement {
   constructor(private readonly context: RunModuleContext, private readonly humanWaits: HumanWaits,
     private readonly workerQuestions: WorkerQuestions, private readonly worktreeAutosave: WorktreeAutosave,
-    private readonly turnBookkeeper: TurnBookkeeper, private readonly line: RunLine,
+    private readonly line: RunLine,
     private readonly autoResumeScheduler: AutoResumeScheduler, private readonly workerExecutions: WorkerExecutions,
     private readonly completionGateHost: completionGateReads.CompletionGateHost, private readonly host: RunSettlementHost,
     private readonly wakeSessionClosedError: string, private readonly wakeDeliveryCapNote: string) {}
@@ -71,6 +75,7 @@ export class RunSettlement {
       active: () => this.host.active.has(runId), starting: () => this.line.hasStarting(runId), queued: () => this.line.hasQueued(runId),
       claimed: () => this.host.hasClaim(runId), autosaveBlocker: () => this.host.autosaveCleanupBlocker(runId),
       privateWorkers: () => workerEvidenceRunIds(this.context.dataDir),
+      jobHolds: () => !!run && jobHoldsScratch(this.context.dataDir, runId, run),
     });
     if (disposition === 'keep') return;
     if (disposition === 'schedule') { this.host.workerScratchCleanup.schedule(runId); return; }
@@ -206,7 +211,7 @@ export class RunSettlement {
     if (delivery === 'park') {
       // No turn end will show a human wait this session registered (hearsay-tools/cezarion#1234).
       this.humanWaits.surfaceHumanWait(runId, state);
-      this.host.move(runId, 'park');
+      this.host.move(runId, 'park-closing-wakes');
       return;
     }
     this.context.store.updateStep(runId, stepId, { status: 'failed', error: this.wakeSessionClosedError, finishedAt: new Date().toISOString() });
@@ -293,7 +298,7 @@ export class RunSettlement {
       // settleSuccess only completes running/waiting steps, so its failure is durable.
       this.humanWaits.surfaceHumanWait(runId, state);
       this.context.store.appendEvent(runId, { type: 'step-end', stepId, status: 'failed' });
-      this.host.move(runId, 'park', { error: `continue failed: ${message}` });
+      this.host.move(runId, 'park-closing-wakes', { error: `continue failed: ${message}` });
       return;
     }
     if (this.autoResumeScheduler.holdFailure(runId, `continue failed: ${message}`)) return;
@@ -509,7 +514,8 @@ export class RunSettlement {
     this.context.store.flush();
   }
 
-  afterDropActive(runId: string): void {
+  /** What a closed session leaves to do on the run, also for a disposed manager's run. */
+  private afterSessionClosed(runId: string): void {
     // Open waits keep their watch or timer: their result reopens the run when it resolves. A
     // refusal queued for the closing session reopens it now (hearsay-tools/cezarion#1301).
     // A queued wake can pump before the usage-limit schedule. This is safe because
@@ -517,9 +523,22 @@ export class RunSettlement {
     if (!this.context.disposed() && (this.context.store.getRun(runId)?.waits?.length || completionGateReads.owesCompletionRefusal(this.context, this.completionGateHost, runId))) this.host.queueWaitWake(runId);
     if (!this.workerExecutions.has(runId) && this.context.store.getRun(runId)?.stopping) this.context.store.updateRun(runId, { stopping: undefined });
     this.republishFinishVerdict(runId);
-    this.host.forgetMemoryPause(runId);
-    this.turnBookkeeper.forget(runId);
-    this.line.clearForced(runId);
+    this.host.forgetExecutionMemory(runId);
+  }
+
+  /** Closed-session success may have parked a completion wait without a live wire. The global
+   *  pass covers the families still in memory (#779); this run's own family may have just left
+   *  the live set with it, so it is reconciled by name first. */
+  private reconcileSettledFamilies(runId: string): void {
+    const settled = this.context.store.getRun(runId);
+    if (!settled?.delegation) return;
+    for (const id of settledRunFamilies(this.context.store, settled)) this.host.reconcileWorkerWaits(id);
+    // Then every other family still in memory (hearsay-tools/cezarion#779).
+    this.host.reconcileWorkerWaits();
+  }
+
+  afterDropActive(runId: string): void {
+    this.afterSessionClosed(runId);
     if (this.host.isDisposedDelegatedRun(runId)) return; // teardown above, no autonomous durable side effects
     // The run's slot is gone from busySlots() as of the deletes above — hand it
     // to the workspace's oldest queued run, in ANY project. Every terminal path
@@ -534,15 +553,7 @@ export class RunSettlement {
     // left a window — measured as exactly one extra task — where the queue saw a free slot and
     // an account that looked healthy, and started work that was already doomed.
     this.autoResumeScheduler.armHeldResume(runId);
-    // Closed-session success may have parked a completion wait without a live wire. The global
-    // pass covers the families still in memory (#779); this run's own family may have just left
-    // the live set with it, so it is reconciled by name first.
-    const settled = this.context.store.getRun(runId);
-    if (settled?.delegation) {
-      for (const id of settledRunFamilies(this.context.store, settled)) this.host.reconcileWorkerWaits(id);
-      // Then every other family still in memory (hearsay-tools/cezarion#779).
-      this.host.reconcileWorkerWaits();
-    }
+    this.reconcileSettledFamilies(runId);
     this.host.releaseSlot();
     // A run leaving the active registry may have reached a terminal transition
     // (done/review/failed/cancelled), increasing the finished-worktree count.
@@ -551,7 +562,29 @@ export class RunSettlement {
     // the lifecycle.
     void this.enforceRetention();
     this.reapTerminalScratch(runId);
+    this.host.releaseRunMemory(runId);
   }
+}
+
+/** Names the task end whose reap kept the scratch for a running job. */
+const JOB_KEPT_FILE = '.hsq-job-kept';
+
+/**
+ * A job started with the default directory keeps the task's scratch past the end it was running at
+ * (hearsay-tools/squawk#3138). Every later reap of that same end keeps it too, even after the job
+ * exits: a read mark or another run event is not an end. The task's next end (a Continue clears
+ * `finishedAt`, and the end sets a new one), its archive or the startup sweep removes it once no
+ * job in it runs. Archive is a removal point, so an archived run's mark holds nothing: every archive
+ * path commits the run, and that event reaps.
+ */
+export function jobHoldsScratch(dataDir: string, runId: string, run: Pick<RunRecord, 'finishedAt' | 'archived'>): boolean {
+  const locations = agentTmpDirLocations(dataDir, runId), mark = run.finishedAt ?? '';
+  const kept = !run.archived && locations.some((dir) => { try { return readFileSync(join(dir, JOB_KEPT_FILE), 'utf8') === mark; } catch { return false; } });
+  if (kept) return true;
+  if (!jobRunsIn(locations)) return false;
+  // Without the mark the scratch still stays while the job runs; it goes at the first reap after.
+  for (const dir of locations) { try { writeFileSync(join(dir, JOB_KEPT_FILE), mark); } catch { /* not this location */ } }
+  return true;
 }
 
 export function sessionCloseKeepsWaiting(input: { readonly cancelled: boolean; readonly incomplete: boolean; readonly idleClosed: boolean | undefined }, workflowAsk: () => boolean): boolean {
@@ -560,11 +593,11 @@ export function sessionCloseKeepsWaiting(input: { readonly cancelled: boolean; r
 
 export function terminalScratchDisposition(runId: string, run: RunRecord | undefined, reads: {
   active(): boolean; starting(): boolean; queued(): boolean; claimed(): boolean;
-  autosaveBlocker(): string | undefined; privateWorkers(): string[] | undefined;
+  autosaveBlocker(): string | undefined; privateWorkers(): string[] | undefined; jobHolds(): boolean;
 }): 'keep' | 'schedule' | 'remove' {
   if (!run || ['queued', 'running', 'waiting'].includes(run.status)) return 'keep';
   if (reads.active() || reads.starting() || reads.queued() || reads.claimed() || !!reads.autosaveBlocker()) return 'keep';
   const privateWorkers = reads.privateWorkers();
   if (run.delegation?.role === 'worker' || run.delegation?.role === 'invalid' || !privateWorkers || privateWorkers.includes(runId)) return 'schedule';
-  return 'remove';
+  return reads.jobHolds() ? 'keep' : 'remove';
 }

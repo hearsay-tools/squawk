@@ -16,6 +16,7 @@ const CONTRACT = '@open-mercato/cezar-contract';
 const LOCAL_MODULES = [
   'packages/cezar/src/home/test-home-selector.testkit.ts',
   'packages/cezar/src/runs/run-exits.ts',
+  'packages/cezar/src/test-launch-guard.testkit.ts',
   'packages/cezar/src/test-outbound-guard.testkit.ts',
   'packages/cezar/vitest.setup.ts',
   'packages/contract/src/usage-limit-hold.ts',
@@ -24,7 +25,7 @@ const LOCAL_MODULES = [
   'scripts/test-install-marker.mjs',
   'scripts/test-sandbox.mjs',
 ];
-const PACKAGES = ['node:crypto', 'node:fs', 'node:module', 'node:net', 'node:os', 'node:path', 'node:url', 'vitest'];
+const PACKAGES = ['node:child_process', 'node:crypto', 'node:fs', 'node:module', 'node:net', 'node:os', 'node:path', 'node:url', 'vitest'];
 
 /** The repository file a specifier names, or undefined for a package the walk does not enter. */
 function resolveLocal(from: string, specifier: string): string | undefined {

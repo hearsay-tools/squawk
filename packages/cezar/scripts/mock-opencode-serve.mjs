@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import * as parityGateFs from 'node:fs';
 import { withoutSessionContextBody } from './mock-session-context.mjs';
+import { questionReplies } from './mock-opencode-questions.mjs';
 const { failureControl, delivery } = await loadControls({ delivery: ['reject', 'hold-ack', 'hold-response'] });
 let inputClosed = false;
 // Bundled dry-run mock of `opencode serve` — speaks just enough of the HTTP+SSE
@@ -185,31 +186,8 @@ async function lifecycle(call) {
 }
 const finishText = async (text) => text + await lifecycle((await tools()).DONE);
 
-/** Questions the runner can look up an id for. `replyQuestion`/`rejectQuestion`
- *  resolve the id through `GET /question` before answering (see
- *  `opencode-server-runner.ts`), so a native ask needs an entry here. */
-const pendingQuestions = [];
 let echoSerial = 0;
-let lateQuestionReply = false;
-let answerDone = false;
 
-/** The question tool arrives as a `tool` part whose state.input holds it —
- *  the shape `opencode-server-runner.test.ts`'s sendQuestion helper drives. */
-const sendQuestionPart = (input) =>
-  send({
-    type: 'message.part.updated',
-    properties: {
-      part: {
-        id: 'prt_mock_question',
-        messageID: MESSAGE_ID,
-        sessionID: SESSION_ID,
-        type: 'tool',
-        callID: 'call_mock_question',
-        tool: 'question',
-        state: { status: 'running', input },
-      },
-    },
-  });
 /** hearsay-tools/cezarion#1266: OpenCode 1.18.35 `permission.asked`. No `session.idle`
  *  follows: the asking tool waits until `POST /permission/{id}/reply` answers it. */
 const pendingPermissionAsks = new Set();
@@ -252,11 +230,12 @@ const info = (extra) => ({
   tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   ...extra,
 });
+const questions = questionReplies({ send, info, finishText, sessionId: () => SESSION_ID, messageId: MESSAGE_ID });
 
 let autonomousTurn = 0;
 let autonomousCap = false;
 const bodyRoutes = [
-  [(req, url) => req.method === 'POST' && /^\/question\/[^/]+\/(reply|reject)$/.test(url), replyToQuestion],
+  [(req, url) => req.method === 'POST' && /^\/question\/[^/]+\/(reply|reject)$/.test(url), questions.replyToQuestion],
   [(req, url) => req.method === 'POST' && /^\/permission\/([^/]+)\/reply$/.test(url), replyToPermission],
   [(req, url) => req.method === 'GET' && /^\/session\/([^/]+)$/.test(url), replyWithSession],
   [(req, url) => req.method === 'PATCH' && /^\/session\/([^/]+)$/.test(url), replyWithPatchedSession],
@@ -271,8 +250,7 @@ const nativeReplies = [
   [body => body.includes('mock:permission-late'), replyWithLatePermission],
   [body => body.includes('mock:permission-default'), replyWithDefaultPermission],
   [body => body.includes('mock:approval'), replyWithApproval],
-  [body => body.includes('mock:ask-bad'), replyWithMalformedAsk],
-  [body => body.includes('mock:ask'), replyWithAsk],
+  ...questions.promptRoutes,
 ];
 function matchesSessionPrompt(req, url) {
   const match = req.method === 'POST' && /^\/session\/([^/]+)\/(prompt_async|message)$/.exec(url);
@@ -291,7 +269,7 @@ function handleRequest(req, res) { wireRecorder?.recordHttpResponse(req, res);
   if (inputClosed && req.method === 'POST') { req.socket.destroy(); return; }
   if (req.method === 'GET' && url === '/question') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(pendingQuestions));
+    res.end(JSON.stringify(questions.pendingQuestions));
     return;
   }
   // Only user-written config, as the real server returns it: this user configured `bash: ask`,
@@ -421,24 +399,6 @@ function replyToPermission(req, res, url, body) {
   }, 30);
   return;
 }
-function replyToQuestion(req, res, url, body) {
-  // Native question reply resumes the held turn, then its own session.idle
-  // ends it (same SSE lifecycle shape as the baseline; never the HTTP ack).
-  const answered = pendingQuestions.some(question => question.id === 'q_mock_1');
-  pendingQuestions.length = 0;
-  if (answered && url.endsWith('/reply')) setTimeout(async () => {
-    const text = answerDone ? await finishText(`human answer: ${body}`) : `human answer: ${body}`;
-    send({ type: 'message.part.updated', properties: { part: {
-      id: 'prt_answer', messageID: MESSAGE_ID, sessionID: SESSION_ID, type: 'text', text,
-    } } });
-    // #505 review: CEZ_MOCK_OPENCODE_REPLY_HOLD_MS keeps the answered turn running.
-    setTimeout(() => send({ type: 'session.idle', properties: { sessionID: SESSION_ID } }), Number(process.env.CEZ_MOCK_OPENCODE_REPLY_HOLD_MS ?? 0));
-  }, 30);
-  const acknowledge = () => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}'); };
-  if (lateQuestionReply) setTimeout(acknowledge, 250);
-  else acknowledge();
-  return;
-}
 
 async function replyWithSubagent(body) {
   // Wire shape from `__fixtures__/opencode/subtask-nested.ndjson`: a
@@ -542,33 +502,7 @@ async function replyWithApproval(body) {
   sendPermissionAsk('per_mock_1', 'bash', ['git status --short'], ['git status *']);
   return;
 }
-async function replyWithMalformedAsk(body) {
-  // Malformed: `questions` is not an array, so the runner must REJECT the
-  // native question and finish the turn rather than wait for an answer to
-  // a card that can never render (#6's rejection path, harness parity R4).
-  send({ type: 'message.updated', properties: { info: info({}) } });
-  pendingQuestions.push({ id: 'q_mock_bad', sessionID: SESSION_ID });
-  sendQuestionPart({ questions: 'not-an-array' });
-  setTimeout(() => send({ type: 'session.idle', properties: { sessionID: SESSION_ID } }), 60);
-  return;
-}
-async function replyWithAsk(body) {
-  lateQuestionReply = body.includes('mock:ask-reply-late');
-  answerDone = body.includes('mock:ask-reply-late-cezar-done') || body.includes('mock:resume-cezar-done');
-  // The native question tool (#6). No `session.idle` follows: a real ask
-  // holds the turn open until the answer is routed back.
-  send({ type: 'message.updated', properties: { info: info({}) } });
-  pendingQuestions.push({ id: 'q_mock_1', sessionID: SESSION_ID });
-  sendQuestionPart({ questions: [{
-    header: 'Library',
-    question: 'Which test library?',
-    options: [
-      { label: 'Vitest', description: 'Use the existing test runner' },
-      { label: 'Node test', description: 'Use node:test' },
-    ],
-  }] });
-  return;
-}
+
 
 /** The turn's usage, then the session goes idle. */
 function sendUsageThenIdle() {

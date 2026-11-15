@@ -53,6 +53,7 @@ interface WaitRegistryHost {
 }
 
 export class WaitRegistry {
+  /** CI and timer registrations in flight, by wait key: keyed by wait, not by run (ADR 0061). */
   readonly ciRegistrations = new Map<string, { runId: string; abort: AbortController; promise: Promise<PrWaitEntry | TimerWaitEntry> }>();
   constructor(private readonly context: RunModuleContext, private readonly host: WaitRegistryHost, private readonly maxAutoContinues: number) {}
   abortRegistrations(runId: string): void {

@@ -10,6 +10,8 @@ interface MaintenanceClaimsHost {
 }
 
 export class MaintenanceClaims {
+  /** Kept here, not in `RunMemory`: cleanup evidence that outlives an execution. A claim lives
+   *  from its grant to the release callback its holder calls, so `dispose` keeps it. */
   readonly reclaiming = new Set<string>();
   constructor(private readonly context: RunModuleContext, private readonly host: MaintenanceClaimsHost) {}
   has(runId: string): boolean { return this.reclaiming.has(runId); }

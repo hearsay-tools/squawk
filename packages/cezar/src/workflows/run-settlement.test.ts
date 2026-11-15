@@ -234,9 +234,9 @@ describe('successful run settlement (#473)', () => {
     return new RunSettlement({ createRunner: noRunners, home: testHome(), store, repoRoot: root, dataDir: join(root, '.ai/cezar'),
       work: new TrackedWork(), semaphore: new WorkspaceSemaphore({ home: testHome() }), disposed: () => typeof disposed === 'function' ? disposed() : disposed },
       unused<Args[1]>('humanWaits'), unused<Args[2]>('workerQuestions'), unused<Args[3]>('autosave', asyncSuccess ? { autosaveCleanupBlocker: () => undefined } : {}),
-      unused<Args[4]>('bookkeeper'), unused<Args[5]>('line'), unused<Args[6]>('resume'),
-      unused<Args[7]>('workers'), unused<Args[8]>('completionGate'),
-      unused<Args[9]>('host', { active, generation: () => undefined,
+      unused<Args[4]>('line'), unused<Args[5]>('resume'),
+      unused<Args[6]>('workers'), unused<Args[7]>('completionGate'),
+      unused<Args[8]>('host', { active, generation: () => undefined,
         ...(asyncSuccess ? { deferParentCompletion: () => false } : {}) }), '', '');
   }
 

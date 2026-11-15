@@ -10,6 +10,8 @@ import { agentTmpDir, agentTmpDirMayExist, agentTmpEnv, removeAgentTmpDir } from
 import { manager, store, root, worker, reopenRuntime, useWorkerWaitFixture } from '../workflows/worker-wait-claude.testkit.ts';
 import { nonDumpableHolder, readableHolder } from './non-dumpable.testkit.ts';
 import { WorkerScratchCleanup } from './scratch-cleanup.ts';
+import { claimJob, jobPaths } from '../jobs/job.ts';
+import { processStartToken } from '../detached-process.ts';
 import { setRunStatus, readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 
 // os.tmpdir reads Node's original environment even after the workflow fixture replaces process.env.
@@ -39,6 +41,24 @@ describe('durable scratch cleanup evidence', () => {
     mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, 'keep'), 'durable');
     return { run, generation, dataDir, scratch };
   }
+
+  it('keeps worker scratch while a job recorded in it runs and removes it at the first check after the job ends', async () => {
+    const { run, dataDir, scratch } = await completed();
+    // A record naming this live process stands for a running supervisor (hearsay-tools/squawk#3138).
+    const exitFile = join(scratch, 'bench.1.exit');
+    const start = processStartToken(process.pid);
+    claimJob(jobPaths(scratch, 'bench'), { name: 'bench', pid: process.pid, ...(start === undefined ? {} : { start }), command: ['x'],
+      startedAt: new Date().toISOString(), log: join(scratch, 'bench.1.log'), exitFile });
+    const cleanup = new WorkerScratchCleanup(store, dataDir, () => false);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      cleanup.recover(); await vi.advanceTimersByTimeAsync(120_000);
+      expect(readFileSync(join(scratch, 'keep'), 'utf8')).toBe('durable');
+      writeFileSync(exitFile, '0\n');
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(existsSync(scratch)).toBe(false);
+    } finally { cleanup.pause(); vi.useRealTimers(); removeAgentTmpDir(dataDir, run.id); }
+  });
 
   it.runIf(process.platform === 'linux' && process.getuid?.() !== 0)('retains an unreadable old fallback owner and its pointer until ownership and the real holder clear', async () => {
     const priorTmpdir = process.env.TMPDIR;

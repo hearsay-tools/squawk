@@ -4,9 +4,16 @@ import type { RunRecord } from '../../runs/store.ts';
 import { createActiveRun } from '../active-run.ts';
 import { workerExecutionStopped } from './run-guards.ts';
 import { staleContinuationDisposition } from './continuation-session.ts';
-import { sessionCloseKeepsWaiting, terminalScratchDisposition } from './run-settlement.ts';
+import { jobHoldsScratch, sessionCloseKeepsWaiting, terminalScratchDisposition } from './run-settlement.ts';
 import { latchInputFault } from './input-delivery.ts';
 import { selectSessionFault } from './session-events.ts';
+import { randomUUID } from 'node:crypto';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { agentTmpDir } from '../../runs/agent-tmpdir.ts';
+import { claimJob, jobPaths } from '../../jobs/job.ts';
+import { processStartToken } from '../../detached-process.ts';
 
 function root(deleting = false): RunRecord {
   return makeRunRecord({ id: 'parent', delegation: { role: 'root', permissions: [], receipts: [], historyDeletion: deleting ? 'pending' : undefined } });
@@ -129,12 +136,13 @@ describe('selectSessionFault', () => {
   });
 });
 
-function scratchReads(calls: string[], stop?: string, evidence: () => string[] | undefined = () => []) {
+function scratchReads(calls: string[], stop?: string, evidence: () => string[] | undefined = () => [], job = false) {
   const flag = (name: string) => { calls.push(name); return name === stop; };
   return {
     active: () => flag('active'), starting: () => flag('starting'), queued: () => flag('queued'), claimed: () => flag('claimed'),
     autosaveBlocker: () => flag('autosave') ? 'saving' : undefined,
     privateWorkers: () => { calls.push('evidence'); return evidence(); },
+    jobHolds: () => { calls.push('job'); return job; },
   };
 }
 
@@ -149,7 +157,20 @@ describe('terminalScratchDisposition', () => {
     const run = makeRunRecord({ status });
     const calls: string[] = [];
     expect(terminalScratchDisposition(run.id, run, scratchReads(calls))).toBe('remove');
-    expect(calls).toEqual(['active', 'starting', 'queued', 'claimed', 'autosave', 'evidence']);
+    expect(calls).toEqual(['active', 'starting', 'queued', 'claimed', 'autosave', 'evidence', 'job']);
+  });
+
+  it('keeps unheld terminal scratch while a job recorded in it runs', () => {
+    const run = makeRunRecord({ status: RUN_STATUS.done });
+    const calls: string[] = [];
+    expect(terminalScratchDisposition(run.id, run, scratchReads(calls, undefined, () => [], true))).toBe('keep');
+    expect(calls.at(-1)).toBe('job');
+  });
+
+  it('schedules worker scratch without reading jobs: the deferred cleanup checks them', () => {
+    const calls: string[] = [];
+    expect(terminalScratchDisposition('lookup', worker(), scratchReads(calls, undefined, () => [], true))).toBe('schedule');
+    expect(calls).not.toContain('job');
   });
 
   it.each(['active', 'starting', 'queued', 'claimed', 'autosave'])('keeps scratch at the first %s hold', stop => {
@@ -173,5 +194,25 @@ describe('terminalScratchDisposition', () => {
     expect(calls.slice(0, 6)).toEqual(['active', 'starting', 'queued', 'claimed', 'autosave', 'evidence']);
     expect(calls[6]).toBe('delegation');
     expect(calls.filter(value => value === 'evidence')).toHaveLength(1);
+  });
+});
+
+describe('jobHoldsScratch', () => {
+  it('holds scratch for the end a job was running at, after the job exits, and not for a later end or an archive', () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'cez-job-hold-')), runId = randomUUID();
+    try {
+      const scratch = agentTmpDir(dataDir, runId), exitFile = join(scratch, 'bench.1.exit'), start = processStartToken(process.pid);
+      mkdirSync(scratch, { recursive: true });
+      expect(jobHoldsScratch(dataDir, runId, { finishedAt: 'end-1', archived: false })).toBe(false);
+      // A record naming this live process stands for a running supervisor.
+      claimJob(jobPaths(scratch, 'bench'), { name: 'bench', pid: process.pid, ...(start === undefined ? {} : { start }), command: ['x'],
+        startedAt: new Date().toISOString(), log: join(scratch, 'bench.1.log'), exitFile });
+      expect(jobHoldsScratch(dataDir, runId, { finishedAt: 'end-1', archived: false })).toBe(true);
+      writeFileSync(exitFile, '0\n');
+      expect(jobHoldsScratch(dataDir, runId, { finishedAt: 'end-1', archived: false })).toBe(true);
+      expect(jobHoldsScratch(dataDir, runId, { finishedAt: 'end-2', archived: false })).toBe(false);
+      // Archive is a removal point: the mark holds nothing once the run is archived.
+      expect(jobHoldsScratch(dataDir, runId, { finishedAt: 'end-1', archived: true })).toBe(false);
+    } finally { rmSync(dataDir, { recursive: true, force: true }); }
   });
 });

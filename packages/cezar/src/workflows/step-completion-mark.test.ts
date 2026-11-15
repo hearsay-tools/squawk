@@ -52,11 +52,11 @@ describe('step completion mark at settlement callers', () => {
     type SettlementArgs = ConstructorParameters<typeof RunSettlement>;
     settlement = new RunSettlement(context, unused<SettlementArgs[1]>('line'),
       unused<SettlementArgs[2]>('humanWaits', { supersedeWorkerFallback: vi.fn() }),
-      unused<SettlementArgs[3]>('autoResume'), unused<SettlementArgs[4]>('bookkeeper'),
-      unused<SettlementArgs[5]>('workerExecutions'), unused<SettlementArgs[6]>('workerQuestions'),
-      unused<SettlementArgs[7]>('subagentWaits'),
-      unused<SettlementArgs[8]>('gate', { active, holdsAgentWaits: () => false }),
-      unused<SettlementArgs[9]>('host', { move: (id, exit, patch) => store.move(id, exit, patch) }), '', '');
+      unused<SettlementArgs[3]>('autoResume'),
+      unused<SettlementArgs[4]>('workerExecutions'), unused<SettlementArgs[5]>('workerQuestions'),
+      unused<SettlementArgs[6]>('subagentWaits'),
+      unused<SettlementArgs[7]>('gate', { active, holdsAgentWaits: () => false }),
+      unused<SettlementArgs[8]>('host', { move: (id, exit, patch) => store.move(id, exit, patch) }), '', '');
     type LoopArgs = ConstructorParameters<typeof StepLoop>;
     stepLoop = new StepLoop(context,
       unused<LoopArgs[1]>('loopHost', { active, executionBlockedByRootFinish: () => false,

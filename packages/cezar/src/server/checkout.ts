@@ -1,8 +1,9 @@
 import { productEnv } from '../core/product-env.ts';
 import { isAbsoluteHostPath } from '../core/host-path.ts';
-import { execFile, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { lstat, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
+import { gitEnv, runGit } from '../git-command.ts';
 
 /**
  * Clone into one validated direct child of projectsDir. Reserve the directory with non-recursive
@@ -210,10 +211,7 @@ export const GH_CREDENTIAL_HELPER_CONFIG: readonly (readonly string[])[] = [
  * the same OAuth grant. */
 async function persistGhCredentialHelper(dir: string): Promise<boolean> {
   for (const args of GH_CREDENTIAL_HELPER_CONFIG) {
-    const ok = await new Promise<boolean>((resolvePromise) => {
-      execFile('git', ['-C', dir, 'config', '--local', ...args],
-        { timeout: 10_000 }, (err) => resolvePromise(!err));
-    });
+    const ok = await runGit(['-C', dir, 'config', '--local', ...args], { timeout: 10_000 }).then(() => true, () => false);
     if (!ok) return false;
   }
   return true;
@@ -236,7 +234,8 @@ export const ghCloneRunner: CloneRunner = (ref, dir, onLine, signal) =>
       // No inherited stdin and `GH_PROMPT_DISABLED`: an unauthenticated `gh`
       // must fail with a message the dialog can show, not block on a prompt
       // nobody can see.
-      env: { ...process.env, GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' },
+      // gh runs `git clone`, which would clone into an inherited GIT_DIR (hearsay-tools/squawk#3207).
+      env: gitEnv({ GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' }),
     });
     let settled = false;
     const finish = (result: { ok: true } | { ok: false; error: string; notFound?: boolean }): void => {

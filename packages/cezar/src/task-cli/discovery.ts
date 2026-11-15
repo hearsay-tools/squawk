@@ -1,7 +1,6 @@
 import { productIdentity } from '../home/identity.ts';
 import { productName } from '../home/display.ts';
 import { productEnv } from '../core/product-env.ts';
-import { execFile } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 import { capabilitiesSchema, healthResponseSchema } from '@open-mercato/cezar-contract/health';
@@ -11,6 +10,7 @@ import { capabilitiesSchema, healthResponseSchema } from '@open-mercato/cezar-co
 const cockpitHealthSchema = healthResponseSchema.extend({ capabilities: capabilitiesSchema.partial() });
 import { projectsResponseSchema } from '@open-mercato/cezar-contract/projects';
 import { fetchJson, TaskCliError, type Cockpit } from './http.ts';
+import { runGit } from '../git-command.ts';
 
 /**
  * Which cockpit serves this checkout (#504, spec 2026-09-24-cez-task-cli). Zero config: probe the
@@ -24,9 +24,7 @@ export const COCKPIT_PORTS: readonly number[] = Array.from({ length: 50 }, (_, i
 const PROBE_TIMEOUT_MS = 1_500;
 
 function git(cwd: string, args: string[], signal?: AbortSignal): Promise<string | undefined> {
-  return new Promise((done) => {
-    execFile('git', ['-C', cwd, ...args], { timeout: 5_000, ...(signal ? { signal } : {}) }, (error, stdout) => done(error ? undefined : stdout.trim()));
-  });
+  return runGit(['-C', cwd, ...args], { timeout: 5_000, ...(signal ? { signal } : {}) }).then(({ stdout }) => stdout.trim(), () => undefined);
 }
 
 async function realpathOr(path: string): Promise<string> {

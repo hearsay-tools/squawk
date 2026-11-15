@@ -11,12 +11,13 @@ import { RunFinish } from './run-finish.ts';
 import { handlePermissionResolved } from './session-events.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import * as completion from './completion-gate.ts';
+import { RunMemory } from './run-memory.ts';
 
 afterEach(() => vi.restoreAllMocks());
 
 it('memory pause writes cause and lifecycle before disabling autonomy and closing the session', async () => {
   const f = boundaryOrderFixture(true);
-  const guard = new MemoryGuard(f.context, { active: f.active });
+  const guard = new MemoryGuard(f.context, { active: f.active }, new RunMemory());
   await guard.enforceMemoryLimit({ [f.run.id]: { cpuPct: 0, rssBytes: 2 * 1024 * 1024, procCount: 1 } });
   expect(f.log).toEqual(['event:note', 'event:lifecycle', 'boundary:mode-disabled/disable', 'end']);
   expect(f.state.boundary.autonomous).toBe(false);

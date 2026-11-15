@@ -4,10 +4,44 @@
 const { readdirSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
 
+const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})/;
+const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})\s*$/;
+
+/** Return whether the line leaves an HTML comment open, given whether it starts inside one. */
+function endsInComment(line, inComment) {
+  let at = 0;
+  for (;;) {
+    const next = line.indexOf(inComment ? '-->' : '<!--', at);
+    if (next < 0) return inComment;
+    at = next + (inComment ? 3 : 4);
+    inComment = !inComment;
+  }
+}
+
+/** Return the first heading line that sits outside HTML comments and code fences, or -1. */
+function titleIndex(lines) {
+  let fence = null;
+  let inComment = false;
+  for (const [index, line] of lines.entries()) {
+    if (fence) {
+      const close = FENCE_CLOSE.exec(line);
+      if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = null;
+    } else if (inComment) {
+      inComment = endsInComment(line, true);
+    } else if (FENCE_OPEN.test(line)) {
+      fence = FENCE_OPEN.exec(line)[1];
+    } else {
+      inComment = endsInComment(line, false);
+      if (/^#\s+\S/.test(line)) return inComment ? -1 : index;
+    }
+  }
+  return -1;
+}
+
 /** Return whether the first heading has a valid status on the next line. */
 function hasValidStatus(source) {
   const lines = source.replace(/\r\n/g, '\n').split('\n');
-  const title = lines.findIndex((line) => /^#\s+\S/.test(line));
+  const title = titleIndex(lines);
   return title >= 0 && /^Status: (?:draft|active|done|superseded(?: by \S+\.md)?)$/.test(lines[title + 1] ?? '');
 }
 

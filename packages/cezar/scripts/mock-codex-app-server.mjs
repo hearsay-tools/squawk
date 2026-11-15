@@ -8,6 +8,7 @@ import { closeSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { appendFileSync } from 'node:fs';
 import { withoutSessionContextParts } from './mock-session-context.mjs';
+import { answersLibraryQuestion } from './mock-ask-answer.mjs';
 const { failureControl, delivery } = await loadControls({ delivery: ['reject', 'hold-ack', 'hold-response'] });
 // Bundled dry-run mock of `codex app-server` — speaks just enough JSON-RPC 2.0
 // JSONL (§3 of agent-event-protocols.md) for the runner wiring test in
@@ -279,6 +280,7 @@ const lateReplies = [
   [turnText => turnText.includes('mock:child-turn'), replyWithChildTurn],
   [turnText => /mock:mcp-approval(?:-(own|form|null-turn))?/.exec(turnText), replyWithMcpApproval],
   [turnText => turnText.includes('mock:approval'), replyWithApproval],
+  [turnText => turnText.includes('mock:resume-cezar-done') && answersLibraryQuestion(turnText), replyWithReopenedAnswer],
   [turnText => process.env.MOCK_CODEX_ASK === '1' || turnText.includes('mock:native-codex-ask'), replyWithAsk],
 ];
 
@@ -320,12 +322,22 @@ async function replyToAsk(msg) {
   const freeText = msg.result.answers?.first?.answers;
   if (resumeAfterAsk && Array.isArray(answer) && answer[0] === 'Vitest') {
     resumeAfterAsk = false;
-    const text = 'Implemented the choice.' + await lifecycle((await tools()).DONE);
-    emit({ method: 'item/started', params: { threadId: 'th_mock_1', turnId: 'turn_mock_1', item: { type: 'agentMessage', id: 'item_answer', text: '' } } });
-    emit({ method: 'item/agentMessage/delta', params: { threadId: 'th_mock_1', turnId: 'turn_mock_1', itemId: 'item_answer', delta: text } });
-    emit({ method: 'item/completed', params: { threadId: 'th_mock_1', turnId: 'turn_mock_1', item: { type: 'agentMessage', id: 'item_answer', text } } });
+    await emitImplementedChoice();
   }
   completeAskedTurn(answer, freeText);
+}
+
+async function emitImplementedChoice() {
+  const text = 'Implemented the choice.' + await lifecycle((await tools()).DONE);
+  emit({ method: 'item/started', params: { threadId: 'th_mock_1', turnId: 'turn_mock_1', item: { type: 'agentMessage', id: 'item_answer', text: '' } } });
+  emit({ method: 'item/agentMessage/delta', params: { threadId: 'th_mock_1', turnId: 'turn_mock_1', itemId: 'item_answer', delta: text } });
+  emit({ method: 'item/completed', params: { threadId: 'th_mock_1', turnId: 'turn_mock_1', item: { type: 'agentMessage', id: 'item_answer', text } } });
+}
+
+/** The answer to a question an idle close dropped opens the reopened session: no new ask. */
+async function replyWithReopenedAnswer() {
+  await emitImplementedChoice();
+  completeAskedTurn(['Vitest']);
 }
 
 function completeAskedTurn(answer, freeText) {

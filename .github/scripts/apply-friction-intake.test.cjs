@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { applyClassification } = require('./apply-friction-intake.cjs');
+const { applyClassification, ensureLabel } = require('./apply-friction-intake.cjs');
+const { LABELS } = require('./friction-policy.cjs');
 
 function harness(overrides = {}) {
   const issue = { number: 12, title: 'Show events', body: 'Print evidence.', state: 'open', labels: [{ name: 'friction' }, { name: 'area-cezar' }], ...overrides };
@@ -8,8 +9,9 @@ function harness(overrides = {}) {
   const mutations = [];
   const github = { rest: { issues: {
     get: async () => ({ data: structuredClone(issue) }),
-    getLabel: async () => ({}),
+    getLabel: async x => ({ data: { ...LABELS.find(l => l.name === x.name) } }),
     createLabel: async x => { mutations.push(['create', x.name]); },
+    updateLabel: async x => { mutations.push(['update', x.name]); },
     removeLabel: async x => { mutations.push(['remove', x.name]); issue.labels = issue.labels.filter(l => l.name !== x.name); },
     addLabels: async x => { mutations.push(['add', x.labels]); for (const name of x.labels) if (!issue.labels.some(l => l.name === name)) issue.labels.push({ name }); },
   } } };
@@ -75,10 +77,59 @@ test('creates a missing managed label but propagates authentication errors', asy
   assert.deepEqual(denied.mutations, []);
 });
 
+function labelApi(live) {
+  const calls = [];
+  const repo = { owner: 'hearsay-tools', repo: 'cezarion' };
+  const github = { rest: { issues: {
+    getLabel: async () => ({ data: live }),
+    createLabel: async x => { calls.push(['create', x]); },
+    updateLabel: async x => { calls.push(['update', x]); },
+  } } };
+  return { calls, repo, github };
+}
+
+test('updates an existing managed label whose description or color drifted from the policy', async () => {
+  const design = LABELS.find(l => l.name === 'friction-design');
+  for (const live of [
+    { name: design.name, color: design.color, description: 'Investigate and propose behavior; await design approval before product implementation.' },
+    { name: design.name, color: '000000', description: design.description },
+  ]) {
+    const { calls, repo, github } = labelApi(live);
+    await ensureLabel(github, repo, design);
+    assert.deepEqual(calls, [['update', { ...repo, name: design.name, color: design.color, description: design.description }]]);
+  }
+});
+
+test('leaves a managed label alone when it differs only by trimmed space or color case', async () => {
+  const regression = LABELS.find(l => l.name === 'friction-regression');
+  const live = { name: regression.name, color: regression.color.toLowerCase(), description: regression.description.trim().slice(0, 100) };
+  const { calls, repo, github } = labelApi(live);
+  await ensureLabel(github, repo, { ...regression, description: `${regression.description} ` });
+  assert.deepEqual(calls, []);
+});
+
+test('compares and writes a long description cut to 100 characters', async () => {
+  const label = { name: 'friction-long', color: 'ABCDEF', description: `${'x'.repeat(99)}yz` };
+  const synced = labelApi({ name: label.name, color: 'abcdef', description: `${'x'.repeat(99)}y` });
+  await ensureLabel(synced.github, synced.repo, label);
+  assert.deepEqual(synced.calls, []);
+  const drifted = labelApi({ name: label.name, color: 'abcdef', description: 'short' });
+  await ensureLabel(drifted.github, drifted.repo, label);
+  assert.equal(drifted.calls[0][1].description, `${'x'.repeat(99)}y`);
+});
+
+test('propagates an error from updating a drifted label', async () => {
+  const design = LABELS.find(l => l.name === 'friction-design');
+  const { repo, github } = labelApi({ name: design.name, color: '000000', description: design.description });
+  github.rest.issues.updateLabel = async () => { throw Object.assign(new Error('forbidden'), { status: 403 }); };
+  await assert.rejects(ensureLabel(github, repo, design), /forbidden/);
+});
+
 test('rechecks eligibility and snapshot after remote label setup before mutations', async () => {
   for (const change of [issue => { issue.body = 'Different remedy'; }, issue => { issue.state = 'closed'; }, issue => { issue.labels = [{ name: 'area-cezar' }]; }]) {
     const h = harness();
-    h.github.rest.issues.getLabel = async () => { change(h.issue); };
+    const getLabel = h.github.rest.issues.getLabel;
+    h.github.rest.issues.getLabel = async x => { change(h.issue); return getLabel(x); };
     assert.equal((await h.run()).status, 'stale');
     assert.deepEqual(h.mutations, []);
   }

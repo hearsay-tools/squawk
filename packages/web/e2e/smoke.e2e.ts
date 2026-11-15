@@ -2,7 +2,7 @@ import { normalizeColorSample } from './contrast'
 import { resolve } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { waitForSettledSample } from './visual-ready'
+import { visibilitySampleExpression, waitForSettledSample } from './visual-ready'
 import { AgentBrowser, bootProjectId, readTestEnv } from './agent-browser'
 import { readSharedProjects, writeSharedProjects } from './workspace-registry'
 
@@ -141,7 +141,7 @@ describe('cockpit app shell', () => {
   it('renders the sidebar brand and the whole nav', () => {
     browser.goto(baseUrl + scoped('/'))
 
-    expect(browser.isVisible('[data-slot="sidebar"]')).toBe(true)
+    expect(browser.waitForValue(visibilitySampleExpression('[data-slot="sidebar"]'), (visible: boolean | null) => visible === true)).toBe(true)
     expect(browser.isVisible('[data-slot="project-header-name"]')).toBe(true)
     browser.waitForFunction(`document.querySelector('[data-slot="sidebar"] nav[aria-label="Main"]') !== null`)
     expect(browser.evaluate(`document.querySelector('[data-slot="sidebar"] nav[aria-label="Main"]').textContent`)).toContain('Tasks')
@@ -420,7 +420,7 @@ describe('mobile shell', () => {
   it('hides the sidebar and shows the top bar at an iPhone viewport', () => {
     browser.goto(baseUrl + scoped('/'))
 
-    expect(browser.isVisible('[data-slot="sidebar"]')).toBe(false)
+    expect(browser.waitForValue(visibilitySampleExpression('[data-slot="sidebar"]'), (visible: boolean | null) => visible === false)).toBe(false)
     expect(browser.isVisible('[data-slot="mobile-top-bar"]')).toBe(true)
     expect(browser.text('[data-slot="mobile-top-bar"]')).toContain('Tasks')
 
@@ -474,8 +474,12 @@ describe('mobile shell', () => {
 
     it('opens over a backdrop, and covers the viewport top to bottom', () => {
       browser.goto(baseUrl + scoped('/'))
-      // Closed means unmounted, not merely hidden — hence count rather than isVisible.
-      expect(browser.count(DRAWER)).toBe(0)
+      // Closed means unmounted, not merely hidden — hence count rather than isVisible. Count once
+      // the shell's top bar has mounted, so the sample is of the rendered page.
+      expect(browser.waitForValue(
+        `document.querySelector('[data-slot="mobile-top-bar"]') ? document.querySelectorAll('${DRAWER}').length : null`,
+        (drawers: number | null) => drawers !== null,
+      )).toBe(0)
 
       openDrawer()
       expect(browser.isVisible(DRAWER)).toBe(true)
@@ -605,7 +609,7 @@ describe('mobile shell', () => {
       try {
         browser.goto(baseUrl + scoped('/'))
         // The trigger is `md:hidden`, so there is no way in — and the real sidebar is the nav.
-        expect(browser.isVisible('[data-slot="mobile-top-bar"]')).toBe(false)
+        expect(browser.waitForValue(visibilitySampleExpression('[data-slot="mobile-top-bar"]'), (visible: boolean | null) => visible === false)).toBe(false)
         expect(browser.count(DRAWER)).toBe(0)
         expect(browser.isVisible('[data-slot="sidebar"]')).toBe(true)
       } finally {
