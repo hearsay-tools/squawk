@@ -38,8 +38,9 @@ export interface RunnerFacts {
   /**
    * How long a human prompt on its way to the wire holds agent input back. `none`: agent input is
    * never refused for a human prompt. `consumption`: the hold ends when the wire reports the prompt
-   * read, or at its acknowledgement if that comes first. `acknowledgement`: the hold ends only at
-   * the prompt's acknowledgement. `turn-end`: the hold ends when the turn the prompt opened ends.
+   * read; a prompt that starts a turn is also released by that start's acknowledgement, and a prompt
+   * steered into a running turn by the turn's end. `acknowledgement`: the hold ends only at the
+   * prompt's acknowledgement. `turn-end`: the hold ends when the turn the prompt opened ends.
    */
   readonly humanPromptHold: 'none' | 'consumption' | 'acknowledgement' | 'turn-end';
   /**
