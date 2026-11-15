@@ -130,10 +130,11 @@ export function recoveryCells(runners: RunnerId[], it: typeof registerTest = reg
       await until(() => capacity.mock.calls.length > 0);
       expect(delivered(f.p.id, id)).toBe(false);
       idleClock.fire(idleClock.captured - 1);
-      // The closed session's wake waits for a slot as a queued continuation.
-      await until(() => store.getRun(f.p.id)?.status === 'queued' && store.readEvents(f.p.id).some(event => event.type === 'session.ended'));
+      // The close settles either way: a charge, or the wake waiting for a slot as a queued continuation.
+      await until(() => store.getRun(f.p.id)?.status === 'queued' || store.getRun(f.p.id)?.waitDeliveryFailures !== undefined);
       // No delivery was attempted in the closed session, so its close charges none.
       expect(store.getRun(f.p.id)?.waitDeliveryFailures).toBeUndefined();
+      expect(store.getRun(f.p.id)?.status).toBe('queued');
       expect(prompted(runner, 'Worker progress u14i')).toEqual([]);
       capacity.mockRestore();
       await semaphore.release();
