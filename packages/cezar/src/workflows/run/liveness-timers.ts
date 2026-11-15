@@ -27,6 +27,8 @@ export const LIVENESS_BOUNDS = {
   'auto-resume': { scope: 'run' },
   /** The grace after the last native subagent ended (`SubagentWaits.armGrace`). */
   'subagent-grace': { scope: 'execution' },
+  /** A native ask's hold for its live native subagents, moved by each child event (`SubagentWaits.boundNativeAskHold`, hearsay-tools/squawk#2701). */
+  'subagent-ask-hold': { scope: 'execution' },
   /** The retry of a stopped child's transcript end, after its session is gone (`SubagentWaits.armRetry`). */
   'subagent-retry': { scope: 'run' },
   /** The earliest inbox claim expiry (`InboxClaims.armInboxClaimExpiry`). */
