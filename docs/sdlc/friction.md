@@ -227,8 +227,9 @@ The action warns and can be rerun after the failure is resolved.
 
 Classification has read-only issue permissions. A separate apply job has issue
 write permission without the TypeSafe credential. It re-fetches current state,
-rejects stale title/body snapshots, skips PRs, creates missing labels, removes
-obsolete managed labels, and adds the category/handling pair. Unrelated labels
+rejects stale title/body snapshots, skips PRs, creates missing labels, updates the
+color and description of a managed label that differs from `friction-policy.cjs`,
+removes obsolete managed labels, and adds the category/handling pair. Unrelated labels
 survive. A second freshness check follows label setup. GitHub offers no atomic
 conditional label mutation, so the task must still verify current scope.
 Ordinary issue intake keeps duplicate detection and general labeling, but receives
