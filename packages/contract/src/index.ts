@@ -47,6 +47,7 @@ export * from './workspace-events.ts';
 
 export * from './permissions.ts';
 export * from './defined.ts';
+export * from './own-lookup.ts';
 export * from './tool-display.ts';
 export * from './version.ts';
 export * from './active-provider.ts';
