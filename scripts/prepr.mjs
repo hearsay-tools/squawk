@@ -161,17 +161,18 @@ export function patchLimitLines(base, io = realIo) {
   let added = 0;
   let deleted = 0;
   const refused = [];
-  for (const { added: a, deleted: d, paths, facts } of rows) {
+  for (const { added: a, deleted: d, paths, facts, status } of rows) {
     if (a === '-') continue;
     added += Number(a);
     deleted += Number(d);
+    if (status === 'D' && a === '0' && !facts.nul) continue;
     const cause = facts.nul ? 'its diff contains a NUL byte'
       : facts.bytes > limit ? `its diff is ${facts.bytes} bytes, over GitHub's ${limit}-byte per-file patch limit` : '';
     if (cause) refused.push(entry(false, `patch limits: ${JSON.stringify(paths.at(-1))}: ${cause}, so GitHub returns no patch and the PR gate fails. Split the change.`));
   }
   const total = `${added + deleted} changed lines (+${added}/-${deleted}) in ${rows.length} file${rows.length === 1 ? '' : 's'}`;
   if (refused.length) return [...refused, entry(false, `patch limits: ${refused.length} of ${rows.length} file diffs refused; ${total}`)];
-  return [entry(true, `patch limits: every file diff is at most ${limit} bytes with no NUL byte; ${total}`)];
+  return [entry(true, `patch limits: every non-deletion file diff is at most ${limit} bytes with no NUL byte; ${total}`)];
 }
 
 function changedFiles(base, io) {

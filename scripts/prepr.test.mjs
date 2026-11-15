@@ -250,7 +250,7 @@ test('patch limits pass under the bound and print the total changed lines', asyn
   const [line, ...rest] = patchLimitLines('main', io);
   assert.deepEqual(rest, []);
   assert.equal(line.ok, true);
-  assert.match(line.text, new RegExp(`pass: patch limits: every file diff is at most ${GITHUB_PATCH_LIMITS.fileBytes} bytes with no NUL byte; 1001 changed lines \\(\\+1001/-0\\) in 2 files`));
+  assert.match(line.text, new RegExp(`pass: patch limits: every non-deletion file diff is at most ${GITHUB_PATCH_LIMITS.fileBytes} bytes with no NUL byte; 1001 changed lines \\(\\+1001/-0\\) in 2 files`));
 });
 
 test('prepr fails on a patch-limit refusal', async () => {
@@ -348,3 +348,33 @@ test('patch limits read a type change, which Git writes as two patch blocks for 
   assert.equal(line.ok, true, line.text);
   assert.match(line.text, /3 changed lines \(\+2\/-1\) in 2 files/);
 });
+
+for (const change of ['removed', 'modified', 'readded', 'renamed', 'deletion-only', 'removed-nul']) {
+  test(`patch limits preserve the rule for oversized ${change} files`, t => {
+    const large = LINE.repeat(Math.ceil(GITHUB_PATCH_LIMITS.fileBytes / 100) + 10);
+    const io = fixtureRepo(t, (cwd, git) => {
+      const file = path.join(cwd, 'large.txt');
+      if (change === 'removed' || change === 'removed-nul') fs.unlinkSync(file);
+      if (change === 'deletion-only') fs.writeFileSync(file, LINE);
+      if (change === 'modified') fs.writeFileSync(file, 'changed\n'.repeat(20000));
+      if (change === 'readded') {
+        fs.unlinkSync(file);
+        git.git('add', '--all');
+        git.git('commit', '-m', 'delete');
+        fs.writeFileSync(file, 'replacement\n'.repeat(20000));
+      }
+      if (change === 'renamed') {
+        fs.renameSync(file, path.join(cwd, 'renamed.txt'));
+        fs.appendFileSync(path.join(cwd, 'renamed.txt'), large.repeat(2));
+      }
+    }, cwd => fs.writeFileSync(path.join(cwd, 'large.txt'),
+      change === 'renamed' ? large.repeat(4) : change === 'removed-nul' ? large + '\0\n' : large));
+    if (change === 'deletion-only') {
+      assert.match(io.git('diff', '--name-status', 'main', 'HEAD'), /^M/m);
+      assert.match(io.git('diff', '--numstat', 'main', 'HEAD'), /^0\t/m);
+    }
+    if (change === 'renamed') assert.match(io.git('diff', '--name-status', '--find-renames', 'main', 'HEAD'), /^R/m);
+    const lines = patchLimitLines('main', io);
+    assert.equal(lines.every(line => line.ok), change === 'removed', lines.map(line => line.text).join('\n'));
+  });
+}

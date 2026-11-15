@@ -34,6 +34,7 @@ changed lines:
 `npm run prepr` (§ Before the PR) refuses the first two cases on the committed branch, so
 a split happens before the push. Split a file's change across PRs, or generate large data
 at test time.
+Pure whole-file deletions (removed files with no additions) are exempt from the per-file size and missing-patch checks because no content remains to review. NUL-byte diffs, incomplete file lists, replacements and edited renames keep the existing rules.
 
 Main PRs start heavy verification (unit tests, build/package, Vitest and browser shards)
 as soon as their queue proof, change classification and immutable PR inputs are ready.
