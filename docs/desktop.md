@@ -271,3 +271,13 @@ Repeat with an unwritable destination and with the new app prevented from
 starting; the old app and signed-in profile must remain usable. Record the
 macOS version, artifact head SHA and results. No macOS smoke result is claimed
 from a Linux workstation.
+
+## Desktop app
+
+Squawk Desktop is a Tauri 2 app for macOS, Windows and Linux. Start a local cockpit
+or connect to a remote HTTPS cockpit (loopback HTTP supports SSH tunnels). Remote
+windows have no native command permissions and need no local Node or agent install.
+Local mode needs Node.js 24.21.0+ and npm, then installs `@hearsay-tools/squawk` on first use.
+
+See [desktop installation, development and testing](desktop.md). PR builds
+provide test installers; public releases require platform signing and notarization.
