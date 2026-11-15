@@ -39,6 +39,9 @@
 #   2026-11-15 start the app with --port 0 and read its URL from the "cockpit →" line it
 #             prints once it listens. A port probed here and bound later by the app could be
 #             taken in between by another listen(0) on the host (EADDRINUSE under load).
+#   2026-11-15 a boot that ends after starting the app and before writing its descriptor, by an
+#             error or by SIGINT/SIGTERM, stops that app: nothing else could name it. INT and TERM
+#             now end the boot; before, their trap released the lock and the boot went on.
 set -eu
 
 # ---- project-specific parameters -------------------------------------------
@@ -219,7 +222,19 @@ BROWSER_PIN=$(printf '%s' "$INPUTS" | json_get - agentBrowserVersion)
 # "source newer than startedAt" test is what keeps a stale build from being tested.
 LOCK_HELD=0
 release_lock() { [ "$LOCK_HELD" = 1 ] && rm -rf "$LOCK_DIR" 2>/dev/null || true; }
-trap release_lock EXIT INT TERM
+# 1 from the app's start until its descriptor is written: a boot that ends in between, by an
+# error or a signal, stops the app, since no descriptor names it for test-env-down.sh.
+APP_UNRECORDED=0
+stop_unrecorded_app() {
+  [ "$APP_UNRECORDED" = 1 ] || return 0
+  APP_UNRECORDED=0
+  log "stopping the app this boot started (pid $APP_PID): the boot ended before recording it"
+  node "$SCRIPT_DIR/test-env-lease.mjs" stop-app 1000 "$APP_PID" "$APP_START" >&2 || true
+}
+on_exit() { stop_unrecorded_app; release_lock; }
+trap on_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 acquire_lock() {
   waited=0
@@ -626,6 +641,7 @@ start_app() {
     "$E2E_BUILD_ROOT/dist/index.js" --port 0 --no-open --repo "$SERVED_ROOT")
   APP_PID=$(printf '%s' "$APP" | json_get - pid)
   APP_START=$(printf '%s' "$APP" | json_get - start)
+  APP_UNRECORDED=1
 
   health_started=$(date +%s)
   health_deadline=$((health_started + HEALTH_TIMEOUT))
@@ -662,7 +678,7 @@ start_app() {
   done
   log "health wait timed out after $((health_now - health_started))s — see .ai/qa/test-env-app.log"
   tail -20 "$APP_LOG" >&2 || true
-  node "$SCRIPT_DIR/test-env-lease.mjs" stop-app 1000 "$APP_PID" "$APP_START" || true
+  stop_unrecorded_app
   exit 1
 }
 
@@ -727,4 +743,5 @@ ensure_build
 prepare_served_repo
 start_app
 write_descriptor
+APP_UNRECORDED=0
 emit 0
