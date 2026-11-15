@@ -72,7 +72,7 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$
 function siteCopy(content: string, from: string, to: string): string {
   const pattern = new RegExp(`(auth_basic_user_file\\s+)${escapeRegExp(from)}(\\s*;)`, 'g');
   if (!pattern.test(content)) throw new Error(`The site does not read ${from}`);
-  return content.replace(pattern, `$1${to}$2`);
+  return content.replace(pattern, (_, before: string, after: string) => `${before}${to}${after}`);
 }
 
 function recordedArtifact(ctx: InstallContext, type: string, path: string): StepArtifact {

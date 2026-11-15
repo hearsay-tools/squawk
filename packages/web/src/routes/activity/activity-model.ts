@@ -1,4 +1,5 @@
 import type { ActivityProject, ActivityRequest, ActivityRun } from '@open-mercato/cezar-api-client/contract/activity'
+import { rungNeedsYou } from '@/lib/attention'
 
 import { counter, since } from './activity-format'
 import { isLiveStatus } from './now-box'
@@ -155,14 +156,13 @@ export interface ActivitySummary {
   inReview: number
 }
 
-const NEEDS_YOU = new Set(['needs-you', 'needs-permission'])
 const QUEUED = new Set(['queued', 'waiting-for-capacity'])
 
 function bucketOf(task: ActivityRun): keyof Pick<ActivitySummary, 'needsYou' | 'working' | 'waiting' | 'queued'> | undefined {
   // A retained root (review, failed, done, cancelled with a live worker) is on the view for its
   // workers; it is none of the four.
   if (!isLiveStatus(task.status)) return undefined
-  if (NEEDS_YOU.has(task.rung)) return 'needsYou'
+  if (rungNeedsYou(task.rung)) return 'needsYou'
   if (task.rung === 'running') return 'working'
   if (QUEUED.has(task.rung)) return 'queued'
   return 'waiting'

@@ -10,7 +10,7 @@ import { processStartToken, startAndForget } from '../detached-process.ts';
 import { probeProcessWait } from '../process-wait/supervisor.ts';
 import { runJobCommand } from './cli.ts';
 import { jobInstructions, ownCommand } from './command.ts';
-import { claimJob, jobPaths, jobStatus, startJob, superviseJob } from './job.ts';
+import { claimJob, jobPaths, jobRunsIn, jobStatus, startJob, superviseJob } from './job.ts';
 
 const run = promisify(execFile);
 const dirs: string[] = [];
@@ -100,7 +100,7 @@ it('the supervisor records itself, writes the output and the exit code, and leav
   expect(jobStatus(dir, 'inline')).toMatchObject({ state: 'exited', exitCode: 4 });
   expect(await superviseJob(dir, 'killed', node("process.kill(process.pid,'SIGKILL')"))).toBe(137);
   expect(await superviseJob(dir, 'absent', [join(dir, 'no-such-binary')])).toBe(127);
-  // Squawk removes a task's temp directory when the task ends: the supervisor still ends with the code.
+  // Deleting a task's history removes its temp directory: the supervisor still ends with the code.
   const gone = join(dir, 'gone');
   mkdirSync(gone);
   expect(await superviseJob(gone, 'late', node(`require('fs').rmSync(${JSON.stringify(gone)},{recursive:true});process.exit(2)`))).toBe(2);
@@ -118,6 +118,22 @@ it('status reads a record whose supervisor is gone and left no exit file as exit
   const status = jobStatus(dir, 'lost');
   expect(status).toMatchObject({ state: 'exited' });
   expect(status).not.toHaveProperty('exitCode');
+});
+
+it.runIf(posix)('a directory holds a running job while a record names a live supervisor with no exit code, or cannot be read', () => {
+  const [empty, ended, live, damaged] = [scratch(), scratch(), scratch(), scratch()];
+  writeFileSync(join(empty, 'notes.db'), 'not a record');
+  expect(jobRunsIn([empty, join(empty, 'absent')])).toBe(false);
+  claimJob(jobPaths(ended, 'gone'), dead(ended, 'gone'));
+  const finished = self(ended, 'done');
+  claimJob(jobPaths(ended, 'done'), finished);
+  writeFileSync(finished.exitFile, '0\n');
+  expect(jobRunsIn([ended])).toBe(false);
+  claimJob(jobPaths(live, 'bench'), self(live, 'bench'));
+  expect(jobRunsIn([ended, live])).toBe(true);
+  // It may belong to a supervisor that still runs.
+  writeFileSync(join(damaged, 'bench.job.db'), 'damaged');
+  expect(jobRunsIn([damaged])).toBe(true);
 });
 
 it.runIf(posix)('a claim is refused while the holder runs, and taken from a holder that is gone or has written its exit file', () => {

@@ -323,7 +323,8 @@ verification, not evidence that the complete browser gate passed.
 
 Runs in the same checkout share one test environment. The wrapper and direct
 Vitest/Squeal browser runs hold an exclusive lease through bootstrap, specs and
-registry restoration. Another run, standalone bootstrap or shutdown waits up to
+registry restoration. A direct Vitest run takes the lease when the test run starts
+and releases it when that run ends, not when the process that hosts it exits. Another run, standalone bootstrap or shutdown waits up to
 300 seconds, then fails without changing the active environment. `--force` does
 not bypass a holder. Exited holders are reclaimed using PID and process-start
 identity. A surviving build or clone child keeps its command group protected;

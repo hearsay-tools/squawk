@@ -58,9 +58,14 @@ try {
   let end;
   let warming;
   const samples = [];
-  while (end === undefined) {
+  const pauseMs = 5;
+  // Each sample after the first also covers the pause before its request, so blocking
+  // between requests is measured too; blockingBudget subtracts the planned pause.
+  let pauseStart;
+  for (;;) {
+    const measurementStart = pauseStart ?? timingSnapshot();
+    const plannedMs = pauseStart ? pauseMs : 0;
     const requestStart = performance.now();
-    const measurementStart = timingSnapshot();
     const pendingResponse = fetch(endpoint, { signal: AbortSignal.timeout(2_000) });
     // The first request includes synchronous project-open work too.
     if (!store) {
@@ -73,13 +78,15 @@ try {
     const requestEnd = performance.now();
     // Include EVERY request begun while cold warm-up was active, even one ending after it.
     const measurement = timingDelta(measurementStart, timingSnapshot());
-    samples.push({ startMs: requestStart - start, endMs: requestEnd - start, latencyMs: requestEnd - requestStart,
-      ...measurement, ...blockingBudget(measurement) });
-    await delay(5);
+    samples.push({ fromMs: measurementStart.at - start, startMs: requestStart - start, endMs: requestEnd - start,
+      latencyMs: requestEnd - requestStart, plannedMs, ...measurement, ...blockingBudget(measurement, plannedMs) });
+    if (end !== undefined) break;
+    pauseStart = timingSnapshot();
+    await delay(pauseMs);
   }
   await warming;
   assert.ok(samples.length > 0, 'health requests must overlap cold warming');
-  assert.ok(samples.every(sample => sample.startMs < end - start && sample.endMs > 0));
+  assert.ok(samples.every(sample => sample.fromMs < end - start && sample.endMs > 0));
   const result = { kind: 'transcript-facts-http-health', runtime: runtime.url.href,
     endpoint: '/api/v1/health', scenario: 'already-listening server during cold project open', primingLatencyMs,
     ...verifyFacts(dataDir, fixtures, store), durationMs: end - start,

@@ -1,4 +1,4 @@
-import { ATTENTION_RANK, deriveAttention } from './attention'
+import { ATTENTION_RANK, deriveAttention, needsYou } from './attention'
 import { isAutomationTask } from '@open-mercato/cezar-api-client/contract/runs'
 import { isUsageLimitHold } from '@open-mercato/cezar-api-client/contract/waits'
 import { normalizeSidebarLimits, type SidebarLimits } from '@open-mercato/cezar-api-client/contract/workspace'
@@ -96,7 +96,7 @@ export interface QuickListBucket {
  */
 export function bucketOf(run: RunSummary, view: ListView): BucketLabel {
   if (view === 'archived') return 'Archived'
-  if (deriveAttention(run).bucket === 'waiting') return 'Needs you'
+  if (needsYou(run)) return 'Needs you'
   if (run.status === 'waiting') return 'Working'
   if (run.status === 'running' || run.status === 'queued') return 'Working'
   return 'Finished'
@@ -350,7 +350,7 @@ export function listCounts(runs: readonly RunSummary[]): {
       continue
     }
     active += 1
-    if (deriveAttention(run).bucket === 'waiting') waiting += 1
+    if (needsYou(run)) waiting += 1
   }
   return { active, archived, waiting }
 }
@@ -400,7 +400,7 @@ export function sidebarCounts(runs: readonly RunSummary[], automations: boolean)
   const counts = { active: 0, automations: 0, activeWaiting: 0, automationsWaiting: 0 }
   for (const run of runs) {
     if (isOwnedWorker(run) || run.archived) continue
-    const waiting = deriveAttention(run).bucket === 'waiting' ? 1 : 0
+    const waiting = needsYou(run) ? 1 : 0
     if (automations && isAutomationTask(run)) {
       counts.automations += 1
       counts.automationsWaiting += waiting

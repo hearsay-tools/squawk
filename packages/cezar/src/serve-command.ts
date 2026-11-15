@@ -30,6 +30,7 @@ import { CockpitOwnership } from './server/cockpit-ownership.ts';
 import { recoverProjectMigration } from './project-migration/recovery.ts';
 import { moveProjectWhenIdle } from './project-migration/auto.ts';
 import { acquireServeListener, onTerminal, ignoreHangupOffTerminal, waitForHealth } from './serve-listener.ts';
+import { installServeStop, type ServeStop } from './serve-stop.ts';
 
 /** The new scoped package has no binary named after it, so npx needs its `hsq` binary named. */
 function restartCommand(pkgName: string): string {
@@ -64,6 +65,28 @@ export async function serveCommand(
 ): Promise<void> {
   const ownership = new deps.CockpitOwnership();
   deps.process.once('exit', () => ownership.releaseAll());
+  const stop = installServeStop(deps);
+  try {
+    await bootServe(home, repoRoot, preferredPort, openBrowser, bindHost, deps, ownership, stop);
+  } catch (error) {
+    // A stop closes the store under a boot step; that step's failure is not the boot's.
+    if (!stop.stopping) throw error;
+  }
+  // The stop ends the process; returning earlier would let the CLI exit before the agents hear it.
+  await stop.stopped;
+}
+
+async function bootServe(
+  home: Home,
+  repoRoot: string,
+  preferredPort: number,
+  openBrowser: boolean,
+  bindHost: string | undefined,
+  deps: ServeDeps,
+  ownership: InstanceType<ServeDeps['CockpitOwnership']>,
+  stop: ServeStop,
+): Promise<void> {
+  const { parts } = stop;
   // An unfinished project migration finishes before anything reads the project; the claim it
   // takes is the one boot keeps. A failure ends the boot with why.
   await deps.recoverProjectMigration(repoRoot, { ownership, keep: true });
@@ -73,6 +96,7 @@ export async function serveCommand(
   // Hold the real listener before workspace writes, recovery or background resources.
   // A probe followed by a later bind would allow another cwd to win in between.
   const listener = await deps.acquireServeListener(preferredPort, bindHost);
+  parts.listener = listener;
   const bootProjectId = await deps.initWorkspace(repoRoot, home);
   // ONE workspace semaphore for the whole process (spec 2026-07-20, step 2.5):
   // the boot manager and every lazily-built project context count their runs
@@ -83,6 +107,7 @@ export async function serveCommand(
   // keepLive + recover() (#367): runs that were queued/running/waiting when
   // the previous process exited are re-queued or resumed instead of failed.
   const store = deps.openBootStore(repoRoot);
+  parts.store = store;
   // Before recovery (#589): the runs recovery re-queues, resumes or fails are exactly the
   // transitions an opted-in bot is waiting for. Deliveries wait until startServer knows its port.
   const taskWebhooks = new deps.TaskWebhooks({ home });
@@ -90,6 +115,7 @@ export async function serveCommand(
   // ONE preview host for the whole process (#781), like the semaphore: ports are host-global, so
   // `port_held` must see every project's servers. Off unless `CEZ_PREVIEW=1`.
   const previewHost = deps.previewToolEnabled() ? new deps.PreviewHost({ home }) : undefined;
+  parts.previewHost = previewHost;
   // The port the cockpit bound, once `startServer` listens; the preview tool refuses it.
   let boundPort: number | undefined;
   const squawkPort = () => boundPort;
@@ -107,6 +133,7 @@ export async function serveCommand(
     sweepBranches: (keep) => void deps.sweepMergedBranches({ root: repoRoot, store, manager, home }, { keep, minIntervalMs: SWEEP_MIN_INTERVAL_MS }),
   });
   const delegation = await deps.DelegationController.start(deps.workerCleanup);
+  parts.delegation = delegation;
   delegation.attachProject({ id: bootProjectId ?? 'default', root: repoRoot, store, manager, home });
   const providerAuth = new deps.ProviderAuthService();
   const discovery = deps.createHostDiscovery(repoRoot, providerAuth, home);
@@ -122,7 +149,10 @@ export async function serveCommand(
 
   await deps.reconcileServeWorktrees(repoRoot, repo, store, manager, previewHost, undefined, home);
 
+  // A stopping boot starts no agent and serves nothing: the stop closes what boot built so far.
+  if (stop.stopping) return;
   await deps.recoverServeProject(store, manager, providerRuntimeAuth, delegation, bootProjectId);
+  if (stop.stopping) return;
 
   // Update discovery (#368) — fire-and-forget; the banner prints whenever the
   // registry answers and /api/v1/health reports it as `latestVersion`.
@@ -158,6 +188,7 @@ export async function serveCommand(
     squawkPort,
     toolActivity,
   }, port, listener);
+  parts.server = server;
   if (!server.listening) await deps.once(server, 'listening');
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('cockpit TCP listener is unavailable');
@@ -168,19 +199,6 @@ export async function serveCommand(
   ownership.publishUrl(url);
 
   deps.printServeBanner(version, repoRoot, repo, checks, url);
-
-  // One stop per process: a repeated signal must not start a second teardown over the first.
-  let stopping = false;
-  const shutdown = (signal: NodeJS.Signals) => {
-    if (stopping) return;
-    stopping = true;
-    void deps.stopServe(server, signal, { store }).finally(() => deps.process.exit(0));
-  };
-  deps.process.on('SIGINT', () => shutdown('SIGINT'));
-  deps.process.on('SIGTERM', () => shutdown('SIGTERM'));
-  if (deps.onTerminal()) deps.process.on('SIGHUP', () => shutdown('SIGHUP'));
-  else deps.ignoreHangupOffTerminal();
-  deps.watchSupervisor(() => shutdown('SIGTERM'));
 
   // Open the browser only once the server actually answers, so the first
   // paint is the cockpit and never a connection error.

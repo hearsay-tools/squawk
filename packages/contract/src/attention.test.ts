@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeWaitingOn, type WaitingOnInput, type WorkerWaitEntry } from './waits.ts';
-import { ATTENTION_RANK, ATTENTION_RUNGS, DEFAULT_WEBHOOK_TRIGGERS, attentionOfRung, deriveAttention, deriveWebhookState, WEBHOOK_TRIGGERS, workerWaitLabel, workersWaitingLabel, type Attention, type AttentionInput, type AttentionRung } from './attention.ts';
+import { ATTENTION_RANK, ATTENTION_RUNGS, DEFAULT_WEBHOOK_TRIGGERS, attentionOfRung, deriveAttention, deriveWebhookState, needsYou, rungNeedsYou, WEBHOOK_TRIGGERS, workerWaitLabel, workersWaitingLabel, type Attention, type AttentionInput, type AttentionRung } from './attention.ts';
 import { runStatusSchema } from './run-status.ts';
 import type { RunStatus } from './runs.ts';
 import {
@@ -635,5 +635,23 @@ describe('attention boundary cases', () => {
     const input: AttentionInput = { status: RUN_STATUS.waiting, waitingOn: { kind: 'peers', count } };
     expect(deriveAttention(input).label).toBe(['waiting on tasks', 'waiting on 1 task', 'waiting on 2 tasks'][count]);
     expect(deriveWebhookState(input)).toBe('waiting-other');
+  });
+});
+
+describe('needsYou (hearsay-tools/squawk#2275)', () => {
+  it('holds exactly the rungs whose bucket asks for a person: permission, a reply and a review', () => {
+    expect(ATTENTION_RUNGS.filter(rungNeedsYou)).toEqual(['needs-permission', 'needs-you', 'needs-review']);
+  });
+
+  it.each([RUN_STATUS.waiting, RUN_STATUS.running])('counts a pending permission request on a %s run, and never an archived one', (status) => {
+    expect(needsYou({ status, hasPendingPermission: true })).toBe(true);
+    expect(needsYou({ status, hasPendingPermission: true, archived: true })).toBe(false);
+  });
+
+  it('counts a waiting reply and a review gate, and not a failure', () => {
+    expect(needsYou({ status: RUN_STATUS.waiting })).toBe(true);
+    expect(needsYou({ status: RUN_STATUS.review })).toBe(true);
+    expect(needsYou({ status: RUN_STATUS.failed })).toBe(false);
+    expect(needsYou({ status: RUN_STATUS.running })).toBe(false);
   });
 });

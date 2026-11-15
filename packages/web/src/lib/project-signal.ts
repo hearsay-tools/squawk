@@ -1,6 +1,6 @@
 import type { RunIndexEntry } from '@open-mercato/cezar-api-client'
 
-import { deriveAttention } from './attention'
+import { deriveAttention, needsYou } from './attention'
 import { isUnread } from './read-state'
 import { isOwnedWorker } from './task-groups'
 
@@ -12,7 +12,7 @@ import { isOwnedWorker } from './task-groups'
  * rail needs no dots — a dot means a run's state on a task row, and no shape may mean two things.
  */
 export type ProjectSignal = {
-  /** Top-level runs whose attention bucket is `waiting`: needs you, needs review. */
+  /** Top-level runs that `needsYou` counts: needs permission, needs you, needs review. */
   needsYou: number
   /** Top-level runs that failed and have not been opened since. */
   failedUnread: number
@@ -27,7 +27,7 @@ const IDLE: ProjectSignal = { needsYou: 0, failedUnread: 0, inMotion: 0, finishe
 /**
  * The four counts for one project's runs.
  *
- * Built only on the deciders every other surface reads (`deriveAttention`, `isUnread`,
+ * Built only on the deciders every other surface reads (`needsYou`, `deriveAttention`, `isUnread`,
  * `isOwnedWorker`), so the rail cannot disagree with a task row.
  *  - Tasks, not processes: owned workers are skipped, so a parent waiting on two workers is ONE
  *    task in motion. Archived runs are ignored everywhere.
@@ -39,10 +39,9 @@ export function projectSignal(runs: readonly RunIndexEntry[]): ProjectSignal {
   const signal = { ...IDLE }
   for (const run of runs) {
     if (run.archived || isOwnedWorker(run)) continue
-    const attention = deriveAttention(run)
-    if (attention.bucket === 'waiting') signal.needsYou += 1
+    if (needsYou(run)) signal.needsYou += 1
     // Violet is the running family: running, monitoring, and a parent parked on its workers.
-    else if (attention.tone === 'running') signal.inMotion += 1
+    else if (deriveAttention(run).tone === 'running') signal.inMotion += 1
     else if (isUnread(run)) {
       if (run.status === 'failed') signal.failedUnread += 1
       else if (run.status === 'done') signal.finishedUnread += 1
