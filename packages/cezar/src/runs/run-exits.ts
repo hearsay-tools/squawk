@@ -193,10 +193,11 @@ export const RUN_EXITS = {
   'draft-pr': { durability: 'debounced', from: ['review', 'done', 'failed', 'cancelled'], to: 'done' },
   'fail-start': { durability: 'debounced', from: ['queued', 'running'], to: 'failed', steps: failedStep },
   fail: { durability: 'debounced', from: ['running', 'waiting'], to: 'failed', steps: failedStep },
-  // A workflow step failed while its run owes wakes: the step is the cursor a Continue resumes. The
-  // step loop flushes it before the wake-delivery decision and the final autosave, so a crash in
-  // either keeps it (hearsay-tools/squawk#1621).
+  // A workflow step failed while its run holds waits: the step is the cursor a Continue resumes
+  // (hearsay-tools/squawk#1621). Each writes the cursor alone and keeps the run's status: running,
+  // or waiting with its park reason when the step's turn parked it first (`settleAgentStepWakes`).
   'fail-attempt': { durability: 'debounced', from: ['running'], to: 'running', fields: (_run, at) => cursorFields(at) },
+  'fail-attempt-parked': { durability: 'debounced', from: ['waiting'], to: 'waiting', fields: (_run, at) => cursorFields(at) },
   // settleFailedContinuation alone: a worker Stop can record cancelled before it settles.
   'fail-continue': { durability: 'debounced', from: ['running', 'waiting', 'cancelled'], to: 'failed', steps: failedStep },
   'fail-interrupted': { durability: 'debounced', from: ['queued', 'running', 'waiting'], to: 'failed',

@@ -20,6 +20,13 @@ describe('the workflow cursor, written by the run exits (ADR 0064)', () => {
     }
   });
 
+  it('records a failed attempt alone, keeping the status and the park reason of a run its turn parked', () => {
+    expect(applyExit(run(RUN_STATUS.running), 'fail-attempt', {}, { stepId: 'review', cursor: 'resume' }))
+      .toStrictEqual({ workflowCursor: resume, status: RUN_STATUS.running });
+    expect(applyExit({ ...run(RUN_STATUS.waiting), parkReason: 'turn' } as ExitRead, 'fail-attempt-parked', {}, { stepId: 'review', cursor: 'resume' }))
+      .toStrictEqual({ workflowCursor: resume, status: RUN_STATUS.waiting });
+  });
+
   it('leaves the cursor alone when the caller names no mode', () => {
     for (const exit of ['requeue', 'fail-attempt', 'hold-failure', 'park', 'fail'] as const) {
       expect(applyExit(run(RUN_STATUS.running, start), exit, {}, { stepId: 'review' })).not.toHaveProperty('workflowCursor');

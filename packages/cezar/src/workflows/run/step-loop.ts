@@ -428,8 +428,10 @@ export class StepLoop {
     // attempt before parking so later successful CI recovery cannot erase it.
     if (failure) {
       if (holdsClosingWakes(this.context, this.completionGateHost, runId)) {
-        // The cursor is on disk before the delivery decision and the final autosave await.
-        this.host.move(runId, 'fail-attempt', {}, { stepId, cursor: 'resume' });
+        // The cursor alone, on disk before the delivery decision and the final autosave await. A
+        // run the step's turn already parked stays waiting, for the reason it parked.
+        const parked = this.context.store.getRun(runId)?.status === 'waiting';
+        this.host.move(runId, parked ? 'fail-attempt-parked' : 'fail-attempt', {}, { stepId, cursor: 'resume' });
         this.context.store.flush();
       }
       this.finishStep(runId, stepId, 'failed', failure, emit);

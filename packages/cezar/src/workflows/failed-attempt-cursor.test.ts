@@ -1,17 +1,18 @@
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CiWaitResult, RunRecord } from '@open-mercato/cezar-contract';
-import { STEP_STATUS, WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
+import { RUN_STATUS, STEP_STATUS, WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { HARNESS_ADAPTERS, promptFor } from '../core/harness-parity.testkit.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { WorktreeAutosave } from './run/worktree-autosave.ts';
 import { MAX_WAKE_DELIVERY_ATTEMPTS } from './run.ts';
 import { gatedProviderFailure } from './waits-parity.testkit.ts';
-import { manager, restart, root, store, toolGenerationOf, until, useWorkerWaitFixture } from './worker-wait.testkit.ts';
+import { manager, restart, root, store, toolGenerationOf, until, useWorkerWaitFixture, work } from './worker-wait.testkit.ts';
 
-// hearsay-tools/squawk#1621, review D1: a failed workflow step whose owed wake reached the delivery
-// cap stays the resume cursor on disk before the final autosave, so a crash there keeps it.
+// hearsay-tools/squawk#1621: a workflow step that fails while its run holds waits is the resume
+// cursor. Review D1: on disk before the final autosave, so a crash there keeps it. Review B1:
+// recording it changes nothing else, also when the step's turn already parked the run.
 const identity = { prUrl: 'https://github.com/acme/repo/pull/12', repository: 'acme/repo', prNumber: 12, headSha: 'a'.repeat(40) };
 const ci = { settle: undefined as undefined | (() => void) };
 const supervisor = {
@@ -21,7 +22,7 @@ const supervisor = {
   close() {},
 };
 
-describe('a capped wake delivery on a failed workflow step', { timeout: 45_000 }, () => {
+describe('a workflow step that fails while its run holds waits', { timeout: 45_000 }, () => {
   useWorkerWaitFixture({ acquireCiResources: (workspace: object) => ({ ...acquireCiResources(workspace), supervisor }) });
   afterEach(() => vi.restoreAllMocks());
 
@@ -65,5 +66,20 @@ describe('a capped wake delivery on a failed workflow step', { timeout: 45_000 }
     await until(() => ['done', 'review', 'failed'].includes(store.getRun(run.id)?.status ?? '') && !manager.isActive(run.id));
     expect(store.getRun(run.id)?.steps.filter(step => !step.synthetic).map(step => [step.id, step.status]))
       .toEqual([['first', STEP_STATUS.failed], ['later', STEP_STATUS.done], ['check', STEP_STATUS.done]]);
+  });
+
+  it('keeps a run its turn parked waiting, for the same reason, when its session then fails', async () => {
+    const run = manager.startRun({ name: 'parked-failure-chain', source: 'built-in', steps: [
+      { id: 'first', prompt: promptFor('claude', 'cezar-wait') },
+      { id: 'later', prompt: HARNESS_ADAPTERS.claude.scenarios['cezar-done']! },
+    ] }, { runner: 'claude', task: 'Wait, then go on', worktree: false });
+    await until(() => store.getRun(run.id)?.status === RUN_STATUS.waiting && [...work.liveSessions].some(session => session.open));
+    expect(store.getRun(run.id)).toMatchObject({ parkReason: 'turn', steps: [expect.objectContaining({ id: 'first', status: STEP_STATUS.waiting }), expect.anything()] });
+    // The parked session's process dies before its timer resolves.
+    const session = [...work.liveSessions].find(candidate => candidate.open)!;
+    process.kill(session.pid!, 'SIGKILL');
+    await until(() => !manager.isActive(run.id));
+    expect(store.getRun(run.id)).toMatchObject({ status: RUN_STATUS.waiting, parkReason: 'turn', workflowCursor: { stepId: 'first', mode: 'resume' } });
+    expect(store.getRun(run.id)?.steps.find(step => step.id === 'first')).toMatchObject({ status: STEP_STATUS.failed });
   });
 });
