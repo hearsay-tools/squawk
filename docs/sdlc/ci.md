@@ -1136,12 +1136,6 @@ this repository's `ci.yml` on the PR head, and no unresolved review thread. Disp
 and unrelated same-name checks cannot supply that proof. Missing or changing evidence
 fails closed. GitHub owns queue persistence; no cockpit session is required.
 
-Transition: a merge group also runs `queue-review-result`, which reports the check
-name `Automated Code Review` after `verify`. The merge group that removes the review
-gate is admitted by the helper from its base, which requires that name in the branch
-rules. A follow-up PR deletes the job after the owner removes the name from the
-ruleset.
-
 A main push probes official Actions metadata for at most 60 seconds (each request
 at most 10 seconds; at most seven pending reads; complete lists limited to 200
 records). It reuses only the newest same-repository queue run's latest successful

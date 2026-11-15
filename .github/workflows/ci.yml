@@ -1602,28 +1602,6 @@ jobs:
               await core.summary.addHeading('Queue admission refused').addRaw(diagnostic.split('\n').map(line => `    ${line}`).join('\n') + '\n').write();
             }
 
-  # Transition: the trusted base of the merge group that removes the review gate
-  # still requires this check name in the branch rules. The inactive name keeps a
-  # skipped job from supplying it.
-  queue-review-result:
-    name: ${{ github.event_name == 'merge_group' && 'Automated Code Review' || 'Queue review (not applicable)' }}
-    needs: verify
-    if: always() && github.event_name == 'merge_group'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    steps:
-      - name: Require verified queue admission
-        env:
-          CANCELLED: ${{ job.status == 'cancelled' }}
-          VERIFY_RESULT: ${{ needs.verify.result }}
-        run: |
-          test "$CANCELLED" = false
-          test "$VERIFY_RESULT" = success
-      - name: Reject a cancelled run
-        if: cancelled()
-        run: exit 1
-
   # npm preview publishing (spec .ai/specs/2026-07-18-npm-preview-publish.md, #482).
   # Publishes `dev` snapshots from `main` after a fully green verify run.
   # PR archives below are published separately by publish-pr-snapshot.yml.

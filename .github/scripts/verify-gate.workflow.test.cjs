@@ -92,7 +92,7 @@ test('only existing trusted docs/infra/bump exemptions skip shards, never build/
 test('cancellation cannot release work or green required gates', () => {
   const ctx = context(); ctx.cancelled = () => true;
   for (const id of heavy) assert.equal(evaluate(ci.jobs[id].if, ctx), false);
-  for (const id of ['preflight', 'verify', 'queue-review-result']) assert.notEqual(shell(id, { CANCELLED: 'true' }).status, 0);
+  for (const id of ['preflight', 'verify']) assert.notEqual(shell(id, { CANCELLED: 'true' }).status, 0);
 });
 
 for (const event of ['pull_request_target', 'merge_group', 'workflow_dispatch', 'push']) {
@@ -127,24 +127,8 @@ test('preflight requires all applicable cheap gates and permits only exact queue
   assert.equal(shell('preflight', { EVENT_NAME: 'push', PROOF_VERIFIED: 'true', TYPECHECK_RESULT: 'skipped' }).status, 0);
   assert.notEqual(shell('preflight', { PROOF_VERIFIED: 'true', TYPECHECK_RESULT: 'skipped' }).status, 0);
 });
-// Transition: the merge group that removes the review gate is admitted by the
-// trusted base script, which still requires this check name in the branch rules.
-test('only a merge group supplies the transitional review check name, after verify', () => {
-  const job = ci.jobs['queue-review-result'];
-  assert.equal(job.needs, 'verify');
-  for (const [event, expected] of [['merge_group', true], ['pull_request_target', false], ['push', false], ['workflow_dispatch', false]]) {
-    const ctx = context(event);
-    assert.equal(evaluate(job.name, ctx) === 'Automated Code Review', expected, event);
-    assert.equal(evaluate(job.if, ctx), expected, event);
-  }
-  for (const result of ['failure', 'cancelled', 'skipped', '']) {
-    assert.notEqual(shell('queue-review-result', { VERIFY_RESULT: result }).status, 0, result);
-  }
-  assert.equal(shell('queue-review-result', { VERIFY_RESULT: 'success' }).status, 0);
-});
-
 test('always aggregates reject cancellation even if all retained prerequisites succeeded', () => {
-  for (const job of [ci.jobs.preflight, ci.jobs.verify, ci.jobs['queue-review-result']]) {
+  for (const job of [ci.jobs.preflight, ci.jobs.verify]) {
     const guard = job.steps.find(step => step.name === 'Reject a cancelled run');
     assert.ok(guard);
     assert.equal(evaluate(guard.if, { cancelled: () => true }), true);
