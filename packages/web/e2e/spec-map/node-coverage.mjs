@@ -4,8 +4,10 @@ import { takeCoverage } from 'node:v8';
 
 let sequence = 0;
 
-export function flushCoverage(directory) {
+export function flushCoverage() {
   takeCoverage();
+  const directory = process.env.NODE_V8_COVERAGE;
+  if (!directory) return;
   // Node names each dump with millisecond precision. Its final signal/exit dump
   // can overwrite an explicit flush from the same millisecond after counters reset.
   const prefix = `coverage-${process.pid}-`;

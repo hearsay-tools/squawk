@@ -1,1 +1,1 @@
-export function flushCoverage(directory: string): void;
+export function flushCoverage(): void;
