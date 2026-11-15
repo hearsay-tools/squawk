@@ -117,7 +117,7 @@ Cockpit e2e applies `.ai/scripts/resolve-browser-launch.mjs` in
 `.ai/scripts/test-env-up.sh` (doctor) and `packages/web/e2e/agent-browser.ts`
 (every later invocation). Those two sites share the resolved namespace and
 Chrome args. The socket-safe TMPDIR is not shared: `test-env-up.sh` applies the
-resolver's answer to its own doctor/probe only, while the e2e Vitest globalSetup
+resolver's answer to its own doctor/probe only, while the e2e Vitest run setup
 (`packages/web/e2e/environment.ts`) and the seam decide it from their own
 caller's env, because a reused env was booted by a process whose TMPDIR may
 differ (hearsay-tools/cezarion#1090). The recipes in this file install and probe only.
