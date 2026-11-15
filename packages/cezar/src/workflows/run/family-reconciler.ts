@@ -44,9 +44,13 @@ export class FamilyReconciler {
     this.host.waitEngine.resolvePeerWaits(runsAwaitingPeer(run, () => this.context.store.listRuns())); // never in recovery: an interrupted peer fails, then continues
   };
 
+  /** Request deadlines by request key. Kept here: timer handles, which slice S5
+   *  (hearsay-tools/squawk#3662) moves into `LivenessTimers`. */
   private readonly requestDeadlineTimers = new Map<string, NodeJS.Timeout>();
   private reconcilingWorkers = false;
   private reconcilingFamily: string | undefined;
+  /** Family roots queued behind the reconcile pass in flight. Kept here: the pass drains it, and
+   *  it names families, not one run's memory. */
   private readonly pendingReconciliations = new Set<string | undefined>();
   recoveryFactsPending = false;
   constructor(private readonly context: RunModuleContext, private readonly host: FamilyReconcilerHost) {}

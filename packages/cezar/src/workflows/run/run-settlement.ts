@@ -28,7 +28,6 @@ import type { HumanWaits } from './human-waits.ts';
 import type { WorkerQuestions } from './worker-questions.ts';
 import type { WorktreeAutosave } from './worktree-autosave.ts';
 import type { RunLine } from './run-line.ts';
-import type { TurnBookkeeper } from './turn-bookkeeping.ts';
 import type { AutoResumeScheduler } from './auto-resume.ts';
 import type { WorkerExecutions } from './worker-executions.ts';
 import { settledRunFamilies } from '../../delegation/conversations.ts';
@@ -55,12 +54,15 @@ interface RunSettlementHost {
   autosaveCleanupBlocker(id: string): string | undefined;
   claimWorktreeReclaim(id: string): (() => void) | null;
   preview: PreviewHostLike | undefined;
-  forgetMemoryPause(id: string): void;
+  /** Forget what the run's last execution held in `RunMemory`. */
+  forgetExecutionMemory(id: string): void;
+  /** Release the run's `RunMemory` slot when the run has ended (`runMemoryReleases`). */
+  releaseRunMemory(id: string): void;
 }
 export class RunSettlement {
   constructor(private readonly context: RunModuleContext, private readonly humanWaits: HumanWaits,
     private readonly workerQuestions: WorkerQuestions, private readonly worktreeAutosave: WorktreeAutosave,
-    private readonly turnBookkeeper: TurnBookkeeper, private readonly line: RunLine,
+    private readonly line: RunLine,
     private readonly autoResumeScheduler: AutoResumeScheduler, private readonly workerExecutions: WorkerExecutions,
     private readonly completionGateHost: completionGateReads.CompletionGateHost, private readonly host: RunSettlementHost,
     private readonly wakeSessionClosedError: string, private readonly wakeDeliveryCapNote: string) {}
@@ -512,7 +514,8 @@ export class RunSettlement {
     this.context.store.flush();
   }
 
-  afterDropActive(runId: string): void {
+  /** What a closed session leaves to do on the run, also for a disposed manager's run. */
+  private afterSessionClosed(runId: string): void {
     // Open waits keep their watch or timer: their result reopens the run when it resolves. A
     // refusal queued for the closing session reopens it now (hearsay-tools/cezarion#1301).
     // A queued wake can pump before the usage-limit schedule. This is safe because
@@ -520,9 +523,22 @@ export class RunSettlement {
     if (!this.context.disposed() && (this.context.store.getRun(runId)?.waits?.length || completionGateReads.owesCompletionRefusal(this.context, this.completionGateHost, runId))) this.host.queueWaitWake(runId);
     if (!this.workerExecutions.has(runId) && this.context.store.getRun(runId)?.stopping) this.context.store.updateRun(runId, { stopping: undefined });
     this.republishFinishVerdict(runId);
-    this.host.forgetMemoryPause(runId);
-    this.turnBookkeeper.forget(runId);
-    this.line.clearForced(runId);
+    this.host.forgetExecutionMemory(runId);
+  }
+
+  /** Closed-session success may have parked a completion wait without a live wire. The global
+   *  pass covers the families still in memory (#779); this run's own family may have just left
+   *  the live set with it, so it is reconciled by name first. */
+  private reconcileSettledFamilies(runId: string): void {
+    const settled = this.context.store.getRun(runId);
+    if (!settled?.delegation) return;
+    for (const id of settledRunFamilies(this.context.store, settled)) this.host.reconcileWorkerWaits(id);
+    // Then every other family still in memory (hearsay-tools/cezarion#779).
+    this.host.reconcileWorkerWaits();
+  }
+
+  afterDropActive(runId: string): void {
+    this.afterSessionClosed(runId);
     if (this.host.isDisposedDelegatedRun(runId)) return; // teardown above, no autonomous durable side effects
     // The run's slot is gone from busySlots() as of the deletes above — hand it
     // to the workspace's oldest queued run, in ANY project. Every terminal path
@@ -537,15 +553,7 @@ export class RunSettlement {
     // left a window — measured as exactly one extra task — where the queue saw a free slot and
     // an account that looked healthy, and started work that was already doomed.
     this.autoResumeScheduler.armHeldResume(runId);
-    // Closed-session success may have parked a completion wait without a live wire. The global
-    // pass covers the families still in memory (#779); this run's own family may have just left
-    // the live set with it, so it is reconciled by name first.
-    const settled = this.context.store.getRun(runId);
-    if (settled?.delegation) {
-      for (const id of settledRunFamilies(this.context.store, settled)) this.host.reconcileWorkerWaits(id);
-      // Then every other family still in memory (hearsay-tools/cezarion#779).
-      this.host.reconcileWorkerWaits();
-    }
+    this.reconcileSettledFamilies(runId);
     this.host.releaseSlot();
     // A run leaving the active registry may have reached a terminal transition
     // (done/review/failed/cancelled), increasing the finished-worktree count.
@@ -554,6 +562,7 @@ export class RunSettlement {
     // the lifecycle.
     void this.enforceRetention();
     this.reapTerminalScratch(runId);
+    this.host.releaseRunMemory(runId);
   }
 }
 

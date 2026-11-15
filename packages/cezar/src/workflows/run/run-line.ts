@@ -11,6 +11,7 @@ import type { RunModuleContext } from './types.ts';
 import type { WorkflowDef } from '../types.ts';
 import type { PendingContinuation, StartRunInput } from './types.ts';
 import { admissionRefusal } from '../../runs/worker-execution.ts';
+import type { RunMemory } from './run-memory.ts';
 
 export type PendingJob = { workflow: WorkflowDef; input: StartRunInput; startAt?: number | undefined };
 
@@ -60,8 +61,9 @@ export function oldestEligibleWakeAt(entries: Iterable<string>, reads: {
 export class RunLine {
   private readonly context: RunModuleContext;
   private readonly host: RunLineHost;
-  constructor(context?: RunModuleContext, host?: RunLineHost) {
-    this.context = context!; this.host = host!;
+  private readonly memory: RunMemory;
+  constructor(memory: RunMemory, context?: RunModuleContext, host?: RunLineHost) {
+    this.memory = memory; this.context = context!; this.host = host!;
   }
   /** The configured default runner as `pump()` last read it, so the sync `oldestWakeAt()` resolves
    *  a runnerless record's account the same way (hearsay-tools/cezarion#1236). */
@@ -77,6 +79,10 @@ export class RunLine {
    *  loop so a slot freed mid-sweep is never a lost wakeup. */
   private pumpAgain = false;
 
+  // The scheduler indexes below stay in RunLine, not in `RunMemory`: `busySlots` and `pump` order
+  // and count them, and `dropActive` releases a run from them through `forget` (ADR 0064).
+  // `dispose` keeps `monitoring`, `waitWakeQueuedAt` and `waitWakeAdmitted`: a disposed manager
+  // pumps nothing, and a later manager rebuilds them from the records.
   readonly queue: string[] = [];
   readonly pendingJobs = new Map<string, PendingJob>();
   /** Interrupted agent turns recovered after a process restart. Unlike an
@@ -101,8 +107,8 @@ export class RunLine {
   readonly waitWakeAdmitted = new Set<string>();
   /** The watchdog ignores the usage hold for one pump sweep. */
   private forceNextPump = false;
-  /** Forced starts keep bypassing the spawn-time gate until dropActive. */
-  private readonly forceStarted = new Set<string>();
+  /** Forced starts keep bypassing the spawn-time gate until dropActive: `RunMemory`'s
+   *  `forceStarted`. */
 
   /** A monitoring-pool member's wake waiting in the line: it already holds its slot, so it needs
    *  no regular one to leave (hearsay-tools/cezarion#1236). */
@@ -419,9 +425,8 @@ export class RunLine {
   retireAdmission(id: string): boolean { return this.waitWakeAdmitted.delete(id); }
   forceNext(): void { this.forceNextPump = true; }
   takeForced(): boolean { const forced = this.forceNextPump; this.forceNextPump = false; return forced; }
-  markForced(id: string): void { this.forceStarted.add(id); }
-  clearForced(id: string): void { this.forceStarted.delete(id); }
-  isForced(id: string): boolean { return this.forceStarted.has(id); }
+  markForced(id: string): void { this.memory.write(id, 'forceStarted', true); }
+  isForced(id: string): boolean { return this.memory.read(id, 'forceStarted') === true; }
   forget(id: string): void {
     this.waiting.delete(id); this.monitoring.delete(id); this.waitWakeAdmitted.delete(id); this.removeWake(id);
   }
