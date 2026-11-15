@@ -2,7 +2,7 @@ import { WAIT_KINDS } from '../workflows/run/wait-kinds.ts';
 import type { AgentInput, Wait } from '@open-mercato/cezar-contract';
 import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
 import { LAST_WAITS_LIMIT } from '@open-mercato/cezar-contract/waits';
-import { waitInputId } from '../workflows/waits.ts';
+import { isSquawkHumanWait, waitInputId } from '../workflows/waits.ts';
 import { applyExit, type RunExitId } from './run-exits.ts';
 import type { RunRecord } from './store.ts';
 import { checkWaitWrite } from './wait-phases.ts';
@@ -74,9 +74,10 @@ export interface StagedOutcome {
   settled: Wait[];
 }
 
-/** An answer to the question at `askSeq` settles the waits shown up to it, and the waits not shown yet. */
+/** An answer to the question at `askSeq` settles the agent's waits shown up to it, the waits not
+ *  shown yet, and Squawk's own wait, which no question binds. */
 function answeredBy(wait: Wait, askSeq: number | undefined): boolean {
-  return askSeq === undefined || !WAIT_KINDS.human.is(wait) || wait.askSeq === undefined || wait.askSeq <= askSeq;
+  return askSeq === undefined || !WAIT_KINDS.human.is(wait) || isSquawkHumanWait(wait) || wait.askSeq === undefined || wait.askSeq <= askSeq;
 }
 
 /** What the outcomes settled so far: `StagedOutcome.answered` and `settled`. */
