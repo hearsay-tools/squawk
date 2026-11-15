@@ -221,6 +221,8 @@ async function streamedFixture(status: number) {
   return {
     url: `http://127.0.0.1:${address.port}`,
     sockets, requests: () => requests,
+    /** Resolves once every open socket has emitted `close`: the transport's own signal. */
+    drained: async () => { await Promise.all([...sockets].map(socket => once(socket, 'close'))) },
     close: async () => {
       server.closeAllConnections()
       await new Promise<void>(resolve => server.close(() => resolve()))
@@ -234,7 +236,8 @@ describe('settled probes close unread streamed bodies (#764 review)', () => {
     try {
       await waitForHealth(fixture.url, 'streamed fixture', { tries: 1, requestTimeoutMs: 500, timeoutMs: 3000 })
       expect(fixture.requests()).toBe(1)
-      await vi.waitFor(() => expect(fixture.sockets.size).toBe(0), { timeout: 1000, interval: 10 })
+      await fixture.drained()
+      expect(fixture.sockets.size).toBe(0)
     } finally { await fixture.close() }
   })
 
@@ -245,7 +248,8 @@ describe('settled probes close unread streamed bodies (#764 review)', () => {
         tries: 3, intervalMs: 0, requestTimeoutMs: 500, timeoutMs: 3000,
       })).rejects.toThrow('answered 503')
       expect(fixture.requests()).toBe(3)
-      await vi.waitFor(() => expect(fixture.sockets.size).toBe(0), { timeout: 1000, interval: 10 })
+      await fixture.drained()
+      expect(fixture.sockets.size).toBe(0)
     } finally { await fixture.close() }
   })
 })
