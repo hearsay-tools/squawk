@@ -117,7 +117,7 @@ describe('runner-fact-combination (hearsay-tools/cezarion#2991)', () => {
   });
 
   it('reads the fact keys from the declared types, so a new fact joins the rule', () => {
-    expect([...declaredFactKeys()].sort()).toEqual(['acknowledgement', 'consumption', 'costReport', 'humanInputAtTurnEnd', 'mode',
+    expect([...declaredFactKeys()].sort()).toEqual(['acknowledgement', 'claudeModelAliases', 'consumption', 'costReport', 'humanInputAtTurnEnd', 'mode',
       'nativeAsk', 'nativeSubagents', 'nativeTimerTool', 'sessionIdSource', 'systemPromptOnResume']);
     const grown = declaredFactKeys(path => {
       const text = readFileSync(join(repoRoot, path), 'utf8');
