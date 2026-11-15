@@ -222,7 +222,12 @@ async function streamedFixture(status: number) {
     url: `http://127.0.0.1:${address.port}`,
     sockets, requests: () => requests,
     /** Resolves once every open socket has emitted `close`: the transport's own signal. */
-    drained: async () => { await Promise.all([...sockets].map(socket => once(socket, 'close'))) },
+    drained: async () => {
+      // bound: hang guard only. A socket the probe leaks rejects here, so the test fails on it
+      // and its `finally` still closes the fixture.
+      const signal = AbortSignal.timeout(3_000)
+      await Promise.all([...sockets].map(socket => once(socket, 'close', { signal })))
+    },
     close: async () => {
       server.closeAllConnections()
       await new Promise<void>(resolve => server.close(() => resolve()))
