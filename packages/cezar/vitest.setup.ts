@@ -9,6 +9,7 @@ import { delimiter, join } from 'node:path'
 import { afterAll, afterEach, beforeEach } from 'vitest'
 import { strictRunExits, throwRunExitViolations } from './src/runs/run-exits.ts'
 import { installOutboundGuard, throwOutboundRefusals } from './src/test-outbound-guard.testkit.ts'
+import { installLaunchGuard, throwLaunchRefusals } from './src/test-launch-guard.testkit.ts'
 
 import { createTestSandbox, hideHostCommands, linkSharedOmpNatives, removeTestSandboxes } from '../../scripts/test-sandbox.mjs'
 
@@ -193,3 +194,9 @@ afterEach(throwRunExitViolations)
 // (hearsay-tools/cezarion#2368), and Stryker activates mutants in the worker, never in a child.
 installOutboundGuard()
 afterEach(throwOutboundRefusals)
+// Nor may it start a real Chromium or dev server the test did not ask for (hearsay-tools/squawk#2369):
+// a mutant that picks the real preview dependency in place of the injected one launched the host's
+// Chromium, or ran the fixture's dev command. The guard refuses the spawn in this process, as the
+// outbound guard does; a file that launches one on purpose calls `allowLaunches`.
+installLaunchGuard()
+afterEach(throwLaunchRefusals)

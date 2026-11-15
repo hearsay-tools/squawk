@@ -5,6 +5,10 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { launchBrowser } from './browser-launch.ts';
 import { chromiumArgs, resolveChromium } from './chromium.ts';
+import { allowLaunches } from '../test-launch-guard.testkit.ts';
+
+// This file streams from a real Chromium on purpose (hearsay-tools/squawk#2369).
+allowLaunches('browser');
 
 // bound: real Chromium startup and GPU initialization can exceed 30 s on loaded CI hosts.
 const BUDGET_MS = 120_000;

@@ -13,6 +13,10 @@ import { processStartToken } from '../delegation/process-liveness.ts';
 import { DevServer, probePort, sweepPreviewLeftovers, trimLog } from './dev-server.ts';
 import { forgetLegacyRunIds, LEGACY_RUNS_FILE } from '../legacy-runs.ts';
 import { fixtureProcessGuard } from './preview.testkit.ts';
+import { allowLaunches } from '../test-launch-guard.testkit.ts';
+
+// This file supervises real dev servers, the fake-dev-server fixture, on purpose (hearsay-tools/squawk#2369).
+allowLaunches('dev-server');
 
 vi.mock('../delegation/process-liveness.ts', async importOriginal => {
   const actual = await importOriginal<typeof import('../delegation/process-liveness.ts')>();
