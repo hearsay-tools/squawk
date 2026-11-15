@@ -1541,7 +1541,9 @@ starts nothing itself.
   first of them that finds no job running removes it; the deferred cleanup does the same for a
   worker's scratch. A reap that keeps it writes `.hsq-job-kept` with the run's `finishedAt`, so a
   later reap of that same end (a read mark, any other run event) keeps it after the job exits too
-  (`jobHoldsScratch`); a Continue clears `finishedAt`, and the next end sets a new one. A record that cannot be read counts as running. Deleting the task's history
+  (`jobHoldsScratch`); a Continue clears `finishedAt`, and the next end sets a new one. An archived
+  run's mark holds nothing: every archive path (manual, `archiveFinished`, archive on merge,
+  retention) removes the directory once no job in it runs. A record that cannot be read counts as running. Deleting the task's history
   removes it at once. So a Continue after the job ended still finds the job by name. The tool
   description and the command's help say so.
 - It prints one JSON object: `name`, `pid` (the supervisor's), `log`, `exitFile`, `replaced`.

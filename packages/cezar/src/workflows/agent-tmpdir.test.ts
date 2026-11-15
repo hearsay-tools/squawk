@@ -215,6 +215,21 @@ describe('RunManager — task-scoped agent TMPDIR (#785)', () => {
       expect(existsSync(dir)).toBe(false);
     }, 30_000);
 
+    it('a manual archive keeps the directory while the job runs and removes it after the job exits', async () => {
+      const run = newRun();
+      const dir = (await resolveStepEnv(run.id, 'claude')).env.TMPDIR!;
+      const { end } = await gatedJob(dir);
+      await finishIdle(run.id);
+      store.setArchived(run.id, true);
+      expect(jobStatus(dir, 'bench')).toMatchObject({ state: 'running' });
+      store.setArchived(run.id, false);
+      await end();
+      store.setRead(run.id);
+      expect(jobStatus(dir, 'bench')).toMatchObject({ state: 'exited', exitCode: 5 });
+      store.setArchived(run.id, true);
+      expect(existsSync(dir)).toBe(false);
+    }, 30_000);
+
     it('the startup sweep spares the directory while the job runs and removes it after', async () => {
       const run = newRun();
       const dir = (await resolveStepEnv(run.id, 'claude')).env.TMPDIR!;

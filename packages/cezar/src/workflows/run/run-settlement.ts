@@ -73,7 +73,7 @@ export class RunSettlement {
       active: () => this.host.active.has(runId), starting: () => this.line.hasStarting(runId), queued: () => this.line.hasQueued(runId),
       claimed: () => this.host.hasClaim(runId), autosaveBlocker: () => this.host.autosaveCleanupBlocker(runId),
       privateWorkers: () => workerEvidenceRunIds(this.context.dataDir),
-      jobHolds: () => jobHoldsScratch(this.context.dataDir, runId, run?.finishedAt),
+      jobHolds: () => !!run && jobHoldsScratch(this.context.dataDir, runId, run),
     });
     if (disposition === 'keep') return;
     if (disposition === 'schedule') { this.host.workerScratchCleanup.schedule(runId); return; }
@@ -565,11 +565,12 @@ const JOB_KEPT_FILE = '.hsq-job-kept';
  * (hearsay-tools/squawk#3138). Every later reap of that same end keeps it too, even after the job
  * exits: a read mark or another run event is not an end. The task's next end (a Continue clears
  * `finishedAt`, and the end sets a new one), its archive or the startup sweep removes it once no
- * job in it runs.
+ * job in it runs. Archive is a removal point, so an archived run's mark holds nothing: every archive
+ * path commits the run, and that event reaps.
  */
-export function jobHoldsScratch(dataDir: string, runId: string, end: string | undefined): boolean {
-  const locations = agentTmpDirLocations(dataDir, runId), mark = end ?? '';
-  const kept = locations.some((dir) => { try { return readFileSync(join(dir, JOB_KEPT_FILE), 'utf8') === mark; } catch { return false; } });
+export function jobHoldsScratch(dataDir: string, runId: string, run: Pick<RunRecord, 'finishedAt' | 'archived'>): boolean {
+  const locations = agentTmpDirLocations(dataDir, runId), mark = run.finishedAt ?? '';
+  const kept = !run.archived && locations.some((dir) => { try { return readFileSync(join(dir, JOB_KEPT_FILE), 'utf8') === mark; } catch { return false; } });
   if (kept) return true;
   if (!jobRunsIn(locations)) return false;
   // Without the mark the scratch still stays while the job runs; it goes at the first reap after.

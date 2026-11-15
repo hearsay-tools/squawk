@@ -198,19 +198,21 @@ describe('terminalScratchDisposition', () => {
 });
 
 describe('jobHoldsScratch', () => {
-  it('holds scratch for the end a job was running at, after the job exits, and not for a later end', () => {
+  it('holds scratch for the end a job was running at, after the job exits, and not for a later end or an archive', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'cez-job-hold-')), runId = randomUUID();
     try {
       const scratch = agentTmpDir(dataDir, runId), exitFile = join(scratch, 'bench.1.exit'), start = processStartToken(process.pid);
       mkdirSync(scratch, { recursive: true });
-      expect(jobHoldsScratch(dataDir, runId, 'end-1')).toBe(false);
+      expect(jobHoldsScratch(dataDir, runId, { finishedAt: 'end-1' })).toBe(false);
       // A record naming this live process stands for a running supervisor.
       claimJob(jobPaths(scratch, 'bench'), { name: 'bench', pid: process.pid, ...(start === undefined ? {} : { start }), command: ['x'],
         startedAt: new Date().toISOString(), log: join(scratch, 'bench.1.log'), exitFile });
-      expect(jobHoldsScratch(dataDir, runId, 'end-1')).toBe(true);
+      expect(jobHoldsScratch(dataDir, runId, { finishedAt: 'end-1' })).toBe(true);
       writeFileSync(exitFile, '0\n');
-      expect(jobHoldsScratch(dataDir, runId, 'end-1')).toBe(true);
-      expect(jobHoldsScratch(dataDir, runId, 'end-2')).toBe(false);
+      expect(jobHoldsScratch(dataDir, runId, { finishedAt: 'end-1' })).toBe(true);
+      expect(jobHoldsScratch(dataDir, runId, { finishedAt: 'end-2' })).toBe(false);
+      // Archive is a removal point: the mark holds nothing once the run is archived.
+      expect(jobHoldsScratch(dataDir, runId, { finishedAt: 'end-1', archived: true })).toBe(false);
     } finally { rmSync(dataDir, { recursive: true, force: true }); }
   });
 });
