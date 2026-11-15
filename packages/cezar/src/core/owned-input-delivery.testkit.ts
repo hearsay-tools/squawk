@@ -29,14 +29,14 @@ async function withDeliveryControl<T>(runner: RunnerId, options: DeliveryControl
 /** Reject exactly one matching input through the real protocol; a reopened
  * process accepts it. No session/manager mock and no transport-error inference.
  * `persistent` rejects every such input, in every process, until `lift()`. */
-export function withRejectedInput(runner: 'codex' | 'opencode' | 'pi' | 'omp', body: (lift: () => void) => Promise<void>,
+export function withRejectedInput(runner: RunnerId, body: (lift: () => void) => Promise<void>,
   { persistent = false, match = 'reject-owned-turn' } = {}): Promise<void> {
   return withDeliveryControl(runner, { kind: 'reject', match, persistent }, control => body(control.lift));
 }
 
 /** Hold only the transport acknowledgement of a matching input; the turn's real frames
  * still reach the runner. On Cursor print the acknowledgement is the first model work. */
-export function withHeldAck(runner: 'codex' | 'opencode' | 'pi' | 'omp' | 'cursor', body: (release: () => void) => Promise<void>,
+export function withHeldAck(runner: RunnerId, body: (release: () => void) => Promise<void>,
   match = 'delay-owned-ack'): Promise<void> {
   return withDeliveryControl(runner, { kind: 'hold-ack', match }, control => body(control.release));
 }

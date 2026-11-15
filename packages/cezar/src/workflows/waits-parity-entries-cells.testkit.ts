@@ -4,7 +4,7 @@ import { onTestFinished, expect, vi, it as registerTest } from 'vitest';
 import { WAIT_PHASE, WAIT_VIA, WAIT_SOURCE, RUN_STATUS, WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { Wait, RunRecord } from '@open-mercato/cezar-contract';
 import type { RunnerId } from '../core/agent-runner.ts';
-import { exemptionFor, HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
+import { exemptionFor, HARNESS_ADAPTERS, humanPromptReadReleases } from '../core/harness-parity-core.testkit.ts';
 import { store, semaphore, until, manager, timeline, collect, fixtureUpdateRun, terminal } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { NO_WAIT_NUDGE } from './turn-end.ts';
@@ -273,10 +273,10 @@ export function entriesCells(runners: RunnerId[], it: typeof registerTest = regi
         const refused = () => store.readEvents(p.id).some(event => event.type === 'note' && String(event.message).startsWith('Completion blocked:'));
         await until(() => turnEnds(p.id) > before && (refused() || nudgeNotes(p.id).length === 1), () => timeline(p.id));
         expect(accepted.mock.results.some(result => result.type === 'return' && result.value.ok)).toBe(true);
-        // Codex/Pi tool activity confirms the input before its held transport ACK: their
-        // executable wire gap sends the nudge already, rather than retaining a DONE boundary.
+        // A runner whose human-prompt hold ends when the wire reports the prompt read takes the
+        // nudge before the held transport ACK, rather than retaining a DONE boundary.
         if (!refused()) {
-          expect(['codex', 'pi']).toContain(runner);
+          expect(humanPromptReadReleases()).toContain(runner);
           expect(nudgeNotes(p.id)).toHaveLength(1);
           release();
           expect(store.readEvents(p.id).filter(event => event.type === 'note' && event.message === summary)).toEqual([]);

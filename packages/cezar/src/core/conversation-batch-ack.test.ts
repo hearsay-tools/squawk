@@ -1,12 +1,13 @@
 import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
 import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
+import { runnersWhere } from './runner-facts.ts';
 import type { AgentInput, ConversationMessage } from '@open-mercato/cezar-contract';
 import { waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 import { withHeldAck } from './owned-input-delivery.testkit.ts';
 
-for (const backend of ['codex', 'opencode', 'pi', 'omp'] as const) {
+for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement === 'response')) {
   it.each(['acknowledged', 'cancelled'] as const)(`${backend}: %s batch keeps independent receipts and concurrent arrivals`, async mode => {
     await withHeldAck(backend, async release => {
       await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId, parentRunId }) => {
@@ -53,7 +54,7 @@ for (const backend of ['codex', 'opencode', 'pi', 'omp'] as const) {
 }
 
 
-for (const backend of ['codex', 'opencode', 'pi', 'omp'] as const) {
+for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement === 'response')) {
   it(`${backend}: provider-first reservation preserves a later inbox claim across its ACK`, async () => {
     await withHeldAck(backend, async release => {
       await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId, parentRunId }) => {
