@@ -180,7 +180,7 @@ jobs:
           esac
           echo "surface=$surface" >> "$GITHUB_OUTPUT"
 
-  # Shared with CodeRabbit admission via release-bump-pr.cjs:
+  # release-bump-pr.cjs decides the shape:
   # bot author + release/v* head is not enough — the live PR file list must match
   # the release-finalization allowlist or Vitest/E2E still run.
   classify-pr:
@@ -1492,7 +1492,7 @@ jobs:
   # cockpit browser jobs.
   verify:
     name: Unit, build, E2E, and package
-    needs: [queue-proof, change-surface, classify-pr, complexity-gate, clone-gate, typecheck, preflight, review-result, unit-tests, build-and-package, vitest, cockpit-browser]
+    needs: [queue-proof, change-surface, classify-pr, complexity-gate, clone-gate, typecheck, preflight, unit-tests, build-and-package, vitest, cockpit-browser, queue-admission]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -1502,8 +1502,7 @@ jobs:
         env:
           CANCELLED: ${{ job.status == 'cancelled' }}
           PREFLIGHT_RESULT: ${{ needs.preflight.result }}
-          REVIEW_RESULT: ${{ needs.review-result.result }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          QUEUE_ADMISSION_RESULT: ${{ needs['queue-admission'].result }}
           PROOF_RESULT: ${{ needs.queue-proof.result }}
           PROOF_VERIFIED: ${{ needs.queue-proof.outputs.verified }}
           PROOF_SOURCE: ${{ needs.queue-proof.outputs.source }}
@@ -1526,8 +1525,9 @@ jobs:
         run: |
           test "$CANCELLED" = false
           test "$PREFLIGHT_RESULT" = success
-          if [ "$EVENT_NAME" = pull_request_target ] && [ "$BASE_REF" = main ]; then
-            test "$REVIEW_RESULT" = success
+          # A queue entry merges only after queue admission; no other event runs it.
+          if [ "$EVENT_NAME" = merge_group ]; then
+            test "$QUEUE_ADMISSION_RESULT" = success
           fi
           test "$CLASSIFY_RESULT" = success
           test "$SURFACE_RESULT" = success
@@ -1565,11 +1565,12 @@ jobs:
         if: cancelled()
         run: exit 1
 
-  # Queue admission reads trusted base code and existing native PR-head review.
+  # Queue admission reads trusted base code and the PR head's native CI. It runs
+  # after every verification job, and verify requires it for a queue entry.
   queue-admission:
     name: Validate reviewed queue entry
-    needs: verify
-    if: ${{ !cancelled() && needs.verify.result == 'success' && github.event_name == 'merge_group' }}
+    needs: [queue-proof, change-surface, classify-pr, complexity-gate, clone-gate, typecheck, preflight, unit-tests, build-and-package, vitest, cockpit-browser]
+    if: ${{ !cancelled() && !failure() && github.event_name == 'merge_group' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -1584,8 +1585,6 @@ jobs:
           ref: ${{ github.event.merge_group.base_sha }}
           persist-credentials: false
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          RELEASE_APP_BOT_LOGIN: ${{ vars.RELEASE_APP_BOT_LOGIN }}
         with:
           retries: 0
           script: |
@@ -1593,66 +1592,22 @@ jobs:
             const { sanitize } = require('./.github/scripts/failure-diagnostics.cjs');
             const diagnostics = {};
             try {
-              const admission = await mergeQueueAdmission({ github, ...context.repo, group: context.payload.merge_group, releaseAppBotLogin: process.env.RELEASE_APP_BOT_LOGIN, diagnostics });
-              await core.summary.addHeading('Existing PR-head review admission').addRaw(JSON.stringify(admission)).write();
+              const admission = await mergeQueueAdmission({ github, ...context.repo, group: context.payload.merge_group, diagnostics });
+              await core.summary.addHeading('Queue admission').addRaw(JSON.stringify(admission)).write();
             } catch (error) {
               // A speculative group's trusted base can predate this diagnostic helper.
               const diagnostic = admissionFailure ? admissionFailure(error, diagnostics) : sanitize(`${error.name}: ${error.message}`);
               core.error(diagnostic);
-              core.setFailed('Queue admission could not verify current native PR CI/review, membership and rules. Inspect the queue and retry; do not bypass.');
+              core.setFailed('Queue admission could not verify current native PR CI, review threads, membership and rules. Inspect the queue and retry; do not bypass.');
               await core.summary.addHeading('Queue admission refused').addRaw(diagnostic.split('\n').map(line => `    ${line}`).join('\n') + '\n').write();
             }
 
-  # Distinct inactive names prevent a skipped job supplying a protected check.
-  review-result:
-    name: ${{ (github.event_name == 'pull_request_target' && github.event.pull_request.base.ref == 'main') && 'Automated Code Review' || 'PR review (not applicable)' }}
-    needs: preflight
-    if: always() && github.event_name == 'pull_request_target' && github.event.pull_request.base.ref == 'main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      checks: read
-      contents: read
-      pull-requests: read
-    steps:
-      - name: Require a completed review
-        env:
-          CANCELLED: ${{ job.status == 'cancelled' }}
-          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
-        run: |
-          test "$CANCELLED" = false
-          if [ "$PREFLIGHT_RESULT" != success ]; then
-            echo "::notice::Preflight ended '$PREFLIGHT_RESULT'. Fix it, then use Re-run failed jobs." >&2
-            exit 1
-          fi
-      - name: Check out trusted review admission scripts
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - name: Require fresh CodeRabbit admission and resolved threads
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          RELEASE_APP_BOT_LOGIN: ${{ vars.RELEASE_APP_BOT_LOGIN }}
-        with:
-          retries: 0
-          script: |
-            const { waitForCodeRabbitAdmission } = require('./.github/scripts/coderabbit-wait.cjs');
-            const admission = await waitForCodeRabbitAdmission({ github, ...context.repo, log: message => core.info(message),
-              pullNumber: context.payload.pull_request.number, head: context.payload.pull_request.head.sha,
-              releaseAppBotLogin: process.env.RELEASE_APP_BOT_LOGIN });
-            await core.summary.addHeading('CodeRabbit admission').addRaw(JSON.stringify(admission)).write();
-            if (!admission.admitted) {
-              core.notice(`CodeRabbit admission blocked: ${admission.reason}. ${admission.action} The reconciler refreshes this job after provider/CI/review events. For eventless thread resolution, dispatch Reconcile CodeRabbit admission with pr_number.`);
-              process.exitCode = 1;
-            }
-      - name: Reject a cancelled run
-        if: cancelled()
-        run: exit 1
-
+  # Transition: the trusted base of the merge group that removes the review gate
+  # still requires this check name in the branch rules. The inactive name keeps a
+  # skipped job from supplying it.
   queue-review-result:
     name: ${{ github.event_name == 'merge_group' && 'Automated Code Review' || 'Queue review (not applicable)' }}
-    needs: [verify, queue-admission]
+    needs: verify
     if: always() && github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -1662,11 +1617,9 @@ jobs:
         env:
           CANCELLED: ${{ job.status == 'cancelled' }}
           VERIFY_RESULT: ${{ needs.verify.result }}
-          QUEUE_RESULT: ${{ needs.queue-admission.result }}
         run: |
           test "$CANCELLED" = false
           test "$VERIFY_RESULT" = success
-          test "$QUEUE_RESULT" = success
       - name: Reject a cancelled run
         if: cancelled()
         run: exit 1

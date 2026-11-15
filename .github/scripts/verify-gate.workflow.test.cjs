@@ -10,7 +10,7 @@ const ci = yaml.parse(fs.readFileSync(path.join(__dirname, '../workflows/ci.yml'
 const heavy = ['build-and-package', 'vitest', 'cockpit-browser'];
 function context(event = 'pull_request_target', base = 'main') {
   return { github: { event_name: event, event: { pull_request: { base: { ref: base } } } },
-    needs: { preflight: { result: 'success' }, 'review-result': { result: 'success' },
+    needs: { preflight: { result: 'success' },
       'queue-proof': { result: 'success', outputs: { verified: 'false' } },
       'pr-test-input': { result: 'success', outputs: { sha: '' } },
 
@@ -22,7 +22,7 @@ function evaluate(value, ctx) {
 }
 function shell(job, overrides = {}) {
   const env = { PATH: process.env.PATH, BASH_ENV: '/dev/null', CANCELLED: 'false', EVENT_NAME: 'pull_request_target',
-    BASE_REF: 'main', PR_NUMBER: '', PREFLIGHT_RESULT: 'success', REVIEW_RESULT: 'success', CLASSIFY_RESULT: 'success',
+    PR_NUMBER: '', PREFLIGHT_RESULT: 'success', QUEUE_ADMISSION_RESULT: 'skipped', CLASSIFY_RESULT: 'success',
     SURFACE_RESULT: 'success', COMPLEXITY_RESULT: 'success', CLONE_RESULT: 'success', COMPLEXITY_GATE_RESULT: 'success',
     CLONE_GATE_RESULT: 'success', TYPECHECK_RESULT: 'success', UNIT_TESTS_RESULT: 'success', BUILD_AND_PACKAGE_RESULT: 'success',
     VITEST_RESULT: 'success', COCKPIT_BROWSER_RESULT: 'success', CHANGE_SURFACE: 'full-matrix', BUMP_PR: 'false',
@@ -33,56 +33,52 @@ function ancestors(id, chain = []) {
   assert.ok(!chain.includes(id), `CI dependency cycle: ${[...chain, id]}`);
   return [ci.jobs[id].needs ?? []].flat().flatMap(dep => [dep, ...ancestors(dep, [...chain, id])]);
 }
-function descendants(id) {
-  return Object.keys(ci.jobs).filter(other => ancestors(other).includes(id));
-}
-test('heavy jobs start without waiting for typecheck, preflight or review', () => {
+test('heavy jobs start without waiting for typecheck or preflight', () => {
   for (const id of Object.keys(ci.jobs)) ancestors(id);
   for (const id of heavy) {
     for (const gate of ['typecheck', 'preflight']) {
       assert.ok(!ancestors(id).includes(gate), `${id} must not wait for ${gate}`);
       assert.doesNotMatch(ci.jobs[id].if, new RegExp(gate), `${id} must not read ${gate}`);
     }
-    assert.ok(!ancestors(id).includes('review-result'), `${id} must not wait for review`);
-    assert.ok(!ancestors('review-result').includes(id), `${id} must not hold review`);
-    assert.doesNotMatch(ci.jobs[id].if, /review-result/, `${id} must not read the review result`);
     assert.match(ci.jobs[id].if, /!cancelled\(\)/, 'intentional skips cannot invoke implicit success()');
   }
-  assert.equal(ci.jobs['review-result'].needs, 'preflight');
-  for (const gate of ['preflight', 'typecheck', 'review-result']) {
+  for (const gate of ['preflight', 'typecheck', ...heavy]) {
     assert.ok(ci.jobs.verify.needs.includes(gate), `verify must still require ${gate}`);
   }
 });
-for (const result of ['failure', 'cancelled', 'skipped', '']) {
-  test(`review ${result} leaves heavy jobs running but keeps the aggregate red`, () => {
-    const ctx = context(); ctx.needs['review-result'].result = result;
-    for (const id of heavy) assert.equal(evaluate(ci.jobs[id].if, ctx), true, id);
-    assert.notEqual(shell('verify', { REVIEW_RESULT: result }).status, 0);
-  });
-}
-test('a targeted review rerun reaches only the aggregate and its dependents, never a suite', () => {
-  // GitHub reruns a job together with every job that depends on it.
-  const rerun = descendants('review-result');
-  assert.ok(rerun.includes('verify'));
-  for (const id of [...heavy, 'vitest-coverage-merge', 'pr-test-input']) {
-    assert.ok(!rerun.includes(id), `${id} must not rerun with review`);
-  }
-  for (const id of rerun) assert.ok(id === 'verify' || ancestors(id).includes('verify'), `${id} reruns with review`);
-});
-test('passing review never excuses missing, blocked or failed tests', () => {
+test('passing cheap gates never excuse missing, blocked or failed tests', () => {
   for (const id of heavy) assert.equal(evaluate(ci.jobs[id].if, context()), true, id);
   for (const key of ['UNIT_TESTS_RESULT', 'BUILD_AND_PACKAGE_RESULT', 'VITEST_RESULT', 'COCKPIT_BROWSER_RESULT']) {
     for (const result of ['failure', 'skipped', 'cancelled', '']) assert.notEqual(shell('verify', { [key]: result }).status, 0);
   }
   assert.equal(shell('verify').status, 0);
 });
-for (const [event, base] of [['pull_request_target', 'release/v1.2'], ['push', 'main'], ['workflow_dispatch', 'main'], ['merge_group', 'main']]) {
-  test(`${event}/${base} heavy jobs tolerate the inapplicable skipped PR review`, () => {
-    const ctx = context(event, base); ctx.needs['review-result'].result = 'skipped';
-    for (const id of heavy) assert.equal(evaluate(ci.jobs[id].if, ctx), true, id);
-    assert.equal(shell('verify', { EVENT_NAME: event, BASE_REF: base, REVIEW_RESULT: 'skipped' }).status, 0);
-  });
-}
+// Queue admission runs only for a merge group. There it gates the required
+// aggregate; on every other event its skip is not read.
+test('verify requires queue admission for a merge group and for no other event', () => {
+  assert.ok(ci.jobs.verify.needs.includes('queue-admission'));
+  assert.ok(!ancestors('queue-admission').includes('verify'), 'admission runs before the aggregate');
+  for (const id of [...heavy, 'typecheck', 'preflight', 'unit-tests']) {
+    assert.ok(ancestors('queue-admission').includes(id), `admission reads evidence after ${id}`);
+    assert.ok(!ancestors(id).includes('queue-admission'), `${id} must not wait for admission`);
+  }
+  for (const result of ['failure', 'cancelled', 'skipped', '']) {
+    assert.notEqual(shell('verify', { EVENT_NAME: 'merge_group', QUEUE_ADMISSION_RESULT: result }).status, 0, result);
+  }
+  assert.equal(shell('verify', { EVENT_NAME: 'merge_group', QUEUE_ADMISSION_RESULT: 'success' }).status, 0);
+  for (const event of ['pull_request_target', 'push', 'workflow_dispatch']) {
+    assert.equal(shell('verify', { EVENT_NAME: event, QUEUE_ADMISSION_RESULT: 'skipped' }).status, 0, event);
+  }
+});
+test('queue admission starts only for a merge group whose verification jobs did not fail', () => {
+  const admission = ci.jobs['queue-admission'].if;
+  const run = (event, { cancelled = false, failed = false } = {}) => evaluate(admission,
+    { ...context(event), cancelled: () => cancelled, failure: () => failed });
+  assert.equal(run('merge_group'), true);
+  assert.equal(run('merge_group', { failed: true }), false);
+  assert.equal(run('merge_group', { cancelled: true }), false);
+  for (const event of ['pull_request_target', 'push', 'workflow_dispatch']) assert.equal(run(event), false, event);
+});
 test('only existing trusted docs/infra/bump exemptions skip shards, never build/package', () => {
   for (const surface of ['docs-only', 'infra-only']) {
     const ctx = context(); ctx.needs['change-surface'].outputs.surface = surface;
@@ -96,7 +92,7 @@ test('only existing trusted docs/infra/bump exemptions skip shards, never build/
 test('cancellation cannot release work or green required gates', () => {
   const ctx = context(); ctx.cancelled = () => true;
   for (const id of heavy) assert.equal(evaluate(ci.jobs[id].if, ctx), false);
-  for (const id of ['preflight', 'review-result', 'verify', 'queue-review-result']) assert.notEqual(shell(id, { CANCELLED: 'true' }).status, 0);
+  for (const id of ['preflight', 'verify', 'queue-review-result']) assert.notEqual(shell(id, { CANCELLED: 'true' }).status, 0);
 });
 
 for (const event of ['pull_request_target', 'merge_group', 'workflow_dispatch', 'push']) {
@@ -131,31 +127,27 @@ test('preflight requires all applicable cheap gates and permits only exact queue
   assert.equal(shell('preflight', { EVENT_NAME: 'push', PROOF_VERIFIED: 'true', TYPECHECK_RESULT: 'skipped' }).status, 0);
   assert.notEqual(shell('preflight', { PROOF_VERIFIED: 'true', TYPECHECK_RESULT: 'skipped' }).status, 0);
 });
-test('exactly one applicable job owns the protected review name for main PRs and queue entries', () => {
-  for (const [event, base, expected] of [['pull_request_target', 'main', 1], ['merge_group', 'main', 1], ['push', 'main', 0],
-    ['workflow_dispatch', 'main', 0], ['pull_request_target', 'release/v1', 0]]) {
-    const ctx = context(event, base);
-    const named = ['review-result', 'queue-review-result'].filter(id => evaluate(ci.jobs[id].name, ctx) === 'Automated Code Review');
-    assert.equal(named.length, expected);
-    for (const id of named) assert.equal(evaluate(ci.jobs[id].if, ctx), true);
+// Transition: the merge group that removes the review gate is admitted by the
+// trusted base script, which still requires this check name in the branch rules.
+test('only a merge group supplies the transitional review check name, after verify', () => {
+  const job = ci.jobs['queue-review-result'];
+  assert.equal(job.needs, 'verify');
+  for (const [event, expected] of [['merge_group', true], ['pull_request_target', false], ['push', false], ['workflow_dispatch', false]]) {
+    const ctx = context(event);
+    assert.equal(evaluate(job.name, ctx) === 'Automated Code Review', expected, event);
+    assert.equal(evaluate(job.if, ctx), expected, event);
   }
+  for (const result of ['failure', 'cancelled', 'skipped', '']) {
+    assert.notEqual(shell('queue-review-result', { VERIFY_RESULT: result }).status, 0, result);
+  }
+  assert.equal(shell('queue-review-result', { VERIFY_RESULT: 'success' }).status, 0);
 });
 
 test('always aggregates reject cancellation even if all retained prerequisites succeeded', () => {
-  for (const job of [ci.jobs.preflight, ci.jobs.verify, ci.jobs['review-result'], ci.jobs['queue-review-result']]) {
+  for (const job of [ci.jobs.preflight, ci.jobs.verify, ci.jobs['queue-review-result']]) {
     const guard = job.steps.find(step => step.name === 'Reject a cancelled run');
     assert.ok(guard);
     assert.equal(evaluate(guard.if, { cancelled: () => true }), true);
     assert.notEqual(spawnSync('bash', ['-c', guard.run]).status, 0);
   }
-});
-
-test('a failed-test retry keeps review, and a review retry keeps the suites', () => {
-  // Failed-job selection is GitHub-owned. Neither side depends on the other,
-  // so retrying one cannot invalidate or repeat the other.
-  assert.ok(!ancestors('review-result').includes('vitest'));
-  for (const id of heavy) assert.ok(!ancestors(id).includes('review-result'));
-  assert.notEqual(shell('verify', { VITEST_RESULT: 'failure' }).status, 0);
-  assert.notEqual(shell('verify', { REVIEW_RESULT: 'failure' }).status, 0);
-  assert.equal(shell('verify').status, 0);
 });
