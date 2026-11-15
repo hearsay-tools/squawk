@@ -5,17 +5,16 @@ import { attachmentExtension } from '@open-mercato/cezar-contract/attachments';
 import { attachmentDirectory } from '../attachment-path.ts';
 import { highestImageSeq, type PastedContent, type PersistedAttachment } from '../pasted-content.ts';
 import type { RunModuleContext } from './types.ts';
+import type { RunMemory } from './run-memory.ts';
 
 interface AttachmentWriterHost {
   persistAttachment(runId: string, mediaType: string, data: string, namePrefix?: string): PersistedAttachment | null;
 }
 
 export class AttachmentWriter {
-  /** Per-run counter independent of ActiveRun, so queued runs can persist attachments.
-   * Seeded lazily from disk on the first write. */
-  readonly queuedImageSeq = new Map<string, number>();
-
-  constructor(private readonly context: RunModuleContext, private readonly host: AttachmentWriterHost) {}
+  /** The per-run counter is `RunMemory`'s `imageSeq`, independent of ActiveRun, so queued runs can
+   *  persist attachments. Seeded lazily from disk on the first write after its slot opens. */
+  constructor(private readonly context: RunModuleContext, private readonly host: AttachmentWriterHost, private readonly memory: RunMemory) {}
 
   /**
    * Persist every attachment a user message carries — images and files alike (open-mercato/cezar#950) — into the
@@ -74,8 +73,9 @@ export class AttachmentWriter {
       // Seed from the highest numeric suffix already on disk, NOT the file count:
       // `screenshot-*` and `pasted-*` share one numbering space, so counting would
       // re-issue a live number after any deletion. Only matters on the first write
-      // of a process (restart case) — afterwards the map is authoritative.
-      let seq = this.queuedImageSeq.get(runId);
+      // of a process (restart case) or after the run's memory was released — afterwards the
+      // slot is authoritative.
+      let seq = this.memory.read(runId, 'imageSeq');
       if (seq === undefined) seq = highestImageSeq(dir);
       // `persistAttachment` is fully synchronous, so two pastes cannot interleave between
       // the read of the counter and the write. The exclusive-create flag is the
@@ -91,7 +91,7 @@ export class AttachmentWriter {
           if ((err as NodeJS.ErrnoException).code === 'EEXIST') continue;
           throw err;
         }
-        this.queuedImageSeq.set(runId, seq);
+        this.memory.write(runId, 'imageSeq', seq);
         // Versioned, because that is the only surface served now. The cockpit still upgrades
         // the unversioned URLs sitting in OLD transcripts when it renders them
         // (`resolveApiUrl`), but a URL minted today must be fetchable as written.

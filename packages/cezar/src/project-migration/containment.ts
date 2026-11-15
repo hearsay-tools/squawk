@@ -1,12 +1,11 @@
-import { execFile } from 'node:child_process';
 import { lstatSync, realpathSync } from 'node:fs';
-import { promisify } from 'node:util';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { gitCommonDir } from '../delegation/workspace-git.ts';
 import { MIGRATION_JOURNAL_FILE } from '../server/cockpit-ownership.ts';
 import { pathPresent } from '../project-paths.ts';
 import { RUNS_DB_FILE } from '../runs/run-database.ts';
 import type { PathRewrite, ProjectMigrationJournal } from './journal.ts';
+import { runGit } from '../git-command.ts';
 
 /**
  * What a project migration journal may name (hearsay-tools/cezarion#3089). A journal is read back
@@ -77,7 +76,6 @@ function carried(from: string, to: string, path: { from: string; to: string }): 
     ?? (path.to === to + path.from.slice(from.length) ? undefined : `${path.to} is not where ${path.from} goes`);
 }
 
-const execFileAsync = promisify(execFile);
 
 const LEGACY = `${sep}.ai${sep}cezar`;
 const MIGRATED = `${sep}.ai${sep}squawk`;
@@ -161,7 +159,7 @@ export const MAX_JOURNAL_BYTES = 64 * 1024 * 1024;
  */
 async function trackedJournalRefusal(repoRoot: string): Promise<string | undefined> {
   try {
-    const { stdout } = await execFileAsync('git', ['ls-files', '-z', '--', `.ai/${MIGRATION_JOURNAL_FILE}`], { cwd: repoRoot, encoding: 'utf8', timeout: 60_000 });
+    const { stdout } = await runGit(['ls-files', '-z', '--', `.ai/${MIGRATION_JOURNAL_FILE}`], { cwd: repoRoot, timeout: 60_000 });
     return stdout ? 'Git tracks it; a migration journal is never committed' : undefined;
   } catch (error) {
     if (/not a git repository/i.test(String((error as { stderr?: unknown }).stderr ?? ''))) return undefined;

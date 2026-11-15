@@ -17,9 +17,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
+import { gitEnv } from '../git-command.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
-import { clearProjectProbeCache, registerProject } from '../workspace/projects.ts';
+import { clearProjectProbeCache, listProjects, registerProject } from '../workspace/projects.ts';
+import { createRunner } from '../core/runner-factory.ts';
+import { ProjectContexts } from './project-context.ts';
+import { createRunManager } from './run-manager.testkit.ts';
 import {
   checkoutRepo,
   checkoutTarget,
@@ -196,6 +200,34 @@ describe('checkout — persisted GitHub credentials', () => {
       const worktree = join(root, 'task');
       git('worktree', 'add', '-qb', 'task', worktree);
       expect(execFileSync('git', ['-C', worktree, 'config', '--get-all', 'credential.https://github.com.helper'], { encoding: 'utf8' })).toBe('\n!gh auth git-credential\n');
+    } finally {
+      vi.unstubAllEnvs();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('checkout — inherited Git location (hearsay-tools/squawk#3207)', () => {
+  it('clones into and configures the target when the process inherited GIT_DIR', async () => {
+    const root = mkdtempSync(join(realpathSync(tmpdir()), 'cez-inherited-git-dir-'));
+    const bin = join(root, 'bin');
+    const repo = join(root, 'repo');
+    const other = join(root, 'other');
+    mkdirSync(bin);
+    writeFileSync(join(bin, 'gh'), '#!/bin/sh\ngit init -q "$4" && git -C "$4" remote add origin "$3"\n', { mode: 0o755 });
+    execFileSync('git', ['init', '-q', other], { env: gitEnv() });
+    vi.stubEnv('PATH', `${bin}:${process.env.PATH}`);
+    vi.stubEnv('GIT_CONFIG_GLOBAL', '/dev/null');
+    vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1');
+    vi.stubEnv('GIT_DIR', join(other, '.git'));
+    vi.stubEnv('GIT_WORK_TREE', other);
+    try {
+      expect(await ghCloneRunner(parseRepoRef('owner/repo')!, repo, () => {}, undefined)).toEqual({ ok: true });
+      const config = (dir: string) => execFileSync('git', ['-C', dir, 'config', '--local', '--list'], { encoding: 'utf8', env: gitEnv() });
+      expect(config(repo)).toContain('remote.origin.url=https://github.com/owner/repo.git');
+      expect(config(repo)).toContain('credential.https://github.com.helper=!gh auth git-credential');
+      expect(config(other)).not.toContain('remote.origin');
+      expect(config(other)).not.toContain('credential.https://github.com.helper');
     } finally {
       vi.unstubAllEnvs();
       rmSync(root, { recursive: true, force: true });
@@ -594,7 +626,7 @@ describe('POST /api/v1/projects/checkout', () => {
     expect((await listProjectsViaApi()).projects.map((p) => p.name).sort()).toEqual(['one', 'two']);
   });
 
-  it('a checkout that duplicates an ALREADY-registered root answers 409 with the existing entry', async () => {
+  it('a checkout that duplicates an ALREADY-registered root answers 200 with the existing entry (hearsay-tools/squawk#1086)', async () => {
     // Reachable when the folder was removed from disk but its registry row was
     // not: the clone succeeds, and registration recognises the realpath.
     await useCheckoutRoot();
@@ -606,12 +638,32 @@ describe('POST /api/v1/projects/checkout', () => {
     clearProjectProbeCache();
 
     const { status, body } = await post({ url: 'open-mercato/cezar' });
-    expect(status).toBe(409);
-    expect(body.error).toContain(existing.id);
-    // The clone is still on disk — a successful checkout is never deleted by a
-    // registry outcome, and the message says where it is.
-    expect(body.error).toContain(target);
+    expect(status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.project?.id).toBe(existing.id);
     expect(existsSync(join(target, '.git'))).toBe(true);
+    expect((await listProjectsViaApi()).projects.map((p) => p.id)).toEqual([existing.id]);
+  });
+
+  it('a re-clone after the registry saw the root missing answers the fresh status, and the project opens', async () => {
+    await useCheckoutRoot();
+    mkdirSync(checkoutRoot, { recursive: true });
+    const target = join(checkoutRoot, 'cezar');
+    mkdirSync(target, { recursive: true });
+    const existing = await registerProject(target, 'local', testHome());
+    rmSync(target, { recursive: true, force: true });
+    clearProjectProbeCache();
+    expect((await listProjectsViaApi()).projects.find((p) => p.id === existing.id)?.status).toBe('missing');
+
+    const { status, body } = await post({ url: 'open-mercato/cezar' });
+    expect(status).toBe(200);
+    expect(body.project).toMatchObject({ id: existing.id, status: 'ok' });
+    const contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), listProjects: () => listProjects(testHome()) });
+    try {
+      expect((await apiRequest(makeApp({ contexts }), `/api/v1/p/${existing.id}/ui-state`)).status).toBe(200);
+    } finally {
+      contexts.disposeAll();
+    }
   });
 });
 

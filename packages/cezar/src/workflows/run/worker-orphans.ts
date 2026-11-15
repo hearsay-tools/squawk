@@ -79,6 +79,8 @@ export class WorkerOrphans {
     return true;
   }
 
+  // The orphan maps stay here, not in `RunMemory`: each entry describes one worker generation and
+  // goes when that generation settles or a new one starts (ADR 0064).
   private readonly orphanProbes = new Map<string, { generation: string; at: number; probe: GenerationProbe }>();
   /** Pending orphan reprobes by run id. One timer serves them all (hearsay-tools/cezarion#879). */
   readonly orphanDue = new Map<string, { generation: string; at: number; attempts: number }>();

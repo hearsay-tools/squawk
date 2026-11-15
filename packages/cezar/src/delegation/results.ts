@@ -1,6 +1,5 @@
 import { runDataDir } from '../legacy-runs.ts';
 import { projectPaths } from '../project-paths.ts';
-import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -9,6 +8,7 @@ import type { RunEvent, RunRecord, RunStore } from '../runs/store.ts';
 import { isAttachmentFileName, resolveAttachmentPath } from '../workflows/attachment-path.ts';
 import { readOwnedDiff, verifyOwnedWorkspace } from './workspace.ts';
 import { artifactDirectory, listArtifacts, readArtifact } from '../artifacts/store.ts';
+import { runGit } from '../git-command.ts';
 
 export const workerRevision = (run: RunRecord): number => run.delegation?.role === 'worker' ? run.delegation.executionRevision ?? 0 : 0;
 
@@ -78,8 +78,7 @@ async function readWorkerHead(repoRoot: string, run: RunRecord, previous: Worker
   let head: WorkerCollectedResult['head'] = { state: workspaceRemoved ? 'deleted' : 'unavailable', reason: 'missing', ...(historicalSha ? { sha: historicalSha } : {}) };
   try {
     const workspace = await verifyOwnedWorkspace(repoRoot, run);
-    const sha = await new Promise<string>((resolve, reject) => execFile('git', ['rev-parse', '--verify', 'HEAD^{commit}'],
-      { cwd: workspace.path, encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 }, (error, stdout) => error ? reject(error) : resolve(stdout.trim())));
+    const sha = (await runGit(['rev-parse', '--verify', 'HEAD^{commit}'], { cwd: workspace.path, timeout: 30_000, maxBuffer: 1024 })).stdout.trim();
     if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(sha)) throw Error('invalid HEAD');
     head = { state: 'available', sha };
   } catch { if (!workspaceRemoved) head = { state: 'unavailable', reason: 'unverified', ...(historicalSha ? { sha: historicalSha } : {}) }; }

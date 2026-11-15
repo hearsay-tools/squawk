@@ -29,6 +29,7 @@ import type {
 } from './agent-runner.js';
 import { RUNNER_FACTS } from './runner-facts.js';
 import { ompRequestedTools } from './runner-tool-grants.ts';
+import { ownLookup } from './own-lookup.ts';
 import { signalSession, spawnSessionLeader } from './session-process.js';
 import { buildChildEnv } from './agent-env.js';
 import type { UiEvent } from './ui-events.js';
@@ -139,11 +140,9 @@ export function ompTools(
   const tools = new Set<string>();
   const dropped = new Set<string>();
   for (const name of requested) {
-    // `hasOwn`: a plain-object lookup would map `constructor` onto Object's own function.
-    const mapped = Object.hasOwn(OMP_TOOL_MAP, name)
-      ? OMP_TOOL_MAP[name]
-      : name.startsWith(MCP_PREFIX) ? ompMcpToolName(name)
-        : OMP_BUILTIN_TOOL_NAMES.includes(name) ? name : undefined;
+    const mapped = ownLookup(OMP_TOOL_MAP, name)
+      ?? (name.startsWith(MCP_PREFIX) ? ompMcpToolName(name)
+        : OMP_BUILTIN_TOOL_NAMES.includes(name) ? name : undefined);
     if (mapped === undefined) dropped.add(name);
     else tools.add(mapped);
   }

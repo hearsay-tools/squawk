@@ -62,7 +62,8 @@ function autosaveReportLine(reason: AutosaveReason, outcome: AutosaveOutcome, ta
 export class WorktreeAutosave {
   constructor(private readonly context: RunModuleContext, private readonly host: WorktreeAutosaveHost) {}
 
-  /** The save may finish execution while its strict writer proof remains pending. */
+  /** The save may finish execution while its strict writer proof remains pending. Kept here, not
+   *  in `RunMemory`: cleanup evidence that outlives an execution. */
   private readonly autosaveTasks = new Map<string, { settlement: Promise<void>; blocker?: string }>();
 
   /** Cleanup evidence survives manager disposal and store close/reopen. */

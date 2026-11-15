@@ -24,6 +24,7 @@ import {
   skillSystemPrompt,
 } from './run.ts';
 import { createRunner } from '../core/runner-factory.ts';
+import { RunMemory } from './run/run-memory.ts';
 
 // Publication guidance is additive for both fresh sessions and Continue; the
 // full prompt assertions below must still pin the unchanged handoff contract.
@@ -264,6 +265,7 @@ describe('systemPrompt end-to-end (dry run)', () => {
     let seamRoot: string;
     let seamStore: RunStore;
     let seamManager: RunManager;
+    const seamMemory = new RunMemory();
     let bookkeeper: TurnBookkeeper;
     const seamWork = new TrackedWork();
 
@@ -278,7 +280,7 @@ describe('systemPrompt end-to-end (dry run)', () => {
         semaphore: new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 0 } }), work: seamWork, disposed: () => false };
       bookkeeper = new TurnBookkeeper(context, { isDisposedDelegatedRun: () => false,
         discoverSkills: () => discoverSkills(seamRoot, undefined, testHome()), reviveWorkflow: async () => skillWorkflow,
-        trackTurn: (_id, task) => { seamWork.track('turn', task); } });
+        trackTurn: (_id, task) => { seamWork.track('turn', task); } }, seamMemory);
     });
 
     afterAll(async () => {
@@ -306,7 +308,7 @@ describe('systemPrompt end-to-end (dry run)', () => {
       const forced = process.env.CEZ_AUTONAME;
       delete process.env.CEZ_AUTONAME;
       await seam.maybeRefreshTitle(record.id, 'made real progress on the fix');
-      expect(seam.lastNamerKey.has(record.id)).toBe(false);
+      expect(seamMemory.read(record.id, 'namerKey')).toBeUndefined();
       process.env.CEZ_AUTONAME = forced;
 
       // Outside dry-run, a fast-failing fake binary guards against real spawns.
@@ -319,20 +321,20 @@ describe('systemPrompt end-to-end (dry run)', () => {
         // Env default OFF → skip before any runner call.
         process.env.CEZ_TITLE_UPDATES = '0';
         await seam.maybeRefreshTitle(record.id, 'more progress');
-        expect(seam.lastNamerKey.has(record.id)).toBe(false);
+        expect(seamMemory.read(record.id, 'namerKey')).toBeUndefined();
 
         // Toggle ON but the title is user-owned → skip.
         process.env.CEZ_TITLE_UPDATES = '1';
         seamStore.updateRun(record.id, { title: 'Mine', titleSummary: 'Mine', titleOrigin: 'user' });
         await seam.maybeRefreshTitle(record.id, 'even more progress');
-        expect(seam.lastNamerKey.has(record.id)).toBe(false);
+        expect(seamMemory.read(record.id, 'namerKey')).toBeUndefined();
 
         // Namer-owned + toggle ON → the key is recorded (the call itself fails
         // fast on the fake binary and leaves the title as-is), and the SAME
         // inputs never record twice.
         seamStore.updateRun(record.id, { titleOrigin: 'auto' });
         await seam.maybeRefreshTitle(record.id, 'progress worth naming');
-        expect(seam.lastNamerKey.get(record.id)).toContain('progress worth naming');
+        expect(seamMemory.read(record.id, 'namerKey')).toContain('progress worth naming');
       } finally {
         if (savedDry === undefined) delete process.env.CEZ_DRY_RUN;
         else process.env.CEZ_DRY_RUN = savedDry;

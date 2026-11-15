@@ -8,6 +8,7 @@ import type { RunRecord } from '../../runs/store.ts';
 import type { Skill } from '../../skills.ts';
 import type { WorkflowDef } from '../types.ts';
 import type { RunModuleContext } from './types.ts';
+import type { RunMemory } from './run-memory.ts';
 
 interface TurnBookkeeperHost {
   isDisposedDelegatedRun(runId: string): boolean;
@@ -17,17 +18,15 @@ interface TurnBookkeeperHost {
 }
 
 export class TurnBookkeeper {
-  /** Last live-refresh namer inputs per run — unchanged inputs skip the call. */
-  readonly lastNamerKey = new Map<string, string>();
-  constructor(private readonly context: RunModuleContext, private readonly host: TurnBookkeeperHost) {}
+  /** The last live-refresh namer inputs per run are `RunMemory`'s `namerKey`: unchanged inputs
+   *  skip the call. */
+  constructor(private readonly context: RunModuleContext, private readonly host: TurnBookkeeperHost, private readonly memory: RunMemory) {}
 
   trackTurnEnd(runId: string, text: string): void {
     const task = this.recordTurnEnd(runId, text);
     this.host.trackTurn(runId, task);
   }
 
-  forget(runId: string): void { this.lastNamerKey.delete(runId); }
-  clear(): void { this.lastNamerKey.clear(); }
 
   /**
    * The namer's apply path (task auto-naming spec). Fire-and-forget: called
@@ -168,8 +167,8 @@ export class TurnBookkeeper {
     if (!run || run.titleOrigin === 'user' || run.titleOrigin === 'marker') return;
     const statText = run.diffStat ? `${run.diffStat.files} files, +${run.diffStat.adds} -${run.diffStat.dels}` : undefined;
     const key = `${turnText.slice(0, 200)}|${statText ?? ''}`;
-    if (this.lastNamerKey.get(runId) === key) return;
-    this.lastNamerKey.set(runId, key);
+    if (this.memory.read(runId, 'namerKey') === key) return;
+    this.memory.write(runId, 'namerKey', key);
     const workflow = await this.host.reviveWorkflow(run);
     const skillName = namingSkillHint(workflow);
     void this.autoNameRun(runId, skillName, namingTask(run), { turnText, diffStat: statText });

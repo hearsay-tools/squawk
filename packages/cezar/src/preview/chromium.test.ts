@@ -38,6 +38,10 @@ import {
   stopChromium,
   type ChromiumFs,
 } from './chromium.ts';
+import { allowLaunches } from '../test-launch-guard.testkit.ts';
+
+// This file launches fixture Chromiums and a real one on purpose (hearsay-tools/squawk#2369).
+allowLaunches('browser');
 
 const HOME = '/home/u';
 const fakeFs = (files: string[], dirs: Record<string, string[]> = {}): ChromiumFs => ({

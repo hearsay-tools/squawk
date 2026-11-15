@@ -1,6 +1,6 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { gitSync } from '../git-command.ts';
 
 /**
  * Source files over 1,000 lines are pinned at their current length (hearsay-tools/cezarion#1800).
@@ -29,7 +29,7 @@ export interface Baseline {
 }
 
 function sourceLengths(): Record<string, number> {
-  const listed = execFileSync('git', ['ls-files', '-z', '--', 'packages'], { cwd: repo, encoding: 'utf8', maxBuffer: 16 << 20 });
+  const listed = gitSync(['ls-files', '-z', '--', 'packages'], { cwd: repo, maxBuffer: 16 << 20 });
   return Object.fromEntries(
     listed
       .split('\0')

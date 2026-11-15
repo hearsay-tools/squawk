@@ -4,6 +4,7 @@ import { isLiveRecord } from '../runs/run-row.ts';
 import type { Home } from '../home/home.ts';
 import { atContinue, atStepOpen, atTaskHead, bindLaunchSource } from './run/launch-read-resolver.ts';
 import { composeRunModules, type RunModules } from './run/compose.ts';
+import { RunMemory } from './run/run-memory.ts';
 import { UNREAD_INPUT_GRACE_MS, QUEUE_WATCHDOG_MS, REPO_REDISCOVERY_MS } from './run/constants.ts';
 export { IDLE_TIMEOUT_MS, UNREAD_INPUT_GRACE_MS, NO_WAIT_NUDGE_REPLY_MS, COMPLETION_WILL_WAIT, MAX_AUTO_CONTINUES, MAX_WAKE_DELIVERY_ATTEMPTS, WAKE_DELIVERY_CAP_NOTE, WAKE_SESSION_CLOSED_ERROR, WAITS_DISCARDED_NOTE, REFUSAL_DISCARDED_NOTE, QUEUE_WATCHDOG_MS } from './run/constants.ts';
 import { isSyntheticContinuation } from './run/workflow-position.ts';
@@ -137,6 +138,12 @@ export class RunManager {
     this.#modules.familyReconciler.onDelegationRun(run, source);
   };
 
+  /** A run that ended releases its memory (hearsay-tools/squawk#2064); so does a deleted one. */
+  readonly #releaseEndedRunMemory = (run: RunRecord): void => {
+    this.#modules.memory.releaseIfEnded(run.id, run, () => this.isActive(run.id));
+  };
+  readonly #releaseDeletedRunMemory = (runId: string): void => { this.#modules.memory.release(runId); };
+
   /** `.ai/cezar` — where the per-task handoff files live. */
   readonly #dataDir: string;
 
@@ -164,7 +171,7 @@ export class RunManager {
   constructor(
     store: RunStore,
     repoRoot: string,
-    options: { home: Home; createRunner: RunnerFactory; timings?: Partial<import('../core/runner-runtime.ts').RunnerTimings>; work?: TrackedWork; semaphore?: WorkspaceSemaphore; unreadInputGraceMs?: number; noWaitNudgeReplyMs?: number; subagentGraceMs?: number; subagentDeadlineMs?: number; preview?: PreviewHostLike | undefined; squawkPort?: (() => number | undefined) | undefined; cockpit?: { origin: string; projectId: string } | undefined; sweepBranches?: ((keep: number) => void) | undefined; toolActivity?: ToolActivityTracker | undefined; acquireCiResources: (workspace: object) => CiResources },
+    options: { home: Home; createRunner: RunnerFactory; timings?: Partial<import('../core/runner-runtime.ts').RunnerTimings>; work?: TrackedWork; semaphore?: WorkspaceSemaphore; unreadInputGraceMs?: number; noWaitNudgeReplyMs?: number; subagentGraceMs?: number; subagentDeadlineMs?: number; preview?: PreviewHostLike | undefined; squawkPort?: (() => number | undefined) | undefined; cockpit?: { origin: string; projectId: string } | undefined; sweepBranches?: ((keep: number) => void) | undefined; toolActivity?: ToolActivityTracker | undefined; acquireCiResources: (workspace: object) => CiResources; memory?: RunMemory | undefined },
   ) {
     this.#store = store;
     this.#repoRoot = repoRoot;
@@ -225,7 +232,7 @@ export class RunManager {
       acceptDone: (...args) => this.acceptDone(...args),
       get preview() { return facade.#preview; },
       get squawkPort() { return facade.#squawkPort; },
-    });
+    }, options.memory ?? new RunMemory());
     // #774: `serve` knows its bound origin before it recovers, so recovered runs carry it too.
     if (options.cockpit) this.setCockpitAddress(options.cockpit);
     this.#ciResources = options.acquireCiResources(this.#semaphore);
@@ -246,6 +253,8 @@ export class RunManager {
     this.#repoRediscovery.unref?.();
     this.#store.on('run', this.#onDelegationRun);
     this.#store.on('deleted', this.#modules.wakeAdmission.onRunDeleted);
+    this.#store.on('run', this.#releaseEndedRunMemory);
+    this.#store.on('deleted', this.#releaseDeletedRunMemory);
   }
 
   /**
@@ -274,6 +283,8 @@ export class RunManager {
     this.#modules.workerExecutions.dispose();
     this.#store.off('run', this.#onDelegationRun);
     this.#store.off('deleted', this.#modules.wakeAdmission.onRunDeleted);
+    this.#store.off('run', this.#releaseEndedRunMemory);
+    this.#store.off('deleted', this.#releaseDeletedRunMemory);
     this.#toolActivity?.detach();
     this.#modules.familyReconciler.dispose();
     this.#modules.inboxClaims.dispose();
@@ -292,8 +303,7 @@ export class RunManager {
     this.#modules.autoResumeScheduler.dispose();
     this.#active.clear();
     this.#modules.line.dispose();
-    this.#modules.memoryGuard.dispose();
-    this.#modules.turnBookkeeper.clear();
+    this.#modules.memory.dispose();
     this.#modules.worktreeAutosave.dispose();
   }
 
