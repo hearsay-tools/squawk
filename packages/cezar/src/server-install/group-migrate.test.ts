@@ -429,6 +429,9 @@ describe('server-migrate sites and credentials', () => {
     expect(listenAddress(site('[2001:db8::5]:443 ssl', '[::]:443 ssl'), 443)).toBe('[2001:db8::5]');
     expect(listenAddress(site('203.0.113.5:80', '[::]:443 ssl'), 443)).toBe('[::1]');
     expect(listenAddress(site('80'), 443)).toBe('127.0.0.1');
+    expect(listenAddress(site('0.0.0.0:443 ssl', '[::]:443 ssl'), 443)).toBe('127.0.0.1');
+    expect(listenAddress(site('   203.0.113.5:443 ssl'), 443)).toBe('203.0.113.5');
+    expect(listenAddress(`    # listen 203.0.113.9:443 ssl;\n${site('[::]:443 ssl')}`, 443)).toBe('[::1]');
   });
 
   it('rolls back when the copied site does not serve the public name', async () => {
