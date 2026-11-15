@@ -43,22 +43,15 @@ as soon as their queue proof, change classification and immutable PR inputs are 
 packaged test typecheck, packaged CLI tests and release-package checks. All three jobs install
 dependencies and run in parallel, including on merge groups and dispatches. A main push
 with valid queue proof skips all three; otherwise all three must pass, even for docs-only changes.
-Heavy jobs run beside typecheck and cheap deterministic preflight; native review
-admission still waits for successful preflight. Review findings no longer hold heavy work back; they block merge
-through the aggregate. `verify` (**Unit, build, E2E, and package**) requires
-successful preflight, a successful **Automated Code Review** and every heavy
-job, so a blocked review fails it even when every suite passes. Both protected
-checks remain required. hearsay-tools/cezarion#2211 put review before heavy
-work to save paid suite runs; hearsay-tools/cezarion#2727 removed that order
-once CodeRabbit and the hosted runners became free for this repository.
+Heavy jobs run beside typecheck and cheap deterministic preflight. `verify`
+(**Unit, build, E2E, and package**) requires successful preflight and every heavy
+job. A type error or cheap-gate failure fails the required aggregate even though
+heavy jobs run. `verify` is the only required check.
 
-CodeRabbit starts automatic draft and incremental reviews on PR changes without
-a label filter or custom round cap. Its external review can start before
-preflight finishes. Heavy verification does not wait for typecheck or preflight;
-the aggregate requires both and current-head review admission. A type error or cheap-gate
-failure still fails the required aggregate even though heavy jobs run. The owner accepted automatic review because
-CodeRabbit is free for this open-source repository. Both required checks still
-gate merge.
+CI runs no automated reviewer. The local pre-PR review that agents run before they
+open a PR is the only automated review, and CI cannot prove that it ran. The
+`Protect main` ruleset requires every review thread resolved, so GitHub refuses
+queue entry while a thread is open.
 
 Local typechecking starts with `pnpm install --frozen-lockfile` in the checkout being verified,
 including nested task worktrees. `npm run typecheck` checks all four workspaces without
@@ -258,7 +251,7 @@ plus the complexity and clone gates. Typecheck, workflow lint, citations, classi
 feed the `Review preflight` gate. Heavy jobs wait only for their skip inputs:
 unit tests and build/package need queue proof and immutable PR inputs; Vitest and browser shards
 also need change-surface and PR-shape classification. They run beside typecheck and
-preflight. Native review admission follows preflight; `verify` requires all of them. Other events keep their existing test inventory. The eight Vitest shards and the eight cockpit browser shards use the exact Node version in
+preflight. `verify` requires all of them. Other events keep their existing test inventory. The eight Vitest shards and the eight cockpit browser shards use the exact Node version in
 `.node-version`; typecheck, unit tests and build/package use
 exactly the `engines.node` minimum (Node 24.21.0). Every job installs Node without a GitHub API call (§ Node setup without GitHub API calls):
 
@@ -391,7 +384,7 @@ and appears in the summary. The initial unit backlog therefore converges through
 normal reviewed PRs; this browser fix leaves the unit data unchanged.
 It leaves an existing refresh
 PR for normal CI and review instead of pushing over it. The existing release
-App creates the PR so native PR CI and CodeRabbit run. It does not merge the PR.
+App creates the PR so native PR CI runs. It does not merge the PR.
 A manual dispatch defaults to `dry_run: true`; branch dispatches and PR proofs
 cannot publish. Use `gh workflow run refresh-test-durations.yml --ref <branch>`
 for a read-only proof, and cite the run summary. Required checks never depend
@@ -409,19 +402,9 @@ sequencer's balancing-only role and upper-quartile fallback for unlisted files.
 
 The completed CI performance campaign is recorded in [the benchmark report](../benchmarks/ci-performance-156.md). Its temporary workflow and raw archives were removed after the measured improvements shipped.
 
-CodeRabbit starts automatic reviews on push, including drafts and incremental changes. `.coderabbit.yaml` clears label filtering and sets `auto_pause_after_reviewed_commits: 0`. The used keys were checked against the live [v2 schema](https://www.coderabbit.ai/integrations/schema.v2.json) on 2026-11-02. The owner removed the custom round/spend cap because this open-source integration is free. Automatic provider execution now starts before preflight; the native admission gate still follows cheap preflight. No review model keys, commands, provider output artifacts, posting schema or PAT fallback remain. Issue intake keeps its independent model integration.
+No review model keys, commands, provider output artifacts, posting schema or PAT fallback remain. Issue intake keeps its independent model integration.
 
-The all-path `reviews.path_instructions` in `.coderabbit.yaml` asks CodeRabbit to
-name each finding's concrete defect class, search all changed files, and group all
-evidenced file/line locations for that root cause in the same review. For guards,
-scanners and parsers whose established validation or safety contract requires it,
-the instruction prefers one general fail-closed recommendation with representative
-regression cases over separate findings for each unsupported syntax form. It
-preserves intentional acceptance of unknown forms where the contract permits it.
-These are reviewer instructions, not proof of complete coverage or a guarantee of
-fewer review rounds.
-
-The native gate requires trusted classification and applicable baseline, complexity and
+`Review preflight` requires trusted classification and applicable baseline, complexity and
 clone checks, plus typecheck, workflow lint and citations. Typecheck reads local
 source without building. The build/package job checks packaged test types after
 the application build.
@@ -434,30 +417,11 @@ requests and dispatches then fetch the full history of the checked-out commit an
 `main` (the classifier fetches the workflow commit), because their merge base can
 be older. No gate fetches other branches or tags.
 
-The protected **Automated Code Review** check retains its name and native Actions provenance. `review-result` runs trusted base scripts after successful preflight. It requires the newest `CodeRabbit` execution from App `347564` / slug `coderabbitai` on the exact live PR head to be completed/success, or completed/skipped with exact authenticated `output.title` **No files to review**, plus zero unresolved review threads of any author. The named skip is the provider's no-files decision; it does not prove model execution and needs no prior successful check. Outdated threads still block. All other skipped/neutral, missing/pending, failed/spoofed/stale checks and malformed/truncated/changing API pages fail closed. An empty provider `pull_requests` array is allowed; formal review objects never prove execution. The reader rechecks the provider (including its title) and live head before admitting. Requests have 10-second limits within a 60-second read deadline; it does not poll a pending provider forever.
+**PR Readiness** (`pr-readiness.yml`) syncs the project board and nothing else. Its one per-PR job reads the live PR, the required checks on its head and its review threads once, then decides the board status. In review needs a PR that is not a draft, every required check passing on the live head and zero unresolved review threads of any author. Outdated threads still count. Trusted discovery emits PR numbers before scheduling. Every trigger uses the same per-PR job lock, and every surviving job reads the live head after acquiring it. Discovery selects only the event's bounded PR targets, with independent jobs and budgets. Readiness never changes draft state (hearsay-tools/cezarion#3288): agents open PRs ready, and a human's draft stays a draft. The job makes no repository write. Under the lock it syncs the PR and closing-linked issue cards: In review when the PR is ready and its live head is verified, In progress otherwise, a draft included. The board sync has its own 15-second budget. When the core quota of the token that serves the reads is under 800 calls (`checkFloor` in `.github/scripts/api-budget.cjs`), the job skips the board sync and its remaining reads, logs why, and a later event catches up. Discovery and the per-PR job each end with one `GitHub API calls: N (core remaining R)` line per token (`GITHUB_TOKEN`, the release App read token, the board token), also when the job fails. Done cards remain protected. A new head whose checks have not passed moves the cards to In progress. Human ready/draft events request the same reevaluation. On the next trigger, a reopened thread moves a same-repository PR's cards back to In progress. GitHub Actions has no review-thread event for manual reopening or resolution; dispatch **PR Readiness** with `pr_number` after either change. Fork PRs get no board sync. Reads use a release App installation token, so they spend the App's API budget instead of the repository's `GITHUB_TOKEN` budget. The token asks for read permissions only. Without `RELEASE_APP_CLIENT_ID`, or when the App lacks one of these permissions, the token step fails quietly and reads use `GITHUB_TOKEN`. Queue admission reads the review threads itself, in addition to its native proof, rules and membership checks. Queue suites always run on full-matrix entries. Exact-push reuse keeps its existing proof and snapshot publication rules.
 
-The native review job keeps an unfinished review pending for up to 20 minutes,
-with at most 40 fresh admission reads spaced 30 seconds apart. A missing trusted
-current-head check gets a 3-minute grace from gate entry, then returns
-`provider-missing-timeout` (an in-flight snapshot can add at most 60 seconds).
-Queued or running checks retain the 20-minute overall bound, including a running
-review that already has open findings. Completed provider results and completed reviews with open threads
-return immediately. A snapshot that changes during its read is discarded and
-read again; other API/schema/head errors before the overall deadline remain errors. Each snapshot keeps the
-60-second read and 10-second request limits, clipped to the overall wait deadline.
-The shared reader enforces request cancellation through an abort signal; the
-numeric timeout option alone is ignored by github-script v9. The job has a
-25-minute limit for checkout, waiting and reporting. This holds an
-Actions runner during the wait. Readiness, queue admission and reconciliation
-still use the immediate reader. See [the pending-review plan](https://github.com/hearsay-tools/cezarion/pull/2604).
+Bot-authored `release/v*` version-bump PRs skip Vitest and cockpit browser E2E only when all of these hold: PR author is `github-actions[bot]` or the exact bot configured in `RELEASE_APP_BOT_LOGIN`, head is `release/v*`, the live file list matches the release-finalization allowlist (`packages/*/package.json`, `pnpm-lock.yaml`), the event head SHA still matches the live PR head, the file-list fetch succeeded in full, and base→head manifests differ only by one shared old→new semver pair (optional caret; same keys/structure — no added scripts, deps, or arbitrary retargets), and the pnpm lockfile stays byte-identical except matching local workspace specifiers (including its pnpm package-manager document).
 
-Settled blocked admission or an expired provider wait logs a notice and exits unsuccessfully. Existing reconciliation can retry after a late review finishes. Broken API/schema evidence is an error. Findings must not become error annotations because the CI sweep groups identical errors across PRs. Heavy unit, build/package, Vitest and browser jobs do not depend on this gate; they start once their skip inputs are ready and run beside typecheck, preflight and review admission. A blocked gate fails `verify`, which reads the gate and every heavy result. Docs-only and infra-only retain their suite skips but still require review admission. Cancellation never releases heavy work. Both protected checks remain required; branch protections are unchanged.
-
-Readiness is the board half of **Reconcile CodeRabbit admission** (`coderabbit-reconcile.yml`), which absorbed the former **PR Readiness** workflow. Its one per-PR job reads the live PR, the required checks on its head, the native proof and fresh CodeRabbit admission once, then decides both the targeted rerun and the board status. In review needs the latest native `ci.yml` run/attempt with successful protected jobs, and fresh CodeRabbit admission. Until a run of the native **Automated Code Review** check on the head has completed, neither a rerun nor In review can follow, so the job skips the native proof and admission reads. Admission is read only when the native review job has completed or the board could move to In review. Trusted discovery emits PR numbers before scheduling. Every trigger uses the same per-PR job lock, and every surviving job reads the live head and proof after acquiring it. Automatic CI/provider/signal discovery selects only the event's bounded PR targets, with independent jobs and budgets. A check run from any app other than CodeRabbit starts no job: the discovery job's `if:` drops it before a runner starts. Readiness never changes draft state (hearsay-tools/cezarion#3288): agents open PRs ready, and a human's draft stays a draft. The job's only repository write is the targeted native rerun. Under the same lock it syncs the PR and closing-linked issue cards: In review when the PR is ready and its live head is verified, In progress otherwise, a draft included. The board sync runs before the rerun attempt, so a rejected or ambiguous rerun request cannot leave a card In review. The board sync has its own 15-second budget, so a stalled project request delays the rerun by at most that long. The board sync is the job's low-priority part: when the core quota of the token that serves the reads is under 800 calls (`checkFloor` in `.github/scripts/api-budget.cjs`), the job skips the board sync and its board-only reads, logs why, and a later event catches up; the rerun decision and the review gate never skip. Discovery and the per-PR job each end with one `GitHub API calls: N (core remaining R)` line per token (`GITHUB_TOKEN`, the release App read token, the board token), also when the job fails. Done cards remain protected. An unverified new head moves the cards to In progress; a late synchronize event cannot override current green proof. Human ready/draft events request the same reevaluation. On the next trigger, a new pending same-head execution or reopened thread moves a same-repository PR's cards back to In progress. GitHub Actions has no review-thread event for manual reopening or resolution; dispatch **Reconcile CodeRabbit admission** with `pr_number` after either change, which refreshes both native admission and the board. Fork PRs get no board sync. Reads use a release App installation token, so they spend the App's API budget instead of the repository's `GITHUB_TOKEN` budget. The token asks for read permissions only (Actions, Checks, Contents, Pull requests, Commit statuses; discovery asks for Actions, Checks and Pull requests). Without `RELEASE_APP_CLIENT_ID`, or when the App lacks one of these permissions, the token step fails quietly and reads use `GITHUB_TOKEN`. The App has no Actions write, so the targeted rerun always uses `GITHUB_TOKEN`. Native proof requires an official matching main-target PR association; an empty association fails closed. If it appears, inspect the native run and start fresh native CI rather than substituting a dispatch or unrelated same-head run. Queue admission reads the same fresh provider/thread evidence in addition to its existing native proof, rules and membership checks. Queue suites always run on full-matrix entries. Exact-push reuse keeps its existing proof and snapshot publication rules.
-
-Bot-authored `release/v*` version-bump PRs skip Vitest, cockpit browser E2E, and automated code review only when all of these hold: PR author is `github-actions[bot]` or the exact bot configured in `RELEASE_APP_BOT_LOGIN`, head is `release/v*`, the live file list matches the release-finalization allowlist (`packages/*/package.json`, `pnpm-lock.yaml`), the event head SHA still matches the live PR head, the file-list fetch succeeded in full, and base→head manifests differ only by one shared old→new semver pair (optional caret; same keys/structure — no added scripts, deps, or arbitrary retargets), and the pnpm lockfile stays byte-identical except matching local workspace specifiers (including its pnpm package-manager document).
-
- The shared check lives in `.github/scripts/release-bump-pr.cjs` (loaded from the trusted base checkout) and feeds CI `classify-pr`; the shared CodeRabbit reader applies the same classifier to complete live files and exact base/head content. The required CI aggregate still runs `typecheck`, `unit-tests` and `build-and-package` and accepts `skipped` for Vitest/cockpit only on that verified shape. The named **Automated Code Review** gate bypasses provider evidence only on that verified shape, and still requires every review thread resolved. A human-authored `release/v*` PR still runs the full matrix and review. Reconciliation never calls a reviewer.
+ The shared check lives in `.github/scripts/release-bump-pr.cjs` (loaded from the trusted base checkout) and feeds CI `classify-pr`. The required CI aggregate still runs `typecheck`, `unit-tests` and `build-and-package` and accepts `skipped` for Vitest/cockpit only on that verified shape. A human-authored `release/v*` PR still runs the full matrix.
 
 Release finalization creates bump PRs with a repository-scoped GitHub App token,
 which emits native `pull_request_target` CI. It waits for that run and never
@@ -745,7 +709,7 @@ change before merge, push the branch and run `gh workflow run ci.yml --ref <bran
 without `-f pr_number`, which only bot release PRs take. The dispatched run uses the
 branch's `ci.yml` on the pushed head, with the full matrix. It skips both publishing
 jobs, so it publishes nothing: `publish-snapshot` runs only on a push to `main`, and
-`prepare-pr-snapshot` only on `pull_request_target`. It also skips `review-result` and `queue-review-result`, so it does not exercise provider admission or native reconciliation. The dispatched run does not satisfy the PR's required checks (see
+`prepare-pr-snapshot` only on `pull_request_target`. It also skips queue admission, which runs only in a merge group. The dispatched run does not satisfy the PR's required checks (see
 § Diagnostic dispatch), so cite its run ID in the PR's
 Verification section. Run `38979957113` proved the new `Lint workflows` step of
 hearsay-tools/cezarion#1199.
@@ -766,32 +730,19 @@ files match, not that the run passed or exercised the skipped jobs above.
 comparison also treats edits to unrelated workflows as stale; later commits
 that leave the workflow files unchanged do not invalidate the proof.
 
-### Re-running a review
+### Re-running a failed job
 
-CodeRabbit owns review execution and finding discussion. CI never requests a model review or resolves findings. Push fixes or discuss a finding with its reviewer. A flaky verification failure uses **Re-run failed jobs**, which retains successful review and heavy jobs. **Re-run failed jobs** reruns every failed job: when only the review failed, it reruns the review and `verify`; when a suite also failed, it reruns that suite too. A targeted rerun of the review job alone, as the reconciler does, never reruns a suite.
+CI never requests a model review or resolves findings. A flaky verification failure uses **Re-run failed jobs**, which retains successful jobs and reruns every failed job with `verify`. A rerun keeps the workflow definition of its run. An open PR whose last CI run predates a workflow change on `main` needs a new run: push a new head or update the branch.
 
-`coderabbit-reconcile.yml` uses default-branch code and no PR checkout. Its only secret is the optional release App key for the read and board tokens (see readiness under [CI verification](#ci-verification)), and its only write permission is the Actions write needed for targeted retries. It reacts to genuine CodeRabbit check `created`/`completed`, native CI completion, completion of **CodeRabbit review signal**, and the pull-request events the board follows (opened, reopened, synchronize, ready for review, converted to draft). Review/comment events run that no-permission, no-checkout signal in PR merge-ref context. The signal debounces per PR (hearsay-tools/squawk#3453): its job has a per-PR concurrency group that cancels an earlier run and settles for 30 s, so a burst of review comments ends in one completed run; a cancelled or skipped signal run wakes nothing only when a newer signal run names the same PR, and a lone one still wakes the reconciler. The trusted consumer validates official workflow identity, native event and same-repository signal association. The association selects a stable PR number; queued proof validates the exact live PR head. Signal success, artifacts and comment bodies grant no authority. Missing signal associations fail closed; use manual recovery.
+### Board sync and the review signal
 
-Independent automatic discovery uses official PR associations from the verified native CI run or provider check, or the validated review signal PR number. CI run or signal merge SHAs never filter the live PR head. An empty provider association alone permits the bounded two-page open-main listing, which selects only eligible current heads equal to the verified provider head. Old associated events still wake their PR and read its newest proof. An unassociated stale head with no current match is a no-op. At most four association rows or matching targets are accepted per event; duplicates are removed. Missing/malformed CI/check associations, target overflow and incomplete inventory fail closed with explicit `pr_number` dispatch recovery. Trusted discovery emits only these eligible PR numbers in its matrix. Unrelated PRs receive no native/provider proof work. This bounds target work per event, not the repository-wide hourly token budget; four-way parallelism only bounds concurrency. Each job has its own 120-second deadline and PR-number concurrency lock, with at most four jobs running and fail-fast disabled. The admitted event is a wake hint. Only the trusted PR number enters the queue; each job reads the live head and proves its newest native run at its lock head. Manual dispatch scopes its requested PR. It validates the latest native CI workflow/run/attempt and successful preflight, then reruns only the completed `review-result` job if live admission differs from its result. Equal outcomes are no-ops. Both completion orders work: CI completion catches an earlier provider finish, and provider completion catches an earlier CI finish. On the next admission read, reopened threads and new pending same-head reviews revoke historical green results. For same-repository PRs, provider check completion automatically wakes reconciliation; manual thread reopening or resolution needs a **Reconcile CodeRabbit admission** dispatch with `pr_number`. Fork PRs receive no automated reruns, including from this dispatch. For fork PRs, a maintainer must rerun the native **Automated Code Review** job in Actions after provider completion or a manual thread change. Existing queue fork verification remains supported.
+`pr-readiness.yml` uses default-branch code and no PR checkout. Its only secret is the optional release App key for the read and board tokens (see readiness under [CI verification](#ci-verification)), and it has no write permission on the repository. It reacts to native CI completion, completion of **Review signal** (`review-signal.yml`), and the pull-request events the board follows (opened, reopened, synchronize, ready for review, converted to draft). Review/comment events run that no-permission, no-checkout signal in PR merge-ref context. The signal debounces per PR (hearsay-tools/squawk#3453): its job has a per-PR concurrency group that cancels an earlier run and settles for 30 s, so a burst of review comments ends in one completed run; a cancelled or skipped signal run wakes nothing only when a newer signal run names the same PR, and a lone one still wakes the board sync. The trusted consumer validates official workflow identity, native event and same-repository signal association. The association selects a stable PR number; the per-PR job reads the exact live PR head. Signal success, artifacts and comment bodies grant no authority. Missing signal associations fail closed; use manual recovery.
 
-Writes are serialized per discovered PR. The reconciler rechecks admission and native identity before the write, then observes the accepted attempt under a bounded deadline before releasing serialization. It observes both successful and ambiguous POST responses without retrying the write. This is a bounded observation barrier, not a durable cross-execution reservation; unresolved acceptance needs manual inspection before further retries. Inspect the native run if acceptance is not visible. GitHub can coalesce pending jobs for one PR; each surviving job reads live evidence. A and B have independent event discovery and separate PR locks; neither discovery job shares a cross-PR pending slot. Manual `pr_number` dispatch recovers dropped or eventless changes. An old valid event cannot select historical proof; its job independently proves the newest native run. Delivery and scheduling still depend on GitHub, so this is not a lossless-delivery claim. GitHub Actions has no review-thread event for manual reopening or resolution, so neither change triggers readiness or the review signal. After either manual change, dispatch **Reconcile CodeRabbit admission** with `pr_number` to refresh native admission and the board. It cannot restart a disabled workflow, a run at least 30 days old or one at the 50-attempt limit. Promotion requires the step marker **Require fresh CodeRabbit admission and resolved threads**. A green historical **Require fresh CodeRabbit execution and resolved threads** job can only be revoked after fresh validated admission rejects it under both policies, such as a reopened thread, pending provider, latest failure or generic skip. An admitted decision, including no-files, leaves that old green job unchanged. A failed historical job always requires a fresh native run; it cannot be promoted by a retry. This prevents a no-files retry loop after revocation. Admission read errors alone cannot authorize a historical retry. Reusable `automated-code-review.yml` model jobs remain refused in every direction. Reruns keep their original definition and immutable source checkout; push a new head or start a new native run after rollout when promotion needs the new policy. No whole-CI dispatch or model fallback occurs.
+Independent automatic discovery uses official PR associations from the verified native CI run, or the validated review signal PR number. CI run or signal merge SHAs never filter the live PR head. Old associated events still wake their PR and read its live head. At most four association rows are accepted per event; duplicates are removed. Missing/malformed CI associations and target overflow fail closed with explicit `pr_number` dispatch recovery. Trusted discovery emits only these eligible PR numbers in its matrix. Unrelated PRs receive no work. This bounds target work per event, not the repository-wide hourly token budget; four-way parallelism only bounds concurrency. Each job has its own 120-second deadline and PR-number concurrency lock, with at most four jobs running and fail-fast disabled. The admitted event is a wake hint. Only the trusted PR number enters the queue; each job reads the live head at its lock head. Manual dispatch scopes its requested PR. Fork PRs receive no board sync, including from this dispatch.
 
-### Native review recovery
+GitHub can coalesce pending jobs for one PR; each surviving job reads live evidence. A and B have independent event discovery and separate PR locks; neither discovery job shares a cross-PR pending slot. Manual `pr_number` dispatch recovers dropped or eventless changes. Delivery and scheduling still depend on GitHub, so this is not a lossless-delivery claim. GitHub Actions has no review-thread event for manual reopening or resolution, so neither change triggers readiness or the review signal. After either manual change, dispatch **PR Readiness** with `pr_number` to refresh the board.
 
-| Evidence | Recovery |
-| --- | --- |
-| `provider-missing-timeout`: no trusted check appeared during the 3-minute grace | Post `@coderabbitai full review` on the PR. After the provider completes, let reconciliation retry the native gate. If the event is missed, dispatch **Reconcile CodeRabbit admission** with `pr_number`. The reconciler never requests a provider review. |
-| Current-head check queued or running | Let the native gate wait within its 20-minute overall bound. After a late completion, reconciliation can retry it; dispatch with `pr_number` if the event is missed. |
-| Current-policy native gate failed, fresh admission now passes | Dispatch **Reconcile CodeRabbit admission** with `pr_number`; it reruns the native gate after fresh preflight, head, run and attempt checks. Equal outcomes are no-ops. |
-| `legacy-workflow`: failed historical execution-only or reusable model gate | A targeted rerun keeps the historical workflow definition. Push a new head or start a fresh native PR run using the rolled-out policy. Dispatch does not upgrade historical policy. |
-| GitHub API timeout, malformed evidence or changed head | Inspect the failed step and live head. Repair the evidence or transient API failure, then dispatch reconciliation or rerun the failed native job. An API error is not proof of an unsuccessful provider review. Inspect ambiguous rerun acceptance before any retry. |
-| Fork PR | A maintainer reruns the native **Automated Code Review** job after provider completion or a thread change; dispatch does not rerun fork jobs. |
-
-The first attempt of [fork PR 2658](https://github.com/hearsay-tools/cezarion/actions/runs/41809519155/attempts/1) failed on an API timeout. [Fork PR 2607's dispatch](https://github.com/hearsay-tools/cezarion/actions/runs/41708168109) refused its historical execution-only gate. These are distinct from a queued/running provider, which the native wait already handles.
-
-GitHub's targeted rerun also reruns the jobs that depend on the review job: `verify` and the jobs after it. No heavy job depends on the review job, so a reconciled review keeps the existing suite results and does not run the suites again. Do not use a review retry to rerun failed tests; use **Re-run failed jobs**.
-
-**Validation limit:** native `pull_request_target` CI uses main's definition until merge. A final-head bare dispatch proves changed verification workflow files but skips admission. The parent must dispatch the final branch before merge. After rollout, use a disposable same-repository draft PR to confirm provider events, finding settlement, both completion orders, revocation, targeted reruns, and manual recovery. Record run, attempt and job IDs and close without merging. Local fixtures do not prove live postmerge provider events, GitHub rerun scheduling or queue semantics.
+**Validation limit:** native `pull_request_target` CI uses main's definition until merge. A final-head bare dispatch proves changed verification workflow files but skips queue admission. The parent must dispatch the final branch before merge. Local fixtures do not prove live postmerge GitHub events or queue semantics.
 
 ### Stable release recovery
 
@@ -1029,25 +980,8 @@ and eight browser jobs execute the full suites on every full-matrix queue entry.
 A selected PR run never serves as full-suite proof for the queue.
 Queue runs have no model keys, npm credentials, publishing jobs or OIDC permission.
 
-Before enqueueing, and again in queue admission, use the newest trusted
-CodeRabbit check on the current PR head. If it started after the PR's
-**first-ever** `ready_for_review` event, it must complete successfully; pending
-or failed execution blocks admission. If no execution started after that event,
-refuse admission for the shared helper's `POST_READY_SETTLE_MS` (three-minute)
-window, then use existing current-head admission. CodeRabbit restarted after
-33–40 seconds in two observed cases but did not restart in another, and provides
-no signal that it will not re-review. A later ready transition does not reset
-the window. The shared reader is `.github/scripts/queue-coderabbit-admission.cjs`;
-`land-pr` uses the same order. A non-draft PR with no ready event was opened
-ready and uses current-head admission without a cutoff. Agents open PRs ready,
-so their PRs take this path and wait for no settle window; a PR opened as a
-draft and later marked ready keeps the window. Malformed or unreadable
-timeline proof blocks actual-review admission. Existing trusted no-files,
-release-stamps and upstream-ledger exceptions remain unchanged.
-A new same-head review that is pending blocks admission; the reconciler moves the
-PR's cards to In progress and leaves its draft state alone.
-See `.ai/specs/2026-11-09-post-first-ready-queue-review.md` and
-hearsay-tools/cezarion#3046 for the observed first-ready race.
+Queue admission reads the PR's review threads and refuses an entry while any
+thread is unresolved. `land-pr` reads the same threads before it enqueues.
 
 ### Rerun of a failed queue shard
 
@@ -1187,24 +1121,32 @@ runs both applicable full suites. There is no PR-suite attestation, reuse probe 
 reuse receipt. This preserves full-suite proof on the combined commit when a PR
 selection misses a runtime dependency.
 
-The required `Automated Code Review` check verifies existing PR-head review
-admission. It does not call a model to review combined code. The helper comes
-from the group's immutable base SHA. It reads the first two live queue entries,
+Queue admission (`Validate reviewed queue entry`, `merge-queue-admission.cjs`) runs
+after every verification job, and `verify` requires its success in a merge group.
+It calls no model. The helper comes from the group's immutable base SHA. It reads
+the first two live queue entries,
 the build window, and requires exactly one entry whose head and base equal the
 group SHAs, at position 1 or 2. At position 2, the position-1 entry's head must
 equal the group base, so the build sits on the chain GitHub reports. An entry
 that moves from position 2 to 1 during its build, because entry 1 merged, passes
 the final reread. It also requires the reviewed queue rules (build concurrency 1
-or 2, every other setting exact), an unchanged open non-draft main PR, successful current native `pull_request_target` CI/review from this
-repository's `ci.yml`, fresh exact-head CodeRabbit admission, and no unresolved review threads. Dispatches and unrelated
-same-name checks cannot supply review admission. Missing or changing evidence
+or 2, every other setting exact), an unchanged open non-draft main PR, a successful
+`Unit, build, E2E, and package` job in the newest native `pull_request_target` run of
+this repository's `ci.yml` on the PR head, and no unresolved review thread. Dispatches
+and unrelated same-name checks cannot supply that proof. Missing or changing evidence
 fails closed. GitHub owns queue persistence; no cockpit session is required.
+
+Transition: a merge group also runs `queue-review-result`, which reports the check
+name `Automated Code Review` after `verify`. The merge group that removes the review
+gate is admitted by the helper from its base, which requires that name in the branch
+rules. A follow-up PR deletes the job after the owner removes the name from the
+ruleset.
 
 A main push probes official Actions metadata for at most 60 seconds (each request
 at most 10 seconds; at most seven pending reads; complete lists limited to 200
 records). It reuses only the newest same-repository queue run's latest successful
 attempt for the **exact pushed SHA**, after every classifier, verification leaf,
-aggregate and review admission job succeeds. A final reread checks for races.
+aggregate and queue admission job succeeds. A final reread checks for races.
 A queue run of a docs-only entry lists each skipped suite once, under its unexpanded
 name (`Vitest shard ${{ matrix.shard }}/8`). The probe accepts those two skipped jobs in
 place of the sixteen shards only when the pushed commit is docs-only or infra-only by
@@ -1249,8 +1191,8 @@ and absent proof forces full fallback. Fixtures do not prove live queue semantic
 or equal cost.
 
 The admitted settings are squash, build concurrency 1 or 2 (§ Two speculative builds), minimum/maximum merge count 1, only passing
-entries (`ALLGREEN`), and a 45-minute check timeout. Keep both required checks
-(`Unit, build, E2E, and package` and `Automated Code Review`) bound to GitHub Actions,
+entries (`ALLGREEN`), and a 45-minute check timeout. Keep the required check
+(`Unit, build, E2E, and package`) bound to GitHub Actions,
 review-thread resolution, strict checks false, all other protections, and no
 bypass actors. The admission helper rejects other queue settings, including
 build concurrency 3 or more and any merge count above 1. Enable the
@@ -1285,7 +1227,7 @@ session because GitHub owns both the queue and Actions records.
 For an incident, bare workflow dispatch forces full CI without publication.
 Reverting reuse restores full verification on future pushes. Queue rollback is
 maintainer-owned: inspect active entries, remove only the queue requirement and
-restore the behind-main policy. Retain full main CI, both required checks,
+restore the behind-main policy. Retain full main CI, the required check,
 review-thread resolution and no-bypass protection.
 
 #### Two speculative builds

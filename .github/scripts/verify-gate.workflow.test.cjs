@@ -49,15 +49,6 @@ test('heavy jobs start without waiting for typecheck or preflight', () => {
     assert.ok(ci.jobs.verify.needs.includes(gate), `verify must still require ${gate}`);
   }
 });
-test('no CI job waits for an external reviewer or supplies a review check on a pull request', () => {
-  assert.equal(ci.jobs['review-result'], undefined);
-  const ctx = context();
-  for (const [id, job] of Object.entries(ci.jobs)) {
-    const name = /\$\{\{/.test(job.name ?? '') && !/matrix\./.test(job.name) ? evaluate(job.name, ctx) : job.name;
-    assert.notEqual(name, 'Automated Code Review', id);
-  }
-  assert.doesNotMatch(JSON.stringify(ci), /coderabbit/i);
-});
 test('passing cheap gates never excuse missing, blocked or failed tests', () => {
   for (const id of heavy) assert.equal(evaluate(ci.jobs[id].if, context()), true, id);
   for (const key of ['UNIT_TESTS_RESULT', 'BUILD_AND_PACKAGE_RESULT', 'VITEST_RESULT', 'COCKPIT_BROWSER_RESULT']) {

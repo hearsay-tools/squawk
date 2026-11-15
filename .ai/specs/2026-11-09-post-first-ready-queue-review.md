@@ -1,5 +1,7 @@
 # Post-first-ready provider proof for queue admission
-Status: done
+Status: superseded
+
+Superseded 2026-11-15: CI runs no automated reviewer. Queue admission reads review threads and needs no provider proof or settle window. Historical design retained below.
 
 Owner decision: three-minute settle window, 2026-11-09. Subject: hearsay-tools/cezarion#3046.
 

@@ -80,14 +80,6 @@ test('PR-context review signals have no permissions, secrets, checkout or truste
   assert.doesNotMatch(JSON.stringify(w), /secrets\.|checkout|outputs/);
 });
 
-test('no workflow or repository file configures an external reviewer', () => {
-  const root = path.join(__dirname, '../..');
-  for (const name of ['.coderabbit.yaml', '.coderabbit.yml']) assert.equal(fs.existsSync(path.join(root, name)), false, name);
-  for (const file of fs.readdirSync(path.join(__dirname, '../workflows'))) {
-    assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '../workflows', file), 'utf8'), /coderabbit/i, file);
-  }
-});
-
 // The workflow scripts run here as github-script runs them. Each fake token is a
 // minimal Octokit whose `request` and `graphql` pass through `hook.wrap`.
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
