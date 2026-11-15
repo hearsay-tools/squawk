@@ -48,6 +48,13 @@ export function conversationMembersOf(run: RunRecord): string[] | null {
   return [...new Set(['', ...conversation.messages.flatMap(message => [message.senderRunId, message.recipientRunId])])];
 }
 
+/** What `automation_runs` holds for a run: `[automation_id, receipt_id]` for the automation that
+ *  launched it and the one that triggered it; null for neither. */
+export function automationRunsOf(run: RunRecord): Array<[string, string | null]> | null {
+  const rows = [run.automation, run.automationTrigger].flatMap(origin => origin ? [[origin.automationId, origin.receiptId ?? null] as [string, string | null]] : []);
+  return rows.length > 0 ? rows : null;
+}
+
 /**
  * Encode a record, its summary and all query columns for one upsert. data may include preserved
  * raw fields. Live process usage is attached by readers and is never persisted here.
@@ -70,6 +77,7 @@ export function encodeRunRow(run: RunRecord, data: string = JSON.stringify(run))
     data,
     summary: JSON.stringify(toRunSummary(run)),
     conversationMembers: conversationMembersOf(run),
+    automationRuns: automationRunsOf(run),
   };
 }
 

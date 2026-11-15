@@ -20,6 +20,8 @@ import {
   toRunDatabaseError,
   type RunRowInput,
 } from './run-database.ts';
+import { AUTOMATION_RUNS_INDEX } from './automation-runs.ts';
+import { CONVERSATION_MEMBERS_INDEX } from './conversation-members.ts';
 
 let dir: string;
 let path: string;
@@ -61,6 +63,8 @@ function planOf(read: () => unknown): string[] {
   }
 }
 
+const membersOf = (db: RunDatabase, id: string) => db.indexRows(CONVERSATION_MEMBERS_INDEX, id)?.map(([member]) => member) ?? null;
+
 function row(id: string, overrides: Partial<RunRowInput> = {}): RunRowInput {
   return {
     id,
@@ -71,6 +75,7 @@ function row(id: string, overrides: Partial<RunRowInput> = {}): RunRowInput {
     data: JSON.stringify({ id, payload: 'full' }),
     summary: JSON.stringify({ id }),
     conversationMembers: null,
+    automationRuns: null,
     ...overrides,
   };
 }
@@ -408,8 +413,8 @@ describe('RunDatabase', () => {
         row('new', { createdAt: '2026-10-02T00:00:00.000Z', conversationMembers: ['', 'x', 'y'] }), row('plain')], deletes: [] });
       expect(db.listConversationRoots('x')).toEqual(['new', 'old']);
       expect(db.listConversationRoots()).toEqual(['new', 'old']);
-      expect(db.conversationMembers('new')).toEqual(['', 'x', 'y']);
-      expect(db.conversationMembers('plain')).toBeNull();
+      expect(membersOf(db, 'new')).toEqual(['', 'x', 'y']);
+      expect(membersOf(db, 'plain')).toBeNull();
       db.transaction({ upserts: [row('old', { createdAt: '2026-10-01T00:00:00.000Z', conversationMembers: ['', 'z'] })], deletes: [] });
       expect(db.listConversationRoots('x')).toEqual(['new']);
       expect(db.listConversationRoots('z')).toEqual(['old']);
@@ -432,10 +437,48 @@ describe('RunDatabase', () => {
       previous.close();
       const migrated = openDb();
       expect(migrated.listConversationRoots().sort()).toEqual(['odd', 'quiet', 'talker']);
-      expect(migrated.conversationMembers('odd')).toEqual(['']);
+      expect(membersOf(migrated, 'odd')).toEqual(['']);
       expect(migrated.listConversationRoots('peer')).toEqual(['talker']);
-      expect(migrated.conversationMembers('talker')).toEqual(['', 'peer', 'talker']);
-      expect(migrated.conversationMembers('worker')).toBeNull();
+      expect(membersOf(migrated, 'talker')).toEqual(['', 'peer', 'talker']);
+      expect(membersOf(migrated, 'worker')).toBeNull();
+    });
+  });
+
+  describe('automation runs (schema 14)', () => {
+    const runsOf = (db: RunDatabase, id: string) => db.indexRows(AUTOMATION_RUNS_INDEX, id);
+
+    it('keeps the index in step with every upsert and delete', () => {
+      const db = openDb();
+      db.transaction({ upserts: [row('old', { createdAt: '2026-10-01T00:00:00.000Z', automationRuns: [['daily', 'r1']] }),
+        row('new', { createdAt: '2026-10-02T00:00:00.000Z', automationRuns: [['daily', 'r2'], ['poll', null]] }), row('plain')], deletes: [] });
+      expect(db.listAutomationRuns('daily').sort()).toEqual(['new', 'old']);
+      expect(db.listAutomationRuns('poll')).toEqual(['new']);
+      expect(db.listRunsByAutomationReceipt(['r1', 'r2', 'missing'])).toEqual(['new', 'old']);
+      expect(runsOf(db, 'new')).toEqual([['daily', 'r2'], ['poll', null]]);
+      expect(runsOf(db, 'plain')).toBeNull();
+      db.transaction({ upserts: [row('old', { createdAt: '2026-10-01T00:00:00.000Z' })], deletes: ['new'] });
+      expect(db.listAutomationRuns('daily')).toEqual([]);
+      expect(db.listRunsByAutomationReceipt(['r1', 'r2'])).toEqual([]);
+    });
+
+    it('migrates schema 13 by indexing each launch and trigger from its record, past rows it cannot read', () => {
+      const run = (id: string, record: Record<string, unknown>) => row(id, { data: JSON.stringify({ id, ...record }) });
+      const db = openDb();
+      db.transaction({ upserts: [
+        run('launched', { automation: { automationId: 'daily', receiptId: 'r1' } }),
+        run('triggered', { automationTrigger: { automationId: 'poll', receiptId: 'r2' } }),
+        run('odd', { automation: 'not an object', automationTrigger: { automationId: 7 } }),
+        run('plain', { title: 'mentions "automation" in text' }), row('broken', { data: 'not a record "automation' }),
+      ], deletes: [] });
+      db.close(); open.length = 0;
+      const previous = new DatabaseSync(path);
+      previous.exec('DROP TABLE automation_runs; PRAGMA user_version = 13');
+      previous.close();
+      const migrated = openDb();
+      expect(migrated.listAutomationRuns('daily')).toEqual(['launched']);
+      expect(migrated.listAutomationRuns('poll')).toEqual(['triggered']);
+      expect(migrated.listRunsByAutomationReceipt(['r1', 'r2']).sort()).toEqual(['launched', 'triggered']);
+      for (const id of ['odd', 'plain', 'broken']) expect(runsOf(migrated, id), id).toBeNull();
     });
   });
 
@@ -607,13 +650,14 @@ describe('RunDatabase', () => {
     // build would drop as unreadable.
     // Schema 12: a worker whose destroy is complete has no worktree_path, as a reclaimed run.
     // Schema 13: conversation_members indexes who each root's conversation names.
-    it('creates a fresh database at schema 13, migrates a v3 one keeping its rows, and refuses version 14', () => {
-      expect(RUN_DATABASE_SCHEMA_VERSION).toBe(13);
+    // Schema 14: automation_runs indexes which automation launched or triggered each run.
+    it('creates a fresh database at schema 14, migrates a v3 one keeping its rows, and refuses version 15', () => {
+      expect(RUN_DATABASE_SCHEMA_VERSION).toBe(14);
       openDb().close();
       open.length = 0;
       const fresh = new DatabaseSync(path, { readOnly: true });
       try {
-        expect(fresh.prepare('PRAGMA user_version').get()).toEqual({ user_version: 13 });
+        expect(fresh.prepare('PRAGMA user_version').get()).toEqual({ user_version: 14 });
       } finally {
         fresh.close();
       }
@@ -628,8 +672,8 @@ describe('RunDatabase', () => {
       for (const db of open.splice(0)) db.close();
       const migrated = new DatabaseSync(path);
       try {
-        expect(migrated.prepare('PRAGMA user_version').get()).toEqual({ user_version: 13 });
-        migrated.exec('PRAGMA user_version = 14');
+        expect(migrated.prepare('PRAGMA user_version').get()).toEqual({ user_version: 14 });
+        migrated.exec('PRAGMA user_version = 15');
       } finally {
         migrated.close();
       }
