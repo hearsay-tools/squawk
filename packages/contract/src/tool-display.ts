@@ -8,11 +8,11 @@
  *              WebSearch, Task, Agent, Skill, TodoWrite, TaskCreate,
  *              TaskUpdate, TaskList, mcp__server__tool
  *  - codex:    commandExecution, contextCompaction, fileChange, imageView,
- *              mcpToolCall, webSearch, plan
+ *              mcpToolCall, webSearch, plan, spawnAgent (the mapper's subagent row)
  *              (codex's checklist arrives as the `turn/plan/updated`
  *              notification, not as a tool call — `todoList` is kept below only
  *              as tolerance for its non-app-server transports)
- *  - opencode: bash, edit, write, read, grep, glob, webfetch, task, todowrite
+ *  - opencode: bash, edit, write, read, grep, glob, webfetch, task, subtask, todowrite
  */
 
 export type ToolKind = 'read' | 'edit' | 'delete' | 'move' | 'search' | 'execute' | 'think' | 'fetch' | 'task' | 'plan' | 'other';
@@ -100,7 +100,7 @@ const TOOL_KINDS = new Map<string, ToolKind>([
   ['read', 'read'], ['imageview', 'read'],
   ['glob', 'search'], ['grep', 'search'],
   ['webfetch', 'fetch'], ['websearch', 'fetch'],
-  ['task', 'task'], ['agent', 'task'], ['skill', 'task'],
+  ['task', 'task'], ['agent', 'task'], ['skill', 'task'], ['spawnagent', 'task'], ['subtask', 'task'],
   ['todowrite', 'plan'], ['todolist', 'plan'], ['plan', 'plan'],
   ['taskcreate', 'plan'], ['taskupdate', 'plan'], ['tasklist', 'plan'],
   ['contextcompaction', 'other'], ['mcptoolcall', 'other'],
@@ -150,10 +150,10 @@ function fetchDisplay(key: string, input: unknown): ToolDisplay {
 const skillName = (input: unknown): string | undefined => rawField(input, 'skill', 'name', 'command');
 const subagentType = (input: unknown): string | undefined => rawField(input, 'subagent_type', 'subagentType');
 
-/** A Skill's name; an agent's whole prompt, which its title shortens to the description. */
+/** A Skill's name; an agent's whole prompt (OMP: `task`), which its title shortens to the description. */
 function taskTarget(key: string, input: unknown): string | undefined {
   if (key === 'skill') return skillName(input);
-  return rawField(input, 'prompt', 'description') ?? subagentType(input);
+  return rawField(input, 'prompt', 'task', 'description') ?? subagentType(input);
 }
 
 function taskDisplay(key: string, input: unknown): ToolDisplay {

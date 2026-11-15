@@ -2,7 +2,7 @@ import type { ToolStatus, UiItem, UiToolItem } from '@open-mercato/cezar-api-cli
 
 import { isSubagentChildKind } from './subagent-child-kind'
 import { splitToolTitle } from './thread-groups'
-import type { ThreadEntry, ThreadTurn } from './thread-state'
+import type { ItemSeqs, ThreadEntry, ThreadTurn } from './thread-state'
 
 /**
  * The Agents dock's data (spec `.ai/specs/2026-07-20-grouped-subagent-display.md` §Collector,
@@ -243,7 +243,7 @@ export function findSubagent(
   return undefined
 }
 
-/** One agent's children in one view of the run, from the turn that spawned it. */
+/** One agent's children in one view of the run, from the turn that last spawned it. */
 export function subagentChildren(turns: ThreadTurn[], parentId: string): ThreadEntry[] {
   const spawnIndex = spawnTurnIndex(turns, parentId)
   return spawnIndex === -1 ? [] : childrenFrom(turns, parentId, spawnIndex).map(({ entry }) => entry)
@@ -251,11 +251,12 @@ export function subagentChildren(turns: ThreadTurn[], parentId: string): ThreadE
 
 interface SeqEntry {
   entry: ThreadEntry
-  seq: number | undefined
+  seqs: ItemSeqs | undefined
 }
 
+/** A later workflow step can reuse an agent's item id: the latest spawn is the agent. */
 function spawnTurnIndex(turns: ThreadTurn[], parentId: string): number {
-  return turns.findIndex((turn) => turn.items.some((entry) => entry.id === parentId && isRootTaskItem(entry)))
+  return findLastIndex(turns, (turn) => turn.items.some((entry) => entry.id === parentId && isRootTaskItem(entry)))
 }
 
 function childrenFrom(turns: ThreadTurn[], parentId: string, startIndex: number): SeqEntry[] {
@@ -264,7 +265,7 @@ function childrenFrom(turns: ThreadTurn[], parentId: string, startIndex: number)
     const turn = turns[i]!
     for (const entry of turn.items) {
       if (!isChildCandidate(entry)) continue
-      if (entry.parentItemId === parentId && entry.id !== parentId) children.push({ entry, seq: turn.itemSeqs?.get(entry.id) })
+      if (entry.parentItemId === parentId && entry.id !== parentId) children.push({ entry, seqs: turn.itemSeqs?.get(entry.id) })
     }
   }
   return children
@@ -274,34 +275,38 @@ function childrenFrom(turns: ThreadTurn[], parentId: string, startIndex: number)
  * The children the sheet renders and the dock row summarizes for one agent
  * (hearsay-tools/squawk#2463). `currentTurns` is the run's current state: it holds the spawning
  * item and every tool child, but no messages before its high-water mark. `visibleTurns` is the
- * loaded transcript, which holds those messages. The result holds each child once, the visible
- * copy when both views hold it, in event order.
+ * loaded transcript, which holds those messages. The result holds each child of the latest spawn
+ * once, in event order. When both views hold a child, the copy with the later event wins.
  */
 export function subagentEntries(visibleTurns: ThreadTurn[], currentTurns: ThreadTurn[], parentId: string): ThreadEntry[] {
   const spawnIndex = spawnTurnIndex(currentTurns, parentId)
   if (spawnIndex === -1) return []
   const current = childrenFrom(currentTurns, parentId, spawnIndex)
   if (visibleTurns === currentTurns) return current.map(({ entry }) => entry)
-  // A history page can begin after the spawn, so the visible view is scanned from its start.
+  // A history page can begin after the spawn, so the visible view is then scanned from its start.
   const merged = new Map<string, SeqEntry>()
   for (const child of childrenFrom(visibleTurns, parentId, Math.max(spawnTurnIndex(visibleTurns, parentId), 0))) {
     if (!merged.has(child.entry.id)) merged.set(child.entry.id, child)
   }
   for (const child of current) {
     const kept = merged.get(child.entry.id)
-    if (kept === undefined) merged.set(child.entry.id, child)
-    else kept.seq = earlier(kept.seq, child.seq)
+    merged.set(child.entry.id, kept === undefined ? child : mergeCopies(kept, child))
   }
   return [...merged.values()].sort(bySeq).map(({ entry }) => entry)
 }
 
-function earlier(a: number | undefined, b: number | undefined): number | undefined {
-  if (a === undefined) return b
-  return b === undefined ? a : Math.min(a, b)
+/** The copy with the later latest event, placed at the earlier first event. A tie keeps the visible copy. */
+function mergeCopies(visible: SeqEntry, current: SeqEntry): SeqEntry {
+  if (visible.seqs === undefined || current.seqs === undefined) return visible
+  const newer = current.seqs.last > visible.seqs.last ? current : visible
+  return {
+    entry: newer.entry,
+    seqs: { first: Math.min(visible.seqs.first, current.seqs.first), last: Math.max(visible.seqs.last, current.seqs.last) },
+  }
 }
 
-/** Event order; an entry without a seq keeps its place after the ones before it. */
+/** Event order; an entry without seqs keeps its place after the ones before it. */
 function bySeq(a: SeqEntry, b: SeqEntry): number {
-  if (a.seq === undefined || b.seq === undefined) return 0
-  return a.seq - b.seq
+  if (a.seqs === undefined || b.seqs === undefined) return 0
+  return a.seqs.first - b.seqs.first
 }

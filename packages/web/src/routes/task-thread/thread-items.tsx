@@ -8,7 +8,7 @@ import { Link } from '@/lib/project-router'
 import { resolveApiUrl } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { isImageAttachmentName } from '@open-mercato/cezar-api-client/contract/attachments'
 import type { FileDiff, ToolKind, UiHookItem, UiToolItem } from '@open-mercato/cezar-api-client'
-import { toolDetailText } from '@open-mercato/cezar-api-client/contract/tool-display'
+import { toolDetailText, toolDisplay } from '@open-mercato/cezar-api-client/contract/tool-display'
 import { cn } from '@/lib/utils'
 
 import { fullExecCommand } from './exec-command'
@@ -671,10 +671,11 @@ function toolCardHeader(item: UiToolItem) {
   const { verb, detail } = item.toolKind === 'execute' && title.detail === undefined
     ? { verb: 'Ran', detail: item.title }
     : title
-  // The expanded body is the whole text the header's detail shortens.
+  // The expanded body is the whole text the title shortens, read by the name's own keys. An item
+  // whose kind is not its name's kind (an OMP task batch) has no such text.
   const fullText = item.toolKind === 'execute' ? fullExecCommand(item.input)
-    : detail === undefined ? undefined
-    : toolDetailText(item.name, item.input)
+    : toolDisplay(item.name).toolKind === item.toolKind ? toolDetailText(item.name, item.input)
+    : undefined
   const expandedCommand = fullText ?? detail
   const Icon = TOOL_ICONS[item.toolKind] ?? WrenchIcon
   return { busy, verb, detail, expandedCommand, Icon }

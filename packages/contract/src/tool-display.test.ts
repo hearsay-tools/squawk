@@ -139,6 +139,11 @@ describe('toolDetailText — the whole text a title detail shortens (hearsay-too
     ['Task', { description: 'Audit', prompt: long }, long],
     ['Agent', { description: 'Audit' }, 'Audit'],
     ['task', { subagent_type: 'Explore' }, 'Explore'],
+    ['task', { agent: 'explore', task: long }, long],
+    ['task', { description: 'Map the RPC layer', task: long }, long],
+    ['spawnAgent', { prompt: long, model: 'gpt-5.4' }, long],
+    ['spawnAgent', { agentPath: '/root/scope_review', agentThreadId: 'th_child' }, undefined],
+    ['subtask', { prompt: long, description: 'Trace callers', agent: 'general' }, long],
     ['Skill', { skill: long, args: 'x' }, long],
     ['TodoWrite', { todos: [] }, undefined],
     ['mcp__github__search', { query: long }, undefined],
@@ -152,5 +157,11 @@ describe('toolDetailText — the whole text a title detail shortens (hearsay-too
     const title = toolDisplay('Agent', input).title;
     expect(title.startsWith('Agent: segment/')).toBe(true);
     expect(toolDetailText('Agent', input)).toBe(long);
+  });
+});
+
+describe('subagent tool names share the task kind (hearsay-tools/squawk#3524)', () => {
+  it.each(['Task', 'Agent', 'task', 'spawnAgent', 'subtask'])('%s is a task tool', (name) => {
+    expect(toolDisplay(name, { description: 'Review the runner' })).toMatchObject({ toolKind: 'task', title: expect.stringMatching(/: Review the runner$/) });
   });
 });

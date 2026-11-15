@@ -163,12 +163,17 @@ export interface ThreadTurn {
    *  left-hand side of the turn duration. */
   startedAt?: string | undefined
   items: ThreadEntry[]
-  /** Item id → seq of the event that first placed the item in this turn. Two views of one run
-   *  (a history page and the current-state context) order their entries by it. */
-  itemSeqs?: ReadonlyMap<string, number>
+  /** Item id → the seqs of the first and the latest event for the item in this turn. Two views
+   *  of one run (a history page and the current-state context) order and pick entries by them. */
+  itemSeqs?: ReadonlyMap<string, ItemSeqs>
   /** Latest `plan.updated` snapshot seen during this turn (full-replacement semantics). */
   planEntries?: PlanEntry[]
   completed?: { stopReason: StopReason; costUsd?: number; ts?: string | undefined }
+}
+
+export interface ItemSeqs {
+  first: number
+  last: number
 }
 
 export interface ThreadState {
@@ -375,14 +380,14 @@ function finishTurn(draft: DraftTurn, provisionalAsk: boolean): ThreadTurn {
         ? { ...entry, text: stripDoneMarker(entry.text, stripAsk) }
         : entry,
     ),
-    itemSeqs: firstSeqs(draft.entries),
+    itemSeqs: itemSeqsOf(draft.entries),
   }
 }
 
-function firstSeqs(entries: DraftEntry[]): Map<string, number> {
-  const seqs = new Map<string, number>()
-  for (const { entry, seq } of entries) {
-    if (!seqs.has(entry.id)) seqs.set(entry.id, seq)
+function itemSeqsOf(entries: DraftEntry[]): Map<string, ItemSeqs> {
+  const seqs = new Map<string, ItemSeqs>()
+  for (const { entry, firstSeq, lastSeq } of entries) {
+    if (!seqs.has(entry.id)) seqs.set(entry.id, { first: firstSeq, last: lastSeq })
   }
   return seqs
 }
