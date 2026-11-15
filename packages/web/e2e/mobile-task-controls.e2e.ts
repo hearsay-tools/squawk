@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { RunRecord } from '@open-mercato/cezar-api-client'
 import { seedRuns } from './seed-runs'
-import { waitForSettledSample } from './visual-ready'
+import { visibilitySampleExpression, waitForSettledSample } from './visual-ready'
 import { spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from './fixture-server'
 import { AgentBrowser, bootProjectId, squawkCli, fixtureServeEnv, getJson } from './agent-browser'
 import { dismissWithEscape, focusWithKeyboard } from './contrast'
@@ -77,11 +77,18 @@ describe('mobile Tasks controls', () => {
     expect(browser.isVisible(tab('archived'))).toBe(true)
     expect(browser.count(drawer)).toBe(0)
     browser.fill(search, 'failed')
-    expect(browser.count('[data-slot="task-card"]')).toBe(1)
-    expect(browser.text('[data-slot="task-card"]')).toContain('Needle failed')
+    const failed = browser.waitForValue(
+      `[...document.querySelectorAll('[data-slot="task-card"]')].map(card => card.innerText)`,
+      (cards: string[]) => cards.length === 1 && cards[0]!.includes('Needle failed'),
+    )
+    expect(failed).toHaveLength(1)
+    expect(failed[0]).toContain('Needle failed')
     browser.fill(search, 'no matching task')
-    expect(browser.text('[data-slot="tasks-empty"]')).toContain('No matching tasks')
-    expect(browser.isVisible(search)).toBe(true)
+    expect(browser.waitForValue(
+      `document.querySelector('[data-slot="tasks-empty"]')?.innerText ?? null`,
+      (text: string | null) => text?.includes('No matching tasks') === true,
+    )).toContain('No matching tasks')
+    expect(browser.waitForValue(visibilitySampleExpression(search), (visible: boolean | null) => visible === true)).toBe(true)
   })
 
   it('retains the query and the view selection across drawer and resize', () => {
@@ -102,11 +109,11 @@ describe('mobile Tasks controls', () => {
     browser.waitForFunction(`document.querySelector('${drawer}') === null`)
     expect(browser.evaluate(`document.querySelector('${tab('archived')}').getAttribute('aria-pressed')`)).toBe('true')
     browser.setViewport(1440, 900)
-    expect(browser.evaluate(`document.querySelector('${search}').value`)).toBe('Needle')
+    expect(browser.waitForValue(`document.querySelector('${search}').value`, (query: string) => query === 'Needle')).toBe('Needle')
     expect(browser.count('[data-slot="archive-finished"]')).toBe(0)
     browser.setViewport(360, 640)
-    expect(browser.evaluate(`document.querySelector('${search}').value`)).toBe('Needle')
-    expect(browser.evaluate(`document.querySelector('${tab('archived')}').getAttribute('aria-pressed')`)).toBe('true')
+    expect(browser.waitForValue(`document.querySelector('${search}').value`, (query: string) => query === 'Needle')).toBe('Needle')
+    expect(browser.waitForValue(`document.querySelector('${tab('archived')}').getAttribute('aria-pressed')`, (pressed: string | null) => pressed === 'true')).toBe('true')
     expect(browser.count(actions)).toBe(0)
     expect(browser.count('[data-slot="task-card"]')).toBe(1)
   })
@@ -117,7 +124,7 @@ describe('mobile Tasks controls', () => {
     browser.setViewport(1440, 900)
     browser.waitForFunction(`document.querySelector('[role="menuitem"]') === null`)
     browser.click(tab('archived'))
-    expect(browser.evaluate(`document.querySelector('${tab('archived')}').getAttribute('aria-pressed')`)).toBe('true')
+    expect(browser.waitForValue(`document.querySelector('${tab('archived')}').getAttribute('aria-pressed')`, (pressed: string | null) => pressed === 'true')).toBe('true')
   })
 
   for (const reduced of [false, true]) for (const density of ['comfortable', 'compact', 'ultra']) for (const theme of ['light', 'dark']) {
@@ -146,7 +153,7 @@ describe('mobile Tasks controls', () => {
         }
         if (width === 360) expect(bounds.firstCard).toBeLessThan(640 - 44)
         focusWithKeyboard(browser, search)
-        expect(browser.evaluate(`document.querySelector('${search}').matches(':focus-visible')`)).toBe(true)
+        expect(browser.waitForValue(`document.querySelector('${search}').matches(':focus-visible')`, (focused: boolean) => focused === true)).toBe(true)
         browser.screenshot(join(artifacts, `${width}-${theme}-${density}-${reduced ? 'reduced' : 'normal'}.png`), { viewport: true })
         if (width === 360) {
           focusWithKeyboard(browser, actions)
@@ -176,11 +183,14 @@ describe('mobile Tasks controls', () => {
     expect(runs.find(run => run.id === 'review')?.archived).toBe(false)
     expect(browser.evaluate(`document.querySelector('${search}').value`)).toBe('done')
     browser.click(tab('archived'))
-    expect(browser.text('[data-slot="task-card"]')).toContain('Needle done')
+    expect(browser.waitForValue(
+      `document.querySelector('[data-slot="task-card"]')?.innerText ?? null`,
+      (text: string | null) => text?.includes('Needle done') === true,
+    )).toContain('Needle done')
     browser.click(search)
     browser.press('Control+a')
     browser.press('Backspace')
-    expect(browser.evaluate(`document.querySelector('${search}').value`)).toBe('')
+    expect(browser.waitForValue(`document.querySelector('${search}').value`, (query: string) => query === '')).toBe('')
     browser.waitForFunction(`document.querySelectorAll('[data-slot="task-card"]').length === 4`)
     expect(browser.count('[data-slot="task-card"]')).toBe(4)
     browser.screenshot(join(artifacts, 'archived-reduced-motion.png'), { viewport: true })

@@ -148,11 +148,11 @@ function focus(selector: string) {
   // Establish keyboard modality before focusing the control, then use a real key press.
   browser.press('Tab')
   browser.evaluate(`document.querySelector(${JSON.stringify(selector)}).focus()`)
-  expect(browser.evaluate(`(() => {
+  expect(browser.waitForValue(`(() => {
     const el = document.querySelector(${JSON.stringify(selector)}), s = getComputedStyle(el);
     return document.activeElement === el && el.matches(':focus-visible') &&
       ((s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) > 0) || s.boxShadow !== 'none');
-  })()`), selector).toBe(true)
+  })()`, (ringed: boolean) => ringed === true), selector).toBe(true)
 }
 
 // The product supports one accent (`cezarion`), and no CSS reads `data-accent`, so the outline
@@ -243,9 +243,10 @@ describe('density-independent mobile action targets (#166)', () => {
             expect(disabled.height).toBeGreaterThanOrEqual(44)
           }
           browser.tapAt(Math.round(disabled.x), Math.round(disabled.y))
-          expect(browser.url()).toContain('/new')
           browser.fill(textarea, 'Preserve this draft while changing density')
           browser.waitForFunction(`document.querySelector('${send}')?.disabled === false`)
+          // The disabled tap did not navigate: read the URL after the fill has settled.
+          expect(browser.url()).toContain('/new')
           region(send, mobile)
           tapEdge('[data-slot="mode-plan"]', mobile)
           browser.waitForFunction(`document.querySelector('[data-slot="mode-plan"]').getAttribute('aria-checked') === 'true'`)
@@ -379,7 +380,7 @@ describe('keyboard, draft and choice journeys across appearance changes (hearsay
       expect(browser.evaluate(`document.querySelector('[data-slot="mode-plan"]').getAttribute('aria-checked')`)).toBe('true')
       focus('[data-slot="mode-seg"] button:first-child')
       browser.press('Enter')
-      expect(browser.evaluate(`document.querySelector('[data-slot="mode-plan"]').getAttribute('aria-checked')`)).toBe('false')
+      expect(browser.waitForValue(`document.querySelector('[data-slot="mode-plan"]').getAttribute('aria-checked')`, (checked: string | null) => checked === 'false')).toBe('false')
       clickInView(browser, '[data-slot="execution-options"] summary')
       clickInView(browser, '[data-slot="model-pill"]')
       browser.waitForFunction(`document.querySelector('[role="menu"]') !== null`)
@@ -428,12 +429,15 @@ describe('keyboard, draft and choice journeys across appearance changes (hearsay
       browser.waitForFunction(`document.querySelector('[data-slot="wb-yaml-toggle"]').parentElement.open === true`)
       focus('[data-slot="wb-yaml-toggle"]')
       browser.press('Enter')
-      expect(browser.evaluate(`document.querySelector('[data-slot="wb-yaml-toggle"]').parentElement.open`)).toBe(false)
+      expect(browser.waitForValue(`document.querySelector('[data-slot="wb-yaml-toggle"]').parentElement.open`, (open: boolean) => open === false)).toBe(false)
       browser.press('Space')
-      expect(browser.evaluate(`document.querySelector('[data-slot="wb-yaml-toggle"]').parentElement.open`)).toBe(true)
+      expect(browser.waitForValue(`document.querySelector('[data-slot="wb-yaml-toggle"]').parentElement.open`, (open: boolean) => open === true)).toBe(true)
       focus('[data-slot="wb-copy"]')
       browser.press('Enter')
-      expect(browser.text('[data-slot="wb-copy"]')).toContain('Copied')
+      expect(browser.waitForValue(
+        `document.querySelector('[data-slot="wb-copy"]')?.innerText ?? null`,
+        (text: string | null) => text?.includes('Copied') === true,
+      )).toContain('Copied')
 
       browser.goto(`${baseUrl}/p/${project}/settings/agents`)
       const toggle = '[data-slot="agents-review-gate"]'

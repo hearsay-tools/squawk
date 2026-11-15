@@ -271,12 +271,12 @@ describe('workflow builder against the live dry-run server', () => {
               addButton(ALPHA),
             ]) {
               focusWithKeyboard(browser, selector)
-              expect(browser.evaluate(`(() => {
+              expect(browser.waitForValue(`(() => {
                 const element = document.querySelector(${JSON.stringify(selector)});
                 const style = getComputedStyle(element);
                 return document.activeElement === element && element.matches(':focus-visible') &&
                   ((style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0) || style.boxShadow !== 'none');
-              })()`), `${density}/${theme}: ${selector}`).toBe(true)
+              })()`, (ringed: boolean) => ringed === true), `${density}/${theme}: ${selector}`).toBe(true)
             }
           }
 
