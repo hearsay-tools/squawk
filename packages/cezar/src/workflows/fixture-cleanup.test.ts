@@ -193,8 +193,9 @@ it('keeps draining while owned work settles one operation at a time past one bou
     pass.enter(); await pass.held;
     return [];
   });
-  const engine = settlementModule(moduleContext(root, store, manager, fixtureWork(root)));
-  const retained = Promise.allSettled([engine.enforceRetention(), engine.enforceRetention(), engine.enforceRetention()]);
+  // One module runs one pass at a time, so three overlapping passes need three modules.
+  const context = moduleContext(root, store, manager, fixtureWork(root));
+  const retained = Promise.allSettled(passes.map(() => settlementModule(context).enforceRetention()));
   await Promise.all(passes.map(pass => pass.entered));
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
   try {

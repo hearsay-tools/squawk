@@ -32,6 +32,14 @@ export function isEndedRoot(run: RunRecord): boolean {
   return run.archived && (run.status === 'done' || run.status === 'failed' || run.status === 'cancelled') && !isLiveRecord(run);
 }
 
+/** The worktree directory a run may still have on disk: its path, unless retention reclaimed it or
+ *  a complete worker destroy removed it. Both keep the path on the record. */
+export function materializedWorktreePath(run: RunRecord): string | undefined {
+  if (run.worktreeReclaimedAt !== undefined) return undefined;
+  if (run.delegation?.role === 'worker' && run.delegation.destroy?.phase === 'complete') return undefined;
+  return run.worktreePath;
+}
+
 /**
  * Encode a record, its summary and all query columns for one upsert. data may include preserved
  * raw fields. Live process usage is attached by readers and is never persisted here.
@@ -48,8 +56,7 @@ export function encodeRunRow(run: RunRecord, data: string = JSON.stringify(run))
     parentRunId: worker ? worker.parentRunId : null,
     clientRequestId: run.clientRequestId ?? null,
     groupId: run.groupId ?? null,
-    // Materialized only: retention reclaims the directory and keeps the path on the record.
-    worktreePath: run.worktreePath !== undefined && run.worktreeReclaimedAt === undefined ? run.worktreePath : null,
+    worktreePath: materializedWorktreePath(run) ?? null,
     branch: ownedBranch(run, worker?.workspace.branch),
     baseBranch: run.baseBranch ?? null,
     data,

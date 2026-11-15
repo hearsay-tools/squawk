@@ -1,6 +1,7 @@
 # 012 — Workflow builder: zakładka Workflows w cockpicie
+Status: draft
 
-Status: ZAIMPLEMENTOWANE 2026-07-11 · Fala: 4 · Zależy od: 005, 008 · Wzorzec: design "Cezar Cockpit v2" (claude.ai/design, projekt 30e9a8b9)
+Recorded status: ZAIMPLEMENTOWANE 2026-07-11 · Fala: 4 · Zależy od: 005, 008 · Wzorzec: design "Cezar Cockpit v2" (claude.ai/design, projekt 30e9a8b9)
 
 ## Cel
 

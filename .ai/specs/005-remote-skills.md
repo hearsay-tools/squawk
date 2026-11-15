@@ -1,6 +1,7 @@
 # 005 — Skille ze zdalnego repo (`open-mercato/skills`)
+Status: done
 
-Status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 2 · Zależy od: — · Wzorzec: janitor `skills.ts` (bare clone + `git ls-tree`/`git show`, bez checkoutu)
+Recorded status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 2 · Zależy od: — · Wzorzec: janitor `skills.ts` (bare clone + `git ls-tree`/`git show`, bez checkoutu)
 
 ## Cel
 

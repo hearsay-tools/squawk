@@ -566,13 +566,14 @@ describe('RunDatabase', () => {
     // which a schema-7 build would strip of its appointment and show as Needs you.
     // Schema 9 (hearsay-tools/cezarion#1446): records may carry process waits, which a schema-8
     // build would drop as unreadable.
-    it('creates a fresh database at schema 11, migrates a v3 one keeping its rows, and refuses version 12', () => {
-      expect(RUN_DATABASE_SCHEMA_VERSION).toBe(11);
+    // Schema 12: a worker whose destroy is complete has no worktree_path, as a reclaimed run.
+    it('creates a fresh database at schema 12, migrates a v3 one keeping its rows, and refuses version 13', () => {
+      expect(RUN_DATABASE_SCHEMA_VERSION).toBe(12);
       openDb().close();
       open.length = 0;
       const fresh = new DatabaseSync(path, { readOnly: true });
       try {
-        expect(fresh.prepare('PRAGMA user_version').get()).toEqual({ user_version: 11 });
+        expect(fresh.prepare('PRAGMA user_version').get()).toEqual({ user_version: 12 });
       } finally {
         fresh.close();
       }
@@ -587,8 +588,8 @@ describe('RunDatabase', () => {
       for (const db of open.splice(0)) db.close();
       const migrated = new DatabaseSync(path);
       try {
-        expect(migrated.prepare('PRAGMA user_version').get()).toEqual({ user_version: 11 });
-        migrated.exec('PRAGMA user_version = 12');
+        expect(migrated.prepare('PRAGMA user_version').get()).toEqual({ user_version: 12 });
+        migrated.exec('PRAGMA user_version = 13');
       } finally {
         migrated.close();
       }
@@ -606,6 +607,22 @@ describe('RunDatabase', () => {
       expect(openDb().get('kept')?.data).toBe(row('kept').data);
       expect(() => RunDatabase.open(path, 10)).toThrow(RunDatabaseUnsupportedSchemaError);
       expect(() => RunDatabase.openReadOnly(path, 10)).toThrow(RunDatabaseUnsupportedSchemaError);
+    });
+
+    it('migrates schema 11 by clearing worktree_path of completely destroyed workers only, past an unreadable row', () => {
+      const worker = (id: string, phase: string) => row(id, { parentRunId: 'parent', worktreePath: `/w/${id}`,
+        data: JSON.stringify({ id, delegation: { role: 'worker', parentRunId: 'parent', destroy: { phase } } }) });
+      const db = openDb();
+      db.transaction({ upserts: [worker('gone', 'complete'), worker('stuck', 'incomplete'),
+        row('alive', { parentRunId: 'parent', worktreePath: '/w/alive' }), row('root', { worktreePath: '/w/root' }),
+        row('unreadable', { parentRunId: 'parent', worktreePath: '/w/unreadable', data: 'not a record' })], deletes: [] });
+      db.close(); open.length = 0;
+      const previous = new DatabaseSync(path);
+      previous.exec('PRAGMA user_version = 11');
+      previous.close();
+      const migrated = openDb();
+      expect(migrated.listWithWorktree().map((r) => r.id).sort()).toEqual(['alive', 'root', 'stuck', 'unreadable']);
+      expect(migrated.get('gone')?.data).toBe(worker('gone', 'complete').data);
     });
 
     it('reports a file that is not a database as corrupt and never deletes or resets it', () => {

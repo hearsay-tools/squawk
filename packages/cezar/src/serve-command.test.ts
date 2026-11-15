@@ -23,7 +23,7 @@ function fixture() {
     listening: true,
     address: vi.fn<() => { address: string; port: number } | string | null>(() => ({ address: '127.0.0.1', port: 4322 })),
   });
-  const processStub = Object.assign(new EventEmitter(), { exit: vi.fn(), send: vi.fn(), disconnect: vi.fn() });
+  const processStub = Object.assign(new EventEmitter(), { exit: vi.fn() });
   const effects = {
     ...defaultServeDeps,
     CockpitOwnership: vi.fn(function () { return ownership; }),
@@ -63,8 +63,8 @@ function fixture() {
     workerCleanup: vi.fn<WorkerCleanupFactory>(),
   };
   const deps = effects as unknown as ServeDeps;
-  const run = (openBrowser = false, restartExact = false, bindHost: string | undefined = undefined) => {
-    return serveCommand(home, '/repo', 0, openBrowser, bindHost, restartExact, deps);
+  const run = (openBrowser = false, bindHost: string | undefined = undefined) => {
+    return serveCommand(home, '/repo', 0, openBrowser, bindHost, deps);
   };
   return { home, ownership, semaphore, store, webhooks, manager, delegation, discovery, events, listener, server, processStub, effects, deps, run };
 }
@@ -182,14 +182,11 @@ describe('serveCommand', () => {
     expect(f.ownership.publishUrl).not.toHaveBeenCalled();
   });
 
-  it('publishes an IPv6 URL and reports the exact restart listener before disconnecting', async () => {
+  it('publishes an IPv6 URL', async () => {
     const f = fixture();
     f.server.address.mockReturnValue({ address: '::1', port: 5432 });
-    await f.run(false, true);
-    expect(f.processStub.send).toHaveBeenCalledWith({ type: 'application-update-listening', host: '::1', port: 5432, repoRoot: '/repo', version: '1.2.3' }, expect.any(Function));
+    await f.run(false);
     expect(f.ownership.publishUrl).toHaveBeenCalledWith('http://[::1]:5432');
-    f.processStub.send.mock.calls[0]![1]();
-    expect(f.processStub.disconnect).toHaveBeenCalledOnce();
   });
 
   it('performs one shutdown after repeated signals and waits for teardown before exit', async () => {

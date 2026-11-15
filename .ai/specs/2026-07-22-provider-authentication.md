@@ -1,6 +1,7 @@
 # Provider authentication discovery and setup
+Status: draft
 
-Status: approved in design review · Date: 2026-07-22
+Recorded status: approved in design review · Date: 2026-07-22
 
 ## Summary
 

@@ -145,31 +145,46 @@ describe('macosx-ngrok review fixes (PR #423)', () => {
     expect(tokenCall?.env?.NGROK_AUTHTOKEN).toBe('SECRET-TOKEN');
   });
 
-  it('writes the credential-bearing plist 0600', async () => {
-    const runner: Runner = {
-      capture: async (_p, args) => {
-        if (args[0] === 'print' || args.join(' ').includes('command -v')) return { code: 0, stdout: '/usr/local/bin/ngrok', stderr: '' };
-        return { code: 0, stdout: '', stderr: '' };
+  /**
+   * launchctl as macOS answers it: `bootstrap` loads a plist into the user's GUI domain and `print`
+   * finds a loaded label there. A program that is not installed exits 127.
+   */
+  function macRunner({ bootstrapExit = 0, loads = true } = {}): Runner {
+    const domain = `gui/${process.getuid?.() ?? 0}`;
+    const loaded = new Set<string>();
+    const ok = (stdout = '') => ({ code: 0, stdout, stderr: '' });
+    return {
+      capture: async (program, args) => {
+        if (program === 'bash') return ok(args.join(' ').includes('command -v') ? '/usr/local/bin/ngrok' : '');
+        if (program !== 'launchctl') return { code: 127, stdout: '', stderr: `${program}: command not found` };
+        if (args[0] === 'print') return { code: loaded.has(args[1]!) ? 0 : 113, stdout: '', stderr: '' };
+        if (args[0] === 'bootout') loaded.delete(args[1]!);
+        return ok();
       },
-      interactive: async () => 0,
+      interactive: async (program, args) => {
+        if (program !== 'launchctl' || args[0] !== 'bootstrap') return 0;
+        if (args[1] !== domain) return 5;
+        const label = readFileSync(args[2]!, 'utf8').match(/<key>Label<\/key>\s*<string>([^<]+)/)![1]!;
+        if (loads) loaded.add(`${domain}/${label}`);
+        return bootstrapExit;
+      },
     };
-    await ngrokStepOf().run(ctxFor(runner));
+  }
+
+  it('writes the credential-bearing plist 0600', async () => {
+    await ngrokStepOf().run(ctxFor(macRunner()));
     const p = join(home, 'Library', 'LaunchAgents', 'tools.hearsay.squawk.ngrok.plist');
     const mode = statSync(p).mode & 0o777;
     expect(mode).toBe(0o600);
     expect(readFileSync(p, 'utf8')).toContain('ops:longenough'); // creds live here → hence 0600
   });
 
-  it('a failed launchctl bootstrap fails the step instead of recording done', async () => {
-    const runner: Runner = {
-      capture: async (_p, args) => {
-        if (args.join(' ').includes('command -v')) return { code: 0, stdout: '/usr/local/bin/ngrok', stderr: '' };
-        if (args[0] === 'print') return { code: 113, stdout: '', stderr: '' }; // not loaded
-        return { code: 0, stdout: '', stderr: '' };
-      },
-      interactive: async (_p, args) => (args[0] === 'bootstrap' ? 5 : 0),
-    };
-    await expect(ngrokStepOf().run(ctxFor(runner))).rejects.toThrow(/launchctl could not load/);
+  it.each([
+    { name: 'exits nonzero and loads nothing', bootstrapExit: 5, loads: false },
+    { name: 'loads the agent and still exits nonzero', bootstrapExit: 5, loads: true },
+    { name: 'exits 0 and loads nothing', bootstrapExit: 0, loads: false },
+  ])('a launchctl bootstrap that $name fails the step instead of recording done', async ({ bootstrapExit, loads }) => {
+    await expect(ngrokStepOf().run(ctxFor(macRunner({ bootstrapExit, loads })))).rejects.toThrow(/launchctl could not load/);
   });
 
   it('undo removes the agent from static label/path even with created:null', async () => {

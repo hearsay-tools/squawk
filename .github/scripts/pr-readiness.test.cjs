@@ -2,92 +2,28 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const {
-  REVIEW_CHECK,
-  BOARD,
-  requiredCheckNames,
-  evaluateChecks,
-  boardMoves,
-  syncBoard,
-} = require('./pr-readiness.cjs');
-// The board follows the merged per-PR job of Reconcile CodeRabbit admission.
-const { discover, reconcile } = require('./coderabbit-reconcile.cjs');
+const { BOARD, requiredCheckNames, evaluateChecks, boardMoves, syncBoard, discover, syncPull } = require('./pr-readiness.cjs');
 const { reader } = require('./queue-ci-proof.cjs');
-
-const { reviewState, reviewData, providerRead } = require('./coderabbit.testkit.cjs');
-const workflowPath = path.join(__dirname, '..', 'workflows', 'coderabbit-reconcile.yml');
+const { fakeGithub, pullFixture, checkRun, signalRun, HEAD: sha, VERIFY } = require('./pr-readiness.testkit.cjs');
+const workflowPath = path.join(__dirname, '..', 'workflows', 'pr-readiness.yml');
 const owner = 'o';
 const repo = 'r';
-const sha = 'a'.repeat(40);
-const VERIFY = 'Unit, build, E2E, and package';
+const FREE = 'GET /rate_limit';
+const PULL = 'GET /repos/{owner}/{repo}/pulls/{pull_number}';
+const THREADS = 'POST /graphql';
 
-function pullFixture(overrides = {}) {
-  return {
-    number: 7,
-    node_id: 'PR_7',
-    state: 'open',
-    changed_files: 1,
-    user: { login: 'author' },
-    draft: false,
-    head: { sha, ref: 'feature', repo: { full_name: `${owner}/${repo}` } },
-    base: { sha: 'b'.repeat(40), ref: 'main', repo: { full_name: `${owner}/${repo}` } },
-    ...overrides,
-  };
-}
-
-function checkRun(id, name, conclusion, status = 'completed') {
-  return { id, name, status, conclusion };
-}
-
-// A GitHub client double: every call is recorded, and each read answers from `state`.
-// Its only write is the targeted native rerun; nothing changes draft state.
-function fakeGithub(state = {}) {
-  const calls = [];
-  const s = {
-    ...reviewState(),
-    pulls: [pullFixture()],
-    rules: [{ type: 'required_status_checks', parameters: { required_status_checks: [{ context: VERIFY }] } }],
-    checkRuns: [checkRun(1, VERIFY, 'success'), checkRun(2, REVIEW_CHECK, 'success')],
-    statuses: [],
-    threads: [],
-    ...state,
-  };
-  s.run.pull_requests = s.pulls.map(p => ({ number: p.number, head: { sha: p.head.sha }, base: { ref: p.base.ref } }));
-  s.run.conclusion = 'success';
-  s.jobs[0].conclusion = 'success';
-  const github = {
-    calls,
-    state: s,
-    request: async (route, params) => {
-      calls.push(['request', route, params]);
-      s.pr = s.live?.(params.pull_number ?? 7) ?? s.pulls.find(p => p.number === (params.pull_number ?? 7)) ?? s.pulls[0];
-      return { data: structuredClone(reviewData(s, route, params)) };
-    },
-  };
-  return github;
-}
-
-const workflowRun = (overrides = {}) => ({ action: 'completed',
-  workflow_run: { ...reviewState().run, ...overrides } });
-
+const workflowRun = (github, overrides = {}) => ({ action: 'completed', workflow_run: { ...github.state.run, ...overrides } });
 function eventArgs(args) {
-  const payload = { repository: { full_name: 'o/r' }, ...args.payload };
-  if (args.eventName === 'check_run') {
-    payload.action ??= 'completed';
-    payload.check_run = { ...args.github.state.checks[0], ...payload.check_run };
-  }
-  const s = args.github.state;
-  return { now: () => s.clock, sleep: async ms => { s.clock += ms; }, ...args, owner, repo, payload };
+  return { ...args, owner, repo, payload: { repository: { full_name: 'o/r' }, ...args.payload } };
 }
 async function handleEvent(args) {
   const input = eventArgs(args);
   const { numbers } = await discover(input);
-  return Promise.all(numbers.map(pullNumber => reconcile({ ...input, pullNumber })));
+  return Promise.all(numbers.map(pullNumber => syncPull({ ...input, pullNumber })));
 }
-
 async function completeRun(github, extra = {}) {
   const logs = [];
-  await handleEvent({ github, owner, repo, eventName: 'workflow_run', payload: workflowRun(), log: (m) => logs.push(m), ...extra });
+  await handleEvent({ github, eventName: 'workflow_run', payload: workflowRun(github), log: (m) => logs.push(m), ...extra });
   return logs;
 }
 
@@ -135,30 +71,31 @@ function cards(board) {
 }
 const IN_REVIEW = ['In review', 'In review'];
 const IN_PROGRESS = ['In progress', 'In progress'];
+const routes = github => github.calls.map(([route]) => route);
 
-test('requires the ruleset checks plus the automated review check', async () => {
+test('requires exactly the checks the ruleset names', async () => {
   const github = fakeGithub({ rules: [
     { type: 'pull_request', parameters: {} },
-    { type: 'required_status_checks', parameters: { required_status_checks: [{ context: VERIFY }, { context: '' }, {}] } },
+    { type: 'required_status_checks', parameters: { required_status_checks: [{ context: VERIFY }, { context: 'lint' }, { context: '' }, {}] } },
   ] });
   const read = client => reader(client, owner, repo, Date.now() + 60000, Date.now);
-  assert.deepEqual(await requiredCheckNames(read(github), 'main'), [REVIEW_CHECK, VERIFY].sort());
+  assert.deepEqual(await requiredCheckNames(read(github), 'main'), [VERIFY, 'lint'].sort());
   await assert.rejects(requiredCheckNames(read(fakeGithub({ rules: { message: 'not a list' } })), 'main'), /branch rules/);
 });
 
 test('evaluates the latest run per required check, and commit statuses as a fallback', () => {
-  const required = [VERIFY, REVIEW_CHECK, 'legacy/status'];
+  const required = [VERIFY, 'lint', 'legacy/status'];
   assert.deepEqual(evaluateChecks({
     required,
-    checkRuns: [checkRun(1, VERIFY, 'failure'), checkRun(5, VERIFY, 'success'), checkRun(2, REVIEW_CHECK, 'success')],
+    checkRuns: [checkRun(1, VERIFY, 'failure'), checkRun(5, VERIFY, 'success'), checkRun(2, 'lint', 'skipped')],
     statuses: [{ context: 'legacy/status', state: 'success' }],
   }), { ready: true, pending: [], failing: [], missing: [] });
   assert.deepEqual(evaluateChecks({
     required,
-    checkRuns: [checkRun(9, VERIFY, 'failure'), checkRun(5, VERIFY, 'success'), checkRun(2, REVIEW_CHECK, null, 'in_progress')],
+    checkRuns: [checkRun(9, VERIFY, 'failure'), checkRun(5, VERIFY, 'success'), checkRun(2, 'lint', null, 'in_progress')],
     statuses: [],
-  }), { ready: false, pending: [REVIEW_CHECK], failing: [VERIFY], missing: ['legacy/status'] });
-  for (const conclusion of ['cancelled', 'timed_out', 'action_required', 'stale', 'startup_failure', null]) {
+  }), { ready: false, pending: ['lint'], failing: [VERIFY], missing: ['legacy/status'] });
+  for (const conclusion of ['skipped', 'neutral', 'cancelled', 'timed_out', 'action_required', 'stale', 'startup_failure', null]) {
     assert.equal(evaluateChecks({ required: [VERIFY], checkRuns: [checkRun(1, VERIFY, conclusion)] }).ready, false, String(conclusion));
   }
   assert.deepEqual(evaluateChecks({ required: ['s'], checkRuns: [], statuses: [{ context: 's', state: 'pending' }] }).pending, ['s']);
@@ -168,46 +105,45 @@ test('evaluates the latest run per required check, and commit statuses as a fall
 test('a ready PR whose head checks are green moves its linked cards to In review', async () => {
   const github = fakeGithub();
   const board = fakeBoard({ current: 'In progress' });
-  await completeRun(github, { projectGithub: board });
+  const logs = await completeRun(github, { projectGithub: board });
   assert.deepEqual(board.moves.map(({ itemId, optionId }) => [itemId, optionId]), [['PR_ITEM', 'opt-review'], ['ISSUE_ITEM', 'opt-review']]);
-  assert.ok(github.calls.some(([, route, params]) => route.endsWith('/commits/{ref}/check-runs') && !params.check_name
-    && params.ref === sha), 'checks are read for the run head, not a branch');
+  assert.ok(github.calls.some(([route, params]) => route.endsWith('/commits/{ref}/check-runs') && params.ref === sha),
+    'checks are read for the live head, not a branch');
+  assert.match(logs.join('\n'), /PR 7: board follows In review \(checks=true, threads resolved=true, draft=false\)/);
 });
 
-test('a skipped protected review cannot replace native success', async () => {
-  const github = fakeGithub({ checkRuns: [checkRun(1, VERIFY, 'success'), checkRun(2, REVIEW_CHECK, 'skipped')] });
-  const board = fakeBoard({ current: 'In review' });
-  await completeRun(github, { projectGithub: board });
-  assert.deepEqual(cards(board), IN_PROGRESS);
-});
-
-test('a red, pending or missing required check keeps the PR ready and moves its cards to In progress', async () => {
+test('a red, pending or missing required check moves the cards to In progress without a thread read', async () => {
   for (const checkRuns of [
-    [checkRun(1, VERIFY, 'failure'), checkRun(2, REVIEW_CHECK, 'success')],
-    [checkRun(1, VERIFY, 'success'), checkRun(2, REVIEW_CHECK, 'failure')],
-    [checkRun(1, VERIFY, null, 'in_progress'), checkRun(2, REVIEW_CHECK, 'success')],
-    [checkRun(2, REVIEW_CHECK, 'success')],
-    [checkRun(1, VERIFY, 'success')],
+    [checkRun(1, VERIFY, 'failure')],
+    [checkRun(1, VERIFY, 'skipped')],
+    [checkRun(1, VERIFY, null, 'in_progress')],
+    [],
   ]) {
     const github = fakeGithub({ checkRuns });
     const board = fakeBoard({ current: 'In review' });
     const logs = await completeRun(github, { projectGithub: board });
-    assert.equal(github.state.pulls[0].draft, false, JSON.stringify(checkRuns));
     assert.deepEqual(cards(board), IN_PROGRESS, JSON.stringify(checkRuns));
-    assert.match(logs.join('\n'), /board follows In progress \(admitted=false, draft=false\)/);
+    assert.match(logs.join('\n'), /board follows In progress \(checks=false, threads resolved=false, draft=false\)/);
+    assert.equal(routes(github).includes(THREADS), false, 'threads cannot change the status');
   }
 });
 
-test('an unresolved review thread of any author keeps the PR ready and moves its cards to In progress', async () => {
-  for (const login of ['github-actions', 'octocat']) {
-    const github = fakeGithub({ threads: [
-      { id: 'T0', isResolved: true, comments: { nodes: [{ databaseId: 1, author: { login } }] } },
-      { id: 'T1', isResolved: false, comments: { nodes: [{ databaseId: 2, author: { login } }] } },
-    ] });
+test('an unresolved review thread of any author, outdated or not, moves the cards to In progress', async () => {
+  for (const thread of [{ id: 'T1', isResolved: false }, { id: 'T1', isResolved: false, isOutdated: true }]) {
+    const github = fakeGithub({ threads: [{ id: 'T0', isResolved: true }, thread] });
     const board = fakeBoard({ current: 'In review' });
     await completeRun(github, { projectGithub: board });
-    assert.equal(github.state.pulls[0].draft, false, login);
-    assert.deepEqual(cards(board), IN_PROGRESS, login);
+    assert.deepEqual(cards(board), IN_PROGRESS, JSON.stringify(thread));
+  }
+});
+
+test('unreadable or malformed review threads count as open', async () => {
+  for (const state of [{ fail: route => route === THREADS }, { threads: [{ id: 'T1' }] }]) {
+    const github = fakeGithub(state);
+    const board = fakeBoard({ current: 'In review' });
+    const logs = await completeRun(github, { projectGithub: board });
+    assert.deepEqual(cards(board), IN_PROGRESS);
+    assert.match(logs.join('\n'), /PR 7: review threads unavailable\./);
   }
 });
 
@@ -217,11 +153,11 @@ test('a human draft stays a draft, and its cards stay In progress with green che
   const logs = await completeRun(github, { projectGithub: board });
   assert.equal(github.state.pulls[0].draft, true);
   assert.deepEqual(cards(board), IN_PROGRESS);
-  assert.match(logs.join('\n'), /admitted=true, draft=true/);
+  assert.match(logs.join('\n'), /checks=true, threads resolved=false, draft=true/);
 });
 
 test('a Done card never moves back, whatever the head state', async () => {
-  for (const checkRuns of [[checkRun(1, VERIFY, 'failure')], [checkRun(1, VERIFY, 'success'), checkRun(2, REVIEW_CHECK, 'success')]]) {
+  for (const checkRuns of [[checkRun(1, VERIFY, 'failure')], [checkRun(1, VERIFY, 'success')]]) {
     const board = fakeBoard({ current: 'Done' });
     await completeRun(fakeGithub({ checkRuns }), { projectGithub: board });
     assert.deepEqual(board.moves, []);
@@ -229,28 +165,50 @@ test('a Done card never moves back, whatever the head state', async () => {
   }
 });
 
-test('skips moved, closed, fork and unrelated PRs', async () => {
+test('skips closed, fork and other-base PRs, and a PR that changes while the job reads', async () => {
   const cases = [
-    ['head moved while checking', { live: () => pullFixture({ head: { sha: 'b'.repeat(40), repo: { full_name: 'o/r' } } }) }],
-    ['closed while checking', { live: () => pullFixture({ state: 'closed' }) }],
-    ['fork', { pulls: [pullFixture({ head: { sha, repo: { full_name: 'fork/r' } } })] }],
-    ['another head', { pulls: [pullFixture({ head: { sha: 'c'.repeat(40), repo: { full_name: 'o/r' } } })] }],
-    ['another base', { pulls: [pullFixture({ base: { ref: 'release' } })] }],
+    ['closed', { pulls: [pullFixture({ state: 'closed' })] }],
+    ['fork', { pulls: [pullFixture({ head: { sha, ref: 'feature', repo: { full_name: 'fork/r' } } })] }],
+    ['another base', { pulls: [pullFixture({ base: { ref: 'release', repo: { full_name: 'o/r' } } })] }],
   ];
+  for (const change of ['head', 'state', 'base']) {
+    cases.push([`${change} changed after the checks were read`, { onRead(route) {
+      if (!route.endsWith('/commits/{ref}/status')) return;
+      if (change === 'head') this.pulls[0].head.sha = 'd'.repeat(40);
+      if (change === 'state') this.pulls[0].state = 'closed';
+      if (change === 'base') this.pulls[0].base.ref = 'release';
+    } }]);
+  }
   for (const [label, state] of cases) {
     const board = fakeBoard({ current: 'In progress' });
     await completeRun(fakeGithub(state), { projectGithub: board });
+    assert.deepEqual(board.numbers, [], label);
     assert.deepEqual(board.moves, [], label);
   }
 });
 
+test('a PR turned draft while the job reads follows the final read', async () => {
+  const github = fakeGithub({ onRead(route) { if (route === THREADS) this.pulls[0].draft = true; } });
+  const board = fakeBoard({ current: 'In review' });
+  await completeRun(github, { projectGithub: board });
+  assert.deepEqual(cards(board), IN_PROGRESS);
+});
+
 test('ignores workflow runs that did not come from a pull request', async () => {
-  for (const payload of [workflowRun({ event: 'merge_group' }), workflowRun({ event: 'push' }), workflowRun({ event: 'workflow_dispatch' }), workflowRun({ head_sha: undefined })]) {
+  for (const overrides of [{ event: 'merge_group' }, { event: 'push' }, { event: 'workflow_dispatch' }, { name: 'Other' }, { id: 0 }]) {
     const github = fakeGithub();
     const board = fakeBoard({ current: 'In progress' });
-    await handleEvent({ github, projectGithub: board, owner, repo, eventName: 'workflow_run', payload });
+    await handleEvent({ github, projectGithub: board, eventName: 'workflow_run', payload: workflowRun(github, overrides) });
     assert.deepEqual(board.numbers, []);
-    assert.equal(github.calls.some(([, route]) => route === 'GET /repos/{owner}/{repo}/pulls'), false);
+    assert.deepEqual(github.calls, []);
+  }
+  const running = fakeGithub();
+  running.state.run.status = 'in_progress';
+  assert.deepEqual(await discover(eventArgs({ github: running, eventName: 'workflow_run', payload: workflowRun(running) })), { numbers: [] });
+  for (const eventName of ['check_run', 'pull_request_review', 'push']) {
+    const github = fakeGithub();
+    assert.deepEqual(await discover(eventArgs({ github, eventName, payload: { action: 'completed' } })), { numbers: [] });
+    assert.deepEqual(github.calls, []);
   }
 });
 
@@ -258,24 +216,26 @@ test('a new head keeps a ready PR ready and moves its cards to In progress', asy
   for (const action of ['opened', 'reopened', 'synchronize']) {
     const github = fakeGithub({ checkRuns: [] });
     const board = fakeBoard({ current: 'In review' });
-    await handleEvent({ github, projectGithub: board, owner, repo, eventName: 'pull_request_target',
-      payload: { action, pull_request: pullFixture() } });
+    await handleEvent({ github, projectGithub: board, eventName: 'pull_request_target', payload: { action, pull_request: pullFixture() } });
     assert.equal(github.state.pulls[0].draft, false, action);
     assert.deepEqual(board.moves.map(({ optionId }) => optionId), ['opt-progress', 'opt-progress'], action);
   }
-  const fork = fakeGithub({ pulls: [pullFixture({ head: { sha, ref: 'feature', repo: { full_name: 'fork/r' } } })] });
+  const fork = pullFixture({ head: { sha, ref: 'feature', repo: { full_name: 'fork/r' } } });
   const board = fakeBoard({ current: 'In review' });
-  await handleEvent({ github: fork, projectGithub: board, owner, repo, eventName: 'pull_request_target',
-    payload: { action: 'synchronize', pull_request: pullFixture({ head: { sha, repo: { full_name: 'fork/r' } } }) } });
+  await handleEvent({ github: fakeGithub({ pulls: [fork] }), projectGithub: board, eventName: 'pull_request_target',
+    payload: { action: 'synchronize', pull_request: fork } });
   assert.deepEqual(board.moves, [], 'a fork PR is not synced');
+  const github = fakeGithub();
+  assert.deepEqual(await discover(eventArgs({ github, eventName: 'pull_request_target', payload: { action: 'labeled', pull_request: pullFixture() } })), { numbers: [] });
 });
 
-test('human flips reevaluate fresh admission and sync the board without changing draft state', async () => {
+test('human flips sync the board from the live PR without changing draft state', async () => {
   for (const [action, draft, status] of [['ready_for_review', false, 'opt-review'], ['converted_to_draft', true, 'opt-progress']]) {
     const github = fakeGithub({ pulls: [pullFixture({ draft })] });
     const board = fakeBoard({ current: 'Todo' });
-    await handleEvent({ github, projectGithub: board, owner, repo, eventName: 'pull_request_target',
-      payload: { action, pull_request: pullFixture({ draft }) } });
+    // The payload is only a wake hint: its stale draft flag is not read.
+    await handleEvent({ github, projectGithub: board, eventName: 'pull_request_target',
+      payload: { action, pull_request: pullFixture({ draft: !draft }) } });
     assert.equal(github.state.pulls[0].draft, draft, action);
     assert.deepEqual(board.moves.map((move) => move.optionId), [status, status], action);
   }
@@ -306,43 +266,122 @@ test('board sync degrades quietly without a token or permission', async () => {
   assert.match(runLogs.join('\n'), /board follows In review[\s\S]*Board sync skipped/);
 });
 
+test('without a board token the per-PR job reads nothing', async () => {
+  const github = fakeGithub(), logs = [];
+  assert.equal(await syncPull({ github, owner, repo, pullNumber: 7, log: m => logs.push(m) }), 'no-token');
+  assert.deepEqual(github.calls, []);
+  assert.match(logs.join('\n'), /Board sync skipped for #7: no project token/);
+  await assert.rejects(syncPull({ github, owner, repo, pullNumber: 0 }), /Missing trusted discovery PR number/);
+});
+
 test('a manual dispatch re-checks one PR after a thread is resolved by hand', async () => {
   const github = fakeGithub({ pulls: [pullFixture(), pullFixture({ number: 8, node_id: 'PR_8' })] });
   const board = fakeBoard({ current: 'In progress' });
-  await handleEvent({ github, projectGithub: board, owner, repo, eventName: 'workflow_dispatch', payload: { inputs: { pr_number: '8' } } });
+  await handleEvent({ github, projectGithub: board, eventName: 'workflow_dispatch', payload: { inputs: { pr_number: '8' } } });
   assert.deepEqual(board.numbers, [8]);
   assert.deepEqual(cards(board), IN_REVIEW);
   const closed = fakeGithub({ pulls: [pullFixture({ state: 'closed' })] });
   const closedBoard = fakeBoard({ current: 'In progress' });
-  await handleEvent({ github: closed, projectGithub: closedBoard, owner, repo, eventName: 'workflow_dispatch', payload: { inputs: { pr_number: 7 } } });
+  await handleEvent({ github: closed, projectGithub: closedBoard, eventName: 'workflow_dispatch', payload: { inputs: { pr_number: 7 } } });
   assert.deepEqual(closedBoard.numbers, []);
   for (const pr_number of ['0', '-1', 'abc', undefined]) {
-    await assert.rejects(handleEvent({ github: fakeGithub(), owner, repo, eventName: 'workflow_dispatch', payload: { inputs: { pr_number } } }), /positive integer/);
+    await assert.rejects(handleEvent({ github: fakeGithub(), eventName: 'workflow_dispatch', payload: { inputs: { pr_number } } }), /positive integer/);
   }
 });
 
-for (const condition of ['pending', 'failed', 'reopened thread', 'native failure', 'native dispatch']) {
-  test(`cards leave In review on fresh ${condition} despite historical green check names`, async () => {
-    const github = fakeGithub();
-    const board = fakeBoard({ current: 'In review' });
-    if (condition === 'pending') github.state.checks[0].status = 'in_progress';
-    if (condition === 'failed') github.state.checks[0].conclusion = 'failure';
-    if (condition === 'reopened thread') github.state.threads = [{ id: 't', isResolved: false, isOutdated: true }];
-    if (condition === 'native failure') github.state.jobs[0].conclusion = 'failure';
-    if (condition === 'native dispatch') github.state.run.event = 'workflow_dispatch';
-    await handleEvent({ github, projectGithub: board, owner, repo, eventName: 'check_run', payload: { check_run: {
-      name: 'CodeRabbit', app: { id: 347564, slug: 'coderabbitai' }, head_sha: sha,
-    } } });
-    assert.equal(github.state.pulls[0].draft, false);
-    assert.deepEqual(cards(board), IN_PROGRESS);
-  });
-}
-test('a wrong-App provider wake reads nothing', async () => {
+test('a foreign event selects nothing and reads nothing', async () => {
   const github = fakeGithub();
-  await handleEvent({ github, owner, repo, eventName: 'check_run', payload: { check_run: { name: 'CodeRabbit', app: { id: 1 }, head_sha: sha } } });
+  await assert.rejects(discover({ github, owner, repo, eventName: 'workflow_dispatch',
+    payload: { repository: { full_name: 'evil/r' }, inputs: { pr_number: '7' } } }), /Foreign event/);
   assert.deepEqual(github.calls, []);
 });
 
+test('a review signal wakes its PR from the official association, never from its merge SHA', async () => {
+  const github = fakeGithub({ signal: signalRun(), threads: [{ id: 'T1', isResolved: false }] });
+  const board = fakeBoard({ current: 'In review' });
+  const payload = { action: 'completed', workflow_run: structuredClone(github.state.signal) };
+  await handleEvent({ github, projectGithub: board, eventName: 'workflow_run', payload });
+  assert.deepEqual(cards(board), IN_PROGRESS);
+  github.state.signal.workflow_id = 9;
+  assert.deepEqual(await discover(eventArgs({ github, eventName: 'workflow_run', payload })), { numbers: [] });
+});
+
+test('an old CI run wakes its PR, and the job reads the live head', async () => {
+  const github = fakeGithub();
+  const board = fakeBoard({ current: 'In progress' });
+  const old = { ...github.state.run, id: 19, head_sha: 'c'.repeat(40) };
+  github.state.run = old;
+  await handleEvent({ github, projectGithub: board, eventName: 'workflow_run', payload: workflowRun(github) });
+  assert.ok(github.calls.some(([route, params]) => route.endsWith('/commits/{ref}/check-runs') && params.ref === sha));
+  assert.deepEqual(cards(board), IN_REVIEW);
+});
+
+test('CI discovery reads only its associated PRs among unrelated ones, deduped and without forks', async () => {
+  const other = pullFixture({ number: 8, node_id: 'PR_8' });
+  const fork = pullFixture({ number: 9, head: { sha, ref: 'feature', repo: { full_name: 'fork/r' } } });
+  const unrelated = Array.from({ length: 63 }, (_, i) => pullFixture({ number: i + 100 }));
+  const github = fakeGithub({ pulls: [pullFixture(), other, fork, ...unrelated] });
+  const association = number => ({ number, head: { sha }, base: { ref: 'main' } });
+  github.state.run.pull_requests = [association(7), association(8), association(7), association(9)];
+  const logs = [];
+  const input = eventArgs({ github, eventName: 'workflow_run', payload: workflowRun(github), log: m => logs.push(m) });
+  assert.deepEqual(await discover(input), { numbers: [7, 8] });
+  assert.deepEqual(github.calls.filter(([route]) => route === PULL).map(([, args]) => args.pull_number), [7, 8, 9]);
+  assert.equal(routes(github).includes('GET /repos/{owner}/{repo}/pulls'), false, 'no repository-wide listing');
+  assert.match(logs.join('\n'), /Skipped a changed or ineligible PR\./);
+});
+
+test('a missing, malformed or oversized CI association fails closed with manual recovery', async () => {
+  const association = number => ({ number, head: { sha }, base: { ref: 'main' } });
+  for (const pulls of [[], null, [{ number: 7 }], [association(0)], [1, 2, 3, 4, 5].map(association)]) {
+    const github = fakeGithub();
+    github.state.run.pull_requests = pulls;
+    await assert.rejects(discover(eventArgs({ github, eventName: 'workflow_run', payload: workflowRun(github) })),
+      /dispatch with pr_number for manual recovery/, JSON.stringify(pulls));
+  }
+});
+
+for (const [label, checkRuns, reads, cardState] of [
+  ['a red head', [checkRun(1, VERIFY, 'failure')], 5, IN_PROGRESS],
+  ['a green head', undefined, 6, IN_REVIEW],
+]) test(`board sync for ${label} costs ${reads} reads`, async () => {
+  const github = fakeGithub(checkRuns ? { checkRuns } : {});
+  const board = fakeBoard({ current: 'Todo' });
+  await syncPull({ github, projectGithub: board, owner, repo, pullNumber: 7 });
+  // PR, branch rules, check runs, statuses, threads when they can decide, PR.
+  assert.equal(github.calls.filter(([route]) => route !== FREE).length, reads);
+  assert.equal(github.calls.filter(([route]) => route === FREE).length, 1);
+  assert.deepEqual(cards(board), cardState);
+});
+
+test('under the core floor the sync skips after the PR read, and a later event catches up', async () => {
+  const github = fakeGithub({ coreRemaining: 799 });
+  const board = fakeBoard({ current: 'In review' }), logs = [];
+  assert.equal(await syncPull({ github, projectGithub: board, owner, repo, pullNumber: 7, log: m => logs.push(m) }), 'under-floor');
+  assert.deepEqual(board.numbers, [], 'no project read');
+  assert.deepEqual(routes(github), [PULL, FREE]);
+  assert.match(logs.join('\n'), /PR 7: board sync skipped: core remaining 799 on the read token is under the floor of 800; a later event catches up\./);
+});
+for (const [label, state] of [['at the floor', { coreRemaining: 800 }], ['an unreadable quota', { coreRemaining: NaN }]]) {
+  test(`board sync proceeds with ${label}`, async () => {
+    const board = fakeBoard({ current: 'Todo' });
+    assert.equal(await syncPull({ github: fakeGithub(state), projectGithub: board, owner, repo, pullNumber: 7 }), BOARD.review);
+    assert.deepEqual(cards(board), IN_REVIEW);
+  });
+}
+
+test('unreadable required checks or a failed final PR read skip the board sync', async () => {
+  let pullReads = 0;
+  for (const [fail, result, message] of [
+    [route => route.endsWith('/rules/branches/{branch}'), 'checks-unavailable', /required checks unavailable; board sync skipped/],
+    [route => route === PULL && ++pullReads === 2, 'pull-unavailable', /the final PR read failed/],
+  ]) {
+    const board = fakeBoard({ current: 'In review' }), logs = [];
+    assert.equal(await syncPull({ github: fakeGithub({ fail }), projectGithub: board, owner, repo, pullNumber: 7, log: m => logs.push(m) }), result);
+    assert.deepEqual(board.numbers, []);
+    assert.match(logs.join('\n'), message);
+  }
+});
 
 function barrier() {
   let resolve;
@@ -350,25 +389,19 @@ function barrier() {
   return { promise, resolve };
 }
 
-// Execute the checked-in workflow's grouping rule, including its old branch/SHA
-// expression in red proof. The test never substitutes a universal test-only lock.
+// Execute the checked-in workflow's grouping rule. The test never substitutes
+// a universal test-only lock.
 async function workflowQueue(onEnqueue = () => {}) {
   const { parse } = await import('yaml');
   const workflow = parse(fs.readFileSync(workflowPath, 'utf8'));
-  const expression = workflow.jobs.reconcile.concurrency.group;
+  const expression = workflow.jobs.sync.concurrency.group;
   const slots = new Map();
-  function group(input, number) {
-    const context = { github: { event: input.payload }, inputs: input.payload.inputs, matrix: { pr: number } };
-    return expression.replace(/\$\{\{(.*?)\}\}/g, (_, source) => source.split('||')
-      .map(term => term.trim().split('.').reduce((value, key) => value?.[key], context)).find(Boolean) ?? '');
-  }
+  const group = number => expression.replace('${{ matrix.pr }}', String(number));
   return async args => {
     const input = eventArgs(args);
     const { numbers } = await discover(input);
     return Promise.all(numbers.map(number => {
-      const key = group(input, number);
-      const work = () => reconcile({ ...input, pullNumber: number });
-      const result = scheduleLatest(slots, key, work);
+      const result = scheduleLatest(slots, group(number), () => syncPull({ ...input, pullNumber: number }));
       onEnqueue(number);
       return result;
     }));
@@ -376,7 +409,7 @@ async function workflowQueue(onEnqueue = () => {}) {
 }
 
 // GitHub keeps one running and one pending job per group. A later pending job
-// replaces the earlier pending job; it cannot interrupt the running mutation.
+// replaces the earlier pending job; it cannot interrupt the running job.
 function scheduleLatest(slots, key, work) {
   return new Promise((resolve, reject) => {
     const job = { work, resolve, reject };
@@ -400,8 +433,8 @@ function startQueued(slots, key, slot, job) {
   });
 }
 
-// Holds the first board read: the job has decided its status from proof and
-// admission, and still holds the PR lock, but has not moved a card yet.
+// Holds the first board read: the job has decided its status and still holds
+// the PR lock, but has not moved a card yet.
 function holdBoard(board) {
   const held = barrier(), release = barrier();
   const graphql = board.graphql;
@@ -417,157 +450,28 @@ function holdBoard(board) {
   return { held: held.promise, release: release.resolve };
 }
 
-// bound: barriers identify the exact admitted-read and queued-job boundaries;
-// this timeout only detects a broken fixture or workflow deadlock.
-test('cross-kind readiness jobs serialize revocation after an older admitted CI job', { timeout: 10000 }, async () => {
-  const github = fakeGithub();
+// bound: barriers mark the exact held-read and queued-job boundaries; this
+// timeout only detects a broken fixture or workflow deadlock.
+test('jobs of different trigger kinds serialize per PR, so a reopened thread wins over an older green job', { timeout: 10000 }, async () => {
+  const github = fakeGithub({ signal: signalRun() });
   const board = fakeBoard({ current: 'In progress' });
   const hold = holdBoard(board), queued = barrier();
   let count = 0;
   const enqueue = await workflowQueue(() => { if (++count === 2) queued.resolve(); });
-  const older = enqueue({ github, projectGithub: board, eventName: 'workflow_run', payload: workflowRun() });
+  const older = enqueue({ github, projectGithub: board, eventName: 'workflow_run', payload: workflowRun(github) });
   await hold.held;
-  github.state.checks[0].status = 'in_progress';
-  github.state.checks[0].conclusion = null;
-  const revocation = enqueue({ github, projectGithub: board, eventName: 'check_run', payload: { action: 'created' } });
+  github.state.threads = [{ id: 'T1', isResolved: false }];
+  const reopened = enqueue({ github, projectGithub: board, eventName: 'workflow_run',
+    payload: { action: 'completed', workflow_run: structuredClone(github.state.signal) } });
   await queued.promise;
   hold.release();
-  await Promise.all([older, revocation]);
-  assert.deepEqual(cards(board), IN_PROGRESS, 'pending provider must win after both jobs settle');
-});
-
-test('a late synchronize wake uses current green proof', async () => {
-  const github = fakeGithub();
-  const board = fakeBoard({ current: 'In progress' });
-  const enqueue = await workflowQueue();
-  await enqueue({ github, projectGithub: board, eventName: 'pull_request_target', payload: { action: 'synchronize',
-    pull_request: pullFixture({ head: { sha: 'c'.repeat(40), ref: 'feature', repo: { full_name: 'o/r' } } }) } });
-  assert.deepEqual(cards(board), IN_REVIEW);
-});
-
-test('a valid old CI wake discovers current PRs and reads the newest live proof', async () => {
-  const github = fakeGithub();
-  const board = fakeBoard({ current: 'In progress' });
-  const old = { ...github.state.run, id: 19, head_sha: 'c'.repeat(40) };
-  const request = github.request;
-  github.request = async (route, args) => args.run_id === old.id && route.endsWith('/runs/{run_id}')
-    ? { data: structuredClone(old) } : request(route, args);
-  const enqueue = await workflowQueue();
-  await enqueue({ github, projectGithub: board, eventName: 'workflow_run', payload: workflowRun(old) });
-  assert.deepEqual(cards(board), IN_REVIEW, 'historical event cannot select historical proof');
-});
-
-test('a stale human flip uses live failed proof instead of its ready payload', async () => {
-  const github = fakeGithub();
-  github.state.checks[0].conclusion = 'failure';
-  const board = fakeBoard({ current: 'In review' });
-  await handleEvent({ github, projectGithub: board, eventName: 'pull_request_target', payload: {
-    action: 'ready_for_review', pull_request: pullFixture() } });
-  assert.deepEqual(board.moves.map(move => move.optionId), ['opt-progress', 'opt-progress']);
-});
-
-// bound: B's board move is the signal that independent PR work progressed while A
-// was held; the timeout detects accidental repository-wide serialization.
-test('independent automatic A and B events keep separate discovery and production PR queues', { timeout: 10000 }, async () => {
-  const a = fakeGithub(), b = fakeGithub({ pulls: [pullFixture({ number: 8, node_id: 'PR_8' })] });
-  a.state.checks[0].pull_requests = structuredClone(a.state.run.pull_requests);
-  b.state.checks[0].pull_requests = structuredClone(b.state.run.pull_requests);
-  const boardA = fakeBoard({ current: 'In progress' }), boardB = fakeBoard({ current: 'In progress' });
-  const held = barrier(), release = barrier(), bMoved = barrier();
-  const graphqlA = boardA.graphql, graphql = boardB.graphql;
-  boardA.graphql = async (query, vars) => { held.resolve(); await release.promise; return graphqlA(query, vars); };
-  boardB.graphql = async (query, vars) => {
-    const result = await graphql(query, vars);
-    if (query.includes('updateProjectV2ItemFieldValue')) bMoved.resolve();
-    return result;
-  };
-  const enqueue = await workflowQueue();
-  const first = enqueue({ github: a, projectGithub: boardA, eventName: 'check_run', payload: {} });
-  await held.promise;
-  const second = enqueue({ github: b, projectGithub: boardB, eventName: 'check_run', payload: {} });
-  await bMoved.promise;
-  assert.deepEqual(boardB.numbers, [8]);
-  assert.deepEqual(boardA.moves, []);
-  release.resolve();
-  await Promise.all([first, second]);
-  assert.deepEqual(cards(boardA), IN_REVIEW);
-  assert.deepEqual(cards(boardB), IN_REVIEW);
-});
-
-// bound: explicit read/queue barriers control replacement, not elapsed time.
-test('a human wake replacing a pending revoker still revokes failed admission', { timeout: 10000 }, async () => {
-  const github = fakeGithub(), board = fakeBoard({ current: 'In progress' });
-  const hold = holdBoard(board), pending = barrier(), replacement = barrier();
-  let count = 0;
-  const enqueue = await workflowQueue(() => {
-    count++;
-    if (count === 2) pending.resolve();
-    if (count === 3) replacement.resolve();
-  });
-  const older = enqueue({ github, projectGithub: board, eventName: 'workflow_run', payload: workflowRun() });
-  await hold.held;
-  github.state.checks[0].conclusion = 'failure';
-  const revoker = enqueue({ github, projectGithub: board, eventName: 'check_run', payload: {} });
-  await pending.promise;
-  const human = enqueue({ github, projectGithub: board, eventName: 'pull_request_target', payload: {
-    action: 'ready_for_review', pull_request: pullFixture() } });
-  await replacement.promise;
-  hold.release();
-  await Promise.all([older, revoker, human]);
+  assert.deepEqual(await Promise.all([older, reopened]), [[BOARD.review], [BOARD.progress]]);
   assert.deepEqual(cards(board), IN_PROGRESS);
 });
 
-test('a human ready request with failed admission keeps the PR ready and its cards In progress', async () => {
-  const github = fakeGithub();
-  github.state.checks[0].conclusion = 'failure';
-  const board = fakeBoard({ current: 'In review' });
-  const enqueue = await workflowQueue();
-  await enqueue({ github, projectGithub: board, eventName: 'pull_request_target', payload: {
-    action: 'ready_for_review', pull_request: pullFixture() } });
-  assert.equal(github.state.pulls[0].draft, false);
-  assert.deepEqual(cards(board), IN_PROGRESS);
-});
-
-
-test('a head change after proof is read refuses a stale board move', async () => {
-  const github = fakeGithub();
-  const board = fakeBoard({ current: 'In progress' });
-  let providerReads = 0;
-  const request = github.request;
-  github.request = async (route, args) => {
-    const result = await request(route, args);
-    if (providerRead(route, args) && ++providerReads === 2) {
-      github.state.pulls[0].head.sha = 'd'.repeat(40);
-    }
-    return result;
-  };
-  await completeRun(github, { projectGithub: board });
-  assert.deepEqual(board.numbers, []);
-});
-
-test('readiness accepts the official no-permission signal association instead of its merge SHA', async () => {
-  const github = fakeGithub();
-  const board = fakeBoard({ current: 'In progress' });
-  github.state.signal = { id: 40, name: 'CodeRabbit review signal', run_attempt: 1, workflow_id: 4,
-    path: '.github/workflows/coderabbit-review-signal.yml', event: 'pull_request_review_comment',
-    head_sha: 'b'.repeat(40), status: 'completed', conclusion: 'failure', repository: { id: 1, full_name: 'o/r' },
-    head_repository: { full_name: 'o/r' }, pull_requests: [{ number: 7, head: { sha, repo: { id: 1 } },
-      base: { ref: 'main', repo: { id: 1 } } }] };
-  const payload = { action: 'completed', workflow_run: structuredClone(github.state.signal) };
-  await handleEvent({ github, projectGithub: board, eventName: 'workflow_run', payload });
-  assert.deepEqual(cards(board), IN_REVIEW);
-  github.state.signal.workflow_id = 9;
-  assert.deepEqual(await discover(eventArgs({ github, eventName: 'workflow_run', payload })), { numbers: [] });
-});
-
-
-// bound: hold the exact old failed decision while two pending jobs coalesce.
-test('a human wake replacing pending promotion still promotes current admitted proof', { timeout: 10000 }, async () => {
-  // The old native gate failed with the provider, so the old job decides
-  // In progress without a rerun; a new CI attempt then passes both.
-  const github = fakeGithub({ checkRuns: [checkRun(1, VERIFY, 'success'), checkRun(2, REVIEW_CHECK, 'failure')] });
-  github.state.checks[0].conclusion = 'failure';
-  github.state.jobs[0].conclusion = 'failure';
+// bound: hold the old job's decision while two pending jobs coalesce.
+test('a wake that replaces a pending job still reads the live state', { timeout: 10000 }, async () => {
+  const github = fakeGithub({ checkRuns: [checkRun(1, VERIFY, 'failure')] });
   const board = fakeBoard({ current: 'In review' });
   const hold = holdBoard(board), pending = barrier(), replacement = barrier();
   let count = 0;
@@ -575,139 +479,35 @@ test('a human wake replacing pending promotion still promotes current admitted p
     if (++count === 2) pending.resolve();
     if (count === 3) replacement.resolve();
   });
-  const older = enqueue({ github, projectGithub: board, eventName: 'workflow_run', payload: workflowRun() });
+  const older = enqueue({ github, projectGithub: board, eventName: 'workflow_run', payload: workflowRun(github) });
   await hold.held;
-  github.state.checks[0].conclusion = 'success';
-  github.state.jobs[0].conclusion = 'success';
-  github.state.checkRuns[1].conclusion = 'success';
-  const promotion = enqueue({ github, projectGithub: board, eventName: 'workflow_run', payload: workflowRun() });
+  github.state.checkRuns = [checkRun(1, VERIFY, 'failure'), checkRun(2, VERIFY, 'success')];
+  const promotion = enqueue({ github, projectGithub: board, eventName: 'workflow_run', payload: workflowRun(github) });
   await pending.promise;
   const human = enqueue({ github, projectGithub: board, eventName: 'pull_request_target', payload: {
-    action: 'converted_to_draft', pull_request: pullFixture({ draft: true }) } });
+    action: 'ready_for_review', pull_request: pullFixture() } });
   await replacement.promise;
   hold.release();
-  await Promise.all([older, promotion, human]);
-  assert.deepEqual(cards(board), IN_REVIEW, 'fresh admitted proof must survive replacement of pending promotion');
-});
-
-for (const event of ['CI', 'provider']) test(`readiness ${event} discovery bounds proof work with 63 unrelated PRs`, async () => {
-  const github = fakeGithub();
-  const board = fakeBoard({ current: 'In progress' });
-  github.state.pulls.push(...Array.from({ length: 63 }, (_, i) => pullFixture({ number: i + 100, node_id: `PR_${i + 100}`,
-    head: { sha: 'b'.repeat(40), ref: 'other', repo: { full_name: 'o/r' } } })));
-  github.state.checks[0].pull_requests = structuredClone(github.state.run.pull_requests);
-  const input = eventArgs({ github, projectGithub: board, eventName: event === 'CI' ? 'workflow_run' : 'check_run', payload: event === 'CI' ? workflowRun() : {} });
-  const result = await discover(input);
-  assert.deepEqual(result, { numbers: [7] });
-  assert.equal(github.calls.some(([, route]) => route === 'GET /repos/{owner}/{repo}/pulls'), false);
-  await Promise.all(result.numbers.map(pullNumber => reconcile({ ...input, pullNumber })));
-  assert.deepEqual(board.numbers, [7]);
+  assert.deepEqual(await Promise.all([older, promotion, human]), [[BOARD.progress], ['coalesced'], [BOARD.review]]);
   assert.deepEqual(cards(board), IN_REVIEW);
 });
 
-test('trusted no-files decision moves a verified head to In review and unresolved threads move it back', async () => {
-  const github = fakeGithub();
-  const board = fakeBoard({ current: 'In progress' });
-  Object.assign(github.state.checks[0], { conclusion: 'skipped', output: { title: 'No files to review' } });
-  await completeRun(github, { projectGithub: board });
-  assert.deepEqual(cards(board), IN_REVIEW);
-  github.state.threads = [{ id: 'open', isResolved: false, isOutdated: true }];
-  await completeRun(github, { projectGithub: board });
-  assert.deepEqual(cards(board), IN_PROGRESS);
-  assert.equal(github.state.pulls[0].draft, false);
+// bound: B's board move is the signal that independent PR work progressed
+// while A was held; the timeout detects accidental repository-wide serialization.
+test('independent A and B events keep separate discovery and per-PR queues', { timeout: 10000 }, async () => {
+  const a = fakeGithub(), b = fakeGithub({ pulls: [pullFixture({ number: 8, node_id: 'PR_8' })] });
+  const boardA = fakeBoard({ current: 'In progress' }), boardB = fakeBoard({ current: 'In progress' });
+  const hold = holdBoard(boardA);
+  const enqueue = await workflowQueue();
+  const first = enqueue({ github: a, projectGithub: boardA, eventName: 'workflow_run', payload: workflowRun(a) });
+  await hold.held;
+  assert.deepEqual(await enqueue({ github: b, projectGithub: boardB, eventName: 'workflow_run', payload: workflowRun(b) }), [BOARD.review]);
+  assert.deepEqual(cards(boardB), IN_REVIEW);
+  assert.deepEqual(boardA.moves, []);
+  hold.release();
+  assert.deepEqual(await first, [BOARD.review]);
+  assert.deepEqual(cards(boardA), IN_REVIEW);
 });
-
-for (const condition of ['failed native aggregate', 'skipped native review', 'missing required check']) test(`trusted no-files cannot reach In review with ${condition}`, async () => {
-  const github = fakeGithub();
-  const board = fakeBoard({ current: 'In progress' });
-  Object.assign(github.state.checks[0], { conclusion: 'skipped', output: { title: 'No files to review' } });
-  if (condition === 'failed native aggregate') github.state.jobs[2].conclusion = 'failure';
-  if (condition === 'skipped native review') github.state.jobs[0].conclusion = 'skipped';
-  if (condition === 'missing required check') github.state.checkRuns = [];
-  await completeRun(github, { projectGithub: board });
-  assert.deepEqual(board.moves, []);
-});
-
-// Per-PR reads with a board token: 4 head reads, then native proof (6) and
-// admission (5) only when they can change the decision, then one final PR read.
-// The board's quota check (GET /rate_limit) is free and not counted.
-const FREE = 'GET /rate_limit';
-for (const [label, checkRuns, reads, cardState] of [
-  ['a running native review', [checkRun(1, VERIFY, null, 'in_progress'), checkRun(2, REVIEW_CHECK, null, 'in_progress')], 5, IN_PROGRESS],
-  ['a green head', undefined, 16, IN_REVIEW],
-]) test(`board sync for ${label} costs ${reads} reads`, async () => {
-  const github = fakeGithub(checkRuns ? { checkRuns } : {});
-  const board = fakeBoard({ current: 'Todo' });
-  await reconcile({ ...eventArgs({ github, projectGithub: board }), pullNumber: 7 });
-  assert.equal(github.calls.filter(([, route]) => route !== FREE).length, reads);
-  assert.equal(github.calls.filter(([, route]) => route === FREE).length, 1);
-  assert.deepEqual(cards(board), cardState);
-});
-
-// Under the read token's core floor only the board sheds: no board-only read,
-// no project call, and the rerun decision still runs.
-for (const [label, mutate, result] of [
-  ['a green head', () => {}, 'unchanged'],
-  ['lost admission', s => { s.checks[0].conclusion = 'failure'; }, 'rerun-requested'],
-]) test(`under the core floor, ${label} skips only the board sync`, async () => {
-  const github = fakeGithub({ coreRemaining: 799 });
-  mutate(github.state);
-  if (result === 'rerun-requested') {
-    const request = github.request;
-    github.request = async (route, params) => {
-      if (github.state.writes.length && route.endsWith('/runs/{run_id}')) github.state.run.run_attempt = 2;
-      return request(route, params);
-    };
-  }
-  const board = fakeBoard({ current: 'In review' }), logs = [];
-  assert.equal(await reconcile({ ...eventArgs({ github, projectGithub: board, log: m => logs.push(m) }), pullNumber: 7 }), result);
-  assert.deepEqual(board.moves, []);
-  assert.deepEqual(board.numbers, [], 'no project read');
-  assert.deepEqual(github.state.writes, result === 'rerun-requested' ? [30] : []);
-  assert.match(logs.join('\n'), /PR 7: board sync skipped: core remaining 799 on the read token is under the floor of 800; a later event catches up\./);
-  // Branch rules, combined statuses and the final PR read serve only the board.
-  const boardOnly = ['GET /repos/{owner}/{repo}/rules/branches/{branch}', 'GET /repos/{owner}/{repo}/commits/{ref}/status'];
-  assert.equal(github.calls.some(([, route]) => boardOnly.includes(route)), false, 'no board-only head read');
-  // A green head keeps the rerun decision's 13 reads: the 16 of a full sync minus those three.
-  if (result === 'unchanged') assert.equal(github.calls.filter(([, route]) => route !== FREE).length, 13);
-});
-for (const [label, state] of [['at the floor', { coreRemaining: 800 }], ['an unreadable quota', { coreRemaining: NaN }]]) {
-  test(`board sync proceeds with ${label}`, async () => {
-    const github = fakeGithub(state);
-    const board = fakeBoard({ current: 'Todo' });
-    await reconcile({ ...eventArgs({ github, projectGithub: board }), pullNumber: 7 });
-    assert.deepEqual(cards(board), IN_REVIEW);
-  });
-}
-test('the floor check reads the token that serves the reads, not GITHUB_TOKEN', async () => {
-  const github = fakeGithub({ coreRemaining: 5000 }), readGithub = fakeGithub({ coreRemaining: 10 });
-  const board = fakeBoard({ current: 'Todo' });
-  await reconcile({ ...eventArgs({ github, readGithub, projectGithub: board }), pullNumber: 7 });
-  assert.deepEqual(board.moves, []);
-  assert.equal(github.calls.some(([, route]) => route === FREE), false);
-  assert.equal(readGithub.calls.filter(([, route]) => route === FREE).length, 1);
-});
-
-// The board follows before the rerun attempt: a POST that fails or stays
-// ambiguous cannot leave a card In review once admission is lost.
-for (const [label, accepted] of [['a rejected', false], ['an ambiguous but accepted', true]]) {
-  test(`${label} rerun POST still moves the cards to In progress`, async () => {
-    const github = fakeGithub();
-    github.state.checks[0].conclusion = 'failure';
-    github.state.writeError = true;
-    const request = github.request;
-    github.request = async (route, params) => {
-      if (accepted && github.state.writes.length && route.endsWith('/runs/{run_id}')) github.state.run.run_attempt = 2;
-      return request(route, params);
-    };
-    const board = fakeBoard({ current: 'In review' });
-    const result = reconcile({ ...eventArgs({ github, projectGithub: board }), pullNumber: 7 });
-    if (accepted) assert.equal(await result, 'rerun-requested');
-    else await assert.rejects(result, /acceptance not yet visible/);
-    assert.deepEqual(github.state.writes, [30], 'one POST, never retried');
-    assert.deepEqual(cards(board), IN_PROGRESS);
-  });
-}
 
 // The board sync has its own budget: a project request that never settles,
 // even one that ignores its abort signal, ends the sync when the budget aborts.
@@ -722,19 +522,14 @@ test('a stalled board request ends at the board budget', async () => {
   assert.deepEqual(seen, [{ signal: budget.signal, retries: 0 }], 'the budget signal reaches the client, with no retries');
 });
 
-test('board requests carry an abort signal, and a failed board still lets the rerun proceed', async () => {
-  const github = fakeGithub();
-  github.state.checks[0].conclusion = 'failure';
-  const board = fakeBoard({ current: 'In review' }), signals = [];
+test('board requests carry an abort signal and no retries', async () => {
+  const board = fakeBoard({ current: 'In progress' }), signals = [];
   const graphql = board.graphql;
-  board.graphql = async (query, variables) => {
-    signals.push(variables.request);
-    if (!query.includes('updateProjectV2ItemFieldValue')) throw new Error('board request budget exhausted');
-    return graphql(query, variables);
-  };
-  assert.equal(await reconcile({ ...eventArgs({ github, projectGithub: board }), pullNumber: 7 }), 'rerun-requested');
-  assert.deepEqual(github.state.writes, [30]);
-  assert.equal(signals.length, 1);
-  assert.ok(signals[0].signal instanceof AbortSignal);
-  assert.equal(signals[0].retries, 0);
+  board.graphql = async (query, variables) => { signals.push(variables.request); return graphql(query, variables); };
+  await syncPull({ github: fakeGithub(), projectGithub: board, owner, repo, pullNumber: 7 });
+  assert.equal(signals.length, 3, 'one board read and two card moves');
+  for (const request of signals) {
+    assert.ok(request.signal instanceof AbortSignal);
+    assert.equal(request.retries, 0);
+  }
 });

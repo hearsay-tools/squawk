@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, expect, it, vi } from 'vitest';
+import * as retention from '../../runs/retention.ts';
 import { RunStore } from '../../runs/store.ts';
 import { createFixtureManager, removeFixtureRepo, unused } from '../fixture-no-runner.testkit.ts';
 import { RunSettlement } from './run-settlement.ts';
@@ -53,4 +54,31 @@ it.each([3, 0])('hands the sweep the keep-count %i after each retention pass', a
 it('runs no sweep for a manager without one (`cez run`, tests)', async () => {
   const { root, store } = fixture(3);
   await expect(settlement(root, store).enforceRetention()).resolves.toBeUndefined();
+});
+
+it('runs one retention pass at a time, and one more for every run that settled during it', async () => {
+  const { root, store } = fixture(3);
+  let release!: () => void;
+  const first = new Promise<void>((resolve) => { release = resolve; });
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => { entered = resolve; });
+  const reclaim = vi.spyOn(retention, 'reclaimWorktrees')
+    .mockImplementationOnce(async () => { entered(); await first; return []; })
+    .mockResolvedValue([]);
+  try {
+    const engine = settlement(root, store);
+    const running = engine.enforceRetention();
+    await started;
+    const queued = [engine.enforceRetention(), engine.enforceRetention(), engine.enforceRetention()];
+    expect(queued[1]).toBe(queued[0]);
+    expect(reclaim).toHaveBeenCalledOnce();
+    release();
+    await Promise.all([running, ...queued]);
+    expect(reclaim).toHaveBeenCalledTimes(2);
+    await engine.enforceRetention();
+    expect(reclaim).toHaveBeenCalledTimes(3);
+  } finally {
+    release();
+    reclaim.mockRestore();
+  }
 });
