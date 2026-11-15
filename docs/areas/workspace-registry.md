@@ -209,12 +209,15 @@ whose `primaryPort` the cockpit listens on (`serverInstanceForPort`), else
 
 For P2c, `migrateLegacyHome(..., { commit: false })` leaves a pending copy.
 `commitLegacyMigration(target, env?)` rechecks the legacy hashes, commits the
-marker and writes `MOVED.json`. After the marker commits, a retry only finishes
+marker and writes `MOVED.json`. It refuses a target without an install marker,
+rolled back or removed, so a discarded copy is never committed. After the marker commits, a retry only finishes
 publication and PATH updates; later legacy changes belong to the canary.
 Profile symlinks stay intact; a profile inside the legacy home stays unchanged
 with a warning. `rollbackLegacyMigration(target)` renames a
-pending marker to `install.json.failed`; the next explicit migration overwrites
-the recorded pending destinations. Rollback never rewrites legacy registry data.
+pending marker to `install.json.failed`; the next explicit migration discards the
+pending copy first: the recorded destinations, the managed install, its launchers
+(`bin/`) and the account trees. Markers, locks and backup archives stay, also
+when XDG roots share one directory. Rollback never rewrites legacy registry data.
 
 Boot defers a server home that supports group migration: only `hsq server-migrate`
 stops the group, stages the home and rolls every instance back on failure. The

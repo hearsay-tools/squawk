@@ -443,15 +443,18 @@ it('a retry removes a file that an older binary added during the recheck of a fa
   expect(getHomeRecovery(target)).toEqual({ files: [] });
 });
 
-it('a retry after a staged copy removes the managed install that the legacy home no longer has', () => {
+it('a retry after a staged copy removes the managed install and its launchers that the legacy home no longer has', () => {
   const { legacy, target } = migrationFixture();
   rawJson(join(legacy.versions, 'v1/package.json'), { version: '1.0.0' });
   migrateLegacyHome(legacy, target, { env: {}, commit: false });
   rollbackLegacyMigration(target);
   expect(json(join(target.versions, 'v1/package.json')).version).toBe('1.0.0');
+  expect(readdirSync(target.bin).sort()).toEqual(['cez', 'cezarion', 'hsq']);
   rmSync(legacy.versions, { recursive: true });
   expect(migrateLegacyHome(legacy, target, { env: {} }).status).toBe('migrated');
   expect(existsSync(target.versions)).toBe(false);
+  // Launchers of the discarded copy would start a versions/ tree that no longer exists.
+  expect(existsSync(target.bin)).toBe(false);
 });
 
 it.each(['settled', 'rechecked'] as const)('migrating a legacy home without a managed install keeps the managed install already in the target (%s copy)', copy => {
@@ -499,6 +502,7 @@ it.skipIf(process.platform === 'win32')('a retry with shared XDG roots discards 
   expect(readInstallMarker(target.config)?.state).toBe('committed');
   expect(json(target.workspaceConfig).saved).toBe('original');
   expect(json(join(target.versions, 'v1/package.json')).version).toBe('1.0.0');
+  expect(readdirSync(target.bin).sort()).toEqual(['cez', 'cezarion', 'hsq']);
 });
 
 it.each(['pending versions directory', 'legacy MOVED.json', 'rolled-back marker'] as const)(
@@ -600,13 +604,15 @@ it('rollback refuses a committed migration and keeps the committed marker', () =
   expect(existsSync(join(target.config, 'install.json.failed'))).toBe(false);
 });
 
-it('committing a staged copy whose target marker was removed writes a committed marker', () => {
+it.each(['rolled back', 'removed'] as const)('commit refuses a staged copy whose target marker was %s and publishes nothing', marker => {
   const { legacy, target } = migrationFixture();
   migrateLegacyHome(legacy, target, { commit: false });
-  rmSync(join(target.config, 'install.json'));
-  commitLegacyMigration(target, {});
-  expect(readInstallMarker(target.config)).toMatchObject({ state: 'committed', migratedFrom: legacy.root });
-  expect(existsSync(join(legacy.root, 'MOVED.json'))).toBe(true);
+  if (marker === 'rolled back') rollbackLegacyMigration(target);
+  else rmSync(join(target.config, 'install.json'));
+  expect(() => commitLegacyMigration(target, {})).toThrow(/without an install marker/);
+  expect(readInstallMarker(target.config)).toBeUndefined();
+  expect(existsSync(join(target.config, 'install.json.failed'))).toBe(marker === 'rolled back');
+  expect(existsSync(join(legacy.root, 'MOVED.json'))).toBe(false);
 });
 
 it('a home migrated from one legacy root refuses another legacy root', () => {

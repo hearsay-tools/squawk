@@ -129,11 +129,13 @@ function writerDiagnostic(files: MigrationFile[]): Error {
   return new Error(`Legacy files kept changing after three checks: ${files.map(file => file.path).join(', ')}. Stop older binaries and retry. Running processes (pid and command):\n${processes}`);
 }
 
-/** Pending copies are disposable. Remove only paths that the prior migration recorded. */
+/** Pending copies are disposable. Remove only the migration's own copies: the managed install,
+ *  its launchers, account trees, and the paths that the prior migration recorded. */
 function discardPendingCopies(target: Home): void {
   const prior = readMigrationRecord(target);
   if (!prior) return;
-  for (const directory of [target.versions, join(target.data, 'accounts')]) {
+  // bin/ holds the discarded copy's launchers, which would start a removed versions/ tree.
+  for (const directory of [target.versions, target.bin, join(target.data, 'accounts')]) {
     assertHomePath(target.data, directory);
     rmSync(directory, { recursive: true, force: true });
   }
@@ -263,7 +265,8 @@ export function commitLegacyMigration(target: Home, env: NodeJS.ProcessEnv = pro
   const record = migrationRecordSchema.parse(readMigrationRecord(target));
   const legacy = homePaths(record.legacyRoot, join(record.legacyRoot, '.cache'), record.legacyRoot);
   withMigration(legacy.root, () => withHomeLock(target.config, () => withHomeLock(target.state, () => {
-    const committed = readInstallMarker(target.config)?.state === 'committed';
+    // A target without its marker (rolled back or removed) is never committed.
+    const committed = assertHomeReadable(target.config).state === 'committed';
     if (!committed) {
       const changed = changedFiles(record.files, planLegacyMigration(legacy, target).files);
       if (changed.length) throw writerDiagnostic(changed);
