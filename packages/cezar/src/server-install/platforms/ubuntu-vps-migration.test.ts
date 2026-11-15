@@ -53,11 +53,12 @@ function defaultMoves(f: ServerFixture, state: ServerState): [Move, Move, Move, 
 }
 
 /** An operator who answers the delegate prompts: runs the shown root command, or only says so. */
-function operatorUi(f: ServerFixture, runsCommands: boolean): Ui {
+function operatorUi(f: ServerFixture, runsCommands: boolean, read: string[] = []): Ui {
   let shown = '';
   const prefix = 'sudo bash -lc ';
   return {
     ...createAutoUi(),
+    info: (m: string) => { read.push(m); },
     message: (m: string) => { if (m.startsWith(prefix)) shown = m.slice(prefix.length); },
     confirm: async ({ message }) => {
       if (message !== 'Have you run it as root?') return false;
@@ -192,6 +193,15 @@ describe('ubuntu-vps migrate and rollback', () => {
       .toBe(Object.keys(planted).some(path => path.endsWith('.service')));
   });
 
+  it('finds the unit record in a ledger edited to list the linger record first', async () => {
+    const { f, state } = install(DEFAULT);
+    const [unitMove] = defaultMoves(f, state);
+    state.steps.autostart!.created!.artifacts.unshift({ kind: 'owned', type: 'linger', name: 'ops' });
+    const report = await migrateUbuntu(context(f, state, { dryRun: true }));
+    expect(report).toMatchObject({ errors: [] });
+    expect(report.moved[0]).toEqual(unitMove);
+  });
+
   it('points every auth_basic_user_file of the copied site at the new htpasswd', async () => {
     const { f, state } = install(DEFAULT);
     const site = f.host.read('/etc/nginx/sites-available/cezar');
@@ -245,8 +255,8 @@ describe('ubuntu-vps migrate and rollback', () => {
 });
 
 describe('root commands the operator runs (delegate mode)', () => {
-  const delegate = (f: ServerFixture, state: ServerState, runsCommands: boolean) =>
-    context(f, state, { assumeYes: false, prefs: { sudoMode: 'delegate' }, ui: operatorUi(f, runsCommands) });
+  const delegate = (f: ServerFixture, state: ServerState, runsCommands: boolean, read: string[] = []) =>
+    context(f, state, { assumeYes: false, prefs: { sudoMode: 'delegate' }, ui: operatorUi(f, runsCommands, read) });
 
   it('completes the system unit and site move, and its rollback, when the operator runs each command', async () => {
     const { f, state } = install(SHOP);
@@ -255,7 +265,10 @@ describe('root commands the operator runs (delegate mode)', () => {
     expect(report.moved).toHaveLength(4);
     expect(f.host.unit('system', 'hearsay-squawk-shop.service').enabled).toBe(true);
     expect(f.host.enabledSites()).toEqual(['hearsay-squawk-shop']);
-    await expect(rollbackUbuntuMigration(delegate(f, state, true), report)).resolves.toMatchObject({ errors: [] });
+    const read: string[] = [];
+    await expect(rollbackUbuntuMigration(delegate(f, state, true, read), report)).resolves.toMatchObject({ errors: [] });
+    // The operator runs the restore as root: its prompt names the unit it removes and the one it restores.
+    expect(read.some(line => line.includes('hearsay-squawk-shop.service') && line.includes('cezar-shop.service'))).toBe(true);
     expect(f.host.unit('system', 'cezar-shop.service').enabled).toBe(true);
     expect(f.host.exists('/etc/systemd/system/hearsay-squawk-shop.service')).toBe(false);
     expect(f.host.enabledSites()).toEqual(['cezar-shop']);

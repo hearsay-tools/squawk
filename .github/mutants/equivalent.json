@@ -301,5 +301,86 @@
     "replacement": "\"\"",
     "reason": "commitLegacyMigration never reads legacy.cache: the claim, planLegacyMigration (migrationRoots is called for the target only), MOVED.json and updateManagedPath use only paths under legacy.root.",
     "site": "const legacy = homePaths(record.legacyRoot, join(record.legacyRoot, "
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "planUnit",
+    "mutator": "ConditionalExpression",
+    "original": "a.kind === 'owned'",
+    "replacement": "true",
+    "site": "const recorded = ctx.state.steps.autostart?.created?.artifacts.find((a) => ",
+    "reason": "No step records a shared service artifact (shared artifacts are packages and certificates), so every service record in the autostart ledger is owned and dropping the kind test finds the same record."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "planUnit",
+    "mutator": "ConditionalExpression",
+    "original": "from.scope === 'user'",
+    "replacement": "false",
+    "site": "if (",
+    "reason": "For a user unit the runner's test -e runs on the same host as the same user as existsSync; both follow symlinks and both report a dangling link or an unreadable directory as absent."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "planUnit",
+    "mutator": "StringLiteral",
+    "original": "'user'",
+    "replacement": "\"\"",
+    "site": "if (from.scope === ",
+    "reason": "Same effect as the scope test turned false: a user unit's destinations are checked with test -e through the runner, which sees the same files as existsSync."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "assertRollbackEntry",
+    "mutator": "StringLiteral",
+    "original": "''",
+    "replacement": "\"Stryker was here!\"",
+    "site": "? to.name === names.unit && to.path === join(dirname(from.path ?? ",
+    "reason": "dirname of any string without a slash is '.', so the fallback for a missing from.path yields the same expected path either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "assertRollbackEntry",
+    "mutator": "StringLiteral",
+    "original": "''",
+    "replacement": "\"Stryker was here!\"",
+    "site": ": stepId === 'nginx-proxy' && [names.vhostAvailable, names.vhostEnabled, names.htpasswd].includes(to.path ?? ",
+    "reason": "The three names are absolute paths, so neither '' nor a relative text is in the list; a site entry without a path is refused either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "assertRollbackEntry",
+    "mutator": "ConditionalExpression",
+    "original": "stepId === 'nginx-proxy'",
+    "replacement": "true",
+    "site": ": ",
+    "reason": "The only caller, rollbackUbuntuMigration, passes only entries it selected by stepId 'autostart' or 'nginx-proxy'; an entry with any other stepId in an edited journal never reaches this check."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "restoreUnit",
+    "mutator": "StringLiteral",
+    "original": "'system'",
+    "replacement": "\"\"",
+    "site": "return await verifyCommand(c, 'systemctl', ['is-enabled', from.name!]) && !(await unitRuns(c, ",
+    "reason": "unitRuns adds --user only when the scope is exactly 'user', so '' and 'system' run the same system-manager queries."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "checkPublicSite",
+    "mutator": "Regex",
+    "original": "/^[23]\\d\\d$/",
+    "replacement": "/[23]\\d\\d$/",
+    "site": "if (!",
+    "reason": "The code comes from curl -s -o /dev/null -w '%{http_code}', which prints exactly three digits (000 when it gets no answer), or the '000' fallback, so the start anchor cannot change the match."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "checkPublicSite",
+    "mutator": "Regex",
+    "original": "/^[23]\\d\\d$/",
+    "replacement": "/^[23]\\d\\d/",
+    "site": "if (!",
+    "reason": "The code is always exactly three digits (curl -w '%{http_code}' with -o /dev/null, or the '000' fallback), so the end anchor cannot change the match."
   }
 ]
