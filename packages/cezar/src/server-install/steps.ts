@@ -1,7 +1,7 @@
 import { productName } from '../home/display.ts';
 import { spawn } from 'node:child_process';
 import { randomInt } from 'node:crypto';
-import { isRunnerId } from '../core/agent-runner.ts';
+import { isRunnerId, type RunnerId } from '../core/agent-runner.ts';
 import { detectEnvironment, type BackendCheck } from '../core/backend-detect.ts';
 import {
   CANCEL,
@@ -351,10 +351,21 @@ export function depCheckStep(opts: DepStepOpts = {}): InstallStep {
   };
 }
 
-const NPM_GLOBAL: Record<string, string> = {
-  claude: '@anthropic-ai/claude-code',
-  codex: '@openai/codex',
+/** Where the installer gets each agent CLI: an npm package, a site the operator installs from, or nowhere it knows. */
+const AGENT_CLI_SOURCE: Record<RunnerId, { npm: string } | { site: string; label: string } | null> = {
+  claude: { npm: '@anthropic-ai/claude-code' },
+  codex: { npm: '@openai/codex' },
+  opencode: { site: 'https://opencode.ai', label: 'OpenCode' },
+  pi: null,
+  cursor: null,
+  omp: null,
 };
+
+/** The npm package of an agent CLI, or undefined for a tool the installer gets no other way. */
+function npmPackage(name: string): string | undefined {
+  const source = isRunnerId(name) ? AGENT_CLI_SOURCE[name] : null;
+  return source !== null && 'npm' in source ? source.npm : undefined;
+}
 
 /** Ubuntu/Debian installer: apt for gh, sudo npm -g for the agent CLIs (system node). */
 export const aptInstallTool: ToolInstaller = async (ctx, name) => {
@@ -383,15 +394,16 @@ export const brewInstallTool: ToolInstaller = async (ctx, name) => {
 };
 
 async function installViaNpmOrNote(ctx: InstallContext, name: string, sudo: boolean): Promise<void> {
-  if (name === 'opencode') {
-    ctx.ui.note('Install OpenCode from https://opencode.ai, then re-run.', 'opencode');
+  const source = isRunnerId(name) ? AGENT_CLI_SOURCE[name] : null;
+  if (source !== null && 'site' in source) {
+    ctx.ui.note(`Install ${source.label} from ${source.site}, then re-run.`, name);
     return;
   }
-  const pkg = NPM_GLOBAL[name];
-  if (!pkg) {
+  if (source === null) {
     ctx.ui.warn(`no known installer for ${name} — install it manually`);
     return;
   }
+  const pkg = source.npm;
   if (sudo) {
     await sudoStep(ctx, {
       description: `Install ${name} globally via npm.`,
@@ -408,20 +420,17 @@ async function installViaNpmOrNote(ctx: InstallContext, name: string, sudo: bool
 }
 
 function removeHintFor(name: string): string {
-  const npm: Record<string, string> = {
-    claude: 'npm rm -g @anthropic-ai/claude-code',
-    codex: 'npm rm -g @openai/codex',
-  };
   if (name === 'gh') return 'sudo apt-get remove -y gh';
-  return npm[name] ?? `# remove ${name} manually`;
+  return npmRemoveHint(name);
+}
+
+function npmRemoveHint(name: string): string {
+  const pkg = npmPackage(name);
+  return pkg === undefined ? `# remove ${name} manually` : `npm rm -g ${pkg}`;
 }
 
 /** macOS-flavored removal hints (brew instead of apt). */
 export function brewRemoveHint(name: string): string {
-  const npm: Record<string, string> = {
-    claude: 'npm rm -g @anthropic-ai/claude-code',
-    codex: 'npm rm -g @openai/codex',
-  };
   if (name === 'gh') return 'brew uninstall gh';
-  return npm[name] ?? `# remove ${name} manually`;
+  return npmRemoveHint(name);
 }

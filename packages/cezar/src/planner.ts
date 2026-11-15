@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { RunnerFactory } from './core/agent-runner.ts';
+import { RUNNER_FACTS } from './core/runner-facts.ts';
 import { loadConfig } from './config.ts';
 import { discoverSkills, type Skill } from './skills.ts';
 import { resolveProfileEnvForRoot } from './workspace/agent-profiles.ts';
@@ -65,10 +66,10 @@ export async function planChain(repoRoot: string, task: string, builtin: readonl
   const userPrompt = buildPlannerPrompt(task, skills, verifyCommands);
 
   // Plan with the configured default runner. `plannerModel` ("sonnet") is a
-  // Claude alias, so only pass it when the planner runs on Claude — Codex /
-  // OpenCode pick their own default model instead.
+  // Claude alias, so only a runner that takes those gets it; another picks its
+  // own default model instead.
   const runner = createRunner(config.defaultRunner);
-  const plannerModel = config.defaultRunner === 'claude' ? config.plannerModel : undefined;
+  const plannerModel = RUNNER_FACTS[config.defaultRunner].claudeModelAliases ? config.plannerModel : undefined;
   // Plan under the SAME agent account this project's tasks run on (spec
   // 2026-07-29-agent-profiles). Without this the planner would quietly bill the personal
   // subscription for a project the user pointed at their work account. An account Squawk refuses

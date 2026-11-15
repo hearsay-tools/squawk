@@ -64,7 +64,7 @@ import { ISSUE_URL_RE, namesForeignReference, originatingIssue, refUrlNumber, re
 import { applyExit, doneCommits, exitDurability, RUN_EXITS, type ExitCall, type ExitDurability, type RunExitId, type RunExitSpec, type RunPatch } from './run-exits.ts';
 import { assertConversationIdFree, type ConversationIdentity } from './conversation-identity.ts';
 export { ConversationIdInUseError } from './conversation-identity.ts';
-import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
+import { RUNNER_IDS, runnerIdOf, type RunnerId } from '../core/agent-runner.ts';
 import {
   ARCHIVED_ROOT, RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY, RunConflictError, RunDatabase, RunDatabaseBusyError,
   type RunConflictEvidence, type RunDatabaseChanges, type RunDatabaseCommit, type RunFenceClaim, type RunRow, type RunRowInput, type RunWriteFence,
@@ -123,7 +123,7 @@ export type StepStatus =
  */
 const storedRunnerSchema = z
   .enum([...RUNNER_IDS, 'claude-cli'])
-  .transform((id) => (id === 'claude-cli' ? ('claude' as const) : id));
+  .transform(runnerIdOf);
 
 const stepStateSchema = contractStepStateSchema.extend({ backend: storedRunnerSchema.optional() });
 

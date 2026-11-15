@@ -17,6 +17,7 @@ import { migrationFixture, rawJson, json } from './migration.testkit.ts';
 import { cleanStoreRoots, storeRoot } from './store.testkit.ts';
 import { planLegacyMigration } from './migration-plan.ts';
 import { accountMigrationPolicy } from './migration-accounts.ts';
+import { RUNNER_IDS } from '../core/agent-runner.ts';
 import * as privateFiles from './private-files.ts';
 import * as migrationRecord from './migration-record.ts';
 
@@ -326,7 +327,7 @@ it.skipIf(process.platform === 'win32').each(['no managed install', 'no marked P
 
 // omp selects an account by profile name, so moving its folder cannot redirect omp; every other
 // provider, and a provider this version does not know, is copied.
-it.each(['claude', 'codex', 'opencode', 'pi', 'cursor', 'omp', 'claude-cli', 'unknown'])('migration policy for a %s account', (provider) => {
+it.each([...RUNNER_IDS, 'claude-cli', 'unknown'])('migration policy for a %s account', (provider) => {
   const account = { id: 'work', configDir: '/old/work', source: '/old/work', target: '/new/accounts/work', provider };
   expect(accountMigrationPolicy(account)).toBe(provider === 'omp' ? 'keep' : 'copy');
 });

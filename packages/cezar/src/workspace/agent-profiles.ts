@@ -2,9 +2,9 @@ import type { Home } from '../home/home.ts';
 import { realpathSync } from 'node:fs';
 import { readdir, realpath } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { isOmpProfileName, ompProfileName, profileEnv, looksLikeProfileDir } from '../core/agent-profiles.ts';
+import { isOmpProfileName, ompProfileName, profileEnv, looksLikeProfileDir, selectsByProfileName } from '../core/agent-profiles.ts';
 import type { ProviderId } from '../core/provider-auth.ts';
-import { agentHomePaths, expandTilde, ompProfilesDir } from '../paths.ts';
+import { AGENT_HOME_SLOT, agentHomePaths, expandTilde, ompProfilesDir } from '../paths.ts';
 import {
   DEFAULT_AGENT_ACCOUNT_ID,
   loadAgentAccounts,
@@ -45,7 +45,7 @@ export function defaultAgentProfile(
   env: NodeJS.ProcessEnv = process.env,
 ): ResolvedAgentProfile {
   const home = agentHomePaths(env);
-  const path = { claude: home.claude, codex: home.codex, opencode: home.opencodeConfig, pi: home.pi, cursor: home.cursor, omp: home.omp }[provider];
+  const path = home[AGENT_HOME_SLOT[provider]];
   return {
     id: DEFAULT_AGENT_ACCOUNT_ID,
     provider,
@@ -228,7 +228,7 @@ export class AgentAccountUnavailableError extends Error {
 /**
  * Why a named account would open another folder than its own if spawned now, or `null`.
  *
- * Only omp can. Its account is a profile NAME, and omp resolves the name under the root it computes
+ * Only a profile-name provider can: omp. Its account is a profile NAME, and omp resolves the name under the root it computes
  * at spawn from `HOME` and `PI_CONFIG_DIR`. The route checked the folder against the root of the
  * day it was added. After either variable changes, `OMP_PROFILE=<name>` opens
  * `<new root>/profiles/<name>`, another profile or a fresh empty one, while Settings still shows the
@@ -240,7 +240,7 @@ export function namedAccountUnavailable(
   path: string,
   env: NodeJS.ProcessEnv = process.env,
 ): string | null {
-  if (provider !== 'omp' || ompProfileDirError(path, env) === null) return null;
+  if (!selectsByProfileName(provider) || ompProfileDirError(path, env) === null) return null;
   return `omp would not open this account's folder ${path}: omp now reads profiles from ${ompProfilesDir(env)}, `
     + 'because HOME or PI_CONFIG_DIR changed after the account was added. Point the account at a profile there, '
     + 'or restore the old value.';

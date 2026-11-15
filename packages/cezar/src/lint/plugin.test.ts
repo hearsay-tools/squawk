@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { oxlintBin, oxlintProblems, staleEntries } from './run.ts';
 import { DESIGN_SAMPLES } from './design-guardian.testkit.ts';
 import { RULES } from './plugin.ts';
-import { declaredRunnerIds } from './runner-id-branch.ts';
+import { declaredRunnerIds, runnerIdBranchesFile } from './runner-id-branch.ts';
 import { repoRoot } from './source-rule.ts';
 
 /**
@@ -82,6 +82,14 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'undocumented-env-name': ['packages/cezar/scripts/e.mjs', "process.env.CEZ_NOT_DOCUMENTED_ANYWHERE = '1';\n"],
 };
 
+/** A one-count comparison site the runner-id-branch baseline still lists: the rule's listed-site fixture. */
+const LISTED_RUNNER_BRANCH = (() => {
+  const { entries } = JSON.parse(readFileSync(join(repoRoot, runnerIdBranchesFile), 'utf8')) as { entries: Array<{ file: string; site: string; count: number }> };
+  const entry = entries.find((e) => e.count === 1 && e.file.endsWith('.ts') && /^[\w.]+ [!=]== '[\w-]+'$/.test(e.site));
+  if (entry === undefined) throw new Error('runner-id-branch baseline lists no one-count comparison site to seed');
+  return entry;
+})();
+
 /** Each approved exception, by the rule it exercises. None may produce a finding. */
 const APPROVED: Record<string, string> = {
   'packages/cezar/src/env-approved.ts': "productEnv('DRY_RUN'); delete process.env.CEZ_DRY_RUN;",
@@ -114,7 +122,7 @@ const APPROVED: Record<string, string> = {
   'packages/cezar/src/workflows/run/fact-single.ts': "const a = runner => runner.systemPromptOnResume === 'resent';\nconst b = id => RUNNER_FACTS[id].nativeAsk;\n",
   'packages/cezar/src/workflows/run/fact-pair.test.ts': "it('x', () => { expect(runner.systemPromptOnResume).toBe(RUNNER_FACTS[id].nativeAsk); });\n",
   // runner-id-branch: a listed site, the seam itself, a test and a message tag.
-  'packages/cezar/src/planner.ts': "const model = config.defaultRunner === 'claude' ? config.plannerModel : undefined;\n",
+  [LISTED_RUNNER_BRANCH.file]: `const listed = ${LISTED_RUNNER_BRANCH.site};\n`,
   'packages/cezar/src/core/runner-pick.ts': "const print = backend === 'cursor';\n",
   'packages/web/src/routes/runner-branch.test.ts': "const print = backend === 'cursor';\n",
   'packages/web/src/routes/frame.ts': "switch (message.t) { case 'cursor': break; }\n",

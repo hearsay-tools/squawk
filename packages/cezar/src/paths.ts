@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { AgentHomePaths } from './agent-config/catalog.ts';
 import { isOmpProfileName } from './core/agent-profiles.ts';
+import type { ProviderId } from './core/provider-auth.ts';
 
 import { assertOutsideAccountHome } from './home/protected-roots.ts';
 import type { Home } from './home/home.ts';
@@ -127,6 +128,11 @@ export function serverLockPath(instance: string = DEFAULT_SERVER_INSTANCE, home:
  * `agentHomePathsForProfiles` instead — what this function answers is what the
  * host is configured for when nothing overrides it.
  */
+/** The slot of `AgentHomePaths` that holds each provider's account home. */
+export const AGENT_HOME_SLOT: Readonly<Record<ProviderId, keyof AgentHomePaths>> = {
+  claude: 'claude', codex: 'codex', opencode: 'opencodeConfig', pi: 'pi', cursor: 'cursor', omp: 'omp',
+};
+
 export function agentHomePaths(env: NodeJS.ProcessEnv = process.env): AgentHomePaths {
   const home = env.HOME || env.USERPROFILE || homedir();
   const xdgConfig = env.XDG_CONFIG_HOME?.trim() || join(home, '.config');

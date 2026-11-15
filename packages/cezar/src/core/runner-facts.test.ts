@@ -31,7 +31,7 @@ describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
   // The turn-path facts (inputDelivery, systemPromptOnResume) and the narrow facts, including
   // sessionIdSource (workflows/run/launch-read-resolver.ts), are declared on every row.
   it('declares every fact on every runner row', () => {
-    const keys = ['costReport', 'inputDelivery', 'nativeAsk', 'nativeSubagents', 'nativeTimerTool', 'sessionIdSource', 'systemPromptOnResume'];
+    const keys = ['claudeModelAliases', 'costReport', 'inputDelivery', 'nativeAsk', 'nativeSubagents', 'nativeTimerTool', 'sessionIdSource', 'systemPromptOnResume'];
     for (const id of RUNNER_IDS) {
       expect(Object.keys(RUNNER_FACTS[id]).sort(), id).toEqual(keys);
       expect(['launch', 'native'], id).toContain(RUNNER_FACTS[id].sessionIdSource);

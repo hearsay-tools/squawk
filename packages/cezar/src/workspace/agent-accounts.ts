@@ -6,7 +6,7 @@ import { posix, resolve, win32 } from 'node:path';
 import { z } from 'zod';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-contract/agent-profiles';
 import { PROVIDER_IDS, type ProviderId } from '../core/provider-auth.ts';
-import { ompProfileName, supportsProfiles } from '../core/agent-profiles.ts';
+import { ompProfileName, selectsByProfileName, supportsProfiles } from '../core/agent-profiles.ts';
 
 /**
  * Optional agent-account store with root-keyed selections. Preserve unknown keys and salvage
@@ -85,7 +85,7 @@ const agentAccountSchema = z
   // `…/profiles/<name>` would resolve to `{}` and run on the default login — the provider lie
   // above in another shape, dropped by the same salvage. Shape only; the route also checks the
   // folder is under omp's current root (`ompProfileDirError`).
-  .refine((account) => account.provider !== 'omp' || ompProfileName(account.configDir) !== null, {
+  .refine((account) => !selectsByProfileName(account.provider) || ompProfileName(account.configDir) !== null, {
     message: 'an omp account folder must be an omp profile: <omp root>/profiles/<name>',
   });
 
