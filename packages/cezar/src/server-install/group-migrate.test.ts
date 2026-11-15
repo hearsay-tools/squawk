@@ -51,6 +51,8 @@ describe('server-migrate group', () => {
     expect(readInstallMarker(f.target.config)?.state).toBe('committed');
     expect(unitName(f, 'default')).toBe('hearsay-squawk.service');
     expect(unitName(f, 'shop')).toBe('hearsay-squawk-shop.service');
+    const { commands } = f.host;
+    expect(commands[commands.indexOf('systemctl --user enable hearsay-squawk.service') - 1]).toBe('systemctl --user daemon-reload');
     expect(readFileSync(f.legacy.serverState('shop'))).toEqual(before);
     expect(existsSync(join(f.legacy.root, 'MOVED.json'))).toBe(true);
     expect(readServerMigrateJournal(f.target)).toBeUndefined();
@@ -62,6 +64,8 @@ describe('server-migrate group', () => {
     f.host.unhealthy.add('hearsay-squawk-shop.service');
     await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'rolled-back' });
     expectOldGroup(f);
+    const { commands } = f.host;
+    expect(commands[commands.lastIndexOf('systemctl --user enable cezar.service') - 1]).toBe('systemctl --user daemon-reload');
     expect(readFileSync(f.legacy.serverState('default'))).toEqual(records);
   });
 
@@ -237,6 +241,9 @@ describe('server-migrate sites and credentials', () => {
     expect(listenAddress(site('[2001:db8::5]:443 ssl', '[::]:443 ssl'), 443)).toBe('[2001:db8::5]');
     expect(listenAddress(site('203.0.113.5:80', '[::]:443 ssl'), 443)).toBe('[::1]');
     expect(listenAddress(site('80'), 443)).toBe('127.0.0.1');
+    expect(listenAddress(site('0.0.0.0:443 ssl', '[::]:443 ssl'), 443)).toBe('127.0.0.1');
+    expect(listenAddress(site('   203.0.113.5:443 ssl'), 443)).toBe('203.0.113.5');
+    expect(listenAddress(`    # listen 203.0.113.9:443 ssl;\n${site('[::]:443 ssl')}`, 443)).toBe('[::1]');
   });
 
   it('rolls back when the copied site does not serve the public name', async () => {
