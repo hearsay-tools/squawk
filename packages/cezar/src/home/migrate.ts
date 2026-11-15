@@ -1,6 +1,6 @@
 import { POWERSHELL, powershellEnv } from '../core/process-stat.ts';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, readFileSync, realpathSync, renameSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homeFileSchema } from '@open-mercato/cezar-contract/home-recovery';
 import { homePaths, type Home } from './home.ts';
@@ -19,7 +19,8 @@ import { LEGACY_RECOVERY_COMMAND } from './migration-cli.ts';
 import { withHomeLock } from './write-lock.ts';
 import { digest, readBytes, VersionLog } from './version-log.ts';
 import { loadWorkspaceConfigSync, mergeWriteWorkspaceConfigSync } from '../workspace/config.ts';
-import { pathHook, writeLaunchers } from '../managed-install/launcher.ts';
+import { launcherFile, pathHook, writeLaunchers } from '../managed-install/launcher.ts';
+import { BINARY_NAMES } from './identity.ts';
 import { readManifest, PACKAGE_NAME } from '../managed-install/layout.ts';
 
 export type MigrationStep = 'recovered' | 'claimed' | 'pending' | 'archived' | 'copied' | 'recheck' | 'accounts' | 'committed';
@@ -130,15 +131,21 @@ function writerDiagnostic(files: MigrationFile[]): Error {
 }
 
 /** Pending copies are disposable. Remove only the migration's own copies: the managed install,
- *  its launchers, account trees, and the paths that the prior migration recorded. */
+ *  its launcher files, account trees, and the paths that the prior migration recorded. */
 function discardPendingCopies(target: Home): void {
   const prior = readMigrationRecord(target);
   if (!prior) return;
-  // bin/ holds the discarded copy's launchers, which would start a removed versions/ tree.
-  for (const directory of [target.versions, target.bin, join(target.data, 'accounts')]) {
+  for (const directory of [target.versions, join(target.data, 'accounts')]) {
     assertHomePath(target.data, directory);
     rmSync(directory, { recursive: true, force: true });
   }
+  // The copy's launchers would start the removed versions/ tree. Other bin/ entries are not the copy's.
+  for (const name of BINARY_NAMES) {
+    const launcher = launcherFile(target.bin, name);
+    assertHomePath(target.data, launcher);
+    rmSync(launcher, { force: true });
+  }
+  if (existsSync(target.bin) && !readdirSync(target.bin).length) rmdirSync(target.bin);
   // Step 7 can publish agent-accounts.json from a config.json import that has no recorded source.
   const copies = [...prior.files.flatMap(file => file.target ? [file.target] : []), { kind: 'config' as const, path: 'agent-accounts.json' }];
   for (const copy of copies) {

@@ -457,6 +457,36 @@ it('a retry after a staged copy removes the managed install and its launchers th
   expect(existsSync(target.bin)).toBe(false);
 });
 
+it('a retry keeps bin/ files that the pending copy did not write', () => {
+  const { legacy, target } = migrationFixture();
+  rawJson(join(legacy.versions, 'v1/package.json'), { version: '1.0.0' });
+  mkdirSync(target.bin, { recursive: true });
+  writeFileSync(join(target.bin, 'operator-tool'), '#!/bin/sh\n', { flag: 'wx' }); // The operator's own tool.
+  migrateLegacyHome(legacy, target, { env: {}, commit: false });
+  rollbackLegacyMigration(target);
+  rmSync(legacy.versions, { recursive: true });
+  expect(migrateLegacyHome(legacy, target, { env: {} }).status).toBe('migrated');
+  expect(readdirSync(target.bin)).toEqual(['operator-tool']);
+});
+
+it.skipIf(process.platform === 'win32')('a retry keeps the state root, its archive, record and lock when XDG_STATE_HOME lies inside bin/', () => {
+  const { legacy } = migrationFixture();
+  const data = storeRoot();
+  const roots = platformKindRoots(storeRoot(), {
+    XDG_DATA_HOME: data, XDG_STATE_HOME: join(data, 'hearsay-squawk', 'bin'), XDG_CONFIG_HOME: storeRoot(),
+  }, 'linux');
+  const target = kindHomePaths(roots, 'split', 'linux');
+  expect(target.state).toBe(join(target.bin, 'hearsay-squawk'));
+  createInstallMarker(target.config, 'test');
+  const first = migrateLegacyHome(legacy, target, { commit: false }).record!;
+  rollbackLegacyMigration(target);
+  expect(migrateLegacyHome(legacy, target).status).toBe('migrated');
+  expect(existsSync(first.backup)).toBe(true);
+  expect(readMigrationRecord(target)?.backup).toEqual(expect.stringContaining(target.backups));
+  expect(existsSync(join(target.state, '.locks'))).toBe(true);
+  expect(json(target.workspaceConfig).saved).toBe('original');
+});
+
 it.each(['settled', 'rechecked'] as const)('migrating a legacy home without a managed install keeps the managed install already in the target (%s copy)', copy => {
   const { legacy, target } = migrationFixture();
   rawJson(join(target.versions, 'v2/package.json'), { version: '2.0.0' });
@@ -505,7 +535,7 @@ it.skipIf(process.platform === 'win32')('a retry with shared XDG roots discards 
   expect(readdirSync(target.bin).sort()).toEqual(['cez', 'cezarion', 'hsq']);
 });
 
-it.each(['pending versions directory', 'legacy MOVED.json', 'rolled-back marker'] as const)(
+it.each(['pending versions directory', 'pending bin directory', 'legacy MOVED.json', 'rolled-back marker'] as const)(
   'a %s that links outside its home is refused and its link target stays untouched', kind => {
     const { legacy, target } = migrationFixture();
     const outside = storeRoot();
@@ -517,10 +547,15 @@ it.each(['pending versions directory', 'legacy MOVED.json', 'rolled-back marker'
       rmSync(target.versions, { recursive: true });
       symlinkSync(outside, target.versions, 'dir');
     }
+    if (kind === 'pending bin directory') {
+      rmSync(target.bin, { recursive: true });
+      symlinkSync(outside, target.bin, 'dir');
+      rawJson(join(outside, 'cez'), { owner: 'outside' });
+    }
     if (kind === 'rolled-back marker') symlinkSync(join(outside, 'kept.json'), join(target.config, 'install.json.failed'));
     const act = () => kind === 'rolled-back marker' ? rollbackLegacyMigration(target) : migrateLegacyHome(legacy, target, { env: {} });
     expect(act).toThrow(/escapes canonical HomeStore root/);
-    expect(readdirSync(outside)).toEqual(['kept.json']);
+    expect(readdirSync(outside).sort()).toEqual(kind === 'pending bin directory' ? ['cez', 'kept.json'] : ['kept.json']);
     expect(json(join(outside, 'kept.json'))).toEqual({ owner: 'outside' });
     if (kind === 'rolled-back marker') expect(readInstallMarker(target.config)?.state).toBe('pending');
   });
