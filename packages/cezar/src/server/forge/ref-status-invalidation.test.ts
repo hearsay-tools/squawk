@@ -12,13 +12,19 @@ import type { RunManager } from '../../workflows/run.ts';
 import { apiRequest } from '../loopback-request.testkit.ts';
 import { __seedRefStatusCacheForTests, readCachedRefStatuses, createGithubDriver, fetchGithubItem } from './github.ts';
 const execFileMock = vi.hoisted(() => vi.fn());
+/** `gh` goes to `execFileMock`, which answers through a promisify-style callback; every other
+ *  command runs for real, called back (git through `runGit`) or promisified. */
 vi.mock('node:child_process', async original => {
   const actual = await original<typeof import('node:child_process')>();
-  return { ...actual, execFile: (...args: unknown[]) => args[0] === 'gh'
-    ? execFileMock(...args)
-    : (actual.execFile as (...args: unknown[]) => unknown)(...args.slice(0, -1),
-      (error: Error | null, stdout: string, stderr: string) =>
-        (args.at(-1) as (error: Error | null, result: { stdout: string; stderr: string }) => void)(error, { stdout, stderr })) };
+  const { promisify } = await import('node:util');
+  const run = actual.execFile as (...args: unknown[]) => unknown;
+  const execFile = (...args: unknown[]) => args[0] === 'gh' ? execFileMock(...args) : run(...args);
+  Object.defineProperty(execFile, promisify.custom, {
+    value: (...args: unknown[]) => args[0] === 'gh'
+      ? new Promise((resolve, reject) => execFileMock(...args, (error: Error | null, result: unknown) => error ? reject(error) : resolve(result)))
+      : promisify(actual.execFile)(...(args as Parameters<typeof actual.execFile>)),
+  });
+  return { ...actual, execFile };
 });
 
 import { createApp } from '../server.ts';

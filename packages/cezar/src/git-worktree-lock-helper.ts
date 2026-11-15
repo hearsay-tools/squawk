@@ -98,6 +98,13 @@ async function waitForTurn(
   }
 }
 
+/** The keeper's wait budget argument in ms: a whole number from 0 to 120 000, 120 000 when absent. */
+export function keeperWaitBudget(value: string | undefined): number {
+  const waitMs = Number(value ?? 120_000);
+  if (!Number.isSafeInteger(waitMs) || waitMs < 0 || waitMs > 120_000) throw new Error('invalid worktree mutation wait budget');
+  return waitMs;
+}
+
 /** Short-lived IPC keeper; launched only by git-worktree-lock.ts. */
 async function keepWorktreeLock(): Promise<void> {
   const { join } = await import('node:path');
@@ -126,9 +133,7 @@ async function keepWorktreeLock(): Promise<void> {
     await write(0);
     const ticket = await selectTicket(directory, name, read);
     await write(ticket);
-    const waitMs = Number(process.argv[3] ?? 120_000);
-    if (!Number.isSafeInteger(waitMs) || waitMs < 0 || waitMs > 120_000) throw new Error('invalid worktree mutation wait budget');
-    const deadline = Date.now() + waitMs;
+    const deadline = Date.now() + keeperWaitBudget(process.argv[3]);
     const turn = await waitForTurn(directory, name, ticket, { read, isStopping: () => stopping, deadline, wait });
     if (turn === 'timeout') send({ kind: 'error', code: 'lock_timeout', error: 'timed out waiting for worktree mutation lock' });
     if (turn !== 'ready') return; // finally withdraws ONLY this queued claim; no mutation was admitted
