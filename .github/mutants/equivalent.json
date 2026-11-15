@@ -306,15 +306,6 @@
     "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
     "function": "planUnit",
     "mutator": "ConditionalExpression",
-    "original": "a.kind === 'owned'",
-    "replacement": "true",
-    "site": "const recorded = ctx.state.steps.autostart?.created?.artifacts.find((a) => ",
-    "reason": "No step records a shared service artifact (shared artifacts are packages and certificates), so every service record in the autostart ledger is owned and dropping the kind test finds the same record."
-  },
-  {
-    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
-    "function": "planUnit",
-    "mutator": "ConditionalExpression",
     "original": "from.scope === 'user'",
     "replacement": "false",
     "site": "if (",

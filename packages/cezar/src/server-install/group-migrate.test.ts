@@ -51,8 +51,6 @@ describe('server-migrate group', () => {
     expect(readInstallMarker(f.target.config)?.state).toBe('committed');
     expect(unitName(f, 'default')).toBe('hearsay-squawk.service');
     expect(unitName(f, 'shop')).toBe('hearsay-squawk-shop.service');
-    const { commands } = f.host;
-    expect(commands[commands.indexOf('systemctl --user enable hearsay-squawk.service') - 1]).toBe('systemctl --user daemon-reload');
     expect(readFileSync(f.legacy.serverState('shop'))).toEqual(before);
     expect(existsSync(join(f.legacy.root, 'MOVED.json'))).toBe(true);
     expect(readServerMigrateJournal(f.target)).toBeUndefined();
@@ -64,8 +62,6 @@ describe('server-migrate group', () => {
     f.host.unhealthy.add('hearsay-squawk-shop.service');
     await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'rolled-back' });
     expectOldGroup(f);
-    const { commands } = f.host;
-    expect(commands[commands.lastIndexOf('systemctl --user enable cezar.service') - 1]).toBe('systemctl --user daemon-reload');
     expect(readFileSync(f.legacy.serverState('default'))).toEqual(records);
   });
 

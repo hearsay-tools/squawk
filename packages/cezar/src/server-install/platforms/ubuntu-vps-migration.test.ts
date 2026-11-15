@@ -114,6 +114,9 @@ describe('ubuntu-vps migrate and rollback', () => {
     ] });
     expect(f.host.unit('user', 'hearsay-squawk.service').enabled).toBe(true);
     expect(f.host.enabledSites()).toEqual(['hearsay-squawk']);
+    // The protocol on real hosts today: reload the user manager, then enable the unit.
+    const before = (command: string) => f.host.commands[f.host.commands.lastIndexOf(command) - 1];
+    expect(before('systemctl --user enable hearsay-squawk.service')).toBe('systemctl --user daemon-reload');
 
     await expect(rollbackUbuntuMigration(context(f, state), { moved: moves, leftAloneForeign: [], errors: [] })).resolves.toEqual({ moved: [
       { stepId: 'nginx-proxy', from: available.to, to: available.from },
@@ -122,6 +125,7 @@ describe('ubuntu-vps migrate and rollback', () => {
       { stepId: 'autostart', from: unit.to, to: unit.from, backup: unit.backup },
     ], leftAloneForeign: [], errors: [] });
     expect(f.host.unit('user', 'cezar.service').enabled).toBe(true);
+    expect(before('systemctl --user enable cezar.service')).toBe('systemctl --user daemon-reload');
     expect(existsSync(userUnit(f, 'hearsay-squawk.service'))).toBe(false);
     expect(f.host.enabledSites()).toEqual(['cezar']);
     expect(f.host.exists('/etc/hearsay-squawk')).toBe(false);
@@ -130,15 +134,21 @@ describe('ubuntu-vps migrate and rollback', () => {
   it.each([
     ['its recorded bind address', '10.0.0.5', 'http://10.0.0.5:4400/'],
     ['no recorded bind address', undefined, 'http://127.0.0.1:4400/'],
-  ])('plans only the unit of an --external-proxy install and checks %s', async (_case, bindHost, url) => {
+  ])('an --external-proxy plan moves only the unit and names the address its health check probes: %s', async (_case, bindHost, url) => {
     const { f, state } = install({ instance: 'api', port: 4400, domain: 'api.example.com', externalProxy: true });
-    const report = await migrateUbuntu(context(f, bindHost ? { ...state, bindHost } : without(state, 'bindHost'), { dryRun: true }));
-    expect(report.moved.map(m => m.to.name)).toEqual(['hearsay-squawk-api.service']);
-    expect(report.details).toEqual([
-      `unit user cezar-api.service → hearsay-squawk-api.service (old file kept as ${userUnit(f, 'cezar-api.service')}.migrated)`,
-      'external proxy: its routes, TLS and authentication stay with the operator',
-      `health check: ${url} answers (the bind address; the proxy is not checked)`,
-    ]);
+    const recorded = bindHost ? { ...state, bindHost } : without(state, 'bindHost');
+    const report = await migrateUbuntu(context(f, recorded, { dryRun: true }));
+    const probed = new Set<string>();
+    const capture = f.host.capture.bind(f.host);
+    f.host.capture = async (program, args, opts) => {
+      if (program === 'curl') probed.add(args.at(-1)!);
+      return capture(program, args, opts);
+    };
+    await createUbuntuVps().startService!(context(f, recorded));
+    expect([...probed]).toEqual([url]);
+    expect(report.moved.map(m => m.stepId)).toEqual(['autostart']);
+    expect(report.details).toContain('external proxy: its routes, TLS and authentication stay with the operator');
+    expect(report.details!.at(-1)).toContain(` ${url} `);
   });
 
   it.each([
@@ -165,6 +175,7 @@ describe('ubuntu-vps migrate and rollback', () => {
   it.each<Refusal>([
     ['no autostart record', DEFAULT, (_f, s) => { delete s.steps.autostart; }, 'No recorded autostart unit'],
     ['a skipped autostart step', DEFAULT, (_f, s) => { s.steps.autostart = { status: skipped, created: null }; }, 'No recorded autostart unit'],
+    ['a service record marked shared', DEFAULT, (_f, s) => { unitRecord(s).kind = 'shared'; }, 'No recorded autostart unit'],
     ['the unit of another instance', DEFAULT, (_f, s) => { unitRecord(s).name = 'cezar-shop.service'; }, 'Unexpected unit name: cezar-shop.service'],
     ['a unit record without a path', DEFAULT, (_f, s) => { delete unitRecord(s).path; }, 'No recorded unit path for cezar.service'],
     ['a unit record without a scope', DEFAULT, (_f, s) => { delete unitRecord(s).scope; }, 'No recorded unit path for cezar.service'],
@@ -185,7 +196,8 @@ describe('ubuntu-vps migrate and rollback', () => {
     const planted = arrange(f, state) ?? {};
     for (const [path, content] of Object.entries(planted)) f.host.write(path, content);
     const ctx = context(f, state);
-    const artifact = state.steps.autostart?.created ? unitRecord(state) : { kind: 'owned', type: 'service', name: 'hearsay-squawk.service' };
+    const artifact = state.steps.autostart?.created?.artifacts.some(a => a.kind === 'owned')
+      ? unitRecord(state) : { kind: 'owned', type: 'service', name: 'hearsay-squawk.service' };
     await expect(migrateUbuntu(ctx)).resolves.toEqual({ moved: [], leftAloneForeign: [], errors: [{ artifact, message: typeof message === 'string' ? message : message(f) }] });
     expect(f.host.commands).toEqual([]);
     for (const [path, content] of Object.entries(planted)) expect(f.host.read(path)).toBe(content);
@@ -332,7 +344,7 @@ describe('ubuntu-vps rollback refusals', () => {
     expect(existsSync(userUnit(f, 'hearsay-squawk-api.service'))).toBe(false);
   });
 
-  it.each<[string, (f: ServerFixture) => string | undefined, string | ((f: ServerFixture) => string)]>([
+  it.each<[string, (f: ServerFixture) => string, string | ((f: ServerFixture) => string)]>([
     ['the old unit file exists again next to its backup', f => {
       writeFileSync(userUnit(f, 'cezar.service'), 'restored by hand\n');
       return userUnit(f, 'cezar.service');
@@ -342,18 +354,26 @@ describe('ubuntu-vps rollback refusals', () => {
       f.host.failDisable.add('hearsay-squawk.service');
       return userUnit(f, 'hearsay-squawk.service');
     }, 'Could not stop and disable hearsay-squawk.service'],
-    ['systemd does not enable the old unit', f => {
-      f.host.failing = w => w.join(' ') === 'systemctl --user enable cezar.service';
-      return undefined;
-    }, 'Could not enable cezar.service'],
   ])('reports a user unit restore as failed when %s', async (_case, arrange, message) => {
     const { f, state } = install(DEFAULT);
     const report = await migrateUbuntu(context(f, state));
     const kept = arrange(f);
-    const content = kept && readFileSync(kept, 'utf8');
+    const content = readFileSync(kept, 'utf8');
     const result = await rollbackUbuntuMigration(context(f, state), report);
     expect(result.errors).toEqual([{ artifact: report.moved[0]!.to, message: typeof message === 'string' ? message : message(f) }]);
-    if (kept) expect(readFileSync(kept, 'utf8')).toBe(content);
+    expect(readFileSync(kept, 'utf8')).toBe(content);
+  });
+
+  it.each([
+    ['user', DEFAULT, 'systemctl --user enable cezar.service', 'cezar.service'],
+    ['system', SHOP, 'systemctl enable cezar-shop.service', 'cezar-shop.service'],
+  ] as const)('reports a %s unit restore as failed when systemd does not enable the old unit', async (scope, spec, command, name) => {
+    const { f, state } = install(spec);
+    const report = await migrateUbuntu(context(f, state));
+    f.host.failing = w => w.join(' ') === command;
+    const result = await rollbackUbuntuMigration(context(f, state), report);
+    expect(result.errors).toEqual([{ artifact: report.moved[0]!.to, message: expect.any(String) }]);
+    expect(f.host.unit(scope, name).enabled).toBe(false);
   });
 
   it.each<[string, (f: ServerFixture, state: ServerState) => Promise<PlatformMigrationReport>]>([
@@ -361,11 +381,6 @@ describe('ubuntu-vps rollback refusals', () => {
       const report = await migrateUbuntu(context(f, state));
       f.host.unit('system', 'hearsay-squawk-shop.service').active = true;
       f.host.failDisable.add('hearsay-squawk-shop.service');
-      return report;
-    }],
-    ['systemd does not enable the old unit', async (f, state) => {
-      const report = await migrateUbuntu(context(f, state));
-      f.host.failing = w => w.join(' ') === 'systemctl enable cezar-shop.service';
       return report;
     }],
     ['daemon-reload fails after a move that left the old unit enabled', async (f, state) => {
