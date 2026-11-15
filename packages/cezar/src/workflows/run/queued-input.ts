@@ -47,8 +47,9 @@ function buildEditedQueuedMessage(current: QueuedMessage, msgId: string, text: s
 }
 
 export class QueuedInput {
-  /** Messages after hydration in the dequeue → session-open gap (#472) live in `RunMemory`
-   *  (`deferredMessages`). Wait-withdrawing entries also retain a durable queue ID until delivered. */
+  /** Messages after hydration in the dequeue → session-open gap (open-mercato/cezar#472) live
+   *  in `RunMemory` (`deferredMessages`). Wait-withdrawing entries also retain a durable queue ID
+   *  until delivered. */
   constructor(private readonly context: RunModuleContext, private readonly host: QueuedInputHost, private readonly memory: RunMemory) {}
 
   /**

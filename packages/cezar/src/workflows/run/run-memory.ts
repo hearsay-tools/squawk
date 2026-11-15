@@ -7,7 +7,7 @@ export interface DeferredMessage { content: PastedContent[]; messageId?: string 
 
 /** One run's memory that is not on its record. An absent field holds its default. */
 export interface RunSlot {
-  /** Messages buffered in the dequeue → session-open gap (#472), owned by `QueuedInput`. */
+  /** Messages buffered in the dequeue → session-open gap (open-mercato/cezar#472), owned by `QueuedInput`. */
   deferredMessages?: DeferredMessage[];
   /** The last attachment number written, owned by `AttachmentWriter`. Absent: seed from disk. */
   imageSeq?: number;
