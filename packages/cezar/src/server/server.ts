@@ -182,6 +182,7 @@ import { worktreeDiff, worktreeSizeBytes } from '../git-worktree.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { isReclaimable, reclaimWorktree, reclaimWorktrees, selectReclaimableWorktrees } from '../runs/retention.ts';
 import { getBranches, getCommit, getDiff, getLogWithParents, getRepoInfo, getStatus, getTracking } from './git.ts';
+import { createHealthCache, HEALTH_TTL_MS } from './health-cache.ts';
 import { createGithubBranchForge } from './repo-branch-forge.ts';
 import { attributeLog, classifyInputFor, deleteBranches, forgetRepoBranches, readRepoBranchCounts, readRepoBranches, type BranchForge, type ClassifyProject } from './repo-branches.ts';
 import { claimRepoGitMutation, localPullBranches, pullRepoCheckout } from './repo-pull.ts';
@@ -1027,13 +1028,9 @@ export function createApp(deps: ServerDeps) {
         .finally(() => { backendChecksAt = Date.now(); backendChecksPending = undefined; })
         .then((changed) => {
           if (!changed) return;
-          // Probe is settled; finish any cold snapshot, then publish the new checks to both transports.
-          // Only availability changed: re-reading Git would spawn processes on this loop (hearsay-tools/squawk#3355).
-          void (async () => {
-            await healthInFlight?.catch(() => {});
-            if (healthCache) cacheHealth({ ...healthCache.payload, checks: backendChecks }, healthCache.at);
-            else await refreshHealth();
-          })().catch(() => {});
+          // Probe is settled; publish the new checks to both transports. Only availability changed:
+          // re-reading Git would spawn processes on this loop (hearsay-tools/squawk#3355).
+          void healthCache.patch((payload) => ({ ...payload, checks: backendChecks })).catch(() => {});
         });
     }
     return backendChecks;
@@ -1081,70 +1078,24 @@ export function createApp(deps: ServerDeps) {
       bootProject: workspace.bootProject,
     };
   };
-  // ---- server-side health cache (stale-while-revalidate) -------------------
-  // The snapshot still reads git and workspace state. Agent-CLI availability
-  // probes have their own nonblocking cache above. Paying that on the browser's FIRST `GET /api/health` is
-  // exactly the few-seconds-blank the cockpit showed at load. So on the live
-  // server the snapshot is computed at the server's OWN pace: both the GET and
-  // the WS `health` topic serve the cached value immediately and revalidate
-  // behind the response, and the cache is pre-warmed at boot so that first
-  // request lands on a warm value instead of the cold compute.
-  const HEALTH_TTL_MS = 5_000;
-  // The staleness CEILING, which is a different job from the TTL above. The TTL
-  // decides how often a revalidation is kicked off; on its own it bounds nothing,
-  // because the revalidation is fire-and-forget. While a cockpit holds the
-  // `health` topic the publisher's interval keeps the cache warm and the two are
-  // the same number — but the normal state of a background `hsq serve` is NO
-  // subscriber, and then nothing refreshes the cache at all: the next `GET
-  // /api/health`, an hour later, would answer with the boot pre-warm's payload
-  // and only the request AFTER it would see the truth. `repo.branch` going stale there is
-  // literally #369, so past this age correctness beats the latency win and the
-  // read waits for the compute. `refreshHealth` dedupes, so waiting costs one.
-  const HEALTH_MAX_STALE_MS = 60_000;
-  /** Whatever `healthSnapshot` actually returns — see the note there. */
-  type HealthPayload = Awaited<ReturnType<typeof healthSnapshot>>;
-  let healthCache: { at: number; payload: HealthPayload; body: string } | undefined;
-  let healthInFlight: Promise<HealthPayload> | undefined;
-  // Set while the topic has a subscriber; a change a refresh detects is pushed
-  // here (a noop when nobody is listening).
+  // Stale-while-revalidate cache over the snapshot; see health-cache.ts.
+  // Set while the topic has a subscriber (a noop when nobody is listening).
   let publishHealth: (data: unknown) => void = () => {};
-  const cacheHealth = (payload: HealthPayload, at: number): void => {
-    const body = JSON.stringify(payload);
-    const changed = body !== healthCache?.body;
-    healthCache = { at, payload, body };
-    if (changed) {
+  const healthCache = createHealthCache({
+    snapshot: healthSnapshot,
+    publish: (payload) => {
       publishHealth(payload);
       workspaceEvents.emit('health', payload);
-    } // only a real change reaches either transport
-  };
-
-  const refreshHealth = (): Promise<HealthPayload> => {
-    // Dedupe: a GET's background revalidation and the topic's interval tick
-    // share ONE repository/workspace compute rather than racing two.
-    if (healthInFlight) return healthInFlight;
-    healthInFlight = (async () => {
-      try {
-        const payload = await healthSnapshot();
-        cacheHealth(payload, Date.now());
-        return payload;
-      } finally {
-        healthInFlight = undefined;
-      }
-    })();
-    return healthInFlight;
-  };
+    },
+  });
+  const refreshHealth = () => healthCache.refresh();
 
   // The read the GET and the topic snapshot share. On the live server (a hub is
-  // injected) it answers from cache instantly and revalidates behind the
-  // response; without a hub — a bare app in tests — there is no refresher
-  // keeping a cache coherent, so it computes fresh, exactly as before.
-  const readHealth = async (): Promise<HealthPayload> => {
+  // injected) it answers from cache; without a hub — a bare app in tests — there is
+  // no refresher keeping a cache coherent, so it computes fresh, exactly as before.
+  const readHealth = async () => {
     if (!deps.socketHub) return healthSnapshot();
-    if (!healthCache) return refreshHealth(); // first ever: nothing to serve yet
-    const age = Date.now() - healthCache.at;
-    if (age > HEALTH_MAX_STALE_MS) return refreshHealth(); // too old to serve — wait for the truth
-    if (age > HEALTH_TTL_MS) void refreshHealth(); // stale: refresh, don't wait on it
-    return { ...healthCache.payload, capabilities: capabilities() }; // per request, like the gates (ADR 0055)
+    return healthCache.read((payload) => ({ ...payload, capabilities: capabilities() })); // per request, like the gates (ADR 0055)
   };
 
   // ---- chained family: health (workspace-level) ----------------------------
