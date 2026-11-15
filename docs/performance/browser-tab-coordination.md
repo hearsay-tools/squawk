@@ -17,7 +17,7 @@ Host: Linux 6.8.0-142-generic, AMD Ryzen 9 5950X, 24 reported CPU cores, reporte
 Evidence retained in the repository:
 
 - [Full measurements CSV](tab-coordination/measurements.csv): every case's cold/request counts, pending and failed requests, CPU/RSS, JS heap, renderer task time, and GET/click p50/p95/max.
-- Raw [before](tab-coordination/before.json) and [after](tab-coordination/after.json) samples, including individual probe failures, page visibility, request protocols and initial/end-of-sample server listener counts.
+- Raw [before](https://github.com/hearsay-tools/squawk/blob/1931f9edbc7045035400343e4bdc164217e4ca4d/docs/performance/tab-coordination/before.json) and [after](https://github.com/hearsay-tools/squawk/blob/1931f9edbc7045035400343e4bdc164217e4ca4d/docs/performance/tab-coordination/after.json) samples, including individual probe failures, page visibility, request protocols and initial/end-of-sample server listener counts.
 - Raw native-window [before](tab-coordination/windows-before.json) and [after](tab-coordination/windows-after.json) samples.
 
 Requests/s includes the measurement's own probes. Aborted hidden-page requests count as request failures; the failed GET column specifically measures starvation. Cold `main` presence proves the shell rendered, not that every request finished; pending requests and real transcript assertions provide the additional evidence. Server listener counts are observable fixture subscriptions, not a claim to enumerate every internal publisher.
