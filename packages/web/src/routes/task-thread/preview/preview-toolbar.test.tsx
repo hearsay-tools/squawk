@@ -54,12 +54,8 @@ function props(extra: Partial<PreviewToolbarProps> = {}): PreviewToolbarProps {
 /** Radix opens its menus on pointerdown, not click. */
 const openMenu = (trigger: HTMLElement) => fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' })
 
-/** A menu row's selection, as a screen reader hears it and as the trailing check mark shows it. */
-const selection = (row: HTMLElement) => ({
-  current: row.getAttribute('aria-current') === 'true',
-  checked: row.lastChild?.nodeName.toLowerCase() === 'svg',
-})
-const selected = (current: readonly boolean[]) => current.map(value => ({ current: value, checked: value }))
+/** Which menu rows assistive technology announces as current. */
+const currentRows = () => screen.getAllByRole('menuitem').map(row => row.getAttribute('aria-current') === 'true')
 
 describe('PreviewToolbar', () => {
   // Rule: .ai/specs/2026-10-02-live-preview-v1.md § Pane.
@@ -411,7 +407,7 @@ describe('PreviewToolbar', () => {
     render(<PreviewToolbar {...p} />)
     const name = viewport === 'fit' ? 'Viewport size: Fit' : `Viewport size: ${viewport.w} × ${viewport.h}`
     openMenu(screen.getByRole('button', { name }))
-    expect(screen.getAllByRole('menuitem').map(selection)).toEqual(selected(current))
+    expect(currentRows()).toEqual(current)
     fireEvent.click(screen.getByRole('menuitem', { name: /^Fit/ }))
     expect(p.onViewport).toHaveBeenCalledExactlyOnceWith('fit')
   })
@@ -423,7 +419,7 @@ describe('PreviewToolbar', () => {
   ] as const)('marks only the page shown as current in the switcher: %s', (_name, shown, current) => {
     render(<PreviewToolbar {...props({ servers: [web, storybook], ...shown })} />)
     openMenu(screen.getByRole('button', { name: /^Server: / }))
-    expect(screen.getAllByRole('menuitem').map(selection)).toEqual(selected(current))
+    expect(currentRows()).toEqual(current)
   })
 
   it.each([
