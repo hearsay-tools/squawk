@@ -6,7 +6,6 @@ import { useAgentAccounts } from '@/api/agent-accounts'
 import {
   queryKeys,
   useConfig,
-  useHealth,
   useProviderStatus,
   useProjects,
   useRunnerModels,
@@ -26,6 +25,7 @@ import {
 import { bumpSkillUsage, orderSkillsByUsage } from '@/lib/skills'
 import { usableRunners } from '@/lib/provider-status'
 import { taskWebhooks } from '@/lib/webhook'
+import { useAutomationsAvailable } from '@/lib/capabilities'
 import { useNavigate } from '@/lib/project-router'
 
 import { prefillToast, unknownSkillPrefillText } from './new-task-prefill'
@@ -152,8 +152,7 @@ export function usePromptTemplates(input: {
   update: DraftUpdate
 }) {
   const { uiState, source, sourcesReady, draftText, submissionPending, update } = input
-  const health = useHealth()
-  const automations = health.data?.capabilities.automations === true
+  const automations = useAutomationsAvailable()
   const promptTemplates = uiState.data?.promptTemplates
   const templates = useMemo(
     () => templatesForCapabilities(normalizePromptTemplates(promptTemplates), { automations }),

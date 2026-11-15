@@ -73,6 +73,7 @@ import { allProjectTags } from '@/lib/project-tags'
 import { canBeUnread, isReadDoneItem, isUnread, unreadMarkerTone } from '@/lib/read-state'
 import { BUCKET_ORDER, runTitle, type BucketLabel, type ListView } from '@/lib/task-groups'
 import { groupIndexedTasks, groupMembers, groupTone, originCounts, rowTasks, type TaskOrigin, type TaskStatusGroup } from '@/lib/task-origin'
+import { useAutomationsAvailable } from '@/lib/capabilities'
 import { useSearchParamsWriter } from '@/lib/use-search-params-writer'
 import { useTaskListFolds } from '@/lib/use-task-list-folds'
 import { usageMetricVisibility } from '@/lib/token-metrics'
@@ -208,10 +209,8 @@ export function GlobalTasksRoute() {
   // source of truth means a refresh, a pasted link and the Back button all land on the same
   // filtered view, with no effect syncing two copies that can disagree.
   const [searchParams, writeSearchParams] = useSearchParamsWriter()
-  const { filters, groupBy, view } = React.useMemo(
-    () => urlStateFromSearchParams(searchParams),
-    [searchParams],
-  )
+  const automations = useAutomationsAvailable()
+  const { filters, groupBy, view } = React.useMemo(() => urlStateFromSearchParams(searchParams, automations), [searchParams, automations])
   const now = useNow(30_000)
 
   /**
@@ -225,7 +224,7 @@ export function GlobalTasksRoute() {
    */
   const commit = (next: (current: GlobalTasksUrlState) => GlobalTasksUrlState) =>
     writeSearchParams((current) => {
-      const params = urlStateToSearchParams(next(urlStateFromSearchParams(current)))
+      const params = urlStateToSearchParams(next(urlStateFromSearchParams(current, automations)))
       const renderer = current.get('tasks')
       if (renderer === 'flat' || renderer === 'virtual') params.set('tasks', renderer)
       return params
@@ -249,7 +248,7 @@ export function GlobalTasksRoute() {
   const indexRuns = React.useMemo(() => index.data?.runs ?? [], [index.data])
   const tasks = React.useMemo(() => toGlobalTasks(indexRuns, registry), [indexRuns, registry])
   const { nameOf, visible, originTotals, statusGroups, folds } = useStatusGroups({
-    tasks, filters, view, groupBy, index: indexRuns, automationsOn: health.data?.capabilities?.automations === true,
+    tasks, filters, view, groupBy, index: indexRuns, automationsOn: automations,
   })
   const groups = React.useMemo(() => groupGlobalTasks(visible, groupBy), [visible, groupBy])
   const origin = filters.origin ?? 'all'
@@ -324,7 +323,7 @@ export function GlobalTasksRoute() {
           <Button variant="outline" aria-expanded={filterDetailsOpen} onClick={() => setFilterDetailsOpen((open) => !open)}><SlidersHorizontalIcon aria-hidden="true" />Filters</Button>
           <Button asChild className="min-h-11"><Link to={scopeTo(projects.data?.bootProject ?? 'default', '/new')}><PlusIcon aria-hidden="true" />New task</Link></Button>
         </div>
-        <TaskOriginRow origin={origin} counts={originTotals} onChange={setOrigin} labels={statusGroups.map((group) => group.label)} onSetAll={folds.setAll} />
+        <TaskOriginRow origin={origin} counts={originTotals} automations={automations} onChange={setOrigin} labels={statusGroups.map((group) => group.label)} onSetAll={folds.setAll} />
       </header>
 
       <div className="flex min-w-0 flex-1 flex-col gap-[22px]">

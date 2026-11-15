@@ -6,7 +6,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
-import { workspaceQueryKeys } from '@/api/queries'
+import { queryKeys, workspaceQueryKeys } from '@/api/queries'
 import { setApiScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 import type { RunRecord, RunSummary } from '@open-mercato/cezar-api-client'
 import { ListViewProvider } from '@/components/list-view'
@@ -24,6 +24,13 @@ import {
 import { timerWait, workerWait } from '@/test/wait-fixtures'
 
 const NOW = Date.parse('2026-07-14T12:00:00.000Z')
+
+/** A query client whose health payload has answered, with automations on or off (hearsay-tools/squawk#1401). */
+function healthClient(automations = true) {
+  const client = createQueryClient()
+  client.setQueryData(queryKeys.health, { capabilities: { automations } })
+  return client
+}
 const ago = (ms: number) => new Date(NOW - ms).toISOString()
 
 let seq = 0
@@ -61,7 +68,7 @@ function renderList(
   repo?: { projectId: string; repoBase: string },
 ) {
   const onViewChange = props.onViewChange ?? vi.fn()
-  const list = <TaskQuickList runs={[]} view="active" now={NOW} projectId="test-project" {...props} onViewChange={onViewChange} />
+  const list = <TaskQuickList runs={[]} view="active" automations now={NOW} projectId="test-project" {...props} onViewChange={onViewChange} />
   const utils = render(
     <QueryClientProvider client={createQueryClient()}>
       <MemoryRouter initialEntries={[route]}>
@@ -126,7 +133,7 @@ describe('status section folding (#811)', () => {
     const working = () => [run({ id: 'work', status: RUN_STATUS.running })]
     const tree = (runs: RunSummary[]) => <QueryClientProvider client={createQueryClient()}><MemoryRouter>
       <button type="button">Outside navigation</button>
-      <TaskQuickList projectId="focus" runs={runs} view="active" onViewChange={() => {}} />
+      <TaskQuickList projectId="focus" runs={runs} view="active" automations onViewChange={() => {}} />
     </MemoryRouter></QueryClientProvider>
     const control = (selector: string) => {
       const element = document.querySelector<HTMLElement>(selector)
@@ -247,7 +254,7 @@ describe('status section folding (#811)', () => {
   it('moves live updates into saved folded sections without duplication, retaining attention and focus', () => {
     const done = run({ id: 'done', status: RUN_STATUS.done, finishedAt: ago(1000) })
     const working = run({ id: 'move', status: RUN_STATUS.running })
-    const tree = (runs: RunSummary[]) => <QueryClientProvider client={createQueryClient()}><MemoryRouter><TaskQuickList projectId="live" runs={runs} view="active" onViewChange={() => {}} /></MemoryRouter></QueryClientProvider>
+    const tree = (runs: RunSummary[]) => <QueryClientProvider client={createQueryClient()}><MemoryRouter><TaskQuickList projectId="live" runs={runs} view="active" automations onViewChange={() => {}} /></MemoryRouter></QueryClientProvider>
     const { rerender } = render(tree([done, working]))
     fireEvent.click(screen.getByRole('button', { name: 'Finished 1' }))
     act(() => (row('move')!.querySelector('a') as HTMLElement).focus())
@@ -831,6 +838,15 @@ describe('TaskQuickList', () => {
       expect(row('a')).not.toBeNull()
       expect(row('n')).toBeNull()
     })
+
+    it('hides the Automations tab and lists automation tasks in Active while automations are off (hearsay-tools/squawk#1401)', () => {
+      renderList({ runs: runs(), view: 'active', automations: false })
+      expect(screen.queryByRole('button', { name: /Automations/ })).toBeNull()
+      expect(screen.getByRole('button', { name: /Active/ }).textContent).toBe('Active3')
+      expect(row('a')).not.toBeNull()
+      expect(row('n')).not.toBeNull()
+      expect(row('gone')).toBeNull()
+    })
   })
 
   describe('empty states', () => {
@@ -863,7 +879,7 @@ describe('TaskQuickListContainer', () => {
   function renderContainer(runs: RunSummary[], route = '/') {
     fetchMock.mockImplementation(async () => new Response(JSON.stringify(runs), { status: 200 }))
     const wrapper = ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={createQueryClient()}>
+      <QueryClientProvider client={healthClient()}>
         <MemoryRouter initialEntries={[route]}>
           <ListViewProvider>{children}</ListViewProvider>
         </MemoryRouter>
@@ -884,7 +900,7 @@ describe('TaskQuickListContainer', () => {
       }
       return new Response(JSON.stringify(path.includes('run-summaries') ? records : {}));
     });
-    render(<QueryClientProvider client={createQueryClient()}><MemoryRouter><ListViewProvider>
+    render(<QueryClientProvider client={healthClient()}><MemoryRouter><ListViewProvider>
       <TaskQuickListContainer projectId="p" />
     </ListViewProvider></MemoryRouter></QueryClientProvider>);
     await waitFor(() => expect(requested.some(path => path.includes('prs=812%2C813'))).toBe(true));
@@ -925,7 +941,7 @@ describe('TaskQuickListContainer', () => {
       })
     })
     const wrapper = ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={createQueryClient()}>
+      <QueryClientProvider client={healthClient()}>
         <MemoryRouter initialEntries={['/']}>
           <ListViewProvider>{children}</ListViewProvider>
         </MemoryRouter>
@@ -960,7 +976,7 @@ describe('TaskQuickListContainer', () => {
       }
       return new Response(JSON.stringify(rows), { status: 200 })
     })
-    render(<QueryClientProvider client={createQueryClient()}><MemoryRouter><ListViewProvider>
+    render(<QueryClientProvider client={healthClient()}><MemoryRouter><ListViewProvider>
       <TaskQuickListContainer />
     </ListViewProvider></MemoryRouter></QueryClientProvider>)
     fireEvent.click(await screen.findByRole('button', { name: /Automations/ }))
@@ -974,6 +990,32 @@ describe('TaskQuickListContainer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Archive all' }))
     await waitFor(() => expect(sweeps).toHaveLength(2))
     expect(sweeps[1]).toEqual({ scope: 'unpinned', automation: false })
+  })
+
+  it('falls back to Active, with every origin in it, when automations turn off (hearsay-tools/squawk#1401)', async () => {
+    const rows = [run({ id: 'manual-done' }), auto({ id: 'auto-done' })]
+    const sweeps: unknown[] = []
+    fetchMock.mockImplementation(async (input, init) => {
+      if (String(input).includes('archive-finished')) {
+        sweeps.push(JSON.parse(String(init?.body)))
+        return new Response(JSON.stringify({ archived: 0, ids: [], pinnedIds: [] }), { status: 200 })
+      }
+      return new Response(JSON.stringify(rows), { status: 200 })
+    })
+    const client = healthClient(true)
+    render(<QueryClientProvider client={client}><MemoryRouter><ListViewProvider>
+      <TaskQuickListContainer />
+    </ListViewProvider></MemoryRouter></QueryClientProvider>)
+    fireEvent.click(await screen.findByRole('button', { name: /Automations/ }))
+    await waitFor(() => expect(row('manual-done')).toBeNull())
+
+    act(() => { client.setQueryData(queryKeys.health, { capabilities: { automations: false } }) })
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Automations/ })).toBeNull())
+    expect(screen.getByRole('button', { name: /^Active/ }).getAttribute('aria-pressed')).toBe('true')
+    expect(row('manual-done')).not.toBeNull()
+    expect(row('auto-done')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Archive all' }))
+    await waitFor(() => expect(sweeps).toEqual([{ scope: 'unpinned' }]))
   })
 
   it('drives the sidebar Active/Automations view', async () => {
@@ -1040,7 +1082,7 @@ describe('SidebarSessionScope', () => {
       }
       return new Response(JSON.stringify({ error: 'not found' }), { status: 404 })
     })
-    const client = createQueryClient()
+    const client = healthClient()
     client.setQueryData(['shop', 'runs', 'list'], [run({ id: sharedId, status: RUN_STATUS.waiting })])
     render(
       <QueryClientProvider client={client}>
@@ -1061,7 +1103,7 @@ describe('SidebarSessionScope', () => {
     setApiScope('shop')
     const shopRun = run({ id: 'shop-only', status: RUN_STATUS.waiting })
     fetchMock.mockImplementation(async () => new Response(JSON.stringify({ error: 'not found' }), { status: 404 }))
-    const client = createQueryClient()
+    const client = healthClient()
     client.setQueryData(workspaceQueryKeys.projects, {
       projects: [
         {
@@ -1541,7 +1583,7 @@ describe('notifying glyph and age-first overflow on the meta line (#729)', () =>
           <MemoryRouter>
             <ReferenceStatusRegistry>
               <ReferenceStatusProvider projectId="p" repoBase="https://github.com/o/r" requests={[{ projectId: 'p', kind: 'PR', number: 594 }]}>
-                <TaskQuickList runs={[run({ id: 't', status: RUN_STATUS.running, pullRequestUrl: 'https://github.com/o/r/pull/594' })]} view="active" now={NOW} onViewChange={vi.fn()} />
+                <TaskQuickList runs={[run({ id: 't', status: RUN_STATUS.running, pullRequestUrl: 'https://github.com/o/r/pull/594' })]} view="active" automations now={NOW} onViewChange={vi.fn()} />
               </ReferenceStatusProvider>
             </ReferenceStatusRegistry>
           </MemoryRouter>
@@ -1589,7 +1631,7 @@ describe('notifying glyph and age-first overflow on the meta line (#729)', () =>
           <MemoryRouter>
             <ReferenceStatusRegistry>
               <ReferenceStatusProvider projectId="p" repoBase="https://github.com/o/r" requests={[{ projectId: 'p', kind: 'PR', number: 594 }]}>
-                <TaskQuickList runs={[run({ id: 't', status: RUN_STATUS.running, pullRequestUrl: 'https://github.com/o/r/pull/594' })]} view="active" now={NOW} onViewChange={vi.fn()} />
+                <TaskQuickList runs={[run({ id: 't', status: RUN_STATUS.running, pullRequestUrl: 'https://github.com/o/r/pull/594' })]} view="active" automations now={NOW} onViewChange={vi.fn()} />
               </ReferenceStatusProvider>
             </ReferenceStatusRegistry>
           </MemoryRouter>
@@ -1708,7 +1750,7 @@ describe('sidebar archive (#780)', () => {
     render(
       <QueryClientProvider client={createQueryClient()}>
         <MemoryRouter>
-          <QuickListBuckets buckets={groupRuns([run({ id: 'a' })], 'active')} sweepCounts={{ unpinned: 1, pinned: 0 }} onSweep={vi.fn()} projectName="shop" />
+          <QuickListBuckets buckets={groupRuns([run({ id: 'a' })], 'active')} automations sweepCounts={{ unpinned: 1, pinned: 0 }} onSweep={vi.fn()} projectName="shop" />
         </MemoryRouter>
       </QueryClientProvider>,
     )
@@ -1833,7 +1875,7 @@ describe('swipe to archive on touch (#780 §7)', () => {
     const tree = (record: RunSummary) => (
       <QueryClientProvider client={client}>
         <MemoryRouter>
-          <TaskQuickList runs={[record]} view="active" now={NOW} onViewChange={vi.fn()} onArchiveRun={vi.fn()} onTogglePin={vi.fn()} />
+          <TaskQuickList runs={[record]} view="active" automations now={NOW} onViewChange={vi.fn()} onArchiveRun={vi.fn()} onTogglePin={vi.fn()} />
         </MemoryRouter>
       </QueryClientProvider>
     )

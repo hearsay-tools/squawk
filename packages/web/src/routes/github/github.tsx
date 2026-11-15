@@ -20,7 +20,7 @@ import { useParams } from 'react-router'
 import { Link, Navigate } from '@/lib/project-router'
 
 import { getGithubComments, putUiState } from '@/api/client'
-import { queryKeys, useGithubPages, useHealth, useUiState } from '@/api/queries'
+import { queryKeys, useGithubPages, useUiState } from '@/api/queries'
 import type {
   GithubData,
   GithubItem,
@@ -47,6 +47,7 @@ import {
 } from '@/lib/github-list-width'
 import { githubTaskPrompt } from '@/lib/github-task'
 import { cn } from '@/lib/utils'
+import { useAutomationsAvailable } from '@/lib/capabilities'
 
 import { IssueLinkedTasks } from './issue-linked-tasks'
 import { IssueFilters } from './issue-filters'
@@ -195,11 +196,9 @@ export function GithubRoute({
   const isDesktop = useIsDesktop()
   // Paged (hearsay-tools/cezarion#1183): `list` is the infinite query, `gh` every loaded page.
   const { pages: list, data: gh } = useGithubPages(GITHUB_PAGE_SIZE)
-  // #801: automations are opt-in, so the cross-link into them exists exactly while the server
-  // says the feature does — otherwise this tab would advertise a page that only says "off".
-  // `capabilities?.` because this tab renders against minimal health payloads too; absent is
-  // fail-closed, which is the honest answer while the server has not spoken.
-  const automationsAvailable = useHealth().data?.capabilities?.automations === true
+  // #801: the cross-link into automations exists exactly while the server says the feature does —
+  // otherwise this tab would advertise a page that only says "off".
+  const automationsAvailable = useAutomationsAvailable()
   const saveGithubView = useSaveGithubView()
   const handToAgent = useHandToAgentState()
   const uiState = useUiState()

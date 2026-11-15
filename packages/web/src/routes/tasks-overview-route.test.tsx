@@ -35,6 +35,7 @@ describe('TasksOverviewRoute — wired to the app', () => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input).replace('?archived=recent', '')
       if (url === '/api/v1/run-summaries') return new Response(JSON.stringify(runs), { status: 200 })
+      if (url === '/api/v1/health') return new Response(JSON.stringify({ capabilities: { automations: true } }), { status: 200 })
       if (url === '/api/v1/runs/archive-finished')
         return new Response(JSON.stringify({ archived: 1 }), { status: 200 })
       return new Response('[]', { status: 200 })

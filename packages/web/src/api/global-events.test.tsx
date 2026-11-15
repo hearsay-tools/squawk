@@ -631,7 +631,7 @@ describe('useGlobalEvents — archived run bursts (#657)', () => {
       useGlobalEvents(usage)
       const list = useRuns()
       return <MemoryRouter><Profiler id="overview" onRender={() => { overviewCommits++ }}>
-        <TasksOverview runs={list.data} view="active" onViewChange={() => undefined}
+        <TasksOverview runs={list.data} view="active" automations onViewChange={() => undefined}
           onArchiveFinished={() => undefined} onMarkAllRead={() => undefined}
           onRename={() => undefined} />
       </Profiler></MemoryRouter>
@@ -2328,7 +2328,7 @@ describe('live run list responses overlapping newer workspace events (#795)', ()
       const list = useProjectRuns(project, true, scope === 'boot-alias')
       const detail = useRun(record.id)
       return <MemoryRouter initialEntries={[`/p/${project}/tasks/${record.id}`]}>
-        <TaskQuickList runs={list.data ?? []} view="active" onViewChange={() => undefined} now={Date.parse(record.createdAt)} />
+        <TaskQuickList runs={list.data ?? []} view="active" automations onViewChange={() => undefined} now={Date.parse(record.createdAt)} />
         {detail.data && <HandoffAction run={detail.data} />}
       </MemoryRouter>
     }

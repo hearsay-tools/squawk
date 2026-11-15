@@ -46,7 +46,7 @@ export const NAV_ITEMS: NavItem[] = [
 export type NavAvailability = {
   /** `forge.available` (spec §"GitHub tab (forge tab)"). */
   forge?: boolean
-  /** `capabilities.automations` — enabled unless `CEZ_AUTOMATIONS=0`. */
+  /** `automationsAvailable(health)` from `lib/capabilities.ts`: on unless `CEZ_AUTOMATIONS=0`. */
   automations?: boolean
 }
 

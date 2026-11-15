@@ -5,7 +5,7 @@ import { matchesRunSearch, type RunSearchExtras } from '@open-mercato/cezar-api-
 import { shownReferenceNumbers } from '@/lib/tasks-table'
 
 import { isOwnedWorker, runTitle } from '@/lib/task-groups'
-import { matchesOrigin, parseOrigin, type TaskOrigin } from '@/lib/task-origin'
+import { availableOrigin, matchesOrigin, parseOrigin, type TaskOrigin } from '@/lib/task-origin'
 
 /**
  * The pure half of the global Tasks page (`/tasks`): joining the cross-project run index to the
@@ -431,13 +431,14 @@ export function urlStateToSearchParams(state: GlobalTasksUrlState): URLSearchPar
  * whatever a pasted, hand-edited or older-version URL happens to carry, so an unknown `group`
  * degrades to "not grouped" rather than to a blank page, and absent keys are simply the defaults.
  * A filter naming a tag or workflow nothing has just leaves an empty table, which is the honest
- * answer to what the URL asked for.
+ * answer to what the URL asked for. While automations are off (`automationsAvailable`), an
+ * Automations origin reads as All.
  */
-export function urlStateFromSearchParams(params: URLSearchParams): GlobalTasksUrlState {
+export function urlStateFromSearchParams(params: URLSearchParams, automations: boolean): GlobalTasksUrlState {
   const tags = params.getAll(SEARCH_PARAMS.tag).filter((tag) => tag !== '')
   if (params.get(SEARCH_PARAMS.untagged) === '1') tags.push(UNTAGGED)
   const group = params.get(SEARCH_PARAMS.groupBy) ?? ''
-  const origin = parseOrigin(params.get(SEARCH_PARAMS.origin))
+  const origin = availableOrigin(parseOrigin(params.get(SEARCH_PARAMS.origin)), automations)
   return {
     filters: {
       query: params.get(SEARCH_PARAMS.query) ?? '',

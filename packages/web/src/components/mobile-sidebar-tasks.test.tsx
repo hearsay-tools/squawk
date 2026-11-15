@@ -69,7 +69,7 @@ describe('mobile sidebar tasks (#811)', () => {
     expect(document.activeElement).toBe(undo)
     fireEvent.click(undo)
     await waitFor(() => expect(api.archiveRun).toHaveBeenCalledWith(runAddress('finished', { projectId: 'boot' }), false))
-    if (action === 'Archive all') expect(api.archiveFinished).toHaveBeenCalledWith(projectAddress({ projectId: 'boot' }), 'unpinned', false)
+    if (action === 'Archive all') expect(api.archiveFinished).toHaveBeenCalledWith(projectAddress({ projectId: 'boot' }), 'unpinned', undefined)
     else expect(api.archiveRun).toHaveBeenCalledWith(runAddress('finished', { projectId: 'boot' }), true)
   })
 })

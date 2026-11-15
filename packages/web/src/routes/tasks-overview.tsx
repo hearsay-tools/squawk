@@ -49,6 +49,8 @@ import {
 } from '@/lib/task-columns'
 import { ARCHIVED_WINDOW, BUCKET_ORDER, listCounts, runTitle, withArchivedPages, type BucketLabel, type ListView } from '@/lib/task-groups'
 import {
+  archivedTabCount,
+  availableOrigin,
   groupMembers,
   groupProjectRuns,
   groupTone,
@@ -60,6 +62,7 @@ import {
   type TaskOrigin,
   type TaskStatusGroup,
 } from '@/lib/task-origin'
+import { useAutomationsAvailable } from '@/lib/capabilities'
 import { useSearchParamsWriter, type SearchParamsUpdate } from '@/lib/use-search-params-writer'
 import { useTaskListFoldsFromUrl } from '@/lib/use-task-list-folds'
 import {
@@ -128,6 +131,7 @@ export function TasksOverview({
   onArchivedSearch,
   origin: originProp,
   onOriginChange,
+  automations,
   urlQuery = '',
   onQueryChange,
   foldScope = 'project',
@@ -175,6 +179,8 @@ export function TasksOverview({
    *  Absent, the page keeps its own, starting at All. */
   origin?: TaskOrigin
   onOriginChange?: (origin: TaskOrigin) => void
+  /** `useAutomationsAvailable`: false drops the Automations origin and reads it as All. */
+  automations: boolean
   /** The search text in the URL, and the setter that writes the typed text back. */
   urlQuery?: string
   onQueryChange?: TasksQueryWriter
@@ -185,7 +191,7 @@ export function TasksOverview({
 }) {
   const [query, setQuery] = useUrlQuery(urlQuery, onQueryChange)
   React.useEffect(() => { onArchivedSearch?.(query.trim()) }, [onArchivedSearch, query])
-  const [origin, setOrigin] = useOriginOrOwn(originProp, onOriginChange)
+  const [origin, setOrigin] = useOriginOrOwn(originProp, onOriginChange, automations)
   const [detailedTable, setDetailedTable] = React.useState(false)
   const desktop = useIsDesktop()
   const { expandedRuns, toggleExpandedRun } = useTaskListExpansion()
@@ -251,7 +257,7 @@ export function TasksOverview({
         />
         <Button asChild data-slot="new-task-inline" className="min-h-11 inline-flex max-md:hidden"><Link to="/new"><PlusIcon aria-hidden="true" />New task</Link></Button>
         </div>
-        <TaskOriginRow origin={origin} counts={derived.originTotals} onChange={setOrigin} labels={groups.map((group) => group.label)} onSetAll={folds.setAll} />
+        <TaskOriginRow origin={origin} counts={derived.originTotals} automations={automations} onChange={setOrigin} labels={groups.map((group) => group.label)} onSetAll={folds.setAll} />
       </header>
       <div className="flex min-w-0 flex-1 flex-col">
         {runs === undefined ? (
@@ -327,10 +333,11 @@ function TasksHeading({ projectName, detailedTable }: { projectName?: string | u
     <div className="flex flex-col gap-2"><h1 className="text-[30px] font-semibold tracking-tight">Project tasks</h1><p className="text-[13px] text-muted-foreground">{projectName ? `${projectName} · ` : ''}{detailedTable ? 'Every resource column shown. Fold columns without losing the saved view.' : 'Review runs, pull requests and resource usage.'}</p></div>
   )
 }
-/** Use the caller's URL origin when present; otherwise keep page state, starting at All. */
-function useOriginOrOwn(origin: TaskOrigin | undefined, onChange: ((origin: TaskOrigin) => void) | undefined) {
+/** Use the caller's URL origin when present; otherwise keep page state, starting at All. An
+ *  Automations origin reads as All while automations are off. */
+function useOriginOrOwn(origin: TaskOrigin | undefined, onChange: ((origin: TaskOrigin) => void) | undefined, automations: boolean) {
   const [own, setOwn] = React.useState<TaskOrigin>('all')
-  return [origin ?? own, onChange ?? setOwn] as const
+  return [availableOrigin(origin ?? own, automations), onChange ?? setOwn] as const
 }
 /**
  * The list's derived state: what the filters leave in each status group, and the counts the
@@ -374,31 +381,12 @@ function deriveProjectTaskGroups({ all, view, query, origin, archivedPages, arch
     visibleCount: groups.reduce((total, group) => total + groupMembers(group).length, 0),
     originTotals: originCounts(withPages, view),
     activeCount: originCounts(all, 'active')[origin],
-    archivedCount: archivedTabCount(all, withPages, origin, archivedPages, archivedTotal),
+    archivedCount: archivedTabCount(all, withPages, origin, archivedPages?.plainHasMore, archivedTotal),
     // Older archived history the list has not loaded yet: the caption says "loaded", not a total.
     incomplete: view === 'archived' && archivedFull && archivedPages?.hasMore !== false,
     finished: finishedRunCount(scoped),
     unread: unreadDoneCount(scoped),
   }
-}
-/**
- * The Archived tab's count. For All it is the server's total, or the window with a `+` while
- * none is known; for one origin it is what has loaded, with a `+` while the plain archive has
- * older pages, or while that is unknown.
- */
-function archivedTabCount(
-  all: readonly RunSummary[],
-  withPages: readonly RunSummary[],
-  origin: TaskOrigin,
-  archivedPages: ArchivedPages | undefined,
-  archivedTotal: number | undefined,
-): number | string {
-  const archived = listCounts(all).archived
-  const full = archived >= ARCHIVED_WINDOW
-  if (origin === 'all') return archivedTotal ?? (full ? `${ARCHIVED_WINDOW}+` : archived)
-  const loaded = originCounts(withPages, 'archived')[origin]
-  // Whether the plain archive has older pages; a search's own paging says nothing about that.
-  return full && archivedPages?.plainHasMore !== false ? `${loaded}+` : loaded
 }
 function resultCaption(count: number, incomplete: boolean, needle: string): string {
   return `${count} ${count === 1 ? 'task' : 'tasks'}${incomplete ? ' loaded' : ''}${needle ? ` matching “${needle}”` : ''}`
@@ -1434,6 +1422,7 @@ export function TasksOverviewRoute() {
   const runs = useRuns()
   const health = useHealth()
   const metricVisibility = usageMetricVisibility(health.data)
+  const automations = useAutomationsAvailable()
   const { view, setView, origin, setOrigin, urlQuery, writeQuery } = useTasksUrlState()
   const writer = useRunCacheWriter()
   const queryClient = useQueryClient()
@@ -1474,7 +1463,7 @@ export function TasksOverviewRoute() {
   const projectName = projects.data?.projects?.find((project) => project.id === projectId)?.name
   // Older archived pages count too: a task found only there still needs its automation's name.
   const hasAutomationTasks = [...(runs.data ?? []), ...(archived.pages?.runs ?? [])].some((run) => run.automationId !== undefined)
-  const automationNameIn = useAutomationNames([undefined], health.data?.capabilities?.automations === true && hasAutomationTasks)
+  const automationNameIn = useAutomationNames([undefined], automations && hasAutomationTasks)
   const automationName = React.useCallback((automationId: string) => automationNameIn(undefined, automationId), [automationNameIn])
   const referenceRequests = React.useMemo(
     () =>
@@ -1502,6 +1491,7 @@ export function TasksOverviewRoute() {
         onViewChange={setView}
         origin={origin}
         onOriginChange={setOrigin}
+        automations={automations}
         urlQuery={urlQuery}
         onQueryChange={writeQuery}
         foldScope={`project:${projectId ?? 'default'}`}

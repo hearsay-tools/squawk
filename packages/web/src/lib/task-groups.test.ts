@@ -695,30 +695,44 @@ describe('sidebar Active and Automations (#1332)', () => {
   ]
 
   it('splits unarchived tasks by recorded origin, never by autonomy', () => {
-    expect(sidebarRuns(fixture(), 'active').map((r) => r.id)).toEqual(['manual', 'autonomous'])
-    expect(sidebarRuns(fixture(), 'automations').map((r) => r.id)).toEqual(['scheduled', 'asks', 'worker'])
+    expect(sidebarRuns(fixture(), 'active', true).map((r) => r.id)).toEqual(['manual', 'autonomous'])
+    expect(sidebarRuns(fixture(), 'automations', true).map((r) => r.id)).toEqual(['scheduled', 'asks', 'worker'])
+  })
+
+  it('lists automation tasks in Active while automations are off (hearsay-tools/squawk#1401)', () => {
+    expect(sidebarRuns(fixture(), 'active', false).map((r) => r.id)).toEqual(['manual', 'autonomous', 'scheduled', 'asks', 'worker'])
   })
 
   it('places automation tasks in their status sections', () => {
-    expect(shape(groupRuns(sidebarRuns(fixture(), 'automations'), 'active'))).toEqual(['Needs you: asks', 'Finished: scheduled'])
+    expect(shape(groupRuns(sidebarRuns(fixture(), 'automations', true), 'active'))).toEqual(['Needs you: asks', 'Finished: scheduled'])
   })
 
   it('counts each tab and its own attention, without workers or archived tasks', () => {
-    expect(sidebarCounts(fixture())).toEqual({ active: 2, automations: 2, activeWaiting: 0, automationsWaiting: 1 })
-    expect(sidebarCounts([])).toEqual({ active: 0, automations: 0, activeWaiting: 0, automationsWaiting: 0 })
+    expect(sidebarCounts(fixture(), true)).toEqual({ active: 2, automations: 2, activeWaiting: 0, automationsWaiting: 1 })
+    expect(sidebarCounts([], true)).toEqual({ active: 0, automations: 0, activeWaiting: 0, automationsWaiting: 0 })
+  })
+
+  it('counts automation tasks in Active while automations are off (hearsay-tools/squawk#1401)', () => {
+    expect(sidebarCounts(fixture(), false)).toEqual({ active: 4, automations: 0, activeWaiting: 1, automationsWaiting: 0 })
   })
 })
 
 describe('sectionTasksPath / parseSectionParam', () => {
   it('opens each section on the origin of its sidebar tab, and reads it back', () => {
-    expect(sectionTasksPath('Needs you', 'active')).toBe('/?origin=direct&section=needs-you')
-    expect(sectionTasksPath('Working', 'automations')).toBe('/?origin=automations&section=working')
-    for (const section of SIDEBAR_SECTIONS) {
-      const param = new URLSearchParams(sectionTasksPath(section, 'active').slice(2)).get('section')
-      expect(parseSectionParam(param)).toBe(section)
+    expect(sectionTasksPath('Needs you', 'active', true)).toBe('/?origin=direct&section=needs-you')
+    expect(sectionTasksPath('Working', 'automations', true)).toBe('/?origin=automations&section=working')
+    for (const automations of [true, false]) {
+      for (const section of SIDEBAR_SECTIONS) {
+        const param = new URLSearchParams(sectionTasksPath(section, 'active', automations).slice(2)).get('section')
+        expect(parseSectionParam(param)).toBe(section)
+      }
     }
     expect(parseSectionParam(null)).toBeNull()
     expect(parseSectionParam('Finished')).toBeNull()
     expect(parseSectionParam('archived')).toBeNull()
+  })
+
+  it('opens every origin while automations are off, as the Active tab then lists them all (hearsay-tools/squawk#1401)', () => {
+    expect(sectionTasksPath('Finished', 'active', false)).toBe('/?section=finished')
   })
 })

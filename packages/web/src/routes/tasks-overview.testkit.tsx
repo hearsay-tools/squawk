@@ -72,6 +72,7 @@ export function renderOverview(
             <TasksOverview
               runs={[]}
               view="active"
+              automations
               now={NOW}
               expandedColumns={{ branch: true }}
               {...props}

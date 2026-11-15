@@ -1,0 +1,21 @@
+id: automations-capability-read-outside-owner-tsx
+valid:
+  # The owner's readers.
+  - "const automations = useAutomationsAvailable()"
+  - "const on = automationsAvailable(health.data)"
+  - "if (useAutomationsAvailability() === 'unknown') return null"
+  # Another capability, and another object's automations.
+  - "const local = health.data?.capabilities?.localHandoff === true"
+  - "const count = counts.automations + 1"
+  - "const list = response.automations.map((entry) => entry.id)"
+  # A health payload built in a fixture.
+  - "const payload = { capabilities: { automations: true } }"
+invalid:
+  - "const on = health.data?.capabilities.automations === true"
+  - "const on = health.data?.capabilities?.automations === true"
+  - "const off = health.capabilities.automations !== true"
+  - "const on = capabilities.automations"
+  - "const on = capabilities?.automations ?? false"
+  - "const items = visibleNavItems({ automations: useHealth().data?.capabilities?.automations === true })"
+  # A read inside JSX.
+  - "const tab = <Tab hidden={health.data?.capabilities.automations !== true} />"
