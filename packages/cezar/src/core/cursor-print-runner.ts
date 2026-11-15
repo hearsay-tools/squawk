@@ -16,6 +16,7 @@ import type { ModelOption } from './runner-model-catalog.ts';
 import { cursorArgs } from './cursor-cli-flags.ts';
 import { sanitizeCursorProviderError } from './cursor-provider-error.ts';
 import { summarizeRunnerStderr } from './runner-stderr.ts';
+import { ownLookup } from './own-lookup.ts';
 import { startCursorPrintProcess, type CursorPrintProcess, type CursorPrintProcessOptions } from './cursor-print-process.ts';
 import { createCursorPrintUiState, mapCursorPrintMessage, mapCursorPrintStreamEvent } from './cursor-print-ui-mapper.ts';
 import { AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS } from './runner-runtime.ts';
@@ -197,7 +198,7 @@ class CursorPrintSession implements AgentSession {
     const extensions: Record<string, string> = {
       'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp',
     };
-    const extension = extensions[block.source.media_type];
+    const extension = ownLookup(extensions, block.source.media_type);
     if (!extension) throw new Error(`Cursor print image type '${block.source.media_type}' is unsupported`);
     const bytes = Buffer.from(block.source.data, 'base64');
     if (!bytes.length || bytes.length > 10 * 1024 * 1024) throw new Error('Cursor print image size is unsupported');

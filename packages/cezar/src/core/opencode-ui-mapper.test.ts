@@ -229,6 +229,20 @@ describe('mapOpencodeEvent edge cases', () => {
     });
   });
 
+  it('maps an Object.prototype member status like any unknown status (hearsay-tools/squawk#2890)', () => {
+    const tool = (status: string | undefined, title?: string) =>
+      part({ id: 'prt_p', type: 'tool', tool: 'bash', state: { status, input: { command: 'ls' }, ...(title ? { title } : {}) } });
+    const running = mapOpencodeEvent(tool(WIRE_TOOL_STATUS.running, 'ls'), startedState()).state;
+    const unknownFirst = mapOpencodeEvent(tool('somethingNew'), startedState());
+    const unknownLater = mapOpencodeEvent(tool('somethingNew', 'ls'), running);
+    expect(unknownFirst.events).toMatchObject([{ type: 'item.started', item: { status: TOOL_STATUS.pending } }]);
+    expect(unknownLater.state.tools.get('prt_p')?.status).toBe(TOOL_STATUS.running);
+    for (const status of ['toString', 'constructor', '__proto__']) {
+      expect(mapOpencodeEvent(tool(status), startedState())).toEqual(unknownFirst);
+      expect(mapOpencodeEvent(tool(status, 'ls'), running)).toEqual(unknownLater);
+    }
+  });
+
   it('tool state carries across updates: pending→running flips via item.updated, error settles as failed', () => {
     let state = startedState();
     state = mapOpencodeEvent(

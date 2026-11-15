@@ -51,6 +51,7 @@ import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
 import { EMPTY_MESSAGE_USAGE, addUsage, emitUsage, maxCost, tokensToUsage, usageForMessages } from './opencode-usage.ts';
 import type { MessageUsage } from './opencode-usage.ts';
 import type { OpencodeUiMapperState, OpencodeUiMapping, SubtaskScope } from './opencode-ui-mapper-state.ts';
+import { ownLookup } from './own-lookup.ts';
 
 export type { OpencodeUiMapperState, OpencodeUiMapping } from './opencode-ui-mapper-state.ts';
 
@@ -345,8 +346,7 @@ function mapTool(
   const name = str(part.tool) ?? str(part.name) ?? 'tool';
   const toolState = isRecord(part.state) ? part.state : {};
   const prev: TrackedTool | undefined = state.tools.get(id);
-  const mapped = typeof toolState.status === 'string' ? STATUS_MAP[toolState.status] : undefined;
-  const status: ToolStatus = mapped ?? prev?.status ?? 'pending';
+  const status: ToolStatus = ownLookup(STATUS_MAP, toolState.status) ?? prev?.status ?? 'pending';
 
   const display = toolDisplay(name, toolState.input);
   const { title, live } = toolTitle(toolState, prev, display);
