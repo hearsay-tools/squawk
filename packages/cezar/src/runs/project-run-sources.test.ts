@@ -72,6 +72,24 @@ describe('project run sources', () => {
     if (databaseBytes) expect(readFileSync(join(source, 'runs.db'))).toEqual(databaseBytes);
   });
 
+  it.each([false, true])('finds fallback roots by conversation, lets a legacy duplicate win, and keeps them through adoption (JSON=%s)', json => {
+    const peer = randomUUID(), other = randomUUID();
+    const talking = (recipientRunId: string) => ({ role: 'root', permissions: [], receipts: [], conversation: { outcomes: [], messages: [{
+      id: randomUUID(), senderRunId: randomUUID(), recipientRunId, kind: 'request', relationship: 'peer', text: 'which branch?',
+      createdAt: '2026-11-01T00:00:00Z', requestHash: 'a'.repeat(64), state: 'accepted' }] } }) as RunRecord['delegation'];
+    const legacy = record('legacy root', { delegation: talking(peer) });
+    const fallback = record('fallback root', { delegation: talking(peer) });
+    const duplicate = record('legacy duplicate', { delegation: talking(other) });
+    seed('cezar', [legacy, duplicate]);
+    seed('squawk', [fallback, { ...duplicate, delegation: talking(peer) }], json);
+    const store = open();
+    expect(new Set(store.listConversationRootIds(peer))).toEqual(new Set([legacy.id, fallback.id]));
+    expect(store.listConversationRootIds(other)).toEqual([duplicate.id]);
+    expect(store.adoptFallbackFamily(fallback.id)).toBe(true);
+    expect(new Set(store.listConversationRootIds(peer))).toEqual(new Set([legacy.id, fallback.id]));
+    expect(new Set(store.listConversationRootIds())).toEqual(new Set([legacy.id, fallback.id, duplicate.id]));
+  });
+
   it('unions disjoint IDs and keeps duplicate records and all their sidecars together', () => {
     const duplicate = record('legacy duplicate');
     const old = record('legacy only');

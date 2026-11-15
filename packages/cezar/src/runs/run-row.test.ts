@@ -2,7 +2,7 @@ import { RUN_STATUS, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factor
 import { describe, expect, it } from 'vitest';
 
 import { branchFor } from '../git-worktree.ts';
-import { encodeRunRow, isLiveRecord, isLiveStatus } from './run-row.ts';
+import { conversationMembersOf, encodeRunRow, isLiveRecord, isLiveStatus } from './run-row.ts';
 import type { RunRecord } from './store.ts';
 
 const ID = '0123abcd-0000-4000-8000-000000000000';
@@ -70,6 +70,24 @@ describe('isLiveRecord', () => {
 
   it('does not read a wait off a quarantined delegation', () => {
     expect(isLiveRecord(record({ delegation: { role: 'invalid', wait: { id: 'x' } } as unknown as RunRecord['delegation'] }))).toBe(false);
+  });
+});
+
+describe('conversationMembersOf', () => {
+  const message = (senderRunId: string, recipientRunId: string) => ({ senderRunId, recipientRunId });
+  const root = (conversation?: unknown) => ({ role: 'root', permissions: [], receipts: [], ...(conversation ? { conversation } : {}) }) as unknown as RunRecord['delegation'];
+
+  it("lists the marker and each sender and recipient once for a root's conversation", () => {
+    const messages = [message('a', 'b'), message('b', 'a'), message('a', 'c')];
+    expect(conversationMembersOf(record({ delegation: root({ messages, outcomes: [] }) }))).toEqual(['', 'a', 'b', 'c']);
+    expect(conversationMembersOf(record({ delegation: root({ messages: [], outcomes: [] }) }))).toEqual(['']);
+    expect(encodeRunRow(record({ delegation: root({ messages, outcomes: [] }) })).conversationMembers).toEqual(['', 'a', 'b', 'c']);
+  });
+
+  it('has none for a root without a conversation, a worker, or a run without delegation', () => {
+    expect(conversationMembersOf(record({ delegation: root() }))).toBeNull();
+    expect(conversationMembersOf(record({ delegation: worker() }))).toBeNull();
+    expect(conversationMembersOf(record())).toBeNull();
   });
 });
 

@@ -70,6 +70,7 @@ function row(id: string, overrides: Partial<RunRowInput> = {}): RunRowInput {
     live: false,
     data: JSON.stringify({ id, payload: 'full' }),
     summary: JSON.stringify({ id }),
+    conversationMembers: null,
     ...overrides,
   };
 }
@@ -400,6 +401,42 @@ describe('RunDatabase', () => {
     });
   });
 
+  describe('conversation members (schema 13)', () => {
+    it('keeps the index in step with every upsert and delete, newest root first', () => {
+      const db = openDb();
+      db.transaction({ upserts: [row('old', { createdAt: '2026-10-01T00:00:00.000Z', conversationMembers: ['', 'x'] }),
+        row('new', { createdAt: '2026-10-02T00:00:00.000Z', conversationMembers: ['', 'x', 'y'] }), row('plain')], deletes: [] });
+      expect(db.listConversationRoots('x')).toEqual(['new', 'old']);
+      expect(db.listConversationRoots()).toEqual(['new', 'old']);
+      expect(db.conversationMembers('new')).toEqual(['', 'x', 'y']);
+      expect(db.conversationMembers('plain')).toBeNull();
+      db.transaction({ upserts: [row('old', { createdAt: '2026-10-01T00:00:00.000Z', conversationMembers: ['', 'z'] })], deletes: [] });
+      expect(db.listConversationRoots('x')).toEqual(['new']);
+      expect(db.listConversationRoots('z')).toEqual(['old']);
+      db.transaction({ upserts: [row('old', { createdAt: '2026-10-01T00:00:00.000Z' })], deletes: ['new'] });
+      expect(db.listConversationRoots()).toEqual([]);
+      expect(db.listConversationRoots('y')).toEqual([]);
+    });
+
+    it('migrates schema 12 by indexing each root conversation from its record, past rows it cannot read', () => {
+      const root = (id: string, conversation: unknown, role = 'root') => row(id, { summary: JSON.stringify({ id, delegation: { role } }),
+        data: JSON.stringify({ id, delegation: { role, ...(conversation === undefined ? {} : { conversation }) } }) });
+      const messages = [{ senderRunId: 'talker', recipientRunId: 'peer' }, { senderRunId: 'peer', recipientRunId: 'talker' }, 'not a message'];
+      const db = openDb();
+      db.transaction({ upserts: [root('talker', { messages, outcomes: [] }), root('quiet', { messages: [], outcomes: [] }), root('none', undefined),
+        root('worker', { messages, outcomes: [] }, 'worker'), row('broken', { data: 'not a record' })], deletes: [] });
+      db.close(); open.length = 0;
+      const previous = new DatabaseSync(path);
+      previous.exec('DROP TABLE conversation_members; PRAGMA user_version = 12');
+      previous.close();
+      const migrated = openDb();
+      expect(migrated.listConversationRoots().sort()).toEqual(['quiet', 'talker']);
+      expect(migrated.listConversationRoots('peer')).toEqual(['talker']);
+      expect(migrated.conversationMembers('talker')).toEqual(['', 'peer', 'talker']);
+      expect(migrated.conversationMembers('worker')).toBeNull();
+    });
+  });
+
   describe('named queries', () => {
     // Each query reads one column the caller computed; the rows are seeded with the column set or
     // not, so a query that ignored its column (or read another) returns the wrong ids.
@@ -567,13 +604,14 @@ describe('RunDatabase', () => {
     // Schema 9 (hearsay-tools/cezarion#1446): records may carry process waits, which a schema-8
     // build would drop as unreadable.
     // Schema 12: a worker whose destroy is complete has no worktree_path, as a reclaimed run.
-    it('creates a fresh database at schema 12, migrates a v3 one keeping its rows, and refuses version 13', () => {
-      expect(RUN_DATABASE_SCHEMA_VERSION).toBe(12);
+    // Schema 13: conversation_members indexes who each root's conversation names.
+    it('creates a fresh database at schema 13, migrates a v3 one keeping its rows, and refuses version 14', () => {
+      expect(RUN_DATABASE_SCHEMA_VERSION).toBe(13);
       openDb().close();
       open.length = 0;
       const fresh = new DatabaseSync(path, { readOnly: true });
       try {
-        expect(fresh.prepare('PRAGMA user_version').get()).toEqual({ user_version: 12 });
+        expect(fresh.prepare('PRAGMA user_version').get()).toEqual({ user_version: 13 });
       } finally {
         fresh.close();
       }
@@ -588,8 +626,8 @@ describe('RunDatabase', () => {
       for (const db of open.splice(0)) db.close();
       const migrated = new DatabaseSync(path);
       try {
-        expect(migrated.prepare('PRAGMA user_version').get()).toEqual({ user_version: 12 });
-        migrated.exec('PRAGMA user_version = 13');
+        expect(migrated.prepare('PRAGMA user_version').get()).toEqual({ user_version: 13 });
+        migrated.exec('PRAGMA user_version = 14');
       } finally {
         migrated.close();
       }

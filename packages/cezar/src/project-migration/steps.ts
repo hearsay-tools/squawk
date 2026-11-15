@@ -243,8 +243,9 @@ function runStoreStep(journal: ProjectMigrationJournal, fault: MigrationFault): 
       ].some(Boolean);
       if (!changed) continue;
       const { seq: _seq, revision, ...input } = row;
+      // Paths change, run ids do not: the row keeps the conversation members it has.
       upserts.push({ ...input, worktreePath: column.worktree_path, data: serializeLike(row.data, data), summary: serializeLike(row.summary, summary),
-        issueAttributionCurrent: db.getMeta(`issue-attribution:${id}`) === String(revision) });
+        issueAttributionCurrent: db.getMeta(`issue-attribution:${id}`) === String(revision), conversationMembers: db.conversationMembers(id) });
     }
     if (upserts.length > 0) db.transaction({ upserts, deletes: [], beforeCommit: () => { fault('run-store:commit'); } });
   } finally { db.close(); }
