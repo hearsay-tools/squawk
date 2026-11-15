@@ -617,7 +617,6 @@ describe('harness parity — systemPromptOnResume declaration (#790)', () => {
               CEZ_MOCK_ARGS_FILE: `${freshName}.args.ndjson`,
               CEZ_MOCK_STDIN_FILE: `${freshName}.stdin.ndjson`,
               CEZ_HANDOFF_FILE: '',
-              CEZ_TODOS_FILE: '',
             },
           },
         });
@@ -631,7 +630,6 @@ describe('harness parity — systemPromptOnResume declaration (#790)', () => {
               CEZ_MOCK_ARGS_FILE: `${resumeName}.args.ndjson`,
               CEZ_MOCK_STDIN_FILE: `${resumeName}.stdin.ndjson`,
               CEZ_HANDOFF_FILE: '',
-              CEZ_TODOS_FILE: '',
             },
           },
         });

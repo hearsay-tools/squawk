@@ -1,4 +1,5 @@
 # Let the run store own run exits
+Status: done
 
 Decision record: [ADR 0056](../../docs/adr/0056-let-the-run-store-own-run-exits.md). Glossary:
 [Run exit](../../GLOSSARY.md#run-exit). Baseline: `main` at `60f6a9557`. Designed with the owner

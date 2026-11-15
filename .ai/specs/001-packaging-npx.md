@@ -1,6 +1,7 @@
 # 001 — Packaging: `npx`, dane w `.ai/cezar/`, zero tarcia przy starcie
+Status: draft
 
-Status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 1 · Zależy od: —
+Recorded status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 1 · Zależy od: —
 
 ## Cel
 

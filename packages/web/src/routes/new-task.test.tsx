@@ -102,7 +102,7 @@ describe('submit', () => {
     // lands in its errored state immediately and the test stays deterministic.
     writeDraft({
       text: '', source: { source: 'skill', ref: 'om-fix' }, runner: null, agentProfile: null, model: null, effort: null,
-      retiredVariants: false, planFirst: false, worktree: null, autonomous: null, archiveWhenDone: false, autoMergePr: false, allowWorkers: true, allowMessaging: true,
+      planFirst: false, worktree: null, autonomous: null, archiveWhenDone: false, autoMergePr: false, allowWorkers: true, allowMessaging: true,
     })
     serve({ createRun: { id: 'run-9' }, uiStateStatus: 404 })
     renderNewTask()
@@ -236,18 +236,14 @@ describe('submit', () => {
     expect(postedBody()).toMatchObject({ workflow: 'quick-task', worktree: false })
   })
 
-  it('preserves old draft text and requires a choice before launching one task', async () => {
+  it('opens an old variant draft and launches one task', async () => {
     localStorage.setItem('cez-new-task-draft', JSON.stringify({ text: 'Race two attempts', variants: 2 }))
     serve()
     renderNewTask()
     await pillReady()
-    expect(screen.getByRole('alert').textContent).toContain('Parallel variants are removed')
-    fireEvent.click(screen.getByRole('button', { name: 'Start task' }))
-    await waitFor(() => expect(screen.getByText(/Choose Use one task/)).toBeTruthy())
-    expect(requests.filter(request => request.method === 'POST' && request.url === '/api/v1/runs')).toHaveLength(0)
-    fireEvent.click(screen.getByRole('button', { name: 'Use one task' }))
     await startTask()
     expect(postedBody()).toMatchObject({ task: 'Race two attempts' })
+    expect(postedBody()).not.toHaveProperty('variants')
   })
 
   it('shows a locked native default but omits it from the direct run request', async () => {

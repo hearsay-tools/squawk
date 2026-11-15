@@ -36,7 +36,7 @@ function expression(raw, context) {
 function context(event, first, rerun = 'skipped') {
   return {
     github: { event_name: event },
-    inputs: { pr_number: '', squeal_gate_trial: false },
+    inputs: { pr_number: '' },
     needs: { },
     steps: { record: { outcome: first }, e2e: { outcome: first }, rerun: { outcome: rerun }, 'e2e-rerun': { outcome: rerun } },
     runner: { temp: '/runner/temp' },

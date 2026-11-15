@@ -1,4 +1,5 @@
 # Project-aware browser page titles
+Status: draft
 
 ## TLDR
 

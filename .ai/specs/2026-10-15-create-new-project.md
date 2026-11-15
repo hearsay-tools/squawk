@@ -1,6 +1,7 @@
 # Create a new project from the cockpit
+Status: done
 
-> Status: implemented · Date: 2026-10-15 · Extends: `2026-07-20-multi-project-workspace`
+> Recorded status: implemented · Date: 2026-10-15 · Extends: `2026-07-20-multi-project-workspace`
 > Issue: hearsay-tools/cezarion#1014 · Ports: open-mercato/cezar#1402 (`0504ec91`), adapted
 
 ## Problem

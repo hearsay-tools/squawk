@@ -1,4 +1,5 @@
 # Worker message delivery and continuation — hearsay-tools/cezarion#475
+Status: done
 
 The parent received queued worker messages one per turn, extending an already
 long first-turn delay. It also failed to register a worker wait while executing

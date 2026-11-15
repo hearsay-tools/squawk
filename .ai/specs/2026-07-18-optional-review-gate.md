@@ -1,11 +1,12 @@
 # Optional review gate — default-off env, Settings override, auto-skip when autonomous
+Status: done
 
 > Historical source: `open-mercato/cezar` (upstream), preserved at fork point
 > `feb85666` (2026-08-31). Unqualified cezar issue/PR citations below belong to
 > that upstream tracker; example numbers, UI values and command literals retain
 > their original meaning. New citations must name their repository.
 
-Status: proposed · Date: 2026-07-18 · Issue: #489 · Relates: spec 009 (the diff-first review gate this makes optional), spec 2026-07-17 task-auto-naming (the `liveTitleUpdates` env/config/Settings precedent mirrored here)
+Recorded status: proposed · Date: 2026-07-18 · Issue: #489 · Relates: spec 009 (the diff-first review gate this makes optional), spec 2026-07-17 task-auto-naming (the `liveTitleUpdates` env/config/Settings precedent mirrored here)
 
 ## TLDR
 

@@ -214,5 +214,4 @@ export const probeEnv = (name: string) => ({
   CEZ_MOCK_ARGS_FILE: `${name}.args.ndjson`,
   CEZ_MOCK_STDIN_FILE: `${name}.stdin.ndjson`,
   CEZ_HANDOFF_FILE: '',
-  CEZ_TODOS_FILE: '',
 });

@@ -8,13 +8,13 @@ import { createQueryClient } from '@/api/query-client'
 import { AppearanceProvider } from '@/components/appearance-provider'
 import { ThemeProvider } from '@/components/theme-provider'
 import { AppRoutes } from '@/routes'
-import { SETTINGS_SECTIONS, visibleSettingsSections } from './registry'
+import { visibleSettingsSections } from './registry'
 
 /**
- * The Settings shell + Appearance section (R6 Step 1.3): registry rendering, hidden gating,
+ * The Settings shell + Appearance section (R6 Step 1.3): registry rendering,
  * the project/global scope split (step 3.5), the appearance round-trip against a stubbed
  * ui-state API, and boot application of persisted values. The URL map itself (including
- * hidden sections 404ing) lives in routes.test.tsx.
+ * unknown sections 404ing) lives in routes.test.tsx.
  *
  * The scope split is what most of this file now pins, and it is pinned where it is observable:
  * WHICH STORE a section writes. Appearance and Notifications must reach
@@ -137,17 +137,6 @@ const GLOBAL_SECTIONS = [
 ]
 
 describe('the section registry', () => {
-  it('declares the spec §Settings sections, later ones hidden', () => {
-    const byId = new Map(SETTINGS_SECTIONS.map((s) => [s.id, s]))
-    for (const id of [...PROJECT_SECTIONS, ...GLOBAL_SECTIONS]) {
-      expect(byId.get(id as never)?.hidden).toBeUndefined()
-    }
-    // Listed in the registry but hidden until implemented (later phase).
-    for (const id of ['keyboard']) {
-      expect(byId.get(id as never)?.hidden).toBe(true)
-    }
-  })
-
   it('splits the sections by scope (step 3.5) — each id belongs to exactly one area', () => {
     expect(visibleSettingsSections('project').map((s) => s.id)).toEqual(PROJECT_SECTIONS)
     expect(visibleSettingsSections('global').map((s) => s.id)).toEqual(GLOBAL_SECTIONS)

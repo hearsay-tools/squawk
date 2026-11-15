@@ -1,6 +1,7 @@
 # 003 — Handoff: „Kontynuuj" i „Otwórz w terminalu"
+Status: draft
 
-Status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 1 · Zależy od: 002 · Wzorzec: janitor `getTaskResumeCommand` + `openInTerminal.ts` + `continueTask`
+Recorded status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 1 · Zależy od: 002 · Wzorzec: janitor `getTaskResumeCommand` + `openInTerminal.ts` + `continueTask`
 
 ## Cel
 

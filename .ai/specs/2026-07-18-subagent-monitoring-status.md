@@ -1,4 +1,5 @@
 # A "monitoring" run activity — stop false "Needs attention" while the agent is still working
+Status: superseded by 2026-07-24-long-running-waiting-sessions.md
 
 > Historical source: `open-mercato/cezar` (upstream), preserved at fork point
 > `feb85666` (2026-08-31). Unqualified cezar issue/PR citations below belong to

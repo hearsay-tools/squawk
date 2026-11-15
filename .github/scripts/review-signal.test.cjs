@@ -5,7 +5,7 @@ const { signalTarget, SIGNAL_PATH } = require('./review-signal.cjs');
 const HEAD = 'a'.repeat(40), MERGE = 'b'.repeat(40);
 const LIST = 'GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs';
 function signal(conclusion, { id = 40, number = 7, status = 'completed' } = {}) {
-  return { id, name: 'CodeRabbit review signal', run_attempt: 1, workflow_id: 4, path: SIGNAL_PATH,
+  return { id, name: 'Review signal', run_attempt: 1, workflow_id: 4, path: SIGNAL_PATH,
     event: 'pull_request_review_comment', head_sha: MERGE, status, conclusion,
     repository: { id: 1, full_name: 'o/r' }, head_repository: { full_name: 'o/r' },
     pull_requests: [{ number, head: { sha: HEAD, repo: { id: 1 } }, base: { ref: 'main', repo: { id: 1 } } }] };

@@ -82,14 +82,13 @@ export class ProjectAutomationScheduler {
         throw new AutomationBackedOffError(`automation is backed off until ${state.backoffUntil}`);
       }
       const { baseline, overlapSince } = pollWindow(definition, state, mode);
-      let duplicates: GithubCandidate[] = [];
-      const result = await githubRequests.run(() => readUnderCanonicalName(github, ({ owner, repo }) => {
+      const { result, duplicates } = await githubRequests.run(() => readUnderCanonicalName(github, async ({ owner, repo }) => {
         // Each attempt starts clean: a retry under a new name must not see the failed one's matches as handled.
         const found: GithubCandidate[] = [];
-        duplicates = found;
         const accept = candidateAcceptor(definition, baseline, mode, store, candidate => found.push(candidate));
-        return github.poller.poll(owner, repo, definition,
+        const polled = await github.poller.poll(owner, repo, definition,
           { since: overlapSince, accept, ...(mode === 'execute' && state.historyScan ? { historyScan: state.historyScan } : {}) });
+        return { result: polled, duplicates: found };
       }));
       this.assertCurrent(definition);
       const eligible = result.candidates.filter(candidate => afterBaseline(candidate, definition, baseline));

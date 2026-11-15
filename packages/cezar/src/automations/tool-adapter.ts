@@ -1,3 +1,4 @@
+import { writableAutomationTask } from '@open-mercato/cezar-contract/automations';
 import { automationCreateSchema, automationUpdateSchema } from '@open-mercato/cezar-contract/automation-requests';
 import { isValidTimeZone } from '@open-mercato/cezar-contract/zoned-time';
 import { onceInstant, unknownTimeZoneMessage } from '@open-mercato/cezar-contract/automation-schedule';
@@ -128,7 +129,7 @@ export function createAutomationToolService(
             enabled: stored.enabled,
             kind: stored.kind,
             schedule,
-            task: { ...stored.task, ...(request.prompt !== undefined ? { prompt: request.prompt } : {}), ...taskSettings(request) },
+            task: { ...writableAutomationTask(stored.task), ...(request.prompt !== undefined ? { prompt: request.prompt } : {}), ...taskSettings(request) },
             expectedRevision: stored.revision,
           });
           if (!body.success) return refuse('invalid_request', body.error.issues[0]?.message ?? 'invalid schedule');

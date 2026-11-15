@@ -109,6 +109,11 @@ function writeLauncher(path: string, contents: string, platform: NodeJS.Platform
   } finally { rmSync(temp, { force: true }); }
 }
 
+/** The launcher file that writeLaunchers writes for one binary into the bin directory `dir`. */
+export function launcherFile(dir: string, name: BinaryName, platform: NodeJS.Platform = process.platform): string {
+  return join(dir, name + (platform === 'win32' ? '.cmd' : ''));
+}
+
 /** Write each supported binary launcher. Returns the bin directory. */
 export function writeLaunchers(env: NodeJS.ProcessEnv = process.env, home: Home, platform: NodeJS.Platform = process.platform): string {
   const dir = binDir(env, home);
@@ -117,7 +122,7 @@ export function writeLaunchers(env: NodeJS.ProcessEnv = process.env, home: Home,
   mkdirSync(dir, { recursive: true });
   mkdirSync(versionsDir(env, home), { recursive: true });
   for (const name of BINARY_NAMES) {
-    const path = join(dir, name + (platform === 'win32' ? '.cmd' : ''));
+    const path = launcherFile(dir, name, platform);
     const contents = platform === 'win32' ? windowsLauncher(env, home, name) : posixLauncher(env, home, name);
     writeLauncher(path, contents, platform);
   }

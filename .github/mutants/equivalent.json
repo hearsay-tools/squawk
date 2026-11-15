@@ -33,6 +33,24 @@
   },
   {
     "file": "packages/cezar/src/server/repo-branches.ts",
+    "function": "deletionVerdicts",
+    "mutator": "StringLiteral",
+    "original": "'cezar'",
+    "replacement": "\"\"",
+    "reason": "productName ignores its argument and returns the build's display name, so an empty literal renders the same text; remove this entry when hearsay-tools/squawk#3509 replaces productName calls with literals.",
+    "site": "refused.push({ name, reason: `not a ${productName("
+  },
+  {
+    "file": "packages/cezar/src/server/repo-branches.ts",
+    "function": "deleteBranches",
+    "mutator": "StringLiteral",
+    "original": "'cezar'",
+    "replacement": "\"\"",
+    "reason": "productName ignores its argument and returns the build's display name, so an empty literal renders the same text; remove this entry when hearsay-tools/squawk#3509 replaces productName calls with literals.",
+    "site": "refused.push({ name, reason: `not a ${productName("
+  },
+  {
+    "file": "packages/cezar/src/server/repo-branches.ts",
     "function": "deleteBranches",
     "mutator": "ObjectLiteral",
     "original": "{ diffStats: false }",
@@ -71,6 +89,78 @@
     "original": "!entry || !tip",
     "replacement": "!entry && !tip",
     "reason": "The payload branches and tips are built one-to-one from the same heads, so entry exists exactly when tip exists."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "planUnit",
+    "mutator": "ConditionalExpression",
+    "original": "from.scope === 'user'",
+    "replacement": "false",
+    "site": "if (",
+    "reason": "For a user unit the runner's test -e runs on the same host as the same user as existsSync; both follow symlinks and both report a dangling link or an unreadable directory as absent."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "planUnit",
+    "mutator": "StringLiteral",
+    "original": "'user'",
+    "replacement": "\"\"",
+    "site": "if (from.scope === ",
+    "reason": "Same effect as the scope test turned false: a user unit's destinations are checked with test -e through the runner, which sees the same files as existsSync."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "assertRollbackEntry",
+    "mutator": "StringLiteral",
+    "original": "''",
+    "replacement": "\"Stryker was here!\"",
+    "site": "? to.name === names.unit && to.path === join(dirname(from.path ?? ",
+    "reason": "dirname of any string without a slash is '.', so the fallback for a missing from.path yields the same expected path either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "assertRollbackEntry",
+    "mutator": "StringLiteral",
+    "original": "''",
+    "replacement": "\"Stryker was here!\"",
+    "site": ": stepId === 'nginx-proxy' && [names.vhostAvailable, names.vhostEnabled, names.htpasswd].includes(to.path ?? ",
+    "reason": "The three names are absolute paths, so neither '' nor a relative text is in the list; a site entry without a path is refused either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "assertRollbackEntry",
+    "mutator": "ConditionalExpression",
+    "original": "stepId === 'nginx-proxy'",
+    "replacement": "true",
+    "site": ": ",
+    "reason": "The only caller, rollbackUbuntuMigration, passes only entries it selected by stepId 'autostart' or 'nginx-proxy'; an entry with any other stepId in an edited journal never reaches this check."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "restoreUnit",
+    "mutator": "StringLiteral",
+    "original": "'system'",
+    "replacement": "\"\"",
+    "site": "return await verifyCommand(c, 'systemctl', ['is-enabled', from.name!]) && !(await unitRuns(c, ",
+    "reason": "unitRuns adds --user only when the scope is exactly 'user', so '' and 'system' run the same system-manager queries."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "checkPublicSite",
+    "mutator": "Regex",
+    "original": "/^[23]\\d\\d$/",
+    "replacement": "/[23]\\d\\d$/",
+    "site": "if (!",
+    "reason": "The code comes from curl -s -o /dev/null -w '%{http_code}', which prints exactly three digits (000 when it gets no answer), or the '000' fallback, so the start anchor cannot change the match."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/ubuntu-vps-migration.ts",
+    "function": "checkPublicSite",
+    "mutator": "Regex",
+    "original": "/^[23]\\d\\d$/",
+    "replacement": "/^[23]\\d\\d/",
+    "site": "if (!",
+    "reason": "The code is always exactly three digits (curl -w '%{http_code}' with -o /dev/null, or the '000' fallback), so the end anchor cannot change the match."
   },
   {
     "file": "packages/cezar/src/server/repo-branches.ts",
@@ -157,6 +247,24 @@
     "reason": "Start waits on one run, so all and any other non-any string have the same completion test and exit code."
   },
   {
+    "file": "packages/cezar/src/server/project-context.ts",
+    "function": "ProjectContexts.maintainColdStore",
+    "mutator": "MethodExpression",
+    "original": "projectPaths(root).reads.slice(1).some(directory => existsSync(join(directory, RUNS_DB_FILE)) || existsSync(join(directory, 'runs.json')))",
+    "replacement": "projectPaths(root).reads.slice(1).every(directory => existsSync(join(directory, RUNS_DB_FILE)) || existsSync(join(directory, 'runs.json')))",
+    "reason": "projectPaths always returns exactly two read roots (the write root and its fallback), so reads.slice(1) holds one directory and some and every give the same answer for every layout, including a symlinked or dangling fallback, since both test that one directory with the same existsSync calls.",
+    "site": "!"
+  },
+  {
+    "file": "packages/cezar/src/server/project-context.ts",
+    "function": "ProjectContexts.dispose",
+    "mutator": "ArithmeticOperator",
+    "original": "(this.epochs.get(projectId) ?? 0) + 1",
+    "replacement": "(this.epochs.get(projectId) ?? 0) - 1",
+    "reason": "Epochs live only in this process's memory and are compared for equality only; counting down from 0 is as strictly monotonic as counting up, so every build that started before a dispose sees a different epoch and every later build the same one, whatever the order of dispose, build, maintenance or disposeAll calls.",
+    "site": "this.epochs.set(projectId, "
+  },
+  {
     "file": "packages/contract/src/attention.ts",
     "function": "(module)",
     "mutator": "StringLiteral",
@@ -198,6 +306,102 @@
     "original": "[]",
     "replacement": "[\"Stryker was here\"]",
     "reason": "The required fallback handles absent or malformed waits; its string element has no phase, so the open-wait filter drops it (one exact mutant match)."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "launchdServices",
+    "mutator": "ConditionalExpression",
+    "original": "a.kind === 'owned' && a.type === 'launchd'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. some() is true for a non-empty ledger either way, because the owned launchd artifact matches the original predicate (the shared ngrok-config artifact matches only the mutant), and false for an empty ledger either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "launchdServices",
+    "mutator": "LogicalOperator",
+    "original": "a.kind === 'owned' && a.type === 'launchd'",
+    "replacement": "a.kind === 'owned' || a.type === 'launchd'",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact is neither owned nor launchd, so it fails the mutant too, and some() finds the owned launchd artifact either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "launchdServices",
+    "mutator": "ConditionalExpression",
+    "original": "a.kind === 'owned'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact fails the mutant because its type is not launchd, and some() finds the owned launchd artifact either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "launchdServices",
+    "mutator": "ConditionalExpression",
+    "original": "a.type === 'launchd'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact fails the mutant because it is not owned, and some() finds the owned launchd artifact either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "agentCandidates",
+    "mutator": "LogicalOperator",
+    "original": "a.kind === 'owned' && a.type === 'launchd'",
+    "replacement": "a.kind === 'owned' || a.type === 'launchd'",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact is neither owned nor launchd, so it fails the mutant too, and find() returns the owned launchd artifact either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "agentCandidates",
+    "mutator": "ConditionalExpression",
+    "original": "a.kind === 'owned'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact fails the mutant because its type is not launchd, and find() returns the owned launchd artifact either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "agentCandidates",
+    "mutator": "ConditionalExpression",
+    "original": "a.type === 'launchd'",
+    "replacement": "true",
+    "reason": "The autostart step records only [owned launchd] and the ngrok step only [shared ngrok-config, owned launchd] (unchanged since the first version), and a migration rewrite or rollback swaps one launchd artifact for another, so every non-empty ledger the product writes for these steps contains an owned launchd artifact. The shared ngrok-config artifact fails the mutant because it is not owned, and find() returns the owned launchd artifact either way."
+  },
+  {
+    "file": "packages/cezar/src/server-install/platforms/macosx-ngrok.ts",
+    "function": "legacyCandidateOwned",
+    "mutator": "BlockStatement",
+    "original": "{\n    return false;\n  }",
+    "replacement": "{}",
+    "reason": "The only caller, agentCandidates, uses the result only as a ternary condition; an unreadable legacy plist returning undefined instead of false selects the same candidate list."
+  },
+  {
+    "file": "packages/cezar/src/server-command.ts",
+    "function": "runAndReportServerCommand",
+    "mutator": "ConditionalExpression",
+    "original": "mode === 'uninstall'",
+    "replacement": "true",
+    "reason": "ServerCommandMode has three values and install and deploy with a complete status take the two earlier branches, so the third branch sees a complete status only in uninstall."
+  },
+  {
+    "file": "packages/cezar/src/ci-wait/tools.ts",
+    "function": "invokeDoneTool",
+    "mutator": "StringLiteral",
+    "original": "'Cezar'",
+    "replacement": "\"\"",
+    "reason": "productName ignores its argument (_legacy) and returns productIdentity().displayName, so the hint text is the same for any argument."
+  },
+  {
+    "file": "packages/cezar/src/server/start-server.ts",
+    "function": "shutdownForRestart",
+    "mutator": "ConditionalExpression",
+    "original": "'closeAllConnections' in server",
+    "replacement": "true",
+    "reason": "server is always a node:http Server: the listener parameter is typed node:http Server and serve() is called without createServer, which makes a node:http server; the check only narrows the ServerType union for TypeScript."
+  },
+  {
+    "file": "packages/cezar/src/server/start-server.ts",
+    "function": "setTaskWebhookOrigin",
+    "mutator": "ConditionalExpression",
+    "original": "context",
+    "replacement": "true",
+    "reason": "ids() returns the keys of the same map peek() reads, and the loop reads both synchronously, so peek() returns a context for every id it is given."
   },
   {
     "file": "packages/contract/src/waits.ts",
@@ -301,5 +505,21 @@
     "replacement": "\"\"",
     "reason": "commitLegacyMigration never reads legacy.cache: the claim, planLegacyMigration (migrationRoots is called for the target only), MOVED.json and updateManagedPath use only paths under legacy.root.",
     "site": "const legacy = homePaths(record.legacyRoot, join(record.legacyRoot, "
+  },
+  {
+    "file": "packages/cezar/src/server-install/group-migrate.ts",
+    "function": "Group.instances",
+    "mutator": "StringLiteral",
+    "original": "'utf8'",
+    "replacement": "\"\"",
+    "reason": "readFileSync with an empty encoding returns the same bytes as a Buffer, and the only reader, loadServerState, passes the result to JSON.parse, which decodes a Buffer as UTF-8; every server record parses to the same state."
+  },
+  {
+    "file": "packages/cezar/src/server-install/group-migrate.ts",
+    "function": "Group.member",
+    "mutator": "StringLiteral",
+    "original": "''",
+    "replacement": "\"Stryker was here!\"",
+    "reason": "The lookup gets this text only for a record with no platform. The production lookup, getStrategy, is keyed by platform ids, so neither the empty string nor any other non-id text has a strategy, and the refusal names the platform unknown either way."
   }
 ]

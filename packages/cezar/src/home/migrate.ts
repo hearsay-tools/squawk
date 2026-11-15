@@ -1,6 +1,6 @@
 import { POWERSHELL, powershellEnv } from '../core/process-stat.ts';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, readFileSync, realpathSync, renameSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homeFileSchema } from '@open-mercato/cezar-contract/home-recovery';
 import { homePaths, type Home } from './home.ts';
@@ -19,7 +19,8 @@ import { LEGACY_RECOVERY_COMMAND } from './migration-cli.ts';
 import { withHomeLock } from './write-lock.ts';
 import { digest, readBytes, VersionLog } from './version-log.ts';
 import { loadWorkspaceConfigSync, mergeWriteWorkspaceConfigSync } from '../workspace/config.ts';
-import { pathHook, writeLaunchers } from '../managed-install/launcher.ts';
+import { launcherFile, pathHook, writeLaunchers } from '../managed-install/launcher.ts';
+import { BINARY_NAMES } from './identity.ts';
 import { readManifest, PACKAGE_NAME } from '../managed-install/layout.ts';
 
 export type MigrationStep = 'recovered' | 'claimed' | 'pending' | 'archived' | 'copied' | 'recheck' | 'accounts' | 'committed';
@@ -129,13 +130,24 @@ function writerDiagnostic(files: MigrationFile[]): Error {
   return new Error(`Legacy files kept changing after three checks: ${files.map(file => file.path).join(', ')}. Stop older binaries and retry. Running processes (pid and command):\n${processes}`);
 }
 
-/** Pending copies are disposable. Remove only paths that the prior migration recorded. */
+/** Pending copies are disposable. Remove only the migration's own copies: the managed install,
+ *  its launcher files, account trees, and the paths that the prior migration recorded. */
 function discardPendingCopies(target: Home): void {
   const prior = readMigrationRecord(target);
   if (!prior) return;
   for (const directory of [target.versions, join(target.data, 'accounts')]) {
     assertHomePath(target.data, directory);
     rmSync(directory, { recursive: true, force: true });
+  }
+  // Only a copy of a managed install writes launchers, and its record lists the legacy versions/
+  // files. Those launchers would start the removed versions/ tree; other bin/ entries are not the copy's.
+  if (prior.files.some(file => file.path.startsWith('versions/'))) {
+    for (const name of BINARY_NAMES) {
+      const launcher = launcherFile(target.bin, name);
+      assertHomePath(target.data, launcher);
+      rmSync(launcher, { force: true });
+    }
+    if (existsSync(target.bin) && !readdirSync(target.bin).length) rmdirSync(target.bin);
   }
   // Step 7 can publish agent-accounts.json from a config.json import that has no recorded source.
   const copies = [...prior.files.flatMap(file => file.target ? [file.target] : []), { kind: 'config' as const, path: 'agent-accounts.json' }];
@@ -263,7 +275,8 @@ export function commitLegacyMigration(target: Home, env: NodeJS.ProcessEnv = pro
   const record = migrationRecordSchema.parse(readMigrationRecord(target));
   const legacy = homePaths(record.legacyRoot, join(record.legacyRoot, '.cache'), record.legacyRoot);
   withMigration(legacy.root, () => withHomeLock(target.config, () => withHomeLock(target.state, () => {
-    const committed = readInstallMarker(target.config)?.state === 'committed';
+    // A target without its marker (rolled back or removed) is never committed.
+    const committed = assertHomeReadable(target.config).state === 'committed';
     if (!committed) {
       const changed = changedFiles(record.files, planLegacyMigration(legacy, target).files);
       if (changed.length) throw writerDiagnostic(changed);
