@@ -2,7 +2,6 @@ import { projectPaths } from './project-paths.ts';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -112,33 +111,35 @@ if pid == 0:
     os.execvp(sys.argv[2], sys.argv[2:])
 os.set_blocking(fd, False)
 while not os.path.exists(hangup):
-    try: os.read(fd, 65536)
-    except (BlockingIOError, OSError): time.sleep(0.05)
+    try: data = os.read(fd, 65536)
+    except (BlockingIOError, OSError): time.sleep(0.05); continue
+    sys.stdout.buffer.write(data); sys.stdout.buffer.flush()
+    if not data: time.sleep(0.05)
 os.close(fd)
 _, status = os.waitpid(pid, 0)
 print('signal %d' % os.WTERMSIG(status) if os.WIFSIGNALED(status) else 'code %d' % os.WEXITSTATUS(status), flush=True)
 `;
 
-async function freePort(): Promise<number> {
-  const probe = createServer();
-  probe.listen(0, '127.0.0.1');
-  await once(probe, 'listening');
-  const { port } = probe.address() as AddressInfo;
-  probe.close();
-  await once(probe, 'close');
-  return port;
-}
-
-function onPty(args: string[]): { hangUp: () => void; ended: Promise<string> } {
+/** `url` is the cockpit URL that `serve` prints once it listens on the port it picked itself. */
+function onPty(args: string[]): { hangUp: () => void; ended: Promise<string>; url: Promise<string> } {
   const hangup = join(root, 'hangup');
   const host = spawn('python3', ['-I', '-c', PTY_HOST, hangup, process.execPath, '--import', 'tsx', CLI, ...args], {
     cwd: PACKAGE_DIR, env: env(), stdio: ['ignore', 'pipe', 'inherit'],
   });
   cez = host;
   let out = '';
-  host.stdout!.on('data', (chunk) => { out += chunk; });
-  const ended = once(host, 'exit').then(() => out.trim().split('\n').at(-1) ?? '');
-  return { hangUp: () => writeFileSync(hangup, ''), ended };
+  const exited = once(host, 'exit');
+  const url = new Promise<string>((resolveUrl, reject) => {
+    host.stdout!.on('data', (chunk) => {
+      out += chunk;
+      const found = /cockpit → (http:\/\/\S+)/.exec(out)?.[1];
+      if (found) resolveUrl(found);
+    });
+    void exited.then(() => reject(new Error(`the pty session ended before serve listened: ${out}`)));
+  });
+  url.catch(() => { /* a test that never asks for the URL ignores it */ });
+  const ended = exited.then(() => out.trim().split('\n').at(-1) ?? '');
+  return { hangUp: () => writeFileSync(hangup, ''), ended, url };
 }
 
 describe.skipIf(process.platform === 'win32')('Squawk forwards SIGINT and SIGTERM to agent sessions (hearsay-tools/cezarion#890)', () => {
@@ -195,9 +196,8 @@ describe.skipIf(process.platform === 'win32')('Squawk forwards SIGINT and SIGTER
     const hasPython = (() => { try { execFileSync('python3', ['-c', 'import pty']); return true; } catch { return false; } })();
 
     it.skipIf(!hasPython)('closing the terminal of cez serve stops the agent and leaves the run for recovery', async () => {
-      const port = await freePort();
-      const url = `http://127.0.0.1:${port}`;
-      const terminal = onPty(['serve', '--repo', root, '--port', String(port), '--no-open']);
+      const terminal = onPty(['serve', '--repo', root, '--port', '0', '--no-open']);
+      const url = await terminal.url;
       await vi.waitFor(async () => expect((await fetch(`${url}/api/v1/health`)).ok).toBe(true), { timeout: 30_000, interval: 200 });
       const id = await stalledRun(url);
       const agent = await agentPid();

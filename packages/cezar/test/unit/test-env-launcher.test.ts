@@ -128,10 +128,11 @@ if (process.env.FIXTURE_APP_MEMBER) {
   const member = "process.on('SIGTERM', () => {}); const fs = require('node:fs'); fs.writeFileSync('.ai/app-member.pid.tmp', String(process.pid)); fs.renameSync('.ai/app-member.pid.tmp', '.ai/app-member.pid'); setInterval(() => {}, 1000);";
   require('node:child_process').spawn(process.execPath, ['-e', member], { stdio: 'ignore' });
 }
-http.createServer((req, res) => {
+// Binds the port it is given (0: the kernel picks) and prints its URL, as the real server's banner does.
+const app = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': req.url === '/api/health' ? 'application/json' : 'text/html' });
   res.end(req.url === '/api/health' ? '{"ok":true}' : '<!doctype html>');
-}).listen(port, '127.0.0.1');
+}).listen(port, '127.0.0.1', () => console.log('  cockpit → http://127.0.0.1:' + app.address().port));
 EOF
 }
 web() {
@@ -401,7 +402,7 @@ test('a prebuilt lane boots without rebuilding shared assets and records its nam
 function descriptor(root: string): {
   baseUrl: string;
   servedRoot: string;
-  app: { pid: number; startCommand: string };
+  app: { pid: number; port: number; startCommand: string };
   startedAt: string;
   inputs: { file: string; sha256: string };
   browser: {
@@ -417,7 +418,7 @@ function descriptor(root: string): {
   return JSON.parse(readFileSync(join(root, '.ai/qa/test-env.json'), 'utf8')) as {
     baseUrl: string;
     servedRoot: string;
-    app: { pid: number; startCommand: string };
+    app: { pid: number; port: number; startCommand: string };
     startedAt: string;
     inputs: { file: string; sha256: string };
     browser: {
@@ -449,6 +450,9 @@ test('a cold boot serves an isolated clone of the checkout, never the checkout i
   // What the app was really started with, not what the descriptor says it was.
   const argv = readFileSync(join(fixture.root, '.ai/app-argv'), 'utf8').split('\n');
   assert.equal(argv[argv.indexOf('--repo') + 1], served);
+  // The app picks its own port and the env records the one it printed: no probed port to lose.
+  assert.equal(argv[argv.indexOf('--port') + 1], '0');
+  assert.equal(first.baseUrl, `http://127.0.0.1:${first.app.port}`);
   // Its own administration: a linked worktree would share the checkout's refs and queue (#795).
   assert.equal(realpathSync(execFileSync('git', ['-C', served, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim()),
     realpathSync(join(served, '.git')));
@@ -726,9 +730,9 @@ function unhealthyFixture(mode: 'stalled' | 'unavailable' | 'exited') {
 ${writePidSource('app.pid')}
 for (let i = 1; i <= 25; i++) console.log('boot-line-' + i);
 ${mode === 'exited' ? 'process.exit(1);' : `
-require('node:http').createServer((req, res) => {
+const app = require('node:http').createServer((req, res) => {
   ${mode === 'unavailable' ? 'res.writeHead(503); res.end();' : '/* Keep the health request open until curl times out. */'}
-}).listen(Number(process.argv[process.argv.indexOf('--port') + 1]), '127.0.0.1');
+}).listen(Number(process.argv[process.argv.indexOf('--port') + 1]), '127.0.0.1', () => console.log('  cockpit → http://127.0.0.1:' + app.address().port));
 `}
 `);
   return { ...fixture, env };
@@ -799,8 +803,10 @@ exec "${commandPath('curl')}" "$@"
       `probe at ${clock - healthStart}s was budgeted ${value}s past the 5s deadline:\n${traced}`);
   }
   assert.ok(probes >= 1, `no health probe traced:\n${traced}`);
+  // The last 20 log lines: boot lines 7-25, then the URL line the app printed once it listened.
   assert.deepEqual(result.stderr.match(/^boot-line-\d+$/gm),
-    Array.from({ length: 20 }, (_, i) => `boot-line-${i + 6}`));
+    Array.from({ length: 19 }, (_, i) => `boot-line-${i + 7}`));
+  assert.match(result.stderr, /^ {2}cockpit → http:\/\/127\.0\.0\.1:\d+$/m);
   assert.equal(result.stdout, '', 'a failed boot must not emit running markers');
   // Observe termination, including delivery of the launcher's SIGTERM after it exits.
   await waitForExit(pid, 'timed-out app', () => result.stderr);
