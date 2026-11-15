@@ -57,6 +57,9 @@ for (const [relative, why] of [
   ['packages/cezar/src/file-length.baseline.json', 'lint gate'],
   ['packages/web/src/test/unit-wait-discipline.baseline.json', 'lint gate'],
   ['packages/web/e2e/fetch-setup.mjs', 'gate or test harness'],
+  ['packages/web/e2e/wait-support.ts', 'gate or test harness'],
+  ['packages/cezar/src/test-outbound-guard.testkit.ts', 'gate or test harness'],
+  ['packages/web/src/test/wait-baseline.ts', 'guard test change'],
   ['scripts/test-browser-home-env.mjs', 'gate or test harness'],
   ['packages/web/product-identity.ts', 'build or release source'],
   ['.oxlintrc.json', 'lint gate'],
@@ -75,6 +78,7 @@ for (const [relative, why] of [
 });
 
 for (const relative of [
+  'packages/web/e2e/new-flow.e2e.ts',
   '.ai/ast-grep/rule-tests/some-rule-test.yml',
   '.ai/ast-grep/fixtures/some-case.compile.ts',
   'packages/cezar/src/lint/plugin.test.ts',
