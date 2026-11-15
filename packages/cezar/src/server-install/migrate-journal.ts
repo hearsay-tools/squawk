@@ -38,24 +38,24 @@ export interface ServerMigrateJournal {
   instances: Array<{ instance: string; planned: PlatformMigrationReport; moved?: PlatformMigrationReport }>;
 }
 
-const journalPath = (target: Home) => join(target.state, 'server-migrate.json');
+export const serverMigrateJournalPath = (target: Home) => join(target.state, 'server-migrate.json');
 
 export function readServerMigrateJournal(target: Home): ServerMigrateJournal | undefined {
-  const bytes = readBytes(journalPath(target));
+  const bytes = readBytes(serverMigrateJournalPath(target));
   // zod omits absent optional keys, so the parsed value matches the exact-optional report type.
   return bytes === null ? undefined : journalSchema.parse(JSON.parse(bytes.toString('utf8'))) as ServerMigrateJournal;
 }
 
 export function writeServerMigrateJournal(target: Home, journal: ServerMigrateJournal): void {
   assertHomeReadable(target.config);
-  const path = journalPath(target);
+  const path = serverMigrateJournalPath(target);
   assertHomePath(target.state, path);
   const bytes = `${JSON.stringify(journalSchema.parse(journal), null, 2)}\n`;
   withHomeLock(target.state, () => replacePrivate(path, bytes, migrationPrivacy));
 }
 
 export function removeServerMigrateJournal(target: Home): void {
-  const path = journalPath(target);
+  const path = serverMigrateJournalPath(target);
   assertHomePath(target.state, path);
   withHomeLock(target.state, () => rmSync(path, { force: true }));
 }

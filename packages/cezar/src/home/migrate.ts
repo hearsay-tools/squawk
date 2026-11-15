@@ -86,8 +86,8 @@ function copyManagedInstall(legacy: Home, target: Home, env: NodeJS.ProcessEnv |
   privateDirectory(target.bin, migrationPrivacy);
   writeLaunchers(env, target);
   // writeLaunchers keeps the shipped 0755. Every migration copy is private.
-  for (const name of ['cezarion', 'cez']) {
-    const path = join(target.bin, process.platform === 'win32' ? `${name}.cmd` : name);
+  for (const name of BINARY_NAMES) {
+    const path = launcherFile(target.bin, name);
     if (process.platform === 'win32') protectPrivatePath(path, false, migrationPrivacy);
     else chmodSync(path, 0o700);
   }
