@@ -282,7 +282,7 @@ describe('scoped route map (/p/:projectId)', () => {
     expect(screen.queryByRole('heading', { name: 'Loading task…' })).toBeNull()
   })
 
-  // MCP lives inside Agent config; keyboard remains hidden and unrouted.
+  // MCP lives inside Agent config; Keyboard has no settings page.
   const unknown = [
     '/nope-404',
     '/tasks',
