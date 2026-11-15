@@ -372,7 +372,8 @@ describe('ubuntu-vps rollback refusals', () => {
     const report = await migrateUbuntu(context(f, state));
     f.host.failing = w => w.join(' ') === command;
     const result = await rollbackUbuntuMigration(context(f, state), report);
-    expect(result.errors).toEqual([{ artifact: report.moved[0]!.to, message: expect.any(String) }]);
+    // The error names the unit the operator must fix.
+    expect(result.errors).toEqual([{ artifact: report.moved[0]!.to, message: expect.stringContaining(name) }]);
     expect(f.host.unit(scope, name).enabled).toBe(false);
   });
 
