@@ -19,6 +19,7 @@ import { prepareOperatorHome } from './entry.ts';
 import { cleanStoreRoots, storeRoot } from './store.testkit.ts';
 import { migrationFiles } from './migration-files.ts';
 import * as privateFiles from './private-files.ts';
+import * as launchers from '../managed-install/launcher.ts';
 import { launcherFile } from '../managed-install/launcher.ts';
 import { BINARY_NAMES } from './identity.ts';
 
@@ -463,6 +464,17 @@ it('a retry after a staged copy removes the managed install and its launchers th
 function launcherNames(target: Home): string[] {
   return BINARY_NAMES.map(name => basename(launcherFile(target.bin, name))).sort();
 }
+
+it('a retry after a crash before the launchers were written migrates and writes them', () => {
+  const { legacy, target } = migrationFixture();
+  rawJson(join(legacy.versions, 'v1/package.json'), { version: '1.0.0' });
+  vi.spyOn(launchers, 'writeLaunchers').mockImplementationOnce(() => { throw new Error('crash before the launchers'); });
+  expect(() => migrateLegacyHome(legacy, target, { env: {} })).toThrow('crash before the launchers');
+  expect(existsSync(launcherFile(target.bin, 'hsq'))).toBe(false);
+  vi.restoreAllMocks();
+  expect(migrateLegacyHome(legacy, target, { env: {} }).status).toBe('migrated');
+  expect(readdirSync(target.bin).sort()).toEqual(launcherNames(target));
+});
 
 it('a retry of a registry-only staged copy keeps an operator file with a launcher name', () => {
   const { legacy, target } = migrationFixture();
