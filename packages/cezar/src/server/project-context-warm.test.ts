@@ -50,10 +50,10 @@ describe('ProjectContexts.warmAll', () => {
 
   it('builds every project once, most recently opened first, and skips missing and built ones', async () => {
     const projects: ProjectWarmCandidate[] = [
+      { id: 'never', root: root(), status: 'not-git' },
       { id: 'old', root: root(), status: 'not-git', lastOpenedAt: '2026-10-01T00:00:00.000Z' },
       { id: 'gone', root: join(tmpdir(), 'cez-warm-missing'), status: 'missing', lastOpenedAt: '2026-10-11T00:00:00.000Z' },
       { id: 'new', root: root(), status: 'not-git', lastOpenedAt: '2026-10-10T00:00:00.000Z' },
-      { id: 'never', root: root(), status: 'not-git' },
       { id: 'open', root: root(), status: 'not-git', lastOpenedAt: '2026-10-12T00:00:00.000Z' },
     ];
     const { contexts, built } = makeContexts(projects);
@@ -170,6 +170,32 @@ describe('ProjectContexts.warmAll', () => {
     expect(built).toEqual([]);
     expect(contexts.peek('gone')).toBeUndefined();
     contexts.disposeAll();
+  });
+
+  it('moves on to the next project when one is removed while it is being warmed', async () => {
+    const projects: ProjectWarmCandidate[] = [
+      { id: 'removed', root: root(), status: 'not-git', lastOpenedAt: '2026-10-12T00:00:00.000Z' },
+      { id: 'next', root: root(), status: 'not-git', lastOpenedAt: '2026-10-11T00:00:00.000Z' },
+    ];
+    const contexts: ProjectContexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(),
+      listProjects: async () => projects,
+      // Runs while the build is under way: the removal overtakes it.
+      prepareManager: (project) => { if (project.id === 'removed') contexts.dispose('removed'); } });
+    try {
+      expect(await contexts.warmAll(projects)).toEqual(['next']);
+      expect(contexts.ids()).toEqual(['next']);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      contexts.disposeAll();
+    }
+  });
+
+  it('warns about a project whose folder went missing after the warm-up listed it', async () => {
+    const listed: ProjectWarmCandidate[] = [{ id: 'vanished', root: root(), status: 'not-git' }];
+    const contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(),
+      listProjects: async () => [{ ...listed[0]!, status: 'missing' }] });
+    expect(await contexts.warmAll(listed)).toEqual([]);
+    expect(warn.mock.calls.filter(([message]: unknown[]) => String(message).includes('vanished'))).toHaveLength(1);
   });
 
   it('skips a project removed after the warm-up listed it, without a warning', async () => {

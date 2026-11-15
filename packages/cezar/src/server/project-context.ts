@@ -238,8 +238,8 @@ export class ProjectContexts {
     const epoch = this.epochs.get(projectId) ?? 0;
     const stale = () => generation !== this.generation || epoch !== (this.epochs.get(projectId) ?? 0);
     const build = (async () => {
+      // A removal during this wait is caught by `build`'s first check, before any side effect.
       await this.maintenance.get(projectId)?.catch(() => undefined);
-      if (stale()) throw new ProjectContextsClosedError();
       return this.build(projectId, stale);
     })();
     this.building.set(projectId, build);
@@ -275,7 +275,7 @@ export class ProjectContexts {
     const lease = this.coldMaintenance(projectId, work, current, finish);
     this.maintenance.set(projectId, lease);
     try { return await lease; }
-    finally { if (this.maintenance.get(projectId) === lease) this.maintenance.delete(projectId); }
+    finally { this.maintenance.delete(projectId); }
   }
 
   /** The cold half of `withMaintenanceStore`, refused under a fence or an unfinished journal. */
@@ -296,7 +296,7 @@ export class ProjectContexts {
     // Skip empty projects, but let the established fenced importer discover legacy-only
     // history. Maintenance mode never normalizes live rows or recovers a manager.
     const reader = RunDatabase.openReadOnly(join(dataDir, RUNS_DB_FILE));
-    let imported = false;
+    let imported: boolean;
     try { imported = reader?.getMeta(RUNS_IMPORT_COMPLETE_KEY) !== undefined; }
     finally { reader?.close(); }
     if (!imported && !existsSync(join(dataDir, 'runs.json')) &&
@@ -345,11 +345,8 @@ export class ProjectContexts {
         await this.context(project.id);
         warmed.push(project.id);
       } catch (err) {
-        if (err instanceof ProjectContextsClosedError) {
-          // Shut down: stop. Removed mid-build: the next project.
-          if (generation !== this.generation) break;
-          continue;
-        }
+        // Removed mid-build: the next project. Shut down: the check at the top of the loop stops.
+        if (err instanceof ProjectContextsClosedError) continue;
         // Removed from the registry after this list was read: nothing to prepare, nothing to say.
         if (err instanceof ProjectContextError && err.reason === 'unknown-project') continue;
         console.warn(`${logPrefix()} project ${project.id} could not be prepared in the background: ${err instanceof Error ? err.message : String(err)}`);
@@ -450,11 +447,9 @@ export class ProjectContexts {
       // without one is a no-op for the host.
       for (const id of ctx.store.listRunIds()) void this.deps.preview.release(id).catch(() => undefined);
     }
-    this.repoHandleControllers.get(ctx.store)?.abort();
-    this.repoHandleControllers.delete(ctx.store);
+    this.repoHandleControllers.get(ctx.store)!.abort();
     this.sweepControllers.get(ctx.store)?.abort();
     this.managerCleanups.get(ctx.manager)?.();
-    this.managerCleanups.delete(ctx.manager);
     teardown(ctx);
   }
 
@@ -564,11 +559,10 @@ export class ProjectContexts {
       // A failed build must not leak the half-built context's subscriptions, nor its sweep.
       this.sweepControllers.get(store)?.abort();
       this.managerCleanups.get(manager)?.();
-      this.managerCleanups.delete(manager);
       teardown({ store, manager });
       throw err;
     } finally {
-      if (this.buildingManagers.get(projectId) === manager) this.buildingManagers.delete(projectId);
+      this.buildingManagers.delete(projectId);
     }
   }
 }
