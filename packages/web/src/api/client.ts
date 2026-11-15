@@ -1222,10 +1222,10 @@ export async function registerProject(root: string): Promise<RegisterProjectResp
  * step 4.3).
  *
  * On the typed client, unlike `registerProject` above: every non-2xx here IS a failure the dialog
- * must show (a 409 means the target folder exists, and there is no entry to navigate to), so
+ * must show (a 409 means the target folder exists and is not registered), so
  * `unwrap`'s ordinary contract is the right one. It surfaces the server's `{ error }` string as
- * the ApiError message, which is exactly what the dialog renders — a clone fails for reasons only
- * the server can name.
+ * the ApiError message, which the dialog renders. A clone into a root the registry already holds
+ * answers 200 with that existing entry, which the dialog opens (hearsay-tools/squawk#1086).
  *
  * No timeout of our own: cloning a large repo legitimately takes minutes, and the request is
  * what the dialog waits on. Progress meanwhile comes from `checkout-progress` on the workspace

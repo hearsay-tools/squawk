@@ -594,7 +594,7 @@ describe('POST /api/v1/projects/checkout', () => {
     expect((await listProjectsViaApi()).projects.map((p) => p.name).sort()).toEqual(['one', 'two']);
   });
 
-  it('a checkout that duplicates an ALREADY-registered root answers 409 with the existing entry', async () => {
+  it('a checkout that duplicates an ALREADY-registered root answers 200 with the existing entry (hearsay-tools/squawk#1086)', async () => {
     // Reachable when the folder was removed from disk but its registry row was
     // not: the clone succeeds, and registration recognises the realpath.
     await useCheckoutRoot();
@@ -606,12 +606,11 @@ describe('POST /api/v1/projects/checkout', () => {
     clearProjectProbeCache();
 
     const { status, body } = await post({ url: 'open-mercato/cezar' });
-    expect(status).toBe(409);
-    expect(body.error).toContain(existing.id);
-    // The clone is still on disk — a successful checkout is never deleted by a
-    // registry outcome, and the message says where it is.
-    expect(body.error).toContain(target);
+    expect(status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.project?.id).toBe(existing.id);
     expect(existsSync(join(target, '.git'))).toBe(true);
+    expect((await listProjectsViaApi()).projects.map((p) => p.id)).toEqual([existing.id]);
   });
 });
 

@@ -2,6 +2,7 @@ import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Hono } from 'hono';
@@ -9,9 +10,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { workspaceUiStatePath } from '../paths.ts';
 import { RunStore } from '../runs/store.ts';
 import * as remote from '../skills-remote.ts';
+import * as uiState from '../ui-state.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { createApp } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, writeFile: vi.fn(actual.writeFile) };
+});
 
 /**
  * `GET/PUT /api/v1/ui-state` (#408 — the `skillUsage` addition). The contract under test: the
@@ -79,6 +86,39 @@ describe('the ui-state API — skillUsage (#408)', () => {
     expect(statSync(uiStatePath()).ino).not.toBe(before);
     expect(rawFile().disabledTeamSkills).toEqual([{ repo: 'acme/skills', name: 'x' }]);
     expect(readdirSync(dirname(uiStatePath())).filter((name) => name.endsWith('.tmp'))).toEqual([]);
+  });
+
+  it('serializes overlapping PUTs: both keys survive and the later value of a shared key wins (hearsay-tools/squawk#1047)', async () => {
+    const actualWriteFile = (await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')).writeFile;
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    let firstWriteHeld!: () => void;
+    const held = new Promise<void>((resolve) => { firstWriteHeld = resolve; });
+    vi.mocked(writeFile).mockImplementationOnce(async (...args) => {
+      firstWriteHeld();
+      await released;
+      return actualWriteFile(...args);
+    });
+    const mergeWrite = uiState.mergeWriteProjectUiState;
+    let secondQueued!: () => void;
+    const queued = new Promise<void>((resolve) => { secondQueued = resolve; });
+    vi.spyOn(uiState, 'mergeWriteProjectUiState')
+      .mockImplementationOnce(mergeWrite)
+      .mockImplementationOnce((...args) => {
+        const write = mergeWrite(...args);
+        secondQueued();
+        return write;
+      });
+
+    const first = put({ a: 1, shared: 'first' });
+    await held;
+    const second = put({ b: 2, shared: 'second' });
+    await queued;
+    release();
+
+    expect((await first).status).toBe(200);
+    expect((await second).status).toBe(200);
+    expect(await (await get()).json()).toEqual({ a: 1, b: 2, shared: 'second' });
   });
 
   it('refuses a disabledTeamSkills entry without a name', async () => {
