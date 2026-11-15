@@ -71,7 +71,7 @@ function copyFile(legacy: Home, target: Home, file: MigrationFile): void {
   if (digest(readBytes(path)) !== digest(bytes)) throw new Error(`Migration copy verification failed: ${file.path}`);
 }
 
-function copyManagedInstall(legacy: Home, target: Home, env: NodeJS.ProcessEnv): void {
+function copyManagedInstall(legacy: Home, target: Home, env: NodeJS.ProcessEnv | undefined): void {
   assertHomePath(target.data, target.versions);
   if (!existsSync(legacy.versions)) { rmSync(target.versions, { recursive: true, force: true }); return; }
   replacePrivateTree(legacy.versions, target.versions, (key, destination) => {
@@ -171,13 +171,13 @@ function migrateLocked(legacy: Home, target: Home, options: MigrationOptions): M
   options.onStep?.('archived', 0);
   writeMigrationRecord(target, record);
   for (const file of plan.files) copyFile(legacy, target, file);
-  if (plan.managedInstall) copyManagedInstall(legacy, target, options.env ?? process.env);
+  if (plan.managedInstall) copyManagedInstall(legacy, target, options.env);
   options.onStep?.('copied', 0);
   return settleCopies(legacy, target, options, record);
 }
 
 function settleCopies(legacy: Home, target: Home, options: MigrationOptions, record: MigrationRecord): MigrationResult {
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; ; attempt++) {
     options.onStep?.('recheck', attempt);
     let next = planLegacyMigration(legacy, target);
     let changed = changedFiles(record.files, next.files);
@@ -189,8 +189,8 @@ function settleCopies(legacy: Home, target: Home, options: MigrationOptions, rec
       changed = changedFiles(record.files, next.files);
     }
     if (!changed.length) {
-      const present = new Set(next.files.map(file => file.path));
-      record.files = [...next.files, ...record.files.filter(file => file.hash === null && !present.has(file.path))];
+      // A deleted file that came back would count as changed: every hash-null entry is still absent.
+      record.files = [...next.files, ...record.files.filter(file => file.hash === null)];
       // Only a complete commit:false copy is a staged home. Any other pending home is a crash.
       if (options.commit === false) record.stagedAt = new Date().toISOString();
       writeMigrationRecord(target, record);
@@ -204,9 +204,8 @@ function settleCopies(legacy: Home, target: Home, options: MigrationOptions, rec
     record.files = [...next.files, ...changed.filter(file => file.hash === null)];
     writeMigrationRecord(target, record);
     for (const file of changed) copyFile(legacy, target, file);
-    if (changed.some(file => file.path.startsWith('versions/'))) copyManagedInstall(legacy, target, options.env ?? process.env);
+    if (changed.some(file => file.path.startsWith('versions/'))) copyManagedInstall(legacy, target, options.env);
   }
-  throw new Error('Unreachable migration state');
 }
 
 /** A pending or rolled-back copy may be the only copy left once the legacy registry is gone.
