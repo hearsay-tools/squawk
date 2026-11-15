@@ -1,8 +1,9 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readInstallMarker } from '../home/install-marker.ts';
-import { commitLegacyMigration } from '../home/migrate.ts';
+import { holdCockpitLease } from '../home/leases.ts';
+import { commitLegacyMigration, migrateLegacyHome } from '../home/migrate.ts';
 import { Home } from '../home/home.ts';
 import { prepareMigrationHome } from '../home/migration-boot.ts';
 import { HomeStore } from '../home/store.ts';
@@ -18,6 +19,19 @@ afterEach(cleanStoreRoots);
 const userUnit = (f: ServerFixture, name: string) => join(f.host.userUnitDir, name);
 const unitName = (f: ServerFixture, instance: string) =>
   loadServerState(instance, f.target).steps.autostart?.created?.artifacts.find(a => a.type === 'service')?.name;
+
+/** One old-named install whose home `hsq migrate` already committed: the record moved, the unit did not. */
+function migratedHome(): ServerFixture {
+  const f = serverFixture();
+  installInstance(f, { instance: 'default', port: 4321, domain: 'cockpit.example.com', tls: true });
+  expect(migrateLegacyHome(f.legacy, f.target, { env: f.env }).status).toBe('migrated');
+  return f;
+}
+
+/** Resolves when the host runs the first command that matches; that command never returns. */
+function crashAt(f: ServerFixture, matches: (command: string) => boolean): Promise<void> {
+  return new Promise<void>(resolve => { f.host.hang = command => matches(command) && (resolve(), true); });
+}
 
 function expectOldGroup(f: ServerFixture): void {
   expect(f.host.unit('user', 'hearsay-squawk.service')).toMatchObject({ enabled: false, active: false });
@@ -40,7 +54,10 @@ describe('server-migrate group', () => {
   it('migrates two instances that share one home together and commits once', async () => {
     const f = sharedHome();
     const before = readFileSync(f.legacy.serverState('shop'));
-    await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'migrated' });
+    const result = await serverMigrate(f);
+    expect(result.status).toBe('migrated');
+    expect(result.lines).toEqual(expect.arrayContaining(['default: checking health', 'shop: checking health']));
+    expect(result.lines.at(-1)).toBe('Migrated 2 server installs.');
     expect(f.host.unit('user', 'hearsay-squawk.service')).toMatchObject({ enabled: true, active: true });
     expect(f.host.unit('system', 'hearsay-squawk-shop.service')).toMatchObject({ enabled: true, active: true });
     expect(f.host.unit('user', 'cezar.service')).toMatchObject({ enabled: false, active: false });
@@ -56,12 +73,14 @@ describe('server-migrate group', () => {
     expect(readServerMigrateJournal(f.target)).toBeUndefined();
   });
 
-  it('rolls the whole group back to the old units, sites and legacy home when one instance fails its health check', async () => {
+  it('rolls the whole group back to the old units, sites and legacy home when one instance fails its health check, starting them in member order because a unit may depend on an earlier one', async () => {
     const f = sharedHome();
     const records = readFileSync(f.legacy.serverState('default'));
     f.host.unhealthy.add('hearsay-squawk-shop.service');
     await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'rolled-back' });
     expectOldGroup(f);
+    expect(f.host.commands.filter(command => /^systemctl (--user )?start '?cezar/.test(command)))
+      .toEqual(['systemctl --user start cezar.service', "systemctl start 'cezar-shop.service'"]);
     expect(readFileSync(f.legacy.serverState('default'))).toEqual(records);
   });
 
@@ -102,7 +121,9 @@ describe('server-migrate group', () => {
     expect(journal?.instances.map(i => [i.instance, i.planned.moved.length, i.moved?.moved.length])).toEqual([['default', 4, 4], ['shop', 4, undefined]]);
     expect(existsSync(userUnit(f, 'cezar.service.migrated'))).toBe(true);
     delete f.host.hang;
-    await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'migrated' });
+    const result = await serverMigrate(f);
+    expect(result.status).toBe('migrated');
+    expect(result.lines[0]).toBe('Rolling back an interrupted server-migrate run.');
     expect(f.host.enabledSites()).toEqual(['hearsay-squawk', 'hearsay-squawk-shop']);
     expect(f.host.unit('system', 'hearsay-squawk-shop.service')).toMatchObject({ enabled: true, active: true });
     expect(readInstallMarker(f.target.config)?.state).toBe('committed');
@@ -164,12 +185,18 @@ describe('server-migrate group', () => {
     f.host.hang = command => command.startsWith('sed -i') && command.includes('htpasswd-shop') && (crashed(), true);
     void serverMigrate(f);
     await crash;
-    commitLegacyMigration(f.target, f.env); // The commit landed; the journal write did not.
+    commitLegacyMigration(f.target, f.env);
+    // The marker commit landed; MOVED.json and the journal write did not.
+    rmSync(join(f.legacy.root, 'MOVED.json'));
     expect(readServerMigrateJournal(f.target)).toMatchObject({ phase: 'migrating', stagedHome: true });
     delete f.host.hang;
-    await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'migrated' });
+    await expect(serverMigrate(f)).resolves.toEqual({ status: 'migrated', lines: ['Finishing an interrupted server-migrate commit.'] });
     expect(unitName(f, 'shop')).toBe('hearsay-squawk-shop.service');
     expect(f.host.enabledSites()).toEqual(['hearsay-squawk', 'hearsay-squawk-shop']);
+    expect(existsSync(join(f.legacy.root, 'MOVED.json'))).toBe(true);
+    // Finished forward: the old services never started again.
+    expect(f.host.unit('user', 'cezar.service').starts).toBe(0);
+    expect(f.host.unit('system', 'cezar-shop.service').starts).toBe(0);
     expect(readServerMigrateJournal(f.target)).toBeUndefined();
   });
 
@@ -180,8 +207,15 @@ describe('server-migrate group', () => {
     // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
     await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'failed' });
     expect(readServerMigrateJournal(f.target)?.phase).toBe('rolling-back');
-    f.host.failDisable.clear();
+    // A re-run whose rollback still fails reports it and starts no new migration.
     f.host.unhealthy.clear();
+    const starts = f.host.unit('system', 'hearsay-squawk-shop.service').starts;
+    // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
+    await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'failed' });
+    expect(readServerMigrateJournal(f.target)?.phase).toBe('rolling-back');
+    expect(readInstallMarker(f.target.config)?.state).toBe('pending');
+    expect(f.host.unit('system', 'hearsay-squawk-shop.service').starts).toBe(starts);
+    f.host.failDisable.clear();
     await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'migrated' });
   });
 
@@ -190,14 +224,172 @@ describe('server-migrate group', () => {
     f.host.unhealthy.add('hearsay-squawk-shop.service');
     // The first site rollback (shop, reverse order) then fails its nginx -t.
     f.host.onUpstreamProbe = () => { f.host.nginxTestFailures = 1; delete f.host.onUpstreamProbe; };
+    const result = await serverMigrate(f);
     // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
-    await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'failed' });
+    expect(result.status).toBe('failed');
+    expect(result.lines).toContainEqual(expect.stringMatching(/^shop: rollback of \/etc\/nginx\/sites-available\/hearsay-squawk-shop: /));
+    expect(result.lines).toContain('The rollback is incomplete. Re-run server-migrate to finish it.');
+    // The restored instance runs its old unit again; the one with a restore error stays stopped.
+    expect(f.host.unit('user', 'cezar.service')).toMatchObject({ enabled: true, active: true });
+    expect(f.host.unit('system', 'cezar-shop.service')).toMatchObject({ active: false });
     expect(readServerMigrateJournal(f.target)?.phase).toBe('rolling-back');
     expect(readInstallMarker(f.target.config)?.state).toBe('pending');
     f.host.unhealthy.clear();
     await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'migrated' });
     expect(f.host.enabledSites()).toEqual(['hearsay-squawk', 'hearsay-squawk-shop']);
     expect(f.host.exists('/etc/nginx/sites-available/hearsay-squawk-shop')).toBe(true);
+  });
+});
+
+describe('server-migrate refusals', () => {
+  it('refuses the whole group, changing nothing, when a newer release recorded a platform this release does not ship', async () => {
+    const f = sharedHome();
+    // serverStateSchema keeps an unknown platform id so that a downgrade still opens the record.
+    Home.seed(f.legacy, f.legacy.serverState('api'), { ...loadServerState('shop', f.legacy), instance: 'api', platform: 'windows-service' });
+    const result = await serverMigrate(f);
+    // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
+    expect(result.status).toBe('failed');
+    expect(result.lines).toContain('api: server-migrate does not support platform windows-service');
+    expect(f.host.commands).toEqual([]);
+    expect(readInstallMarker(f.target.config)?.state).toBeUndefined();
+  });
+
+  it('refuses the group before any change when a new unit name is already taken', async () => {
+    const f = sharedHome();
+    writeFileSync(userUnit(f, 'hearsay-squawk.service'), '[Unit]\n');
+    const result = await serverMigrate(f);
+    // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
+    expect(result.status).toBe('failed');
+    expect(result.lines).toContain(`default: ${userUnit(f, 'cezar.service')}: Destination already exists: ${userUnit(f, 'hearsay-squawk.service')}`);
+    expect(f.host.commands).toEqual([]);
+    expect(readInstallMarker(f.target.config)?.state).toBeUndefined();
+  });
+
+  it('leaves an install that never finished as it is and reports nothing to migrate', async () => {
+    const f = serverFixture();
+    const state = installInstance(f, { instance: 'default', port: 4321 });
+    Home.seed(f.legacy, f.legacy.serverState('default'), { ...state, installed: false });
+    const result = await serverMigrate(f);
+    expect(result.status).toBe('unchanged');
+    expect(result.lines.at(-1)).toBe(`No completed server install is recorded in ${f.legacy.root}.`);
+    expect(f.host.commands).toEqual([]);
+    expect(f.host.unit('user', 'cezar.service')).toMatchObject({ enabled: true, active: true });
+    expect(readInstallMarker(f.target.config)?.state).toBeUndefined();
+  });
+
+  it('refuses the group while an install of any of its instances is running', async () => {
+    const f = sharedHome();
+    writeFileSync(f.legacy.serverLock('shop'), `${process.ppid}\n`); // An install of shop in another process.
+    await expect(serverMigrate(f)).rejects.toThrow(`already running (pid ${process.ppid})`);
+    expect(f.host.commands).toEqual([]);
+    expect(f.host.unit('system', 'cezar-shop.service')).toMatchObject({ enabled: true, active: true });
+  });
+
+  it('restarts the old services and leaves the new home unstaged when a cockpit still serves the legacy home', async () => {
+    const f = sharedHome();
+    rmSync(join(f.target.config, 'install.json')); // The new home does not exist yet.
+    const release = holdCockpitLease(f.legacy, 4999, 'manual');
+    try {
+      const result = await serverMigrate(f);
+      expect(result.status).toBe('rolled-back');
+      expect(result.lines).toContainEqual(expect.stringContaining(`pid ${process.pid}, port 4999, instance manual`));
+    } finally { release(); }
+    expect(f.host.unit('user', 'cezar.service')).toMatchObject({ enabled: true, active: true });
+    expect(f.host.unit('system', 'cezar-shop.service')).toMatchObject({ enabled: true, active: true });
+    expect(f.host.enabledSites()).toEqual(['cezar', 'cezar-shop']);
+    expect(readInstallMarker(f.target.config)).toBeUndefined();
+    expect(existsSync(join(f.target.config, 'install.json.failed'))).toBe(false);
+    expect(readServerMigrateJournal(f.target)).toBeUndefined();
+  });
+});
+
+describe('server-migrate rollback and recovery', () => {
+  it('rolls the group back and names the site when a site move fails its nginx test', async () => {
+    const f = sharedHome();
+    f.host.nginxTestFailures = 1; // The first nginx -t belongs to the default site's move.
+    const result = await serverMigrate(f);
+    expect(result.status).toBe('rolled-back');
+    expect(result.lines).toContainEqual(expect.stringMatching(/^server-migrate failed: default: \/etc\/nginx\/sites-available\/cezar: /));
+    expectOldGroup(f);
+  });
+
+  it('finishes the rollback and warns when a restored service fails its start check', async () => {
+    const f = sharedHome();
+    f.host.unhealthy.add('hearsay-squawk-shop.service');
+    f.host.unhealthy.add('cezar.service');
+    const result = await serverMigrate(f);
+    expect(result.status).toBe('rolled-back');
+    expect(result.lines).toContainEqual(expect.stringMatching(/^default: the restored service did not pass its check: /));
+    expect(f.host.unit('system', 'cezar-shop.service')).toMatchObject({ enabled: true, active: true });
+    expect(existsSync(join(f.target.config, 'install.json.failed'))).toBe(true);
+    expect(readServerMigrateJournal(f.target)).toBeUndefined();
+  });
+
+  it('finishes a rollback whose journal outlived the marker rename, then migrates', async () => {
+    const f = sharedHome();
+    const journalPath = join(f.target.state, 'server-migrate.json');
+    let journal = '';
+    f.host.unhealthy.add('hearsay-squawk-shop.service');
+    f.host.onUpstreamProbe = () => { journal ||= readFileSync(journalPath, 'utf8'); };
+    await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'rolled-back' });
+    // A power loss kept the journal's unlink off the disk while the marker rename reached it.
+    writeFileSync(journalPath, journal);
+    delete f.host.onUpstreamProbe;
+    f.host.unhealthy.clear();
+    await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'migrated' });
+    expect(f.host.enabledSites()).toEqual(['hearsay-squawk', 'hearsay-squawk-shop']);
+    expect(readInstallMarker(f.target.config)?.state).toBe('committed');
+    expect(readServerMigrateJournal(f.target)).toBeUndefined();
+  });
+
+  it('keeps the journal and changes nothing when the operator deleted the server record of an interrupted instance', async () => {
+    const f = sharedHome();
+    const crash = crashAt(f, command => command.includes('hearsay-squawk-shop.service'));
+    void serverMigrate(f);
+    await crash;
+    delete f.host.hang;
+    rmSync(f.legacy.serverState('shop'));
+    const journal = readServerMigrateJournal(f.target);
+    const commands = f.host.commands.length;
+    const result = await serverMigrate(f);
+    // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
+    expect(result.status).toBe('failed');
+    expect(result.lines).toContain('shop: server-migrate does not support platform unknown');
+    expect(readServerMigrateJournal(f.target)).toEqual(journal);
+    expect(f.host.commands).toHaveLength(commands);
+  });
+});
+
+describe('server-migrate over a home that is already migrated', () => {
+  it('migrates its old-named install beside one with the new names, without writing the legacy home', async () => {
+    const f = migratedHome();
+    installInstance(f, { instance: 'shop', port: 4322, domain: 'shop.example.com', current: true });
+    const plan = await serverMigrate(f, { dryRun: true });
+    expect(plan.status).toBe('planned');
+    expect(plan.lines).toContain(`home: already migrated to ${f.target.config}`);
+    expect(plan.lines).toContain('rollback: any failure restores every old service definition (systemd units and nginx sites, launchd plists), starts the old services. A restore error leaves its instance stopped and the rollback journal in place: fix the reported error and re-run server-migrate to finish the rollback. A restored service that fails its start check is reported as a warning.');
+    expect(plan.lines.filter(line => line.startsWith('marker:'))).toEqual([]);
+    // Another process holds the legacy home's migration claim; a committed home never needs it.
+    writeFileSync(join(f.legacy.root, '.migrating'), JSON.stringify({ pid: process.pid }));
+    await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'migrated' });
+    expect(f.host.unit('user', 'hearsay-squawk.service')).toMatchObject({ enabled: true, active: true });
+    expect(f.host.unit('user', 'hearsay-squawk-shop.service')).toMatchObject({ enabled: true, active: true });
+    expect(unitName(f, 'default')).toBe('hearsay-squawk.service');
+    expect(f.host.enabledSites()).toEqual(['hearsay-squawk', 'hearsay-squawk-shop']);
+    expect(readInstallMarker(f.target.config)?.state).toBe('committed');
+    expect(readServerMigrateJournal(f.target)).toBeUndefined();
+  });
+
+  it('rolls its services back and keeps the home committed when a check fails', async () => {
+    const f = migratedHome();
+    f.host.unhealthy.add('hearsay-squawk.service');
+    await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'rolled-back' });
+    expect(f.host.unit('user', 'cezar.service')).toMatchObject({ enabled: true, active: true });
+    expect(f.host.unit('user', 'hearsay-squawk.service')).toMatchObject({ enabled: false, active: false });
+    expect(f.host.enabledSites()).toEqual(['cezar']);
+    expect(unitName(f, 'default')).toBe('cezar.service');
+    expect(readInstallMarker(f.target.config)?.state).toBe('committed');
+    expect(readServerMigrateJournal(f.target)).toBeUndefined();
   });
 });
 
@@ -272,7 +464,9 @@ describe('server-migrate sites and credentials', () => {
     const f = serverFixture();
     installInstance(f, { instance: 'api', port: 4400, domain: 'api.example.com', externalProxy: true });
     f.host.write('/etc/traefik/dynamic/cezar.yml', 'routers: {}\n');
-    await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'migrated' });
+    const result = await serverMigrate(f);
+    expect(result.status).toBe('migrated');
+    expect(result.lines.at(-1)).toBe('Migrated 1 server install.');
     expect(f.host.unit('user', 'hearsay-squawk-api.service')).toMatchObject({ enabled: true, active: true });
     expect(f.host.read('/etc/traefik/dynamic/cezar.yml')).toBe('routers: {}\n');
     expect(f.host.exists('/etc/hearsay-squawk')).toBe(false);
