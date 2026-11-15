@@ -162,6 +162,14 @@ export class SubagentWaits {
     });
   }
 
+  /** The run leaves its park (it resumes, or a permission request parks it instead): a hold for
+   *  its children ends with it, so neither the hold's deadline nor a child's end releases a later
+   *  park. */
+  endParkHold(runId: string, state: ActiveRun): void {
+    this.clearAskHold(runId);
+    if (state.boundary.heldForSubagents) transitionTurnBoundary(state, { kind: 'subagents-changed', phase: 'release', session: state.liveSession.session });
+  }
+
   private clearAskHold(runId: string): void {
     this.timers.clear('subagent-ask-hold', runId);
   }

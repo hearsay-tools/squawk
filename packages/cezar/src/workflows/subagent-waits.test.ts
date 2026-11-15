@@ -525,6 +525,27 @@ describe('the subagent wait deadline (hearsay-tools/cezarion#2431)', () => {
     } finally { hold.restore(); }
   });
 
+  it('a native ask answered, then a permission request in the same turn: the permission park stays, with no idle close', async () => {
+    const hold = observationClock(() => /SubagentWaits\.boundNativeAskHold/.test(new Error().stack ?? ''));
+    try {
+      const { run } = await heldParent();
+      startChild(run.id, 'toolu_bg_01');
+      nativeAsk(run.id);
+      await until(() => store.getRun(run.id)?.status === RUN_STATUS.waiting);
+      expect(hold.pending).toBe(1);
+      expect(manager.sendMessage(run.id, [{ type: 'text', text: 'Library: Vitest' }])).toBe(true);
+      await until(() => store.getRun(run.id)?.status === RUN_STATUS.running);
+      emitUi(run.id, { type: 'permission.requested', requestId: 'permission-1', title: 'Run command', options: [{ id: 'deny', label: 'Decline', kind: 'reject_once' }] });
+      await until(() => store.getRun(run.id)?.hasPendingPermission === true);
+      expect(hold.pending).toBe(0);
+      hold.fire(0);
+      endChild(run.id, 'toolu_bg_01');
+      expect(idleClock.pending).toBe(0);
+      expect(store.getRun(run.id)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
+      expect(sessions.get(run.id)?.open).toBe(true);
+    } finally { hold.restore(); }
+  });
+
   it('a native ask beside running children gives the slot back when the last child ends', async () => {
     const { run } = await heldParent();
     startChild(run.id, 'toolu_bg_01');
