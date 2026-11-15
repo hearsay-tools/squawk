@@ -180,7 +180,7 @@ const guards = (rule, path) => !(rule.source && TEST_FILE.test(path)) && !rule.e
 /** The first NEVER rule that guards a path, or undefined. */
 export const neverRule = (path) => NEVER.find((rule) => guards(rule, path))
 
-function pathReasons(diff) {
+export function pathReasons(diff) {
   const reasons = []
   for (const f of diff.files) {
     if (f.status === 'A' && f.path.endsWith('.baseline.json')) reasons.push(`new ratchet baseline: ${f.path}`)

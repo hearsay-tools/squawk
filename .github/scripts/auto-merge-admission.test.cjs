@@ -75,3 +75,25 @@ for (const relative of [
   const created = checkChange(t, relative, null, 'first: 1\n');
   assert.equal(created.status, 0, created.stdout + created.stderr);
 });
+
+test('path rules name each guarded file, file mode change and new baseline', async () => {
+  const { pathReasons } = await import(require('node:url').pathToFileURL(script).href);
+  const file = (relative, change = {}) => ({ path: relative, status: 'M', oldMode: '100644', newMode: '100644', adds: ['new'], dels: ['old'], ...change });
+  assert.deepEqual(pathReasons({ files: [
+    file('.oxlintrc.json'),
+    file('.ai/ast-grep/rule-tests/added-test.yml', { dels: [] }),
+    file('.ai/ast-grep/rule-tests/edited-test.yml'),
+    file('packages/cezar/src/lint/run.test.ts', { dels: [] }),
+    file('packages/cezar/src/lint/new-rule.baseline.json', { status: 'A', dels: [] }),
+    file('docs/run.sh', { newMode: '100755' }),
+    file('docs/link', { newMode: '120000' }),
+    file('README.md'),
+  ] }), [
+    'lint gate: .oxlintrc.json',
+    'guard test change: .ai/ast-grep/rule-tests/edited-test.yml',
+    'new ratchet baseline: packages/cezar/src/lint/new-rule.baseline.json',
+    'lint gate: packages/cezar/src/lint/new-rule.baseline.json',
+    'changes the file mode: docs/run.sh',
+    'symlink or submodule: docs/link',
+  ]);
+});
