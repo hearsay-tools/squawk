@@ -19,7 +19,7 @@ import { askErrorMessage, waitErrorMessage } from '../../ci-wait/errors.ts';
 import { toolSessionRefusal } from './squawk-tools.ts';
 import { pendingQuestion } from './human-waits.ts';
 import { askCardFields } from './turn-markers.ts';
-import { identicalWait, normalizePrUrl, openWaits, timerWaitEntry, prWaitEntry, processWaitEntry } from '../waits.ts';
+import { identicalWait, normalizePrUrl, timerWaitEntry, prWaitEntry, processWaitEntry } from '../waits.ts';
 import { delegationWaitRefusal, workerListTarget } from '../wait-scope.ts';
 import { isSessionLeader } from '../../core/session-process.ts';
 import { probeProcessWait } from '../../process-wait/supervisor.ts';

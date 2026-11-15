@@ -76,7 +76,7 @@ export interface StagedOutcome {
 
 /** An answer to the question at `askSeq` settles the waits shown up to it, and the waits not shown yet. */
 function answeredBy(wait: Wait, askSeq: number | undefined): boolean {
-  return askSeq === undefined || wait.kind !== 'human' || wait.askSeq === undefined || wait.askSeq <= askSeq;
+  return askSeq === undefined || !WAIT_KINDS.human.is(wait) || wait.askSeq === undefined || wait.askSeq <= askSeq;
 }
 
 /** What the outcomes settled so far: `StagedOutcome.answered` and `settled`. */
