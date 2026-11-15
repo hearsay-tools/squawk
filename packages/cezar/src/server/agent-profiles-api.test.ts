@@ -251,6 +251,29 @@ describe('agent profiles API', () => {
         }
       });
 
+      // Each account's files resolve inside that account's own folder: the agent home slot of its
+      // provider. A named omp account keeps its config in `agent/`; every default is the discovered home.
+      it('lists every account\'s own config files from its own folder', async () => {
+        const named: Record<string, string> = {
+          claude: join(home, 'claude-work'),
+          codex: join(home, 'codex-work'),
+          pi: join(home, 'pi-work', 'agent'),
+          omp: join(userHome, '.omp', 'profiles', 'work'),
+        };
+        for (const [provider, configDir] of Object.entries(named)) {
+          const { status } = await send('POST', '/api/v1/workspace/agent-profiles', { provider, configDir });
+          expect(status, provider).toBe(201);
+        }
+        const profiles = (await list()).profiles;
+        for (const profile of profiles) {
+          const folder = profile.isDefault ? profile.path : profile.provider === 'omp' ? join(profile.path, 'agent') : profile.path;
+          expect(profile.files.length, `${profile.provider}/${profile.id}`).toBeGreaterThan(0);
+          for (const file of profile.files) expect(file.path, `${profile.provider}/${profile.id}`).toBe(join(folder, file.label));
+        }
+        expect(profiles.filter((p) => !p.isDefault).map((p) => p.provider).sort()).toEqual(Object.keys(named).sort());
+        expect(profiles.filter((p) => p.isDefault).map((p) => p.provider)).toEqual([...PROVIDER_IDS]);
+      });
+
       it('adds a folder in omp\'s profiles dir, which need not exist yet', async () => {
         const dir = join(userHome, '.omp', 'profiles', 'work');
         const { status, body } = await send('POST', '/api/v1/workspace/agent-profiles', { provider: 'omp', label: 'Work', configDir: dir });
