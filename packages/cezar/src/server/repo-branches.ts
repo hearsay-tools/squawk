@@ -13,7 +13,7 @@ import type { BranchClass, BranchPrState, RepoBranchCountsResponse, RepoBranchEn
 import { git as runGit, type GitResult } from '../git-command.ts';
 import { isSafeGitRef } from '../git-refs.ts';
 import { withWorktreeMutation, type WorktreeGitResult } from '../git-worktree-lock.ts';
-import { ownedCleanupProtection, parseShortstat } from '../git-worktree.ts';
+import { branchesInUse, ownedCleanupProtection, parseShortstat, retainingRef } from '../git-worktree.ts';
 import { loadConfig } from '../config.ts';
 import type { BranchOwner, RunStatus, RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
@@ -161,13 +161,11 @@ async function aheadCounts(root: string, heads: HeadRow[], baseSha: string | nul
   return out;
 }
 
-async function checkedOutBranches(root: string): Promise<Set<string>> {
-  const res = await git(root, ['worktree', 'list', '--porcelain']);
-  const out = new Set<string>();
-  for (const line of res.stdout.split('\n')) {
-    if (line.startsWith('branch refs/heads/')) out.add(line.slice('branch refs/heads/'.length));
-  }
-  return out;
+/** Whether a worktree uses a branch, by git's own `branch -D` guard; every branch when the
+ *  registrations cannot be read. */
+async function checkedOutBranches(root: string): Promise<(name: string) => boolean> {
+  const inUse = await branchesInUse((args) => git(root, args));
+  return inUse ? (name) => inUse.has(name) : () => true;
 }
 
 /** The branch a run owns: its recorded `branch`, or `cez/<id8>` for an old worktree run — the
@@ -370,24 +368,6 @@ async function remoteDefault(root: string, base: string, at: (ref: string) => Pr
   return sha ? { ref: `origin/${name}`, fullRef: target, sha, prBase: name } : none;
 }
 
-/** A local or remote-tracking ref OUTSIDE `excluded` (full ref names) that also reaches `sha`, with
- *  its own tip — the witness a delete verifies in its transaction — or null when none does. */
-async function retainingRef(
-  run: (args: string[]) => Promise<WorktreeGitResult>,
-  sha: string,
-  excluded: ReadonlySet<string>,
-): Promise<{ ref: string; sha: string } | null> {
-  const res = await run(['for-each-ref', '--contains', sha, '--format=%(refname)%00%(objectname)%00%(symref)', 'refs/heads', 'refs/remotes']);
-  if (!res.ok) return null;
-  for (const line of res.stdout.split('\n')) {
-    const [ref, tip, symref] = line.split('\0');
-    // Never an alias (origin/HEAD, a symbolic branch): it may point at the very branch being
-    // deleted, and a `--no-deref` verify of its name protects nothing it points at.
-    if (ref && tip && !symref && !excluded.has(ref)) return { ref, sha: tip };
-  }
-  return null;
-}
-
 /** The PR a row SHOWS: one at the branch's current tip first, then an open one, then the newest.
  *  A reused branch keeps its old merged PR in the list; showing that over the open PR carrying the
  *  current work would file the row under "No pull request" and offer a duplicate. Display only —
@@ -560,7 +540,7 @@ export async function classifyBranches(input: ClassifyInput, options?: ClassifyO
     const inUse =
       head.name === input.currentBranch ||
       head.name === base ||
-      checkedOut.has(head.name) ||
+      checkedOut(head.name) ||
       receiptHeld.has(head.name) ||
       (task && protection.uncertain) ||
       (runs?.some(liveRun) ?? false);
@@ -836,7 +816,7 @@ export async function deleteBranches(
             refused.push({ name, reason: 'owned by a delegated workspace' });
             continue;
           }
-          if (checkedOut.has(name)) {
+          if (checkedOut(name)) {
             refused.push({ name, reason: 'checked out in a worktree' });
             continue;
           }

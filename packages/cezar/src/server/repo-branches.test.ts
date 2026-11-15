@@ -396,6 +396,16 @@ describe('the branch classifier (issue 08 §A)', () => {
     expect(cls['cez/aaaaaaaa']).toBe('not-landed');
   });
 
+  it('marks a branch active while a bisect in a worktree returns to it, though porcelain says detached', async () => {
+    await taskBranch(root, 'cez/55555555', 3);
+    await git(root, 'worktree', 'add', '-q', join(root, 'wt'), 'cez/55555555');
+    await git(join(root, 'wt'), 'bisect', 'start', 'HEAD', 'main');
+    expect(await git(root, 'worktree', 'list', '--porcelain')).not.toContain('branch refs/heads/cez/55555555');
+
+    const { cls } = await classesOf({ runs: [] });
+    expect(cls['cez/55555555']).toBe('active');
+  });
+
   it('marks in-use branches active: live, review, owned, current, base, and checked out in a worktree', async () => {
     const base = await git(root, 'rev-parse', 'HEAD');
     await taskBranch(root, 'cez/11111111', 1);

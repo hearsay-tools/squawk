@@ -61,6 +61,14 @@ describe('autosave task-branch rule (#1004)', () => {
     expect(watches).toHaveBeenCalledTimes(process.platform === 'win32' ? 0 : 1);
   });
 
+  // A repo's `status.showUntrackedFiles=no` must not hide new files from the save.
+  it('saves an untracked file the repo config hides from git status', async () => {
+    await git(['config', 'status.showUntrackedFiles', 'no']);
+    writeFileSync(join(repo, 'notes.txt'), 'new\n');
+    expect(await autosaveCommit(repo, 'turn end', { taskBranch: TASK_BRANCH })).toBe('committed');
+    expect(await out(['show', 'HEAD:notes.txt'])).toBe('new');
+  });
+
   // hearsay-tools/squawk#3207: a cockpit started from a Git hook inherits GIT_DIR; the save still uses its worktree.
   it('saves the worktree it was given when the process inherited GIT_DIR', async () => {
     vi.stubEnv('GIT_DIR', join(tmpdir(), 'cez-autosave-absent-git-dir'));
@@ -406,7 +414,7 @@ describe('autosave task-branch rule (#1004)', () => {
 
     const prefix = '-c gc.auto=0 -c maintenance.auto=false ';
     expect(readFileSync(log, 'utf8').split('\n').filter(Boolean)).toEqual([
-      `${prefix}status --porcelain`,
+      `${prefix}status --porcelain --untracked-files=normal`,
       `${prefix}add -A`,
       `${prefix}config user.name`,
       `${prefix}config user.email`,

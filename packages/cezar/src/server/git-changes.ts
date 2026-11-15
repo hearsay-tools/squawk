@@ -619,7 +619,7 @@ export type CommitResult = { ok: true; sha: string } | { ok: false; error: strin
 export async function commitAll(dir: string, message: string): Promise<CommitResult> {
   const refusal = fallbackProjectWriteError(dir);
   if (refusal) return { ok: false, error: refusal };
-  const status = await git(dir, ['status', '--porcelain']);
+  const status = await git(dir, ['status', '--porcelain', '--untracked-files=normal']);
   if (!status.ok) return { ok: false, error: gitReason(status, 'git status failed') };
   if (!status.stdout.trim()) {
     return { ok: false, error: 'nothing to commit — the working tree is clean' };

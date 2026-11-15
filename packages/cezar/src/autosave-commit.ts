@@ -264,7 +264,7 @@ export async function autosaveCommit(dir: string, reason: AutosaveReason, option
   finally { if (autosaves.get(key) === task) autosaves.delete(key); }
 
   async function save(git: AutosaveGitFn): Promise<AutosaveResult> {
-    const status = await git(dir, ['status', '--porcelain']);
+    const status = await git(dir, ['status', '--porcelain', '--untracked-files=normal']);
     if (!status.ok) return 'failed';
     if (!status.stdout.trim()) return 'nothing-to-do';
     const { taskBranch, onOutcome } = options;
