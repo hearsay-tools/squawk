@@ -7,7 +7,7 @@ import { planLegacyMigration } from '../home/migration-plan.ts';
 import { readMigrationRecord } from '../home/migration-record.ts';
 import { withInstallLocks } from './engine.ts';
 import { applyMigrationReport } from './migration-report.ts';
-import { readServerMigrateJournal, removeServerMigrateJournal, writeServerMigrateJournal, type ServerMigrateJournal } from './migrate-journal.ts';
+import { readServerMigrateJournal, removeServerMigrateJournal, serverMigrateJournalPath, writeServerMigrateJournal, type ServerMigrateJournal } from './migrate-journal.ts';
 import { listServerInstances, loadServerState, saveServerState } from './state.ts';
 import { defaultRunner } from './steps.ts';
 import { supportsServerMigration } from './strategies.ts';
@@ -153,11 +153,18 @@ async function rollbackGroup(group: Group, members: Member[]): Promise<boolean> 
 async function recover(group: Group, journal: ServerMigrateJournal): Promise<'migrated' | 'rolled-back' | 'failed'> {
   const { target } = group.opts;
   const loaded = journal.instances.map(({ instance, planned, moved }) => ({ instance, planned, moved, state: loadServerState(instance, group.records) }));
+  const allMoved = loaded.every(hasMoved);
+  // The committing phase may have published some ledgers already: never roll it back.
+  if (journal.phase === 'committing' && !allMoved) {
+    const unmoved = loaded.filter(entry => !entry.moved).map(entry => entry.instance).join(', ');
+    group.say(`${serverMigrateJournalPath(target)}: the journal is in its committing phase but has no moved report for ${unmoved}. Restore it or remove it, then re-run server-migrate.`, 'error');
+    return 'failed';
+  }
   // Only this group's own commit, made after every move and check, finishes forward. `hsq migrate`
   // can commit the staged copy too, but it copies the home again and drops the record's stagedAt.
   // A committed home always has a migration record.
   const ownCommit = journal.phase === 'committing' || (journal.stagedHome && committed(target) && readMigrationRecord(target)!.stagedAt !== undefined);
-  if (ownCommit && loaded.every(hasMoved)) {
+  if (ownCommit && allMoved) {
     group.say('Finishing an interrupted server-migrate commit.');
     commitGroup(group, loaded, journal.stagedHome);
     return 'migrated';

@@ -407,13 +407,15 @@ describe('server-migrate after hsq migrate committed the home a crashed run stag
     expectRecoveredAndMigrated(f, result.lines);
   });
 
-  it('rolls back and migrates again from a hand-edited committing journal that lacks a moved instance', async () => {
+  it('rolls back and migrates again when a hand-edited journal over its own commit lacks a moved instance', async () => {
     const f = sharedHome();
-    const crash = crashAt(f, command => command.includes('hearsay-squawk-shop.service'));
+    const crash = crashAt(f, command => command.startsWith('sed -i') && command.includes('htpasswd-shop'));
     void serverMigrate(f);
     await crash;
     delete f.host.hang;
-    writeServerMigrateJournal(f.target, { ...readServerMigrateJournal(f.target)!, phase: 'committing' });
+    commitLegacyMigration(f.target, f.env); // The run's own commit landed; the committing journal did not.
+    const journal = readServerMigrateJournal(f.target)!;
+    writeServerMigrateJournal(f.target, { ...journal, instances: journal.instances.map(({ instance, planned, moved }) => instance === 'shop' ? { instance, planned } : { instance, planned, ...(moved ? { moved } : {}) }) });
     const result = await serverMigrate(f);
     expect(result.status).toBe('migrated');
     expectRecoveredAndMigrated(f, result.lines);

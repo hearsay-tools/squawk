@@ -4,9 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readInstallMarker } from '../home/install-marker.ts';
 import { migrateLegacyHome } from '../home/migrate.ts';
 import { cleanStoreRoots } from '../home/store.testkit.ts';
-import { readServerMigrateJournal, writeServerMigrateJournal } from './migrate-journal.ts';
+import { readServerMigrateJournal, serverMigrateJournalPath, writeServerMigrateJournal } from './migrate-journal.ts';
 import { loadServerState } from './state.ts';
-import { installInstance, serverFixture, serverMigrate, type ServerFixture } from './server-migrate.testkit.ts';
+import { installInstance, serverFixture, serverMigrate, sharedHome, type ServerFixture } from './server-migrate.testkit.ts';
 
 // Pass-through until a test arms a fault; afterEach restores the real functions.
 vi.mock('node:fs', async original => {
@@ -33,7 +33,7 @@ function failRenameOnce(path: string): void {
   });
 }
 
-const unitName = (f: ServerFixture) => loadServerState('default', f.target).steps.autostart?.created?.artifacts.find(a => a.type === 'service')?.name;
+const unitName = (f: ServerFixture, instance = 'default') => loadServerState(instance, f.target).steps.autostart?.created?.artifacts.find(a => a.type === 'service')?.name;
 
 describe('server-migrate under write faults and a concurrent home migration', () => {
   it('finishes the commit when MOVED.json cannot be written after the home committed', async () => {
@@ -74,6 +74,31 @@ describe('server-migrate under write faults and a concurrent home migration', ()
     expect(readInstallMarker(f.target.config)?.state).toBeUndefined();
     expect(existsSync(join(f.target.config, 'install.json.failed'))).toBe(true);
     expect(readServerMigrateJournal(f.target)).toBeUndefined();
+  });
+
+  it.each([
+    ['a crash before any instance moved', 'default, shop', async (f: ServerFixture) => {
+      const crash = new Promise<void>(resolve => { f.host.hang = command => command === 'systemctl --user disable cezar.service' && (resolve(), true); });
+      void serverMigrate(f);
+      await crash;
+      delete f.host.hang;
+    }],
+    ['a ledger commit that stopped after the first instance', 'shop', async (f: ServerFixture) => {
+      // Armed during the health checks, after staging copied the records: only commitGroup writes shop's ledger later.
+      f.host.onUpstreamProbe = () => { failRenameOnce(f.target.serverState('shop')); delete f.host.onUpstreamProbe; };
+      await expect(serverMigrate(f)).rejects.toThrow('ENOSPC');
+      expect(unitName(f)).toBe('hearsay-squawk.service');
+    }],
+  ])('refuses a hand-edited committing journal without a moved report after %s, changing nothing', async (_state, unmoved, interrupt) => {
+    const f = sharedHome();
+    await interrupt(f);
+    const journal = readServerMigrateJournal(f.target)!;
+    // The hand edit: the committing phase, and no moved report for shop.
+    writeServerMigrateJournal(f.target, { ...journal, phase: 'committing', instances: journal.instances.map(({ instance, planned, moved }) => instance === 'shop' ? { instance, planned } : { instance, planned, ...(moved ? { moved } : {}) }) });
+    const before = { commands: f.host.commands.length, units: JSON.stringify([...f.host.units]), sites: f.host.enabledSites(), ledgers: [unitName(f), unitName(f, 'shop')], journal: real.readFileSync(serverMigrateJournalPath(f.target), 'utf8') };
+    const result = await serverMigrate(f);
+    expect(result).toEqual({ status: 'failed', lines: [`${serverMigrateJournalPath(f.target)}: the journal is in its committing phase but has no moved report for ${unmoved}. Restore it or remove it, then re-run server-migrate.`] });
+    expect({ commands: f.host.commands.length, units: JSON.stringify([...f.host.units]), sites: f.host.enabledSites(), ledgers: [unitName(f), unitName(f, 'shop')], journal: real.readFileSync(serverMigrateJournalPath(f.target), 'utf8') }).toEqual(before);
   });
 
   it('moves nothing when another process commits the home right after the run decided to stage it', async () => {
