@@ -84,7 +84,7 @@ function localPatches(read, from, to) {
   let next = 0;
   return rows.map((row, k) => {
     const own = patches.slice(next, next += letters[k] === 'T' ? 2 : 1);
-    return { ...row, facts: patchFacts(Buffer.concat(own)) };
+    return { ...row, status: letters[k], facts: patchFacts(Buffer.concat(own)) };
   });
 }
 
@@ -127,6 +127,7 @@ function missingPatches(files, stats, changedFiles, local = new Map()) {
   for (const file of files) {
     if (typeof file.patch === 'string') continue;
     const counts = stats.get(file.filename);
+    if (file.status === 'removed' && file.additions === 0 && !local.get(file.filename)?.nul) continue;
     if (counts?.added === '-' && counts.deleted === '-') continue;
     if (file.additions === 0 && file.deletions === 0 && counts?.added === '0' && counts.deleted === '0') continue;
     if (['renamed', 'copied'].includes(file.status) && file.additions === 0 && file.deletions === 0) continue;

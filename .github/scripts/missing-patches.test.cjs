@@ -7,10 +7,10 @@ const { execFileSync } = require('node:child_process');
 const { diffStats, missingPatches, checkPullRequest, GITHUB_PATCH_LIMITS, patchFacts } = require('./missing-patches.cjs');
 const fixtures = require('./fixtures/missing-patches/api.json');
 
-test('recorded looping heads reject large modified and removed text files', () => {
+test('recorded looping heads reject large modified text files and accept whole-file removals', () => {
   for (const fixture of fixtures.slice(0, 2)) {
     const reasons = missingPatches(fixture.files, new Map(), fixture.files.length);
-    const absent = fixture.files.filter(file => !Object.hasOwn(file, 'patch'));
+    const absent = fixture.files.filter(file => !Object.hasOwn(file, 'patch') && file.status !== 'removed');
     assert.equal(reasons.length, absent.length + 1);
     for (const file of absent) {
       assert.ok(reasons.some(reason => reason.includes(JSON.stringify(file.filename)) &&
@@ -69,7 +69,7 @@ test('Git numstat classifies bytes, including removed binary files and unusual p
     assert.deepEqual(stats.get(filename), { added: '0', deleted: '0' });
     const file = { filename, status, additions: 0, deletions: 0 };
     assert.deepEqual(missingPatches([file], stats, 1), []);
-    assert.equal(missingPatches([file], new Map(), 1).length, 2);
+    assert.equal(missingPatches([file], new Map(), 1).length, status === 'removed' ? 0 : 2);
   }
 });
 
@@ -201,4 +201,16 @@ test('a file with no local diff to read is named as unclassified', () => {
   assert.match(reason, /no local diff was read to classify it/);
   assert.match(summary, /This PR changes 4 lines \(\+3\/-1\) in 1 file\b/);
   assert.deepEqual(patchFacts(Buffer.from('a\0b')), { bytes: 3, nul: true });
+});
+
+test('only whole-file removals bypass a missing oversized patch', () => {
+  const filename = 'large.txt';
+  const local = new Map([[filename, { bytes: GITHUB_PATCH_LIMITS.fileBytes + 1, nul: false }]]);
+  for (const [status, additions] of [['removed', 0], ['modified', 1], ['modified', 2000], ['renamed', 1000], ['removed', 1]]) {
+    const file = { filename, status, additions, deletions: 2000 };
+    const reasons = missingPatches([file], new Map(), 1, local);
+    assert.equal(reasons.length, status === 'removed' && additions === 0 ? 0 : 2);
+  }
+  assert.equal(missingPatches([{ filename, status: 'removed', additions: 0, deletions: 2000 }],
+    new Map(), 1, new Map([[filename, { bytes: 200000, nul: true }]])).length, 2);
 });
