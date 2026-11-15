@@ -214,10 +214,10 @@ describe('request shapes', () => {
     },
     {
       name: 'createRun',
-      call: () => createRun({ task: 'do it', workflow: 'quick-task', variants: 1 }),
+      call: () => createRun({ task: 'do it', workflow: 'quick-task' }),
       path: '/api/v1/runs',
       method: 'POST',
-      body: { task: 'do it', workflow: 'quick-task', variants: 1 },
+      body: { task: 'do it', workflow: 'quick-task' },
     },
     { name: 'cancelRun', call: () => cancelRun('run-1'), path: '/api/v1/runs/run-1/cancel', method: 'POST' },
     {

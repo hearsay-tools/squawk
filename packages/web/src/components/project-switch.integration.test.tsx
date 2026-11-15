@@ -124,9 +124,9 @@ describe('rail + controller', () => {
   })
 
   it('links an inactive project to its remembered page, fresh after A-B-A', () => {
-    mount('/p/other/inbox')
+    mount('/p/other/skills')
     fireEvent.click(screen.getByRole('button', { name: 'go git' }))
-    expect(href('other')).toBe('/p/other/inbox')
+    expect(href('other')).toBe('/p/other/skills')
   })
 
   it.each(['/p/other/tasks/%', '/p/other/tasks/%E0%A4%A'])(

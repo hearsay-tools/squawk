@@ -20,7 +20,6 @@ export const PAGE_TITLE_ROUTES = [
   { pattern: '/github/*', pageLabel: 'GitHub' },
   { pattern: '/automations/*', pageLabel: 'Automations' },
   { pattern: '/skills', pageLabel: 'Skills' },
-  { pattern: '/inbox', pageLabel: 'Inbox' },
   { pattern: '/reports', pageLabel: 'Reports' },
   { pattern: '/workflows/*', pageLabel: 'Workflows' },
   { pattern: '/settings/*', pageLabel: 'Settings' },

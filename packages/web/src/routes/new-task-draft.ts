@@ -15,8 +15,6 @@ import type { TaskSource } from './new-task-form'
  */
 export interface NewTaskDraft {
   text: string
-  /** An old multi-candidate draft needs an explicit choice before starting one task. */
-  retiredVariants: boolean
   source: TaskSource | null
   runner: Runner | null
   /** Per-task agent account (spec 2026-07-29-agent-profiles). `null` = follow the project's own
@@ -104,7 +102,6 @@ const EMPTY: NewTaskDraft = {
   agentProfile: null,
   model: null,
   effort: null,
-  retiredVariants: false,
   planFirst: false,
   worktree: null,
   autonomous: null,
@@ -142,7 +139,6 @@ function normalize(raw: unknown): NewTaskDraft {
     agentProfile: typeof obj.agentProfile === 'string' ? obj.agentProfile : null,
     model: typeof obj.model === 'string' ? obj.model : null,
     effort: typeof obj.effort === 'string' ? obj.effort : null,
-    retiredVariants: obj.retiredVariants === true || (obj.variants !== undefined && obj.variants !== 1),
     planFirst: obj.planFirst === true,
     worktree: typeof obj.worktree === 'boolean' ? obj.worktree : null,
     autonomous: typeof obj.autonomous === 'boolean' ? obj.autonomous : null,
