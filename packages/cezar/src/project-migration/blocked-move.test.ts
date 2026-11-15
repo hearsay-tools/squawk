@@ -40,10 +40,11 @@ describe.each(['symlink', 'conflict'])('blocked project migration (%s)', kind =>
     const warn = (line: string) => lines.push(line);
     const result = await moveProjectWhenIdle(root, { homes: [], log: warn });
     noticeLegacyProject(root, { warn });
-    expect(result).toMatchObject({ status: 'blocked', reason: expect.stringContaining(reason) });
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain('[hsq] Project ');
-    expect(lines[0]).toContain(reason);
+    // The plan's own refusal, as the plan words it: a conflict names the path it would replace.
+    const refusal = kind === 'conflict' ? `${join(root, '.ai/squawk/config.json')}: ${reason}` : reason;
+    expect(result).toEqual({ status: 'blocked', reason: refusal });
+    expect(lines).toEqual([`[hsq] Project ${root} keeps its state in .ai/cezar/ for now: ${refusal}. `
+      + 'It is served from both folders; the move runs again at the next start.']);
     expect(projectPaths(root).write).toBe(join(root, '.ai/cezar'));
   });
 

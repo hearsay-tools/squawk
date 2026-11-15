@@ -1,7 +1,8 @@
 import { reportsIndex } from '../artifacts/reports-index.ts';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter, once } from 'node:events';
+import { createServer } from 'node:http';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,14 +27,14 @@ import { CompletionActionCoordinator } from '../server/completion-actions.ts';
 import { WorkspaceEventBus } from '../server/server.ts';
 import { startServer } from '../server/start-server.ts';
 import type { RunManager } from '../workflows/run.ts';
-import { moveProjectWhenIdle } from './auto.ts';
+import { closingSignal, movedNotice, moveProjectWhenIdle, prepareProjects } from './auto.ts';
 import { crashAt, moved, owners, TIMEOUT } from './engine.testkit.ts';
 import { ProjectMigrationRecoveryError } from './recovery.ts';
 import { buildMigrationProject, PARENT, removeMigrationProject, TASK, WORKER, type MigrationProject } from './project-migration.testkit.ts';
 import { artifactDirectory } from '../artifacts/store.ts';
 import { handoffPath } from '../handoff.ts';
 import { LEGACY_RUNS_FILE } from '../legacy-runs.ts';
-import { fallbackProjectWriteError } from '../project-paths.ts';
+import { fallbackProjectWriteError, projectPaths } from '../project-paths.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
 
 /**
@@ -124,8 +125,14 @@ describe('the automatic project move', { timeout: TIMEOUT }, () => {
       const run = cockpit();
       // ... and its own cockpit.lock claim, as a cockpit that served the project before holds it.
       await run.ownership.acquire(project.dataDir);
+      // The cockpit also serves its boot project, whose data lives elsewhere.
+      const boot = mkdtempSync(join(realpathSync(tmpdir()), 'cez-auto-move-boot-data-'));
+      temporary.push(boot);
+      await run.ownership.acquire(boot);
       const context = await run.contexts.context('p');
       expect(movedState()).toBe(true);
+      // The move keeps every claim of the cockpit that ran it: no other cockpit can take the boot project.
+      expect(existsSync(join(boot, 'cockpit.lock'))).toBe(true);
       expect(context.store.getRun(TASK)?.worktreePath).toBe(moved(project, project.taskPath));
       await reportsIndex(context.store).idle();
     } finally { release(); }
@@ -168,6 +175,8 @@ describe('the automatic project move', { timeout: TIMEOUT }, () => {
       const second = cockpit();
       const kept = await second.contexts.context('p');
       expect(kept.store.getRun(TASK)?.worktreePath).toBe(project.taskPath);
+      // With the kept task's files the only ones left, the second start has nothing to move.
+      expect(warn.mock.calls.flat().filter(line => String(line).startsWith('[hsq] Moved the state of'))).toHaveLength(1);
       expect(existsSync(join(project.taskPath, 'report.html'))).toBe(true);
       expect(JSON.parse(readFileSync(join(project.newDir, LEGACY_RUNS_FILE), 'utf8'))).toEqual({ version: 1, runs: [TASK] });
       // The task is archived; one attempt per cockpit run, so the same run does not move its files.
@@ -195,6 +204,9 @@ describe('the automatic project move', { timeout: TIMEOUT }, () => {
     const failed = moveProjectWhenIdle(project.root, { ownership: run.ownership, homes: [], fault: crashAt('move:before') });
     await expect(failed).rejects.toBeInstanceOf(ProjectMigrationRecoveryError);
     await expect(failed).rejects.toThrow('move:before');
+    expect(projectAdmissionRefusal(project.dataDir)?.reason).toBe('journal');
+    // A later caller in the same cockpit run neither tries again nor fails again: the journal is recovery's.
+    expect(await moveProjectWhenIdle(project.root, { ownership: run.ownership, homes: [] })).toEqual({ status: 'nothing' });
     expect(projectAdmissionRefusal(project.dataDir)?.reason).toBe('journal');
   });
 
@@ -359,6 +371,68 @@ describe('the automatic project move', { timeout: TIMEOUT }, () => {
     } finally { warn.mockRestore(); }
   });
 
+  /** A live process of its own, as another cockpit or a migration in progress is. */
+  async function otherProcess<T>(use: (other: ChildProcess) => Promise<T>): Promise<T> {
+    const other = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1 << 30)'], { stdio: 'ignore' });
+    try { return await use(other); } finally {
+      const exited = once(other, 'exit');
+      other.kill('SIGKILL');
+      await exited;
+    }
+  }
+
+  it('does not move a project another cockpit serves, and names that cockpit', async () => {
+    await otherProcess(async other => {
+      // A cockpit that claimed the project and has not published its address yet.
+      const startToken = processStartToken(other.pid!);
+      writeFileSync(join(project.dataDir, 'cockpit.lock'), JSON.stringify({ pid: other.pid, token: randomUUID(), ...(startToken ? { startToken } : {}) }));
+      try {
+        const lines: string[] = [];
+        const result = await moveProjectWhenIdle(project.root, { ownership: cockpit().ownership, homes: [], log: line => lines.push(line) });
+        expect(result).toEqual({ status: 'blocked', reason: `cockpit pid ${other.pid} serves it` });
+        expect(lines).toEqual([`[hsq] Project ${project.root} keeps its state in .ai/cezar/ for now: cockpit pid ${other.pid} serves it. `
+          + 'It is served from both folders; the move runs again at the next start.']);
+        expect(movedState()).toBe(false);
+      } finally { rmSync(join(project.dataDir, 'cockpit.lock'), { force: true }); }
+    });
+  });
+
+  it.each([
+    ['closes', (_lifecycle: ReturnType<typeof closingSignal>, server: ReturnType<typeof createServer>) => { server.close(); }],
+    ['shuts down for a restart', (lifecycle: ReturnType<typeof closingSignal>) => { lifecycle.stop(); }],
+  ])('prepares no further project once the cockpit %s', async (_name, closing) => {
+    const server = createServer();
+    await new Promise<void>(resolve => { server.listen(0, '127.0.0.1', resolve); });
+    const lifecycle = closingSignal(server);
+    try {
+      expect(lifecycle.stopped()).toBe(false);
+      closing(lifecycle, server);
+      await prepareProjects([{ root: project.root }], { ownership: cockpit().ownership, homes: [], stopped: lifecycle.stopped });
+      expect(movedState()).toBe(false);
+      expect(projectPaths(project.root).write).toBe(project.dataDir);
+    } finally { if (server.listening) server.close(); }
+  });
+
+  it.each(['deleted', 'replaced by a file'])('skips a registered project whose directory was %s, without a warning', async kind => {
+    const gone = mkdtempSync(join(realpathSync(tmpdir()), 'cez-auto-move-gone-'));
+    temporary.push(gone);
+    execFileSync('git', ['init', '-q', gone]);
+    await registerProject(gone, undefined, testHome());
+    rmSync(gone, { recursive: true, force: true });
+    if (kind !== 'deleted') writeFileSync(gone, 'not a project');
+    clearProjectProbeCache();
+    const projects = (await listProjects(testHome())).filter(entry => entry.root === gone);
+    expect(projects).toMatchObject([{ status: 'missing' }]);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      expect(await prepareProjects(projects, { ownership: cockpit().ownership, homes: [] })).toBe(projects);
+      expect(warn).not.toHaveBeenCalled();
+    } finally { warn.mockRestore(); }
+    // Nothing recreated the project where its directory was.
+    if (kind === 'deleted') expect(existsSync(gone)).toBe(false);
+    else expect(readFileSync(gone, 'utf8')).toBe('not a project');
+  });
+
   it('does not move a project while an automation of this cockpit holds its lease', async () => {
     const lease = AutomationStore.open(project.dataDir).acquireLease();
     expect(lease).toBeDefined();
@@ -367,5 +441,15 @@ describe('the automatic project move', { timeout: TIMEOUT }, () => {
       expect(result).toEqual({ status: 'blocked', reason: 'an automation of this cockpit holds its lease' });
       expect(movedState()).toBe(false);
     } finally { lease?.release(); }
+  });
+});
+
+describe('the notice of a finished move', () => {
+  it.each([
+    [[], 'Moved the state of /r from .ai/cezar/ to .ai/squawk/.'],
+    [['a'], 'Moved the state of /r from .ai/cezar/ to .ai/squawk/. 1 task keeps its files in .ai/cezar/ until it is archived: a.'],
+    [['a', 'b'], 'Moved the state of /r from .ai/cezar/ to .ai/squawk/. 2 tasks keep their files in .ai/cezar/ until they are archived: a, b.'],
+  ])('names the %j tasks that keep their files', (leftovers, notice) => {
+    expect(movedNotice('/r', leftovers)).toBe(notice);
   });
 });
