@@ -101,16 +101,23 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
 
   // A refusal on a present checkout writes nothing and reports nothing: the checkout is not the
   // owned one, or the checkpoint no longer matches it.
-  it.each(['re-added at the worker path after a partial removal', 'whose branch moved after an interrupted destroy'] as const)(
+  it.each(['re-added at the worker path after a partial removal', 'whose branch moved after an interrupted destroy',
+    'whose branch moved away and back after an interrupted destroy', 'whose branch ref file was rewritten after an interrupted destroy'] as const)(
     'keeps a checkout %s', async how => {
-      const { root, first } = await fixture(); const workspace = await createOwnedWorkspace(root, randomUUID(), first);
+      const { root, first, second } = await fixture(); const workspace = await createOwnedWorkspace(root, randomUUID(), first);
       if (how === 're-added at the worker path after a partial removal') {
         const lock = join(root, '.git/refs/heads', workspace.branch + '.lock'); await writeFile(lock, 'lock');
         expect(await removeOwnedWorkspace(root, workspace)).toMatchObject({ remaining: ['branch'] }); await rm(lock);
         git(root, 'worktree', 'add', '-q', workspace.path, workspace.branch);
       } else {
         await removeOwnedWorkspace(root, workspace, undefined, async () => { throw new Error('preview release failed'); });
-        await writeFile(join(workspace.path, 'tracked.txt'), 'worker'); git(workspace.path, 'commit', '-qam', 'worker');
+        if (how !== 'whose branch ref file was rewritten after an interrupted destroy') {
+          await writeFile(join(workspace.path, 'tracked.txt'), 'worker'); git(workspace.path, 'commit', '-qam', 'worker');
+        }
+        // Back at the recorded tip: the worker commit survives only in the branch reflog.
+        if (how === 'whose branch moved away and back after an interrupted destroy') git(workspace.path, 'reset', '-q', '--hard', first);
+        // An outside writer replaces the loose ref without a reflog entry.
+        if (how === 'whose branch ref file was rewritten after an interrupted destroy') await writeFile(join(root, '.git/refs/heads', workspace.branch), `${second}\n`);
       }
       const tip = git(root, 'rev-parse', workspace.branch);
       const path = receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json');
@@ -123,6 +130,21 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
       expect(git(workspace.path, 'rev-parse', 'HEAD')).toBe(tip);
       expect(git(root, 'rev-parse', workspace.branch)).toBe(tip);
     });
+
+  it('keeps a worktree moved after an interrupted destroy', async () => {
+    const { root, first } = await fixture(); const workspace = await createOwnedWorkspace(root, randomUUID(), first);
+    await removeOwnedWorkspace(root, workspace, undefined, async () => { throw new Error('preview release failed'); });
+    const path = receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json');
+    const checkpoint = await readFile(path, 'utf8');
+    git(root, 'worktree', 'move', workspace.path, workspace.path + '-moved');
+    const { calls, report } = recordingReport();
+    expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report))
+      .toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
+    expect(calls).toEqual([]);
+    expect(await readFile(path, 'utf8')).toBe(checkpoint);
+    expect(git(workspace.path + '-moved', 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(workspace.branch);
+    expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
+  });
 
   it('finishes a partly removed destroy after a human deleted the branch', async () => {
     const { root, workspace } = await partlyRemoved();

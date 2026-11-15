@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
 import { createOwnedWorkspace } from './workspace.ts';
 import { removeOwnedWorkspace } from './workspace-removal.ts';
-import { fixture, git, receiptPath, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
+import { fixture, git, receiptPath, recordingReport, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
 
 describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, () => {
   // hearsay-tools/cezarion#905: the worktree, its admin directory and its registration went away
@@ -113,15 +113,18 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     const tip = git(workspace.path, 'rev-parse', 'HEAD');
     git(root, 'branch', 'keeper', tip);
     await strand(root, workspace, 'deleted and pruned');
+    // A named refusal: the caller explains it, so neither attempt reports it unexplained.
+    const { calls, report } = recordingReport();
     expect(await removeOwnedWorkspace(root, workspace, undefined, async () => {
       git(root, 'update-ref', 'refs/heads/keeper', first);
-    })).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
+    }, undefined, report)).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
     expect(git(root, 'rev-parse', workspace.branch)).toBe(tip);
     // The retry resumes from the checkpoint the failed delete wrote, and proves the commits again.
     expect(JSON.parse(await readFile(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'), 'utf8')))
       .toMatchObject({ sha: tip, phase: 'worktree-removed' });
-    const retry = await removeOwnedWorkspace(root, workspace);
+    const retry = await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report);
     expect(retry).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
+    expect(calls).toEqual([]);
     expect(retry.error).toBe(`Owned branch ${workspace.branch} holds 1 commit beyond its worker baseline; ` +
       'keep what you need, delete the branch, then retry destroy');
     expect(git(root, 'rev-parse', workspace.branch)).toBe(tip);
@@ -150,7 +153,9 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     await strand(root, workspace, 'externally removed');
     const other = join(root, 'other-checkout');
     git(root, 'worktree', 'add', '-q', other, workspace.branch);
-    expect(await removeOwnedWorkspace(root, workspace)).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
+    const { calls, report } = recordingReport();
+    expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report)).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
+    expect(calls).toEqual([['unexplained']]);
     expect(git(root, 'branch', '--list', workspace.branch)).not.toBe('');
     expect(existsSync(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'))).toBe(false);
     git(root, 'worktree', 'remove', other);
