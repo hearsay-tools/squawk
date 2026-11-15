@@ -215,9 +215,9 @@ publication and PATH updates; later legacy changes belong to the canary.
 Profile symlinks stay intact; a profile inside the legacy home stays unchanged
 with a warning. `rollbackLegacyMigration(target)` renames a
 pending marker to `install.json.failed`; the next explicit migration discards the
-pending copy first: the recorded destinations, the managed install, its launchers
-(`bin/`) and the account trees. Markers, locks and backup archives stay, also
-when XDG roots share one directory. Rollback never rewrites legacy registry data.
+pending copy first: the recorded destinations, the managed install, its launcher
+files in `bin/` and the account trees. Other `bin/` entries, markers, locks and
+backup archives stay, also when XDG roots share or nest directories. Rollback never rewrites legacy registry data.
 
 Boot defers a server home that supports group migration: only `hsq server-migrate`
 stops the group, stages the home and rolls every instance back on failure. The
