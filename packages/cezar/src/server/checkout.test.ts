@@ -19,7 +19,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
-import { clearProjectProbeCache, registerProject } from '../workspace/projects.ts';
+import { clearProjectProbeCache, listProjects, registerProject } from '../workspace/projects.ts';
+import { createRunner } from '../core/runner-factory.ts';
+import { ProjectContexts } from './project-context.ts';
+import { createRunManager } from './run-manager.testkit.ts';
 import {
   checkoutRepo,
   checkoutTarget,
@@ -611,6 +614,27 @@ describe('POST /api/v1/projects/checkout', () => {
     expect(body.project?.id).toBe(existing.id);
     expect(existsSync(join(target, '.git'))).toBe(true);
     expect((await listProjectsViaApi()).projects.map((p) => p.id)).toEqual([existing.id]);
+  });
+
+  it('a re-clone after the registry saw the root missing answers the fresh status, and the project opens', async () => {
+    await useCheckoutRoot();
+    mkdirSync(checkoutRoot, { recursive: true });
+    const target = join(checkoutRoot, 'cezar');
+    mkdirSync(target, { recursive: true });
+    const existing = await registerProject(target, 'local', testHome());
+    rmSync(target, { recursive: true, force: true });
+    clearProjectProbeCache();
+    expect((await listProjectsViaApi()).projects.find((p) => p.id === existing.id)?.status).toBe('missing');
+
+    const { status, body } = await post({ url: 'open-mercato/cezar' });
+    expect(status).toBe(200);
+    expect(body.project).toMatchObject({ id: existing.id, status: 'ok' });
+    const contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), listProjects: () => listProjects(testHome()) });
+    try {
+      expect((await apiRequest(makeApp({ contexts }), `/api/v1/p/${existing.id}/ui-state`)).status).toBe(200);
+    } finally {
+      contexts.disposeAll();
+    }
   });
 });
 
