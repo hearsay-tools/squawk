@@ -88,8 +88,9 @@ describe('restart shutdown', () => {
       if (!server.listening) await once(server, 'listening');
       const base = `ws://127.0.0.1:${(server.address() as AddressInfo).port}`;
       const bus = await connect(`${base}/api/v1/ws`);
+      sockets.push(bus.ws);
       const pane = await connect(`${base}/api/v1/runs/${run.id}/preview/ws`);
-      sockets.push(bus.ws, pane.ws);
+      sockets.push(pane.ws);
       store.updateRun(run.id, { title: 'Renamed before the restart' });
 
       const shutdown = server.shutdownForRestart();
