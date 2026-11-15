@@ -39,7 +39,9 @@ describe('server-migrate under write faults and a concurrent home migration', ()
   it('finishes the commit when MOVED.json cannot be written after the home committed', async () => {
     const f = oneInstance();
     failRenameOnce(join(f.legacy.root, 'MOVED.json'));
-    await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'migrated' });
+    const result = await serverMigrate(f);
+    expect(result.status).toBe('migrated');
+    expect(result.lines).toContainEqual(expect.stringMatching(/^server-migrate committed the home, then failed: ENOSPC: .*\. Finishing the commit\.$/));
     expect(existsSync(join(f.legacy.root, 'MOVED.json'))).toBe(true);
     expect(readInstallMarker(f.target.config)?.state).toBe('committed');
     expect(unitName(f)).toBe('hearsay-squawk.service');
@@ -88,6 +90,7 @@ describe('server-migrate under write faults and a concurrent home migration', ()
     const result = await serverMigrate(f);
     expect(raced).toBe(true);
     expect(result.status).toBe('rolled-back');
+    expect(result.lines).toContain('server-migrate failed: Expected a staged home, got unchanged. Rolling back every instance.');
     expect(readInstallMarker(f.target.config)?.state).toBe('committed');
     expect(f.host.unit('user', 'cezar.service')).toMatchObject({ enabled: true, active: true });
     expect(existsSync(join(f.host.userUnitDir, 'hearsay-squawk.service'))).toBe(false);

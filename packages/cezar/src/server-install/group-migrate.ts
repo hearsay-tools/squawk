@@ -104,8 +104,8 @@ function describePlan(group: Group, members: Member[]): void {
     const plan = planLegacyMigration(legacy, target);
     group.say(`home: ${legacy.root} → config ${target.config}, state ${target.state}, data ${target.data} (${plan.files.length} files copied; the legacy home stays)`);
   }
-  // Every registered platform names each of its moves in its details.
-  for (const { instance, planned } of members) for (const line of planned.details ?? []) group.say(`${instance}: ${line}`);
+  // Every registered platform's error-free plan has details naming each move; a plan without them fails loudly here.
+  for (const { instance, planned } of members) for (const line of planned.details!) group.say(`${instance}: ${line}`);
   group.say(`group: ${names} succeed or fail together. Each instance starts under its new name and passes its health check before the group commits.`);
   if (!homeCommitted) group.say(`marker: ${join(target.config, 'install.json')} stays pending (the new home is read-only) until every instance passes, then commits.`);
   group.say(`rollback: any failure restores every old service definition (systemd units and nginx sites, launchd plists), starts the old services${homeCommitted ? '' : ' and renames the marker to install.json.failed; the legacy home stays in use'}. A restore error leaves its instance stopped and the rollback journal in place: fix the reported error and re-run server-migrate to finish the rollback. A restored service that fails its start check is reported as a warning.`);
