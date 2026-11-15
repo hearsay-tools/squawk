@@ -14,7 +14,7 @@ const EXPECTED_QUEUE_JOBS = [
   'Cockpit browser E2E shard 3/8', 'Cockpit browser E2E shard 4/8',
   'Cockpit browser E2E shard 5/8', 'Cockpit browser E2E shard 6/8',
   'Cockpit browser E2E shard 7/8', 'Cockpit browser E2E shard 8/8',
-  'Unit, build, E2E, and package', 'Automated Code Review', 'Validate reviewed queue entry',
+  'Unit, build, E2E, and package', 'Validate reviewed queue entry',
 ];
 function fixture() {
   const run = { id: 20, run_attempt: 1, workflow_id: 3, path: '.github/workflows/ci.yml',

@@ -1,4 +1,5 @@
 # Parallel speculative merge-queue builds
+Status: done
 
 Issue: hearsay-tools/cezarion#2610. Status: **approved** by the owner on 2026-11-03.
 Owner decisions recorded 2026-11-03. Implementation follows in separate issues (§ Follow-up issues).
@@ -112,7 +113,7 @@ behaves exactly as today at 1. Rollback is a ruleset change only.
 - The final re-read already re-checks the entry and the PR, and stays. It
   accepts the entry at either position, so the move above does not fail it.
 - Every other check stays unchanged: PR state, native `pull_request_target` run,
-  CodeRabbit admission, threads, and the final re-read of rules, entry and PR.
+  threads, and the final re-read of rules, entry and PR.
 
 ### 3. Native-suite reuse (`pr-test-proof.cjs`)
 
@@ -253,7 +254,7 @@ Rows that "cannot happen" at k=1 are why the serial queue never needed them.
    - the effect of failing entry 1 on entry 2's run: cancelled or left running (S4,
      row 25);
    - that the entry lookup (`entryFrom`) passes at positions 1 and 2, and fails for a
-     stale group. The sandbox has no CodeRabbit or native PR CI, so the full admission
+     stale group. The sandbox has no native PR CI, so the full admission
      runs for the first time in the pilot. Any admission failure there is a rollback.
 
    Attach the results to the pilot issue. Any mismatch returns to design review before

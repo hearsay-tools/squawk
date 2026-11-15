@@ -1,6 +1,7 @@
 # Task communication protocol — hearsay-tools/cezarion#1933
+Status: done
 
-Status: the owner approved the design decisions on 2026-10-27, at the design gate of
+Recorded status: the owner approved the design decisions on 2026-10-27, at the design gate of
 hearsay-tools/cezarion#1933, and approved this spec in review the same day. It changes no
 code. Implementation is tracked in hearsay-tools/cezarion#1989 to hearsay-tools/cezarion#1996:
 see [Follow-ups](#14-follow-ups).

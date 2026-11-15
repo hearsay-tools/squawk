@@ -1,6 +1,7 @@
 # Upstream ledger
+Status: done
 
-Status: accepted · Date: 2026-09-18 · Relates: `.ai/upstream/`, `.github/scripts/upstream-ledger.cjs`, `.github/scripts/upstream-targets.cjs`, `.github/scripts/upstream-reachability.cjs`, `.github/workflows/upstream-scan.yml`
+Recorded status: accepted · Date: 2026-09-18 · Relates: `.ai/upstream/`, `.github/scripts/upstream-ledger.cjs`, `.github/scripts/upstream-targets.cjs`, `.github/scripts/upstream-reachability.cjs`, `.github/workflows/upstream-scan.yml`
 
 ## TLDR
 

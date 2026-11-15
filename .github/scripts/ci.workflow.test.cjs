@@ -50,7 +50,7 @@ function runShell(command, env = {}, cwd = repoRoot) {
   return spawnSync('bash', ['-e', '-c', command], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, CANCELLED: 'false', PREFLIGHT_RESULT: 'success', BASE_REF: 'main', REVIEW_RESULT: 'success', TYPECHECK_RESULT: 'success', UNIT_TESTS_RESULT: 'success', CLASSIFY_RESULT: 'success', SURFACE_RESULT: 'success', CLONE_GATE_RESULT: 'success', COMPLEXITY_GATE_RESULT: 'success', EVENT_NAME: 'pull_request_target', ...env },
+    env: { ...process.env, CANCELLED: 'false', PREFLIGHT_RESULT: 'success', QUEUE_ADMISSION_RESULT: 'success', TYPECHECK_RESULT: 'success', UNIT_TESTS_RESULT: 'success', CLASSIFY_RESULT: 'success', SURFACE_RESULT: 'success', CLONE_GATE_RESULT: 'success', COMPLEXITY_GATE_RESULT: 'success', EVENT_NAME: 'pull_request_target', ...env },
   });
 }
 
@@ -247,14 +247,14 @@ test('a docs-only or infra-only merge group may skip the suites; a bump PR shape
   const { runInNewContext } = require('node:vm');
   const ci = workflow();
   const gate = ci.jobs.verify.steps.find(step => step.name === 'Require every verification job');
-  const queue = (env) => runShell(gate.run, { EVENT_NAME: 'merge_group', BASE_REF: '', REVIEW_RESULT: 'skipped',
+  const queue = (env) => runShell(gate.run, { EVENT_NAME: 'merge_group',
     UNIT_TESTS_RESULT: 'success', BUILD_AND_PACKAGE_RESULT: 'success', VITEST_RESULT: 'skipped', COCKPIT_BROWSER_RESULT: 'skipped', BUMP_PR: 'false', ...env });
   for (const surface of ['docs-only', 'infra-only']) {
     assert.equal(queue({ CHANGE_SURFACE: surface }).status, 0, surface);
     for (const name of ['vitest', 'cockpit-browser']) {
       const condition = ci.jobs[name].if.replace(/needs\.([a-z]+-[a-z]+)/g, "needs['$1']");
       assert.equal(runInNewContext(condition, { github: { event_name: 'merge_group', event: {} }, cancelled: () => false, needs: {
-        'queue-proof': { result: 'success', outputs: { verified: 'false' } }, preflight: { result: 'success' }, 'review-result': { result: 'skipped' },
+        'queue-proof': { result: 'success', outputs: { verified: 'false' } }, preflight: { result: 'success' },
         'change-surface': { outputs: { surface } }, 'classify-pr': { outputs: { bump_pr: 'false' } }, 'pr-test-input': { result: 'skipped' },
       } }), false, `${name} ${surface}`);
     }
@@ -277,7 +277,7 @@ test('ledger-only PRs skip both matrices but cannot bypass the required build an
     // Actions permits hyphens in property names; JavaScript requires brackets.
     const condition = ci.jobs[name].if.replace(/needs\.([a-z]+-[a-z]+)/g, "needs['$1']");
     assert.equal(runInNewContext(condition, { github: { event_name: 'pull_request_target', event: { pull_request: { base: { ref: 'main' } } } }, cancelled: () => false, needs: {
-      'queue-proof': { result: 'success', outputs: { verified: 'false' } }, preflight: { result: 'success' }, 'review-result': { result: 'success' },
+      'queue-proof': { result: 'success', outputs: { verified: 'false' } }, preflight: { result: 'success' },
       'change-surface': { outputs: { surface } }, 'classify-pr': { outputs: { bump_pr: 'false' } },
     } }), false, name);
   }

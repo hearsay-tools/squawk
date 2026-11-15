@@ -1,4 +1,5 @@
 # GitHub tab: full timeline events (commits, labels, merges) with per-commit CI markers
+Status: done
 
 > Historical source: `open-mercato/cezar` (upstream), preserved at fork point
 > `feb85666` (2026-08-31). Unqualified cezar issue/PR citations below belong to

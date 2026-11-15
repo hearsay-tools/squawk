@@ -1,6 +1,7 @@
 # Finalizing a crashed worker's execution proof (hearsay-tools/cezarion#469)
+Status: done
 
-Status: approved design (2026-09-26), revised with human approval for hearsay-tools/cezarion#738 (2026-10-04) and
+Recorded status: approved design (2026-09-26), revised with human approval for hearsay-tools/cezarion#738 (2026-10-04) and
 for hearsay-tools/cezarion#889 (2026-10-07), which reverses #738's rule that an unreadable cwd is a possible holder, and
 for hearsay-tools/cezarion#890 (2026-10-07), which runs each agent session in its own process group, and
 for hearsay-tools/cezarion#879 (2026-10-07), which backs off the three cleanup loops (section 6). Extends

@@ -5,7 +5,6 @@ const path = require('node:path');
 const { setTimeout: delay } = require('node:timers/promises');
 const CI_PATH = '.github/workflows/ci.yml';
 const VERIFY = 'Unit, build, E2E, and package';
-const REVIEW = 'Automated Code Review';
 // The shard count of ci.yml's vitest and cockpit-browser matrices.
 const SHARDS = 8;
 // A matrix job that its `if` skipped is listed once, under its unexpanded name.
@@ -14,7 +13,7 @@ const suitesOf = count => ['Vitest shard', 'Cockpit browser E2E shard'].map(pref
   skipped: `${prefix} \${{ matrix.shard }}/${count}` }));
 const requiredQueueJobs = (count = SHARDS) => [
   'Classify pull request change surface', 'Classify PR shape', 'Check function complexity', 'Check new code clones', 'Review preflight', 'Typecheck', 'Unit tests (package)', 'Unit tests (scripts)', 'Build and package',
-  ...suitesOf(count).flatMap(suite => suite.shards), VERIFY, REVIEW, 'Validate reviewed queue entry',
+  ...suitesOf(count).flatMap(suite => suite.shards), VERIFY, 'Validate reviewed queue entry',
 ];
 const SUITES = suitesOf(SHARDS);
 const SUITE_JOBS = SUITES.flatMap(suite => suite.shards);
@@ -193,5 +192,5 @@ async function queueCiProof({ github, owner, repo, eventName, ref, sha, now = Da
     return fallback('proof-unavailable');
   }
 }
-module.exports = { queueCiProof, mainCommitSurface, requiredQueueJobs, REQUIRED_QUEUE_JOBS, SUITE_JOBS, SKIPPED_SUITE_JOBS, VERIFY, REVIEW, CI_PATH,
+module.exports = { queueCiProof, mainCommitSurface, requiredQueueJobs, REQUIRED_QUEUE_JOBS, SUITE_JOBS, SKIPPED_SUITE_JOBS, VERIFY, CI_PATH,
   validSha, positive, reader, pages, readCiRuns, readCiJobs, successfulJobs, newest };

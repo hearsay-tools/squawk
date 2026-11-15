@@ -1,11 +1,12 @@
 # In-band task-reference markers — CEZ:PR / CEZ:ISSUE / CEZ:TITLE
+Status: done
 
 > Historical source: `open-mercato/cezar` (upstream), preserved at fork point
 > `feb85666` (2026-08-31). Unqualified cezar issue/PR citations below belong to
 > that upstream tracker; example numbers, UI values and command literals retain
 > their original meaning. New citations must name their repository.
 
-Status: proposed · Date: 2026-07-18 · Owner direction 2026-07-18 · Relates:
+Recorded status: proposed · Date: 2026-07-18 · Owner direction 2026-07-18 · Relates:
 spec 2026-07-16-pr-autodiscovery (the fuzzy tier this overrides), spec
 2026-07-17-task-auto-naming (the namer this can silence), #347 (`CEZ:DONE`,
 the marker this extends)

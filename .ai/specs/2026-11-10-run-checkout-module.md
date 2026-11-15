@@ -1,4 +1,5 @@
 # One run checkout module for the cockpit's checkout routes
+Status: done
 
 Decision record: [ADR 0062](../../docs/adr/0062-one-module-decides-run-checkout-access.md).
 Glossary: [Run checkout](../../GLOSSARY.md#run-checkout), [Checkout intent](../../GLOSSARY.md#checkout-intent).

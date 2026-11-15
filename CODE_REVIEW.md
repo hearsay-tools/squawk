@@ -129,9 +129,7 @@ correction and describe the test that would catch it.
 
 Set severity from the consequence. Optional style, wording or refactor advice
 does not justify blocking a change. Missing tests alone are not a product defect;
-explicit repository verification requirements still apply. Use the current
-[automated review policy](docs/sdlc/ci.md#ci-verification) for automated finding
-thresholds and disposition.
+explicit repository verification requirements still apply.
 
 Request changes for material unresolved defects or unmet required verification.
 A review approval does not grant merge authority; follow

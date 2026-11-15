@@ -1,4 +1,5 @@
 # Browser tab coordination
+Status: done
 
 Shipped by the implementation for [hearsay-tools/cezarion#924](https://github.com/hearsay-tools/cezarion/issues/924).
 

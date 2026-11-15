@@ -175,7 +175,6 @@ describe('pageTitleContext', () => {
     ['/p/cezar/git/commits/abc123', 'Git'],
     ['/p/cezar/github/issues/543', 'GitHub'],
     ['/p/cezar/skills', 'Skills'],
-    ['/p/cezar/inbox', 'Inbox'],
     ['/p/cezar/workflows/quick-task', 'Workflows'],
     ['/p/cezar/settings/agents', 'Settings'],
     ['/settings/global/projects', 'Settings'],
@@ -229,7 +228,6 @@ const ROUTE_CASES: Array<[url: string, route: string]> = [
   ['/github/prs', 'github'],
   ['/github/issues/42', 'github'],
   ['/github/prs/7', 'github'],
-  ['/inbox', 'inbox'],
   // The real workflow builder (R6 Step 1.6): with fetch never answering both the list URL
   // and a named deep link are honestly loading.
   ['/workflows', 'workflows'],
@@ -284,7 +282,7 @@ describe('scoped route map (/p/:projectId)', () => {
     expect(screen.queryByRole('heading', { name: 'Loading task…' })).toBeNull()
   })
 
-  // MCP lives inside Agent config; keyboard remains hidden and unrouted.
+  // MCP lives inside Agent config; Keyboard has no settings page.
   const unknown = [
     '/nope-404',
     '/tasks',
@@ -293,6 +291,8 @@ describe('scoped route map (/p/:projectId)', () => {
     '/settings/keyboard',
     '/tasks/abc123/nope',
     '/compare',
+    '/compare/g1',
+    '/inbox',
   ]
   for (const url of unknown) {
     it(`/p/${BOOT}${url} → the 404 route`, () => {

@@ -107,7 +107,12 @@ it.each(['symlink', 'dangling symlink', 'file'])('keeps a fresh project on legac
     else symlinkSync(kind === 'symlink' ? outside : join(outside, 'missing'), destination, 'dir');
     expect(projectPaths(repo).write).toBe(join(repo, '.ai/cezar'));
     await initCommand(repo);
-    await moveProjectWhenIdle(repo, { homes: [] });
+    // The notice names what the operator must fix, as the plan words it, not a failure to read through it.
+    const lines: string[] = [];
+    expect(await moveProjectWhenIdle(repo, { homes: [], log: line => lines.push(line) }))
+      .toEqual({ status: 'blocked', reason: `${destination} exists and is not a directory` });
+    expect(lines).toEqual([`[hsq] Project ${repo} keeps its state in .ai/cezar/ for now: ${destination} exists and is not a directory. `
+      + 'It is served from both folders; the move runs again at the next start.']);
     expect(projectMoveMarked(repo)).toBe(false);
     expect(projectPaths(repo).write).toBe(join(repo, '.ai/cezar'));
     expect(existsSync(join(repo, '.ai/cezar/workflows/fix-and-verify.yaml'))).toBe(true);

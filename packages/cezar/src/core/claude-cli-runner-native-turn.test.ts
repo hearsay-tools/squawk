@@ -175,7 +175,7 @@ describe('Claude native parent turns on the mock wire (hearsay-tools/cezarion#15
     const ui: UiEvent[] = [];
     const session = new ClaudeCliRunner({ bin: mockBin, timeoutMs: 0 }).startSession(
       { toolGrant: UNSET_TOOL_GRANT, userPrompt: `mock:subagent-background ${tokens} parity-release=${release}`, cwd: dir, sessionId: 'native-turn',
-        env: { CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '', CEZ_MOCK_ARGS_FILE: '', CEZ_MOCK_NOTES: '0' } },
+        env: { CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: '', CEZ_MOCK_NOTES: '0' } },
       () => {},
       { onUiEvent: event => ui.push(event) },
     );

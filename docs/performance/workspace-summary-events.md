@@ -1,6 +1,6 @@
 # Workspace stream summary events: measurements
 
-This report goes with [hearsay-tools/cezarion#2730](https://github.com/hearsay-tools/cezarion/issues/2730) (plan `.ai/specs/2026-11-06-cockpit-performance-plan.md`, slice S1). Before the change, the workspace stream wrote one full run record per connection per event, and the cockpit turned each record into a list row. After the change, the cockpit reads `GET /api/v1/workspace/events?runs=summary`. That stream carries the list row, and one shared feed builds each frame's text once per mode.
+This report goes with [hearsay-tools/cezarion#2730](https://github.com/hearsay-tools/cezarion/issues/2730) (epic hearsay-tools/cezarion#2728, slice S1). Before the change, the workspace stream wrote one full run record per connection per event, and the cockpit turned each record into a list row. After the change, the cockpit reads `GET /api/v1/workspace/events?runs=summary`. That stream carries the list row, and one shared feed builds each frame's text once per mode.
 
 Main result for one large delegation family, one stream and the detail closed: the stream bytes fell from 14.6 MB to 0.12 MB (−99.2%). The p95 frame fell from 264,760 bytes to 412 bytes. The cockpit's per-frame parse and validation p95 fell from 0.44 ms to 0.04 ms. With the parent's detail open, the total bytes still fell by 62% (14.9 MB to 5.7 MB). The cost is 21 detail fetches instead of 1, which is the approved D1 behavior. With four connections, the shared feed cut the server dispatch total for full records from 228 ms to 106 ms.
 
