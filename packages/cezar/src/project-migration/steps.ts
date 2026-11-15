@@ -1,3 +1,5 @@
+import { AUTOMATION_RUNS_INDEX } from '../runs/automation-runs.ts';
+import { CONVERSATION_MEMBERS_INDEX } from '../runs/conversation-members.ts';
 import { chmodSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync, rmSync, statSync } from 'node:fs';
 import { dirname, join, posix, relative, resolve, sep } from 'node:path';
 import { readOwnedWorkspaceRecord, replaceOwnedWorkspaceRecord } from '../delegation/workspace-record.ts';
@@ -243,9 +245,10 @@ function runStoreStep(journal: ProjectMigrationJournal, fault: MigrationFault): 
       ].some(Boolean);
       if (!changed) continue;
       const { seq: _seq, revision, ...input } = row;
-      // Paths change, run ids do not: the row keeps the conversation members it has.
+      // Paths change, run ids do not: the row keeps the index rows it has.
       upserts.push({ ...input, worktreePath: column.worktree_path, data: serializeLike(row.data, data), summary: serializeLike(row.summary, summary),
-        issueAttributionCurrent: db.getMeta(`issue-attribution:${id}`) === String(revision), conversationMembers: db.conversationMembers(id) });
+        issueAttributionCurrent: db.getMeta(`issue-attribution:${id}`) === String(revision),
+        conversationMembers: db.indexRows(CONVERSATION_MEMBERS_INDEX, id)?.map(([member]) => member!) ?? null, automationRuns: db.indexRows(AUTOMATION_RUNS_INDEX, id) });
     }
     if (upserts.length > 0) db.transaction({ upserts, deletes: [], beforeCommit: () => { fault('run-store:commit'); } });
   } finally { db.close(); }

@@ -1,3 +1,4 @@
+import { AUTOMATION_RUNS_MIGRATION } from './automation-runs.ts';
 import { CONVERSATION_MEMBERS_MIGRATION } from './conversation-members.ts';
 import { REPORTS_MIGRATION } from './report-rows.ts';
 import { DESTROYED_WORKTREE_MIGRATION, MERGE_WAIT_MIGRATION } from './run-database-version.ts';
@@ -188,5 +189,5 @@ export const MIGRATIONS: readonly string[] = [
   -- No live recompute: isLiveRecord already calls a row with an open wait live, of any kind.
   `,
   REPORTS_MIGRATION,
-  MERGE_WAIT_MIGRATION, DESTROYED_WORKTREE_MIGRATION, CONVERSATION_MEMBERS_MIGRATION,
+  MERGE_WAIT_MIGRATION, DESTROYED_WORKTREE_MIGRATION, CONVERSATION_MEMBERS_MIGRATION, AUTOMATION_RUNS_MIGRATION,
 ];
