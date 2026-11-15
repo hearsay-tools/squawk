@@ -19,7 +19,8 @@ hsq job status bench
 
 The command keeps running after the agent's shell call, turn and session end. It prints the
 paths of its log file and its exit-code file, which are in the task's temp directory unless
-`--dir` names another one. The agent waits for it with a process wait. A second start of a
+`--dir` names another one. When the task ends while the job runs, Squawk keeps that directory,
+so the log and exit code are still there after the job ends. The agent waits for it with a process wait. A second start of a
 name that still runs is refused.
 
 Squawk supplies the bundled command and task context to agent sessions automatically

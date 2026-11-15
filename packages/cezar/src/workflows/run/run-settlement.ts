@@ -1,6 +1,7 @@
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { workerEvidenceRunIds } from '../../runs/worker-execution.ts';
-import { removeAgentTmpDir } from '../../runs/agent-tmpdir.ts';
+import { agentTmpDirLocations, removeAgentTmpDir } from '../../runs/agent-tmpdir.ts';
+import { jobRunsIn } from '../../jobs/job.ts';
 import { resolveWorktreeRetention } from '../../config.ts';
 import { reclaimWorktrees } from '../../runs/retention.ts';
 import type { PreviewHostLike } from '../../preview/registration.ts';
@@ -71,6 +72,7 @@ export class RunSettlement {
       active: () => this.host.active.has(runId), starting: () => this.line.hasStarting(runId), queued: () => this.line.hasQueued(runId),
       claimed: () => this.host.hasClaim(runId), autosaveBlocker: () => this.host.autosaveCleanupBlocker(runId),
       privateWorkers: () => workerEvidenceRunIds(this.context.dataDir),
+      jobRuns: () => jobRunsIn(agentTmpDirLocations(this.context.dataDir, runId)),
     });
     if (disposition === 'keep') return;
     if (disposition === 'schedule') { this.host.workerScratchCleanup.schedule(runId); return; }
@@ -560,11 +562,13 @@ export function sessionCloseKeepsWaiting(input: { readonly cancelled: boolean; r
 
 export function terminalScratchDisposition(runId: string, run: RunRecord | undefined, reads: {
   active(): boolean; starting(): boolean; queued(): boolean; claimed(): boolean;
-  autosaveBlocker(): string | undefined; privateWorkers(): string[] | undefined;
+  autosaveBlocker(): string | undefined; privateWorkers(): string[] | undefined; jobRuns(): boolean;
 }): 'keep' | 'schedule' | 'remove' {
   if (!run || ['queued', 'running', 'waiting'].includes(run.status)) return 'keep';
   if (reads.active() || reads.starting() || reads.queued() || reads.claimed() || !!reads.autosaveBlocker()) return 'keep';
   const privateWorkers = reads.privateWorkers();
   if (run.delegation?.role === 'worker' || run.delegation?.role === 'invalid' || !privateWorkers || privateWorkers.includes(runId)) return 'schedule';
-  return 'remove';
+  // A job started with the default directory keeps it: the task's next end, its archive or the next
+  // startup sweep removes it once no job in it runs (hearsay-tools/squawk#3138).
+  return reads.jobRuns() ? 'keep' : 'remove';
 }

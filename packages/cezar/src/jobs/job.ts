@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { constants, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -22,6 +22,7 @@ import { ownCommand } from './command.ts';
  * system drops a dead claimant's file lock, so nothing is ever taken over by age or by guess.
  */
 
+const RECORD_SUFFIX = '.job.db';
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 /** How long a start waits for its supervisor to claim the name before it gives up. */
 const READY_TIMEOUT_MS = 30_000;
@@ -42,7 +43,7 @@ export function jobDirectory(dir: string | undefined, env: NodeJS.ProcessEnv): s
 
 export function jobPaths(dir: string, name: string): JobPaths {
   if (!NAME.test(name)) throw new JobError(`Invalid job name ${JSON.stringify(name)}: use 1-64 letters, digits, ".", "_" or "-", starting with a letter or digit.`);
-  return { record: join(dir, `${name}.job.db`) };
+  return { record: join(dir, `${name}${RECORD_SUFFIX}`) };
 }
 
 const damaged = (paths: JobPaths, why: string) => new JobError(`The job record ${paths.record} cannot be used (${why}). Check that no process of this job runs, then delete it or choose another name.`);
@@ -107,6 +108,26 @@ export function jobStatus(dir: string, name: string): JobStatus {
   const exitCode = readExit(record);
   if (exitCode !== undefined) return { ...base, state: 'exited', exitCode };
   return running(record) ? { ...base, state: 'running' } : { ...base, state: 'exited' };
+}
+
+/**
+ * Whether a job recorded directly in one of `dirs` still runs (hearsay-tools/squawk#3138). Squawk
+ * keeps a task's temp directory while one does, so the job's log and exit code outlive the task. A
+ * record that cannot be read counts as running: it may belong to a supervisor that still runs. A
+ * directory that cannot be listed holds no job this can find.
+ */
+export function jobRunsIn(dirs: readonly string[]): boolean {
+  return dirs.some((dir) => {
+    let names: string[];
+    try { names = readdirSync(dir); } catch { return false; }
+    return names.some((file) => {
+      if (!file.endsWith(RECORD_SUFFIX)) return false;
+      try {
+        const record = readRecord({ record: join(dir, file) });
+        return record !== undefined && readExit(record) === undefined && running(record);
+      } catch { return true; }
+    });
+  });
 }
 
 /** What the supervisor tells its starter: it holds the name, or another supervisor does. */
@@ -218,7 +239,7 @@ export async function superviseJob(dir: string, name: string, command: string[],
       for (const [signal, handler] of signals) process.off(signal, handler);
       if (note) writeFileSync(log, `${note}\n`);
       closeSync(log);
-      // The directory can be gone: Squawk removes a task's temp directory when the task ends.
+      // The directory can be gone: deleting the task's history removes its temp directory.
       try { writeAtomic(record.exitFile, `${code}\n`); } catch { /* no one can read it there */ }
       done(code);
     };

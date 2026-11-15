@@ -129,12 +129,13 @@ describe('selectSessionFault', () => {
   });
 });
 
-function scratchReads(calls: string[], stop?: string, evidence: () => string[] | undefined = () => []) {
+function scratchReads(calls: string[], stop?: string, evidence: () => string[] | undefined = () => [], job = false) {
   const flag = (name: string) => { calls.push(name); return name === stop; };
   return {
     active: () => flag('active'), starting: () => flag('starting'), queued: () => flag('queued'), claimed: () => flag('claimed'),
     autosaveBlocker: () => flag('autosave') ? 'saving' : undefined,
     privateWorkers: () => { calls.push('evidence'); return evidence(); },
+    jobRuns: () => { calls.push('job'); return job; },
   };
 }
 
@@ -149,7 +150,20 @@ describe('terminalScratchDisposition', () => {
     const run = makeRunRecord({ status });
     const calls: string[] = [];
     expect(terminalScratchDisposition(run.id, run, scratchReads(calls))).toBe('remove');
-    expect(calls).toEqual(['active', 'starting', 'queued', 'claimed', 'autosave', 'evidence']);
+    expect(calls).toEqual(['active', 'starting', 'queued', 'claimed', 'autosave', 'evidence', 'job']);
+  });
+
+  it('keeps unheld terminal scratch while a job recorded in it runs', () => {
+    const run = makeRunRecord({ status: RUN_STATUS.done });
+    const calls: string[] = [];
+    expect(terminalScratchDisposition(run.id, run, scratchReads(calls, undefined, () => [], true))).toBe('keep');
+    expect(calls.at(-1)).toBe('job');
+  });
+
+  it('schedules worker scratch without reading jobs: the deferred cleanup checks them', () => {
+    const calls: string[] = [];
+    expect(terminalScratchDisposition('lookup', worker(), scratchReads(calls, undefined, () => [], true))).toBe('schedule');
+    expect(calls).not.toContain('job');
   });
 
   it.each(['active', 'starting', 'queued', 'claimed', 'autosave'])('keeps scratch at the first %s hold', stop => {

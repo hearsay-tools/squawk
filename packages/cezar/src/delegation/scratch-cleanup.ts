@@ -1,5 +1,6 @@
 import { autosaveCleanupIds } from '../autosave-cleanup.ts';
-import { agentTmpDirMayExist, removeAgentTmpDir, sweepAgentTmpDirs } from '../runs/agent-tmpdir.ts';
+import { agentTmpDirLocations, agentTmpDirMayExist, removeAgentTmpDir, sweepAgentTmpDirs } from '../runs/agent-tmpdir.ts';
+import { jobRunsIn } from '../jobs/job.ts';
 import { workerEvidenceRunIds } from '../runs/worker-execution.ts';
 import type { RunStore } from '../runs/store.ts';
 import { sharedCwdScan, type CwdSource } from './process-liveness.ts';
@@ -46,7 +47,7 @@ export class WorkerScratchCleanup {
     // their scratch is theirs.
     if (autosaves) sweepAgentTmpDirs(this.dataDir, [...new Set([...live.filter(run =>
       this.busy(run.id) || ['queued', 'running', 'waiting'].includes(run.status)).map(run => run.id), ...owners,
-      ...this.store.listForeignClaimedRunIds(), ...(autosaves ?? [])])]);
+      ...this.store.listForeignClaimedRunIds(), ...(autosaves ?? [])])], dir => jobRunsIn([dir]));
     if (!retained || !autosaves) { // failed enumeration must not permanently lose a wake source
       this.recoveryTimer = setTimeout(() => this.recover(), 60_000); this.recoveryTimer.unref?.();
     }
@@ -121,7 +122,9 @@ export class WorkerScratchCleanup {
     // shared snapshot is this synchronous tick's: it never outlives a yield.
     try {
       if (generation && resourceId && execution?.generation === generation && !this.busy(id) &&
-        this.store.workerScratchResourcesSafe(id, generation, resourceId, cwds)) removeAgentTmpDir(this.dataDir, id);
+        this.store.workerScratchResourcesSafe(id, generation, resourceId, cwds) &&
+        // A job started in the scratch keeps it until the job ends (hearsay-tools/squawk#3138).
+        !jobRunsIn(agentTmpDirLocations(this.dataDir, id))) removeAgentTmpDir(this.dataDir, id);
     } catch { /* Transient evidence/read failures retain the durable intent for another wake. */ }
     // Uncertainty has no age limit or force-delete exit; it backs off instead.
     this.arm(id, attempts + 1, retryDelayMs(attempts, this.backoff, noJitter), now);

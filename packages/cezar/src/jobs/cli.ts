@@ -16,8 +16,10 @@ status  Print JSON: "state" is "running" or "exited", with "pid", "log",
         "exitFile", and "exitCode" when the exit file holds one.
 
 --dir <dir>  Where the job's files live. Default: $TMPDIR, the task's temp
-             directory, which ${productName('Cezar')} removes when the task ends. For a job that
-             must outlive the task, name a git-ignored directory in the worktree.
+             directory. A job that still runs when the task ends keeps it, so
+             the log and exit code outlive the task. ${productName('Cezar')} removes it at the
+             task's next end, its archive or ${productName('Cezar')}'s next start, once no job
+             in it runs, and at once when the task's history is deleted.
 -h, --help   Show this help.
 
 The command runs without a shell. For a pipeline, pass: -- sh -c '<pipeline>'.`);
