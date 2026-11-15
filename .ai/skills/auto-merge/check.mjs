@@ -32,14 +32,17 @@ export const NEVER = [
     '.github/scripts/{check-clones,check-spec-status,check-citations,change-coupling,api-budget,missing-patches,merge-vitest-coverage,failure-diagnostics,vitest-worker-count,vitest-coverage-tests,vitest-file-duration}.*',
     '.github/scripts/{*.workflow,auto-merge-gates,auto-merge-admission}.test.cjs', '.github/actions/**',
     '**/vitest.config.ts', '**/vitest.setup.ts',
-    'packages/web/e2e/{agent-browser,failure-setup,environment,fixture-server,held-browser-daemon,poll}.ts',
+    'packages/web/e2e/{agent-browser,failure-setup,environment,fixture-server,held-browser-daemon,poll,artifacts-setup,workspace-registry}.ts',
+    'packages/web/e2e/fetch-setup.mjs',
     'squeal.config.json',
-    'scripts/{test-changed,test-git-env,prepr,check-typecheck-coverage,test-home-env,test-home-setup,test-install-marker,test-sandbox,test-package,e2e-affected,ci-test-selection,check-workspace-resolution}.mjs',
+    'scripts/{test-changed,test-git-env,prepr,check-typecheck-coverage,test-home-env,test-browser-home-env,test-home-setup,test-install-marker,test-sandbox,test-package,e2e-affected,ci-test-selection,check-workspace-resolution}.mjs',
     '.ai/scripts/**', '**/tsconfig*.json', 'packages/cezar/src/ast-grep-rules.testkit.ts',
   ] },
   { why: 'lint gate', source: true, except: [LINT_CASES], globs: [
     'packages/cezar/src/lint/**', '.oxlintrc.json', 'sgconfig.yml',
     '.ai/ast-grep/*', '.ai/ast-grep/{rules,utils,launch-read-normalization}/**',
+    'packages/cezar/src/{file-length,test-wait-discipline,test-wait-discipline-polls}.baseline.json',
+    'packages/web/src/test/{card-2-contrast,search-params-discipline,unit-wait-discipline}.baseline.json',
   ] },
   { why: 'guard test change', unless: 'adds', globs: [
     'packages/cezar/src/server/{contract-parity*,route-parity,versioned-surface,bc-route-inventory,typed-bodies,api-types,origin-guard,host-guard}.test.ts',
@@ -68,6 +71,7 @@ export const NEVER = [
     'scripts/release*.mjs', 'packages/cezar/src/release/**',
     'packages/cezar/scripts/{check-pack,inline-contract,sync-readme,install-as-command}.mjs',
     'packages/cezar/src/pack-check.ts', 'packages/web/vite.config.ts', 'packages/web/index.html',
+    'packages/web/{product-identity.ts,src/lib/build-env.ts}', 'packages/cezar/scripts/product-identity.mjs',
   ] },
   { why: 'security', source: true, globs: [
     'packages/cezar/src/server/{capabilities,validators,upgrade-router,ws,provider-auth-runtime,provider-action-gate,fs-browse,open-in-app,open-in-terminal,wsl}.ts',
