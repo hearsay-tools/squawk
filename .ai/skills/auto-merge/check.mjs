@@ -35,7 +35,7 @@ export const NEVER = [
     'squeal.config.json',
     'scripts/{test-changed,test-git-env,prepr,check-typecheck-coverage,test-home-env,test-browser-home-env,test-home-setup,test-install-marker,test-sandbox,test-package,e2e-affected,ci-test-selection,check-workspace-resolution}.mjs',
     '.ai/scripts/**', '**/tsconfig*.json',
-    'packages/cezar/src/{ast-grep-rules,test-outbound-guard,home/test-home-selector}.testkit.ts',
+    'packages/cezar/src/{ast-grep-rules,test-outbound-guard,test-launch-guard,home/test-home-selector}.testkit.ts',
   ] },
   { why: 'gate or test harness', source: true, globs: ['packages/web/e2e/*.{ts,mjs}', 'packages/web/e2e/spec-map/**'] },
   { why: 'lint gate', source: true, except: [LINT_CASES], globs: [
