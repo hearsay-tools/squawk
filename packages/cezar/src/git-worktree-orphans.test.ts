@@ -87,6 +87,23 @@ describe('pruneOrphans keeps work no other ref holds', () => {
     expect(await tip(root, 'keeper')).not.toBeNull();
   });
 
+  it('keeps a held branch that another worktree has checked out', async () => {
+    const root = await repo();
+    const wt = await createWorktree(root, 'moved0000000', 'main');
+    // The orphan checkout left its task branch; an ordinary worktree took it.
+    await run('git', ['switch', '-q', '--detach'], { cwd: wt.path });
+    const other = join(root, 'other');
+    await run('git', ['worktree', 'add', '-q', other, wt.branch], { cwd: root });
+
+    await expect(pruneOrphans(root, new Set())).resolves.toEqual(['moved0000000']);
+
+    expect(existsSync(wt.path)).toBe(false);
+    expect(await tip(root, wt.branch)).not.toBeNull();
+    const head = await run('git', ['symbolic-ref', 'HEAD'], { cwd: other });
+    expect(head.stdout.trim()).toBe(`refs/heads/${wt.branch}`);
+    await expect(run('git', ['rev-parse', '--verify', 'HEAD'], { cwd: other })).resolves.toBeTruthy();
+  });
+
   it('sorts a mixed set over an empty run store, and keeps live runs untouched', async () => {
     const root = await repo();
     const dirty = await createWorktree(root, 'mixdirty0000', 'main');

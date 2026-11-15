@@ -596,6 +596,10 @@ async function pruneOrphansLocked(repoRoot: string, validIds: ReadonlySet<string
 async function deleteKeptOrphanBranch(repoRoot: string, branch: string, protection: OwnedCleanupProtection, git: WorktreeGit): Promise<void> {
   const ref = `refs/heads/${branch}`;
   if (protection.branches.has(branch) || (await git(repoRoot, ['symbolic-ref', '-q', ref])).ok) return;
+  // `update-ref` lacks `branch -D`'s checkout guard: keep a branch any worktree has checked out,
+  // and keep it when the registrations cannot be read.
+  const listed = await git(repoRoot, ['worktree', 'list', '--porcelain', '-z']);
+  if (!listed.ok || listed.stdout.split('\0').includes(`branch ${ref}`)) return;
   const tip = await git(repoRoot, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
   const sha = tip.stdout.trim();
   if (!tip.ok || !sha) return;
