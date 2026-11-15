@@ -1,7 +1,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Home, homePaths, kindHomePaths } from './home.ts';
 import { platformKindRoots } from './kind-roots.ts';
@@ -19,6 +19,8 @@ import { prepareOperatorHome } from './entry.ts';
 import { cleanStoreRoots, storeRoot } from './store.testkit.ts';
 import { migrationFiles } from './migration-files.ts';
 import * as privateFiles from './private-files.ts';
+import { launcherFile } from '../managed-install/launcher.ts';
+import { BINARY_NAMES } from './identity.ts';
 
 afterEach(() => { vi.restoreAllMocks(); cleanStoreRoots(); });
 
@@ -449,12 +451,28 @@ it('a retry after a staged copy removes the managed install and its launchers th
   migrateLegacyHome(legacy, target, { env: {}, commit: false });
   rollbackLegacyMigration(target);
   expect(json(join(target.versions, 'v1/package.json')).version).toBe('1.0.0');
-  expect(readdirSync(target.bin).sort()).toEqual(['cez', 'cezarion', 'hsq']);
+  expect(readdirSync(target.bin).sort()).toEqual(launcherNames(target));
   rmSync(legacy.versions, { recursive: true });
   expect(migrateLegacyHome(legacy, target, { env: {} }).status).toBe('migrated');
   expect(existsSync(target.versions)).toBe(false);
   // Launchers of the discarded copy would start a versions/ tree that no longer exists.
   expect(existsSync(target.bin)).toBe(false);
+});
+
+/** The launcher file names that writeLaunchers writes on this platform. */
+function launcherNames(target: Home): string[] {
+  return BINARY_NAMES.map(name => basename(launcherFile(target.bin, name))).sort();
+}
+
+it('a retry of a registry-only staged copy keeps an operator file with a launcher name', () => {
+  const { legacy, target } = migrationFixture();
+  migrateLegacyHome(legacy, target, { env: {}, commit: false });
+  rollbackLegacyMigration(target);
+  const own = launcherFile(target.bin, 'hsq');
+  mkdirSync(target.bin, { recursive: true });
+  writeFileSync(own, '#!/bin/sh\n', { flag: 'wx' }); // The operator's own launcher; the copy wrote none.
+  expect(migrateLegacyHome(legacy, target, { env: {} }).status).toBe('migrated');
+  expect(readFileSync(own, 'utf8')).toBe('#!/bin/sh\n');
 });
 
 it('a retry keeps bin/ files that the pending copy did not write', () => {
@@ -532,7 +550,7 @@ it.skipIf(process.platform === 'win32')('a retry with shared XDG roots discards 
   expect(readInstallMarker(target.config)?.state).toBe('committed');
   expect(json(target.workspaceConfig).saved).toBe('original');
   expect(json(join(target.versions, 'v1/package.json')).version).toBe('1.0.0');
-  expect(readdirSync(target.bin).sort()).toEqual(['cez', 'cezarion', 'hsq']);
+  expect(readdirSync(target.bin).sort()).toEqual(launcherNames(target));
 });
 
 it.each(['pending versions directory', 'pending bin directory', 'legacy MOVED.json', 'rolled-back marker'] as const)(

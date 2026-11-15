@@ -139,13 +139,16 @@ function discardPendingCopies(target: Home): void {
     assertHomePath(target.data, directory);
     rmSync(directory, { recursive: true, force: true });
   }
-  // The copy's launchers would start the removed versions/ tree. Other bin/ entries are not the copy's.
-  for (const name of BINARY_NAMES) {
-    const launcher = launcherFile(target.bin, name);
-    assertHomePath(target.data, launcher);
-    rmSync(launcher, { force: true });
+  // Only a copy of a managed install writes launchers, and its record lists the legacy versions/
+  // files. Those launchers would start the removed versions/ tree; other bin/ entries are not the copy's.
+  if (prior.files.some(file => file.path.startsWith('versions/'))) {
+    for (const name of BINARY_NAMES) {
+      const launcher = launcherFile(target.bin, name);
+      assertHomePath(target.data, launcher);
+      rmSync(launcher, { force: true });
+    }
+    if (existsSync(target.bin) && !readdirSync(target.bin).length) rmdirSync(target.bin);
   }
-  if (existsSync(target.bin) && !readdirSync(target.bin).length) rmdirSync(target.bin);
   // Step 7 can publish agent-accounts.json from a config.json import that has no recorded source.
   const copies = [...prior.files.flatMap(file => file.target ? [file.target] : []), { kind: 'config' as const, path: 'agent-accounts.json' }];
   for (const copy of copies) {
