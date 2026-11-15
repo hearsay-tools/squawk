@@ -15,7 +15,7 @@ function context(event = 'pull_request_target', base = 'main') {
       'pr-test-input': { result: 'success', outputs: { sha: '' } },
 
       'change-surface': { outputs: { surface: 'full-matrix' } }, 'classify-pr': { outputs: { bump_pr: 'false' } } },
-    cancelled: () => false, always: () => true };
+    cancelled: () => false };
 }
 function evaluate(value, ctx) {
   return runInNewContext(value.replace(/^\$\{\{\s*|\s*\}\}$/g, '').replace(/needs\.([\w-]+)/g, "needs['$1']"), ctx);
