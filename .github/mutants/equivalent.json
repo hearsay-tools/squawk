@@ -254,13 +254,5 @@
     "original": "''",
     "replacement": "\"Stryker was here!\"",
     "reason": "The lookup gets this text only for a record with no platform. The production lookup, getStrategy, is keyed by platform ids, so neither the empty string nor any other non-id text has a strategy, and the refusal names the platform unknown either way."
-  },
-  {
-    "file": "packages/cezar/src/server-install/group-migrate.ts",
-    "function": "rollbackGroup",
-    "mutator": "MethodExpression",
-    "original": "restored.reverse()",
-    "replacement": "restored",
-    "reason": "It changes only the order in which restored services start. Each instance has its own systemd unit (After= and Wants= name only network-online.target) or launchd plist, its own port and its own nginx site; no unit names another instance, and every site and unit restore ends before the first start, so the starts commute and a failed start only warns. A crash between two starts: after a complete rollback the journal is gone and one instance stays stopped in either order; after a partial rollback the journal stays, and the retry restores again from disk and starts every restored instance, again in an order that cannot matter."
   }
 ]

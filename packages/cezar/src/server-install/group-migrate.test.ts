@@ -72,12 +72,14 @@ describe('server-migrate group', () => {
     expect(readServerMigrateJournal(f.target)).toBeUndefined();
   });
 
-  it('rolls the whole group back to the old units, sites and legacy home when one instance fails its health check', async () => {
+  it('rolls the whole group back to the old units, sites and legacy home when one instance fails its health check, starting them in member order because a unit may depend on an earlier one', async () => {
     const f = sharedHome();
     const records = readFileSync(f.legacy.serverState('default'));
     f.host.unhealthy.add('hearsay-squawk-shop.service');
     await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'rolled-back' });
     expectOldGroup(f);
+    expect(f.host.commands.filter(command => /^systemctl (--user )?start '?cezar/.test(command)))
+      .toEqual(['systemctl --user start cezar.service', "systemctl start 'cezar-shop.service'"]);
     expect(readFileSync(f.legacy.serverState('default'))).toEqual(records);
   });
 
