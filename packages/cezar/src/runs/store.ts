@@ -1355,10 +1355,7 @@ export class RunStore extends EventEmitter {
    * Logs and receipts may compact independently. Read only matching keys in SQLite and overlay
    * held records so a debounced provenance update or deletion is reflected immediately. */
   countAutomationRuns(automationId: string): number {
-    const where = "json_extract(data, '$.automation.automationId') = ? OR " +
-      "json_extract(data, '$.automationTrigger.automationId') = ?";
-    const ids = new Set((this.db?.listKeysWhere(where, [automationId, automationId]) ?? [])
-      .map((key) => key.id));
+    const ids = new Set(this.db?.listAutomationRuns(automationId) ?? []);
     for (const id of this.deleted) ids.delete(id);
     for (const [id, run] of this.held) {
       if (run.automation?.automationId === automationId || run.automationTrigger?.automationId === automationId) ids.add(id);
@@ -1416,13 +1413,11 @@ export class RunStore extends EventEmitter {
     }
     const missing = [...wanted].filter((receipt) => !found.has(receipt));
     if (missing.length === 0 || !this.db) return found;
-    const where = "json_extract(data, '$.automation.receiptId') IN (SELECT value FROM json_each(?))" +
-      " OR json_extract(data, '$.automationTrigger.receiptId') IN (SELECT value FROM json_each(?))";
-    for (const key of this.db.listKeysWhere(where, [JSON.stringify(missing), JSON.stringify(missing)])) {
-      if (this.held.has(key.id) || this.deleted.has(key.id)) continue;
-      const run = this.getRun(key.id);
+    for (const id of this.db.listRunsByAutomationReceipt(missing)) {
+      if (this.held.has(id) || this.deleted.has(id)) continue;
+      const run = this.getRun(id);
       const receipt = run && receiptOf(run);
-      if (receipt !== undefined && wanted.has(receipt) && !found.has(receipt)) found.set(receipt, key.id);
+      if (receipt !== undefined && wanted.has(receipt) && !found.has(receipt)) found.set(receipt, id);
     }
     return found;
   }

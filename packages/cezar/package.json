@@ -31,6 +31,7 @@
     "install-as-command": "node scripts/install-as-command.mjs --mode link",
     "install-as-command:global": "node scripts/install-as-command.mjs --mode global",
     "uninstall-as-command": "node scripts/install-as-command.mjs --mode uninstall",
+    "bench:automation-lookups": "node --import tsx scripts/benchmark-automation-lookups.ts",
     "bench:conversation-lookup": "node --import tsx scripts/benchmark-conversation-lookup.ts",
     "bench:family-reconcile": "node --import tsx scripts/benchmark-family-reconcile.ts",
     "bench:run-store": "node --import tsx scripts/benchmark-run-store.ts",

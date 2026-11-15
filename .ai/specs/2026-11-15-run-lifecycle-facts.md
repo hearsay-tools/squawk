@@ -68,14 +68,19 @@ replaces `doneRequested` and `doneAtBoundary` as the done record; the boundary k
 ### Owners
 
 `RunMemory` (`workflows/run/run-memory.ts`) holds one slot per run with `#private` fields:
-`deferredMessages`, `queuedImageSeq`, `continuationGenerations`, `retainedNotes`, `stoppedWorkers`,
-`memoryPausing`, `lastNamerKey` and `forceStarted` move into it. The slot opens at run start and is
+`deferredMessages`, `queuedImageSeq`, `retainedNotes`, `stoppedWorkers`, `memoryPausing`,
+`lastNamerKey` and `forceStarted` move into it. The slot opens at run start and is
 released at a final exit with no open wait and no auto-resume hold, on delete and on `dispose`.
 These stay where they are, with a comment at the field: the `RunLine` scheduler indexes (ordered
 and counted by `busySlots` and `pump`; `release` calls `line.forget`), `executions`,
 `finalizedWorkers` and the orphan maps (their lifetime is a worker generation), the wait-engine
 and wait-registry maps (keyed by wait id, ADR 0061), `reclaiming` and `autosaveTasks` (cleanup
-evidence that outlives an execution).
+evidence that outlives an execution), and `continuationGenerations` in `continuation-acceptance.ts`.
+`RunSettlement.successSuperseded` compares that token after its diff and config I/O, also for an
+accepted Finish that survives disposal, so the token must outlive `dispose` until pending
+settlements drain. The timer maps in `wake-retries.ts`, `auto-resume.ts` and `inbox-claims.ts`
+stay until S5 moves them into `LivenessTimers`: S4 lists them as named exceptions of its rule, and
+S5 removes those exceptions.
 
 `LivenessTimers` (`workflows/run/liveness-timers.ts`) has one row per bound kind: idle close,
 nudge reply, acknowledgement, unread input, held human input, wake retry, wake backoff,
@@ -121,8 +126,10 @@ fix, recorded as `proof_base`, and adds a `RUNNER_IDS` parity cell where its iss
 | S12 | hearsay-tools/squawk#2443 | the acknowledgement and reply bound for a submitted autonomous nudge | S5, S11 |
 | S13 | hearsay-tools/squawk#2587 | `doneAccepted` and the completion protocol | S7, S8 |
 
-Slices with no shared file run in parallel: S1, S3, S4 and S6 first; then S2, S5, S7 and S8;
-then S9, S10 and S11; then S12 and S13. At most four run at once.
+Waves: S1, S3, S4 and S6 first; then S2, S5, S7 and S8; then S9, S10 and S11; then S12 and S13.
+At most four run at once. Slices in one wave can share a file, so they merge in a fixed order and
+each later slice merges `main` before its PR: S1 before S3 (both change `runs/run-exits.ts`), and
+S5 before S7 before S8 (all change `run/input-delivery.ts`).
 
 ## Case tables
 
