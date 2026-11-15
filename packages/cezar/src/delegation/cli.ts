@@ -1,7 +1,6 @@
 import { productName } from '../home/display.ts';
 import { commandText } from '../home/command.ts';
 import { productEnv } from '../core/product-env.ts';
-import { execFileSync } from 'node:child_process';
 import { lstat, realpath } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { readBoundedContextFile } from './context.ts';
@@ -45,6 +44,7 @@ import { discoveryRequestSchema, discoveredTasksSchema } from '@open-mercato/cez
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { runnerFlag, skillFlagIssue } from '../workflows/types.ts';
 import { DelegationPolicyError } from './policy.ts';
+import { gitSync } from '../git-command.ts';
 
 /** Accept exactly the endpoint format minted by this installation's private listener. */
 export function delegationEndpoint(value: string | undefined): URL {
@@ -155,7 +155,7 @@ async function attachPaths(values: string[]): Promise<string[]> {
   if (values.length === 0) return [];
   const cwd = process.cwd();
   let top: string;
-  try { top = await realpath(execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8', timeout: 5_000, stdio: ['ignore', 'pipe', 'ignore'] }).trim()); }
+  try { top = await realpath(gitSync(['rev-parse', '--show-toplevel'], { cwd, timeout: 5_000, stdio: ['ignore', 'pipe', 'ignore'] }).trim()); }
   catch { throw new WorkerCliError('spawn --attach needs a git worktree; run it from your worktree'); }
   const root = await realpath(cwd);
   const paths: string[] = [];

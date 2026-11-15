@@ -22,7 +22,7 @@ function fixture() {
   };
   put('package.json', '{"private":true,"type":"module"}\n');
   for (const module of ['home/identity.ts', 'release/manifests.ts', 'release/publication.ts',
-    'release/compatibility.ts', 'release/stable.ts', 'release/snapshot.ts', 'core/product-env.ts']) {
+    'release/compatibility.ts', 'release/stable.ts', 'release/snapshot.ts', 'core/product-env.ts', 'git-command.ts']) {
     put(`packages/cezar/src/${module}`, readFileSync(join(root, 'packages/cezar/src', module)));
   }
   for (const script of ['release.mjs', 'release-snapshot.mjs']) {

@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createWorktree, pruneOrphans, removeWorktree } from './git-worktree.ts';
 import { withWorktreeMutation } from './git-worktree-lock.ts';
-import { readMutationClaim } from './git-worktree-lock-helper.ts';
+import { keeperWaitBudget, readMutationClaim } from './git-worktree-lock-helper.ts';
 
 const exec = promisify(execFile);
 const roots: string[] = [];
@@ -165,4 +165,11 @@ it('withdraws timed-out cleanup without running its queued mutation after unlock
   await withWorktreeMutation(root, async () => {});
   expect(ran).toBe(false);
   expect(await readdir(join(root, '.git/cezar-worktree-mutations'))).toEqual([]);
+});
+
+it('reads the keeper wait budget from its argument and refuses one out of range', () => {
+  expect(keeperWaitBudget(undefined)).toBe(120_000);
+  expect(keeperWaitBudget('0')).toBe(0);
+  expect(keeperWaitBudget('120000')).toBe(120_000);
+  for (const value of ['-1', '120001', '1.5', 'soon']) expect(() => keeperWaitBudget(value)).toThrow('invalid worktree mutation wait budget');
 });

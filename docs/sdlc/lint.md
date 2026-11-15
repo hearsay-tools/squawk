@@ -232,6 +232,19 @@ The rule knows no type. It leaves out a receiver whose name ends in `error`, `er
 because the error of an exec call carries its own `killed`. It also leaves out a computed key.
 It has no baseline.
 
+### Git spawns (`git-spawn-outside-helper`)
+
+The ast-grep rule checks production `.ts` files in `packages/cezar/src`; it ignores tests,
+testkits and `git-command.ts`, the one module that starts git (hearsay-tools/squawk#3207,
+epic hearsay-tools/squawk#3644). It reports a call whose first argument is the literal `git`
+(a string, or a template with no substitution) through `execFile`, `execFileSync`, `spawn` or
+`spawnSync`, bare or as a member, through `promisify(...)` called in place, or through a name
+the same file binds to `promisify(...)`. It also reports `exec` and `execSync` when the shell
+command starts with `git `. Use `git`, `runGit`, `gitSync` or `spawnGit`: each drops the inherited
+`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` family, so git acts on `cwd`. The rule knows no
+value: it leaves out a command held in a variable (`spawn(cmd, …)`) and a launcher alias imported
+from another module. It has no baseline and no exception.
+
 ## Add a rule
 
 For a safety guard, first apply [New safety guards](#new-safety-guards) and document

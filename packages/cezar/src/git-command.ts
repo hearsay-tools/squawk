@@ -1,4 +1,9 @@
-import { execFile } from 'node:child_process';
+import {
+  execFile, execFileSync, spawn,
+  type ChildProcess, type ChildProcessByStdio, type ExecFileException, type ExecFileOptions, type ExecFileSyncOptions,
+  type SpawnOptions, type SpawnOptionsWithStdioTuple, type StdioNull, type StdioPipe,
+} from 'node:child_process';
+import type { Readable } from 'node:stream';
 
 export interface GitResult {
   ok: boolean;
@@ -32,6 +37,57 @@ export function gitEnv(overrides: Record<string, string | undefined> = {}, sourc
   const env = { ...source };
   for (const name of LOCATION_VARS) delete env[name];
   return { ...env, ...overrides };
+}
+
+/** The env of every helper below: `env` is set over `baseEnv` (default `process.env`) without its
+ *  location variables, so a caller's own value (a private `GIT_INDEX_FILE`) wins. */
+export interface GitEnvOptions {
+  env?: Record<string, string | undefined> | undefined;
+  baseEnv?: NodeJS.ProcessEnv | undefined;
+}
+
+function withGitEnv<T extends GitEnvOptions>(options: T): Omit<T, keyof GitEnvOptions> & { env: NodeJS.ProcessEnv } {
+  const { env, baseEnv, ...rest } = options;
+  return { ...rest, env: gitEnv(env, baseEnv) };
+}
+
+export type RunGitOptions = Omit<ExecFileOptions, 'env' | 'encoding'> & GitEnvOptions & {
+  /** Written to git's stdin, which is then closed. Without it stdin stays open, as `execFile` leaves it. */
+  input?: string | undefined;
+};
+
+/** The rejection of `runGit`: `execFile`'s error with git's output, as `promisify(execFile)` gives it. */
+export type RunGitError = ExecFileException & { stdout: string; stderr: string };
+
+/** Run git and resolve its output; reject with a `RunGitError` when it fails. */
+export function runGit(args: readonly string[], options: RunGitOptions = {}): Promise<{ stdout: string; stderr: string }> {
+  const { input, ...rest } = options;
+  return new Promise((resolve, reject) => {
+    const child = execFile('git', args, { ...withGitEnv(rest), encoding: 'utf8' }, (error, stdout, stderr) => {
+      if (error) reject(Object.assign(error, { stdout, stderr }));
+      else resolve({ stdout, stderr });
+    });
+    // A git that exits early closes its stdin; that EPIPE belongs to the rejection above.
+    if (input !== undefined) child.stdin?.on('error', () => undefined).end(input);
+  });
+}
+
+export type GitSyncOptions = Omit<ExecFileSyncOptions, 'env' | 'encoding'> & GitEnvOptions;
+
+/** Run git synchronously and return its stdout; throw `execFileSync`'s error when it fails. */
+export function gitSync(args: readonly string[], options: GitSyncOptions = {}): string {
+  return execFileSync('git', args, { ...withGitEnv(options), encoding: 'utf8' });
+}
+
+export type SpawnGitOptions = Omit<SpawnOptions, 'env'> & GitEnvOptions;
+
+/** Start git for a caller that reads its streams or owns its lifetime. */
+export function spawnGit(
+  args: readonly string[], options: Omit<SpawnOptionsWithStdioTuple<StdioNull, StdioPipe, StdioPipe>, 'env'> & GitEnvOptions,
+): ChildProcessByStdio<null, Readable, Readable>;
+export function spawnGit(args: readonly string[], options?: SpawnGitOptions): ChildProcess;
+export function spawnGit(args: readonly string[], options: SpawnGitOptions = {}): ChildProcess {
+  return spawn('git', args, withGitEnv(options));
 }
 
 /** Run git in `cwd`, never throw — degradation is the caller's policy. */
