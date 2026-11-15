@@ -33,9 +33,6 @@ function ancestors(id, chain = []) {
   assert.ok(!chain.includes(id), `CI dependency cycle: ${[...chain, id]}`);
   return [ci.jobs[id].needs ?? []].flat().flatMap(dep => [dep, ...ancestors(dep, [...chain, id])]);
 }
-function descendants(id) {
-  return Object.keys(ci.jobs).filter(other => ancestors(other).includes(id));
-}
 test('heavy jobs start without waiting for typecheck or preflight', () => {
   for (const id of Object.keys(ci.jobs)) ancestors(id);
   for (const id of heavy) {

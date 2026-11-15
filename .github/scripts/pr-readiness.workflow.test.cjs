@@ -82,7 +82,6 @@ test('PR-context review signals have no permissions, secrets, checkout or truste
 
 // The workflow scripts run here as github-script runs them. Each fake token is a
 // minimal Octokit whose `request` and `graphql` pass through `hook.wrap`.
-const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
 function token(s, remaining, { project = false } = {}) {
   let send = async ({ method, url, ...params }) => {
     const route = `${method} ${url}`;
@@ -105,7 +104,8 @@ async function runJob(jobName, { s, github, env, tokens = {} }) {
     payload: { repository: { full_name: 'o/r' }, inputs: { pr_number: '7' } } };
   let error;
   try {
-    await new AsyncFunction('require', 'github', 'context', 'core', 'getOctokit', 'process', step.with.script)(
+    // runJob is itself async, so its constructor builds the step's async script.
+    await new runJob.constructor('require', 'github', 'context', 'core', 'getOctokit', 'process', step.with.script)(
       p => require(path.resolve(__dirname, '../..', p)), github, context, core, value => tokens[value],
       { env: { ...step.env, ...env } });
   } catch (caught) { error = caught; }
