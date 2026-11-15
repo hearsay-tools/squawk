@@ -14,6 +14,8 @@ valid:
   - 'const { workflowCursor: _cursor, ...rest } = run'
   - 'type Read = { workflowCursor?: WorkflowCursor }'
   - 'interface Row { workflowCursor?: { stepId: string } }'
+  # The read-time upgrade of a saved row.
+  - "export function upgradeLegacyWorkflowCursor(row) { row.workflowCursor = { stepId, mode: 'resume' } }"
 invalid:
   - "this.context.store.updateRun(runId, { workflowCursor: { stepId, mode: 'start' } })"
   - 'this.context.store.updateRun(runId, { workflowCursor: undefined })'

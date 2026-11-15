@@ -17,8 +17,6 @@ ignores:
   # The owner: each exit's fields() writes the cursor (cursorFields, enteredStep, succeeded) and the
   # park reason.
   - packages/cezar/src/runs/run-exits.ts
-  # The read-time upgrade of a saved `workflowResumeStepId` (upgradeLegacyWorkflowCursor).
-  - packages/cezar/src/runs/legacy-workflow-cursor.ts
 utils:
   run-fact: { regex: '^(workflowCursor|parkReason)$' }
 rule:
@@ -33,3 +31,9 @@ rule:
     # type members are other node kinds. A patch built under another name, or with a computed key,
     # is not seen: the rule sees literals.
     - not: { has: { field: value, regex: '^z\.|Schema\b|Schema\.' } }
+    # The read-time upgrade of a saved `workflowResumeStepId` (runs/legacy-run-rows.ts).
+    - not:
+        inside:
+          stopBy: end
+          kind: function_declaration
+          has: { field: name, regex: '^upgradeLegacyWorkflowCursor$' }

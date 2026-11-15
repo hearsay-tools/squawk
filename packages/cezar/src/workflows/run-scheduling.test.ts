@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RUN_STATUS, makeRunRecord, makeStepState } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS, STEP_KIND, STEP_STATUS, makeRunRecord, makeStepState } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { accountHeldFor, deriveAccountHolds, queuedStartAt, resumeInFlight } from './run-scheduling.ts';
 import type { WorkflowDef } from './types.ts';
 
@@ -29,18 +29,18 @@ describe('account holds', () => {
 // hearsay-tools/squawk#1621: a queued workflow tail starts at its `start` cursor (ADR 0064).
 describe('queued start', () => {
   const workflow: WorkflowDef = { name: 'chain', source: 'file', steps: [{ id: 'implement' }, { id: 'review' }, { id: 'verify', command: 'true' }] };
-  const steps = (implement: 'done' | 'pending') => [
+  const steps = (implement: typeof STEP_STATUS.done | typeof STEP_STATUS.pending) => [
     makeStepState({ id: 'implement', status: implement }),
-    makeStepState({ id: 'review', status: 'pending' }),
-    makeStepState({ id: 'verify', kind: 'check', status: 'pending' }),
+    makeStepState({ id: 'review', status: STEP_STATUS.pending }),
+    makeStepState({ id: 'verify', kind: STEP_KIND.check, status: STEP_STATUS.pending }),
   ];
 
   it('starts at the step the cursor names', () => {
-    expect(queuedStartAt(makeRunRecord({ status: RUN_STATUS.queued, steps: steps('pending'), workflowCursor: { stepId: 'review', mode: 'start' } }), workflow)).toBe(1);
+    expect(queuedStartAt(makeRunRecord({ status: RUN_STATUS.queued, steps: steps(STEP_STATUS.pending), workflowCursor: { stepId: 'review', mode: 'start' } }), workflow)).toBe(1);
   });
 
   it('starts at the first pending step without a start cursor', () => {
-    expect(queuedStartAt(makeRunRecord({ status: RUN_STATUS.queued, steps: steps('done') }), workflow)).toBe(1);
-    expect(queuedStartAt(makeRunRecord({ status: RUN_STATUS.queued, steps: steps('pending'), workflowCursor: { stepId: 'review', mode: 'resume' } }), workflow)).toBe(0);
+    expect(queuedStartAt(makeRunRecord({ status: RUN_STATUS.queued, steps: steps(STEP_STATUS.done) }), workflow)).toBe(1);
+    expect(queuedStartAt(makeRunRecord({ status: RUN_STATUS.queued, steps: steps(STEP_STATUS.pending), workflowCursor: { stepId: 'review', mode: 'resume' } }), workflow)).toBe(0);
   });
 });
