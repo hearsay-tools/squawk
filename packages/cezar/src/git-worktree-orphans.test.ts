@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -154,6 +154,23 @@ describe('pruneOrphans keeps work no other ref holds', () => {
     await expect(pruneOrphans(root, new Set())).resolves.toEqual(['stacked00000']);
 
     expect(await tip(root, wt.branch)).not.toBeNull();
+  });
+
+  // Root reads a mode-000 file, and Windows has no such mode: the case needs a non-root POSIX user.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('keeps every branch when a reservation file exists but cannot be read', async () => {
+    const root = await repo();
+    const wt = await createWorktree(root, 'unread000000', 'main');
+    await run('git', ['worktree', 'add', '-q', '--detach', join(root, 'other'), 'main'], { cwd: root });
+    const state = join(root, '.git/worktrees/other/rebase-merge');
+    mkdirSync(state, { recursive: true });
+    writeFileSync(join(state, 'head-name'), `refs/heads/${wt.branch}\n`, { mode: 0o000 });
+    try {
+      // The checkout goes (clean, kept by main); the branch stays, since its reservation is unknown.
+      await expect(pruneOrphans(root, new Set())).resolves.toEqual(['unread000000']);
+      expect(await tip(root, wt.branch)).not.toBeNull();
+    } finally {
+      chmodSync(join(state, 'head-name'), 0o644);
+    }
   });
 
   it('sorts a mixed set over an empty run store, and keeps live runs untouched', async () => {

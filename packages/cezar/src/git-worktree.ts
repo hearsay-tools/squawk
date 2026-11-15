@@ -536,8 +536,8 @@ export async function worktreeShortstat(
  *  `prepare_checked_out_branches` (branch.c): a worktree's checked-out branch, the branch its
  *  rebase or bisect returns to (porcelain reports those as `detached`), and the refs a paused
  *  `rebase --update-refs` will move. The state files are read from every worktree's admin
- *  directory, a missing checkout's too. Null when the registrations cannot be read: a caller then
- *  treats every branch as in use. */
+ *  directory, a missing checkout's too. Null when the registrations or a state file that exists
+ *  cannot be read: a caller then treats every branch as in use. */
 export async function branchesInUse(run: (args: string[]) => Promise<WorktreeGitResult>): Promise<Set<string> | null> {
   const [listed, common] = await Promise.all([
     run(['worktree', 'list', '--porcelain', '-z']),
@@ -548,19 +548,26 @@ export async function branchesInUse(run: (args: string[]) => Promise<WorktreeGit
   for (const field of listed.stdout.split('\0')) {
     if (field.startsWith('branch refs/heads/')) inUse.add(field.slice('branch refs/heads/'.length));
   }
-  const root = common.stdout.trim();
-  const admins = [root, ...(await readdir(join(root, 'worktrees')).catch(() => [] as string[])).map(name => join(root, 'worktrees', name))];
-  for (const admin of admins) {
-    for (const file of ['rebase-merge/head-name', 'rebase-apply/head-name', 'BISECT_START']) {
-      const name = (await readFile(join(admin, file), 'utf8').catch(() => '')).trim();
-      if (name) inUse.add(name.startsWith('refs/heads/') ? name.slice('refs/heads/'.length) : name);
+  // A state file that exists but cannot be read is unknown, never "no reservation".
+  const absent = (error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined;
+    throw error;
+  };
+  try {
+    const root = common.stdout.trim();
+    const names = await readdir(join(root, 'worktrees')).catch(absent) ?? [];
+    for (const admin of [root, ...names.map(name => join(root, 'worktrees', name))]) {
+      for (const file of ['rebase-merge/head-name', 'rebase-apply/head-name', 'BISECT_START']) {
+        const name = ((await readFile(join(admin, file), 'utf8').catch(absent)) ?? '').trim();
+        if (name) inUse.add(name.startsWith('refs/heads/') ? name.slice('refs/heads/'.length) : name);
+      }
+      // Three lines per ref: its name, the value before the rebase, the value it will get.
+      const updates = ((await readFile(join(admin, 'rebase-merge/update-refs'), 'utf8').catch(absent)) ?? '').split('\n');
+      for (let i = 0; i < updates.length; i += 3) {
+        if (updates[i]!.startsWith('refs/heads/')) inUse.add(updates[i]!.slice('refs/heads/'.length));
+      }
     }
-    // Three lines per ref: its name, the value before the rebase, the value it will get.
-    const updates = (await readFile(join(admin, 'rebase-merge/update-refs'), 'utf8').catch(() => '')).split('\n');
-    for (let i = 0; i < updates.length; i += 3) {
-      if (updates[i]!.startsWith('refs/heads/')) inUse.add(updates[i]!.slice('refs/heads/'.length));
-    }
-  }
+  } catch { return null; }
   return inUse;
 }
 
