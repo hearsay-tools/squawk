@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { settleVisual, waitForSettledSample } from './visual-ready'
+import { dismissWithEscape } from './contrast'
 import { artifactsDir, createGitHubFixture, DESKTOP } from './github-fixture'
 import type { GitHubFixture, GithubPayload } from './github-fixture'
 
@@ -644,8 +645,12 @@ it.each([1440, 402, 360].flatMap(width => ['light', 'dark'].map(theme => ({ widt
   settleVisual(browser, '[data-route="github"]', { theme, width: 'wide', idle: true })
   browser.screenshot(`${artifactsDir}/revised-github-handoff-${width}-${theme}.png`, { viewport: true })
   browser.click('[data-slot="gh-workflow-trigger"]')
-  browser.press('Escape')
-  expect(browser.evaluate(`document.querySelector('[data-slot="gh-custom-prompt"]').value`)).toBe('Review this issue and keep this draft')
+  browser.waitForFunction(`document.querySelector('[data-slot="gh-workflow-menu"]') !== null`)
+  dismissWithEscape(browser, { content: '[data-slot="gh-workflow-menu"]', focus: '[data-slot="gh-workflow-trigger"]' })
+  expect(browser.waitForValue(
+    `document.querySelector('[data-slot="gh-custom-prompt"]').value`,
+    (value: string) => value === 'Review this issue and keep this draft',
+  )).toBe('Review this issue and keep this draft')
 }, 90_000)
 
 // #721: a metadata refresh used to insert a full-width status paragraph into the wrapping filter
