@@ -63,9 +63,9 @@ async function resolveSnapshot({ github, owner, repo, trigger }) {
   const list = (route, args = {}) => github.paginate(`GET /repos/{owner}/{repo}/${route}`, { owner, repo, per_page: 100, ...args });
   if (!validTrigger(trigger)) return null;
   const run = await get('actions/runs/{run_id}', { run_id: trigger.id });
-  // The automated review runs inside this CI run, so open findings fail the run
-  // with verification and preparation green. Those two jobs, checked below,
-  // decide; a cancelled or otherwise unfinished run never publishes.
+  // A run can fail in a job outside verification and preparation. Those two
+  // jobs, checked below, decide; a cancelled or otherwise unfinished run never
+  // publishes.
   if (!triggeredCiRun(run, trigger, repository)) return null;
   const pulls = await list('pulls', { state: 'open', head: `${owner}:${run.head_branch}` });
   const matches = pulls.filter(p => openHeadPull(p, run, repository));

@@ -8,9 +8,6 @@ function secondEntry(s) {
   s.entries = [s.first, s.entry];
 }
 function graphqlResponse(s, args) {
-  if (args.query.includes('timelineItems(')) return { data: { repository: { pullRequest: {
-    timelineItems: { nodes: s.firstReady ? [{ createdAt: s.firstReady }] : [] },
-  } } } };
   if (args.query.includes('mergeQueue(')) return { data: { repository: { mergeQueue: {
     entries: { nodes: s.entries ?? [s.entry], pageInfo: { hasNextPage: false } },
   } } } };
@@ -26,16 +23,15 @@ function fixture(fork = false) {
     group: { head_sha: SHA, base_sha: BASE, base_ref: 'refs/heads/main', head_ref: 'refs/heads/gh-readonly-queue/main/pr-7' },
     rules: [{ type: 'merge_queue', parameters: { merge_method: 'SQUASH', max_entries_to_build: 1,
       min_entries_to_merge: 1, max_entries_to_merge: 1, grouping_strategy: 'ALLGREEN', check_response_timeout_minutes: 45 } },
-    { type: 'required_status_checks', parameters: { required_status_checks: ['Unit, build, E2E, and package', 'Automated Code Review'].map(context => ({ context, integration_id: 15368 })) } },
+    { type: 'required_status_checks', parameters: { required_status_checks: [{ context: 'Unit, build, E2E, and package', integration_id: 15368 }] } },
     { type: 'pull_request', parameters: { required_review_thread_resolution: true } }],
     entry: { id: 'entry', position: 1, headCommit: { oid: SHA }, baseCommit: { oid: BASE }, pullRequest: { number: 7, headRefOid: HEAD } },
     pr: { number: 7, state: 'open', draft: false, base: { sha: BASE, ref: 'main', repo: { full_name: 'o/r' } }, head: { sha: HEAD, ref: 'feature', repo: { full_name: headRepo } } },
     run: { id: 20, run_attempt: 1, workflow_id: 3, path: '.github/workflows/ci.yml', event: 'pull_request_target',
       repository: { full_name: 'o/r' }, head_repository: { full_name: headRepo }, head_sha: HEAD, head_branch: 'feature',
       status: 'completed', conclusion: 'success', pull_requests: [{ number: 7, head: { sha: HEAD }, base: { ref: 'main' } }] },
-    jobs: ['Unit, build, E2E, and package', 'Automated Code Review'].map((name, i) => ({ id: i + 1, name, status: 'completed', conclusion: 'success' })),
-    checks: [{ id: 100, name: 'CodeRabbit', app: { id: 347564, slug: 'coderabbitai' }, head_sha: HEAD, started_at: '2026-11-08T22:51:37Z', status: 'completed', conclusion: 'success' }],
-    firstReady: '2026-11-08T22:51:04Z', threads: [], calls: [],
+    jobs: [{ id: 1, name: 'Unit, build, E2E, and package', status: 'completed', conclusion: 'success' }],
+    threads: [], calls: [],
   };
   const github = { request: async (route, args) => {
     s.calls.push(route); s.onRead?.(route, args);
@@ -43,7 +39,6 @@ function fixture(fork = false) {
     let data;
     if (route.endsWith('/rules/branches/{branch}')) data = s.rules;
     else if (route === 'POST /graphql') data = graphqlResponse(s, args);
-    else if (route.endsWith('/commits/{ref}/check-runs')) data = { total_count: s.checks.length, check_runs: s.checks };
     else if (route.endsWith('/pulls/{pull_number}')) data = s.pr;
     else if (route.endsWith('/workflows/{workflow_id}')) data = { id: 3, path: '.github/workflows/ci.yml', state: 'active' };
     else if (route.endsWith('/workflows/{workflow_id}/runs')) data = { total_count: s.runs?.length ?? 1, workflow_runs: s.runs ?? [s.run] };

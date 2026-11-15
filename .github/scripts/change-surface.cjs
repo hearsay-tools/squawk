@@ -37,10 +37,10 @@ const testReadDocuments = [
 // docs/superpowers/specs/2026-09-25-infra-only-change-surface-design.md).
 // Exact-file allowlist on purpose: a new or renamed file fails closed to
 // full-matrix until deliberately listed here, and harness files — ci.yml,
-// coderabbit-reconcile.yml,
+// pr-readiness.yml,
 // release.yml and nightly.yml (both run `npm test` themselves — #565 review),
 // change-surface.cjs, require-e2e-passed.cjs, ci-test-sequencer.mjs,
-// coderabbit-admission.cjs, release-bump-pr.cjs, the *.workflow.test.cjs pins —
+// merge-queue-admission.cjs, release-bump-pr.cjs, the *.workflow.test.cjs pins —
 // must never appear (issue constraint #5: a PR that widens skips or alters a
 // harness that executes product suites runs the suites it affects).
 // Engine-script tests stay covered: they run under `npm run test:unit` inside
