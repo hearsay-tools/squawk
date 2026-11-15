@@ -10,7 +10,7 @@ import { ensureDataGitignore } from './data-gitignore.ts';
 import { loadWorkflows } from './workflows/load.ts';
 import { discoverSkills } from './skills.ts';
 import { loadSessionContextRules } from './session-context.ts';
-import { readProjectUiStateSync, writeProjectUiState } from './ui-state.ts';
+import { mergeWriteProjectUiState, readProjectUiStateSync } from './ui-state.ts';
 
 describe('project directory reads before P5', () => {
   let repo: string;
@@ -64,7 +64,7 @@ describe('project directory reads before P5', () => {
     });
     expect(JSON.parse(readFileSync(join(projectPaths(repo).write, 'config.json'), 'utf8'))).toEqual({ baseBranch: 'fallback', unknown: 7, defaultRunner: 'codex' });
     expect(readFileSync(fallback, 'utf8')).toBe('{"baseBranch":"fallback","unknown":7}');
-    await writeProjectUiState(repo, { ...readProjectUiStateSync(repo), focusedFile: 'a.ts' });
+    await mergeWriteProjectUiState(repo, current => ({ ...current, focusedFile: 'a.ts' }));
     expect(readProjectUiStateSync(repo)).toEqual({ openFiles: ['a.ts'], focusedFile: 'a.ts' });
   });
 
