@@ -190,7 +190,7 @@ async function driveContract(backend: RunnerId, drive: DriveContract): Promise<C
       spec: {
         ...drive.spec,
         env: {
-          CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '', CEZ_MOCK_ARGS_FILE: wireFiles[0]!, CEZ_MOCK_STDIN_FILE: wireFiles[1]!,
+          CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: wireFiles[0]!, CEZ_MOCK_STDIN_FILE: wireFiles[1]!,
           CEZ_MOCK_RELEASE_FILE: releaseFile, ...(drive.steerGate ? { CEZ_MOCK_STEER_GATE: gateFile } : {}), ...drive.env,
         },
       },

@@ -97,6 +97,13 @@ describe('encodeRunRow', () => {
     expect(encodeRunRow(record({ worktreePath: '/w/t', worktreeReclaimedAt: '2026-10-05T00:00:00.000Z' })).worktreePath).toBeNull();
   });
 
+  it("keeps a worker's worktree in the worktree column until its destroy completes", () => {
+    for (const phase of ['requested', 'terminating', 'cleaning', 'incomplete']) {
+      expect(encodeRunRow(record({ worktreePath: '/w/t', delegation: worker({ destroy: { phase } }) })).worktreePath, phase).toBe('/w/t');
+    }
+    expect(encodeRunRow(record({ worktreePath: '/w/t', delegation: worker({ destroy: { phase: 'complete' } }) })).worktreePath).toBeNull();
+  });
+
   it("names the branch a run owns: its own, an owned worker's planned one, else its worktree's task branch", () => {
     expect(encodeRunRow(record({ branch: 'feature/x', worktreePath: '/w/t' })).branch).toBe('feature/x');
     expect(encodeRunRow(record({ worktreePath: '/w/t' })).branch).toBe('cez/0123abcd');

@@ -44,12 +44,24 @@ export function workerFamilyEnded(run: RunRecord, lookup: (id: string) => RunRec
  *  (the store's `getRun`; a parent need not have a worktree of its own). */
 export function isReclaimable(run: RunRecord, lookup: (id: string) => RunRecord | undefined = () => undefined): boolean {
   if (run.delegation?.role === 'invalid') return false;
+  if (run.delegation?.role === 'worker' && run.delegation.destroy) return false;
+  // The record's own fields first: a store lookup decodes the parent's whole record.
+  if (!FINISHED.has(run.status) && run.status !== 'review') return false;
+  if (!run.worktreePath || run.worktreeReclaimedAt || !existsSync(run.worktreePath)) return false;
   if (run.delegation?.role === 'worker') {
     const parent = lookup(run.delegation.parentRunId);
-    if (run.delegation.destroy || (parent && !FINISHED.has(parent.status))) return false;
+    if (parent && !FINISHED.has(parent.status)) return false;
   }
-  const settled = FINISHED.has(run.status) || (run.status === 'review' && workerFamilyEnded(run, lookup));
-  return settled && Boolean(run.worktreePath) && existsSync(run.worktreePath!) && !run.worktreeReclaimedAt;
+  return FINISHED.has(run.status) || workerFamilyEnded(run, lookup);
+}
+
+/** `fn` answering each key once: one pass asks about the same parent for each of its workers. */
+function once<T>(fn: (id: string) => T): (id: string) => T {
+  const answers = new Map<string, T>();
+  return (id) => {
+    if (!answers.has(id)) answers.set(id, fn(id));
+    return answers.get(id)!;
+  };
 }
 
 /**
@@ -70,11 +82,12 @@ export function selectReclaimableWorktrees(
     runs.filter((run) => run.delegation?.role === 'worker' && run.delegation.parentRunId === parentId),
 ): string[] {
   if (!Number.isFinite(keep) || keep <= 0) return [];
+  const parentOf = once(lookup), familyLive = once((parentId) => workersOf(parentId).some(isLiveRecord));
   // A family with a live or destroying worker keeps every directory, inside the budget and past it.
-  const reclaimable = runs.filter((run) => isReclaimable(run, lookup) &&
-    !(run.delegation?.role === 'worker' && workersOf(run.delegation.parentRunId).some(isLiveRecord)));
-  const ended = reclaimable.filter((run) => workerFamilyEnded(run, lookup));
-  const budgeted = reclaimable.filter((run) => !ended.includes(run))
+  const reclaimable = runs.filter((run) => isReclaimable(run, parentOf) &&
+    !(run.delegation?.role === 'worker' && familyLive(run.delegation.parentRunId)));
+  const ended = new Set(reclaimable.filter((run) => workerFamilyEnded(run, parentOf)));
+  const budgeted = reclaimable.filter((run) => !ended.has(run))
     .sort((a, b) => (recencyKey(a) < recencyKey(b) ? 1 : recencyKey(a) > recencyKey(b) ? -1 : 0));
   return [...ended, ...budgeted.slice(keep)].map((r) => r.id);
 }

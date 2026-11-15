@@ -1,4 +1,5 @@
 # Slot release marking the pump due: slice 4.2 case table
+Status: superseded
 
 Slice 4.2 is excluded. Row C5 changes stored messages and events. Each C1–C15 call
 can also change auto-resume state before return when no workspace sweep is active

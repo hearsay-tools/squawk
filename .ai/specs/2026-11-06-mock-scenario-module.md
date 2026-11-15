@@ -1,4 +1,5 @@
 # One mock scenario module and six wire encoders
+Status: done
 
 Source: candidate 3 of the 2026-11-03 architecture review (cezar task f5410885).
 Campaign task: d18f6eb8. Baseline: `main` at `bc5764da7`.

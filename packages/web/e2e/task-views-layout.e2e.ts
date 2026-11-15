@@ -56,7 +56,7 @@ const prepare = (width: number, theme: string, idle = true) => {
 it('renders assigned task flows at 1440 Wide, 402 and 360 in both themes without page overflow', () => {
   const pages: Array<[string, string, string]> = [
     ['project', scoped('/'), '[data-slot="tasks-summary"], [data-slot="task-cards"]'], ['global', '/tasks?group=project', '[data-slot="global-task-row"]'],
-    ['inbox', scoped('/inbox'), '[data-route="inbox"]'], ['automations', scoped('/automations'), '[data-route="automations"] [data-slot="automation-card"]'],
+    ['automations', scoped('/automations'), '[data-route="automations"] [data-slot="automation-card"]'],
     ['editor', scoped(`/automations/${automationId}`), '#automation-name'],
   ]
   for (const width of [1440, 402, 360]) for (const theme of ['light', 'dark']) for (const [name, path, selector] of pages) {

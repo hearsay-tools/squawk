@@ -1,6 +1,7 @@
 # Retire the workaround skills
+Status: done
 
-Status: approved by the owner on 2026-11-02 (task `0b8679f4`). Plan revision 3: slice 3.2 rejected on measurement; planner decision 2026-11-03 (task `0b8679f4`). Slice 3.3 fixes causes before splitting and owns the cap and Squeal wait-bound deletion. Revision 2 added the owner constraints and revised slices 2.6, 3.1, 3.3, 4.2 and 4.3.
+Recorded status: approved by the owner on 2026-11-02 (task `0b8679f4`). Plan revision 3: slice 3.2 rejected on measurement; planner decision 2026-11-03 (task `0b8679f4`). Slice 3.3 fixes causes before splitting and owns the cap and Squeal wait-bound deletion. Revision 2 added the owner constraints and revised slices 2.6, 3.1, 3.3, 4.2 and 4.3.
 
 ## Goal
 

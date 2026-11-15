@@ -17,7 +17,6 @@ import { locationToRestore, readStoredLastLocation } from './lib/last-location'
 import { Navigate as ScopedNavigate } from './lib/project-router'
 import { ActivityLoading } from './routes/activity/activity-loading'
 import { GithubLoading } from './routes/github/github-loading'
-import { InboxRoute } from './routes/inbox'
 import { NewTaskRoute } from './routes/new-task'
 import { NotFoundRoute } from './routes/not-found'
 import { RepoGitLoading } from './routes/repo-git/repo-git-loading'
@@ -440,9 +439,6 @@ function projectScopeRoute() {
           }
         />
       </Route>
-      {/* The parallel-variant compare page is retired (hearsay-tools/cezarion#1760): old
-          bookmarks land on the task list. */}
-      <Route path="compare/:groupId" element={<ScopedNavigate to="/" replace />} />
       {/* The Git view (issue 06 §3): each section is a URL — /git (Recently on main; a phone's
           Git screen unless ?view=repo), /git/commits (+ /:sha, one commit inside Recently on
           main), /git/not-landed (issue 08), /git/cleanup, /git/branches, and /git/changes (the main tree's uncommitted
@@ -567,9 +563,6 @@ function projectScopeRoute() {
           </Suspense>
         }
       />
-      {/* Export guidance for old Inbox bookmarks: light — no markdown stack — so it rides the main
-          bundle like the overview does. */}
-      <Route path="inbox" element={<InboxRoute />} />
       {/* The workflow builder (R6 Step 1.6): /workflows opens the canvas on the repo's first
           saved chain, /workflows/:name deep-links a specific one. */}
       <Route

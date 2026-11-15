@@ -74,7 +74,7 @@ import { failLoadedInterruptedRun, restoreLoadedUsageLimitHold, settleLoadedStop
 import { hasLegacyWaitFields, upgradeLegacyWaits, UNREADABLE_WAIT } from './legacy-waits.ts';
 export { ciWaitEntry, holdsWorkerWait, upgradeLegacyWaits, workerWaitEntry } from './legacy-waits.ts';
 import { ExitEvents } from './exit-events.ts';
-import { encodeRunRow, isLiveRecord, isLiveStatus } from './run-row.ts';
+import { encodeRunRow, isLiveRecord, isLiveStatus, materializedWorktreePath } from './run-row.ts';
 import { collectRawExtras, encodeRawRecord, type RawExtras } from './raw-record.ts';
 import { ColdReadCache, storedRow, type StoredRow } from './cold-reads.ts';
 import { assertNoLegacyCockpit, assertNoLegacyWriter, backUpLegacyIndex, LEGACY_INDEX_FILE, LegacyWriterError, readLegacyIndex } from './legacy-index.ts';
@@ -1449,7 +1449,7 @@ export class RunStore extends EventEmitter {
   /** Runs with a materialized worktree directory (`worktreePath`, not reclaimed), most recently
    *  finished first, then newest first: worktree retention and the worktrees panel. */
   listRunsWithWorktree(): RunRecord[] {
-    const runs = this.queryRuns(this.db?.listWithWorktree() ?? [], (run) => run.worktreePath !== undefined && run.worktreeReclaimedAt === undefined);
+    const runs = this.queryRuns(this.db?.listWithWorktree() ?? [], (run) => materializedWorktreePath(run) !== undefined);
     const recency = ([run]: readonly [RunRecord, ListOrder]) => run.finishedAt ?? run.createdAt;
     return runs.sort((a, b) => (recency(a) < recency(b) ? 1 : recency(a) > recency(b) ? -1 : newestFirst(a[1], b[1]))).map(([run]) => run);
   }

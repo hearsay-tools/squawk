@@ -1,6 +1,7 @@
 # 002 — Żywa sesja: follow-upy i obrazki w trakcie taska
+Status: draft
 
-Status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 1 · Zależy od: — · Wzorzec: janitor `claudeRunner.ts` (proces bez `-p`, stdin NDJSON)
+Recorded status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 1 · Zależy od: — · Wzorzec: janitor `claudeRunner.ts` (proces bez `-p`, stdin NDJSON)
 
 ## Cel
 

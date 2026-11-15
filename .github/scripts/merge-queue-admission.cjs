@@ -1,7 +1,7 @@
 'use strict';
-const { readQueueCodeRabbitAdmission } = require('./queue-coderabbit-admission.cjs');
+const { listReviewThreads } = require('./review-threads.cjs');
 const { sanitize } = require('./failure-diagnostics.cjs');
-const { CI_PATH, VERIFY, REVIEW, validSha, positive, reader, readCiRuns, readCiJobs, successfulJobs, newest } = require('./queue-ci-proof.cjs');
+const { CI_PATH, VERIFY, validSha, positive, reader, readCiRuns, readCiJobs, successfulJobs, newest } = require('./queue-ci-proof.cjs');
 function errorMessage(error) {
   // Never serialize request objects, headers, response bodies or stacks.
   const status = Number.isInteger(error?.status) && error.status >= 100 && error.status <= 599 ? ` (HTTP ${error.status})` : '';
@@ -61,10 +61,8 @@ function requireQueueRules(rules) {
   if (queues.length !== 1 || p?.merge_method !== 'SQUASH' || ![1, 2].includes(p.max_entries_to_build)
     || p.min_entries_to_merge !== 1 || p.max_entries_to_merge !== 1
     || p.grouping_strategy !== 'ALLGREEN' || p.check_response_timeout_minutes !== 45) throw new Error('Unsupported queue settings');
-  for (const name of [VERIFY, REVIEW]) {
-    if (!rules.some(r => r.type === 'required_status_checks' && r.parameters?.required_status_checks?.some(
-      c => c.context === name && c.integration_id === 15368))) throw new Error('Required Actions check missing');
-  }
+  if (!rules.some(r => r.type === 'required_status_checks' && r.parameters?.required_status_checks?.some(
+    c => c.context === VERIFY && c.integration_id === 15368))) throw new Error('Required Actions check missing');
   if (!rules.some(r => r.type === 'pull_request' && r.parameters?.required_review_thread_resolution === true)) {
     throw new Error('Review thread protection missing');
   }
@@ -125,7 +123,7 @@ function requireStableRun(run, finalRun, finalLatest, eligible) {
   if (!eligible(finalRun) || finalRun.id !== run.id || finalRun.run_attempt !== run.run_attempt
     || finalLatest?.id !== run.id || finalLatest.run_attempt !== run.run_attempt || !eligible(finalLatest)) throw new Error('Native CI changed');
 }
-async function mergeQueueAdmission({ github, owner, repo, group, now = Date.now, sleep, allowInProgress = false, releaseAppBotLogin, diagnostics = {} }) {
+async function mergeQueueAdmission({ github, owner, repo, group, now = Date.now, sleep, allowInProgress = false, diagnostics = {} }) {
   startDiagnostics(diagnostics, group);
   requireGroup(group);
   github = diagnosticGithub(github, diagnostics);
@@ -150,18 +148,17 @@ async function mergeQueueAdmission({ github, owner, repo, group, now = Date.now,
   const workflow = await read('GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}', { workflow_id: 'ci.yml' });
   if (!positive(workflow?.id) || workflow.path !== CI_PATH || workflow.state !== 'active') throw new Error('CI workflow unavailable');
   const runs = () => readCiRuns(read, workflow.id, pr.head.sha, 'pull_request_target');
-  diagnostics.check = 'native CI/review';
+  diagnostics.check = 'native CI';
   const latest = newest(await runs());
   const run = latest && await read('GET /repos/{owner}/{repo}/actions/runs/{run_id}', { run_id: latest.id });
   const eligible = r => nativeRun(r, fullName, workflow.id, entry, pr) && nativeSuccess(r, allowInProgress);
-  if (!eligible(run)) throw new Error('Current native PR CI/review has not passed');
+  if (!eligible(run)) throw new Error('Current native PR CI has not passed');
   diagnostics.check = 'native protected jobs';
-  if (!successfulJobs(await readCiJobs(read, run.id), [VERIFY, REVIEW])) throw new Error('Native CI/review gates missing');
-  diagnostics.check = 'CodeRabbit admission';
-  const admission = await readQueueCodeRabbitAdmission({ github, owner, repo, pullNumber: pr.number, head: pr.head.sha,
-    releaseAppBotLogin, now, sleep, deadline: Math.min(deadline, now() + 60000) });
-  if (!admission.admitted) throw new Error(`Unresolved or unsuccessful CodeRabbit admission: ${admission.reason}`);
-  diagnostics.check = 'final native CI/review';
+  if (!successfulJobs(await readCiJobs(read, run.id), [VERIFY])) throw new Error('Native CI gate missing');
+  diagnostics.check = 'review threads';
+  const threads = await listReviewThreads({ github: { graphql }, owner, repo, pullNumber: pr.number });
+  if (threads.some(thread => !thread.isResolved)) throw new Error('Unresolved review threads');
+  diagnostics.check = 'final native CI';
   const finalRun = await read('GET /repos/{owner}/{repo}/actions/runs/{run_id}', { run_id: run.id });
   const finalLatest = newest(await runs());
   requireStableRun(run, finalRun, finalLatest, eligible);

@@ -1,5 +1,5 @@
 import { ProjectRunConnection } from './project-run-connection.ts';
-import { MERGE_WAIT_MIGRATION, RUN_DATABASE_READABLE_FROM, RUN_DATABASE_SCHEMA_VERSION } from './run-database-version.ts';
+import { DESTROYED_WORKTREE_MIGRATION, MERGE_WAIT_MIGRATION, RUN_DATABASE_READABLE_FROM, RUN_DATABASE_SCHEMA_VERSION } from './run-database-version.ts';
 export { RUN_DATABASE_READABLE_FROM, RUN_DATABASE_SCHEMA_VERSION } from './run-database-version.ts';
 import { validateChanges, toRunClaim, toRunRow, toRunBindings, writeMetadata, readOnlyTarget } from './run-database-row.ts';
 import { reportRows, REPORTS_MIGRATION, type IndexedArtifact } from './report-rows.ts';
@@ -210,7 +210,7 @@ const MIGRATIONS: readonly string[] = [
   -- No live recompute: isLiveRecord already calls a row with an open wait live, of any kind.
   `,
   REPORTS_MIGRATION,
-  MERGE_WAIT_MIGRATION,
+  MERGE_WAIT_MIGRATION, DESTROYED_WORKTREE_MIGRATION,
 ];
 
 /** What the caller writes for one run. Optional columns may be omitted or null. */

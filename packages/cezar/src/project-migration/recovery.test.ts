@@ -95,7 +95,7 @@ function serve(root: string) {
   const listener = vi.fn().mockRejectedValue(new Error('listener reached'));
   const process = new EventEmitter();
   // The process exit releases boot's claim, as a failed boot's exit does.
-  const done = serveCommand(testHome(), root, 0, false, undefined, false,
+  const done = serveCommand(testHome(), root, 0, false, undefined,
     { ...defaultServeDeps, acquireServeListener: listener, process } as unknown as ServeDeps).finally(() => process.emit('exit'));
   return { listener, done };
 }
