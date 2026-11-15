@@ -357,11 +357,11 @@ The moves that make the cockpit worth the browser tab:
 - 🗂️ **Every project in one cockpit.** One `hsq serve` hosts every repo you
   register; the desktop rail switches between them, and **All tasks** shows every
   project's tasks in one table. See
-  [Multiple projects, one cockpit](#multiple-projects-one-cockpit).
+  [Multiple projects, one cockpit](docs/areas/workspace-registry.md#multiple-projects-one-cockpit).
 - 👥 **Owned workers.** A task's agent can spawn its own tracked workers — on the
   same or another runner — message them, and collect their diffs; you still review
   the result. Each task has an **Allow Squawk workers** switch, on by default. See
-  [Owned workers](#owned-workers).
+  [Owned workers](docs/workers.md#owned-workers).
 - 📱 **Runs on your coding server, drives from your pocket.** The cockpit is a
   responsive web app streaming over SSE, so the box running Squawk can be a
   **VPS, cloud, or dedicated server** you never sit in front of. Point a browser
@@ -377,7 +377,7 @@ Task and project views share one browser window and live updates over Server-Sen
 | View | What's in it |
 |---|---|
 | **Tasks** | Every task with its status, live event stream (agent text · tool calls · tool results · pasted/generated screenshots and file attachments), tokens and cost. Continue, cancel, open in terminal (`claude --resume`), review the diff, or push a draft PR. |
-| **All tasks** | Every *registered project's* tasks in one table, filtered and grouped by tag, project, status or workflow — see [Grouping connected repositories](#grouping-connected-repositories-tags-and-the-all-tasks-page). Appears once a second project is registered. |
+| **All tasks** | Every *registered project's* tasks in one table, filtered and grouped by tag, project, status or workflow — see [Grouping connected repositories](docs/areas/workspace-registry.md#grouping-connected-repositories-tags-and-the-all-tasks-page). Appears once a second project is registered. |
 | **Activity** | What each active task and worker does or waits for right now, and the open requests between tasks as lines. Live without a reload. **All projects** shows one panel per project. |
 | **Git** | In **More**. Branch, working-tree status, diff vs HEAD, recent commits (click one for its inline patch + GitHub link), and the configurable base branch that worktrees fork from and PRs target. |
 | **GitHub** | Open issues and PRs of the repo's origin, read through your logged-in `gh`. Hand an issue straight to the agent — pick a workflow and skills, one click runs it. |
@@ -399,311 +399,11 @@ bypasses the server cache immediately and refreshes the selected thread too.
 
 ## Multiple projects, one cockpit
 
-One `hsq serve` hosts **every repo you work in**, not just the one you started
-it in. Each repo Squawk boots in registers itself in a per-user registry at
-`<config>/config.json` — the workspace file that also holds the global knobs
-(the parallel cap, the memory ceiling, the browse root, and the checkout root). Nothing is added to
-the repo: per-project state stays in that repo's `.ai/squawk/` (or `.ai/cezar/`
-until the project moves).
-
-Every view is project-scoped:
-
-```
-/p/<projectId>/            tasks · activity · git · github · skills · workflows · reports · settings
-```
-
-`<projectId>` is a slug derived from the folder name (`my-app`, then `my-app-2`
-on a collision), and `/p/default/…` always means the project Squawk was started
-in. The desktop rail selects the project. Its sidebar shows the project header,
-view tabs and task list, ordered **Needs you → Finished → Working**.
-Pins stay first within their status section and do not spend the default ten-row
-budget; Finished takes priority over Working when that budget fills up. Each
-section starts expanded and folds independently using its heading (click, Enter
-or Space). Folding is remembered per browser, project and section, separately
-from folding a project. Folded headings keep full task counts and attention
-indicators, including tasks outside the visible row limit. These controls work
-in the mobile drawer too. **Archive all** appears only on Finished and archives
-all eligible unpinned tasks, including hidden rows; individual archive actions
-and Undo remain available. Archived keeps its existing history view.
-The view tabs are Tasks, Activity, GitHub, Skills and Settings. More views holds Git,
-Workflows and Reports, and Automations when enabled. The project menu
-offers Mark all read and project settings; local mode also offers Open in and
-Copy path. Active/Archived remains below the Tasks heading. The new-task
-composer names the project it will run in.
-
-**Adding a project** — the **+** button on the desktop rail (or in the mobile
-navigation drawer):
-
-- ✨ **New project…** creates a git repository with one empty commit in the checkout
-  root and registers it. Optionally — only when you switch it on — it also creates a
-  **private** GitHub repository under your account or one of your organizations, empty or
-  from a GitHub template. If GitHub setup fails after the repository exists, the local
-  project is kept and the dialog shows the command that finishes it. A hosted cockpit
-  creates local projects only.
-- 📂 **Open local folder…** browses from the configured browse root
-  (**Settings → Projects**, default `~/`) in a folder picker and
-  registers the folder you pick.
-- ⬇️ **Clone from GitHub…** clones with your logged-in `gh` into the checkout
-  root (**Settings → Projects**, default `~/cezar/projects`) with live progress,
-  then registers the clone. Close the dialog and the clone is killed and its
-  partial directory removed. For a SAML-protected organization, follow **Authorize
-  this GitHub organization**, authorize in GitHub, then return to retry once (or
-  choose **Retry clone**). Original errors remain available under **Error details**.
-  Clones use HTTPS and save the GitHub CLI credential helper in the new repository
-  so later pushes use the same organization grant, even if `gh` prefers SSH.
-
-Removing a project (**Settings → Projects**) drops the registry entry only — the
-repo and its `.ai/cezar/` are never touched, so re-adding it later finds all its
-tasks intact. The project Squawk is currently serving can't be removed: it
-re-registers itself at the next start.
-
-**From the terminal** — the same registry, no cockpit required (handy over ssh):
-
-```bash
-hsq backup list [<file>]           # list rotating config.json / agent-accounts.json backups
-hsq backup restore <file> [--at <time>] # restore JSON only; account folders are unchanged
-hsq projects                      # list: id, branch or status, path, tags
-hsq projects add ~/code/api       # register a folder (defaults to the current repo)
-hsq projects remove api           # drop the registry entry; the repo is untouched
-hsq projects tag api storefront backend     # set the grouping tags (no tags clears them)
-```
-
-These read and write `<config>/config.json` directly, so they work with the
-server stopped, and `HSQ_HOME` (`CEZ_HOME` fallback) selects which workspace they operate on.
-
-Settings split along the same line: **General** (the project's folder, its
-registry facts, its parallel-task ceiling, and Remove), **Agents**, **Agent config**,
-**Worktrees**, **Sidebar** and **Prompt templates** describe one
-repo and live under `/p/<projectId>/settings`; **Appearance**,
-**Notifications**, **Resources**, **Skills**, **Agent accounts** and **Projects**
-are yours or the machine's and live at `/settings/global`.
-
-**Settings → Sidebar** controls this project's task rows on desktop and mobile.
-Set **Overall**, **Needs You**, **Finished**, and **Working** to a positive whole
-number or **Unlimited**. Defaults are 10 overall and Unlimited for each section.
-The overall budget is allocated in section order (Needs You, Finished, Working),
-and each section must also fit its own limit. Unlimited removes only its selected
-constraint. Pinned rows and groups containing pins bypass both budgets; a grouped
-task counts as one row. Archived uses only the overall limit, with no pin exemption.
-Save applies the preferences to this project and keeps them after a reload.
-Refreshed preferences update an untouched form; unsaved edits stay in place.
-Malformed stored sidebar limits fall back field by field to these defaults,
-while valid limits and unrelated preferences are preserved.
-
-On desktop, Settings replaces the sidebar task list with two groups: **This project**
-and **Global · every project**. Each group includes General and its available sections;
-the current section is highlighted, and the main page shows its content. On mobile,
-the section picker and General page's section cards provide navigation.
-
-The GitHub sidebar groups **Issues** (Assigned to me, No task yet, Has a task,
-All open) and **Pull requests** (Review requested, Mine, Checks failing, All open).
-Selecting a filter updates the URL, so reloading keeps that selection. The issue
-list, detail pane and Hand to agent action stay in the main area. On mobile, the
-GitHub tab opens the filter screen; selecting a row opens its list.
-
-Has a task and No task yet use issue references from this project's non-archived
-tasks, excluding references to other repositories. The list loads 50 rows at a time
-and loads the next page as you scroll toward its end. The tabs and All open show
-GitHub's exact open totals. A preset count shows a `+` while more pages remain
-unloaded, and a search count shows one when the search reaches its result limit;
-an unavailable count is not shown as zero. Filtering by search, label, assignee or
-board narrows the loaded rows; while it is on, the next page loads only when you press
-Load more.
-
-The `body` field on `GET /api/v1/github` list rows is deprecated. It is still sent,
-and a later minor removes it; read an item's body from the comments route's `detail`. Views without their own navigation still show tasks in the sidebar.
-
-Open an issue to see **Linked tasks (N)** beneath its heading. Each row opens a task
-in the current project and shows its title, status and date, newest first. Archived
-tasks remain listed with an **Archived** label, so diagnosis and implementation
-sessions are both reachable.
-
-The Git sidebar lists **Task worktrees** that still exist on disk, including retained
-worktrees from finished tasks. Each row shows its branch, task title, status and
-available diff counts, and opens that task's Changes tab. Reclaimed worktrees disappear
-from the list. Changes, Commits and Branches remain tabs in the main repository header.
-On mobile, Git sits in the More sheet and opens the worktree list; **Open repository** opens the repository
-view, and **Back to worktrees** returns to the list.
-
-### Grouping connected repositories: tags and the All tasks page
-
-Work rarely stops at a repo boundary. A storefront is an API, a web app and a
-design system; a platform is a handful of services plus the infra that runs
-them. **Tags** are how you say so, and **All tasks** is where saying so pays off.
-
-**Tag a repo** in **Settings → Projects**: type into the *Tags* cell on its row
-and press Enter (comma works too; the × on a chip, or Backspace in an empty
-field, removes one). The field **autocompletes from the tags already used in the
-workspace** — click the field to see them all, arrow keys and Enter to pick —
-which is what keeps the second repo landing on the first one's spelling instead
-of inventing `store-front` next to `storefront`. Anything not on the list is
-just typed. A tag is a free-form label — `storefront`, `infra`, `client-acme` —
-and a project can carry several, because a repo can belong to more than one
-piece of work. Tags are trimmed, deduplicated case-insensitively (`API` and
-`api` are one tag) and stored in `<config>/config.json` beside the rest of the
-registry, so they are yours and this machine's, never something added to the
-repo.
-
-**All tasks** — the layers icon on the desktop rail, `/tasks`, or `⌘K → All tasks` —
-then shows every registered project's work in one table:
-
-- **Filter** by tag, status and workflow. Tags are one-click chips; status and
-  workflow are searchable multi-selects. Every facet ORs inside itself and ANDs
-  across, so *"anything running or waiting in storefront or infra"* is one set
-  of clicks. Each option carries how many tasks it would leave, so a filter that
-  would empty the table says so before you click it. The search box matches
-  title, project, workflow, branch and tags.
-- **Group by** tag, project, status or workflow — click the pressed one again to
-  ungroup. Grouping by tag is the reason tags exist: three repos tagged
-  `storefront` become one section, and a repo tagged twice appears under both —
-  it genuinely belongs to both.
-
-The filters, the grouping and the Active/Archived tab live in the **URL**, so a
-filtered view survives a refresh, pastes into a chat, and sits in a bookmark —
-`/tasks?tag=storefront&status=running&group=tag` is a link to exactly what you
-were looking at. Only what you changed shows up: Active is the default, so the
-Archived view is `?archived=1` and a normal link carries no key for it.
-
-Each row shows **every** PR and issue it references — a task opened on an issue
-that landed a PR shows both — plus its cost and live CPU/memory, and can be
-marked **read/unread** (the eye) or **archived** (or restored) right there. Every task title, project name and project group heading links into that
-project, so the thread, its diff and its worktree are one click away and stay
-exactly where they were. Returning to a long thread restores its saved row measurements
-once the replay has rebuilt the same ordered messages, keeping the same content in view.
-Scrolling, jumping to the latest message, or loading different history takes ownership
-from that restoration; a thread left at its live tail follows the current tail.
-
-There is deliberately **no project filter**: narrowing this page to one project
-is that project's own Tasks page, which is a better version of the same answer
-(live updates, the full column set, the composer). So picking a project *leaves*
-for it rather than turning the global view into a worse local one.
-
-Nothing else in Squawk reads tags, on purpose: a tag is a lens, not a permission,
-a queue or a routing rule. Removing one changes what you see and nothing else.
-
-> The page reads a workspace-wide index capped at the newest 200 tasks per
-> project — it says so, and names the projects it capped, rather than showing a
-> short list as if it were complete. Older tasks are always in that project's own
-> Tasks page.
-
-**Old page URLs keep working.** Every unprefixed page path — `/`, `/tasks/<id>`,
-`/settings` — still answers, bound to the project Squawk was started in; the
-cockpit redirects flat paths to their `/p/<boot>/…` twin, so existing bookmarks
-need no change. The HTTP API is the exception: it moved to
-`/api/v1/…` (see the CHANGELOG), so a script that calls it needs the extra
-segment.
-
-> **Hosted cockpit?** The folder picker is confined to the independent browse
-> root. Set `HSQ_BROWSE_ROOT` (`CEZ_BROWSE_ROOT` fallback) narrowly before first boot (or save it in
-> **Settings → Projects**) when a remote viewer should not enumerate the host's
-> whole home. Clones continue to use the separate checkout root.
-
----
+See [Multiple projects, one cockpit](docs/areas/workspace-registry.md).
 
 ## Waiting for PR checks, merges and timers
 
-An agent waits on something outside its turn with `cezar_wait`. With `kind: "pr"` and
-a GitHub PR URL in `pr`, Squawk watches the PR outside the model: its checks
-(`until: "checks"`, the default), its eventual merge (`until: "merge"`), or a merge
-the agent has requested (`until: "merge_or_blocked"`). The last target wakes when
-the PR merges, closes, conflicts, or is neither queued nor scheduled for auto-merge.
-It includes any known queue-removal or auto-merge-disable reason. A pending queue
-slot or enabled auto-merge keeps it open. The ordinary merge target ignores queue
-removal; use `wake_on_conflict: false` for a dependency wait that also ignores
-conflicts. Only `merged` confirms success. The optional
-`timeout_seconds` defaults to 1,800 and accepts 1–7,200. With `kind: "timer"`,
-`seconds` (60–7,200) and an optional `note`, Squawk wakes the agent at that time and
-hands the note back. No authored configuration or worker delegation permission is
-needed. A PR wait requires `gh`, access to the repository, and a supported GitHub
-host; GitHub Enterprise hosts must already be recognized by the forge/auth
-configuration. Tool startup itself makes no GitHub request. With **Monitoring
-wake-up** turned off in **Settings → Resources**, `cezar_wait` refuses a timer
-(`timers_disabled`); once the automatic-wake budget of 40 is spent, it refuses one
-with `wake_budget_spent`, and a run with nothing else to wait on waits for you. The
-budget is kept on the task, so a cockpit restart keeps it; a message from you or a
-Continue starts it again.
-
-A CI wait stays pending while any GitHub Actions workflow run on its captured
-head commit is incomplete, even when a rerun temporarily hides that run's checks.
-It checks again every 30 seconds within the original deadline. Once those runs
-complete, it reads the checks again to decide the result. A result describes what
-GitHub reported; it does not predict workflows that have not appeared yet or grant
-merge approval.
-
-A merge wait (`until: "merge"`, hearsay-tools/cezarion#1425) reads the PR's state at
-once and then every 30 seconds within its deadline. It ends as `merged` only when
-GitHub reports the PR merged, with the merge time and merge commit when GitHub gives
-them, and as `closed` when the PR closed without merge. Green checks keep it open,
-and so does a new head commit. A merge wait holds none of the four watcher slots, so
-long merge waits never delay a checks wait. By default both targets also end as
-`conflicting` when the PR has merge conflicts. Set `wake_on_conflict: false` when the
-agent watches a PR it does not own, such as another agent's PR its work depends on:
-it cannot resolve those conflicts. With `until: "checks"`, GitHub often runs no
-workflows on a conflicting PR, so such a wait usually ends as `no_checks` or at its
-deadline. A checks wait and a merge wait on the same PR are two waits.
-
-The agent asks you with `cezar_ask`, a card of one to four questions in the ask
-format. A question with two to four options shows them as choices; a question without
-options is open, and the card shows a text box for your answer. The task reads Needs
-you once the turn ends, and your next message answers it. `cezar_wait` takes PR, worker, request,
-peer, process and timer waits only, and points an agent that asks it for a human wait to `cezar_ask`. A run
-has one question to you at a time, and the agent cannot cancel it once you have seen
-it. A native question opens the same kind of wait. When the work is
-done and verified, the agent calls `cezar_done` (an optional `summary`), and the task
-finishes at the end of that turn: its open waits are cancelled and the summary is
-written as a note. In a workflow step that is not the last, `cezar_done` finishes that step
-and Squawk starts the next one. `cezar_done` refuses while owned workers are live or uncollected,
-a worker question is unanswered or a question to you is still pending, and says what to do first. An
-autonomous task does not wait for you until its automatic-wake budget is spent.
-
-A run can have several waits open at once, up to 16. Each answer carries the
-wait's id, its absolute deadline and the list of waits still open, and
-`cezar_cancel_wait` closes one by its id. The agent ends its turn to wait, with no
-marker required. The run is then `waiting`, and the pill reads **waiting for CI**,
-**waiting for merge** or **monitoring** rather than Needs you. The header lists every open wait: **Waiting
-for CI — owner/repo#N** or **Waiting for merge — owner/repo#N** with a PR link and the deadline, or **Next automatic check**
-with its time and note. **CI result ready — waiting for capacity** means the
-observation is owed to the agent and its wake turn has not started yet. A run parked
-on CI or a timer keeps its agent slot, a monitoring slot when one is free, so the
-wake usually starts at once. Claude's `ScheduleWakeup` opens a timer in the same list.
-
-Every agent session needs these tools. Squawk starts a private local socket for them,
-in the system temporary directory, when the first session of a cockpit launches. If it
-cannot start, for example because that directory is full or not writable, the task fails
-before the agent starts. The error names the cause and the fix: free space or fix the
-permissions, then Continue the task. A task woken by a wait retries with the usual backoff.
-The cockpit and other tasks keep working, and the next launch tries again.
-
-Squawk reports passed, failed, cancelled or skipped checks, no checks, changed head,
-timeout or an operational error. It watches the registered commit: a new PR head
-is reported separately, and the agent decides whether to wait again. The first
-observation runs immediately. Later check-status and PR-head polls run every 30
-seconds, and no setting changes that interval. Four watchers run concurrently;
-queued waits retain their original deadline. Results are bounded
-observations, not merge approval or evidence that every expected workflow appeared.
-The agent still decides its next action; CI success never completes the task or
-accepts review. A wait ends only when its own result arrives, its deadline passes,
-or someone cancels it: the agent with `cezar_cancel_wait`, or Squawk when the task
-is stopped, finished, cancelled or deleted. A human message wakes the agent without
-closing any wait, and every delivered turn ends with a list of the waits still open.
-CI never answers a pending human question. If the agent's session fails or closes while a
-result is owed, Squawk retries the delivery after 15 and then 30 seconds; a third
-failure marks the task failed and keeps the result. Continue delivers it, and Stop
-discards it and leaves the task failed.
-Controller recovery can replay an
-observation after an ambiguous delivery checkpoint, identified by its stable
-lifecycle input ID.
-
-The deprecated `cezar_wait_for_ci` tool was removed (hearsay-tools/cezarion#1236):
-call `cezar_wait` with `kind: "pr"` instead. `kind: "ci"` itself was replaced by
-`kind: "pr"` (hearsay-tools/cezarion#1425) and is refused with a message that names
-the new spelling.
-
-The adapters are bundled for Claude (including `claude-cli`), Codex, OpenCode,
-Cursor, Pi and OMP. Internal socket/capability environment values are runtime wiring,
-not settings to create or share. If the tool is unavailable or denied, its error
-is surfaced while ordinary tasks continue. See [the CI-wait protocol](AGENT_PROTOCOL.md#ci-wait-tool-contract-474)
-for the owners of the limits and the harness evidence required before a runner ships.
+See [Waiting for PR checks, merges and timers](docs/waits.md).
 
 ## Discover runners and models
 
@@ -723,75 +423,7 @@ The catalog describes host default accounts, not every named account or the sele
 
 ## Owned workers
 
-Every task has two settings, both on by default:
-
-- **Allow Squawk workers**: the task's agent may start Squawk workers and resume them. Each worker is a separate paid agent session. The worker limits below cap resources, not spending.
-- **Allow task messaging**: the task's agent may list, message and wait on other tasks in this project with `hsq message`.
-
-Set them in the new-task form, in the task's header menu at any time, with `hsq task start` or `hsq run` and `--no-workers` / `--no-messaging`, or in an automation's `task.allowWorkers` / `task.allowMessaging`. A task created before these settings existed counts as on for both. The cockpit and headless `hsq run` start one private loopback listener; each eligible session receives the absolute bundled Node/CLI invocation and its own environment credentials. No `hsq` installation on the agent's PATH, config file, separate daemon, or remembered port is needed. If the listener cannot start, ordinary tasks keep working without delegation tools.
-
-Turning **Allow Squawk workers** off refuses new `spawn` and `--resume` at once, including through a session's existing credential and for a spawn still waiting to be accepted. The task keeps messaging, waiting on, inspecting, collecting, stopping and destroying the workers it already has, and work already accepted finishes. Turning **Allow task messaging** off refuses peer discovery, new peer waits and new peer messages in both directions; a reply to a request accepted earlier still lands, and messages between a task and its own workers are never blocked. A root task with both off, no worker receipt and no open peer request gets no credential; worker sessions, and roots with a worker receipt (also a deleted worker's, so its retained result stays collectable) or an open peer request, keep theirs. Native subagents inside one session are not Squawk workers, and these settings do not change them. These settings are cooperative supervision, not process isolation.
-
-`CEZ_DELEGATION` is retired and has no effect. A caller that set `CEZ_DELEGATION=1` needs no change. A caller that relied on it being unset turns the settings off per task, for example `hsq run --no-workers --no-messaging "<task>"`.
-
-The provisioned command has these forms (the session instructions supply the absolute invocation):
-
-```sh
-hsq worker spawn --baseline parent-head --request-id <UUID> 'Implement the assigned change'
-hsq worker spawn --baseline parent-head --request-id <UUID> --runner codex --effort high --context-file ./selected-context.txt 'Review the parser'
-hsq worker spawn --baseline parent-head --request-id <UUID> --workflow review 'Review the parser change'
-hsq worker list                         # All own workers, revisions and cleanup resources (fetches pages automatically)
-hsq worker inspect <worker-id>
-hsq worker steer <worker-id> 'Consider this additional constraint'
-hsq worker diff <worker-id>
-hsq worker collect <worker-id>
-hsq worker wait <worker-id> --mode one --timeout-seconds 600
-hsq worker wait <first-id> <second-id> --mode any --timeout-seconds 600
-hsq worker wait <first-id> <second-id> --mode all --timeout-seconds 600
-hsq worker cancel-wait <wait-id>
-hsq message request <recipient-run-id> 'Please check this decision' --id <message-UUID>
-hsq worker resume <worker-id> 'Correct the returned result' --id <new-message-UUID>
-hsq message progress <recipient-run-id> 'Parser tests pass' --id <message-UUID>
-hsq message follow-up <recipient-run-id> 'Include empty input' --id <message-UUID> --request-id <request-UUID>
-hsq message reply <recipient-run-id> 'Checked; empty input is covered' --id <message-UUID> --request-id <request-UUID>
-hsq message conversation <recipient-run-id>
-hsq message wait --request <request-UUID> --request <another-request-UUID> --mode all
-hsq message wait --peer <task-id> --timeout-seconds 1800   # Wake on that peer task's next message, or when it settles
-hsq message inbox
-hsq message tasks --all
-hsq message cancel-wait <wait-id>
-hsq message cancel-request <request-UUID>
-hsq worker stop <worker-id>
-hsq worker destroy <worker-id>
-```
-
-Use `hsq message --help` for messaging commands. Use `hsq worker --help` to list worker operations and flags, or `hsq worker <operation> --help` for one operation. Explicit help prints human-readable text and exits successfully without an active delegation session. Commands otherwise return bounded JSON and a nonzero exit on failure or incomplete cleanup. Spawn requires a committed baseline (`parent-head` or an explicit ref) and pins its SHA at acceptance; dirty parent edits are excluded. Optional `--context '<text>'` or `--context-file <UTF-8-file>` supplies selected context, not the parent's conversation. The two flags are mutually exclusive, and combined task/context text is limited to 100,000 characters. The API also accepts up to 32 pinned-baseline file or parent-attachment references, with at most 8 MiB of copied attachments. Inspect reports worker-local input locations. Reuse a request ID only with the same task, baseline, context, runner, model, effort and workflow when retrying a lost response. `--runner` and its alias `--backend` count as the same field, so a retry may switch spelling. A parent holds at most 32 outstanding workers: accepted, live, or not yet verifiably destroyed. A verified destroy (`hsq worker destroy`, or **Clean up** on a finished worker in the cockpit's Workers list) frees a slot; incomplete cleanup keeps its slot until a retry completes. A parent can create at most 1,024 workers in total; past that, start a new task. These limits bound disk resources and runaway spawning, not spending: a worker can be resumed with Continue, and destroying it does not undo charges already made. Cost stays bounded by `maxParallel` and by stopping the parent. There are at most 32 undelivered steering messages per worker.
-
-An incomplete destroy reports the remaining resources and a reason. Squawk retries that recorded request after a delay, including after the project's context recovers on server restart. It removes the owned checkout only after process termination and ownership are verified. If the reason persists, inspect the worker process, Git worktree lock and ownership receipt; correct the blocker and use `hsq worker destroy <worker-id>` or the cockpit Destroy action to retry immediately. Squawk leaves ambiguous or replaced resources in place for operator review.
-
-`--workflow <name>` runs a catalog workflow inside the worker: the built-in `quick-task` or any `.ai/cezar/workflows/*.yaml` by name, with its agent and check steps, `skill:` bodies and `onFail` loops, so a repo's `review.yaml` becomes a dedicated reviewer. Omitted `--workflow` runs `quick-task` exactly as before. `--runner`, `--model` and `--effort` fill only the steps that leave those fields unset; a step's own `allowedTools`/`bashAllowlist` narrow the parent's grants and never widen them. An unknown name is refused. Agent steps may mix runners: at spawn every agent step is resolved and pinned separately, so an implement-with-codex, review-with-claude chain runs each step under its own runner, account, model, effort and grants. A step's optional `agentProfile` names the account it runs under (an id the registry does not know is refused); same-runner steps otherwise inherit the parent's account and other runners resolve their project/default one. Run-level columns show the first agent step.
-
-Explicit default-account model pins are checked against a fresh, nonempty host catalog after account/model resolution and before a worker is created. Named accounts retain existing validation because a default-account catalog cannot disprove their model access. A miss returns `invalid_input`, available models with advertised efforts, and other runners listing the requested ID in `modelChoices`. Empty, stale, or unavailable discovery leaves existing selection validation in place. Accepted retries and omitted model defaults are unchanged.
-
-Omitted `--runner` inherits the parent's active runner. Same-runner workers inherit omitted model/account/effort; `--runner <claude|codex|opencode|pi|cursor|omp>` selecting another runner resolves that runner's project/default account and model without forwarding another provider's settings. `--backend` is a permanent alias of `--runner`; giving both with different values is refused as `invalid_input`. Worker `inspect` and `collect` still report the selected runner in a field named `backend`. `--model <model>` selects a supported model, subject to existing locks. `--effort <low|medium|high|xhigh|max>` pins reasoning effort on same-runner and mixed-runner spawn; omitted `--effort` still inherits the parent pin on same-runner spawn and drops it on mixed-runner spawn. Accepted identity and grants remain fixed across queuing, restart and Continue, including explicit empty grants. Changing or deleting an account registry entry does not rebind a worker. Missing accepted identity evidence or account homes, incompatible Claude state-file layouts, and conflicting later model locks refuse execution explicitly. Credentials and vendor configuration are never copied; each worker receives its own delegation credential, and unspecified native models stay unspecified.
-
-Wait registers immediately. End the parent turn to release scheduler capacity; Squawk resumes it on a selected settled outcome or the finite deadline. `any` is the default, `one` requires exactly one worker, and `all` waits for every selected worker. Review, completion, failure, cancellation with proven termination, and destruction are outcomes. Timeout defaults to 600 seconds (1–7200 accepted). `cancel-wait` is idempotent for the retained wait ID and cannot cancel a newer wait. Empty dependency-deadline wakes do not spend the automatic-wake budget; explicit timers and native-subagent safety deadlines remain charged. Timeout and wait cancellation report partial outcomes and unresolved workers, never cancel workers, and never automatically re-wait. Steering is attributed agent input and cannot answer a pending human question.
-
-Parents and owned workers can converse in both directions; a worker may address only its parent. `send --kind request` opens a reply obligation whose ID is the message ID; `send --kind progress` (or `progress`) does not. Follow-ups clarify an existing request; only an explicit correlated `reply` settles it as replied. Retry a message with the same ID and exact payload, including deadline duration; changed payloads are rejected. Acceptance, provider delivery, reply, and task completion are separate facts, visible in the task transcript and `conversation` JSON.
-
-Messages allow 100,000 characters each, with at most 32 undelivered inputs per recipient, 1,024 messages per family, and 32 pending requests. Request deadlines default to 600 seconds, configurable per message with `--timeout-seconds 1–7200`. Request waits use the same limits and `one`/`any`/`all` modes as worker waits, and each run has one active wait. Incoming conversation can interrupt a parked wait without settling its requests. `cancel-request` cancels an obligation; `cancel-wait` only stops waiting. Completion without a reply, failure, cancellation, destruction, timeout, or sender closure settle obligations distinctly. Late replies remain visible without reopening them.
-
-Messages reach a live recipient as soon as they are accepted, including mid-turn: Claude, Codex, Pi, OMP and OpenCode steer them into the running turn, and the model reads them at its next step. Cursor delivers at the turn boundary, because a second prompt would cancel its running turn. Pending conversations go together, in order, up to 32 messages and 100,000 formatted characters per batch; a single valid message is never split. Every message keeps its ID, sender, delivery receipt and request outcome; receipts show queued, delivered and read (when the agent's harness can tell) separately. A pending human question holds messages until it is answered, then they follow right behind the answer. The thread's Details distinguish creation, delivery confirmation and event-recording times.
-
-Sending a message to a review or terminal participant reports `not-delivered` and `continuation-required`, with the reason and next command; the CLI exits 1. An active parent can use `hsq worker resume` to continue its settled done/review/failed worker with that message as the new instruction. No human Continue is needed for this parent-controlled action. A retry with the same payload and ID never creates another continuation; resuming after a rejected message requires a new ID. Stopped or destroyed workers need a new worker. Workers cannot resume parents, and conversation never answers a pending human question. Durable IDs deduplicate accepted queue entries and event replay, but a crash between provider acceptance and its durable delivery checkpoint can leave transport delivery ambiguous; this is not an exactly-once execution guarantee.
-
-Collect returns the worker's execution revision, status/outcome, `settled` and `partial` flags, and typed availability for assistant summary, HEAD, bounded diff and artifact descriptors. Missing evidence is explicit; running output is partial. An available `diff.path` points to a **JSON result file** containing `{ result, diffSnapshot }`; its `diffSnapshot` field holds the patch. Read and review that field before applying any changes. The latest collected result is stored under the parent and survives restart. Collection acknowledges observation, not Git integration or successful work. Review desired worker commits and deliberately integrate them into the parent before destroying their worktrees/branches; there is no automatic merge.
-
-Parent completion requires collection of every worker's latest settled execution revision. A worker Continue invalidates older readiness. An early completion attempt waits for outstanding workers and wakes the parent to inspect/collect; it does not silently finish on wake. While workers remain live, markerless replies, completion timeouts, and repeated premature completion park the parent as monitoring with the existing capped wakeups. Once workers settle, repeated completion without collecting their results retains attention. Human Finish also refuses unresolved/uncollected workers. If the parent is already under review, Continue the parent first, then Continue its worker. Human questions remain authoritative.
-
-Stop requests cancellation; `stopping` does not prove termination. Destroy checkpoints obtainable results, waits up to 30 seconds for proven termination, and removes only verified owned resources. An `incomplete` response lists remaining resources; resolve the cause and retry explicitly. Cleanup order is: collect/integrate desired results, destroy owned resources, explicitly delete child histories through the cockpit/API, then delete parent history. Parent-owned summaries and bounded diff snapshots remain until parent deletion, including after child-history deletion; general artifact bytes are not archived. Branch/path strings and SHAs become historical descriptors after removal, not promises of available Git objects or files. The human cleanup endpoint `POST /api/v1/p/<projectId>/runs/<worker-id>/worker-destroy` stays available when delegation is disabled. The CLI bounds each HTTP request to 45 seconds and rejects endpoint/auth/origin overrides and redirects.
-
-Provisioned root tasks and workers may use native subagents, and each mechanism has its own purpose. Use native subagents for work that needs no separate worktree: research, code reading and focused analysis, for example a subagent that reads the parser and summarizes its error handling. Native subagents need no worker creation, worktree, collection or destruction. Use Squawk workers for work that needs its own worktree, its own commits or a tracked lifecycle. Workers may use native subagents too, but cannot spawn Squawk workers. An agent may message its own subagents with its runner's tools; it reaches another Squawk task only through `hsq message`. Where a runner's native tool for reaching another session is separate from subagent messaging, a per-run adapter control turns it off: Codex's cross-thread message board, and an OpenCode plugin that refuses a `task` call whose `task_id` names a session outside the caller's own session tree. Claude sessions refuse messages from other sessions on every launch. Known limitations: a Claude session Squawk starts can still list and message Claude sessions that Squawk did not start, and sessions on other machines; an OpenCode session that an older Squawk created under delegation keeps its `task` deny on Continue and restart recovery, because OpenCode cannot remove a session permission rule (new OpenCode sessions allow subagents). These controls are cooperative same-user supervision, not isolation ([Governed delegation controls](AGENT_PROTOCOL.md#governed-delegation-controls-d1)). When the listener is unavailable, ordinary tools/settings stay unchanged. The listener binds to `127.0.0.1`, including hosted cockpit mode. Its session credentials authorize only what that session may do: a root manages its own workers and messages peer roots in the same project, subject to the task's settings and relationship checks; a worker addresses only its parent. This is cooperative local-agent supervision; same-user unrestricted shell and custom tools are not hard isolation. Workers cannot spawn Squawk workers or message peers through Squawk. Review remains a human gate with no automatic acceptance. Never read, echo, forward, or persist the generated token.
+See [Owned workers](docs/workers.md).
 
 ## From the terminal: `hsq task` and `hsq message`
 
@@ -813,7 +445,7 @@ An explicit `--url` wins over `HSQ_URL` (`CEZ_URL` fallback); `--repo` selects t
 
 `hsq task send` is human input. It can answer a pending human question. It refuses
 inside a task (`HSQ_TASK_ID` (`CEZ_TASK_ID` fallback) is set). Agents use `hsq message` for task messages,
-including peer and parent/worker conversations; see [Owned workers](#owned-workers).
+including peer and parent/worker conversations; see [Owned workers](docs/workers.md#owned-workers).
 
 ```bash
 id=$(hsq task start --task-file - <<'EOF' | jq -r .id
@@ -1125,7 +757,7 @@ Useful environment variables:
 | Var | Effect |
 |---|---|
 | `HSQ_*` settings (`CEZ_*` fallback) | Ordinary settings prefer a defined HSQ value, including empty. Home, hosted-mode REMOTE and native shell controls use the separate rules below. Both home locators and inherited controller authority are removed from child environments, even in full-env mode. |
-| `CEZ_DELEGATION` | Retired (hearsay-tools/cezarion#2784); has no effect. Workers and task messaging are per-task settings, both on by default. See [Owned workers](#owned-workers). |
+| `CEZ_DELEGATION` | Retired (hearsay-tools/cezarion#2784); has no effect. Workers and task messaging are per-task settings, both on by default. See [Owned workers](docs/workers.md#owned-workers). |
 | `HSQ_DELEGATION_URL`, `CEZ_DELEGATION_URL`, `HSQ_DELEGATION_TOKEN`, `CEZ_DELEGATION_TOKEN` | Internal generated session values; do not configure or copy them. Tokens rotate on Continue/restart and are revoked when the session/controller closes. |
 | `HSQ_REMOTE`, `CEZ_REMOTE` | Hosted mode: exact `1` under either name disables local handoff and local settings administration. Empty or `0` cannot cancel the other name's hosted-mode pin. Server installers pin both names. |
 | `HSQ_API_PORT`, `CEZ_API_PORT` | Local service port used by the development web proxy; defaults to 4321. |
@@ -1337,7 +969,7 @@ steps:
 ```
 
 Owned workers can compare approaches in separate worktrees. Each worker has its own
-runner and model selection; see [Owned workers](#owned-workers).
+runner and model selection; see [Owned workers](docs/workers.md#owned-workers).
 
 **Models come from your own machine.** For Claude, Codex, OpenCode, and Pi, the model picker
 is not a list Squawk ships — it asks the installed CLI what it can actually run
@@ -1506,7 +1138,7 @@ automatically; your workflows and skills stay committable. See [run history reco
 Settings that belong to *you* rather than to a repo — the parallel cap
 (`maxParallel`, default **2**), the per-task memory ceiling and the checkout
 root — live once in `<config>/config.json`, alongside the
-[project registry](#multiple-projects-one-cockpit), and are edited from
+[project registry](docs/areas/workspace-registry.md#multiple-projects-one-cockpit), and are edited from
 **Settings → Resources** and **Settings → Projects**. A `maxParallel` left over
 in a repo's `.ai/cezar/config.json` is imported into the workspace file the
 first time Squawk boots there, and ignored afterwards.

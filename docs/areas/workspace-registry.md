@@ -372,3 +372,206 @@ Legacy grant rows remain read-only in every cockpit. The host operator resolves
 them with `hsq backup import remote-settings/<id>.json` or `hsq backup ignore
 remote-settings/<id>.json`. The banner shows Import only for an importable source
 and always names Ignore. These CLI actions use the same recovery writer.
+
+## Multiple projects, one cockpit
+
+One `hsq serve` hosts **every repo you work in**, not just the one you started
+it in. Each repo Squawk boots in registers itself in a per-user registry at
+`<config>/config.json` — the workspace file that also holds the global knobs
+(the parallel cap, the memory ceiling, the browse root, and the checkout root). Nothing is added to
+the repo: per-project state stays in that repo's `.ai/squawk/` (or `.ai/cezar/`
+until the project moves).
+
+Every view is project-scoped:
+
+```
+/p/<projectId>/            tasks · activity · git · github · skills · workflows · reports · settings
+```
+
+`<projectId>` is a slug derived from the folder name (`my-app`, then `my-app-2`
+on a collision), and `/p/default/…` always means the project Squawk was started
+in. The desktop rail selects the project. Its sidebar shows the project header,
+view tabs and task list, ordered **Needs you → Finished → Working**.
+Pins stay first within their status section and do not spend the default ten-row
+budget; Finished takes priority over Working when that budget fills up. Each
+section starts expanded and folds independently using its heading (click, Enter
+or Space). Folding is remembered per browser, project and section, separately
+from folding a project. Folded headings keep full task counts and attention
+indicators, including tasks outside the visible row limit. These controls work
+in the mobile drawer too. **Archive all** appears only on Finished and archives
+all eligible unpinned tasks, including hidden rows; individual archive actions
+and Undo remain available. Archived keeps its existing history view.
+The view tabs are Tasks, Activity, GitHub, Skills and Settings. More views holds Git,
+Workflows and Reports, and Automations when enabled. The project menu
+offers Mark all read and project settings; local mode also offers Open in and
+Copy path. Active/Archived remains below the Tasks heading. The new-task
+composer names the project it will run in.
+
+**Adding a project** — the **+** button on the desktop rail (or in the mobile
+navigation drawer):
+
+- ✨ **New project…** creates a git repository with one empty commit in the checkout
+  root and registers it. Optionally — only when you switch it on — it also creates a
+  **private** GitHub repository under your account or one of your organizations, empty or
+  from a GitHub template. If GitHub setup fails after the repository exists, the local
+  project is kept and the dialog shows the command that finishes it. A hosted cockpit
+  creates local projects only.
+- 📂 **Open local folder…** browses from the configured browse root
+  (**Settings → Projects**, default `~/`) in a folder picker and
+  registers the folder you pick.
+- ⬇️ **Clone from GitHub…** clones with your logged-in `gh` into the checkout
+  root (**Settings → Projects**, default `~/cezar/projects`) with live progress,
+  then registers the clone. Close the dialog and the clone is killed and its
+  partial directory removed. For a SAML-protected organization, follow **Authorize
+  this GitHub organization**, authorize in GitHub, then return to retry once (or
+  choose **Retry clone**). Original errors remain available under **Error details**.
+  Clones use HTTPS and save the GitHub CLI credential helper in the new repository
+  so later pushes use the same organization grant, even if `gh` prefers SSH.
+
+Removing a project (**Settings → Projects**) drops the registry entry only — the
+repo and its `.ai/cezar/` are never touched, so re-adding it later finds all its
+tasks intact. The project Squawk is currently serving can't be removed: it
+re-registers itself at the next start.
+
+**From the terminal** — the same registry, no cockpit required (handy over ssh):
+
+```bash
+hsq backup list [<file>]           # list rotating config.json / agent-accounts.json backups
+hsq backup restore <file> [--at <time>] # restore JSON only; account folders are unchanged
+hsq projects                      # list: id, branch or status, path, tags
+hsq projects add ~/code/api       # register a folder (defaults to the current repo)
+hsq projects remove api           # drop the registry entry; the repo is untouched
+hsq projects tag api storefront backend     # set the grouping tags (no tags clears them)
+```
+
+These read and write `<config>/config.json` directly, so they work with the
+server stopped, and `HSQ_HOME` (`CEZ_HOME` fallback) selects which workspace they operate on.
+
+Settings split along the same line: **General** (the project's folder, its
+registry facts, its parallel-task ceiling, and Remove), **Agents**, **Agent config**,
+**Worktrees**, **Sidebar** and **Prompt templates** describe one
+repo and live under `/p/<projectId>/settings`; **Appearance**,
+**Notifications**, **Resources**, **Skills**, **Agent accounts** and **Projects**
+are yours or the machine's and live at `/settings/global`.
+
+**Settings → Sidebar** controls this project's task rows on desktop and mobile.
+Set **Overall**, **Needs You**, **Finished**, and **Working** to a positive whole
+number or **Unlimited**. Defaults are 10 overall and Unlimited for each section.
+The overall budget is allocated in section order (Needs You, Finished, Working),
+and each section must also fit its own limit. Unlimited removes only its selected
+constraint. Pinned rows and groups containing pins bypass both budgets; a grouped
+task counts as one row. Archived uses only the overall limit, with no pin exemption.
+Save applies the preferences to this project and keeps them after a reload.
+Refreshed preferences update an untouched form; unsaved edits stay in place.
+Malformed stored sidebar limits fall back field by field to these defaults,
+while valid limits and unrelated preferences are preserved.
+
+On desktop, Settings replaces the sidebar task list with two groups: **This project**
+and **Global · every project**. Each group includes General and its available sections;
+the current section is highlighted, and the main page shows its content. On mobile,
+the section picker and General page's section cards provide navigation.
+
+The GitHub sidebar groups **Issues** (Assigned to me, No task yet, Has a task,
+All open) and **Pull requests** (Review requested, Mine, Checks failing, All open).
+Selecting a filter updates the URL, so reloading keeps that selection. The issue
+list, detail pane and Hand to agent action stay in the main area. On mobile, the
+GitHub tab opens the filter screen; selecting a row opens its list.
+
+Has a task and No task yet use issue references from this project's non-archived
+tasks, excluding references to other repositories. The list loads 50 rows at a time
+and loads the next page as you scroll toward its end. The tabs and All open show
+GitHub's exact open totals. A preset count shows a `+` while more pages remain
+unloaded, and a search count shows one when the search reaches its result limit;
+an unavailable count is not shown as zero. Filtering by search, label, assignee or
+board narrows the loaded rows; while it is on, the next page loads only when you press
+Load more.
+
+The `body` field on `GET /api/v1/github` list rows is deprecated. It is still sent,
+and a later minor removes it; read an item's body from the comments route's `detail`. Views without their own navigation still show tasks in the sidebar.
+
+Open an issue to see **Linked tasks (N)** beneath its heading. Each row opens a task
+in the current project and shows its title, status and date, newest first. Archived
+tasks remain listed with an **Archived** label, so diagnosis and implementation
+sessions are both reachable.
+
+The Git sidebar lists **Task worktrees** that still exist on disk, including retained
+worktrees from finished tasks. Each row shows its branch, task title, status and
+available diff counts, and opens that task's Changes tab. Reclaimed worktrees disappear
+from the list. Changes, Commits and Branches remain tabs in the main repository header.
+On mobile, Git sits in the More sheet and opens the worktree list; **Open repository** opens the repository
+view, and **Back to worktrees** returns to the list.
+
+### Grouping connected repositories: tags and the All tasks page
+
+Work rarely stops at a repo boundary. A storefront is an API, a web app and a
+design system; a platform is a handful of services plus the infra that runs
+them. **Tags** are how you say so, and **All tasks** is where saying so pays off.
+
+**Tag a repo** in **Settings → Projects**: type into the *Tags* cell on its row
+and press Enter (comma works too; the × on a chip, or Backspace in an empty
+field, removes one). The field **autocompletes from the tags already used in the
+workspace** — click the field to see them all, arrow keys and Enter to pick —
+which is what keeps the second repo landing on the first one's spelling instead
+of inventing `store-front` next to `storefront`. Anything not on the list is
+just typed. A tag is a free-form label — `storefront`, `infra`, `client-acme` —
+and a project can carry several, because a repo can belong to more than one
+piece of work. Tags are trimmed, deduplicated case-insensitively (`API` and
+`api` are one tag) and stored in `<config>/config.json` beside the rest of the
+registry, so they are yours and this machine's, never something added to the
+repo.
+
+**All tasks** — the layers icon on the desktop rail, `/tasks`, or `⌘K → All tasks` —
+then shows every registered project's work in one table:
+
+- **Filter** by tag, status and workflow. Tags are one-click chips; status and
+  workflow are searchable multi-selects. Every facet ORs inside itself and ANDs
+  across, so *"anything running or waiting in storefront or infra"* is one set
+  of clicks. Each option carries how many tasks it would leave, so a filter that
+  would empty the table says so before you click it. The search box matches
+  title, project, workflow, branch and tags.
+- **Group by** tag, project, status or workflow — click the pressed one again to
+  ungroup. Grouping by tag is the reason tags exist: three repos tagged
+  `storefront` become one section, and a repo tagged twice appears under both —
+  it genuinely belongs to both.
+
+The filters, the grouping and the Active/Archived tab live in the **URL**, so a
+filtered view survives a refresh, pastes into a chat, and sits in a bookmark —
+`/tasks?tag=storefront&status=running&group=tag` is a link to exactly what you
+were looking at. Only what you changed shows up: Active is the default, so the
+Archived view is `?archived=1` and a normal link carries no key for it.
+
+Each row shows **every** PR and issue it references — a task opened on an issue
+that landed a PR shows both — plus its cost and live CPU/memory, and can be
+marked **read/unread** (the eye) or **archived** (or restored) right there. Every task title, project name and project group heading links into that
+project, so the thread, its diff and its worktree are one click away and stay
+exactly where they were. Returning to a long thread restores its saved row measurements
+once the replay has rebuilt the same ordered messages, keeping the same content in view.
+Scrolling, jumping to the latest message, or loading different history takes ownership
+from that restoration; a thread left at its live tail follows the current tail.
+
+There is deliberately **no project filter**: narrowing this page to one project
+is that project's own Tasks page, which is a better version of the same answer
+(live updates, the full column set, the composer). So picking a project *leaves*
+for it rather than turning the global view into a worse local one.
+
+Nothing else in Squawk reads tags, on purpose: a tag is a lens, not a permission,
+a queue or a routing rule. Removing one changes what you see and nothing else.
+
+> The page reads a workspace-wide index capped at the newest 200 tasks per
+> project — it says so, and names the projects it capped, rather than showing a
+> short list as if it were complete. Older tasks are always in that project's own
+> Tasks page.
+
+**Old page URLs keep working.** Every unprefixed page path — `/`, `/tasks/<id>`,
+`/settings` — still answers, bound to the project Squawk was started in; the
+cockpit redirects flat paths to their `/p/<boot>/…` twin, so existing bookmarks
+need no change. The HTTP API is the exception: it moved to
+`/api/v1/…` (see the CHANGELOG), so a script that calls it needs the extra
+segment.
+
+> **Hosted cockpit?** The folder picker is confined to the independent browse
+> root. Set `HSQ_BROWSE_ROOT` (`CEZ_BROWSE_ROOT` fallback) narrowly before first boot (or save it in
+> **Settings → Projects**) when a remote viewer should not enumerate the host's
+> whole home. Clones continue to use the separate checkout root.
+
+---
