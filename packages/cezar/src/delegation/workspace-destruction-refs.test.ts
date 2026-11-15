@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
 import { createOwnedWorkspace } from './workspace.ts';
 import { removeOwnedWorkspace } from './workspace-removal.ts';
-import { fixture, git, receiptPath, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
+import { fixture, git, receiptPath, recordingReport, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
 
 describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, () => {
   // hearsay-tools/cezarion#905: the worktree, its admin directory and its registration went away
@@ -68,6 +68,35 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     },
   );
 
+  it('deletes a stranded branch still at its baseline after the parent branch was rewritten', async () => {
+    const { root, first } = await fixture();
+    // The worker starts from a parent commit that a later rewrite of the parent branch drops.
+    const parentCommit = git(root, 'commit-tree', `${first}^{tree}`, '-p', first, '-m', 'parent work');
+    git(root, 'branch', 'feature', parentCommit);
+    const workspace = await createOwnedWorkspace(root, randomUUID(), parentCommit);
+    git(root, 'branch', '-f', 'feature', first);
+    git(root, 'reflog', 'expire', '--expire=now', 'refs/heads/feature');
+    await strand(root, workspace, 'externally removed');
+    expect(await removeOwnedWorkspace(root, workspace)).toMatchObject({ state: 'complete', remaining: [] });
+    expect(git(root, 'branch', '--list', workspace.branch)).toBe('');
+  });
+
+  // hearsay-tools/squawk#3619: git follows a symbolic ref on delete unless told not to.
+  it('never deletes the branch a stranded worker branch now points at', async () => {
+    const { root, first } = await fixture();
+    const workspace = await createOwnedWorkspace(root, randomUUID(), first);
+    await strand(root, workspace, 'externally removed');
+    expect(git(root, 'rev-parse', 'refs/heads/main')).toBe(first);
+    git(root, 'symbolic-ref', `refs/heads/${workspace.branch}`, 'refs/heads/main');
+    const { calls, report } = recordingReport();
+    expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report)).toEqual({
+      workerId: workspace.ownerRunId, state: 'complete', remaining: [], deleted: [
+        { kind: 'worktree', path: workspace.path }, { kind: 'branch', ref: `refs/heads/${workspace.branch}` }] });
+    expect(calls).toEqual([]);
+    expect(git(root, 'rev-parse', 'refs/heads/main')).toBe(first);
+    expect(git(root, 'for-each-ref', '--format=%(refname)', `refs/heads/${workspace.branch}`)).toBe('');
+  });
+
   // hearsay-tools/squawk#911: commits another ref keeps are no work the delete would lose.
   it('deletes a stranded branch moved behind its baseline onto a commit another branch keeps', async () => {
     const { root, first, second } = await fixture();
@@ -92,6 +121,20 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     expect(git(root, 'rev-parse', 'keeper')).toBe(tip);
   });
 
+  it('deletes a stranded branch whose commits a remote-tracking branch keeps (hearsay-tools/squawk#911)', async () => {
+    const { root, first } = await fixture();
+    const workspace = await createOwnedWorkspace(root, randomUUID(), first);
+    await writeFile(join(workspace.path, 'tracked.txt'), 'worker');
+    git(workspace.path, 'commit', '-qam', 'worker');
+    const tip = git(workspace.path, 'rev-parse', 'HEAD');
+    // The worker pushed its branch: only the remote-tracking ref keeps the commit locally.
+    git(root, 'update-ref', `refs/remotes/origin/${workspace.branch}`, tip);
+    await strand(root, workspace, 'deleted and pruned');
+    expect(await removeOwnedWorkspace(root, workspace)).toMatchObject({ state: 'complete', remaining: [] });
+    expect(git(root, 'branch', '--list', workspace.branch)).toBe('');
+    expect(git(root, 'rev-parse', `refs/remotes/origin/${workspace.branch}`)).toBe(tip);
+  });
+
   it('keeps a stranded branch when the branch that keeps its commits moves before the delete (hearsay-tools/squawk#911)', async () => {
     const { root, first } = await fixture();
     const workspace = await createOwnedWorkspace(root, randomUUID(), first);
@@ -100,15 +143,18 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     const tip = git(workspace.path, 'rev-parse', 'HEAD');
     git(root, 'branch', 'keeper', tip);
     await strand(root, workspace, 'deleted and pruned');
+    // A named refusal: the caller explains it, so neither attempt reports it unexplained.
+    const { calls, report } = recordingReport();
     expect(await removeOwnedWorkspace(root, workspace, undefined, async () => {
       git(root, 'update-ref', 'refs/heads/keeper', first);
-    })).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
+    }, undefined, report)).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
     expect(git(root, 'rev-parse', workspace.branch)).toBe(tip);
     // The retry resumes from the checkpoint the failed delete wrote, and proves the commits again.
     expect(JSON.parse(await readFile(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'), 'utf8')))
       .toMatchObject({ sha: tip, phase: 'worktree-removed' });
-    const retry = await removeOwnedWorkspace(root, workspace);
+    const retry = await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report);
     expect(retry).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
+    expect(calls).toEqual([]);
     expect(retry.error).toBe(`Owned branch ${workspace.branch} holds 1 commit beyond its worker baseline; ` +
       'keep what you need, delete the branch, then retry destroy');
     expect(git(root, 'rev-parse', workspace.branch)).toBe(tip);
@@ -137,7 +183,9 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     await strand(root, workspace, 'externally removed');
     const other = join(root, 'other-checkout');
     git(root, 'worktree', 'add', '-q', other, workspace.branch);
-    expect(await removeOwnedWorkspace(root, workspace)).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
+    const { calls, report } = recordingReport();
+    expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report)).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
+    expect(calls).toEqual([['unexplained']]);
     expect(git(root, 'branch', '--list', workspace.branch)).not.toBe('');
     expect(existsSync(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'))).toBe(false);
     git(root, 'worktree', 'remove', other);
