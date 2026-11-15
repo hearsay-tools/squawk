@@ -1027,10 +1027,12 @@ export function createApp(deps: ServerDeps) {
         .finally(() => { backendChecksAt = Date.now(); backendChecksPending = undefined; })
         .then((changed) => {
           if (!changed) return;
-          // Probe is settled; finish any cold snapshot, then refresh both transports separately.
+          // Probe is settled; finish any cold snapshot, then publish the new checks to both transports.
+          // Only availability changed: re-reading Git would spawn processes on this loop (hearsay-tools/squawk#3355).
           void (async () => {
             await healthInFlight?.catch(() => {});
-            await refreshHealth();
+            if (healthCache) cacheHealth({ ...healthCache.payload, checks: backendChecks }, healthCache.at);
+            else await refreshHealth();
           })().catch(() => {});
         });
     }
@@ -1106,6 +1108,15 @@ export function createApp(deps: ServerDeps) {
   // Set while the topic has a subscriber; a change a refresh detects is pushed
   // here (a noop when nobody is listening).
   let publishHealth: (data: unknown) => void = () => {};
+  const cacheHealth = (payload: HealthPayload, at: number): void => {
+    const body = JSON.stringify(payload);
+    const changed = body !== healthCache?.body;
+    healthCache = { at, payload, body };
+    if (changed) {
+      publishHealth(payload);
+      workspaceEvents.emit('health', payload);
+    } // only a real change reaches either transport
+  };
 
   const refreshHealth = (): Promise<HealthPayload> => {
     // Dedupe: a GET's background revalidation and the topic's interval tick
@@ -1114,13 +1125,7 @@ export function createApp(deps: ServerDeps) {
     healthInFlight = (async () => {
       try {
         const payload = await healthSnapshot();
-        const body = JSON.stringify(payload);
-        const changed = body !== healthCache?.body;
-        healthCache = { at: Date.now(), payload, body };
-        if (changed) {
-          publishHealth(payload);
-          workspaceEvents.emit('health', payload);
-        } // only a real change reaches either transport
+        cacheHealth(payload, Date.now());
         return payload;
       } finally {
         healthInFlight = undefined;

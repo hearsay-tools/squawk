@@ -16,8 +16,6 @@ const root = mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 
 for (const key of Object.keys(process.env)) if (/^(CEZ|HSQ)_/.test(key)) delete process.env[key];
 process.env.HSQ_HOME = process.env.CEZ_HOME = join(root, 'home');
 process.env.HSQ_DRY_RUN = process.env.CEZ_DRY_RUN = '1';
-// Automation warm-up spawns git at boot with no completion signal (hearsay-tools/squawk#3355).
-process.env.HSQ_AUTOMATIONS = process.env.CEZ_AUTOMATIONS = '0';
 const runtime = { url: new URL('../dist/', import.meta.url), ext: 'js' };
 let dataDir;
 let store;
@@ -30,7 +28,6 @@ try {
   const { projectPaths } = await import(new URL('project-paths.js', runtime.url));
   dataDir = projectPaths(join(root, 'cold-project')).write;
   const { startServer } = await import(new URL('server/start-server.js', runtime.url));
-  const { WorkspaceEventBus } = await import(new URL('server/server.js', runtime.url));
   const { RunManager } = await import(new URL('workflows/run.js', runtime.url));
   const { acquireCiResources } = await import(new URL('ci-wait/resources.js', runtime.url));
   const { resolveHome } = await import(new URL('home/resolve.js', runtime.url));
@@ -46,13 +43,7 @@ try {
   // second cold store on this same event loop. No transcript sidecar is primed.
   bootStore = RunStore.open(projectPaths(root).write);
   await bootStore.factsWarmIdle();
-  // Boot health returns before the agent availability probe settles. The probe's settlement
-  // refreshes health once more, and that refresh spawns git synchronously on this loop.
-  const workspaceEvents = new WorkspaceEventBus();
-  const healthSettled = new Promise(resolve => {
-    const off = workspaceEvents.on((event, payload) => { if (event === 'health' && payload.checks.length > 0) { off(); resolve(); } });
-  });
-  server = startServer({ home, repoRoot: root, store: bootStore, manager: {}, workspaceEvents, createManager: (store, root, options) => new RunManager(store, root, { ...options, acquireCiResources }), version: 'task4-measurement', bindHost: '127.0.0.1' }, 0);
+  server = startServer({ home, repoRoot: root, store: bootStore, manager: {}, createManager: (store, root, options) => new RunManager(store, root, { ...options, acquireCiResources }), version: 'task4-measurement', bindHost: '127.0.0.1' }, 0);
   if (!server.listening) await once(server, 'listening');
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
@@ -62,8 +53,6 @@ try {
   assert.equal(prime.status, 200);
   assert.equal((await prime.json()).version, 'task4-measurement');
   const primingLatencyMs = performance.now() - primingStart;
-  // An already-listening server has finished that boot refresh; the watchdog bounds this wait.
-  await healthSettled;
   assert.equal(readdirSync(join(dataDir, 'runs')).filter(name => name.endsWith('.facts.json')).length, 0);
   const start = performance.now();
   let end;
