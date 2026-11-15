@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { Agent, createServer, get, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -48,6 +48,16 @@ async function storeSnapshot(dataDir: string): Promise<string> {
   return `${createHash('sha256').update(await readFile(join(dataDir, 'runs.db'))).digest('hex')} ${sidecars.join(',')}`;
 }
 
+const EXACT_PORT_FLOOR = 10_000;
+
+/** First port the OS assigns on its own: Linux reads it from procfs; other systems use the IANA range. */
+function ephemeralRangeStart(): number {
+  if (process.platform !== 'linux') return 49_152;
+  const first = Number(readFileSync('/proc/sys/net/ipv4/ip_local_port_range', 'utf8').trim().split(/\s+/)[0]);
+  assert.ok(first > EXACT_PORT_FLOOR, `ephemeral range starts at ${first}`);
+  return first;
+}
+
 async function fixture() {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'cez-serve-port-')));
   const homeRoot = join(root, 'home');
@@ -70,6 +80,26 @@ async function fixture() {
     const address = server.address();
     assert.ok(address && typeof address !== 'string');
     return { server, port: address.port };
+  };
+  /** A free port for a cockpit to take by number. listen(0) and outgoing connections on every
+   * process of the host draw from the ephemeral range, so a port probed there and released can
+   * be taken before the cockpit binds it (hearsay-tools/squawk#3618). Pick one below that range. */
+  const exactPort = async () => {
+    const first = ephemeralRangeStart();
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const port = EXACT_PORT_FLOOR + Math.floor(Math.random() * (first - EXACT_PORT_FLOOR));
+      const server = createServer();
+      try {
+        server.listen(port, '127.0.0.1');
+        await once(server, 'listening');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') continue;
+        throw error;
+      }
+      await new Promise<void>((done) => server.close(() => done()));
+      return port;
+    }
+    throw new Error(`No free port in ${EXACT_PORT_FLOOR}-${first - 1}`);
   };
   const start = (directory: string, args: string[] = []) => {
     const child = spawn(process.execPath, [...cliArgs, ...args, '--no-open'], {
@@ -104,7 +134,7 @@ async function fixture() {
     await Promise.all(occupants.map((server) => new Promise<void>((done) => server.close(() => done()))));
     await rm(root, { recursive: true, force: true });
   };
-  return { root, repo, occupy, start, close };
+  return { root, repo, occupy, exactPort, start, close };
 }
 
 function refused(result: { url?: string | undefined; code: number | null; output: string }, port: number) {
@@ -149,11 +179,10 @@ test('busy cockpit port from a different cwd refuses before recovery or startup 
     assert.equal((await localGet(`${first.url}/api/v1/health`)).status, 200, 'existing cockpit remains healthy');
 
     const deliberateRepo = await f.repo('deliberate');
-    const free = await f.occupy();
-    await new Promise<void>((done) => free.server.close(() => done()));
-    const deliberate = await f.start(deliberateRepo, ['--port', String(free.port)]).outcome();
+    const free = await f.exactPort();
+    const deliberate = await f.start(deliberateRepo, ['--port', String(free)]).outcome();
     assert.ok(deliberate.url, deliberate.output);
-    assert.equal(Number(new URL(deliberate.url).port), free.port, 'explicit free port stays exact');
+    assert.equal(Number(new URL(deliberate.url).port), free, 'explicit free port stays exact');
     assert.equal((await localGet(`${deliberate.url}/api/v1/health`)).status, 200);
   } finally { await f.close(); }
 });
@@ -213,21 +242,20 @@ test('different cwd contenders acquire the exact port once before either can rec
       store.close(); // as above: durable, and free for a boot that wrongly recovered to take
       indexes.push(await storeSnapshot(join(repo, '.ai/cezar')));
     }
-    const free = await f.occupy();
-    await new Promise<void>((done) => free.server.close(() => done()));
-    const contenders = repos.map((repo) => f.start(repo, ['--port', String(free.port)]));
+    const free = await f.exactPort();
+    const contenders = repos.map((repo) => f.start(repo, ['--port', String(free)]));
     const outcomes = await Promise.all(contenders.map((child) => child.outcome()));
     assert.equal(outcomes.filter((outcome) => outcome.url).length, 1, JSON.stringify(outcomes));
     const loser = outcomes.findIndex((outcome) => outcome.code === 1);
     assert.ok(loser >= 0, JSON.stringify(outcomes));
-    refused(outcomes[loser]!, free.port);
+    refused(outcomes[loser]!, free);
     // As above: the loser's boot may have moved its project before the race for the port.
     const served = projectPaths(repos[loser]!).write;
     assert.equal(await storeSnapshot(served), indexes[loser]);
     assert.deepEqual(await readdir(join(served, 'runs')), []);
     assert.equal(existsSync(join(served, 'cockpit.lock')), false);
     const winner = outcomes.find((outcome) => outcome.url)!;
-    assert.equal(Number(new URL(winner.url!).port), free.port);
+    assert.equal(Number(new URL(winner.url!).port), free);
     assert.equal((await localGet(`${winner.url}/api/v1/health`)).status, 200);
   } finally { await f.close(); }
 });

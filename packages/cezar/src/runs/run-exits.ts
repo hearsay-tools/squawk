@@ -140,6 +140,15 @@ const failedStep = (step: StepState, _run: ExitRead, { finishedAt, error }: Step
 const parkedStep = (step: StepState, run: ExitRead, { stepId }: StepSettlement): StepState =>
   step.id === (stepId ?? run.currentStepId) && (step.status === 'running' || step.status === 'pending') ? { ...step, status: 'waiting' } : step;
 
+/** The park fact (ADR 0064): the exit that parks a run records why. A run already `waiting` keeps
+ *  the reason it parked for: a session that closes, or a restart, re-parks a run its own turn
+ *  parked, and that run still waits on what its turn registered. */
+const parkedFor = (reason: NonNullable<RunRecord['parkReason']>) => (run: ExitRead): RunPatch =>
+  run.status === 'waiting' ? {} : { parkReason: reason };
+
+/** A hold records `hold` over any earlier reason: the run waits on its automatic resume. */
+const HOLD: RunPatch = { finishedAt: undefined, parkReason: 'hold' };
+
 /** A released park: the legacy `activity` cleared. */
 function settleParkRelease(run: RunRecord): RunRecord {
   const settled: WithLegacyActivity = { ...run, activity: undefined };
@@ -160,15 +169,18 @@ export const RUN_EXITS = {
   // The step it runs is the caller's: `currentStepId` is an extra.
   'continue-now': { durability: 'debounced', from: ['waiting', 'review', 'done', 'failed', 'cancelled'], to: 'running',
     fields: () => ({ error: undefined, finishedAt: undefined }) },
-  park: { durability: 'debounced', from: ['running', 'queued', 'waiting'], to: 'waiting', fields: (_run, at) => cursorFields(at), steps: parkedStep },
+  park: { durability: 'debounced', from: ['running', 'queued', 'waiting'], to: 'waiting', fields: parkedFor('turn'), steps: parkedStep },
   // A park that gives up its slot (hearsay-tools/cezarion#1235): committed at once, so a refused
   // write throws with nothing changed and the caller keeps the slot.
-  'park-release': { durability: 'committed', from: ['running', 'queued', 'waiting'], to: 'waiting', settle: settleParkRelease, steps: parkedStep },
+  'park-release': { durability: 'committed', from: ['running', 'queued', 'waiting'], to: 'waiting', fields: parkedFor('turn'), settle: settleParkRelease, steps: parkedStep },
+  // The session closed while the run held wakes: no turn parked it, so a parent gets no park
+  // notice (hearsay-tools/squawk#3502).
+  'park-closing-wakes': { durability: 'debounced', from: ['running', 'queued', 'waiting'], to: 'waiting', fields: parkedFor('closing-wakes'), steps: parkedStep },
   'park-for-wake': { durability: 'debounced', from: ['queued', 'waiting'], to: 'waiting' },
-  hold: { durability: 'debounced', from: ['failed', 'waiting'], to: 'waiting', fields: () => ({ finishedAt: undefined }) },
+  hold: { durability: 'debounced', from: ['failed', 'waiting'], to: 'waiting', fields: () => HOLD },
   // A provider error or usage limit holds the failing run in its failure's own write
   // (hearsay-tools/squawk#3337): never a transient `failed` a worker cascade or a parent's wait reads.
-  'hold-failure': { durability: 'debounced', from: ['running', 'waiting'], to: 'waiting', fields: (_run, at) => ({ finishedAt: undefined, ...cursorFields(at) }), steps: failedStep },
+  'hold-failure': { durability: 'debounced', from: ['running', 'waiting'], to: 'waiting', fields: (_run, at) => ({ ...HOLD, ...cursorFields(at) }), steps: failedStep },
   resume: { durability: 'debounced', from: ['waiting'], to: 'running' },
   succeed: { durability: 'debounced', from: ['running', 'waiting'], to: 'done', fields: succeeded, steps: succeededStep },
   'succeed-review': { durability: 'debounced', from: ['running', 'waiting'], to: 'review', fields: succeeded, steps: succeededStep },
@@ -180,7 +192,11 @@ export const RUN_EXITS = {
   // settled run that is published reads done too. The route refuses a usage-limit hold (spec B13).
   'draft-pr': { durability: 'debounced', from: ['review', 'done', 'failed', 'cancelled'], to: 'done' },
   'fail-start': { durability: 'debounced', from: ['queued', 'running'], to: 'failed', steps: failedStep },
-  fail: { durability: 'debounced', from: ['running', 'waiting'], to: 'failed', fields: (_run, at) => cursorFields(at), steps: failedStep },
+  fail: { durability: 'debounced', from: ['running', 'waiting'], to: 'failed', steps: failedStep },
+  // A workflow step failed while its run owes wakes: the step is the cursor a Continue resumes. The
+  // step loop flushes it before the wake-delivery decision and the final autosave, so a crash in
+  // either keeps it (hearsay-tools/squawk#1621).
+  'fail-attempt': { durability: 'debounced', from: ['running'], to: 'running', fields: (_run, at) => cursorFields(at) },
   // settleFailedContinuation alone: a worker Stop can record cancelled before it settles.
   'fail-continue': { durability: 'debounced', from: ['running', 'waiting', 'cancelled'], to: 'failed', steps: failedStep },
   'fail-interrupted': { durability: 'debounced', from: ['queued', 'running', 'waiting'], to: 'failed',

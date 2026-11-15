@@ -14,14 +14,14 @@ describe('the workflow cursor, written by the run exits (ADR 0064)', () => {
     expect(applyExit(run(RUN_STATUS.running), 'requeue', {}, { stepId: 'review', cursor: 'start' })).toMatchObject({ workflowCursor: start, status: RUN_STATUS.queued });
   });
 
-  it('records a failed attempt that a Continue resumes on a park, a failure and a held failure', () => {
-    for (const exit of ['park', 'fail', 'hold-failure'] as const) {
+  it('records a failed attempt that a Continue resumes, before the wake delivery decision and on a held failure', () => {
+    for (const exit of ['fail-attempt', 'hold-failure'] as const) {
       expect(applyExit(run(RUN_STATUS.running), exit, {}, { stepId: 'review', cursor: 'resume' })).toHaveProperty('workflowCursor', resume);
     }
   });
 
   it('leaves the cursor alone when the caller names no mode', () => {
-    for (const exit of ['requeue', 'park', 'fail', 'hold-failure'] as const) {
+    for (const exit of ['requeue', 'fail-attempt', 'hold-failure', 'park', 'fail'] as const) {
       expect(applyExit(run(RUN_STATUS.running, start), exit, {}, { stepId: 'review' })).not.toHaveProperty('workflowCursor');
     }
   });

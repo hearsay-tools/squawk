@@ -206,7 +206,7 @@ export class RunSettlement {
     if (delivery === 'park') {
       // No turn end will show a human wait this session registered (hearsay-tools/cezarion#1234).
       this.humanWaits.surfaceHumanWait(runId, state);
-      this.host.move(runId, 'park');
+      this.host.move(runId, 'park-closing-wakes');
       return;
     }
     this.context.store.updateStep(runId, stepId, { status: 'failed', error: this.wakeSessionClosedError, finishedAt: new Date().toISOString() });
@@ -311,7 +311,7 @@ export class RunSettlement {
       // settleSuccess only completes running/waiting steps, so its failure is durable.
       this.humanWaits.surfaceHumanWait(runId, state);
       this.context.store.appendEvent(runId, { type: 'step-end', stepId, status: 'failed' });
-      this.host.move(runId, 'park', { error: `continue failed: ${message}` });
+      this.host.move(runId, 'park-closing-wakes', { error: `continue failed: ${message}` });
       return;
     }
     if (this.autoResumeScheduler.holdFailure(runId, `continue failed: ${message}`)) return;
@@ -342,7 +342,7 @@ export class RunSettlement {
     if (settlement.kind === 'cancelled') {
       this.settleCancelledRun(runId);
     } else if (settlement.kind === 'failed') {
-      this.settleFailedRun(runId, settlement.error, loop.deliveryCapped, loop.resumeStepId);
+      this.settleFailedRun(runId, settlement.error, loop.deliveryCapped);
     } else if (settlement.kind === 'incomplete') {
       await this.settleIncompleteStep(runId, settlement.stepId);
     } else if (settlement.kind === 'idle') {
@@ -361,11 +361,10 @@ export class RunSettlement {
     this.host.move(runId, 'cancel');
   }
 
-  /** The failed settlement. A capped wake delivery adds the cap's note. A failed step whose
-   *  wakes were owed stays the workflow cursor a Continue resumes. */
-  settleFailedRun(runId: string, runError: string, deliveryCapped: boolean, resumeStepId?: string): void {
+  /** The failed settlement. A capped wake delivery adds the cap's note. */
+  settleFailedRun(runId: string, runError: string, deliveryCapped: boolean): void {
     if (this.autoResumeScheduler.holdFailure(runId, runError)) return;
-    this.host.move(runId, 'fail', { error: runError }, resumeStepId ? { stepId: resumeStepId, cursor: 'resume' } : {});
+    this.host.move(runId, 'fail', { error: runError });
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: `run failed — ${runError}` });
     if (deliveryCapped) this.context.store.appendEvent(runId, { type: 'note', message: this.wakeDeliveryCapNote });
   }

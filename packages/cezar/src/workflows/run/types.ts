@@ -107,8 +107,6 @@ export type StepLoop = {
   deliveryCapped: boolean;
   /** An earlier step whose session closed without a done (hearsay-tools/cezarion#1620). */
   incompleteStepId?: string;
-  /** The failed agent step a CI recovery resumes: its failure closed with wakes still owed. */
-  resumeStepId?: string;
 };
 
 /** What a launched session's callbacks share (hearsay-tools/cezarion#1632): the turn in progress

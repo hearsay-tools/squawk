@@ -312,6 +312,11 @@ export const runRecordSchema = z.object({
   autoResumeAttempts: z.number().optional(),
   /** Why the hold waits: `usage-limit`, or a `provider-error` retried with back-off (hearsay-tools/squawk#3337). */
   autoResumeReason: z.enum(['usage-limit', 'provider-error']).optional(),
+  /** Why a `waiting` run parked (ADR 0064): its own turn (`turn`), an automatic-resume hold
+   *  (`hold`), or a session that closed while it held wakes (`closing-wakes`). The exit that parks
+   *  the run writes it (`runs/run-exits.ts`); a run that leaves `waiting` keeps it unread. A row
+   *  saved before the fact has none. */
+  parkReason: z.enum(['turn', 'hold', 'closing-wakes']).optional(),
   createdAt: z.string(),
   startedAt: z.string().optional(),
   finishedAt: z.string().optional(),

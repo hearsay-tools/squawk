@@ -299,15 +299,13 @@ export function eventCheckpoint(): Map<string, string> {
  * - the persisted runs, to `diskCheckpoint` or to what they were when this was called;
  * - each worker's execution record (`runs/<id>.execution.json`), to what it was when this was called;
  * - each worker's process record (`runs/<id>.processes.json`), to what it was when this was called,
- *   with an absent controller PID: the stopped `serve` process is gone. With `liveController`, the
- *   record keeps this process as its controller, so recovery treats the execution as its own;
+ *   with an absent controller PID: the stopped `serve` process is gone;
  * - each file in `events` (usually from `eventCheckpoint`), to its given content.
  * Every other file stays as the stop wrote it, the event logs too when `events` is not given. */
-export async function restart(fakeClock = false, diskCheckpoint?: readonly unknown[], events?: Map<string, string>, { liveController = false } = {}) {
+export async function restart(fakeClock = false, diskCheckpoint?: readonly unknown[], events?: Map<string, string>) {
   checkpoint('restart-stop-start');
   store.flush(); const disk = diskCheckpoint ?? readPersistedRuns(join(root, '.ai/cezar'));
   const workerRecords = [...runFiles('.execution.json'), ...[...runFiles('.processes.json')].map(([path, content]) => {
-    if (liveController) return [path, content] as const;
     const record = JSON.parse(content) as { controller: object };
     return [path, JSON.stringify({ ...record, controller: { ...record.controller, pid: ABSENT_PROCESS_PID } })] as const;
   })];

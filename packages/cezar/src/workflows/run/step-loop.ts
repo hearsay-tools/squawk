@@ -427,7 +427,11 @@ export class StepLoop {
     // runAgentStep already emitted session.ended(error). Record the failed
     // attempt before parking so later successful CI recovery cannot erase it.
     if (failure) {
-      if (holdsClosingWakes(this.context, this.completionGateHost, runId)) loop.resumeStepId = stepId;
+      if (holdsClosingWakes(this.context, this.completionGateHost, runId)) {
+        // The cursor is on disk before the delivery decision and the final autosave await.
+        this.host.move(runId, 'fail-attempt', {}, { stepId, cursor: 'resume' });
+        this.context.store.flush();
+      }
       this.finishStep(runId, stepId, 'failed', failure, emit);
       loop.runError = `step "${stepId}" failed: ${failure}`;
     }
@@ -443,8 +447,8 @@ export class StepLoop {
     }
     if (delivery !== 'park') return false;
     this.humanWaits.surfaceHumanWait(runId, state);
-    this.host.move(runId, 'park', {
-      ...(failure ? { error: loop.runError! } : {}) }, loop.resumeStepId ? { stepId: loop.resumeStepId, cursor: 'resume' } : {});
+    this.host.move(runId, 'park-closing-wakes', {
+      ...(failure ? { error: loop.runError! } : {}) });
     this.context.store.flush(); // checkpoint the failed attempt and its recoverable workflow cursor before parking
     this.host.dropActive(runId);
     return true;

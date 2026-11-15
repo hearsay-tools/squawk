@@ -61,6 +61,8 @@ type Site = {
   manager: boolean;
   /** The Table B rows of S7 that changed what the site writes. */
   s7?: S7Row[];
+  /** The lifecycle facts the exit records since ADR 0064. */
+  facts?: RunPatch;
 };
 
 const retired = (run: ExitRead): RunPatch => oldManagerPatch(run, 'fail', {});
@@ -86,8 +88,8 @@ const SITES: Site[] = [
   // B7: dispatchAcceptedContinuation no longer repeats checkpointContinuation's continue-line write.
   // hold
   { site: 'auto-resume hold', exit: 'hold', from: 'waiting', manager: true,
-    before: () => ({ finishedAt: u, autoResumeAt: NOW }), after: () => ({ autoResumeAt: NOW }) },
-  { site: 'restoreLoadedUsageLimitHold', exit: 'hold', from: 'failed', manager: false, before: () => ({ finishedAt: u }), after: () => ({}) },
+    before: () => ({ finishedAt: u, autoResumeAt: NOW }), after: () => ({ autoResumeAt: NOW }), facts: { parkReason: 'hold' } },
+  { site: 'restoreLoadedUsageLimitHold', exit: 'hold', from: 'failed', manager: false, before: () => ({ finishedAt: u }), after: () => ({}), facts: { parkReason: 'hold' } },
   // succeed, succeed-review, accept-review
   ...(['succeed', 'succeed-review'] as const).map((exit): Site => ({ site: `commitOrdinarySuccess (${exit})`, exit, from: 'running', manager: false,
     before: run => ({ ...retired(run), finishedAt: SHARED, currentStepId: u, autoResumeAttempts: u }), after: () => ({}), s7: ['B1-B3', 'B5', 'cursor'] })),
@@ -134,7 +136,7 @@ describe('run exits settle the fields all their sites agree on (S5)', () => {
       it(`${row.site} (${row.exit}) writes the record it wrote before, for ${kind}`, () => {
         const run = make(row.from);
         const old = row.manager ? oldManagerPatch(run, row.exit, row.before(run)) : row.before(run);
-        const expected = (row.s7 ?? []).reduce((write, s7) => S7_ROWS[s7](run, write), old);
+        const expected = { ...(row.s7 ?? []).reduce((write, s7) => S7_ROWS[s7](run, write), old), ...row.facts };
         expect(applyExit(run, row.exit, row.after(run))).toStrictEqual({ ...expected, status: RUN_EXITS[row.exit].to });
       });
     }
@@ -144,12 +146,31 @@ describe('run exits settle the fields all their sites agree on (S5)', () => {
   // the exits that set only `finishedAt` need no fields of their own.
   it('leaves the exits whose sites disagree, that settle through their guard, or that settle only what every settling exit does, without fields', () => {
     const fieldless = Object.entries(RUN_EXITS).filter(([, spec]) => !('fields' in spec)).map(([id]) => id);
-    expect(fieldless.sort()).toEqual(['accept-review', 'cancel', 'cancel-late', 'cancel-root', 'draft-pr', 'fail-continue', 'fail-crash', 'fail-start', 'park-for-wake', 'park-release',
+    expect(fieldless.sort()).toEqual(['accept-review', 'cancel', 'cancel-late', 'cancel-root', 'draft-pr', 'fail', 'fail-continue', 'fail-crash', 'fail-start', 'park-for-wake',
       'resume', 'start-held', 'stop-worker', 'withdraw-hold']);
     for (const id of fieldless as RunExitId[]) {
       const run = rootWithIntent(RUN_EXITS[id].from[0]!);
       const settled = settlesRun(id) ? S7_ROWS['B1-B3'](run, {}) : {};
       expect(applyExit(run, id, { finishedAt: SHARED })).toStrictEqual({ finishedAt: SHARED, ...settled, status: RUN_EXITS[id].to });
     }
+  });
+});
+
+// ADR 0064: the exit that parks a run records why, and a later park of a run already waiting keeps
+// it (hearsay-tools/squawk#3502).
+describe('the park fact', () => {
+  const EXITS = { park: 'turn', 'park-release': 'turn', 'park-closing-wakes': 'closing-wakes', hold: 'hold', 'hold-failure': 'hold' } as const;
+
+  it.each(Object.entries(EXITS))('%s from a status other than waiting records %s', (exit, reason) => {
+    const run = plainRun(RUN_EXITS[exit as keyof typeof EXITS].from.find(status => status !== 'waiting')!);
+    expect(applyExit(run, exit as keyof typeof EXITS)).toMatchObject({ parkReason: reason });
+  });
+
+  it.each(['park', 'park-release', 'park-closing-wakes'] as const)('%s of a run already waiting keeps the reason it parked for', (exit) => {
+    expect(applyExit(plainRun('waiting'), exit)).not.toHaveProperty('parkReason');
+  });
+
+  it.each(['hold', 'hold-failure'] as const)('%s of a waiting run records hold over its earlier reason', (exit) => {
+    expect(applyExit(plainRun('waiting'), exit)).toMatchObject({ parkReason: 'hold' });
   });
 });

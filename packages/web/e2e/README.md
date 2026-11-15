@@ -2,8 +2,11 @@
 
 The specs in this directory drive the built cockpit in a real Chrome through the
 `agent-browser` seam (`agent-browser.ts`). Run them via `npm run test:e2e`, or through
-Squeal's slow tier when installed. The root Vitest config exposes the browser project,
-and its `environment.ts` globalSetup uses the same environment bootstrap as the wrapper.
+Squeal's slow tier when installed. The root Vitest config exposes the browser project.
+Its `environment.ts` reporter prepares the environment, with the same bootstrap as the
+wrapper, at the start of each test run and releases it, with the lease, when that run
+ends. A long-lived host such as the Squeal daemon holds no lease between runs, so the
+app's idle watcher can stop the app.
 `npm test` and `npm run test:watch` select only the four unit projects. Browser results
 are keyed by the server, cockpit and e2e sources that `squeal.config.json` lists as their
 inputs, not by built output; CI owns the full gate.
