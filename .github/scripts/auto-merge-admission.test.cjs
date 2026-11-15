@@ -32,7 +32,7 @@ for (const name of [
   'merge-queue-admission', 'queue-ci-proof', 'pr-test-proof', 'pr-test-input',
   'pr-readiness', 'review-threads', 'review-signal', 'release-bump-pr',
   'check-clones', 'check-spec-status', 'check-citations', 'change-coupling', 'api-budget',
-  'missing-patches', 'failure-diagnostics',
+  'missing-patches', 'failure-diagnostics', 'vitest-worker-count',
 ]) test(`a small ${name} change requires owner review`, t => {
   const relative = `.github/scripts/${name}.cjs`;
   const result = checkChange(t, relative, 'module.exports = false;\n', 'module.exports = true;\n');
@@ -42,6 +42,10 @@ for (const name of [
 
 for (const [relative, why] of [
   ['.github/scripts/merge-vitest-coverage.mjs', 'gate or test harness'],
+  ['.github/scripts/vitest-coverage-tests.mjs', 'gate or test harness'],
+  ['.github/scripts/vitest-file-duration.mjs', 'gate or test harness'],
+  ['.github/scripts/auto-merge-gates.test.cjs', 'gate or test harness'],
+  ['.github/scripts/auto-merge-admission.test.cjs', 'gate or test harness'],
   ['.github/actions/node-dist/action.yml', 'gate or test harness'],
   ['scripts/prepr.mjs', 'gate or test harness'],
   ['scripts/check-typecheck-coverage.mjs', 'gate or test harness'],

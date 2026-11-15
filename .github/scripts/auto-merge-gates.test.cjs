@@ -12,7 +12,10 @@ const yaml = require('yaml');
 const root = path.resolve(__dirname, '../..');
 const policy = import(pathToFileURL(path.join(root, '.ai/skills/auto-merge/check.mjs')).href);
 const SCOPE = /^(?:\.github\/|scripts\/|\.ai\/|packages\/[^/]+\/scripts\/|packages\/cezar\/src\/lint\/)/;
-const TOOL_CONFIGS = ['.oxlintrc.json', 'sgconfig.yml'];
+// Configs that Vitest, Vite, tsc, oxlint, ast-grep and Squeal load by default.
+const TOOL_CONFIG = /(?:^|\/)(?:vitest(?:\.[\w-]+)?\.config\.[cm]?[jt]s|vitest\.setup\.ts|vite\.config\.ts|tsconfig[\w.-]*\.json|\.oxlintrc\.json|sgconfig\.yml|squeal\.config\.json)$/;
+// The tests that hold the policy in place.
+const POLICY_TESTS = ['.github/scripts/auto-merge-gates.test.cjs', '.github/scripts/auto-merge-admission.test.cjs'];
 const IMPORT = /(?:require\(\s*|import\(\s*|\bfrom\s+|\bimport\s+)['"](\.{1,2}\/[^'"]+)['"]/g;
 const NPM_RUN = /\bnpm\s+(?:run\s+([\w:*-]+)|(test)\b)(?:[^\n;&|]*?\s(?:-w|--workspace)[=\s]+(\S+))?/g;
 
@@ -41,6 +44,7 @@ const NOT_A_GATE = [
   { glob: 'scripts/dev.mjs', reason: 'local development server' },
   { glob: 'scripts/setup-merge-drivers.mjs', reason: 'local git configuration' },
   { glob: 'scripts/test-parity.mjs', reason: 'local parity runner; CI runs the parity tests through Vitest' },
+  { glob: 'vitest.stryker.config.ts', reason: 'Vitest config for mutation runs, which only report' },
 ];
 
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -101,7 +105,7 @@ function scan() {
   for (const [dir, manifest] of packages) {
     for (const [name, text] of Object.entries(manifest.scripts ?? {})) found.command(text, dir === '.' ? '' : dir, `${dir}/package.json ${name}`);
   }
-  for (const config of TOOL_CONFIGS) found.refer(config, 'default tool config');
+  for (const config of files) if (TOOL_CONFIG.test(config) && !/(?:^|\/)(?:__)?fixtures(?:__)?\//.test(config)) found.refer(config, 'default tool config');
   return { files, packages, ...found };
 }
 
@@ -129,13 +133,21 @@ test('every gate file a workflow or npm script runs is on the auto-merge never-l
   const { neverRule, TEST_FILE } = await policy;
   const found = scan();
   await followImports(found);
-  for (const gate of ['.github/scripts/check-clones.cjs', 'packages/cezar/src/lint/run.ts', '.github/actions/node-dist/action.yml', 'scripts/test-home-env.mjs', '.oxlintrc.json']) {
+  for (const gate of ['.github/scripts/check-clones.cjs', 'packages/cezar/src/lint/run.ts', '.github/actions/node-dist/action.yml', 'scripts/test-home-env.mjs', '.oxlintrc.json', 'vitest.config.ts', '.github/scripts/vitest-worker-count.cjs']) {
     assert.ok(found.refs.has(gate), `the scan no longer finds ${gate}`);
   }
   const unguarded = [...found.refs]
     .filter(([file]) => !neverRule(file) && !TEST_FILE.test(file) && !NOT_A_GATE.some((entry) => path.matchesGlob(file, entry.glob)))
     .map(([file, sources]) => `${file} (run by ${[...sources].join(', ')})`);
   assert.deepEqual(unguarded, [], 'add each file to NEVER in check.mjs, or to NOT_A_GATE here with a reason');
+});
+
+test('the tests that hold the policy are themselves guarded against any edit', async () => {
+  const { neverRule } = await policy;
+  for (const file of POLICY_TESTS) {
+    const rule = neverRule(file);
+    assert.ok(rule && !rule.unless, `${file} must be on the never-list without an unless rule`);
+  }
 });
 
 test('every npm script a workflow or package script runs exists', () => {

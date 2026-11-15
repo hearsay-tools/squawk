@@ -7,14 +7,37 @@ const { join } = require('node:path');
 const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})/;
 const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})\s*$/;
 
+/** Return where the code span that opens with the backtick run at `start` ends, or -1 when it does not close. */
+function codeSpanEnd(line, start, ticks) {
+  const close = new RegExp(`(?<!\`)\`{${ticks}}(?!\`)`, 'g');
+  close.lastIndex = start + ticks;
+  const match = close.exec(line);
+  return match ? match.index + ticks : -1;
+}
+
 /** Return whether the line leaves an HTML comment open, given whether it starts inside one. */
 function endsInComment(line, inComment) {
   let at = 0;
   for (;;) {
-    const next = line.indexOf(inComment ? '-->' : '<!--', at);
-    if (next < 0) return inComment;
-    at = next + (inComment ? 3 : 4);
-    inComment = !inComment;
+    if (inComment) {
+      const close = line.indexOf('-->', at);
+      if (close < 0) return true;
+      at = close + 3;
+      inComment = false;
+      continue;
+    }
+    const open = line.indexOf('<!--', at);
+    const tick = /`+/g;
+    tick.lastIndex = at;
+    const run = tick.exec(line);
+    if (run && (open < 0 || run.index < open)) {
+      const end = codeSpanEnd(line, run.index, run[0].length);
+      at = end < 0 ? run.index + run[0].length : end;
+      continue;
+    }
+    if (open < 0) return false;
+    at = open + 4;
+    inComment = true;
   }
 }
 

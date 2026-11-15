@@ -29,8 +29,8 @@ export const NEVER = [
   { why: 'gate or test harness', globs: [
     '.github/workflows/**', '.github/codex/**', '.github/schemas/**', '.github/actionlint.yaml',
     '.github/scripts/{baseline-growth*,change-surface,change-surface-readers,queue-ci-proof,pr-test-proof,pr-test-input,review-threads,review-signal,pr-readiness,require-e2e-passed,release-*,pr-snapshot,node-floor-reporter,ci-test-sequencer,cockpit-test-sequencer,vitest-rerun-reset,merge-queue-admission,merge-recommendation*}.*',
-    '.github/scripts/{check-clones,check-spec-status,check-citations,change-coupling,api-budget,missing-patches,merge-vitest-coverage,failure-diagnostics}.*',
-    '.github/scripts/*.workflow.test.cjs', '.github/actions/**',
+    '.github/scripts/{check-clones,check-spec-status,check-citations,change-coupling,api-budget,missing-patches,merge-vitest-coverage,failure-diagnostics,vitest-worker-count,vitest-coverage-tests,vitest-file-duration}.*',
+    '.github/scripts/{*.workflow,auto-merge-gates,auto-merge-admission}.test.cjs', '.github/actions/**',
     '**/vitest.config.ts', '**/vitest.setup.ts',
     'packages/web/e2e/{agent-browser,failure-setup,environment,fixture-server,held-browser-daemon,poll}.ts',
     'squeal.config.json',
