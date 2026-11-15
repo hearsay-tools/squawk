@@ -61,6 +61,7 @@ function seedRow(record: Record<string, unknown>): RunRowInput {
     data: JSON.stringify(record),
     summary: encoded?.summary ?? '{}',
     conversationMembers: encoded?.conversationMembers ?? null,
+    automationRuns: encoded?.automationRuns ?? null,
   };
 }
 
