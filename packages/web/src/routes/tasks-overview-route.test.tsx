@@ -229,6 +229,7 @@ describe('TasksOverviewRoute — wired to the app', () => {
       { ...run({ id: 'auto', status: RUN_STATUS.done }), automationId: 'auto-1' },
     ])
     await waitFor(() => expect(tableRow('act')).not.toBeNull())
+    await waitFor(() => expect(sidebarTab('automations')).not.toBeNull())
     expect(sidebarRow('act')).not.toBeNull()
     expect(sidebarRow('auto')).toBeNull()
     // The table's Active is every unarchived task, automation-created ones included.

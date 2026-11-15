@@ -1295,6 +1295,15 @@ describe('global tasks — status groups and origin (hearsay-tools/cezarion#1616
     expect(rowIds()).toContain('a1')
   })
 
+  it('keeps a linked Automations origin in the URL while another filter changes with automations off (hearsay-tools/squawk#1401)', async () => {
+    stubFetch({ runs: [...RUNS, automated] })
+    renderPage(createQueryClient(), '/tasks?origin=automations')
+    await screen.findByText('Nightly health')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search tasks across projects' }), { target: { value: 'runner' } })
+    await waitFor(() => expect(search()).toContain('q=runner'))
+    expect(search()).toContain('origin=automations')
+  })
+
   it('names project and origin under every title, falling back to the automation id', async () => {
     stubFetch({ runs: [RUNS[0]!, automated] })
     renderPage()

@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { HealthResponse } from '@open-mercato/cezar-api-client'
 
 import { useHealth } from '@/api/queries'
@@ -22,14 +22,15 @@ export function automationsAvailable(
 export type AutomationsAvailability = 'unknown' | 'available' | 'unavailable'
 
 /**
- * The availability from the last health payload this component saw. A refetch that fails, or a
- * project switch whose health has not loaded yet, keeps the previous answer instead of hiding
- * every entry until the payload returns.
+ * The availability from the last health payload this component committed. A refetch that fails,
+ * or a project switch whose health has not loaded yet, keeps the previous answer instead of
+ * hiding every entry until the payload returns. Only a committed render records the payload: a
+ * render React discards leaves the kept answer alone.
  */
 export function useAutomationsAvailability(): AutomationsAvailability {
   const health = useHealth().data
   const lastKnown = useRef<HealthResponse | undefined>(undefined)
-  if (health) lastKnown.current = health
+  useEffect(() => { if (health) lastKnown.current = health }, [health])
   const known = health ?? lastKnown.current
   if (!known) return 'unknown'
   return automationsAvailable(known) ? 'available' : 'unavailable'

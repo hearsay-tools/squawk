@@ -1,6 +1,6 @@
 import { productName } from '@/lib/product-name'
 import { projectAddress } from '@/api/run-address'
-import { useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 
 import { useHealth, useProjectRuns, useProjects } from '@/api/queries'
@@ -139,7 +139,7 @@ export function AppShellContainer({ children }: { children: ReactNode }) {
   const projectId = useActiveProjectId()
   const health = useHealth()
   const lastKnownHealth = useRef<HealthResponse | undefined>(undefined)
-  if (health.data) lastKnownHealth.current = health.data
+  useEffect(() => { if (health.data) lastKnownHealth.current = health.data }, [health.data])
   const shellHealth = health.data ?? lastKnownHealth.current
   // Without the server's word for it the nav must not offer a tab whose every request would 409.
   const automations = automationsAvailable(shellHealth)

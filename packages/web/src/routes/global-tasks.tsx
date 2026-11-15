@@ -220,11 +220,11 @@ export function GlobalTasksRoute() {
    * The whole state is re-decoded from the params INSIDE the updater rather than read from this
    * render's closure, and `useSearchParamsWriter` hands the updater the params of every earlier
    * write, rendered or not, so two changes landing in one tick compose instead of the second
-   * silently reverting the first.
+   * silently reverting the first. Every origin decodes here; the render applies availability.
    */
   const commit = (next: (current: GlobalTasksUrlState) => GlobalTasksUrlState) =>
     writeSearchParams((current) => {
-      const params = urlStateToSearchParams(next(urlStateFromSearchParams(current, automations)))
+      const params = urlStateToSearchParams(next(urlStateFromSearchParams(current, true)))
       const renderer = current.get('tasks')
       if (renderer === 'flat' || renderer === 'virtual') params.set('tasks', renderer)
       return params
