@@ -137,10 +137,9 @@ export const runRecordSchema = contractRunRecordSchema.extend({
   webhook: contractRunRecordSchema.shape.webhook.catch(undefined),
   destroyRetry: contractRunRecordSchema.shape.destroyRetry.catch(undefined),
   stopping: contractRunRecordSchema.shape.stopping.catch(undefined),
-  hasPendingPermission: contractRunRecordSchema.shape.hasPendingPermission.catch(undefined),
   autoResumeAt: z.string().datetime().optional().catch(undefined),
   autoResumeAttempts: z.number().int().min(0).optional().catch(undefined), autoResumeReason: contractRunRecordSchema.shape.autoResumeReason.catch(undefined),
-  parkReason: contractRunRecordSchema.shape.parkReason.catch(undefined),
+  parkReason: contractRunRecordSchema.shape.parkReason.catch(undefined), hasPendingPermission: contractRunRecordSchema.shape.hasPendingPermission.catch(undefined),
   pullRequests: z.preprocess((value) => Array.isArray(value)
     ? value.flatMap((entry) => {
         const parsed = runPullRequestSchema.safeParse(entry);
