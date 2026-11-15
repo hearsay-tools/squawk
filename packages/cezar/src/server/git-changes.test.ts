@@ -1282,6 +1282,21 @@ describe('commitAll / pushCurrentBranch — direct degradation paths', () => {
     }
   });
 
+  it('commitAll commits an untracked file the repo config hides from git status', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cez-hidden-untracked-'));
+    try {
+      initRepo(dir);
+      g(dir, 'commit', '--allow-empty', '-m', 'base');
+      g(dir, 'config', 'status.showUntrackedFiles', 'no');
+      writeFileSync(join(dir, 'notes.txt'), 'new\n');
+      const res = await commitAll(dir, 'msg');
+      expect(res.ok).toBe(true);
+      expect(g(dir, 'show', 'HEAD:notes.txt')).toBe('new\n');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('pushCurrentBranch reports detached HEAD as a reason', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'cez-detached-'));
     try {

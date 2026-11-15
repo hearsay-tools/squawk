@@ -52,6 +52,18 @@ describe('pruneOrphans keeps work no other ref holds', () => {
     expect(await tip(root, wt.branch)).not.toBeNull();
   });
 
+  it('keeps an orphan whose only change is an untracked file the repo config hides', async () => {
+    const root = await repo();
+    await run('git', ['config', 'status.showUntrackedFiles', 'no'], { cwd: root });
+    const wt = await createWorktree(root, 'hidden000000', 'main');
+    writeFileSync(join(wt.path, 'notes.txt'), 'untracked\n');
+
+    await expect(pruneOrphans(root, new Set())).resolves.toEqual([]);
+
+    expect(readFileSync(join(wt.path, 'notes.txt'), 'utf8')).toBe('untracked\n');
+    expect(await tip(root, wt.branch)).not.toBeNull();
+  });
+
   it('keeps the branch of a clean orphan whose commits are not on any other ref', async () => {
     const root = await repo();
     const wt = await createWorktree(root, 'ahead0000000', 'main');

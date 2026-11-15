@@ -370,10 +370,12 @@ async function removeCleanWorktree(
   if (!kept.ok || kept.stdout.trim() === '') return;
   // The refusal git would give a dirty tree, read first so a declined removal costs nothing
   // (`beforeRemove` stops the run's preview). git still has the last word at removal time.
-  const status = await git(worktreePath, ['status', '--porcelain']);
+  // A user's `status.showUntrackedFiles=no` would hide untracked files from both reads, and git's
+  // unforced removal would then delete them: both pin git's default.
+  const status = await git(worktreePath, ['status', '--porcelain', '--untracked-files=normal']);
   if (!status.ok || status.stdout.trim() !== '') return;
   await beforeRemove();
-  const removed = await git(repoRoot, ['worktree', 'remove', worktreePath]);
+  const removed = await git(repoRoot, ['-c', 'status.showUntrackedFiles=normal', 'worktree', 'remove', worktreePath]);
   if (!removed.ok) return;
   if (protection.paths.size === 0) await git(repoRoot, ['worktree', 'prune']);
 }
