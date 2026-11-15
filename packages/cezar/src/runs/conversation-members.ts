@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import type { RunIndexTable } from './run-index-rows.ts';
 
 /**
  * `conversation_members` rows for the roots of the runs-shaped table `source` (alias `s`) that
@@ -39,42 +40,27 @@ export const CONVERSATION_MEMBERS_MIGRATION = `
   INSERT OR IGNORE INTO conversation_members (root_id, member_id) ${conversationMembersSelect('runs')};
   `;
 
-const instances = new WeakMap<DatabaseSync, ConversationMembers>();
+/** The index's rows: `[member_id]` per root, the root id implied. */
+export const CONVERSATION_MEMBERS_INDEX: RunIndexTable = { table: 'conversation_members', columns: ['root_id', 'member_id'], select: conversationMembersSelect };
+
+const instances = new WeakMap<DatabaseSync, ConversationRoots>();
 type Execute = <T>(work: () => T) => T;
-export function conversationMembers(db: DatabaseSync, execute: Execute): ConversationMembers {
-  let rows = instances.get(db);
-  if (!rows) { rows = new ConversationMembers(db, execute); instances.set(db, rows); }
-  return rows;
+export function conversationRoots(db: DatabaseSync, execute: Execute): ConversationRoots {
+  let roots = instances.get(db);
+  if (!roots) { roots = new ConversationRoots(db, execute); instances.set(db, roots); }
+  return roots;
 }
 
-/** Prepared once per connection. `replace` and `deleteRun` join the run write that calls them. */
-export class ConversationMembers {
-  private statements;
+/** The index's lookup, prepared once per connection. */
+export class ConversationRoots {
+  private statement;
   constructor(db: DatabaseSync, private execute: Execute) {
-    this.statements = {
-      roots: db.prepare(`SELECT r.id AS id FROM conversation_members c JOIN runs r ON r.id = c.root_id
-        WHERE c.member_id = ? ORDER BY r.created_at DESC, r.seq`),
-      members: db.prepare('SELECT member_id FROM conversation_members WHERE root_id = ? ORDER BY member_id'),
-      delete: db.prepare('DELETE FROM conversation_members WHERE root_id = ?'),
-      insert: db.prepare('INSERT OR IGNORE INTO conversation_members (root_id, member_id) VALUES (?, ?)'),
-    };
+    this.statement = db.prepare(`SELECT r.id AS id FROM conversation_members c JOIN runs r ON r.id = c.root_id
+      WHERE c.member_id = ? ORDER BY r.created_at DESC, r.seq`);
   }
 
   /** The roots whose conversation names `memberId`, newest first; `''` lists every root with one. */
   roots(memberId: string): string[] {
-    return this.execute(() => this.statements.roots.all(memberId)).map((row) => row.id as string);
+    return this.execute(() => this.statement.all(memberId)).map((row) => row.id as string);
   }
-
-  /** A row's stored members: null for none. */
-  membersOf(rootId: string): string[] | null {
-    const members = this.execute(() => this.statements.members.all(rootId)).map((row) => row.member_id as string);
-    return members.length > 0 ? members : null;
-  }
-
-  replace(rootId: string, members: readonly string[] | null): void {
-    this.statements.delete.run(rootId);
-    for (const member of members ?? []) this.statements.insert.run(rootId, member);
-  }
-
-  deleteRun(rootId: string): void { this.statements.delete.run(rootId); }
 }

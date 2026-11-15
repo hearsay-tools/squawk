@@ -179,7 +179,7 @@ it('the database guard refuses a fallback row write loudly, never claims its fam
   try {
     const db = (store as unknown as { db: RunDatabase }).db;
     const row = db.get(fixture.mixed.workerId)!;
-    const upsert = { ...row, data: row.data.replace('historical worker', 'bypass'), conversationMembers: null };
+    const upsert = { ...row, data: row.data.replace('historical worker', 'bypass'), conversationMembers: null, automationRuns: null };
     const fallbackConflict = (run: () => unknown) => {
       try { run(); } catch (error) { return error instanceof RunConflictError ? error.conflicts.map(conflict => conflict.reason) : error; }
       return 'committed';
@@ -190,7 +190,7 @@ it('the database guard refuses a fallback row write loudly, never claims its fam
     expect(db.takeClaims(owner, [{ family: fixture.fallbackLive.parentId, expect: null }, { family: fixture.mixed.parentId, expect: null }])).toEqual(new Map());
     expect(db.getClaim(fixture.mixed.parentId)).toBeUndefined();
     // A legacy row of a mixed family is the store's policy to refuse; the database copies nothing for it.
-    db.transaction({ upserts: [{ ...db.get(fixture.mixed.parentId)!, conversationMembers: null }], deletes: [] });
+    db.transaction({ upserts: [{ ...db.get(fixture.mixed.parentId)!, conversationMembers: null, automationRuns: null }], deletes: [] });
     expect(primaryIds().filter(id => fixture.fallbackIds.has(id))).toEqual([]);
     // The adoption intent copies the whole family first, so the same write then commits.
     db.transaction({ upserts: [upsert], deletes: [], adoptFallback: [fixture.mixed.parentId] });
@@ -211,7 +211,7 @@ it('keeps saving a held legacy family when another process adds a fallback membe
     const late = { ...readPersistedRuns(fallback).find(run => run.id === fixture.fallbackSettled.workerId), id: randomUUID(),
       delegation: { ...readPersistedRuns(fallback).find(run => run.id === fixture.fallbackSettled.workerId).delegation, parentRunId: fixture.legacy.parentId } };
     const source = RunDatabase.open(join(fallback, RUNS_DB_FILE));
-    try { source.transaction({ upserts: [{ ...source.get(fixture.fallbackSettled.workerId)!, id: late.id, parentRunId: fixture.legacy.parentId, data: JSON.stringify(late), conversationMembers: null }], deletes: [] }); }
+    try { source.transaction({ upserts: [{ ...source.get(fixture.fallbackSettled.workerId)!, id: late.id, parentRunId: fixture.legacy.parentId, data: JSON.stringify(late), conversationMembers: null, automationRuns: null }], deletes: [] }); }
     finally { source.close(); }
     const before = fallbackBytes();
     store.updateRun(fixture.legacy.parentId, { title: 'still saved' });
@@ -233,7 +233,7 @@ it('maps a busy legacy database to RunDatabaseBusyError for projected claims and
     lock.exec('BEGIN IMMEDIATE');
     const owner = { session: 'other', pid: process.pid, startToken: null };
     expect(() => db.takeClaims(owner, [{ family: fixture.legacy.parentId, expect: null }])).toThrow(RunDatabaseBusyError);
-    expect(() => db.transaction({ upserts: [{ ...db.get(fixture.legacy.parentId)!, conversationMembers: null }], deletes: [] })).toThrow(RunDatabaseBusyError);
+    expect(() => db.transaction({ upserts: [{ ...db.get(fixture.legacy.parentId)!, conversationMembers: null, automationRuns: null }], deletes: [] })).toThrow(RunDatabaseBusyError);
     // The store's existing contract: a busy claim is deferred to the write, which retries on the next save.
     expect(store.updateRun(fixture.legacy.parentId, { title: 'deferred' })?.title).toBe('deferred');
     lock.exec('ROLLBACK');
@@ -256,7 +256,7 @@ it('settles a queued change refused by a new fallback copy per row, and the rest
     store.updateRun(fixture.legacy.parentId, { title: 'unrelated' });
     // Before the debounced save, the migrating binary writes the same ID under .ai/squawk/.
     const source = RunDatabase.open(join(fallback, RUNS_DB_FILE));
-    try { source.transaction({ upserts: [{ ...row, conversationMembers: null }], deletes: [] }); } finally { source.close(); }
+    try { source.transaction({ upserts: [{ ...row, conversationMembers: null, automationRuns: null }], deletes: [] }); } finally { source.close(); }
     const before = fallbackBytes();
     store.flush();
     expect(readPersistedRuns(primary).find(run => run.id === fixture.legacy.parentId)?.title).toBe('unrelated');
