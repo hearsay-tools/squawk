@@ -182,9 +182,12 @@ or a message. A worker that parks before finishing sends none of these, so the
 parent slept until the deadline (or forever, on Cezar's deadline-less completion
 wait). Cezar now sends the parent a **park notice** from the worker.
 
-- When: a worker is `waiting`, not stopping, destroyed or complete, and has no
-  pending question and no queued input, while its parent has an open `worker`
-  wait that selects it, by worker ID or by a request sent to it. Any park counts
+- When: a worker is `waiting` because its own turn parked it (`parkReason`
+  `turn`, ADR 0064), is not stopping or destroyed, and has no pending question
+  and no queued input, while its parent has an open `worker` wait that selects
+  it, by worker ID or by a request sent to it. A turn's park still counts after
+  a crash or an idle close ended the worker's execution; an automatic-resume hold
+  and a closing session's park do not (hearsay-tools/squawk#3502). Any park counts
   except a question, which already reaches the parent as a routed request (#505).
   Queued input wakes the worker, so the turn that takes it decides at its park.
 - Who fires it: the worker's turn-end park (`settleTurn`, every entry), the

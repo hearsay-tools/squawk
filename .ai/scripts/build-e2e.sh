@@ -49,7 +49,7 @@ node packages/cezar/scripts/inline-contract.mjs "$OUT/dist"
 # bootstrap checks.
 #
 # NODE_ENV=production because Vite derives the bundle's mode from an inherited NODE_ENV, and
-# Squeal reaches this script through the e2e project's globalSetup, inside Vitest, which sets
+# Squeal reaches this script through the e2e project's run setup, inside Vitest, which sets
 # NODE_ENV=test (hearsay-tools/cezarion#1087). That produced a development bundle: the React dev
 # runtime and `import.meta.env.DEV`, so the cockpit started its SharedWorker from the dev-server
 # path `/assets/live-worker-*.ts`. The worker failed, every document fell back to finite HTTP

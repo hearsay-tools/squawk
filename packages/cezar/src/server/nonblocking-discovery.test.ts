@@ -166,3 +166,27 @@ it.each([false, true])('publishes completed availability without a health subscr
   await vi.waitFor(() => expect(published).toHaveBeenCalledWith('health', expect.objectContaining({ checks })), { timeout: HANG_GUARD_MS });
   expect(await (await apiRequest(app, '/api/v1/health')).json()).toMatchObject({ checks });
 });
+
+// hearsay-tools/squawk#3355: each Git spawn blocks this loop until the child execs.
+it('publishes settled availability into the cached snapshot without reading Git again', async () => {
+  const checks: BackendCheck[] = [{ name: 'cursor', available: true, version: '1' }];
+  let finish!: (checks: BackendCheck[]) => void;
+  vi.mocked(detectEnvironment).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+  const repoInfo = vi.spyOn(git, 'getRepoInfo');
+  const events = new WorkspaceEventBus();
+  const settled = new Promise<unknown>((resolve) => {
+    events.on((event, payload) => { if (event === 'health' && (payload as { checks: BackendCheck[] }).checks.length > 0) resolve(payload); });
+  });
+  const app = build(undefined, {
+    workspaceEvents: events,
+    providerAuth: new ProviderAuthService({ runCommand: async () => ({ stdout: '', stderr: '', exitCode: 1 }) }),
+    socketHub: { registerTopic: () => {}, registerTopicFamily: () => {}, handleUpgrade: () => {}, close: () => {}, onClose: () => () => undefined },
+  });
+  const cold = await (await apiRequest(app, '/api/v1/health')).json() as { repoRoot: string };
+  expect(cold).toMatchObject({ checks: [] });
+  expect(repoInfo).toHaveBeenCalledOnce();
+  finish(checks);
+  expect(await settled).toMatchObject({ checks, repoRoot: cold.repoRoot });
+  expect(await (await apiRequest(app, '/api/v1/health')).json()).toMatchObject({ checks });
+  expect(repoInfo).toHaveBeenCalledOnce();
+});

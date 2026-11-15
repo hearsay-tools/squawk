@@ -14,6 +14,7 @@ import { autosaveCleanupBlocker, clearAutosaveCleanup } from '../autosave-cleanu
 import { EventEmitter } from 'node:events';
 import { admissibleExecution, holderRefusal, SPAWN_NEXT, WorkerAdmissionRefusal, workerEvidenceRunIds, workerExecutionSchema, type WorkerExecution } from './worker-execution.ts';
 import { agentTmpDirLocations, agentTmpDirMayExist, agentTmpDirOwnershipProven, removeAgentTmpDir } from './agent-tmpdir.ts';
+import { jobRunsIn } from '../jobs/job.ts';
 import { removeArtifacts } from '../artifacts/lifecycle.ts';
 import { randomUUID, createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -137,9 +138,9 @@ export const runRecordSchema = contractRunRecordSchema.extend({
   webhook: contractRunRecordSchema.shape.webhook.catch(undefined),
   destroyRetry: contractRunRecordSchema.shape.destroyRetry.catch(undefined),
   stopping: contractRunRecordSchema.shape.stopping.catch(undefined),
-  hasPendingPermission: contractRunRecordSchema.shape.hasPendingPermission.catch(undefined),
   autoResumeAt: z.string().datetime().optional().catch(undefined),
   autoResumeAttempts: z.number().int().min(0).optional().catch(undefined), autoResumeReason: contractRunRecordSchema.shape.autoResumeReason.catch(undefined),
+  parkReason: contractRunRecordSchema.shape.parkReason.catch(undefined), hasPendingPermission: contractRunRecordSchema.shape.hasPendingPermission.catch(undefined),
   pullRequests: z.preprocess((value) => Array.isArray(value)
     ? value.flatMap((entry) => {
         const parsed = runPullRequestSchema.safeParse(entry);
@@ -3147,10 +3148,9 @@ export class RunStore extends EventEmitter {
   private archiveSettledFamily(root: RunRecord): void {
     const workers = this.listWorkersOf(root.id), family = [root, ...workers];
     if (family.some((run) => isLiveRecord(run) || run.pinned) || (root.delegation?.role === 'root' && root.delegation.historyDeletion)) return;
-    for (const member of [root, ...workers.flatMap((worker) => this.record(worker.id) ?? [])]) {
-      if (member.archived) continue;
+    for (const member of [root, ...workers.flatMap((worker) => this.record(worker.id) ?? [])].filter((run) => !run.archived)) {
       this.applyArchived(member, true);
-      removeAgentTmpDir(this.dataDir, member.id);
+      if (!jobRunsIn(agentTmpDirLocations(this.dataDir, member.id))) removeAgentTmpDir(this.dataDir, member.id);
     }
   }
 
