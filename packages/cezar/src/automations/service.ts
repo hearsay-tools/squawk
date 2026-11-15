@@ -1,6 +1,6 @@
 import type { Home } from '../home/home.ts';
 import type { z } from 'zod';
-import { type AutomationKind, type AutomationListQuery, type OnceStatus } from '@open-mercato/cezar-contract/automations';
+import { writableAutomationTask, type AutomationKind, type AutomationListQuery, type OnceStatus } from '@open-mercato/cezar-contract/automations';
 import { nextOccurrence, ONCE_PAST_DUE_MESSAGE, onceInstant } from '@open-mercato/cezar-contract/automation-schedule';
 import { automationCreateSchema, automationUpdateSchema, type AutomationEditable } from '@open-mercato/cezar-contract/automation-requests';
 import { SCHEDULED_TASK_NOTE } from '@open-mercato/cezar-contract/scheduled-tasks';
@@ -87,7 +87,7 @@ function editableAutomation(definition: AutomationDefinition) {
     ...(definition.intervalSeconds !== undefined ? { intervalSeconds: definition.intervalSeconds } : {}),
     ...(definition.filters ? { filters: definition.filters } : {}),
     ...(definition.schedule ? { schedule: definition.schedule } : {}),
-    task: definition.task,
+    task: writableAutomationTask(definition.task),
   };
 }
 

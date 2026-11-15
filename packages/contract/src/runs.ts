@@ -867,10 +867,6 @@ export type AttachmentInput = z.input<typeof attachmentInputSchema>;
 export const imageInputSchema = attachmentInputSchema;
 export type ImageInput = AttachmentInput;
 
-export const PARALLEL_VARIANTS_REMOVED = 'Parallel variants are removed. Use owned workers to compare approaches; collect their results and integrate the chosen commits explicitly.';
-/** A refusal fence for older callers: never strip a candidate count and launch one run. */
-export const singleRunVariantsSchema = z.literal(1, { error: PARALLEL_VARIANTS_REMOVED }).optional();
-
 /**
  * The KEYS of `POST /runs`' body, before the XOR refinement that `createRunInputSchema` adds.
  *
@@ -893,8 +889,6 @@ export const createRunInputBaseSchema = z
     /** Agent account for this task (spec 2026-07-29-agent-profiles). Omit to follow the
      *  project's own selection; an id that no longer exists is a 400, not a silent default. */
     agentProfile: z.string().max(64).optional(),
-    /** Retired input. Only the old single-run spelling is accepted. */
-    variants: singleRunVariantsSchema,
     /** false → run in the repo working tree instead of an isolated worktree (read-only skills).
      *  Omit for the default. */
     worktree: z.boolean().optional(),

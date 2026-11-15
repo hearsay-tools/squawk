@@ -48,7 +48,7 @@ describe('main dispatch', () => {
     await f.run();
     expect(f.deps.resolveCliHome).toHaveBeenCalledExactlyOnceWith();
     expect(f.deps.prepareOperatorHome).toHaveBeenCalledExactlyOnceWith(f.home, undefined);
-    expect(f.deps.serveCommand).toHaveBeenCalledWith(f.home, '/work', 4321, true, undefined, false);
+    expect(f.deps.serveCommand).toHaveBeenCalledWith(f.home, '/work', 4321, true, undefined);
   });
 
   it.each(['--help', '-h'])('prints help for %s before repo access or Home preparation', async (flag) => {
@@ -70,18 +70,18 @@ describe('main dispatch', () => {
     await f.run();
     expect(f.deps.getRepoInfo).toHaveBeenCalledWith('/work');
     expect(f.deps.prepareOperatorHome).toHaveBeenCalledWith(f.home, 'serve');
-    expect(f.deps.serveCommand).toHaveBeenCalledExactlyOnceWith(f.home, '/work', 4321, true, undefined, false);
+    expect(f.deps.serveCommand).toHaveBeenCalledExactlyOnceWith(f.home, '/work', 4321, true, undefined);
     expect(f.processStub.exitCode).toBeUndefined();
   });
 
-  it('resolves the repo root before forwarding serve port, browser, bind, and restart flags', async () => {
-    const f = fixture(['--port', '5678', '--repo', '/requested/nested', '--no-open', '--bind-host', '::1', '--restart-exact', 'serve']);
+  it('resolves the repo root before forwarding serve port, browser, and bind flags', async () => {
+    const f = fixture(['--port', '5678', '--repo', '/requested/nested', '--no-open', '--bind-host', '::1', 'serve']);
     f.deps.getRepoInfo.mockResolvedValue({ root: '/requested' });
     await f.run();
     expect(f.deps.getRepoInfo).toHaveBeenCalledWith('/requested/nested');
     expect(f.deps.getRepoInfo).toHaveBeenCalledBefore(f.deps.serveCommand);
     expect(f.deps.prepareOperatorHome).toHaveBeenCalledWith(f.home, 'serve');
-    expect(f.deps.serveCommand).toHaveBeenCalledWith(f.home, '/requested', 5678, false, '::1', true);
+    expect(f.deps.serveCommand).toHaveBeenCalledWith(f.home, '/requested', 5678, false, '::1');
   });
 
   it('joins and trims run positionals while forwarding workflow, model, and denied access', async () => {

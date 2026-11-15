@@ -1,4 +1,5 @@
 # Show Input/Output Tokens and Cost per Session
+Status: done
 
 ## 📝 TLDR
 

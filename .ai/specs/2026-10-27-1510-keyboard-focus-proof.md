@@ -1,4 +1,5 @@
 # Footer keyboard focus proof — hearsay-tools/cezarion#1510
+Status: done
 
 ## Finding
 

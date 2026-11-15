@@ -1,6 +1,7 @@
 # Scheduled automations — stage 1 of three (issue hearsay-tools/cezarion#766)
+Status: done
 
-> Status: implemented (stage 1) · Fork adaptation of upstream open-mercato/cezar#985
+> Recorded status: implemented (stage 1) · Fork adaptation of upstream open-mercato/cezar#985
 > (`fbfb492493058acd8ddfca1a311c92f107c24386`). Extends the fork's
 > `.ai/specs/2026-07-25-github-automations.md` (amended by open-mercato/cezar#801 opt-in gating and hearsay-tools/cezarion#651 lease
 > safeguards).

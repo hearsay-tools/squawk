@@ -79,6 +79,7 @@ async function fixture(existing?: { directory: string; spec: string }, executabl
   return { directory, child }
 }
 
+// Each explicit flush and the final exit can contribute separate coverage deltas.
 function results(directory: string): Array<{ url: string; functions: Array<{ functionName: string; ranges: Array<{ count: number }> }> }> {
   return readdirSync(directory, { recursive: true, encoding: 'utf8' })
     .filter(file => file.endsWith('.json'))
@@ -98,7 +99,7 @@ test('records server functions and live mock coverage under the task owner spec'
   await endNodeCapture(directory, spec)
   const evidence = results(join(directory, 'first', 'node'))
   expect(evidence.some(script => script.url.endsWith('/dist/index.js'))).toBe(true)
-  expect(evidence.find(script => script.url.endsWith('/mock-case.mjs'))?.functions)
+  expect(evidence.filter(script => script.url.endsWith('/mock-case.mjs')).flatMap(script => script.functions))
     .toEqual(expect.arrayContaining([expect.objectContaining({ functionName: 'scenario', ranges: expect.arrayContaining([expect.objectContaining({ count: 1 })]) })]))
   await beginNodeCapture(directory, 'packages/web/e2e/second.e2e.ts')
   await endNodeCapture(directory, 'packages/web/e2e/second.e2e.ts')
@@ -123,7 +124,7 @@ test('flushes a terminated mock and preserves its SIGTERM exit signal', async ()
   await endNodeCapture(directory, spec)
   expect(nodeCaptureComplete(directory, spec)).toBe(true)
   const evidence = results(join(directory, 'terminated', 'node'))
-  expect(evidence.find(script => script.url.endsWith('/mock-case.mjs'))?.functions)
+  expect(evidence.filter(script => script.url.endsWith('/mock-case.mjs')).flatMap(script => script.functions))
     .toEqual(expect.arrayContaining([expect.objectContaining({ functionName: 'scenario' })]))
 })
 
@@ -204,7 +205,7 @@ test('captures an executable mock supplied as the spawn command', async () => {
   child.stdin.write('task-executable\n')
   await ready
   await endNodeCapture(directory, spec)
-  expect(results(join(directory, 'executable', 'node')).find(script => script.url.endsWith('/mock-case.mjs'))?.functions)
+  expect(results(join(directory, 'executable', 'node')).filter(script => script.url.endsWith('/mock-case.mjs')).flatMap(script => script.functions))
     .toEqual(expect.arrayContaining([expect.objectContaining({ functionName: 'scenario' })]))
 })
 
@@ -326,6 +327,6 @@ test.each([true, false])('uses the final coverage receipt only for matching proc
   if (!validReceipt) { await expect(capture).rejects.toThrow(); return }
   await capture
   expect(nodeCaptureComplete(directory, spec)).toBe(true)
-  expect(results(join(directory, 'exit-race/node')).find(script => script.url.endsWith('/mock-case.mjs'))?.functions)
+  expect(results(join(directory, 'exit-race/node')).filter(script => script.url.endsWith('/mock-case.mjs')).flatMap(script => script.functions))
     .toEqual(expect.arrayContaining([expect.objectContaining({ functionName: 'scenario' })]))
 })

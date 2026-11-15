@@ -158,14 +158,14 @@ test('busy cockpit port from a different cwd refuses before recovery or startup 
   } finally { await f.close(); }
 });
 
-for (const host of ['127.0.0.1', '127.0.0.2']) for (const restartExact of [false, true]) test(`ordinary occupied port refuses on ${host} (restart-exact=${restartExact})`, { timeout: 40_000 }, async () => {
+for (const host of ['127.0.0.1', '127.0.0.2']) test(`ordinary occupied port refuses on ${host}`, { timeout: 40_000 }, async () => {
   const f = await fixture();
   try {
     const repo = await f.repo('repo');
     const expectedDataDir = projectPaths(repo).write;
     // A loopback-only probe on 127.0.0.1 would miss the 127.0.0.2 occupant.
     const { port } = await f.occupy(0, host);
-    refused(await f.start(repo, ['--bind-host', host, '--port', String(port), ...(restartExact ? ['--restart-exact'] : [])]).outcome(), port);
+    refused(await f.start(repo, ['--bind-host', host, '--port', String(port)]).outcome(), port);
     assert.equal(existsSync(join(expectedDataDir, 'runs')), false, 'no store initialized');
     assert.equal(existsSync(Home.sandbox(join(f.root, 'home')).workspaceConfig), false, 'no workspace initialized');
     assert.equal(existsSync(join(expectedDataDir, 'cockpit.lock')), false);

@@ -1,4 +1,5 @@
 # One wait-kind table behind one wait engine
+Status: done
 
 Decision record: [ADR 0061](../../docs/adr/0061-one-wait-engine-executes-wait-kind-rows.md).
 Glossary: [Wait kind](../../GLOSSARY.md#wait-kind), [Wait engine](../../GLOSSARY.md#wait-engine).

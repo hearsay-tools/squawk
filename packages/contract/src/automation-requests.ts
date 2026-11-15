@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { automationKindSchema, automationLogResultSchema, automationEventSchema } from './automations.ts';
 import { storedAutomationFiltersSchema as automationFiltersSchema, storedAutomationTaskSchema as automationTaskSchema } from './automation-storage.ts';
 import { automationScheduleSchema } from './automation-schedule.ts';
-import { singleRunVariantsSchema } from './runs.ts';
 
 /**
  * The editable body of both kinds. Every kind-specific key is optional here because which ones a
@@ -19,7 +18,9 @@ export const automationEditableSchema = z
     intervalSeconds: z.number().int().min(60).max(86_400).optional(),
     filters: automationFiltersSchema.optional(),
     schedule: automationScheduleSchema.optional(),
-    task: automationTaskSchema.safeExtend({ variants: singleRunVariantsSchema }),
+    task: z.strictObject(automationTaskSchema.shape).omit({ variants: true }).refine((task) => !(task.workflow && task.steps), {
+      message: 'task selects either a named workflow or inline steps, not both',
+    }),
   })
   .strict();
 export type AutomationEditable = z.infer<typeof automationEditableSchema>;

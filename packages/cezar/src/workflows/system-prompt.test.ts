@@ -137,7 +137,6 @@ describe('systemPrompt end-to-end (dry run)', () => {
   const SKILL_BODY = 'Inspect the selected pull request and review its diff.';
   let repoRoot: string;
   let argsFile: string;
-  let inheritedTodos: string;
   let store: RunStore;
   let manager: RunManager;
   const savedEnv: Record<string, string | undefined> = {};
@@ -169,21 +168,14 @@ describe('systemPrompt end-to-end (dry run)', () => {
   beforeAll(async () => {
     repoRoot = await seedRepo('cez-sysprompt-');
     argsFile = join(repoRoot, 'mock-args.ndjson');
-    inheritedTodos = join(repoRoot, 'inherited-todos.json');
     savedEnv.CEZ_DRY_RUN = process.env.CEZ_DRY_RUN;
     savedEnv.CEZ_MOCK_ARGS_FILE = process.env.CEZ_MOCK_ARGS_FILE;
-    savedEnv.CEZ_TODOS_FILE = process.env.CEZ_TODOS_FILE;
     savedEnv.CEZ_AUTONAME = process.env.CEZ_AUTONAME;
     process.env.CEZ_DRY_RUN = '1';
     // Dry-run skips naming by default (canned titles would clobber honest
     // heuristics in demos/e2e); '1' forces the mock path for these tests.
     process.env.CEZ_AUTONAME = '1';
     process.env.CEZ_MOCK_ARGS_FILE = argsFile;
-    // Simulate a nested Squawk (an agent running `cez serve` / the test suite):
-    // the parent process already carries CEZ_TODOS_FILE. Runners spawn with
-    // `{ ...process.env, ...spec.env }`, so `agentEnv` must *shadow* this for
-    // every run, so an older parent cannot pass a writable inbox into a child.
-    process.env.CEZ_TODOS_FILE = inheritedTodos;
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
     // Cap 1 (workspace-level since step 2.5) serializes the suite's runs.
     manager = createFixtureManager(store, repoRoot, { home: testHome(),

@@ -54,7 +54,6 @@ interface HealthBody {
   forge: unknown;
   capabilities: {
     localHandoff: boolean;
-    followups: boolean;
     automations: boolean;
     tokenMetrics: boolean;
   };
@@ -65,7 +64,6 @@ interface HealthBody {
 describe('workspace projects API', () => {
   const savedHome = process.env.CEZ_HOME;
   const savedRemote = process.env.CEZ_REMOTE;
-  const savedFollowups = process.env.CEZ_FOLLOWUPS;
   const savedAutomations = process.env.CEZ_AUTOMATIONS;
   const savedDryRun = process.env.CEZ_DRY_RUN;
   let home: string;
@@ -80,7 +78,6 @@ describe('workspace projects API', () => {
     useTestHome(home ? Home.sandbox(home) : undefined); // paths.ts sends all workspace paths here
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
     delete process.env.CEZ_REMOTE;
-    delete process.env.CEZ_FOLLOWUPS;
     delete process.env.CEZ_AUTOMATIONS;
     // Deterministic on any machine: no network, no real agent CLIs.
     process.env.CEZ_DRY_RUN = '1';
@@ -94,8 +91,6 @@ describe('workspace projects API', () => {
     else useTestHome(savedHome ? Home.sandbox(savedHome) : undefined);
     if (savedRemote === undefined) delete process.env.CEZ_REMOTE;
     else process.env.CEZ_REMOTE = savedRemote;
-    if (savedFollowups === undefined) delete process.env.CEZ_FOLLOWUPS;
-    else process.env.CEZ_FOLLOWUPS = savedFollowups;
     if (savedAutomations === undefined) delete process.env.CEZ_AUTOMATIONS;
     else process.env.CEZ_AUTOMATIONS = savedAutomations;
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;

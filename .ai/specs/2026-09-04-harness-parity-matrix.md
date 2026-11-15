@@ -1,4 +1,5 @@
 # Shared harness parity test matrix
+Status: done
 
 > Issue: hearsay-tools/cezarion#68 · Depends on: `2026-07-14-cockpit-ui-redesign.md` (protocol v2 and its backend-parity requirement)
 

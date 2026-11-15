@@ -21,7 +21,6 @@ describe('POST /api/v1/runs systemPrompt', () => {
   let store: RunStore;
   let app: Hono;
   let captured: StartRunInput | undefined;
-  const savedFollowups = process.env.CEZ_FOLLOWUPS;
 
   beforeEach(() => {
     repoRoot = mkdtempSync(join(tmpdir(), 'cez-startrun-'));
@@ -29,7 +28,6 @@ describe('POST /api/v1/runs systemPrompt', () => {
     captured = undefined;
     // #471: these assertions are about systemPrompt, so pin the inbox on and
     // let the dedicated suite below own the gate's behavior.
-    process.env.CEZ_FOLLOWUPS = '1';
     // The route hands the parsed input straight to the manager — a capturing
     // stub is all the harness needs (the patch-run.test.ts pattern).
     const manager = {
@@ -50,8 +48,6 @@ describe('POST /api/v1/runs systemPrompt', () => {
   afterEach(() => {
     store.flush();
     rmSync(repoRoot, { recursive: true, force: true });
-    if (savedFollowups === undefined) delete process.env.CEZ_FOLLOWUPS;
-    else process.env.CEZ_FOLLOWUPS = savedFollowups;
   });
 
   const post = (body: unknown) =>

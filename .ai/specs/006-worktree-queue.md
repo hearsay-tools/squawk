@@ -1,6 +1,7 @@
 # 006 — Worktree per task, kolejka i `maxParallel`
+Status: done
 
-Status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 2 · Zależy od: — · Wzorzec: janitor `git.ts` (worktree + autosave) i `tasks.ts` (`pump()`)
+Recorded status: ZAIMPLEMENTOWANE 2026-07-10 · Fala: 2 · Zależy od: — · Wzorzec: janitor `git.ts` (worktree + autosave) i `tasks.ts` (`pump()`)
 
 ## Cel
 

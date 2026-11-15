@@ -1,4 +1,5 @@
 # CEZ_SINGLE_PROJECT mode
+Status: superseded
 
 > **Removed 2026-11-13** (hearsay-tools/squawk#2988). This mode no longer exists; the env vars
 > are ignored and every rule below is history. See `BACKWARD_COMPATIBILITY.md` and the CHANGELOG.

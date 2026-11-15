@@ -1,4 +1,5 @@
 # Break up RunManager: a facade over `workflows/run/` modules
+Status: done
 
 Epic hearsay-tools/cezarion#2051; this record is hearsay-tools/cezarion#2052. The owner approved
 the plan on 2026-10-28. Decision record: [ADR 0053](../../docs/adr/0053-keep-runmanager-a-facade-over-run-modules.md).

@@ -20,7 +20,7 @@ export const defaultCliDeps = {
 export type CliDeps = typeof defaultCliDeps & {
   resolveCliHome: () => Home;
   readOwnVersion: () => string;
-  serveCommand: (home: Home, root: string, port: number, open: boolean, bindHost: string | undefined, restartExact: boolean) => Promise<void>;
+  serveCommand: (home: Home, root: string, port: number, open: boolean, bindHost: string | undefined) => Promise<void>;
   serverCommand: typeof serverCommand;
   runCommand: (home: Home, root: string, task: string, workflow: string | undefined, model: string | undefined, access: TaskAccess) => Promise<void>;
   initCommand: (root: string) => void | Promise<void>;
@@ -155,7 +155,6 @@ async function dispatch(deps: CliDeps): Promise<void> {
       reinstall: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
       version: { type: 'boolean', short: 'v', default: false },
-      'restart-exact': { type: 'boolean', default: false },
     },
     allowPositionals: true,
   });
@@ -180,7 +179,7 @@ async function dispatch(deps: CliDeps): Promise<void> {
 
   switch (command) {
     case 'serve':
-      await deps.serveCommand(home(), repoRoot, Number(values.port), !values['no-open'], values['bind-host'], Boolean(values['restart-exact']));
+      await deps.serveCommand(home(), repoRoot, Number(values.port), !values['no-open'], values['bind-host']);
       return;
     case 'run':
       await deps.runCommand(home(), repoRoot, task, values.workflow, values.model,

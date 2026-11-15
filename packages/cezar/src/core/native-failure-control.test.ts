@@ -29,7 +29,7 @@ function run(runner: RunnerId, path: string, prompt: string) {
   // driveSeam supplies a fresh cwd and native subprocess on every call. The
   // absolute control path must retain state independently of either lifetime.
   return driveSeam(runner, 'baseline', { spec: { userPrompt: prompt,
-    env: { CEZ_MOCK_FAILURE_CONTROL: path, CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '', CEZ_MOCK_ARGS_FILE: '' } } });
+    env: { CEZ_MOCK_FAILURE_CONTROL: path, CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: '' } } });
 }
 function expectFailure(observation: Awaited<ReturnType<typeof run>>) {
   expect(observation.v1.filter(event => event.type === 'error')).not.toHaveLength(0);
@@ -50,7 +50,7 @@ describe.each(['opencode', 'codex', 'omp', 'pi'] as const)('%s native failure st
     const observation = await driveSeam(runner, 'baseline', {
       spec: { userPrompt: opening, env: { CEZ_MOCK_FAILURE_CONTROL: control.path,
         CEZ_MOCK_DELIVERY_CONTROL: delivery.path, CEZ_MOCK_WIRE_FILE: wire,
-        CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '', CEZ_MOCK_ARGS_FILE: '' } },
+        CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: '' } },
       sessionOptions: { onAgentInputConsumed: ids => consumed.push(...ids) },
       whileOpen: async (session, { v1 }) => {
         try {
@@ -105,7 +105,7 @@ describe.each(RUNNER_IDS)('%s native failure control', runner => {
     expectSuccess(await run(runner, control.path, 'inspect the working tree'));
     expect(control.held()).toBe(false);
     const observation = await driveSeam(runner, 'provider-error-controlled', {
-      spec: { env: { CEZ_MOCK_FAILURE_CONTROL: control.path, CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '', CEZ_MOCK_ARGS_FILE: '' } },
+      spec: { env: { CEZ_MOCK_FAILURE_CONTROL: control.path, CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: '' } },
       whileOpen: async (_session, { v1 }) => {
         try {
           await waitFor(control.held);
@@ -150,7 +150,7 @@ it('keeps a Pi echo scenario from holding or consuming a later provider failure'
   const control = fixture({ mode: 'gated-once' });
   const echo = await driveSeam('pi', 'baseline', {
     spec: { userPrompt: 'mock:agent-echo mock:provider-error',
-      env: { CEZ_MOCK_FAILURE_CONTROL: control.path, CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '', CEZ_MOCK_ARGS_FILE: '' } },
+      env: { CEZ_MOCK_FAILURE_CONTROL: control.path, CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: '' } },
     whileOpen: async (_session, { v1 }) => {
       try {
         await waitFor(() => control.held() || v1.some(event => event.type === 'turn-end'));
@@ -163,7 +163,7 @@ it('keeps a Pi echo scenario from holding or consuming a later provider failure'
   });
   expectSuccess(echo);
   const failure = await driveSeam('pi', 'provider-error', {
-    spec: { env: { CEZ_MOCK_FAILURE_CONTROL: control.path, CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '', CEZ_MOCK_ARGS_FILE: '' } },
+    spec: { env: { CEZ_MOCK_FAILURE_CONTROL: control.path, CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: '' } },
     whileOpen: async (_session, { v1 }) => {
       try {
         await waitFor(control.held);

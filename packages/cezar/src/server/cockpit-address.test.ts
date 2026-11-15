@@ -3,6 +3,8 @@ import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
+import { once } from 'node:events';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -72,4 +74,41 @@ describe('startServer cockpit address', () => {
       store.close();
     }
   }, 15_000);
+
+  it('addresses a project context built before the cockpit listens', async () => {
+    const bootId = (await registerProject(bootRoot, undefined, testHome())).id;
+    const otherId = (await registerProject(otherRoot, undefined, testHome())).id;
+    const store = RunStore.open(join(bootRoot, '.ai/cezar'), { keepLive: true });
+    const contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), listProjects: () => listProjects(testHome())});
+    const built = await contexts.context(otherId);
+    const server = startServer({ home: testHome(), repoRoot: bootRoot, bootProjectId: bootId, store,
+      manager: { isActive: () => false, setCockpitAddress: vi.fn() } as unknown as RunManager, version: '0.0.0-test', contexts }, 0);
+    try {
+      if (!server.listening) await once(server, 'listening');
+      expect(built.manager.cockpitAddress()).toEqual({ origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, projectId: otherId });
+    } finally {
+      server.close();
+      await contexts.disposeAll();
+      store.close();
+    }
+  });
+
+  it('addresses the requested port when the supplied listener is bound to a socket path', async () => {
+    const bootId = (await registerProject(bootRoot, undefined, testHome())).id;
+    const store = RunStore.open(join(bootRoot, '.ai/cezar'), { keepLive: true });
+    const manager = createRunManager(store, bootRoot, { home: testHome(), createRunner });
+    const socketDir = mkdtempSync(join(tmpdir(), 'cez-address-socket-'));
+    const listener = createServer();
+    listener.listen(join(socketDir, 'cockpit.sock'));
+    await once(listener, 'listening');
+    const server = startServer({ home: testHome(), repoRoot: bootRoot, bootProjectId: bootId, store, manager, version: '0.0.0-test' }, 4321, listener);
+    try {
+      expect(manager.cockpitAddress()).toEqual({ origin: 'http://127.0.0.1:4321', projectId: bootId });
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+      manager.dispose();
+      store.close();
+      rmSync(socketDir, { recursive: true, force: true });
+    }
+  });
 });

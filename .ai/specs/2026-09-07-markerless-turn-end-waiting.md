@@ -1,4 +1,5 @@
 # Immediate waiting state for markerless turn ends
+Status: done
 
 > Issue: hearsay-tools/cezarion#119
 

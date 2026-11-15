@@ -31,7 +31,7 @@ async function fixture(check: (ctx: {
   const trace = join(cwd, 'stdin.jsonl');
   const session = new ClaudeCliRunner({ bin }).startSession({ toolGrant: UNSET_TOOL_GRANT,
     userPrompt: `mock:model-refusal:${seed ? 'seed' : 'always'}`, cwd, timeoutMs, sessionId: 'model-refusal-session', resume: !seed,
-    env: { CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '', CEZ_MOCK_STDIN_FILE: trace },
+    env: { CEZ_HANDOFF_FILE: '', CEZ_MOCK_STDIN_FILE: trace },
   }, e => events.push(e), { autoEndAfterFirstTurn: autoEnd, onUiEvent: e => ui.push(e), onAgentInputConsumed: ids => consumed.push(...ids) });
   const settled = session.result.catch(() => undefined);
   const turns = () => events.filter(e => e.type === 'turn-end').length;

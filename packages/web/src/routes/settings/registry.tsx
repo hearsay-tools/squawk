@@ -1,9 +1,8 @@
 import { TasksSection } from './archive-on-merge-field'
 import { BellIcon, BotIcon, FoldersIcon, GaugeIcon, KeyRoundIcon, PaletteIcon } from '@/components/design-icons'
-import { FileCogIcon, FileTextIcon, FolderGit2Icon, KeyboardIcon } from 'lucide-react'
+import { FileCogIcon, FileTextIcon, FolderGit2Icon } from 'lucide-react'
 import type { ComponentType, SVGProps } from 'react'
 
-import { CenteredState } from '@/components/centered-state'
 import { AccountsSection } from './accounts-section'
 import { AgentConfigSection } from './agent-config-section'
 import { AgentsSection } from './agents-section'
@@ -26,9 +25,6 @@ import { WorktreesSection } from './worktrees-section'
  * store it writes. The rule of thumb: does the setting describe THIS REPO (agents, worktrees,
  * prompt templates) or the person/machine (appearance, notifications, host
  * resources, the project registry)?
- *
- * `hidden` sections are declared but not routed and not listed: keyboard remains a later
- * phase; MCP now lives inside Agent config as a per-agent subsection.
  */
 
 export type SettingsSectionId =
@@ -42,7 +38,6 @@ export type SettingsSectionId =
   | 'projects'
   | 'notifications'
   | 'prompt-templates'
-  | 'keyboard'
   | 'tasks'
 
 /** Which settings area a section belongs to — and therefore which store it writes. */
@@ -57,23 +52,6 @@ export interface SettingsSection {
   component: ComponentType
   /** `project` → `/p/<projectId>/settings/<id>`, `global` → `/settings/global/<id>`. */
   scope: SettingsScope
-  /** Declared but not yet implemented: no nav entry, no route (the URL is honestly a 404). */
-  hidden?: boolean
-}
-
-/** A registry entry whose real section arrives in a later Step — routable, honest about it. */
-function comingSoon(title: string, Icon: ComponentType<SVGProps<SVGSVGElement>>): ComponentType {
-  return function ComingSoonSection() {
-    return (
-      <CenteredState
-        icon={<Icon />}
-        tone="neutral"
-        title={title}
-        subtitle="This section arrives in a later phase of the redesign."
-        heading="h2"
-      />
-    )
-  }
 }
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
@@ -160,22 +138,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     component: ProjectsSection,
     scope: 'global',
   },
-  {
-    id: 'keyboard',
-    title: 'Keyboard',
-    description: 'Shortcuts.',
-    icon: KeyboardIcon,
-    component: comingSoon('Keyboard', KeyboardIcon),
-    scope: 'global',
-    hidden: true,
-  },
 ]
 
 /**
- * What one settings area's nav and route table actually show — hidden sections drop out
- * entirely, and so does everything belonging to the OTHER scope. The two areas are rendered by
- * the same shell, so this filter is the only thing keeping them apart.
+ * What one settings area's nav and route table actually show — only sections belonging to
+ * that scope. The two areas use the same shell, so this filter keeps them apart.
  */
 export function visibleSettingsSections(scope: SettingsScope): SettingsSection[] {
-  return SETTINGS_SECTIONS.filter((section) => !section.hidden && section.scope === scope)
+  return SETTINGS_SECTIONS.filter((section) => section.scope === scope)
 }

@@ -1,4 +1,5 @@
 # Hold a run on a provider error instead of failing it
+Status: done
 
 Issue: hearsay-tools/squawk#3337 (friction group CJ). Baseline: `main` at `cc3cead4b`. Designed
 with the owner on 2026-11-12 in task 9986e564 (design track, `friction-design`).

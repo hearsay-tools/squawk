@@ -46,7 +46,6 @@ describe('projectSwitchTarget', () => {
     '/p/other/git/',
     '/p/other/Git',
     '/p/other/new',
-    '/p/other/inbox',
     '/p/other/skills',
     '/p/other/workflows',
     '/p/other/automations/new',
@@ -432,14 +431,6 @@ describe('resolveProjectSwitch: the answer for each entity kind', () => {
     })
   })
 
-  it('keeps a routed page that no existence check covers, with no request', async () => {
-    // `/compare/:groupId` is the retired page's redirect: it has a param, so it is verified, and
-    // nothing in the checker table claims it.
-    expect(await landing('/p/other/compare/g1')).toBe('kept')
-    for (const request of [client.getRun, client.getRunCommit, client.getRepoCommit, client.getGithubItem, client.getWorkflows, client.getAutomations]) {
-      expect(request).not.toHaveBeenCalled()
-    }
-  })
 
   describe('the abort signal', () => {
     const requestSignals = () => [

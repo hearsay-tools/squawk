@@ -91,8 +91,8 @@ function inDirectory(base: PlatformStrategy, dir: string): PlatformStrategy {
 /** A plist as an install made before the rename wrote it: the old label. */
 const legacyLabel = (xml: string) => xml.replaceAll('tools.hearsay.squawk.', 'ai.cezar.');
 
-/** A completed pre-rename macOS install: both agents loaded and recorded, unless `ngrokRecorded` is false. */
-function macInstall({ ngrokRecorded = true } = {}) {
+/** A completed pre-rename macOS install: both agents loaded and recorded, unless `cockpitRecorded` or `ngrokRecorded` is false. */
+function macInstall({ cockpitRecorded = true, ngrokRecorded = true } = {}) {
   const f = migrationFixture();
   const dir = join(f.directory, 'LaunchAgents');
   mkdirSync(dir, { recursive: true });
@@ -106,7 +106,7 @@ function macInstall({ ngrokRecorded = true } = {}) {
     schema: 1, platform: 'macosx-ngrok', instance: 'default', installed: true, primaryPort: 4321, publicUrl: 'https://cockpit.ngrok.app', ephemeral: false,
     steps: {
       deps: { status: done, created: { artifacts: [] } },
-      autostart: { status: done, created: { artifacts: [agent(OLD[0]!)] } },
+      autostart: { status: done, created: cockpitRecorded ? { artifacts: [agent(OLD[0]!)] } : null },
       ngrok: { status: done, created: ngrokRecorded ? { artifacts: [{ kind: 'shared', type: 'ngrok-config', name: 'authtoken' }, agent(OLD[1]!)] } : null },
       identity: { status: done, created: { artifacts: [] } },
     },
@@ -169,6 +169,14 @@ describe('hsq server-migrate on macOS (launchd)', () => {
       .toEqual([['bootout', OLD[0]], ['bootout', OLD[1]]]);
     expect(f.launchd.commands).toContainEqual(['curl', '-s', '--max-time', '2', '-o', '/dev/null', '-w', '%{http_code}', 'http://127.0.0.1:4321/']);
     expect(f.launchd.commands).toContainEqual(['curl', '-s', '--max-time', '2', 'http://localhost:4040/api/tunnels']);
+  });
+
+  it('stops a cockpit the ledger does not record when its launcher proves it ours, before it moves the home', async () => {
+    const f = macInstall({ cockpitRecorded: false });
+    await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'migrated' });
+    expectNewAgents(f);
+    expect(f.launchd.launchctl().slice(0, 2).map(c => c.slice(1, 2).concat(c[2]!.split('/').pop()!)))
+      .toEqual([['bootout', OLD[0]], ['bootout', OLD[1]]]);
   });
 
   it('is a no-op on a rerun after success', async () => {

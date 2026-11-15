@@ -1,6 +1,7 @@
 # Delivery pipeline: one full run, in the merge queue
+Status: active
 
-Status: **draft**. The owner chose this direction on 2026-11-11, in place of the
+Recorded status: **draft**. The owner chose this direction on 2026-11-11, in place of the
 post-merge verification design of hearsay-tools/cezarion#3217 (epic
 hearsay-tools/cezarion#3208). Implementation follows in separate issues (§ Phases).
 Amended 2026-11-13 with the result of Squeal's coverage proof, squeal row 020-26c
@@ -104,8 +105,8 @@ Regression proof (`docs/sdlc/regression-proof.md`) stays. It is part of writing 
 3. A change that matches a never-list path or content rule of
    `.ai/skills/auto-merge/check.mjs` keeps today's loop: a fresh round until one reports no
    active finding, at most 5 rounds, then the owner decides.
-4. CodeRabbit stays as it is: the `Automated Code Review` check requires its admission and
-   resolved threads on every PR.
+4. CI runs no automated reviewer (owner decision 2026-11-15). The ruleset and queue
+   admission require resolved threads on every PR.
 
 The rule text lives in the owner's Cezar prompt, outside this repository (§ Owner actions).
 
@@ -131,10 +132,8 @@ The queue no longer reuses PR suites (§ Merge queue and exact-commit reuse in
 
 ### Merge
 
-1. The board sync (`pr-readiness.yml`, merged into `coderabbit-reconcile.yml`) no longer returns a PR to draft. It keeps the board in sync from the
-   check and thread state. A PR that opens ready has no `ready_for_review` event, so queue
-   admission uses current-head CodeRabbit admission without the 180 s window, as it does
-   today for such PRs.
+1. The board sync (`pr-readiness.yml`) no longer returns a PR to draft. It keeps the board in sync from the
+   check and thread state.
 2. For a PR that qualifies for auto-merge, the agent arms `gh pr merge --auto --squash`
    once the review round has no blocking finding and the changed-function quality report
    for the current head is complete with no blocker. GitHub enqueues the PR when the required
@@ -143,7 +142,7 @@ The queue no longer reuses PR suites (§ Merge queue and exact-commit reuse in
    (`gh pr merge --disable-auto`). It arms it again only when 2 holds for the new head.
    `.ai/skills/auto-merge/references/follow.md` changes to say so; today it keeps an armed
    request across a qualifying push. Like the review round, this is an agent rule: queue
-   admission checks native CI and CodeRabbit, not the local report.
+   admission checks native CI and review threads, not the local report.
 
 ### Queue (about 10 minutes)
 
@@ -289,8 +288,6 @@ hearsay-tools/cezarion#3214 wait for phase 4.
 
 - Every "after" time is an estimate from measured job times. No run has shown them.
 - The 8 + 8 time is an estimate. Per-shard setup (install, server build) does not shrink.
-- CodeRabbit sets the PR stage: one check takes 8.2 min. A PR with threads pays a fix push
-  and a second check.
 - The queue builds at most 2 entries and merges 1. At about 10 minutes an entry, it merges
   about 12 PRs an hour. 46 PRs a day fit; at peaks, entries wait for each other.
 - The 15 to 20 minutes apply to PRs that merge without the owner: 34% of the last 330 PRs

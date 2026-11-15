@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync, unlinkSync, renameSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import crypto, { createHash } from 'node:crypto';
-import { takeCoverage } from 'node:v8';
+import { flushCoverage as takeCoverage } from './node-coverage.mjs';
 import { isMainThread } from 'node:worker_threads';
 
 const root = process.env.E2E_SPEC_MAP_NODE_DIR;

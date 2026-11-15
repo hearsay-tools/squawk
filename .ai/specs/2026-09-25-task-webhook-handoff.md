@@ -1,4 +1,5 @@
 # Task webhook and hand off (hearsay-tools/cezarion#589)
+Status: done
 
 A bot driving `cez task` (hearsay-tools/cezarion#504) learns about status changes only by polling `wait` or holding
 `log --follow`. A bot behind an HTTP endpoint needs a push, and the owner wants to start a task
