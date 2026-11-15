@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync, unlinkSync, renameSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import crypto, { createHash } from 'node:crypto';
-import { takeCoverage } from 'node:v8';
+import { flushCoverage } from './node-coverage.mjs';
 import { isMainThread } from 'node:worker_threads';
 
 const root = process.env.E2E_SPEC_MAP_NODE_DIR;
@@ -49,7 +49,7 @@ async function install(root, owner) {
           expectServer(active);
         }
         else if (command.action === 'end') { snapshot(active); active = undefined; }
-        else if (command.action === 'flush' && owner) takeCoverage();
+        else if (command.action === 'flush' && owner) flushCoverage(coverageDirectory);
         else throw new Error('unknown capture command');
         connection.end('{"ok":true}\n');
       } catch (error) { connection.end(`${JSON.stringify({ error: error.message })}\n`); }
@@ -68,7 +68,7 @@ async function install(root, owner) {
   process.on('exit', () => {
     if (!owner) snapshot(active);
     else if (coverageDirectory) {
-      takeCoverage();
+      flushCoverage(coverageDirectory);
       writeRecord(join(coverageDirectory, `completed-${process.pid}.json`),
         { pid: process.pid, spec: owner, taskId: process.env.CEZ_TASK_ID });
     }
@@ -76,7 +76,7 @@ async function install(root, owner) {
   });
   {
     function flushSignal() {
-      if (owner) takeCoverage();
+      if (owner) flushCoverage(coverageDirectory);
       else snapshot(active);
       if (process.listenerCount('SIGTERM') === 1) {
         process.removeListener('SIGTERM', flushSignal);
