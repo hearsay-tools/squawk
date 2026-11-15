@@ -20,8 +20,8 @@ import { readTestEnv } from './agent-browser'
  * session that registered three projects to capture sidebar screenshots turned `smoke.e2e.ts`
  * into five selector failures that looked exactly like product breakage.
  *
- * So the run pins it: `setup()` below (wired as vitest `globalSetup`) trims the registry to the
- * boot project alone before any spec opens a page, and puts it back verbatim afterwards. Specs
+ * So each run pins it: `setup()` below (called by the run setup in `environment.ts`) trims the
+ * registry to the boot project alone before any spec opens a page, and puts it back verbatim afterwards. Specs
  * that assert the flat shell then get the flat shell, always. A spec that wants the OTHER shape
  * asks for it explicitly — `project-sidebar.e2e.ts` seeds its own multi-project registry through
  * `snapshotSharedHome` + `writeSharedProjects` and restores it in `afterAll`.
@@ -110,7 +110,7 @@ export function snapshotSharedHome(...names: string[]): () => void {
 }
 
 /**
- * vitest `globalSetup` — pin the registry to the one-project shape for the whole run.
+ * Run setup — pin the registry to the one-project shape for the whole test run.
  *
  * "The boot project alone" rather than "empty": the flat shell is what a real one-project
  * workspace renders, and dropping the boot entry too would also drop the `lastOpenedAt` the
@@ -118,7 +118,7 @@ export function snapshotSharedHome(...names: string[]): () => void {
  * allocated by the registry, so only the server knows it.
  *
  * Degrades silently when the env is not up: the specs' own `readTestEnv()` produces the useful
- * error, and a globalSetup that threw first would hide it.
+ * error, and a run setup that threw first would hide it.
  */
 export async function setup(): Promise<() => void> {
   let bootProject: string
