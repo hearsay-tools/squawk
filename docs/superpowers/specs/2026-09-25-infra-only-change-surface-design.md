@@ -32,7 +32,7 @@ every path is one of:
 
 Anything else under `.github/**` stays full-matrix: `ci.yml`,
 `automated-code-review.yml`, `recover-automated-review.yml`,
-`ci-benchmark.yml`, `release.yml` and `nightly.yml` (both execute product
+`release.yml` and `nightly.yml` (both execute product
 suites themselves — release verification runs `npm test`, the nightly job
 runs `npm run test:unit`, `npm test`, and `npm run test:package`, so a PR
 editing them cannot silently skip the suites they gate; constraint #5
