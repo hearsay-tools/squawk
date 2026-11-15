@@ -104,6 +104,27 @@ describe('pruneOrphans keeps work no other ref holds', () => {
     await expect(run('git', ['rev-parse', '--verify', 'HEAD'], { cwd: other })).resolves.toBeTruthy();
   });
 
+  // Porcelain reports these worktrees as `detached`; git's `branch -D` still refuses the branch.
+  it.each([
+    ['rebase', ['rebase', '--no-ff', '--exec', 'false', 'main']],
+    ['bisect', ['bisect', 'start', 'HEAD', 'main']],
+  ] as const)('keeps a held branch that a %s in another worktree returns to', async (_name, command) => {
+    const root = await repo();
+    const wt = await createWorktree(root, 'paused000000', 'main');
+    for (const file of ['a.txt', 'b.txt', 'c.txt']) await commitIn(wt.path, file);
+    await run('git', ['switch', '-q', '--detach'], { cwd: wt.path });
+    await run('git', ['branch', 'keeper', wt.branch], { cwd: root });
+    const other = join(root, 'other');
+    await run('git', ['worktree', 'add', '-q', other, wt.branch], { cwd: root });
+    await run('git', [...GIT_ID, ...command], { cwd: other }).catch(() => undefined); // exec `false` stops the rebase
+    const listed = await run('git', ['worktree', 'list', '--porcelain'], { cwd: root });
+    expect(listed.stdout).not.toContain(`branch refs/heads/${wt.branch}`);
+
+    await expect(pruneOrphans(root, new Set())).resolves.toEqual(['paused000000']);
+
+    expect(await tip(root, wt.branch)).not.toBeNull();
+  });
+
   it('sorts a mixed set over an empty run store, and keeps live runs untouched', async () => {
     const root = await repo();
     const dirty = await createWorktree(root, 'mixdirty0000', 'main');

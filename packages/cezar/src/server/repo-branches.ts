@@ -13,7 +13,7 @@ import type { BranchClass, BranchPrState, RepoBranchCountsResponse, RepoBranchEn
 import { git as runGit, type GitResult } from '../git-command.ts';
 import { isSafeGitRef } from '../git-refs.ts';
 import { withWorktreeMutation, type WorktreeGitResult } from '../git-worktree-lock.ts';
-import { ownedCleanupProtection, parseShortstat, retainingRef } from '../git-worktree.ts';
+import { branchesInUse, ownedCleanupProtection, parseShortstat, retainingRef } from '../git-worktree.ts';
 import { loadConfig } from '../config.ts';
 import type { BranchOwner, RunStatus, RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
@@ -161,13 +161,11 @@ async function aheadCounts(root: string, heads: HeadRow[], baseSha: string | nul
   return out;
 }
 
-async function checkedOutBranches(root: string): Promise<Set<string>> {
-  const res = await git(root, ['worktree', 'list', '--porcelain']);
-  const out = new Set<string>();
-  for (const line of res.stdout.split('\n')) {
-    if (line.startsWith('branch refs/heads/')) out.add(line.slice('branch refs/heads/'.length));
-  }
-  return out;
+/** Whether a worktree uses a branch, by git's own `branch -D` guard; every branch when the
+ *  registrations cannot be read. */
+async function checkedOutBranches(root: string): Promise<(name: string) => boolean> {
+  const inUse = await branchesInUse((args) => git(root, args));
+  return inUse ? (name) => inUse.has(name) : () => true;
 }
 
 /** The branch a run owns: its recorded `branch`, or `cez/<id8>` for an old worktree run — the
@@ -542,7 +540,7 @@ export async function classifyBranches(input: ClassifyInput, options?: ClassifyO
     const inUse =
       head.name === input.currentBranch ||
       head.name === base ||
-      checkedOut.has(head.name) ||
+      checkedOut(head.name) ||
       receiptHeld.has(head.name) ||
       (task && protection.uncertain) ||
       (runs?.some(liveRun) ?? false);
@@ -818,7 +816,7 @@ export async function deleteBranches(
             refused.push({ name, reason: 'owned by a delegated workspace' });
             continue;
           }
-          if (checkedOut.has(name)) {
+          if (checkedOut(name)) {
             refused.push({ name, reason: 'checked out in a worktree' });
             continue;
           }

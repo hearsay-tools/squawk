@@ -530,6 +530,31 @@ export async function worktreeShortstat(
   });
 }
 
+/** The branches git's own `branch -D` guard refuses to delete: checked out in a worktree, or the
+ *  branch a rebase or bisect in a worktree returns to (porcelain reports those as `detached`). The
+ *  state files are read from every worktree's admin directory, a missing checkout's too. Null when
+ *  the registrations cannot be read: a caller then treats every branch as in use. */
+export async function branchesInUse(run: (args: string[]) => Promise<WorktreeGitResult>): Promise<Set<string> | null> {
+  const [listed, common] = await Promise.all([
+    run(['worktree', 'list', '--porcelain', '-z']),
+    run(['rev-parse', '--path-format=absolute', '--git-common-dir']),
+  ]);
+  if (!listed.ok || !common.ok) return null;
+  const inUse = new Set<string>();
+  for (const field of listed.stdout.split('\0')) {
+    if (field.startsWith('branch refs/heads/')) inUse.add(field.slice('branch refs/heads/'.length));
+  }
+  const root = common.stdout.trim();
+  const admins = [root, ...(await readdir(join(root, 'worktrees')).catch(() => [] as string[])).map(name => join(root, 'worktrees', name))];
+  for (const admin of admins) {
+    for (const file of ['rebase-merge/head-name', 'rebase-apply/head-name', 'BISECT_START']) {
+      const name = (await readFile(join(admin, file), 'utf8').catch(() => '')).trim();
+      if (name) inUse.add(name.startsWith('refs/heads/') ? name.slice('refs/heads/'.length) : name);
+    }
+  }
+  return inUse;
+}
+
 /** A local or remote-tracking ref OUTSIDE `excluded` (full ref names) that also reaches `sha`, with
  *  its own tip — the witness a delete verifies in its transaction — or null when none does. */
 export async function retainingRef(
@@ -596,10 +621,9 @@ async function pruneOrphansLocked(repoRoot: string, validIds: ReadonlySet<string
 async function deleteKeptOrphanBranch(repoRoot: string, branch: string, protection: OwnedCleanupProtection, git: WorktreeGit): Promise<void> {
   const ref = `refs/heads/${branch}`;
   if (protection.branches.has(branch) || (await git(repoRoot, ['symbolic-ref', '-q', ref])).ok) return;
-  // `update-ref` lacks `branch -D`'s checkout guard: keep a branch any worktree has checked out,
-  // and keep it when the registrations cannot be read.
-  const listed = await git(repoRoot, ['worktree', 'list', '--porcelain', '-z']);
-  if (!listed.ok || listed.stdout.split('\0').includes(`branch ${ref}`)) return;
+  // `update-ref` lacks `branch -D`'s guard, so it is applied here.
+  const inUse = await branchesInUse((args) => git(repoRoot, args));
+  if (!inUse || inUse.has(branch)) return;
   const tip = await git(repoRoot, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
   const sha = tip.stdout.trim();
   if (!tip.ok || !sha) return;
