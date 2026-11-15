@@ -1270,7 +1270,7 @@ describe('TaskThreadRoute — in-flight detail cancellation (#483)', () => {
     expect(requests[0]!.signal.aborted).toBe(true)
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Do the thing')
     expect(screen.queryByText('Could not load this task')).toBeNull()
-    await waitFor(() => expect(requests).toHaveLength(2), { timeout: 2_000 })
+    await waitFor(() => expect(requests).toHaveLength(2))
     await act(async () => requests[1]!.reply(run('waiting', { id: parentId, titleSummary: 'Parent after worker' })))
     await waitFor(() => expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Parent after worker'))
   })

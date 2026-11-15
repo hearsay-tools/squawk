@@ -164,13 +164,13 @@ describe('#163 mobile skill picker', () => {
     expect(browser.evaluate(`document.activeElement?.dataset.slot`)).toBe('popover-content')
     const input = 'input[placeholder="search skills & workflows…"]'
     browser.click(input)
-    expect(browser.evaluate(`document.activeElement?.dataset.slot`)).toBe('command-input')
+    expect(browser.waitForValue(`document.activeElement?.dataset.slot`, (slot: string | undefined) => slot === 'command-input')).toBe('command-input')
     browser.fill(input, 'qz163browse')
     browser.waitForFunction(`document.querySelectorAll('[data-slot="source-option"]').length === 24`)
 
     browser.setViewport(360, 340)
     browser.setViewport(360, 640)
-    expect(browser.evaluate(`document.querySelector('${input}').value`)).toBe('qz163browse')
+    expect(browser.waitForValue(`document.querySelector('${input}').value`, (query: string) => query === 'qz163browse')).toBe('qz163browse')
     browser.evaluate(`(() => {
       const input = document.querySelector('[data-slot="command-input"]');
       input.blur();

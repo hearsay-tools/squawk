@@ -3,7 +3,8 @@ import { commandText } from '../home/command.ts';
 import { WAIT_KINDS } from '../workflows/run/wait-kinds.ts';
 import { createHash } from 'node:crypto';
 import type { ConversationMessage, Wait, WorkerWaitEntry } from '@open-mercato/cezar-contract';
-import type { RunEvent, RunStore } from '../runs/store.ts';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
+import type { RunEvent, RunRecord, RunStore } from '../runs/store.ts';
 import { describeWait, isSquawkHumanWait } from '../workflows/waits.ts';
 import { uuidFrom } from './questions.ts';
 import { topLevelAssistantText } from './results.ts';
@@ -20,6 +21,13 @@ export const PARK_NOTICE_EXCERPT_MAX = 1000;
  */
 export function parkNoticeId(workerRunId: string, waitId: string): string {
   return uuidFrom(`worker-park:${workerRunId}:${waitId}`);
+}
+
+/** Whether the worker's own turn parked it (`parkReason`, ADR 0064), the one park that earns a
+ *  notice (hearsay-tools/squawk#3502). A row saved before the fact reads as a turn's park unless it
+ *  is a usage-limit hold. */
+export function parkedByTurn(run: Pick<RunRecord, 'status' | 'autoResumeAt' | 'parkReason'>): boolean {
+  return (run.parkReason ?? (isUsageLimitHold(run) ? 'hold' : 'turn')) === 'turn';
 }
 
 /** The parent's first open worker wait that selects the worker, by its ID or by a request sent to
