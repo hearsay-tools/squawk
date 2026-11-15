@@ -1,5 +1,6 @@
 import { RUN_DATABASE_READABLE_FROM, RUN_DATABASE_SCHEMA_VERSION } from './run-database-version.ts';
-import { conversationMembersSelect } from './conversation-members.ts';
+import { runIndexAdoption, runIndexView } from './run-index-rows.ts';
+import { RUN_INDEXES } from './run-indexes.ts';
 import { claimOwnerLive } from './run-claims.ts';
 import { warnFallbackRunSource } from './project-run-sources.ts';
 import { cpSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
@@ -144,9 +145,8 @@ export class ProjectRunConnection {
       sourceNames.has(name) ? String(name) : `${dflt_value ?? 'NULL'} AS ${name}`).join(', ');
     db.exec(`CREATE TEMP VIEW project_runs AS SELECT * FROM main.runs UNION ALL
       SELECT ${sourceColumns} FROM ${table} source WHERE NOT EXISTS (SELECT 1 FROM main.runs legacy WHERE legacy.id = source.id)`);
-    // A fallback row's members come from its record: an older fallback has no conversation_members.
-    db.exec(`CREATE TEMP VIEW project_conversation_members AS SELECT root_id, member_id FROM main.conversation_members UNION ALL
-      SELECT root_id, member_id FROM (${conversationMembersSelect(table)}) source WHERE NOT EXISTS (SELECT 1 FROM main.runs legacy WHERE legacy.id = source.root_id)`);
+    // A fallback row's index rows come from its record: an older fallback may not have the table.
+    for (const { index } of RUN_INDEXES) db.exec(runIndexView(index, table));
     this.attached = attached;
     this.sourceTable = table;
     const claims = attached ? 'SELECT * FROM project_fallback.run_claims' : 'SELECT * FROM main.run_claims WHERE 0';
@@ -217,7 +217,7 @@ export class ProjectRunConnection {
         const columns = Object.keys(row).filter(key => key !== 'seq');
         this.current.prepare(`INSERT INTO main.runs (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`)
           .run(...columns.map(key => row[key] as string | number | null));
-        this.current.prepare(`INSERT OR IGNORE INTO main.conversation_members (root_id, member_id) ${conversationMembersSelect('main.runs', 's.id = :id')}`).run({ id });
+        for (const { index } of RUN_INDEXES) this.current.prepare(runIndexAdoption(index)).run({ id });
       }
     }
     // Inside the transaction, after the fence: another process may have added a fallback copy since the
@@ -256,11 +256,13 @@ export class ProjectRunConnection {
   }
 }
 
+const PROJECT_VIEWS: Record<string, string> = { runs: 'project_runs', run_claims: 'project_claims',
+  ...Object.fromEntries(RUN_INDEXES.map(({ index }) => [index.table, `project_${index.table}`])) };
 /** Match only table references. Quoted text and comments are opaque to the projection. */
-const PROJECT_VIEWS: Record<string, string> = { runs: 'project_runs', run_claims: 'project_claims', conversation_members: 'project_conversation_members' };
+const PROJECT_READ = new RegExp(String.raw`('(?:''|[^'])*'|"(?:""|[^"])*"|${'`'}[^${'`'}]*${'`'}|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?\*\/)|\b(FROM|JOIN)(\s+)(${Object.keys(PROJECT_VIEWS).join('|')})\b`, 'gi');
 
 function projectReadTables(sql: string): string {
-  return sql.replace(/('(?:''|[^'])*'|"(?:""|[^"])*"|`[^`]*`|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?\*\/)|\b(FROM|JOIN)(\s+)(runs|run_claims|conversation_members)\b/gi,
+  return sql.replace(PROJECT_READ,
     (match, quoted: string | undefined, keyword: string, space: string, table: string, offset: number) => {
       // A DELETE target stays the primary table; every other reference, nested reads in writes included, is a read.
       if (quoted || /\bDELETE\s*$/i.test(sql.slice(0, offset))) return match;

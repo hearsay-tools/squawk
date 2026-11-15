@@ -21,9 +21,11 @@ add a database write for no reader.
 
 Per-run memory that outlives one execution has one owner, `RunMemory`
 (`workflows/run/run-memory.ts`). It opens a slot at run start and releases it at a final exit,
-on delete and on `dispose`. Each liveness bound has one timer owner, `LivenessTimers`
-(`workflows/run/liveness-timers.ts`), with one typed row per bound kind, so a new bound kind
-fails typecheck until its row exists. Clearing an execution's or a run's timers is one call.
+on delete and on `dispose`. State that a settlement still compares after disposal, such as the
+continuation generation token, stays with its owner until that settlement drains. Each liveness
+bound has one timer owner, `LivenessTimers` (`workflows/run/liveness-timers.ts`), with one typed
+row per bound kind, so a new bound kind fails typecheck until its row exists. Clearing an
+execution's or a run's timers is one call.
 
 ## Context
 
