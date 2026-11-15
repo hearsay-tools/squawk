@@ -56,6 +56,19 @@ describe('claude typed forked command', () => {
     expect(new Set(children.map((item) => item.parentItemId))).toEqual(new Set([`${FORK_ID}-2`]));
   });
 
+  it('never gives a repeated command the id of another command named like its suffix', () => {
+    const rename = (lines: Array<Record<string, unknown>>, wireId: string) =>
+      lines.filter((line) => line.subtype !== 'init').map((line) => (line.parent_tool_use_id === FORK_ID ? { ...line, parent_tool_use_id: wireId } : line));
+    let state = runTurn(fixtureLines()).state;
+    const forkIds: unknown[] = [];
+    for (const wireId of [FORK_ID, `${FORK_ID}-2`, `${FORK_ID}-2`]) {
+      const turn = runTurn(rename(fixtureLines(), wireId), state);
+      state = turn.state;
+      forkIds.push(itemsOf(turn.events).find((item) => item.toolKind === 'task')?.id);
+    }
+    expect(forkIds).toEqual([`${FORK_ID}-2`, `${FORK_ID}-2-2`, `${FORK_ID}-2-3`]);
+  });
+
   it('titles the fork from the command name when its task_started was not seen', () => {
     const lines = fixtureLines().filter((line) => line.subtype !== 'task_started');
     const fork = itemsOf(runTurn(lines).events).find((item) => item.toolKind === 'task');

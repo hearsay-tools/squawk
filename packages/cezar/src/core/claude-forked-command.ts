@@ -23,9 +23,9 @@ export interface ForkedCommandState {
   readonly forkedCommandStarts: ReadonlyMap<string, ForkedCommandStart>;
   /** Typed forked commands open in this turn, keyed by the wire parent id their children carry. */
   readonly openForkedCommands: ReadonlyMap<string, UiToolItem>;
-  /** How many fork items each wire parent id has minted in this session: a command typed again
-   *  gets a fresh item id, so each fork nests in its own turn. */
-  readonly forkedCommandUses: ReadonlyMap<string, number>;
+  /** Every fork item id minted in this session: a command typed again gets a fresh item id, so
+   *  each fork nests in its own turn and never overwrites another fork's item. */
+  readonly forkedCommandIds: ReadonlySet<string>;
 }
 
 export function withForkedCommandStart<S extends ForkedCommandState>(msg: Record<string, unknown>, state: S): S {
@@ -49,17 +49,24 @@ export function adoptForkedCommand<S extends ForkedCommandState>(
   const next: S = {
     ...state,
     openForkedCommands: new Map(state.openForkedCommands).set(wireId, item),
-    forkedCommandUses: new Map(state.forkedCommandUses).set(wireId, (state.forkedCommandUses.get(wireId) ?? 0) + 1),
+    forkedCommandIds: new Set(state.forkedCommandIds).add(item.id),
   };
   return { events: [{ type: 'item.started', item }], state: next, msg: { ...msg, parent_tool_use_id: item.id } };
 }
 
+/** The wire id, or the first free `<wire id>-<n>`: a suffixed id can equal another command's
+ *  wire id (`/review` typed twice, then `/review-2`), so every minted id is checked. */
+function freeForkItemId(wireId: string, minted: ReadonlySet<string>): string {
+  let id = wireId;
+  for (let n = 2; minted.has(id); n += 1) id = `${wireId}-${n}`;
+  return id;
+}
+
 function startForkedCommandItem(wireId: string, state: ForkedCommandState, taskId: string | undefined): UiToolItem {
-  const uses = state.forkedCommandUses.get(wireId) ?? 0;
   const start = taskId === undefined ? undefined : state.forkedCommandStarts.get(taskId);
   const item: UiToolItem = {
     kind: 'tool',
-    id: uses === 0 ? wireId : `${wireId}-${uses + 1}`,
+    id: freeForkItemId(wireId, state.forkedCommandIds),
     name: 'Skill',
     toolKind: 'task',
     title: start?.description ?? `/${wireId.slice(FORKED_COMMAND_PREFIX.length)}`,

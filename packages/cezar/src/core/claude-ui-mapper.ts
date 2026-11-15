@@ -112,7 +112,7 @@ export function createClaudeUiState(opts: { fallbackSessionId?: string | undefin
     endedBackgroundTasks: new Set(),
     forkedCommandStarts: new Map(),
     openForkedCommands: new Map(),
-    forkedCommandUses: new Map(),
+    forkedCommandIds: new Set(),
   };
 }
 
