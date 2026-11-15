@@ -262,7 +262,7 @@ preflight. Native review admission follows preflight; `verify` requires all of t
 `.node-version`; typecheck, unit tests and build/package use
 exactly the `engines.node` minimum (Node 24.21.0). Every job installs Node without a GitHub API call (§ Node setup without GitHub API calls):
 
-- Eight Vitest shards on `ubuntu-24.04` each install dependencies and run `npm test -- --shard=N/8 --maxWorkers=4` for N=1..8. In merge groups the same command runs under `squeal ci record` (§ Squeal shared results), and in a Squeal gate trial dispatch without `--coverage.enabled` (§ Squeal quality gate trial).
+- Eight Vitest shards on `ubuntu-24.04` each install dependencies and run `npm test -- --shard=N/8 --maxWorkers=4` for N=1..8. In merge groups the same command runs under `squeal ci record` (§ Squeal shared results), with no change to the test command or exit code.
 - The required typecheck job uses `blacksmith-2vcpu-ubuntu-2404` (2 vCPU, 8 GB) for PRs and manual dispatches, and `ubuntu-24.04` for pushes and merge groups. It runs pinned workflow lint, issue-citation checking and `npm run typecheck` for all change surfaces, including docs, infrastructure and release bumps. It uses the minimum-Node setup.
 - Two unit jobs on `ubuntu-24.04` run package unit tests and repository script tests from source on exactly Node 24.21.0. Each installs dependencies and runs beside build/package.
 - The build/package job on `ubuntu-24.04` runs on exactly Node 24.21.0. It runs the full application build, packaged CLI E2E typecheck and tests, and release-package dry-run packing. Only the packaged tests and their typecheck read build output. The packaged tests install the tarball, start the CLI and exercise the SQLite run store on the minimum supported Node version.
@@ -494,8 +494,8 @@ nodejs.org instead of spending the repository's quota. The action takes only exa
 `actions/cache`: `ci.yml` runs under `pull_request_target`, whose caches land in the base
 branch scope, where a PR job could plant an unverified Node binary.
 
-Jobs that check out a ref that can predate the action (a rollback release candidate, the
-Squeal results trial, the LXC canary) first check out the action from the workflow's own
+Jobs that check out a ref that can predate the action (a rollback release candidate or the
+LXC canary) first check out the action from the workflow's own
 commit into `node-dist-tooling`, install Node, and then check out their ref.
 
 Other jobs that check out a commit other than the workflow's own (the merge-group base in the
@@ -503,8 +503,7 @@ complexity and clone gates, a PR merge ref, a nightly or release candidate) keep
 checkout and run the action only under `if: hashFiles('.github/actions/node-dist/action.yml') != ''`.
 When the tree lacks it, the step before this change runs instead, with its bounded retry in
 the minimum-Node jobs, so a base-checkout gate never runs tooling from the queued head. A run
-step that moves the workspace with `git checkout` or `git switch` (the Squeal packaged test
-trial) counts as such a checkout. `setup-node-api-free.workflow.test.cjs` enforces both
+step that moves the workspace with `git checkout` or `git switch` counts as such a checkout. `setup-node-api-free.workflow.test.cjs` enforces both
 patterns.
 
 The only job that still follows `lts/*` is the `lts/*` leg of the release-candidate install
@@ -595,8 +594,7 @@ dispatch proves the job too.
 ### Vitest coverage artifact
 
 Eligible pull request runs and manual dispatches collect V8 coverage in the eight required
-`Vitest shard N/8` jobs (hearsay-tools/cezarion#1958). A Squeal gate trial dispatch collects
-Squeal's coverage instead and has no V8 artifact (§ Squeal quality gate trial). Each shard runs its tests once, with
+`Vitest shard N/8` jobs (hearsay-tools/cezarion#1958). Each shard runs its tests once, with
 `--coverage.enabled`; there is no separate coverage test matrix. Main pushes and merge groups
 keep the command without coverage. Docs-only, infra-only, verified queue-proof and bump-PR
 runs keep their existing skips.
@@ -626,6 +624,9 @@ failing tests. Coverage remains opt-in locally and keeps test files in the repor
 Like any `ci.yml` edit, prove the final workflow with a dispatch (§ Proving a `ci.yml` change).
 
 ### Squeal shared results
+
+`squeal-export`, `squeal-publish` and `squeal-ref-check` are normal, non-required
+shared-results jobs. They are not trials.
 
 Merge groups publish their Vitest results for Squeal, so a new worktree at a main commit
 can import those passes instead of running the same test files again
@@ -679,126 +680,17 @@ Dependabot's weekly actions pull request moves the Squeal pin to a newer `v<vers
 (§ Pinned actions). To move it by hand, change the commit and the `# v<version>` comment on
 every `Set up Squeal` step in `ci.yml` together; the workflow test requires one pin.
 
-### Squeal quality gate trial
+### LXC canary decision
 
-A manual trial measures Squeal's one-shot quality gate on the shards' own evidence, before
-any check depends on it (hearsay-tools/squeal spec 020 D13, row 020-08c;
-hearsay-tools/cezarion#3096). It runs only on request:
+The manual LXC admission canary remains a trial. Its decision date is **2026-11-21**.
+It must answer: can disposable runner replacement and restart recovery succeed, and
+can a full four-shard Vitest matrix pass before either owner-PR route is enabled?
 
-```bash
-gh workflow run ci.yml --ref <branch> -f squeal_gate_trial=true
-```
-
-- Only a dispatch with `squeal_gate_trial` and no `pr_number` takes the trial. Every other
-  dispatch, including the bare proof of a `ci.yml` change (§ Proving a `ci.yml` change) and
-  its V8 coverage artifact, is unchanged. Dispatches of one branch share a concurrency group
-  and cancel each other, so start the trial after the bare proof ends.
-- Each `Vitest shard N/8` runs `npm test -- --shard=N/8 --maxWorkers=4` under
-  `squeal ci record`, as in a merge group, but without `--coverage.enabled`: Squeal's coverage
-  provider yields to a project's own coverage, so only then does it write coverage records
-  into the parts. The shard's output and exit code stay its own. The parts upload as
-  `squeal-parts-shard-N`; the run collects and merges no V8 coverage.
-- The `Squeal quality gate trial` job (`squeal-gate-trial`) runs after the shards pass or
-  fail. It checks out the dispatched commit with the history of main, installs dependencies,
-  sets up Squeal's action, downloads the parts and runs
-  `squeal code --base origin/main --json --parts <shard directories>`. A selected test file
-  whose part certifies its inputs here comes from the parts; the gate runs the others itself,
-  for up to 600 seconds.
-- Its job summary gives the verdict and exit code, the changed functions by state, how many
-  selected test files came from the parts, from the stores and from the gate's own runs, and
-  for each shard the recording cost Squeal writes into its parts: Squeal's own time, its share
-  of the test time and its time after the command. The `squeal-gate-trial` artifact holds
-  `report.json` (`squeal-code-gate/1`), the gate's stderr, exit code and time, kept 14 days.
-- Nothing depends on it. The job is outside `verify.needs` and the merge-queue roster, only a
-  manual dispatch runs it, every step continues on error and the job sets
-  `continue-on-error`. The verdict is reported, not enforced.
-
-`.github/scripts/ci-squeal-gate-trial.workflow.test.cjs` pins the trigger, the job's
-permissions, its gate command and its summary.
-
-### Squeal coverage proof
-
-A manual proof checks that Squeal can record its per-test-file coverage beside the project's
-own V8 report in one run, without changing that report or adding cost above run-to-run noise
-(hearsay-tools/squeal spec 020 D19, row 020-26c; hearsay-tools/squeal#189). It runs only on
-request:
-
-```bash
-gh workflow run ci.yml --ref <branch> -f squeal_coverage_proof=true
-```
-
-- Only a dispatch with `squeal_coverage_proof` and no `pr_number` takes the proof. The rest of
-  that dispatch runs as a bare dispatch does, V8 coverage artifact included. Dispatches of one
-  branch share a concurrency group and cancel each other, so start the proof after the bare
-  proof of a `ci.yml` change ends (§ Proving a `ci.yml` change).
-- The `Squeal coverage proof <run>` jobs (`squeal-coverage-proof`) run Vitest shard 1/8, the
-  first of the eight shards, three times in parallel on the dispatched commit, each with
-  `npm test -- --shard=1/8 --maxWorkers=4 --coverage.enabled`, the shard command of a dispatch.
-  `squeal` runs it under `squeal ci record` after Squeal's action, so Squeal reads the V8
-  provider's payloads into its parts. `v8` and `v8-control` run it alone; `v8-control` is the
-  run-to-run control. Each keeps its exit code, its wall and CPU (user + sys) time, the runner's
-  CPU count, CPU model and load, and `coverage-final.json`, and uploads them as
-  `squeal-coverage-proof-<run>` with the parts for `squeal`, kept 14 days.
-- The `Compare the Squeal coverage proof` job (`squeal-coverage-proof-compare`) runs after the
-  three end in any way but skipped. It downloads them and runs
-  `.github/scripts/squeal-coverage-proof.cjs`, which writes the job summary and uploads
-  `comparison.json` as `squeal-coverage-comparison`, kept 14 days.
-- The summary compares covered statements of `squeal` against `v8`, and of `v8` against
-  `v8-control`, by source location: statements whose covered state differs and the files they
-  are in. A difference between `squeal` and `v8` reads as Squeal's only when it is well above
-  the control's. Then it gives the parts' test files with and without a record and why, the
-  part header's collector (`v8` expected) and the test files that loaded `node:inspector`;
-  then each run's time, the two differences against `v8`, and Squeal's own time from the parts.
-- Nothing depends on it. Both jobs are outside `verify.needs` and the merge-queue roster, only a
-  manual dispatch runs them, every step continues on error and both jobs set
-  `continue-on-error`. The proof never runs on a pull request, in a merge group or on a push.
-
-`.github/scripts/ci-squeal-coverage-proof.workflow.test.cjs` pins the trigger, the three runs,
-their artifacts and the steps' scripts; `.github/scripts/squeal-coverage-proof.test.cjs` pins the
-comparison.
-
-### Squeal packaged test trial
-
-A manual trial checks whether Squeal's one-shot quality gate can measure code that only the
-packaged tests load, with configuration Squeal already supports: a node:test entry with a
-`prepare` command, and child-process coverage (hearsay-tools/squeal spec 020 D12 and D15, row
-020-32; hearsay-tools/squeal#194). Today `squeal code --base origin/main` reads such functions
-as `no-loader`, because no runner lists `packages/cezar/test/e2e`. The trial runs only on request.
-To replay the change that hearsay-tools/squeal#194 reports, hearsay-tools/cezarion#3297:
-
-```bash
-gh workflow run ci.yml --ref <branch> -f squeal_package_trial=true \
-  -f squeal_package_trial_commit=b12aed82bd9e3f7d96d8fd868fd641c9d874b307
-```
-
-- Only a dispatch with `squeal_package_trial` and no `pr_number` takes the trial. Every other
-  dispatch, including the bare proof of a `ci.yml` change (§ Proving a `ci.yml` change), is
-  unchanged. Dispatches of one branch share a concurrency group and cancel each other, so start
-  the trial after the bare proof ends.
-- Without `squeal_package_trial_commit`, the trial measures the dispatched commit against
-  `origin/main`. With a full commit SHA, it measures that commit against its first parent.
-- `squeal.config.json` in the repository does not change. The gate reads `prepare` and
-  `coverage.children` at the merge base, so the `Squeal packaged test trial` job
-  (`squeal-package-trial`) builds two local commits: the merge base, and the measured commit's
-  tree on top of it, each with two keys added to its `squeal.config.json`. The keys are a
-  node:test entry `test:package` (`npm run test:package` without its wrapper: the `cwd` and
-  `argv` of `test:unit`, `include: ["test/e2e/*.test.ts"]`, and `prepare`
-  `npm --prefix ../.. run build`, 600 seconds) and `coverage.children: true`.
-- The job checks out the local head, installs its dependencies, sets up Squeal's action and runs
-  `squeal code --base squeal-package-trial-base --json --timeout 1200`. The gate runs the
-  `prepare` build before the first selected packaged test file; its output goes to the log.
-- Its job summary gives the measured commit, the verdict and exit code, the changed functions by
-  state, each runner's run with its `prepare` result and child coverage files, and a table of the
-  changed functions that the packaged tests load or that are not `pass`. The
-  `squeal-package-trial` artifact holds `report.json` (`squeal-code-gate/1`), the gate's stderr,
-  exit code and time, the two `squeal.config.json` files the gate read and `commits.json`, kept
-  14 days.
-- Nothing depends on it. The job is outside `verify.needs` and the merge-queue roster, only a
-  manual dispatch runs it, every step continues on error and the job sets `continue-on-error`.
-
-`.github/scripts/ci-squeal-package-trial.workflow.test.cjs` pins the trigger, the trial keys
-against `scripts/test-package.mjs` and `test:unit`, the local commits, the gate command and the
-summary.
+The browser matrix passed in run 41864924993. The Vitest matrix in run 41861649090
+had three passing shards and one failed assertion. Runner recovery remains unproven.
+Open hearsay-tools/cezarion#2682 adds disabled owner-PR routing and keeps this manual
+canary separate. Keep the canary and its LXC scripts until that recovery and workload
+question is decided. This trial changes no required check or merge-queue behavior.
 
 ### Upstream scan PRs
 

@@ -21,32 +21,6 @@ on:
         description: Release PR number (omit for full verification of the dispatched SHA)
         required: false
         type: string
-      # The Squeal quality gate trial (§ Squeal quality gate trial in docs/sdlc/ci.md):
-      # only a dispatch without pr_number takes it; it never gates anything.
-      squeal_gate_trial:
-        description: Record Squeal coverage in the Vitest shards and run the Squeal quality gate trial (no pr_number)
-        required: false
-        type: boolean
-        default: false
-      # The Squeal coverage proof (§ Squeal coverage proof in docs/sdlc/ci.md): only a dispatch
-      # without pr_number takes it; it never gates anything.
-      squeal_coverage_proof:
-        description: Run Vitest shard 1/8 with V8 coverage under squeal ci record and twice alone, and compare the three (no pr_number)
-        required: false
-        type: boolean
-        default: false
-      # The Squeal packaged test trial (§ Squeal packaged test trial in docs/sdlc/ci.md): only a
-      # dispatch without pr_number takes it; it never gates anything.
-      squeal_package_trial:
-        description: Run the Squeal quality gate with a node:test entry for the packaged tests and child coverage (no pr_number)
-        required: false
-        type: boolean
-        default: false
-      squeal_package_trial_commit:
-        description: Packaged test trial only; a full commit SHA to measure against its first parent (empty measures the dispatched commit against main)
-        required: false
-        type: string
-        default: ''
 
 permissions:
   contents: read
@@ -993,19 +967,17 @@ jobs:
         env:
           VITEST_FILE_DURATION_CAP: '1'
         run: npm test -- --shard=${{ matrix.shard }}/8 --maxWorkers=4 ${{ (github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch') && '--coverage.enabled' || '' }}
-        if: github.event_name != 'pull_request_target' && github.event_name != 'merge_group' && !(github.event_name == 'workflow_dispatch' && inputs.squeal_gate_trial == true && inputs.pr_number == '')
+        if: github.event_name != 'pull_request_target' && github.event_name != 'merge_group'
 
       # Merge groups (the run whose SHA becomes main) run the same command under
       # `squeal ci record`, which returns the command's exit code and output and writes
       # part files for the squeal-export job. See docs/sdlc/ci.md § Squeal shared results.
-      # A squeal_gate_trial dispatch records too, without its own V8 coverage, so Squeal's
-      # provider writes coverage records into the parts for squeal-gate-trial.
       # Squeal's action puts `squeal` on the PATH and runs it with the Node set up above. It is
       # pinned to a release commit, its version in the comment (Dependabot moves both), and
       # never fails the job: when Squeal cannot run, `squeal ci record` runs the command alone
       # with its exit code (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
-        if: (github.event_name == 'merge_group' || (github.event_name == 'workflow_dispatch' && inputs.squeal_gate_trial == true && inputs.pr_number == ''))
+        if: github.event_name == 'merge_group'
         uses: hearsay-tools/squeal/ci@6a7b41c08d5b2d27412cad1b1c139e65144876e6 # v0.1.460
 
       - name: Run server and cockpit unit suites with Squeal recording
@@ -1018,7 +990,7 @@ jobs:
         run: &record-shard |
           set -- npm test -- --shard=${{ matrix.shard }}/8 --maxWorkers=4
           exec squeal ci record --out "$RUNNER_TEMP/$PARTS_DIR" -- "$@"
-        if: (github.event_name == 'merge_group' || (github.event_name == 'workflow_dispatch' && inputs.squeal_gate_trial == true && inputs.pr_number == ''))
+        if: github.event_name == 'merge_group'
 
       # A merge-group shard whose first run fails runs the whole shard once more, in the same
       # order, recorded into new parts; the shard passes only when the rerun passes. The reset
@@ -1051,10 +1023,10 @@ jobs:
 
       - name: Upload Squeal parts
         # A status function: without one GitHub adds success(), and a shard whose tests failed
-        # would lose its parts and recording cost, which the gate trial reads. After a rerun only
+        # would lose its parts. After a rerun only
         # its parts upload: `squeal ci export` refuses two parts for one shard. When Squeal could
         # not run there are no parts: the upload fails and continues on error.
-        if: "!cancelled() && (github.event_name == 'merge_group' || (github.event_name == 'workflow_dispatch' && inputs.squeal_gate_trial == true && inputs.pr_number == ''))"
+        if: "!cancelled() && github.event_name == 'merge_group'"
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -1066,7 +1038,7 @@ jobs:
 
       - name: Upload shard coverage
         id: upload
-        if: (!cancelled() && (github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch')) && !(github.event_name == 'workflow_dispatch' && inputs.squeal_gate_trial == true && inputs.pr_number == '')
+        if: (!cancelled() && (github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch'))
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -1077,7 +1049,7 @@ jobs:
           overwrite: true
 
       - name: Report a missing shard coverage report
-        if: always() && (github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch') && ((steps.collect.outcome != 'success' && steps.collect_pr.outcome != 'success') || steps.upload.outcome != 'success') && !(github.event_name == 'workflow_dispatch' && inputs.squeal_gate_trial == true && inputs.pr_number == '')
+        if: always() && (github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch') && ((steps.collect.outcome != 'success' && steps.collect_pr.outcome != 'success') || steps.upload.outcome != 'success')
         continue-on-error: true
         env:
           SHARD: ${{ matrix.shard }}
@@ -1257,583 +1229,12 @@ jobs:
           echo "::warning::$msg"
           printf '> [!WARNING]\n> %s\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
 
-  # Squeal quality gate trial (hearsay-tools/squeal spec 020 D13, row 020-08c). Only a manual
-  # dispatch with squeal_gate_trial and no pr_number runs it. Its Vitest shards record under
-  # `squeal ci record` without their own V8 coverage, so Squeal's provider writes coverage
-  # records into the parts; this job runs `squeal code --base origin/main --parts` on them and
-  # reports in its job summary and the squeal-gate-trial artifact. It never fails the run:
-  # every step continues on error, and it is outside verify.needs and the queue roster.
-  # See docs/sdlc/ci.md § Squeal quality gate trial.
-  squeal-gate-trial:
-    name: Squeal quality gate trial
-    needs: [vitest]
-    # A status function in the condition: without one GitHub adds success(), which is false
-    # here because jobs further up (pr-test-input) are skipped in a dispatch.
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.squeal_gate_trial == true && inputs.pr_number == '' && (needs.vitest.result == 'success' || needs.vitest.result == 'failure') }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    continue-on-error: true
-
-    # Runs the dispatched code (install, the gate's own test runs), so it only reads.
-    permissions:
-      contents: read
-
-    steps:
-      - name: Check out the dispatched commit
-        continue-on-error: true
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-          fetch-depth: 1
-
-      # The gate compares with the merge base of origin/main, so it fetches this commit's
-      # history and main only, as complexity-gate does for a bare dispatch.
-      - name: Fetch the history the gate compares
-        continue-on-error: true
-        run: git fetch --no-tags --unshallow origin +refs/heads/main:refs/remotes/origin/main
-
-      - name: Set up pnpm
-        continue-on-error: true
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          version: '12.11.2'
-
-      - name: Install Node.js from nodejs.org
-        uses: ./.github/actions/node-dist
-        continue-on-error: true
-        with:
-          node-version-file: .node-version
-
-      # The shards' Node: a part's evidence counts only where the environment matches.
-      - name: Set up Node.js
-        continue-on-error: true
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          token: ''
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install pnpm dependencies
-        continue-on-error: true
-        run: pnpm install --frozen-lockfile
-
-      # Squeal's action, as in the shards; it never fails the job (hearsay-tools/squeal spec 018 D20).
-      - name: Set up Squeal
-        continue-on-error: true
-        uses: hearsay-tools/squeal/ci@6a7b41c08d5b2d27412cad1b1c139e65144876e6 # v0.1.460
-
-      - name: Download Squeal parts
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          pattern: squeal-parts-shard-*
-          path: ${{ runner.temp }}/squeal-parts
-
-      # The gate's exit code is its verdict: 0 pass, 1 violations, 3 incomplete, 2 a setup or
-      # usage error. The step keeps it, with the gate's time and stderr, and exits 0.
-      - name: Run the Squeal quality gate on the shard parts
-        id: gate
-        continue-on-error: true
-        run: |
-          out="$RUNNER_TEMP/squeal-gate-trial"
-          mkdir -p "$out"
-          started="$(date +%s)"
-          code=0
-          squeal code --base origin/main --json \
-            --parts "$RUNNER_TEMP"/squeal-parts/squeal-parts-shard-* > "$out/report.json" 2> "$out/stderr.txt" || code=$?
-          echo "$code" > "$out/exit-code"
-          echo "$(( $(date +%s) - started ))" > "$out/seconds"
-          cat "$out/stderr.txt" >&2
-
-      - name: Report the trial
-        if: always()
-        continue-on-error: true
-        env:
-          SHARDS_RESULT: ${{ needs.vitest.result }}
-          GATE: ${{ steps.gate.outcome }}
-        run: |
-          report_filter='
-            ([.runs[] | (.from // {}) as $from | .selected[] | ($from[.] // "run")]) as $sources
-            | "Verdict: **\(.verdict)** (exit \($code)) in \($seconds) s. Base `\(.base.ref)`, merge base \(.base.commit[0:12]); head \(.head.commit[0:12]).",
-              "",
-              "Changed functions: \(.functions | length) (\(.counts | to_entries | map("\(.key) \(.value)") | join(", "))). Paths not counted: \(.uncounted | length). Budget \(.budget.seconds) s, timed out: \(.budget.timedOut).",
-              "",
-              "| Selected test files | From the parts | From the stores | Run by the gate |",
-              "|---:|---:|---:|---:|",
-              "| \($sources | length) | \([$sources[] | select(. == "parts")] | length) | \([$sources[] | select(. == "store")] | length) | \([$sources[] | select(. == "run")] | length) |",
-              "",
-              (.runs[] | "- \(.runner): \(.selected | length) selected, \(.completed | length) completed, \(.notFinished | length) not finished, \(.failed | length) with a failed test; run time \(if .durationMs == null then "none" else "\(.durationMs / 1000 | round) s" end).")'
-          shard_filter='
-            def secs: (if . < 10000 then (. / 10 | round) / 100 else (. / 100 | round) / 10 end) | tostring + " s";
-            (map(.testFiles | length) | add) as $files
-            | (map([.testFiles[] | select(.record != null)] | length) | add) as $records
-            | (map(.header.coverage | if . == null then "none (format 3)" elif has("off") then "off: \(.off)" else "\(.provider), provider \(.providerVersion), record \(.recordVersion)" end) | unique | join("; ")) as $provider
-            | (map(.header.cost // empty) | unique_by(.command)) as $costs
-            | (map(select(.header.cost != null) | .testFiles[] | .durationMs // 0) | add // 0) as $testMs
-            | ($costs | map(.hooksMs) | add // 0) as $hooks
-            | "| \($shard) | \(length) | \($files) | \($records) | \($provider) | "
-              + (if ($costs | length) == 0 then "not in the parts | | |"
-                 else "\($hooks | secs) in \($costs | map(.threads) | add) processes and threads | "
-                   + (if $testMs > 0 then "\((1000 * $hooks / $testMs | round) / 10)% of \($testMs | secs)" else "no test time" end)
-                   + " | \($costs | map(.afterMs) | add | secs) |" end)'
-          out="$RUNNER_TEMP/squeal-gate-trial"
-          code="$(cat "$out/exit-code" 2> /dev/null || echo none)"
-          seconds="$(cat "$out/seconds" 2> /dev/null || echo unknown)"
-          {
-            echo "## Squeal quality gate trial"
-            echo
-            echo "A trial: this job gates nothing and never fails the run. Vitest shards: $SHARDS_RESULT."
-            echo
-            if jq -e '.format == "squeal-code-gate/1"' "$out/report.json" > /dev/null 2>&1; then
-              jq -r --arg code "$code" --arg seconds "$seconds" "$report_filter" "$out/report.json"
-            elif [ "$code" = none ]; then
-              echo "No report: the gate did not run (gate step: ${GATE:-skipped})."
-            else
-              echo "No report: exit $code$([ "$code" = 2 ] && echo ', a setup or usage error') after $seconds s. The gate's last stderr lines:"
-              echo
-              echo '```'
-              tail -n 20 "$out/stderr.txt" 2> /dev/null || true
-              echo '```'
-            fi
-            echo
-            echo "### Squeal's recording cost, from each shard's parts"
-            echo
-            found=0
-            for dir in "$RUNNER_TEMP"/squeal-parts/squeal-parts-shard-*; do
-              [ -d "$dir" ] || continue
-              if [ "$found" = 0 ]; then
-                echo "| Shard | Parts | Test files | With a record | Coverage provider | Squeal's own time | Share of the test time | After the command |"
-                echo "|---|---:|---:|---:|---|---|---|---:|"
-                found=1
-              fi
-              jq -s -r --arg shard "${dir##*-}" "$shard_filter" "$dir"/squeal-part-*.json 2> /dev/null \
-                || echo "| ${dir##*-} | the parts do not read | | | | | | |"
-            done
-            [ "$found" = 1 ] || echo "No shard parts were downloaded."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload the trial report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: squeal-gate-trial
-          path: ${{ runner.temp }}/squeal-gate-trial/
-          if-no-files-found: warn
-          retention-days: 14
-          overwrite: true
-
-  # Squeal coverage proof (hearsay-tools/squeal spec 020 D19, row 020-26c; hearsay-tools/squeal#189).
-  # Only a manual dispatch with squeal_coverage_proof and no pr_number runs it. Vitest shard 1/8,
-  # one of the eight, runs three times on the dispatched commit, each with the project's V8
-  # coverage: `squeal` under `squeal ci record`, which reads the V8 provider's payloads into its
-  # parts, and `v8` and `v8-control` alone, the second as the run-to-run control.
-  # squeal-coverage-proof-compare compares the three. Neither job gates anything: every step
-  # continues on error, both jobs set continue-on-error, and both are outside verify.needs and
-  # the queue roster.
-  # See docs/sdlc/ci.md § Squeal coverage proof.
-  squeal-coverage-proof:
-    name: Squeal coverage proof ${{ matrix.run }}
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.squeal_coverage_proof == true && inputs.pr_number == '' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        run: [ squeal, v8, v8-control ]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    continue-on-error: true
-
-    # Runs the dispatched code (install, tests), so it only reads.
-    permissions:
-      contents: read
-
-    steps:
-      - name: Check out the dispatched commit
-        continue-on-error: true
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-
-      - name: Set up pnpm
-        continue-on-error: true
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          version: '12.11.2'
-
-      - name: Install Node.js from nodejs.org
-        uses: ./.github/actions/node-dist
-        continue-on-error: true
-        with:
-          node-version-file: .node-version
-
-      # The shards' Node, so the three runs and a Vitest shard see the same V8.
-      - name: Set up Node.js
-        continue-on-error: true
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          token: ''
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install pnpm dependencies
-        continue-on-error: true
-        run: pnpm install --frozen-lockfile
-
-      # Squeal's pinned action, as in the shards; it never fails the job (hearsay-tools/squeal
-      # spec 018 D20). Only the `squeal` run records.
-      - name: Set up Squeal
-        if: matrix.run == 'squeal'
-        continue-on-error: true
-        uses: hearsay-tools/squeal/ci@6a7b41c08d5b2d27412cad1b1c139e65144876e6 # v0.1.460
-
-      # The shard command of a dispatch, with its V8 coverage. Bash's `time` gives the wall and
-      # CPU (user + sys) time of the command and every process it waited for. The step keeps
-      # the exit code, the times and the coverage report, and exits 0.
-      - name: Run Vitest shard 1/8 with V8 coverage
-        id: shard
-        continue-on-error: true
-        env:
-          VITEST_FILE_DURATION_CAP: '1'
-          PROOF_RUN: ${{ matrix.run }}
-        run: |
-          out="$RUNNER_TEMP/squeal-coverage-proof"
-          mkdir -p "$out"
-          set -- npm test -- --shard=1/8 --maxWorkers=4 --coverage.enabled
-          if [ "$PROOF_RUN" = squeal ]; then
-            set -- squeal ci record --out "$out/parts" -- "$@"
-          fi
-          load_before="$(cut -d ' ' -f 1 /proc/loadavg 2> /dev/null || true)"
-          code=0
-          TIMEFORMAT='%3R %3U %3S'
-          { time "$@" 2>&3 || code=$?; } 3>&2 2> "$out/time.txt"
-          load_after="$(cut -d ' ' -f 1 /proc/loadavg 2> /dev/null || true)"
-          read -r wall user sys < "$out/time.txt" || true
-          if ! cp .ai/qa/coverage/coverage-final.json "$out/coverage-final.json"; then
-            echo "::warning title=Squeal coverage proof $PROOF_RUN::No V8 coverage report (exit $code)."
-          fi
-          jq -n --arg run "$PROOF_RUN" --argjson code "$code" --arg wall "$wall" --arg user "$user" --arg sys "$sys" \
-            --arg root "$GITHUB_WORKSPACE" --arg cpus "$(getconf _NPROCESSORS_ONLN)" --arg model "$(sed -n 's/^model name[[:space:]]*: //p' /proc/cpuinfo 2> /dev/null | head -n 1)" \
-            --arg loadBefore "$load_before" --arg loadAfter "$load_after" --argjson command "$(printf '%s\0' "$@" | jq -cRs 'split("\u0000")[:-1]')" \
-            '{format: "squeal-coverage-proof-run/1", run: $run, command: $command, exitCode: $code,
-              wallSeconds: ($wall | tonumber? // null), userSeconds: ($user | tonumber? // null), sysSeconds: ($sys | tonumber? // null),
-              root: $root, cpus: ($cpus | tonumber? // null), cpuModel: $model,
-              loadBefore: ($loadBefore | tonumber? // null), loadAfter: ($loadAfter | tonumber? // null)}' > "$out/run.json"
-          echo "Squeal coverage proof $PROOF_RUN: exit $code, wall ${wall:-unknown} s, CPU ${user:-unknown} s user and ${sys:-unknown} s sys."
-
-      - name: Upload the proof run
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: squeal-coverage-proof-${{ matrix.run }}
-          path: ${{ runner.temp }}/squeal-coverage-proof/
-          if-no-files-found: warn
-          retention-days: 14
-          overwrite: true
-
-  squeal-coverage-proof-compare:
-    name: Compare the Squeal coverage proof
-    needs: [squeal-coverage-proof]
-    # A status function in the condition: without one GitHub adds success(), and a proof run
-    # that failed or timed out would skip the comparison of the other two.
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.squeal_coverage_proof == true && inputs.pr_number == '' && needs.squeal-coverage-proof.result != 'skipped' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    continue-on-error: true
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Check out the comparison script
-        continue-on-error: true
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            .github/scripts
-            .github/actions/node-dist
-
-      - name: Install Node.js from nodejs.org
-        uses: ./.github/actions/node-dist
-        continue-on-error: true
-        with:
-          node-version-file: .node-version
-
-      - name: Set up Node.js
-        continue-on-error: true
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          token: ''
-
-      - name: Download the proof runs
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          pattern: squeal-coverage-proof-*
-          path: ${{ runner.temp }}/squeal-coverage-proof
-
-      # The script writes the job summary and comparison.json, and exits 0 whatever it finds.
-      - name: Compare the proof runs
-        if: always()
-        continue-on-error: true
-        run: |
-          out="$RUNNER_TEMP/squeal-coverage-comparison"
-          mkdir -p "$out"
-          node .github/scripts/squeal-coverage-proof.cjs --input "$RUNNER_TEMP/squeal-coverage-proof" --json "$out/comparison.json" \
-            >> "$GITHUB_STEP_SUMMARY" || echo "The comparison did not finish (exit $?); see the step log." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload the comparison
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: squeal-coverage-comparison
-          path: ${{ runner.temp }}/squeal-coverage-comparison/
-          if-no-files-found: warn
-          retention-days: 14
-          overwrite: true
-
-  # Squeal packaged test trial (hearsay-tools/squeal spec 020 D12 and D15, row 020-32;
-  # hearsay-tools/squeal#194). Only a manual dispatch with squeal_package_trial and no pr_number
-  # runs it. It runs `squeal code`, the one-shot gate an agent runs before a PR, with two keys
-  # added: a node:test entry for packages/cezar/test/e2e whose `prepare` builds the packages, and
-  # child-process coverage. The gate reads both at the merge base, so the job adds them to
-  # squeal.config.json in two local commits, the merge base's and the head's; the repository's
-  # own configuration does not change. With squeal_package_trial_commit it measures that commit
-  # against its first parent. It never fails the run: every step continues on error, and it is
-  # outside verify.needs and the queue roster. See docs/sdlc/ci.md § Squeal packaged test trial.
-  squeal-package-trial:
-    name: Squeal packaged test trial
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.squeal_package_trial == true && inputs.pr_number == '' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    continue-on-error: true
-
-    # Runs the measured code (install, build, the gate's own test runs), so it only reads.
-    permissions:
-      contents: read
-
-    steps:
-      - name: Check out the dispatched commit
-        continue-on-error: true
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-          fetch-depth: 1
-
-      # The gate compares with a merge base, so it fetches this commit's history and main only,
-      # as complexity-gate does for a bare dispatch.
-      - name: Fetch the history the gate compares
-        continue-on-error: true
-        run: git fetch --no-tags --unshallow origin +refs/heads/main:refs/remotes/origin/main
-
-      # Base: the merge base of the measured commit and origin/main (or of the given commit and
-      # its first parent), with the trial keys. Head: the measured commit's tree with the same
-      # keys, on that base. Then the gate's merge base holds the keys, and the head's change is
-      # the measured commit's change. The branch squeal-package-trial-base names the base.
-      - name: Build the trial commits
-        id: commits
-        continue-on-error: true
-        env:
-          TRIAL_COMMIT: ${{ inputs.squeal_package_trial_commit }}
-          # `npm run test:package` without its wrapper (scripts/test-package.mjs): its cwd and
-          # argv, the root build as `prepare`, and the files the wrapper accepts.
-          TRIAL_ENTRY: >-
-            {"name": "test:package", "cwd": "packages/cezar",
-            "argv": ["--import", "../../scripts/test-home-env.mjs", "--import", "tsx"],
-            "include": ["test/e2e/*.test.ts"],
-            "prepare": {"command": ["npm", "--prefix", "../..", "run", "build"], "timeoutSeconds": 600}}
-          GIT_AUTHOR_NAME: Squeal packaged test trial
-          GIT_AUTHOR_EMAIL: noreply@github.com
-          GIT_COMMITTER_NAME: Squeal packaged test trial
-          GIT_COMMITTER_EMAIL: noreply@github.com
-        run: |
-          out="$RUNNER_TEMP/squeal-package-trial"
-          mkdir -p "$out"
-          if [ -n "$TRIAL_COMMIT" ]; then
-            # A full SHA only: git fetch must never read the input as an option.
-            if ! [[ "$TRIAL_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
-              echo "::error title=Squeal packaged test trial::squeal_package_trial_commit must be a full 40-character commit SHA."
-              exit 1
-            fi
-            git cat-file -e "$TRIAL_COMMIT^{commit}" 2> /dev/null || git fetch --no-tags origin "$TRIAL_COMMIT"
-            head="$TRIAL_COMMIT"
-            ref="$TRIAL_COMMIT^1"
-          else
-            head="$(git rev-parse HEAD)"
-            ref=origin/main
-          fi
-          merge="$(git merge-base "$ref" "$head")"
-          # Sets `tree` to the commit's tree with the trial keys in its squeal.config.json.
-          with_trial_keys() {
-            { git show "$1:squeal.config.json" 2> /dev/null || echo '{}'; } \
-              | jq --argjson entry "$TRIAL_ENTRY" '.coverage = ((.coverage // {}) + {children: true})
-                  | .nodeTest = ([(.nodeTest // [])[] | select(.name != $entry.name)] + [$entry])' > "$out/squeal.config.$2.json"
-            blob="$(git hash-object -w "$out/squeal.config.$2.json")"
-            index="$RUNNER_TEMP/squeal-package-trial-index"
-            rm -f "$index"
-            GIT_INDEX_FILE="$index" git read-tree "$1"
-            GIT_INDEX_FILE="$index" git update-index --add --cacheinfo "100644,$blob,squeal.config.json"
-            tree="$(GIT_INDEX_FILE="$index" git write-tree)"
-            rm -f "$index"
-          }
-          with_trial_keys "$merge" base
-          base="$(git commit-tree "$tree" -p "$merge" -m 'Squeal packaged test trial: the merge base with the trial keys')"
-          with_trial_keys "$head" head
-          trial="$(git commit-tree "$tree" -p "$base" -m 'Squeal packaged test trial: the measured commit with the trial keys')"
-          git branch --force squeal-package-trial-base "$base"
-          git checkout --quiet --detach "$trial"
-          jq -n --arg ref "$ref" --arg head "$head" --arg merge "$merge" --arg base "$base" --arg trial "$trial" \
-            '{format: "squeal-package-trial-commits/1", ref: $ref, head: $head, mergeBase: $merge, base: $base, trial: $trial}' > "$out/commits.json"
-          echo "Squeal packaged test trial: $head against $ref (merge base $merge); local base $base, head $trial."
-
-      - name: Set up pnpm
-        id: pnpm
-        continue-on-error: true
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          version: '12.11.2'
-
-      # The trial commit can predate the node-dist action.
-      - name: Install Node.js from nodejs.org
-        if: hashFiles('.github/actions/node-dist/action.yml') != ''
-        uses: ./.github/actions/node-dist
-        continue-on-error: true
-        with:
-          node-version-file: .node-version
-
-      # After the trial commits: the measured tree's Node and lockfile.
-      - name: Set up Node.js
-        id: node
-        if: hashFiles('.github/actions/node-dist/action.yml') != ''
-        continue-on-error: true
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          token: ''
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Set up Node.js without node-dist
-        id: node_fallback
-        # The checked-out ref predates the node-dist action: the previous setup.
-        if: hashFiles('.github/actions/node-dist/action.yml') == ''
-        continue-on-error: true
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install pnpm dependencies
-        id: install
-        continue-on-error: true
-        run: pnpm install --frozen-lockfile
-
-      # Squeal's action, as in the shards; it never fails the job (hearsay-tools/squeal spec 018 D20).
-      - name: Set up Squeal
-        id: squeal_setup
-        continue-on-error: true
-        uses: hearsay-tools/squeal/ci@6a7b41c08d5b2d27412cad1b1c139e65144876e6 # v0.1.460
-
-      # The gate's exit code is its verdict: 0 pass, 1 violations, 3 incomplete, 2 a setup or
-      # usage error. Its budget is twice the default 600 s, so a slow build still gives a report;
-      # the report has each run's time. The step keeps the exit code, time and stderr, and exits 0.
-      - name: Run the Squeal quality gate with the packaged tests
-        id: gate
-        # Never on the unchanged checkout, nor on an unprepared environment: a failed setup step
-        # keeps its outcome under continue-on-error, so each one is checked.
-        if: steps.commits.outcome == 'success' && steps.pnpm.outcome == 'success' && (steps.node.outcome == 'success' || steps.node_fallback.outcome == 'success') && steps.install.outcome == 'success' && steps.squeal_setup.outcome == 'success'
-        continue-on-error: true
-        run: |
-          out="$RUNNER_TEMP/squeal-package-trial"
-          mkdir -p "$out"
-          started="$(date +%s)"
-          code=0
-          squeal code --base squeal-package-trial-base --json --timeout 1200 > "$out/report.json" 2> "$out/stderr.txt" || code=$?
-          echo "$code" > "$out/exit-code"
-          echo "$(( $(date +%s) - started ))" > "$out/seconds"
-          cat "$out/stderr.txt" >&2
-
-      - name: Report the trial
-        if: always()
-        continue-on-error: true
-        env:
-          GATE: ${{ steps.gate.outcome }}
-          SETUP: "pnpm ${{ steps.pnpm.outcome }}, Node.js ${{ steps.node.outcome == 'skipped' && steps.node_fallback.outcome || steps.node.outcome }}, install ${{ steps.install.outcome }}, Squeal ${{ steps.squeal_setup.outcome }}"
-          PACKAGED_TESTS: packages/cezar/test/e2e/
-        run: |
-          report_filter='
-            def secs: if . == null then "none" else "\(. / 1000 | round) s" end;
-            def packaged: [(.loaders.expected + .loaders.measured)[] | select(startswith($packaged))] | unique;
-            "Verdict: **\(.verdict)** (exit \($code)) in \($seconds) s. Budget \(.budget.seconds) s, timed out: \(.budget.timedOut). Child coverage read at the base: \(.base.policy.coverageChildren // false).",
-            "",
-            "Changed functions: \(.functions | length) (\(.counts | to_entries | map("\(.key) \(.value)") | join(", "))). Paths not counted: \(.uncounted | length).",
-            "",
-            (.runs[] | "- \(.runner): \(.selected | length) selected, \(.completed | length) completed, \(.notFinished | length) not finished, \(.failed | length) with a failed test; run time \(.durationMs | secs)"
-              + (if .children then "; child coverage files read \(.children.read), dropped \(.children.dropped)" else "" end) + ".",
-              ((.prepare // [])[] | "  - `prepare` of `\(.project)`: `\(.command | join(" "))`, \(.outcome), exit \(.exit // "none"), \(.durationMs | secs); \(.notRun | length) selected files did not run because of it.")),
-            "",
-            "### Changed functions that the packaged tests load, and every function that is not pass",
-            "",
-            ([.functions[] | select((packaged | length) > 0 or .state != "pass")] as $rows
-              | if ($rows | length) == 0 then "None."
-                else "| Function | State | Gap | Lines covered | CRAP | Packaged loaders |", "|---|---|---|---:|---:|---|",
-                  ($rows[:60][] | "| `\(.path)` `\(.qualifiedName)` | \(.state) | \(.gap // "") | \(if .coverage then "\(.coverage.covered)/\(.coverage.lines)" else "" end) | \(.crap // "") | \(packaged | map("`\(ltrimstr($packaged))`") | join(", ")) |"),
-                  (if ($rows | length) > 60 then "", "\($rows | length - 60) more in report.json." else empty end)
-                end)'
-          out="$RUNNER_TEMP/squeal-package-trial"
-          code="$(cat "$out/exit-code" 2> /dev/null || echo none)"
-          seconds="$(cat "$out/seconds" 2> /dev/null || echo unknown)"
-          {
-            echo "## Squeal packaged test trial"
-            echo
-            echo "A trial: this job gates nothing and never fails the run. The gate read a node:test entry \`test:package\` with \`prepare\`, and \`coverage.children: true\`, added to \`squeal.config.json\` in two local commits; the configuration in the repository is unchanged."
-            echo
-            if jq -e '.format == "squeal-package-trial-commits/1"' "$out/commits.json" > /dev/null 2>&1; then
-              jq -r '"Measured: \(.head[0:12]) against `\(.ref)`, merge base \(.mergeBase[0:12]). Local commits with the trial keys: base \(.base[0:12]), head \(.trial[0:12])."' "$out/commits.json"
-            else
-              echo "No trial commits: the step that builds them failed (see its log)."
-            fi
-            echo
-            if jq -e '.format == "squeal-code-gate/1"' "$out/report.json" > /dev/null 2>&1; then
-              jq -r --arg code "$code" --arg seconds "$seconds" --arg packaged "$PACKAGED_TESTS" "$report_filter" "$out/report.json"
-            elif [ "$code" = none ]; then
-              echo "No report: the gate did not run (gate step: ${GATE:-skipped}; setup: $SETUP)."
-            else
-              echo "No report: exit $code$([ "$code" = 2 ] && echo ', a setup or usage error') after $seconds s. The gate's last stderr lines:"
-              echo
-              echo '```'
-              tail -n 20 "$out/stderr.txt" 2> /dev/null || true
-              echo '```'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload the trial report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: squeal-package-trial
-          path: ${{ runner.temp }}/squeal-package-trial/
-          if-no-files-found: warn
-          retention-days: 14
-          overwrite: true
-
   # Merges the eight shard reports into one repo-relative Istanbul `coverage-final.json` and
   # uploads it as `vitest-coverage-<head SHA>`. See docs/sdlc/ci.md § Vitest coverage artifact.
   vitest-coverage-merge:
     name: Merge Vitest coverage
     needs: [vitest]
-    if: ${{ !cancelled() && (github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch') && needs.vitest.result != 'skipped' && !(github.event_name == 'workflow_dispatch' && inputs.squeal_gate_trial == true && inputs.pr_number == '') }}
+    if: ${{ !cancelled() && (github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch') && needs.vitest.result != 'skipped' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
