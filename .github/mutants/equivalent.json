@@ -117,6 +117,23 @@
     "reason": "Unreachable exhaustiveness default kept for the type checker; parseOperation refuses every name not handled by execute."
   },
   {
+    "file": "packages/cezar/src/delegation/workspace-removal.ts",
+    "function": "prepareMissingWorktree",
+    "mutator": "StringLiteral",
+    "original": "'prepared'",
+    "replacement": "\"\"",
+    "reason": "removeOwnedWorkspace in packages/cezar/src/delegation/workspace-removal.ts passes this checkpoint only to removeBranch, which replaces the phase with 'worktree-removed' before its first checkpoint write; the value is never written or read."
+  },
+  {
+    "file": "packages/cezar/src/delegation/workspace-removal.ts",
+    "function": "keepingRefs",
+    "mutator": "StringLiteral",
+    "site": "const tips = branch.log.content.toString('utf8').split('\\n').filter(Boolean).map(entry => entry.split(' ')[1] ?? ",
+    "original": "''",
+    "replacement": "\"Stryker was here!\"",
+    "reason": "The fallback applies only to a reflog line without a space, which git never writes. Neither value equals the baseline or tip SHA, and git rejects both alike: run against a repository, 'git for-each-ref --contains <value>' exits 129 with no output ('malformed object name') and 'git merge-base --is-ancestor <value> <tip>' exits 128 for '' and for \"Stryker was here!\". So keepingRefs finds no witness and returns undefined either way."
+  },
+  {
     "file": "packages/cezar/src/task-cli/cli.ts",
     "function": "execute",
     "mutator": "StringLiteral",
@@ -301,22 +318,5 @@
     "replacement": "\"\"",
     "reason": "commitLegacyMigration never reads legacy.cache: the claim, planLegacyMigration (migrationRoots is called for the target only), MOVED.json and updateManagedPath use only paths under legacy.root.",
     "site": "const legacy = homePaths(record.legacyRoot, join(record.legacyRoot, "
-  },
-  {
-    "file": "packages/cezar/src/delegation/workspace-removal.ts",
-    "function": "prepareMissingWorktree",
-    "mutator": "StringLiteral",
-    "original": "'prepared'",
-    "replacement": "\"\"",
-    "reason": "removeOwnedWorkspace in packages/cezar/src/delegation/workspace-removal.ts passes this checkpoint only to removeBranch, which replaces the phase with 'worktree-removed' before its first checkpoint write; the value is never written or read."
-  },
-  {
-    "file": "packages/cezar/src/delegation/workspace-removal.ts",
-    "function": "keepingRefs",
-    "mutator": "StringLiteral",
-    "site": "const tips = branch.log.content.toString('utf8').split('\\n').filter(Boolean).map(entry => entry.split(' ')[1] ?? ",
-    "original": "''",
-    "replacement": "\"Stryker was here!\"",
-    "reason": "The fallback applies only to a reflog line without a space, which git never writes. Neither value equals the baseline or tip SHA, and git rejects both alike: run against a repository, 'git for-each-ref --contains <value>' exits 129 with no output ('malformed object name') and 'git merge-base --is-ancestor <value> <tip>' exits 128 for '' and for \"Stryker was here!\". So keepingRefs finds no witness and returns undefined either way."
   }
 ]
