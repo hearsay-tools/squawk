@@ -8,6 +8,10 @@ import { afterEach, expect, it } from 'vitest';
 import { DevServer, probePort } from './dev-server.ts';
 import { ChromiumMissingError, PreviewHost, type RunContext } from './host.ts';
 import { fakeViewer, fixtureProcessGuard } from './preview.testkit.ts';
+import { allowLaunches } from '../test-launch-guard.testkit.ts';
+
+// This file tears down a real dev server, the fake-dev-server fixture, on purpose (hearsay-tools/squawk#2369).
+allowLaunches('dev-server');
 
 // Tags the fixture launch below, so a process left after the test fails it (hearsay-tools/cezarion#1880).
 const guard = fixtureProcessGuard();

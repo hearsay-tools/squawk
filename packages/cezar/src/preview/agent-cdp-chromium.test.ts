@@ -13,6 +13,10 @@ import { previewCdpUrl } from './agent-address.ts';
 import { resolveChromium } from './chromium.ts';
 import { PreviewHost, type RunContext } from './host.ts';
 import { fakeViewer } from './preview.testkit.ts';
+import { allowLaunches } from '../test-launch-guard.testkit.ts';
+
+// This file drives a real Chromium on purpose (hearsay-tools/squawk#2369).
+allowLaunches('browser');
 
 /**
  * The agent's path to a real Chromium (hearsay-tools/cezarion#784): the CDP proxy route, the host's
