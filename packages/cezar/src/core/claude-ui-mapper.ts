@@ -45,8 +45,14 @@ import type {
 import { hookEventName, isVisibleHookItem } from './hook-items.ts';
 import { editWriteKey } from './edit-write-key.ts';
 import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
+import {
+  adoptForkedCommand,
+  completeForkedCommands,
+  withForkedCommandStart,
+  type ForkedCommandState,
+} from './claude-forked-command.ts';
 
-export interface ClaudeUiMapperState {
+export interface ClaudeUiMapperState extends ForkedCommandState {
   /** Used when `system/init` lacks `session_id` (the dry-run mock does). */
   readonly fallbackSessionId?: string | undefined;
   /** True once `system/init` produced `session.started`. */
@@ -104,6 +110,9 @@ export function createClaudeUiState(opts: { fallbackSessionId?: string | undefin
     backgroundTasks: new Map(),
     backgroundTaskIds: new Map(),
     endedBackgroundTasks: new Set(),
+    forkedCommandStarts: new Map(),
+    openForkedCommands: new Map(),
+    forkedCommandUses: new Map(),
   };
 }
 
@@ -125,6 +134,13 @@ export function claudeTurnStarted(state: ClaudeUiMapperState): ClaudeUiMapping {
 /** Fold one parsed stream-json message into v2 events. Never throws. */
 export function mapClaudeMessage(msg: unknown, state: ClaudeUiMapperState): ClaudeUiMapping {
   if (!isRecord(msg)) return { events: [], state };
+  const fork = adoptForkedCommand(msg, state);
+  if (!fork) return mapWireMessage(msg, state);
+  const mapped = mapWireMessage(fork.msg, fork.state);
+  return { events: [...fork.events, ...mapped.events], state: mapped.state };
+}
+
+function mapWireMessage(msg: Record<string, unknown>, state: ClaudeUiMapperState): ClaudeUiMapping {
   switch (msg.type) {
     case 'system':
       if (msg.subtype === 'init') return mapInit(msg, state);
@@ -281,7 +297,8 @@ function withBackgroundTask(state: ClaudeUiMapperState, item: UiToolItem, taskId
 
 function mapTaskStarted(msg: Record<string, unknown>, state: ClaudeUiMapperState): ClaudeUiMapping {
   const toolUseId = str(msg.tool_use_id);
-  const open = toolUseId === undefined ? undefined : state.openTools.get(toolUseId);
+  if (toolUseId === undefined) return { events: [], state: withForkedCommandStart(msg, state) };
+  const open = state.openTools.get(toolUseId);
   if (msg.is_backgrounded !== true || !open || !isRootTask(open) || open.background) return { events: [], state };
   const item: UiToolItem = { ...open, background: true };
   const next = withBackgroundTask(state, item, str(msg.task_id));
@@ -770,6 +787,7 @@ function mapResult(msg: Record<string, unknown>, state: ClaudeUiMapperState): Cl
   itemSeq = fallback.itemSeq;
   let turnSeq = state.turnSeq;
   const turnId = state.currentTurnId ?? `turn_${++turnSeq}`;
+  events.push(...completeForkedCommands(state, resultStopReason(msg) === 'error'));
   events.push(...completeTurnEvents(msg, turnId));
   return {
     events,
@@ -778,6 +796,8 @@ function mapResult(msg: Record<string, unknown>, state: ClaudeUiMapperState): Cl
       itemSeq,
       turnSeq,
       currentTurnId: null,
+      forkedCommandStarts: new Map(),
+      openForkedCommands: new Map(),
       openTools: denials.openTools ?? state.openTools,
       sawAssistantText: fallback.sawAssistantText,
     },
