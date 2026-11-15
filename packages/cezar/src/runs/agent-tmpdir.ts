@@ -713,9 +713,10 @@ function reapAgentTmpDir(dataDir: string, runId: string, spareUnclaimedShort: bo
 
 /**
  * Startup sweep of confined repo-local and digest directories not claimed by keepRunIds. Respect
- * full-run and dataDir ownership markers; retain unreadable or uncertain ownership.
+ * full-run and dataDir ownership markers; retain unreadable or uncertain ownership. A directory
+ * `spare` names stays too: the caller keeps one that holds a running job (hearsay-tools/squawk#3138).
  */
-export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>): string[] {
+export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>, spare: (dir: string) => boolean = () => false): string[] {
   // Private worker evidence outlives corrupt/missing/quarantined index rows. Both local
   // and digest-named fallback scratch belong to deferred cleanup, not this orphan sweep.
   const workers = workerEvidenceRunIds(dataDir);
@@ -738,6 +739,7 @@ export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>)
     for (const name of entries) {
       if (keep.has(name) || !safeRunId(name)) continue;
       try {
+        if (agentTmpDirLocations(dataDir, name).some(spare)) continue;
         const locations = agentTmpDirLocations(dataDir, name).filter(dir => existsSync(dir));
         reapAgentTmpDir(dataDir, name, claimedShort.has(basename(agentShortTmpDir(dataDir, name))));
         reaped.push(...locations.filter(dir => !existsSync(dir)).map(dir => basename(dir)));
@@ -766,6 +768,7 @@ export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>)
       // A marker that is a proper prefix of a kept run's id is that run's, cut short.
       if (owner === null ? claimedShort.has(name) : [...keep].some((id) => id.startsWith(owner))) continue;
       try {
+        if (spare(join(shortRoot, name))) continue;
         rmSync(join(shortRoot, name), { recursive: true, force: true });
         reaped.push(owner ?? name);
       } catch {
@@ -773,7 +776,7 @@ export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>)
       }
     }
   }
-  reaped.push(...sweepFallbackRoots(dataDir, keep));
+  reaped.push(...sweepFallbackRoots(dataDir, keep, spare));
   return reaped;
 }
 
@@ -788,7 +791,7 @@ export function sweepAgentTmpDirs(dataDir: string, keepRunIds: Iterable<string>)
  * marker that is missing, unreadable or names a live dataDir is another
  * project's, or unknown, and is never ours to remove.
  */
-function sweepFallbackRoots(dataDir: string, keep: ReadonlySet<string>): string[] {
+function sweepFallbackRoots(dataDir: string, keep: ReadonlySet<string>, spare: (dir: string) => boolean): string[] {
   const owners = dataDirOwners(dataDir);
   const claimed = new Set([...keep].filter(safeRunId).flatMap((id) =>
     dataDirIdentities(dataDir).map((identity) => basename(fallbackTmpDir(osTempRoot(), identity, id)))));
@@ -803,6 +806,7 @@ function sweepFallbackRoots(dataDir: string, keep: ReadonlySet<string>): string[
     for (const entry of fallbackEntries) {
       if (!fallbackSweepable(osRoot, entry, owners, claimed)) continue;
       try {
+        if (spare(join(osRoot, entry.name))) continue;
         rmSync(join(osRoot, entry.name), { recursive: true, force: true });
         reaped.push(entry.name);
       } catch {
