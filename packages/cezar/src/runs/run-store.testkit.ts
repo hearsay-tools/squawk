@@ -69,6 +69,24 @@ function hasDelegationWait(record: Record<string, unknown>): boolean {
   return !!delegation && typeof delegation === 'object' && (delegation as { wait?: unknown }).wait !== undefined;
 }
 
+/** Overwrite stored columns of the row `id` as they stand, as a corrupted `runs.db` holds them:
+ *  no encoding, no derived column recomputed. */
+export function overwriteRunColumns(dataDir: string, id: string, columns: { data?: string; summary?: string }): void {
+  const db = new DatabaseSync(join(dataDir, RUNS_DB_FILE));
+  try {
+    for (const [column, value] of Object.entries(columns)) {
+      db.prepare(`UPDATE runs SET ${column} = ? WHERE id = ?`).run(value, id);
+    }
+  } finally {
+    db.close();
+  }
+}
+
+/** The stored summary text of the row `id`, as another process reads it. */
+export function readStoredSummary(dataDir: string, id: string): string | undefined {
+  return persistedRows(dataDir).find((row) => row.id === id)?.summary;
+}
+
 /** The id of every run the store knows, held or only in `runs.db`, newest first. `listRuns()` is
  *  the live set only (#779), so a test about every run reads the list rows instead. */
 export function runIds(store: RunStore): string[] {
@@ -90,7 +108,7 @@ export function readPersistedText(dataDir: string): string {
   return persistedRows(dataDir).map((row) => `${row.data}\n${row.summary}`).join('\n');
 }
 
-function persistedRows(dataDir: string): Array<{ data: string; summary: string }> {
+function persistedRows(dataDir: string): Array<{ id: string; data: string; summary: string }> {
   const db = RunDatabase.openReadOnly(join(dataDir, RUNS_DB_FILE));
   if (!db) return [];
   try {

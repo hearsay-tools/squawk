@@ -10,7 +10,7 @@ import { historyPaths } from './history-file.ts';
 import { readRunIndexFromDisk } from './run-index.ts';
 import { RUNS_DB_FILE, RunDatabase } from './run-database.ts';
 import { RunStore, runRecordSchema } from './store.ts';
-import { setRunStatus, blockRunWrites, readPersistedRuns, readPersistedText, seedRuns } from './run-store.testkit.ts';
+import { setRunStatus, blockRunWrites, overwriteRunColumns, readPersistedRuns, readPersistedText, readStoredSummary, runIds, seedRuns } from './run-store.testkit.ts';
 import {
   STEP_KIND,
   RUN_STATUS,
@@ -3146,5 +3146,71 @@ describe('RunRecord.handoffRecords (hearsay-tools/cezarion#1809)', () => {
     expect(runRecordSchema.parse(LEGACY_RUN).handoffRecords).toBeUndefined();
     const previous = contractRunRecordSchema.omit({ handoffRecords: true });
     expect('handoffRecords' in previous.parse({ ...LEGACY_RUN, handoffRecords: records })).toBe(false);
+  });
+});
+
+describe('RunStore — a row whose stored summary is not JSON (hearsay-tools/squawk#3530)', () => {
+  let dataDir: string;
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'cez-store-'));
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  const BAD = { ...LEGACY_RUN, id: 'bad-summary', title: 'bad summary', createdAt: '2026-01-02T00:00:00.000Z' };
+  const HANDLE = { owner: 'o', name: 'r' };
+
+  it('opens, lists the run from its record, and the next save rewrites a valid summary', () => {
+    seedRuns(dataDir, [BAD]);
+    overwriteRunColumns(dataDir, BAD.id, { summary: 'malformed JSON' });
+    const store = RunStore.open(dataDir);
+    expect(store.listRunSummaries().runs.map((run) => [run.id, run.title])).toEqual([[BAD.id, BAD.title]]);
+    store.flush();
+    expect(JSON.parse(readStoredSummary(dataDir, BAD.id)!)).toMatchObject({ id: BAD.id, title: BAD.title });
+    store.close();
+  });
+
+  it('rewrites the bad summary of a live row that open keeps live', () => {
+    seedRuns(dataDir, [{ ...BAD, status: RUN_STATUS.queued }]);
+    overwriteRunColumns(dataDir, BAD.id, { summary: 'malformed JSON' });
+    const store = RunStore.open(dataDir, { keepLive: true });
+    expect(store.getRun(BAD.id)?.status).toBe(RUN_STATUS.queued);
+    store.flush();
+    expect(JSON.parse(readStoredSummary(dataDir, BAD.id)!)).toMatchObject({ id: BAD.id, status: RUN_STATUS.queued });
+    store.close();
+  });
+
+  it('arms a repository handle while the bad summary is still stored', () => {
+    seedRuns(dataDir, [BAD]);
+    overwriteRunColumns(dataDir, BAD.id, { summary: 'malformed JSON' });
+    const store = RunStore.open(dataDir);
+    expect(() => store.setRepoHandle(HANDLE)).not.toThrow();
+    expect(store.getRun(BAD.id)?.title).toBe(BAD.title);
+    store.close();
+  });
+
+  it('counts an undecodable row as unreadable, and every stored-row query skips it', () => {
+    seedRuns(dataDir, [BAD, LEGACY_RUN]);
+    overwriteRunColumns(dataDir, BAD.id, { data: 'not json', summary: 'not json' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const store = RunStore.open(dataDir);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('1 run(s)'));
+    expect(runIds(store)).toEqual([LEGACY_RUN.id]);
+    store.setRepoHandle(HANDLE);
+    expect(store.markAllRead()).toBe(0);
+    expect(store.listQuarantinedRunIds()).toEqual([]);
+    expect(store.countAutomationRuns('automation')).toBe(0);
+    expect(store.findNonArchivedRunByIssue('o/r', 1)).toBeUndefined();
+    expect(store.findRunIdsByAutomationReceipt(['receipt']).size).toBe(0);
+    expect(store.listBranchOwners()).toEqual([]);
+    expect(store.archiveFinished().ids).toEqual([LEGACY_RUN.id]);
+    store.close();
+    const db = RunDatabase.open(join(dataDir, RUNS_DB_FILE));
+    try {
+      expect(db.listCompletionCandidates(0, 64)).toEqual([]);
+      expect(db.archiveFamilyHasPullRequests(BAD.id)).toBe(false);
+    } finally { db.close(); }
   });
 });

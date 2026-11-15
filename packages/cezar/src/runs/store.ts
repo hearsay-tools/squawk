@@ -69,6 +69,7 @@ import {
   type RunConflictEvidence, type RunDatabaseChanges, type RunDatabaseCommit, type RunFenceClaim, type RunRow, type RunRowInput, type RunWriteFence,
 } from './run-database.ts';
 import { listBranchOwners, type BranchOwner } from './branch-owners.ts';
+import { guardedJsonSql } from './guarded-json-sql.ts';
 import { restoreLostReferencedPullRequest } from './loaded-run-healing.ts';
 import { failLoadedInterruptedRun, restoreLoadedUsageLimitHold, settleLoadedStop } from './loaded-run-exits.ts';
 import { hasLegacyWaitFields, upgradeLegacyWaits, UNREADABLE_WAIT } from './legacy-waits.ts';
@@ -350,12 +351,12 @@ function importLegacyIndex(db: RunDatabase, dataDir: string): void {
 /**
  * Finished rows whose stored summary an open-time normalization would still change: a referenced
  * PR an older Squawk's created-PR declaration erased, or issue attribution displaced by a
- * follow-up declaration (see `reconcileLoadedRun`). Not live, so not
+ * follow-up declaration (see `reconcileLoadedRun`), or a summary that is not JSON. Not live, so not
  * in the `live` column; open decodes these few and keeps the ones it actually repaired.
  */
-const LEGACY_REFERENCE_HEAL_SQL =
+const LEGACY_REFERENCE_HEAL_SQL = guardedJsonSql(
   "(json_extract(summary, '$.markerRefs.pr') IS NOT NULL AND json_extract(summary, '$.referencedPullRequestUrl') IS NULL)" +
-  " OR (NOT EXISTS (SELECT 1 FROM meta WHERE key = 'issue-attribution:' || runs.id AND value = CAST(runs.revision AS TEXT)) AND json_extract(summary, '$.markerRefs.issue') IS NOT NULL)";
+  " OR (NOT EXISTS (SELECT 1 FROM meta WHERE key = 'issue-attribution:' || runs.id AND value = CAST(runs.revision AS TEXT)) AND json_extract(summary, '$.markerRefs.issue') IS NOT NULL)", 1);
 
 /**
  * The rows whose stored summary reading their record can change, as SQL over `runs`: the rows
@@ -375,9 +376,8 @@ export const LOAD_REPAIR_SQL = `live = 1 OR ${LEGACY_REFERENCE_HEAL_SQL}`;
  * finished task nobody has opened since the upgrade. `instr` keeps the JSON parse off every
  * other row.
  */
-const AUTOMATION_ORIGIN_HEAL_SQL =
-  "instr(data, '\"automation') > 0 AND json_extract(summary, '$.automationId') IS NULL" +
-  " AND (json_extract(data, '$.automation.automationId') IS NOT NULL OR json_extract(data, '$.automationTrigger.automationId') IS NOT NULL)";
+const AUTOMATION_ORIGIN_HEAL_SQL = `instr(data, '"automation') > 0 AND ${guardedJsonSql("json_extract(summary, '$.automationId') IS NULL" +
+  " AND (json_extract(data, '$.automation.automationId') IS NOT NULL OR json_extract(data, '$.automationTrigger.automationId') IS NOT NULL)", 0, ['summary', 'data'])}`;
 
 export { branchOwnerOf, type BranchOwner } from './branch-owners.ts';
 
@@ -749,8 +749,8 @@ export class RunStore extends EventEmitter {
   /** Normalize a record just read from `row` (see `reconcileLoadedRun`) and hold it. Marks the row
    *  dirty only when normalization changed it, so the next save persists exactly the runs open()
    *  rewrote. A row read up from schema-3 wait fields counts as changed: its rewrite drops them
-   *  and recomputes its summary and live column (`upgradeLegacyWaits`). The caller has claimed
-   *  the row's family. */
+   *  and recomputes its summary and live column (`upgradeLegacyWaits`), as does a summary that does
+   *  not parse (hearsay-tools/squawk#3530). The caller has claimed the row's family. */
   private adoptLoadedRun({ run, extras, upgraded }: DecodedRun, opts: { keepLive?: boolean; onlyIfChanged?: boolean; settle?: boolean; stop?: boolean }, row: RunRow): void {
     if (this.db?.familyHasFallback(rowFamily(row))) return;
     // Serialized, so a key set to `undefined` reads as the absent key it is once written.
@@ -758,7 +758,7 @@ export class RunStore extends EventEmitter {
     const wasCancelled = run.status === 'cancelled';
     if (opts.settle) settleOrphanedRun(run, { stop: opts.stop });
     else reconcileLoadedRun(run, opts);
-    const changed = upgraded === true || JSON.stringify(run) !== before;
+    const changed = upgraded === true || JSON.stringify(run) !== before || parseStoredSummary(row.summary) === undefined;
     if (opts.onlyIfChanged && !changed) return;
     this.held.set(run.id, run);
     this.base.set(run.id, { revision: row.revision, seq: row.seq, data: row.data, extras });
@@ -1046,7 +1046,7 @@ export class RunStore extends EventEmitter {
     // `touch` per healed run: the cockpit is already live when the handle lands, so a corrected
     // chip has to reach the open page over SSE, not just the next `runs.json` write.
     let healed = false;
-    const stored = this.db?.listWhere(`${REFERENCED_RUN_RULE.sql} OR json_extract(summary, '$.pullRequests') IS NOT NULL`).filter((row) => {
+    const stored = this.db?.listWhere(guardedJsonSql(`${REFERENCED_RUN_RULE.sql} OR json_extract(summary, '$.pullRequests') IS NOT NULL`, 0)).filter((row) => {
       if (this.held.has(row.id) || this.deleted.has(row.id)) return false;
       const summary = parseStoredSummary(row.summary);
       return !summary || namesForeignReference(summary, handle);
@@ -1339,7 +1339,7 @@ export class RunStore extends EventEmitter {
   /** The id of every run whose delegation is quarantined (`invalid`), held or stored: its stored
    *  summary says so, so nothing is decoded (scratch cleanup). */
   listQuarantinedRunIds(): string[] {
-    const ids = new Set((this.db?.listKeysWhere("json_extract(summary, '$.delegation.role') = 'invalid'") ?? []).map((key) => key.id));
+    const ids = new Set((this.db?.listKeysWhere(guardedJsonSql("json_extract(summary, '$.delegation.role') = 'invalid'", 0)) ?? []).map((key) => key.id));
     for (const id of this.deleted) ids.delete(id);
     for (const [id, run] of this.held) {
       if (run.delegation?.role === 'invalid') ids.add(id);
@@ -1352,8 +1352,8 @@ export class RunStore extends EventEmitter {
    * Logs and receipts may compact independently. Read only matching keys in SQLite and overlay
    * held records so a debounced provenance update or deletion is reflected immediately. */
   countAutomationRuns(automationId: string): number {
-    const where = "json_extract(data, '$.automation.automationId') = ? OR " +
-      "json_extract(data, '$.automationTrigger.automationId') = ?";
+    const where = guardedJsonSql("json_extract(data, '$.automation.automationId') = ? OR " +
+      "json_extract(data, '$.automationTrigger.automationId') = ?", 0, ['data']);
     const ids = new Set((this.db?.listKeysWhere(where, [automationId, automationId]) ?? [])
       .map((key) => key.id));
     for (const id of this.deleted) ids.delete(id);
@@ -1382,13 +1382,13 @@ export class RunStore extends EventEmitter {
     for (const run of this.held.values()) if (matches(run)) return run.id;
     // Secondary references are record-only: query them in SQLite rather than hydrating every
     // finished transcript or relying on the slim summary's primary issue number.
-    const where = `archived = 0 AND (
+    const where = `archived = 0 AND ${guardedJsonSql(`
       json_extract(data, '$.issueNumber') = ? OR json_extract(data, '$.markerRefs.issue') = ?
       OR lower(rtrim(json_extract(data, '$.referencedIssueUrl'), '/')) = ?
       OR EXISTS (SELECT 1 FROM json_each(data, '$.referencedIssueCandidates') WHERE lower(rtrim(value, '/')) = ?)
       OR (json_extract(data, '$.automation.event') LIKE 'issue.%' AND lower(rtrim(json_extract(data, '$.automation.githubUrl'), '/')) = ?)
       OR instr(lower(json_extract(data, '$.task')), ?) > 0
-    )`;
+    `, 0, ['data'])}`;
     for (const key of this.db?.listKeysWhere(where, [number, number, url, url, url, url]) ?? []) {
       if (this.held.has(key.id) || this.deleted.has(key.id) || this.unreadable.has(key.id)) continue;
       const run = this.getRun(key.id);
@@ -1413,8 +1413,8 @@ export class RunStore extends EventEmitter {
     }
     const missing = [...wanted].filter((receipt) => !found.has(receipt));
     if (missing.length === 0 || !this.db) return found;
-    const where = "json_extract(data, '$.automation.receiptId') IN (SELECT value FROM json_each(?))" +
-      " OR json_extract(data, '$.automationTrigger.receiptId') IN (SELECT value FROM json_each(?))";
+    const where = guardedJsonSql("json_extract(data, '$.automation.receiptId') IN (SELECT value FROM json_each(?))" +
+      " OR json_extract(data, '$.automationTrigger.receiptId') IN (SELECT value FROM json_each(?))", 0, ['data']);
     for (const key of this.db.listKeysWhere(where, [JSON.stringify(missing), JSON.stringify(missing)])) {
       if (this.held.has(key.id) || this.deleted.has(key.id)) continue;
       const run = this.getRun(key.id);
@@ -1460,7 +1460,7 @@ export class RunStore extends EventEmitter {
    * no record. Held runs answer from memory.
    */
   listBranchOwners(): BranchOwner[] {
-    const rows = (this.db?.listBranchOwners("branch IS NOT NULL OR json_extract(summary, '$.pullRequestUrl') IS NOT NULL") ?? [])
+    const rows = (this.db?.listBranchOwners(`branch IS NOT NULL OR ${guardedJsonSql("json_extract(summary, '$.pullRequestUrl') IS NOT NULL", 0)}`) ?? [])
       .filter((row) => !this.deleted.has(row.id) && !this.held.has(row.id));
     return listBranchOwners(rows, [...this.held.values()], (id) => this.getRun(id));
   }
@@ -2422,7 +2422,7 @@ export class RunStore extends EventEmitter {
     // Runs not in memory are picked by the same rule over their stored summary, then re-checked
     // on the record before they are stamped.
     const candidates = [...this.held.values()];
-    const stored = (this.db?.listWhere(UNREAD_RUN_RULE.sql) ?? []).filter((row) => !this.held.has(row.id) && !this.deleted.has(row.id));
+    const stored = (this.db?.listWhere(guardedJsonSql(UNREAD_RUN_RULE.sql, 0)) ?? []).filter((row) => !this.held.has(row.id) && !this.deleted.has(row.id));
     // One claim transaction for them all; another process's runs are skipped (`record` refuses).
     this.claimFamilies(stored.map(rowFamily));
     for (const row of stored) {
@@ -3136,7 +3136,7 @@ export class RunStore extends EventEmitter {
     const cold = overflow.filter((id) => !this.held.has(id) && !this.hasFallbackRun(id));
     if (cold.length > 0) {
       // Another process's runs are its own to keep or archive (#779, plan step 3).
-      const rows = this.db!.listWhere(RETENTION_RUN_RULE.sql, [JSON.stringify(cold)]);
+      const rows = this.db!.listWhere(guardedJsonSql(RETENTION_RUN_RULE.sql, 0), [JSON.stringify(cold)]);
       const writable = this.claimFamilies(rows.map(rowFamily));
       for (const row of rows) if (writable.has(rowFamily(row))) stale.push(row.id);
     }

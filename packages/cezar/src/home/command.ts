@@ -18,7 +18,7 @@ export function cliCommand(entry: string | undefined = process.argv[1]): BinaryN
 /** Render command examples only; callers keep product prose and paths unchanged. */
 export function commandText(text: string, entry: string | undefined = process.argv[1]): string {
   if (text === 'cezarion' || text === 'cez') return cliCommand(entry);
-  return text.replace(/(?<![\w./\\-])\b(?:cez|hsq)(?=\s|\]|`|$)/g, cliCommand(entry))
+  return text.replace(/(?<![\w./\\-])\b(?:cez|hsq)(?=\s|\]|`|$)/g, () => cliCommand(entry))
     .replace(/\bnpx cezarion(?:@([\w.-]+))?(?![\w@-])/g, (_, version?: string) => npxCommand(version));
 }
 

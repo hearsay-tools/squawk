@@ -5,6 +5,7 @@ export { RUN_DATABASE_READABLE_FROM, RUN_DATABASE_SCHEMA_VERSION } from './run-d
 import { validateChanges, toRunClaim, toRunRow, toRunBindings, writeMetadata, readOnlyTarget } from './run-database-row.ts';
 import { reportRows, type IndexedArtifact } from './report-rows.ts';
 import { conversationMembers } from './conversation-members.ts';
+import { guardedJsonSql } from './guarded-json-sql.ts';
 import { readPeerSummaryPage, toSummaryRow, type PeerSummaryPageQuery } from './run-database-peer-page.ts';
 import { accessSync, closeSync, constants, existsSync, openSync, readSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -546,7 +547,7 @@ export class RunDatabase {
     opts: { includeIssueMarked?: boolean } = {}): void {
     const tokens = prefilter.map(() => 'instr(lower(summary), ?) > 0').join(' AND ');
     const matches = opts.includeIssueMarked && tokens
-      ? `(${tokens}) OR CASE WHEN json_valid(summary) THEN json_extract(summary, '$.markerRefs.issue') IS NOT NULL ELSE 1 END` : tokens;
+      ? `(${tokens}) OR ${guardedJsonSql("json_extract(summary, '$.markerRefs.issue') IS NOT NULL", 1)}` : tokens;
     const where = ['parent_run_id IS NULL', ...(matches ? [`(${matches})`] : [])].join(' AND ');
     this.run(() => {
       for (const row of this.db.prepare(`${SUMMARY_SELECT} WHERE ${where} ${NEWEST_FIRST}`).iterate(...prefilter)) {
@@ -656,7 +657,7 @@ export class RunDatabase {
   listCompletionCandidates(afterSeq: number, limit: number): Array<{ id: string; seq: number }> {
     return this.run(() => this.db.prepare(`SELECT id, seq FROM runs
       WHERE archived = 0 AND status = 'done' AND seq > ?
-        AND json_extract(data, '$.completionAction.phase') IN ('pending', 'blocked')
+        AND ${guardedJsonSql("json_extract(data, '$.completionAction.phase') IN ('pending', 'blocked')", 0, ['data'])}
       ORDER BY seq LIMIT ?`).all(afterSeq, Math.max(1, Math.min(64, limit))))
       .map(row => ({ id: row.id as string, seq: row.seq as number }));
   }
@@ -664,8 +665,8 @@ export class RunDatabase {
   /** Indexed point/family lookup, after the bounded root page has been selected. */
   archiveFamilyHasPullRequests(id: string): boolean {
     return this.run(() => this.db.prepare(`SELECT 1 FROM runs WHERE (id = ? OR parent_run_id = ?)
-      AND (json_array_length(json_extract(data, '$.pullRequests')) > 0
-        OR json_extract(data, '$.pullRequestUrl') IS NOT NULL) LIMIT 1`).get(id, id)) !== undefined;
+      AND ${guardedJsonSql(`json_array_length(json_extract(data, '$.pullRequests')) > 0
+        OR json_extract(data, '$.pullRequestUrl') IS NOT NULL`, 0, ['data'])} LIMIT 1`).get(id, id)) !== undefined;
   }
 
   /** Every id with its revision, ordered by id. */

@@ -13,7 +13,7 @@ function label(xml: string): string | undefined {
 
 function relabel(xml: string, from: string, to: string): string {
   if (label(xml) !== from) throw new Error(`Unexpected launchd label (expected ${from})`);
-  return xml.replace(/(<key>Label<\/key>\s*<string>)[^<]+(<\/string>)/, `$1${to}$2`);
+  return xml.replace(/(<key>Label<\/key>\s*<string>)[^<]+(<\/string>)/, (_, open: string, close: string) => `${open}${to}${close}`);
 }
 
 export async function unloadLaunchd(ctx: InstallContext, name: string): Promise<void> {
