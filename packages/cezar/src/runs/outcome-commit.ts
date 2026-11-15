@@ -33,8 +33,10 @@ export type RunOutcome =
   | { kind: 'requeued'; inputIds: readonly string[] }
   /** An inbox read's receipt: every member is delivered, and the receipt acknowledged, at `at`. */
   | { kind: 'inbox-acknowledged'; receiptId: string; at: string }
-  /** The user answered: each open human wait (or only those named) settles `delivered`. */
-  | { kind: 'answered'; waitIds?: readonly string[] }
+  /** The user answered: each open human wait (or only those named) settles `delivered`. With
+   *  `askSeq`, the question answered, a wait shown for a later question stays open
+   *  (hearsay-tools/squawk#1293). */
+  | { kind: 'answered'; waitIds?: readonly string[]; askSeq?: number }
   /** Each named open or resolved wait settles `cancelled`, and its undelivered wake input goes.
    *  `superseded`: the runner resumed the parent itself, which a subagent wait records as its result
    *  (hearsay-tools/cezarion#2431). */
@@ -70,6 +72,11 @@ export interface StagedOutcome {
   answered: string[];
   /** Every wait the outcomes settled, as committed to `lastWaits`, in the order they settled. */
   settled: Wait[];
+}
+
+/** An answer to the question at `askSeq` settles the waits shown up to it, and the waits not shown yet. */
+function answeredBy(wait: Wait, askSeq: number | undefined): boolean {
+  return askSeq === undefined || wait.kind !== 'human' || wait.askSeq === undefined || wait.askSeq <= askSeq;
 }
 
 /** What the outcomes settled so far: `StagedOutcome.answered` and `settled`. */
@@ -157,7 +164,8 @@ const APPLY: { [K in RunOutcome['kind']]: Handler<K> } = {
       ? agentInputSchema.parse({ ...input, deliveredAt: outcome.at, inboxClaim: { ...input.inboxClaim, acknowledgedAt: outcome.at } }) : input);
   },
   answered(run, outcome, out) {
-    const waits = (run.waits ?? []).filter((wait) => WAIT_KINDS[wait.kind].userAnswers && wait.phase === 'open' && (!outcome.waitIds || outcome.waitIds.includes(wait.id)));
+    const waits = (run.waits ?? []).filter((wait) => WAIT_KINDS[wait.kind].userAnswers && wait.phase === 'open'
+      && (!outcome.waitIds || outcome.waitIds.includes(wait.id)) && answeredBy(wait, outcome.askSeq));
     if (!waits.length) return unchanged(run);
     const deliveredAt = new Date().toISOString();
     out.answered.push(...waits.map((wait) => wait.id));

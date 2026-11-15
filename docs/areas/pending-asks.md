@@ -9,3 +9,5 @@
 ## Rules
 
 The pending ask is built once from a run's `ask.requested` events by `pending-ask.ts`. Worker routing, the cockpit card, `hsq task status` and the task webhook read it from there; the ast-grep rule `ask-requested-read-outside-projection` fails a payload read anywhere else. A new field goes in the projection's two output maps, `askStatusFields` and `askCardOf`, and `pending-ask.test.ts` stops compiling until it is placed. `hsq task status` and the webhook read the `ask.requested` event, not the human wait, so a design that follows the wait misses them. `workflows/run.ts` only writes the event and opens the human wait (hearsay-tools/cezarion#1471: `context` missed the CLI and webhook).
+
+A human wait belongs to the question its `askSeq` names (`run/human-waits.ts`). `openHumanAlias` reuses only a wait not shown yet or the one shown for the current question, and an `answered` outcome with an `askSeq` settles only the waits shown up to it. Code that asks whether a question is pending calls `isQuestionPending`, which reads the open human wait rows (hearsay-tools/squawk#1293).

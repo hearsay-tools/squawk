@@ -17,6 +17,7 @@ import { squawkAskRequestSchema, squawkWaitRequestSchema, type AskErrorCode, typ
 import type { CiWatcherSupervisor } from '../../ci-wait/supervisor.ts';
 import { askErrorMessage, waitErrorMessage } from '../../ci-wait/errors.ts';
 import { toolSessionRefusal } from './squawk-tools.ts';
+import { pendingQuestion } from './human-waits.ts';
 import { askCardFields } from './turn-markers.ts';
 import { identicalWait, normalizePrUrl, openWaits, timerWaitEntry, prWaitEntry, processWaitEntry } from '../waits.ts';
 import { delegationWaitRefusal, workerListTarget } from '../wait-scope.ts';
@@ -191,7 +192,7 @@ export class WaitRegistry {
     // a question asked in that turn is a new one, never the answered one returned
     // (hearsay-tools/cezarion#2397).
     const answering = active.liveSession.session?.open ? active.inputState.openingAnswerAskSeq : undefined;
-    const open = WAIT_KINDS.human.duplicateAsk(openWaits(run), answering);
+    const open = pendingQuestion(run, answering);
     if (open?.askSeq !== undefined) return open;
     if (!open && !this.host.waitEngine.hasRoom(run)) refuse('capacity');
     const base: HumanWaitEntry = open ?? WAIT_KINDS.human.entry(turnId);
