@@ -1,6 +1,7 @@
 # SQLite run store (hearsay-tools/cezarion#779)
+Status: done
 
-Status: implemented on the hearsay-tools/cezarion#779 branch, 2026-10-05. This is the short design record of what shipped. The long form is the [Plan handoff](https://github.com/hearsay-tools/cezarion/issues/779#issuecomment-5983809598) comment on hearsay-tools/cezarion#779, with its Amendment 1 and Amendment 2. The evidence that justified the move is the [benchmark comment](https://github.com/hearsay-tools/cezarion/issues/779#issuecomment-5992577996).
+Recorded status: implemented on the hearsay-tools/cezarion#779 branch, 2026-10-05. This is the short design record of what shipped. The long form is the [Plan handoff](https://github.com/hearsay-tools/cezarion/issues/779#issuecomment-5983809598) comment on hearsay-tools/cezarion#779, with its Amendment 1 and Amendment 2. The evidence that justified the move is the [benchmark comment](https://github.com/hearsay-tools/cezarion/issues/779#issuecomment-5992577996).
 
 ## Problem
 

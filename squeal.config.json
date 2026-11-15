@@ -182,9 +182,6 @@
     ".github/scripts/no-compat-policy.test.cjs": [
       "**/*.{md,ts,tsx,cjs,mjs,js,yaml,yml,json}"
     ],
-    ".github/scripts/coderabbit.workflow.test.cjs": [
-      ".coderabbit.yaml"
-    ],
     ".github/scripts/issue-template.test.cjs": [
       ".github/ISSUE_TEMPLATE/task.yml"
     ],

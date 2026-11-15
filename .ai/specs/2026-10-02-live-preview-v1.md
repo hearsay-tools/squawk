@@ -1,4 +1,5 @@
 # Live preview v1: click through the agent's app from the cockpit
+Status: done
 
 An agent builds a web app in a task's worktree and wants the owner to check it in a browser.
 Today the owner has to find the port, reach the host, and keep the agent's dev server alive past

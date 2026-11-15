@@ -1,0 +1,24 @@
+name: Review signal
+# Review events use PR merge-ref context. This signal has no token permissions,
+# secrets, checkout or outputs. The trusted workflow_run consumer only uses official
+# source metadata to locate a PR, then reads the PR's live state itself.
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+permissions: {}
+jobs:
+  signal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    # One review with N inline comments fires N+1 events. A newer event in the
+    # same PR cancels the older run, so a burst ends in one completed run that
+    # starts after the last event. Consumers skip a cancelled run only when a
+    # newer run covers the same PR.
+    concurrency:
+      group: review-signal-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - run: sleep 30

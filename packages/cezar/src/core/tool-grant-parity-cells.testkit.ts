@@ -176,7 +176,7 @@ export function describeToolGrantParity(scope: RunnerId | 'once'): void {
         // Relative recording paths: the mock resolves them against its cwd, which is `dir`.
         const obs = await driveSeam(backend, 'baseline', { spec: {
           cwd: dir, sessionId: undefined, toolGrant: entry.grant(backend), squawkTools: DESCRIPTOR,
-          env: { CEZ_MOCK_ARGS_FILE: `${entry.id}.args.ndjson`, CEZ_MOCK_STDIN_FILE: `${entry.id}.stdin.ndjson`, CEZ_HANDOFF_FILE: '', CEZ_TODOS_FILE: '', ...entry.env },
+          env: { CEZ_MOCK_ARGS_FILE: `${entry.id}.args.ndjson`, CEZ_MOCK_STDIN_FILE: `${entry.id}.stdin.ndjson`, CEZ_HANDOFF_FILE: '', ...entry.env },
         } });
         errors.set(entry.id, obs.v1.filter(event => event.type === 'error'));
         recordings.set(entry.id, readRecording(dir, entry.id));

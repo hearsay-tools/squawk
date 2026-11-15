@@ -1,4 +1,5 @@
 # Durable monitoring sessions with bounded background capacity
+Status: done
 
 > Issue: open-mercato/cezar#654 · Extends: `2026-07-18-subagent-monitoring-status.md` (open-mercato/cezar#490)
 

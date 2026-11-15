@@ -2,7 +2,7 @@ import { z } from 'zod';
 // An automation launches an ORDINARY Squawk task, so the task it carries is the composer's own
 // run-creation input minus the keys an automation supplies itself. Consumed rather than
 // redeclared — the same one-way direction `./runs.ts` takes towards `./workflows.ts`.
-import { createRunInputBaseSchema, singleRunVariantsSchema } from './runs.ts';
+import { createRunInputBaseSchema } from './runs.ts';
 import { automationScheduleSchema, onceStatusSchema } from './automation-schedule.ts';
 
 export { onceStatusSchema, type OnceStatus } from './automation-schedule.ts';
@@ -62,8 +62,8 @@ export type AutomationKind = z.infer<typeof automationKindSchema>;
  * Two keys are re-spelled rather than inherited, because the automation schema really does differ
  * from the composer's and the contract has to describe the automation route:
  *
- *  - `variants` retains `1 | 2 | 3` in stored definitions and read responses. New writes use
- *    `singleRunVariantsSchema`; a saved count above one is readable but cannot launch;
+ *  - `variants` retains `1 | 2 | 3` in stored definitions and read responses. ordinary tasks
+ *    ignore the saved count when they launch;
  *  - `systemPrompt` carries no `.transform()` here. The composer's trims-to-absent on the way in,
  *    which makes the key REQUIRED (`string | undefined`) on the output side; the automation route
  *    stores and answers it plainly, so it stays optional.
@@ -79,6 +79,12 @@ export const automationTaskSchema = createRunInputBaseSchema
     systemPrompt: z.string().optional(),
   });
 export type AutomationTask = z.infer<typeof automationTaskSchema>;
+
+/** Remove a saved-only field before building a write request; never apply to caller input. */
+export function writableAutomationTask<T extends object>(task: T): Omit<T, 'variants'> {
+  const { variants: _variants, ...writable } = task as T & { variants?: unknown };
+  return writable;
+}
 
 /**
  * A one-time schedule's archive record (hearsay-tools/cezarion#1465): written after its task
@@ -377,7 +383,7 @@ export const createAutomationInputSchema = automationDefinitionSchema
     /** Omitted = `github` on create, the shape every pre-schedule client sends; omitted on
      *  update = the stored kind. */
     kind: automationKindSchema.optional(),
-    task: automationTaskSchema.extend({ variants: singleRunVariantsSchema }),
+    task: automationTaskSchema.omit({ variants: true }).strict(),
     enable: z.boolean().optional(),
   });
 export type CreateAutomationInput = z.input<typeof createAutomationInputSchema>;

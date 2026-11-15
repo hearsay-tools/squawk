@@ -1,6 +1,7 @@
 # Rebrand and a home layout that tests cannot clobber
+Status: done
 
-Status: accepted by the owner (2026-11-06). Epic: hearsay-tools/cezarion#2778.
+Recorded status: accepted by the owner (2026-11-06). Epic: hearsay-tools/cezarion#2778.
 
 Owner decisions (2026-11-06):
 

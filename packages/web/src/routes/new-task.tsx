@@ -56,7 +56,6 @@ import {
   ComposerFooterEnd,
   ExecutionSettings,
   NewTaskHeader,
-  RetiredVariantsNotice,
 } from './new-task-sections'
 import { PlanReview } from './plan-review'
 import './new-task.css'
@@ -158,7 +157,6 @@ export function NewTaskRoute() {
       <div data-slot="new-task-layout" ref={draftPanelRef} style={plan !== null ? { display: 'none' } : undefined} className="relative z-[1] mx-auto w-full max-w-none px-11 pt-12 max-md:px-[18px] max-md:pt-[22px]">
         <NewTaskHeader />
 
-        {draft.retiredVariants ? <RetiredVariantsNotice onUseOneTask={() => update({ retiredVariants: false })} /> : null}
 
         <Composer
           ref={composerRef}

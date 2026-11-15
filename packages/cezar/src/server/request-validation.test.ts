@@ -139,8 +139,6 @@ describe('request validation bounds (#429)', () => {
     { name: 'empty task profile reaches account lookup', body: { ...inlineBody, agentProfile: '' }, status: 400, schemaValid: true },
     { name: 'effort at cap', body: { ...inlineBody, effort: 'x'.repeat(32) }, status: 201 },
     { name: 'effort over cap', body: { ...inlineBody, effort: 'x'.repeat(33) }, status: 400 },
-    { name: 'retired variants', body: { ...inlineBody, variants: 2 }, status: 400 },
-    { name: 'single variant', body: { ...inlineBody, variants: 1 }, status: 201 },
     { name: 'trimmed system prompt at cap', body: { ...inlineBody, systemPrompt: ` ${'x'.repeat(20_000)} ` }, status: 201 },
     { name: 'system prompt over cap', body: { ...inlineBody, systemPrompt: 'x'.repeat(20_001) }, status: 400 },
     { name: 'malformed request id', body: { ...inlineBody, clientRequestId: 'bad' }, status: 400 },

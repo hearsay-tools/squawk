@@ -12,7 +12,7 @@ import {
   createAutomationSkillBody,
 } from './prompts.ts';
 
-/** The storage schema is the source of truth: the reference an agent reads must not drift from it. */
+/** The storage schema supplies documented keys; retired read-only fields are excluded below. */
 const objectKeys = (schema: unknown): string[] => {
   let current = schema as { shape?: Record<string, unknown>; _def?: { schema?: unknown; innerType?: unknown } };
   while (!current.shape && current._def) current = (current._def.schema ?? current._def.innerType) as typeof current;
@@ -30,7 +30,7 @@ describe('AUTOMATION_SCHEMA_REFERENCE', () => {
   });
 
   it('names every task and filter key, event, schedule type and runner', () => {
-    for (const key of objectKeys(automationTaskSchema)) expect(AUTOMATION_SCHEMA_REFERENCE, key).toContain(`"${key}"`);
+    for (const key of objectKeys(automationTaskSchema).filter((key) => key !== 'variants')) expect(AUTOMATION_SCHEMA_REFERENCE, key).toContain(`"${key}"`);
     for (const key of objectKeys(automationFiltersSchema)) expect(AUTOMATION_SCHEMA_REFERENCE, key).toContain(`"${key}"`);
     for (const event of automationEventSchema.options) expect(AUTOMATION_SCHEMA_REFERENCE).toContain(event);
     for (const type of SCHEDULE_TYPES) expect(AUTOMATION_SCHEMA_REFERENCE).toContain(`"${type}"`);

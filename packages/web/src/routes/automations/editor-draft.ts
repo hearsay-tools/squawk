@@ -1,3 +1,4 @@
+import { writableAutomationTask } from '@open-mercato/cezar-api-client/contract/automations'
 import {
   normalizeSchedule,
   type AutomationSchedule,
@@ -41,7 +42,6 @@ export interface AutomationDraft {
   allowMessaging: boolean
   /** The state the user wants after saving. */
   enabled: boolean
-  retiredVariants: boolean
   /** Task keys the editor has no control for (effort, a system prompt …), carried
    *  through an edit untouched. */
   taskExtra: Omit<TaskInput, 'prompt' | 'workflow' | 'runner' | 'model' | 'autonomous' | 'archiveWhenDone' | 'autoMergePr' | 'allowWorkers' | 'allowMessaging'>
@@ -62,10 +62,9 @@ type DraftSource = Partial<{
 }>
 
 export function fromDefinition(source: DraftSource = {}): AutomationDraft {
-  const { prompt, workflow, runner, model, autonomous, archiveWhenDone, autoMergePr, allowWorkers, allowMessaging, variants, ...taskExtra } = source.task ?? { prompt: '' }
+  const { prompt, workflow, runner, model, autonomous, archiveWhenDone, autoMergePr, allowWorkers, allowMessaging, ...taskExtra } = writableAutomationTask(source.task ?? { prompt: '' })
   const fresh = source.task === undefined
   return {
-    retiredVariants: variants !== undefined && variants !== 1,
     name: source.name ?? '',
     description: source.description ?? '',
     kind: source.kind ?? 'schedule',
@@ -106,7 +105,6 @@ function scheduleBody(schedule: NormalizedSchedule): AutomationSchedule {
 }
 
 function taskBody(draft: AutomationDraft): TaskInput {
-  if (draft.retiredVariants) throw new Error('Parallel variants are removed. Choose Use one task before saving this automation.')
   return {
     ...draft.taskExtra,
     prompt: draft.prompt,

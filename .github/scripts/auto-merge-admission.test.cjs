@@ -8,7 +8,6 @@ const { execFileSync, spawnSync } = require('node:child_process');
 
 for (const name of [
   'merge-queue-admission', 'queue-ci-proof', 'pr-test-proof', 'pr-test-input',
-  'native-review-proof', 'coderabbit-admission', 'coderabbit-reconcile',
   'pr-readiness', 'review-threads', 'review-signal', 'release-bump-pr',
 ]) test(`a small ${name} change requires owner review`, t => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-admission-policy-'));

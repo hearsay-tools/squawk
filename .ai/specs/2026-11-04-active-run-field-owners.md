@@ -1,6 +1,7 @@
 # Group ActiveRun fields by owner
+Status: done
 
-Status: design draft for coordinator and planner review. No product change is authorized by this document.
+Recorded status: design draft for coordinator and planner review. No product change is authorized by this document.
 Subject: hearsay-tools/cezarion#2520, slice 4.1 of hearsay-tools/cezarion#2487.
 Baseline: `origin/main` at `172032e46e4475add22af4d11b20143a1f73ac3e`, fetched 2026-11-04.
 All source paths below start at `packages/cezar/src/`, unless stated otherwise.

@@ -1,6 +1,7 @@
 # Cockpit UI redesign (React + shadcn/ui)
+Status: done
 
-Status: proposed
+Recorded status: proposed
 Run plan: `.ai/runs/2026-07-14-cockpit-ui-redesign-spec.md`
 Research: `.ai/analysis/cockpit-ui-redesign/` (7 studies: cezar code map, agent-desktop-apps UX, agent event protocols, opencode web UI, paseo, mercato-sandboxes visuals, diff/highlighting tech)
 Mockups: `docs/mockups/` (HTML, shadcn-styled, real cezar data) — screenshots in `docs/mockups/screenshots/`

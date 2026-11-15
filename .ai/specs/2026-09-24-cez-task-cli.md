@@ -1,4 +1,5 @@
 # `cez task` — operator/bot CLI over the cockpit's run routes — hearsay-tools/cezarion#504
+Status: done
 
 An operator, or an LLM bot driving a shell, cannot start a task that appears in
 the running cockpit, watch it and steer it from a terminal. `cez run` keeps its

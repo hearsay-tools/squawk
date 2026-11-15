@@ -1,6 +1,7 @@
 # OMP (Oh My Pi) agent runner (hearsay-tools/cezarion#595)
+Status: done
 
-Status: approved design (2026-10-02). Approved by the owner section by section in
+Recorded status: approved design (2026-10-02). Approved by the owner section by section in
 brainstorming and then as this written spec. This is the committed design record that code
 comments cite. Decisions made while implementing it (rulings 0 to 20, written "Ruling N" so they cannot be read as harness rows, checked against a real
 OMP v18.4.11 binary on 2026-10-05) are folded into the sections they change and listed together
@@ -292,7 +293,7 @@ that shape; no web change is needed beyond tests.
 | Batch-form call (`args.tasks[]`) | one synthetic tool item per sub-agent: `id = <toolCallId>#<lifecycle.id>`, `name:'task'`, `toolKind:'task'`, title from `description` (else the task text), `input {agent, task}` | `parentItemId` = the synthetic id |
 | Batch call card | rendered as a plain tool item (`toolKind: 'other'`), title "Task batch · N agents", so the drawer shows N rows, not N+1 | none |
 
-Status: `started` → `running`, `completed` → `completed`, `failed`/`aborted` → `failed`, for
+Recorded status: `started` → `running`, `completed` → `completed`, `failed`/`aborted` → `failed`, for
 batch and single-form rows alike; a run that ends mid-agent shows as stalled (existing rule).
 v18.4.11 runs `task` asynchronously in RPC by default (`async.enabled`, protocolDefault
 `["rpc"]`), so a single-form call's `tool_execution_end` can arrive while its agent still runs:

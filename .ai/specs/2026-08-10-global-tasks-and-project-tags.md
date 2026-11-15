@@ -1,4 +1,5 @@
 # Global tasks page + project tags (grouping connected repositories)
+Status: done
 
 ## TLDR
 The cockpit can show one project's tasks at a time. Real work does not stop at a repo boundary: a storefront is an API, a web app and a design system, and "how is the storefront doing?" currently means visiting three sidebar groups and holding the answer in your head. This spec adds (a) free-form **tags** on a registry project — labels that say *these repos are one piece of work* — and (b) a **global Tasks page** at `/tasks` that lists every registered project's runs in one table, filterable by tag, status and workflow, groupable by any of those plus project, with each row carrying its PR/issue chip and an archive action. Tags are an optional field on the existing project registry entry, so nothing migrates and a workspace that never tags anything behaves exactly as before.
