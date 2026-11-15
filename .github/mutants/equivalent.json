@@ -247,6 +247,24 @@
     "reason": "Start waits on one run, so all and any other non-any string have the same completion test and exit code."
   },
   {
+    "file": "packages/cezar/src/server/project-context.ts",
+    "function": "ProjectContexts.maintainColdStore",
+    "mutator": "MethodExpression",
+    "original": "projectPaths(root).reads.slice(1).some(directory => existsSync(join(directory, RUNS_DB_FILE)) || existsSync(join(directory, 'runs.json')))",
+    "replacement": "projectPaths(root).reads.slice(1).every(directory => existsSync(join(directory, RUNS_DB_FILE)) || existsSync(join(directory, 'runs.json')))",
+    "reason": "projectPaths always returns exactly two read roots (the write root and its fallback), so reads.slice(1) holds one directory and some and every give the same answer for every layout, including a symlinked or dangling fallback, since both test that one directory with the same existsSync calls.",
+    "site": "!"
+  },
+  {
+    "file": "packages/cezar/src/server/project-context.ts",
+    "function": "ProjectContexts.dispose",
+    "mutator": "ArithmeticOperator",
+    "original": "(this.epochs.get(projectId) ?? 0) + 1",
+    "replacement": "(this.epochs.get(projectId) ?? 0) - 1",
+    "reason": "Epochs live only in this process's memory and are compared for equality only; counting down from 0 is as strictly monotonic as counting up, so every build that started before a dispose sees a different epoch and every later build the same one, whatever the order of dispose, build, maintenance or disposeAll calls.",
+    "site": "this.epochs.set(projectId, "
+  },
+  {
     "file": "packages/contract/src/attention.ts",
     "function": "(module)",
     "mutator": "StringLiteral",
