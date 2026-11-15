@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { RunLine } from './run-line.ts';
+import { RunMemory } from './run-memory.ts';
 
 describe('RunLine', () => {
   it('keeps queue identity and only removes a queued entry with its wake marker', () => {
-    const line = new RunLine();
+    const line = new RunLine(new RunMemory());
     const queue = line.queue;
     line.enqueueWake('wake', 10);
     line.enqueueWake('wake', 20);
@@ -20,7 +21,7 @@ describe('RunLine', () => {
   });
 
   it('retains the existing teardown exceptions and clears only the owned transient state', () => {
-    const line = new RunLine();
+    const line = new RunLine(new RunMemory());
     line.park('run'); line.markStarting('run'); line.joinPool('run');
     line.enqueueWake('run', 10); line.admitWake('run'); line.markForced('run');
     line.dispose();

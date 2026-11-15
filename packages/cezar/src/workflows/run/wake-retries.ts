@@ -1,4 +1,5 @@
 import type { RunModuleContext } from './types.ts';
+import type { RunMemory } from './run-memory.ts';
 import type { RunRecord } from '../../runs/store.ts';
 import { noJitter, retryDelayMs, WAKE_RETRY_BACKOFF, type Backoff } from '../../delegation/retry-backoff.ts';
 import { LivenessTimers } from './liveness-timers.ts';
@@ -12,11 +13,10 @@ interface WakeRetriesHost {
 export class WakeRetries {
   // Overridable so tests need not wait out production cadence.
   wakeRetryBackoff: Backoff = WAKE_RETRY_BACKOFF;
-  /** The last "retained; continuation unavailable" note per run: the 1 Hz admission retry writes
-   *  it on the transition into refusal or when the reason changes, never once per retry. */
-  private readonly retainedNotes = new Map<string, string>();
-
-  constructor(private readonly context: RunModuleContext, private readonly host: WakeRetriesHost,
+  /** The last "retained; continuation unavailable" note per run is `RunMemory`'s `retainedNote`:
+   *  the 1 Hz admission retry writes it on the transition into refusal or when the reason
+   *  changes, never once per retry. */
+  constructor(private readonly context: RunModuleContext, private readonly host: WakeRetriesHost, private readonly memory: RunMemory,
     private readonly timers = new LivenessTimers()) {}
 
   /** A wake that could not be admitted yet, retried once a second while one is owed. */
@@ -48,20 +48,20 @@ export class WakeRetries {
   }
 
   noteRetained(runId: string, message: string): boolean {
-    if (this.retainedNotes.get(runId) !== message) {
-      this.retainedNotes.set(runId, message);
+    if (this.memory.read(runId, 'retainedNote') !== message) {
+      this.memory.write(runId, 'retainedNote', message);
       return true;
     }
     return false;
   }
 
   clearRetained(runId: string): void {
-    this.retainedNotes.delete(runId);
+    this.memory.write(runId, 'retainedNote', undefined);
   }
 
   forget(runId: string): void {
     this.timers.clear('wake-retry', runId);
-    this.retainedNotes.delete(runId);
+    this.clearRetained(runId);
   }
 
   dispose(): void {

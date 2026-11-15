@@ -1,6 +1,7 @@
 import { WaitEngine } from './wait-engine.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { MemoryGuard } from './memory-guard.ts';
+import type { RunMemory } from './run-memory.ts';
 import { RunCancel } from './run-cancel.ts';
 import { IDLE_TIMEOUT_MS, ROUTED_QUESTION_REFUSAL, NO_WAIT_NUDGE_REPLY_MS, COMPLETION_WILL_WAIT, MAX_AUTO_CONTINUES, SCHEDULE_WAKEUP_MAX_SECONDS, MAX_WAKE_DELIVERY_ATTEMPTS, WAKE_DELIVERY_CAP_NOTE, WAKE_SESSION_CLOSED_ERROR, RESTART_CONTINUATION_PROMPT } from './constants.ts';
 import { isSyntheticContinuation } from './workflow-position.ts';
@@ -22,7 +23,7 @@ import { FamilyReconciler } from './family-reconciler.ts';
 import * as completionGateReads from './completion-gate.ts';
 import { WaitRegistry } from './wait-registry.ts';
 import { WakeRetries } from './wake-retries.ts';
-import { LivenessTimers } from './liveness-timers.ts';
+import type { LivenessTimers } from './liveness-timers.ts';
 import { HumanWaits } from './human-waits.ts';
 import { SubagentWaits } from './subagent-waits.ts';
 import { RunStart } from './run-start.ts';
@@ -73,6 +74,8 @@ import { type WorkflowDef } from '../types.ts';
 export interface RunModules {
   /** The one timer owner of every run's liveness bounds (hearsay-tools/squawk#3662). */
   liveness: LivenessTimers;
+  /** Per-run memory that outlives an execution (ADR 0064). */
+  memory: RunMemory;
   memoryGuard: MemoryGuard;
   workerScratchCleanup: WorkerScratchCleanup;
   completionGateHost: completionGateReads.CompletionGateHost;
@@ -170,9 +173,11 @@ export interface FacadeHost {
 }
 
 /** Build modules in dependency order; callbacks read the facade at use time. */
-export function composeRunModules(context: RunModuleContext, host: FacadeHost): RunModules {
+export function composeRunModules(context: RunModuleContext, host: FacadeHost, memory: RunMemory): RunModules {
   const modules = {} as RunModules;
-  modules.liveness = new LivenessTimers();
+  modules.memory = memory;
+  const releaseRunMemory = (id: string) => modules.memory.releaseIfEnded(id, context.store.getRun(id), () => host.isActive(id));
+  modules.liveness = memory.liveness;
   modules.workerScratchCleanup = new WorkerScratchCleanup(context.store, context.dataDir, id => host.isActive(id) || modules.workerExecutions.has(id) || modules.claims.has(id) || !!host.autosaveCleanupBlocker(id));
   modules.completionGateHost = {
     active: host.active,
@@ -227,11 +232,11 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost): 
     };
   }
 
-  modules.memoryGuard = new MemoryGuard(context, { active: host.active });
+  modules.memoryGuard = new MemoryGuard(context, { active: host.active }, modules.memory);
   modules.retries = new WakeRetries(context, {
     owesWake: run => modules.wakeAdmission.owesWake(run), queueWaitWake: id => modules.wakeAdmission.queueWaitWake(id),
     retryWaitAdmission: id => modules.retries.retryWaitAdmission(id),
-  }, modules.liveness);
+  }, modules.memory, modules.liveness);
   modules.queuedRevivalHost = {
     move: (id, exit, patch) => host.move(id, exit, patch), isActive: id => host.isActive(id),
     workerExecutionStopped: id => host.workerExecutionStopped(id), ownedJob: run => modules.runStart.ownedJob(run),
@@ -242,7 +247,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost): 
     reviveQueuedRun: (run, reason) => host.reviveQueuedRun(run, reason), reviveWorkflow: run => queuedRevival.reviveWorkflow(context, modules.queuedRevivalHost, run),
     checkpointRestartContext: (run, step) => queuedRevival.checkpointRestartContext(context, modules.queuedRevivalHost, run, step),
   };
-  modules.line = new RunLine(context, {
+  modules.line = new RunLine(modules.memory, context, {
     activeSize: () => host.active.size, activeHas: id => host.active.has(id),
     withExecutionAccount: run => modules.wakeAdmission.withExecutionAccount(run),
     maintenance: id => modules.claims.has(id) || !!host.autosaveCleanupBlocker(id),
@@ -328,6 +333,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost): 
     supersedeOnRunnerResume: id => modules.subagentWaits.supersedeOnRunnerResume(id),
     releaseSlot: () => modules.line.releaseSlot(),
     routeWorkerQuestion: id => modules.workerQuestions.routeWorkerQuestion(id),
+    holdChildrenOrArmIdle: (id, state) => modules.turnSettler.holdChildrenOrArmIdle(id, state),
   };
   modules.turnNudges = new TurnNudges(context, modules.humanWaits, modules.line, modules.completionGateHost, {
     active: host.active, move: (id, exit, patch) => host.move(id, exit, patch),
@@ -353,7 +359,9 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost): 
     { maintenance: id => modules.claims.has(id) || !!host.autosaveCleanupBlocker(id),
       settleOrphanedWorkerExecution: (id, opts) => host.settleOrphanedWorkerExecution(id, opts),
       reapTerminalScratch: id => modules.runSettlement.reapTerminalScratch(id), queueWaitWake: id => modules.wakeAdmission.queueWaitWake(id),
-      retryWaitAdmission: id => modules.retries.retryWaitAdmission(id), releaseSlot: () => modules.line.releaseSlot() },
+      retryWaitAdmission: id => modules.retries.retryWaitAdmission(id), releaseSlot: () => modules.line.releaseSlot(),
+      releaseRunMemory },
+    modules.memory,
   );
   modules.automationToolsSlot = new AutomationToolsSlot(context,
     () => !!host.cockpit,
@@ -365,6 +373,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost): 
   );
   modules.attachments = new AttachmentWriter(context,
     { persistAttachment: (id, mediaType, data, prefix) => modules.attachments.persistAttachment(id, mediaType, data, prefix) },
+    modules.memory,
   );
   modules.queuedInput = new QueuedInput(context,
     { hasJob: id => modules.line.hasJob(id), hasContinuation: id => modules.line.hasContinuation(id), job: id => modules.line.job(id),
@@ -373,6 +382,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost): 
       persistPastedAttachments: (id, content) => modules.attachments.persistPastedAttachments(id, content),
       toQueuedMessage: (id, content) => modules.queuedInput.toQueuedMessage(id, content),
       sendMessage: (id, content, messageId) => host.sendMessage(id, content, messageId) },
+    modules.memory,
   );
   modules.inboxClaims = new InboxClaims(context,
     { activeGet: id => host.active.get(id),
@@ -393,6 +403,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost): 
   modules.turnBookkeeper = new TurnBookkeeper(context,
     { isDisposedDelegatedRun: id => isDisposedDelegatedRun(context.store, () => context.disposed(), id), discoverSkills: () => modules.runSkills.discoverSkills(),
       reviveWorkflow: run => queuedRevival.reviveWorkflow(context, modules.queuedRevivalHost, run), trackTurn: (id, task) => modules.workerExecutions.trackTurn(id, task) },
+    modules.memory,
   );
   modules.runSkills = new RunSkills(context,
     { builtinSkills: () => host.builtinSkills(), workerExecutionStopped: id => host.workerExecutionStopped(id),
@@ -460,7 +471,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost): 
   }, modules.claims, modules.line, modules.workerExecutions, modules.queuedInput, modules.autoResumeScheduler,
   modules.worktreeAutosave, modules.workerQuestions, ROUTED_QUESTION_REFUSAL, RESTART_CONTINUATION_PROMPT);
   modules.runSettlement = new RunSettlement(context, modules.humanWaits, modules.workerQuestions,
-    modules.worktreeAutosave, modules.turnBookkeeper, modules.line, modules.autoResumeScheduler, modules.workerExecutions,
+    modules.worktreeAutosave, modules.line, modules.autoResumeScheduler, modules.workerExecutions,
     modules.completionGateHost, {
       active: host.active, isSyntheticContinuation: (run, step) => isSyntheticContinuation(run, step),
       generation: id => modules.continuationAcceptance.generation(id), isActive: id => host.isActive(id),
@@ -475,7 +486,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost): 
       workerScratchCleanup: modules.workerScratchCleanup, hasClaim: id => modules.claims.has(id),
       autosaveCleanupBlocker: id => host.autosaveCleanupBlocker(id),
       claimWorktreeReclaim: id => host.claimWorktreeReclaim(id), preview: host.preview,
-      forgetMemoryPause: id => modules.memoryGuard.forgetMemoryPause(id),
+      forgetExecutionMemory: id => modules.memory.forgetExecution(id), releaseRunMemory,
     }, WAKE_SESSION_CLOSED_ERROR, WAKE_DELIVERY_CAP_NOTE);
   modules.continuationSession = new ContinuationSession(context, {
     move: (...args) => host.move(...args), dropActive: id => host.dropActive(id),

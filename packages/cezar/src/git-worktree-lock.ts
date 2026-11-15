@@ -1,8 +1,8 @@
-import { execFile, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { gitEnv } from './git-command.ts';
+import { gitEnv, runGit, type RunGitError } from './git-command.ts';
 
 export interface WorktreeGitResult { ok: boolean; stdout: string; stderr: string }
 /** `input` is written to git's stdin — what `update-ref --stdin` needs for a multi-ref transaction. */
@@ -19,12 +19,10 @@ export class WorktreeMutationLockTimeout extends Error {
 export async function withWorktreeMutation<T>(repoRoot: string, operation: (git: WorktreeGit) => Promise<T>, options: { waitMs?: number } = {}): Promise<T> {
   const waitMs = options.waitMs ?? 120_000;
   if (!Number.isSafeInteger(waitMs) || waitMs < 0 || waitMs > 120_000) throw new Error('invalid worktree mutation wait budget');
-  const common = await new Promise<string>((resolve, reject) => {
-    execFile('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: repoRoot, encoding: 'utf8', timeout: Math.max(1, Math.min(30_000, waitMs)), env: gitEnv() }, (error, stdout, stderr) => {
-      if (error) reject(new Error(`cannot resolve Git common directory: ${stderr.trim() || error.message}`));
-      else resolve(stdout.trim());
-    });
-  });
+  const common = await runGit(['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: repoRoot, timeout: Math.max(1, Math.min(30_000, waitMs)) }).then(
+    ({ stdout }) => stdout.trim(),
+    (error: RunGitError) => { throw new Error(`cannot resolve Git common directory: ${error.stderr.trim() || error.message}`); },
+  );
   const claims = join(await realpath(common), 'cezar-worktree-mutations');
   const source = import.meta.url.endsWith('.ts');
   const helper = fileURLToPath(new URL(source ? './git-worktree-lock-helper.ts' : './git-worktree-lock-helper.js', import.meta.url));

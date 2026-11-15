@@ -1,11 +1,8 @@
 import { productEnv } from '../core/product-env.ts';
-import { execFile } from 'node:child_process';
-import { gitEnv } from '../git-command.ts';
-import { promisify } from 'node:util';
+import { runGit } from '../git-command.ts';
 import type { RepoPullBranchesResponse, RepoPullConfirmation, RepoPullError, RepoPullInput, RepoPullResponse } from '@open-mercato/cezar-contract';
 import { isSafeGitRef } from '../git-refs.ts';
 
-const exec = promisify(execFile);
 const mutating = new Set<string>();
 
 /** Shared with branch switching: a cockpit action must not change HEAD during a pull. */
@@ -16,12 +13,11 @@ export function claimRepoGitMutation(root: string): (() => void) | null {
 }
 
 async function git(root: string, args: string[]): Promise<string> {
-  const { stdout } = await exec('git', args, {
+  const { stdout } = await runGit(args, {
     cwd: root,
-    encoding: 'utf8',
     timeout: 60_000,
     maxBuffer: 1024 * 1024,
-    env: gitEnv({ GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', GIT_MERGE_AUTOEDIT: 'no', GIT_EDITOR: 'true' }),
+    env: { GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', GIT_MERGE_AUTOEDIT: 'no', GIT_EDITOR: 'true' },
   });
   return stdout.trim();
 }

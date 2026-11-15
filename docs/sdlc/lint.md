@@ -233,6 +233,17 @@ reasoned allow-list in the rule's `ignores`, kept current by `liveness-timer-rul
 awaited pause or a manager interval takes a line-level `ast-grep-ignore` with its reason. The rule
 does not follow a timer function under another name. It has no baseline.
 
+### Per-run memory fields (`run-memory-field-outside-owner`)
+
+The rule checks production `.ts` files in `packages/cezar/src/workflows/run/` and
+`workflows/run.ts`; it ignores tests and testkits (hearsay-tools/squawk#2064, ADR 0064).
+It reports a class field, public or `#private`, static or not, whose initializer is `new Map`,
+`new Set` or `new WeakMap` by bare name. Per-run memory goes into `RunSlot` in `run-memory.ts`,
+which releases it when the run ends, is deleted or the manager is disposed.
+Its exceptions are the reasoned allow-list in the rule's `ignores`, kept current by
+`run-memory-field-rule.test.ts`. It does not follow a map assigned in a constructor or a method,
+a member constructor such as `new globalThis.Map()`, or a map a helper call builds.
+
 ### `ChildProcess.killed` reads (`child-killed-read`)
 
 The ast-grep rule checks production `.ts` files in `packages/cezar/src`; it ignores tests and
@@ -242,6 +253,19 @@ that the child ended; a watchdog asks `trackChildExit(child)` in `core/agent-run
 The rule knows no type. It leaves out a receiver whose name ends in `error`, `err` or `failure`,
 because the error of an exec call carries its own `killed`. It also leaves out a computed key.
 It has no baseline.
+
+### Git spawns (`git-spawn-outside-helper`)
+
+The ast-grep rule checks production `.ts` files in `packages/cezar/src`; it ignores tests,
+testkits and `git-command.ts`, the one module that starts git (hearsay-tools/squawk#3207,
+epic hearsay-tools/squawk#3644). It reports a call whose first argument is the literal `git`
+(a string, or a template with no substitution) through `execFile`, `execFileSync`, `spawn` or
+`spawnSync`, bare or as a member, through `promisify(...)` called in place, or through a name
+the same file binds to `promisify(...)`. It also reports `exec` and `execSync` when the shell
+command starts with `git `. Use `git`, `runGit`, `gitSync` or `spawnGit`: each drops the inherited
+`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` family, so git acts on `cwd`. The rule knows no
+value: it leaves out a command held in a variable (`spawn(cmd, …)`) and a launcher alias imported
+from another module. It has no baseline and no exception.
 
 ## Add a rule
 

@@ -1,15 +1,15 @@
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { ManifestLike } from './manifests.ts';
+import { gitSync } from '../git-command.ts';
 
 function sourceManifest(dir: string, manifest: ManifestLike): ManifestLike {
   if (manifest.gitHead) return manifest;
   try {
     // npm normally discovers this from its cwd. The disposable copy is outside Git;
     // retain the source SHA so stable publish retries can verify the existing version.
-    const gitHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    const gitHead = gitSync(['rev-parse', 'HEAD'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
     return { ...manifest, gitHead };
   } catch { return manifest; } // Local package fixtures need not be in a Git repository.
 }

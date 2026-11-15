@@ -27,6 +27,9 @@ describe('projectSignal', () => {
     { name: 'a read done run is idle', runs: [entry({ ...finished, seenAt: '2026-09-27T12:00:00Z' })], expected: {} },
     { name: 'needs you only', runs: [entry({ status: RUN_STATUS.waiting })], expected: { needsYou: 1 } },
     { name: 'a pending human ask on a waiting run is needs you', runs: [entry({ status: RUN_STATUS.waiting, waitingOn: { kind: WAIT_KIND.human } })], expected: { needsYou: 1 } },
+    { name: 'a waiting run with a pending permission request is needs you', runs: [entry({ status: RUN_STATUS.waiting, hasPendingPermission: true })], expected: { needsYou: 1 } },
+    { name: 'a running run with a pending permission request is needs you', runs: [entry({ status: RUN_STATUS.running, hasPendingPermission: true })], expected: { needsYou: 1 } },
+    { name: 'an archived run with a pending permission request is idle', runs: [entry({ status: RUN_STATUS.waiting, hasPendingPermission: true, archived: true })], expected: {} },
     { name: 'unread failure only', runs: [entry({ status: RUN_STATUS.failed, ...finished })], expected: { failedUnread: 1 } },
     { name: 'a read failure is not counted', runs: [entry({ status: RUN_STATUS.failed, ...finished, seenAt: '2026-09-27T12:00:00Z' })], expected: {} },
     {

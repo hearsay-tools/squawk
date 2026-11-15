@@ -1,0 +1,23 @@
+{
+  "$comment": "Matches the rule found when it landed (hearsay-tools/squawk#2275), keyed by file and the first line of the match so a moved line does not churn it. This list only shrinks: fix a match, then run AST_GREP_RULES_UPDATE=1 npm run lint. Rules: .ai/ast-grep/README.md. The three sites keep a rule of their own (hearsay-tools/squawk#2275): task-thread.tsx picks the composer's copy for a permission or a waiting reply, and lets an empty submit stop a run parked on a wait that asks no person.",
+  "sites": [
+    {
+      "file": "packages/web/src/routes/task-thread/task-thread.tsx",
+      "rule": "attention-bucket-compare-outside-owner-tsx",
+      "site": "attention.bucket === 'none'",
+      "count": 1
+    },
+    {
+      "file": "packages/web/src/routes/task-thread/task-thread.tsx",
+      "rule": "attention-bucket-compare-outside-owner-tsx",
+      "site": "attention.bucket === 'permission'",
+      "count": 1
+    },
+    {
+      "file": "packages/web/src/routes/task-thread/task-thread.tsx",
+      "rule": "attention-bucket-compare-outside-owner-tsx",
+      "site": "attention.bucket === 'waiting'",
+      "count": 1
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import type { RunModuleContext } from './types.ts';
+import type { RunMemory } from './run-memory.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { ProcessUsage } from '../../core/process-usage.ts';
 import { clearIdleTimer } from './input-timers.ts';
@@ -9,12 +10,10 @@ interface MemoryGuardHost {
 }
 
 export class MemoryGuard {
-  /** Runs currently being paused by the memory guard — dedupes the ~2 s samples so one breach
-   *  triggers one pause, not a burst. Cleared in dropActive when the run leaves the registry. */
-  private readonly memoryPausing = new Set<string>();
-  constructor(private readonly context: RunModuleContext, private readonly host: MemoryGuardHost) {}
-  forgetMemoryPause(runId: string): void { this.memoryPausing.delete(runId); }
-  dispose(): void { this.memoryPausing.clear(); }
+  /** A run the memory guard is pausing is `RunMemory`'s `memoryPausing`: it dedupes the ~2 s
+   *  samples so one breach triggers one pause, not a burst. Cleared in dropActive when the run
+   *  leaves the registry (`RunMemory.forgetExecution`). */
+  constructor(private readonly context: RunModuleContext, private readonly host: MemoryGuardHost, private readonly memory: RunMemory) {}
 
   /**
    * Pause any active run whose whole process tree exceeds the WORKSPACE
@@ -39,10 +38,10 @@ export class MemoryGuard {
     for (const runId of runIds) {
       const usage = snapshot[runId];
       if (!usage || usage.rssBytes <= limitBytes) continue;
-      if (this.memoryPausing.has(runId)) continue;
+      if (this.memory.read(runId, 'memoryPausing')) continue;
       const state = this.host.active.get(runId);
       if (!state?.liveSession.session?.open || state.liveSession.cancelled) continue;
-      this.memoryPausing.add(runId);
+      this.memory.write(runId, 'memoryPausing', true);
       const usedMb = Math.round(usage.rssBytes / (1024 * 1024));
       this.context.store.appendEvent(runId, {
         type: 'note',

@@ -1,0 +1,31 @@
+id: attention-bucket-compare-outside-owner
+language: typescript
+severity: warning
+message: >-
+  Ask the attention owner, packages/contract/src/attention.ts, instead of comparing an attention
+  bucket to a name: `needsYou(run)` for "Needs you" and its dots, `rungNeedsYou(rung)` for a reader
+  that holds only the rung (hearsay-tools/squawk#2275). A second copy of the rule drifts: the
+  sidebar, the tab dot and the project rail left pending permission requests out of Needs you.
+  The readers that keep a rule of their own (a thread's copy, a group heading) are the baseline, which only shrinks.
+files:
+  - packages/web/src/**/*.ts
+  - packages/cezar/src/**/*.ts
+ignores:
+  - packages/**/*.test.ts
+  - packages/**/*.test.tsx
+  - packages/**/*.testkit.ts
+# Keep this file and attention-bucket-compare-outside-owner-tsx.yml the same below `files`: ast-grep parses
+# .ts and .tsx files with different grammars, so one rule cannot cover both.
+# attention-bucket-compare-rule.test.ts compares them and holds the names to ATTENTION_RANK.
+#
+# Matches `<expr>.bucket` compared with ===, !==, == or != to an attention bucket name, in either
+# order. The rule knows no types, so it keys on the bucket names: a CI check's bucket ('pass',
+# 'fail', 'pending', 'cancel', 'skipping') is another field and is not matched.
+rule:
+  kind: binary_expression
+  all:
+    - has: { field: operator, regex: '^(===|!==|==|!=)$' }
+    - has:
+        kind: member_expression
+        has: { field: property, regex: '^bucket$' }
+    - has: { kind: string, regex: '^[''"](permission|error|waiting|running|unseen|none)[''"]$' }

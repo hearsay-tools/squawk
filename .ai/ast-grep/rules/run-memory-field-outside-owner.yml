@@ -1,0 +1,42 @@
+id: run-memory-field-outside-owner
+language: typescript
+severity: warning
+message: >-
+  Keep per-run memory in RunMemory (workflows/run/run-memory.ts): add a field to RunSlot and read
+  and write it through RunMemory, which releases it when the run ends, is deleted or the manager
+  is disposed (ADR 0064, hearsay-tools/squawk#2064). A map that must stay on its module needs an
+  entry in this rule's ignores with its reason.
+files:
+  - packages/cezar/src/workflows/run.ts
+  - packages/cezar/src/workflows/run/**/*.ts
+ignores:
+  - packages/cezar/src/workflows/run/**/*.test.ts
+  - packages/cezar/src/workflows/run/**/*.testkit.ts
+  - packages/cezar/src/workflows/run/run-memory.ts # The owner.
+  - packages/cezar/src/workflows/run.ts # #active: the active-run registry; only activate and dropActive write it (ADR 0053).
+  - packages/cezar/src/workflows/run/continuation-acceptance.ts # successSuperseded compares the continuation token after its I/O, also after dispose.
+  - packages/cezar/src/workflows/run/family-reconciler.ts # Family roots queued for one reconcile pass.
+  - packages/cezar/src/workflows/run/liveness-timers.ts # The owner of every liveness bound, keyed by kind, run and key; RunMemory's release clears a run's run scope (hearsay-tools/squawk#3662).
+  - packages/cezar/src/workflows/run/live-session-state.ts # A session group on the ActiveRun: it goes with the ActiveRun at dropActive.
+  - packages/cezar/src/workflows/run/maintenance-claims.ts # reclaiming: cleanup evidence that outlives an execution.
+  - packages/cezar/src/workflows/run/run-line.ts # The scheduler indexes: busySlots and pump order and count them; dropActive calls line.forget.
+  - packages/cezar/src/workflows/run/squawk-tools.ts # Tool calls that wait for the automation service, not per-run memory.
+  - packages/cezar/src/workflows/run/subagent-waits.ts # A session group on the ActiveRun: it goes with the ActiveRun at dropActive.
+  - packages/cezar/src/workflows/run/tracked-work.ts # Process work keyed by promise and session, not by run.
+  - packages/cezar/src/workflows/run/usage-accounting.ts # The turn ids of one runner invocation, held by its step.
+  - packages/cezar/src/workflows/run/wait-engine.ts # Keyed by wait id (ADR 0061).
+  - packages/cezar/src/workflows/run/wait-registry.ts # Keyed by wait id (ADR 0061).
+  - packages/cezar/src/workflows/run/worker-executions.ts # One worker generation's execution, and proveRunTermination waiters.
+  - packages/cezar/src/workflows/run/worker-orphans.ts # The orphan maps: each entry lives for one worker generation.
+  - packages/cezar/src/workflows/run/worktree-autosave.ts # autosaveTasks: cleanup evidence that outlives an execution.
+# Syntax only: a class field, public or #private, static or not, whose initializer is `new Map`,
+# `new Set` or `new WeakMap` by bare name. It leaves out a map assigned in a constructor or method,
+# a member constructor (`new globalThis.Map()`) and a map built by a helper call.
+rule:
+  kind: public_field_definition
+  has:
+    field: value
+    kind: new_expression
+    has:
+      field: constructor
+      regex: ^(Map|Set|WeakMap)$

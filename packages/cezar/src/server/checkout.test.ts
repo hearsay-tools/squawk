@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
+import { gitEnv } from '../git-command.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
 import { clearProjectProbeCache, registerProject } from '../workspace/projects.ts';
@@ -196,6 +197,34 @@ describe('checkout — persisted GitHub credentials', () => {
       const worktree = join(root, 'task');
       git('worktree', 'add', '-qb', 'task', worktree);
       expect(execFileSync('git', ['-C', worktree, 'config', '--get-all', 'credential.https://github.com.helper'], { encoding: 'utf8' })).toBe('\n!gh auth git-credential\n');
+    } finally {
+      vi.unstubAllEnvs();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('checkout — inherited Git location (hearsay-tools/squawk#3207)', () => {
+  it('clones into and configures the target when the process inherited GIT_DIR', async () => {
+    const root = mkdtempSync(join(realpathSync(tmpdir()), 'cez-inherited-git-dir-'));
+    const bin = join(root, 'bin');
+    const repo = join(root, 'repo');
+    const other = join(root, 'other');
+    mkdirSync(bin);
+    writeFileSync(join(bin, 'gh'), '#!/bin/sh\ngit init -q "$4" && git -C "$4" remote add origin "$3"\n', { mode: 0o755 });
+    execFileSync('git', ['init', '-q', other], { env: gitEnv() });
+    vi.stubEnv('PATH', `${bin}:${process.env.PATH}`);
+    vi.stubEnv('GIT_CONFIG_GLOBAL', '/dev/null');
+    vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1');
+    vi.stubEnv('GIT_DIR', join(other, '.git'));
+    vi.stubEnv('GIT_WORK_TREE', other);
+    try {
+      expect(await ghCloneRunner(parseRepoRef('owner/repo')!, repo, () => {}, undefined)).toEqual({ ok: true });
+      const config = (dir: string) => execFileSync('git', ['-C', dir, 'config', '--local', '--list'], { encoding: 'utf8', env: gitEnv() });
+      expect(config(repo)).toContain('remote.origin.url=https://github.com/owner/repo.git');
+      expect(config(repo)).toContain('credential.https://github.com.helper=!gh auth git-credential');
+      expect(config(other)).not.toContain('remote.origin');
+      expect(config(other)).not.toContain('credential.https://github.com.helper');
     } finally {
       vi.unstubAllEnvs();
       rmSync(root, { recursive: true, force: true });

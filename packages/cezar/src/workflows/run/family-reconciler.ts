@@ -47,6 +47,8 @@ export class FamilyReconciler {
 
   private reconcilingWorkers = false;
   private reconcilingFamily: string | undefined;
+  /** Family roots queued behind the reconcile pass in flight. Kept here: the pass drains it, and
+   *  it names families, not one run's memory. */
   private readonly pendingReconciliations = new Set<string | undefined>();
   recoveryFactsPending = false;
   constructor(private readonly context: RunModuleContext, private readonly host: FamilyReconcilerHost,

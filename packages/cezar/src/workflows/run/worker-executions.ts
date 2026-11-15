@@ -3,6 +3,7 @@ import type { AgentSession } from '../../core/claude-cli-runner.ts';
 import { sessionGroupOf } from '../../core/session-process.ts';
 import type { RunModuleContext } from './types.ts';
 import type { WorkerOrphans } from './worker-orphans.ts';
+import type { RunMemory } from './run-memory.ts';
 import { WorkerAdmissionRefusal } from '../../runs/worker-execution.ts';
 
 interface WorkerExecutionsHost {
@@ -12,13 +13,21 @@ interface WorkerExecutionsHost {
   queueWaitWake(id: string): void;
   retryWaitAdmission(id: string): void;
   releaseSlot(): void;
+  /** The execution left: the run's memory goes if the run has ended (`runMemoryReleases`). */
+  releaseRunMemory(id: string): void;
 }
 
 export class WorkerExecutions {
-  constructor(private readonly context: RunModuleContext, private readonly orphans: WorkerOrphans, private readonly host: WorkerExecutionsHost) {}
+  constructor(private readonly context: RunModuleContext, private readonly orphans: WorkerOrphans, private readonly host: WorkerExecutionsHost,
+    private readonly memory: RunMemory) {}
+  /** Kept here: an entry lives for one worker generation, from `beginWorkerExecution` to
+   *  `finishWorkerExecution`. `dispose` keeps it: a disposed manager's execution still settles its
+   *  own sessions, turns and deliveries, and `proveRunTermination` waits on it. */
   readonly executions = new Map<string, { generation: string; admitted: boolean; promise: Promise<void>; resolve: () => void; sessions: Set<Promise<void>>; turns: Set<Promise<void>>; deliveries: Set<Promise<void>> }>();
+  /** Kept here: a generation whose completion write failed, kept for one explicit retry
+   *  (`proveRunTermination`); the next generation's start or a successful write clears it. */
   private readonly finalizedWorkers = new Map<string, string>();
-  private readonly stoppedWorkers = new Set<string>();
+  /** Kept here: the callbacks of `proveRunTermination` calls in flight, not per-run memory. */
   private readonly terminationWaiters = new Set<() => void>();
 
   beginWorkerExecution(runId: string, admitted = true): void {
@@ -44,7 +53,7 @@ export class WorkerExecutions {
     this.finalizedWorkers.delete(runId);
     // #469: an earlier generation's destroy blocker never describes this one.
     this.orphans.forgetBlockers(runId);
-    this.stoppedWorkers.delete(runId);
+    this.memory.write(runId, 'workerStopped', undefined);
   }
 
   async finishWorkerExecution(runId: string): Promise<void> {
@@ -70,6 +79,7 @@ export class WorkerExecutions {
     }
     if (!this.context.disposed() && this.context.store.getRun(runId)?.stopping) this.context.store.updateRun(runId, { stopping: undefined });
     if (!this.context.disposed()) this.host.releaseSlot();
+    if (!this.context.disposed()) this.host.releaseRunMemory(runId);
   }
 
   /** Capture every returned process result before setup can throw. A setup
@@ -82,7 +92,7 @@ export class WorkerExecutions {
 
   private persistWorkerCompletion(runId: string, generation: string): void {
     try {
-      if (this.stoppedWorkers.has(runId)) this.context.store.move(runId, 'stop-worker');
+      if (this.isStopped(runId)) this.context.store.move(runId, 'stop-worker');
       if (this.context.store.commitWorkerExecutionComplete(runId, generation)) {
         this.finalizedWorkers.delete(runId);
         this.host.reapTerminalScratch(runId);
@@ -122,8 +132,8 @@ export class WorkerExecutions {
   has(id: string) { return this.executions.has(id); }
   admitted(id: string) { return this.executions.get(id)?.admitted; }
   generation(id: string) { return this.executions.get(id)?.generation; }
-  markStopped(id: string) { this.stoppedWorkers.add(id); }
-  isStopped(id: string) { return this.stoppedWorkers.has(id); }
+  markStopped(id: string) { this.memory.write(id, 'workerStopped', true); }
+  isStopped(id: string) { return this.memory.read(id, 'workerStopped') === true; }
   trackTurn(id: string, task: Promise<void>) {
     const turns = this.executions.get(id)?.turns;
     turns?.add(task);

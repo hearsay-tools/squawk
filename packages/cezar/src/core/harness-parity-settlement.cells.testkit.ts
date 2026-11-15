@@ -1,7 +1,7 @@
 import type { RunnerId } from './agent-runner.ts';
 import type { HarnessParityPart } from './harness-parity-parts.testkit.ts';
 import { describeHarnessPart, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
-import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS, STEP_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,6 +10,7 @@ import * as gitWorktree from '../git-worktree.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { readMockRecords } from '../mock-records.testkit.ts';
 import { agentTmpDir, resolveAgentTmpDir } from '../runs/agent-tmpdir.ts';
+import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import type { RunRecord, RunStore } from '../runs/store.ts';
 import { apiRequest } from '../server/loopback-request.testkit.ts';
 import { createApp } from '../server/server.ts';
@@ -20,6 +21,7 @@ import type { WorkflowDef } from '../workflows/types.ts';
 import { driveSeam, exemptionFor, HARNESS_ADAPTERS, PERMISSION_CRITERIA, promptFor, textEvents, waitFor } from './harness-parity-core.testkit.ts';
 import { driveObservedRun } from './harness-parity-run-tier.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
+import { runnersWhere } from './runner-facts.ts';
 import type { UiEvent } from './ui-events.ts';
 import { driveRun, withOwnedInputRun, type RunObservation } from './workflow-parity-core.testkit.ts';
 
@@ -55,6 +57,13 @@ function answerThroughRoute(repoRoot: string, store: RunStore, manager: Paramete
     body: JSON.stringify({ requestId: request.requestId, optionId }),
   });
 }
+
+/** R129: a native ask the idle close dropped, then the run its answer reopened. */
+type IdleClosedAnswer = {
+  closedWhileAsking: { active: boolean; status: string | undefined; pendingAsk: boolean };
+  status: string | undefined; pendingAsk: boolean; openHumanWaits: unknown[]; idleCloses: number;
+  delivered: StoredEvent[]; reopened: number;
+};
 
 const optionPicked = (request: StoredEvent, pick: string) =>
   (request.options as Array<{ id: string; label: string }>).find(option => option.label.toLowerCase().includes(pick))!;
@@ -313,25 +322,61 @@ export const SETTLEMENT_GROUPS = {
               await waitFor(() => store.readEvents(runId).some(event => event.type === 'ask.requested'));
               const scratch = resolveAgentTmpDir(join(repoRoot, '.ai/cezar'), runId);
               writeFileSync(join(scratch, 'notes'), 'pending answer');
-              const nativeAsk = exemptionFor('R23', backend);
-              if (nativeAsk) {
-                expect(nativeAsk.kind).toBe('capability-absent');
-                expect(idle.pending).toBe(0);
-              } else {
-                // bound: the portable ask's completed turn arms its shipped idle timer.
-                await waitFor(() => idle.pending > 0);
-              }
+              // bound: the parked question, native or portable, arms its shipped idle timer.
+              await waitFor(() => idle.pending > 0);
               await idle.advance(IDLE_TIMEOUT_MS);
-              if (nativeAsk) {
-                expect(manager.isActive(runId)).toBe(true);
-                expect(store.getRun(runId)?.status).toBe(RUN_STATUS.waiting);
-                expect(store.readWorkerExecution(runId)?.phase).not.toBe('complete');
-              } else {
-                // bound: idle expiry closes the owned process and releases its active run.
-                await waitFor(() => !manager.isActive(runId));
-              }
+              // bound: idle expiry closes the owned process and releases its active run.
+              await waitFor(() => !manager.isActive(runId));
               observation = { active: manager.isActive(runId), status: store.getRun(runId)?.status,
                 phase: store.readWorkerExecution(runId)?.phase, scratch: readFileSync(join(scratch, 'notes'), 'utf8') };
+            });
+            return observation;
+          } finally { idle.restore(); }
+        });
+
+        // hearsay-tools/squawk#2701: an idle close drops the open native question; the answer
+        // reopens the session as its first message and settles the question.
+        if (!runnersWhere(facts => facts.nativeAsk === 'answerable').includes(backend)) continue;
+        const ask = HARNESS_ADAPTERS[backend].askResumeCases[0]!;
+        parityRow(backend, {
+          id: 'R129', scenario: 'ask-resume', name: 'R129 idle-closes a parked native ask and reopens the session with its answer',
+          assert(observation: IdleClosedAnswer) {
+            expect(observation.closedWhileAsking).toEqual({ active: false, status: RUN_STATUS.waiting, pendingAsk: true });
+            expect(observation.status).toBe(RUN_STATUS.done);
+            expect(observation.pendingAsk).toBe(false);
+            expect(observation.openHumanWaits).toEqual([]);
+            expect(observation.idleCloses).toBe(1);
+            expect(observation.delivered).toEqual([expect.objectContaining({ source: 'parent' })]);
+            expect(observation.reopened).toBe(1);
+          },
+        }, async () => {
+          const idle = observationClock(delay => delay === IDLE_TIMEOUT_MS && /armIdleTimer/.test(new Error().stack ?? ''));
+          let observation!: IdleClosedAnswer;
+          try {
+            await withOwnedInputRun(backend, ask.scenario, async ({ manager, store, runId, answer }) => {
+              manager.enqueueOwnedRun(runId);
+              // bound: the native ask frame parks the run with its question open.
+              await waitFor(() => store.getRun(runId)?.status === RUN_STATUS.waiting && hasPendingAsk(store, runId));
+              // bound: the parked native ask arms its shipped idle timer.
+              await waitFor(() => idle.pending > 0);
+              await idle.advance(IDLE_TIMEOUT_MS);
+              // bound: idle expiry closes the native process and releases its active run.
+              await waitFor(() => !manager.isActive(runId));
+              const closedWhileAsking = { active: manager.isActive(runId), status: store.getRun(runId)?.status, pendingAsk: hasPendingAsk(store, runId) };
+              idle.restore();
+              const answerSeq = store.readEvents(runId).length;
+              await answer(ask.answer);
+              // bound: the answer reopens the session, whose turn ends the run.
+              await waitFor(() => !manager.isActive(runId) && ['done', 'review', 'failed'].includes(store.getRun(runId)?.status ?? ''), 30_000);
+              const events = store.readEvents(runId);
+              const run = store.getRun(runId);
+              observation = {
+                closedWhileAsking, status: run?.status, pendingAsk: hasPendingAsk(store, runId),
+                openHumanWaits: (run?.waits ?? []).filter(wait => wait.kind === WAIT_KIND.human && wait.phase === WAIT_PHASE.open),
+                idleCloses: events.filter(event => event.type === 'lifecycle' && /session closed after \d+m of inactivity/.test(String(event.message))).length,
+                delivered: events.filter(event => event.type === 'human-input-delivered'),
+                reopened: events.slice(answerSeq).filter(event => event.type === 'session.started').length,
+              };
             });
             return observation;
           } finally { idle.restore(); }

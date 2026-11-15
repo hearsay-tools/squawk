@@ -1,9 +1,12 @@
-import { promisify } from 'node:util';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+/** Each git call as `exec(bin, args, options)`: it resolves to git's output or rejects with its error. */
 const exec = vi.hoisted(() => vi.fn());
 vi.mock('node:child_process', () => {
-  const execFile = Object.assign(vi.fn(), { [promisify.custom]: exec });
+  type Callback = (error: Error | null, stdout: string, stderr: string) => void;
+  const execFile = vi.fn((bin: string, args: string[], options: unknown, callback: Callback) => {
+    (exec(bin, args, options) as Promise<{ stdout: string }>).then(({ stdout }) => callback(null, stdout, ''), (error: Error) => callback(error, '', ''));
+  });
   return { execFile };
 });
 const { getRepoInfo } = await import('./git.ts');
