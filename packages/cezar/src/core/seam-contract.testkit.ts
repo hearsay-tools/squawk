@@ -34,7 +34,7 @@ import { join } from 'node:path';
 import { expect } from 'vitest';
 import { createFailureControl } from '../../scripts/mock-failure-control.mjs';
 import { inputDeliveryOf, type AgentEvent, type AgentSession, type InputDelivery, type RunnerId } from './agent-runner.ts';
-import { driveSeam, PINNED_SESSION_ID, promptFor, seedOpencodeMockSession, waitFor, type DriveSeamOptions, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
+import { driveSeam, PINNED_SESSION_ID, promptFor, seedOpencodeMockSession, type DriveSeamOptions, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
@@ -113,12 +113,14 @@ function turnAround(timeline: readonly ContractEntry[], position: number): { sta
 }
 
 /** Records the merged stream, marks and the session's hold. */
-class Recorder {
+export class Recorder {
   readonly timeline: ContractEntry[] = [];
   readonly at = new Map<string, number>();
   readonly read: Record<string, boolean | undefined> = {};
   released: number | undefined;
   session: AgentSession | undefined;
+  /** How the session's result settled, once it has: a row's wait ends there with this. */
+  ended: string | undefined;
   private watching = false;
   private poll: ReturnType<typeof setInterval> | undefined;
   /** `holdsHumanInput()` at each v1 `turn-end`, read as run.ts reads it there. */
@@ -148,6 +150,22 @@ class Recorder {
     this.poll ??= setInterval(() => this.sample(), 2);
   }
 
+  /** Follow `session` and record how its result settles. */
+  watch(session: AgentSession): void {
+    this.session = session;
+    session.result.then(
+      () => { this.ended = 'its result resolved'; },
+      (error: unknown) => { this.ended = `its result rejected: ${error instanceof Error ? error.message : String(error)}`; },
+    );
+  }
+
+  /** The session's state and the stream so far, for a failure message. */
+  describe(): string {
+    const session = this.session;
+    const state = session ? `session.open=${session.open} held=${session.heldHumanInputCount?.() ?? session.holdsHumanInput()}` : 'no session';
+    return `${state}\n${describeTimeline(this.timeline)}`;
+  }
+
   stop(): void {
     if (this.poll) clearInterval(this.poll);
     this.poll = undefined;
@@ -155,6 +173,22 @@ class Recorder {
 
   private sample(): void {
     if (this.watching && this.released === undefined && this.session && !this.session.holdsHumanInput()) this.released = this.timeline.length;
+  }
+}
+
+/**
+ * Wait until `cond` holds for a contract row. A session whose result settles first fails the wait at
+ * once with that result, since no later event can come; the bound stays a hang guard. Either failure
+ * carries the session's state and the stream so far.
+ */
+export async function until(recorder: Recorder, cond: () => boolean, ms = 10_000): Promise<void> {
+  const start = Date.now();
+  while (!cond()) {
+    if (recorder.ended !== undefined) throw new Error(`the session ended before ${cond.toString()}: ${recorder.ended}\n${recorder.describe()}`);
+    const elapsed = Date.now() - start;
+    // bound: hang guard only; the session's own end, checked above, is the earlier signal.
+    if (elapsed > ms) throw new Error(`waitFor timed out after ${elapsed}ms: ${cond.toString()}\n${recorder.describe()}`);
+    await new Promise(resolve => setTimeout(resolve, 10));
   }
 }
 
@@ -199,12 +233,12 @@ async function driveContract(backend: RunnerId, drive: DriveContract): Promise<C
       sessionOptions: { ...drive.sessionOptions },
       onEvent: recorder.onEvent,
       whileOpen: async (session) => {
-        recorder.session = session;
+        recorder.watch(session);
         try {
           await drive.whileOpen(session, recorder, {
             release: () => writeFileSync(releaseFile, ''),
             openGate: () => writeFileSync(gateFile, ''),
-            onWire: marker => waitFor(() => wire().includes(marker)),
+            onWire: marker => until(recorder, () => wire().includes(marker)),
           });
         } finally {
           recorder.stop();
@@ -286,11 +320,11 @@ async function observeAcknowledgement(backend: RunnerId): Promise<ContractObserv
       const steer = delivery.mode === 'steer';
       const send = (id: string) => session.sendAgentMessage([{ type: 'text', text: `mock:agent-echo ${id}` }], [id]);
       const acknowledged = (id: string, ack: Promise<void>) => ack.then(() => { rec.mark(`ack:${id}`); });
-      await waitFor(() => turnStarted(rec));
+      await until(rec, () => turnStarted(rec));
       if (steer) {
         // S12 owns admission: startup may refuse once (Codex has no thread yet); the running turn admits.
         let first: false | Promise<void> = false;
-        await waitFor(() => {
+        await until(rec, () => {
           first = send(ACK_IDS[0]);
           return first !== false;
         });
@@ -324,7 +358,7 @@ async function observeAcknowledgement(backend: RunnerId): Promise<ContractObserv
         mock.release();
       } else {
         mock.release();
-        await waitFor(() => turnEnds(rec) >= 1);
+        await until(rec, () => turnEnds(rec) >= 1);
         const ack = send(ACK_IDS[0]);
         rec.mark(`sent:${ACK_IDS[0]}`);
         expect(ack).not.toBe(false);
@@ -334,11 +368,11 @@ async function observeAcknowledgement(backend: RunnerId): Promise<ContractObserv
       const reported = (id: string) => consumed.includes(id) || reportedUnread(rec.timeline, id);
       if (delivery.consumption === 'unobservable') {
         // Nothing reports the read: the input's own turn ending is the last signal.
-        await waitFor(() => turnEnds(rec) >= 2);
+        await until(rec, () => turnEnds(rec) >= 2);
         return;
       }
       // bound: an observable runner reports each input read or unread; a missing report fails the row.
-      await waitFor(() => sent.every(reported) && turnEnds(rec) >= 1, 10_000).catch(() => undefined);
+      await until(rec, () => sent.every(reported) && turnEnds(rec) >= 1, 10_000).catch(() => undefined);
     },
   });
 }
@@ -375,10 +409,10 @@ async function observeTurnStart(backend: RunnerId): Promise<ContractObservation>
   return driveContract(backend, {
     scenario: 'hold', variant: 'follow-up',
     whileOpen: async (session, rec) => {
-      await waitFor(() => turnEnds(rec) >= 1);
+      await until(rec, () => turnEnds(rec) >= 1);
       // The deferred token holds the follow-up's native turn start 800 ms after its prompt.
       rec.sendHuman(session, `${FOLLOW_UP} ${DEFERRED_TURN_START}`);
-      await waitFor(() => carrierSettled(rec) && turnEnds(rec) >= 2);
+      await until(rec, () => carrierSettled(rec) && turnEnds(rec) >= 2);
     },
   });
 }
@@ -419,13 +453,13 @@ async function observeHeld(backend: RunnerId, variant: keyof typeof HELD_VARIANT
       if (variant === 'startup') {
         rec.sendHuman(session, HELD_VARIANTS[variant]);
         mock.release();
-        await waitFor(() => carrierSettled(rec));
+        await until(rec, () => carrierSettled(rec));
         return;
       }
-      await waitFor(() => turnStarted(rec));
+      await until(rec, () => turnStarted(rec));
       if (variant === 'idle') {
         mock.release();
-        await waitFor(() => turnEnds(rec) >= 1);
+        await until(rec, () => turnEnds(rec) >= 1);
         rec.sendHuman(session, HELD_VARIANTS[variant]);
       } else {
         rec.sendHuman(session, HELD_VARIANTS[variant]);
@@ -435,7 +469,7 @@ async function observeHeld(backend: RunnerId, variant: keyof typeof HELD_VARIANT
         if (variant === 'late-ack') await deliveredMidTurn(backend, mock);
         mock.release();
       }
-      await waitFor(() => carrierSettled(rec));
+      await until(rec, () => carrierSettled(rec));
     },
   });
 }
@@ -461,7 +495,7 @@ async function observeFinish(backend: RunnerId): Promise<ContractObservation> {
     // The session is asked to close after its first turn, as a finished step is.
     sessionOptions: { autoEndAfterFirstTurn: true },
     whileOpen: async (session, rec, mock) => {
-      await waitFor(() => turnStarted(rec));
+      await until(rec, () => turnStarted(rec));
       // Before or after the turn ends, the follow-up was sent while it ran, so it is held at that end.
       rec.sendHuman(session, `${FOLLOW_UP} ${DEFERRED_TURN_START}`);
       mock.release();
@@ -493,11 +527,11 @@ async function observeTiming(backend: RunnerId, timing: 'early' | 'late'): Promi
     whileOpen: async (session, rec, mock) => {
       // Early: while the turn's tool runs, before its last model call. Late: after its final text.
       // Either window stays open until the mock has the message, so no timer decides which it is.
-      await waitFor(() => v1Of(rec).some(event => event.type === (timing === 'early' ? 'tool-call' : 'text')));
+      await until(rec, () => v1Of(rec).some(event => event.type === (timing === 'early' ? 'tool-call' : 'text')));
       rec.sendHuman(session, `${FOLLOW_UP} mock:agent-echo`);
       await deliveredMidTurn(backend, mock);
       mock.openGate();
-      await waitFor(() => carrierSettled(rec) && turnEnds(rec) >= 1);
+      await until(rec, () => carrierSettled(rec) && turnEnds(rec) >= 1);
     },
   });
 }
@@ -527,7 +561,7 @@ async function observeSystemPrompt(backend: RunnerId, resume: boolean): Promise<
       env: { CEZ_MOCK_ARGS_FILE: files[0], CEZ_MOCK_STDIN_FILE: files[1] },
       // Codex resumes the thread its mock knows by id (S14).
       spec: { systemPrompt: SYSTEM_PROMPT, resume, sessionId: resume && backend === 'codex' ? 'th_mock_1' : PINNED_SESSION_ID },
-      whileOpen: async (_session, rec) => { await waitFor(() => turnEnds(rec) >= 1); },
+      whileOpen: async (_session, rec) => { await until(rec, () => turnEnds(rec) >= 1); },
     });
     const records = files.flatMap(file => existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter(Boolean) : []);
     return { ...observed, records };
@@ -570,10 +604,10 @@ async function observeProcesses(backend: RunnerId): Promise<ContractObservation>
       whileOpen: async (session, rec) => {
         // As Squawk reads it: right after startSession returns (workflows/run/input-receipts.ts).
         report(session.pid);
-        await waitFor(() => turnEnds(rec) >= 1);
+        await until(rec, () => turnEnds(rec) >= 1);
         // A follow-up turn: a runner that starts a process per turn starts another.
         rec.sendHuman(session, `${FOLLOW_UP} mock:agent-echo`);
-        await waitFor(() => carrierSettled(rec) && turnEnds(rec) >= 2);
+        await until(rec, () => carrierSettled(rec) && turnEnds(rec) >= 2);
         last = session.pid;
       },
     });
@@ -616,11 +650,11 @@ async function observeProviderFailure(backend: RunnerId, variant: typeof FAILURE
       spec: variant === 'wake' ? { userPrompt: `${WAKE_OPENING} ${FOLLOW_UP}`, resume: true, sessionId: backend === 'codex' ? 'th_mock_1' : PINNED_SESSION_ID } : {},
       whileOpen: async (session, rec) => {
         if (variant === 'gated') {
-          await waitFor(control.held);
+          await until(rec, control.held);
           rec.mark('released');
           control.release();
         }
-        await waitFor(() => v1Of(rec).some(event => event.type === 'error'));
+        await until(rec, () => v1Of(rec).some(event => event.type === 'error'));
         // Squawk interrupts a session on its first error (workflows/run/session-events.ts).
         rec.mark('interrupt');
         session.interrupt();
