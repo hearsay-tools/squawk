@@ -7,7 +7,7 @@ import type { AgentSession } from '../../core/claude-cli-runner.ts';
 import type { RunRecord, RunStore } from '../../runs/store.ts';
 import { enqueueAgentInput, hasLiveInboxClaim } from '../../delegation/input.ts';
 import { recordRequestRefusal, type CompletionRefusal } from '../completion-policy.ts';
-import { NO_WAIT_NUDGE_NOTE, NO_WAIT_NO_REPLY_NOTE, COMPLETION_NO_REPLY_NOTE, COMPLETION_NUDGE_NOTE, AUTONOMOUS_NUDGE, AUTONOMOUS_NO_ACK_NOTE, stepScopedNudge, type TurnEndOutcome } from '../turn-end.ts';
+import { NO_WAIT_NUDGE_NOTE, NO_WAIT_NO_REPLY_NOTE, COMPLETION_NO_REPLY_NOTE, COMPLETION_NUDGE_NOTE, AUTONOMOUS_NUDGE, AUTONOMOUS_NO_ACK_NOTE, AUTONOMOUS_NO_REPLY_NOTE, stepScopedNudge, type TurnEndOutcome } from '../turn-end.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { RunExitId } from '../../runs/run-exits.ts';
 import { clearIdleTimer, clearNoWaitNudgeReplyTimer, harnessOwesInput } from './input-timers.ts';
@@ -45,10 +45,18 @@ export function nudgeAwaitsAcknowledgement(state: ActiveRun, session: AgentSessi
   return !!session && nudge?.session === session && nudge.cause === 'autonomous' && nudge.state === 'submitted';
 }
 
-/** A run an autonomous nudge kept running: refused, or submitted and never acknowledged. Its idle
- *  close settles it `waiting`. */
+/** The autonomous nudge `session` acknowledged, with no turn start since: its answer bound runs
+ *  (hearsay-tools/squawk#3741). A turn start retires the fact. */
+export function nudgeAwaitsAnswer(state: ActiveRun, session: AgentSession | undefined): boolean {
+  const nudge = state.boundary.nudge;
+  return !!session && nudge?.session === session && nudge.cause === 'autonomous' && nudge.state === 'acknowledged' && !nudge.answered;
+}
+
+/** A run an autonomous nudge kept running: refused, submitted and never acknowledged, or
+ *  acknowledged and never answered. Its idle close settles it `waiting`. */
 export function nudgeHeldRunning(state: ActiveRun): boolean {
-  return state.boundary.nudge?.state === 'refused' || nudgeAwaitsAcknowledgement(state, state.boundary.nudge?.session);
+  const session = state.boundary.nudge?.session;
+  return state.boundary.nudge?.state === 'refused' || nudgeAwaitsAcknowledgement(state, session) || nudgeAwaitsAnswer(state, session);
 }
 
 /** The work the no-progress guard counts as the model working (`MODEL_PROGRESS` in
@@ -236,31 +244,53 @@ export class TurnNudges {
    * `waiting` once its process has exited, with no human wait.
    */
   armAutonomousNudgeBound(runId: string, state: ActiveRun): void {
+    this.armUnansweredNudgeBound(runId, state, 'acknowledgement', nudgeAwaitsAcknowledgement, AUTONOMOUS_NO_ACK_NOTE);
+  }
+
+  /**
+   * The bound of an autonomous nudge the harness acknowledged, while its session shows no model
+   * work (hearsay-tools/squawk#3741). An acknowledgement means the transport took the input, not
+   * that a turn started. It has the acknowledgement bound's length and expiry; model work cancels
+   * it, and heartbeats do not.
+   */
+  armAutonomousNudgeAnswerBound(runId: string, state: ActiveRun): void {
+    this.armUnansweredNudgeBound(runId, state, 'nudge-answer', nudgeAwaitsAnswer, AUTONOMOUS_NO_REPLY_NOTE);
+  }
+
+  private armUnansweredNudgeBound(runId: string, state: ActiveRun, kind: 'acknowledgement' | 'nudge-answer',
+    holds: (state: ActiveRun, session: AgentSession) => boolean, message: string): void {
     const session = state.liveSession.session;
-    if (!session?.open || !nudgeAwaitsAcknowledgement(state, session)) return;
-    this.timers.arm({ kind: 'acknowledgement', runId, delayMs: this.noWaitNudgeReplyMs,
+    if (!session?.open || !holds(state, session)) return;
+    this.timers.arm({ kind, runId, delayMs: this.noWaitNudgeReplyMs,
       session: { armed: session, current: () => state.liveSession.session } }, () => {
       if (this.context.disposed() || this.host.active.get(runId) !== state || !session.open || state.liveSession.cancelled ||
-        state.liveSession.finishRequested || !nudgeAwaitsAcknowledgement(state, session)) return;
+        state.liveSession.finishRequested || !holds(state, session)) return;
       this.host.abandonNudgeFlight(state, session);
-      this.host.closeIdleSession(runId, state, { type: 'note', tone: 'warning', ...(state.liveSession.currentStepId ? { stepId: state.liveSession.currentStepId } : {}), message: AUTONOMOUS_NO_ACK_NOTE });
+      this.host.closeIdleSession(runId, state, { type: 'note', tone: 'warning', ...(state.liveSession.currentStepId ? { stepId: state.liveSession.currentStepId } : {}), message });
     });
   }
 
-  /** The harness acknowledged the nudge `session` was sent: its bound ends, and the fact records it. */
+  /** The harness acknowledged the nudge `session` was sent: its acknowledgement bound ends, and the
+   *  fact records it. An autonomous nudge whose session showed no model work since the send gets
+   *  its answer bound (hearsay-tools/squawk#3741). */
   acknowledgeNudge(runId: string, state: ActiveRun, session: AgentSession): void {
     if (state.boundary.nudge?.session !== session || state.boundary.nudge.state !== 'submitted') return;
-    recordNudge(state, { cause: state.boundary.nudge.cause, state: 'acknowledged' });
+    const { cause, answered } = state.boundary.nudge;
+    recordNudge(state, { cause, state: 'acknowledged', ...(answered ? { answered } : {}) });
     this.timers.clear('acknowledgement', runId);
+    if (!answered) this.armAutonomousNudgeAnswerBound(runId, state);
   }
 
-  /** Model work in the nudge's own session is its reply: its bound stops while the turn runs. A turn
+  /** Model work in the nudge's own session is its reply: its bounds stop while the turn runs. A turn
    *  end that still finds the acknowledgement missing arms it again. Both event paths name the session
    *  that emitted the event, so a retired session's late events stop nothing (hearsay-tools/squawk#2443). */
   noteNudgeActivity(runId: string, state: ActiveRun, emitting: AgentSession | undefined, event: { type: string; item?: { parentItemId?: string } }): void {
     if (!emitting || this.host.active.get(runId) !== state || state.liveSession.session !== emitting ||
       state.boundary.nudge?.session !== emitting || !isModelActivity(event)) return;
+    const nudge = state.boundary.nudge;
+    if (event.type !== 'turn.started' && nudge.state === 'submitted' && !nudge.answered) recordNudge(state, { cause: nudge.cause, state: nudge.state, answered: true });
     this.timers.clear('acknowledgement', runId);
+    this.timers.clear('nudge-answer', runId);
   }
 
   /** The nudge a turn end with no wait or done gets: one automatic turn, charged to the

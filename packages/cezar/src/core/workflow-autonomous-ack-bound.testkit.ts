@@ -45,7 +45,7 @@ async function assertBoundCloses({ store, manager, runId }: Fixture, cell: Cell)
   expect(cell.clock().captured).toBe(2);
   const state = cell.state();
   const session = state.liveSession.session!;
-  expect(state.boundary.nudge).toEqual({ session, cause: 'autonomous', state: 'submitted' });
+  expect(state.boundary.nudge).toEqual({ session, cause: 'autonomous', state: 'submitted', answered: true });
   expect(store.getRun(runId)?.status).toBe('running');
   expect(cell.semaphore.busy()).toBe(1);
   await cell.clock().advance(NO_WAIT_NUDGE_REPLY_MS);

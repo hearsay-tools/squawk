@@ -43,7 +43,9 @@ Accepted at the design gate on 2026-11-15:
    parked by its own turn gets one, also after a crash or an idle close.
 3. An autonomous nudge with no acknowledgement and no reply (hearsay-tools/squawk#2443) is bounded
    at 5 minutes, as the no-wait nudge. On expiry the run records a note naming the nudge and closes
-   through the idle path, with no Needs You.
+   through the idle path, with no Needs You. An acknowledged one whose session shows no model
+   work gets the same bound from its acknowledgement, which heartbeats do not extend
+   (hearsay-tools/squawk#3741).
 4. A clean session close that aborts an acknowledgement in flight (hearsay-tools/squawk#3508) is a
    retryable closed-session delivery failure: the input is requeued, and the 3-attempt cap holds.
 
@@ -89,7 +91,7 @@ stay until S5 moves them into `LivenessTimers`: S4 lists them as named exception
 S5 removes those exceptions.
 
 `LivenessTimers` (`workflows/run/liveness-timers.ts`) has one row per bound kind: idle close,
-nudge reply, acknowledgement, unread input, held human input, wake retry, wake backoff,
+nudge reply, acknowledgement, nudge answer, unread input, held human input, wake retry, wake backoff,
 auto-resume, subagent grace, a native ask's subagent hold, subagent retry, inbox claim and request
 deadline. Each row names its
 scope (`execution` or `run`). `arm` replaces an existing handle for the same kind, run and key;

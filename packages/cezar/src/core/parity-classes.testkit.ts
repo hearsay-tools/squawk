@@ -238,6 +238,7 @@ export const SCENARIO_CLASSES: Readonly<Record<ScenarioName, readonly [ScenarioC
   autonomous: ['shared', SQUAWK_TOOL],
   'autonomous-cap': ['shared', SQUAWK_TOOL],
   'autonomous-cezar-ask-cap': ['shared', SQUAWK_TOOL],
+  'autonomous-silent': ['shared', 'the mock ACKs the nudge and sends heartbeats only; Squawk bounds the missing answer'],
   hold: ['shared', 'the mock delays its terminal turn signal; Squawk decides what happens meanwhile'],
   'hold-gated': ['shared', 'the mock holds its turn until a gate file exists; Squawk decides what happens meanwhile'],
   'hold-cezar-done': ['shared', SQUAWK_TOOL],

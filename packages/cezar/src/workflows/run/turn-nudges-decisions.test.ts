@@ -12,7 +12,7 @@ import { setRunStatus } from '../../runs/run-store.testkit.ts';
 import { WorkspaceSemaphore } from '../../workspace/semaphore.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../fixture-no-runner.testkit.ts';
 import type { RunManager } from '../run.ts';
-import { AUTONOMOUS_NO_ACK_NOTE, AUTONOMOUS_NUDGE, COMPLETION_NUDGE_NOTE, NO_WAIT_NO_REPLY_NOTE, NO_WAIT_NUDGE_NOTE } from '../turn-end.ts';
+import { AUTONOMOUS_NO_ACK_NOTE, AUTONOMOUS_NO_REPLY_NOTE, AUTONOMOUS_NUDGE, COMPLETION_NUDGE_NOTE, NO_WAIT_NO_REPLY_NOTE, NO_WAIT_NUDGE_NOTE } from '../turn-end.ts';
 import { COMPLETION_WILL_WAIT, MAX_AUTO_CONTINUES } from './constants.ts';
 import { QUICK_TASK_WORKFLOW } from '../types.ts';
 import { observationClock } from '../../core/observation-clock.testkit.ts';
@@ -246,6 +246,8 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
   let emit: (event: AgentEvent) => void;
   let emitUi: (event: UiEvent) => void;
   let acknowledge: () => void;
+  /** A native heartbeat frame and a usage update: transport activity that is not model work. */
+  let heartbeat: () => void;
   /** OpenCode emits the nudge's turn.started inside sendAgentMessage, before it returns. */
   let startsTurnOnSend: boolean;
 
@@ -263,6 +265,7 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
         const result = new Promise<AgentRunResult>(resolve => { finish = resolve; });
         emit = event => onEvent?.(event);
         emitUi = event => options?.onUiEvent?.(event);
+        heartbeat = () => { options?.onActivity?.(); emitUi({ type: 'usage.updated', usage: { input: 1, output: 1, total: 2 } }); };
         const close = () => { open = false; finish({ text: '', toolCalls: [], tokensUsed: 0 }); };
         // The nudge's acknowledgement settles only when the test acknowledges it.
         const sendAgentMessage = vi.fn(() => {
@@ -309,12 +312,73 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
     await expectClosedWaiting(id, nudged);
   });
 
-  it('an acknowledgement inside the bound cancels it, and the run continues', async () => {
+  // hearsay-tools/squawk#3741: an ACK means the transport took the nudge, not that a turn started.
+  const answerNotes = (id: string) => f.store.readEvents(id).filter(e => e.type === 'note' && e.message === AUTONOMOUS_NO_REPLY_NOTE);
+
+  it('an acknowledged nudge that gets no turn closes the run after the answer bound, heartbeats or not', async () => {
+    const { id, session: nudged } = await startNudged();
+    await vi.advanceTimersByTimeAsync(BOUND_MS - 1);
+    acknowledge();
+    await vi.advanceTimersByTimeAsync(0);
+    for (let tick = 0; tick < 4; tick++) {
+      await vi.advanceTimersByTimeAsync(BOUND_MS / 4 - 1);
+      heartbeat();
+    }
+    expect(nudged.end).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(4);
+    expect(nudged.end).toHaveBeenCalledOnce();
+    expect(answerNotes(id)).toHaveLength(1);
+    expect(boundNotes(id)).toEqual([]);
+    await waitForProduct(f.manager, f.store, () => !f.manager.isActive(id));
+    expect(f.store.getRun(id)?.status).toBe(RUN_STATUS.waiting);
+    expect(f.store.getRun(id)?.steps.at(-1)?.status).toBe(STEP_STATUS.waiting);
+    expect(f.store.getRun(id)?.waits ?? []).toEqual([]);
+  });
+
+  it('a turn start the send emits is no answer: the acknowledged nudge still closes the run after the bound', async () => {
+    startsTurnOnSend = true;
     const { id, session: nudged } = await startNudged();
     acknowledge();
-    await vi.advanceTimersByTimeAsync(BOUND_MS);
+    await vi.advanceTimersByTimeAsync(0);
+    heartbeat();
+    await vi.advanceTimersByTimeAsync(BOUND_MS - 1);
     expect(nudged.end).not.toHaveBeenCalled();
-    expect(boundNotes(id)).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(nudged.end).toHaveBeenCalledOnce();
+    expect(answerNotes(id)).toHaveLength(1);
+  });
+
+  it('a turn start after the acknowledgement cancels the answer bound', async () => {
+    const { id, session: nudged } = await startNudged();
+    acknowledge();
+    await vi.advanceTimersByTimeAsync(BOUND_MS - 1);
+    emitUi({ type: 'turn.started', turnId: randomUUID() });
+    await vi.advanceTimersByTimeAsync(BOUND_MS * 2);
+    expect(nudged.end).not.toHaveBeenCalled();
+    expect(answerNotes(id)).toEqual([]);
+    expect(f.store.getRun(id)?.status).toBe(RUN_STATUS.running);
+  });
+
+  it('model work after the acknowledgement cancels the answer bound', async () => {
+    const { id, session: nudged } = await startNudged();
+    acknowledge();
+    await vi.advanceTimersByTimeAsync(BOUND_MS - 1);
+    emit({ type: 'text', text: 'answering the nudge' });
+    await vi.advanceTimersByTimeAsync(BOUND_MS * 2);
+    expect(nudged.end).not.toHaveBeenCalled();
+    expect(answerNotes(id)).toEqual([]);
+    expect(f.store.getRun(id)?.status).toBe(RUN_STATUS.running);
+  });
+
+  it('an acknowledgement that arrives while the nudge\'s turn already works arms no answer bound', async () => {
+    startsTurnOnSend = true;
+    const { id, session: nudged } = await startNudged();
+    await vi.advanceTimersByTimeAsync(BOUND_MS - 1);
+    emit({ type: 'tool-call', id: randomUUID(), tool: 'Bash', input: {} });
+    acknowledge();
+    await vi.advanceTimersByTimeAsync(BOUND_MS * 2);
+    expect(nudged.end).not.toHaveBeenCalled();
+    expect(answerNotes(id)).toEqual([]);
     expect(f.store.getRun(id)?.status).toBe(RUN_STATUS.running);
   });
 
