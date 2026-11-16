@@ -1,4 +1,4 @@
-import { isAutomationTask, type ArchiveFinishedScope, type RunRecord } from './runs.ts';
+import { isAutomationTask, type ArchiveFinishedScope, type RunRecord, type StepState } from './runs.ts';
 import { isUsageLimitHold } from './waits.ts';
 
 /**
@@ -7,6 +7,35 @@ import { isUsageLimitHold } from './waits.ts';
  * Each takes the record, never a bare status, so no caller can miss a usage-limit hold
  * (hearsay-tools/cezarion#1434). `isUsageLimitHold` lives in `usage-limit-hold.ts`; `waits.ts` re-exports it.
  */
+
+/**
+ * The step holding the run's latest agent session: of the steps with a session id, the one that
+ * started last. A Continue appends its synthetic step, so array order is not time order: a
+ * workflow step that ran after a continuation sits before it (hearsay-tools/squawk#3024). A step
+ * saved without a start time keeps its array position against its neighbours. `except` leaves out
+ * one step, such as the Continue's own.
+ */
+export function latestSessionStep<S extends Pick<StepState, 'id' | 'sessionId' | 'startedAt'>>(steps: readonly S[], except?: string): S | undefined {
+  let latest: S | undefined;
+  for (const step of steps) {
+    if (!step.sessionId || step.id === except) continue;
+    if (!latest || !step.startedAt || !latest.startedAt || step.startedAt >= latest.startedAt) latest = step;
+  }
+  return latest;
+}
+
+/** The runner that owns a step's session. A step saved before backend affinity belongs to the
+ *  run's runner, and a run with none to Claude. */
+export function sessionRunner(step: Pick<StepState, 'backend'> | undefined, run: Pick<RunRecord, 'runner'> | undefined): NonNullable<RunRecord['runner']> {
+  return step?.backend ?? run?.runner ?? 'claude';
+}
+
+/** The latest session's id, the runner that owns it (`sessionRunner`) and the account it was opened
+ *  under. Every step with a session counts, with or without a saved backend. */
+export function latestSession(run: { steps: readonly Pick<StepState, 'id' | 'sessionId' | 'startedAt' | 'backend' | 'profileId'>[]; runner?: RunRecord['runner'] }): { sessionId: string | undefined; backend: NonNullable<RunRecord['runner']>; profileId: string | undefined } {
+  const step = latestSessionStep(run.steps);
+  return { sessionId: step?.sessionId, backend: sessionRunner(step, run), profileId: step?.profileId };
+}
 
 const LIVE_STATUSES: ReadonlySet<string> = new Set(['queued', 'running', 'waiting']);
 

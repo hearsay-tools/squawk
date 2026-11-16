@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveAttention } from './attention.ts';
-import { engineOwnsRun, isSessionOpen, isSweepable } from './run-predicates.ts';
+import { engineOwnsRun, isSessionOpen, isSweepable, latestSession, latestSessionStep, sessionRunner } from './run-predicates.ts';
 import { runStatusSchema } from './run-status.ts';
 import type { ArchiveFinishedScope, RunStatus } from './runs.ts';
 import { computeWaitingOn, isUsageLimitHold } from './waits.ts';
@@ -118,5 +118,36 @@ describe('isSweepable', () => {
     for (const run of inputs) for (const scope of scopes) {
       expect(isSweepable(run, scope), JSON.stringify({ run, scope })).toBe(cockpitCopy(run, scope));
     }
+  });
+});
+
+describe('latestSessionStep', () => {
+  const step = (id: string, sessionId?: string, startedAt?: string) => ({ id, sessionId, startedAt });
+  it('reads start time, not array order (hearsay-tools/squawk#3024)', () => {
+    // `review` ran after the appended `continue-1`, which sits after it in the array.
+    const steps = [step('implement', 'launch'), step('review', 'review-session', '2026-11-16T00:00:03Z'), step('continue-1', 'thread', '2026-11-16T00:00:02Z')];
+    expect(latestSessionStep(steps)?.id).toBe('review');
+    expect(latestSessionStep(steps, 'review')?.id).toBe('continue-1');
+  });
+  it('keeps array order for steps saved without a start time, and skips steps with no session', () => {
+    expect(latestSessionStep([step('a', 's1'), step('b', 's2'), step('c')])?.id).toBe('b');
+    expect(latestSessionStep([step('c')])).toBeUndefined();
+  });
+});
+
+describe('sessionRunner', () => {
+  it('reads the step backend, else the run runner, else Claude', () => {
+    expect(sessionRunner({ backend: 'codex' }, { runner: 'claude' })).toBe('codex');
+    expect(sessionRunner({}, { runner: 'pi' })).toBe('pi');
+    expect(sessionRunner(undefined, undefined)).toBe('claude');
+  });
+});
+
+describe('latestSession', () => {
+  it('pairs the latest session with its runner and account, else the run runner, else Claude', () => {
+    const steps = [{ id: 'implement', sessionId: 'a', startedAt: '2026-11-16T00:00:01Z', backend: 'codex' as const, profileId: 'work' }];
+    expect(latestSession({ steps, runner: 'claude' })).toEqual({ sessionId: 'a', backend: 'codex', profileId: 'work' });
+    expect(latestSession({ steps: [{ id: 'x', sessionId: 'b' }], runner: 'pi' })).toEqual({ sessionId: 'b', backend: 'pi', profileId: undefined });
+    expect(latestSession({ steps: [] })).toEqual({ sessionId: undefined, backend: 'claude', profileId: undefined });
   });
 });

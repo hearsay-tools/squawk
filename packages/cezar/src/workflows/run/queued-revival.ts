@@ -1,3 +1,4 @@
+import { latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
 import { atTaskHead, atContinue } from './launch-read-resolver.ts';
 import type { WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import type { RunRecord, RunStore, QueuedMessage } from '../../runs/store.ts';
@@ -51,7 +52,7 @@ export async function reviveQueuedRun(context: RunModuleContext, host: QueuedRev
     .reverse()
     .find((step) => step.status === 'pending' && host.isSyntheticContinuation(run, step));
   const sessionStep = queuedContinuation
-    ? [...run.steps].reverse().find((step) => step.id !== queuedContinuation.id && step.sessionId)
+    ? latestSessionStep(run.steps, queuedContinuation.id)
     : undefined;
   // A provider retry or a worker resume with no earlier session queues a fresh-session
   // continuation (hearsay-tools/squawk#3337): it revives as that continuation, never as the job.

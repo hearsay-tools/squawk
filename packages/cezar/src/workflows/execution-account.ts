@@ -1,3 +1,4 @@
+import { latestSession } from '@open-mercato/cezar-contract/run-predicates';
 import type { RunnerId } from '../core/agent-runner.ts';
 import type { RunRecord } from '../runs/store.ts';
 
@@ -16,7 +17,7 @@ export function executionAccount(
     const runAccount = continuation.backend === (run.runner ?? 'claude') ? run.agentProfile : undefined;
     return { runner: continuation.backend, agentProfile: owning?.profileId ?? runAccount };
   }
-  const step = [...run.steps].reverse().find((candidate) => candidate.sessionId !== undefined && candidate.backend !== undefined);
-  if (step) return { runner: step.backend, agentProfile: step.profileId ?? run.agentProfile };
+  const latest = latestSession(run);
+  if (latest.sessionId !== undefined) return { runner: latest.backend, agentProfile: latest.profileId ?? run.agentProfile };
   return { runner: run.runner, agentProfile: run.agentProfile };
 }

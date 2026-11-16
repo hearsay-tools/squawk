@@ -1,3 +1,4 @@
+import { latestSession } from '@open-mercato/cezar-contract/run-predicates';
 import type { Home } from '../home/home.ts';
 import { fallbackProjectWriteError } from '../project-paths.ts';
 import { join } from 'node:path';
@@ -91,14 +92,14 @@ export async function openRunCli(
   const blocked = await providerActionError([cliRunner]);
   if (blocked) return c.json({ error: blocked }, 409);
   // A usage-limit hold has no session until its resume (hearsay-tools/cezarion#1236), so it resumes.
-  const sessionStep = !checkout.resumeAllowed ? undefined : [...run.steps].reverse().find((s) => s.sessionId);
-  const sessionId = sessionStep?.sessionId;
+  const session = checkout.resumeAllowed ? latestSession(run) : undefined;
+  const sessionId = session?.sessionId;
   // An id resumeCommand refuses (open-mercato/cezar#431) degrades to a fresh CLI in the worktree,
   // exactly like a run that never recorded a session.
-  const resume = sessionId && cliRunner === (sessionStep?.backend ?? run.runner ?? 'claude') ? resumeCommand(cliRunner, sessionId) : null;
+  const resume = sessionId && cliRunner === session?.backend ? resumeCommand(cliRunner, sessionId) : null;
   // A resume uses the session account; a fresh CLI uses the project's account.
   const account = resume
-    ? { command: resume, ...await handoffEnv(cliRunner, sessionStep?.profileId) }
+    ? { command: resume, ...await handoffEnv(cliRunner, session?.profileId) }
     : await freshCliHandoff(cliRunner, repoRoot, home);
   if ('error' in account) return c.json({ error: account.error }, 409);
   const { command } = account;

@@ -205,6 +205,24 @@ Autosave process attribution is observation, not OS containment: `autosave-holde
 `continuedSessionId` and `resumableSessionId` in `workflows/run/launch-read-resolver.ts` own
 which step a Continue continues and which session it resumes.
 `workflows/native-session-continue.test.ts` drives every runner through them.
+`continuationDefStep` in `delegation/execution-identity.ts` names the workflow step that the
+continued session's owner runs as: its skill, grants, model, effort and worker identity.
+`latestSessionStep` in the contract's `run-predicates.ts` names the latest session: the step with
+a session that started last. A Continue appends its step, so the array order is not time order.
+
+| State | Trigger | Who or what fires it | Behavior at shipped defaults |
+| --- | --- | --- | --- |
+| latest session owned by workflow step `implement` | Continue | the user, a parent, recovery | runs as `implement`; the synthetic `continue-N` records `continuesStepId: implement` |
+| latest session owned by `continue-N` with `continuesStepId: implement` (for example its process crashed) | Continue | the user, a parent, recovery | runs as `implement`, on a mixed-runner chain too (hearsay-tools/squawk#3024) |
+| latest session owned by a saved `continue-N` without `continuesStepId` | Continue | the user, a parent, recovery | runs as the chain's last agent step, as before; the new `continue-N` records no `continuesStepId` |
+| a `resume` cursor on failed step `implement` | Continue | the user, a parent, recovery | runs as `implement` and records it |
+| `continue-1` of `implement` called done, then `review` ran with its own session | Continue | the user, a parent, recovery | runs as `review`, whose session started last |
+| a `continue-N` with `continuesStepId: implement` | the Continue's done | the agent | the `workflowCursor` and the step statuses decide the next step, as before; `continuesStepId` sets no position, so a recovered failed attempt stays failed and the chain does not run again |
+
+Only `workflows/continuation-admission.ts` writes `continuesStepId`, once, when it admits the
+Continue (ADR 0064). It names the step a Continue runs as, never the workflow position.
+`delegation/provision-intent-catalog.test.ts`, `workflows/continuation-tools.test.ts` and
+`workflows/run/launch-read-resolver.test.ts` cover every row except the `resume`-cursor row.
 
 ### Governed delegation controls (D1)
 

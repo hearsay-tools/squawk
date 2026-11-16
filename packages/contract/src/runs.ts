@@ -95,6 +95,10 @@ export const stepStateSchema = z.object({
   costUsd: z.number().optional(),
   /** Explicit provenance for engine-generated continuation steps. */
   synthetic: z.literal('continuation').optional(),
+  /** On a `synthetic` continuation: the workflow step it continues, recorded once at admission
+   *  (ADR 0064). It names the step a later Continue of this session runs as, never the workflow
+   *  position. Absent on steps saved before it; those resolve to the chain's last agent step. */
+  continuesStepId: z.string().optional(),
 });
 export type StepState = z.infer<typeof stepStateSchema>;
 

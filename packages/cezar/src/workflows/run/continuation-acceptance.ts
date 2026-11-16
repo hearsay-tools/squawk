@@ -75,6 +75,7 @@ export class ContinuationAcceptance {
       historyDeletionPending: () => historyDeletionPending(this.context.store, runId),
       parentStatus: parentId => this.context.store.getRun(parentId)?.status,
       identity: (run, session) => this.host.workerStep(runId, atContinue.definitionId(atContinue.definitionStep(this.context.store, run, session))),
+      continuedStep: (run, session) => atContinue.continuedStep(this.context.store, run, session),
       beforeFinalStep: run => workflowPosition.waitingBeforeFinalWorkflowStep(run, (record, step) => this.host.isSyntheticContinuation(record, step), record => this.waitingWorkflowStepIndex(record)),
       waitingStepIndex: run => this.waitingWorkflowStepIndex(run),
       pendingFallback: () => this.workerQuestions.pendingWorkerFallback(runId),
@@ -134,7 +135,7 @@ export class ContinuationAcceptance {
     this.autoResumeScheduler.clearAutoResume(runId);
     if (!deferForCapacity) this.host.clearWakeBackoff(runId);
     const failure = continuation.previousFailure(run);
-    const continuationStep = continuation.nextStep(run);
+    const continuationStep = continuation.nextStep(run, admitted.continuedStep);
     const stepId = continuationStep.id;
     if (run.delegation?.role !== 'worker') this.context.store.addStep(runId, continuationStep);
     const recovered = deferForCapacity && !conversation && !opts.answerInputId ? atContinue.checkpoint(run) : undefined;

@@ -247,6 +247,133 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
     expect(continued).toMatchObject({ model: 'gpt-5.1-codex', toolGrant: { kind: 'inherited', tools: ['Read'] } });
     expect(continued.env?.CODEX_HOME).toBe(codexHome);
   }, 60_000);
+  // hearsay-tools/squawk#3024: the fresh Codex session of that Continue belongs to the synthetic
+  // `continue-1`. When its process ends, the next Continue still runs as `implement`, under its
+  // pinned Codex identity, not as the chain's last agent step `review` on Claude.
+  it('continues a crashed synthetic continuation of a mixed chain\'s codex step as that step', async () => {
+    const codexHome = join(f.root, 'codex-account'); mkdirSync(codexHome); vi.stubEnv('CODEX_HOME', codexHome);
+    writeFileSync(join(codexHome, 'config.toml'), 'model = "gpt-5.1-codex"');
+    const dir = join(f.root, '.ai/cezar/workflows'); mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'mixed.yaml'), ['name: mixed', 'steps:',
+      '  - id: implement', '    prompt: "Implement: {{task}}"', '    runner: codex', '    allowedTools: [Read]',
+      '  - id: review', '    prompt: "Review: {{task}}"', '    runner: claude'].join('\n'));
+    const a = await acceptIdentityWorker(undefined, undefined, { workflow: 'mixed' });
+    const workerId = a.child.workerId;
+    await launchAccepted(a, 'queued'); await until(() => sessions.length === 2);
+    sessions[1]!.finish();
+    expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
+    expect(f.manager.continueRun(workerId, { text: 'again' })).toEqual({ ok: true });
+    await until(() => sessions.length === 3);
+    sessions[2]!.emit({ type: 'session', sessionId: 'continue-thread' });
+    await until(() => f.store.getRun(workerId)?.steps.find(step => step.id === 'continue-1')?.sessionId === 'continue-thread');
+    expect(f.store.getRun(workerId)?.steps.find(step => step.id === 'continue-1')).toMatchObject({ synthetic: 'continuation', continuesStepId: 'implement' });
+    // continue-1's process ends before `review` starts. The next Continue resumes its session.
+    sessions[2]!.finish();
+    expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
+    expect(f.manager.continueRun(workerId, { text: 'again' })).toEqual({ ok: true });
+    await until(() => sessions.length === 4 || f.store.getRun(workerId)?.status === 'failed');
+    expect(f.store.getRun(workerId)?.error).toBeUndefined();
+    const continued = sessions[3]!.spec;
+    expect(continued).toMatchObject({ resume: true, sessionId: 'continue-thread', model: 'gpt-5.1-codex', toolGrant: { kind: 'inherited', tools: ['Read'] } });
+    expect(continued.effort).toBeUndefined();
+    expect(continued.env?.CODEX_HOME).toBe(codexHome);
+    expect(continued.env?.CLAUDE_CONFIG_DIR).not.toBe(a.home);
+    expect(f.store.getRun(workerId)?.steps.find(step => step.id === 'continue-2')).toMatchObject({ synthetic: 'continuation', continuesStepId: 'implement' });
+  }, 60_000);
+  // Review round 1 of hearsay-tools/squawk#3024: `review` ran after `continue-1`, which the record
+  // lists after it. The latest session is review's, so the next Continue runs as `review`.
+  it('continues a mixed chain as review after a continuation of implement advanced it', async () => {
+    const codexHome = join(f.root, 'codex-account'); mkdirSync(codexHome); vi.stubEnv('CODEX_HOME', codexHome);
+    writeFileSync(join(codexHome, 'config.toml'), 'model = "gpt-5.1-codex"');
+    const dir = join(f.root, '.ai/cezar/workflows'); mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'mixed.yaml'), ['name: mixed', 'steps:',
+      '  - id: implement', '    prompt: "Implement: {{task}}"', '    runner: codex', '    allowedTools: [Read]',
+      '  - id: review', '    prompt: "Review: {{task}}"', '    runner: claude'].join('\n'));
+    const a = await acceptIdentityWorker(undefined, undefined, { workflow: 'mixed' });
+    const workerId = a.child.workerId;
+    await launchAccepted(a, 'queued'); await until(() => sessions.length === 2);
+    sessions[1]!.finish();
+    expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
+    expect(f.manager.continueRun(workerId, { text: 'again' })).toEqual({ ok: true });
+    await until(() => sessions.length === 3);
+    sessions[2]!.emit({ type: 'session', sessionId: 'continue-thread' });
+    await until(() => f.store.getRun(workerId)?.steps.find(step => step.id === 'continue-1')?.sessionId === 'continue-thread');
+    doneTurn(sessions[2]!, 'implemented');
+    await until(() => sessions.length === 4);
+    expect(sessions[3]!.spec.userPrompt).toContain('Review: child');
+    sessions[3]!.emit({ type: 'session', sessionId: 'review-session' });
+    await until(() => f.store.getRun(workerId)?.steps.find(step => step.id === 'review')?.sessionId === 'review-session');
+    sessions[3]!.finish('reviewed');
+    expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
+    expect(f.store.getRun(workerId)?.steps.map(step => step.id)).toEqual(['implement', 'review', 'continue-1']);
+    expect(f.manager.continueRun(workerId, { text: 'again' })).toEqual({ ok: true });
+    await until(() => sessions.length === 5 || f.store.getRun(workerId)?.status === 'failed');
+    expect(f.store.getRun(workerId)?.error).toBeUndefined();
+    expect(sessions[4]!.spec).toMatchObject({ model: 'haiku', effort: 'high', resume: true, sessionId: 'review-session' });
+    expect(sessions[4]!.spec.env?.CLAUDE_CONFIG_DIR).toBe(a.home);
+    expect(sessions[4]!.spec.env?.CODEX_HOME).not.toBe(codexHome);
+    expect(f.store.getRun(workerId)?.steps.find(step => step.id === 'continue-2')).toMatchObject({ continuesStepId: 'review' });
+  }, 60_000);
+  // Review round 1 of hearsay-tools/squawk#3024: a Continue recovered a failed `implement` through its
+  // `resume` cursor, which keeps that attempt failed, and the chain went on to `verify`. A later
+  // Continue of that session must not run `verify` again.
+  it('does not run the rest of a chain again after a continuation of a recovered failed step', async () => {
+    const dir = join(f.root, '.ai/cezar/workflows'); mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'checked.yaml'), ['name: checked', 'steps:',
+      '  - id: implement', '    prompt: "Implement: {{task}}"', '  - id: verify', '    command: "true"'].join('\n'));
+    const a = await acceptIdentityWorker(undefined, undefined, { workflow: 'checked' });
+    const workerId = a.child.workerId;
+    await launchAccepted(a, 'queued'); await until(() => sessions.length === 2);
+    sessions[1]!.emit({ type: 'session', sessionId: 'implement-session' });
+    await until(() => f.store.getRun(workerId)?.steps.find(step => step.id === 'implement')?.sessionId === 'implement-session');
+    doneTurn(sessions[1]!, 'implemented');
+    expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
+    const verifyStarts = () => f.store.readEvents(workerId).filter(event => event.type === 'step-start' && event.stepId === 'verify').length;
+    expect(verifyStarts()).toBe(1);
+    // What that recovery leaves: the failed attempt, and the done `continue-1` that resumed its
+    // session and recorded it, between `implement` and `verify`.
+    const implement = f.store.getRun(workerId)!.steps.find(step => step.id === 'implement')!;
+    f.store.updateStep(workerId, 'implement', { status: STEP_STATUS.failed, error: 'boom' });
+    f.store.addStep(workerId, { id: 'continue-1', name: 'Continue', kind: STEP_KIND.agent, synthetic: 'continuation', continuesStepId: 'implement' });
+    f.store.updateStep(workerId, 'continue-1', { status: STEP_STATUS.done, iterations: 1, startedAt: implement.startedAt, sessionId: 'implement-session', backend: 'claude', profileId: implement.profileId });
+    expect(f.manager.continueRun(workerId, { text: 'again' })).toEqual({ ok: true });
+    await until(() => sessions.length === 3);
+    expect(sessions[2]!.spec).toMatchObject({ resume: true, sessionId: 'implement-session' });
+    doneTurn(sessions[2]!, 'answered');
+    await until(() => verifyStarts() > 1 || (!f.manager.isActive(workerId) && ['done', 'review', 'failed'].includes(f.store.getRun(workerId)?.status ?? '')));
+    expect(verifyStarts()).toBe(1);
+    expect(f.store.getRun(workerId)?.error).toBeUndefined();
+  }, 60_000);
+  // Review round 2 of hearsay-tools/squawk#3024: `continuesStepId` names the step a Continue runs
+  // as, never the workflow position. A Continue after a recovered failed final step leaves that
+  // attempt failed and starts nothing.
+  it('leaves a recovered failed final step failed after a later continuation of it', async () => {
+    const dir = join(f.root, '.ai/cezar/workflows'); mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'single.yaml'), ['name: single', 'steps:', '  - id: implement', '    prompt: "Implement: {{task}}"'].join('\n'));
+    const a = await acceptIdentityWorker(undefined, undefined, { workflow: 'single' });
+    const workerId = a.child.workerId;
+    await launchAccepted(a, 'queued'); await until(() => sessions.length === 2);
+    sessions[1]!.emit({ type: 'session', sessionId: 'implement-session' });
+    await until(() => f.store.getRun(workerId)?.steps.find(step => step.id === 'implement')?.sessionId === 'implement-session');
+    doneTurn(sessions[1]!, 'implemented');
+    expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
+    // What the recovery leaves: the failed attempt, and the done `continue-1` that resumed its
+    // session through the `resume` cursor and recorded it.
+    const implement = f.store.getRun(workerId)!.steps.find(step => step.id === 'implement')!;
+    const failedAt = '2026-11-16T00:00:00.000Z';
+    f.store.updateStep(workerId, 'implement', { status: STEP_STATUS.failed, error: 'boom', finishedAt: failedAt });
+    f.store.addStep(workerId, { id: 'continue-1', name: 'Continue', kind: STEP_KIND.agent, synthetic: 'continuation', continuesStepId: 'implement' });
+    f.store.updateStep(workerId, 'continue-1', { status: STEP_STATUS.done, iterations: 1, startedAt: implement.startedAt, sessionId: 'implement-session', backend: 'claude', profileId: implement.profileId });
+    const implementStarts = () => f.store.readEvents(workerId).filter(event => event.type === 'step-start' && event.stepId === 'implement').length;
+    expect(f.manager.continueRun(workerId, { text: 'again' })).toEqual({ ok: true });
+    await until(() => sessions.length === 3);
+    expect(sessions[2]!.spec).toMatchObject({ resume: true, sessionId: 'implement-session' });
+    doneTurn(sessions[2]!, 'answered');
+    expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
+    expect(f.store.getRun(workerId)?.error).toBeUndefined();
+    expect(f.store.getRun(workerId)?.steps.find(step => step.id === 'implement')).toMatchObject({ status: STEP_STATUS.failed, error: 'boom', finishedAt: failedAt });
+    expect(implementStarts()).toBe(1);
+  }, 60_000);
   it('launches a later step under its own account even after the first step\'s account home is gone (#465 review)', async () => {
     const codexHome = join(f.root, 'codex-account'); mkdirSync(codexHome); vi.stubEnv('CODEX_HOME', codexHome);
     const dir = join(f.root, '.ai/cezar/workflows'); mkdirSync(dir, { recursive: true });

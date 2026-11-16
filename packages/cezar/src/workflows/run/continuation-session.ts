@@ -288,9 +288,10 @@ export class ContinuationSession {
     // (MCP servers, subagents) on Continue, restart recovery and the usage-limit auto-resume
     // — and dropping `bashAllowlist` WIDENED Bash from an allowlist to unrestricted
     // (`AgentRunSpec.toolGrant`, #430). Record steps share ids with `workflowDef.steps`;
-    // a synthetic `continue-N` that owns its session extends the run's tail, so it resolves
-    // from the definition's last agent step. A legacy record without `workflowDef` (#367), or
-    // a session no step owns, keeps today's defaults.
+    // a synthetic `continue-N` that owns its session resolves to the step it recorded at
+    // admission (`continuesStepId`), and one saved without it to the definition's last agent
+    // step. A legacy record without `workflowDef` (#367), or a session no step owns, keeps
+    // today's defaults.
     const toolGrant = atContinue.toolGrant(stepIdentity, toolsStep, backend);
     const model = await continuationModel(this.context.store, this.context.repoRoot, runId, state, record, toolsStep, stepIdentity, backend, this.context.home);
     if (typeof model === 'string') { this.failContinuationBeforeSpawn(runId, stepId, sink, model); return undefined; }
