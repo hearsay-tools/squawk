@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { homeRecoveryReaderSchema, type HomeFile, type HomeRecovery, type HomeRecoveryAction } from '@open-mercato/cezar-api-client/contract/home-recovery'
 import type { HealthResponse } from '@open-mercato/cezar-api-client'
 import { ApiError, cez, init, unwrap, type ReadOptions } from './client'
+import { fetchAsConsumer } from './fetch-as-consumer'
 import { onLiveReconcile } from './live-coordinator'
 import { pageIsActive, subscribePageActivity, usePageActive } from './live-visibility'
 import { queryKeys, workspaceQueryKeys } from './queries'
@@ -37,9 +38,9 @@ export function useHomeRecoverySubscription(): void {
     let releaseTopic: (() => void) | undefined
     const refresh = async (signal?: AbortSignal) => {
       if (!pageIsActive()) return
-      await client.fetchQuery({ queryKey: HOME_RECOVERY_QUERY_KEY,
-        queryFn: ({ signal: querySignal }) => getHomeRecovery({ signal: AbortSignal.any(
-          [querySignal, lifetime.signal, ...(signal ? [signal] : [])]) }), staleTime: 0, retry: false })
+      // Readers share this request: a caller that stops waiting ends only its own consumption.
+      await fetchAsConsumer(client, { queryKey: HOME_RECOVERY_QUERY_KEY, queryFn: ({ signal: own }) => getHomeRecovery({ signal: own }), staleTime: 0 },
+        signal ? AbortSignal.any([lifetime.signal, signal]) : lifetime.signal)
     }
     const fold = (value: unknown) => {
       let snapshot: HomeRecovery
