@@ -30,7 +30,15 @@ export const ROW_FAMILIES = {
   entries: { completion: ['U6'], timer: ['U11'], refusals: ['U20', 'U20u'], 'no-wait': ['U5', 'accepted'] },
 } as const satisfies Partial<Record<WaitParityPart, Record<string, readonly string[]>>>;
 export type FamilyPart = keyof typeof ROW_FAMILIES;
-type RowFamily = { [P in FamilyPart]: keyof typeof ROW_FAMILIES[P] }[FamilyPart];
+export type RowFamily = { [P in FamilyPart]: keyof typeof ROW_FAMILIES[P] }[FamilyPart];
+
+/** The parts whose rows a runner that is not folded runs from one file per row family: the
+ *  claude closed part in one file reached CI's per-file cap (hearsay-tools/squawk#3683). */
+export const FAMILY_FILE_PARTS: readonly FamilyPart[] = ['closed'];
+/** The row families of a part that runs one file per family, or none for a part with one file. */
+export const fileFamilies = (part: WaitParityPart): readonly RowFamily[] =>
+  (FAMILY_FILE_PARTS as readonly WaitParityPart[]).includes(part) ? Object.keys(ROW_FAMILIES[part as FamilyPart]) as RowFamily[] : [];
+export const waitFamilyFile = (runner: RunnerId, part: WaitParityPart, family: RowFamily): string => `waits-${runner}-${part}-${family}-parity.test.ts`;
 
 /**
  * A runner other than the scenario runner runs only the rows that run on every runner, a few per
@@ -62,7 +70,7 @@ export const foldedWaitFile = (runner: RunnerId, fold: WaitFold): string => `wai
 export const folded = (runner: RunnerId): boolean => FOLDED_WAIT_RUNNERS.includes(runner);
 /** The module of each fold's parts. A folded runner's file imports the one of its fold. */
 export const waitFoldModule = (fold: WaitFold): string => `waits-parity-${fold}-fold.testkit.ts`;
-export type WaitPartScope = { runner: RunnerId; part: WaitParityPart };
+export type WaitPartScope = { runner: RunnerId; part: WaitParityPart; family?: RowFamily };
 export type WaitFoldScope = { runner: RunnerId; part: 'every-runner'; fold: WaitFold };
 
 /** Register a folded runner's cells of one group, each row only where its class runs it. */
@@ -82,7 +90,7 @@ export function foldCells(runner: RunnerId, fold: WaitFold, cells: Partial<Recor
   }
 }
 
-function rowFamily(part: FamilyPart, title: string): RowFamily {
+export function rowFamily(part: FamilyPart, title: string): RowFamily {
   const criterion = title.split(' ')[part === 'entries' ? 2 : 1]!;
   const families: Record<string, readonly string[]> = ROW_FAMILIES[part];
   const family = Object.keys(families).find(name => families[name]!.includes(criterion));
