@@ -53,7 +53,8 @@ import { createActivityRoutes, type ActivityServerDeps } from './activity-routes
 import type { Home } from '../home/home.ts';
 import { createWorkspaceProjects, createWorkspaceProjectContexts, createTaskWebhooks, type WorkspaceProjects } from './workspace-projects.ts';
 import { subscribeRunFeed } from './run-event-feed.ts';
-import { latestSessionStep, type ApiRun, type ArchivedRunsResponse, type RunSummary, type RunsSearchResponse } from '@open-mercato/cezar-contract';
+import type { ApiRun, ArchivedRunsResponse, RunSummary, RunsSearchResponse } from '@open-mercato/cezar-contract';
+import { latestSession } from '@open-mercato/cezar-contract/run-predicates';
 import { ARCHIVED_RUNS_PAGE_DEFAULT } from '@open-mercato/cezar-contract/run-limits';
 import { RUNS_SEARCH_PER_PROJECT_MAX, archivedRunsQuerySchema, createRunInputSchema, runSummariesQuerySchema, runsSearchQuerySchema } from '@open-mercato/cezar-contract/runs';
 import { workspaceEventsQuerySchema, type RunsIndexResponse } from '@open-mercato/cezar-contract/workspace-events';
@@ -2969,9 +2970,7 @@ export function createApp(deps: ServerDeps) {
   // nothing. The stored record itself is never touched.
   const withUsage = (run: RunRecord, finishBlocked?: string | null): ApiRun => {
     const usage = currentUsage(run.id);
-    const sessionStep = latestSessionStep(run.steps);
-    const sessionId = sessionStep?.sessionId;
-    const backend = sessionStep?.backend ?? run.runner ?? 'claude';
+    const { sessionId, backend } = latestSession(run);
     const command = sessionId ? resumeCommand(backend, sessionId) : null;
     return { ...run, ...(usage ? { usage } : {}), ...(command ? { cliResumeCommand: command } : {}),
       ...(finishBlocked !== undefined ? { finishBlocked } : {}) };
@@ -3475,10 +3474,8 @@ export function createApp(deps: ServerDeps) {
       const project = c.get('project');
       const checkout = openHandoffCheckout(c, '; resume the session from a machine that has the checkout');
       if ('status' in checkout) return c.json(checkout.body, checkout.status);
-      const sessionStep = latestSessionStep(checkout.run.steps);
-      const sessionId = sessionStep?.sessionId;
+      const { sessionId, backend, profileId } = latestSession(checkout.run);
       if (!sessionId) return c.json({ error: 'no agent session to resume' }, 409);
-      const backend = sessionStep?.backend ?? checkout.run.runner ?? 'claude';
       const blocked = await providerActionError([backend]);
       if (blocked) return c.json({ error: blocked }, 409);
       const cwd = checkout.directory();
@@ -3488,7 +3485,7 @@ export function createApp(deps: ServerDeps) {
       // Fails closed on an id we do not recognise — see resumeCommand (open-mercato/cezar#431).
       if (resume === null) return c.json({ error: 'the recorded session id has an unexpected shape' }, 409);
       const account = resume
-        ? { command: resume, ...await handoffEnv(backend, sessionStep?.profileId) }
+        ? { command: resume, ...await handoffEnv(backend, profileId) }
         : await freshCliHandoff(backend, project.root, deps.home);
       if ('error' in account) return c.json({ error: account.error }, 409);
       const { command } = account;

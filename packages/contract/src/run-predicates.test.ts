@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveAttention } from './attention.ts';
-import { engineOwnsRun, isSessionOpen, isSweepable, latestSessionStep } from './run-predicates.ts';
+import { engineOwnsRun, isSessionOpen, isSweepable, latestSession, latestSessionStep } from './run-predicates.ts';
 import { runStatusSchema } from './run-status.ts';
 import type { ArchiveFinishedScope, RunStatus } from './runs.ts';
 import { computeWaitingOn, isUsageLimitHold } from './waits.ts';
@@ -132,5 +132,14 @@ describe('latestSessionStep', () => {
   it('keeps array order for steps saved without a start time, and skips steps with no session', () => {
     expect(latestSessionStep([step('a', 's1'), step('b', 's2'), step('c')])?.id).toBe('b');
     expect(latestSessionStep([step('c')])).toBeUndefined();
+  });
+});
+
+describe('latestSession', () => {
+  it('pairs the latest session with its runner and account, else the run runner, else Claude', () => {
+    const steps = [{ id: 'implement', sessionId: 'a', startedAt: '2026-11-16T00:00:01Z', backend: 'codex' as const, profileId: 'work' }];
+    expect(latestSession({ steps, runner: 'claude' })).toEqual({ sessionId: 'a', backend: 'codex', profileId: 'work' });
+    expect(latestSession({ steps: [{ id: 'x', sessionId: 'b' }], runner: 'pi' })).toEqual({ sessionId: 'b', backend: 'pi', profileId: undefined });
+    expect(latestSession({ steps: [] })).toEqual({ sessionId: undefined, backend: 'claude', profileId: undefined });
   });
 });

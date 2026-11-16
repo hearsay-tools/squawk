@@ -24,6 +24,13 @@ export function latestSessionStep<S extends Pick<StepState, 'id' | 'sessionId' |
   return latest;
 }
 
+/** The latest session's id, the runner that owns it and the account it was opened under. A step
+ *  saved before backend affinity belongs to the run's runner, and a run with none to Claude. */
+export function latestSession(run: { steps: readonly Pick<StepState, 'id' | 'sessionId' | 'startedAt' | 'backend' | 'profileId'>[]; runner?: RunRecord['runner'] }): { sessionId: string | undefined; backend: NonNullable<RunRecord['runner']>; profileId: string | undefined } {
+  const step = latestSessionStep(run.steps);
+  return { sessionId: step?.sessionId, backend: step?.backend ?? run.runner ?? 'claude', profileId: step?.profileId };
+}
+
 const LIVE_STATUSES: ReadonlySet<string> = new Set(['queued', 'running', 'waiting']);
 
 /** Status-only live predicate: queued, running or waiting. */
