@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { AgentInput, Wait } from '@open-mercato/cezar-contract';
 import { agentInputSchema, workerOutcomeSchema } from '@open-mercato/cezar-contract/delegation';
-import { makePeerWait, makePrWait, makeProcessWait, makeRunRecord, makeSubagentWait, makeTimerWait, makeWorkerRequestWait, makeWorkerWait, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeHumanWait, makePeerWait, makePrWait, makeProcessWait, makeRunEvent, makeRunRecord, makeSubagentWait, makeTimerWait, makeWorkerRequestWait, makeWorkerWait, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentSession } from '../../core/agent-runner.ts';
 import { createActiveRun } from '../active-run.ts';
-import { owedAtDone, reconsideredBy } from './done-accepted.ts';
+import { acceptedDoneDelivery, owedAtDone, reconsideredBy } from './done-accepted.ts';
+import { acceptedDoneHolds } from './turn-settler.ts';
 import { InputFlight } from './input-delivery.ts';
 
 const resolved = <W extends Wait>(wait: W): W => ({ ...wait, phase: WAIT_PHASE.resolved, resolvedAt: new Date().toISOString() });
@@ -75,8 +76,25 @@ describe('input owed at cezar_done (hearsay-tools/squawk#2587)', () => {
     expect(owedAtDone(run, state)).toEqual([
       { kind: 'wait_result', wait_id: result.id, wait_kind: 'pr' },
       { kind: 'in_flight', input_id: steered.id },
+      { kind: 'unread', input_id: unread.id },
       { kind: 'queued', input_id: queued.id, source: 'peer' },
     ]);
+  });
+
+  // B1: an acknowledgement is not a read (core/opencode-steering.test.ts): an instruction the
+  // harness accepted and the model has not read is owed, in memory and on the saved row.
+  it('owes delivered input the model has not read, also when only the saved row says so', () => {
+    const unread = input({ deliveredAt: new Date().toISOString(), awaitingRead: true });
+    expect(owedAtDone(makeRunRecord({ agentInputs: [unread] }), live('observable'))).toEqual([{ kind: 'unread', input_id: unread.id }]);
+  });
+
+  // D1: a result the harness reported read before its acknowledgement is not owed again.
+  it('owes no wait result whose delivery the harness already reported read', () => {
+    const result = resolved(makeTimerWait());
+    const state = live('observable');
+    state.inputState.attachFlight(new InputFlight(session, [result.id]));
+    state.inputState.recordEarlyConsumption(result.id);
+    expect(owedAtDone(makeRunRecord({ waits: [result], agentInputs: [input({ id: result.id, source: agentInputSchema.shape.source.enum.lifecycle })] }), state)).toEqual([]);
   });
 
   it('owes nothing for the flight that opened the turn on a harness that cannot report reads', () => {
@@ -84,5 +102,57 @@ describe('input owed at cezar_done (hearsay-tools/squawk#2587)', () => {
     const state = live('unobservable');
     state.inputState.attachFlight(new InputFlight(session, [opened.id]));
     expect(owedAtDone(makeRunRecord({ agentInputs: [opened] }), state)).toEqual([]);
+  });
+});
+
+describe('whether an accepted done still holds at the turn end (hearsay-tools/squawk#2587)', () => {
+  const at = '2026-11-16T10:00:00.000Z', before = '2026-11-16T09:59:59.000Z', after = '2026-11-16T10:00:01.000Z';
+  const done = { session: 'generation', at, seq: 10 };
+  const holds = (over: Partial<Parameters<typeof makeRunRecord>[0]> = {}, events = [makeRunEvent({ type: 'user-message', seq: 9 })], turn = {}) =>
+    acceptedDoneHolds(makeRunRecord({ doneAccepted: done, ...over }), events, turn);
+  const kept = { holds: true };
+  const withdrawn = (reason: string) => ({ holds: false, reason });
+
+  it.each<[string, Partial<Parameters<typeof makeRunRecord>[0]>, { holds: boolean; reason?: string }]>([
+    ['nothing after the done keeps it', {}, kept],
+    ['a progress note after the done keeps it', { agentInputs: [input({ createdAt: after, conversation: conversation('progress', 'peer') })] }, kept],
+    // B2: a peer follow-up the message inbox acknowledged.
+    ['a peer follow-up read through the inbox withdraws it', { agentInputs: [input({ createdAt: after, deliveredAt: after, conversation: conversation('follow-up', 'peer') })] }, withdrawn('a new peer request')],
+    // B3: the opening input of a continuation that resumes a stopped worker.
+    ['an agent request that opens a continuation withdraws it', { agentInputs: [input({ createdAt: after, conversation: conversation('request') })] }, withdrawn('a new agent request')],
+    ['the parent\'s steer withdraws it', { agentInputs: [input({ createdAt: after })] }, withdrawn('a new instruction from the parent')],
+    ['an instruction from before the done keeps it', { agentInputs: [input({ createdAt: before, deliveredAt: before, consumedAt: before })] }, kept],
+    // B4: a peer wait from `hsq message wait --peer`, outside the tool.
+    ['a peer wait registered through the CLI withdraws it', { waits: [makePeerWait({ registeredAt: after, via: WAIT_VIA['cez-message-wait'] })] }, withdrawn('the agent registered a wait')],
+    // D2: a replayed registration registers nothing new.
+    ['a wait registered before the done keeps it', { waits: [makeTimerWait({ registeredAt: before })] }, kept],
+    ['the completion wait keeps it', { waits: [makeWorkerWait({ registeredAt: after, source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion })] }, kept],
+    ['a question asked after the done withdraws it', { waits: [makeHumanWait({ registeredAt: after })] }, withdrawn('the agent asked the user')],
+    ['a failed result after the done withdraws it', { waits: [resolved({ ...makePrWait({ registeredAt: before }), resolvedAt: after, result: { outcome: 'failed', headSha: 'a'.repeat(40), observedAt: after, checks: [], totalChecks: 1, truncated: false } })] }, withdrawn('a failed pr wait result')],
+    ['a passed result after the done keeps it', { waits: [resolved({ ...makePrWait({ registeredAt: before }), resolvedAt: after, result: { outcome: 'passed', headSha: 'a'.repeat(40), observedAt: after, checks: [], totalChecks: 1, truncated: false } })] }, kept],
+  ])('%s', (_name, over, expected) => {
+    expect(holds(over)).toEqual(expected);
+  });
+
+  it('a human message recorded after the done withdraws it; one before keeps it', () => {
+    expect(holds({}, [makeRunEvent({ type: 'user-message', seq: 11 })])).toEqual(withdrawn('a new human message'));
+    expect(holds({}, [makeRunEvent({ type: 'user-message', seq: 10 })])).toEqual(kept);
+  });
+
+  // A ScheduleWakeup in the turn that accepted the done loses to it (run-schedule-wakeup.test.ts);
+  // one in a later turn is a wait the agent registers after it.
+  it('a ScheduleWakeup in a later turn or a native question withdraws it', () => {
+    expect(holds({}, [makeRunEvent({ type: 'turn.started', seq: 11 })], { scheduledWake: true })).toEqual(withdrawn('the agent scheduled a wake-up'));
+    expect(holds({}, [makeRunEvent({ type: 'turn.started', seq: 8 })], { scheduledWake: true })).toEqual(kept);
+    expect(holds({}, [], { nativeAsk: true })).toEqual(withdrawn('the agent asked the user'));
+  });
+
+  // B5: the done's free delivery turn is granted once; later deliveries charge as wakes do.
+  it('grants one free delivery turn per accepted done', () => {
+    const result = resolved(makeTimerWait({ registeredAt: before }));
+    const run = makeRunRecord({ doneAccepted: done, waits: [result] });
+    expect(acceptedDoneDelivery(run, [], [result.id])).toBe('free');
+    expect(acceptedDoneDelivery({ ...run, doneAccepted: { ...done, freeTurn: true } }, [], [result.id])).toBe('kept');
+    expect(acceptedDoneDelivery(makeRunRecord({ waits: [result] }), [], [result.id])).toBeUndefined();
   });
 });

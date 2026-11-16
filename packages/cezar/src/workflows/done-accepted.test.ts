@@ -86,6 +86,18 @@ describeWaitCells(() => {
     expect(closings(run.id)).toEqual([]);
   });
 
+  // D2: a registration the tool replays (the same operation_id) registers nothing new.
+  it('a replayed wait registration after an accepted done keeps the done, and the run finishes', async () => {
+    const run = await quietRun();
+    const register = toolCall('cezar_wait', { kind: WAIT_KIND.timer, seconds: 600, note: 'd2', operation_id: randomUUID() });
+    const timer = () => store.getRun(run.id)?.waits?.find(wait => wait.kind === WAIT_KIND.timer);
+    await parentTurn(run.id, register, () => timer()?.phase === WAIT_PHASE.open);
+    expect(manager.sendMessage(run.id, [{ type: 'text', text: `${toolCall('cezar_done', {})} ${register}` }])).toBe(true);
+    await until(() => finished(run.id), () => timeline(run.id));
+    expect(withdrawn(run.id)).toEqual([]);
+    expect(closings(run.id)).toEqual([expect.objectContaining({ via: 'cezar_done' })]);
+  });
+
   it('a done committed before a restart finishes the run at the next turn end with no new wait or ask', async () => {
     const external = github();
     const run = await waitingOnPr();
