@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { canonicalLang, highlight, highlightSync, isPlainLang, supportedLanguages } from './highlighter'
+import { canonicalLang, highlight, highlightSync, isPlainLang, langForPath, supportedLanguages } from './highlighter'
 
 /**
  * The Shiki singleton, exercised for real: the JS regex engine is pure JS, so jsdom runs the
@@ -30,6 +30,13 @@ describe('highlighter singleton', () => {
     expect(isPlainLang('')).toBe(true)
     expect(isPlainLang('plaintext')).toBe(true)
     expect(isPlainLang('ts')).toBe(false)
+  })
+
+  it('answers null for a fence language or path extension that names an Object.prototype member (hearsay-tools/squawk#2890)', () => {
+    for (const name of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
+      expect(canonicalLang(name)).toBeNull()
+      expect(langForPath(`file.${name}`)).toBeNull()
+    }
   })
 
   it('answers unknown fence languages synchronously with plaintext — never a crash', () => {

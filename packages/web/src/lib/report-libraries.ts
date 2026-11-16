@@ -5,6 +5,7 @@
  * the libraries in `LIBRARIES`, `prepareReport` puts the cockpit's own pinned copy into the page
  * instead. The code is loaded lazily, only for a report that names the library.
  */
+
 export type ReportLibraryId = 'tailwind' | 'tailwind-v3' | 'mermaid'
 
 /** The library code `prepareReport` copies into the page, by id. A missing id stays blocked. */
@@ -73,6 +74,7 @@ export function installTailwindConfig(): void {
     lineHeight: 'leading', maxWidth: 'container', animation: 'animate', aspectRatio: 'aspect',
   }
   const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
+  const namespaceOf = (key: string): string | undefined => (Object.hasOwn(NAMESPACES, key) ? NAMESPACES[key] : undefined)
   const declare = (lines: string[], namespace: string, name: string, value: unknown): void => {
     if (isRecord(value)) {
       for (const [key, nested] of Object.entries(value)) declare(lines, namespace, key === 'DEFAULT' ? name : name ? `${name}-${key}` : key, nested)
@@ -99,11 +101,15 @@ export function installTailwindConfig(): void {
     const theme = isRecord(settings.theme) ? settings.theme : {}
     const lines: string[] = []
     for (const [key, value] of Object.entries(theme)) {
-      if (!NAMESPACES[key]) continue
-      lines.push(`--${NAMESPACES[key]}-*: initial;`)
-      declare(lines, NAMESPACES[key], '', value)
+      const namespace = namespaceOf(key)
+      if (!namespace) continue
+      lines.push(`--${namespace}-*: initial;`)
+      declare(lines, namespace, '', value)
     }
-    for (const [key, value] of Object.entries(isRecord(theme.extend) ? theme.extend : {})) if (NAMESPACES[key]) declare(lines, NAMESPACES[key], '', value)
+    for (const [key, value] of Object.entries(isRecord(theme.extend) ? theme.extend : {})) {
+      const namespace = namespaceOf(key)
+      if (namespace) declare(lines, namespace, '', value)
+    }
     return `${darkVariant(settings.darkMode)}@theme {\n${lines.join('\n')}\n}`
   }
   const sheet = document.createElement('style')
