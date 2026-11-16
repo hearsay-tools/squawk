@@ -27,9 +27,9 @@ it('locks the boundary slot, getter surface and prototype without freezing the r
   expect(() => replace(group, 'doneAtBoundary', wire)).toThrow(TypeError);
   expect(define(group, 'pendingHumanAsk', true)).toBe(false);
   expect(set(group, 'autonomous', false)).toBe(false);
-  transitionTurnBoundary(state, { kind: 'done-request', session: wire, summary: 'done' });
-  expect(group.doneRequested).toEqual({ session: wire, summary: 'done' });
-  expect(Object.isFrozen(group.doneRequested)).toBe(true);
+  transitionTurnBoundary(state, { kind: 'turn-end', phase: 'record-done', session: wire, done: true, request: { summary: 'done' }, keepClose: true });
+  expect(group.doneClose).toEqual({ via: 'cezar_done', summary: 'done' });
+  expect(Object.isFrozen(group.doneClose)).toBe(true);
   expect(Object.isFrozen(wire)).toBe(false);
   expect(state.boundary).toBe(group);
 });
@@ -41,7 +41,7 @@ it('retains independent immutable records and their session identities across la
   const ack = { session: wire, monitoring: true };
   transitionTurnBoundary(state, { kind: 'session-open', phase: 'scope-step', session: wire, next });
   transitionTurnBoundary(state, { kind: 'turn-end', phase: 'save-ack', session: wire, boundary: ack });
-  transitionTurnBoundary(state, { kind: 'turn-end', phase: 'record-done', session: wire, done: true, request: { session: wire, summary: 'kept' }, keepClose: true });
+  transitionTurnBoundary(state, { kind: 'turn-end', phase: 'record-done', session: wire, done: true, request: { summary: 'kept' }, keepClose: true });
   const group = state.boundary;
   const oldNext = group.nextStep;
   const oldAck = group.parkAfterAck;
@@ -65,7 +65,7 @@ it('keeps absent optional defaults and independent factory generations', () => {
   expect(a.boundary.pendingHumanAsk).toBe(true); expect(a.boundary.autonomous).toBe(true);
   expect(b.boundary.pendingHumanAsk).toBe(false); expect(b.boundary.autonomous).toBe(false);
   for (const value of [a.boundary.waitWakeTurn, a.boundary.noWaitNudgeReplyTimer, a.boundary.noWaitNudgeSawContent,
-    a.boundary.noWaitNudgeParked, a.boundary.doneAtBoundary, a.boundary.doneRequested, a.boundary.nextStep,
+    a.boundary.noWaitNudgeParked, a.boundary.doneAtBoundary, a.boundary.requestRefusedDone, a.boundary.nextStep,
     a.boundary.completedStepId, a.boundary.doneClose, a.boundary.parkAfterAck, a.boundary.atTurnBoundary,
     a.boundary.idleTimer, a.boundary.idleClosed, a.boundary.monitoringCapNoted, a.boundary.nudge,
     a.boundary.noWaitNudged, a.boundary.incomingRequestRefused, a.boundary.sentRequestRefused,

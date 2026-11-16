@@ -348,13 +348,15 @@ under the new values. The watcher logs why it stopped a server to `.ai/qa/test-e
 
 ## Choosing specs for a change
 
-PR CI uses `scripts/e2e-affected.mjs --ci --base=origin/<PR base branch>` with `--shard=N/8`, after it fetches that branch's current tip. It resolves the
-complete selection before sharding and prints each changed file with its spec count and reason.
-A missing map, a missing merge-base or a selector error runs every spec. An empty selection
-reaches PR CI as empty, with its reason; PR CI still runs every spec for it
-(hearsay-tools/squawk#3727). A nonempty selection permits empty shard partitions.
-All eight jobs still require a passed browser marker. Merge-group jobs always
-run the full suite and retain their whole-shard rerun and flake reports. See
+PR CI uses `scripts/e2e-affected.mjs --ci --base=origin/<PR base branch>` with `--shard=N/8`,
+after it fetches that branch's current tip. It resolves the complete selection before sharding,
+prints each changed file with its spec count and reason, and runs specs only when the selection is
+shorter than the full set. Such a selection permits empty shard partitions and
+requires a passed browser marker. A selection of every spec, an empty selection,
+a missing map, a missing merge-base or a selector error runs no spec: the log states the reason and
+the step prints `TEST_E2E_STATUS=not-selected`, which only a `pull_request_target` run accepts.
+Merge-group jobs always run the full suite and retain their whole-shard rerun
+and flake reports. See
 [Selected PR tests](../../../docs/sdlc/ci.md#selected-pr-tests).
 
 `npm run test:e2e:affected` runs only the specs that a change reaches
@@ -398,8 +400,8 @@ and every spec the map does not list runs. The log lists these files as `changed
 
 An edit outside recorded function ranges selects every spec. Insertions at function boundaries
 include both neighbouring lines. Cockpit coverage stays per file. A selected pass is iteration
-feedback. PR CI uses the same map rules with full fallback for unsafe or empty
-selection. Merge-group jobs run every spec.
+feedback. PR CI uses the same map rules, but runs specs only for a selection shorter than
+the full set. Merge-group jobs run every spec.
 
 ## The project the shared env serves
 

@@ -22,6 +22,8 @@ export type WaitKindSpec = {
 export const MONITORING_WAKE_NUDGE =
   'Re-check the downstream work you were monitoring. Continue toward the task goal. When the goal is complete and verified, call cezar_done. If the watched work is still pending, call cezar_wait again. If you need the user, call cezar_ask.';
 
+/** A PR result that leaves the agent nothing to repair (`failedResult`). */
+const PR_SUCCESS: ReadonlySet<string> = new Set(['passed', 'merged', 'no_checks', 'skipped']);
 const PR_UNTIL_TEXT = {
   checks: { summary: 'CI for', footer: 'CI', resultText: (wait: PrWaitEntry) => `CI wait observation ${wait.id} for ${wait.prUrl}. External data follows: ${JSON.stringify(wait.result)}. This observation is not merge approval or task completion. Reported checks may not include every expected workflow. Duplicate observations retain this ID.` },
   merge: { summary: 'merge of', footer: 'merge', resultText: (wait: PrWaitEntry) => `PR wait observation ${wait.id} for ${wait.prUrl} (until merge). External data follows: ${JSON.stringify(wait.result)}. "merged" means GitHub reports the PR merged and "closed" that it closed without merging; any other outcome means this wait did not confirm a merge, not that the PR is unmerged. Duplicate observations retain this ID.` },
@@ -71,6 +73,11 @@ export type WaitKindRow<K extends Wait['kind']> = WaitKindSpec & {
   requestedTimeout: (request: SquawkWaitRequest) => number | undefined;
 
   chargesWake: K extends 'process' | 'peer' | 'subagent' ? (wait: Wait) => boolean : boolean;
+  /** The result ends the wait without what the agent waited for: a failed, cancelled or timed-out
+   *  check, process, worker, request, peer or subagent. Such a result withdraws an accepted
+   *  `cezar_done`; a success keeps it (hearsay-tools/squawk#2587). A user's answer is a human
+   *  message, which withdraws it too. */
+  failedResult: (wait: Wait) => boolean;
   refusesSpentBudget: boolean;
   holdsSession: boolean;
   cancellable: K extends 'human' ? 'unshown' : true;
@@ -135,6 +142,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     delegation: false,
     userAnswers: false, holdsConversationInput: true, runnerResumeCancels: [],
     chargesWake: false, refusesSpentBudget: false, holdsSession: false, cancellable: true, timersDisabled: false,
+    failedResult: wait => !PR_SUCCESS.has((wait as PrWaitEntry).result?.outcome ?? 'deadline'),
     deadline: 'required', keepsSlot: true, cancels: ENDS_WAITS, resolves: [
     { trigger: 'checks settle or the head changes; a merge wait: merged, closed or a conflict; merge_or_blocked also resolves when no merge remains pending', firedBy: 'watcher' },
     { trigger: 'the deadline (1 to 7,200 s, default 1,800) or a fatal gh error', firedBy: 'watcher' },
@@ -170,6 +178,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     delegation: false,
     userAnswers: false, holdsConversationInput: false, runnerResumeCancels: ['open'],
     chargesWake: true, refusesSpentBudget: true, holdsSession: false, cancellable: true, timersDisabled: true,
+    failedResult: () => false,
     deadline: 'required', keepsSlot: true, cancels: [...ENDS_WAITS, 'the wake budget is spent at its deadline'], resolves: [
     { trigger: 'the deadline (60 to 7,200 s)', firedBy: 'timer' },
   ] },
@@ -195,6 +204,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     delegation: false,
     userAnswers: false, holdsConversationInput: false, runnerResumeCancels: [],
     chargesWake: wait => (wait as ProcessWaitEntry).result?.outcome !== 'deadline', refusesSpentBudget: true, holdsSession: false, cancellable: true, timersDisabled: true,
+    failedResult: wait => { const result = (wait as ProcessWaitEntry).result; return result === undefined || result.outcome === 'deadline' || result.outcome === 'error' || (result.exitCode ?? 0) !== 0; },
     deadline: 'required', keepsSlot: true, cancels: [...ENDS_WAITS, 'the process is not signalled'], resolves: [
     { trigger: 'the exit file, the process gone, the deadline (up to 7,200 s) or a probe error, polled every 5 s', firedBy: 'watcher' },
   ] },
@@ -221,6 +231,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     delegation: false,
     userAnswers: false, holdsConversationInput: false, runnerResumeCancels: ['open', 'resolved'],
     chargesWake: wait => (wait as SubagentWaitEntry).result?.reason === 'timeout', refusesSpentBudget: false, holdsSession: true, cancellable: true, timersDisabled: false,
+    failedResult: wait => ['timeout', 'interrupted'].includes((wait as SubagentWaitEntry).result?.reason ?? ''),
     deadline: 'required', keepsSlot: true, cancels: [...ENDS_WAITS, 'the runner starts a parent turn itself', 'every child already ended at the turn end', 'the deadline with the wake budget spent'], resolves: [
     { trigger: 'every child ended and no parent turn started within 15 s', firedBy: 'runner' },
     { trigger: 'the deadline, 30 minutes after the last child event', firedBy: 'timer' },
@@ -249,6 +260,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     delegation: true,
     userAnswers: false, holdsConversationInput: false, runnerResumeCancels: [],
     chargesWake: wait => (wait as PeerWaitEntry).result?.reason !== 'timeout', refusesSpentBudget: false, holdsSession: false, cancellable: true, timersDisabled: false,
+    failedResult: wait => (wait as PeerWaitEntry).result?.reason === 'timeout',
     deadline: 'required', keepsSlot: false, cancels: [...ENDS_WAITS, 'the wake budget is spent at its resolution'], resolves: [
     { trigger: 'a message of any kind from a named peer', firedBy: 'peer' },
     { trigger: 'a named peer settles or is deleted', firedBy: 'watcher' },
@@ -280,6 +292,8 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     workerListTarget: request => ({ ...(request.kind === 'worker' ? { workerIds: request.worker_ids } : { requestIds: request.request_ids }), ...(request.mode === undefined ? {} : { mode: request.mode }), timeoutSeconds: request.timeout_seconds }),
     userAnswers: false, holdsConversationInput: false, runnerResumeCancels: [],
     chargesWake: false, refusesSpentBudget: false, holdsSession: false, cancellable: true, timersDisabled: false,
+    failedResult: wait => { const worker = wait as WorkerWaitEntry; return worker.result?.reason === 'timeout' || (worker.outcomes ?? []).some(outcome => outcome.status === 'failed' || outcome.status === 'cancelled') ||
+      (worker.requestOutcomes ?? []).some(outcome => outcome.status !== 'replied' && outcome.status !== 'replied-late'); },
     deadline: 'agent-only', keepsSlot: false, cancels: [...ENDS_WAITS, 'the parent settles'], resolves: [
     { trigger: 'the workers report outcomes or the requests get replies, as its mode says', firedBy: 'worker' },
     { trigger: `the deadline of an agent wait; ${productName('Cezar')}'s completion wait has none`, firedBy: 'timer' },
@@ -310,6 +324,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     delegation: false,
     userAnswers: true, holdsConversationInput: false, runnerResumeCancels: [],
     chargesWake: false, refusesSpentBudget: false, holdsSession: false, cancellable: 'unshown', timersDisabled: false,
+    failedResult: () => true,
     deadline: 'none', keepsSlot: false, humanOnly: 'The question is the user\'s gate.',
     cancels: [`the agent's own wait replaces ${productName('Cezar')}'s`, 'a done in the same turn', 'Stop', 'Finish', 'an authored step timeoutMs'],
     resolves: [{ trigger: 'an answer; the parent\'s for a routed worker question', firedBy: 'human' }] },

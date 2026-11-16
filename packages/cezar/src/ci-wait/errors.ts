@@ -171,6 +171,8 @@ const doneMessages: Record<Exclude<DoneErrorCode, 'workers_outstanding' | 'worke
   generation_mismatch: 'This tool belongs to an earlier session. Use the current session tool.',
   invalid_request: 'Invalid cezar_done arguments.',
   unavailable: `${productName('Cezar')} could not accept cezar_done now. Retry once; if it fails again, end your turn and say the task is complete.`,
+  // hearsay-tools/squawk#2587: `owed` lists what is still to be delivered.
+  input_pending: 'Input for you is still to be delivered: the results and messages in `owed`. End your turn to receive it, handle it, then call cezar_done again if the task is still complete.',
 };
 
 export function doneErrorMessage(code: keyof typeof doneMessages): string {

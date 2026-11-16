@@ -128,6 +128,8 @@ export const PARITY_FAMILIES = {
     U14m: 'the wake fails through Claude\'s own unread exit on Claude, and no failing opening turn may read the steered message; S44 holds neither',
     U14i: 'the idle close ends each runner\'s own session, and no runner may receive a message the scheduler did not admit',
     U22k: 'reads the U22s exemption', U22r: 'reads the U22s exemption and holds the acknowledgement on opencode only',
+    U6r: 'the wake after an accepted done reaches each runner\'s own turn path, which reports its turn end and its reads its own way (hearsay-tools/squawk#2587)',
+    U6p: 'input still owed at cezar_done is each runner\'s own: its acknowledgement and its read report decide what the turn already read (hearsay-tools/squawk#2587)',
   }),
   'waits-subagents': everyRunner('reads the nativeSubagents fact'),
   // CI, PR and worker waits.

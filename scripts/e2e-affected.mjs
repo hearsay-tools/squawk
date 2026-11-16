@@ -385,17 +385,14 @@ function minutes(root, specs) {
   return `, about ${Math.max(1, Math.round(total / 60_000))} min`;
 }
 
-function report(root, loaded, selection, specFiles) {
+function report(root, loaded, selection, specFiles, ci) {
   if (loaded.map) console.log(`${LOG} Spec map: ${loaded.file}, commit ${loaded.map.commit.slice(0, 8)}, built ${loaded.map.createdAt}.`);
   const count = specs => specs === null ? 'every spec' : `${specs.length} spec${specs.length === 1 ? '' : 's'}`;
   for (const { file, specs, reason } of selection.lines ?? []) console.log(`  ${file}: ${count(specs)} (${reason})`);
   for (const { file, specs, reason } of selection.drift ?? []) {
     console.log(`  ${file}, changed on main after the map: ${count(specs)} (${reason})`);
   }
-  if (selection.empty) {
-    console.log(`${LOG} Selected 0 of ${specFiles.length} specs: ${selection.reason}.`);
-    console.log(`${LOG} PR CI runs every spec for an empty selection (hearsay-tools/squawk#3727).`);
-  } else if (selection.all) console.log(`${LOG} ${selection.reason}. Every spec runs.`);
+  if (selection.all) console.log(`${LOG} ${selection.reason}. ${ci ? 'The selector chooses every spec' : 'Every spec runs'}.`);
   else for (const spec of selection.specs) console.log(`  → ${spec}`);
   const time = selection.specs.length > 0 ? minutes(root, selection.specs) : '';
   const why = selection.specs.length === 0 ? `: ${selection.reason}` : '';
@@ -427,13 +424,6 @@ function chooseSpecs(root, run, loaded, specFiles, base) {
   return selectSpecs({ files, map, graph: referenceGraph(root, specFiles), specFiles, changes: lineChanges(files, []), drift });
 }
 
-/** PR CI runs every spec for an empty selection until hearsay-tools/squawk#3727 decides otherwise. */
-function ciSelection(picked, specFiles) {
-  if (picked.files === null) return { ...picked, all: true, specs: specFiles };
-  if (picked.files.length === 0) return { ...picked, all: true, specs: specFiles, empty: true };
-  return { ...picked, all: false, specs: picked.files };
-}
-
 export function main(argv) {
   const options = parseOptions(argv);
   const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
@@ -445,14 +435,34 @@ export function main(argv) {
     if (options.map && loaded.error) throw new Error(loaded.error);
     return chooseSpecs(root, run, loaded, specFiles, options.base);
   };
-  const chosen = options.ci ? ciSelection(browserFiles(select), specFiles) : select();
-  report(root, loaded ?? {}, chosen, specFiles);
+  return options.ci ? runCi(root, options, select, specFiles, () => loaded) : runLocal(root, options, select(), loaded, specFiles);
+}
+
+function runLocal(root, options, chosen, loaded, specFiles) {
+  report(root, loaded, chosen, specFiles, false);
   if (options.plan) return 0;
   if (chosen.specs.length === 0) {
     console.log(`${LOG} No browser spec reaches these changes, so none runs.`);
     return 0;
   }
-  const args = ['.ai/scripts/e2e.sh', ...options.forward, ...(chosen.all ? [] : chosen.specs), ...(options.ci && !chosen.all ? ['--passWithNoTests=true'] : [])];
+  return runE2e(root, [...options.forward, ...(chosen.all ? [] : chosen.specs)]);
+}
+
+// PR CI: a shorter selection runs; every other answer runs nothing and passes with its reason.
+function runCi(root, options, select, specFiles, loaded) {
+  const { chosen, skip } = browserFiles(select, specFiles.length);
+  if (chosen) report(root, loaded() ?? {}, chosen, specFiles, true);
+  if (skip) {
+    console.log(`${LOG} PR CI runs no browser spec: ${skip}.`);
+    console.log('TEST_E2E_STATUS=not-selected');
+    return 0;
+  }
+  if (options.plan) return 0;
+  return runE2e(root, [...options.forward, ...chosen.specs, '--passWithNoTests=true']);
+}
+
+function runE2e(root, forward) {
+  const args = ['.ai/scripts/e2e.sh', ...forward];
   const result = spawnSync('sh', args, { cwd: root, stdio: 'inherit' });
   if (result.error) console.error(result.error.message);
   return result.status ?? 1;

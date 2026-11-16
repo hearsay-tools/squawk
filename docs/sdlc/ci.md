@@ -146,9 +146,10 @@ with no result (the first ten and a count when more) and passes when none failed
 
 Record the named files and their Squeal state in the PR's Verification. A missing verdict
 is covered by CI's shards, which give the full verdict; a failing verdict is never
-covered, and the PR does not merge until the shards pass. To check one test file by hand,
-run `npm test -- <file> -t '<name>'` and confirm it reports passed tests, not only skipped
-ones. This also covers a file Squeal re-runs only because the change edited a document it
+covered, and the PR does not merge until the shards pass. To get one test file's verdict
+now, run `squeal run tests <file> --wait 60000` (`run-loop` for a parity or worker file).
+With no daemon, run `npm test -- <file> -t '<name>'` and confirm it reports passed tests,
+not only skipped ones. This also covers a file Squeal re-runs only because the change edited a document it
 reads, for example `AGENT_PROTOCOL.md` prose, which re-runs
 `packages/cezar/src/core/harness-parity.test.ts`.
 
@@ -232,12 +233,18 @@ Browser jobs fetch the PR base branch's current tip and call
 than the tested merge's base parent. The selector reads the newest successful `e2e-spec-map.yml`
 map on `main` and selects from the PR's own changes, from the merge-base with that tip. Merges
 after the map's commit do not count, except that mapped files they changed add their specs
-when the PR touches mapped code. Its log prints each changed file with its spec count and reason. A missing map,
-missing merge-base or failed selector runs every spec on eight shards. An empty selection
-reaches the job as empty, with its reason, and still runs every spec until
-hearsay-tools/squawk#3727 changes that. Selected browser
-runs still require `TEST_E2E_STATUS=passed`; missing browsers fail verification.
-The token used to download the map has read-only Actions and repository scopes.
+when the PR touches mapped code. Its log prints each changed file with its spec count and
+reason. A PR runs browser specs only
+when the selector returns a list shorter than the full set. When the selector
+chooses every spec, chooses no spec or fails, the PR runs no browser spec: the log
+and the job summary state the reason, and the step prints
+`TEST_E2E_STATUS=not-selected`. `require-e2e-passed.cjs` accepts that marker only
+when `GITHUB_EVENT_NAME` is `pull_request_target`, so the browser jobs and `verify`
+stay green on the PR and every other event still requires `passed`. The merge queue runs every spec on every full-matrix entry, so a
+browser failure the PR run does not see fails the queue entry instead. A shorter
+selection still requires `TEST_E2E_STATUS=passed`; missing browsers fail
+verification. The token used to download the map has read-only Actions and
+repository scopes.
 
 Docs-only, infra-only and verified release-stamp skips remain as before. Merge
 groups and manual dispatches run full suites. Main pushes reuse eligible exact-SHA

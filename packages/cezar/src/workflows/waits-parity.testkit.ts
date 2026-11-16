@@ -37,6 +37,8 @@ export const WAIT_CRITERIA = [
   { id: 'U7a', scenario: 'baseline', name: 'cezar_done after cezar_ask in the same turn is refused and the question stays pending' },
   { id: 'U9h', scenario: 'provider-error-controlled', name: 'provider failure and clean close with a human wait open leave the run recoverable' },
   { id: 'U6', scenario: 'baseline', name: 'cezar_done is refused with live workers and with settled but uncollected workers, accepted once collected, and open waits are cancelled' },
+  { id: 'U6r', scenario: 'baseline', name: 'a wait result that arrives after an accepted cezar_done is delivered with the done note, and the run finishes when that turn ends, also with the wake budget spent' },
+  { id: 'U6p', scenario: 'baseline', name: 'cezar_done is refused with input_pending while a resolved wait result awaits delivery, and records nothing' },
   { id: 'U7d', scenario: 'baseline', name: 'cezar_done finishes through the done path in a message turn and in a Continue' },
   { id: 'U7q', scenario: 'baseline', name: 'live and deferred human answers commit their reset wake counters with the answer and keep the flush budget decisions' },
   { id: 'U7b', scenario: 'baseline', name: 'a live answer at the spent budget with a refused timer wake still owed shows the same notes on every runner' },

@@ -17,14 +17,18 @@ export function unitFiles(selection, run = execFileSync) {
 }
 
 /**
- * The browser selection PR CI receives: `files` is null for every spec or a failed selector, and
- * empty when no spec reaches the change. `reason`, the per-file `lines` and the `drift` lines come with it.
+ * PR CI runs browser specs only for a selection shorter than the full set. Every other
+ * answer returns `skip`, the reason PR CI runs no spec; the merge queue runs every spec.
  */
-export function browserFiles(select) {
+export function browserFiles(select, total) {
+  let chosen;
   try {
-    const chosen = select();
-    return { files: chosen.all ? null : chosen.specs, reason: chosen.reason, lines: chosen.lines, drift: chosen.drift };
+    chosen = select();
   } catch (error) {
-    return { files: null, reason: `the selector failed: ${String(error?.message ?? error).split('\n')[0]}` };
+    return { skip: `the selector failed: ${String(error?.message ?? error).split('\n')[0]}` };
   }
+  const why = chosen.reason ? `: ${chosen.reason}` : '';
+  if (chosen.all || chosen.specs.length >= total) return { chosen, skip: `the selector chose every spec${why}` };
+  if (chosen.specs.length === 0) return { chosen, skip: `the selector chose no spec${why}` };
+  return { chosen };
 }

@@ -10,9 +10,11 @@ function fixture() {
   return { state, session };
 }
 
-it('keeps a done request, retained boundary, question and held-child fact independent', () => {
+it('keeps a refused-request done, retained boundary, question and held-child fact independent', () => {
   const { state, session } = fixture();
-  transitionTurnBoundary(state, { kind: 'done-request', session, summary: 'done' });
+  const refusal = { kind: 'completion-refusal' as const, phase: 'record' as const, session, code: 'requests_outstanding' as const, tool: true };
+  transitionTurnBoundary(state, refusal);
+  transitionTurnBoundary(state, refusal);
   transitionTurnBoundary(state, { kind: 'turn-end', phase: 'ui-completed', session });
   transitionTurnBoundary(state, { kind: 'turn-end', phase: 'save-ack', session, boundary: { session, monitoring: true, humanGate: true } });
   transitionTurnBoundary(state, { kind: 'human-wait-opened', phase: 'prepare', session });
@@ -20,8 +22,7 @@ it('keeps a done request, retained boundary, question and held-child fact indepe
   const ack = state.boundary.parkAfterAck;
   transitionTurnBoundary(state, { kind: 'subagents-changed', phase: 'release', session });
   expect(state.boundary.heldForSubagents).toBeUndefined();
-  expect(state.boundary.doneRequested?.session).toBe(session);
-  expect(state.boundary.doneRequested?.summary).toBe('done');
+  expect(state.boundary.requestRefusedDone).toBe(session);
   expect(state.boundary.atTurnBoundary).toBe(session);
   expect(state.boundary.pendingHumanAsk).toBe(true);
   expect(state.boundary.parkAfterAck).toBe(ack);
@@ -29,7 +30,7 @@ it('keeps a done request, retained boundary, question and held-child fact indepe
 
 it('keeps close metadata for a refused done and clears only the accepted boundary', () => {
   const { state, session } = fixture();
-  transitionTurnBoundary(state, { kind: 'turn-end', phase: 'record-done', session, done: false, request: { session, summary: 'summary' }, keepClose: true });
+  transitionTurnBoundary(state, { kind: 'turn-end', phase: 'record-done', session, done: false, request: { summary: 'summary' }, keepClose: true });
   const close = state.boundary.doneClose;
   expect(state.boundary.doneAtBoundary).toBeUndefined();
   expect(close).toEqual({ via: 'cezar_done', summary: 'summary' });
@@ -44,13 +45,14 @@ it('requires a second sent-request refusal in the same completion cycle to retai
   const { state, session } = fixture();
   const refusal = { kind: 'completion-refusal' as const, phase: 'record' as const, session, code: 'requests_outstanding' as const, tool: true };
   transitionTurnBoundary(state, refusal);
-  expect(state.boundary.doneRequested).toBeUndefined();
+  expect(state.boundary.requestRefusedDone).toBeUndefined();
   transitionTurnBoundary(state, refusal);
-  expect(state.boundary.doneRequested?.session).toBe(session);
+  expect(state.boundary.requestRefusedDone).toBe(session);
   transitionTurnBoundary(state, { kind: 'turn-end', phase: 'consume-done', session });
+  expect(state.boundary.requestRefusedDone).toBeUndefined();
   transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'completion-cycle', session });
   transitionTurnBoundary(state, refusal);
-  expect(state.boundary.doneRequested).toBeUndefined();
+  expect(state.boundary.requestRefusedDone).toBeUndefined();
 });
 
 it('clears fired reply handles before caller generation checks, including a replaced session', () => {
