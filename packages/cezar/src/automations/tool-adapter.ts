@@ -26,7 +26,7 @@ import type { AutomationToolService } from '../workflows/run/types.ts';
 import { projectPaths } from '../project-paths.ts';
 import { withProjectAdmission } from '../server/cockpit-ownership.ts';
 import { onceStatus, type AutomationService, type AutomationServiceProject } from './service.ts';
-import { isGithubAutomation, isScheduleAutomation, isOnceSchedule, type AutomationDefinition } from './types.ts';
+import { isGithubAutomation, isScheduleAutomation, isOnceSchedule, type AutomationDefinition, type GithubAutomationDefinition } from './types.ts';
 
 /**
  * hearsay-tools/cezarion#1465: `cezar_schedule_task` and `cezar_scheduled_tasks` over the same
@@ -94,10 +94,15 @@ export function createAutomationToolService(
       if (isGithubAutomation(stored) && previews.get(signal)?.get(stored.id) !== stored.revision) {
         return { ok: false, code: 'preview_required', message: 'Preview this GitHub poll in this session before enabling it. Preview again after any edit.' };
       }
-      const result = await service.enable(project, stored.id);
+      const result = await service.enable(project, stored.id, stored.revision);
       return result.ok ? repeatingView(result.automation) : fromStatus(result);
     }
     if (!isGithubAutomation(stored)) return refuse('invalid_request', 'A schedule has nothing to preview; report next_run_at.');
+    return preview(stored, signal);
+  }
+
+  /** Preview owns its evidence lifecycle, including failure, revision change and session close. */
+  async function preview(stored: GithubAutomationDefinition, signal: AbortSignal): Promise<AutomationToolAnswer> {
     // A failed repeat preview cannot leave an earlier successful receipt usable.
     previews.get(signal)?.delete(stored.id);
     try {

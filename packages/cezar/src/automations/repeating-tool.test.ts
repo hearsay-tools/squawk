@@ -73,6 +73,32 @@ describe('repeating automation tool', () => {
     expect(await tools.automation({ action: 'enable', id, explicit: true }, session.signal)).toMatchObject({ code: 'preview_required' });
   });
 
+  it('refuses a definition changed between the preview guard and the enable write', async () => {
+    const { tools, session, create, service, project } = fixture(); const made = await create();
+    if (!made.ok) throw new Error(made.message);
+    const id = made.automation.id;
+    await tools.automation({ action: 'preview', id }, session.signal);
+    const enable = service.enable.bind(service);
+    vi.spyOn(service, 'enable').mockImplementation(async (target, automationId, expectedRevision) => {
+      await service.update(target, automationId, { ...definition, expectedRevision: made.automation.revision, task: { prompt: 'Changed during enable' } });
+      return enable(target, automationId, expectedRevision);
+    });
+    expect(await tools.automation({ action: 'enable', id, explicit: true }, session.signal)).toMatchObject({ ok: false, code: 'conflict' });
+    expect(project.automationStore.get(id)?.enabled).toBe(false);
+  });
+
+  it('invalidates a successful preview when a later preview fails, and refuses a closed session', async () => {
+    const { tools, session, create, poll } = fixture(); const made = await create();
+    if (!made.ok) throw new Error(made.message);
+    const id = made.automation.id;
+    await tools.automation({ action: 'preview', id }, session.signal);
+    poll.mockRejectedValueOnce(new Error('offline'));
+    expect(await tools.automation({ action: 'preview', id }, session.signal)).toMatchObject({ ok: false });
+    expect(await tools.automation({ action: 'enable', id, explicit: true }, session.signal)).toMatchObject({ code: 'preview_required' });
+    session.abort();
+    expect(await tools.automation({ action: 'enable', id, explicit: true }, session.signal)).toMatchObject({ code: 'unavailable' });
+  });
+
   it('creates a repeating schedule paused, reports its next occurrence and enables only explicitly', async () => {
     const { tools, session } = fixture();
     const made = await tools.automation({ action: 'create', definition: { name: 'Daily', kind: 'schedule', schedule: { type: 'daily', hour: 4, minute: 0 }, task: { prompt: 'Check it' } } }, session.signal);

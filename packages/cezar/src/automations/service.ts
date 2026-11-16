@@ -359,12 +359,13 @@ export function createAutomationService(deps: AutomationServiceDeps) {
       return remove(current);
     },
 
-    async enable(project: AutomationServiceProject, id: string) {
+    async enable(project: AutomationServiceProject, id: string, expectedRevision?: number) {
       const store = project.automationStore;
       // No client revision: the toggle applies to what is on disk now, not to this store's last read.
       store.reload();
       const current = store.get(id);
       if (!current) return fail(404, 'not found');
+      if (expectedRevision !== undefined && current.revision !== expectedRevision) return fail(409, 'the automation changed elsewhere; preview it again');
       try {
         if (isOnceSchedule(current)) {
           return await underOnceLease(project, id, (fresh) => {
