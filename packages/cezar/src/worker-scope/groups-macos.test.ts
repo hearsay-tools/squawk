@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RunRecord } from '@open-mercato/cezar-contract';
@@ -12,6 +12,12 @@ import { WorkerScopes, type ScopeStore } from './worker-scopes.ts';
 /** bound: a SIGKILLed process is reaped within milliseconds; this only ends a hang. */
 const HANG_GUARD_MS = 10_000;
 const started: number[] = [];
+/** Running, not a zombie: `pidExists` counts a signalled process that is not reaped yet, so a
+ * survival assertion reads the state `ps` reports. */
+const running = (pid: number) => {
+  const ps = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
+  return ps.status === 0 && ps.stdout.trim() !== '' && !ps.stdout.trim().startsWith('Z');
+};
 afterEach(() => { for (const pid of started.splice(0)) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } } });
 
 function scopes() {
@@ -51,7 +57,7 @@ describe.runIf(process.platform === 'darwin')('worker scope on macOS', () => {
     const { watched } = await launch(scope, workerId,
       "const c = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' }); c.unref(); console.log(c.pid); setInterval(() => {}, 1000);");
     expect(await scope.stop(workerId, HANG_GUARD_MS)).toEqual({ stopped: true });
-    expect(pidExists(watched)).toBe(true);
+    expect(running(watched)).toBe(true);
   });
 
   it('a group whose leader is gone is never signalled: no boot id proves its number', async () => {
@@ -60,6 +66,6 @@ describe.runIf(process.platform === 'darwin')('worker scope on macOS', () => {
       "const c = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' }); c.unref(); console.log(c.pid); setTimeout(() => process.exit(0), 200);");
     await vi.waitFor(() => expect(pidExists(leader)).toBe(false), { timeout: HANG_GUARD_MS });
     expect(await scope.stop(workerId, HANG_GUARD_MS)).toEqual({ stopped: true });
-    expect(pidExists(watched)).toBe(true);
+    expect(running(watched)).toBe(true);
   });
 });
