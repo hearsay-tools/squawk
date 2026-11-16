@@ -66,8 +66,10 @@ describe('cleanCloseFailsDelivery', () => {
     expect(owes).not.toHaveBeenCalled();
   });
 
-  it.each([true, false])('charges an attempt that named no input while something is owed: %s', owed => {
-    expect(cleanCloseFailsDelivery({ session, inputIds: [] }, unread, () => owed)).toBe(owed);
+  it('charges nothing for an attempt that named no input', () => {
+    const owes = vi.fn(() => true);
+    expect(cleanCloseFailsDelivery({ session, inputIds: [] }, ids => { expect(ids).toEqual([]); return true; }, owes)).toBe(false);
+    expect(owes).not.toHaveBeenCalled();
   });
 
   it('charges an attempt only when an input it carried is owed again', () => {

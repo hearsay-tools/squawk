@@ -557,6 +557,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     canAutoContinue: (id, state) => modules.turnNudges.canAutoContinue(id, state), armNoWaitNudgeReplyTimer: (id, state) => modules.turnNudges.armNoWaitNudgeReplyTimer(id, state),
     awaitCompletionNudgeReply: (id, state, session) => modules.turnNudges.awaitCompletionNudgeReply(id, state, session),
     queueWaitWake: id => modules.wakeAdmission.queueWaitWake(id), owesWake: (run, budget) => modules.wakeAdmission.owesWake(run, budget),
+    owedWakeInputIds: run => modules.wakeAdmission.owedWakeInputIds(run),
     pendingConversationWakes: (run, budget) => modules.wakeAdmission.pendingConversationWakes(run, budget), routedAnswer: id => modules.wakeAdmission.routedAnswer(id),
     spendWakeAdmission: (id, state, owed) => modules.wakeAdmission.spendWakeAdmission(id, state, owed), cancelAutomaticAtCap: (id, waits) => modules.wakeAdmission.cancelAutomaticAtCap(id, waits),
     reparkWithoutWaits: (id, state) => modules.wakeAdmission.reparkWithoutWaits(id, state), holdPeerWakesAtCap: id => modules.wakeAdmission.holdPeerWakesAtCap(id),

@@ -48,10 +48,10 @@ interface WakeAdmissionHost {
 /** A clean close fails a wake delivery only when its session attempted one that did not reach the
  *  agent, and something is still owed. Input the scheduler has not admitted yet costs no retry
  *  (hearsay-tools/squawk#1289). An attempt reached the agent when no input any attempt of the
- *  session carried is owed again (`received`); an attempt that named no input (a wake opening with
- *  nothing listable) never proves it. */
+ *  session carried is owed again (`received`); an attempt that named no input carried nothing to
+ *  fail. */
 export function cleanCloseFailsDelivery(attempt: DeliveryAttempt | undefined, received: (inputIds: readonly string[]) => boolean, owesDelivery: () => boolean): boolean {
-  if (!attempt || (attempt.inputIds.length > 0 && received(attempt.inputIds))) return false;
+  if (!attempt || received(attempt.inputIds)) return false;
   return owesDelivery();
 }
 
@@ -336,7 +336,16 @@ export class WakeAdmission {
   }
 
   owesWake(run: RunRecord, beforeHumanReset?: HumanAnswerBudget): boolean {
-    return wakeLedger.owesWake(run, { routedAnswer: id => this.routedAnswer(id), pendingConversationWakes: (record, budget) => this.pendingConversationWakes(record, budget) }, beforeHumanReset);
+    return wakeLedger.owesWake(run, this.wakeReads(), beforeHumanReset);
+  }
+
+  /** What `owesWake` counts, by input id. */
+  owedWakeInputIds(run: RunRecord): string[] {
+    return wakeLedger.owedWakeInputIds(run, this.wakeReads());
+  }
+
+  private wakeReads() {
+    return { routedAnswer: (id: string) => this.routedAnswer(id), pendingConversationWakes: (record: RunRecord, budget?: HumanAnswerBudget) => this.pendingConversationWakes(record, budget) };
   }
 
   takesWake(runId: string, state: ActiveRun): boolean {

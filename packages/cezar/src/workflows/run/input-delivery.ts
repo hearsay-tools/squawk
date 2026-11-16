@@ -261,7 +261,7 @@ interface InputDeliveryHost {
   boundaryTurn(id: string, state: ActiveRun, session: AgentSession, done: boolean): SettledTurn;
   canAutoContinue(id: string, state: ActiveRun): boolean; armNoWaitNudgeReplyTimer(id: string, state: ActiveRun): void;
   awaitCompletionNudgeReply(id: string, state: ActiveRun, session: AgentSession): void;
-  queueWaitWake(id: string): void; owesWake(run: RunRecord, budget?: HumanAnswerBudget): boolean;
+  queueWaitWake(id: string): void; owesWake(run: RunRecord, budget?: HumanAnswerBudget): boolean; owedWakeInputIds(run: RunRecord): string[];
   pendingConversationWakes(run: RunRecord, budget?: HumanAnswerBudget): AgentInput[]; routedAnswer(id: string): AgentInput | undefined;
   spendWakeAdmission(id: string, state: ActiveRun, owed: boolean): void; cancelAutomaticAtCap(id: string, waits: readonly Wait[]): void;
   reparkWithoutWaits(id: string, state: ActiveRun): void; holdPeerWakesAtCap(id: string): void;
@@ -546,7 +546,7 @@ export class InputDelivery {
   openDeliveryScope(runId: string, state: ActiveRun, session: AgentSession): void {
     const opening = state.inputState.openingAgentInputId;
     const run = this.host.line.isAdmitted(runId) ? this.context.store.getRun(runId) : undefined;
-    const owed = run ? [...resolvedWaits(run).map(waitInputId), ...this.host.pendingConversationWakes(run).map(input => input.id)] : [];
+    const owed = run ? this.host.owedWakeInputIds(run) : [];
     attemptWrites.open(state.inputState, run || opening ? { session, inputIds: [...new Set([...(opening ? [opening] : []), ...owed])] } : undefined);
   }
 
