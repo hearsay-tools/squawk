@@ -43,6 +43,14 @@ export async function settled(block = true) {
 /** The destroy as the API shows it: the stored phase plus the run's retry state. */
 export const destroyOf = (workerId: string) => { const run = f.store.getRun(workerId); return run ? workerDestroyView(run) : undefined; };
 
+/** Runs `read` while no destroy attempt for the worker runs. Every attempt, explicit or scheduled,
+ * holds the worker's serialization key from its first write (`requested`) to its retry record, so a
+ * read queued on that key sees the state between two attempts, never an attempt's in-progress phase. */
+export function betweenAttempts<T>(workerId: string, read: () => T): Promise<T> {
+  const serialized = Reflect.get(f.service, 'serialized') as (key: string, operation: () => Promise<T>) => Promise<T>;
+  return serialized.call(f.service, `worker:project:${workerId}`, async () => read());
+}
+
 export function useDestroyBackoffFixture() {
   beforeEach(() => { scopeFixtureProcesses(); f = fixture(); });
   afterEach(async () => { await f?.close(); vi.restoreAllMocks(); syncBuiltinESMExports(); vi.unstubAllEnvs(); });

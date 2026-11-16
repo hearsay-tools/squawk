@@ -9,7 +9,7 @@ import { scheduledDestroyAttempts, workerCleanupInternals } from './service.test
 import { WORKTREE_LOCK_BUSY_ERROR } from './workspace-removal.ts';
 import { DelegationService } from './service.ts';
 
-import { f, linux, cadence, settled, destroyOf, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
+import { f, linux, cadence, settled, destroyOf, betweenAttempts, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 
 describe('destroy backoff cadence', { timeout: 30_000 }, () => {
@@ -70,7 +70,7 @@ describe('destroy backoff cadence', { timeout: 30_000 }, () => {
     expect(first.attempts).toBe(5);
     // Attempt 5 is the first capped delay (300 ms); jitter only stretches it.
     expect(Date.parse(first.nextAt) - first.at).toBeGreaterThanOrEqual(290);
-    expect(destroyOf(workerId)).toMatchObject({ phase: 'incomplete', remaining: ['worktree', 'branch'] });
+    expect(await betweenAttempts(workerId, () => destroyOf(workerId))).toMatchObject({ phase: 'incomplete', remaining: ['worktree', 'branch'] });
   });
 
   it.runIf(linux)('a blocker cleared inside the fast window lets the destroy complete within it', async () => {

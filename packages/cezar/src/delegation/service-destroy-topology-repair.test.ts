@@ -12,7 +12,7 @@ import { WORKTREE_LOCK_BUSY_ERROR } from './workspace-removal.ts';
 
 import { withWorktreeMutation } from '../git-worktree-lock.ts';
 
-import { f, linux, cadence, settled, destroyOf, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
+import { f, linux, cadence, settled, destroyOf, betweenAttempts, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
 
 describe('destroy backoff topology-repair', { timeout: 30_000 }, () => {
   useDestroyBackoffFixture();
@@ -28,7 +28,7 @@ describe('destroy backoff topology-repair', { timeout: 30_000 }, () => {
       expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete', error: WORKTREE_LOCK_BUSY_ERROR });
       // Past the fixture's one real change, and still contended.
       await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
-      expect(destroyOf(workerId)).toMatchObject({ phase: 'incomplete', error: WORKTREE_LOCK_BUSY_ERROR });
+      expect(await betweenAttempts(workerId, () => destroyOf(workerId))).toMatchObject({ phase: 'incomplete', error: WORKTREE_LOCK_BUSY_ERROR });
     } finally { unlock(); await keeper; }
     await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });
     expect(existsSync(workspace.path)).toBe(false);
@@ -42,7 +42,7 @@ describe('destroy backoff topology-repair', { timeout: 30_000 }, () => {
     writeFileSync(marker, randomUUID());
     expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete' });
     await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
-    expect(destroyOf(workerId)?.phase).toBe('incomplete');
+    expect((await betweenAttempts(workerId, () => destroyOf(workerId)))?.phase).toBe('incomplete');
     writeFileSync(marker, original);
     await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });
     expect(existsSync(workspace.path)).toBe(false);
@@ -58,7 +58,7 @@ describe('destroy backoff topology-repair', { timeout: 30_000 }, () => {
     writeFileSync(head, 'ref: refs/heads/elsewhere\n');
     expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
     await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
-    expect(destroyOf(workerId)?.phase).toBe('incomplete');
+    expect((await betweenAttempts(workerId, () => destroyOf(workerId)))?.phase).toBe('incomplete');
     writeFileSync(head, attached);
     await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });
     expect(existsSync(workspace.path)).toBe(false);
@@ -77,7 +77,7 @@ describe('destroy backoff topology-repair', { timeout: 30_000 }, () => {
     writeFileSync(join(stray, 'cezar-owned-resource'), workspace.resourceId, { mode: 0o600 });
     expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete' });
     await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
-    expect(destroyOf(workerId)?.phase).toBe('incomplete');
+    expect((await betweenAttempts(workerId, () => destroyOf(workerId)))?.phase).toBe('incomplete');
     // Repaired in place: the `worktrees` directory itself does not change.
     writeFileSync(join(stray, 'cezar-owned-resource'), randomUUID());
     await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });
@@ -92,7 +92,7 @@ describe('destroy backoff topology-repair', { timeout: 30_000 }, () => {
     onTestFinished(() => rmSync(lock, { force: true }));
     expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
     await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
-    expect(destroyOf(workerId)).toMatchObject({ phase: 'incomplete', remaining: ['branch'] });
+    expect(await betweenAttempts(workerId, () => destroyOf(workerId))).toMatchObject({ phase: 'incomplete', remaining: ['branch'] });
     rmSync(lock);
     await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });
   });

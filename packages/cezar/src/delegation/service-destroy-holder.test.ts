@@ -11,7 +11,7 @@ import { testHome } from '../home/test-home.testkit.ts';
 import { createFixtureManager } from '../workflows/fixture-claude.testkit.ts';
 import { projectPaths } from '../project-paths.ts';
 import { runWorktreeTeardown } from './worktree-teardown.ts';
-import { f, linux, cadence, settled, destroyOf, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
+import { f, linux, cadence, settled, destroyOf, betweenAttempts, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
 
 /** A process in its own group with its cwd in `root`, as a test server or file watcher a worktree
  * started for itself. */
@@ -144,7 +144,7 @@ describe('destroy backoff holder', { timeout: 30_000 }, () => {
     mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, '.cez-fallback'), '{not a pointer');
     expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
     await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
-    expect(destroyOf(workerId)?.phase).toBe('incomplete');
+    expect((await betweenAttempts(workerId, () => destroyOf(workerId)))?.phase).toBe('incomplete');
     rmSync(join(scratch, '.cez-fallback'));
     await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });
     expect(existsSync(workspace.path)).toBe(false);
