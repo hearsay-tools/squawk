@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { runnerSchema } from '@open-mercato/cezar-contract/runner';
+import { RUNNER_COCKPIT_FACTS } from '@open-mercato/cezar-contract/runner-facts';
 import { inputDeliveryOf, RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { exemptionFor } from './harness-parity-core.testkit.ts';
 import { createRunner } from './runner-factory.ts';
@@ -60,5 +62,16 @@ describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
   it.each(['S40', 'S41'])('exempts a runner from %s exactly when its delivery is boundary', criterion => {
     expect(RUNNER_IDS.filter(runner => exemptionFor(criterion, runner) !== undefined))
       .toEqual(RUNNER_IDS.filter(runner => RUNNER_FACTS[runner].inputDelivery.mode === 'boundary'));
+  });
+});
+
+describe('cockpit runner facts (hearsay-tools/squawk#3642)', () => {
+  it('lists the runners of RUNNER_IDS, in the same order, in the contract roster and the cockpit table', () => {
+    expect(runnerSchema.options).toEqual([...RUNNER_IDS]);
+    expect(Object.keys(RUNNER_COCKPIT_FACTS)).toEqual([...RUNNER_IDS]);
+  });
+
+  it('states the input mode each runner declares in its wire facts', () => {
+    for (const id of RUNNER_IDS) expect(RUNNER_COCKPIT_FACTS[id].inputMode, id).toBe(RUNNER_FACTS[id].inputDelivery.mode);
   });
 });

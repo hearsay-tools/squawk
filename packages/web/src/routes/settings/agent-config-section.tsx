@@ -159,10 +159,10 @@ function AgentPane({
     <>
       {agent.groups.map((g) => {
         const files = listing.files.filter(g.files)
-        const isClaudeMcp = agent.id === 'claude' && g.id === 'mcp'
+        const userMcp = g.showsUserMcp ? listing.userMcp : undefined
         // An empty group vanishes unless the descriptor gave it `empty` copy — a group that is
         // empty BY DESIGN (Pi's MCP: "No MCP.") says so and what to try, instead of hiding.
-        if (files.length === 0 && !(isClaudeMcp && listing.userMcp) && !g.empty) return null
+        if (files.length === 0 && !userMcp && !g.empty) return null
         return (
           <section key={g.id} data-slot="agent-config-group" data-group={g.id} data-agent={agent.id}>
             <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-soft-foreground">
@@ -201,7 +201,7 @@ function AgentPane({
                 </li>
               ))}
             </ul>
-            {isClaudeMcp && listing.userMcp && <UserMcpBlock userMcp={listing.userMcp} />}
+            {userMcp && <UserMcpBlock userMcp={userMcp} />}
           </section>
         )
       })}

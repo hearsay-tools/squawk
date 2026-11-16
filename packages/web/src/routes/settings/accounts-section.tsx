@@ -29,6 +29,7 @@ import {
   type AgentProfilesResponse,
 } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
+import { runnerDisplayName } from '@open-mercato/cezar-api-client/contract/runner-facts'
 import type {
   BackendCheck,
   ProviderId,
@@ -92,15 +93,6 @@ import { SettingsAgentPicker } from './settings-agent-picker'
  * 3. **Remove only ever DEREGISTERS.** No directory is touched, no session deleted. The confirm
  *    says so out loud, because "Remove" next to a path reads as "delete my folder".
  */
-
-const PROVIDER_LABEL: Record<ProviderId, string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  opencode: 'OpenCode',
-  pi: 'pi',
-  cursor: 'Cursor',
-  omp: 'OMP',
-}
 
 /** The vendor's own install/login instruction, shown when the CLI is not on this machine. */
 const PROVIDER_INSTALL: Record<ProviderId, string> = {
@@ -186,7 +178,7 @@ function AccountsPane({ data }: { data: AgentProfilesResponse }) {
         <TabsList variant="line" data-slot="accounts-tabs">
           {providers.map((provider) => (
             <TabsTrigger key={provider} value={provider} data-provider={provider}>
-              {PROVIDER_LABEL[provider]}
+              {runnerDisplayName(provider)}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -286,7 +278,7 @@ function AgentTab({
     <div data-slot="accounts-provider" data-provider={provider} className="flex flex-col gap-4">
       {/* Facts about the BINARY, not about any one account: a version and an install are shared by
           every login of the same CLI, so they belong here rather than repeated on each row. */}
-      <h3 className="settings-account-provider-title">{PROVIDER_LABEL[provider]}</h3>
+      <h3 className="settings-account-provider-title">{runnerDisplayName(provider)}</h3>
       <div className="settings-account-installation settings-readout">
         {check === undefined ? <span>Checking…</span> : installed ? (
           <span data-slot="agent-installed">Installed</span>
@@ -311,7 +303,7 @@ function AgentTab({
 
       {!canCarryAccounts ? (
         <p data-slot="accounts-single-only" className="text-[11px] text-soft-foreground">
-          {PROVIDER_LABEL[provider]} can only hold one account here: it keeps its credentials
+          {runnerDisplayName(provider)} can only hold one account here: it keeps its credentials
           outside its config folder, so a second folder would change settings without changing the
           login — which would say “work account” while billing the other one.
         </p>
@@ -395,13 +387,13 @@ function DefaultsForNewProjects({ profiles }: { profiles: AgentProfilesResponse 
         <label className="settings-model-agent-choice">
           <span>Default model for</span>
           <select aria-label="Model agent" value={modelRunner ?? runner} onChange={(event) => setModelRunner(event.target.value as Runner)}>
-            {RUNNERS.map((entry) => <option key={entry.id} value={entry.id}>{PROVIDER_LABEL[entry.id]}</option>)}
+            {RUNNERS.map((entry) => <option key={entry.id} value={entry.id}>{runnerDisplayName(entry.id)}</option>)}
           </select>
         </label>
         {RUNNERS.filter((entry) => entry.id === (modelRunner ?? runner)).map((entry) => (
           <label key={entry.id} className="settings-account-model flex items-center gap-3">
             <CpuIcon className="size-4 text-accent-icon shrink-0" />
-            <span className="w-24 shrink-0 text-xs text-muted-foreground">{PROVIDER_LABEL[entry.id]}</span>
+            <span className="w-24 shrink-0 text-xs text-muted-foreground">{runnerDisplayName(entry.id)}</span>
             <select
               aria-label={`Default model for ${entry.label}`}
               data-slot="accounts-default-model"
@@ -485,7 +477,7 @@ function AccountRow({ account, isMachineDefault, onRemove }: { account: AgentPro
               <span data-slot="account-missing">— folder not created yet; Connect will make it</span>
             ) : !account.looksValid ? (
               <span data-slot="account-unrecognised">
-                — this folder does not look like {PROVIDER_LABEL[account.provider]} config yet
+                — this folder does not look like {runnerDisplayName(account.provider)} config yet
               </span>
             ) : null}
           </div>

@@ -3,10 +3,10 @@ import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { RunnerModelCatalog, type ModelOption } from './runner-model-catalog.ts';
 
 const UNAVAILABLE_REASON_NAME: Record<RunnerId, string> = {
-  claude: 'Claude',
+  claude: 'Claude Code',
   codex: 'Codex',
   opencode: 'OpenCode',
-  pi: 'Pi',
+  pi: 'pi',
   cursor: 'Cursor',
   omp: 'OMP',
 };
@@ -143,7 +143,7 @@ describe('RunnerModelCatalog', () => {
       models: [],
       source: 'unavailable',
       stale: false,
-      reason: 'Pi model discovery is temporarily unavailable',
+      reason: 'pi model discovery is temporarily unavailable',
     });
   });
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 
 import { useCreateAgentProfile } from '@/api/queries'
 import type { FsBrowseDir, ProviderId } from '@open-mercato/cezar-api-client'
@@ -41,6 +41,20 @@ const FOLDER_EXAMPLE: Partial<Record<ProviderId, string>> = {
   codex: '~/.codex-second',
   pi: '~/.pi-second/agent',
   omp: '~/.omp/profiles/second',
+}
+
+/**
+ * What a folder must be for an agent whose account is more than a folder. omp selects an account
+ * by profile NAME, so only a folder in its profiles dir can be one. Said here rather than left to
+ * the server's 400, which would arrive after the user had already typed a folder somewhere else.
+ */
+const FOLDER_HINT: Partial<Record<ProviderId, ReactNode>> = {
+  omp: (
+    <>
+      An omp account is an omp profile: use <code>~/.omp/profiles/&lt;name&gt;</code>, with
+      a lowercase name. The profile folder may link to a folder elsewhere.
+    </>
+  ),
 }
 
 export function AddAccountDialog({
@@ -171,13 +185,9 @@ export function AddAccountDialog({
           <p className="text-[11px] text-soft-foreground">
             A <code>~</code> is kept as written and expanded when the agent runs.
           </p>
-          {/* omp selects an account by profile NAME, so only a folder in its profiles dir can be
-              one. Said here rather than left to the server's 400, which would arrive after the
-              user had already typed a folder somewhere else. */}
-          {provider === 'omp' ? (
-            <p data-slot="add-account-omp-hint" className="text-[11px] text-soft-foreground">
-              An omp account is an omp profile: use <code>~/.omp/profiles/&lt;name&gt;</code>, with
-              a lowercase name. The profile folder may link to a folder elsewhere.
+          {FOLDER_HINT[provider] ? (
+            <p data-slot="add-account-folder-hint" className="text-[11px] text-soft-foreground">
+              {FOLDER_HINT[provider]}
             </p>
           ) : null}
         </div>

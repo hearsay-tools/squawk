@@ -141,7 +141,7 @@ describe('workspace model catalog API', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       runner: 'pi', models: [], source: 'unavailable', stale: false,
-      reason: 'Pi model discovery is temporarily unavailable',
+      reason: 'pi model discovery is temporarily unavailable',
     });
   });
 

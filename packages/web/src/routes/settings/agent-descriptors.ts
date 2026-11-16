@@ -34,6 +34,8 @@ export interface AgentGroup {
    * `.mcp.json` aside, has always behaved that way).
    */
   empty?: string
+  /** The group also shows the user-level MCP listing (`~/.claude.json`), even with no file. */
+  showsUserMcp?: true
   files: (f: AgentConfigFile) => boolean
 }
 
@@ -75,12 +77,15 @@ export const AGENT_DESCRIPTORS: AgentDescriptor[] = [
     label: 'Claude',
     groups: [
       group('claude', 'settings', 'Settings'),
-      group(
-        'claude',
-        'mcp',
-        'MCP',
-        'A dedicated .mcp.json (key: mcpServers), shared via version control.',
-      ),
+      {
+        ...group(
+          'claude',
+          'mcp',
+          'MCP',
+          'A dedicated .mcp.json (key: mcpServers), shared via version control.',
+        ),
+        showsUserMcp: true,
+      },
       group('claude', 'memory', 'Memory & instructions'),
     ],
   },
