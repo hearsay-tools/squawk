@@ -3,6 +3,7 @@ Status: draft
 
 Baseline: `main` at `00958e289`. Drafted with the owner on 2026-11-16 in task b99fbdec. The probe
 reports are in [`.ai/analysis/2026-11-16-runner-native-skills/`](../analysis/2026-11-16-runner-native-skills/).
+Two probe rounds ran on 2026-11-16; round 2 closed the open checks of the first draft.
 This draft replaces the direction of the unmerged October drafts on branch `cez/4a7475dc`
 (`2026-10-19-native-team-skills.md` and its two siblings); see [Earlier drafts](#earlier-drafts).
 
@@ -56,7 +57,7 @@ Facts that shape the design:
 
 - **Every trigger works on a later turn and after a resume.**
 - **Mid-turn messages differ.** pi expands a trigger in a steer. Codex `turn/steer` does not
-  (mock provider only). OpenCode's command route is a separate long-poll request.
+  (real model). OpenCode steers a second command into the running turn.
 - **Position rules differ.** Claude and pi need the trigger at the very start. Codex, omp and
   Cursor accept it inside the text. Cursor also matches a `/name` inside the system prompt text
   that Squawk prepends to the prompt.
@@ -88,11 +89,22 @@ needs to choose between them.
   `{ id, name, description?, scope?, plugin?, path? }`. `id` is the exact value the trigger
   takes. `problems` carries what the runner reports as broken or dropped (Codex `errors`, omp
   `warnings`). Fields a runner does not report stay absent; Squawk does not fill them from the
-  file system.
+  file system. Tested routes: Claude `get_skills_dialog` with
+  `--settings '{"disableAllHooks":true}'` and `--no-session-persistence` (full list, no hook
+  run, no session file); Codex `skills/list`; OpenCode `GET /skill`; pi RPC `get_commands`; omp
+  `omp skill list --json` (the RPC list needs a selected model, the CLI list does not).
 - **`AgentRunSpec.skill = { id, args }`** asks the adapter to open the turn with that skill. The
-  adapter builds its own form: Claude a last text block `/id args`; Codex a structured skill
-  item with the listed `path`, plus the args as text; OpenCode the command route; pi and omp
-  `/skill:id args`; Cursor `/id` followed by the args.
+  adapter builds its own form, and each form below is tested:
+
+  | Runner | Form | Rule the adapter must keep |
+  | --- | --- | --- |
+  | Claude | A last text block `/id args` | Opening context goes in an earlier text block of the same message. Context after the trigger block stops the expansion |
+  | Codex | A `{type:"skill", name, path}` item with the listed `path`, plus the args as text, on `turn/start` | Never on `turn/steer`, and never on a `turn/start` sent during an active turn: both drop the skill |
+  | OpenCode | `POST /session/{id}/command` | Do not wait for the answer. The request returns only at turn end and Node's `fetch` fails at 300 s. The user message that holds the skill body arrives on the event stream about 30 ms after the request; that is the sign of expansion. Never during a busy turn: a second command is steered into the running turn and the first skill's result is lost |
+  | pi | `/skill:id args` at the start of the message | At least one argument must follow the id on the same line. `/skill:id` followed by a line break is not expanded. Opening context goes after the args |
+  | omp | `/skill:id args` | The adapter maps the `custom` message with `customType: "skill-prompt"` to a user-message event. Today it produces no event, so the transcript has no trace of the skill |
+  | Cursor | `/id` followed by the args | The id is the folder name. See [Cursor matches Squawk's own text](#cursor-matches-squawks-own-text) |
+
 - **Facts:** `skillList: 'full' | 'none'`, `skillTriggerMidTurn: boolean`, and
   `skillUnknownName: 'error' | 'silent'`.
 
@@ -111,9 +123,10 @@ their meaning: this step runs skill X.
 Continue is a plain resume. It does not trigger the skill again, because the body is already in
 the session and a second trigger would restart the skill.
 
-The opening context (handoff and `context.yaml` rules) must not sit before the trigger on Claude
-and pi. It travels after the arguments, or for Claude in an earlier text block. The plan decides
-per runner and pins it with a parity row.
+The opening context (handoff and `context.yaml` rules) keeps travelling with the opening message.
+Its place differs per runner, as the table above says: an earlier text block on Claude, after
+the arguments on pi. Each adapter pins its place with a parity row. Today that context is dropped
+for a slash opening; this design sends it again.
 
 ### A `/name` typed by a human
 
@@ -133,6 +146,19 @@ with it.
   probe shows "list unavailable" and the composer still accepts a typed id.
 - **Changing what a runner has** (install a plugin, add a skill) is not in this spec. A later
   spec adds it, and it calls the runner's own CLI; Squawk does not edit runner files.
+
+### Cursor matches Squawk's own text
+
+Cursor print mode scans the whole stdin text with `(?:^|\s)\/([a-zA-Z0-9_-]+)` and attaches the
+skill whose folder has that name. A path after a space matches by its first segment. Squawk
+prepends its system prompt and the handoff to that text. A sample of Squawk's own text matched
+four ids: the selected skill's name, `tmp`, `home` and `cezar` (from an unquoted worktree path and
+the `<!-- /cezar:records -->` marker). A turn with skill folders of those names attached all four.
+
+This happens today, apart from this design. A character that is not whitespace before the `/`
+(a quote or a backtick) stops the match. The Cursor adapter must therefore send no ` /word` of
+its own: it quotes every path and marker in the text it adds. A parity row pins that the text
+Squawk adds holds no match.
 
 ### What is removed
 
@@ -155,26 +181,34 @@ Saved data still opens: a `config.json` that holds `skillsRepos` and a `ui-state
 
 | # | Question | Options | Proposed |
 | --- | --- | --- | --- |
-| D1 | Skills follow the step's account home. A second Claude or Codex account has other skills. ADR 0023 rejected this. | (a) accept; (b) keep one shared library, which needs Squawk to inject it | (a). It is what "use the runner's setup" means. `~/.agents/skills` is still read from any home by Codex, OpenCode, pi and omp |
+| D1 | A second account of a runner has another home, so it can have other skills. ADR 0023 rejected this. Tested: Claude's list follows the home completely. Codex and pi lose their plugins and packages but keep `~/.agents/skills`. omp keeps `~/.agents/skills` and the Claude plugin cache. OpenCode and Cursor have no account home in Squawk | (a) accept; (b) keep one shared library, which needs Squawk to inject it | (a). It is what "use the runner's setup" means. A skill in `~/.agents/skills` reaches every account of every runner but Claude |
 | D2 | Cursor has no list in print mode. | (a) no list: the picker takes a typed id and step open does not check it; (b) ACP list, marked partial, typed ids still accepted; (c) Squawk reads Cursor's folders and plugin cache itself | (a) first. (b) shows about a quarter of the skills on a host with plugins and costs 5 to 6 s. (c) is the layer this spec removes |
 | D3 | A human types `/name` at the start of a message. | (a) pass the text unchanged: it works on Claude and Cursor only; (b) when `name` is in the runner's list, send that runner's trigger; otherwise pass the text unchanged | (b). One way to type a skill on every runner, and the runner's own slash commands still pass through |
 | D4 | A project skill folder that git ignores does not exist in a task worktree. | (a) Squawk does nothing; step open fails with "not in this worktree" and names the folder; (b) Squawk links ignored skill folders from the main checkout into each new worktree | (a). A project tracks its skills, or links them in `worktreeSetup` |
 | D5 | Skills in `.ai/skills/` (this repository has five) are read by no runner. | (a) drop the folders as sources; this repository moves its skills to a tracked native folder in a separate change; (b) keep `.ai/skills` as a Squawk-only source with the inline body | (a). `AGENTS.md` already names these skills by file path, which needs no skill mechanism |
-| D6 | A trigger in a message sent during a running turn, on a runner that does not expand it there. | (a) send as text and show a note; (b) hold the message until the turn ends, then open the next turn with the trigger | (a) |
-| D7 | The built-in "create automation" skill and the `interactive: true` frontmatter hint are Squawk's own. | (a) drop both: the automations part of the system prompt stays; (b) keep them as Squawk prompt presets, outside the skill list | Owner's call; (a) is smaller |
+| D6 | A trigger in a message sent during a running turn. Tested: pi expands it. Codex drops it. OpenCode steers it into the running turn and loses the first result. Claude, omp and Cursor: not tested | (a) send as text and show a note; (b) hold the message until the turn ends, then open the next turn with the trigger | (b) on every runner but pi. Codex and OpenCode both expand a trigger that opens the next turn, and (a) sends text the model may not act on |
+| D7 | The built-in "create automation" skill and the `interactive: true` frontmatter hint are Squawk's own. | (a) drop both: the automations part of the system prompt stays; (b) keep them as Squawk prompt presets, outside the skill list; (c) replace the skill with a tool in Squawk's own MCP server, as the owner asked on 2026-11-16 | (c). All six adapters honor the Squawk tools. `cezar_schedule_task` already wraps the same automation service for one-time schedules. The tool can enforce "created paused" and "preview first", which a playbook only asks for. The picker entry and the `interactive` hint go away |
 
-## Open checks before implementation
+## Checks closed in round 2
 
-Each is a short probe, not a design question.
+| Check | Result |
+| --- | --- |
+| Does each list follow a non-default account home? | Claude: yes, completely. Codex, pi: in part (`~/.agents/skills` stays). omp: only omp's own user skills. OpenCode, Cursor: Squawk has no account home for them. Every list works without a login in that home, except omp's RPC list |
+| Claude: context and trigger in one message | Works with the context block first and the trigger block last. The reverse order is not expanded |
+| Claude: a list call that runs no user hooks | `--settings '{"disableAllHooks":true}'` gives the full list with no hook run. `--bare` and `--safe-mode` list no skills |
+| Codex: `turn/steer` with a real model | Not expanded, for `$name` and for the structured item. `turn/interrupt` then `turn/start`, waiting for the turn end, and `thread/queue/add` do expand (mock provider) |
+| OpenCode: the command route held open | Answers at turn end; events arrive meanwhile. `fetch` fails at 300 s. A dropped request does not stop the turn. No async form exists |
+| pi: context after the trigger | Works when an argument follows the id. A user skill wins over a project skill of the same name under Squawk's launch |
+| omp: Squawk's mapper on a skill turn | Turn start, turn end and session id are detected. The skill message produces no event |
+| Cursor: Squawk's own text | Four accidental matches in a sample of Squawk's text; all four skills attached |
 
-- A non-default account home on each runner: does the list follow `CLAUDE_CONFIG_DIR`,
-  `CODEX_HOME`, `PI_CODING_AGENT_DIR` and `OMP_PROFILE`?
-- Claude: opening context in an earlier text block, trigger in the last one.
-- Claude: a list probe that does not run the user's `SessionStart` hooks.
-- Codex: `turn/steer` with a real model.
-- OpenCode: the command route held open for a full turn next to the SSE stream, under load.
-- omp: how Squawk's mapper shows a turn that has a `skill-prompt` message and no user message.
-- Cursor: a skill folder name that also appears as ` /word` in Squawk's own system prompt text.
+## Still open
+
+- Claude: whether the user's MCP servers start during a list call; hooks from managed policy.
+- Claude, omp, Cursor: a trigger in a message during a running turn.
+- Codex: a list call with a fresh home writes state files into that home.
+- omp: `OMP_PROFILE` against the real omp root (the probe used a scratch root).
+- The layers above the omp adapter on a skill turn.
 
 ## Plan
 

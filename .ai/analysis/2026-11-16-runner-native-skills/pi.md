@@ -132,3 +132,64 @@ and assistant `EPSILON-4a0f3082: printed`.
   `streamingBehavior`); DOCS say they expand `/skill:` the same way (`docs/rpc-commands.md`).
 - `pi-ci-wait.mjs` loaded alongside: it needs Squawk's tool socket.
 - pi packages installed at project level, and `get_commands` without a configured model or with failed auth.
+
+## Open checks, round 2 (2026-11-16)
+
+pi 1.4.0, same transport and flags as round 1 (`pi --mode rpc` plus Squawk's extensions and default tool flags).
+`<S>` is a new scratch repo and `<H>` a scratch pi home, both directly under `/tmp` and removed afterwards.
+Model turns used: 2 of 4 (`zai/glm-5.3-flash`). Everything else ran with no model call. For the stream checks
+that need a prompt but no model, `<H>/models.json` held one provider whose `baseUrl` was `http://127.0.0.1:9/v1`
+(connection refused), so pi emitted the user message and then `stopReason:"error", errorMessage:"Connection error."`.
+
+Fixture: `<S>/.pi/skills/probe-alpha`, `<S>/.pi/skills/probe-shared`, and two project skills named like two of
+the user's own `~/.agents/skills` skills (`<U1>` in `<S>/.pi/skills`, `<U2>` in `<S>/.agents/skills`);
+`<H>/skills/probe-homeskill` and `<H>/skills/probe-shared`. No credential file was copied or linked into `<H>`.
+
+### Check A: does the list follow a non-default account home?
+
+- Variable: `PI_CODING_AGENT_DIR`, set to the account folder. DOCS: `packages/cezar/src/core/agent-profiles.ts`
+  line 42 (`pi: { select: { envVar: 'PI_CODING_AGENT_DIR', by: 'folder' }, configSubdir: null, ... }`) and
+  `profileEnv()`; applied by `workspace/agent-profiles.ts` only for a named account (the default account adds
+  nothing to the env).
+- What Squawk puts in that home: nothing. It stores the folder path in its own `~/.cezar/agent-accounts.json`,
+  and pi creates the content on login. DOCS: `agent-profiles.ts` comment "add the profile → Connect → the CLI
+  creates the dir on login"; the markers Squawk looks for are `auth.json`, `settings.json`, `models.json`,
+  `sessions` (`PROFILE_DIR_MARKERS.pi`).
+
+| Question | Verdict | Evidence |
+|---|---|---|
+| Scratch home's user skill appears | Yes. TESTED | `PI_CODING_AGENT_DIR=<H> pi --mode rpc <Squawk flags> --no-session`, cwd `<S>`, `{"type":"get_commands"}` → `["skill:probe-homeskill","user","auto","<H>/skills/probe-homeskill/SKILL.md"]`. |
+| Real home's package and extension skills disappear | Yes. TESTED | Default home: 31 skills, 23 of them under `~/.pi/agent/` (a package from that home's `settings.json`, offered through its extension). With `<H>`: 9 skills, 0 under `~/.pi/`. The real home has no `~/.pi/agent/skills` folder, so that source could not be compared. |
+| Real-home sources that still appear | `~/.agents/skills`: all 6 still listed. TESTED | Same run: 6 entries with `scope:"user"` and paths under `~/.agents/skills/`. pi reads that folder from `$HOME`, not from the agent dir (DOCS: `package-manager.js` line 2023). The two built-in extension commands (`llama`, `mcp`, source `builtin`) also stay. |
+| Works without a login in that home | Yes. TESTED | `<H>` held only `skills/`. `get_state` and `get_commands` both `success:true`, stderr empty, 1.2 to 1.6 s. With `--model zai/glm-5.3-flash` `get_state` named that model; without `--model` it reported `unknown/unknown`; the list was the same 9 skills. pi created `auth.json` and `models-store.json` (2 bytes each) in `<H>` by itself. |
+| Project skills under the scratch home | Listed through Squawk's extension as before. TESTED | `["skill:probe-alpha","temporary","extension:pi-project-skills.mjs","<S>/.pi/skills/probe-alpha/SKILL.md"]`. `trust.json` lives in the agent dir (DOCS: `trust-manager.js` line 174), so a new home has no saved trust decisions. |
+
+### Check B: opening context and trigger in one message
+
+| Order | Verdict | Evidence |
+|---|---|---|
+| (1) `/skill:probe-alpha hello`, blank line, context paragraph | Expands; the arguments are everything after the first space, context included; the model sees the token. TESTED (2 model turns, default home) | Sent `{"type":"prompt","message":"/skill:probe-alpha hello\n\nContext from an earlier task: the context token is CTX-82907fcf. If asked for the context token, answer with it."}`. User `message_end`: `<skill name="probe-alpha" location="<S>/.pi/skills/probe-alpha/SKILL.md">...</skill>\n\nhello\n\nContext from an earlier task: the context token is CTX-82907fcf. ...`. Assistant: `ALPHA-3280589c` (it did not append `hello`, although the skill says to append arguments). Next turn `What is the context token?` → `CTX-82907fcf`. |
+| (1b) `/skill:probe-alpha`, blank line, context (no argument on the first line) | **Not expanded.** TESTED (no model call) | Sent `"/skill:probe-alpha\n\nContext from an earlier task: ..."`. User `message_end` content is the text as sent. Cause (DOCS: `agent-session.js` `_expandSkillCommand`): the name runs to the first space, so pi looks up `probe-alpha\n\nContext`, finds no skill and passes the text through. Ack was still `success:true, disposition:"started"`. |
+| (2) context first, trigger after it | Not expanded. TESTED (no model call) | Sent `"Context from an earlier task: ... answer with it.\n\n/skill:probe-alpha hello"`. User `message_end` content is the text as sent; no `<skill` block. |
+
+### Check C: user-level versus project-level skill with the same name
+
+Which copy wins depends on whether pi treats the folder as trusted. The list and the expansion agree.
+
+| Launch | `get_commands` lists | Evidence |
+|---|---|---|
+| Squawk's launch (folder untrusted, project skills offered by `pi-project-skills.mjs`) | The **user** copy; the project copy is dropped without a record. TESTED | Scratch home: `["skill:probe-shared","user","auto","<H>/skills/probe-shared/SKILL.md"]`, no `<S>/.pi/skills/probe-shared` entry. Default home: `<U1>` and `<U2>` both resolve to `~/.agents/skills/...`; the project copies in `<S>/.pi/skills` and `<S>/.agents/skills` are absent. Tested pairs: `<agentDir>/skills` over `<S>/.pi/skills`, and `~/.agents/skills` over `<S>/.pi/skills` and over `<S>/.agents/skills`. |
+| `--approve` (folder trusted, no Squawk extension needed) | The **project** copy; the user copy is dropped. TESTED | Scratch home: `["skill:probe-shared","project","auto","<S>/.pi/skills/probe-shared/SKILL.md"]`. Default home and scratch home: `<U1>` from `<S>/.pi/skills/<U1>/SKILL.md`, `<U2>` from `<S>/.agents/skills/<U2>/SKILL.md`; entries under `~/.agents/skills` fall from 6 to 4. |
+
+- Expansion under Squawk's launch: `/skill:probe-shared` expanded the user copy. TESTED (no model call, scratch
+  home): user `message_end` content `<skill name="probe-shared" location="<H>/skills/probe-shared/SKILL.md">...
+  SHAREDUSER-b737e5c4 ...</skill>`; the project copy's token did not appear.
+- Expansion in a trusted folder: NOT TESTED with a prompt. DOCS: `_expandSkillCommand` takes
+  `resourceLoader.getSkills().skills.find(name)`, the same list `get_commands` returns, so it expands the project copy.
+- No collision record reached RPC stdout or stderr in any of these runs.
+
+### Not tested in round 2, and why
+
+- A logged-in second pi account: the scratch home had no login, and copying or linking credentials was forbidden.
+- A user skill in the real `~/.pi/agent/skills`: that folder does not exist here and user homes are read-only;
+  the scratch home stood in for it.

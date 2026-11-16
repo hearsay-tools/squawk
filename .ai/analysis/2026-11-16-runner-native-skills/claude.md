@@ -183,3 +183,82 @@ The model resolved `references/extra.md` against the "Base directory for this sk
 - Whether the list routes answer on a logged-out account.
 - A structured skill input or a dedicated "run skill" control request: none found in `--help`; the binary's control subtypes include `get_skills_dialog`, `reload_skills`, `reload_plugins`, `local_command`, and I tested only the first three.
 - Caveat on the free expansion probe: the zero-cost failure for a made-up model id came from this host's API proxy (`400 unknown provider`). On another host the error text may differ.
+
+## Open checks, round 2 (2026-11-16)
+
+Claude Code CLI `2.1.321`. Model turns used in this round: 2 (both in Check B, Haiku). Checks A and C made no model call.
+Fixture: a new scratch repo under `/tmp` with one project skill `.claude/skills/probe-alpha`, and a scratch account home under `/tmp` with one user skill `skills/probe-homeskill`. No credential file was copied or linked into the scratch home.
+Counts on this host's real home (names withheld): 7 user skills, 3 installed plugins carrying 28 plugin skills. Claude Code itself adds 18 bundled skills and 4 built-in plugins (`source: …@builtin`).
+
+### Check A: does the list follow a non-default account home?
+
+**Verdict: yes. The list follows `CLAUDE_CONFIG_DIR` completely, and it works without a login in that home.**
+
+Source (read, not run):
+- Variable: `CLAUDE_CONFIG_DIR`. `packages/cezar/src/core/agent-profiles.ts`: `ACCOUNT_LAYOUT.claude = { select: { envVar: 'CLAUDE_CONFIG_DIR', by: 'folder' }, … stateFile: 'beside-home' }`; `profileEnv('claude', dir)` returns `{ CLAUDE_CONFIG_DIR: dir }` for a named account and `{}` for the default account.
+- The account folder is a path the user gives, stored as written (`packages/cezar/src/workspace/agent-accounts.ts`, example in its comment: `CLAUDE_CONFIG_DIR=~/.claude-klaudiusz claude`).
+- What Squawk puts in that home: I found no `mkdir`, `writeFile` or `symlink` call in `core/agent-profiles.ts`, `workspace/agent-profiles.ts`, `workspace/agent-accounts.ts` or `core/provider-auth.ts`. Squawk reads the state file `<folder>/.claude.json` (`paths.ts`, `claudeStateFilePath`: inside the folder under the override, a sibling `~/.claude.json` for the default home). The CLI's own login fills the folder.
+
+TESTED, list route = Squawk's session argv (`--input-format stream-json --output-format stream-json --verbose --replay-user-messages --include-hook-events --settings '{"crossSessionInbound":"refuse"}' --permission-mode dontAsk --allowedTools Read,Edit,Write,Grep,Glob,Bash --model haiku`), stdin = control request `get_skills_dialog`, then user line `/reload-plugins`; cwd = scratch repo:
+
+| Run | `get_skills_dialog` | `system/init` | Hook frames | `/reload-plugins` result |
+|---|---|---|---|---|
+| real home (no variable) | 36: project 1, user 7, plugin 28 | 54 skills, 7 plugins | 2 started | `Reloaded: 3 plugins · 29 skills · 5 agents · 12 hooks …` |
+| `CLAUDE_CONFIG_DIR=<scratch home>`, auth variables inherited | 2: `probe-alpha(project)`, `probe-homeskill(user)` | 20 skills (2 fixtures + 18 bundled), 0 plugin skills, 4 plugins, all `@builtin` | 0 | `Reloaded: 0 plugins · 0 skills · 5 agents · 0 hooks …` |
+| same, with `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN` unset for the child | identical to the row above | identical | 0 | identical; `num_turns 0`, cost 0, exit 0, empty stderr |
+
+- The scratch home's user skill appears (`source: user`).
+- The real home's 7 user skills, 3 installed plugins, 28 plugin skills and its hooks all disappear. `init.mcp_servers` is empty.
+- Real-home sources that still appear: none. What remains is built into the CLI (18 bundled skills, 4 `@builtin` plugins). `~/.agents/skills` is not a Claude source (round 1).
+- No login needed: the third row has no credential in the scratch home and no auth variable, and both list routes answer normally.
+- Side effect: the CLI created `.claude.json`, `backups/`, `plugins/store/`, `projects/<cwd-slug>/`, `sessions/` and `telemetry/` in the scratch home during a list probe.
+- NOT TESTED: enterprise or managed settings (none probed), and a model turn under the scratch home.
+
+### Check B: opening context and trigger in one user message
+
+**Verdict: yes. With the context block first and `/probe-alpha hello` as the LAST text block, Claude Code expands the skill and the model also gets the context block.**
+
+TESTED (2 model turns), Squawk's session argv, one stdin line:
+```
+content: [ {"type":"text","text":"Handoff context for this task: …\nThe context token is CTX-81e5d84b. If asked for the context token, answer with it."},
+           {"type":"text","text":"/probe-alpha hello"} ]
+stdout:  user isReplay=true  "<command-message>probe-alpha</command-message>\n<command-name>/probe-alpha</command-name>\n<command-args>hello</command-args>"
+         assistant text: ALPHA-bd0c5d90:hello        result num_turns=1 denials=[]     (no tool_use; no Skill call)
+turn 2:  "What is the context token?"  →  assistant text: CTX-81e5d84b   num_turns=1
+session JSONL: one isMeta user message with two text blocks: [ "<the context block>", "Base directory for this skill: …/probe-alpha\n\n<body>…" ]
+```
+- The replayed user message shows only the command tags. The context block is not in the replay; it is in the session JSONL and the model answered from it.
+
+TESTED (no model turn; `--model probe-no-such-model-0`, cost 0), reverse order `[ "/probe-alpha hello", "<context block>" ]`:
+```
+stdout:  user isReplay=true  ["/probe-alpha hello","Handoff context for this task: …"]     (raw blocks, no command tags)
+session JSONL: 0 isMeta messages
+```
+- No expansion. The trigger must be the last text block (same result as round 1).
+
+### Check C: a list probe that runs no user hooks
+
+**Verdict: exists. Add `disableAllHooks` through `--settings`. The skill set is unchanged and no hook runs.**
+
+Exact argv (TESTED, no model call, no user line, nothing written to `~/.claude`):
+```
+claude --print --input-format stream-json --output-format stream-json --verbose --include-hook-events \
+       --no-session-persistence --settings '{"disableAllHooks":true}'
+stdin:  {"type":"control_request","request_id":"d1","request":{"subtype":"get_skills_dialog"}}
+stdout: one frame only: control_response success, 36 skills (project 1, user 7, plugin 28), at 0.7–0.9 s
+```
+Hook detection: `--include-hook-events` frame count, plus a marker `SessionStart` hook in the scratch repo's own `.claude/settings.json` that appends a line to a scratch file. The user's settings were not touched.
+
+| Variant | Skills listed | Hook frames | Marker hook ran | Session file |
+|---|---|---|---|---|
+| Squawk session argv, `--settings '{"crossSessionInbound":"refuse"}'`, dialog + `/reload-plugins` (baseline) | 36 dialog, 54 `init.skills`, 7 plugins | 3 started, 3 response | yes | yes |
+| same with `--settings '{"crossSessionInbound":"refuse","disableAllHooks":true}'` | 36, 54, 7 (same) | 0 | no | yes |
+| the argv above (control request only) | 36; name+source list hash equal to baseline | 0 | no | no |
+| the argv above plus `--strict-mcp-config` | 36, same hash | 0 | no | no |
+| control request only, **without** `disableAllHooks` | 36 | 3 started, 3 response | yes | no |
+| `--bare` | 0 | 0 | no | no |
+| `--safe-mode` (round 1) | 0 | 0 | - | no |
+
+- Sending `get_skills_dialog` before any user line does not avoid hooks: `SessionStart` hooks run at process start.
+- With `disableAllHooks` the `/reload-plugins` text still says `12 hooks`: they are loaded, not run.
+- NOT TESTED: hooks from managed (policy) settings, and whether `--strict-mcp-config` stops the user's MCP servers from starting during the probe (only the list was compared).

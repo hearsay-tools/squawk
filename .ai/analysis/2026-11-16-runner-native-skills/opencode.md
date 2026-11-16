@@ -92,3 +92,53 @@ The probes used the same launch (`opencode serve --hostname 127.0.0.1 --port <fr
 - Servers started: PIDs 2844427, 2981014, 3009524, 3029060; each stopped with `kill -TERM <pid>` and confirmed gone. No opencode listener of this probe remains.
 - Scratch folders `/tmp/skill-probe-opencode.jWFb9t` and `/tmp/skill-probe-opencode-ext.5477bc` removed.
 - Left behind by the runner itself: 9 probe sessions in OpenCode's own data folder.
+
+## Open checks, round 2 (2026-11-16)
+
+opencode 1.19.4, model `zai-coding-plan/glm-5.3-flash`, 4 model turns (4 command requests). Scratch root `/tmp/skill-probe-opencode2.<rand>`; Node v26.13.0 for the driver.
+
+### Check A: does the skill list follow a non-default account home?
+
+**Squawk has no home variable for OpenCode, and no non-default OpenCode account exists.**
+
+| Fact | Evidence |
+|---|---|
+| No selecting variable | `packages/cezar/src/core/agent-profiles.ts:41`: `opencode: { select: null, ... }`, so `profileEnv('opencode', dir)` returns `{}`. DOCS |
+| A second account cannot be created | `server/server.ts:1594`: `POST /workspace/agent-profiles` answers 400 `opencode cannot carry more than one account`. `delegation/provision-accounts-lifecycle.test.ts:115` asserts the spec env has no `OPENCODE_CONFIG_DIR`. DOCS |
+| Squawk writes nothing into an OpenCode home | `PROFILE_DIR_MARKERS.opencode` is `[]` (`core/agent-profiles.ts:150`); no account folder is provisioned. DOCS |
+| What moves the default instead | `agentHomePaths` (`paths.ts`) reads `$XDG_CONFIG_HOME/opencode`, and the `XDG_` prefix passes to the child (`BASE_ALLOW_PREFIXES`, `core/agent-env.ts`). `XDG_*` set on the Squawk process is therefore the only way an OpenCode "account" changes. DOCS |
+| What an account is for OpenCode | Two folders: config in `$XDG_CONFIG_HOME/opencode` (config file, plugin list, provider definitions, `skills/`) and data in `$XDG_DATA_HOME/opencode` (`auth.json`, `opencode.db` with the sessions). Folder contents listed by name only. TESTED (below) |
+
+Test: scratch config home with one user skill at `<scratch>/xdg/config/opencode/skills/probe-homeskill/SKILL.md`, no credential file copied or linked; cwd = scratch repo with one project skill; `env <vars> opencode debug skill > file` (no model call). All runs exit 0.
+
+| Variables set | Total | Scratch home skill | Project skill | `~/.agents/skills` + `~/.claude/skills` | `~/.claude/skills/.trash` | Plugin skills (`~/.cache/opencode/packages`) | Built-in | `opencode models` |
+|---|---|---|---|---|---|---|---|---|
+| none (baseline) | 37 | 0 | 1 | 7 | 12 | 16 | 1 | 27 models, 4 providers |
+| `XDG_CONFIG_HOME` | 22 | 1 | 1 | 7 | 12 | 0 | 1 | 64 models, 4 providers |
+| `XDG_DATA_HOME` | 37 | 0 | 1 | 7 | 12 | 16 | 1 | 24 models, 3 providers |
+| `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_STATE_HOME` | 22 | 1 | 1 | 7 | 12 | 0 | 1 | 13 models, 1 provider |
+
+- The scratch home's user skill appears when `XDG_CONFIG_HOME` points at it. TESTED. The same through Squawk's route: `XDG_CONFIG_HOME=<scratch>/xdg/config opencode serve ...`, `GET /skill` -> `http=200 0.48s`, 25 entries, `probe-homeskill` listed, 0 plugin skills.
+- The real home's plugin skills disappear (16 -> 0) with `XDG_CONFIG_HOME` moved, because the plugin list lives in the config file (1 plugin entry there). Moving only the data home keeps them. TESTED.
+- The real home's user skills do NOT disappear under any XDG variable: the 7 skills in `~/.agents/skills` and `~/.claude/skills` and the 12 under `~/.claude/skills/.trash` are found through `HOME`, not through an XDG folder. TESTED. Which of the two folders wins a shared name varied by run (4+3, 6+1, 1+6), as in round 1.
+- The list works without a login in that home: with all four XDG folders moved (no `auth.json`) `opencode debug skill` exits 0 with 22 entries, and `opencode models` drops from 27 models to 13 from 1 provider. TESTED.
+- OpenCode wrote into the scratch homes by itself: `config/opencode/.gitignore`, `config/opencode/opencode.jsonc` (key `$schema` only), `data/opencode/opencode.db`, `data/opencode/log`, `data/opencode/repos`, `cache/opencode/models.json`, `cache/opencode/bin`, `state/opencode/locks`. TESTED.
+- Overriding `HOME`: NOT TESTED (it is not something Squawk sets, and it would move the shell's git and gh setup too).
+
+### Check B: `POST /session/{id}/command` as a long poll next to SSE
+
+Recorded cause in the adapter: `opencode-server-runner.ts:810-812`, "`POST /session/:id/message` long-polled the whole turn, and undici's default 300s headers timeout ended it as `prompt failed: fetch failed` (#4, upstream #897); `prompt_async` returns immediately." Lines 960-965 add that undici also cuts a response body idle for 300 s, which is why the SSE reader uses `node:http`; line 1524 says the `fetch` helper is safe only because nothing long-polls any more.
+
+Setup for B1, B2, B4: Squawk's launch (`opencode serve --hostname 127.0.0.1 --port <free>`, cwd = scratch repo, no config). One `node:http` connection reads `GET /event`; a second sends the command. Times are ms from driver start.
+
+| # | Verdict | Evidence |
+|---|---|---|
+| B1 hold the request for a turn of 60 s or more | **The POST stays open and answers only at turn end; every turn event arrives on SSE meanwhile. TESTED.** | Skill body asks for `sleep 70` then a token. `[1546] POST command sent` -> `[2525] SSE message.updated role=user` + `message.part.updated` text part with the skill body -> `[2539] session.status busy` -> `[5911] tool bash running {"command":"sleep 70"}` -> `[75985] tool bash completed` -> `[77170] POST response headers status=200 after 75624ms content-length=1286` (headers and body in the same instant, no early headers, no chunked transfer) -> `[77177] session.status idle`, `session.idle`, `command.executed name=probe-slow`. SSE never went quiet for more than 10 s (`server.heartbeat` every 10 s). Reply: `SLOW-ff354b18`. |
+| B1 consequence for a `fetch` client | **A held request dies at 300 s. TESTED without the runner.** | Local `node:http` server that sends headers after 310 s, `fetch(url, {method:'POST'})` on Node v26.13.0: `fetch failed after 300880ms: TypeError: fetch failed; cause=HeadersTimeoutError UND_ERR_HEADERS_TIMEOUT`. The command route sends no headers before turn end (B1), so the adapter's `fetch` helper would fail the same way on a command turn longer than 300 s. A turn that long through the command route itself: NOT TESTED (turn and time budget). |
+| B2 client drops the POST after 5 s | **The turn continues to the end; `command.executed` is missing. TESTED.** | Skill asks for `sleep 30`. `[1522] POST sent` -> `[1548] message.updated role=user`, text part with the skill body, `session.status busy` -> `[6522] client destroys the socket` (`socket hang up`) -> `[9919] tool bash running {"command":"sleep 30"}` -> `[39943] tool bash completed` -> `[42832] session.status idle`, `session.idle`. Event counts: `message.updated=10 message.part.updated=15 message.part.delta=84 session.status=6 session.idle=1`, `command.executed=0`. Stored reply: `MID-e02da699`. |
+| B2 another sign that the command expanded | **Yes: the user message. TESTED.** | About 30 ms after the POST (before any model output) SSE carries `message.updated {info:{role:"user", id, agent, model}}` and `message.part.updated {part:{type:"text", messageID, text:"<skill body>\n\nBase directory for this skill: <dir>..."}}`. The part has no marker that it came from a command (keys: `id, messageID, sessionID, text, type`); a client recognises it by the text, which equals the `template` from `GET /command`. The command body also accepts a client-chosen `messageID` (`^msg`) per `/doc`: DOCS, NOT TESTED. |
+| B3 async form | **None. DOCS.** | `/doc` (162 paths): the only command routes are `POST /session/{sessionID}/command` (query parameters `directory`, `workspace`; body keys `agent, arguments, command, messageID, model, parts, variant`), `GET /command`, `GET /api/command` and the TUI-only `POST /tui/execute-command`. No `command_async`, no async flag. `POST /api/session/{sessionID}/prompt` takes `{text, files, agents}` only. |
+| B3 part type on `prompt_async` | **No command or skill part. DOCS.** | Part types: `TextPartInput`, `FilePartInput`, `AgentPartInput`, `SubtaskPartInput`. `SubtaskPartInput` has an optional `command` string beside its required `prompt`, `description`, `agent`; whether that field expands anything: NOT TESTED (turn budget). |
+| B4 second `command` while the turn is busy | **Accepted and steered into the running turn; no error, no queue of its own. TESTED.** | `[1516] POST A probe-mid` (`sleep 30`) -> `[4673] tool bash running` -> `[15515] POST B probe-quick "second"` -> `[15534] SSE message.updated role=user` + text part with the second skill's body (inserted at once, while bash still runs) -> `[34683] tool bash completed` -> one more model step -> `[36446] POST A status=200 after 34930ms` and `[36447] POST B status=200 after 20932ms`, both with the SAME body (assistant message `msg_...nmztnLe7qgiI8S`) -> one `session.idle` -> `command.executed name=probe-mid` and `command.executed name=probe-quick`, both with that same `messageID`. Final text: `QUICK-0436886b:second`; the first skill's token `MID-e02da699` was never returned, although its shell command ran. |
+
+Cleanup: servers PID 1604019 and 1784634 stopped by PID and confirmed gone; scratch folder removed; no process with a cwd inside the scratch folder is left. The three probe sessions of B1, B2 and B4 stay in OpenCode's own data folder.

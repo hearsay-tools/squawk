@@ -117,3 +117,85 @@ Reply with exactly this token and nothing else: ALPHA-9abaf926. …
 - Sessions Codex wrote in its home by itself: six real threads (`01a1e419-e556-…`, `01a1e41a-508f-…`, `01a1e41a-7e11-…`, `01a1e41a-8976-…`, `01a1e41a-cc4b-…`, `01a1e41a-d9f7-…`) and one mock thread (`01a1e418-a8b2-…`). All other mock threads were `ephemeral`. The probe scripts wrote nothing under `~/.codex` or `~/.agents`; Codex's own writes there (sessions, its logs and state) were not audited beyond the check in Surprise 7.
 - One runner process at a time; every app-server and `codex exec` PID was recorded and seen to exit (code 0). No process with a cwd in the scratch root is left.
 - No Squawk, hsq or cez command was used; no subagent; the repo worktree is unchanged.
+
+## Open checks, round 2 (2026-11-16)
+
+Same runner (`codex-cli 0.164.0`), same transport (`codex app-server` on stdio). Scratch root `/tmp/skill-probe-codex.hx7pVt` (a git repo with `probe-alpha` and `probe-gamma` in `.agents/skills`, and a scratch Codex home `home2/`). Two real model turns (`gpt-5.6-luna`, effort `low`); everything else used no model call. Host load average was about 65 during the real turns.
+
+| Check | Verdict |
+|---|---|
+| A: does the list follow a non-default account home? | **Partly.** `CODEX_HOME` moves the home's own skills, the plugin skills and the built-in skills. Skills in `~/.agents/skills` stay in the list under every `CODEX_HOME`. The list works in a home with no login. |
+| B: `turn/steer` with a real model | **Confirmed: no expansion.** Neither `$probe-alpha` nor a structured `skill` item in a steer injects the skill body. `$probe-alpha` still returned the token because the model read the file itself; the structured item returned no token. |
+| B: what the protocol offers instead | Four routes expand the skill (all TESTED with the mock provider); `turn/start` during an active turn does not. See the table below. |
+
+### Check A: the account home
+
+**How Squawk selects the account (DOCS, source).**
+
+- Variable: `CODEX_HOME`, selected "by folder" (`ACCOUNT_LAYOUT.codex`, `packages/cezar/src/core/agent-profiles.ts:40`).
+- `resolveProfileEnvForRoot` (`packages/cezar/src/workspace/agent-profiles.ts:118`) returns `{ CODEX_HOME: <account folder> }` for a named account and `{}` for the default account. The runner merges it over the child env (`buildCodexAppServerEnv`).
+- What Squawk puts in that home: nothing found. It reads two names there as an advisory "looks like a Codex home" check (`auth.json`, `config.toml`; `PROFILE_DIR_MARKERS.codex`) and reads `auth.json` to show the account identity (`agent-config/account-identity.ts`). The login command and the status probe run the Codex CLI with the same variable (`core/provider-auth.ts`, `loginCommand` and `probe`); the CLI writes the home.
+
+**Test (TESTED, no model call).** Scratch home `home2/` held only `skills/probe-homeskill/SKILL.md`; no credential file was copied or linked. Requests: `initialize`, `account/read {}`, `skills/list {cwds:[<scratch repo>], forceReload:true}`, `plugin/list`, `model/list`, once with the default env and once with `CODEX_HOME=<scratch>/home2`.
+
+| Source of the listed skill | Default home | `CODEX_HOME` = scratch home |
+|---|---|---|
+| Scratch repo `.agents/skills` (`scope:"repo"`) | 2 | 2 |
+| Scratch home `skills/` (`scope:"user"`) | n/a | 1 (`probe-homeskill`) |
+| `~/.agents/skills` (`scope:"user"`; one of them through a symlink to another folder under `~`) | 5 | **5** |
+| `~/.codex/plugins/cache` (`scope:"user"`, with `pluginId`) | 28 skills from 3 plugins | **0** |
+| Built-in skills (`scope:"system"`) | 5, under `~/.codex/skills/.system` | 5, under `<scratch home>/skills/.system` |
+| Total | 40 | 13 |
+
+Excerpts:
+
+- Default: `initialize ok … codexHome=~/.codex`, `skills/list ok 110 ms errors=0 total=40`, `plugin/list: marketplaces=3 plugins=59 installed=3`.
+- Scratch: `initialize ok 486 ms codexHome=/tmp/skill-probe-codex.hx7pVt/home2`, `skills/list ok 18 ms errors=0 total=13`, `{"name":"probe-homeskill","scope":"user","path":"/tmp/skill-probe-codex.hx7pVt/home2/skills/probe-homeskill/SKILL.md"}`, `plugin/list: marketplaces=0 plugins=0 installed=0`.
+
+Answers to the brief's questions:
+
+- **Does the scratch home's user skill appear?** Yes, from `$CODEX_HOME/skills/<name>/SKILL.md`, `scope:"user"`.
+- **Do the real home's user skills and plugins disappear?** The plugin skills (28) and the plugin list disappear. The real home has no skill of its own in `~/.codex/skills` apart from the built-ins, so there was nothing else to disappear.
+- **Which real-home sources still appear?** `~/.agents/skills`: all 5 skills, unchanged. That folder follows `HOME`, not `CODEX_HOME`. The response gives both kinds `scope:"user"`; only `path` tells them apart.
+- **Does the list work without a login in that home?** Yes. `initialize`, `skills/list`, `plugin/list` and `model/list` all answered with no error; `account/read` returned `account: null`. (It also returned `account: null` in the default home on this host.)
+- **Side effect:** the list-only run made Codex write into the scratch home: `skills/.system/` (the 5 built-ins), `installation_id`, five `*.sqlite` state files with their `-shm`/`-wal` files, and `.tmp/` with a `plugins.sync.lock` and a `git-*` folder.
+
+NOT TESTED: a home that has a login but different plugins; whether `.tmp/git-*` means Codex starts fetching a plugin marketplace into a new home.
+
+### Check B: `turn/steer` with a real model
+
+Schema (DOCS): `TurnSteerParams.input` is an array of the same `UserInput` union as `turn/start`: `["text","image","localImage","audio","localAudio","skill","mention"]`. So `turn/steer` accepts a `skill` item. Required fields: `threadId`, `expectedTurnId`, `input`.
+
+Setup for both turns (Squawk's fields): `thread/start {model, cwd, sandbox:'danger-full-access'}`, then `turn/start` with the text "Run the shell command `sleep 20` now and wait for it. When it has finished, reply with the single word DONE.", `effort:'low'`. Three seconds after the `commandExecution` item for `sleep 20` started, the probe sent `turn/steer`. Evidence for "injected" is the thread's rollout file (user-role items and a search for the `<skill>` wrapper).
+
+| Steer input | Steer result | Rollout | Model's answer | Verdict |
+|---|---|---|---|---|
+| `[{type:'text', text:'$probe-alpha steer-args'}]` | `{"turnId":"…"}` at +8.5 s; echoed as a `userMessage` item while `sleep` was still running | User items: the opening prompt and `$probe-alpha steer-args`. `<skill>` injection: **false** | After `sleep 20` (exit 0) the model ran `sed -n '1,240p' <repo>/.agents/skills/probe-alpha/SKILL.md` and answered `ALPHA-401a972d: steer-args` | **TESTED: not expanded.** The token arrived by model choice. |
+| `[{type:'text', text:'Follow the attached skill. Arguments: steer-args'}, {type:'skill', name:'probe-alpha', path:'<repo>/.agents/skills/probe-alpha/SKILL.md'}]` | `{"turnId":"…"}` at +7.5 s; the `userMessage` item echoes both items | User items: the opening prompt and the steer text. `<skill>` injection: **false** | The model ran `rg --files -g 'SKILL.md' -g 'AGENTS.md' -g '*skill*' .` (exit 1) and answered `DONE`. No token | **TESTED: accepted, not expanded.** The skill item is dropped without an error. |
+
+Both turns ended as one `turn/completed` with status `completed` under the turn id that `turn/start` returned. No approval request arrived.
+
+### What the protocol offers for a mid-turn skill message
+
+All TESTED with the mock provider (a local `POST /v1/responses` recorder, no model call), text `$probe-gamma …` sent while or after a 5-second model request. "Expanded" means the next model request holds the `<skill>` message for `probe-gamma`.
+
+| Route | Result | Expanded |
+|---|---|---|
+| `turn/steer` during the active turn | Round 1 (mock) and Check B (real) | No |
+| `turn/start` during the active turn | Returns the **active** turn's id with status `inProgress`; the text joins the running turn; one `turn/completed` in total. Model request: `["SLOWMOCK first message","$probe-gamma second-start"]` | **No** |
+| `turn/interrupt {threadId, turnId}`, wait for `turn/completed` (status `interrupted`), then `turn/start` | Second turn completes. Model request: `["<turn_aborted> The user interrupted the previous turn on purpose…","$probe-gamma after-interrupt","<skill> probe-gamma"]`. The interrupt here landed before the first model request was sent, and the first turn's own text was not in the next request | Yes |
+| Wait for `turn/completed`, then `turn/start` (queue in the client) | Model request: `["SLOWMOCK first message","$probe-gamma after-completed","<skill> probe-gamma"]` | Yes |
+| `thread/queue/add {threadId, clientUserMessageId, input}` during the active turn (queue in the server) | Returns `{"queuedSubmission":{"id":…,"input":[…],"clientUserMessageId":"probe-q-1"}}`; three `thread/queue/changed` notifications; when the active turn completed, a second turn ran by itself (no `thread/queue/start` sent); the queue was empty afterwards. Model request: `["SLOWMOCK first message","$probe-gamma queued","<skill> probe-gamma"]`. On an `ephemeral` thread the request fails: `"ephemeral thread does not support queued submissions: <threadId>"` | Yes |
+
+DOCS only (schema, not run):
+
+- `thread/queue/list`, `/delete`, `/reorder`, `/update`, `/start {threadId, queuedSubmissionId?}` manage the server queue.
+- `thread/inject_items {threadId, items}` appends "Raw Responses API items to append to the thread's model-visible history". The client would have to supply the skill body itself.
+
+NOT TESTED: the server queue and the interrupt route with a real model; a structured `skill` item through `thread/queue/add`; how a queued submission behaves across `thread/resume`.
+
+### Housekeeping, round 2
+
+- Sessions Codex wrote in its home by itself: two real threads (the steer turns) and one mock thread (the non-ephemeral queue test; an earlier attempt of that test was cut off by a session restart and may have left one more). The other mock threads were `ephemeral`.
+- One runner process at a time. Every app-server PID was recorded and seen to exit with code 0, except the run cut off by the restart; after it, no process with a cwd inside the scratch root existed. The scratch root is removed.
+- No Squawk, hsq, cez or squeal command was run; no subagent; this report is the only file this probe changed in the worktree, and it is not committed.

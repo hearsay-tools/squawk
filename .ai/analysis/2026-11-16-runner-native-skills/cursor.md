@@ -171,3 +171,94 @@ Scratch folders removed. All processes with cwd in the scratch repo were stopped
 scan found none. Started: 4 `agent acp` runs, 2 `agent ls` attempts (ended by timeout), 3 print turns. One
 unrelated chat store under another workspace hash disappeared from `~/.cursor/chats` during the print turns;
 nothing under the user homes was edited or deleted by hand.
+
+## Open checks, round 2 (2026-11-16)
+
+CLI `2026.11.13-eacade1`, print mode with Squawk's flags (`agent --disable-auto-update -p --force --trust
+--output-format stream-json --model gpt-5.4-nano-low`, prompt on stdin, cwd = scratch repo). Load average 55 to 70.
+Model turns: 4 reached a model (2 for Check B, 2 for Check A). Two more attempts ended before any model output
+(a flag the server refused, and a TLS error under the scratch config dir); both are reported below.
+
+### Check A: does the skill set follow a non-default account home?
+
+Print mode has no list route, so this answers it for the trigger set, with the ACP list (not Squawk's transport) as
+the no-model check.
+
+| Claim | Verdict | Evidence |
+| --- | --- | --- |
+| Squawk has no home variable for Cursor | DOCS (Squawk source) | `packages/cezar/src/core/agent-profiles.ts`: `ACCOUNT_LAYOUT.cursor = { select: null, ... }` with the comment "CURSOR_CONFIG_DIR relocates configuration, not a verified whole account home"; so `PROFILE_ENV_VAR.cursor` is `null`, named accounts are refused for Cursor, and `PROFILE_DIR_MARKERS.cursor = []`. No flag either: `cursor-print-runner.ts` adds no account argument. |
+| What an "account" is for Cursor under Squawk | DOCS (Squawk source) | The host login, or `CURSOR_API_KEY` / `CURSOR_AUTH_TOKEN` in Squawk's own environment (`provider-auth.ts`, `parseCursorStatus`); `buildChildEnv` passes every `CURSOR_*` variable to the child. `CURSOR_CONFIG_DIR` is read only by `paths.ts` (`agentHomePaths().cursor`) to find `cli-config.json` for the Settings page (`agent-config/catalog.ts`), and reaches the CLI only when it is already set in Squawk's environment. Squawk writes nothing into a Cursor home on its own. |
+| Which paths follow `CURSOR_CONFIG_DIR` in the CLI | DOCS (bundle `index.js`, `cursor-config/dist/paths.js`) + TESTED | Source: the config dir is `CURSOR_CONFIG_DIR`, else `$XDG_CONFIG_HOME/cursor`, else `~/.cursor`, and it holds `cli-config.json`. The login file is `($XDG_CONFIG_HOME or ~/.config)/cursor/auth.json` and ignores the variable. `projects/` uses `CURSOR_DATA_DIR`, else `~/.cursor`. Skill roots and `~/.claude/plugins/installed_plugins.json` are joined to `os.homedir()`. TESTED: after the runs below the scratch home held `cli-config.json`, `statsig-cache.json`, `acp-sessions/<id>/meta.json`, `chats/<hash>/<id>/{meta.json, store.db}`; transcripts still went to `~/.cursor/projects/<slug>/agent-transcripts/`. |
+| The list does not follow the variable | TESTED, no model call | Scratch home with `<scratch-home>/skills/probe-cfgdir-user/SKILL.md` and `<scratch-home>/.cursor/skills/probe-cfgdir-nested/SKILL.md`, no credential file. `CURSOR_CONFIG_DIR=<scratch-home> agent --disable-auto-update acp`, then `initialize`, `authenticate`, `session/new {cwd, mcpServers: []}`: 36 entries = 1 + 6 global + 18 builtin + 5 project + 6 user skills. The same call without the variable: the same 36 names (equal hash of the sorted name list). No entry contains `cfgdir`. |
+| Login works without a login in that home | TESTED | `authenticate` answered ok at 3352 ms and `session/new` at 6429 ms under the scratch home, which holds no auth file. The login is not in the config dir. |
+| The trigger set does not follow the variable | TESTED, 1 turn | Print turn with `CURSOR_CONFIG_DIR=<scratch-home>`, stdin `/probe-cfgdir-user /probe-cfgdir-nested /<one real-home user skill> /<one real-home plugin skill> /probe-unref /home` + "list every reply token ... quote the `**Core principle:**` line ... first heading of every other attached skill". `assistant`: line 1 `UNREF-1ea4c328 HOMEDIR-1674a885` (the two project skills), line 2 the plugin skill's line verbatim, line 3 the user skill's first heading plus the two project headings. Neither `CFGuser-9b8c87a9` nor `CFGnested-51d971f5` came back. Zero `tool_call` frames. |
+| Real-home sources that still load under the variable | TESTED | All of them: the 6 listed user skills (from `~/.claude/skills`, 8 folders, and `~/.agents/skills`, 6 folders; `~/.cursor/skills` and `~/.codex/skills` hold none), the 18 builtin skills in `~/.cursor/skills-cursor`, and plugin skills from `~/.cursor/plugins/cache` (3 marketplaces, 11 plugin folders, 53 `SKILL.md` files). Claude's registry there lists 4 plugins. |
+| A model turn under a fresh config dir | TESTED: failed on this host until one setting was set | First attempt: frames `system/init`, `user`, then `connection/reconnecting` and `retry/starting` three times; exit 1; stderr `RetriableError: [internal] ...SSL routines:ssl3_read_bytes:tlsv1 alert no application protocol`. The fresh `cli-config.json` has the key `network.useHttp1ForAgent`, as the real one does (values not read). After I set it to `true` in the scratch file the turn ran. So this host's proxy needs a setting that lives in the config dir. |
+| An earlier form of the question gave `NONE` | TESTED, inconclusive | The same slash line with "list the frontmatter name of every attached skill" returned `NONE`; the token question right after it showed four skills attached. The question was the fault, not the attach. |
+| `XDG_CONFIG_HOME` or `HOME` as the account switch | NOT TESTED | Source says `XDG_CONFIG_HOME` moves both the config dir and the login file, and `HOME` moves every skill root. Squawk sets neither for Cursor. |
+
+### Check B: accidental triggers from Squawk's own prompt text
+
+**1. The match rule (DOCS: bundle `8869.index.js`, `findSkillReferences`; examples run through that regex in Node).**
+
+- Skills: `/(?:^|\s)\/([a-zA-Z0-9_-]+)/g` over the whole stdin text, then an exact, case-sensitive lookup of the id.
+  Commands: `/(?:^|\s)\/([a-zA-Z0-9_-]+)(?:[ \t]+([^\n]+))?/g`, the rest of the line becomes arguments.
+- Before the `/`: start of the whole text, or any whitespace (space, tab, newline, no-break space). No `m` flag.
+  Anything else before it blocks the match.
+- After the id: nothing is required. The id is the longest run of `[a-zA-Z0-9_-]`, whatever follows.
+
+| Text | Ids matched |
+| --- | --- |
+| `/name`, `x /name`, `x\n/name`, `- /name`, `1. /name`, `> /name` | `name` |
+| `see /name.`, `see /name, ok`, `see /name) ok`, ` /name:sub`, ` /name/SKILL.md` | `name` |
+| ` /home/user/x` | `home` |
+| `` `/name` ``, `"/name"`, `'/name'`, `(/name)`, `</name>` | none |
+| `https://x/name`, `a/name`, `~/name`, ` //name`, ` /.cursor/skills` | none |
+
+**2. A sample of what Squawk sends (built by calling Squawk's own builders from this worktree; stub store, no secrets).**
+
+`cursor-print-runner.ts` sends `prependSystemPrompt(systemPrompt, userPrompt)` = `systemPrompt + "\n\n---\n\n" + userPrompt`.
+The system prompt is `composeSystemPrompt(skill part, launchSystemTail(...))`; the opening user prompt is the
+session-context prefix (the injected handoff file) plus the task text.
+
+| Part (builder) | Chars | Matches | Ids |
+| --- | --- | --- | --- |
+| System tail: delegation with workers on (`provisionDelegationSession`), automations, webhooks, artifacts, long commands, handoff contract | 33,384 | 0 | none: every absolute path in it is single-quoted by `shellQuote`, and other slashes sit inside words |
+| Skill part (`skillSystemPrompt`, present when a skill is selected) | 514 | 2 | the selected skill's name, from `Selected skill: /<name>`; the first path segment of `Skill files are installed on disk at: <dir>` |
+| Context prefix (`buildSessionContext` with a file from `seedHandoffFile` + `renderHandoffRecords`) | 674 | 2 | the first path segment of `**Worktree:** <path>`; `cezar`, from the records end marker `<!-- /cezar:records -->` (present once an autosave record exists) |
+| **Whole stdin** | 34,787 | **4** | 4 distinct: `probe-sel` (the selected skill), `tmp` (skill folder under `/tmp` here), `home` (worktree path), `cezar` |
+
+Two more Squawk-authored texts match the rule by source reading, not in the sample: the lifecycle input
+`Skills installed for /<name>: ...` / `Skill files for /<name> are at <dir>.` (`workflows/run/run-skills.ts`), and the
+pasted-attachment list `- <absolute path>` (`workflows/pasted-content.ts`). So the candidate ids from Squawk's own
+words are: the selected skill's name, `cezar`, and the first segment of an absolute path (`home`, `Users`, `tmp`, `var`, ...).
+Text Squawk forwards but does not write (skill body, extra system prompt, handoff goal and progress, user text) can match anything.
+
+**3. Real turn (TESTED).** Scratch repo with `.cursor/skills/{home, tmp, cezar, probe-sel, probe-unref}`, each with its own
+token. The Squawk-injected body of `probe-sel` carried a different token, `INJECTED-4cc1033c`. Stdin = the 34,787-char
+sample + "Use no tools and do not follow any skill. List every reply token ... in skill instruction text you can see
+in this message or attached to it".
+
+- Frames: `system/init`, `user`, `assistant`, `result/success`; zero `tool_call` frames.
+- `assistant` = `NATIVESEL-c26703ba TMPDIR-9cc61ad6 HOMEDIR-1674a885 CEZARWORD-4e040800 INJECTED-4cc1033c`.
+- All four candidate skills were attached. `probe-unref`, which the text never names, was not (`UNREF-1ea4c328` absent).
+- So a skill Squawk injects today is delivered twice when a native folder of the same name exists: once as Squawk's
+  text and once as Cursor's attachment of the native copy.
+- On this host none of the 31 non-project entries in the ACP list is named `home`, `tmp`, `cezar`, `Users`, `var`,
+  `private`, `usr`, `opt` or `mnt`; the path-segment and `cezar` hits need a skill or command folder with that name.
+
+**4. Escapes.**
+
+| Escape | Verdict | Evidence |
+| --- | --- | --- |
+| Put a non-whitespace character before the `/` | TESTED: works | The same sample with four edits (`` `/probe-sel` ``, both paths in single quotes, `<!--/cezar:records-->`): the regex finds 0 matches, and the turn returned only `INJECTED-4cc1033c`, zero `tool_call` frames. |
+| A prompt marker or escape syntax that stops the scan for part of the text | DOCS: none | The resolver is the bare regex above over the whole string: no backslash handling, no code-fence or tag awareness, no offset or range argument. |
+| `--exclude-workspace-context` (hidden flag: "Strip all workspace-sourced context (rules, skills, transcripts, notes) from the session") | TESTED: refused for this account | DOCS: with it print skips the loader, so no skill or command is attached at all; it is whole-session, not per part. Turn with the flag: exit 1 after three retries, stderr `RetriableError: [invalid_argument] Workspace context exclusion is not allowed for this user, team, or selected model`. No model output. |
+| `--system-prompt <file>` (hidden flag: "Replace system prompt with contents of file (Anysphere/OpenAI team only)") | DOCS only, NOT TESTED | The scan covers the stdin prompt only, so text passed this way would not be scanned; the help text limits it to Cursor's own team and it replaces Cursor's system prompt. |
+
+### Cleanup (round 2)
+
+Scratch repo, scratch home and tools folder under `/tmp` are removed. Each print run was a session leader; its
+process group got SIGTERM after exit and a scan of `/proc/*/cwd` found nothing left in the scratch folders after any
+run. The 2 ACP runs were stopped by their process group. Nothing under `~` was edited by hand; the CLI wrote its own
+session files under `~/.cursor/projects/<scratch slug>/`.

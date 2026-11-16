@@ -238,3 +238,170 @@ In the resumed process, after T7, I created `.claude/skills/probe-late/SKILL.md`
 
 omp wrote its own session files under `~/.omp/agent/sessions/` for the three probe directories (accepted by
 the brief; not removed). Nothing else was written outside `/tmp`.
+
+## Open checks, round 2 (2026-11-16)
+
+omp 18.13.1, same transport as round 1. 2 model turns used (`cliproxy/gpt-5.6-luna`), both for Check B.
+Scratch root `/tmp/skill-probe-omp2.<rand>` with `repo/` (git, 3 project skills) and `home/` (scratch omp
+root).
+
+### Check A: does the skill list follow a non-default account home?
+
+**How Squawk selects an omp account (DOCS, Squawk source).**
+
+- `core/agent-profiles.ts` `ACCOUNT_LAYOUT.omp`: `select: { envVar: 'OMP_PROFILE', by: 'profile-name' }`,
+  `configSubdir: 'agent'`. `profileEnv` emits `OMP_PROFILE=<name>`, the last path segment of an account
+  folder that must be `<omp root>/profiles/<name>` (`workspace/agent-profiles.ts` `ompProfileDirError`).
+- `<omp root>` is `~/<PI_CONFIG_DIR or .omp>` (`paths.ts` `ompRootDir`; omp `packages/utils/src/dirs.ts`
+  agrees). The variable carries a name, never a path. The default account spawns with no variable.
+- Squawk writes nothing into the profile folder: `core/agent-profiles.ts`, `workspace/agent-profiles.ts`
+  and `workspace/agent-accounts.ts` hold no `mkdir`, `writeFile`, `symlink` or `copyFile` (grep).
+- What the folder holds is omp's own: `agent/` (`agent.db`, `config.yml`, `models.yml`, `mcp.json`,
+  `sessions/`, `skills/`), `logs/`, `run/`, `cache/` (`core/agent-profiles.ts` comments; the scratch run
+  below created `agent/agent.db`, `agent/models.db`, `agent/skill-descriptions.db`, `agent/sessions/`,
+  `logs/`).
+
+**Test setup.** A profile under the real `~/.omp/profiles/` would be a write to the user home, so the scratch
+profile sits under a scratch omp root reached with `PI_CONFIG_DIR=../../tmp/skill-probe-omp2.<rand>/home/omproot`
+(omp joins it onto the home directory). `HOME` stayed real. Fixtures: one user skill in
+`<root>/profiles/probea/agent/skills/home-probea-skill/`, one in `<root>/agent/skills/home-default-skill/`.
+No credential file was copied or linked.
+
+| Run (cwd = scratch repo) | Total | `native:user` | `agents:user` | `agent-plugins:user` | `claude-plugins:project` | project |
+|---|---|---|---|---|---|---|
+| 0. no variable (real default home) | 30 | 0 | 6 | 15 | 6 | 3 |
+| 1. `PI_CONFIG_DIR=… OMP_PROFILE=probea` | 31 | 1 (`home-probea-skill`) | 6 | 15 | 6 | 3 |
+| 2. `PI_CONFIG_DIR=…` only | 31 | 1 (`home-default-skill`) | 6 | 15 | 6 | 3 |
+
+Command for each row: `omp skill list --json`, counted with
+`jq '.skills|group_by(.source)|map("\(.[0].source)=\(length)")'`. TESTED, exit 0 in all three.
+
+- **The scratch home's user skill appears**, as `native:user`, and only the selected profile's:
+  run 1 lists `home-probea-skill` and not `home-default-skill`; run 2 the reverse. TESTED.
+- **Nothing from the real home disappears.** The real default home has 0 skills of its own
+  (`~/.omp/agent/skills` does not exist), so there was nothing omp-owned to lose. All 27 other user-level
+  entries stay under the scratch profile: 6 from `~/.agents/skills`, 15 `agent-plugins:user` and 6
+  `claude-plugins:project`, both from `~/.claude/plugins/cache`. Those sources hang off the home directory,
+  not the omp home. TESTED.
+- The 15 warnings (plugin skills dropped for `requires`, name collisions) are the same in all three runs.
+  TESTED.
+- **`omp skill list --json` works without a login in that home**: exit 0, empty stderr. TESTED.
+- **RPC `get_available_commands` does not work without a usable model in that home.** TESTED:
+  `PI_CONFIG_DIR=… OMP_PROFILE=probea omp --mode rpc` in the scratch repo exits 1 before the `ready` frame:
+
+  ```
+  No default model selected. Use /login, set an API key environment variable, or select a local model with /model or --model.
+  …
+  Or create /tmp/skill-probe-omp2.<rand>/home/omproot/profiles/probea/agent/models.yml
+  ```
+
+  With a placeholder `OPENAI_API_KEY` in the child env (no prompt sent, so no model call) the same launch
+  starts; `get_state` reports `openai/gpt-5.5` and a session file under
+  `<root>/profiles/probea/agent/sessions/`, and `get_available_commands` returns 31 `source:"skill"` entries
+  including `skill:home-probea-skill`, the same set as the CLI route. TESTED.
+- DOCS, not tested: `managed-skills` (Skillshare installs) sits in the agent directory, so it follows the
+  profile; so does `config.yml` with `skills.*` and `disabledExtensions`. Where omp's own plugin registry
+  (`<omp root>/plugins/installed_plugins.json`) sits relative to a profile: NOT TESTED.
+- NOT TESTED: `OMP_PROFILE` alone against the real `~/.omp` (it would create a folder in the user home).
+  Run 2 shows that `PI_CONFIG_DIR` by itself only moves the root, so the profile effect in run 1 is the
+  difference between runs 1 and 2.
+
+### Check B: Squawk's omp adapter and UI mapper on a skill-triggered turn
+
+**Recording (2 model turns, TESTED).** `omp --mode rpc --model cliproxy/gpt-5.6-luna`, Squawk's four startup
+commands with Squawk's ids, then `prompt` `cezar-prompt-1` = `/skill:probe-alpha` and, after
+`session_settled`, `prompt` `cezar-prompt-2` = `/skill:probe-gamma second turn`. Raw stdout, both turns the
+same shape (31 `message_update` lines and the startup frames left out, long values cut):
+
+```
+>>> {"type":"prompt","id":"cezar-prompt-1","message":"/skill:probe-alpha"}
+{"id":"cezar-prompt-1","type":"response","command":"prompt","success":true}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_start","message":{"role":"custom","customType":"skill-prompt","content":"[IMPORTANT: User invoked the \"probe-alpha\" skill; …
+{"type":"message_end","message":{"role":"custom","customType":"skill-prompt","content":"[IMPORTANT: User invoked …
+{"type":"message_start","message":{"role":"assistant","content":[{"type":"thinking",…
+{"type":"message_end","message":{"role":"assistant",… "ALPHA-c3a6081c" …
+{"type":"turn_end","message":{"role":"assistant",…
+{"type":"agent_end","messages":[{"role":"custom","customType":"skill-prompt",…
+{"type":"prompt_result","id":"cezar-prompt-1","agentInvoked":true,"status":"completed","sessionSettled":true}
+{"type":"session_settled"}
+>>> {"type":"prompt","id":"cezar-prompt-2","message":"/skill:probe-gamma second turn"}
+{"id":"cezar-prompt-2","type":"response","command":"prompt","success":true}
+{"type":"agent_start"}
+… same order, "probe-gamma", answer "GAMMA-f93e54cf: second turn" …
+{"type":"session_settled"}
+```
+
+No line in the recording has `"role":"user"` (`grep -c` = 0).
+
+**Replay through Squawk's real code (TESTED, no model call, repo unchanged).** A replay script stood in for
+the binary: `new OmpRunner({ bin: <replay-omp.mjs> })` from `packages/cezar/src/core/omp-runner.ts`, loaded
+with `node --import tsx` from `packages/cezar` (the runner the repo's own scripts use). The script writes the
+recorded frames back in the recorded order as each command arrives on stdin. The harness called
+`startSession({ cwd, userPrompt: '/skill:probe-alpha', toolGrant: { kind: 'unset' } })`, printed every v1
+`AgentEvent` and every `UiEvent`, and sent the second prompt at the first `turn-end`, once with
+`session.sendMessage` and once with `session.sendAgentMessage(…, ['input-A'])`.
+
+What the adapter wrote to the child: argv `["--mode","rpc"]`, then exactly the recorded commands, including
+`{"type":"prompt","id":"cezar-prompt-1","message":"/skill:probe-alpha"}`. So Squawk passes the trigger text
+through unchanged.
+
+What Squawk emitted (deltas left out; identical in both runs except the marked lines):
+
+```
+ui  {"type":"turn.started","turnId":"turn_1"}
+ui  {"type":"session.started","sessionId":"01a1e47c-…","backend":"omp","model":"gpt-5.6-luna"}
+v1  {"type":"session","sessionId":"01a1e47c-…"}
+ui  {"type":"item.completed","item":{"kind":"reasoning","id":"turn_1_reasoning_0_0",…}}
+ui  {"type":"item.completed","item":{"kind":"message","id":"turn_1_text_1_0","role":"assistant","text":"ALPHA-c3a6081c"}}
+v1  {"type":"text","text":"ALPHA-c3a6081c"}
+ui  {"type":"usage.updated",…}   v1 {"type":"token-usage","tokensUsed":8619}   v1 {"type":"cost","usd":0}
+ui  {"type":"turn.completed","turnId":"turn_1","stopReason":"end_turn",…}   [holdsHumanInput=false held=0]
+v1  {"type":"turn-end"}
+ui  {"type":"turn.started","turnId":"turn_2"}
+ui  {"type":"item.completed","item":{"kind":"message","id":"turn_2_text_1_0","role":"assistant","text":"GAMMA-f93e54cf: second turn"}}
+v1  {"type":"text","text":"GAMMA-f93e54cf: second turn"}
+ui  {"type":"turn.completed","turnId":"turn_2","stopReason":"end_turn",…}
+--  onAgentInputConsumed ["input-A"]          (agent run only)
+v1  {"type":"turn-end"}
+ui  {"type":"session.ended","reason":"end_turn"}
+v1  {"type":"done"}
+result {"text":"ALPHA-c3a6081c\nGAMMA-f93e54cf: second turn","toolCalls":[],"tokensUsed":10424,"sessionId":"01a1e47c-…"}
+```
+
+| Question | Answer |
+|---|---|
+| Does Squawk see a user message for the turn? | No event of either stream carries the prompt or the skill body. The mapper only makes items for `role:"assistant"` (`omp-ui-mapper.ts` `mapMessageEnd`, `isAssistantMessageEnd`), so an ordinary `user` message makes no item either: the adapter is not where Squawk's user bubble comes from. TESTED for the skill turn, DOCS for the comparison. |
+| Turn start | Detected: `turn.started` for both turns. The adapter emits it itself when it writes the prompt (`ompTurnStarted`), not from an omp frame. TESTED. |
+| Turn end | Detected: `turn.completed` and v1 `turn-end` at `session_settled`, both turns. TESTED. |
+| Session id | Recorded: `session.started`, v1 `session`, and `result.sessionId`, from the `get_state` response. TESTED. |
+| Skill body shown as assistant text? | No. The `custom` `message_start` and `message_end` produce nothing in v1 or v2; `result.text` holds only the two answers. TESTED. |
+| Held human input | Released: `holdsHumanInput()` is `true` after the write and `false` at `turn.completed` in both turns. With no `user` `message_start` to match, the release comes from the prompt's `response` while the turn it opened is open (`settleHumanAck`), and `prompt_result` would release it otherwise. TESTED for the outcome, DOCS for the branch. |
+| Agent-sent input (`sendAgentMessage`) | The receipt is acknowledged and `onAgentInputConsumed(["input-A"])` fires, but at the turn's end (`PiRpcInput.settleTurn`, the "carried" path) and not when the model received the prompt, because the `user` `message_start` that normally reports it never comes. TESTED. |
+| Dropped or mis-shown | Dropped: the whole `skill-prompt` message, so Squawk's streams carry no trace of which skill ran, its path or its arguments (`details.name`, `details.path`, `details.args` are in the raw frame only). Nothing was mis-shown and no turn was left unstarted or unended. TESTED. |
+
+Branch each recorded frame type takes (DOCS, `omp-runner.ts` `handleOutputLine` → `mapOmpRpcMessage` and
+`dispatchNative`/`dispatchPiTurnMessage`):
+
+- `ready`, `advisor_cost_changed`, `available_commands_update`, `extension_ui_request`, `turn_start`,
+  `turn_end`, `agent_end`: mapper `default` (nothing); the first frame releases the adapter's outbox.
+- `response` to `get_state`: session id adopted. To `set_*`: a note only on failure. To `prompt`:
+  `settlePromptResponse`, which settles the human or agent acknowledgement.
+- `agent_start`: `PiRpcInput.startTurn` (marks acknowledged agent input as carried).
+- `message_start` with `role:"custom"`: `dispatchPiTurnMessage` handles only `role === 'user'`; nothing.
+- `message_end` with `role:"custom"`: not an assistant message; nothing in mapper or dispatcher.
+- `message_update`, assistant `message_end`: text and reasoning items, usage, v1 `text`.
+- `prompt_result` (`completed`): removes the held human prompt; no event.
+- `session_settled`: `completeTurn` → `turn.completed`, then `settleTurn` → v1 `turn-end`.
+
+NOT TESTED: a skill trigger sent as a steer while a turn runs. DOCS reading: an agent-sent steer is consumed
+only by a matching `user` `message_start` or by being carried from before `agent_start`; a skill-expanded
+steer has neither, so whether its input id is ever reported as consumed is open. Also NOT TESTED: how the
+run pipeline above the adapter (transcript, cockpit) shows the turn; this check stopped at the adapter's
+two event streams.
+
+### Leftovers, round 2
+
+omp wrote one more session folder of its own under `~/.omp/agent/sessions/` (the scratch repo, default-home
+runs). Scratch folders under `/tmp` removed; no process started by the probe is left.
