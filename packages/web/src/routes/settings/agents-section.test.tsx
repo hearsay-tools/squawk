@@ -598,7 +598,7 @@ describe('the agents form', () => {
       serve({ agentProfiles: WITH_WORK_ACCOUNT })
       renderAt('/settings/agents')
 
-      await waitFor(() => expect(rows()).toHaveLength(7))
+      await waitFor(() => expect(rows()).toHaveLength(6))
       expect(rows().map((r) => `${r.getAttribute('data-value')}:${r.getAttribute('data-account')}`)).toEqual([
         'claude:',
         'claude:klaudiusz',
@@ -626,7 +626,7 @@ describe('the agents form', () => {
       serve({ agentProfiles: WITH_WORK_ACCOUNT })
       renderAt('/settings/agents')
 
-      await waitFor(() => expect(rows()).toHaveLength(7))
+      await waitFor(() => expect(rows()).toHaveLength(6))
       fireEvent.click(rowFor('claude', 'klaudiusz')!)
 
       await waitFor(() => expect(selections()).toHaveLength(1))
@@ -649,7 +649,7 @@ describe('the agents form', () => {
 
       // Wait for the SPLIT state: until the accounts land, claude is one plain row, and clicking
       // that one writes no selection — which is correct, and would make this pass for no reason.
-      await waitFor(() => expect(rows()).toHaveLength(7))
+      await waitFor(() => expect(rows()).toHaveLength(6))
       fireEvent.click(rowFor('claude', '')!)
 
       await waitFor(() => expect(selections()).toHaveLength(1))
@@ -664,7 +664,7 @@ describe('the agents form', () => {
       serve({ agentProfiles: WITH_WORK_ACCOUNT })
       renderAt('/settings/agents')
 
-      await waitFor(() => expect(rows()).toHaveLength(7))
+      await waitFor(() => expect(rows()).toHaveLength(6))
       fireEvent.click(rowFor('codex')!)
 
       await waitFor(() => expect(puts()).toHaveLength(1))
