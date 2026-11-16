@@ -203,6 +203,18 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
     const heldQuestionGets: Array<() => void> = [];
     const heldPermissionReplies: Array<() => void> = [];
     let permissionReplyStatus = opts.permissionReplyStatus ?? 200;
+    const answerPrompt = (res: ServerResponse, followup: boolean): void => {
+      const acknowledge = () => {
+        res.writeHead(opts.promptStatus ?? 200, { 'content-type': 'application/json' });
+        res.end('{}');
+      };
+      if (followup && opts.followupErrorStatus) {
+        res.writeHead(opts.followupErrorStatus, { 'content-type': 'application/json' });
+        res.flushHeaders();
+        heldAcknowledgements.push(() => res.end('{"error":"provider"}'));
+      } else if (followup && opts.holdFollowupPrompt) heldAcknowledgements.push(acknowledge);
+      else acknowledge();
+    };
     let questionReplyStatus = opts.questionReplyStatus ?? 200;
     const server = createServer((req, res) => {
       const url = req.url ?? '';
@@ -256,16 +268,7 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
         if (req.method === 'POST' && /^\/session\/ses_test\/(prompt_async|message)$/.test(url)) {
           promptPosts.push(url);
           promptBodies.push(JSON.parse(body || '{}'));
-          const acknowledge = () => {
-            res.writeHead(opts.promptStatus ?? 200, { 'content-type': 'application/json' });
-            res.end('{}');
-          };
-          if (promptPosts.length > 1 && opts.followupErrorStatus) {
-            res.writeHead(opts.followupErrorStatus, { 'content-type': 'application/json' });
-            res.flushHeaders();
-            heldAcknowledgements.push(() => res.end('{"error":"provider"}'));
-          } else if (promptPosts.length > 1 && opts.holdFollowupPrompt) heldAcknowledgements.push(acknowledge);
-          else acknowledge();
+          answerPrompt(res, promptPosts.length > 1);
           return;
         }
         if (req.method === 'POST' && /^\/question\/[^/]+\/reply$/.test(url)) {
