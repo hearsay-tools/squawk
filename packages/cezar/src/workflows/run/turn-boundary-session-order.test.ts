@@ -49,6 +49,7 @@ function activityFixture() {
       f.log.push('reply-content');
       expect(f.state.boundary.atTurnBoundary).toBe(f.wire);
     },
+    cancelAutonomousNudgeBound: () => { f.log.push('nudge-bound'); },
   });
   const sink = unused<UiEventSink>('sink', { handle: () => { f.log.push('persist-ui'); return undefined; } });
   const originalUsage = usage.recordUsageUiEvent;
@@ -63,9 +64,20 @@ it('parent activity invalidates boundary after persisted UI and child tracking',
   const f = activityFixture();
   handleRunnerUiEvent(f.context, f.host, f.run.id, f.state, f.sink, { type: 'turn.started', turnId: 'turn' });
   expect(f.log).toEqual(['usage', 'persist-ui', 'children', 'reply-content',
-    'boundary:nudge-fact/retire', 'boundary:turn-started/clear-boundary']);
+    'boundary:nudge-fact/retire', 'nudge-bound', 'boundary:turn-started/clear-boundary']);
   expect(f.state.boundary.atTurnBoundary).toBeUndefined();
   expect(f.state.boundary.nudge).toBeUndefined();
+});
+
+// hearsay-tools/squawk#2443: a submitted autonomous nudge is still owed its acknowledgement after
+// the reply starts; the activity stops its bound, and the turn end bounds it again.
+it('parent activity keeps a nudge still owed its acknowledgement and stops its bound', () => {
+  const f = activityFixture();
+  transitionTurnBoundary(f.state, { kind: 'nudge-fact', phase: 'record', session: f.wire, nudge: { cause: 'autonomous', state: 'submitted' } });
+  f.log.length = 0;
+  handleRunnerUiEvent(f.context, f.host, f.run.id, f.state, f.sink, { type: 'turn.started', turnId: 'turn' });
+  expect(f.log).toEqual(['usage', 'persist-ui', 'children', 'reply-content', 'nudge-bound', 'boundary:turn-started/clear-boundary']);
+  expect(f.state.boundary.nudge).toEqual({ session: f.wire, cause: 'autonomous', state: 'submitted' });
 });
 
 it('child-only content persists and tracks the child without invalidating the parent boundary', () => {

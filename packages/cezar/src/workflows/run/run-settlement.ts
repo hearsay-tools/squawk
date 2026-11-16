@@ -21,6 +21,7 @@ import { reviewGateEnabled } from '../../runs/review-gate.ts';
 import { settlesAsDone } from './steps.ts';
 import { clearIdleTimer, clearAutosaveTimer } from './input-timers.ts';
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
+import { nudgeHeldRunning } from './turn-nudges.ts';
 import { waitingBeforeFinalWorkflowStep, waitingWorkflowStepIndex, ciWorkflowResumeStepIndex, workflowStartIndex } from './workflow-position.ts';
 import * as stepDecisions from './step-decisions.ts';
 import * as completionGateReads from './completion-gate.ts';
@@ -480,7 +481,7 @@ export class RunSettlement {
       await this.settleIdleClosedWorker(runId);
       return;
     }
-    if (!run || state.boundary.nudge?.state !== 'refused' || run.waits?.length || hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id))) return;
+    if (!run || !nudgeHeldRunning(state) || run.waits?.length || hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id))) return;
     for (const step of run.steps) {
       if (step.status === 'running') this.context.store.updateStep(runId, step.id, { status: 'waiting' });
     }

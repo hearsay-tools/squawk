@@ -1,6 +1,6 @@
 import { productEnv } from '../../core/product-env.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
-import { retireNudge } from './turn-nudges.ts';
+import { nudgeAwaitsAcknowledgement, retireNudge } from './turn-nudges.ts';
 import { randomUUID } from 'node:crypto';
 import { askPayloadOf, askRequestOf } from '@open-mercato/cezar-contract/pending-ask';
 import type { RunRecord, RunStore } from '../../runs/store.ts';
@@ -122,6 +122,7 @@ export interface SessionHelperHost {
   flushAgentInputs(runId: string): boolean;
   resumeParkedRun(runId: string, state: ActiveRun): void;
   noteNoWaitNudgeContent(runId: string, state: ActiveRun, event: { type: string; item?: { parentItemId?: string } }): void;
+  cancelAutonomousNudgeBound(runId: string): void;
   parkedOnWorkers(runId: string): boolean;
   /** Native subagents (hearsay-tools/cezarion#2431): track a background child's events, and close
    *  the subagent wait and the timers when the runner resumes the parent itself. */
@@ -282,10 +283,13 @@ export function handleRunnerUiEvent(context: RunModuleContext, host: SessionHelp
   host.trackSubagentEvent(runId, state, event);
   host.noteNoWaitNudgeContent(runId, state, event);
   if (isRunnerActivity(event)) {
-    // Activity answers the nudge. A refused one's bound was the idle timer.
+    // Activity answers the nudge. A refused one's bound was the idle timer. One still owed its
+    // acknowledgement stays until it arrives, and its bound stops while the turn runs
+    // (hearsay-tools/squawk#2443).
     const refused = state.boundary.nudge?.state === 'refused';
-    if (state.boundary.nudge) retireNudge(state);
+    if (state.boundary.nudge && !nudgeAwaitsAcknowledgement(state, state.liveSession.session)) retireNudge(state);
     if (refused) clearIdleTimer(state);
+    host.cancelAutonomousNudgeBound(runId);
     clearHeldHumanInputTimer(state);
     transitionTurnBoundary(state, { kind: 'turn-started', phase: 'clear-boundary', session: state.liveSession.session });
   }

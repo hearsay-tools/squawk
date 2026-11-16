@@ -54,7 +54,7 @@ function fixture() {
     parkOnWaits: call('parkWaits', true), queueWaitWake: call('wake', undefined), leaveMonitoringPool: call('leavePool', undefined),
     chargeAutomaticWake: call('charge', 1), canAutoContinue: call('canContinue', true),
     sendTurnEndNudge: call('sendNudge', true), awaitCompletionNudgeReply: call('replyBound', undefined), noticeParkedWorker: call('notice', undefined),
-    routeWorkerQuestion: call('route', undefined), settledTurnOutcome: call('outcome', undefined),
+    routeWorkerQuestion: call('route', undefined), settledTurnOutcome: call('outcome', undefined), armAutonomousNudgeBound: call('nudgeBound', undefined),
     subagentWaits: { atTurnEnd: call('subagentsAtTurnEnd', undefined), holdsLiveSubagents: vi.fn(() => false) },
   };
   const semaphore = { monitoringWakeIntervalMinutes: call<number | null>('interval', 1) };
@@ -234,12 +234,13 @@ describe('turn settler entry orders', () => {
 
 
 describe('turn settler carrier orders', () => {
-  it.each(['closed', 'input', 'take-input'] as const)('%s has no carrier effects before the running outcome', kind => {
+  // A run left running bounds an autonomous nudge still owed its acknowledgement (hearsay-tools/squawk#2443).
+  it.each(['closed', 'input', 'take-input'] as const)('%s has no carrier effects, then bounds the nudge before the running outcome', kind => {
     const f = fixture();
     decide({ kind }, { kind });
     f.settler.settleTurn('run', f.state, 'ack', turn);
     expect(f.host.settledTurnOutcome).toHaveBeenCalledWith('run', 'ack', { kind: 'running' });
-    expect(f.log.slice(f.log.lastIndexOf('wakes') + 1)).toEqual(['boundary:turn-end/carry', 'outcome']);
+    expect(f.log.slice(f.log.lastIndexOf('wakes') + 1)).toEqual(['boundary:turn-end/carry', 'nudgeBound', 'outcome']);
   });
 
   it.each(['closed', 'input', 'defer', 'park', 'human-wait', 'nudge', 'completion-wait'] as const)('withdraws settled refusal before the %s carrier, then records its outcome', kind => {

@@ -12,11 +12,16 @@ import { setRunStatus } from '../../runs/run-store.testkit.ts';
 import { WorkspaceSemaphore } from '../../workspace/semaphore.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../fixture-no-runner.testkit.ts';
 import type { RunManager } from '../run.ts';
-import { COMPLETION_NUDGE_NOTE } from '../turn-end.ts';
+import { AUTONOMOUS_NO_ACK_NOTE, AUTONOMOUS_NUDGE, COMPLETION_NUDGE_NOTE } from '../turn-end.ts';
 import { COMPLETION_WILL_WAIT, MAX_AUTO_CONTINUES } from './constants.ts';
 import { QUICK_TASK_WORKFLOW } from '../types.ts';
 import { observationClock } from '../../core/observation-clock.testkit.ts';
 import { completionRefusalQueueDecision } from './turn-nudges.ts';
+import { runnerHook, setupMonitoringFixture, waitForProduct } from '../run-fixture.testkit.ts';
+import { createFixtureManager as createRunnerFixtureManager } from '../fixture-cleanup.testkit.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../../core/claude-cli-runner.ts';
+import type { AgentEvent, AgentRunResult, AgentSession } from '../../core/agent-runner.ts';
+import type { UiEvent } from '../../core/ui-events.ts';
 
 describe('completionRefusalQueueDecision', () => {
   it.each([
@@ -227,5 +232,93 @@ describe('closed-session refusal effects through public recovery', () => {
     expect(inputs.mock.calls.filter(([runId]) => runId === id)).toEqual([]);
     expect(store.getRun(id)?.agentInputs).toEqual([input]);
     expect(store.getRun(id)?.automaticWakes).toBe(7);
+  });
+});
+
+// hearsay-tools/squawk#2443: a submitted autonomous nudge whose acknowledgement never arrives is
+// bounded as the no-wait nudge's reply is. Its expiry notes the nudge and closes through the idle path.
+describe('the acknowledgement bound of a submitted autonomous nudge', () => {
+  const f = setupMonitoringFixture();
+  const BOUND_MS = 300;
+  let session: AgentSession | undefined;
+  let emit: (event: AgentEvent) => void;
+  let emitUi: (event: UiEvent) => void;
+  let acknowledge: () => void;
+
+  beforeEach(() => {
+    session = undefined;
+    f.manager.dispose();
+    f.manager = createRunnerFixtureManager(f.store, f.repoRoot, { home: testHome(), noWaitNudgeReplyMs: BOUND_MS });
+    runnerHook.runner = {
+      backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
+      run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: async () => {},
+      startSession(_spec, onEvent, options) {
+        let open = true;
+        let finish!: (result: AgentRunResult) => void;
+        const result = new Promise<AgentRunResult>(resolve => { finish = resolve; });
+        emit = event => onEvent?.(event);
+        emitUi = event => options?.onUiEvent?.(event);
+        const close = () => { open = false; finish({ text: '', toolCalls: [], tokensUsed: 0 }); };
+        // The nudge's acknowledgement settles only when the test acknowledges it.
+        const sendAgentMessage = vi.fn(() => new Promise<void>(resolve => { acknowledge = resolve; }));
+        session = { get open() { return open; }, result, sendMessage: vi.fn(() => true), sendAgentMessage,
+          end: vi.fn(close), interrupt: vi.fn(close), discardQueuedMessages: vi.fn(), holdsHumanInput: () => false };
+        queueMicrotask(() => emit({ type: 'session', sessionId: 'ack-bound-session' }));
+        return session;
+      },
+    };
+  });
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  async function startNudged() {
+    const record = f.manager.startRun(f.SINGLE_STEP, { task: 'work', runner: 'claude', autonomous: true, worktree: false });
+    f.currentId = record.id;
+    await waitForProduct(f.manager, f.store, () => !!session);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    if (!session) throw new Error('runner session missing');
+    emit({ type: 'turn-end' });
+    expect(session.sendAgentMessage).toHaveBeenCalledExactlyOnceWith([{ type: 'text', text: AUTONOMOUS_NUDGE }], []);
+    expect(f.store.getRun(record.id)?.status).toBe(RUN_STATUS.running);
+    return { id: record.id, session };
+  }
+  const boundNotes = (id: string) => f.store.readEvents(id).filter(e => e.type === 'note' && e.message === AUTONOMOUS_NO_ACK_NOTE);
+
+  async function expectClosedWaiting(id: string, nudged: AgentSession): Promise<void> {
+    expect(nudged.end).toHaveBeenCalledOnce();
+    expect(boundNotes(id)).toHaveLength(1);
+    await waitForProduct(f.manager, f.store, () => !f.manager.isActive(id));
+    expect(f.store.getRun(id)?.status).toBe(RUN_STATUS.waiting);
+    expect(f.store.getRun(id)?.steps.at(-1)?.status).toBe(STEP_STATUS.waiting);
+    // The idle path opens no Needs You.
+    expect(f.store.getRun(id)?.waits ?? []).toEqual([]);
+  }
+
+  it('closes a run whose nudge gets no acknowledgement and no reply through the idle path', async () => {
+    const { id, session: nudged } = await startNudged();
+    await vi.advanceTimersByTimeAsync(BOUND_MS - 1);
+    expect(nudged.end).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await expectClosedWaiting(id, nudged);
+  });
+
+  it('an acknowledgement inside the bound cancels it, and the run continues', async () => {
+    const { id, session: nudged } = await startNudged();
+    acknowledge();
+    await vi.advanceTimersByTimeAsync(BOUND_MS);
+    expect(nudged.end).not.toHaveBeenCalled();
+    expect(boundNotes(id)).toEqual([]);
+    expect(f.store.getRun(id)?.status).toBe(RUN_STATUS.running);
+  });
+
+  it('a reply inside the bound cancels it; its turn end, still unacknowledged, bounds the nudge again', async () => {
+    const { id, session: nudged } = await startNudged();
+    emitUi({ type: 'turn.started', turnId: randomUUID() });
+    await vi.advanceTimersByTimeAsync(BOUND_MS);
+    expect(nudged.end).not.toHaveBeenCalled();
+    expect(f.store.getRun(id)?.status).toBe(RUN_STATUS.running);
+    emit({ type: 'turn-end' });
+    expect(nudged.sendAgentMessage).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(BOUND_MS);
+    await expectClosedWaiting(id, nudged);
   });
 });
