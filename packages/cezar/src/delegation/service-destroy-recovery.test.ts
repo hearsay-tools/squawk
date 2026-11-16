@@ -11,7 +11,7 @@ import { workerCleanupInternals } from './service.testkit.ts';
 
 import { DelegationService } from './service.ts';
 
-import { f, linux, cadence, settled, destroyOf, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
+import { f, linux, cadence, settled, destroyOf, betweenAttempts, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 
 /** Resolves once every operation already queued on the service's serialization `key` settled. */
@@ -99,12 +99,13 @@ describe('destroy backoff recovery', { timeout: 90_000 }, () => {
     await f.service.destroy(f.caller, { workerId });
     // bound: every scheduled attempt runs in full (Git and evidence), so attempts are slow under host load; this only ends a hang.
     await vi.waitFor(() => expect(f.store.getRun(workerId)?.destroyRetry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 30_000 });
-    const run = f.store.getRun(workerId)!;
+    // Between attempts: the next tick's in-progress phases carry no error key yet.
+    const [run, inspection] = await betweenAttempts(workerId, () => [f.store.getRun(workerId)!, f.service.inspect(f.caller, { workerId })] as const);
     if (run.delegation?.role !== 'worker') throw Error('worker');
     // The pre-hearsay-tools/cezarion#879 destroy keys exactly: a strict reader that has never heard of retries still parses it.
     expect(Object.keys(run.delegation.destroy!).sort()).toEqual(['error', 'phase', 'remaining', 'requestedAt']);
     expect(delegationStateSchema.safeParse(run.delegation).success).toBe(true);
-    expect(await f.service.inspect(f.caller, { workerId })).toMatchObject({ destroy: { phase: 'incomplete', retry: { attempts: run.destroyRetry!.attempts } } });
+    expect(await inspection).toMatchObject({ destroy: { phase: 'incomplete', retry: { attempts: run.destroyRetry!.attempts } } });
   });
 
   it.runIf(linux)('a tick cut off by project replacement writes nothing afterwards (guard)', async () => {

@@ -14,6 +14,7 @@ import { ensureOwnedWorkspace } from './workspace.ts';
 
 import { workerDestroyView } from '../runs/delegation-state.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+import type { DelegationService } from './service.ts';
 
 export let f: ReturnType<typeof fixture>;
 
@@ -42,6 +43,14 @@ export async function settled(block = true) {
 
 /** The destroy as the API shows it: the stored phase plus the run's retry state. */
 export const destroyOf = (workerId: string) => { const run = f.store.getRun(workerId); return run ? workerDestroyView(run) : undefined; };
+
+/** Runs `read` while no destroy attempt for the worker runs. Every attempt, explicit or scheduled,
+ * holds the worker's serialization key from its first write (`requested`) to its retry record, so a
+ * read queued on that key sees the state between two attempts, never an attempt's in-progress phase. */
+export function betweenAttempts<T>(workerId: string, read: () => T, service: DelegationService = f.service): Promise<T> {
+  const serialized = Reflect.get(service, 'serialized') as (key: string, operation: () => Promise<T>) => Promise<T>;
+  return serialized.call(service, `worker:project:${workerId}`, async () => read());
+}
 
 export function useDestroyBackoffFixture() {
   beforeEach(() => { scopeFixtureProcesses(); f = fixture(); });

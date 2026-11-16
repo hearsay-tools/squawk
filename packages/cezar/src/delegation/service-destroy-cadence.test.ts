@@ -9,7 +9,7 @@ import { scheduledDestroyAttempts, workerCleanupInternals } from './service.test
 import { WORKTREE_LOCK_BUSY_ERROR } from './workspace-removal.ts';
 import { DelegationService } from './service.ts';
 
-import { f, linux, cadence, settled, destroyOf, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
+import { f, linux, cadence, settled, destroyOf, betweenAttempts, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
 import { workerCleanups } from './worker-cleanup.ts';
 
 describe('destroy backoff cadence', { timeout: 30_000 }, () => {
@@ -26,7 +26,8 @@ describe('destroy backoff cadence', { timeout: 30_000 }, () => {
     await Promise.all(full.slice(0, 3));
     // Each tick reached termination, the step after the worktree teardown: none stopped short.
     expect(termination.mock.calls.length).toBeGreaterThanOrEqual(3);
-    expect(destroyOf(workerId)).toMatchObject({ phase: 'incomplete', remaining: ['worktree', 'branch'] });
+    // A fourth tick may already run: read between attempts.
+    expect(await betweenAttempts(workerId, () => destroyOf(workerId))).toMatchObject({ phase: 'incomplete', remaining: ['worktree', 'branch'] });
   });
 
   it.runIf(linux)("a project's automatic full attempts run one at a time", async () => {
@@ -50,7 +51,7 @@ describe('destroy backoff cadence', { timeout: 30_000 }, () => {
       restarted.armDestroyRetries('project');
       await vi.waitFor(() => { for (const { workerId } of [a, b]) expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(1); }, { timeout: 10_000 });
       expect(most).toBe(1);
-      for (const { workerId } of [a, b]) expect(destroyOf(workerId)?.error).not.toBe(WORKTREE_LOCK_BUSY_ERROR);
+      for (const { workerId } of [a, b]) expect((await betweenAttempts(workerId, () => destroyOf(workerId), restarted))?.error).not.toBe(WORKTREE_LOCK_BUSY_ERROR);
     } finally { detach(); }
   });
 
@@ -70,7 +71,7 @@ describe('destroy backoff cadence', { timeout: 30_000 }, () => {
     expect(first.attempts).toBe(5);
     // Attempt 5 is the first capped delay (300 ms); jitter only stretches it.
     expect(Date.parse(first.nextAt) - first.at).toBeGreaterThanOrEqual(290);
-    expect(destroyOf(workerId)).toMatchObject({ phase: 'incomplete', remaining: ['worktree', 'branch'] });
+    expect(await betweenAttempts(workerId, () => destroyOf(workerId))).toMatchObject({ phase: 'incomplete', remaining: ['worktree', 'branch'] });
   });
 
   it.runIf(linux)('a blocker cleared inside the fast window lets the destroy complete within it', async () => {
