@@ -121,10 +121,13 @@ try {
       scope.started(leader.pid!);
       const descendant = Number(String(await new Promise(resolve => leader.stdout!.once('data', resolve))).trim());
       const t0 = performance.now();
-      const stopped = await store.scopes.stop(id, 10_000);
-      if (stopped.stopped) stops.push(performance.now() - t0); else stopFailures++;
-      // A `groups` host does not contain a setsid descendant (ADR 0032): end it here.
-      try { process.kill(descendant, 'SIGKILL'); } catch { /* the scope ended it */ }
+      try {
+        const stopped = await store.scopes.stop(id, 10_000);
+        if (stopped.stopped) stops.push(performance.now() - t0); else stopFailures++;
+      } catch { stopFailures++; } finally {
+        // Ended whatever the stop did: nothing this fixture started outlives it.
+        try { process.kill(descendant, 'SIGKILL'); } catch { /* the scope ended it */ }
+      }
     }
     fixture.scopeBackend = host.backend; fixture.scopeStopMedianMs = median(stops); fixture.scopeStopP90Ms = p90(stops); fixture.scopeStopFailures = stopFailures;
   }
