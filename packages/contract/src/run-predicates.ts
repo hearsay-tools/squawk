@@ -30,10 +30,25 @@ export function sessionRunner(step: Pick<StepState, 'backend'> | undefined, run:
   return step?.backend ?? run?.runner ?? 'claude';
 }
 
+/** The latest step that ran on a runner Squawk no longer ships, when it started after every step
+ *  holding `sessionId` (any such step when there is none), by the same start-time order as
+ *  `latestSessionStep`: that work's session is gone, so nothing older resumes in its place
+ *  (hearsay-tools/squawk#3715). */
+export function removedRunnerStepAfter<S extends Pick<StepState, 'id' | 'sessionId' | 'startedAt' | 'removedBackend'>>(steps: readonly S[], sessionId: string | undefined): S | undefined {
+  let latest: S | undefined;
+  for (const step of steps) {
+    if (step.removedBackend === undefined && (sessionId === undefined || step.sessionId !== sessionId)) continue;
+    if (!latest || !step.startedAt || !latest.startedAt || step.startedAt >= latest.startedAt) latest = step;
+  }
+  return latest?.removedBackend !== undefined ? latest : undefined;
+}
+
 /** The latest session's id, the runner that owns it (`sessionRunner`) and the account it was opened
- *  under. Every step with a session counts, with or without a saved backend. */
-export function latestSession(run: { steps: readonly Pick<StepState, 'id' | 'sessionId' | 'startedAt' | 'backend' | 'profileId'>[]; runner?: RunRecord['runner'] }): { sessionId: string | undefined; backend: NonNullable<RunRecord['runner']>; profileId: string | undefined } {
-  const step = latestSessionStep(run.steps);
+ *  under. Every step with a session counts, with or without a saved backend. Work on a removed
+ *  runner after it leaves no session to hand off. */
+export function latestSession(run: { steps: readonly Pick<StepState, 'id' | 'sessionId' | 'startedAt' | 'backend' | 'profileId' | 'removedBackend'>[]; runner?: RunRecord['runner'] }): { sessionId: string | undefined; backend: NonNullable<RunRecord['runner']>; profileId: string | undefined } {
+  const latest = latestSessionStep(run.steps);
+  const step = removedRunnerStepAfter(run.steps, latest?.sessionId) ? undefined : latest;
   return { sessionId: step?.sessionId, backend: sessionRunner(step, run), profileId: step?.profileId };
 }
 

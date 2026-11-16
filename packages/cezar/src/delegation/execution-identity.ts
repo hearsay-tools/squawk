@@ -4,7 +4,7 @@ import { workerInputRecipeSchema, type WorkerInputRecipe } from '@open-mercato/c
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { realpathSync, statSync } from 'node:fs';
 import { z } from 'zod';
-import { latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
+import { latestSessionStep, removedRunnerStepAfter } from '@open-mercato/cezar-contract/run-predicates';
 import { ACCOUNT_LAYOUT, profileEnv, selectsByProfileName, supportsProfiles } from '../core/agent-profiles.ts';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { namedAccountUnavailable, type ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
@@ -227,17 +227,7 @@ export function continuationDefStep(store: RunStore, record: RunRecord | undefin
   return continuedDefStep(defSteps, record, sessionId) ?? [...defSteps].reverse().find((s) => stepKind(s) === 'agent');
 }
 
-/** The latest step that ran on a removed runner, when it started after every step holding
- *  `sessionId` (any such step when there is none): the work a Continue picks up, in a new session.
- *  "Latest" is by start time, as `latestSessionStep` reads it, since a Continue appends its step. */
-export function removedRunnerStepAfter(steps: RunRecord['steps'], sessionId: string | undefined): RunRecord['steps'][number] | undefined {
-  let latest: RunRecord['steps'][number] | undefined;
-  for (const step of steps) {
-    if (step.removedBackend === undefined && (sessionId === undefined || step.sessionId !== sessionId)) continue;
-    if (!latest || !step.startedAt || !latest.startedAt || step.startedAt >= latest.startedAt) latest = step;
-  }
-  return latest?.removedBackend !== undefined ? latest : undefined;
-}
+export { removedRunnerStepAfter } from '@open-mercato/cezar-contract/run-predicates';
 
 /**
  * The definition step a Continue continues when the run names one: the failed step of a `resume`

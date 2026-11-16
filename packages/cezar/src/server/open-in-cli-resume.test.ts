@@ -166,6 +166,17 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
     expect(mockOpenInTerminal).not.toHaveBeenCalled();
   });
 
+  it('hands off no older session when the latest work ran on a removed runner (hearsay-tools/squawk#3715)', async () => {
+    const run = makeRun('claude', 'plan-session');
+    store.updateStep(run.id, 'work', { startedAt: '2026-01-01T10:00:00.000Z' });
+    store.addStep(run.id, { id: 'build', name: 'Build', kind: STEP_KIND.agent });
+    store.updateStep(run.id, 'build', { removedBackend: 'cursor', startedAt: '2026-01-01T10:01:00.000Z' });
+    const detail = await (await apiRequest(app(), `/api/v1/runs/${run.id}`)).json() as { cliResumeCommand?: string };
+    expect(detail.cliResumeCommand).toBeUndefined();
+    const res = await openIn(run.id, 'cli:claude');
+    expect(((await res.json()) as { command: string }).command).toBe('claude');
+  });
+
   it('open-in-cli still resumes a usage-limit hold', async () => {
     const run = makeRun('claude', 'sess-1');
     setRunStatus(store, run.id, RUN_STATUS.waiting, { autoResumeAt: new Date(Date.now() + 600_000).toISOString() });
