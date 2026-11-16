@@ -315,6 +315,16 @@ export function signalSession(child: ChildProcess, signal: NodeJS.Signals, platf
   child.kill(signal);
 }
 
+/** Immediate cleanup for a no-turn probe, including members left by an exited leader.
+ * Keep the same recorded-member guard as the deferred runner reap; never signal a reused group. */
+export function signalOwnedSessionGroup(child: ChildProcess, signal: NodeJS.Signals): void {
+  const pid = child.pid;
+  const leader = pid === undefined ? undefined : leaders.get(pid);
+  if (!leader || leader.child !== child || stale(pid!, leader)) return;
+  leader.signalledAt ??= Date.now();
+  signalProcessGroup(pid!, signal);
+}
+
 /** The pgid of a registered, still-running grouped leader, for the worker process ledger. */
 /** Whether `pid` leads a session this process spawned: an agent's own process, which a process
  *  wait refuses because it ends only with the session (hearsay-tools/cezarion#1446). */

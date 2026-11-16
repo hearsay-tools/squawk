@@ -1,10 +1,11 @@
 import { type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
 import { buildChildEnv } from './agent-env.ts';
 import { profileEnv } from './agent-profiles.ts';
 import type { RunnerId } from './agent-runner.ts';
 import { productEnv } from './product-env.ts';
-import { signalSession, spawnSessionLeader } from './session-process.ts';
+import { processGroupAlive, sessionGroupOf, signalOwnedSessionGroup, signalSession, spawnSessionLeader } from './session-process.ts';
 
 export interface SkillDiscoveryOptions {
   cwd: string;
@@ -36,9 +37,10 @@ export async function skillProbe<T>(
   const env = buildChildEnv({ backend: runner, extraEnv: profileEnv(runner, options.accountHome) });
   const launch = options.spawn ?? ((bin, argv, cwd, env) => spawnSessionLeader(bin, argv, { cwd, env }));
   const child = launch(skillExecutable(runner, options.bin), args, options.cwd, env);
+  const group = child.pid === undefined ? undefined : sessionGroupOf(child.pid);
   const exited = probeExit(child);
   const signal = AbortSignal.any([options.signal ?? new AbortController().signal, AbortSignal.timeout(options.timeoutMs ?? 15_000)]);
-  const kill = () => signalSession(child, 'SIGKILL');
+  const kill = () => group === undefined ? signalSession(child, 'SIGKILL') : signalOwnedSessionGroup(child, 'SIGKILL');
   child.stderr.on('error', () => {});
   child.stderr.resume();
   child.stdin.on('error', () => {});
@@ -61,6 +63,16 @@ export async function skillProbe<T>(
     child.stdin.destroy();
     child.stdout.destroy();
     child.stderr.destroy();
+    if (group !== undefined) await waitForProbeGroup(group);
+  }
+}
+
+/** Group disappearance is the cleanup signal; poll it within the catalog's one-second grace. */
+async function waitForProbeGroup(group: number): Promise<void> {
+  const deadline = performance.now() + 750;
+  while (processGroupAlive(group)) {
+    if (performance.now() >= deadline) throw new Error('Skill probe process group did not exit');
+    await delay(10);
   }
 }
 

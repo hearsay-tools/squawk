@@ -11,11 +11,17 @@ import { discoverOpencodeSkills } from './opencode-skill-catalog.ts';
 import { discoverPiSkills } from './pi-skill-catalog.ts';
 import { discoverOmpSkills } from './omp-skill-catalog.ts';
 import { RunnerSkillCatalog, type SkillCatalogQuery } from './runner-skill-catalog.ts';
-import type { SkillDiscoveryOptions } from './skill-probe.ts';
+import { skillProbe, type SkillDiscoveryOptions } from './skill-probe.ts';
 const discovers = { claude: discoverClaudeSkills, codex: discoverCodexSkills, opencode: discoverOpencodeSkills, pi: discoverPiSkills, omp: discoverOmpSkills };
+// The member reports readiness after installing its handlers; only then does its leader crash.
+const leaderFirst = `const { spawn } = require('node:child_process');
+const member = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000); process.send('ready')"],
+  { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+member.once('message', () => process.exit(1));`;
 
 for (const runner of RUNNER_IDS) describe(`${runner} skill probe process cleanup`, () => {
-  for (const failure of ['hung', 'crashed'] as const) it(`${failure}: unavailable with a reason and no child left`, async () => {
+  // Windows uses taskkill trees; leaderless POSIX process groups do not exist there.
+  for (const failure of ['hung', 'crashed', 'leader-first'] as const) it.runIf(failure !== 'leader-first' || process.platform !== 'win32')(`${failure}: unavailable with a reason and no child left`, async () => {
     let child!: ChildProcessWithoutNullStreams;
     let exit!: Promise<unknown>;
     const launch: SkillDiscoveryOptions['spawn'] = (_bin, args, cwd, env) => {
@@ -29,7 +35,7 @@ for (const runner of RUNNER_IDS) describe(`${runner} skill probe process cleanup
       if (runner === 'pi') expect(args.some(a => a.endsWith('/pi-project-skills.mjs'))).toBe(true);
       child = spawnSessionLeader(process.execPath, ['-e', failure === 'hung'
         ? "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"
-        : 'process.exit(1)'], { cwd, env });
+        : failure === 'leader-first' ? leaderFirst : 'process.exit(1)'], { cwd, env });
       exit = once(child, 'exit');
       return child;
     };
@@ -40,10 +46,29 @@ for (const runner of RUNNER_IDS) describe(`${runner} skill probe process cleanup
     const result = await catalog.get({ runner, cwd: tmpdir(), accountHome: '/profiles/probe' });
     expect(result).toMatchObject({ source: 'unavailable', reason: expect.any(String) });
     expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
-    if (failure === 'crashed') expect(child.exitCode).toBe(1);
+    if (failure !== 'hung') expect(child.exitCode).toBe(1);
     // Check immediately on return; waiting for the exit here would hide the catalog race.
     const target = process.platform === 'win32' ? child.pid! : -child.pid!;
     expect(() => process.kill(target, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }));
     await exit;
   }, 5000); // bound: a 200ms catalog deadline plus bounded cleanup must reap its group; a crash gets 3 seconds to start.
+});
+
+describe.runIf(process.platform !== 'win32')('leader-first probe cleanup on every outcome', () => {
+  it.each(['success', 'read-failure', 'abort'] as const)('%s waits for the whole group', async outcome => {
+    let child!: ChildProcessWithoutNullStreams;
+    const controller = new AbortController();
+    const probe = skillProbe('claude', [], { cwd: tmpdir(), signal: controller.signal, spawn: (_bin, _args, cwd, env) => {
+      child = spawnSessionLeader(process.execPath, ['-e', leaderFirst.replace('exit(1)', 'exit(0)')], { cwd, env });
+      return child;
+    } }, async child => {
+      await once(child, 'exit');
+      if (outcome === 'read-failure') throw new Error('read failed');
+      if (outcome === 'abort') controller.abort();
+      return 'metadata';
+    });
+    if (outcome === 'success') expect(await probe).toBe('metadata');
+    else await expect(probe).rejects.toThrow(outcome === 'abort' ? 'cancelled' : 'read failed');
+    expect(() => process.kill(-child.pid!, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }));
+  }, 5000); // bound: two mock processes start, then the probe waits at most 750ms for group disappearance.
 });
