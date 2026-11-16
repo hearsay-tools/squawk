@@ -1319,7 +1319,7 @@ export function createApp(deps: ServerDeps) {
       },
     )
 
-    .post('/providers/connect', jsonZodValidator(providerConnectSchema, { message: 'provider must be claude, codex, opencode, pi, cursor, or omp' }), async (c) => {
+    .post('/providers/connect', jsonZodValidator(providerConnectSchema, { message: `provider must be ${PROVIDER_IDS.slice(0, -1).join(', ')}, or ${PROVIDER_IDS.at(-1)}` }), async (c) => {
       const body = { data: c.req.valid('json') };
 
       const provider = body.data.provider as ProviderId;
