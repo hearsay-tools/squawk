@@ -90,7 +90,13 @@ needs to choose between them.
   `--settings '{"disableAllHooks":true}'` and `--no-session-persistence` (full list, no hook
   run, no session file); Codex `skills/list`; OpenCode `GET /skill`; pi RPC `get_commands`; omp
   `omp skill list --json` (the RPC list needs a selected model, the CLI list does not).
-- **`AgentRunSpec.skill = { id, args }`** asks the adapter to open the turn with that skill. The
+- **One id can have two entries.** Codex lists both copies of a name that two folders hold, and
+  only the structured item with a `path` starts one of them; the text form starts neither. So a
+  skill reference is `{ id, path? }`. A pick in the cockpit stores the `path` when the runner
+  reports one. A reference with no path (a workflow's `skill:`, `worker spawn --skill`, a typed
+  `/name`) that matches more than one entry fails at step open; the error names every path. It
+  is not resolved by a Squawk rule (D8). Claude, OpenCode, pi and omp list one entry for each id.
+- **`AgentRunSpec.skill = { id, path?, args }`** asks the adapter to open the turn with that skill. The
   adapter builds its own form, and each form below is tested:
 
   | Runner | Form | Rule the adapter must keep |
@@ -101,8 +107,9 @@ needs to choose between them.
   | pi | `/skill:id args` at the start of the message | At least one argument must follow the id on the same line. `/skill:id` followed by a line break is not expanded. Opening context goes after the args |
   | omp | `/skill:id args` | The adapter maps the `custom` message with `customType: "skill-prompt"` to a user-message event. Today it produces no event, so the transcript has no trace of the skill |
 
-- **Facts:** `skillTriggerMidTurn: boolean` and `skillUnknownName: 'error' | 'silent'`. All five
-  runners list, so no fact is needed for a runner without a list.
+- **Facts:** `skillTriggerMidTurn: boolean`, `skillUnknownName: 'error' | 'silent'` and
+  `skillsSeenBySession: 'live' | 'at-start'` (Codex is `live`). All five runners list, so no
+  fact is needed for a runner without a list.
 
 ### Starting a selected skill
 
@@ -116,8 +123,15 @@ their meaning: this step runs skill X.
 3. Squawk sends the trigger with the step's prompt as its arguments.
 4. Squawk sends no skill body, installs no files and reads no skill file.
 
-Continue is a plain resume. It does not trigger the skill again, because the body is already in
-the session and a second trigger would restart the skill.
+Continue is a plain resume when the runner resumes the stored session. It does not trigger the
+skill again, because the body is already in the session and a second trigger would restart the
+skill.
+
+A Continue can also start a fresh session, for example when OpenCode no longer has the stored
+session (`bootstrap` in `opencode-server-runner.ts`). A fresh session holds no skill body. The
+adapter reports whether it resumed. When it did not, Squawk opens the fresh session with the
+step's trigger, with the Continue message as its arguments, after the same check as at step
+open. Shared code reads the adapter's report, never a runner id.
 
 The opening context (handoff and `context.yaml` rules) keeps travelling with the opening message.
 Its place differs per runner, as the table above says: an earlier text block on Claude, after
@@ -129,6 +143,15 @@ for a slash opening; this design sends it again.
 Squawk no longer replaces a leading `/name` with a skill body. When the name is in the runner's
 list, Squawk sends that runner's trigger (D3). During a running turn it holds such a message
 until the turn ends, except on pi (D6).
+
+"The runner's list" here is the list as the running session sees it. Only Codex shows a skill
+that was added after the session started. A pi process, an omp session and an OpenCode server
+keep the list they started with, and Claude adds a skill only when its skills folder already
+existed. On those four a fresh list would name a skill that the session does not know, and the
+trigger would reach the model as plain text with no error. So Squawk keeps the list it read
+when the session's runner process started, and checks a later trigger against that list. On
+Codex it reads the list again. A name that only a fresh list holds is not triggered: Squawk
+passes the text and adds a note that the skill is available after the next Continue.
 
 ### The cockpit
 
@@ -153,7 +176,7 @@ until the turn ends, except on pi (D6).
 | Per-skill off-list | `disabledTeamSkills` in `ui-state.json`, `use-skill-selection.ts`, `GET /skills/importable` |
 | Inline body and `/name` expansion | `skillSystemPrompt`, `expandRegistrySlashSkillText` in `prompts.ts` |
 | Squawk-only skill folders | `.ai/cezar/skills`, `.ai/squawk/skills`, `.ai/skills` as sources; `SKILL_DIRS` and the hint that copies it |
-| The run's saved list | `state.skills.catalog`, `loadRunSkills`, `enabledSkills` and their two ast-grep rules |
+| The run's saved list of full skill records | `state.skills.catalog`, `loadRunSkills`, `enabledSkills` and their two ast-grep rules. The session keeps only the ids and paths it read at its start, to check later triggers |
 
 `docs/areas/skills.md` is rewritten. A new ADR supersedes
 [ADR 0023](../../docs/adr/0023-treat-skills-as-shared-content.md).
@@ -172,6 +195,7 @@ Saved data still opens: a `config.json` that holds `skillsRepos` and a `ui-state
 | D5 | Skills in `.ai/skills/` (this repository has five) are read by no runner | The folders stop being sources. This repository moves its skills to a tracked native folder in a separate change. `AGENTS.md` already names them by file path |
 | D6 | A trigger in a message sent during a running turn. Tested: pi expands it. Codex drops it. OpenCode steers it into the running turn and loses the first result. Claude and omp: not tested | On every runner but pi, Squawk holds the message until the turn ends, then opens the next turn with the trigger |
 | D7 | The built-in "create automation" skill and the `interactive: true` frontmatter hint are Squawk's own | A tool in Squawk's own MCP server replaces the skill. Every adapter honors the Squawk tools, and `cezar_schedule_task` already wraps the same automation service for one-time schedules. The tool enforces "created paused" and "preview first". The picker entry and the `interactive` hint go away |
+| D8 | One id with two entries in a runner's list (Codex), named without a path | Proposed on 2026-11-16 after review, not yet confirmed by the owner: the step fails at step open and the error names every path. Squawk adds no precedence rule of its own |
 
 ## Checks closed in round 2
 
@@ -222,7 +246,7 @@ manifest records and that are unchanged.
 | Case | Files written, kept or removed | Worktree state at the next step, Continue and restart |
 | --- | --- | --- |
 | A catalog or source that has not loaded yet | None written: the new code installs nothing, so no load is awaited | Unchanged |
-| The same name from two sources | Not possible in Squawk: it merges no sources. The runner resolves its own duplicates and Squawk shows the runner's list | Unchanged |
+| The same name from two sources | None written. Squawk merges no sources and shows the runner's list. Codex can list one id twice; [the runner seam](#the-runner-seam) says how a reference picks one | Unchanged |
 | Records written by an older Squawk version | At the first step open or Continue after the upgrade: every recorded, unchanged entry and Squawk's own `.gitignore` in the skills folders are removed, then the records. An entry the user or agent changed stays | The runner sees tracked skills and the user's own. A changed leftover stays until the worktree goes |
 | A crash between two writes | Removal is repeatable: the records are dropped last, so the next step open removes what is left | Same as the row above after the next step open |
 | The source removing the item | Not applicable: no source. A skill that leaves the runner's list is absent at the next list read; a step that names it fails at step open | Unchanged |
