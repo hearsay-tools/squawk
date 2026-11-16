@@ -28,16 +28,18 @@ describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
     expect(runnersWhere(facts => facts.nativeSubagents === 'reported')).toEqual(['claude', 'codex']);
     expect(runnersWhere(facts => facts.nativeTimerTool !== null)).toEqual(['claude']);
     expect(runnersWhere(facts => facts.sessionIdSource === 'launch')).toEqual(['claude', 'pi']);
+    expect(runnersWhere(facts => facts.turnStart === 'on-write')).toEqual(['claude', 'pi', 'omp']);
   });
 
   // The turn-path facts (inputDelivery, systemPromptOnResume) and the narrow facts, including
   // sessionIdSource (workflows/run/launch-read-resolver.ts), are declared on every row.
   it('declares every fact on every runner row', () => {
-    const keys = ['childWork', 'claudeModelAliases', 'costReport', 'hookEvents', 'humanPromptHold', 'inputDelivery', 'nativeAsk', 'nativePermission', 'nativeSubagents', 'nativeTimerTool', 'sessionIdSource', 'systemPromptOnResume', 'transport'];
+    const keys = ['childWork', 'claudeModelAliases', 'costReport', 'hookEvents', 'humanPromptHold', 'inputDelivery', 'nativeAsk', 'nativePermission', 'nativeSubagents', 'nativeTimerTool', 'sessionIdSource', 'systemPromptOnResume', 'transport', 'turnStart'];
     for (const id of RUNNER_IDS) {
       expect(Object.keys(RUNNER_FACTS[id]).sort(), id).toEqual(keys);
       expect(['launch', 'native'], id).toContain(RUNNER_FACTS[id].sessionIdSource);
       expect(['resent', 'in-thread'], id).toContain(RUNNER_FACTS[id].systemPromptOnResume);
+      expect(['on-write', 'on-wire'], id).toContain(RUNNER_FACTS[id].turnStart);
     }
   });
 

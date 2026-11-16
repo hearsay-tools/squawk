@@ -39,6 +39,7 @@ export const WAIT_CRITERIA = [
   { id: 'U6', scenario: 'baseline', name: 'cezar_done is refused with live workers and with settled but uncollected workers, accepted once collected, and open waits are cancelled' },
   { id: 'U7d', scenario: 'baseline', name: 'cezar_done finishes through the done path in a message turn and in a Continue' },
   { id: 'U7q', scenario: 'baseline', name: 'live and deferred human answers commit their reset wake counters with the answer and keep the flush budget decisions' },
+  { id: 'U7b', scenario: 'baseline', name: 'a live answer at the spent budget with a refused timer wake still owed shows the same notes on every runner' },
   { id: 'U6s', scenario: 'baseline', name: 'cezar_done in a workflow step that is not the last completes that step, and the next step runs' },
   // hearsay-tools/cezarion#1234 phase 2b: the turn-end rule.
   { id: 'U5', scenario: 'baseline', name: 'a turn end with no wait gets one nudge, then a second no-wait turn end opens a no-wait human wait and reads needs you' },
