@@ -3,7 +3,7 @@
  * group, detached ones too, and `cgroup.kill` ends them all (ADR 0032). */
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { lstatSync, mkdirSync, readFileSync, rmdirSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, readdirSync, readFileSync, rmdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const CGROUP_ROOT = '/sys/fs/cgroup';
@@ -19,14 +19,21 @@ export type CgroupFs = {
   writeFile: (path: string, data: string) => void;
   mkdir: (path: string) => void;
   rmdir: (path: string) => void;
+  /** False only when nothing is there; any other lookup failure throws: it proves no absence. */
   isDir: (path: string) => boolean;
+  /** The child cgroups directly under `path`. */
+  children: (path: string) => string[];
 };
 export const realCgroupFs: CgroupFs = {
   readFile: path => readFileSync(path, 'utf8'),
   writeFile: (path, data) => writeFileSync(path, data),
   mkdir: path => mkdirSync(path, { mode: 0o700 }),
   rmdir: path => rmdirSync(path),
-  isDir: path => { try { const s = lstatSync(path); return s.isDirectory() && !s.isSymbolicLink(); } catch { return false; } },
+  isDir: path => {
+    try { const s = lstatSync(path); return s.isDirectory() && !s.isSymbolicLink(); }
+    catch (error) { if (code(error) === 'ENOENT') return false; throw error; }
+  },
+  children: path => readdirSync(path, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => join(path, entry.name)),
 };
 
 /** The cgroup v2 directory this process is in, from `/proc/self/cgroup`. Undefined on cgroup v1,
@@ -53,15 +60,14 @@ export function probeCgroups(fs: CgroupFs = realCgroupFs, place: (procs: string)
   if (!base) return { reason: 'no cgroup v2 entry in /proc/self/cgroup' };
   const probe = join(base, `squawk-probe-${randomUUID()}`);
   try { fs.mkdir(probe); } catch (error) { return { reason: `cannot create a child cgroup (${code(error)})` }; }
+  let failure: string | undefined;
   try {
-    if (!place(join(probe, 'cgroup.procs'))) return { reason: 'cannot move a process into a child cgroup' };
-    fs.writeFile(join(probe, 'cgroup.kill'), '1');
-    return { base };
-  } catch (error) {
-    return { reason: `cannot kill a child cgroup (${code(error)})` };
-  } finally {
-    try { fs.rmdir(probe); } catch { /* an empty probe group the next probe never reuses */ }
-  }
+    if (!place(join(probe, 'cgroup.procs'))) failure = 'cannot move a process into a child cgroup';
+    else fs.writeFile(join(probe, 'cgroup.kill'), '1');
+  } catch (error) { failure = `cannot kill a child cgroup (${code(error)})`; }
+  // Removal is part of the proof: a host that cannot remove a worker's cgroup cannot destroy it.
+  try { fs.rmdir(probe); } catch (error) { failure ??= `cannot remove a child cgroup (${code(error)})`; }
+  return failure ? { reason: failure } : { base };
 }
 
 /** A shell moves itself into the probe group and exits; exit 0 means the move worked. */
@@ -103,18 +109,23 @@ export function killCgroup(path: string, fs: CgroupFs = realCgroupFs): void {
 
 /** Kill, wait until empty, remove; repeated until the group is gone or `deadline` passes. A process
  * that placed itself after a kill makes the removal fail with EBUSY, so it is killed in turn; once
- * the group is removed no process can enter it. True when the group is gone. */
+ * the group is removed no process can enter it. Child cgroups a worker made are removed first: the
+ * kernel removes only a cgroup without children. True when the group is gone; a lookup that fails
+ * for any reason but absence answers false, never success. */
 export async function removeCgroup(path: string, deadline: number, fs: CgroupFs = realCgroupFs): Promise<boolean> {
-  for (;;) {
-    if (!fs.isDir(path)) return true;
-    killCgroup(path, fs);
-    while (cgroupPopulated(path, fs) && Date.now() < deadline) await sleep(POLL_MS);
-    try { fs.rmdir(path); return true; } catch (error) {
-      if (code(error) === 'ENOENT') return true;
-      if (code(error) !== 'EBUSY' || Date.now() >= deadline) return false;
+  try {
+    for (;;) {
+      if (!fs.isDir(path)) return true;
+      killCgroup(path, fs);
+      while (cgroupPopulated(path, fs) && Date.now() < deadline) await sleep(POLL_MS);
+      for (const child of fs.children(path)) if (!await removeCgroup(child, deadline, fs)) return false;
+      try { fs.rmdir(path); return true; } catch (error) {
+        if (code(error) === 'ENOENT') return true;
+        if (code(error) !== 'EBUSY' || Date.now() >= deadline) return false;
+      }
+      await sleep(POLL_MS);
     }
-    await sleep(POLL_MS);
-  }
+  } catch { return false; }
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

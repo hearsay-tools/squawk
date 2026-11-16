@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cgroupCommand, cgroupPopulated, ensureCgroup, killCgroup, ownCgroup, probeCgroups, removeCgroup, workerCgroupPath, type CgroupFs } from './cgroup.ts';
 
 /** An in-memory cgroup tree: directories, `cgroup.events`, and what each kill or removal did. */
-function fakeFs(opts: { self?: string; mkdir?: (path: string) => void; busy?: number } = {}) {
+function fakeFs(opts: { self?: string; mkdir?: (path: string) => void; busy?: number; rmdir?: (path: string) => void } = {}) {
   const dirs = new Set<string>(['/sys/fs/cgroup/app.slice/squawk.service']);
   const populated = new Set<string>();
   const log: string[] = [];
@@ -23,12 +23,15 @@ function fakeFs(opts: { self?: string; mkdir?: (path: string) => void; busy?: nu
     },
     mkdir: path => { opts.mkdir?.(path); dirs.add(path); log.push(`mkdir ${path}`); },
     rmdir: path => {
+      opts.rmdir?.(path);
       if (!dirs.has(path)) throw enoent(path);
+      if ([...dirs].some(dir => dir.startsWith(`${path}/`))) throw Object.assign(new Error('EBUSY: has children'), { code: 'EBUSY' });
       // A process that placed itself after the kill: the kernel refuses the removal.
       if (busy > 0) { busy--; populated.add(path); throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' }); }
       dirs.delete(path); log.push(`rmdir ${path}`);
     },
     isDir: path => dirs.has(path),
+    children: path => [...dirs].filter(dir => dir.startsWith(`${path}/`) && !dir.slice(path.length + 1).includes('/')),
   };
   return { fs, dirs, populated, log };
 }
@@ -79,6 +82,26 @@ describe('cgroup backend', () => {
     expect(dirs.has(path)).toBe(false);
     expect(log.filter(line => line.endsWith('cgroup.kill 1'))).toHaveLength(3);
     expect(await removeCgroup(path, Date.now() + 5_000, fs)).toBe(true);
+  });
+
+  it('a probe whose group cannot be removed fails: destroy needs removal', () => {
+    const fs = fakeFs({ rmdir: () => { throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' }); } });
+    expect(probeCgroups(fs.fs, () => true)).toEqual({ reason: 'cannot remove a child cgroup (EBUSY)' });
+  });
+
+  it('removes the child cgroups a worker made before its own', async () => {
+    const { fs, dirs } = fakeFs();
+    const path = ensureCgroup('/sys/fs/cgroup/app.slice/squawk.service', 'w1', fs);
+    dirs.add(`${path}/nested`); dirs.add(`${path}/nested/deeper`);
+    expect(await removeCgroup(path, Date.now() + 5_000, fs)).toBe(true);
+    expect([...dirs].filter(dir => dir.startsWith(path))).toEqual([]);
+  });
+
+  it('a lookup that fails for any reason but absence is no success', async () => {
+    const { fs } = fakeFs();
+    const path = ensureCgroup('/sys/fs/cgroup/app.slice/squawk.service', 'w1', fs);
+    const denied = { ...fs, isDir: () => { throw Object.assign(new Error('EACCES'), { code: 'EACCES' }); } };
+    expect(await removeCgroup(path, Date.now() + 5_000, denied)).toBe(false);
   });
 
   it('gives up at the deadline and keeps the group', async () => {

@@ -4,9 +4,10 @@
 import { randomUUID } from 'node:crypto';
 import { closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync, readSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 
-export function readPrivateRecord<T>(path: string, cap: number, parse: (value: unknown) => T): T | 'absent' | 'unknown' {
+export function readPrivateRecord<T>(path: string | (() => string), cap: number, parse: (value: unknown) => T): T | 'absent' | 'unknown' {
   try {
-    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    // A path that cannot be resolved (a missing or unsafe runs directory) is classified like a read.
+    const fd = openSync(typeof path === 'string' ? path : path(), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
       const info = fstatSync(fd);
       if (!info.isFile() || info.size > cap || (info.mode & 0o077)) return 'unknown';

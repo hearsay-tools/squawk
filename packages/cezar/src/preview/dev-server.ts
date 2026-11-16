@@ -151,7 +151,9 @@ export class DevServer extends EventEmitter {
       this.finish('exited');
     };
     let argv: [string, string[]] = ['/bin/sh', ['-c', this.server.command]];
-    if (process.platform !== 'win32' && this.scope) {
+    // Admission holds on every platform: on Windows the scope wraps nothing yet, but still refuses
+    // a start once destroy has begun.
+    if (this.scope) {
       try { argv = this.scope.command(argv[0], argv[1]); } catch (error) { refuse(error); return; }
     }
     const child = process.platform === 'win32'

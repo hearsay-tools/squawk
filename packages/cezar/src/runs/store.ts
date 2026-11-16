@@ -2807,7 +2807,7 @@ export class RunStore extends EventEmitter {
   /** Tri-state: only ENOENT is `absent` (legacy, scan-only). A present record that is unreadable,
    * wrongly permissioned, malformed or of another generation is `unknown`: never finalized or reaped. */
   readWorkerProcesses(id: string, generation: string): WorkerProcessRecord | 'absent' | 'unknown' {
-    const record = readPrivateRecord(this.processesPath(id), 8192, value => workerProcessRecordSchema.parse(value));
+    const record = readPrivateRecord(() => this.processesPath(id), 8192, value => workerProcessRecordSchema.parse(value));
     return typeof record === 'string' || record.generation === generation ? record : 'unknown';
   }
 
@@ -2822,7 +2822,7 @@ export class RunStore extends EventEmitter {
 
   /** Tri-state like the process record: only ENOENT is `absent`. */
   readWorkerScope(id: string): ScopeRecord | 'absent' | 'unknown' {
-    const record = readPrivateRecord(this.scopePath(id), 65_536, value => scopeRecordSchema.parse(value));
+    const record = readPrivateRecord(() => this.scopePath(id), 65_536, value => scopeRecordSchema.parse(value));
     return typeof record === 'string' || record.workerId === id ? record : 'unknown';
   }
 
@@ -2860,7 +2860,7 @@ export class RunStore extends EventEmitter {
       this.writeWorkerExecution(id, { generation, phase: 'complete',
         // Nothing abandons an execution any more (hearsay-tools/cezarion#889); keep a checkpoint that already was.
         ...(proof.abandoned ? { abandoned: true as const } : {}),
-        ...(opts.interrupted && proof.phase === 'starting' ? { interrupted: true as const } : {}),
+        ...(proof.interrupted || (opts.interrupted && proof.phase === 'starting') ? { interrupted: true as const } : {}),
         ...(proof.phase === 'queued' || proof.neverMaterialized ? { neverMaterialized: true as const } : {}),
         ...(!['queued', 'running', 'waiting'].includes(run.status) ? { scratchCleanup: {
           resourceId: run.delegation.workspace.resourceId, path: run.delegation.workspace.path } } : {}) });

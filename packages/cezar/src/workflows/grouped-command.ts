@@ -43,7 +43,7 @@ export function runGroupedCommand(opts: GroupedCommandOptions): Promise<GroupedC
   if (refusal) return Promise.resolve({ exitCode: null, output: '', timedOut: false, spawnError: refusal });
   let argv: [string, string[]];
   try { argv = scope ? scope.command('bash', ['-lc', command]) : ['bash', ['-lc', command]]; }
-  catch (error) { return Promise.resolve({ exitCode: null, output: '', timedOut: false, spawnError: (error as Error).message }); }
+  catch (error) { const message = (error as Error).message; return Promise.resolve({ exitCode: null, output: `failed to start: ${message}`, timedOut: false, spawnError: message }); }
   return new Promise((resolve) => {
     const grouped = process.platform !== 'win32';
     const child = spawn(argv[0], argv[1], { cwd, env, detached: grouped });
@@ -52,7 +52,8 @@ export function runGroupedCommand(opts: GroupedCommandOptions): Promise<GroupedC
       try { scope?.started(pid); } catch (error) {
         child.on('error', () => undefined);
         try { if (grouped) process.kill(-pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch { /* already gone */ }
-        resolve({ exitCode: null, output: '', timedOut: false, spawnError: (error as Error).message });
+        const message = (error as Error).message;
+        resolve({ exitCode: null, output: `failed to start: ${message}`, timedOut: false, spawnError: message });
         return;
       }
     }

@@ -275,7 +275,7 @@ describe('durable scratch cleanup evidence', () => {
     } finally { await outsider.close(); }
   });
 
-  it.runIf(process.platform !== 'win32')('reclaim needs an empty scope; admission does not (ADR 0032)', async () => {
+  it.runIf(process.platform === 'linux')('reclaim needs an empty scope; admission does not (ADR 0032)', async () => {
     const { run, generation, scratch } = await completed();
     if (run.delegation?.role !== 'worker') throw Error('missing worker');
     const service = await groupHolder(scratch);

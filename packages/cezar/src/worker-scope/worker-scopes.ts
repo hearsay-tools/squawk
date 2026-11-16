@@ -40,6 +40,7 @@ export class WorkerScopeUnreadable extends Error {
   constructor() { super("the worker's scope record is unreadable; its processes cannot be found"); }
 }
 
+const key = (entry: RecordedProcess) => `${entry.pid}:${entry.startToken}`;
 const capacityError = (workerId: string) => new Error(`worker ${workerId} already owns ${SCOPE_GROUP_CAP} live process groups`);
 
 export type ScopeStop = { stopped: true } | { stopped: false; error: string };
@@ -78,7 +79,11 @@ export class WorkerScopes {
           const live = liveGroups(record.groups);
           // Never forget a live group to make room: refuse the start instead (the caller ends it).
           if (live.length >= SCOPE_GROUP_CAP) throw capacityError(workerId);
-          return { ...record, groups: [...live, groupEntry(pid)] };
+          const entry = groupEntry(pid);
+          // Without a start token the group can never be proven ours, so it could never be stopped:
+          // refuse it, and the spawn site ends the group now.
+          if (entry.startToken === undefined) throw new Error(`process ${pid} exited before its identity could be recorded`);
+          return { ...record, groups: [...live, entry] };
         });
       },
     };
@@ -121,7 +126,12 @@ export class WorkerScopes {
       await new Promise(resolve => setTimeout(resolve, STOP_POLL_MS));
       groups = groupsStillStopping(groups);
     }
-    this.store.writeWorkerScope(workerId, { workerId, cgroups, groups });
+    // Merged into the record as it is now: an entry written while this stop waited is kept, and only
+    // what this stop ended leaves it. Groups only the execution record names stay there.
+    const removed = new Set(record.cgroups.filter(path => !cgroups.includes(path)));
+    const ended = new Set(record.groups.filter(group => !groups.some(left => key(left) === key(group))).map(key));
+    this.update(workerId, current => ({ ...current, cgroups: current.cgroups.filter(path => !removed.has(path)),
+      groups: current.groups.filter(group => !ended.has(key(group))) }));
     if (!cgroups.length && !groups.length) return { stopped: true };
     return { stopped: false, error: `worker processes did not stop within ${Math.round(timeoutMs / 1000)}s: ${
       [...cgroups.map(path => `cgroup ${path}`), ...groups.map(group => `process group ${group.pgid}`)].join(', ')}` };
@@ -138,9 +148,9 @@ export class WorkerScopes {
   private groups(workerId: string, record: ScopeRecord): RecordedProcess[] {
     const generation = this.store.readWorkerExecution(workerId)?.generation;
     const execution = generation ? this.store.readWorkerProcesses(workerId, generation) : 'absent';
-    const seen = new Set(record.groups.map(group => `${group.pid}:${group.startToken}`));
+    const seen = new Set(record.groups.map(key));
     const recorded = typeof execution === 'string' ? [] : execution.processes;
-    return [...record.groups, ...recorded.filter(entry => !seen.has(`${entry.pid}:${entry.startToken}`))];
+    return [...record.groups, ...recorded.filter(entry => !seen.has(key(entry)))];
   }
 
   private update(workerId: string, change: (record: ScopeRecord) => ScopeRecord): void {

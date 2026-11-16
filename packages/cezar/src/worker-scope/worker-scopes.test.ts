@@ -93,6 +93,33 @@ describe('WorkerScopes', () => {
     expect(pidExists(printed)).toBe(false);
   });
 
+  it.runIf(posix)('groups: stop keeps a group registered while it waited, and drops only what it ended', async () => {
+    const workerId = randomUUID();
+    const child = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' });
+    started.push(child.pid!);
+    const first = { pid: child.pid!, pgid: child.pid!, startToken: processStartToken(child.pid!)! };
+    const late = { pid: 999_999, pgid: 999_999, startToken: 'registered-during-stop' };
+    let reads = 0;
+    let record: ScopeRecord = { workerId, cgroups: [], groups: [first] };
+    const store: ScopeStore = {
+      // The first read is stop's snapshot; by the next, another start has registered a group.
+      readWorkerScope: () => (++reads === 1 ? record : { ...record, groups: [...record.groups, late] }),
+      writeWorkerScope: (_id, next) => { record = next; },
+      getRun: id => ({ id, delegation: { role: 'worker' } }) as unknown as RunRecord,
+      readWorkerExecution: () => undefined, readWorkerProcesses: () => 'absent',
+    };
+    const scopes = new WorkerScopes(store, () => ({ backend: 'groups', reason: 'test' }));
+    expect(await scopes.stop(workerId, HANG_GUARD_MS)).toEqual({ stopped: true });
+    expect(record.groups).toEqual([late]);
+  });
+
+  it.runIf(posix)('groups: refuses to record a process whose identity cannot be read', async () => {
+    const child = spawn('true', [], { detached: true, stdio: 'ignore' });
+    await new Promise(resolve => child.once('exit', resolve));
+    const scopes = new WorkerScopes(memoryStore().store, () => ({ backend: 'groups', reason: 'test' }));
+    expect(() => scopes.spawnScope(randomUUID()).started(child.pid!)).toThrow(/identity could be recorded/);
+  });
+
   it.runIf(posix)('groups: refuses a start past the cap instead of forgetting a live group', async () => {
     const workerId = randomUUID();
     const { store, state } = memoryStore();
