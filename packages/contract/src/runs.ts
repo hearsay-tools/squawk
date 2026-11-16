@@ -83,8 +83,7 @@ export const stepStateSchema = z.object({
   sessionId: z.string().optional(),
   /** Backend that owns `sessionId`; absent on records written before backend affinity. */
   backend: runnerSchema.optional(),
-  /** The runner Squawk no longer ships that this step ran on (hearsay-tools/squawk#3715). Its
-   *  session is gone; a Continue that finds it newer than every recorded session continues it. */
+  /** A runner Squawk no longer ships that this step ran on; its session is gone (hearsay-tools/squawk#3715). */
   removedBackend: z.string().optional(),
   /** Agent account (spec 2026-07-29-agent-profiles) that owns `sessionId` — `default`, or a
    *  stored profile id. The two are a PAIR: a session id only resolves inside the config dir
@@ -254,8 +253,7 @@ export const runRecordSchema = z.object({
   /** Normalized provider/model identity used for attribution and reproducible replay. */
   modelIdentity: z.string().optional(),
   runner: runnerSchema.optional(),
-  /** The runner a run was saved on when Squawk no longer ships it (hearsay-tools/squawk#3715).
-   *  Such a run has no `runner`, and continues only on a runner the Continue names. */
+  /** A runner Squawk no longer ships that this run ran on; it continues only on a named runner (hearsay-tools/squawk#3715). */
   removedRunner: z.string().optional(),
   /** The composer's per-task agent account (spec 2026-07-29-agent-profiles), applying to steps
    *  on `runner`. Absent = the run follows the project's own selection. */
