@@ -220,6 +220,16 @@ for (const type of [InputGroup, InputFlight]) {
 }
 export function createInputGroup(): InputGroup { return new InputGroup(); }
 
+/** The one way input reaches a live session's transport: every send records the owed input it
+ *  carries as this session's delivery attempt (hearsay-tools/squawk#1289). A session's opening
+ *  prompt is the only other way, and `openDeliveryScope` records it. The
+ *  `agent-session-send-outside-handoff` lint rule refuses a send anywhere else. */
+function handToTransport<T>(state: ActiveRun, session: AgentSession, inputIds: readonly string[], send: (session: AgentSession) => T): T {
+  const sent = state.inputState.writeInput(() => send(session));
+  if (sent && inputIds.length) attemptWrites.record(state.inputState, { session, inputIds });
+  return sent;
+}
+
 type HumanAnswerBudget = { spent: number };
 
 /** Charging results cancelled by this flush, before a human answer resets its budget. */
@@ -374,9 +384,8 @@ export class InputDelivery {
     }
     const bundle = state.boundary.atTurnBoundary === state.liveSession.session ? pendingConversationBatch(this.context.store.getRun(runId), state, input => formatAgentInput(input, id => this.context.store.getRun(id)), reply.id) : undefined;
     const session = state.liveSession.session;
-    if (!state.inputState.writeInput(() => session.sendMessage([{ type: 'text', text }, ...(bundle ? [{ type: 'text' as const, text: bundle.text }] : [])]))) return;
-    // The answer's commit is its checkpoint: a refused one leaves its inputs undelivered.
-    attemptWrites.record(state.inputState, { session, inputIds: [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])], outcome: 'acknowledged' });
+    const content = [{ type: 'text' as const, text }, ...(bundle ? [{ type: 'text' as const, text: bundle.text }] : [])];
+    if (!handToTransport(state, session, [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])], wire => wire.sendMessage(content))) return;
     this.context.store.appendEvent(runId, { type: 'human-input-delivered', askSeq, source });
     inputReceipts.commitRoutedAnswer(this.context, runId, state, [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])], fallback, this.maxAutoContinues);
     // Spend the answer's admission now so later messages can steer before its turn ends.
@@ -531,12 +540,14 @@ export class InputDelivery {
     if (idle) this.settleIdleBoundary(runId, state, session);
   }
 
-  /** A session opens with no delivery attempted, unless an admitted wake reopened it: its opening
-   *  prompt is that wake's first delivery attempt (hearsay-tools/squawk#1289). */
+  /** A session opens with its opening prompt as its only delivery attempt: the opening input a
+   *  continuation carries, and, when an admitted wake reopened it, everything that wake owes
+   *  (hearsay-tools/squawk#1289). Any other session opens with none. */
   openDeliveryScope(runId: string, state: ActiveRun, session: AgentSession): void {
+    const opening = state.inputState.openingAgentInputId;
     const run = this.host.line.isAdmitted(runId) ? this.context.store.getRun(runId) : undefined;
-    attemptWrites.open(state.inputState, run && { session,
-      inputIds: [...resolvedWaits(run).map(waitInputId), ...this.host.pendingConversationWakes(run).map(input => input.id)] });
+    const owed = run ? [...resolvedWaits(run).map(waitInputId), ...this.host.pendingConversationWakes(run).map(input => input.id)] : [];
+    attemptWrites.open(state.inputState, run || opening ? { session, inputIds: [...new Set([...(opening ? [opening] : []), ...owed])] } : undefined);
   }
 
   /** Reservation is synchronous; only an acknowledged transport may checkpoint delivery. */
@@ -592,11 +603,10 @@ export class InputDelivery {
     };
     let acknowledgement: false | Promise<void>;
     // A wake beside a pending question (`admitsAgentInput`) is not its answer: the question stays Squawk's and its card stays answerable, because only a human delivery settles it. The provider's acknowledgement is still the checkpoint, and a rejected one fails the session like any other, leaving the waits resolved for a continuation.
-    try { acknowledgement = state.inputState.writeInput(() => session.sendAgentMessage(content, inputIds)); }
+    try { acknowledgement = handToTransport(state, session, inputIds, wire => wire.sendAgentMessage(content, inputIds)); }
     catch (error) { refund(); fail(error, false); state.inputState.clearFlight(); return false; }
     // A refused submission drops its flight, and its reservation with it.
     if (!acknowledgement) { state.inputState.clearFlight(); return false; }
-    if (inputIds.length) attemptWrites.record(state.inputState, { session, inputIds });
     // Attach rejection handling before any persistence/capacity work can throw.
     flightWrites.settle(flight, acknowledgement.then(() => {
       // A positive command ACK can precede a provider-close frame in the same read batch. Closing the transport afterwards does not revoke that ACK; explicit stop/disposal/replacement still revoke authority via current().
@@ -766,7 +776,7 @@ export class InputDelivery {
     const prepared = this.prepareMessageContent(runId, state, content);
     const { blocks, expanded, deliverable } = prepared;
     const session = state.liveSession.session;
-    const delivered = state.inputState.writeInput(() => session.sendMessage(deliverable));
+    const delivered = handToTransport(state, session, prepared.bundle?.inputs.map(input => input.id) ?? [], wire => wire.sendMessage(deliverable));
     if (delivered && expanded !== blocks) this.host.runSkills.provisionLiveSlashSkill(runId, state, blocks);
     if (delivered) this.applyHumanMessageDelivery(runId, state, prepared, messageId);
     return delivered;

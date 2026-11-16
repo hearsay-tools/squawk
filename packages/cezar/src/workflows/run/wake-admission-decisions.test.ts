@@ -58,7 +58,7 @@ describe('shouldReparkWithoutWaits', () => {
 // hearsay-tools/squawk#1289: a clean close charges a failed wake only after a delivery attempt.
 describe('cleanCloseFailsDelivery', () => {
   const session = stateAtBoundary(false).liveSession.session!;
-  const unread = vi.fn(() => { throw Error('receipt read without an acknowledged attempt'); });
+  const unread = vi.fn(() => { throw Error('receipt read without a named input'); });
 
   it('charges nothing without an attempt and reads no owed delivery', () => {
     const owes = vi.fn(() => true);
@@ -66,15 +66,16 @@ describe('cleanCloseFailsDelivery', () => {
     expect(owes).not.toHaveBeenCalled();
   });
 
-  it.each([true, false])('charges an attempt that was not acknowledged only while something is owed: %s', owed => {
-    expect(cleanCloseFailsDelivery({ session, inputIds: ['message'] }, unread, () => owed)).toBe(owed);
+  it.each([true, false])('charges an attempt that named no input while something is owed: %s', owed => {
+    expect(cleanCloseFailsDelivery({ session, inputIds: [] }, unread, () => owed)).toBe(owed);
   });
 
-  it('charges an acknowledged attempt only when the close requeued an input it carried', () => {
-    const attempt = { session, inputIds: ['message'], outcome: 'acknowledged' as const };
+  it('charges an attempt only when an input it carried is owed again', () => {
+    const attempt = { session, inputIds: ['first', 'second'], outcome: 'acknowledged' as const };
     const owes = vi.fn(() => true);
-    expect(cleanCloseFailsDelivery(attempt, ids => { expect(ids).toEqual(['message']); return true; }, owes)).toBe(false);
+    expect(cleanCloseFailsDelivery(attempt, ids => { expect(ids).toEqual(['first', 'second']); return true; }, owes)).toBe(false);
     expect(owes).not.toHaveBeenCalled();
     expect(cleanCloseFailsDelivery(attempt, () => false, owes)).toBe(true);
+    expect(cleanCloseFailsDelivery({ session, inputIds: ['first'] }, () => false, () => false)).toBe(false);
   });
 });

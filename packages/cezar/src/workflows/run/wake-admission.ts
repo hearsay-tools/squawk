@@ -47,10 +47,11 @@ interface WakeAdmissionHost {
 
 /** A clean close fails a wake delivery only when its session attempted one that did not reach the
  *  agent, and something is still owed. Input the scheduler has not admitted yet costs no retry
- *  (hearsay-tools/squawk#1289). Once the latest attempt is acknowledged, a delivery failed only
- *  when the close requeued an input any attempt of the session carried (`received` is false). */
+ *  (hearsay-tools/squawk#1289). An attempt reached the agent when no input any attempt of the
+ *  session carried is owed again (`received`); an attempt that named no input (a wake opening with
+ *  nothing listable) never proves it. */
 export function cleanCloseFailsDelivery(attempt: DeliveryAttempt | undefined, received: (inputIds: readonly string[]) => boolean, owesDelivery: () => boolean): boolean {
-  if (!attempt || (attempt.outcome === 'acknowledged' && received(attempt.inputIds))) return false;
+  if (!attempt || (attempt.inputIds.length > 0 && received(attempt.inputIds))) return false;
   return owesDelivery();
 }
 
@@ -125,7 +126,11 @@ export class WakeAdmission {
 
   /** Both clean-close paths ask this before they count a failed wake delivery. */
   cleanCloseFailsDelivery(runId: string, state: ActiveRun): boolean {
-    const received = (ids: readonly string[]) => !this.context.store.getRun(runId)?.agentInputs?.some(input => ids.includes(input.id) && !input.deliveredAt);
+    const received = (ids: readonly string[]) => {
+      const run = this.context.store.getRun(runId);
+      const owed = new Set([...resolvedWaits(run ?? {}).map(waitInputId), ...(run?.agentInputs ?? []).filter(input => !input.deliveredAt).map(input => input.id)]);
+      return !ids.some(id => owed.has(id));
+    };
     return cleanCloseFailsDelivery(state.inputState.deliveryAttempt, received, () => this.owesDelivery(runId));
   }
 
