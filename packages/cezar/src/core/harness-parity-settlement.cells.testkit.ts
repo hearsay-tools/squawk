@@ -3,28 +3,23 @@ import type { HarnessParityPart } from './harness-parity-parts.testkit.ts';
 import { describeHarnessPart, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
 import { RUN_STATUS, STEP_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, vi } from 'vitest';
 import * as gitWorktree from '../git-worktree.ts';
 import { testHome } from '../home/test-home.testkit.ts';
-import { readMockRecords } from '../mock-records.testkit.ts';
 import { agentTmpDir, resolveAgentTmpDir } from '../runs/agent-tmpdir.ts';
 import { hasPendingAsk } from '../runs/run-store.testkit.ts';
-import type { RunRecord, RunStore } from '../runs/store.ts';
 import { apiRequest } from '../server/loopback-request.testkit.ts';
 import { createApp } from '../server/server.ts';
 import { cleanupCheckpoint, seedSettledFamily } from '../workflows/delegation-reconcile.testkit.ts';
 import { fixtureWork } from '../workflows/fixture-manager.testkit.ts';
 import { IDLE_TIMEOUT_MS, type RunManager } from '../workflows/run.ts';
-import type { WorkflowDef } from '../workflows/types.ts';
 import { answerThroughRoute, type StoredEvent } from './harness-parity-permission-route.testkit.ts';
-import { driveSeam, exemptionFor, HARNESS_ADAPTERS, PERMISSION_CRITERIA, promptFor, textEvents, waitFor } from './harness-parity-core.testkit.ts';
+import { exemptionFor, HARNESS_ADAPTERS, promptFor, waitFor } from './harness-parity-core.testkit.ts';
 import { driveObservedRun } from './harness-parity-run-tier.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
-import { RUNNER_FACTS, runnersWhere } from './runner-facts.ts';
-import type { UiEvent } from './ui-events.ts';
-import { driveRun, withOwnedInputRun, type RunObservation } from './workflow-parity-core.testkit.ts';
+import { runnersWhere } from './runner-facts.ts';
+import { driveRun, withOwnedInputRun } from './workflow-parity-core.testkit.ts';
 
 /** Keep the exact fire-and-forget settlement promise owned by the fixture. */
 function observeSettlements(manager: RunManager) {
