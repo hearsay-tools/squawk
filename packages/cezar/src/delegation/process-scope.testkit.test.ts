@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { readableHolder } from './non-dumpable.testkit.ts';
-import { inspectGeneration, processesWithCwdUnder, processStartToken, recordedProcessLive } from './process-liveness.ts';
+import { processesWithCwdUnder, processStartToken, recordedProcessLive } from './process-liveness.ts';
+import { recordedHolders } from '../runs/worker-resource-holders.ts';
 import { scopeFixtureProcesses } from './process-scope.testkit.ts';
 import { requirePidText } from '../pid-file.testkit.ts';
 
@@ -22,18 +23,18 @@ describe.runIf(process.platform === 'linux')('fixture process enumeration safety
     const holder = await readableHolder(root);
     let closed = false;
     try {
-      expect(inspectGeneration({ paths: [root] })).toMatchObject({ liveness: 'alive', pids: [holder.pid] });
+      expect(processesWithCwdUnder(root)).toEqual([holder.pid]);
       await holder.write();
       expect(readFileSync(join(root, 'holder-writes'), 'utf8')).toBe('still writable\n');
       await holder.close(); closed = true;
-      expect(inspectGeneration({ paths: [root] }).liveness).toBe('gone');
+      expect(processesWithCwdUnder(root)).toEqual([]);
       // The test runner's parent is deliberately absent from enumeration. Its recorded
       // identity still blocks the real probe; scoping must never filter recorded reads.
       expect(fs.readdirSync('/proc')).not.toContain(String(process.ppid));
-      expect(inspectGeneration({ paths: [root], record: { generation: 'fixture',
+      expect(recordedHolders({ generation: 'fixture',
         controller: { pid: process.pid, startToken: processStartToken(process.pid) },
         processes: [{ pid: process.ppid, startToken: processStartToken(process.ppid) }],
-      } })).toMatchObject({ liveness: 'alive', pids: [process.ppid] });
+      })).toEqual([process.ppid]);
     } finally {
       if (!closed) await holder.close();
       restore(); rmSync(root, { recursive: true, force: true });
@@ -65,7 +66,7 @@ else:
       expect(processesWithCwdUnder(root)).toContain(pid); // now reparented, still the same token
       writeFileSync(join(root, 'stop'), '');
       await vi.waitFor(() => expect(recordedProcessLive(holder!)).toBe(false), { timeout: HANG_GUARD_MS });
-      expect(inspectGeneration({ paths: [root] }).liveness).toBe('gone');
+      expect(processesWithCwdUnder(root)).toEqual([]);
     } finally {
       writeFileSync(join(root, 'stop'), ''); launcher.stdin.end(); await exited;
       if (holder) await vi.waitFor(() => expect(recordedProcessLive(holder!)).toBe(false), { timeout: HANG_GUARD_MS });
@@ -207,12 +208,12 @@ describe.runIf(process.platform === 'darwin')('macOS fixture process enumeration
       expect(cwdPids).toContain(holder.pid);
       expect(cwdPids).not.toContain(process.ppid);
       expect(processesWithCwdUnder(root)).toContain(holder.pid);
-      expect(inspectGeneration({ paths: [root], record: { generation: 'fixture',
+      expect(recordedHolders({ generation: 'fixture',
         controller: { pid: process.pid, startToken: processStartToken(process.pid) },
         processes: [{ pid: process.ppid, startToken: processStartToken(process.ppid) }],
-      } }).pids).toContain(process.ppid);
+      })).toContain(process.ppid);
       holder.stdin.end(); await exited;
-      expect(inspectGeneration({ paths: [root] }).liveness).toBe('gone');
+      expect(processesWithCwdUnder(root)).toEqual([]);
     } finally {
       holder.stdin.end(); await exited;
       restore(); rmSync(root, { recursive: true, force: true });
@@ -238,7 +239,7 @@ describe.runIf(process.platform === 'darwin')('macOS fixture process enumeration
       expect(processesWithCwdUnder(root)).toContain(pid);
       writeFileSync(join(root, 'stop'), '');
       await vi.waitFor(() => expect(recordedProcessLive(holder!)).toBe(false), { timeout: HANG_GUARD_MS });
-      expect(inspectGeneration({ paths: [root] }).liveness).toBe('gone');
+      expect(processesWithCwdUnder(root)).toEqual([]);
     } finally {
       writeFileSync(join(root, 'stop'), ''); launcher.stdin.end(); await exited;
       if (holder) await vi.waitFor(() => expect(recordedProcessLive(holder!)).toBe(false), { timeout: HANG_GUARD_MS });

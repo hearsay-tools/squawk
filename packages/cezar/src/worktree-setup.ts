@@ -7,6 +7,7 @@ import {
 } from '@open-mercato/cezar-contract/workspace';
 import { buildCommandEnv } from './core/agent-env.ts';
 import { runGroupedCommand } from './workflows/grouped-command.ts';
+import type { SpawnScope } from './worker-scope/scope.ts';
 
 /**
  * Worktree setup (#917, spec `.ai/specs/2026-10-07-worktree-setup.md`): the commands a project
@@ -88,8 +89,10 @@ export async function runWorktreeSetup(opts: {
   setInterrupt: (stop: () => void) => void;
   isCancelled: () => boolean;
   onCommandResult: (result: WorktreeSetupCommandResult) => void;
+  /** A worker's scope: each command starts inside it (ADR 0032). */
+  scope?: SpawnScope | undefined;
 }): Promise<WorktreeSetupOutcome> {
-  const { plan, cwd, env, setInterrupt, isCancelled, onCommandResult } = opts;
+  const { plan, cwd, env, setInterrupt, isCancelled, onCommandResult, scope } = opts;
   const refusal = fallbackProjectWriteError(cwd);
   if (refusal) return { status: 'invalid', issue: refusal };
   const started = Date.now();
@@ -103,6 +106,7 @@ export async function runWorktreeSetup(opts: {
       setInterrupt,
       timeoutMs: plan.timeoutSeconds * 1000,
       keep: 'tail',
+      scope,
       cap: OUTPUT_CAP,
     });
     const commandResult: WorktreeSetupCommandResult = {

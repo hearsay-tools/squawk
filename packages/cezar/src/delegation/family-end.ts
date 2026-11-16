@@ -17,7 +17,6 @@ import type { RunRecord, RunStore } from '../runs/store.ts';
 import { ownedWorkspaceReceipts } from './workspace-record.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
 import { releaseThenRemoveOwnedWorkspace } from './owned-workspace-release.ts';
-import { inspectGeneration } from './process-liveness.ts';
 
 export type FamilyEndStore = Pick<RunStore, 'getRun' | 'listWorkersOf' | 'commitDelegation' | 'readWorkerExecution' |
   'workerResourcesSafe' | 'sourceDataDir' | 'unavailable'>;
@@ -60,12 +59,12 @@ function inProject(repoRoot: string, workspace: WorkerWorkspace): boolean {
 }
 
 /** An orphan receipt's directory goes as an archived worker's does: only when it is clean, and only
- *  while still no run owns it and no process works in it. True once the directory is gone. */
+ *  while still no run owns it. A process that works in it is not the worker's (ADR 0032). True once
+ *  the directory is gone. */
 async function reclaimOrphanDirectory(repoRoot: string, store: FamilyEndStore, workspace: WorkerWorkspace): Promise<boolean> {
   if (!existsSync(workspace.path)) return true;
   const assertOrphan = () => {
     if (store.getRun(workspace.ownerRunId)) throw new Error('The receipt has a run');
-    if (inspectGeneration({ paths: [workspace.path] }).liveness !== 'gone') throw new Error('A process may hold the directory');
   };
   try { assertOrphan(); } catch { return false; }
   await releaseThenRemoveWorktree({}, workspace.ownerRunId, repoRoot, workspace.path, undefined,

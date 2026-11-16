@@ -28,7 +28,7 @@ import type {
   ToolGrant,
 } from './agent-runner.js';
 import { RUNNER_FACTS } from './runner-facts.js';
-import { unknownToolGrant } from './agent-runner.js';
+import { SQUAWK_SIDE_SPEC_SUPPORT, unknownToolGrant } from './agent-runner.js';
 import { signalSession, spawnSessionLeader, waitForEofExit } from './session-process.js';
 import { buildChildEnv } from './agent-env.js';
 import { squawkToolNames } from '../ci-wait/tool-catalog.js';
@@ -67,7 +67,7 @@ export interface PiRunnerOptions {
  */
 export const PI_SPEC_SUPPORT: AgentRunSpecSupport = {
   squawkTools: { honored: true, via: 'explicit CI --extension and selected tool admission' },
-  timings: { honored: true, via: 'internal runner deadlines; omitted fields retain production defaults' },
+  ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: '--append-system-prompt' },
   userPrompt: { honored: true, via: 'RPC prompt message' },
   images: { honored: true, via: 'RPC prompt images' },
@@ -114,6 +114,7 @@ export class PiRunner implements AgentRunner {
     const child = spawnSessionLeader(this.bin, buildPiArgs(spec), {
       cwd: spec.cwd,
       timings: spec.timings,
+      scope: spec.scope,
       env: buildChildEnv({ backend: this.backend, extraEnv: spec.env }),
     });
     boundOutputDrainAfterExit(child);

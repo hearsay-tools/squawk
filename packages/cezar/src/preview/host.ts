@@ -15,6 +15,7 @@ import { DevServer, probePort, type DevServerState } from './dev-server.ts';
 import { previewStopResult, type PreviewHostLike } from './registration.ts';
 import { PreviewSession, type Viewer } from './session.ts';
 import { normalizePreviewUrl } from './url.ts';
+import type { SpawnScope } from '../worker-scope/scope.ts';
 /**
  * The workspace-wide preview host (#781, spec 2026-10-02-live-preview-v1): one per server process,
  * because ports are host-global. Keyed by run id, it owns every cezar-started dev server and every
@@ -31,7 +32,7 @@ export type RunContext = {
   title: string;
   worktreePath: string;
   dataDir: string;
-  store: Pick<RunStore, 'getRun' | 'appendEvent'> & Partial<Pick<RunStore, 'writeRefusal'>>;
+  store: Pick<RunStore, 'getRun' | 'appendEvent'> & Partial<Pick<RunStore, 'writeRefusal' | 'spawnScope'>>;
 };
 
 export type PreviewTarget = { port: number } | { url: string } | { agent: true };
@@ -57,7 +58,7 @@ export type DevServerLike = Pick<DevServer, 'state' | 'attempts' | 'exitCode' | 
 export type PreviewHostDeps = {
   home: Home;
   probe?: (port: number) => Promise<boolean>;
-  createServer?: (opts: { server: PreviewServer; worktreePath: string; dir: string }) => DevServerLike;
+  createServer?: (opts: { server: PreviewServer; worktreePath: string; dir: string; scope?: SpawnScope | undefined }) => DevServerLike;
   launchBrowser?: (profileDir: string) => Promise<BrowserHandle>;
   download?: (opts: { signal: AbortSignal; onProgress(received: number, total: number): void }) => Promise<string>;
   env?: NodeJS.ProcessEnv;
@@ -222,7 +223,8 @@ export class PreviewHost implements PreviewHostLike {
     const previous = entry.servers.get(port);
     if (owned(previous) && this.stopping.has(previous)) return;
     if (this.heldByOther(entry, server)) return;
-    const dev = this.deps.createServer({ server, worktreePath: entry.ctx.worktreePath, dir: this.runDir(entry.ctx) });
+    // A worker's preview server is the worker's: it starts in its scope, so destroy ends it (ADR 0032).
+    const dev = this.deps.createServer({ server, worktreePath: entry.ctx.worktreePath, dir: this.runDir(entry.ctx), scope: entry.ctx.store.spawnScope?.(entry.ctx.runId) });
     // A DevServer is born `starting` without emitting it, so the host records that transition, before
     // it reserves the port: a refused record write leaves no live entry and no held port behind.
     try { this.recordState(entry, port, 'starting', dev); }

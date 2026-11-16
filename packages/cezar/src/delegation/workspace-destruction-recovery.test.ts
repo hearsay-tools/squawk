@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createOwnedWorkspace } from './workspace.ts';
 import { removeOwnedWorkspace } from './workspace-removal.ts';
-import { fixture, git, receiptPath, recordingReport, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
+import { fixture, git, receiptPath, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
 
 describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, () => {
   it('retries branch-only cleanup after a locked ref; rejects repurposing after partial cleanup', async () => {
@@ -77,14 +77,12 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     return { root, first, workspace };
   }
 
-  it('keeps a partly removed branch another worktree checked out at the recorded tip, and reports why it is unexplained', async () => {
+  it('keeps a partly removed branch another worktree checked out at the recorded tip, and keeps it', async () => {
     const { root, first, workspace } = await partlyRemoved();
     const other = join(root, 'other-checkout');
     git(root, 'worktree', 'add', '-q', other, workspace.branch);
-    const { calls, report } = recordingReport();
-    expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report))
+    expect(await removeOwnedWorkspace(root, workspace))
       .toMatchObject({ state: 'incomplete', remaining: ['branch'] });
-    expect(calls).toEqual([['unexplained']]);
     expect(git(other, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(workspace.branch);
     expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
   });
@@ -122,10 +120,8 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
       const tip = git(root, 'rev-parse', workspace.branch);
       const path = receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json');
       const checkpoint = await readFile(path, 'utf8');
-      const { calls, report } = recordingReport();
-      expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report))
+      expect(await removeOwnedWorkspace(root, workspace))
         .toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
-      expect(calls).toEqual([]);
       expect(await readFile(path, 'utf8')).toBe(checkpoint);
       expect(git(workspace.path, 'rev-parse', 'HEAD')).toBe(tip);
       expect(git(root, 'rev-parse', workspace.branch)).toBe(tip);
@@ -137,10 +133,8 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     const path = receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json');
     const checkpoint = await readFile(path, 'utf8');
     git(root, 'worktree', 'move', workspace.path, workspace.path + '-moved');
-    const { calls, report } = recordingReport();
-    expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report))
+    expect(await removeOwnedWorkspace(root, workspace))
       .toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
-    expect(calls).toEqual([]);
     expect(await readFile(path, 'utf8')).toBe(checkpoint);
     expect(git(workspace.path + '-moved', 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(workspace.branch);
     expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
@@ -165,10 +159,8 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
   it('never recursively removes a locked worktree and can retry after unlock', async () => {
     const { root, first } = await fixture(); const workspace = await createOwnedWorkspace(root, randomUUID(), first);
     git(root, 'worktree', 'lock', workspace.path);
-    const { calls, report } = recordingReport();
-    expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report))
+    expect(await removeOwnedWorkspace(root, workspace))
       .toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
-    expect(calls).toEqual([['unexplained']]);
     expect(JSON.parse(await readFile(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'), 'utf8'))).toMatchObject({ phase: 'prepared' });
     expect(existsSync(workspace.path)).toBe(true); git(root, 'worktree', 'unlock', workspace.path);
     expect(await removeOwnedWorkspace(root, workspace)).toMatchObject({ state: 'complete' });
