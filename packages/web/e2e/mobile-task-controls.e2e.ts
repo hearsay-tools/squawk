@@ -9,6 +9,7 @@ import { visibilitySampleExpression, waitForSettledSample } from './visual-ready
 import { spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from './fixture-server'
 import { AgentBrowser, bootProjectId, squawkCli, fixtureServeEnv, getJson } from './agent-browser'
 import { dismissWithEscape, focusWithKeyboard } from './contrast'
+import { clearWithKeyboard } from './clear-field'
 // fixture-server starts: 1
 
 let browser: AgentBrowser
@@ -187,10 +188,7 @@ describe('mobile Tasks controls', () => {
       `document.querySelector('[data-slot="task-card"]')?.innerText ?? null`,
       (text: string | null) => text?.includes('Needle done') === true,
     )).toContain('Needle done')
-    browser.click(search)
-    browser.press('Control+a')
-    browser.press('Backspace')
-    expect(browser.waitForValue(`document.querySelector('${search}').value`, (query: string) => query === '')).toBe('')
+    clearWithKeyboard(browser, search)
     browser.waitForFunction(`document.querySelectorAll('[data-slot="task-card"]').length === 4`)
     expect(browser.count('[data-slot="task-card"]')).toBe(4)
     browser.screenshot(join(artifacts, 'archived-reduced-motion.png'), { viewport: true })

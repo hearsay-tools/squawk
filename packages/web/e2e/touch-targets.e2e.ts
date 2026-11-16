@@ -11,6 +11,7 @@ import { clickInView, waitForSettledSample } from './visual-ready'
 import { spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from './fixture-server'
 import { AgentBrowser, bootProjectId, squawkCli, fixtureServeEnv } from './agent-browser'
 import { contrastSampleExpression, focusWithKeyboard, type ContrastSample } from './contrast'
+import { clearWithKeyboard } from './clear-field'
 import { openSessionActivityRow } from './session-activity'
 // fixture-server starts: 1
 
@@ -226,9 +227,7 @@ describe('density-independent mobile action targets (#166)', () => {
           appearance(density, theme)
           browser.waitForFunction(`document.querySelector('[data-slot="model-pill"]') !== null`)
           browser.click('[data-slot="mode-seg"] button:first-child')
-          browser.click(textarea)
-          browser.press('Control+a')
-          browser.press('Backspace')
+          clearWithKeyboard(browser, textarea)
           const send = '[data-slot="composer"] button[aria-label="Start task"]'
           browser.waitForFunction(`document.querySelector('${send}')?.disabled === true`)
           // Empty/disabled action still reserves its space; a real tap cannot submit it.
@@ -288,10 +287,7 @@ describe('density-independent mobile action targets (#166)', () => {
           browser.goto(`${baseUrl}/p/${project}/workflows`)
           browser.waitForFunction(`document.querySelector('[data-slot="wb-step-actions"]') !== null`)
           appearance(density, theme)
-          browser.click('[data-slot="wb-name"]')
-          browser.press('Control+a')
-          browser.press('Backspace')
-          browser.waitForFunction(`document.querySelector('[data-slot="wb-name"]').value === ''`)
+          clearWithKeyboard(browser, '[data-slot="wb-name"]')
           browser.fill('[data-slot="wb-name"]', 'Kept workflow draft')
           expect(targetAudit().overlaps).toEqual([])
           region('[data-slot="wb-step-grip"]', mobile)
@@ -366,9 +362,7 @@ describe('keyboard, draft and choice journeys across appearance changes (hearsay
       appearance(density, theme)
       browser.waitForFunction(`document.querySelector('[data-slot="model-pill"]') !== null`)
       clickInView(browser, '[data-slot="mode-seg"] button:first-child')
-      browser.click(textarea)
-      browser.press('Control+a')
-      browser.press('Backspace')
+      clearWithKeyboard(browser, textarea)
       const send = '[data-slot="composer"] button[aria-label="Start task"]'
       browser.waitForFunction(`document.querySelector('${send}')?.disabled === true`)
       browser.fill(textarea, 'Preserve this draft while changing density')
@@ -411,9 +405,7 @@ describe('keyboard, draft and choice journeys across appearance changes (hearsay
       browser.waitForFunction(`document.querySelector('[data-slot="wb-step-actions"]') !== null`)
       appearance(density, theme)
       clickInView(browser, '[data-slot="wb-name"]')
-      browser.press('Control+a')
-      browser.press('Backspace')
-      browser.waitForFunction(`document.querySelector('[data-slot="wb-name"]').value === ''`)
+      clearWithKeyboard(browser, '[data-slot="wb-name"]')
       browser.fill('[data-slot="wb-name"]', 'Kept workflow draft')
       clickInView(browser, '[data-slot="wb-step-actions"]')
       browser.waitForFunction(`document.querySelector('[data-slot="wb-step-remove"]') !== null`)
