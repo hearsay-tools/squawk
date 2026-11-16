@@ -189,11 +189,11 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
   };
   modules.inputReceiptSteps = {
     clearUnread: state => clearUnreadInputTimer(state), clearHeld: state => clearHeldHumanInputTimer(state),
-    noteActivity: (id, state, event) => { modules.turnNudges.noteNudgeActivity(id, event); modules.turnNudges.noteNoWaitNudgeContent(id, state, event); },
+    noteActivity: (id, state, event, emitting) => { modules.turnNudges.noteNudgeActivity(id, state, emitting, event); modules.turnNudges.noteNoWaitNudgeContent(id, state, event); },
     persistAttachment: (id, mediaType, data) => modules.attachments.persistAttachment(id, mediaType, data),
     ready: (id, state, session) => modules.inputDelivery.handleAgentInputReady(id, state, session),
     pid: (id, pid) => { replaceRunProcess(id, pid); modules.workerExecutions.recordWorkerProcess(id, pid); },
-    ui: (id, state, sink, event) => sessionEvents.handleRunnerUiEvent(context, modules.sessionHelperHost, id, state, sink, event),
+    ui: (id, state, sink, event, emitting) => sessionEvents.handleRunnerUiEvent(context, modules.sessionHelperHost, id, state, sink, event, emitting),
     flushDeferred: id => modules.queuedInput.flushDeferred(id), recordProcess: (id, pid) => modules.workerExecutions.recordWorkerProcess(id, pid),
   };
   modules.inputReceiptHost = {
@@ -328,7 +328,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     flushAgentInputs: id => modules.inputDelivery.flushAgentInputs(id),
     resumeParkedRun: (...args) => modules.inputDelivery.resumeParkedRun(...args),
     noteNoWaitNudgeContent: (...args) => modules.turnNudges.noteNoWaitNudgeContent(...args),
-    noteNudgeActivity: (id, event) => modules.turnNudges.noteNudgeActivity(id, event),
+    noteNudgeActivity: (id, state, emitting, event) => modules.turnNudges.noteNudgeActivity(id, state, emitting, event),
     parkedOnWorkers: id => modules.wakeAdmission.parkedOnWorkers(id),
     trackSubagentEvent: (id, state, event) => modules.subagentWaits.trackEvent(id, state, event),
     supersedeOnRunnerResume: id => modules.subagentWaits.supersedeOnRunnerResume(id),

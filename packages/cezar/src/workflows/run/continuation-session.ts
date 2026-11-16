@@ -12,7 +12,7 @@ import { startManagedSession } from '../../core/managed-session.ts';
 import { pastedAttachmentsText, type PastedContent, type PersistedAttachment } from '../pasted-content.ts';
 import type { AutosaveReason } from '../../autosave-commit.ts';
 import { continuationOpening } from './opening.ts';
-import { createSessionEventHandler, launchPreamble } from './session-events.ts';
+import { createSessionEventHandler, launchPreamble, type SessionEventHandler } from './session-events.ts';
 import { agentDirectories, composeSystemPrompt, expandRegistrySlashSkillText } from './prompts.ts';
 import { continuationRunner } from './launch-settings.ts';
 import { preserveRunAfterDisposal } from './run-guards.ts';
@@ -547,7 +547,7 @@ export class ContinuationSession {
     state: ActiveRun,
     runner: AgentRunner,
     launch: ContinuationSessionLaunch,
-    onEvent: (event: AgentEvent) => void,
+    onEvent: SessionEventHandler,
     turn: SessionTurn,
     sink: UiEventSink,
   ): AgentSession {
@@ -594,7 +594,8 @@ export class ContinuationSession {
           resume: launch.sessionId !== undefined,
           timeoutMs: 0,
         },
-        onEvent,
+        // Every agent event names the session that emitted it.
+        event => onEvent(event, session),
         inputReceipts.inputReceiptCallbacks(this.context, this.inputReceiptHost, this.inputReceiptSteps, runId, state, () => session, turn, sink, true),
       );
     } catch (error) { ciTools?.revoke(); state.liveSession.clearCiRevoker(); delegation?.revoke(); state.liveSession.clearDelegationRevoker(); throw error; }

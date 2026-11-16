@@ -254,10 +254,13 @@ export class TurnNudges {
     this.timers.clear('acknowledgement', runId);
   }
 
-  /** Model work in the session is the nudge's reply: its bound stops while the turn runs. A turn end
-   *  that still finds the acknowledgement missing arms it again. */
-  noteNudgeActivity(runId: string, event: { type: string; item?: { parentItemId?: string } }): void {
-    if (isModelActivity(event)) this.timers.clear('acknowledgement', runId);
+  /** Model work in the nudge's own session is its reply: its bound stops while the turn runs. A turn
+   *  end that still finds the acknowledgement missing arms it again. Both event paths name the session
+   *  that emitted the event, so a retired session's late events stop nothing (hearsay-tools/squawk#2443). */
+  noteNudgeActivity(runId: string, state: ActiveRun, emitting: AgentSession | undefined, event: { type: string; item?: { parentItemId?: string } }): void {
+    if (!emitting || this.host.active.get(runId) !== state || state.liveSession.session !== emitting ||
+      state.boundary.nudge?.session !== emitting || !isModelActivity(event)) return;
+    this.timers.clear('acknowledgement', runId);
   }
 
   /** The nudge a turn end with no wait or done gets: one automatic turn, charged to the

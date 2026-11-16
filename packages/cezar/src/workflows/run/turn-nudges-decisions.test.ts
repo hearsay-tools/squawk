@@ -343,6 +343,36 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
     acknowledge();
   });
 
+  it('an image from the agent stream is model work that stops the bound', async () => {
+    const { id, session: nudged } = await startNudged();
+    await vi.advanceTimersByTimeAsync(BOUND_MS - 1);
+    emit({ type: 'image', mediaType: 'image/png', data: 'iVBORw0KGgo=' });
+    await vi.advanceTimersByTimeAsync(BOUND_MS * 2);
+    expect(nudged.end).not.toHaveBeenCalled();
+    expect(boundNotes(id)).toEqual([]);
+    acknowledge();
+  });
+
+  it('a retired session\'s late model work does not stop the current session\'s bound', async () => {
+    const { id, session: retired } = await startNudged();
+    const retiredEmit = emit;
+    const retiredEmitUi = emitUi;
+    await vi.advanceTimersByTimeAsync(BOUND_MS);
+    await expectClosedWaiting(id, retired);
+    vi.useRealTimers();
+    expect(f.manager.continueRun(id, { text: 'go on' }).ok).toBe(true);
+    await waitForProduct(f.manager, f.store, () => !!session && session !== retired && f.store.getRun(id)?.status === RUN_STATUS.running);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const current = session!;
+    emit({ type: 'turn-end' });
+    expect(current.sendAgentMessage).toHaveBeenCalledOnce();
+    retiredEmit({ type: 'text', text: 'late text from the retired session' });
+    retiredEmitUi({ type: 'turn.started', turnId: randomUUID() });
+    await vi.advanceTimersByTimeAsync(BOUND_MS);
+    expect(current.end).toHaveBeenCalledOnce();
+    expect(boundNotes(id)).toHaveLength(2);
+  });
+
   it('a reply inside the bound cancels it; its turn end, still unacknowledged, bounds the nudge again', async () => {
     const { id, session: nudged } = await startNudged();
     emitUi({ type: 'turn.started', turnId: randomUUID() });

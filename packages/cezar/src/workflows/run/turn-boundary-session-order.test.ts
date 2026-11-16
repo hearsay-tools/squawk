@@ -62,7 +62,7 @@ function activityFixture() {
 
 it('parent activity invalidates boundary after persisted UI and child tracking', () => {
   const f = activityFixture();
-  handleRunnerUiEvent(f.context, f.host, f.run.id, f.state, f.sink, { type: 'turn.started', turnId: 'turn' });
+  handleRunnerUiEvent(f.context, f.host, f.run.id, f.state, f.sink, { type: 'turn.started', turnId: 'turn' }, f.wire);
   expect(f.log).toEqual(['usage', 'persist-ui', 'children', 'reply-content', 'nudge-activity',
     'boundary:nudge-fact/retire', 'boundary:turn-started/clear-boundary']);
   expect(f.state.boundary.atTurnBoundary).toBeUndefined();
@@ -75,7 +75,7 @@ it('parent activity keeps a nudge still owed its acknowledgement', () => {
   const f = activityFixture();
   transitionTurnBoundary(f.state, { kind: 'nudge-fact', phase: 'record', session: f.wire, nudge: { cause: 'autonomous', state: 'submitted' } });
   f.log.length = 0;
-  handleRunnerUiEvent(f.context, f.host, f.run.id, f.state, f.sink, { type: 'turn.started', turnId: 'turn' });
+  handleRunnerUiEvent(f.context, f.host, f.run.id, f.state, f.sink, { type: 'turn.started', turnId: 'turn' }, f.wire);
   expect(f.log).toEqual(['usage', 'persist-ui', 'children', 'reply-content', 'nudge-activity', 'boundary:turn-started/clear-boundary']);
   expect(f.state.boundary.nudge).toEqual({ session: f.wire, cause: 'autonomous', state: 'submitted' });
 });
@@ -83,7 +83,7 @@ it('parent activity keeps a nudge still owed its acknowledgement', () => {
 it('child-only content persists and tracks the child without invalidating the parent boundary', () => {
   const f = activityFixture();
   const event: UiEvent = { type: 'item.completed', item: { kind: 'message', id: 'item', role: 'assistant', text: 'child', parentItemId: 'child' } };
-  handleRunnerUiEvent(f.context, f.host, f.run.id, f.state, f.sink, event);
+  handleRunnerUiEvent(f.context, f.host, f.run.id, f.state, f.sink, event, f.wire);
   expect(f.log).toEqual(['usage', 'persist-ui', 'children', 'reply-content', 'nudge-activity']);
   expect(f.state.boundary.atTurnBoundary).toBe(f.wire);
   expect(f.state.boundary.nudge).toEqual({ session: f.wire, cause: 'autonomous', state: 'refused' });
