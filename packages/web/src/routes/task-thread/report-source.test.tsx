@@ -1,9 +1,10 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, renderHook, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
+import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, getArtifactMetadata, getRunRelationships } from '@/api/client'
+import { queryScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { useReportSource } from './report-source'
 
 vi.mock('@/api/client', async original => ({ ...await original<typeof import('@/api/client')>(), getArtifactMetadata: vi.fn(), getRunRelationships: vi.fn() }))
@@ -69,5 +70,56 @@ describe('report source without mounted cards or transcript data', () => {
     renderHook(() => useReportSource('parent', undefined), { wrapper })
     expect(metadata).not.toHaveBeenCalled()
     expect(relationships).not.toHaveBeenCalled()
+  })
+})
+
+describe('report source sharing a metadata request', () => {
+  type Metadata = Awaited<ReturnType<typeof getArtifactMetadata>>
+  // Like fetch: an aborted signal rejects the request; otherwise the test answers it.
+  function pendingMetadata() {
+    const answers: Array<() => void> = []
+    metadata.mockImplementation((_runId, _artifactId, opts) => new Promise<Metadata>((resolve, reject) => {
+      opts?.signal?.addEventListener('abort', () => reject(opts.signal!.reason))
+      answers.push(() => resolve({ artifact: { id: 'report' } } as Metadata))
+    }))
+    return { answerAll: () => { for (const answer of answers.splice(0)) answer() } }
+  }
+  const wrapperFor = (client: QueryClient) => ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
+
+  it('resolves after a source card registers while the metadata request is in flight', async () => {
+    const pending = pendingMetadata()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const hook = renderHook(({ known }: { known: string | undefined }) => useReportSource('parent', 'report', known), { wrapper: wrapperFor(client), initialProps: { known: undefined as string | undefined } })
+    await waitFor(() => expect(metadata).toHaveBeenCalledTimes(1))
+    // The registered card changes the lookup key; the first lookup is cancelled mid-request.
+    hook.rerender({ known: 'parent' })
+    await act(async () => { pending.answerAll() })
+    await waitFor(() => expect(hook.result.current.isPending).toBe(false))
+    expect(hook.result.current.error).toBeNull()
+    expect(hook.result.current.data).toBe('parent')
+  })
+
+  it('resolves when a source card unmounts while it shares the metadata request', async () => {
+    const pending = pendingMetadata()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    // The card's own metadata read, as a virtualized row mounts and then leaves the viewport.
+    function Card() {
+      useQuery({ queryKey: [queryScope(), 'runs', 'artifact-metadata', 'parent', 'report'], queryFn: ({ signal }) => getArtifactMetadata('parent', 'report', { signal }) })
+      return null
+    }
+    let lookup: ReturnType<typeof useReportSource> | undefined
+    function Pane() {
+      lookup = useReportSource('parent', 'report')
+      return null
+    }
+    const view = render(<QueryClientProvider client={client}><Card /><Pane /></QueryClientProvider>)
+    await waitFor(() => expect(metadata).toHaveBeenCalledTimes(1))
+    view.rerender(<QueryClientProvider client={client}><Pane /></QueryClientProvider>)
+    // The card's unmount cancels the shared request; the lookup starts it again.
+    await waitFor(() => expect(metadata).toHaveBeenCalledTimes(2))
+    await act(async () => { pending.answerAll() })
+    await waitFor(() => expect(lookup?.isPending).toBe(false))
+    expect(lookup?.error).toBeNull()
+    expect(lookup?.data).toBe('parent')
   })
 })
