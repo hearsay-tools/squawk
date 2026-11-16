@@ -981,7 +981,7 @@ jobs:
       # with its exit code (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
         if: github.event_name == 'merge_group'
-        uses: hearsay-tools/squeal/ci@6a7b41c08d5b2d27412cad1b1c139e65144876e6 # v0.1.460
+        uses: hearsay-tools/squeal/ci@9ea3a8ff639927e74247cd011b4c0f39fc6a5ed2 # v0.1.522
 
       - name: Run server and cockpit unit suites with Squeal recording
         id: record
@@ -1078,6 +1078,8 @@ jobs:
       !cancelled() && github.event_name == 'merge_group' && needs.vitest.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      results: ${{ steps.results.outputs.exists }}
 
     # Runs the queued code (install, `ci export`), so it only reads.
     permissions:
@@ -1114,7 +1116,7 @@ jobs:
       # Squeal's action, as in the shards; a refusal or crash of the Squeal command is a
       # warning (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
-        uses: hearsay-tools/squeal/ci@6a7b41c08d5b2d27412cad1b1c139e65144876e6 # v0.1.460
+        uses: hearsay-tools/squeal/ci@9ea3a8ff639927e74247cd011b4c0f39fc6a5ed2 # v0.1.522
 
       - name: Download Squeal parts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -1125,7 +1127,15 @@ jobs:
       - name: Export Squeal results
         run: squeal ci export --parts "$RUNNER_TEMP"/squeal-parts/squeal-parts-shard-* --out "$RUNNER_TEMP/squeal-results.json.gz"
 
+      # An export that writes nothing warns and exits 0. The job then passes with no upload and
+      # no publish, so its run stays successful (hearsay-tools/squawk#3701).
+      - name: Check for the Squeal results file
+        id: results
+        run: |
+          if [ -s "$RUNNER_TEMP/squeal-results.json.gz" ]; then echo exists=true; else echo exists=false; fi >> "$GITHUB_OUTPUT"
+
       - name: Upload Squeal results
+        if: steps.results.outputs.exists == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: squeal-results
@@ -1140,7 +1150,7 @@ jobs:
     needs: [squeal-export]
     # A status function in the condition: without one GitHub adds success(), which is
     # false in a merge group because a job further up (pr-test-input) is skipped there.
-    if: ${{ !cancelled() && github.event_name == 'merge_group' && needs.squeal-export.result == 'success' }}
+    if: ${{ !cancelled() && github.event_name == 'merge_group' && needs.squeal-export.result == 'success' && needs.squeal-export.outputs.results == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
 
@@ -1171,7 +1181,7 @@ jobs:
       # Squeal's action, as in the shards; a refusal or crash of the Squeal command is a
       # warning (hearsay-tools/squeal spec 018 D20).
       - name: Set up Squeal
-        uses: hearsay-tools/squeal/ci@6a7b41c08d5b2d27412cad1b1c139e65144876e6 # v0.1.460
+        uses: hearsay-tools/squeal/ci@9ea3a8ff639927e74247cd011b4c0f39fc6a5ed2 # v0.1.522
 
       - name: Download Squeal results
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4

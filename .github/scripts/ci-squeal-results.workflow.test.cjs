@@ -18,22 +18,23 @@ const step = (job, id) => job.steps.find((s) => s.id === id || s.name === id);
 // Squeal's GitHub Action (hearsay-tools/squeal spec 018 D20) puts `squeal` on the PATH and never
 // fails the job. Like every action here it is pinned to a full commit SHA; the comment names its
 // release tag.
-const SQUEAL_ACTION = 'hearsay-tools/squeal/ci@6a7b41c08d5b2d27412cad1b1c139e65144876e6';
-const SQUEAL_PIN = `uses: ${SQUEAL_ACTION} # v0.1.460`;
+const SQUEAL_ACTION = 'hearsay-tools/squeal/ci@9ea3a8ff639927e74247cd011b4c0f39fc6a5ed2';
+const SQUEAL_PIN = `uses: ${SQUEAL_ACTION} # v0.1.522`;
 
 function expression(raw, context) {
   const code = String(raw).replace(/^\$\{\{\s*|\s*\}\}$/g, '').replace(/needs\.([\w]+-[\w-]+)/g, "needs['$1']");
   return runInNewContext(code, context);
 }
 
-function context(event, { vitest = 'success', exported = 'success', pr = '' } = {}) {
+function context(event, { vitest = 'success', exported = 'success', results = 'true', pr = '', steps = {} } = {}) {
   return {
     github: { event_name: event },
     inputs: { pr_number: pr },
     needs: {
       vitest: { result: vitest },
-      'squeal-export': { result: exported },
+      'squeal-export': { result: exported, outputs: { results } },
     },
+    steps,
     cancelled: () => false,
   };
 }
@@ -145,6 +146,8 @@ test('squeal-publish alone writes contents, after the export, and runs no reposi
   for (const exported of ['failure', 'skipped', 'cancelled']) {
     assert.equal(expression(job.if, context('merge_group', { exported })), false, exported);
   }
+  // An export that wrote no file passes its job; the publish then has nothing to push.
+  for (const results of ['false', '']) assert.equal(expression(job.if, context('merge_group', { results })), false, `results ${results}`);
   // Without a status function GitHub adds success(), which a skipped job further up
   // (pr-test-input in a merge group) makes false: the publish was skipped in run 42843943744.
   assert.match(String(job.if), /!cancelled\(\)/, 'the condition carries its own status function');
@@ -266,4 +269,39 @@ test('every job that runs squeal sets up Squeal\'s pinned action once, after its
 test('squeal.config.json reads the shared results ref squeal-publish writes', () => {
   const config = JSON.parse(fs.readFileSync(path.join(repoRoot, 'squeal.config.json'), 'utf8'));
   assert.deepEqual(config.shared, { ref: 'refs/squeal' });
+});
+
+// `squeal ci export` warns and exits 0 when it writes nothing (hearsay-tools/squeal spec 018 D20).
+// The job then passes without a file: no upload, no publish, no failed run that costs main a full
+// CI run (hearsay-tools/squawk#3701).
+test('an export that writes no file skips the upload and the publish without failing the job', () => {
+  const job = ci().jobs['squeal-export'];
+  const names = job.steps.map((s) => s.name);
+  const check = step(job, 'results');
+  assert.equal(check.name, 'Check for the Squeal results file');
+  assert.equal(names.indexOf(check.name), names.indexOf('Export Squeal results') + 1);
+  assert.equal(names.indexOf('Upload Squeal results'), names.indexOf(check.name) + 1);
+  assert.equal(job.outputs.results, '${{ steps.results.outputs.exists }}');
+  const upload = step(job, 'Upload Squeal results');
+  assert.equal(upload.with['if-no-files-found'], 'error', 'a file the check saw must upload');
+  for (const [exists, runs] of [['true', true], ['false', false]]) {
+    assert.equal(expression(upload.if, context('merge_group', { steps: { results: { outputs: { exists } } } })), runs, exists);
+  }
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-squeal-results-'));
+  try {
+    const output = path.join(temp, 'output');
+    const read = () => {
+      fs.writeFileSync(output, '');
+      const result = spawnSync('bash', ['-e', '-c', check.run], { encoding: 'utf8', env: { PATH: '/usr/bin:/bin', RUNNER_TEMP: temp, GITHUB_OUTPUT: output } });
+      assert.equal(result.status, 0, result.stderr);
+      return fs.readFileSync(output, 'utf8');
+    };
+    assert.equal(read(), 'exists=false\n', 'no file');
+    fs.writeFileSync(path.join(temp, 'squeal-results.json.gz'), '');
+    assert.equal(read(), 'exists=false\n', 'an empty file');
+    fs.writeFileSync(path.join(temp, 'squeal-results.json.gz'), 'x');
+    assert.equal(read(), 'exists=true\n', 'a written file');
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
 });

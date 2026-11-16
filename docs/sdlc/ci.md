@@ -618,9 +618,12 @@ can import those passes instead of running the same test files again
   merge group, with `contents: read` and no stored credentials. It checks out
   `merge_group.head_sha`, installs dependencies, downloads the parts, runs
   `squeal ci export` and uploads `squeal-results.json.gz` as the `squeal-results` artifact,
-  kept 3 days. It runs the queued code, so it never holds write access.
+  kept 3 days. It runs the queued code, so it never holds write access. An export that
+  writes no file warns and exits 0; the `Check for the Squeal results file` step then
+  sets the job output `results` to `false`, the upload is skipped and the job passes.
 - The `Publish Squeal shared results` job (`squeal-publish`) is the only job with
   `contents: write`, and it runs no repository code: no install, build or package script. It
+  runs only when the export job succeeded and its `results` output is `true`. It
   checks out the same commit with full history and no stored credentials, sets up Node and
   Squeal's action, downloads the export and runs `squeal ci publish --keep 100`.
   That pushes `refs/squeal/<sha>` and deletes refs beyond the newest 100 main commits; it
@@ -1140,9 +1143,20 @@ fails closed. GitHub owns queue persistence; no cockpit session is required.
 
 A main push probes official Actions metadata for at most 60 seconds (each request
 at most 10 seconds; at most seven pending reads; complete lists limited to 200
-records). It reuses only the newest same-repository queue run's latest successful
-attempt for the **exact pushed SHA**, after every classifier, verification leaf,
-aggregate and queue admission job succeeds. A final reread checks for races.
+records). It reuses only the newest same-repository queue run's latest attempt for
+the **exact pushed SHA**, after every classifier, verification leaf, aggregate and
+queue admission job succeeds. A final reread checks for races.
+
+The probe reads only these queue-run jobs (`REQUIRED_QUEUE_JOBS` in
+`.github/scripts/queue-ci-proof.cjs`): `Classify pull request change surface`,
+`Classify PR shape`, `Check function complexity`, `Check new code clones`,
+`Review preflight`, `Typecheck`, `Unit tests (package)`, `Unit tests (scripts)`,
+`Build and package`, `Vitest shard 1/8` to `8/8`, `Cockpit browser E2E shard 1/8`
+to `8/8`, `Unit, build, E2E, and package` and `Validate reviewed queue entry`.
+Each must appear once and succeed. The run's conclusion may be `success` or
+`failure`: a failed job outside this list, such as `Export Squeal shared results`,
+does not cost `main` a full run (hearsay-tools/squawk#3701). A `cancelled` or other
+conclusion is not proof.
 A queue run of a docs-only entry lists each skipped suite once, under its unexpanded
 name (`Vitest shard ${{ matrix.shard }}/8`). The probe accepts those two skipped jobs in
 place of the sixteen shards only when the pushed commit is docs-only or infra-only by
