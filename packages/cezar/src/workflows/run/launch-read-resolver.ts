@@ -14,7 +14,7 @@ import { RUNNER_FACTS } from '../../core/runner-facts.ts';
 import { parseDelegationEffort } from '../../delegation/effort.ts';
 import { boundWorkerAccountEnv, captureWorkerAccount, continuationDefStep, continuationDefSteps, continuedDefStep, ownedWorkflow, workerIdentity, workerStepIdentity, WorkerIdentityError, type WorkerAccountBinding, type WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import { DelegationPolicyError } from '../../delegation/policy.ts';
-import type { QueuedMessage, RunEvent, RunRecord, RunStore, StepState } from '../../runs/store.ts';
+import type { QueuedMessage, RunRecord, RunStore, StepState } from '../../runs/store.ts';
 import { makeRunTitle } from '../../runs/run-title.ts';
 import { discoverSkills, filterDisabledTeamSkills, filterDisabledTeamSources, readDisabledTeamSkills, type Skill } from '../../skills.ts';
 import { getTeamSkillsCached } from '../../skills-remote.ts';

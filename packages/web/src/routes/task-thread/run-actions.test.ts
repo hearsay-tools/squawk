@@ -28,6 +28,7 @@ import {
   resolveConflictsPrompt,
   resumeHint,
   runActionFlags,
+  hasLiveSession,
 } from './run-actions'
 
 const step = (extra: Partial<StepState> = {}): StepState => ({
@@ -157,6 +158,13 @@ describe('runActionFlags — the visibility matrix, all 7 statuses × archived',
     const flags = runActionFlags(run('done', { removedRunner: 'cursor', steps: [step()] }))
     expect(flags.continueRun).toBe(true)
     expect(flags.terminal).toBe(false)
+  })
+
+  it('a task saved on a removed runner and left waiting has no live session, so it offers Continue', () => {
+    const waiting = run('waiting', { removedRunner: 'cursor', steps: [step()] })
+    expect(hasLiveSession(waiting)).toBe(false)
+    expect(runActionFlags(waiting).continueRun).toBe(true)
+    expect(hasLiveSession(run('waiting', { steps: [step()] }))).toBe(true)
   })
 
   it('a live worker has pin: false', () => {

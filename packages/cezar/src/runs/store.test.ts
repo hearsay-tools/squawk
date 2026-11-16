@@ -2675,6 +2675,24 @@ describe('RunStore — the legacy `claude-cli` runner id (#547)', () => {
     expect(store.getRun('modern')?.removedRunner).toBeUndefined();
   });
 
+  it('marks a run on a live runner whose later step ran on a removed runner', () => {
+    seedRuns(dataDir, [{
+      ...LEGACY_RUN,
+      id: 'mixed',
+      runner: 'claude',
+      steps: [
+        { id: 'plan', name: 'Plan', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0,
+          sessionId: 'plan-sess', backend: 'claude' },
+        { id: 'work', name: 'Work', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0,
+          sessionId: 'cursor-sess', backend: 'cursor' },
+      ],
+    }]);
+
+    const run = RunStore.open(dataDir).getRun('mixed');
+    expect(run).toMatchObject({ runner: 'claude', removedRunner: 'cursor' });
+    expect(run?.steps[1]).not.toHaveProperty('sessionId');
+  });
+
   it('marks a run with no runner of its own when one of its steps ran on a removed runner', () => {
     seedRuns(dataDir, [{
       ...LEGACY_RUN,

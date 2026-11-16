@@ -508,7 +508,7 @@ export const SESSION_GROUPS = {
           beforeAll(async () => {
             dir = mkdtempSync(join(tmpdir(), `cez-spec-support-${backend}-`));
             const variants = new Map<string, Partial<AgentRunSpec>>();
-            for (const [field, entry] of Object.entries(SPEC_FIELD_PROBES) as [AgentRunSpecField, SpecFieldProbe][]) {
+            for (const [_field, entry] of Object.entries(SPEC_FIELD_PROBES) as [AgentRunSpecField, SpecFieldProbe][]) {
               const probe = entry;
               if (probe.kind !== 'boundary') continue;
               variants.set(variantKey(probe.without), probe.without);

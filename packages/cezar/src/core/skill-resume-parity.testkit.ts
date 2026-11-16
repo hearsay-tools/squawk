@@ -478,7 +478,6 @@ describe('harness parity — skill system prompt on Continue (#790)', () => {
     it(`${backend} R59 recovers a Continue interrupted before its session event`, async () => {
       await withSkillResumeRun(backend, async (fixture) => {
         const sessionId = recordedSessionId(fixture.store, fixture.runId);
-        const original = fixture.store.getRun(fixture.runId)!.steps[0]!;
         await idleClose(fixture.manager, fixture.runId);
         fixture.store.addStep(fixture.runId, {
           id: 'continue-1', name: 'Continue', kind: STEP_KIND.agent, synthetic: 'continuation',

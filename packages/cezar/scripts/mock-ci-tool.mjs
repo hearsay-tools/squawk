@@ -1,7 +1,7 @@
 // Offline harness fixtures share the real bundled MCP protocol, never a fake receipt.
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { publishFile } from './mock-publish.mjs';
-import { basename, join } from 'node:path';
+import { basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';

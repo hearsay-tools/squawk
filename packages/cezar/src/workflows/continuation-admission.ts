@@ -342,7 +342,9 @@ export class ContinuationChecks {
     const absent = sessionRefusal(sessionStep, untouched, (run.delegation?.role === 'worker' && !!this.conversation) ||
       this.opts.freshSession === true || run.removedRunner !== undefined);
     if (absent) return absent;
-    const affinity = sessionAffinity(run, this.opts, identity, sessionStep, untouched);
+    // A removed-runner run continues in a new session, never an older one (hearsay-tools/squawk#3715).
+    const fresh = run.removedRunner !== undefined;
+    const affinity = { ...sessionAffinity(run, this.opts, identity, sessionStep, untouched), ...(fresh ? { resume: false } : {}) };
     const resumeSessionId = affinity.resume ? this.reads.sessionId(sessionStep) : undefined;
     return { ok: true as const, value: { untouched, ...affinity, resumeSessionId } };
   }

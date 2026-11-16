@@ -19,9 +19,10 @@ function isRemovedRunner(value: unknown): value is string {
 }
 
 /**
- * A run saved on a removed runner is read as `removedRunner`, with no `runner`. Its steps on that
- * runner keep no backend and no session, so a Continue on a live runner can never resume a session
- * that runner does not own: it starts a new one. The next write of the row stores the fold.
+ * A run saved on a removed runner, or with any step on one, is read as `removedRunner`; a removed
+ * `runner` is cleared. Its steps on that runner keep no backend and no session, and a Continue on
+ * a live runner always opens a new session: the latest work is the removed runner's, so an older
+ * session of another runner is not where the task stands. The next write of the row stores the fold.
  */
 export function upgradeRemovedRunner(row: Record<string, unknown>): void {
   let removed = isRemovedRunner(row.runner) ? row.runner : undefined;
@@ -30,7 +31,7 @@ export function upgradeRemovedRunner(row: Record<string, unknown>): void {
     if (!step || typeof step !== 'object') continue;
     const fields = step as Record<string, unknown>;
     if (!isRemovedRunner(fields.backend)) continue;
-    if (row.runner === undefined) removed ??= fields.backend;
+    removed ??= fields.backend;
     delete fields.backend;
     delete fields.sessionId;
     delete fields.sessionTransport;

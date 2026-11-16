@@ -80,4 +80,35 @@ describe('Continue on a run saved on a removed runner', () => {
     expect(store.getRun(run.id)).toMatchObject({ runner: 'codex' });
     expect(store.getRun(run.id)?.removedRunner).toBeUndefined();
   });
+
+  it('opens a new session even when an earlier step left a session on the runner the Continue names', async () => {
+    const { store, manager } = fixture();
+    const run = removedRunnerRun(store);
+    store.updateStep(run.id, 'work', { sessionId: 'old-codex-session', backend: 'codex' });
+    const started = new Promise<AgentRunSpec>(resolve => { captured.started = resolve; });
+
+    expect(manager.continueRun(run.id, { text: 'keep going', runner: 'codex' })).toEqual({ ok: true });
+
+    const spec = await started;
+    expect(spec.resume).toBeFalsy();
+    expect(spec.sessionId).not.toBe('old-codex-session');
+  });
+
+  it('fails a task interrupted at start instead of starting it on the project default runner', async () => {
+    const { store, manager } = fixture();
+    const run = store.createRun({ title: 'task', task: 'task', workflow: 'quick-task',
+      steps: [{ id: 'work', name: 'Work', kind: STEP_KIND.agent }] });
+    // Interrupted during worktree setup, before any session: recovery requeues the whole workflow.
+    store.updateRun(run.id, { removedRunner: 'cursor',
+      workflowDef: { name: 'quick-task', steps: [{ id: 'work', name: 'Work', prompt: '{{task}}' }] },
+      worktreeSetup: { status: 'running', startedAt: new Date().toISOString() } });
+    setRunStatus(store, run.id, RUN_STATUS.running);
+
+    await manager.recover();
+    const settled = () => captured.specs.length > 0 || store.getRun(run.id)?.status === RUN_STATUS.failed;
+    await vi.waitFor(() => expect(settled()).toBe(true), { timeout: 10_000 }); // bound: a hang guard; the requeued job settles at once
+
+    expect(captured.specs).toEqual([]);
+    expect(store.getRun(run.id)).toMatchObject({ status: RUN_STATUS.failed, error: removedRunnerMessage('cursor') });
+  });
 });
