@@ -25,7 +25,8 @@ valid:
   - "export function spendDoneFreeTurn(store, runId) { store.commitOutcome(runId, { kind: 'done-free-turn' }) }"
   - 'const done = run.doneAccepted'
   - 'const row = z.object({ doneAccepted: doneAcceptedSchema.optional() })'
-  # The read-time upgrade of a saved row.
+  # The read-time upgrades of a saved row.
+  - "export function upgradeLegacyDoneAccepted(row) { row.doneAccepted = { ...done, openWaits: [], settledWaits: [] } }"
   - "export function upgradeLegacyWorkflowCursor(row) { row.workflowCursor = { stepId, mode: 'resume' } }"
 invalid:
   - "this.context.store.updateRun(runId, { workflowCursor: { stepId, mode: 'start' } })"

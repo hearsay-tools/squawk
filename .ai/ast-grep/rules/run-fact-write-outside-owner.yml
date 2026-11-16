@@ -53,9 +53,10 @@ rule:
             - { kind: method_definition, has: { field: name, regex: "^['\"]done-(accepted|retired|free-turn)['\"]$" } }
     # The outcome type declares the kinds.
     - not: { inside: { stopBy: end, kind: type_alias_declaration } }
-    # The read-time upgrade of a saved `workflowResumeStepId` (runs/legacy-run-rows.ts).
+    # The read-time upgrades of a saved `workflowResumeStepId` and of a `doneAccepted` saved before its
+    # identity facts (runs/legacy-run-rows.ts).
     - not:
         inside:
           stopBy: end
           kind: function_declaration
-          has: { field: name, regex: '^upgradeLegacyWorkflowCursor$' }
+          has: { field: name, regex: '^(upgradeLegacyWorkflowCursor|upgradeLegacyDoneAccepted)$' }
