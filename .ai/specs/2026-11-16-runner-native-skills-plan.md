@@ -31,8 +31,10 @@ on `main` before the next one that shares a hot file starts.
   native mock wires through `HARNESS_ADAPTERS` ([runners](../../docs/areas/runners.md)). Extend
   the mock (`mock-claude.mjs`, `mock-codex-app-server.mjs`, `mock-opencode-serve.mjs`,
   `mock-pi-rpc.mjs`, `mock-omp-rpc.mjs`) to answer as the probe report for that runner records.
-  Where a mock gains a new frame, record the real wire with `record-mock-wires.mjs` as the
-  repository does for other frames.
+  Where a mock gains a new frame, first capture that frame from the real CLI, as the probes
+  did, and keep the capture in `core/__fixtures__/<runner>/`. Build the mock's answer from the
+  capture. `record-mock-wires.mjs` records mock traffic only; it is not evidence of what the
+  real CLI sends.
 - Shared code outside `packages/cezar/src/core/` reads a declared fact, never a runner id.
 - Each "open check" below is a short probe against the real CLI. Its result goes into the
   runner's report in the analysis folder, in the same pull request.
@@ -69,11 +71,8 @@ account home, without a model call. Nothing in the product reads the answer yet.
 
 - The account home goes to the probe through `profileEnv` (`core/agent-profiles.ts`), the same
   way a session gets it.
-- Facts in `core/runner-facts.ts`: `skillTriggerMidTurn` (true for pi only),
-  `skillUnknownName` (`'error'` for OpenCode, `'silent'` for the rest) and
-  `skillsSeenBySession` (`'live'` for Codex, `'at-start'` for the rest). Add them to
-  `TURN_PATH_FACTS` in `core/parity-classes.testkit.ts`. Slice 3 adds the `FACT_VALUE_TESTS`
-  entries when shared code first reads them.
+- This slice declares no runner fact. The three skill facts describe the trigger, so slice 2
+  declares them, and slice 3 registers them as turn-path facts with their tests.
 
 **Tests.** One unit test file for each adapter against recorded answers, as the model catalog
 adapters have. One parity family, class `every-runner`: the list through each native mock wire
@@ -116,6 +115,13 @@ process behind.
   (`bootstrap` in `opencode-server-runner.ts`); the other adapters report what they did.
 - Codex: a trigger never goes through `turn/steer`, and never through a `turn/start` during an
   active turn. The adapter refuses such a send; slice 3 holds the message instead (D6).
+- Facts in `RunnerFacts` and `RUNNER_FACTS` (`core/runner-facts.ts`): `skillTriggerMidTurn`
+  (true for pi only until the open check below says more), `skillUnknownName` (`'error'` for
+  OpenCode, `'silent'` for the rest) and `skillsSeenBySession` (`'live'` for Codex,
+  `'at-start'` for the rest). Do not add them to `TURN_PATH_FACTS` here:
+  `FACT_VALUE_TESTS` is typed over that table, and `parity-classes.test.ts` then demands a
+  unit test for every value the scenario runner does not show. No shared code reads the facts
+  until slice 3.
 
 **Tests.** Parity rows on every runner: first turn with arguments; first turn with opening
 context; a later turn; a resume; an id the runner does not know (the declared
@@ -142,6 +148,9 @@ stops reading that folder (D5).
 - Add tracked links: `.agents/skills/<name>` and `.claude/skills/<name>`, each a relative
   symlink to `../../.ai/skills/<name>`. `.agents/skills` covers Codex, OpenCode, pi and omp;
   `.claude/skills` covers Claude.
+- `om-prepare-test-env/SKILL.md` has no frontmatter. The Codex, pi and OpenCode probes show
+  that such a file is not listed as a skill. Add `name` and `description`. Leave its body as
+  it is.
 - `.gitignore` ignores `.agents/` and `.claude/skills` today. Change it to ignore their
   contents except these five entries.
 - Check first, on each runner, that a symlinked skill folder inside the project is listed and
@@ -163,6 +172,17 @@ Server and run path:
   and folder; resolve the reference (`{ id, path? }`, D8 for a duplicate id); fail the step
   before any model call when the id is missing or ambiguous; set `spec.skill`. Send no skill
   body in the system prompt.
+- The chosen copy travels with the task (D8). `workflowStepSchema`
+  (`packages/contract/src/workflows.ts`) gains an optional `skillPath` next to `skill`. The
+  cockpit sets it on the inline step of `POST /runs` when the picked entry has a path. The run
+  record keeps the step, so a later step open, a recovery and a fresh-session Continue start
+  the same copy. A path is specific to one host, so nothing portable holds one: the workflow
+  builder writes no `skillPath` into a saved workflow file, and an automation definition,
+  `worker spawn --skill` and the task CLI's `--skill` name a skill by id. For those, the D8
+  scope rule decides. A `skillPath` that the list no longer holds fails the step at step open.
+- `task-cli/cli.ts` (`start`): it reads `/skills?wait=1` today and warns that the run "may use
+  the plain prompt". Read `/runner-skills` for the run's runner and account. A missing id now
+  fails the step, so the warning says that.
 - `workflows/run/launch-context.ts` (`sessionContextFor`): stop dropping the opening context
   for a slash opening. The adapter now places it.
 - `workflows/run/continuation-session.ts` and `launch-read-resolver.ts`: a Continue that
@@ -190,6 +210,11 @@ Cockpit:
 - `routes/skills.tsx`: a read-only inventory for one runner and account, with the runner's own
   problems and a re-read button. Remove `team-sources-panel.tsx`, the switches
   (`lib/use-skill-selection.ts`) and the shadow mark.
+- A picked skill is `{ id, path? }`: `TaskSource` (`routes/new-task-form.ts`) and the draft
+  store (`routes/new-task-draft.ts`) carry the path, and `buildCreateRunBody` sends it as
+  `skillPath`. When the list holds one id twice, the picker shows both entries with their
+  paths. `lastTask` and `recentSources` in `ui-state.json` keep names only; a recent name that
+  matches two entries shows both.
 - Pickers read the list of the step's runner and account: `components/composer/`,
   `components/command-palette.tsx`, `routes/new-task*.ts(x)`,
   `routes/workflows/workflows-builder-sections.tsx`, `routes/github/hand-to-agent.tsx` and
@@ -197,26 +222,33 @@ Cockpit:
   unavailable still lets the user type an id.
 - `components/skill-detail.tsx` shows what the runner reports. Squawk reads no skill file.
 
-**Tests.** `FACT_VALUE_TESTS` entries for each skill fact value that the scenario runner does
-not show. Shared parity rows for step open (known, missing and ambiguous id), a fresh-session
+**Tests.** Add the three skill facts to `TURN_PATH_FACTS` (`core/parity-classes.testkit.ts`)
+together with a `FACT_VALUE_TESTS` entry for each value that the scenario runner does not
+show: `skillTriggerMidTurn` true, `skillUnknownName` `'error'` and `skillsSeenBySession`
+`'live'`. Shared parity rows for step open (known, missing and ambiguous id), a fresh-session
 Continue, a held trigger and a typed name. Rewrite `packages/web/e2e/settings-skills.e2e.ts`
 and `skill-search-ranking.e2e.ts` against a mock runner's list.
 
 ### State restore cases
 
-The cockpit restores the last choice from `ui-state.json` (`lastTask`, `recentSources`). A
-saved skill is a name; it carries no runner.
+The new-task form restores its draft from the browser's local storage
+(`routes/new-task-draft.ts`): the text, the source, the runner and the account. `resolveSource`
+keeps a drafted skill only when the catalog still has it. A new form with no draft opens with
+no skill; `lastTask` in `ui-state.json` is still written and still preselects nothing. This
+slice keeps both rules. What changes is the catalog that the check reads: the list of the
+draft's runner and account.
 
 | Path or trigger | Restored value | Displayed value |
 | --- | --- | --- |
-| Reopen the new-task form with no saved choice | Nothing | The plain task, no skill |
-| Reopen with a saved skill that the selected runner lists | The skill id | The skill, with the runner's description |
-| Switch the runner in the form to one that does not list the saved skill | The saved id stays in `ui-state.json` | No skill selected, and a line that says the runner does not have it. Starting the task sends no skill |
-| The saved skill is no longer in any list (a removed team skill) | The saved id stays until the user picks again | As the row above |
-| The list is unavailable when the form opens | The skill id | The id as typed text, marked unchecked. Step open still checks it |
+| Open the form with no draft | Nothing | No skill selected, whatever `lastTask` holds |
+| Reopen with a drafted skill that the drafted runner lists | The drafted `{ id, path? }` | The skill, with the runner's description |
+| Switch between two projects that each hold a draft | Each project's own draft | Each skill checked against its own runner's list |
+| Change the runner or the account in the form to one that does not list the drafted skill | The draft keeps the id | No skill selected. The draft keeps the id, so a change back shows the skill again |
+| The drafted `path` is gone and the id is still listed | The draft keeps the id | The listed entry, when exactly one has the id. With two, no skill selected until the user picks |
+| The list is unavailable when the form opens | The drafted id | The id, marked unchecked. Step open still checks it |
 
-The picker derives the selection from the saved id and the current list. It never writes a
-masked value back.
+The form derives the selection from the draft and the current list. It never writes a masked
+value back to the draft.
 
 **Done when** a selected skill starts natively on each runner with no skill text in the system
 prompt, a missing id fails before a model call, and no reader is left on `discoverSkills`.
