@@ -96,6 +96,7 @@ describe('automationsPrompt and the skill body', () => {
     expect(prompt).not.toContain(`${command} create`);
     expect(prompt).not.toContain(`${command} enable`);
     expect(prompt).not.toContain(AUTOMATION_SCHEMA_REFERENCE);
+    expect(prompt).toContain('update replaces each key given; "task" merges key by key, null removes one');
     for (const operation of ['schema', 'list | show <id>', 'update <id> --file <def.json>', 'pause <id> | delete <id>', 'run <id>', 'check <id> --execute']) expect(prompt).toContain(`${command} ${operation}`);
   });
 

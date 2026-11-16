@@ -1,4 +1,5 @@
 import { automationToolGithub } from './tool-github.ts';
+import { withAutomationToolDeadline } from './tool-timeout.ts';
 import { automationToolRequestSchema, type AutomationToolAnswer, type AutomationToolRequest } from '@open-mercato/cezar-contract/automation-tool';
 import { nextOccurrence } from '@open-mercato/cezar-contract/automation-schedule';
 import { ProjectAutomationScheduler } from './scheduler.ts';
@@ -72,11 +73,11 @@ export function createAutomationToolService(
     };
   };
 
-  async function automation(request: AutomationToolRequest, signal: AbortSignal): Promise<AutomationToolAnswer> {
+  async function automation(request: AutomationToolRequest, signal: AbortSignal, operationSignal = signal): Promise<AutomationToolAnswer> {
     const parsed = automationToolRequestSchema.safeParse(request);
     if (!parsed.success) return refuse('invalid_request', parsed.error.issues[0]?.message ?? 'invalid automation');
     request = parsed.data;
-    if (signal.aborted) return refuse('unavailable', 'The calling session is closed.');
+    if (operationSignal.aborted) return refuse('unavailable', 'The calling session is closed.');
     if (request.action === 'create') {
       const body = { ...request.definition, task: { worktree: true, autonomous: true, ...request.definition.task }, enable: false };
       const result = await service.create(project, body);
@@ -98,19 +99,19 @@ export function createAutomationToolService(
       return result.ok ? repeatingView(result.automation) : fromStatus(result);
     }
     if (!isGithubAutomation(stored)) return refuse('invalid_request', 'A schedule has nothing to preview; report next_run_at.');
-    return preview(stored, signal);
+    return preview(stored, signal, operationSignal);
   }
 
   /** Preview owns its evidence lifecycle, including failure, revision change and session close. */
-  async function preview(stored: GithubAutomationDefinition, signal: AbortSignal): Promise<AutomationToolAnswer> {
+  async function preview(stored: GithubAutomationDefinition, signal: AbortSignal, operationSignal: AbortSignal): Promise<AutomationToolAnswer> {
     // A failed repeat preview cannot leave an earlier successful receipt usable.
     previews.get(signal)?.delete(stored.id);
     try {
       const github = await (deps.github ? deps.github() : automationToolGithub(project.root));
-      signal.throwIfAborted();
+      operationSignal.throwIfAborted();
       const scheduler = new ProjectAutomationScheduler({ projectId: project.id, store: project.automationStore, timeZone: deps.timeZone(), ...(github ? { github } : {}) });
-      const result = await scheduler.check(stored, 'preview');
-      signal.throwIfAborted();
+      const result = await scheduler.check(stored, 'preview', operationSignal);
+      operationSignal.throwIfAborted();
       project.automationStore.reload();
       if (project.automationStore.get(stored.id)?.revision !== stored.revision) return refuse('conflict', 'The automation changed during preview; preview it again.');
       const sessionPreviews = previews.get(signal) ?? new Map<string, number>();
@@ -207,8 +208,15 @@ export function createAutomationToolService(
   };
   // Session tools do not pass through the HTTP route admission middleware.
   return {
-    automation: (request, signal) => withProjectAdmission(projectPaths(project.root).write,
-      () => automation(request, signal), error => refuse('conflict', error.message)),
+    automation: async (request, signal) => {
+      const admitted = (operationSignal: AbortSignal) => withProjectAdmission(projectPaths(project.root).write,
+        () => automation(request, signal, operationSignal), error => refuse('conflict', error.message));
+      try {
+        return await (request.action === 'preview' ? withAutomationToolDeadline(signal, admitted) : admitted(signal));
+      } catch (error) {
+        return refuse('unavailable', error instanceof Error ? error.message : String(error));
+      }
+    },
     scheduleTask: request => withProjectAdmission(projectPaths(project.root).write,
       () => tools.scheduleTask(request), error => refuse('conflict', error.message)),
     scheduledTasks: request => withProjectAdmission(projectPaths(project.root).write,

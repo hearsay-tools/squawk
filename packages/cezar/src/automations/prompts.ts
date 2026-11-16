@@ -117,7 +117,7 @@ Use the CLI for the other automation operations. Every command prints one JSON o
 
   ${command} schema                                   the definition shape, every key, every bound, the prompt placeholders
   ${command} list | show <id>                          list definitions or show one
-  ${command} update <id> --file <def.json>              update a definition ("task" merges key by key, null removes one)
+  ${command} update <id> --file <def.json>              update replaces each key given; "task" merges key by key, null removes one
   ${command} pause <id> | delete <id>                  pause or delete a definition
   ${command} run <id>                                 launch a schedule once, now, when the user asks
   ${command} check <id> --execute                      execute a GitHub poll now, when the user asks

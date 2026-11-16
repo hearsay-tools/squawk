@@ -9,9 +9,10 @@ import { createAutomationService, type AutomationServiceProject } from './servic
 import { AutomationStore } from './store.ts';
 import { createAutomationToolService } from './tool-adapter.ts';
 import type { GithubPoller } from './github-poller.ts';
+import { AUTOMATION_TOOL_TIMEOUT_MS } from './tool-timeout.ts';
 
 const dirs: string[] = [];
-afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => { vi.useRealTimers(); for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 const definition = { name: 'Review issues', kind: 'github' as const, events: ['issue.opened' as const], intervalSeconds: 300, filters: { lookbackDays: 7, maxRecords: 25 }, task: { prompt: 'Review {{github.url}}' } };
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'squawk-repeating-')); dirs.push(root);
@@ -106,6 +107,30 @@ describe('repeating automation tool', () => {
     if (!made.ok) throw new Error(made.message);
     expect(await tools.automation({ action: 'enable', id: made.automation.id }, session.signal)).toMatchObject({ code: 'explicit_required' });
     expect(await tools.automation({ action: 'enable', id: made.automation.id, explicit: true }, session.signal)).toMatchObject({ ok: true, automation: { enabled: true } });
+  });
+
+  it('bounds a stalled preview on the server and discards its earlier preview evidence', async () => {
+    const { tools, session, create, poll, project } = fixture(); const made = await create();
+    if (!made.ok) throw new Error(made.message);
+    const id = made.automation.id;
+    await tools.automation({ action: 'preview', id }, session.signal);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const started = Promise.withResolvers<void>();
+    const result = Promise.withResolvers<{ candidates: []; truncated: boolean; pages: number }>();
+    poll.mockImplementationOnce(() => { started.resolve(); return result.promise; });
+    const preview = tools.automation({ action: 'preview', id }, session.signal);
+    await started.promise;
+    await vi.advanceTimersByTimeAsync(AUTOMATION_TOOL_TIMEOUT_MS);
+    expect(await preview).toMatchObject({ ok: false, code: 'unavailable', message: 'Automation tool preview timed out.' });
+    expect(await tools.automation({ action: 'enable', id, explicit: true }, session.signal)).toMatchObject({ code: 'preview_required' });
+    result.resolve({ candidates: [], truncated: false, pages: 1 });
+    // bound: the scheduler releases its lease after the provider settles.
+    await vi.waitFor(() => {
+      const lease = project.automationStore.acquireLease();
+      expect(lease).toBeTruthy();
+      lease?.release();
+    });
+    expect(await tools.automation({ action: 'enable', id, explicit: true }, session.signal)).toMatchObject({ code: 'preview_required' });
   });
 
   it('refuses enable fields on creation and directs one-time schedules to their existing tools', async () => {

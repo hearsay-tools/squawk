@@ -24,6 +24,12 @@ The answer includes the cockpit URL when reachable, and a repeating schedule's n
 occurrence in UTC even while paused. The one-time tools still see only one-time
 schedules. The CLI and built-in skill remain available.
 
+The preview deadline includes admission and the shared GitHub request queue. It
+allows two bounded poll scans for a canonical-name retry, plus one GitHub command
+budget for discovery and queueing. The private client allows one more command
+budget so the server can return its timeout diagnostic. An expired preview cannot
+authorize enable, even if the provider later answers.
+
 ## Repository name and failing polls
 
 A GitHub poll reads under the canonical `owner/name` that `gh repo view
