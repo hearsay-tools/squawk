@@ -1,7 +1,7 @@
 # Worker process ownership (hearsay-tools/squawk#2180)
 Status: active
 
-Slice A (interface, Linux `cgroup`, `groups`, scan removal) shipped in hearsay-tools/squawk#3698. Slice B (the Windows `job` backend) follows it. Slices B
+Slice A (interface, Linux `cgroup`, `groups`, scan removal) shipped in hearsay-tools/squawk#3698. Slice B (the Windows `job` backend) shipped in hearsay-tools/squawk#3704. Slice C adds native macOS checks (the `macos-groups` job) and the user docs in `docs/workers.md`. Slices B
 (Windows Job Object backend, shared with hearsay-tools/squawk#1876), C (native macOS checks) and
 D (before/after spawn and destroy timings) follow as their own pull requests.
 
