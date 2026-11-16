@@ -263,7 +263,7 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
         const result = new Promise<AgentRunResult>(resolve => { finish = resolve; });
         emit = event => onEvent?.(event);
         emitUi = event => options?.onUiEvent?.(event);
-        heartbeat = () => { options?.onActivity?.(); emitUi({ type: 'usage.updated', usage: { input: 1, output: 1 } }); };
+        heartbeat = () => { options?.onActivity?.(); emitUi({ type: 'usage.updated', usage: { input: 1, output: 1, total: 2 } }); };
         const close = () => { open = false; finish({ text: '', toolCalls: [], tokensUsed: 0 }); };
         // The nudge's acknowledgement settles only when the test acknowledges it.
         const sendAgentMessage = vi.fn(() => {
