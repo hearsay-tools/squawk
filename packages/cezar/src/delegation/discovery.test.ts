@@ -66,7 +66,7 @@ describe('parent discovery and model admission', () => {
       pi: { discover: async () => [{ id: 'different-provider/gpt-current', label: '', description: '' }] },
     } }), providers: async () => ({ providers: [] }) });
     for (const model of ['gpt-current', 'openai/gpt-current']) {
-      await expect(spawn({ model })).rejects.toMatchObject({ code: 'invalid_input', modelChoices: { otherRunners: ['opencode', 'cursor'] } });
+      await expect(spawn({ model })).rejects.toMatchObject({ code: 'invalid_input', modelChoices: { otherRunners: ['opencode'] } });
     }
   });
   it('keeps accepted retries valid when the catalog changes', async () => {

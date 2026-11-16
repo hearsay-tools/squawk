@@ -53,21 +53,8 @@ function mcpServerOf(backend, wire) {
     const server = Object.entries(wire.config ?? {}).find(([key]) => key.startsWith('mcp_servers.cezar_ci_'))?.[1];
     return { server, env: Object.fromEntries((server?.env_vars ?? []).map(name => [name, process.env[name]])) };
   }
-  if (backend === 'cursor') return cursorServerOf(wire);
   const local = Object.entries(wire.mcp ?? {}).find(([key]) => key.startsWith('cezar_ci_'))?.[1];
   return { server: local && { command: local.command[0], args: local.command.slice(1) }, env: { ...process.env, ...local?.environment } };
-}
-
-/** Cursor print names the server in its plugin directory; the ACP-shaped wire lists it inline. */
-function cursorServerOf(wire) {
-  if (!Array.isArray(wire)) {
-    const server = wire.mcpServers.find(server => server.name.startsWith('cezar_ci_'));
-    return { server, env: Object.fromEntries(server?.env.map(({ name, value }) => [name, value]) ?? []) };
-  }
-  const dir = wire[wire.indexOf('--plugin-dir') + 1];
-  const servers = JSON.parse(readFileSync(join(dir, 'mcp.json'), 'utf8')).mcpServers;
-  const server = Object.entries(servers).find(([name]) => name.startsWith('cezar_ci_'))?.[1];
-  return { server, env: expandEnv(server?.env) };
 }
 
 async function probeMcpTool({ server, env }, name, args) {

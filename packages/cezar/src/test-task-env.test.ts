@@ -34,7 +34,6 @@ describe('test runs never inherit a task session (hearsay-tools/cezarion#953)', 
 // runner. vitest.setup.ts points HOME at a sandbox and clears every variable that moves an agent home.
 const AGENT_HOME_KEYS = [
   'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'PI_CODING_AGENT_DIR', 'PI_CONFIG_DIR', 'OMP_PROFILE', 'PI_PROFILE',
-  'CURSOR_CONFIG_DIR',
 ];
 
 describe('test runs never read the host home (hearsay-tools/cezarion#1361)', () => {

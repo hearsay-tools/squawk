@@ -4,7 +4,7 @@ import { isSafeSessionId, resumeCommand, RUNNER_CLI, terminalExecutable } from '
 import { commands as goldenCommands, sessionId, unsafeSessionIds } from '../../test/fixtures/resume-commands.ts';
 
 describe('resume commands — shared golden parity across RUNNER_IDS', () => {
-  beforeEach(() => { vi.stubEnv('CEZ_CURSOR_BIN', undefined); vi.stubEnv('CEZ_OMP_BIN', undefined); });
+  beforeEach(() => { vi.stubEnv('CEZ_OMP_BIN', undefined); });
   afterEach(() => vi.unstubAllEnvs());
 
   const commands = goldenCommands satisfies Record<(typeof RUNNER_IDS)[number], string>;

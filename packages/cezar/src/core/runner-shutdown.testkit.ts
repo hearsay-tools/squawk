@@ -94,8 +94,8 @@ async function withChild(backend: RunnerId, check: (session: AgentSession, child
   const settled = session.result.catch(error => error);
   try {
     // Wait for the PID contents, not merely file creation (which precedes the
-    // write). Cursor can also replace its child while bootstrapping, so use the
-    // native process that actually accepted this prompt, not the first spawn.
+    // write), and use the native process that actually accepted this prompt,
+    // not the first spawn: a runner may replace its child while bootstrapping.
     // bound: wait for the fixture's native process receipt on a loaded host.
     const child = await vi.waitFor(() => {
       const pid = readPid(join(cwd, 'watchdog.pid'));

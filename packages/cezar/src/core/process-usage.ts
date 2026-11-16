@@ -126,7 +126,7 @@ export function registerRunProcess(runId: string, pid: number): void {
 }
 
 /** Follow a replacement backend PID within the same session without losing
- * peaks accumulated by its earlier processes (Cursor print starts one per turn). */
+ * peaks accumulated by its earlier processes (an OMP respawn or an OpenCode server restart). */
 export function replaceRunProcess(runId: string, pid: number): void {
   const prior = entries.get(runId);
   if (!prior) { registerRunProcess(runId, pid); return; }

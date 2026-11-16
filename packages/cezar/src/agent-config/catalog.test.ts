@@ -23,10 +23,10 @@ describe('agent-config catalog', () => {
     }
   });
 
-  it('<repo>/AGENTS.md is ONE entry read by every runner that loads it (Codex, OpenCode, Pi, Cursor, OMP)', () => {
+  it('<repo>/AGENTS.md is ONE entry read by every runner that loads it (Codex, OpenCode, Pi, OMP)', () => {
     const agents = CONFIG_FILES.filter((f) => f.label === 'AGENTS.md' && f.scope === 'project');
     expect(agents).toHaveLength(1);
-    expect(agents[0]!.runners).toEqual(['codex', 'opencode', 'pi', 'cursor', 'omp']);
+    expect(agents[0]!.runners).toEqual(['codex', 'opencode', 'pi', 'omp']);
   });
 
   it('lists Pi’s documented files: settings at both scopes and the global AGENTS.md — and no MCP file', () => {

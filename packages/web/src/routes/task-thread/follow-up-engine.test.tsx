@@ -650,6 +650,16 @@ const serveAccounts = (
  * Default` / `claude · Klaudiusz` / `codex` — so "continue this on my other Claude login" is
  * sayable after the task has started, not only when it is created.
  */
+describe('a task saved on a removed runner (hearsay-tools/squawk#3715)', () => {
+  it('continues on the project default runner as a new session, naming it on the wire', async () => {
+    serve()
+    renderAction(makeRun({ runner: undefined, removedRunner: 'cursor', steps: [step()] }))
+    fireEvent.click(await screen.findByRole('button', { name: /continue/i }))
+    await waitFor(() => expect(continueBody()).toBeDefined())
+    expect(continueBody()).toMatchObject({ runner: 'claude' })
+  })
+})
+
 describe('the follow-up runner pill carries the account', () => {
   it('lists every agent-and-login as one flat row, on a single-backend host too', async () => {
     serveAccounts(ACCOUNTS, {

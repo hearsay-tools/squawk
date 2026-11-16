@@ -73,12 +73,12 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'mock-lifecycle-boundary': ['packages/cezar/scripts/mock-boundary.mjs', "function watchdogStall() {}\n"],
   'mock-scenario-boundary': ['packages/cezar/scripts/mock-scenario-violation.mjs', "import { play } from './mock-scenario.mjs';\nconst x = 'mock:hold';\n"],
   'native-mock-source': ['packages/cezar/test/b.test.ts', "const text = readFileSync(adapter.mockBin, 'utf8');\n"],
-  'parity-runner-subset': ['packages/cezar/src/core/runner-group-parity.test.ts', "const held = new Set(['opencode', 'cursor']);\n"],
+  'parity-runner-subset': ['packages/cezar/src/core/runner-group-parity.test.ts', "const held = new Set(['opencode', 'omp']);\n"],
   'raw-query-setter': ['packages/web/src/c.tsx', "import { useSearchParams } from 'react-router';\nconst [p, setP] = useSearchParams();\n"],
   'run-fact-reader': ['packages/web/src/lib/d.ts', "const held = attention.label === 'usage limit';\n"],
   'run-history-reader': ['packages/cezar/src/raw-history.ts', 'const text = readFileSync(historyPaths(dir, id).plain);\n'],
   'runner-fact-combination': ['packages/cezar/src/workflows/run/fact-pair.ts', "function f(runner, id) {\n  return runner.systemPromptOnResume === 'resent' && RUNNER_FACTS[id].nativeAsk === 'none';\n}\n"],
-  'runner-id-branch': ['packages/web/src/routes/runner-branch.ts', "export const held = (runner: string) => runner === 'cursor';\n"],
+  'runner-id-branch': ['packages/web/src/routes/runner-branch.ts', "export const held = (runner: string) => runner === 'omp';\n"],
   'runner-roster-literal': ['packages/web/src/lib/runner-roster.test.ts', `const all = [${ROSTER}];\n`],
   'undocumented-env-name': ['packages/cezar/scripts/e.mjs', "process.env.CEZ_NOT_DOCUMENTED_ANYWHERE = '1';\n"],
 };
@@ -104,7 +104,7 @@ const APPROVED: Record<string, string> = {
   // native-mock-source: pointing the runner at the real mock.
   'packages/cezar/test/g.test.ts': 'process.env[adapter.binEnv] = adapter.mockBin;\n',
   // parity-runner-subset: a one-runner shard, a per-runner reason table, and a group outside a parity file.
-  'packages/cezar/src/workflows/waits-one-runner-parity.test.ts': "subagentCells(['pi']);\nconst reasons = [['pi', 'no child wire'], ['cursor', 'no child frame']];\n",
+  'packages/cezar/src/workflows/waits-one-runner-parity.test.ts': "subagentCells(['pi']);\nconst reasons = [['pi', 'no child wire'], ['omp', 'no child frame']];\n",
   'packages/cezar/src/core/runner-group.test.ts': "for (const backend of ['codex', 'pi']) {}\n",
   // raw-query-setter: the baseline's reasoned exception, and a read-only tuple.
   'packages/web/src/routes/task-git/task-files.tsx': "import { useSearchParams } from 'react-router';\nconst [query, setQuery] = useSearchParams();\n",
@@ -118,9 +118,9 @@ const APPROVED: Record<string, string> = {
   'packages/cezar/src/workflows/run/fact-single.ts': "const a = runner => runner.systemPromptOnResume === 'resent';\nconst b = id => RUNNER_FACTS[id].nativeAsk;\n",
   'packages/cezar/src/workflows/run/fact-pair.test.ts': "it('x', () => { expect(runner.systemPromptOnResume).toBe(RUNNER_FACTS[id].nativeAsk); });\n",
   // runner-id-branch: the seam itself, a test and a message tag.
-  'packages/cezar/src/core/runner-pick.ts': "const print = backend === 'cursor';\n",
-  'packages/web/src/routes/runner-branch.test.ts': "const print = backend === 'cursor';\n",
-  'packages/web/src/routes/frame.ts': "switch (message.t) { case 'cursor': break; }\n",
+  'packages/cezar/src/core/runner-pick.ts': "const print = backend === 'omp';\n",
+  'packages/web/src/routes/runner-branch.test.ts': "const print = backend === 'omp';\n",
+  'packages/web/src/routes/frame.ts': "switch (message.t) { case 'omp': break; }\n",
   // runner-roster-literal: the definition, a listed roster, a subset and a derived list.
   'packages/cezar/src/core/agent-runner.ts': `export const RUNNER_IDS = [${ROSTER}] as const;\n`,
   'packages/contract/src/runner.ts': `export const runnerSchema = z.enum([${ROSTER}]);\n`,

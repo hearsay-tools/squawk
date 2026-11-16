@@ -63,6 +63,7 @@ import {
   mainTranscriptSections,
   type TranscriptMessageActions,
 } from './session-transcript'
+import { removedRunnerMessage } from '@open-mercato/cezar-api-client/contract/runner'
 import { recipientBackendsFromRuns, titlesFromRuns } from './conversation-presentation'
 import {
   reduceThread,
@@ -661,7 +662,9 @@ function ThreadFooterDock({
           </div>
         ) : null}
 
-        {continuable && continueAction.startsNewConversation ? (
+        {continuable && run.removedRunner !== undefined ? (
+          <p className="px-1 text-xs text-muted-foreground" role="status">{removedRunnerMessage(run.removedRunner)}</p>
+        ) : continuable && continueAction.startsNewConversation ? (
           <p className="px-1 text-xs text-muted-foreground" role="status">Starts a new agent conversation.</p>
         ) : null}
 

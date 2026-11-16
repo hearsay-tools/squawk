@@ -29,11 +29,11 @@ describe('runner-id-branch (hearsay-tools/cezarion#2991)', () => {
     ["backend !== 'omp'", "backend !== 'omp'"],
     ["run.runner == 'pi'", "run.runner == 'pi'"],
     ["step?.backend != 'codex'", "step?.backend != 'codex'"],
-    ["'cursor' === runner", "runner === 'cursor'"],
-    ["runner === ('cursor' as const)", "runner === 'cursor'"],
-    ["runner === ('cursor' satisfies string)", "runner === 'cursor'"],
-    ['runner === `cursor`', "runner === 'cursor'"],
-    ['runner === "cursor"', "runner === 'cursor'"],
+    ["'opencode' === runner", "runner === 'opencode'"],
+    ["runner === ('opencode' as const)", "runner === 'opencode'"],
+    ["runner === ('opencode' satisfies string)", "runner === 'opencode'"],
+    ['runner === `opencode`', "runner === 'opencode'"],
+    ['runner === "opencode"', "runner === 'opencode'"],
     ["config\n  .defaultRunner === 'claude'", "config .defaultRunner === 'claude'"],
     ["switch (runner) { case 'codex': case 'gh': break; case 'pi': break; default: }", "switch (runner) case 'codex', 'pi'"],
     ["const f = (a: string) => a === 'opencode' || a === 'omp'", "a === 'opencode'|a === 'omp'"],
@@ -42,22 +42,22 @@ describe('runner-id-branch (hearsay-tools/cezarion#2991)', () => {
   });
 
   it('reads JSX in a .tsx file', () => {
-    expect(sites("const a = <p>{runner === 'cursor' ? 'a' : 'b'}</p>;", 'packages/web/src/routes/pick.tsx')).toEqual(["runner === 'cursor'"]);
+    expect(sites("const a = <p>{runner === 'opencode' ? 'a' : 'b'}</p>;", 'packages/web/src/routes/pick.tsx')).toEqual(["runner === 'opencode'"]);
   });
 
   it.each([
-    "message.t === 'cursor'",
-    "switch (message.t) { case 'cursor': break; }",
+    "message.t === 'opencode'",
+    "switch (message.t) { case 'opencode': break; }",
     "switch (event.type) { case 'pi': break; }",
     "type !== 'codex'",
     "'pi' === 'pi'",
     'runner === other',
     "runner === 'gh'",
-    "ids.includes('cursor')",
-    "const labels = { cursor: 'Cursor' }; labels['pi'];",
-    "// runner === 'cursor'",
-    "const text = \"runner === 'cursor'\";",
-    "type Only = Extract<Runner, 'cursor'>;",
+    "ids.includes('opencode')",
+    "const labels = { opencode: 'OpenCode' }; labels['pi'];",
+    "// runner === 'opencode'",
+    "const text = \"runner === 'opencode'\";",
+    "type Only = Extract<Runner, 'opencode'>;",
   ])('passes %s', (source) => {
     expect(sites(source)).toEqual([]);
   });
@@ -83,12 +83,12 @@ describe('runner-id-branch (hearsay-tools/cezarion#2991)', () => {
   });
 
   it('lets a listed site pass up to its count, in its own file only', () => {
-    const source = "if (runner === 'cursor') a();\nif (runner === 'cursor') b();\nif (runner === 'omp') c();\n";
-    const exceptions = [{ file, site: "runner === 'cursor'", count: 1, reason: 'identity choice: a fixture' }];
-    expect(scanRunnerIdBranches(file, source, exceptions).map(({ site }) => site)).toEqual(["runner === 'cursor'", "runner === 'omp'"]);
+    const source = "if (runner === 'opencode') a();\nif (runner === 'opencode') b();\nif (runner === 'omp') c();\n";
+    const exceptions = [{ file, site: "runner === 'opencode'", count: 1, reason: 'identity choice: a fixture' }];
+    expect(scanRunnerIdBranches(file, source, exceptions).map(({ site }) => site)).toEqual(["runner === 'opencode'", "runner === 'omp'"]);
     expect(scanRunnerIdBranches('packages/cezar/src/server/other.ts', source, exceptions)).toHaveLength(3);
-    expect(runnerIdBranch.check(file, "\nif (runner === 'cursor') a();")).toEqual([
-      { line: 2, message: expect.stringMatching(/^runner === 'cursor': only packages\/cezar\/src\/core\/ branches on a runner id\..+RUNNER_FACTS.+hearsay-tools\/cezarion#2991/) },
+    expect(runnerIdBranch.check(file, "\nif (runner === 'opencode') a();")).toEqual([
+      { line: 2, message: expect.stringMatching(/^runner === 'opencode': only packages\/cezar\/src\/core\/ branches on a runner id\..+RUNNER_FACTS.+hearsay-tools\/cezarion#2991/) },
     ]);
   });
 
@@ -109,24 +109,24 @@ describe('runner-id-branch (hearsay-tools/cezarion#2991)', () => {
       writeFileSync(join(root, path), text);
     };
     const core = 'packages/cezar/src/core/pick.ts';
-    write(file, "if (runner === 'cursor') a();\nif (backend === 'omp') b();\nif (backend === 'omp') c();\nif (id === 'pi') d();\n");
-    write(core, "if (runner === 'cursor') a();\n");
+    write(file, "if (runner === 'opencode') a();\nif (backend === 'omp') b();\nif (backend === 'omp') c();\nif (id === 'pi') d();\n");
+    write(core, "if (runner === 'opencode') a();\n");
     const entry = (site: string, count: number, reason = 'identity choice: a fixture', path = file) => ({ file: path, site, count, reason });
     write(runnerIdBranchesFile, JSON.stringify({ entries: [
-      entry("runner === 'cursor'", 1),
+      entry("runner === 'opencode'", 1),
       entry("backend === 'omp'", 3),
-      entry("runner === 'cursor'", 1),
+      entry("runner === 'opencode'", 1),
       entry("id === 'pi'", 1, ' '),
-      entry("runner === 'cursor'", 1, undefined, core),
+      entry("runner === 'opencode'", 1, undefined, core),
       entry("runner === 'codex'", 1, undefined, 'packages/cezar/src/server/gone.ts'),
     ] }));
     const stale = (path: string, site: string, lists: number, has: number) =>
       `${runnerIdBranchesFile} cez/runner-id-branch: stale or invalid entry ${path}: ${site} (lists ${lists}, the file has ${has}); lower the count or remove the entry`;
     expect(staleRunnerIdBranches(root)).toEqual([
       stale(file, "backend === 'omp'", 3, 2),
-      stale(file, "runner === 'cursor'", 1, 1),
+      stale(file, "runner === 'opencode'", 1, 1),
       stale(file, "id === 'pi'", 1, 1),
-      stale(core, "runner === 'cursor'", 1, 1),
+      stale(core, "runner === 'opencode'", 1, 1),
       stale('packages/cezar/src/server/gone.ts', "runner === 'codex'", 1, 0),
     ]);
   });

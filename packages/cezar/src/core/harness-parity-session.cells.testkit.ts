@@ -581,9 +581,9 @@ export const SESSION_GROUPS = {
   },
 
   // #781: the `squawkTools` cell, live. One shared Squawk tool list feeds every
-  // runner's own wire (Claude's MCP config and generated allow-list entry, Codex
-  // and Cursor forwarded env, OpenCode's runtime config, Pi's extension and tool
-  // admission), and each mock lists the tools through the real bundled adapter.
+  // runner's own wire (Claude's MCP config and generated allow-list entry, Codex's
+  // forwarded env, OpenCode's runtime config, Pi's extension and tool admission),
+  // and each mock lists the tools through the real bundled adapter.
   // `cezar_preview_serve` and `cezar_preview_stop` are listed under `CEZ_PREVIEW=1` exactly, and
   // `cezar_schedule_task` and `cezar_scheduled_tasks` unless `CEZ_AUTOMATIONS=0` (hearsay-tools/cezarion#1465).
   // Exercise the default and both explicit automation states on every native wire.

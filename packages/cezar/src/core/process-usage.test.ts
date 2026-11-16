@@ -4,7 +4,7 @@ import { aggregateTreeUsage, parsePsOutput, registerRunProcess,
   replaceRunProcess, recordUsageSampleForTest, unregisterRunProcess } from './process-usage.ts';
 
 describe('run process replacement', () => {
-  it('keeps the peak across Cursor print turns when the PID changes', () => {
+  it('keeps the peak when the session replaces its backend process', () => {
     const runId = 'replacement-peak';
     try {
       registerRunProcess(runId, 123);

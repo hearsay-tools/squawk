@@ -40,9 +40,12 @@ export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null
   const providers = useProviderStatus()
   const config = useConfig()
   const untouched = isStoppedBeforeStarting(run)
-  const needsConfig = untouched && !run.runner
+  // A task saved on a removed runner has no runner of its own: it starts on the project's default
+  // runner, and the server needs that runner named (hearsay-tools/squawk#3715).
+  const removed = run.removedRunner !== undefined
+  const needsConfig = (untouched && !run.runner) || removed
   const runners = usableRunners(providers.data)
-  const currentRunner = run.runner ?? (untouched ? config.data?.defaultRunner : undefined) ?? 'claude'
+  const currentRunner = run.runner ?? (untouched || removed ? config.data?.defaultRunner : undefined) ?? 'claude'
   const runner = resolveRunner(pickedRunner, runners, currentRunner)
   const currentRunnerConnected = runners.includes(currentRunner)
   const required = untouched ? providersRequiredByWorkflow(run.workflowDef!, runner) : [runner]
@@ -69,7 +72,7 @@ export function useContinuationProvider(run: ApiRun, pickedRunner: Runner | null
     providerError: providers.isError,
     reason,
     runnerOverride:
-      pickedRunner !== null || !currentRunnerConnected
+      pickedRunner !== null || !currentRunnerConnected || removed
         ? runner
         : undefined,
   }
