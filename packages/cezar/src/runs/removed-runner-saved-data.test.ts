@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { upgradeRemovedRunnerResult } from './legacy-run-rows.ts';
 import { parseStoredSummary } from './run-summary-page.ts';
 import { runSummarySchema } from '@open-mercato/cezar-contract/runs';
-import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS, STEP_KIND, STEP_STATUS, makeStepState } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { removedRunnerStepAfter } from '../delegation/execution-identity.ts';
 
 // hearsay-tools/squawk#3715: a collected result of a worker that ran on a removed runner stays readable.
 describe('upgradeRemovedRunnerResult', () => {
@@ -30,5 +31,24 @@ describe('parseStoredSummary', () => {
     expect(summary).not.toHaveProperty('runner');
     expect(summary).not.toHaveProperty('currentStepBackend');
     expect(runSummarySchema.safeParse({ ...summary, workflow: 'quick-task', workflowLabel: 'quick-task', tokensUsed: 0 }).success).toBe(true);
+  });
+});
+
+// A Continue appends its step, so a workflow step that ran later can sit before it: "latest" is by
+// start time, as latestSessionStep reads it.
+describe('removedRunnerStepAfter', () => {
+  const step = (id: string, extra: Record<string, unknown>) => makeStepState({ id, kind: STEP_KIND.agent, status: STEP_STATUS.done, ...extra });
+
+  it('finds no removed work when a live session started after it, wherever it sits in the list', () => {
+    const steps = [step('implement', { startedAt: '2026-01-01T10:00:00.000Z' }),
+      step('review', { sessionId: 'review-session', backend: 'codex', startedAt: '2026-01-01T10:02:00.000Z' }),
+      step('continue-1', { removedBackend: 'cursor', startedAt: '2026-01-01T10:01:00.000Z' })];
+    expect(removedRunnerStepAfter(steps, 'review-session')).toBeUndefined();
+  });
+
+  it('finds removed work that started after the latest live session', () => {
+    const steps = [step('plan', { sessionId: 'plan-session', backend: 'codex', startedAt: '2026-01-01T10:00:00.000Z' }),
+      step('build', { removedBackend: 'cursor', startedAt: '2026-01-01T10:01:00.000Z' })];
+    expect(removedRunnerStepAfter(steps, 'plan-session')?.id).toBe('build');
   });
 });

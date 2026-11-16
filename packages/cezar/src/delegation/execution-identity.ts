@@ -227,16 +227,16 @@ export function continuationDefStep(store: RunStore, record: RunRecord | undefin
   return continuedDefStep(defSteps, record, sessionId) ?? [...defSteps].reverse().find((s) => stepKind(s) === 'agent');
 }
 
-/** The latest step that ran on a removed runner, when it is newer than every step holding
- *  `sessionId` (any such step when there is none): the work a Continue picks up, in a new session. */
+/** The latest step that ran on a removed runner, when it started after every step holding
+ *  `sessionId` (any such step when there is none): the work a Continue picks up, in a new session.
+ *  "Latest" is by start time, as `latestSessionStep` reads it, since a Continue appends its step. */
 export function removedRunnerStepAfter(steps: RunRecord['steps'], sessionId: string | undefined): RunRecord['steps'][number] | undefined {
-  let holder = -1;
-  let removed = -1;
-  steps.forEach((step, index) => {
-    if (sessionId !== undefined && step.sessionId === sessionId) holder = index;
-    if (step.removedBackend !== undefined) removed = index;
-  });
-  return removed > holder ? steps[removed] : undefined;
+  let latest: RunRecord['steps'][number] | undefined;
+  for (const step of steps) {
+    if (step.removedBackend === undefined && (sessionId === undefined || step.sessionId !== sessionId)) continue;
+    if (!latest || !step.startedAt || !latest.startedAt || step.startedAt >= latest.startedAt) latest = step;
+  }
+  return latest?.removedBackend !== undefined ? latest : undefined;
 }
 
 /**
