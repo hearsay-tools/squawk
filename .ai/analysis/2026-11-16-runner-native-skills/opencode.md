@@ -127,7 +127,7 @@ Test: scratch config home with one user skill at `<scratch>/xdg/config/opencode/
 
 ### Check B: `POST /session/{id}/command` as a long poll next to SSE
 
-Recorded cause in the adapter: `opencode-server-runner.ts:810-812`, "`POST /session/:id/message` long-polled the whole turn, and undici's default 300s headers timeout ended it as `prompt failed: fetch failed` (#4, upstream #897); `prompt_async` returns immediately." Lines 960-965 add that undici also cuts a response body idle for 300 s, which is why the SSE reader uses `node:http`; line 1524 says the `fetch` helper is safe only because nothing long-polls any more.
+Recorded cause in the adapter: `opencode-server-runner.ts:810-812`, "`POST /session/:id/message` long-polled the whole turn, and undici's default 300s headers timeout ended it as `prompt failed: fetch failed` (hearsay-tools/cezarion#4, upstream #897); `prompt_async` returns immediately." Lines 960-965 add that undici also cuts a response body idle for 300 s, which is why the SSE reader uses `node:http`; line 1524 says the `fetch` helper is safe only because nothing long-polls any more.
 
 Setup for B1, B2, B4: Squawk's launch (`opencode serve --hostname 127.0.0.1 --port <free>`, cwd = scratch repo, no config). One `node:http` connection reads `GET /event`; a second sends the command. Times are ms from driver start.
 
