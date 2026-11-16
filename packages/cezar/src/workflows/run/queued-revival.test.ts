@@ -57,3 +57,25 @@ it('fails a queued task saved on a removed runner instead of starting it on the 
   expect(enqueueContinuation).not.toHaveBeenCalled();
   expect(move).toHaveBeenCalledWith(run.id, 'fail-start', expect.objectContaining({ error: removedRunnerMessage('cursor') }));
 });
+
+// hearsay-tools/squawk#3715: a Continue queued after work on a removed runner reopens no older session.
+it('revives a continuation queued after a removed-runner step as a new session', async () => {
+  root = mkdtempSync(join(tmpdir(), 'cez-queued-revival-'));
+  const store = RunStore.open(root);
+  const context = { createRunner: noRunners, home: testHome(), store, dataDir: root, repoRoot: root,
+    semaphore: new WorkspaceSemaphore({ home: testHome() }), work: new TrackedWork(), disposed: () => false } as RunModuleContext;
+  const steps = [
+    makeStepState({ id: 'plan', kind: STEP_KIND.agent, status: STEP_STATUS.done, sessionId: 'plan-session', backend: 'claude' }),
+    makeStepState({ id: 'build', kind: STEP_KIND.agent, status: STEP_STATUS.done, removedBackend: 'cursor' }),
+    makeStepState({ id: 'continue-1', kind: STEP_KIND.agent, status: STEP_STATUS.pending, synthetic: 'continuation', continuesStepId: 'build' }),
+  ];
+  const created = store.createRun({ title: 'held', task: 'build it', workflow: 'quick-task', steps: [] });
+  const run = makeRunRecord({ id: created.id, status: RUN_STATUS.queued, runner: 'claude', steps,
+    continuationMessage: { id: 'continue-1', text: 'keep going', origin: 'human', createdAt: new Date().toISOString() } });
+  const enqueueContinuation = vi.fn();
+  const host = { isActive: () => false, workerExecutionStopped: () => false, isSyntheticContinuation: (_run: unknown, step: { synthetic?: string }) => step.synthetic === 'continuation',
+    workerStep: () => undefined, resumableSessionId: () => 'plan-session', restartContinuationPrompt: 'Continue.', enqueueContinuation, enqueueJob: vi.fn(),
+    reviveWorkflow: async () => null } as unknown as QueuedRevivalHost;
+  await reviveQueuedRun(context, host, run, 'queue watchdog');
+  expect(enqueueContinuation).toHaveBeenCalledWith(run.id, expect.objectContaining({ stepId: 'continue-1', sessionId: undefined, backend: 'claude' }));
+});

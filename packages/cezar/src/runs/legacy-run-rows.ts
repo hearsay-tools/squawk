@@ -46,6 +46,14 @@ export function upgradeRemovedRunner(row: Record<string, unknown>): void {
   if (removed !== undefined && row.removedRunner === undefined) row.removedRunner = removed;
 }
 
+/** A settled row's stored summary skips the record parse; it folds the same way. */
+export function upgradeRemovedRunnerSummary(row: Record<string, unknown>): void {
+  if (isRemovedRunner(row.currentStepBackend)) delete row.currentStepBackend;
+  if (!isRemovedRunner(row.runner)) return;
+  if (row.removedRunner === undefined) row.removedRunner = row.runner;
+  delete row.runner;
+}
+
 /** A saved worker-result snapshot names the runner the worker ran on; a removed one is dropped. */
 export function upgradeRemovedRunnerResult(file: unknown): unknown {
   const result = file && typeof file === 'object' ? (file as Record<string, unknown>).result : undefined;

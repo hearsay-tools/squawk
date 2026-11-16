@@ -12,7 +12,7 @@ import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../../core/agent-m
 import { ModelIdentityError, formatModelIdentity, normalizeModelForBackend } from '../../core/model-identity.ts';
 import { RUNNER_FACTS } from '../../core/runner-facts.ts';
 import { parseDelegationEffort } from '../../delegation/effort.ts';
-import { boundWorkerAccountEnv, captureWorkerAccount, continuationDefStep, continuationDefSteps, continuedDefStep, ownedWorkflow, workerIdentity, workerStepIdentity, WorkerIdentityError, type WorkerAccountBinding, type WorkerStepIdentity } from '../../delegation/execution-identity.ts';
+import { boundWorkerAccountEnv, captureWorkerAccount, continuationDefStep, continuationDefSteps, continuedDefStep, ownedWorkflow, removedRunnerStepAfter, workerIdentity, workerStepIdentity, WorkerIdentityError, type WorkerAccountBinding, type WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import { DelegationPolicyError } from '../../delegation/policy.ts';
 import type { QueuedMessage, RunRecord, RunStore, StepState } from '../../runs/store.ts';
 import { makeRunTitle } from '../../runs/run-title.ts';
@@ -598,7 +598,9 @@ function queuedResumeSession(context: RunModuleContext, host: QueuedRevivalHost,
   // A provider retry keeps the held step's account, resolved as `sessionAccount` is (hearsay-tools/squawk#3337).
   const agentProfile = resumeIdentity?.account.profileId ?? (retryInFlightRunner(run) ? sessionAccount : run.agentProfile);
   const sameAccount = agentProfile === undefined || agentProfile === sessionAccount;
-  const recoveredSessionId = sessionBackend === backend && sameAccount
+  // Work on a removed runner after this session means a new session (hearsay-tools/squawk#3715).
+  const fresh = removedRunnerStepAfter(run.steps, sessionStep.sessionId) !== undefined;
+  const recoveredSessionId = sessionBackend === backend && sameAccount && !fresh
     ? host.resumableSessionId(run.id, sessionStep) : undefined;
   return { backend, sessionBackend, sameAccount, recoveredSessionId };
 }
