@@ -344,6 +344,36 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
     expect(verifyStarts()).toBe(1);
     expect(f.store.getRun(workerId)?.error).toBeUndefined();
   }, 60_000);
+  // Review round 2 of hearsay-tools/squawk#3024: `continuesStepId` names the step a Continue runs
+  // as, never the workflow position. A Continue after a recovered failed final step leaves that
+  // attempt failed and starts nothing.
+  it('leaves a recovered failed final step failed after a later continuation of it', async () => {
+    const dir = join(f.root, '.ai/cezar/workflows'); mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'single.yaml'), ['name: single', 'steps:', '  - id: implement', '    prompt: "Implement: {{task}}"'].join('\n'));
+    const a = await acceptIdentityWorker(undefined, undefined, { workflow: 'single' });
+    const workerId = a.child.workerId;
+    await launchAccepted(a, 'queued'); await until(() => sessions.length === 2);
+    sessions[1]!.emit({ type: 'session', sessionId: 'implement-session' });
+    await until(() => f.store.getRun(workerId)?.steps.find(step => step.id === 'implement')?.sessionId === 'implement-session');
+    doneTurn(sessions[1]!, 'implemented');
+    expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
+    // What the recovery leaves: the failed attempt, and the done `continue-1` that resumed its
+    // session through the `resume` cursor and recorded it.
+    const implement = f.store.getRun(workerId)!.steps.find(step => step.id === 'implement')!;
+    const failedAt = '2026-11-16T00:00:00.000Z';
+    f.store.updateStep(workerId, 'implement', { status: STEP_STATUS.failed, error: 'boom', finishedAt: failedAt });
+    f.store.addStep(workerId, { id: 'continue-1', name: 'Continue', kind: STEP_KIND.agent, synthetic: 'continuation', continuesStepId: 'implement' });
+    f.store.updateStep(workerId, 'continue-1', { status: STEP_STATUS.done, iterations: 1, startedAt: implement.startedAt, sessionId: 'implement-session', backend: 'claude', profileId: implement.profileId });
+    const implementStarts = () => f.store.readEvents(workerId).filter(event => event.type === 'step-start' && event.stepId === 'implement').length;
+    expect(f.manager.continueRun(workerId, { text: 'again' })).toEqual({ ok: true });
+    await until(() => sessions.length === 3);
+    expect(sessions[2]!.spec).toMatchObject({ resume: true, sessionId: 'implement-session' });
+    doneTurn(sessions[2]!, 'answered');
+    expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
+    expect(f.store.getRun(workerId)?.error).toBeUndefined();
+    expect(f.store.getRun(workerId)?.steps.find(step => step.id === 'implement')).toMatchObject({ status: STEP_STATUS.failed, error: 'boom', finishedAt: failedAt });
+    expect(implementStarts()).toBe(1);
+  }, 60_000);
   it('launches a later step under its own account even after the first step\'s account home is gone (#465 review)', async () => {
     const codexHome = join(f.root, 'codex-account'); mkdirSync(codexHome); vi.stubEnv('CODEX_HOME', codexHome);
     const dir = join(f.root, '.ai/cezar/workflows'); mkdirSync(dir, { recursive: true });

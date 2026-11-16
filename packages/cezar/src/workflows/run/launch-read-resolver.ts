@@ -630,8 +630,6 @@ function waitingWorkflowStepIndex(run: RunRecord, isSyntheticContinuation: Synth
   // synthetic continuation replacing currentStepId and wait delivery retiring the wait.
   const ciSource = ciWorkflowResumeStepIndex(run);
   if (ciSource >= 0) return ciSource;
-  const recorded = continuedWorkflowStepIndex(run, steps, isSyntheticContinuation);
-  if (recorded >= 0) return recorded;
   const interrupted = steps.findIndex((step) => {
     const persisted = run.steps.find((candidate) => candidate.id === step.id);
     return stepKind(step) === 'agent' && persisted?.status === 'failed' && persisted.error === 'interrupted — cezar process exited during the run';
@@ -645,21 +643,6 @@ function waitingWorkflowStepIndex(run: RunRecord, isSyntheticContinuation: Synth
     if (persisted?.status === 'waiting' || persisted?.status === 'running') return index;
   }
   return -1;
-}
-
-/** The step the current synthetic continuation recorded at admission (ADR 0064,
- *  hearsay-tools/squawk#3024), while the run has not passed it: that step is not done and no
- *  later workflow step has started. A Continue of a step the run is past resumes no position, so
- *  its done does not run the rest of the chain again. A synthetic step saved without the record
- *  answers -1, so the status scan decides. */
-function continuedWorkflowStepIndex(run: RunRecord, steps: readonly { id: string }[], isSyntheticContinuation: SyntheticContinuationRead): number {
-  const current = run.steps.find(step => step.id === run.currentStepId);
-  const continued = current && isSyntheticContinuation(run, current) ? current.continuesStepId : undefined;
-  const index = continued === undefined ? -1 : steps.findIndex(step => step.id === continued);
-  const persisted = (id: string) => run.steps.find(step => step.id === id);
-  const passed = persisted(continued ?? '')?.status === 'done' ||
-    steps.slice(index + 1).some(later => persisted(later.id)?.startedAt !== undefined);
-  return index >= 0 && !passed ? index : -1;
 }
 
 /** The workflow step a Continue's done starts: the run's `start` cursor (hearsay-tools/squawk#1621),

@@ -217,12 +217,12 @@ a session that started last. A Continue appends its step, so the array order is 
 | latest session owned by a saved `continue-N` without `continuesStepId` | Continue | the user, a parent, recovery | runs as the chain's last agent step, as before; the new `continue-N` records no `continuesStepId` |
 | a `resume` cursor on failed step `implement` | Continue | the user, a parent, recovery | runs as `implement` and records it |
 | `continue-1` of `implement` called done, then `review` ran with its own session | Continue | the user, a parent, recovery | runs as `review`, whose session started last |
-| `continue-N` of `implement` called done after the run went past `implement` (`implement` done, or a later step started) | the Continue's done | the agent | settles the run; the rest of the chain does not run again |
+| a `continue-N` with `continuesStepId: implement` | the Continue's done | the agent | the `workflowCursor` and the step statuses decide the next step, as before; `continuesStepId` sets no position, so a recovered failed attempt stays failed and the chain does not run again |
 
 Only `workflows/continuation-admission.ts` writes `continuesStepId`, once, when it admits the
-Continue (ADR 0064). `delegation/provision-intent-catalog.test.ts`,
-`workflows/continuation-tools.test.ts` and `workflows/run/launch-read-resolver.test.ts` cover
-every row except the `resume`-cursor row.
+Continue (ADR 0064). It names the step a Continue runs as, never the workflow position.
+`delegation/provision-intent-catalog.test.ts`, `workflows/continuation-tools.test.ts` and
+`workflows/run/launch-read-resolver.test.ts` cover every row except the `resume`-cursor row.
 
 ### Governed delegation controls (D1)
 
