@@ -75,8 +75,8 @@ describe('claude typed forked command', () => {
     expect(fork).toEqual({ kind: 'tool', id: FORK_ID, name: 'Skill', toolKind: 'task', title: '/fxfork', status: TOOL_STATUS.running });
   });
 
-  it('fails the fork when its turn fails', () => {
-    const lines = fixtureLines().map((line) => (line.type === 'result' ? { ...line, subtype: 'error_during_execution', is_error: true } : line));
+  it.each(['error_during_execution', 'error_max_turns'])('fails the fork when its turn ends with %s', (subtype) => {
+    const lines = fixtureLines().map((line) => (line.type === 'result' ? { ...line, subtype, is_error: true } : line));
     const completed = runTurn(lines).events.filter((event) => event.type === 'item.completed');
     expect(itemsOf(completed).find((item) => item.toolKind === 'task')?.status).toBe(TOOL_STATUS.failed);
   });

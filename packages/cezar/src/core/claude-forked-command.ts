@@ -76,7 +76,8 @@ function startForkedCommandItem(wireId: string, state: ForkedCommandState, taskI
   return item;
 }
 
-/** The turn's end settles every fork it opened: failed when the turn failed, else completed. */
+/** The turn's end settles every fork it opened: failed when the turn did not end normally
+ *  (an error or the turn cap), else completed. */
 export function completeForkedCommands(state: ForkedCommandState, turnFailed: boolean): UiEvent[] {
   const status = turnFailed ? 'failed' : 'completed';
   return [...state.openForkedCommands.values()].map((open) => ({ type: 'item.completed', item: { ...open, status } }));

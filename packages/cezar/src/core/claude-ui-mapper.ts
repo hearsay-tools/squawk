@@ -787,7 +787,7 @@ function mapResult(msg: Record<string, unknown>, state: ClaudeUiMapperState): Cl
   itemSeq = fallback.itemSeq;
   let turnSeq = state.turnSeq;
   const turnId = state.currentTurnId ?? `turn_${++turnSeq}`;
-  events.push(...completeForkedCommands(state, resultStopReason(msg) === 'error'));
+  events.push(...completeForkedCommands(state, resultStopReason(msg) !== 'end_turn'));
   events.push(...completeTurnEvents(msg, turnId));
   return {
     events,
