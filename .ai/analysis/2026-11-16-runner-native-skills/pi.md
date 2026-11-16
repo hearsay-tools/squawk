@@ -50,7 +50,7 @@ the git root (project), plus `skills` paths in settings, pi packages, `--skill <
 | # | Verdict | Evidence |
 |---|---|---|
 | L1 | **Yes.** RPC `get_commands` lists skills with no model call. TESTED | Request: `{"id":"c","type":"get_commands"}` to `pi --mode rpc <Squawk flags> --no-session`, cwd `<S>`. Response `data.commands[]`, 34 entries: 32 with `source:"skill"`, 2 with `source:"extension"` (`llama`, `mcp`). Entry shape: `{"name":"skill:probe-alpha","description":"...","source":"skill","sourceInfo":{"path":"<S>/.pi/skills/probe-alpha/SKILL.md","source":"extension:pi-project-skills.mjs","scope":"temporary","origin":"top-level","baseDir":"..."}}`. Stream held only `response` records, no `agent_start`. Wall time for spawn + `get_state` + `get_commands` + exit: 0.5 to 1.1 s over 10 runs at load 25 to 37. |
-| L1 scopes | Project, user and extension/package skills all listed. TESTED | User: `["skill:notes","user","auto",".../.agents/skills/notes/SKILL.md"]` (6). Project through Squawk's extension: scope `temporary`, source `extension:pi-project-skills.mjs` (3). Skills another extension offers (the host's toolkit-dev package): `["skill:dev-flow","temporary","extension:apptension-dev",".../plugins/apptension-sdlc/skills/dev-flow/SKILL.md"]` (23), bare names. With `--approve` in place of the extension the project ones read `scope:"project", source:"auto"`. |
+| L1 scopes | Project, user and extension/package skills all listed. TESTED | User: `["skill:<user-skill>","user","auto",".../.agents/skills/<user-skill>/SKILL.md"]` (6). Project through Squawk's extension: scope `temporary`, source `extension:pi-project-skills.mjs` (3). Skills another extension offers (a package installed on the host): `["skill:<skill>","temporary","extension:<package>",".../plugins/<plugin>/skills/<skill>/SKILL.md"]` (23), bare names. With `--approve` in place of the extension the project ones read `scope:"project", source:"auto"`. |
 | L1 session | Needs a pi process, not a saved session. TESTED | Ran with `--no-session`. There is no `pi` subcommand or flag that prints skills: `pi list` is "List installed packages from user and project settings", `pi config` is a TUI (DOCS: `pi --help`, `pi list --help`). |
 | L1 trust | Without Squawk's extension and without `--approve`, project skills are absent. TESTED | `pi --mode rpc --no-session --model ...` in `<S>`: 29 skills, no `probe-*`. Same with `--approve`: 32, the three `probe-*` present. DOCS: `docs/security.md` "Print, JSON, and RPC modes cannot show the built-in trust prompt". |
 | L2 cwd | List depends on cwd. TESTED | cwd `<S>/sub`: `probe-alpha` now from `.agents/skills` (ancestor walk), `probe-epsilon`; `.pi/skills/probe-gamma` gone, because `.pi/skills` is read from cwd only. Same result with Squawk's extension and with `--approve`. cwd outside the repo: no `probe-*`. |
@@ -82,7 +82,7 @@ the git root (project), plus `skills` paths in settings, pi packages, `--skill <
 | `disable-model-invocation: true` | Listed by `get_commands`. TESTED. Left out of the system prompt, `/skill:` still works (DOCS: `skills.js` `formatSkillsForPrompt`, `docs/skills.md`); NOT TESTED with a turn. |
 | Same name in `.pi/skills` and `.agents/skills` | One entry; `.pi/skills` wins, with Squawk's extension and with `--approve`. TESTED (list path, and T1 returned ALPHA-b7f542f2, not ALPHA-0dd16b14). The loser is not reported over RPC. DOCS: "Name collisions keep the first discovered skill and produce a warning." |
 | User skill and project skill with one name | NOT TESTED (user homes are read-only here). DOCS: comment in `pi-project-skills.mjs`: under the extension the user's copy wins; in a trusted session the project's wins. |
-| Plugin-qualified names | pi has none. Package and extension skills get bare names (TESTED: `skill:dev-flow` from `plugins/apptension-sdlc/...`); `sourceInfo` carries the origin (`source`, `scope`, `origin`, `baseDir`). A `:` in a name is accepted as plain text (`skill:Probe_Bad:X`). |
+| Plugin-qualified names | pi has none. Package and extension skills get bare names (TESTED: `skill:<skill>` from `plugins/<plugin>/...`); `sourceInfo` carries the origin (`source`, `scope`, `origin`, `baseDir`). A `:` in a name is accepted as plain text (`skill:Probe_Bad:X`). |
 
 ### Flags that change the list (no model call)
 
@@ -90,7 +90,7 @@ the git root (project), plus `skills` paths in settings, pi packages, `--skill <
 |---|---|
 | `--skill <dir or file>` | Adds a skill for this process only, without trust: `["skill:probe-flag","temporary","local",".../extra/probe-flag/SKILL.md"]`. TESTED |
 | `--approve` | Loads project `.pi/skills` and `.agents/skills` natively with `scope:"project"`. TESTED |
-| `--no-skills` with Squawk's flags | The 6 user skills disappear; skills offered by extensions stay (Squawk's project skills and the 23 toolkit-dev ones). TESTED |
+| `--no-skills` with Squawk's flags | The 6 user skills disappear; skills offered by extensions stay (Squawk's project skills and the 23 package ones). TESTED |
 
 ### `-p` (print) mode
 
@@ -118,7 +118,7 @@ and assistant `EPSILON-4a0f3082: printed`.
 - pi emits a `message_end` with `role:"system"` and a `sections` object at the start of a run (all sections on a
   new session, only changed ones later), so the skill list the model was given is visible in the stream.
 - `--no-skills` does not remove skills that extensions offer.
-- The host's toolkit-dev skills arrive through an extension (`extension:apptension-dev`) and are listed too, so the
+- The host's package skills arrive through an extension (`extension:<package>`) and are listed too, so the
   list is not limited to skill folders.
 
 ## Not tested, and why

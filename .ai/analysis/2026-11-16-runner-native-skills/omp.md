@@ -5,8 +5,8 @@ Bun executable; "source" below means the JavaScript read out of that binary with
 its `// packages/...` comments). Default account, no `OMP_PROFILE`. The user config has no `skills.*` and no
 `disabledExtensions` key, so omp's defaults applied.
 
-Model: `cliproxy/gpt-5.6-luna` (`--model`), the smallest tier of the default account's subscription proxy. The
-account's own default model was `cliproxy/gpt-6.1-sol`. 12 model turns used, 0 timeouts. The model followed
+Model: `<provider>/gpt-5.6-luna` (`--model`), the smallest tier the default account offers. The
+account's own default model was `<provider>/gpt-6.1-sol`. 12 model turns used, 0 timeouts. The model followed
 "reply with exactly this token" in every turn, so the answers and the event stream agree.
 
 Marks: **TESTED** (ran it), **DOCS** (read in the 18.13.1 source or `--help`), **NOT TESTED**.
@@ -55,7 +55,7 @@ the child env.
 {"skills":[{"name":"probe-alpha","description":"Probe fixture skill probe-alpha for a runner behaviour test.",
   "filePath":"/tmp/skill-probe-omp.uOEuF6/.omp/skills/probe-alpha/SKILL.md",
   "baseDir":"/tmp/skill-probe-omp.uOEuF6/.omp/skills/probe-alpha","source":"native:project","hide":false}, …],
- "warnings":[{"skillPath":"","message":"… Skipping skill \"dev-flow\": unexpected frontmatter field \"requires\""}, …]}
+ "warnings":[{"skillPath":"","message":"… Skipping skill \"<skill>\": unexpected frontmatter field \"requires\""}, …]}
 ```
 
 - Keys per skill: `name`, `description`, `filePath`, `baseDir`, `source`, `hide`. `source` is
@@ -198,7 +198,7 @@ In the resumed process, after T7, I created `.claude/skills/probe-late/SKILL.md`
   `name collision: … available as "claude/probe-dup"` appears only in `omp skill list --json`. TESTED for the
   list. Trigger of a namespaced name: DOCS only (the parser accepts one `/` in the name).
 - Plugin skills use bare names (`code-review`, `plan-issue`), not `plugin:skill`. Four cached versions of one
-  plugin gave `squeal`, `squeal/squeal`, `squeal/squeal~2`, `squeal/squeal~3`. TESTED for the list.
+  plugin gave `<name>`, `<plugin>/<name>`, `<plugin>/<name>~2`, `<plugin>/<name>~3`. TESTED for the list.
 
 ## Surprises
 
@@ -232,7 +232,7 @@ In the resumed process, after T7, I created `.claude/skills/probe-late/SKILL.md`
 - Reference read under a narrowed `--tools` list without `read`: turn budget.
 - `--plugin-dir` (hidden flag) and `omp skill list` with a config overlay: not needed for the two questions.
 - Squawk's own handling of the `skill-prompt` frame (v1/v2 events, held-input release): outside a runner probe.
-- Other models: every turn used `cliproxy/gpt-5.6-luna`.
+- Other models: every turn used `<provider>/gpt-5.6-luna`.
 
 ## Leftovers
 
@@ -241,7 +241,7 @@ the brief; not removed). Nothing else was written outside `/tmp`.
 
 ## Open checks, round 2 (2026-11-16)
 
-omp 18.13.1, same transport as round 1. 2 model turns used (`cliproxy/gpt-5.6-luna`), both for Check B.
+omp 18.13.1, same transport as round 1. 2 model turns used (`<provider>/gpt-5.6-luna`), both for Check B.
 Scratch root `/tmp/skill-probe-omp2.<rand>` with `repo/` (git, 3 project skills) and `home/` (scratch omp
 root).
 
@@ -308,7 +308,7 @@ Command for each row: `omp skill list --json`, counted with
 
 ### Check B: Squawk's omp adapter and UI mapper on a skill-triggered turn
 
-**Recording (2 model turns, TESTED).** `omp --mode rpc --model cliproxy/gpt-5.6-luna`, Squawk's four startup
+**Recording (2 model turns, TESTED).** `omp --mode rpc --model <provider>/gpt-5.6-luna`, Squawk's four startup
 commands with Squawk's ids, then `prompt` `cezar-prompt-1` = `/skill:probe-alpha` and, after
 `session_settled`, `prompt` `cezar-prompt-2` = `/skill:probe-gamma second turn`. Raw stdout, both turns the
 same shape (31 `message_update` lines and the startup frames left out, long values cut):

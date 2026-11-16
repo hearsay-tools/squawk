@@ -126,8 +126,9 @@ for a slash opening; this design sends it again.
 
 ### A `/name` typed by a human
 
-Squawk no longer replaces a leading `/name` with a skill body. See decision D3 for what it does
-with it.
+Squawk no longer replaces a leading `/name` with a skill body. When the name is in the runner's
+list, Squawk sends that runner's trigger (D3). During a running turn it holds such a message
+until the turn ends, except on pi (D6).
 
 ### The cockpit
 
@@ -160,17 +161,17 @@ with it.
 Saved data still opens: a `config.json` that holds `skillsRepos` and a `ui-state.json` that holds
 `disabledTeamSkills` load with those keys ignored. Nothing else is kept for compatibility.
 
-## Decisions for the owner
+## Product decisions (owner, 2026-11-16)
 
-| # | Question | Options | Proposed |
-| --- | --- | --- | --- |
-| D1 | A second account of a runner has another home, so it can have other skills. ADR 0023 rejected this. Tested: Claude's list follows the home completely. Codex and pi lose their plugins and packages but keep `~/.agents/skills`. omp keeps `~/.agents/skills` and the Claude plugin cache. OpenCode has no account home in Squawk | (a) accept; (b) keep one shared library, which needs Squawk to inject it | (a). It is what "use the runner's setup" means. A skill in `~/.agents/skills` reaches every account of every runner but Claude |
-| D2 | Withdrawn. It asked how to list Cursor's skills; Cursor leaves Squawk (hearsay-tools/squawk#3715) | | |
-| D3 | A human types `/name` at the start of a message. | (a) pass the text unchanged: it works on Claude only; (b) when `name` is in the runner's list, send that runner's trigger; otherwise pass the text unchanged | (b). One way to type a skill on every runner, and the runner's own slash commands still pass through |
-| D4 | A project skill folder that git ignores does not exist in a task worktree. | (a) Squawk does nothing; step open fails with "not in this worktree" and names the folder; (b) Squawk links ignored skill folders from the main checkout into each new worktree | (a). A project tracks its skills, or links them in `worktreeSetup` |
-| D5 | Skills in `.ai/skills/` (this repository has five) are read by no runner. | (a) drop the folders as sources; this repository moves its skills to a tracked native folder in a separate change; (b) keep `.ai/skills` as a Squawk-only source with the inline body | (a). `AGENTS.md` already names these skills by file path, which needs no skill mechanism |
-| D6 | A trigger in a message sent during a running turn. Tested: pi expands it. Codex drops it. OpenCode steers it into the running turn and loses the first result. Claude and omp: not tested | (a) send as text and show a note; (b) hold the message until the turn ends, then open the next turn with the trigger | (b) on every runner but pi. Codex and OpenCode both expand a trigger that opens the next turn, and (a) sends text the model may not act on |
-| D7 | The built-in "create automation" skill and the `interactive: true` frontmatter hint are Squawk's own. | (a) drop both: the automations part of the system prompt stays; (b) keep them as Squawk prompt presets, outside the skill list; (c) replace the skill with a tool in Squawk's own MCP server, as the owner asked on 2026-11-16 | (c). Every adapter honors the Squawk tools. `cezar_schedule_task` already wraps the same automation service for one-time schedules. The tool can enforce "created paused" and "preview first", which a playbook only asks for. The picker entry and the `interactive` hint go away |
+| # | Question | Decision |
+| --- | --- | --- |
+| D1 | A second account of a runner has another home, so it can have other skills. ADR 0023 rejected this | Accepted. Skills follow the step's account home. Tested: Claude's list follows the home completely. Codex and pi lose their plugins and packages but keep `~/.agents/skills`. omp keeps `~/.agents/skills` and the Claude plugin cache. OpenCode has no account home in Squawk |
+| D2 | Withdrawn. It asked how to list Cursor's skills; Cursor leaves Squawk (hearsay-tools/squawk#3715) | |
+| D3 | A human types `/name` at the start of a message | When `name` is in the runner's list, Squawk sends that runner's trigger. Otherwise it passes the text unchanged, so the runner's own slash commands still work |
+| D4 | A project skill folder that git ignores does not exist in a task worktree | Squawk does nothing. Step open fails with "not in this worktree" and names the folder. A project tracks its skills, or links them in `worktreeSetup` |
+| D5 | Skills in `.ai/skills/` (this repository has five) are read by no runner | The folders stop being sources. This repository moves its skills to a tracked native folder in a separate change. `AGENTS.md` already names them by file path |
+| D6 | A trigger in a message sent during a running turn. Tested: pi expands it. Codex drops it. OpenCode steers it into the running turn and loses the first result. Claude and omp: not tested | On every runner but pi, Squawk holds the message until the turn ends, then opens the next turn with the trigger |
+| D7 | The built-in "create automation" skill and the `interactive: true` frontmatter hint are Squawk's own | A tool in Squawk's own MCP server replaces the skill. Every adapter honors the Squawk tools, and `cezar_schedule_task` already wraps the same automation service for one-time schedules. The tool enforces "created paused" and "preview first". The picker entry and the `interactive` hint go away |
 
 ## Checks closed in round 2
 
@@ -194,7 +195,7 @@ Saved data still opens: a `config.json` that holds `skillsRepos` and a `ui-state
 
 ## Plan
 
-Slices in order. Each is one pull request. A `-plan.md` follows when the decisions are taken.
+Slices in order. Each is one pull request. A `-plan.md` follows before slice 1.
 Slice 1 starts after hearsay-tools/squawk#3715 merges, so that no slice writes Cursor code that
 the removal then deletes.
 
@@ -205,14 +206,16 @@ the removal then deletes.
 3. **Switch.** Step open, Continue, live input, worker `--skill`, the planner and auto-naming
    read the runner list and send the trigger. The cockpit pages and pickers move to the
    per-runner list. This slice is the breaking change (`!` in the title).
-4. **Removal.** Delete the code in [What is removed](#what-is-removed), rewrite the area doc,
+4. **Automation tool.** The MCP tool that replaces the built-in skill (D7). It can ship at any
+   point before slice 5.
+5. **Removal.** Delete the code in [What is removed](#what-is-removed), rewrite the area doc,
    add the ADR, and clean up as the case tables say.
 
 ## Case tables
 
 ### Worktree cases
 
-Slice 4 removes files that an older Squawk installed in task worktrees. It calls
+Slice 5 removes files that an older Squawk installed in task worktrees. It calls
 `removeProvisionedSkills` (`skills-provision.ts`), which removes only entries the worktree
 manifest records and that are unchanged.
 

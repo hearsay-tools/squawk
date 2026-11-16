@@ -56,7 +56,7 @@ Route B, control request `get_skills_dialog` (TESTED; the subtype name comes fro
 stdin:  {"type":"control_request","request_id":"r1","request":{"subtype":"get_skills_dialog"}}
 stdout: {"type":"control_response","response":{"subtype":"success","request_id":"r1","response":{"skills":[
   {"name":"probe-alpha","display_name":"probe-alpha","description":"First fixture skill for a transport check.","source":"project","tokens":18,"state":"on","advertised":true,"handles":{}},
-  {"name":"squeal:setup","display_name":"squeal:setup","description":"…","source":"plugin","tokens":83,"state":"on","locked_by":"plugin","advertised":true,"handles":{"aliases":["setup"]}}, …]}}}
+  {"name":"<plugin-b>:setup","display_name":"<plugin-b>:setup","description":"…","source":"plugin","tokens":83,"state":"on","locked_by":"plugin","advertised":true,"handles":{"aliases":["setup"]}}, …]}}}
 timing: response at 0.4–0.5 s after spawn; no user line needed; no session file written
 ```
 - Fields: `name, display_name, description, source (project|user|plugin), tokens, state, advertised, handles.aliases, locked_by`. No path.
@@ -171,7 +171,7 @@ The model resolved `references/extra.md` against the "Base directory for this sk
 9. Reads inside cwd are allowed without `Read` in the allow list; only reads outside cwd depend on it.
 10. A skill folder is hot-loaded mid-session only when `.claude/skills/` already existed at start.
 11. User hooks fire on list probes (`SessionStart`) and on every turn (`UserPromptSubmit`, `Stop`), so a list probe is not side-effect free on a host with hooks. `--safe-mode` removes the hooks and the skills together.
-12. Two installed plugins here both list the alias `setup` (`apptension-sdlc:setup`, `squeal:setup`). Which one `/setup` runs was not tested.
+12. Two installed plugins here both list the alias `setup` (`<plugin-a>:setup`, `<plugin-b>:setup`). Which one `/setup` runs was not tested.
 
 ## Not tested, and why
 
