@@ -1,6 +1,7 @@
 import { productCommand } from '@/lib/product-name'
 import { runTitle } from '@/lib/task-groups'
 import type { ApiRun, RelatedRunTitle, Runner, RunSummary } from '@open-mercato/cezar-api-client'
+import { RUNNER_COCKPIT_FACTS, runnerDisplayName } from '@open-mercato/cezar-api-client/contract/runner-facts'
 
 import type { ThreadConversationMessage } from './thread-state'
 
@@ -122,8 +123,8 @@ export function conversationDeliveryExplanation(
 ): string | undefined {
   if (message.instruction !== undefined) return message.instruction
   if (message.delivery === 'queued') {
-    const timing = recipientBackend === 'cursor'
-      ? 'Queued for delivery. If Cursor is in a turn, delivery waits for that turn to end.'
+    const timing = recipientBackend && RUNNER_COCKPIT_FACTS[recipientBackend].inputMode === 'boundary'
+      ? `Queued for delivery. If ${runnerDisplayName(recipientBackend)} is in a turn, delivery waits for that turn to end.`
       : recipientBackend
         ? 'Queued for delivery. This agent can receive messages during its current turn.'
         : 'Queued for delivery. Timing depends on the recipient agent.'

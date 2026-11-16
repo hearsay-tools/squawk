@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { runnerSchema } from '@open-mercato/cezar-contract/runner';
+import { RUNNER_COCKPIT_FACTS } from '@open-mercato/cezar-contract/runner-facts';
 import { inputDeliveryOf, RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { exemptionFor } from './harness-parity-core.testkit.ts';
 import { createRunner } from './runner-factory.ts';
@@ -26,16 +28,18 @@ describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
     expect(runnersWhere(facts => facts.nativeSubagents === 'reported')).toEqual(['claude', 'codex']);
     expect(runnersWhere(facts => facts.nativeTimerTool !== null)).toEqual(['claude']);
     expect(runnersWhere(facts => facts.sessionIdSource === 'launch')).toEqual(['claude', 'pi']);
+    expect(runnersWhere(facts => facts.turnStart === 'on-write')).toEqual(['claude', 'pi', 'omp']);
   });
 
   // The turn-path facts (inputDelivery, systemPromptOnResume) and the narrow facts, including
   // sessionIdSource (workflows/run/launch-read-resolver.ts), are declared on every row.
   it('declares every fact on every runner row', () => {
-    const keys = ['claudeModelAliases', 'costReport', 'inputDelivery', 'nativeAsk', 'nativeSubagents', 'nativeTimerTool', 'sessionIdSource', 'systemPromptOnResume'];
+    const keys = ['childWork', 'claudeModelAliases', 'costReport', 'hookEvents', 'humanPromptHold', 'inputDelivery', 'nativeAsk', 'nativePermission', 'nativeSubagents', 'nativeTimerTool', 'sessionIdSource', 'systemPromptOnResume', 'transport', 'turnStart'];
     for (const id of RUNNER_IDS) {
       expect(Object.keys(RUNNER_FACTS[id]).sort(), id).toEqual(keys);
       expect(['launch', 'native'], id).toContain(RUNNER_FACTS[id].sessionIdSource);
       expect(['resent', 'in-thread'], id).toContain(RUNNER_FACTS[id].systemPromptOnResume);
+      expect(['on-write', 'on-wire'], id).toContain(RUNNER_FACTS[id].turnStart);
     }
   });
 
@@ -60,5 +64,16 @@ describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
   it.each(['S40', 'S41'])('exempts a runner from %s exactly when its delivery is boundary', criterion => {
     expect(RUNNER_IDS.filter(runner => exemptionFor(criterion, runner) !== undefined))
       .toEqual(RUNNER_IDS.filter(runner => RUNNER_FACTS[runner].inputDelivery.mode === 'boundary'));
+  });
+});
+
+describe('cockpit runner facts (hearsay-tools/squawk#3642)', () => {
+  it('lists the runners of RUNNER_IDS, in the same order, in the contract roster and the cockpit table', () => {
+    expect(runnerSchema.options).toEqual([...RUNNER_IDS]);
+    expect(Object.keys(RUNNER_COCKPIT_FACTS)).toEqual([...RUNNER_IDS]);
+  });
+
+  it('states the input mode each runner declares in its wire facts', () => {
+    for (const id of RUNNER_IDS) expect(RUNNER_COCKPIT_FACTS[id].inputMode, id).toBe(RUNNER_FACTS[id].inputDelivery.mode);
   });
 });

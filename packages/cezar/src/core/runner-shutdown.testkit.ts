@@ -49,6 +49,11 @@ import { createRunner } from './runner-factory.js';
 import { HARNESS_ADAPTERS, SHUTDOWN_CRITERIA, promptFor } from './harness-parity.testkit.js';
 import { killFromPidFile, readPid, requirePid } from '../pid-file.testkit.js';
 
+/** The runners whose EOF cleanup cells (the `eof-` families) run. */
+export const EOF_CLEANUP_RUNNERS: readonly RunnerId[] = RUNNER_IDS.filter(runner => runner === 'claude' || runner === 'codex' || runner === 'pi');
+/** The runners whose cell reaps a live child after stdout ends cleanly. */
+export const CLEAN_EOF_REAP_RUNNERS: readonly RunnerId[] = RUNNER_IDS.filter(runner => runner === 'claude' || runner === 'pi');
+
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 /** A zombie has exited; only its reaper's wait remains. */
@@ -381,7 +386,7 @@ process.on = function(event, listener) {
 
 function eofEvidence(backend: RunnerId, it: typeof registerTest = registerTest): void {
 
-    if (backend === 'pi' || backend === 'claude') {
+    if (CLEAN_EOF_REAP_RUNNERS.includes(backend)) {
       it(`${backend} reaps a live child after stdout ends cleanly`, async () => {
         await withChild(backend, async (session, child, _events, settled) => {
           child.kill('SIGSTOP');
@@ -501,7 +506,7 @@ function eofDeadline(backend: RunnerId, it: typeof registerTest = registerTest):
 }
 
 export const shutdownCells = { 'outside-signal': outsideSignalCells, 'end-escalation': endEscalationCells, 'process-groups': processGroups, 'exit-reaping': exitReaping, 'signal-readiness': signalReadiness, 'eof-evidence': eofEvidence, 'eof-intent': eofIntent, 'eof-deadline': eofDeadline };
-export const SHUTDOWN_GROUPS = Object.fromEntries(Object.keys(shutdownCells).map(family => [family, (family.startsWith('eof-') ? RUNNER_IDS.filter(runner => runner === 'claude' || runner === 'codex' || runner === 'pi') : RUNNER_IDS).map(runner => ({ runner, family: family as keyof typeof shutdownCells }))]));
+export const SHUTDOWN_GROUPS = Object.fromEntries(Object.keys(shutdownCells).map(family => [family, (family.startsWith('eof-') ? EOF_CLEANUP_RUNNERS : RUNNER_IDS).map(runner => ({ runner, family: family as keyof typeof shutdownCells }))]));
 export function registerShutdownGroup(group: keyof typeof shutdownCells): void {
   describe('runner shutdown parity (hearsay-tools/cezarion#843)', () => {
     for (const row of SHUTDOWN_GROUPS[group]!) shutdownCells[row.family](row.runner);

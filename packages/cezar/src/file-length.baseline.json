@@ -3,11 +3,11 @@
   "limit": 1000,
   "files": {
     "packages/cezar/src/core/codex-app-server-runner.ts": 1260,
-    "packages/cezar/src/core/opencode-server-runner.ts": 1717,
+    "packages/cezar/src/core/opencode-server-runner.ts": 1700,
     "packages/cezar/src/runs/store.ts": 3387,
     "packages/cezar/src/server-install/platforms/ubuntu-vps.ts": 1005,
     "packages/cezar/src/server/forge/github.ts": 3214,
-    "packages/cezar/src/server/server.ts": 4990,
+    "packages/cezar/src/server/server.ts": 4952,
     "packages/web/e2e/agent-browser.ts": 1233,
     "packages/web/src/api/client.ts": 2168,
     "packages/web/src/api/queries.ts": 2108,

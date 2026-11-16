@@ -554,6 +554,10 @@ describe('imageMimeType — the raw-serving allowlist (R5 Step 1.6)', () => {
     expect(imageMimeType('.png')).toBeNull(); // a dotfile named ".png" is not an image
     expect(imageMimeType('archive.png.zip')).toBeNull();
   });
+
+  it('answers null for an extension that names an Object.prototype member (hearsay-tools/squawk#2890)', () => {
+    for (const ext of ['toString', 'constructor', '__proto__']) expect(imageMimeType(`file.${ext}`)).toBeNull();
+  });
 });
 
 describe('isOsOpenableImage — the OS-launcher allowlist (#365)', () => {

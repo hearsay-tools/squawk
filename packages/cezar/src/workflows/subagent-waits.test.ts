@@ -488,6 +488,92 @@ describe('the subagent wait deadline (hearsay-tools/cezarion#2431)', () => {
     append.mockRestore();
   });
 
+  // hearsay-tools/squawk#2701: a native ask holds its turn open, so no turn end opens a subagent
+  // wait beside it; the hold for its children ends at the same deadline.
+  const nativeAsk = (runId: string) => emitUi(runId, { type: 'ask.requested', requestId: 'native-ask-1',
+    questions: [{ header: 'Library', question: 'Which test library?', options: [{ label: 'Vitest' }, { label: 'Node test' }] }] });
+
+  it('a native ask beside running children keeps the session and its slot only until the subagent deadline', async () => {
+    const { run } = await heldParent();
+    startChild(run.id, 'toolu_bg_01');
+    nativeAsk(run.id);
+    await until(() => store.getRun(run.id)?.status === RUN_STATUS.waiting);
+    expect(semaphore.busy()).toBe(1);
+    expect(idleClock.pending).toBe(0);
+    // bound: the 1-second subagent deadline of this fixture ends the hold.
+    await until(() => semaphore.busy() === 0);
+    expect(idleClock.pending).toBe(1);
+    expect(manager.isActive(run.id)).toBe(true);
+    expect(store.getRun(run.id)?.status).toBe(RUN_STATUS.waiting);
+  });
+
+  it('a child event moves a native ask\'s hold deadline, and the replaced deadline does nothing', async () => {
+    const hold = observationClock(() => /SubagentWaits\.boundNativeAskHold/.test(new Error().stack ?? ''));
+    try {
+      const { run } = await heldParent();
+      startChild(run.id, 'toolu_bg_01');
+      nativeAsk(run.id);
+      await until(() => store.getRun(run.id)?.status === RUN_STATUS.waiting);
+      expect(hold.pending).toBe(1);
+      startChild(run.id, 'toolu_bg_02');
+      expect([hold.captured, hold.pending]).toEqual([2, 1]);
+      hold.fire(0);
+      expect(semaphore.busy()).toBe(1);
+      hold.fire(1);
+      expect(semaphore.busy()).toBe(0);
+      expect(idleClock.pending).toBe(1);
+    } finally { hold.restore(); }
+  });
+
+  it('a running child\'s progress moves a native ask\'s hold deadline', async () => {
+    const hold = observationClock(() => /SubagentWaits\.boundNativeAskHold/.test(new Error().stack ?? ''));
+    try {
+      const { run } = await heldParent();
+      startChild(run.id, 'toolu_bg_01');
+      nativeAsk(run.id);
+      await until(() => store.getRun(run.id)?.status === RUN_STATUS.waiting);
+      expect([hold.captured, hold.pending]).toEqual([1, 1]);
+      emitUi(run.id, { type: 'item.updated', item: { ...child('toolu_bg_01', 'running'), title: 'Background research: reading files' } });
+      expect([hold.captured, hold.pending]).toEqual([2, 1]);
+      hold.fire(0);
+      expect(semaphore.busy()).toBe(1);
+      hold.fire(1);
+      expect(semaphore.busy()).toBe(0);
+    } finally { hold.restore(); }
+  });
+
+  it('a native ask answered, then a permission request in the same turn: the permission park stays, with no idle close', async () => {
+    const hold = observationClock(() => /SubagentWaits\.boundNativeAskHold/.test(new Error().stack ?? ''));
+    try {
+      const { run } = await heldParent();
+      startChild(run.id, 'toolu_bg_01');
+      nativeAsk(run.id);
+      await until(() => store.getRun(run.id)?.status === RUN_STATUS.waiting);
+      expect(hold.pending).toBe(1);
+      expect(manager.sendMessage(run.id, [{ type: 'text', text: 'Library: Vitest' }])).toBe(true);
+      await until(() => store.getRun(run.id)?.status === RUN_STATUS.running);
+      emitUi(run.id, { type: 'permission.requested', requestId: 'permission-1', title: 'Run command', options: [{ id: 'deny', label: 'Decline', kind: 'reject_once' }] });
+      await until(() => store.getRun(run.id)?.hasPendingPermission === true);
+      expect(hold.pending).toBe(0);
+      hold.fire(0);
+      endChild(run.id, 'toolu_bg_01');
+      expect(idleClock.pending).toBe(0);
+      expect(store.getRun(run.id)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
+      expect(sessions.get(run.id)?.open).toBe(true);
+    } finally { hold.restore(); }
+  });
+
+  it('a native ask beside running children gives the slot back when the last child ends', async () => {
+    const { run } = await heldParent();
+    startChild(run.id, 'toolu_bg_01');
+    nativeAsk(run.id);
+    await until(() => store.getRun(run.id)?.status === RUN_STATUS.waiting);
+    expect(semaphore.busy()).toBe(1);
+    endChild(run.id, 'toolu_bg_01');
+    expect(semaphore.busy()).toBe(0);
+    expect(idleClock.pending).toBe(1);
+  });
+
   it('the deadline wakes the parent and spends one wake', async () => {
     const { id, wait } = await parkedOnSubagents();
     await until(() => settledOf(id, wait.id)?.phase === WAIT_PHASE.delivered && store.getRun(id)?.status === RUN_STATUS.waiting);

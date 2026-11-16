@@ -29,7 +29,8 @@ coverage to a separate issue. Where the fix lives decides where its row runs
   scenario runner shows one value of each. Every other declared value names the
   unit tests that drive shared code with it, in `FACT_VALUE_TESTS`. A fix whose
   behavior depends on such a value adds or extends one of those unit tests.
-- **A new runner** declares its facts in `RUNNER_FACTS`. When it adds a value
+- **A new runner** declares its facts in `RUNNER_FACTS`, its cockpit facts in
+  `RUNNER_COCKPIT_FACTS` and its terminal command in `RUNNER_CLI`. When it adds a value
   that no runner declared before, it also adds that value's unit tests to
   `FACT_VALUE_TESTS`.
 
@@ -70,6 +71,15 @@ Three guards hold the rule:
    native subagents) does not run on every runner. A scenario is `shared` only when
    a seam contract row holds the runner's part of it on every runner, as S44 does
    for `provider-error-controlled`.
+
+A parity test selects the runners a row covers from their declared facts:
+`runnersWhere()` over `RUNNER_FACTS`, or `exemptWhere()` in
+`core/harness-parity-core.testkit.ts` for an exemption. A changed facts row then
+changes the expected result with no per-runner test edit. The
+`cez/parity-runner-subset` lint rule fails a parity file that lists two or more
+runner ids, but not all of them, by hand. A protocol quirk of one runner names
+that one runner. `core/runner-fact-exemptions.test.ts` swaps facts rows and checks
+that the exemptions follow (hearsay-tools/squawk#3642).
 
 A per-runner parity file loads only its own adapter. It picks its runner with
 `useRunners(onlyRunner(...))`. The testkits it reaches import a kit's `-core` file, never

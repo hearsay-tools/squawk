@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFailureControl } from '../../scripts/mock-failure-control.mjs';
 import { createDeliveryControl } from '../../scripts/mock-delivery-control.mjs';
 import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
+import { runnersWhere } from './runner-facts.ts';
 import { driveSeam, HARNESS_ADAPTERS, waitFor } from './harness-parity.testkit.ts';
 
 // These tests exercise the native mocks as test infrastructure: ignoring a configured
@@ -39,7 +40,7 @@ function expectSuccess(observation: Awaited<ReturnType<typeof run>>) {
   expect(observation.v1.some(event => event.type === 'turn-end')).toBe(true);
 }
 
-describe.each(['opencode', 'codex', 'omp', 'pi'] as const)('%s native failure steering', runner => {
+describe.each(runnersWhere(facts => facts.inputDelivery.acknowledgement === 'response'))('%s native failure steering', runner => {
   it.each([true, false])('preserves native steering and provider failure (failing: %s)', async failing => {
     const opening = 'deliver fixture result';
     const control = fixture({ mode: 'persistent', opening, failure: 'provider' });

@@ -13,7 +13,10 @@ Every runner emits two event streams together: v1 `AgentEvent` (§2) and v2 `UiE
 The types in `agent-runner.ts` and their doc comments are the contract: `AgentRunner`,
 `AgentSession`, `SessionOptions`, `AgentRunSpec`, `InputDelivery` and `SystemPromptOnResume`.
 `RUNNER_FACTS` in `core/runner-facts.ts` holds what each runner's wire can do, one row per
-runner id. Each runner's `*_SPEC_SUPPORT` constant, next to its class, says which
+runner id. `RUNNER_COCKPIT_FACTS` in `packages/contract/src/runner-facts.ts` holds what the
+cockpit and the server both read: the display name, the model catalog delivery, the effort
+levels, the model id scope and the input mode. `RUNNER_CLI` in `core/runner-cli.ts` holds how
+a terminal starts and resumes each runner's CLI. Each runner's `*_SPEC_SUPPORT` constant, next to its class, says which
 `AgentRunSpec` fields its wire honors.
 
 - `.ai/scripts/probe-steering.ts` probes the `inputDelivery` of a real CLI. It spends a paid
@@ -271,7 +274,9 @@ force, or force only in part. The item numbers are stable: code cites them.
 1. **Runner** — `core/<runner>-runner.ts` implements `AgentRunner` / `AgentSession`.
    Declare `specSupport` and the `RUNNER_FACTS` row from what the wire does, not from a
    similar runner. Probe mid-turn input live for `inputDelivery`. Probe a resumed session
-   for `systemPromptOnResume`; when you cannot, declare `resent`. Use
+   for `systemPromptOnResume`; when you cannot, declare `resent`. A wire that can raise a
+   permission request after its turn ended declares `nativePermission: 'after-turn'` and
+   implements `AgentSession.endWhenQuiet`; the late-permission parity cells check both. Use
    `prependSystemPrompt` when the backend has no system-prompt channel. For a fork of an
    existing runner's wire, read the fork's own protocol documents for the turn boundary,
    the session id and the tool flags before you copy code.

@@ -1,19 +1,11 @@
 import { controlLocation } from '@open-mercato/cezar-contract/control-locations';
+import { runnerDisplayName } from '@open-mercato/cezar-contract/runner-facts';
 import type {
   ProviderId,
   ProviderStatusResponse,
 } from '../core/provider-auth.ts';
 import type { RunRecord } from '../runs/store.ts';
 export { providersRequiredByWorkflow } from '@open-mercato/cezar-contract/workflows';
-
-const LABEL: Record<ProviderId, string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  opencode: 'OpenCode',
-  pi: 'pi',
-  cursor: 'Cursor',
-  omp: 'OMP',
-};
 
 export function providerForExistingRun(
   run: RunRecord,
@@ -30,10 +22,10 @@ export function unavailableProviderMessage(
   for (const provider of required) {
     const row = response.providers.find(({ provider: id }) => id === provider);
     if (row?.enabled === false) {
-      return `${LABEL[provider]} is disabled. Enable it in ${controlLocation('providers')}.`;
+      return `${runnerDisplayName(provider)} is disabled. Enable it in ${controlLocation('providers')}.`;
     }
     if (row?.status !== 'connected') {
-      return `${LABEL[provider]} credentials are unavailable. Authorize it in ${controlLocation('providers')}.`;
+      return `${runnerDisplayName(provider)} credentials are unavailable. Authorize it in ${controlLocation('providers')}.`;
     }
   }
   return null;

@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
 import type { RunnerId } from '../core/agent-runner.ts';
+import { runnerDisplayName } from '@open-mercato/cezar-contract/runner-facts';
 import { RunStore } from '../runs/store.ts';
 import { defaultWorkspaceConfig, type WorkspaceConfig } from '../workspace/config.ts';
 import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
@@ -64,7 +65,7 @@ const workspaceConfig = (disabledProviders: ProviderId[] = []) => {
 /**
  * `POST /api/v1/runs/:id/open-in` with a `cli:<runner>` target (#402 follow-up): picking the
  * agent CLI that matches the run's own runner resumes THIS run's session — the same
- * `resumeCommand` mapping the client mirrors in run-actions.ts. Every other case (a foreign
+ * `resumeCommand` mapping the run detail sends as `cliResumeCommand`. Every other case (a foreign
  * runner, or no session yet) launches the CLI fresh rather than guessing at a cross-backend
  * resume: a Claude session id means nothing to `codex resume`, so cross-runner picks and
  * sessionless runs both degrade to a plain launch instead of erroring.
@@ -170,7 +171,7 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
       const response = await openInCli(run.id);
       expect(response.status).toBe(409);
       expect(await response.json()).toEqual({
-        error: `the configured ${backend === 'omp' ? 'OMP' : 'Cursor'} executable cannot be used in a terminal command`,
+        error: `the configured ${runnerDisplayName(backend)} executable cannot be used in a terminal command`,
       });
       expect(mockOpenInTerminal).not.toHaveBeenCalled();
     } finally {
@@ -186,7 +187,7 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
     store.updateStep(run.id, 'work', { backend });
     const detail = await apiRequest(app(), `/api/v1/runs/${run.id}`);
     const body = await detail.json() as { cliResumeCommand?: string };
-    expect(body.cliResumeCommand).toBe(backend === 'cursor' ? expected : undefined);
+    expect(body.cliResumeCommand).toBe(expected);
     const response = await openInCli(run.id, { disabled: [runner] });
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ command: expected });

@@ -128,6 +128,8 @@ export const CONTROL_CRITERIA = [
   { id: 'R75', scenario: 'provider-error-controlled' },
   { id: 'R76', scenario: 'provider-error-controlled' },
   { id: 'R26', scenario: 'ask-resume' },
+  // hearsay-tools/squawk#1293: a question asked in its answer's continuation turn.
+  { id: 'R130', scenario: 'ask' },
   // workflows/ci-wait-refusal.test.ts: settled worker wake, private CI IPC, then delivery.
   { id: 'R27', scenario: 'hold' },
   // hearsay-tools/cezarion#1225: cancel/destroy releases the same-turn wait slot.

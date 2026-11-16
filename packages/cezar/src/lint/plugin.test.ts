@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { oxlintBin, oxlintProblems, staleEntries } from './run.ts';
 import { DESIGN_SAMPLES } from './design-guardian.testkit.ts';
 import { RULES } from './plugin.ts';
-import { declaredRunnerIds, runnerIdBranchesFile } from './runner-id-branch.ts';
+import { declaredRunnerIds } from './runner-id-branch.ts';
 import { repoRoot } from './source-rule.ts';
 
 /**
@@ -73,6 +73,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'mock-lifecycle-boundary': ['packages/cezar/scripts/mock-boundary.mjs', "function watchdogStall() {}\n"],
   'mock-scenario-boundary': ['packages/cezar/scripts/mock-scenario-violation.mjs', "import { play } from './mock-scenario.mjs';\nconst x = 'mock:hold';\n"],
   'native-mock-source': ['packages/cezar/test/b.test.ts', "const text = readFileSync(adapter.mockBin, 'utf8');\n"],
+  'parity-runner-subset': ['packages/cezar/src/core/runner-group-parity.test.ts', "const held = new Set(['opencode', 'cursor']);\n"],
   'raw-query-setter': ['packages/web/src/c.tsx', "import { useSearchParams } from 'react-router';\nconst [p, setP] = useSearchParams();\n"],
   'run-fact-reader': ['packages/web/src/lib/d.ts', "const held = attention.label === 'usage limit';\n"],
   'run-history-reader': ['packages/cezar/src/raw-history.ts', 'const text = readFileSync(historyPaths(dir, id).plain);\n'],
@@ -81,14 +82,6 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'runner-roster-literal': ['packages/web/src/lib/runner-roster.test.ts', `const all = [${ROSTER}];\n`],
   'undocumented-env-name': ['packages/cezar/scripts/e.mjs', "process.env.CEZ_NOT_DOCUMENTED_ANYWHERE = '1';\n"],
 };
-
-/** A one-count comparison site the runner-id-branch baseline still lists: the rule's listed-site fixture. */
-const LISTED_RUNNER_BRANCH = (() => {
-  const { entries } = JSON.parse(readFileSync(join(repoRoot, runnerIdBranchesFile), 'utf8')) as { entries: Array<{ file: string; site: string; count: number }> };
-  const entry = entries.find((e) => e.count === 1 && e.file.endsWith('.ts') && /^[\w.]+ [!=]== '[\w-]+'$/.test(e.site));
-  if (entry === undefined) throw new Error('runner-id-branch baseline lists no one-count comparison site to seed');
-  return entry;
-})();
 
 /** Each approved exception, by the rule it exercises. None may produce a finding. */
 const APPROVED: Record<string, string> = {
@@ -110,6 +103,9 @@ const APPROVED: Record<string, string> = {
   'packages/web/src/f.ts': "import type { RunRecord } from '@open-mercato/cezar-contract';\ntype T = import('@open-mercato/cezar-api-client').X;\n",
   // native-mock-source: pointing the runner at the real mock.
   'packages/cezar/test/g.test.ts': 'process.env[adapter.binEnv] = adapter.mockBin;\n',
+  // parity-runner-subset: a one-runner shard, a per-runner reason table, and a group outside a parity file.
+  'packages/cezar/src/workflows/waits-one-runner-parity.test.ts': "subagentCells(['pi']);\nconst reasons = [['pi', 'no child wire'], ['cursor', 'no child frame']];\n",
+  'packages/cezar/src/core/runner-group.test.ts': "for (const backend of ['codex', 'pi']) {}\n",
   // raw-query-setter: the baseline's reasoned exception, and a read-only tuple.
   'packages/web/src/routes/task-git/task-files.tsx': "import { useSearchParams } from 'react-router';\nconst [query, setQuery] = useSearchParams();\n",
   'packages/web/src/h.tsx': "import { useSearchParams } from 'react-router';\nconst [query] = useSearchParams();\n",
@@ -121,8 +117,7 @@ const APPROVED: Record<string, string> = {
   // runner-fact-combination: one fact per function, and a test outside its scope.
   'packages/cezar/src/workflows/run/fact-single.ts': "const a = runner => runner.systemPromptOnResume === 'resent';\nconst b = id => RUNNER_FACTS[id].nativeAsk;\n",
   'packages/cezar/src/workflows/run/fact-pair.test.ts': "it('x', () => { expect(runner.systemPromptOnResume).toBe(RUNNER_FACTS[id].nativeAsk); });\n",
-  // runner-id-branch: a listed site, the seam itself, a test and a message tag.
-  [LISTED_RUNNER_BRANCH.file]: `const listed = ${LISTED_RUNNER_BRANCH.site};\n`,
+  // runner-id-branch: the seam itself, a test and a message tag.
   'packages/cezar/src/core/runner-pick.ts': "const print = backend === 'cursor';\n",
   'packages/web/src/routes/runner-branch.test.ts': "const print = backend === 'cursor';\n",
   'packages/web/src/routes/frame.ts': "switch (message.t) { case 'cursor': break; }\n",
@@ -161,7 +156,7 @@ describe('the cez rules under oxlint', () => {
   });
 
   it.each(Object.entries(VIOLATIONS))('%s reports its seeded violation with file, line and rule', (rule, [file]) => {
-    expect(problems.filter((p) => p.startsWith(`${file}:`))).toEqual([expect.stringMatching(new RegExp(`^${file.replaceAll('.', '\\.')}:\\d+:\\d+ cez\\(${rule}\\): .+(?:hearsay-tools/cezarion#|open-mercato/cezar#|AGENTS\\.md)`))]);
+    expect(problems.filter((p) => p.startsWith(`${file}:`))).toEqual([expect.stringMatching(new RegExp(`^${file.replaceAll('.', '\\.')}:\\d+:\\d+ cez\\(${rule}\\): .+(?:hearsay-tools/(?:cezarion|squawk)#|open-mercato/cezar#|AGENTS\\.md)`))]);
   });
 
   it('passes every approved exception', () => {

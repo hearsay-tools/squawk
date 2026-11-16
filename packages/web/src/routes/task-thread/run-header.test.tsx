@@ -53,6 +53,8 @@ const run = (status: RunStatus, extra: Partial<ApiRun> = {}): ApiRun => ({
   outputTokens: 2_400,
   archived: false,
   steps: [step({ sessionId: 'sess-1' })],
+  // The server's take-over command for that session, as a detail read sends it.
+  cliResumeCommand: 'claude --resume sess-1',
   ...extra,
 })
 
@@ -782,7 +784,7 @@ describe('header layout, tabs, pill and resume hint', () => {
     stubFetch()
     const writeText = vi.fn(() => Promise.resolve())
     vi.stubGlobal('navigator', { clipboard: { writeText } })
-    renderHeader(run('failed', { runner: 'opencode', worktreePath: '/tmp/wt' }))
+    renderHeader(run('failed', { runner: 'opencode', worktreePath: '/tmp/wt', cliResumeCommand: 'opencode --session sess-1' }))
 
     fireEvent.click(actionBar().getByRole('menuitem', { name: 'Open in…' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Copy resume command' }))

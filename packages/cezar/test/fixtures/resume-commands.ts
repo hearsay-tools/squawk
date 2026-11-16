@@ -1,4 +1,4 @@
-/** Golden take-over commands shared by server and cockpit tests. */
+/** Golden take-over commands for the server's resume-command tests. */
 export const sessionId = 's1';
 export const commands = {
   claude: 'claude --resume s1',

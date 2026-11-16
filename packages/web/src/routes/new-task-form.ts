@@ -1,10 +1,10 @@
 import { runnerDiscoversModels } from '@open-mercato/cezar-api-client/contract/workspace'
+import { RUNNER_COCKPIT_FACTS, runnerModelListName } from '@open-mercato/cezar-api-client/contract/runner-facts'
 import type {
   BackendCheck,
   CreateRunInput,
   CreateRunResponse,
   AttachmentInput,
-  ModelDiscoveryRunner,
   Runner,
   RunnerModelCatalogResponse,
   Skill,
@@ -101,14 +101,16 @@ export const EFFORT_OPTIONS = [
 
 export type EffortOption = (typeof EFFORT_OPTIONS)[number]
 
-/** Auto plus advertised levels. Cursor has no generic fallback without model metadata. */
+/** Auto plus advertised levels. A `catalog-only` runner has no generic fallback without model
+ *  metadata, and reads levels only from its own catalog. */
 export function effortOptionsForModel(
   runner: Runner,
   model: string,
   catalog?: RunnerModelCatalogResponse,
 ): readonly EffortOption[] {
-  const fallback = runner === 'cursor' ? [EFFORT_OPTIONS[0]] : EFFORT_OPTIONS
-  const levels = runnerDiscoversModels(runner) && (runner !== 'cursor' || catalog?.runner === runner)
+  const catalogOnly = RUNNER_COCKPIT_FACTS[runner].effortLevels === 'catalog-only'
+  const fallback = catalogOnly ? [EFFORT_OPTIONS[0]] : EFFORT_OPTIONS
+  const levels = runnerDiscoversModels(runner) && (!catalogOnly || catalog?.runner === runner)
     ? catalog?.models.find((entry) => entry.id === model)?.effortLevels
     : undefined
   if (!levels?.length) return fallback
@@ -134,31 +136,30 @@ export function resolveEffort(
   return options.some((option) => option.value === value) ? value : ''
 }
 
-/** Runners that pick with the canonical `provider/model` convention and span every provider the
- *  host has configured, so an id they list is never EXCLUSIVE to them: pi, OMP and OpenCode
- *  can all serve `openai/gpt-5.1` from the same provider. Their discovered ids are therefore
- *  skipped when judging another runner's id.
- *
- *  This is the cockpit's half of the rule the server states structurally — a runner with no
- *  default provider cannot be contradicted, which is why `KNOWN_PRESETS_BY_RUNNER.pi` is empty
- *  in `packages/cezar/src/core/model-presets.ts`. Without it, treating a discovered pi id as
- *  "another runner's preset" would silently strip a pinned OpenCode model from the OpenCode picker. */
-const PROVIDER_SPANNING_RUNNERS: readonly Runner[] = ['opencode', 'pi', 'omp']
+/** Retired dated model suggestions, by the runner that served them. They are no presets any
+ *  more, but another runner still refuses them as known foreign ids. */
+const RETIRED_MODEL_IDS: Partial<Record<Runner, readonly string[]>> = {
+  claude: ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5'],
+}
 
 /** Keep recognized presets from another backend out of a runner's custom-model escape hatch
  * (#480).
- * Unknown ids remain valid custom models; only a known cross-runner mismatch is discarded. */
+ * Unknown ids remain valid custom models; only a known cross-runner mismatch is discarded.
+ *
+ * A runner whose `modelIdScope` is not `own` serves ids of every provider: no id conflicts with
+ * an `any-provider` runner, and a `provider-spanning` runner's ids belong to no runner alone, so
+ * they never conflict with another runner. This is the cockpit's half of the rule the server
+ * states structurally: a runner with no default provider cannot be contradicted, which is why
+ * `KNOWN_PRESETS_BY_RUNNER.pi` is empty in `packages/cezar/src/core/model-presets.ts`. */
 export function modelConflictsWithRunner(model: string, runner: Runner): boolean {
-  // Cursor legitimately serves bare IDs from multiple providers, even when discovery is unavailable.
-  if (runner === 'cursor') return false
+  if (RUNNER_COCKPIT_FACTS[runner].modelIdScope === 'any-provider') return false
   if (!model || MODELS_BY_RUNNER[runner].some((preset) => preset.id === model)) return false
-  // Preserve the retired dated suggestions' mismatch guard. Provider-qualified IDs stay free-form.
-  const legacyClaudeIds = ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5']
-  if (runner !== 'claude' && legacyClaudeIds.includes(model)) return true
+  const foreign = (other: string) => other !== runner
+  if (Object.entries(RETIRED_MODEL_IDS).some(([other, ids]) => foreign(other) && ids.includes(model))) return true
   return Object.entries(MODELS_BY_RUNNER).some(
     ([other, presets]) =>
-      other !== runner &&
-      !PROVIDER_SPANNING_RUNNERS.includes(other as Runner) &&
+      foreign(other) &&
+      RUNNER_COCKPIT_FACTS[other as Runner].modelIdScope === 'own' &&
       presets.some((preset) => preset.id !== '' && preset.id === model),
   )
 }
@@ -190,16 +191,6 @@ export function modelsForRunner(
   return base
 }
 
-/** How each discovery runner is named in the picker's status line. */
-const DISCOVERY_RUNNER_LABEL: Record<ModelDiscoveryRunner, string> = {
-  claude: 'Claude',
-  codex: 'Codex',
-  opencode: 'OpenCode',
-  pi: 'Pi',
-  cursor: 'Cursor',
-  omp: 'OMP',
-}
-
 export function modelCatalogStatus(
   runner: Runner,
   catalog: RunnerModelCatalogResponse | undefined,
@@ -207,7 +198,7 @@ export function modelCatalogStatus(
   fetching = false,
 ): string | undefined {
   if (!runnerDiscoversModels(runner)) return undefined
-  const name = DISCOVERY_RUNNER_LABEL[runner]
+  const name = runnerModelListName(runner)
   if (catalog?.stale) return `Using cached ${name} model list`
   if (failed || catalog?.source === 'unavailable') return `Latest ${name} models unavailable`
   if (fetching && !catalog) return `Loading ${name} models…`

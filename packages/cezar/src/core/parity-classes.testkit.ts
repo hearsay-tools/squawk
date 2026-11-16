@@ -98,7 +98,7 @@ export const PARITY_FAMILIES = {
     'tools', 'cdp', 'tool-grants', 'diagnostics', 'child', 'hooks', 'prs', 'permission', 'default-permission',
     'retirement-P3', 'retirement-P4', 'permission-failure', 'malformed', 'early-permission', 'late-permission', 'mcp']
     .map(group => [`harness:${group}`, everyRunner(HARNESS_SEAM)])),
-  'harness:answer': everyRunner('R26 resumes a different native ask kind on each runner (askResumeCases)'),
+  'harness:answer': everyRunner(`R26 resumes a different native ask kind on each runner (askResumeCases); R130 ${NATIVE_ASK_SCENARIO}`),
   'harness:owner': everyRunner(`R50 parks on the ask scenario: ${NATIVE_ASK_SCENARIO}`),
   // Harness run tier: RunManager cells whose outcome is Squawk's.
   'harness:run': shared('RunManager cells over the native wire', {
@@ -122,6 +122,7 @@ export const PARITY_FAMILIES = {
   waits: shared('the wait list, its wakes and its refusals are Squawk\'s; steer or boundary and the acknowledgement are turn-path facts', {
     U1: `${SMOKE}: registration through each runner's own tool transport`,
     U7k: NATIVE_ASK_SCENARIO,
+    U7b: 'the answer\'s own write reports its turn start on some runners and not others (turnStart)',
     U8l: 'asserts an opencode-only session state',
     U14m: 'the wake fails through Claude\'s own unread exit on Claude, and no failing opening turn may read the steered message; S44 holds neither',
     U22k: 'reads the U22s exemption', U22r: 'reads the U22s exemption and holds the acknowledgement on opencode only',
