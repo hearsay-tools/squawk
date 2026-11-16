@@ -27,7 +27,9 @@ export function runWire(control) {
   let toolWire = codex ? undefined : process.argv.slice(2);
   const rl = createInterface({ input: process.stdin });
   if (!codex) emit({ type: 'system', subtype: 'init', session_id: id });
-  async function turn(text, number, turnId = `turn-${number}`) {
+  async function turn(text, number, turnId = `turn-${number}`, read) {
+    // Claude's `--replay-user-messages` echo: the model read the line that opened this turn (#505).
+    if (read) emit(read);
     let result = { text: 'Nothing more to add.' };
     if (number !== undefined) {
       publishJson(join(control, `${id}.${number}.input.json`), { text, cwd: process.cwd(), backend: codex ? 'codex' : 'claude' });
@@ -74,7 +76,8 @@ export function runWire(control) {
       const content = message.message.content;
       const text = typeof content === 'string' ? content : content.map(part => part.text ?? '').join('\n');
       const number = text.includes(NO_WAIT_NUDGE) ? undefined : ++serial;
-      queue = queue.then(() => turn(text, number, number === undefined ? `nudge-${++nudges}` : undefined));
+      const read = typeof message.uuid === 'string' ? { type: 'user', isReplay: true, uuid: message.uuid, message: message.message } : undefined;
+      queue = queue.then(() => turn(text, number, number === undefined ? `nudge-${++nudges}` : undefined, read));
     }
   });
   rl.on('close', () => process.exit(0));

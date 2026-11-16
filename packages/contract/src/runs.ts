@@ -196,8 +196,9 @@ export type RunPullRequest = z.infer<typeof runPullRequestSchema>;
 export const workflowCursorSchema = z.object({ stepId: z.string(), mode: z.enum(['resume', 'start']) });
 export type WorkflowCursor = z.infer<typeof workflowCursorSchema>;
 
-/** An accepted `cezar_done`: the tool generation that accepted it, when, and its summary. */
-export const doneAcceptedSchema = z.object({ session: z.string(), at: z.string(), summary: z.string().optional() });
+/** An accepted `cezar_done`: the tool generation that accepted it, when, the last event sequence
+ *  then, its summary, and whether its one free delivery turn is spent. */
+export const doneAcceptedSchema = z.object({ session: z.string(), at: z.string(), seq: z.number().int().nonnegative(), summary: z.string().optional(), freeTurn: z.literal(true).optional() });
 export type DoneAccepted = z.infer<typeof doneAcceptedSchema>;
 
 export const runRecordSchema = z.object({

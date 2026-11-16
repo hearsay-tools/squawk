@@ -26,8 +26,8 @@ export const ownerGroups = {
     slot: 'inputState', owner: 'input-delivery.ts', factory: 'createInputGroup',
     types: ['InputGroup', 'InputFlight', 'DeliveryAttempt', 'ReadonlySetView'],
     getters: ['inputState'],
-    bindings: ['inputState', 'agentInputFlight', 'inputDelivery', 'unreadInputIds', 'consumedBeforeAck', 'bundledInputIds', 'retiredInFlight', 'unreadRetried', 'inputIds'],
-    fields: ['inputState', 'agentInputError', 'agentInputFlight', 'inputDelivery', 'unreadInputIds', 'consumedBeforeAck', 'bundledInputIds', 'retiredInFlight', 'unreadInputTimer', 'unreadRetried', 'heldHumanInputTimer', 'heldHumanInputSince', 'heldHumanInputExpired', 'openingAnswerAskSeq', 'openingAgentInputId', 'writingInput', 'deliveryAttempt', 'session', 'inputIds', 'outcome', 'settled', 'wakeReserved', 'admittedWake', 'mode', 'consumption', 'via', 'length', 'size'],
+    bindings: ['inputState', 'agentInputFlight', 'inputDelivery', 'unreadInputIds', 'consumedBeforeAck', 'bundledInputIds', 'turnOpenerIds', 'retiredInFlight', 'unreadRetried', 'inputIds'],
+    fields: ['inputState', 'agentInputError', 'agentInputFlight', 'inputDelivery', 'unreadInputIds', 'consumedBeforeAck', 'bundledInputIds', 'turnOpenerIds', 'retiredInFlight', 'unreadInputTimer', 'unreadRetried', 'heldHumanInputTimer', 'heldHumanInputSince', 'heldHumanInputExpired', 'openingAnswerAskSeq', 'openingAgentInputId', 'writingInput', 'deliveryAttempt', 'session', 'inputIds', 'outcome', 'settled', 'wakeReserved', 'admittedWake', 'mode', 'consumption', 'via', 'length', 'size'],
   },
   session: {
     slot: 'liveSession', owner: 'live-session-state.ts', factory: 'createSessionGroup',

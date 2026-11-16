@@ -8,9 +8,9 @@ message: >-
   ExitCall (`{ stepId, cursor: 'start' | 'resume' }`) of the exit you move the run with.
   `continuesStepId` is written only by workflows/continuation-admission.ts, once, on the synthetic
   step a Continue admits. `doneAccepted` is recorded only by `recordDoneAccepted` in
-  workflows/run/run-finish.ts and retired only by `retireDoneAccepted` in
-  workflows/run/turn-settler.ts, both through RunStore.commitOutcome (`done-accepted`,
-  `done-retired`).
+  workflows/run/run-finish.ts; `retireDoneAccepted` and `spendDoneFreeTurn` in
+  workflows/run/turn-settler.ts retire it and spend its free turn, all through
+  RunStore.commitOutcome (`done-accepted`, `done-retired`, `done-free-turn`).
 files:
   - packages/cezar/src/**/*.ts
   - packages/contract/src/**/*.ts
@@ -27,7 +27,7 @@ ignores:
 utils:
   run-fact: { regex: '^(workflowCursor|continuesStepId|parkReason|doneAccepted)$' }
   # The outcomes that record and retire `doneAccepted`, and the owner function of each.
-  done-outcome: { kind: pair, all: [{ has: { field: key, regex: '^kind$' } }, { has: { field: value, regex: "^['\"]done-(accepted|retired)['\"]$" } }] }
+  done-outcome: { kind: pair, all: [{ has: { field: key, regex: '^kind$' } }, { has: { field: value, regex: "^['\"]done-(accepted|retired|free-turn)['\"]$" } }] }
 rule:
   all:
     - any:
@@ -43,14 +43,14 @@ rule:
     # is not seen: the rule sees literals.
     - not: { has: { field: value, regex: '^z\.|Schema\b|Schema\.' } }
     # The owners of `doneAccepted`: `recordDoneAccepted` (run-finish.ts) stages `done-accepted`,
-    # `retireDoneAccepted` (turn-settler.ts) stages `done-retired`, and the two outcome handlers in
-    # runs/outcome-commit.ts apply them to the row.
+    # `retireDoneAccepted` and `spendDoneFreeTurn` (turn-settler.ts) stage `done-retired` and
+    # `done-free-turn`, and the outcome handlers in runs/outcome-commit.ts apply them to the row.
     - not:
         inside:
           stopBy: end
           any:
-            - { kind: function_declaration, has: { field: name, regex: '^(recordDoneAccepted|retireDoneAccepted)$' } }
-            - { kind: method_definition, has: { field: name, regex: "^['\"]done-(accepted|retired)['\"]$" } }
+            - { kind: function_declaration, has: { field: name, regex: '^(recordDoneAccepted|retireDoneAccepted|spendDoneFreeTurn)$' } }
+            - { kind: method_definition, has: { field: name, regex: "^['\"]done-(accepted|retired|free-turn)['\"]$" } }
     # The outcome type declares the kinds.
     - not: { inside: { stopBy: end, kind: type_alias_declaration } }
     # The read-time upgrade of a saved `workflowResumeStepId` (runs/legacy-run-rows.ts).

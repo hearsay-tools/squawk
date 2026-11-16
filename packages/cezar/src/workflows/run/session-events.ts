@@ -32,7 +32,6 @@ import type { ExecutionEmit, LaunchCiTools, LaunchDelegation, RunModuleContext, 
 import { nativeTimerDelay } from './turn-markers.ts';
 import { recordReportedCost } from './usage-accounting.ts';
 import { reportsNativeSubagents } from './subagent-waits.ts';
-import { retireDoneAccepted } from './turn-settler.ts';
 
 export interface SessionEventHost {
   disposedSessionEvent(runId: string, state: ActiveRun, event: AgentEvent): boolean;
@@ -343,8 +342,6 @@ export function handlePermissionResolved(context: RunModuleContext, host: Sessio
 
 export function handleNativeAskRequested(context: RunModuleContext, host: SessionHelperHost, runId: string, state: ActiveRun, ask: NonNullable<ReturnType<typeof askPayloadOf>>): void {
   host.humanWaits.prepareHumanAsk(state);
-  // A question withdraws an accepted done: the run waits for the answer (hearsay-tools/squawk#2587).
-  retireDoneAccepted(context.store, runId, 'reconsidered', 'the agent asked the user');
   // A native ask is a human wait the user already sees (hearsay-tools/cezarion#1234).
   const questions = askRequestOf({ questions: ask.questions })?.questions;
   const wait = host.humanWaits.openHumanAlias(runId, state, 'native-ask', questions ? { questions } : undefined);

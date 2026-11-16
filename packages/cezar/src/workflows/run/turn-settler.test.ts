@@ -30,7 +30,7 @@ function fixture() {
   const run = makeRunRecord({ id: 'run', status: RUN_STATUS.running, waits: [], autoResumeAttempts: 2 });
   const store = {
     getRun: () => run,
-    transcriptFacts: () => ({}),
+    transcriptFacts: () => ({}), readEvents: () => [],
     appendEvent: vi.fn((_id: string, event: { type: string; message?: string }) => { log.push(`event:${event.type}`); }),
     updateRun: vi.fn((_id: string, patch: object) => { log.push(`update:${Object.keys(patch).join(',')}`); }),
     updateStep: call('step', undefined), flush: call('flush', undefined), commitWait: call('commitWait', undefined),
@@ -85,7 +85,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 describe('turn settler entry orders', () => {
   it('turn-end consumes done before resetting nudges, saves boundary before settlement, then clears resume attempts', () => {
     const f = fixture();
-    f.run.doneAccepted = { session: 'generation', at: new Date().toISOString() };
+    f.run.doneAccepted = { session: 'generation', at: new Date().toISOString(), seq: 0 };
     transitionTurnBoundary(f.state, { kind: 'input-submitted', phase: 'nudge-delivered', session: f.session });
     transitionTurnBoundary(f.state, { kind: 'completion-refusal', phase: 'nudge-delivered', session: f.session });
     decide({ kind: 'park' });

@@ -88,6 +88,16 @@ describe('input owed at cezar_done (hearsay-tools/squawk#2587)', () => {
     expect(owedAtDone(makeRunRecord({ agentInputs: [unread] }), live('observable'))).toEqual([{ kind: 'unread', input_id: unread.id }]);
   });
 
+  // The input submitted at the boundary that opened this turn is the turn's own, also on a harness
+  // that reports its read only when the turn completes (Codex).
+  it('owes no input that opened this turn, read or not', () => {
+    const opener = input({ deliveredAt: new Date().toISOString(), awaitingRead: true });
+    const state = live('observable');
+    state.inputState.recordUnreadInput(opener.id);
+    state.inputState.openTurnWith([opener.id]);
+    expect(owedAtDone(makeRunRecord({ agentInputs: [opener] }), state)).toEqual([]);
+  });
+
   // D1: a result the harness reported read before its acknowledgement is not owed again.
   it('owes no wait result whose delivery the harness already reported read', () => {
     const result = resolved(makeTimerWait());
@@ -111,7 +121,7 @@ describe('whether an accepted done still holds at the turn end (hearsay-tools/sq
   const holds = (over: Partial<Parameters<typeof makeRunRecord>[0]> = {}, events = [makeRunEvent({ type: 'user-message', seq: 9 })], turn = {}) =>
     acceptedDoneHolds(makeRunRecord({ doneAccepted: done, ...over }), events, turn);
   const kept = { holds: true };
-  const withdrawn = (reason: string) => ({ holds: false, reason });
+  const withdrawn = (reason: string) => ({ holds: false, reason, byInput: expect.any(Boolean) });
 
   it.each<[string, Partial<Parameters<typeof makeRunRecord>[0]>, { holds: boolean; reason?: string }]>([
     ['nothing after the done keeps it', {}, kept],

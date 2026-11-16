@@ -22,6 +22,7 @@ valid:
   - "const APPLY = { 'done-accepted'(run, outcome) { return { run: { ...run, doneAccepted: { session: outcome.session, at: outcome.at } }, changed: true } } }"
   - "const APPLY = { 'done-retired'(run) { const { doneAccepted: _done, ...rest } = run; return { run: rest, changed: true } } }"
   - "type RunOutcome = { kind: 'done-accepted'; session: string } | { kind: 'done-retired'; as: 'completed' }"
+  - "export function spendDoneFreeTurn(store, runId) { store.commitOutcome(runId, { kind: 'done-free-turn' }) }"
   - 'const done = run.doneAccepted'
   - 'const row = z.object({ doneAccepted: doneAcceptedSchema.optional() })'
   # The read-time upgrade of a saved row.
@@ -43,3 +44,4 @@ invalid:
   - "this.context.store.commitOutcome(runId, { kind: 'done-accepted', session, at })"
   - "store.commitOutcome(runId, { kind: 'done-retired', as: 'reconsidered', reason: 'human message' })"
   - 'run.doneAccepted = undefined'
+  - "this.context.store.commitOutcome(runId, { kind: 'done-free-turn' })"

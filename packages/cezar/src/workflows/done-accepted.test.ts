@@ -102,7 +102,7 @@ describeWaitCells(() => {
     const external = github();
     const run = await waitingOnPr();
     // What a crash right after the tool accepted the done leaves: the record, and the wait it outranks.
-    store.commitOutcome(run.id, { kind: 'done-accepted', session: 'before-restart', at: new Date().toISOString() });
+    store.commitOutcome(run.id, { kind: 'done-accepted', session: 'before-restart', at: new Date().toISOString(), seq: store.transcriptFacts(run.id).lastSeq });
     await restart();
     external.settle();
     await until(() => finished(run.id), () => timeline(run.id));
