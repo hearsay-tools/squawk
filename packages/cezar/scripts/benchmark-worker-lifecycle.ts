@@ -1,4 +1,4 @@
-import { benchmarkHome, prepareBenchmarkEnv } from './benchmark-home.ts';
+import { prepareBenchmarkEnv } from './benchmark-home.ts';
 import { setRunStatus } from '../src/runs/run-store.testkit.ts';
 /**
  * Worker lifecycle benchmark (hearsay-tools/squawk#2180): spawn and destroy latency of real owned
@@ -19,8 +19,8 @@ import { setRunStatus } from '../src/runs/run-store.testkit.ts';
  * (`inspectGeneration`); after, a worker scope's stop of a detached descendant.
  */
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { cpus, loadavg, tmpdir } from 'node:os';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpus, loadavg } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -37,16 +37,9 @@ const { values } = parseArgs({ options: { workers: { type: 'string', default: '1
 const workers = Number(values.workers);
 if (!Number.isInteger(workers) || workers < 1) throw new Error('--workers must be a whole number >= 1');
 
-const { RunStore } = await import('../src/runs/store.ts');
-const { RunManager } = await import('../src/workflows/run.ts');
-const home = benchmarkHome((await import('../src/home/resolve.ts')).resolveHome({ purpose: 'cli' }));
-const { DelegationService } = await import('../src/delegation/service.ts');
-const { acquireCiResources } = await import('../src/ci-wait/resources.ts');
-const { workerCleanups } = await import('../src/delegation/worker-cleanup.ts');
+const { benchmarkProject, git } = await import('./benchmark-project.ts');
 const { planOwnedWorkspace } = await import('../src/delegation/workspace.ts');
-const { WorkspaceSemaphore } = await import('../src/workspace/semaphore.ts');
 
-const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? Number(s[Math.floor(s.length / 2)]!.toFixed(1)) : null; };
 const p90 = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? Number(s[Math.min(s.length - 1, Math.floor(s.length * 0.9))]!.toFixed(1)) : null; };
 async function until(predicate: () => boolean, timeoutMs: number): Promise<boolean> {
@@ -55,18 +48,8 @@ async function until(predicate: () => boolean, timeoutMs: number): Promise<boole
   return true;
 }
 
-const root = mkdtempSync(join(tmpdir(), 'cez-bench-lifecycle-'));
-git(root, 'init', '-q', '-b', 'main');
-git(root, 'config', 'gc.auto', '0');
-git(root, 'config', 'maintenance.auto', 'false');
-git(root, '-c', 'user.name=bench', '-c', 'user.email=bench@local', 'commit', '--allow-empty', '-qm', 'base');
-const sha = git(root, 'rev-parse', 'HEAD');
-const dataDir = join(root, '.ai/cezar');
 const holders: ChildProcess[] = [];
-const store = RunStore.open(dataDir, { keepLive: true });
-const manager = new RunManager(store, root, { home, createRunner: () => new ClaudeCliRunner(), semaphore: new WorkspaceSemaphore({ home, initial: { maxParallel: 4 } }), acquireCiResources });
-const service = new DelegationService(workerCleanups());
-const detach = service.registerProject({ id: 'bench', root, store, manager, home });
+const { root, sha, dataDir, store, manager, service, detach } = await benchmarkProject('cez-bench-lifecycle-', { createRunner: () => new ClaudeCliRunner(), maxParallel: 4 });
 try {
   const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
   setRunStatus(store, parent.id, 'waiting', { delegation: { role: 'root', permissions: ['spawn'], receipts: [] } });
