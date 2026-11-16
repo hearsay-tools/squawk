@@ -616,8 +616,9 @@ whose file is in the report but never ran counts as 0% covered.
 the merged pull request, reads the `crap-report-<head SHA>` artifact of that head's newest CI
 run, and adds each function over 30 to the open issue labelled `crap-follow-up`, which it opens
 when none is open. Each function is one checklist line, keyed by file and scope (the function and the functions around it): a later
-merge that changes a listed function replaces its line; an anonymous function in the scope is
-named `anonymous`, without its position. A pull request can merge before its report is uploaded:
+merge that changes a listed function replaces its line. An anonymous function in the scope is
+named `anonymous`, without its position, and siblings under one parent that share a name get an
+ordinal (`anonymous#1`, `run#2`), so a moved line keeps the key and siblings keep their own. A pull request can merge before its report is uploaded:
 while that head's CI run is unfinished, the workflow looks again every 30 seconds for up to 20
 minutes. A pull request without a report (no Vitest run, the report job failed, or the run still
 unfinished after the wait) files nothing, and the job summary says why and how to replay it. The workflow

@@ -54,25 +54,40 @@ function excludePatterns(path) {
   return exclude;
 }
 
+const baseName = fn => fn.name.replace(/^anonymous@\d+:\d+$/, 'anonymous');
+const parentOf = (fn, functions) => functions.findLast(item => item.start < fn.start && item.end >= fn.end);
+
 /**
- * The names of `fn` and every function around it, outermost first: two same-named helpers in different
- * functions differ. An anonymous function's position is dropped, as changed-functions.mjs drops it, so
- * the scope survives a line moving above it.
+ * Each function's scope: its name and the names of the functions around it, outermost first, so two
+ * same-named helpers in different functions differ. An anonymous function drops its position, as
+ * changed-functions.mjs does, so the scope survives a line moving above it. Siblings under one parent
+ * that share a name get an ordinal (`run#1`, `run#2`), so each keeps its own scope.
  */
-const scopeOf = (fn, functions) => functions.filter(item => item.start <= fn.start && item.end >= fn.end)
-  .map(item => item.name.replace(/^anonymous@\d+:\d+$/, 'anonymous')).join(' / ');
+function scopes(functions) {
+  const segment = new Map();
+  const siblings = new Map();
+  for (const fn of functions) {
+    const key = `${functions.indexOf(parentOf(fn, functions))}\0${baseName(fn)}`;
+    siblings.set(key, [...(siblings.get(key) ?? []), fn]);
+  }
+  for (const group of siblings.values()) {
+    group.forEach((fn, index) => segment.set(fn, group.length > 1 ? `${baseName(fn)}#${index + 1}` : baseName(fn)));
+  }
+  return new Map(functions.map(fn => [fn, functions.filter(item => item.start <= fn.start && item.end >= fn.end).map(item => segment.get(item)).join(' / ')]));
+}
 
 /** One row per changed function: `over`, `pass`, `excluded` (child-process-only code) or `no-coverage`. */
 export function scoreChanges(scan, coverage, { exclude = [], read, limit = thresholds.crap } = {}) {
   return scan.files.flatMap(({ file, functions: changed }) => {
     const source = read(file);
     const functions = analyzeSource(source, file);
+    const scopeOf = scopes(functions);
     const starts = lineStarts(source);
     const excluded = exclude.some(pattern => matchesGlob(file, pattern));
     const entry = coverage[file];
     return changed.map(fn => {
       const located = functions.find(item => item.line === fn.line && item.column === fn.column);
-      const row = status => ({ file, name: fn.name, scope: located ? scopeOf(located, functions) : fn.name, line: fn.line, complexity: fn.complexity, coverage: null, crap: null, status });
+      const row = status => ({ file, name: fn.name, scope: located ? scopeOf.get(located) : fn.name, line: fn.line, complexity: fn.complexity, coverage: null, crap: null, status });
       if (excluded) return row('excluded');
       const share = entry && located ? functionCoverage(located, functions, entry, starts) : null;
       if (share === null) return row('no-coverage');

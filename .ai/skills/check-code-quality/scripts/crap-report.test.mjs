@@ -121,6 +121,14 @@ test('an anonymous enclosing function names the scope without its position, so t
   assert.deepEqual(result.report.functions.map(fn => fn.scope).sort(), ['anonymous', 'anonymous / helper']);
 });
 
+test('siblings that share a name get an ordinal, so each keeps its own scope', t => {
+  const f = repo(t, { 'src/a.ts': 'export const keep = 1;\n' });
+  const head = f.commit({ 'src/a.ts': 'export const keep = 1;\non(() => 1);\non(() => 2);\nexport function make() {\n  return [{ run() { return 1; } }, { run() { return 2; } }];\n}\n' });
+  const result = run(f, head, { 'src/a.ts': entry([]) });
+  assert.equal(result.code, 0, result.error);
+  assert.deepEqual(result.report.functions.map(fn => fn.scope).sort(), ['anonymous#1', 'anonymous#2', 'make', 'make / run#1', 'make / run#2']);
+});
+
 test('missing arguments or an unreadable coverage file exit 2', t => {
   const f = repo(t, { 'a.ts': 'export const a = 1;\n' });
   assert.equal(runCrapReport(['--base', f.base], { cwd: f.cwd, stdout: { write() {} }, stderr: { write() {} } }), 2);
