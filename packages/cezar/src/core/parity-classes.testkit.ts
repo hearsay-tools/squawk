@@ -147,7 +147,11 @@ export const PARITY_FAMILIES = {
   'workflow-ask': shared('cezar_ask is Squawk\'s tool', {
     Q8: 'its authored timeout reaches each runner\'s own step deadline',
   }),
-  'workflow-final-message': shared('the final-message rules are decided in turn-end.ts'),
+  'workflow-final-message': shared('the final-message rules are decided in turn-end.ts', {
+    F8: 'its silent-tail scenario runs each runner\'s own nudge acknowledgement',
+    F9: 'its silent-tail scenario runs each runner\'s own late reply',
+    F10: 'its silent-tail scenario runs each runner\'s own slow wrap-up turn',
+  }),
   'workflow-followup': everyRunner('the follow-up hold (H rows) is each runner class\'s own'),
   'workflow-no-progress': everyRunner('each runner reports its own model progress'),
   'workflow-step-completion': shared('step completion is decided in run.ts'),
