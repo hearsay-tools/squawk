@@ -1,4 +1,4 @@
-import { benchmarkHome, prepareBenchmarkEnv } from './benchmark-home.ts';
+import { prepareBenchmarkEnv } from './benchmark-home.ts';
 import { setRunStatus } from '../src/runs/run-store.testkit.ts';
 /**
  * Stuck-destroy benchmark (hearsay-tools/cezarion#879): what permanently stuck worker destroys
@@ -14,20 +14,20 @@ import { setRunStatus } from '../src/runs/run-store.testkit.ts';
  *   `DelegationService`, on a temp Git repo, with `CEZ_DRY_RUN=1` and production cadence (no
  *   timer is overridden).
  * - Each worker is settled the way a finished worker is: a complete execution checkpoint, status
- *   `review`, a real owned worktree and a local scratch dir. A `sleep` child holds each of the
- *   two, so neither can ever be removed: the destroy stays incomplete and the scratch is retained.
+ *   `review`, a real owned worktree and a local scratch dir. Its worktree is locked
+ *   (`git worktree lock`), so Git never removes it and the destroy stays incomplete. A process
+ *   working in the worktree no longer blocks a destroy (ADR 0032), so the lock is the blocker.
  * - Every worker is destroyed once through the human route, as Clean up does. Only then does the
  *   window start, so the measurement is the retry and reprobe loops alone.
  * - CPU is this process (`process.cpuUsage`, every thread) plus the children it reaped during the
- *   window (`/proc/self/stat` cutime/cstime: the git processes the loops spawn). The holders are
- *   reaped only after the window. Event-loop delay is what an HTTP request would wait.
+ *   window (`/proc/self/stat` cutime/cstime: the git processes the loops spawn). Event-loop delay is
+ *   what an HTTP request would wait.
  * - Compare N workers against `--workers 0`; the difference is what the stuck workers add.
  */
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { cpus, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpus } from 'node:os';
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
@@ -52,14 +52,8 @@ const { values } = parseArgs({ options: {
 const workers = Number(values.workers), minutes = Number(values.minutes);
 if (!Number.isInteger(workers) || workers < 0 || !(minutes > 0)) throw new Error('--workers must be a whole number >= 0 and --minutes > 0');
 
-const { RunStore } = await import('../src/runs/store.ts');
-const { RunManager } = await import('../src/workflows/run.ts');
-const home = benchmarkHome((await import('../src/home/resolve.ts')).resolveHome({ purpose: 'cli' }));
-const { DelegationService } = await import('../src/delegation/service.ts');
-const { acquireCiResources } = await import('../src/ci-wait/resources.ts');
-const { workerCleanups } = await import('../src/delegation/worker-cleanup.ts');
+const { benchmarkProject } = await import('./benchmark-project.ts');
 const { planOwnedWorkspace, ensureOwnedWorkspace } = await import('../src/delegation/workspace.ts');
-const { WorkspaceSemaphore } = await import('../src/workspace/semaphore.ts');
 const { agentTmpDir } = await import('../src/runs/agent-tmpdir.ts');
 
 /** Clock ticks of this process's reaped children (`cutime + cstime`), in ms; 0 off Linux. */
@@ -73,28 +67,16 @@ function childrenCpuMs(): number {
   return ticks * 1000 / hz;
 }
 
-const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
-const root = mkdtempSync(join(tmpdir(), 'cez-bench-stuck-'));
-git(root, 'init', '-q', '-b', 'main');
-git(root, 'config', 'gc.auto', '0');
-git(root, 'config', 'maintenance.auto', 'false');
-git(root, '-c', 'user.name=bench', '-c', 'user.email=bench@local', 'commit', '--allow-empty', '-qm', 'base');
-const sha = git(root, 'rev-parse', 'HEAD');
-const dataDir = join(root, '.ai/cezar');
-
 // Teardown runs however the run ends, so a failed setup, destroy or measurement leaves no
-// `sleep` holder and no temporary repository behind.
-const holders: ChildProcess[] = [];
-let store: RunStoreInstance | undefined, manager: RunManagerInstance | undefined, detach: (() => void) | undefined;
+// temporary repository behind.
+let store: RunStoreInstance | undefined, manager: RunManagerInstance | undefined, detach: (() => void) | undefined, root: string | undefined;
 try {
-  store = RunStore.open(dataDir, { keepLive: true });
-  manager = new RunManager(store, root, { home, createRunner: noRunners, semaphore: new WorkspaceSemaphore({ home, initial: { maxParallel: 1 } }), acquireCiResources });
-  const service = new DelegationService(workerCleanups());
-  detach = service.registerProject({ id: 'bench', root, store, manager, home });
+  const project = await benchmarkProject('cez-bench-stuck-', { createRunner: noRunners, maxParallel: 1 });
+  ({ store, manager, detach, root } = project);
+  const { sha, dataDir, service } = project;
   const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
   setRunStatus(store, parent.id, 'waiting', { delegation: { role: 'root', permissions: ['spawn'], receipts: [] } });
 
-  const hold = (cwd: string) => { holders.push(spawn('sleep', ['86400'], { cwd, stdio: 'ignore' })); };
   const ids: string[] = [];
   for (let i = 0; i < workers; i++) {
     const id = randomUUID();
@@ -107,14 +89,14 @@ try {
     if (!store.commitWorkerExecutionComplete(id, generation)) throw new Error(`worker ${id} did not complete`);
     const scratch = agentTmpDir(dataDir, id);
     mkdirSync(scratch, { recursive: true });
-    hold(created.path); hold(scratch);
+    execFileSync('git', ['worktree', 'lock', '--reason', 'benchmark', created.path], { cwd: root });
     ids.push(id);
   }
   // What boot does after recovery: arm pending destroys and the scratch reprobes.
   service.armDestroyRetries('bench');
   for (const id of ids) {
     const result = await service.destroyForHuman('bench', id).catch((error: Error) => ({ state: 'error', error: error.message }));
-    if (result.state === 'complete') throw new Error(`worker ${id} was not held: its destroy completed`);
+    if (result.state === 'complete') throw new Error(`worker ${id} was not locked: its destroy completed`);
   }
 
   const delay = monitorEventLoopDelay({ resolution: 10 });
@@ -140,11 +122,10 @@ try {
   if (values.out) writeFileSync(values.out, `${JSON.stringify(row, null, 2)}\n`);
 
 } finally {
-  for (const child of holders) child.kill('SIGKILL');
   detach?.();
   manager?.dispose();
   store?.close();
-  rmSync(root, { recursive: true, force: true });
+  if (root) rmSync(root, { recursive: true, force: true });
   if (ownHome) rmSync(ownHome, { recursive: true, force: true });
 }
 process.exit(0);

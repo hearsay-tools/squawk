@@ -1,10 +1,10 @@
 import { waitPartDescribers, inputsFor, retryClock, nativeWire, askPrompt, pendingQuestion, asks, answered, expectAdmissionRetryCleared, settled, prompted, fireTimer, flushMicrotasks, humanOpen, answerOf, retryAtOnce, observeAdmissionRetries, timerWaits, sessionOf, agentWaits, turnEnds, parkedOn, waitOfKind, blockedDone, liveRefusal, expectPoolCapacity, github, pr } from './waits-parity-fixture.testkit.ts';
 import { MAX_WAKE_DELIVERY_ATTEMPTS, WAKE_DELIVERY_CAP_NOTE, MAX_AUTO_CONTINUES, WAKE_SESSION_CLOSED_ERROR, WAITS_DISCARDED_NOTE, COMPLETION_NUDGE_NOTE } from './run.ts';
 import { join } from 'node:path';
-import { expect, it as registerTest } from 'vitest';
+import { expect, onTestFinished, it as registerTest } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import { WAIT_KIND, STEP_STATUS, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
-import type { Wait } from '@open-mercato/cezar-contract';
+import type { Wait, RunRecord } from '@open-mercato/cezar-contract';
 import type { RunnerId } from '../core/agent-runner.ts';
 import { HARNESS_ADAPTERS, exemptionFor } from '../core/harness-parity-core.testkit.ts';
 import { store, manager, until, toolGenerationOf, semaphore, terminal, root, parent, worker, waitOf } from './worker-wait-core.testkit.ts';
@@ -12,7 +12,8 @@ import { timed } from './waits.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { hasPendingAsk, muteLockedDatabaseLogs, blockRunWrites } from '../runs/run-store.testkit.ts';
 import { recordCommits } from '../runs/outcome-crash.testkit.ts';
-import { withHeldAck, withRejectedInput } from '../core/owned-input-delivery.testkit.ts';
+import { withHeldAck, withHeldResponse, withRejectedInput } from '../core/owned-input-delivery.testkit.ts';
+import { RUNNER_FACTS } from '../core/runner-facts.ts';
 import { persistentWakeFailure, TIMER_WAKE_OPENING, toolCall, gatedProviderFailure } from './waits-parity.testkit.ts';
 
 // The delivery part of the wait parity cells (`WAIT_PARITY_PARTS` in `waits-parity-catalog.testkit.ts`).
@@ -56,6 +57,15 @@ async function answerQuestion(id: string, askSeq: number) {
   expect(asks(id)[0]!.seq).toBe(askSeq);
   expect(manager.sendMessage(id, [{ type: 'text', text: 'Parser' }])).toBe(true);
   await until(() => answered(id, asks(id).at(-1)!.seq));
+}
+
+/** Every status the store publishes for run `id` from now on. */
+function publishedStatuses(id: string): RunRecord['status'][] {
+  const statuses: RunRecord['status'][] = [];
+  const onRun = (run: RunRecord) => { if (run.id === id) statuses.push(run.status); };
+  store.on('run', onRun);
+  onTestFinished(() => { store.off('run', onRun); });
+  return statuses;
 }
 
 // A failed run cannot wake itself. Its absence shows at once, and no admission retry or backoff is left to start one later.
@@ -102,6 +112,66 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
         await answerQuestion(run.id, askSeq);
       };
       await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp', exercise);
+    });
+
+    // hearsay-tools/squawk#1239: the acknowledgement of a wake whose turn already ended
+    // checkpoints the delivery in the question's park, with no `running` write between.
+    it(`${runner} U12 a wake acknowledged after its turn ended keeps the run waiting, with no running write`, async () => {
+      if (exemptionFor('U12', runner)) {
+        expect(exemptionFor('U12', runner)?.kind).toBe('capability-absent');
+        return;
+      }
+      await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp' | 'cursor', async release => {
+        const { run, timer, askSeq } = await timerBesideQuestion(runner, 'mock:agent-echo delay-owned-ack');
+        const ends = turnEnds(run.id);
+        fireTimer(timer.id);
+        if (RUNNER_FACTS[runner].inputDelivery.acknowledgement === 'model-work') {
+          // Cursor print acknowledges on the turn's first model work: the held acknowledgement
+          // holds the turn too, so no turn can end before it.
+          await until(() => prompted(runner, `Timer ${timer.id} fired`).length > 0);
+          await flushMicrotasks();
+          expect(turnEnds(run.id)).toBe(ends);
+          release();
+          await until(() => settled(run.id, timer.id)?.phase === 'delivered');
+          await answerQuestion(run.id, askSeq);
+          return;
+        }
+        await until(() => prompted(runner, `Timer ${timer.id} fired`).length > 0 && turnEnds(run.id) > ends);
+        expect(settled(run.id, timer.id)).toBeUndefined();
+        expect(store.getRun(run.id)?.status).toBe('waiting');
+        const statuses = publishedStatuses(run.id);
+        release();
+        await until(() => settled(run.id, timer.id)?.phase === 'delivered' && pendingQuestion(run.id));
+        await flushMicrotasks();
+        expect(statuses).not.toContain('running');
+        expect(statuses.at(-1)).toBe('waiting');
+        await answerQuestion(run.id, askSeq);
+      });
+    });
+
+    it(`${runner} U12 a wake acknowledged during its turn shows the run running`, async () => {
+      if (exemptionFor('U12', runner)) {
+        expect(exemptionFor('U12', runner)?.kind).toBe('capability-absent');
+        return;
+      }
+      // The response is held after the acknowledgement: the turn is still running when it lands.
+      // On Cursor print the acknowledgement is the turn's first model work, so it lands in the turn too.
+      await withHeldResponse(runner, async (release, held) => {
+        const { run, timer, askSeq } = await timerBesideQuestion(runner, 'mock:agent-echo hold-wake-response');
+        const ends = turnEnds(run.id);
+        const statuses = publishedStatuses(run.id);
+        fireTimer(timer.id);
+        await until(held);
+        if (RUNNER_FACTS[runner].inputDelivery.acknowledgement !== 'model-work') {
+          await until(() => settled(run.id, timer.id)?.phase === 'delivered');
+          expect(turnEnds(run.id)).toBe(ends);
+          expect(store.getRun(run.id)?.status).toBe('running');
+        }
+        release();
+        await until(() => settled(run.id, timer.id)?.phase === 'delivered' && turnEnds(run.id) > ends);
+        expect(statuses).toContain('running');
+        await answerQuestion(run.id, askSeq);
+      }, 'hold-wake-response');
     });
 
     it(`${runner} U12 a human answer resets the budget while a timer acknowledgement keeps its reserved charge`, async () => {

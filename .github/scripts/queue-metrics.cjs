@@ -4,7 +4,7 @@
 const { execFile } = require('node:child_process');
 const { parseArgs } = require('node:util');
 const { setTimeout: delay } = require('node:timers/promises');
-const { requiredQueueJobs, REQUIRED_QUEUE_JOBS, successfulJobs } = require('./queue-ci-proof.cjs');
+const { requiredQueueJobs, REQUIRED_QUEUE_JOBS, successfulJobs, PROOF_CONCLUSIONS } = require('./queue-ci-proof.cjs');
 
 const PROOF_JOB = 'Verify exact queue CI evidence';
 // On a main push, Typecheck runs only when the queue proof did not verify.
@@ -380,7 +380,7 @@ function proofReason(push) {
   if (!push.evidence?.queueRun) return 'no-exact-queue-run';
   const queueRun = attemptAt(push.evidence.queueRun, push.evidence.attempts, Date.parse(proof.completed_at));
   if (queueRun.status !== 'completed' || Date.parse(queueRun.updated_at) > Date.parse(proof.completed_at)) return 'source-pending';
-  if (queueRun.conclusion !== 'success') return 'source-not-successful';
+  if (!PROOF_CONCLUSIONS.includes(queueRun.conclusion)) return 'source-not-successful';
   const attempt = queueJobs.filter(job => job.run_attempt === queueRun.run_attempt);
   if (!successfulJobs(attempt, rosterOf(attempt))) return 'incomplete-gate';
   return 'unexplained';

@@ -135,14 +135,17 @@ function queueRun(run, fullName, workflowId, sha) {
     && typeof run.head_branch === 'string' && run.head_branch.startsWith('gh-readonly-queue/main/');
 }
 
+// A failed run can still be proof: the job roster (completeGate) decides, so a
+// failed job outside the gate, such as the Squeal export, costs no full main run.
+const PROOF_CONCLUSIONS = ['success', 'failure'];
 // The race re-check: the run just verified, and the same run as the newest
-// merge-group run for the sha, must still read back completed and successful.
+// merge-group run for the sha, must still read back completed with its conclusion.
 function sameCompletedRun(final, authoritative, run, fullName, workflowId, sha) {
   return queueRun(final, fullName, workflowId, sha) && final.id === run.id && final.run_attempt === run.run_attempt
-    && final.status === 'completed' && final.conclusion === 'success'
+    && final.status === 'completed' && final.conclusion === run.conclusion
     && queueRun(authoritative, fullName, workflowId, sha) && authoritative?.id === run.id
     && authoritative.run_attempt === run.run_attempt
-    && authoritative.status === 'completed' && authoritative.conclusion === 'success';
+    && authoritative.status === 'completed' && authoritative.conclusion === run.conclusion;
 }
 
 // One poll iteration: list and read the queue run for sha, then wait while it
@@ -176,7 +179,7 @@ async function queueCiProof({ github, owner, repo, eventName, ref, sha, now = Da
       if (step.reason) return fallback(step.reason);
       if (!step.run) continue;
       const run = step.run;
-      if (run.conclusion !== 'success') return fallback('source-not-successful');
+      if (!PROOF_CONCLUSIONS.includes(run.conclusion)) return fallback('source-not-successful');
       const jobs = await readCiJobs(read, run.id);
       const suites = await completeGate(jobs, run, surfaceOf);
       if (!suites) return fallback('incomplete-gate');
@@ -192,5 +195,5 @@ async function queueCiProof({ github, owner, repo, eventName, ref, sha, now = Da
     return fallback('proof-unavailable');
   }
 }
-module.exports = { queueCiProof, mainCommitSurface, requiredQueueJobs, REQUIRED_QUEUE_JOBS, SUITE_JOBS, SKIPPED_SUITE_JOBS, VERIFY, CI_PATH,
+module.exports = { queueCiProof, PROOF_CONCLUSIONS, mainCommitSurface, requiredQueueJobs, REQUIRED_QUEUE_JOBS, SUITE_JOBS, SKIPPED_SUITE_JOBS, VERIFY, CI_PATH,
   validSha, positive, reader, pages, readCiRuns, readCiJobs, successfulJobs, newest };

@@ -3,7 +3,8 @@ name: Worker scope on native hosts
 # runner user no cgroup delegation, so the shared Vitest shards exercise only the `groups`
 # backend. The Linux job delegates one cgroup v2 subtree to the runner user, moves the test shell
 # into it, and requires the `cgroup` cases to run, not skip. The Windows job runs the `job`
-# backend's native cases on a Windows runner.
+# backend's native cases on a Windows runner; the macOS job runs the `groups` backend's macOS
+# cases, the accepted limit included.
 on:
   pull_request:
     paths:
@@ -89,3 +90,35 @@ jobs:
           grep -q '✓ .*the worker ends with its controller, and an unrelated process survives' "$RUNNER_TEMP/job.log"
           grep -q '✓ .*a cmd.exe /s /c command keeps its own quotes inside the job' "$RUNNER_TEMP/job.log"
           grep -q '✓ .*runs in an agent environment with its own TEMP and a PowerShell 7 module path' "$RUNNER_TEMP/job.log"
+
+  macos-groups:
+    name: macOS process-group worker scope
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Node.js from nodejs.org
+        uses: ./.github/actions/node-dist
+        with:
+          node-version: '24.21.0'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.21.0'
+          token: ''
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run the scope tests natively
+        env:
+          NO_COLOR: '1'
+          FORCE_COLOR: '0'
+        run: |
+          set -euo pipefail
+          cd packages/cezar
+          npx vitest run --reporter=verbose src/worker-scope 2>&1 | tee "$RUNNER_TEMP/scope.log"
+          # The macOS cases skip elsewhere; here they must have run.
+          grep -q "✓ .*stop ends the worker's own group, its leader and a member" "$RUNNER_TEMP/scope.log"
+          grep -q '✓ .*a detached descendant outlives stop: the accepted macOS limit' "$RUNNER_TEMP/scope.log"
+          grep -q '✓ .*a group whose leader is gone is never signalled: no boot id proves its number' "$RUNNER_TEMP/scope.log"

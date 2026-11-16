@@ -85,8 +85,9 @@ or a committed file diff over the per-file patch limit or with a NUL byte.
   before a PR. CI runs them. Run one only to debug a failure. With a daemon,
   `npm run test:parity` asks `squeal run run-loop` for the parity files and waits for
   their verdicts.
-- The changed-function quality check ([`check-code-quality`](../../.ai/skills/check-code-quality/SKILL.md))
-  runs beside the push, not before it, and reuses Squeal's stored results.
+- The changed-function check ([`check-code-quality`](../../.ai/skills/check-code-quality/SKILL.md))
+  is the complexity gate on the committed head. It reads no coverage and takes seconds.
+  CRAP is reported in CI (§ CRAP report for changed functions).
 - Regression proof ([regression-proof.md](regression-proof.md)) stays: it is part of
   writing the test.
 
@@ -110,8 +111,7 @@ prompt. Between edits, no message about these files is not a pass, and
 `squeal status --wait` does not hold for them. `squeal run run-loop <path>... --wait 60000`
 runs the group's files that the paths select now. `npm run prepr` names these files
 as files with no result when the agent has not paused since the change; CI runs them.
-`squeal code --base` still runs the group's files that load a changed function. This is a
-three-day trial (hearsay-tools/squawk#3551); revert the group to return to edit-time runs.
+This is a three-day trial (hearsay-tools/squawk#3551); revert the group to return to edit-time runs.
 
 The final six-command gate and full-suite runs belong in CI. Do not run the
 complete local gate just to commit, open a PR, or complete a review. Record
@@ -511,8 +511,8 @@ changes behavior at shipped defaults.
 changes. It fails when a changed function has classic complexity above 20 and is new or more
 complex than at the merge base. A pull request can lower a function's complexity, and it never
 fails because a function it does not touch is long. A changed function that is lowered but stays
-over 20 passes; the job lists it as a notice, and the pre-PR check (`check-code-quality`) still
-reports it. A moved or renamed function is compared with
+over 20 passes; the job and the pre-PR check (`check-code-quality`), which runs the same script,
+list it as a notice. A moved or renamed function is compared with
 the function it came from: first one with an identical body, then the one same-named function that
 shares the most of its body lines, at least half of them. A copy of a long function is still new, and
 so is a function that only shares a name with a removed one or has two equally close origins. When
@@ -538,8 +538,8 @@ node .ai/skills/check-code-quality/scripts/complexity-gate.mjs --base origin/mai
 ```
 
 For an owner-approved increase, the owner adds the `baseline-growth` label, then re-runs the failed
-`complexity-gate` job. An agent never adds the label. Auto-merge has no complexity check. CI now
-publishes Vitest coverage (§ Vitest coverage artifact); adding CRAP to the gate is a separate change.
+`complexity-gate` job. An agent never adds the label. Auto-merge has no complexity check of its own.
+CRAP is not part of this gate; CI reports it without failing (§ CRAP report for changed functions).
 
 **File length.** `npm run lint` pins every non-test source file over 1,000 lines in
 `packages/cezar/src/file-length.baseline.json`. The lint bridge lets Squeal re-run the budget
@@ -568,8 +568,8 @@ runs keep their existing skips.
 The optional `Merge Vitest coverage` job uploads `vitest-coverage-<head SHA>`, holding
 `coverage-final.json` (Istanbul, paths relative to the repository root, test files included)
 and `provenance.json` (tested ref, head and base SHA, run ID and attempt), kept 14 days.
-The local pre-PR gate runs Squeal's one-shot check and requires its complete report.
-It does not reuse this CI artifact; see `.ai/skills/check-code-quality/references/pre-pr.md`.
+The `crap-report` job reads it (§ CRAP report for changed functions). No local step
+measures coverage before a merge.
 
 Test failures, unhandled errors, coverage startup failures and worker failures still fail the
 required shard. The coverage-only reporter catches errors from report conversion and writing
@@ -588,6 +588,48 @@ optional publication and artifact shape. `.github/scripts/vitest-coverage-tests.
 checks real Vitest exit codes when report generation or writing fails, with passing and
 failing tests. Coverage remains opt-in locally and keeps test files in the report.
 Like any `ci.yml` edit, prove the final workflow with a dispatch (§ Proving a `ci.yml` change).
+
+### CRAP report for changed functions
+
+CRAP combines complexity with missing coverage: complexity² × (1 − coverage)³ + complexity.
+It needs a coverage run, so it is not a local pre-PR step (hearsay-tools/squawk#3702). CI
+computes it where coverage already exists, and it never fails a check.
+
+**On the pull request.** The optional `Report CRAP for changed functions` job (`crap-report`)
+runs after `Merge Vitest coverage` on PR runs and bare dispatches. Like `complexity-gate`, it
+runs code from the workflow commit and reads the tested commit as Git data. It scores each
+function the change touches with `.ai/skills/check-code-quality/scripts/crap-report.mjs`
+against `vitest-coverage-<head SHA>`. The job summary lists each function with its complexity,
+coverage and CRAP; a function over 30 gets a warning annotation. Equality passes. The job
+uploads `crap-report-<head SHA>`, kept 14 days. Every step continues on error, and the job stays
+outside `verify.needs` and the merge-queue roster, so it cannot fail the required check.
+
+**The coverage source.** The tested commit is the one the shards ran (`pr-test-input`). A PR
+run can select a subset of the unit tests (`scripts/test-changed.mjs`). That subset holds the
+tests that import the changed files, so it holds every in-process test that can run a changed
+function, and a changed function's score matches a full run. A function in a file that the
+coverage report lacks, or that `coverage.exclude` in `squeal.config.json` lists (code that only
+a child process runs), shows `no coverage data` or `excluded` and gets no score. A function
+whose file is in the report but never ran counts as 0% covered.
+
+**After the merge.** `.github/workflows/crap-follow-up.yml` runs on each push to `main`. It finds
+the merged pull request, reads the `crap-report-<head SHA>` artifact of that head's newest CI
+run, and adds each function over 30 to the open issue labelled `crap-follow-up`, which it opens
+when none is open. Each function is one checklist line, keyed by file and scope (the function and the functions around it): a later
+merge that changes a listed function replaces its line. An anonymous function in the scope is
+named `anonymous`, without its position, and siblings under one parent that share a name get an
+ordinal (`anonymous#1`, `run#2`), so a moved line keeps the key and siblings keep their own. A pull request can merge before its report is uploaded:
+while that head's CI run is unfinished, the workflow looks again every 30 seconds for up to 20
+minutes. A pull request without a report (no Vitest run, the report job failed, or the run still
+unfinished after the wait) files nothing, and the job summary says why and how to replay it. The workflow
+runs trusted `main` code and holds the issue write behind one concurrency group. A
+`workflow_dispatch` with `pr_number` replays one merged pull request; `dry_run` (the default)
+prints the issue body without writing it.
+
+To reproduce a report locally from a downloaded coverage artifact, see the skill's
+[Bundled tool](../../.ai/skills/check-code-quality/references/tool.md#crap-scoring).
+`.github/scripts/ci-coverage.workflow.test.cjs` pins the job, and
+`.github/scripts/crap-follow-up.test.cjs` pins the filing and the workflow's trust.
 
 ### Squeal shared results
 
@@ -618,9 +660,12 @@ can import those passes instead of running the same test files again
   merge group, with `contents: read` and no stored credentials. It checks out
   `merge_group.head_sha`, installs dependencies, downloads the parts, runs
   `squeal ci export` and uploads `squeal-results.json.gz` as the `squeal-results` artifact,
-  kept 3 days. It runs the queued code, so it never holds write access.
+  kept 3 days. It runs the queued code, so it never holds write access. An export that
+  writes no file warns and exits 0; the `Check for the Squeal results file` step then
+  sets the job output `results` to `false`, the upload is skipped and the job passes.
 - The `Publish Squeal shared results` job (`squeal-publish`) is the only job with
   `contents: write`, and it runs no repository code: no install, build or package script. It
+  runs only when the export job succeeded and its `results` output is `true`. It
   checks out the same commit with full history and no stored credentials, sets up Node and
   Squeal's action, downloads the export and runs `squeal ci publish --keep 100`.
   That pushes `refs/squeal/<sha>` and deletes refs beyond the newest 100 main commits; it
@@ -1140,9 +1185,20 @@ fails closed. GitHub owns queue persistence; no cockpit session is required.
 
 A main push probes official Actions metadata for at most 60 seconds (each request
 at most 10 seconds; at most seven pending reads; complete lists limited to 200
-records). It reuses only the newest same-repository queue run's latest successful
-attempt for the **exact pushed SHA**, after every classifier, verification leaf,
-aggregate and queue admission job succeeds. A final reread checks for races.
+records). It reuses only the newest same-repository queue run's latest attempt for
+the **exact pushed SHA**, after every classifier, verification leaf, aggregate and
+queue admission job succeeds. A final reread checks for races.
+
+The probe reads only these queue-run jobs (`REQUIRED_QUEUE_JOBS` in
+`.github/scripts/queue-ci-proof.cjs`): `Classify pull request change surface`,
+`Classify PR shape`, `Check function complexity`, `Check new code clones`,
+`Review preflight`, `Typecheck`, `Unit tests (package)`, `Unit tests (scripts)`,
+`Build and package`, `Vitest shard 1/8` to `8/8`, `Cockpit browser E2E shard 1/8`
+to `8/8`, `Unit, build, E2E, and package` and `Validate reviewed queue entry`.
+Each must appear once and succeed. The run's conclusion may be `success` or
+`failure`: a failed job outside this list, such as `Export Squeal shared results`,
+does not cost `main` a full run (hearsay-tools/squawk#3701). A `cancelled` or other
+conclusion is not proof.
 A queue run of a docs-only entry lists each skipped suite once, under its unexpanded
 name (`Vitest shard ${{ matrix.shard }}/8`). The probe accepts those two skipped jobs in
 place of the sixteen shards only when the pushed commit is docs-only or infra-only by
