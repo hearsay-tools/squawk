@@ -58,7 +58,11 @@ test('a snapshot selects its test and a lint baseline selects its declared reade
   const cwd = repo(t);
   assert.deepEqual(classify(['packages/web/src/__snapshots__/view.test.tsx.snap'], cwd), { sources: [], tests: ['packages/web/src/view.test.tsx'] });
   assert.deepEqual(classify(['packages/cezar/src/lint/rule.baseline.json'], cwd), { sources: [], tests: [scanner] });
-  // The wildcard JSON declaration alone does not name a baseline's reader.
+  // A wildcard declaration neither names a baseline's reader nor joins an exact one.
+  const wide = fixture(t, { 'squeal.config.json': JSON.stringify({ inputs: {
+    [scanner]: ['packages/*/src/**/*.json'], 'packages/web/src/test/wait.test.ts': ['packages/web/src/test/wait.baseline.json'],
+  } }) });
+  assert.deepEqual(classify(['packages/web/src/test/wait.baseline.json'], wide), { sources: [], tests: ['packages/web/src/test/wait.test.ts'] });
   assert.deepEqual(classify(['packages/web/src/test/other.baseline.json'], cwd),
     { full: 'Package input outside the import graph: packages/web/src/test/other.baseline.json' });
 });

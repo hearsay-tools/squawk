@@ -92,7 +92,10 @@ function classifyPath(path, { inputs, configuration }) {
   if (snapshot && matchesGlob(snapshot, VITEST_TEST)) return { tests: [snapshot, ...readers] };
   // A baseline selects its readers only when a test declares the baseline by its exact
   // path: a wildcard such as packages/*/src/**/*.json also matches baselines that test never reads.
-  if (path.endsWith('.baseline.json') && vitest.some(({ globs }) => globs.includes(path))) return { tests: readers };
+  if (path.endsWith('.baseline.json')) {
+    const declared = vitest.filter(({ globs }) => globs.includes(path)).map(({ test }) => test);
+    if (declared.length) return { tests: declared };
+  }
   if (path.startsWith('packages/')) return { full: 'Package input outside the import graph' };
   if (readers.length || NO_VITEST_READER.some(glob => matchesGlob(path, glob))) return { tests: readers };
   return { full: 'Unmapped input' };
