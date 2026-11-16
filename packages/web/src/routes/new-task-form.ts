@@ -1,5 +1,5 @@
 import { runnerDiscoversModels } from '@open-mercato/cezar-api-client/contract/workspace'
-import { RUNNER_COCKPIT_FACTS, runnerDisplayName } from '@open-mercato/cezar-api-client/contract/runner-facts'
+import { RUNNER_COCKPIT_FACTS, runnerModelListName } from '@open-mercato/cezar-api-client/contract/runner-facts'
 import type {
   BackendCheck,
   CreateRunInput,
@@ -198,7 +198,7 @@ export function modelCatalogStatus(
   fetching = false,
 ): string | undefined {
   if (!runnerDiscoversModels(runner)) return undefined
-  const name = runnerDisplayName(runner)
+  const name = runnerModelListName(runner)
   if (catalog?.stale) return `Using cached ${name} model list`
   if (failed || catalog?.source === 'unavailable') return `Latest ${name} models unavailable`
   if (fetching && !catalog) return `Loading ${name} models…`

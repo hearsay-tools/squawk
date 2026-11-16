@@ -8,8 +8,10 @@ import type { Runner } from './runner.ts';
  * where they state the same fact.
  */
 export interface CockpitRunnerFacts {
-  /** The runner's name in the cockpit and in server messages. */
+  /** The runner's name on provider, account and conversation surfaces and in server messages. */
   readonly displayName: string;
+  /** The runner's name in model discovery messages and in the model picker's status line. */
+  readonly modelListName: string;
   /**
    * `pushed`: the server refreshes the model catalog in the background, serves the cached copy on
    * request and pushes each change on the `models:<runner>` topic. `on-request`: each request
@@ -35,28 +37,33 @@ export interface CockpitRunnerFacts {
 
 export const RUNNER_COCKPIT_FACTS = {
   claude: {
-    displayName: 'Claude Code', modelCatalogDelivery: 'on-request', effortLevels: 'catalog-or-generic', modelIdScope: 'own', inputMode: 'steer',
+    displayName: 'Claude Code', modelListName: 'Claude', modelCatalogDelivery: 'on-request', effortLevels: 'catalog-or-generic', modelIdScope: 'own', inputMode: 'steer',
   },
   codex: {
-    displayName: 'Codex', modelCatalogDelivery: 'on-request', effortLevels: 'catalog-or-generic', modelIdScope: 'own', inputMode: 'steer',
+    displayName: 'Codex', modelListName: 'Codex', modelCatalogDelivery: 'on-request', effortLevels: 'catalog-or-generic', modelIdScope: 'own', inputMode: 'steer',
   },
   opencode: {
-    displayName: 'OpenCode', modelCatalogDelivery: 'on-request', effortLevels: 'catalog-or-generic', modelIdScope: 'provider-spanning', inputMode: 'steer',
+    displayName: 'OpenCode', modelListName: 'OpenCode', modelCatalogDelivery: 'on-request', effortLevels: 'catalog-or-generic', modelIdScope: 'provider-spanning', inputMode: 'steer',
   },
   pi: {
-    displayName: 'pi', modelCatalogDelivery: 'on-request', effortLevels: 'catalog-or-generic', modelIdScope: 'provider-spanning', inputMode: 'steer',
+    displayName: 'pi', modelListName: 'Pi', modelCatalogDelivery: 'on-request', effortLevels: 'catalog-or-generic', modelIdScope: 'provider-spanning', inputMode: 'steer',
   },
   cursor: {
-    displayName: 'Cursor', modelCatalogDelivery: 'pushed', effortLevels: 'catalog-only', modelIdScope: 'any-provider', inputMode: 'boundary',
+    displayName: 'Cursor', modelListName: 'Cursor', modelCatalogDelivery: 'pushed', effortLevels: 'catalog-only', modelIdScope: 'any-provider', inputMode: 'boundary',
   },
   omp: {
-    displayName: 'OMP', modelCatalogDelivery: 'on-request', effortLevels: 'catalog-or-generic', modelIdScope: 'provider-spanning', inputMode: 'steer',
+    displayName: 'OMP', modelListName: 'OMP', modelCatalogDelivery: 'on-request', effortLevels: 'catalog-or-generic', modelIdScope: 'provider-spanning', inputMode: 'steer',
   },
 } as const satisfies Readonly<Record<Runner, CockpitRunnerFacts>>;
 
 /** The display name of a runner. */
 export function runnerDisplayName(runner: Runner): string {
   return RUNNER_COCKPIT_FACTS[runner].displayName;
+}
+
+/** The runner's name in model discovery messages. */
+export function runnerModelListName(runner: Runner): string {
+  return RUNNER_COCKPIT_FACTS[runner].modelListName;
 }
 
 /** The runners whose cockpit facts match, in the table's order. */

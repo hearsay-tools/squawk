@@ -125,7 +125,7 @@ describe('model option resolution', () => {
   it('reports stale and unavailable Codex catalogs without exposing reasons', () => {
     expect(modelCatalogStatus('codex', { runner: 'codex', models: [], source: 'cache', stale: true, reason: 'raw' })).toBe('Using cached Codex model list')
     expect(modelCatalogStatus('codex', { runner: 'codex', models: [], source: 'unavailable', stale: false, reason: 'raw' })).toBe('Latest Codex models unavailable')
-    expect(modelCatalogStatus('claude', undefined, true)).toBe('Latest Claude Code models unavailable')
+    expect(modelCatalogStatus('claude', undefined, true)).toBe('Latest Claude models unavailable')
   })
 
   it('opencode: auto alone until the host catalog answers (#794)', () => {
@@ -212,8 +212,8 @@ describe('model option resolution', () => {
     expect(modelCatalogStatus('opencode', undefined, true)).toBe('Latest OpenCode models unavailable')
     expect(
       modelCatalogStatus('pi', { runner: 'pi', models: [], source: 'cache', stale: true, reason: 'raw' }),
-    ).toBe('Using cached pi model list')
-    expect(modelCatalogStatus('pi', undefined, true)).toBe('Latest pi models unavailable')
+    ).toBe('Using cached Pi model list')
+    expect(modelCatalogStatus('pi', undefined, true)).toBe('Latest Pi models unavailable')
   })
 
   it('resolveModel keeps known picks and arbitrary native model pins', () => {
@@ -543,7 +543,7 @@ describe('buildAutomationTask', () => {
     const catalog = { runner: 'claude' as const, models: [{ id: 'opus[1m]', label: 'Host Opus', description: 'Host choice' }], source: 'live' as const, stale: false }
     expect(modelsForRunner('claude', catalog, ['claude-opus-4-8', 'private-model']).map(m => m.id)).toEqual(['', 'opus[1m]', 'claude-opus-4-8', 'private-model'])
     expect(resolveModel('private-model', 'claude', undefined, catalog)).toBe('private-model')
-    expect(modelCatalogStatus('claude', { ...catalog, source: 'cache', stale: true })).toBe('Using cached Claude Code model list')
+    expect(modelCatalogStatus('claude', { ...catalog, source: 'cache', stale: true })).toBe('Using cached Claude model list')
   })
   it('retains the cross-runner guard for retired dated suggestions', () => {
     expect(modelConflictsWithRunner('claude-opus-4-8', 'codex')).toBe(true)
@@ -551,8 +551,8 @@ describe('buildAutomationTask', () => {
  })
 
 it('reports discovery in progress without masking cached feedback', () => {
-  expect(modelCatalogStatus('claude', undefined, false, true)).toBe('Loading Claude Code models…')
-  expect(modelCatalogStatus('claude', { runner: 'claude', models: [], source: 'cache', stale: true }, false, true)).toBe('Using cached Claude Code model list')
+  expect(modelCatalogStatus('claude', undefined, false, true)).toBe('Loading Claude models…')
+  expect(modelCatalogStatus('claude', { runner: 'claude', models: [], source: 'cache', stale: true }, false, true)).toBe('Using cached Claude model list')
   expect(modelCatalogStatus('claude', undefined, false, false)).toBeUndefined()
 })
 
