@@ -3,14 +3,13 @@ import { agentTmpDirLocations, agentTmpDirMayExist, removeAgentTmpDir, sweepAgen
 import { jobRunsIn } from '../jobs/job.ts';
 import { workerEvidenceRunIds } from '../runs/worker-execution.ts';
 import type { RunStore } from '../runs/store.ts';
-import { sharedCwdScan, type CwdSource } from './process-liveness.ts';
 import { noJitter, retryDelayMs, SCRATCH_BACKOFF, type Backoff } from './retry-backoff.ts';
 
 type Pending = { at: number; attempts: number; generation?: string | undefined; resourceId?: string | undefined };
 
 /**
  * Keep terminal cleanup intent in the generation checkpoint as well as the index. Retain and
- * retry unknown evidence. One timer and shared process snapshot serve pending cleanup.
+ * retry unknown evidence. One timer serves pending cleanup.
  */
 export class WorkerScratchCleanup {
   private due = new Map<string, Pending>();
@@ -102,27 +101,25 @@ export class WorkerScratchCleanup {
   private tick(): void {
     this.timer = undefined;
     if (!this.enabled) return;
-    // Ids due within 5 % of the fast cadence ride along, so near neighbours share the scan, and
-    // every id this tick retains is re-armed from the same instant, so they stay together.
+    // Ids due within 5 % of the fast cadence ride along, and every id this tick retains is
+    // re-armed from the same instant, so they stay together.
     const now = Date.now();
     const dueBy = Math.max(this.armedFor, now) + this.backoff.fastMs / 20;
-    const cwds = sharedCwdScan();
     this.ticking = true;
     try {
-      for (const [id, pending] of [...this.due]) if (pending.at <= dueBy) this.probe(id, pending, cwds, now);
+      for (const [id, pending] of [...this.due]) if (pending.at <= dueBy) this.probe(id, pending, now);
     } finally { this.ticking = false; }
     this.wake();
   }
 
-  private probe(id: string, { attempts, generation, resourceId }: Pending, cwds: CwdSource, now: number): void {
+  private probe(id: string, { attempts, generation, resourceId }: Pending, now: number): void {
     this.due.delete(id);
     const execution = this.store.readWorkerExecution(id);
     // No await between ownership/generation + holder proof and rm. Admission is synchronous
-    // too, so a queued stale callback can never touch the next generation's scratch. The
-    // shared snapshot is this synchronous tick's: it never outlives a yield.
+    // too, so a queued stale callback can never touch the next generation's scratch.
     try {
       if (generation && resourceId && execution?.generation === generation && !this.busy(id) &&
-        this.store.workerScratchResourcesSafe(id, generation, resourceId, cwds) &&
+        this.store.workerScratchResourcesSafe(id, generation, resourceId) &&
         // A job started in the scratch keeps it until the job ends (hearsay-tools/squawk#3138).
         !jobRunsIn(agentTmpDirLocations(this.dataDir, id))) removeAgentTmpDir(this.dataDir, id);
     } catch { /* Transient evidence/read failures retain the durable intent for another wake. */ }

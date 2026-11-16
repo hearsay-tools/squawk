@@ -5,7 +5,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createOwnedWorkspace } from './workspace.ts';
-import { fixture, git, receiptPath, recordingReport, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
+import { fixture, git, receiptPath, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
 
 const hook = vi.hoisted(() => ({
   beforeContains: undefined as ((sha: string) => void) | undefined,
@@ -63,12 +63,10 @@ describe('the result after an outside change during destroy', { timeout: WORKSPA
     git(root, 'worktree', 'lock', workspace.path);
     const worktrees = dirname(workspace.path);
     hook.after = (args, ok) => { if (!ok && args[0] === 'worktree' && args[1] === 'remove') chmodSync(worktrees, 0o000); };
-    const { calls, report } = recordingReport();
     try {
-      expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report))
+      expect(await removeOwnedWorkspace(root, workspace))
         .toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
     } finally { chmodSync(worktrees, 0o755); }
-    expect(calls).toEqual([['unexplained']]);
     expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
   });
 
@@ -79,12 +77,10 @@ describe('the result after an outside change during destroy', { timeout: WORKSPA
     git(workspace.path, 'checkout', '-q', '--detach');
     const worktrees = dirname(workspace.path);
     hook.afterHead = (refusal) => { if (refusal) chmodSync(worktrees, 0o000); };
-    const { calls, report } = recordingReport();
     try {
-      expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report))
+      expect(await removeOwnedWorkspace(root, workspace))
         .toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
     } finally { chmodSync(worktrees, 0o755); }
-    expect(calls).toEqual([['unexplained']]);
     expect(existsSync(workspace.path)).toBe(true);
     expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
   });

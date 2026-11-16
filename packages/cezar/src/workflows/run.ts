@@ -46,7 +46,6 @@ import type { SquawkToolHandlers } from '../ci-wait/controller.ts';
 import type { WorkerAccountBinding } from '../delegation/execution-identity.ts';
 import type { DelegationProvisioner } from '../delegation/provision.ts';
 import { onUsage, type ProcessUsage } from '../core/process-usage.ts';
-import { type CwdSource } from '../delegation/process-liveness.ts';
 import type { RunnerFactory, RunnerId } from '../core/agent-runner.ts';
 import { seedHandoffFile } from '../handoff.ts';
 // Contract VALUES, like `workspaceUiStateSchema` in workspace/migrations.ts: the attachment
@@ -98,15 +97,13 @@ export class RunManager {
   readonly #context: RunModuleContext;
   readonly #modules: RunModules;
 
-  settleOrphanedWorkerExecution(runId: string, opts: { admitting?: boolean; fresh?: boolean; cwds?: CwdSource } = {}): boolean { return this.#modules.orphans.settleOrphanedWorkerExecution(runId, opts); }
+  settleOrphanedWorkerExecution(runId: string, opts: { admitting?: boolean; fresh?: boolean } = {}): boolean { return this.#modules.orphans.settleOrphanedWorkerExecution(runId, opts); }
   takeWorkerTerminationBlocker(runId: string): { blocker: WorkerTerminationBlocker; changed: boolean } | undefined { return this.#modules.orphans.takeWorkerTerminationBlocker(runId); }
 
   requestWorkerStop(runId: string): WorkerStopResult { return this.#modules.runCancel.requestWorkerStop(runId); }
 
   async awaitRunTermination(runId: string, timeoutMs: number, opts: { reapOrphans?: boolean } = {}): Promise<boolean> {
-    const terminated = await this.#modules.workerExecutions.proveRunTermination(runId, timeoutMs, opts);
-    if (terminated && opts.reapOrphans && !this.#disposed) await this.#modules.orphans.terminateFinishedWorkerGroups(runId, timeoutMs);
-    return terminated;
+    return this.#modules.workerExecutions.proveRunTermination(runId, timeoutMs, opts);
   }
 
   #historyDeletionPending(runId: string): boolean {

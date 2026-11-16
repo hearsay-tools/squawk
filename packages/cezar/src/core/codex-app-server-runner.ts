@@ -14,7 +14,7 @@ import {
   type ContentBlock,
   type SessionOptions,
   type AgentRunSpecSupport,
-  type InputDelivery, prependSystemPrompt, trackChildExit,
+  type InputDelivery, prependSystemPrompt, SQUAWK_SIDE_SPEC_SUPPORT, trackChildExit,
 } from './agent-runner.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { codexToolGrantFields } from './runner-tool-grants.ts';
@@ -84,7 +84,7 @@ export interface CodexRunnerOptions {
  */
 export const CODEX_SPEC_SUPPORT: AgentRunSpecSupport = {
   squawkTools: { honored: true, via: 'thread/start and thread/resume dotted mcp_servers config with env_vars and default_tools_approval_mode approve' },
-  timings: { honored: true, via: 'internal runner deadlines; omitted fields retain production defaults' },
+  ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: 'prepended to the opening turn/start input through prependSystemPrompt' },
   userPrompt: { honored: true, via: 'turn/start input text' },
   images: { honored: false, reason: 'the adapter sends text input items only; image blocks are dropped' },
@@ -227,7 +227,7 @@ class CodexSession implements AgentSession {
     private readonly opts: SessionOptions,
   ) {
     try {
-      this.child = spawnCodexAppServer(bin, spec.cwd, spec.env, { session: true, timings: spec.timings });
+      this.child = spawnCodexAppServer(bin, spec.cwd, spec.env, { session: true, timings: spec.timings, scope: spec.scope });
       this.rpc = new CodexAppServerRpc(this.child, (error) => {
         if (!this.hardStopStarted && !this.hasExited()) this.fail(error);
       });

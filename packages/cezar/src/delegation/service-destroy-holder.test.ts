@@ -1,4 +1,4 @@
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 
@@ -56,22 +56,33 @@ describe('destroy backoff holder', { timeout: 30_000 }, () => {
     expect(existsSync(workspace.path)).toBe(false);
   });
 
-  it.runIf(linux)('a failed worktreeTeardown ends in the refusal that names the holder, and a scheduled retry runs it again', async () => {
+  it.runIf(linux)('a failed worktreeTeardown is recorded, and a scheduled retry runs it again', async () => {
     await cadence({ fastMs: 200, fastCount: 10, capMs: 2_000 });
-    const { workerId, workspace } = await settled(false);
-    const holder = spawn('sleep', ['30'], { cwd: workspace.path, stdio: 'ignore' });
-    onTestFinished(() => { holder.kill('SIGKILL'); });
+    const { workerId, blocker } = await settled();
     const calls = join(scratchDir(), 'calls');
-    // The first run fails and stops nothing; the second stops the holder.
+    // The first run fails; the second clears the Git lock that keeps the removal incomplete.
     const failing = `echo run >> '${calls}'; [ "$(wc -l < '${calls}')" -gt 1 ] || exit 3`;
-    useTeardown(failing, stop(holder.pid!));
-    const refused = await f.service.destroy(f.caller, { workerId });
-    expect(refused).toMatchObject({ state: 'incomplete' });
-    expect(refused.error).toMatch(new RegExp(`processes ${holder.pid} \\(sleep\\)`));
+    useTeardown(failing);
+    expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
     expect(f.store.readEvents(workerId).filter(event => event.type === 'lifecycle' && String(event.message).startsWith('worktree teardown failed:')))
       .toEqual([expect.objectContaining({ message: expect.stringMatching(/^worktree teardown failed: `echo run .*` exited 3$/) })]);
+    blocker!.release();
     await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });
-    expect(readFileSync(calls, 'utf8').trim().split('\n')).toHaveLength(2);
+    expect(readFileSync(calls, 'utf8').trim().split('\n').length).toBeGreaterThanOrEqual(2);
+  });
+
+  // ADR 0032: ownership, not file use. A process outside the worker's scope whose cwd is in the worktree
+  // neither blocks the destroy nor is signalled; the worktree is removed anyway.
+  it.runIf(linux)('a process outside the worker scope with its cwd in the worktree neither blocks the destroy nor is signalled', async () => {
+    await cadence();
+    const { workerId, workspace } = await settled(false);
+    const outsider = spawn('sleep', ['30'], { cwd: workspace.path, stdio: 'ignore' });
+    onTestFinished(() => { outsider.kill('SIGKILL'); });
+    expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'complete', remaining: [] });
+    expect(existsSync(workspace.path)).toBe(false);
+    expect(outsider.exitCode).toBeNull();
+    expect(outsider.signalCode).toBeNull();
+    expect(() => process.kill(outsider.pid!, 0)).not.toThrow();
   });
 
   it.runIf(linux)('a project replaced while the worktree teardown runs starts no termination through the old manager', async () => {
@@ -110,72 +121,18 @@ describe('destroy backoff holder', { timeout: 30_000 }, () => {
     expect(existsSync(join(other, 'ran'))).toBe(false);
   });
 
-  // A hook added after an attempt without one is a change: the next tick runs in full, not skipped.
-  it.runIf(linux)('a worktreeTeardown added while scheduled retries skip a live holder ends the skipping', async () => {
+  // A worker still running when the teardown ran can start a service after it: scheduled ticks run the
+  // teardown again on every attempt.
+  it.runIf(linux)('scheduled retries run the worktreeTeardown on every attempt', async () => {
     await cadence({ fastMs: 200, fastCount: 10, capMs: 2_000 });
-    const { workerId, workspace } = await settled(false);
-    const service = await worktreeService(workspace.path);
+    const { workerId } = await settled();
+    const calls = join(scratchDir(), 'calls');
+    useTeardown(`echo run >> '${calls}'`);
     expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete' });
     await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
-    useTeardown(stop(service.pid!));
-    await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });
-  });
-
-  // A worker still running when the teardown ran can start a service after it: with a hook configured,
-  // scheduled ticks never skip, so a later teardown stops that service.
-  it.runIf(linux)('with a worktreeTeardown configured, scheduled retries run it again while a holder stays', async () => {
-    await cadence({ fastMs: 200, fastCount: 10, capMs: 2_000 });
-    const { workerId, workspace } = await settled(false);
-    const service = await worktreeService(workspace.path);
-    const pidFile = join(scratchDir(), 'service.pid');
-    // The teardown stops only a service it knows of; at first it knows none.
-    useTeardown(`[ ! -f '${pidFile}' ] || { ${stop(service.pid!)}; }`);
-    expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete' });
-    await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
-    writeFileSync(pidFile, String(service.pid));
-    await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });
-  });
-
-  it.runIf(linux)('a holder that moves out of the worktree ends the skipping', async () => {
-    await cadence({ fastMs: 200, fastCount: 10, capMs: 2_000 });
-    const { workerId, workspace } = await settled(false);
-    const child = spawn(process.execPath, ['-e', "console.log('ready'); process.stdin.on('data', () => { process.chdir('/'); console.log('moved'); })"],
-      { cwd: workspace.path, stdio: ['pipe', 'pipe', 'ignore'] });
-    onTestFinished(() => { child.kill('SIGKILL'); });
-    const line = () => new Promise<void>(done => child.stdout!.once('data', () => done()));
-    await line();
-    expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete' });
-    await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
-    const moved = line(); child.stdin!.write('go\n'); await moved;
-    // Still running, so only its cwd says it no longer holds anything.
-    await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });
-    expect(child.exitCode).toBeNull();
-  });
-
-  it.runIf(linux)("a holder only the removal's own last check saw still ends the skipping when it exits", async () => {
-    await cadence({ fastMs: 200, fastCount: 10, capMs: 2_000 });
-    const { workerId, workspace } = await settled(false);
-    // A locked worktree fails Git's removal after both holder checks pass, so ticks settle into skipping.
-    execFileSync('git', ['worktree', 'lock', workspace.path], { cwd: f.root });
-    expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete' });
-    await vi.waitFor(() => expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
-    // The next full attempt: its own proof answers safe, then a process enters the worktree before the
-    // removal's second check, the real race between the two scans.
-    let late: ReturnType<typeof spawn> | undefined;
-    const proof = f.store.workerResourceHolders.bind(f.store);
-    vi.spyOn(f.store, 'workerResourceHolders').mockImplementation((...args) => {
-      const answer = proof(...args);
-      if (answer === 'safe' && !late) late = spawn('sleep', ['30'], { cwd: workspace.path, stdio: 'ignore' });
-      return answer;
-    });
-    onTestFinished(() => { late?.kill('SIGKILL'); });
-    execFileSync('git', ['worktree', 'unlock', workspace.path], { cwd: f.root });
-    await vi.waitFor(() => expect(late).toBeDefined(), { timeout: 10_000 });
-    await vi.waitFor(() => expect(destroyOf(workerId)?.error).toMatch(new RegExp(`processes ${late!.pid} \\(sleep\\)`)), { timeout: 10_000 });
-    const exited = new Promise<void>(resolve => late!.once('exit', () => resolve()));
-    late!.kill('SIGKILL'); await exited;
-    await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });
-    expect(existsSync(workspace.path)).toBe(false);
+    const attempts = destroyOf(workerId)!.retry!.attempts;
+    // The explicit attempt plus one per recorded retry.
+    expect(readFileSync(calls, 'utf8').trim().split('\n').length).toBeGreaterThanOrEqual(attempts + 1);
   });
 
   it('a holder check that names no process is retried in full once its evidence is repaired, never skipped', async () => {
