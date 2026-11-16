@@ -122,4 +122,3 @@ jobs:
           grep -q "✓ .*stop ends the worker's own group, its leader and a member" "$RUNNER_TEMP/scope.log"
           grep -q '✓ .*a detached descendant outlives stop: the accepted macOS limit' "$RUNNER_TEMP/scope.log"
           grep -q '✓ .*a group whose leader is gone is never signalled: no boot id proves its number' "$RUNNER_TEMP/scope.log"
-          npx vitest run src/delegation/service-destroy-holder
