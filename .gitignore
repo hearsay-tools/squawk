@@ -27,8 +27,17 @@ dist/
 /*/**/.ai/cezar/
 /*/**/.ai/squawk/
 
-# locally installed agent skills (per-machine installs, not repo content)
+# Keep repository skill links; locally installed agent skills stay per-machine.
 .agents/
+!/.agents/
+/.agents/*
+!/.agents/skills/
+/.agents/skills/*
+!/.agents/skills/auto-merge
+!/.agents/skills/campaign
+!/.agents/skills/check-code-quality
+!/.agents/skills/land-pr
+!/.agents/skills/om-prepare-test-env
 .superpowers/
 skills-lock.json
 
@@ -55,8 +64,13 @@ skills-lock.json
 .ai/font-audit-reference/
 WORKER-STATUS.md
 
-# local symlink into .agents/skills
-.claude/skills
+# Claude reads its own native skill folder.
+/.claude/skills/*
+!/.claude/skills/auto-merge
+!/.claude/skills/campaign
+!/.claude/skills/check-code-quality
+!/.claude/skills/land-pr
+!/.claude/skills/om-prepare-test-env
 
 # mock-agent output from dry-run e2e (scripts/mock-claude.mjs appends here)
 /notes.md
