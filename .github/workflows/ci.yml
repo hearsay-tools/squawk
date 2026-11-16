@@ -1438,6 +1438,8 @@ jobs:
   # Skip is a failure here: a machine that cannot drive the cockpit must not
   # green the required aggregate. This job opts into skip-exit-0 with
   # --allow-skip, then checks the marker through require-e2e-passed.cjs.
+  # On a PR, a selection that is not shorter than the full set runs no spec and
+  # passes with TEST_E2E_STATUS=not-selected; the merge queue runs every spec.
   cockpit-browser:
     name: Cockpit browser E2E shard ${{ matrix.shard }}/8
     # Same docs-only, infra-only, and verified bump-PR skips as Vitest.
@@ -1507,6 +1509,8 @@ jobs:
         run: |
           set -o pipefail
           node scripts/e2e-affected.mjs --ci --allow-skip --shard=${{ matrix.shard }}/8 2>&1 | tee "$RUNNER_TEMP/e2e.log"
+          # A full, empty or failed selection runs no spec here: the merge queue runs every spec.
+          grep -h '^\[e2e:affected\] PR CI runs no browser spec' "$RUNNER_TEMP/e2e.log" >> "$GITHUB_STEP_SUMMARY" || true
           node .github/scripts/require-e2e-passed.cjs < "$RUNNER_TEMP/e2e.log"
 
       - name: Run cockpit browser E2E

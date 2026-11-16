@@ -239,7 +239,7 @@ function repository(t) {
 
 const affected = (cwd, ...args) => spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8' });
 
-test('CI planning uses mapped specs and falls back on empty selection or a missing map', t => {
+test('CI planning runs nothing for an empty selection or a missing map', t => {
   const { dir, put, map } = repository(t);
   const cwd = process.cwd();
   const mapFlag = map();
@@ -254,7 +254,6 @@ test('CI planning uses mapped specs and falls back on empty selection or a missi
     process.chdir(cwd);
   }
 });
-
 test('--plan diffs the working tree against the map’s commit, untracked files included, and runs nothing', t => {
   const { dir, put, map } = repository(t);
   put('packages/web/src/routes/task-thread/markdown.tsx', 'export function Markdown() { return 1 }\n');
@@ -293,7 +292,7 @@ test('a --map file that cannot be read is an error, not a full run', t => {
   assert.match(result.stderr, /cannot read the spec map at .*missing\.json/);
 });
 
-test('CI runs selected specs with shard flags and uses full fallback for empty or failed selection', t => {
+test('CI runs a shorter selection with shard flags and runs nothing for every spec, no spec or a failed selector', t => {
   const { dir, put, map } = repository(t);
   put('.ai/scripts/e2e.sh', 'printf "arg=%s\\n" "$@"; exit 19\n');
   const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
@@ -302,28 +301,42 @@ test('CI runs selected specs with shard flags and uses full fallback for empty o
   put('packages/web/src/routes/task-thread/markdown.tsx', 'export function Markdown() { return 1 }\n');
   const selected = affected(dir, '--ci', '--shard=2/8', mapFlag);
   assert.equal(selected.status, 19, selected.stdout + selected.stderr);
+  assert.match(selected.stdout, /markdown\.tsx: 2 specs/, 'the CI log keeps the reason for each file');
   assert.match(selected.stdout, /arg=--shard=2\/8/);
   assert.match(selected.stdout, /arg=packages\/web\/e2e\/artifact-project-links.e2e.ts/);
   assert.match(selected.stdout, /arg=packages\/web\/e2e\/chat-code-fence.e2e.ts/);
   assert.doesNotMatch(selected.stdout, /arg=.*smoke.e2e.ts/);
   assert.match(selected.stdout, /arg=--passWithNoTests=true/);
+  assert.doesNotMatch(selected.stdout, /not-selected/);
   git('restore', 'packages/web/src/routes/task-thread/markdown.tsx');
-  for (const flag of [mapFlag, '--map=missing.json']) {
-    const fallback = affected(dir, '--ci', '--shard=2/8', flag);
-    assert.equal(fallback.status, 19, fallback.stdout + fallback.stderr);
-    assert.match(fallback.stdout, /Selected 3 of 3 specs/);
-    assert.match(fallback.stdout, /arg=--shard=2\/8/);
-    assert.doesNotMatch(fallback.stdout, /arg=.*e2e.ts|passWithNoTests/);
+  const cases = [
+    [mapFlag, /PR CI runs no browser spec: the selector chose no spec\./],
+    ['--map=missing.json', /PR CI runs no browser spec: the selector failed: cannot read the spec map at .*missing\.json/],
+  ];
+  put('packages/web/vite.config.ts', 'export default {}\n');
+  const every = affected(dir, '--ci', '--shard=2/8', mapFlag);
+  git('clean', '-qf', 'packages/web/vite.config.ts');
+  // A mapped source that every spec ran selects the full list without the every-spec flag.
+  put('packages/api-client/src/client.ts', 'export const client = 1\n');
+  const mappedEvery = affected(dir, '--ci', '--shard=2/8', mapFlag);
+  git('clean', '-qf', 'packages/api-client');
+  assert.match(mappedEvery.stdout, /client\.ts: 3 specs/);
+  for (const [result, reason] of [...cases.map(([flag, reason]) => [affected(dir, '--ci', '--shard=2/8', flag), reason]),
+    [every, /Selected 3 of 3 specs[^]*PR CI runs no browser spec: the selector chose every spec\./],
+    [mappedEvery, /Selected 3 of 3 specs[^]*PR CI runs no browser spec: the selector chose every spec\./]]) {
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, reason);
+    assert.match(result.stdout, /^TEST_E2E_STATUS=not-selected$/m);
+    assert.doesNotMatch(result.stdout, /arg=/, 'no browser starts');
   }
 });
-
-test('PR browser workflow logs leave the mapped selection intact', t => {
+function runPrBrowserStep(t, change) {
   const { dir, put, map } = repository(t);
   put('.ai/scripts/e2e.sh', 'printf "arg=%s\\n" "$@"; echo TEST_E2E_STATUS=passed\n');
   execFileSync('git', ['add', '.'], { cwd: dir });
   execFileSync('git', ['commit', '-qm', 'browser command'], { cwd: dir });
   const mapFile = map().slice('--map='.length);
-  put('packages/web/src/routes/task-thread/markdown.tsx', 'export function Markdown() { return 1 }\n');
+  change(put);
   const temp = tempDir(t);
   // Keep the workflow command intact. Only map download and the costly browser are fixture seams.
   temp.put('node', `#!/bin/sh
@@ -334,18 +347,33 @@ fi
 exec "$REAL_NODE" "$MARKER_SCRIPT" "$@"
 `);
   chmodSync(join(temp.dir, 'node'), 0o755);
+  temp.put('summary.md', '');
   const workflow = yaml.parse(readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8'));
   const run = workflow.jobs['cockpit-browser'].steps.find(step => step.id === 'e2e-pr').run;
   const result = spawnSync('bash', ['-eu', '-c', run.replace('${{ matrix.shard }}', '1')], {
     cwd: dir, encoding: 'utf8', env: { ...process.env, PATH: `${temp.dir}:${process.env.PATH}`,
-      RUNNER_TEMP: temp.dir, REAL_NODE: process.execPath, SELECTOR_SCRIPT: script, MAP_FILE: mapFile,
+      RUNNER_TEMP: temp.dir, GITHUB_STEP_SUMMARY: join(temp.dir, 'summary.md'), GITHUB_EVENT_NAME: 'pull_request_target',
+      REAL_NODE: process.execPath, SELECTOR_SCRIPT: script, MAP_FILE: mapFile,
       MARKER_SCRIPT: fileURLToPath(new URL('../.github/scripts/require-e2e-passed.cjs', import.meta.url)) },
   });
+  return { result, summary: readFileSync(join(temp.dir, 'summary.md'), 'utf8') };
+}
+
+test('PR browser workflow logs leave the mapped selection intact', t => {
+  const { result, summary } = runPrBrowserStep(t, put => put('packages/web/src/routes/task-thread/markdown.tsx', 'export function Markdown() { return 1 }\n'));
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /Selected 2 of 3 specs/);
   assert.match(result.stdout, /arg=packages\/web\/e2e\/artifact-project-links.e2e.ts/);
   assert.match(result.stdout, /arg=packages\/web\/e2e\/chat-code-fence.e2e.ts/);
   assert.doesNotMatch(result.stdout, /arg=.*smoke.e2e.ts/);
+  assert.equal(summary, '');
+});
+
+test('PR browser workflow step passes without a browser when the selection is every spec', t => {
+  const { result, summary } = runPrBrowserStep(t, put => put('packages/web/vite.config.ts', 'export default {}\n'));
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.doesNotMatch(result.stdout, /arg=/);
+  assert.match(summary, /PR CI runs no browser spec: the selector chose every spec\./);
 });
 
 test('mock function edits select only specs that executed that function, plus incomplete specs', () => {
