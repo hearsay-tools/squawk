@@ -6,7 +6,7 @@ import type { RunnerId } from './agent-runner.ts';
  * imports only that module, so an edit behind one part reruns only its files
  * (hearsay-tools/cezarion#3242). `harness-parity-cells.testkit.ts` joins every part for the guards.
  */
-export type HarnessParityPart = 'session' | 'run' | 'ownership' | 'settlement' | 'provider' | 'owned-input' | 'startup' | 'owned-workflows' | 'contract';
+export type HarnessParityPart = 'session' | 'run' | 'ownership' | 'settlement' | 'provider' | 'owned-input' | 'startup' | 'owned-workflows' | 'contract' | 'pending-request';
 
 // Adjacent semantic families; every group below belongs to exactly one part.
 export const HARNESS_PARITY_GROUPS: Readonly<Record<HarnessParityPart, readonly string[]>> = {
@@ -18,7 +18,8 @@ export const HARNESS_PARITY_GROUPS: Readonly<Record<HarnessParityPart, readonly 
   'owned-workflows': ['owned-workflows'],
   'owned-input': ['owned'],
   ownership: ['continue', 'restart', 'owner', 'adopt', 'stop'],
-  settlement: ['cleanup', 'multi-continue', 'superseded', 'disposal', 'scratch', 'permission', 'default-permission', 'retirement-P3', 'retirement-P4', 'permission-failure', 'malformed', 'early-permission', 'late-permission', 'mcp'],
+  settlement: ['cleanup', 'multi-continue', 'superseded', 'disposal', 'scratch', 'permission', 'default-permission', 'mcp'],
+  'pending-request': ['retirement-P3', 'retirement-P4', 'permission-failure', 'malformed', 'early-permission', 'late-permission'],
 };
 
 export const harnessParityFile = (backend: RunnerId, part: HarnessParityPart): string =>

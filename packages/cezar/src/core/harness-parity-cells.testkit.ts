@@ -28,6 +28,7 @@ import { describeHarnessParity as describeOwnershipParity, OWNERSHIP_GROUPS } fr
 import { describeHarnessParity as describeProviderParity, PROVIDER_GROUPS } from './harness-parity-provider.cells.testkit.ts';
 import { describeHarnessParity as describeRunParity, RUN_GROUPS } from './harness-parity-run.cells.testkit.ts';
 import { describeHarnessParity as describeSessionParity, FOLLOW_ON_CRITERION, INPUT_CRITERIA, SESSION_GROUPS } from './harness-parity-session.cells.testkit.ts';
+import { describeHarnessParity as describePendingRequestParity, PENDING_REQUEST_GROUPS } from './harness-parity-pending-request.cells.testkit.ts';
 import { describeHarnessParity as describeSettlementParity, SETTLEMENT_GROUPS } from './harness-parity-settlement.cells.testkit.ts';
 import { describeHarnessParity as describeStartupParity, STARTUP_GROUPS } from './harness-parity-startup.cells.testkit.ts';
 /**
@@ -419,15 +420,15 @@ const HARNESS_PARITY_ORDER: readonly HarnessGroup[] = [
   SESSION_GROUPS.governed, opencodeRestrictedSessions, SESSION_GROUPS['native-message'], SESSION_GROUPS.spec, SESSION_GROUPS.tools,
   SESSION_GROUPS.cdp, SETTLEMENT_GROUPS.cleanup, SETTLEMENT_GROUPS['multi-continue'], SETTLEMENT_GROUPS.superseded,
   SETTLEMENT_GROUPS.disposal, SETTLEMENT_GROUPS.scratch, RUN_GROUPS.monitoring, RUN_GROUPS.prs, SETTLEMENT_GROUPS.permission,
-  SETTLEMENT_GROUPS['default-permission'], SETTLEMENT_GROUPS.retirements, SETTLEMENT_GROUPS['permission-failure'],
-  SETTLEMENT_GROUPS.malformed, SETTLEMENT_GROUPS['early-permission'], SETTLEMENT_GROUPS['late-permission'], SETTLEMENT_GROUPS.mcp,
+  SETTLEMENT_GROUPS['default-permission'], PENDING_REQUEST_GROUPS.retirements, PENDING_REQUEST_GROUPS['permission-failure'],
+  PENDING_REQUEST_GROUPS.malformed, PENDING_REQUEST_GROUPS['early-permission'], PENDING_REQUEST_GROUPS['late-permission'], SETTLEMENT_GROUPS.mcp,
 ];
 
 /** Each part's own `describeHarnessParity`, the one its runner files call. */
 const HARNESS_PARITY_PARTS: Readonly<Record<HarnessParityPart, (scope: { runner: RunnerId; part: HarnessParityPart }, registration?: HarnessRegistration) => void>> = {
   contract: describeContractParity, startup: describeStartupParity, session: describeSessionParity, provider: describeProviderParity,
   run: describeRunParity, ownership: describeOwnershipParity, 'owned-input': describeOwnedInputParity,
-  'owned-workflows': describeOwnedWorkflowsParity, settlement: describeSettlementParity,
+  'owned-workflows': describeOwnedWorkflowsParity, settlement: describeSettlementParity, 'pending-request': describePendingRequestParity,
 };
 
 /** Every part at once: the once file's guards and single-runner cells, or a dry collection. */
