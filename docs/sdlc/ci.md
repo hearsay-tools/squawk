@@ -98,8 +98,8 @@ Before adding a YAML, shell or Markdown reader, read [Script readers](script-rea
 When Squeal is installed and validating the worktree, use its results during
 implementation. It covers unit Vitest, both fast node:test groups, and cockpit
 browser E2E in the slow tier. It does not run packaged CLI E2E
-(`npm run test:package -- <files>`): run those tests by hand, with or without
-Squeal. Pass repo-root paths; the command builds missing or stale outputs. With no
+(`npm run test:package`): CI's package job is its verdict, and agents do not run it
+locally. With no
 daemon, run `squeal start`; do not run other test runners by hand
 (AGENTS.md § Validation). `npm test` and `npm run test:watch` select only the four
 unit projects; Squeal also discovers the browser project from the root config.
@@ -117,9 +117,9 @@ This is a three-day trial (hearsay-tools/squawk#3551); revert the group to retur
 The final six-command gate and full-suite runs belong in CI. Do not run the
 complete local gate just to commit, open a PR, or complete a review. Record
 revision/diff, commands or Squeal status, results, and subsequent changes in the
-handoff, and rerun affected checks after later code edits. For an explicitly
-requested full local browser run or CI failure investigation, use
-`npm run test:e2e:local`: four isolated lanes, about 8 GiB of free RAM.
+handoff, and read affected verdicts again after later code edits. For a requested
+local browser run or a CI failure investigation, use
+`squeal run browser [<spec paths>] --wait 60000`.
 
 `test:changed` is the no-daemon fallback inside `npm run prepr`; agents do not run it by
 hand. It uses the merge-base against local `origin/main` (falling back to
@@ -326,8 +326,9 @@ under `.ai/qa/local-runs/`. A skipped browser exits nonzero there, since it did 
 verify the full suite. CI keeps eight separate serial shards on its matrix.
 `npm run test:e2e` without arguments still runs the full sequential suite,
 with the existing environment reuse. A missing browser exits 3 unless the caller
-passes `--allow-skip` to permit exit 0. For iteration use
-`npm run test:e2e -- smoke.e2e.ts -t 'test name'`. Optional `--force` and
+passes `--allow-skip` to permit exit 0. Agents iterate with
+`squeal run browser <spec paths> --wait 60000`, never these commands
+(AGENTS.md § Validation). Optional `--force` and
 `--force-rebuild` go only to environment bootstrap; other arguments (including
 `--shard=N/M`, spec paths and test-name filters) go to Vitest with quoting preserved.
 A literal `--` ends wrapper option parsing. A filtered pass is selection-only

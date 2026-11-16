@@ -156,12 +156,9 @@ and never fails a check. After the merge, each function over CRAP 30 gets a line
 the open `crap-follow-up` issue. See
 [CRAP report for changed functions](sdlc/ci.md#crap-report-for-changed-functions).
 
-For iteration, run affected test files or `npm run test:changed` (inspect with
-`-- --plan`; override the local main comparison with `-- --base=<ref>`).
-The changed-test command includes staged, unstaged and untracked changes and
-falls back to full Vitest on shared/configuration/unknown input or missing Git
-history. It is not a substitute for final verification. See [AGENTS.md § Validation](../AGENTS.md#validation)
-for targeted browser commands and the [CI guide](sdlc/ci.md) for the final-gate/evidence-reuse policy.
+For iteration, read Squeal's verdicts. Agents never run the test commands above by hand;
+[AGENTS.md § Validation](../AGENTS.md#validation) names the Squeal commands and the few
+exceptions. The [CI guide](sdlc/ci.md) holds the final-gate/evidence-reuse policy.
 
 `npm run typecheck` checks all four workspaces from source without writing build
 output. `npm run typecheck:web` checks the cockpit and reads the server route types

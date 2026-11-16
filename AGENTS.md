@@ -105,16 +105,17 @@ unless `worktreeSetup` already did.
   listed checks). A failure's diff, stack and console output:
   `squeal why '<check>' --include-logs` (names from `squeal failures <file>`). A failure
   you think load caused: `squeal retry <file> --reason load`. With no daemon, run
-  `squeal start`. Never run a test runner by hand; the one exception is a
-  [red proof recipe](docs/sdlc/regression-proof.md). Follow the
+  `squeal start`. Never run a test runner by hand. Exceptions: a
+  [red proof recipe](docs/sdlc/regression-proof.md) and a documented measurement,
+  reproduction or baseline tool; neither is a verdict. Follow the
   [wait bound](docs/sdlc/ci.md#squeal-wait-bound).
 - CI owns the final gate and full-suite runs.
 - In a unit test, wait on the product's own signal. A timeout is only a hang guard, with a
   `// bound: <reason>` comment at the call site. A test that proves something did not happen
   uses fake timers or states at the call site why it needs real time.
 - `npm run typecheck`: no build or `dist` writes; after a build: `npm run typecheck:package`.
-- CLI E2E: `npm run test:package -- <repo-root paths>`. Parity and browser specs run in CI;
-  to debug one: `squeal run run-loop|browser <paths> --wait 60000` and the
+- Packaged CLI E2E (`npm run test:package`) runs only in CI. Parity and browser specs run in
+  CI; to debug one: `squeal run run-loop|browser <paths> --wait 60000` and the
   [e2e guide](packages/web/e2e/README.md).
 
 ### Before opening a PR

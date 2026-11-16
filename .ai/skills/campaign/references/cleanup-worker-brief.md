@@ -47,8 +47,8 @@ Before the PR, in this order:
    --head HEAD; node .github/scripts/check-citations.cjs.
 4. Read focused test results through Squeal as AGENTS.md § Validation says;
    for a verdict now, run squeal run tests|run-loop <files> --wait 60000. Use
-   npm test -- <files> only for the exceptions that section names. Run the
-   Reader sweep's selected packaged checks too; browser specs run in CI.
+   npm test -- <files> only for the exceptions that section names. Packaged
+   CLI checks and browser specs run in CI.
 5. Commit, then run check-code-quality's pre-PR complexity gate, as its
    reference says. CI's complexity gate counts a moved function as new when a
    same-named delegator stays behind; tell the coordinator about any function
@@ -96,7 +96,8 @@ At the end: git checkout cez/<your 8-char id>; squeal stop in this worktree;
    silently on the next move.
    For a risky PR (one that splits or merges functions, changes call order,
    shares code between two paths, or changes tests), CI's Vitest shards give
-   the parity results. Run npm run test:parity only to debug a parity failure.
+   the parity results. To debug a parity failure, run squeal run run-loop
+   <paths> --wait 60000.
    Say in Verification which case applies.
    A changed or added test or guard needs the regression proof in
    docs/sdlc/regression-proof.md; record the command in the PR body.
