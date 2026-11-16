@@ -28,6 +28,8 @@ dist/
 /*/**/.ai/squawk/
 
 # Keep repository skill links; locally installed agent skills stay per-machine.
+.agents/
+!/.agents/
 /.agents/*
 !/.agents/skills/
 /.agents/skills/*
