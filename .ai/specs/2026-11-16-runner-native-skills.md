@@ -97,7 +97,10 @@ needs to choose between them.
   `/name`) that matches more than one entry is resolved by the scope the runner reports (D8):
   `repo` wins over `user`, and `user` wins over `system`. Squawk then sends the winner's `path`.
   When the best scope holds more than one copy, or a copy has another scope (Codex also reports
-  `admin`), the step fails at step open and the error names every path. Two cases stay
+  `admin`), the reference is ambiguous. For a step's selected skill (a workflow's `skill:`,
+  `worker spawn --skill`), the step fails at step open and the error names every path. A typed
+  `/name` never fails a step; [the section on typed names](#a-name-typed-by-a-human) says what
+  happens to it. Two cases stay
   failures under this rule, because Codex gives both copies one scope: `.agents/skills` and
   `.codex/skills` in one project are both `repo`, and `~/.agents/skills` and the Codex home's
   `skills` are both `user`. Whether Codex lists a symlinked mirror of a folder as a second entry
@@ -160,6 +163,14 @@ when the session's runner process started, and checks a later trigger against th
 Codex it reads the list again. A name that only a fresh list holds is not triggered: Squawk
 passes the text and adds a note that the skill is available after the next Continue.
 
+A typed `/name` can also be ambiguous: on Codex a second copy can appear after the step opened,
+because Codex reads the list again. Squawk resolves the name when it sends the message. For a
+held message that is when the turn ends and the message is released. It applies the D8 scope
+rule first. When the name is still ambiguous, Squawk sends no trigger: it passes the text
+unchanged and adds a note that names every path. The step does not fail and the message is
+not rejected. To recover, the user picks the skill in the cockpit picker, which stores the
+path, or removes one copy and sends the message again.
+
 ### The cockpit
 
 - **Skills page:** a read-only inventory for one runner and account: name, description, scope
@@ -202,7 +213,7 @@ Saved data still opens: a `config.json` that holds `skillsRepos` and a `ui-state
 | D5 | Skills in `.ai/skills/` (this repository has five) are read by no runner | The folders stop being sources. This repository moves its skills to a tracked native folder in a separate change. `AGENTS.md` already names them by file path |
 | D6 | A trigger in a message sent during a running turn. Tested: pi expands it. Codex drops it. OpenCode steers it into the running turn and loses the first result. Claude and omp: not tested | On every runner but pi, Squawk holds the message until the turn ends, then opens the next turn with the trigger |
 | D7 | The built-in "create automation" skill and the `interactive: true` frontmatter hint are Squawk's own | A tool in Squawk's own MCP server replaces the skill. Every adapter honors the Squawk tools, and `cezar_schedule_task` already wraps the same automation service for one-time schedules. The tool enforces "created paused" and "preview first". The picker entry and the `interactive` hint go away |
-| D8 | One id with two entries in a runner's list (Codex), named without a path | Squawk picks by the scope the runner reports: `repo` over `user` over `system`. Two copies in the best scope, or a copy with another scope, fail at step open with an error that names every path |
+| D8 | One id with two entries in a runner's list (Codex), named without a path | Squawk picks by the scope the runner reports: `repo` over `user` over `system`. When two copies share the best scope, or a copy has another scope, a step's selected skill fails at step open with an error that names every path, and a typed `/name` is sent as plain text with a note that names every path |
 
 ## Checks closed in round 2
 
