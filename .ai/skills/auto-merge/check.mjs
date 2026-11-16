@@ -56,7 +56,7 @@ export const NEVER = [
   { why: 'agent instructions or contracts', globs: [
     '**/AGENTS.md', '**/CLAUDE.md', 'CODE_REVIEW.md', 'SDLC.md', 'AGENT_PROTOCOL.md',
     '.ai/specs/2026-09-04-harness-parity-matrix.md', '.ai/skills/**', '.ai/agentic.config.json', '.ai/trackers/**',
-    '.ai/browsers/**', 'docs/sdlc/**', '.ai/upstream/README.md', 'packages/web/e2e/README.md', 'packages/web/docs/**',
+    '.ai/browsers/**', 'docs/sdlc/**', 'packages/web/e2e/README.md', 'packages/web/docs/**',
     '{.agents,.claude,.codex,.cursor,.opencode}/**',
   ] },
   { why: 'prompt text that ships', source: true, globs: [

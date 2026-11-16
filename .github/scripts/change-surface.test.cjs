@@ -17,7 +17,6 @@ const rootProcessDocuments = [
 const infraWorkflows = [
   '.github/workflows/report-workflow-failure.yml',
   '.github/workflows/sweep-ci-failures.yml',
-  '.github/workflows/upstream-scan.yml',
   '.github/workflows/npm-preview-cleanup.yml',
   '.github/workflows/publish-pr-snapshot.yml',
   '.github/workflows/issue-intake.yml',
@@ -88,25 +87,6 @@ test('isDocsPath fails closed for unsafe paths', () => {
     'docs/../README.md', 'docs//guide.md', 'packages/web/e2e/../README.md',
     'packages//web/README.md', 'packages/web/e2e/',
   ]) assert.equal(isDocsPath(unsafe), false, JSON.stringify(unsafe));
-});
-
-test('generated upstream ledger files skip the matrix without allowing arbitrary upstream code', () => {
-  const files = ['.ai/upstream/ledger.yaml', '.ai/upstream/LEDGER.md', '.ai/upstream/scans/2026-09-25.md'];
-  assert.equal(classifyPaths(files), 'docs-only');
-  for (const file of files) assert.equal(classifyPaths([file]), 'docs-only', file);
-  // reportPath preserves prior same-day reports with suffixes starting at 2.
-  for (const suffix of ['2', '3', '10', '20']) {
-    assert.equal(classifyPaths([...files, `.ai/upstream/scans/2026-09-25-${suffix}.md`]), 'docs-only');
-  }
-  for (const unsafe of [
-    '.ai/upstream/run.cjs', '.ai/upstream/ledger.yml', '.ai/upstream/scans/run.js',
-    '.ai/upstream/scans/nested/2026-09-25.md', '.ai/upstream/scans/notes.md',
-    '.ai/upstream/scans/2026-09-25-1.md', '.ai/upstream/scans/2026-09-25-02.md',
-    '.ai/upstream/scans/2026-09-25-0.md', '.ai/upstream/scans/2026-09-25-extra.md',
-    '.ai/upstream/scans/../ledger.yaml', '.ai/upstream/scans/2026-09-25.md/extra',
-    '.github/scripts/upstream-scan.cjs', '.github/scripts/upstream-ledger.cjs',
-    'packages/cezar/src/index.ts', '.github/workflows/ci.yml',
-  ]) assert.equal(classifyPaths([...files, unsafe]), 'full-matrix', unsafe);
 });
 
 test('classifies every infra allowlisted path as infra-only', () => {

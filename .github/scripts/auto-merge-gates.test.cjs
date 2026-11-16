@@ -66,7 +66,6 @@ const NPM_RUN = /\bnpm\s+(?:run\s+([\w:*-]+)|(test)\b)(?:[^\n;&|]*?\s(?:-w|--wor
 const BOT_WORKFLOWS = {
   'friction-intake.yml': 'labels friction issues',
   'issue-intake.yml': 'labels new issues',
-  'upstream-scan.yml': 'opens upstream drift pull requests',
   'mutants-weekly.yml': 'reports mutation scores',
   'mutation-report.yml': 'reports mutation scores',
   'mutation-report-comment.yml': 'comments mutation scores',
