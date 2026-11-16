@@ -115,15 +115,17 @@ describe('repeating automation tool', () => {
     const id = made.automation.id;
     await tools.automation({ action: 'preview', id }, session.signal);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    const started = Promise.withResolvers<void>();
-    const result = Promise.withResolvers<{ candidates: []; truncated: boolean; pages: number }>();
-    poll.mockImplementationOnce(() => { started.resolve(); return result.promise; });
+    let start!: () => void;
+    let finish!: (value: { candidates: []; truncated: boolean; pages: number }) => void;
+    const started = new Promise<void>(resolve => { start = resolve; });
+    const result = new Promise<{ candidates: []; truncated: boolean; pages: number }>(resolve => { finish = resolve; });
+    poll.mockImplementationOnce(() => { start(); return result; });
     const preview = tools.automation({ action: 'preview', id }, session.signal);
-    await started.promise;
+    await started;
     await vi.advanceTimersByTimeAsync(AUTOMATION_TOOL_TIMEOUT_MS);
     expect(await preview).toMatchObject({ ok: false, code: 'unavailable', message: 'Automation tool preview timed out.' });
     expect(await tools.automation({ action: 'enable', id, explicit: true }, session.signal)).toMatchObject({ code: 'preview_required' });
-    result.resolve({ candidates: [], truncated: false, pages: 1 });
+    finish({ candidates: [], truncated: false, pages: 1 });
     // bound: the scheduler releases its lease after the provider settles.
     await vi.waitFor(() => {
       const lease = project.automationStore.acquireLease();
