@@ -94,8 +94,14 @@ needs to choose between them.
   only the structured item with a `path` starts one of them; the text form starts neither. So a
   skill reference is `{ id, path? }`. A pick in the cockpit stores the `path` when the runner
   reports one. A reference with no path (a workflow's `skill:`, `worker spawn --skill`, a typed
-  `/name`) that matches more than one entry fails at step open; the error names every path. It
-  is not resolved by a Squawk rule (D8). Claude, OpenCode, pi and omp list one entry for each id.
+  `/name`) that matches more than one entry is resolved by the scope the runner reports (D8):
+  `repo` wins over `user`, and `user` wins over `system`. Squawk then sends the winner's `path`.
+  When the best scope holds more than one copy, or a copy has another scope (Codex also reports
+  `admin`), the step fails at step open and the error names every path. Two cases stay
+  failures under this rule, because Codex gives both copies one scope: `.agents/skills` and
+  `.codex/skills` in one project are both `repo`, and `~/.agents/skills` and the Codex home's
+  `skills` are both `user`. Whether Codex lists a symlinked mirror of a folder as a second entry
+  is not tested. Claude, OpenCode, pi and omp list one entry for each id.
 - **`AgentRunSpec.skill = { id, path?, args }`** asks the adapter to open the turn with that skill. The
   adapter builds its own form, and each form below is tested:
 
@@ -196,7 +202,7 @@ Saved data still opens: a `config.json` that holds `skillsRepos` and a `ui-state
 | D5 | Skills in `.ai/skills/` (this repository has five) are read by no runner | The folders stop being sources. This repository moves its skills to a tracked native folder in a separate change. `AGENTS.md` already names them by file path |
 | D6 | A trigger in a message sent during a running turn. Tested: pi expands it. Codex drops it. OpenCode steers it into the running turn and loses the first result. Claude and omp: not tested | On every runner but pi, Squawk holds the message until the turn ends, then opens the next turn with the trigger |
 | D7 | The built-in "create automation" skill and the `interactive: true` frontmatter hint are Squawk's own | A tool in Squawk's own MCP server replaces the skill. Every adapter honors the Squawk tools, and `cezar_schedule_task` already wraps the same automation service for one-time schedules. The tool enforces "created paused" and "preview first". The picker entry and the `interactive` hint go away |
-| D8 | One id with two entries in a runner's list (Codex), named without a path | Proposed on 2026-11-16 after review, not yet confirmed by the owner: the step fails at step open and the error names every path. Squawk adds no precedence rule of its own |
+| D8 | One id with two entries in a runner's list (Codex), named without a path | Squawk picks by the scope the runner reports: `repo` over `user` over `system`. Two copies in the best scope, or a copy with another scope, fail at step open with an error that names every path |
 
 ## Checks closed in round 2
 
@@ -216,6 +222,7 @@ Saved data still opens: a `config.json` that holds `skillsRepos` and a `ui-state
 - Claude, omp: a trigger in a message during a running turn.
 - Codex: a list call with a fresh home writes state files into that home.
 - omp: `OMP_PROFILE` against the real omp root (the probe used a scratch root).
+- Codex: whether a symlinked mirror of a skill folder is listed as a second entry.
 - The layers above the omp adapter on a skill turn.
 
 ## Plan
