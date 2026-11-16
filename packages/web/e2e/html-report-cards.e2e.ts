@@ -5,7 +5,6 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
-import { LIVE_PROTOCOL } from '@open-mercato/cezar-api-client/contract/live-coordination'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { seedRuns } from './seed-runs'
 import { AgentBrowser, bootProjectId, squawkCli, fixtureServeEnv } from './agent-browser'
@@ -294,34 +293,7 @@ it.each(['light', 'dark'])('fits a full-screen phone reader with accessible card
 
 it.each([360, 1440])('opens and closes a report from the agent sheet at %ipx', width => {
   browser.setViewport(width, 640)
-  // Cold history omits agent message children (hearsay-tools/cezarion#2463).
-  // Capture the real shared-worker subscription and deliver a native live message,
-  // as thread-scroll.e2e.ts does. Keep the normal history requests and transport.
-  browser.goto(base + `/p/${projectId}/`)
-  browser.waitForFunction(`document.querySelector('[data-route="tasks"]') !== null`)
-  browser.evaluate(`(() => {
-    const post = MessagePort.prototype.postMessage;
-    MessagePort.prototype.postMessage = function(message, ...rest) {
-      if (message?.type === 'sync' && message.version === ${LIVE_PROTOCOL}) {
-        const entry = message.entries.find(entry => entry.demand.kind === 'run' && entry.demand.runId === '${agentRunId}');
-        if (entry) window.__reportLive = { port: this, epoch: message.epoch, entry };
-      }
-      return post.call(this, message, ...rest);
-    };
-    history.pushState(null, '', '/p/${projectId}/tasks/${agentRunId}');
-    window.dispatchEvent(new PopStateEvent('popstate'));
-  })()`)
-  browser.waitForFunction(`window.__reportLive !== undefined && document.querySelector('[data-slot="run-activity-dock"]') !== null`)
-  browser.evaluate(`(() => {
-    const current = window.__reportLive;
-    current.port.dispatchEvent(new MessageEvent('message', { data: {
-      version: ${LIVE_PROTOCOL}, type: 'frame', epoch: current.epoch, id: current.entry.id,
-      frame: { type: 'event', projectId: '${projectId}', runId: '${agentRunId}', name: 'ui-event', event: {
-        type: 'item.completed', seq: 1000, ts: '2026-11-01T08:02:00Z', stepId: 'task',
-        item: { kind: 'message', id: 'live-agent-report', role: 'assistant', parentItemId: 'toolu_task_a_1', text: ${JSON.stringify(`Live agent report: ${publication.markdown}`)} }
-      } }
-    } }));
-  })()`)
+  browser.goto(base + `/p/${projectId}/tasks/${agentRunId}`)
   const activity = '[data-slot="run-activity-dock"]'
   browser.waitForFunction(`document.querySelector('${activity} > button') !== null`)
   browser.evaluate(`document.querySelector('${activity} > button').scrollIntoView({ block: 'center' })`)

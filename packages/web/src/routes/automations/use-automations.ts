@@ -4,7 +4,7 @@ import type { AutomationsResponse } from '@open-mercato/cezar-api-client'
 
 import { onWorkspaceEvent } from '@/api/global-events'
 import { getAutomations } from '@/api/client'
-import { useHealth } from '@/api/queries'
+import { useAutomationsAvailable } from '@/lib/capabilities'
 import { useActiveProjectId } from '@/lib/project-router'
 
 /**
@@ -13,7 +13,7 @@ import { useActiveProjectId } from '@/lib/project-router'
  *
  * Waits for health rather than firing optimistically: a fetch made before the answer arrives
  * would 409 on a gated server and paint an error over the disabled state. The effect depends on
- * two booleans, not `health.data`, so a health refetch does not re-request the list.
+ * one boolean, not `health.data`, so a health refetch does not re-request the list.
  */
 /** `archived`: `only` for the list's Archived filter; `include` where one schedule is looked up by id. */
 export function useAutomations(archived?: 'include' | 'only'): {
@@ -22,17 +22,15 @@ export function useAutomations(archived?: 'include' | 'only'): {
   refresh: () => Promise<void>
 } {
   const projectId = useActiveProjectId()
-  const health = useHealth()
-  const healthKnown = health.data !== undefined
-  const off = healthKnown && health.data.capabilities?.automations !== true
+  const available = useAutomationsAvailable()
   const [data, setData] = useState<AutomationsResponse>()
   const [error, setError] = useState('')
   const refresh = useCallback(
     (signal?: AbortSignal) => getAutomations({ signal, ...(archived ? { archived } : {}) }).then((next) => { if (signal?.aborted) return; setData(next); setError('') }).catch((cause) => { if (!signal?.aborted) setError(String(cause)) }),
     [archived],
   )
-  useEffect(() => { if (healthKnown && !off) void refresh() }, [healthKnown, off, refresh])
-  useEffect(() => onLiveReconcile(async signal => { if (healthKnown && !off) await refresh(signal) }), [healthKnown, off, refresh])
+  useEffect(() => { if (available) void refresh() }, [available, refresh])
+  useEffect(() => onLiveReconcile(async signal => { if (available) await refresh(signal) }), [available, refresh])
   useEffect(() => onWorkspaceEvent((name, payload) => {
     if (name !== 'automation-change') return
     const changed = payload as { project?: unknown }

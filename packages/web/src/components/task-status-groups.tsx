@@ -6,7 +6,7 @@ import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import type { AttentionTone } from '@/lib/attention'
 import type { BucketLabel } from '@/lib/task-groups'
-import { TASK_ORIGINS, type TaskOrigin } from '@/lib/task-origin'
+import { taskOrigins, type TaskOrigin } from '@/lib/task-origin'
 import { progressPreview } from '@/lib/task-preview'
 import { cn } from '@/lib/utils'
 
@@ -17,19 +17,22 @@ import { cn } from '@/lib/utils'
  */
 
 /** All / Direct tasks / Automations, each with the count it would show. Independent of the
- *  Active / Archived tabs: switching tabs keeps the origin. */
+ *  Active / Archived tabs: switching tabs keeps the origin. `automations` is
+ *  `useAutomationsAvailable`: without it there is no Automations chip. */
 export function OriginFilter({
   origin,
   counts,
+  automations,
   onChange,
 }: {
   origin: TaskOrigin
   counts: Record<TaskOrigin, number>
+  automations: boolean
   onChange: (origin: TaskOrigin) => void
 }) {
   return (
     <div role="group" aria-label="Task origin" data-slot="origin-filter" className="flex flex-wrap items-center gap-1.5">
-      {TASK_ORIGINS.map((option) => {
+      {taskOrigins(automations).map((option) => {
         const pressed = option.value === origin
         return (
           <button
@@ -70,9 +73,10 @@ export function GroupFoldControls({ onExpand, onCollapse }: { onExpand: () => vo
  * The row under the toolbar: the origin chips, and the fold controls while there are groups to
  * fold.
  */
-export function TaskOriginRow({ origin, counts, onChange, labels, onSetAll }: {
+export function TaskOriginRow({ origin, counts, automations, onChange, labels, onSetAll }: {
   origin: TaskOrigin
   counts: Record<TaskOrigin, number>
+  automations: boolean
   onChange: (origin: TaskOrigin) => void
   /** The groups on screen, which the fold controls open or close together. */
   labels: readonly BucketLabel[]
@@ -80,7 +84,7 @@ export function TaskOriginRow({ origin, counts, onChange, labels, onSetAll }: {
 }) {
   return (
     <div data-slot="task-origin-row" className="flex flex-wrap items-center gap-2.5">
-      <OriginFilter origin={origin} counts={counts} onChange={onChange} />
+      <OriginFilter origin={origin} counts={counts} automations={automations} onChange={onChange} />
       {labels.length > 0 ? <GroupFoldControls onExpand={() => onSetAll(labels, false)} onCollapse={() => onSetAll(labels, true)} /> : null}
     </div>
   )

@@ -141,5 +141,6 @@ export function printServeBanner(
     const detail = check.available ? (check.version ?? 'ok') : (check.hint ?? 'missing');
     console.log(`  ${mark} ${check.name.padEnd(6)} ${detail}`);
   }
+  // .ai/scripts/test-env-up.sh starts the e2e server with --port 0 and reads its URL from this line.
   console.log(`\n  cockpit → ${url}\n`);
 }

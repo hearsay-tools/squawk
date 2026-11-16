@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { NAV_ITEMS, activeNavItem, activeNavPath, isPushedGitScreen, isPushedRoute, visibleNavItems } from './nav-items'
+import { automationsAvailable } from '@/lib/capabilities'
 
 /** Which nav item owns a URL. This is the rule that decides what the user sees lit up, and it
  *  is not a plain equality check — items own areas, and the Settings area nests. */
@@ -146,6 +147,15 @@ describe('visibleNavItems', () => {
 
   it('defaults to absent — the nav claims nothing before health answers', () => {
     expect(labelsOf()).toEqual(labelsOf({ forge: false, automations: false }))
+  })
+
+  it('shows Automations only for a payload that says automations: true (hearsay-tools/squawk#1401)', () => {
+    const shown = (health: Parameters<typeof automationsAvailable>[0]) =>
+      labelsOf({ forge: true, automations: automationsAvailable(health) }).includes('Automations')
+    expect(shown({ capabilities: { automations: true } })).toBe(true)
+    expect(shown({ capabilities: { automations: false } })).toBe(false)
+    expect(shown({ capabilities: {} })).toBe(false)
+    expect(shown(undefined)).toBe(false)
   })
 
   it('never invents an item — the result is always a subset of NAV_ITEMS, in order', () => {

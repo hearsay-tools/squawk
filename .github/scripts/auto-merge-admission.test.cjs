@@ -32,7 +32,7 @@ for (const name of [
   'merge-queue-admission', 'queue-ci-proof', 'pr-test-proof', 'pr-test-input',
   'pr-readiness', 'review-threads', 'review-signal', 'release-bump-pr',
   'check-clones', 'check-spec-status', 'check-citations', 'change-coupling', 'api-budget',
-  'missing-patches', 'failure-diagnostics',
+  'missing-patches', 'failure-diagnostics', 'vitest-worker-count',
 ]) test(`a small ${name} change requires owner review`, t => {
   const relative = `.github/scripts/${name}.cjs`;
   const result = checkChange(t, relative, 'module.exports = false;\n', 'module.exports = true;\n');
@@ -42,6 +42,10 @@ for (const name of [
 
 for (const [relative, why] of [
   ['.github/scripts/merge-vitest-coverage.mjs', 'gate or test harness'],
+  ['.github/scripts/vitest-coverage-tests.mjs', 'gate or test harness'],
+  ['.github/scripts/vitest-file-duration.mjs', 'gate or test harness'],
+  ['.github/scripts/auto-merge-gates.test.cjs', 'gate or test harness'],
+  ['.github/scripts/auto-merge-admission.test.cjs', 'gate or test harness'],
   ['.github/actions/node-dist/action.yml', 'gate or test harness'],
   ['scripts/prepr.mjs', 'gate or test harness'],
   ['scripts/check-typecheck-coverage.mjs', 'gate or test harness'],
@@ -50,6 +54,14 @@ for (const [relative, why] of [
   ['packages/cezar/src/ast-grep-rules.testkit.ts', 'gate or test harness'],
   ['packages/cezar/src/lint/run.ts', 'lint gate'],
   ['packages/cezar/src/lint/home-readers.baseline.json', 'lint gate'],
+  ['packages/cezar/src/file-length.baseline.json', 'lint gate'],
+  ['packages/web/src/test/unit-wait-discipline.baseline.json', 'lint gate'],
+  ['packages/web/e2e/fetch-setup.mjs', 'gate or test harness'],
+  ['packages/web/e2e/wait-support.ts', 'gate or test harness'],
+  ['packages/cezar/src/test-outbound-guard.testkit.ts', 'gate or test harness'],
+  ['packages/web/src/test/wait-baseline.ts', 'guard test change'],
+  ['scripts/test-browser-home-env.mjs', 'gate or test harness'],
+  ['packages/web/product-identity.ts', 'build or release source'],
   ['.oxlintrc.json', 'lint gate'],
   ['sgconfig.yml', 'lint gate'],
   ['.ai/ast-grep/rules/some-rule.yml', 'lint gate'],
@@ -66,6 +78,7 @@ for (const [relative, why] of [
 });
 
 for (const relative of [
+  'packages/web/e2e/new-flow.e2e.ts',
   '.ai/ast-grep/rule-tests/some-rule-test.yml',
   '.ai/ast-grep/fixtures/some-case.compile.ts',
   'packages/cezar/src/lint/plugin.test.ts',

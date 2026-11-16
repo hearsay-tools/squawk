@@ -36,6 +36,12 @@
 #   2026-10-27 boot from the tracked .ai/scripts/test-env.inputs.json (hearsay-tools/cezarion#1977):
 #             its default server env and pinned agent-browser release, with its digest in the
 #             descriptor as a reuse key. The descriptor is runtime state Squeal ignores.
+#   2026-11-15 start the app with --port 0 and read its URL from the "cockpit →" line it
+#             prints once it listens. A port probed here and bound later by the app could be
+#             taken in between by another listen(0) on the host (EADDRINUSE under load).
+#   2026-11-15 a boot that ends after starting the app and before writing its descriptor, by an
+#             error or by SIGINT/SIGTERM, stops that app: nothing else could name it. INT and TERM
+#             now end the boot; before, their trap released the lock and the boot went on.
 set -eu
 
 # ---- project-specific parameters -------------------------------------------
@@ -72,7 +78,6 @@ else
   SERVED_ROOT="$QA_DIR/served/${REPO_ROOT##*/}"
 fi
 
-PREFERRED_PORT=4321
 HEALTH_PATH="/api/v1/health"
 HEALTH_TIMEOUT=${TEST_ENV_HEALTH_TIMEOUT_SECONDS:-180}
 if ! node -e 'const s=process.argv[1]; process.exit(/^[1-9][0-9]*$/.test(s) && Number.isSafeInteger(Number(s)) ? 0 : 1)' -- "$HEALTH_TIMEOUT"; then
@@ -188,26 +193,10 @@ export GIT_COMMITTER_EMAIL='tests@cezar.invalid'
 
 log() { echo "[test-env] $*" >&2; }
 
-# Never assume python3 exists — cascade through whatever the machine has.
-free_port() {
-  if command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()'
-  elif command -v python >/dev/null 2>&1; then
-    python -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()'
-  elif command -v node >/dev/null 2>&1; then
-    node -e 's=require("net").createServer();s.listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})'
-  else
-    awk 'BEGIN{srand();print 20000+int(rand()*20000)}'
-  fi
-}
-
-port_free() {
-  node -e '
-    const net = require("net");
-    const s = net.createServer();
-    s.once("error", () => process.exit(1));
-    s.listen(Number(process.argv[1]), "127.0.0.1", () => s.close(() => process.exit(0)));
-  ' "$1" 2>/dev/null
+# The URL the app prints once it listens (printServeBanner in serve-boot.ts), or nothing yet.
+bound_url() {
+  line=$(grep -m 1 -o 'cockpit → http://[^ ]*' "$APP_LOG" 2>/dev/null) || return 0
+  printf '%s' "${line#cockpit → }"
 }
 
 http_ok() { curl -fsS --max-time "${2:-5}" "$1" >/dev/null 2>&1; }
@@ -233,7 +222,19 @@ BROWSER_PIN=$(printf '%s' "$INPUTS" | json_get - agentBrowserVersion)
 # "source newer than startedAt" test is what keeps a stale build from being tested.
 LOCK_HELD=0
 release_lock() { [ "$LOCK_HELD" = 1 ] && rm -rf "$LOCK_DIR" 2>/dev/null || true; }
-trap release_lock EXIT INT TERM
+# 1 from the app's start until its descriptor is written: a boot that ends in between, by an
+# error or a signal, stops the app, since no descriptor names it for test-env-down.sh.
+APP_UNRECORDED=0
+stop_unrecorded_app() {
+  [ "$APP_UNRECORDED" = 1 ] || return 0
+  APP_UNRECORDED=0
+  log "stopping the app this boot started (pid $APP_PID): the boot ended before recording it"
+  node "$SCRIPT_DIR/test-env-lease.mjs" stop-app 1000 "$APP_PID" "$APP_START" >&2 || true
+}
+on_exit() { stop_unrecorded_app; release_lock; }
+trap on_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 acquire_lock() {
   waited=0
@@ -625,11 +626,10 @@ ensure_browser() {
 
 # ---- 6. app start + health wait ---------------------------------------------
 start_app() {
-  PORT=$PREFERRED_PORT
-  port_free "$PORT" || PORT=$(free_port)
-  BASE_URL="http://127.0.0.1:$PORT"
-
-  log "starting Squawk on $BASE_URL (CEZ_DRY_RUN=1${SERVER_ENV:+ $SERVER_ENV})"
+  # --port 0: the app binds a port the kernel picks and prints its URL. A port picked here
+  # and bound later by the app can be taken in between by any other listen(0) on the host.
+  BASE_URL=
+  log "starting Squawk on a port it picks itself (CEZ_DRY_RUN=1${SERVER_ENV:+ $SERVER_ENV})"
   # --no-open: a test boot must never hijack the operator's browser.
   # Detach through Node on every host: the cached app survives the caller and is
   # outside the command group retained by a crashed build's lifetime lease.
@@ -638,9 +638,10 @@ start_app() {
   rm -rf "$QA_DIR/server-home"
   mkdir -p "$QA_DIR/server-home"
   APP=$(cd "$REPO_ROOT" && HOME="$QA_DIR/server-home" USERPROFILE="$QA_DIR/server-home" node "$SCRIPT_DIR/test-env-lease.mjs" detach-app --json "$APP_LOG" \
-    "$E2E_BUILD_ROOT/dist/index.js" --port "$PORT" --no-open --repo "$SERVED_ROOT")
+    "$E2E_BUILD_ROOT/dist/index.js" --port 0 --no-open --repo "$SERVED_ROOT")
   APP_PID=$(printf '%s' "$APP" | json_get - pid)
   APP_START=$(printf '%s' "$APP" | json_get - start)
+  APP_UNRECORDED=1
 
   health_started=$(date +%s)
   health_deadline=$((health_started + HEALTH_TIMEOUT))
@@ -656,7 +657,14 @@ start_app() {
     # A slow probe must not spend five extra seconds past the overall deadline.
     probe_timeout=5
     [ "$remaining" -ge 5 ] || probe_timeout=$remaining
-    if http_ok "$BASE_URL$HEALTH_PATH" "$probe_timeout"; then
+    if [ -z "$BASE_URL" ]; then
+      BASE_URL=$(bound_url)
+      if [ -n "$BASE_URL" ]; then
+        PORT=${BASE_URL##*:}
+        log "Squawk listens on $BASE_URL"
+      fi
+    fi
+    if [ -n "$BASE_URL" ] && http_ok "$BASE_URL$HEALTH_PATH" "$probe_timeout"; then
       health_now=$(date +%s)
       if [ "$health_now" -lt "$health_deadline" ]; then
         log "healthy after $((health_now - health_started))s"
@@ -670,7 +678,7 @@ start_app() {
   done
   log "health wait timed out after $((health_now - health_started))s — see .ai/qa/test-env-app.log"
   tail -20 "$APP_LOG" >&2 || true
-  node "$SCRIPT_DIR/test-env-lease.mjs" stop-app 1000 "$APP_PID" "$APP_START" || true
+  stop_unrecorded_app
   exit 1
 }
 
@@ -714,7 +722,7 @@ write_descriptor() {
       notes: "Booted from the VITE_CEZ_E2E=1 build in .ai/qa/build/cezar (never packages/cezar/dist) after pnpm install --frozen-lockfile with CEZ_DRY_RUN=1, so workspace links/runtime dependencies are present, the agent CLIs are mocked, and no agent login/network is needed. Serves servedRoot, an isolated clone of this checkout. No backing services. Stop with .ai/scripts/test-env-down.sh. App log: .ai/qa/test-env-app.log.",
     }, null, 2) + "\n");
   ' "$ENV_DESCRIPTOR" "$BASE_URL" "$PORT" "$APP_PID" "$APP_START" \
-    "${SERVER_ENV:+$SERVER_ENV }CEZ_DRY_RUN=1 CEZ_HOME=.ai/qa/cez-home HOME=.ai/qa/server-home USERPROFILE=.ai/qa/server-home node $E2E_BUILD_ROOT/dist/index.js --port $PORT --no-open --repo $SERVED_ROOT" \
+    "${SERVER_ENV:+$SERVER_ENV }CEZ_DRY_RUN=1 CEZ_HOME=.ai/qa/cez-home HOME=.ai/qa/server-home USERPROFILE=.ai/qa/server-home node $E2E_BUILD_ROOT/dist/index.js --port 0 --no-open --repo $SERVED_ROOT" \
     "$BROWSER_INSTALLED" "$BROWSER_COMMAND" "$BROWSER_VERSION" "$BROWSER_NOTES" "$BROWSER_DESCRIPTOR" \
     "$(uname -s 2>/dev/null | grep -qi Linux && { grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null && echo wsl2 || echo linux; } || echo darwin)" \
     "$BROWSER_LAUNCH_JSON" "$SERVED_ROOT" "$SERVER_ENV_KEY" "$WATCH_KEY" "$INPUTS_SHA"
@@ -735,4 +743,5 @@ ensure_build
 prepare_served_repo
 start_app
 write_descriptor
+APP_UNRECORDED=0
 emit 0

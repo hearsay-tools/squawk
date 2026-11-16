@@ -158,7 +158,7 @@ describe('filterGlobalTasks', () => {
   })
 
   it('filters multiple projects alongside tags and preserves project URLs', () => {
-    const state = urlStateFromSearchParams(new URLSearchParams('project=api&project=infra&tag=storefront&group=status'))
+    const state = urlStateFromSearchParams(new URLSearchParams('project=api&project=infra&tag=storefront&group=status'), true)
     expect(ids(filterGlobalTasks(tasks, state.filters, 'active'))).toEqual(['a1'])
     expect(urlStateToSearchParams(state).getAll('project')).toEqual(['api', 'infra'])
     expect(resetCount(state)).toBe(4)
@@ -350,7 +350,7 @@ describe('URL state', () => {
     ...over,
   })
   const roundTrip = (over: Partial<GlobalTasksUrlState> = {}) =>
-    urlStateFromSearchParams(urlStateToSearchParams(state(over)))
+    urlStateFromSearchParams(urlStateToSearchParams(state(over)), true)
 
   it('emits nothing for a bare page, so /tasks stays a bare /tasks', () => {
     expect(urlStateToSearchParams(DEFAULT_URL_STATE).toString()).toBe('')
@@ -382,14 +382,14 @@ describe('URL state', () => {
     const params = urlStateToSearchParams(state({ filters: filters({ tags: [UNTAGGED, 'infra'] }) }))
     expect(params.get(SEARCH_PARAMS.untagged)).toBe('1')
     expect(params.getAll(SEARCH_PARAMS.tag)).toEqual(['infra'])
-    expect(urlStateFromSearchParams(params).filters.tags).toEqual(['infra', UNTAGGED])
+    expect(urlStateFromSearchParams(params, true).filters.tags).toEqual(['infra', UNTAGGED])
   })
 
   it('spells only the archived view, because active is the default', () => {
     expect(urlStateToSearchParams(state({ view: 'active' })).has(SEARCH_PARAMS.archived)).toBe(false)
     expect(urlStateToSearchParams(state({ view: 'archived' })).get(SEARCH_PARAMS.archived)).toBe('1')
-    expect(urlStateFromSearchParams(new URLSearchParams('archived=1')).view).toBe('archived')
-    expect(urlStateFromSearchParams(new URLSearchParams('')).view).toBe('active')
+    expect(urlStateFromSearchParams(new URLSearchParams('archived=1'), true).view).toBe('archived')
+    expect(urlStateFromSearchParams(new URLSearchParams(''), true).view).toBe('active')
   })
 
   it('trims the query and omits an empty one', () => {
@@ -410,13 +410,17 @@ describe('URL state', () => {
 
   it('forgives whatever a pasted or hand-edited URL carries', () => {
     // An unknown grouping is not grouped — never a blank page.
-    expect(urlStateFromSearchParams(new URLSearchParams('group=bogus')).groupBy).toBe('none')
-    expect(urlStateFromSearchParams(new URLSearchParams(''))).toEqual(DEFAULT_URL_STATE)
+    expect(urlStateFromSearchParams(new URLSearchParams('group=bogus'), true).groupBy).toBe('none')
+    expect(urlStateFromSearchParams(new URLSearchParams(''), true)).toEqual(DEFAULT_URL_STATE)
     // Empty values are dropped rather than becoming a filter matching nothing.
-    expect(urlStateFromSearchParams(new URLSearchParams('tag=&status=')).filters).toEqual(NO_FILTERS)
-    expect(urlStateFromSearchParams(new URLSearchParams('untagged=yes')).filters.tags).toEqual([])
+    expect(urlStateFromSearchParams(new URLSearchParams('tag=&status='), true).filters).toEqual(NO_FILTERS)
+    expect(urlStateFromSearchParams(new URLSearchParams('untagged=yes'), true).filters.tags).toEqual([])
     // Anything but the exact flag is the default view.
-    expect(urlStateFromSearchParams(new URLSearchParams('archived=yes')).view).toBe('active')
+    expect(urlStateFromSearchParams(new URLSearchParams('archived=yes'), true).view).toBe('active')
+    // While automations are off, a linked Automations origin reads as All (hearsay-tools/squawk#1401).
+    expect(urlStateFromSearchParams(new URLSearchParams('origin=automations'), false).filters.origin).toBeUndefined()
+    expect(urlStateFromSearchParams(new URLSearchParams('origin=direct'), false).filters.origin).toBe('direct')
+    expect(urlStateFromSearchParams(new URLSearchParams('origin=automations'), true).filters.origin).toBe('automations')
   })
 })
 

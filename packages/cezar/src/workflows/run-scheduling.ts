@@ -43,8 +43,17 @@ export function resumeInFlight(run: Pick<RunRecord, 'status' | 'autoResumeAttemp
 
 export { sessionlessWakePrompt } from './run/wait-kinds.ts';
 
-/** Resume the persisted pending tail instead of replaying completed agents. */
+/** The index of the step the run's `start` cursor names (ADR 0064), else -1. */
+export function workflowStartIndex(run: Pick<RunRecord, 'workflowCursor'>, workflow: WorkflowDef): number {
+  const cursor = run.workflowCursor;
+  return cursor?.mode === 'start' ? workflow.steps.findIndex(definition => definition.id === cursor.stepId) : -1;
+}
+
+/** Resume from the run's `start` cursor, else the persisted pending tail, instead of replaying
+ *  completed agents. */
 export function queuedStartAt(run: RunRecord, workflow: WorkflowDef): number {
+  const cursor = workflowStartIndex(run, workflow);
+  if (cursor >= 0) return cursor;
   return Math.max(0, workflow.steps.findIndex(definition =>
     run.steps.find(step => step.id === definition.id)?.status === 'pending'));
 }

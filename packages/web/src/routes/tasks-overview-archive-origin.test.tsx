@@ -22,7 +22,7 @@ describe('archived pages past the window', () => {
     rerender(
       <QueryClientProvider client={createQueryClient()}>
         <MemoryRouter>
-          <TasksOverview runs={archivedRuns(200)} view="archived" now={NOW} archivedTotal={250}
+          <TasksOverview runs={archivedRuns(200)} view="archived" automations now={NOW} archivedTotal={250}
             onViewChange={vi.fn()} onArchiveFinished={vi.fn()} onMarkAllRead={vi.fn()} onRename={vi.fn()} />
         </MemoryRouter>
       </QueryClientProvider>,
@@ -38,7 +38,7 @@ describe('archived pages past the window', () => {
     rerender(
       <QueryClientProvider client={createQueryClient()}>
         <MemoryRouter>
-          <TasksOverview runs={window} view="archived" now={NOW} origin="automations" onOriginChange={vi.fn()}
+          <TasksOverview runs={window} view="archived" automations now={NOW} origin="automations" onOriginChange={vi.fn()}
             archivedPages={{ ...searched, plainHasMore: false }}
             onViewChange={vi.fn()} onArchiveFinished={vi.fn()} onMarkAllRead={vi.fn()} onRename={vi.fn()} />
         </MemoryRouter>
@@ -174,6 +174,15 @@ describe('TasksOverview — status groups and origin (hearsay-tools/cezarion#161
     void rerender
   })
 
+  it('hides the Automations origin, and lists every origin, while automations are off (hearsay-tools/squawk#1401)', () => {
+    const runs = [run({ id: 'direct' }), automated({ id: 'auto-done' })]
+    renderOverview({ runs, automations: false, origin: 'automations', onOriginChange: vi.fn() }, false)
+    const chips = within(document.querySelector('[data-slot="origin-filter"]') as HTMLElement)
+    expect(chips.queryByRole('button', { name: /^Automations/ })).toBeNull()
+    expect(chips.getByRole('button', { name: 'All 2' }).getAttribute('aria-pressed')).toBe('true')
+    expect(rowIds().sort()).toEqual(['/tasks/auto-done', '/tasks/direct'])
+  })
+
   it('names the search in the plain count caption', () => {
     const caption = () => document.querySelector('[data-slot="tasks-result-count"]') as HTMLElement
     renderOverview({ runs: [run({ title: 'Needle' })] }, false)
@@ -187,7 +196,7 @@ describe('TasksOverview — status groups and origin (hearsay-tools/cezarion#161
     const view = (query: string) => (
       <QueryClientProvider client={createQueryClient()}>
         <MemoryRouter>
-          <TasksOverview {...props} urlQuery={query} view="active" now={NOW}
+          <TasksOverview {...props} urlQuery={query} view="active" automations now={NOW}
             onViewChange={vi.fn()} onArchiveFinished={vi.fn()} onMarkAllRead={vi.fn()} onRename={vi.fn()} />
         </MemoryRouter>
       </QueryClientProvider>
@@ -211,7 +220,7 @@ describe('TasksOverview — status groups and origin (hearsay-tools/cezarion#161
     const view = (query: string) => (
       <QueryClientProvider client={createQueryClient()}>
         <MemoryRouter>
-          <TasksOverview {...props} urlQuery={query} view="active" now={NOW}
+          <TasksOverview {...props} urlQuery={query} view="active" automations now={NOW}
             onViewChange={vi.fn()} onArchiveFinished={vi.fn()} onMarkAllRead={vi.fn()} onRename={vi.fn()} />
         </MemoryRouter>
       </QueryClientProvider>

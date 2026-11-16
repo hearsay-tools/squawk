@@ -1268,7 +1268,7 @@ describe('global tasks — status groups and origin (hearsay-tools/cezarion#1616
   const origins = () => [...document.querySelectorAll('[data-slot="global-task-row"] [data-slot="task-origin"]')].map((line) => line.textContent)
 
   it('groups by status, and filters by origin through the URL', async () => {
-    stubFetch({ runs: [...RUNS, automated] })
+    stubFetch({ runs: [...RUNS, automated], automations: {} })
     renderPage()
     await screen.findByText('Nightly health')
     expect([...document.querySelectorAll('[data-slot="task-status-group"]')].map((group) => group.getAttribute('data-bucket')))
@@ -1282,6 +1282,26 @@ describe('global tasks — status groups and origin (hearsay-tools/cezarion#1616
     // Origin survives the archive switch.
     fireEvent.click(screen.getByRole('button', { name: 'Archived' }))
     await waitFor(() => expect(search()).toBe('?archived=1&origin=automations'))
+  })
+
+  it('hides the Automations origin, and lists every origin, while automations are off (hearsay-tools/squawk#1401)', async () => {
+    stubFetch({ runs: [...RUNS, automated] })
+    renderPage(createQueryClient(), '/tasks?origin=automations')
+    await screen.findByText('Nightly health')
+    const chips = within(document.querySelector('[data-slot="origin-filter"]') as HTMLElement)
+    expect(chips.queryByRole('button', { name: /^Automations/ })).toBeNull()
+    expect(chips.getByRole('button', { name: /^All/ }).getAttribute('aria-pressed')).toBe('true')
+    expect(rowIds()).toContain('nightly-run')
+    expect(rowIds()).toContain('a1')
+  })
+
+  it('keeps a linked Automations origin in the URL while another filter changes with automations off (hearsay-tools/squawk#1401)', async () => {
+    stubFetch({ runs: [...RUNS, automated] })
+    renderPage(createQueryClient(), '/tasks?origin=automations')
+    await screen.findByText('Nightly health')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search tasks across projects' }), { target: { value: 'runner' } })
+    await waitFor(() => expect(search()).toContain('q=runner'))
+    expect(search()).toContain('origin=automations')
   })
 
   it('names project and origin under every title, falling back to the automation id', async () => {

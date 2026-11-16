@@ -1,6 +1,6 @@
 import { productName } from '@/lib/product-name'
 import { projectAddress } from '@/api/run-address'
-import { useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 
 import { useHealth, useProjectRuns, useProjects } from '@/api/queries'
@@ -8,6 +8,7 @@ import type { HealthResponse, ProjectListEntry, ProjectsResponse, RunSummary } f
 import { AppShell } from '@/components/app-shell'
 import { CommandPalette } from '@/components/command-palette'
 import { ListViewProvider } from '@/components/list-view'
+import { automationsAvailable } from '@/lib/capabilities'
 import { ProviderBannerContainer } from '@/components/provider-banner-container'
 import { HomeRecoveryBanner } from '@/components/home-recovery-banner'
 import { SidebarProjectHeader } from '@/components/sidebar-project-header'
@@ -138,11 +139,10 @@ export function AppShellContainer({ children }: { children: ReactNode }) {
   const projectId = useActiveProjectId()
   const health = useHealth()
   const lastKnownHealth = useRef<HealthResponse | undefined>(undefined)
-  if (health.data) lastKnownHealth.current = health.data
+  useEffect(() => { if (health.data) lastKnownHealth.current = health.data }, [health.data])
   const shellHealth = health.data ?? lastKnownHealth.current
-  // GitHub automations are opt-in too (#801) — same honesty rule: without the server's word for
-  // it the nav must not offer a tab whose every request would 409.
-  const automationsAvailable = shellHealth?.capabilities.automations === true
+  // Without the server's word for it the nav must not offer a tab whose every request would 409.
+  const automations = automationsAvailable(shellHealth)
   // Unread done items (#unread-done-items) for the Tasks badge. Reads the same active-scope run
   // list the sidebar quick-list and Tasks table already hold — one cache entry, no extra fetch.
   const projectsQuery = useProjects()
@@ -201,7 +201,7 @@ export function AppShellContainer({ children }: { children: ReactNode }) {
         // forge note says why it is absent.
         forgeAvailable={forgeAvailable}
         // Hidden unless health reports the opt-in automations capability (#801).
-        automationsAvailable={automationsAvailable}
+        automationsAvailable={automations}
         banner={<><HomeRecoveryBanner /><ProviderBannerContainer /></>}
         sidebarList={viewSidebar}
         taskQuickList={<TaskQuickListContainer projectId={sidebarProjectId} boot={sidebarBoot} />}

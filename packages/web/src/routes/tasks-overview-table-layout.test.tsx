@@ -680,6 +680,7 @@ describe('TasksOverview — usage cells', () => {
             <TasksOverview
               runs={runs}
               view="active"
+              automations
               onViewChange={vi.fn()}
               onArchiveFinished={vi.fn()}
               onMarkAllRead={vi.fn()}

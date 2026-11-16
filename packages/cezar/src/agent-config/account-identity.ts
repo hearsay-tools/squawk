@@ -142,15 +142,17 @@ export async function readAccountIdentity(
   provider: ProviderId,
   configDir: string,
 ): Promise<AccountIdentity> {
-  if (provider === 'claude') return readClaudeIdentity(configDir);
-  if (provider === 'codex') return readCodexIdentity(configDir);
-  return { available: false, reason: UNREADABLE_IDENTITY[provider], fields: [] };
+  const source = IDENTITY_SOURCE[provider];
+  if ('read' in source) return source.read(configDir);
+  return { available: false, reason: source.unreadable, fields: [] };
 }
 
-/** Why "Show details" has nothing for the agents whose identity is not read here. */
-const UNREADABLE_IDENTITY: Record<Exclude<ProviderId, 'claude' | 'codex'>, string> = {
-  opencode: `OpenCode keeps its login outside its config folder, so ${productName('cezar')} cannot read it.`,
-  pi: `${productName('cezar')} does not read which login a pi account is signed in as.`,
-  omp: `${productName('cezar')} does not read which login an omp account is signed in as.`,
-  cursor: `${productName('cezar')} does not read which login a Cursor account is signed in as.`,
+/** How each agent's login identity is read from an account folder, or why "Show details" has nothing. */
+const IDENTITY_SOURCE: Record<ProviderId, { read: (configDir: string) => Promise<AccountIdentity> } | { unreadable: string }> = {
+  claude: { read: readClaudeIdentity },
+  codex: { read: readCodexIdentity },
+  opencode: { unreadable: `OpenCode keeps its login outside its config folder, so ${productName('cezar')} cannot read it.` },
+  pi: { unreadable: `${productName('cezar')} does not read which login a pi account is signed in as.` },
+  omp: { unreadable: `${productName('cezar')} does not read which login an omp account is signed in as.` },
+  cursor: { unreadable: `${productName('cezar')} does not read which login a Cursor account is signed in as.` },
 };

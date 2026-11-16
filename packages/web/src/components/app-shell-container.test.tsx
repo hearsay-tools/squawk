@@ -349,7 +349,7 @@ describe('sidebar wiring', () => {
     const active = run({ id: 'active-session', titleSummary: 'Current session' })
     const archived = { ...run({ id: 'archived-session', titleSummary: 'Nightly sweep', status: RUN_STATUS.done }), automationId: 'auto-1' }
     serve({
-      '/api/v1/health': { ...HEALTH, bootProject: 'cezar' },
+      '/api/v1/health': { ...HEALTH, bootProject: 'cezar', capabilities: { ...HEALTH.capabilities, automations: true } },
       '/api/v1/projects': {
         projects: [PROJECT, { ...PROJECT, id: 'shop', name: 'shop' }],
         bootProject: 'cezar', projectsDir: '/projects',
@@ -368,6 +368,23 @@ describe('sidebar wiring', () => {
     expect(screen.queryByRole('link', { name: /Current session/ })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /^Active/ }))
     await waitFor(() => expect(document.querySelector('[data-run-id="active-session"]')).not.toBeNull())
+  })
+
+  it('hides every Automations entry, and lists automation tasks in Active, while automations are off (hearsay-tools/squawk#1401)', async () => {
+    const active = run({ id: 'active-session', titleSummary: 'Current session' })
+    const scheduled = { ...run({ id: 'scheduled-session', titleSummary: 'Nightly sweep', status: RUN_STATUS.done }), automationId: 'auto-1' }
+    serve({
+      '/api/v1/health': { ...HEALTH, bootProject: 'cezar' },
+      '/api/v1/projects': { projects: [PROJECT], bootProject: 'cezar', projectsDir: '/projects' },
+      '/api/v1/run-summaries': [active, scheduled],
+      '/api/v1/p/cezar/run-summaries': [active, scheduled],
+      '/api/v1/workspace/ui-state': {},
+    })
+    renderShell('/p/cezar/new')
+    await screen.findByRole('link', { name: /Current session/ })
+    await waitFor(() => expect(document.querySelector('[data-run-id="scheduled-session"]')).not.toBeNull())
+    expect(screen.queryByRole('button', { name: /^Automations/ })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Automations' })).toBeNull()
   })
 
   it('keeps the task rows mounted while health renames the boot list to its default key (hearsay-tools/squawk#3048)', async () => {
@@ -415,7 +432,7 @@ describe('sidebar wiring', () => {
     const bootActive = run({ id: 'boot-active', titleSummary: 'Boot active' })
     const shopWaiting = run({ id: 'shop-wait', titleSummary: 'Shop waiting', status: RUN_STATUS.waiting })
     serve({
-      '/api/v1/health': { ...HEALTH, bootProject: 'cezar' },
+      '/api/v1/health': { ...HEALTH, bootProject: 'cezar', capabilities: { ...HEALTH.capabilities, automations: true } },
       '/api/v1/projects': {
         projects: [PROJECT, { ...PROJECT, id: 'shop', name: 'shop', lastOpenedAt: '2026-07-19T00:00:00.000Z' }],
         bootProject: 'cezar',

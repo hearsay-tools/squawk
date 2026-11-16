@@ -1,0 +1,21 @@
+id: subagent-children-outside-dock-tsx
+language: tsx
+severity: warning
+message: >-
+  Read a subagent's children through `subagentEntries(visibleTurns, currentTurns, id)` in
+  packages/web/src/routes/task-thread/subagent-dock.ts (hearsay-tools/squawk#2463). The current-state
+  context drops a subagent's messages; `subagentEntries` adds them from the loaded transcript, so the
+  sheet and the dock row show the same entries. `subagentChildren` reads one view only.
+files:
+  - packages/web/src/**/*.tsx
+ignores:
+  - packages/web/src/routes/task-thread/subagent-dock.ts
+  - packages/web/src/**/*.test.tsx
+# Keep this file and the other subagent-children-outside-dock rule the same below `files`: ast-grep
+# parses .ts and .tsx files with different grammars, so one rule cannot cover both. A call through
+# another name, such as an import alias, is not matched.
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: '^subagentChildren$'

@@ -134,7 +134,7 @@ agentTranscriptSections(agentId: string, entries: readonly ThreadEntry[]): Trans
 buildTranscriptRows(sections: readonly TranscriptSection[], runId: string): ThreadRow[]
 ```
 
-The main adapter represents `run.task` as the first section's `userMessage`, including `taskImages`, then maps every `ThreadTurn`. The agent adapter creates one section from `subagentChildren`; it does not pre-render or filter entry kinds.
+The main adapter represents `run.task` as the first section's `userMessage`, including `taskImages`, then maps every `ThreadTurn`. The agent adapter creates one section from `subagentEntries`; it does not pre-render or filter entry kinds.
 
 ### 2. One exhaustive entry renderer
 
@@ -292,7 +292,7 @@ Illustrative shared-renderer proposal:
 
 - **No attributed children (current Codex review mode):** render the existing agent empty state; do not fabricate output from the parent task result.
 - **Late parent attribution:** new children appended while the sheet is open join the same section and follow-tail only if stuck.
-- **Unknown/orphan parent id:** retain `subagentChildren` behavior; the main transcript still renders the item top-level rather than losing it.
+- **Unknown/orphan parent id:** retain `subagentEntries` behavior; the main transcript still renders the item top-level rather than losing it.
 - **Very long agent run:** panel crosses the same virtualization threshold as main; stable item keys prevent card-state and measurement churn.
 - **Duplicate item ids across turns/runs:** section scope + run/view namespace continues to prevent cache collisions.
 - **User scrolls up during streaming:** neither delta nor image arrival forces a jump; pill announces that newer content exists.

@@ -1,4 +1,4 @@
-import { legacyIndexRows } from './legacy-run-rows.ts';
+import { legacyIndexRows, upgradeLegacyRunRow } from './legacy-run-rows.ts';
 import { dataReadDirs, runDataDir } from '../project-paths.ts';
 import { addRunSource, copyFallbackFamily, fallbackRunSource, bindWorkerResultPath, fallbackRunDeleteError, workerResultsDirectory } from './project-run-sources.ts';
 import { productName, logPrefix } from '../home/display.ts';
@@ -64,7 +64,7 @@ import { ISSUE_URL_RE, namesForeignReference, originatingIssue, refUrlNumber, re
 import { applyExit, doneCommits, exitDurability, RUN_EXITS, type ExitCall, type ExitDurability, type RunExitId, type RunExitSpec, type RunPatch } from './run-exits.ts';
 import { assertConversationIdFree, type ConversationIdentity } from './conversation-identity.ts';
 export { ConversationIdInUseError } from './conversation-identity.ts';
-import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
+import { RUNNER_IDS, runnerIdOf, type RunnerId } from '../core/agent-runner.ts';
 import {
   ARCHIVED_ROOT, RUNS_DB_FILE, RUNS_IMPORT_COMPLETE_KEY, RunConflictError, RunDatabase, RunDatabaseBusyError,
   type RunConflictEvidence, type RunDatabaseChanges, type RunDatabaseCommit, type RunFenceClaim, type RunRow, type RunRowInput, type RunWriteFence,
@@ -73,7 +73,7 @@ import { listBranchOwners, type BranchOwner } from './branch-owners.ts';
 import { guardedJsonSql } from './guarded-json-sql.ts';
 import { restoreLostReferencedPullRequest } from './loaded-run-healing.ts';
 import { failLoadedInterruptedRun, restoreLoadedUsageLimitHold, settleLoadedStop } from './loaded-run-exits.ts';
-import { hasLegacyWaitFields, upgradeLegacyWaits, UNREADABLE_WAIT } from './legacy-waits.ts';
+import { hasLegacyWaitFields, UNREADABLE_WAIT } from './legacy-waits.ts';
 export { ciWaitEntry, holdsWorkerWait, upgradeLegacyWaits, workerWaitEntry } from './legacy-waits.ts';
 import { ExitEvents } from './exit-events.ts';
 import { encodeRunRow, isLiveRecord, isLiveStatus, materializedWorktreePath } from './run-row.ts';
@@ -123,7 +123,7 @@ export type StepStatus =
  */
 const storedRunnerSchema = z
   .enum([...RUNNER_IDS, 'claude-cli'])
-  .transform((id) => (id === 'claude-cli' ? ('claude' as const) : id));
+  .transform(runnerIdOf);
 
 const stepStateSchema = contractStepStateSchema.extend({ backend: storedRunnerSchema.optional() });
 
@@ -148,7 +148,7 @@ export const runRecordSchema = contractRunRecordSchema.extend({
         return parsed.success ? [parsed.data] : [];
       })
     : undefined, z.array(runPullRequestSchema).optional()),
-  worktreeSetup: contractRunRecordSchema.shape.worktreeSetup.catch(undefined),
+  worktreeSetup: contractRunRecordSchema.shape.worktreeSetup.catch(undefined), workflowCursor: contractRunRecordSchema.shape.workflowCursor.catch(undefined),
   archived: z.boolean().default(false),
   workflowDef: workflowDefSchema.optional().catch(undefined),
   steps: z.array(stepStateSchema),
@@ -168,7 +168,7 @@ export const runRecordSchema = contractRunRecordSchema.extend({
 export function parseRunRecords(raw: unknown) {
   if (Array.isArray(raw)) for (const row of raw) {
     if (!row || typeof row !== 'object') continue;
-    upgradeLegacyWaits(row);
+    upgradeLegacyRunRow(row);
     // One unreadable wait must not evict the run, nor its readable siblings.
     for (const key of ['waits', 'lastWaits'] as const) {
       if (row[key] === undefined) continue;

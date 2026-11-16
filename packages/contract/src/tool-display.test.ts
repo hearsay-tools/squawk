@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { toolDisplay, type ToolDisplay } from './tool-display.ts';
+import { toolDetailText, toolDisplay, type ToolDisplay } from './tool-display.ts';
 
 describe('tool display input boundaries', () => {
   it.each(['constructor', 'toString', '__proto__'])('keeps %s as an unknown tool name', (name) => {
@@ -118,5 +118,50 @@ describe('tool display malformed inputs', () => {
     expect(toolDisplay('Skill', { command: 'review' })).toEqual({ toolKind: 'task', title: 'Skill: review', subtitle: undefined });
     expect(toolDisplay('Skill')).toEqual({ toolKind: 'task', title: 'Skill', subtitle: undefined });
     expect(toolDisplay('Agent')).toEqual({ toolKind: 'task', title: 'Agent', subtitle: undefined });
+  });
+});
+
+describe('toolDetailText — the whole text a title detail shortens (hearsay-tools/squawk#3524)', () => {
+  const long = `${'segment/'.repeat(20)}end`;
+  it.each<[string, unknown, string | undefined]>([
+    ['Read', { file_path: long, path: 'other' }, long],
+    ['imageView', { path: long }, long],
+    ['Edit', { file_path: ' ', filePath: long }, long],
+    ['NotebookEdit', { notebook_path: long, file_path: 'other' }, long],
+    ['fileChange', { changes: [{ path: long }] }, long],
+    ['fileChange', { changes: [{ path: 'a' }, { path: 'b' }] }, undefined],
+    ['Grep', { pattern: `  ${long}\n`, path: 'src' }, `  ${long}\n`],
+    ['Glob', { query: long }, long],
+    ['WebFetch', { url: long }, long],
+    ['WebSearch', { query: long }, long],
+    ['Bash', { command: `echo\n${long}` }, `echo\n${long}`],
+    ['commandExecution', { command: ['npm', 42, long] }, `npm ${long}`],
+    ['Task', { description: 'Audit', prompt: long }, long],
+    ['Agent', { description: 'Audit' }, 'Audit'],
+    ['task', { subagent_type: 'Explore' }, 'Explore'],
+    ['task', { agent: 'explore', task: long }, long],
+    ['task', { description: 'Map the RPC layer', task: long }, long],
+    ['spawnAgent', { prompt: long, model: 'gpt-5.4' }, long],
+    ['spawnAgent', { agentPath: '/root/scope_review', agentThreadId: 'th_child' }, undefined],
+    ['subtask', { prompt: long, description: 'Trace callers', agent: 'general' }, long],
+    ['Skill', { skill: long, args: 'x' }, long],
+    ['TodoWrite', { todos: [] }, undefined],
+    ['mcp__github__search', { query: long }, undefined],
+    ['Read', 'not-an-object', undefined],
+  ])('%s → its untruncated detail', (name, input, expected) => {
+    expect(toolDetailText(name, input)).toBe(expected);
+  });
+
+  it('reads the key the title reads, so the title detail is a prefix of it', () => {
+    const input = { description: ' ', prompt: long, subagentType: 'Explore' };
+    const title = toolDisplay('Agent', input).title;
+    expect(title.startsWith('Agent: segment/')).toBe(true);
+    expect(toolDetailText('Agent', input)).toBe(long);
+  });
+});
+
+describe('subagent tool names share the task kind (hearsay-tools/squawk#3524)', () => {
+  it.each(['Task', 'Agent', 'task', 'spawnAgent', 'subtask'])('%s is a task tool', (name) => {
+    expect(toolDisplay(name, { description: 'Review the runner' })).toMatchObject({ toolKind: 'task', title: expect.stringMatching(/: Review the runner$/) });
   });
 });

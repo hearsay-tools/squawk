@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { type AgentBackend, type RunnerId, type ToolGrant } from '../core/agent-runner.ts';
+import { runnerIdOf, type AgentBackend, type RunnerId, type ToolGrant } from '../core/agent-runner.ts';
 
 import { workflowStepDefSchema as workflowStepSchema, workflowDefSchema } from '@open-mercato/cezar-contract/workflows';
 import { workflowFileSchema } from '@open-mercato/cezar-contract/workflow-file';
@@ -137,8 +137,7 @@ export function allowedToolsForStep(
 }
 
 function extrasFor(backend: AgentBackend | undefined): readonly string[] {
-  if (backend === undefined || backend === 'claude-cli') return HARNESS_EXTRA_TOOLS.claude;
-  return HARNESS_EXTRA_TOOLS[backend];
+  return HARNESS_EXTRA_TOOLS[runnerIdOf(backend)];
 }
 
 /** Tool lists as a workflow step and a worker identity store them. */

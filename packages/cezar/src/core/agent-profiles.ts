@@ -7,20 +7,58 @@ import type { ProviderId } from './provider-auth.ts';
  * this mapping.
  */
 
+/** How one provider lays out an account, declared once per provider id. */
+export interface AccountLayout {
+  /**
+   * How a named account reaches the CLI: the variable Squawk sets, and what it takes. `folder`: the
+   * account folder. `profile-name`: a profile name parsed from the folder, which the CLI resolves
+   * under its own root. null: the provider carries no named accounts.
+   */
+  readonly select: { readonly envVar: string; readonly by: 'folder' | 'profile-name' } | null;
+  /** Where the agent keeps its config inside a named account folder; null: the folder itself. */
+  readonly configSubdir: string | null;
+  /**
+   * Whether a worker binding of the default account pins its discovered home. false: the default
+   * spawns bare and follows the host env, as it did before pi and omp carried accounts
+   * (hearsay-tools/cezarion#1283). A machine where the agent never ran has no home to pin.
+   */
+  readonly defaultBindsHome: boolean;
+  /**
+   * Where the login state file sits for the discovered home. `beside-home`: next to it (Claude's
+   * `.claude.json`, see `claudeStateFilePath`), so a worker binds the home the child env resolves
+   * and records that layout. `in-home`: inside the account folder.
+   */
+  readonly stateFile: 'in-home' | 'beside-home';
+}
+
 /**
- * Account relocation variables used by Squawk. null means named accounts are unsupported. omp
- * takes a profile name; other supported mappings take a folder. Host values define the default;
- * named overrides apply last. Refuse a named omp folder outside the current profile root.
+ * Account relocation per provider. Host values define the default; named overrides apply last.
+ * Refuse a named profile-name folder outside the current profile root.
  */
-export const PROFILE_ENV_VAR: Record<ProviderId, string | null> = {
-  claude: 'CLAUDE_CONFIG_DIR',
-  codex: 'CODEX_HOME',
-  opencode: null,
-  pi: 'PI_CODING_AGENT_DIR',
+export const ACCOUNT_LAYOUT: Readonly<Record<ProviderId, AccountLayout>> = {
+  claude: { select: { envVar: 'CLAUDE_CONFIG_DIR', by: 'folder' }, configSubdir: null, defaultBindsHome: true, stateFile: 'beside-home' },
+  codex: { select: { envVar: 'CODEX_HOME', by: 'folder' }, configSubdir: null, defaultBindsHome: true, stateFile: 'in-home' },
+  opencode: { select: null, configSubdir: null, defaultBindsHome: false, stateFile: 'in-home' },
+  pi: { select: { envVar: 'PI_CODING_AGENT_DIR', by: 'folder' }, configSubdir: null, defaultBindsHome: false, stateFile: 'in-home' },
   // CURSOR_CONFIG_DIR relocates configuration, not a verified whole account home.
-  cursor: null,
-  omp: 'OMP_PROFILE',
+  cursor: { select: null, configSubdir: null, defaultBindsHome: false, stateFile: 'in-home' },
+  // A named omp account is a profile folder that keeps its config in `agent/`.
+  omp: { select: { envVar: 'OMP_PROFILE', by: 'profile-name' }, configSubdir: 'agent', defaultBindsHome: false, stateFile: 'in-home' },
 };
+
+/** The variable that selects a named account per provider; null means named accounts are unsupported. */
+export const PROFILE_ENV_VAR = Object.fromEntries(
+  Object.entries(ACCOUNT_LAYOUT).map(([provider, layout]) => [provider, layout.select?.envVar ?? null]),
+) as Readonly<Record<ProviderId, string | null>>;
+
+/**
+ * Whether a provider selects a named account by profile name rather than by folder. Takes a stored
+ * value, which may name no provider this version knows; such a value answers false.
+ */
+export function selectsByProfileName(provider: unknown): boolean {
+  return typeof provider === 'string' && Object.hasOwn(ACCOUNT_LAYOUT, provider)
+    && ACCOUNT_LAYOUT[provider as ProviderId].select?.by === 'profile-name';
+}
 
 /** Providers that can carry more than one account — what the UI offers "Add account" for. */
 export const PROFILE_CAPABLE_PROVIDERS: readonly ProviderId[] = (
@@ -32,18 +70,19 @@ export function supportsProfiles(provider: ProviderId): boolean {
 }
 
 /**
- * Build a provider-specific account override, or an empty object for the discovered default. omp
- * takes a profile name parsed from its folder. Never emit another provider’s variable.
+ * Build a provider-specific account override, or an empty object for the discovered default. A
+ * `profile-name` provider takes a profile name parsed from its folder. Never emit another
+ * provider’s variable.
  */
 export function profileEnv(provider: ProviderId, configDir: string | null | undefined): Record<string, string> {
-  const name = PROFILE_ENV_VAR[provider];
+  const select = ACCOUNT_LAYOUT[provider].select;
   const dir = configDir?.trim();
-  if (name === null || !dir) return {};
-  if (provider === 'omp') {
+  if (select === null || !dir) return {};
+  if (select.by === 'profile-name') {
     const profile = ompProfileName(dir);
-    return profile === null ? {} : { [name]: profile };
+    return profile === null ? {} : { [select.envVar]: profile };
   }
-  return { [name]: dir };
+  return { [select.envVar]: dir };
 }
 
 /** omp's own profile-name rule (omp 18.8.0, `packages/utils/src/dirs.ts`). */
@@ -76,12 +115,13 @@ export function isOmpProfileName(name: string): boolean {
 }
 
 /**
- * Where the agent keeps its config inside an account folder: the folder itself, except omp, whose
- * profile folder keeps it in `agent/`. The discovered omp default is ALREADY an agent dir
- * (`agentHomePaths().omp`), so callers apply this to named accounts only.
+ * Where the agent keeps its config inside an account folder: `configSubdir` of the folder, or the
+ * folder itself. The discovered omp default is ALREADY an agent dir (`agentHomePaths().omp`), so
+ * callers apply this to named accounts only.
  */
 export function profileAgentDir(provider: ProviderId, dir: string): string {
-  return provider === 'omp' ? join(dir, 'agent') : dir;
+  const subdir = ACCOUNT_LAYOUT[provider].configSubdir;
+  return subdir === null ? dir : join(dir, subdir);
 }
 
 /**

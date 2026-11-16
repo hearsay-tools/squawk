@@ -8,6 +8,7 @@ import { useProjectSwitch } from '@/components/use-project-switch'
 import { scopeTo, useActiveProjectId, useNavigate } from '@/lib/project-router'
 import type { ProjectListEntry, RunIndexEntry, RunSummary, Skill } from '@open-mercato/cezar-api-client'
 import { visibleNavItems } from '@/components/nav-items'
+import { automationsAvailable } from '@/lib/capabilities'
 import { StatusDot } from '@/components/status-dot'
 import { NEXT_THEME } from '@/components/theme-toggle'
 import { useTheme } from '@/components/theme-provider'
@@ -419,7 +420,7 @@ function paletteViews({ multiProject, health }: { multiProject: boolean; health:
     ...(multiProject ? [{ label: 'All tasks', to: '/tasks', icon: LayersIcon, global: true }] : []),
     ...visibleNavItems({
       forge: health.data?.forge?.available === true,
-      automations: health.data?.capabilities.automations === true,
+      automations: automationsAvailable(health.data),
     }).map((item) => ({ label: item.label, to: item.to, icon: item.icon, global: false })),
   ]
 }

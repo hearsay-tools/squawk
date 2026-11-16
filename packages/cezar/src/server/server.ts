@@ -231,7 +231,7 @@ import {
   sameProfileDir,
   type ResolvedAgentProfile,
 } from '../workspace/agent-profiles.ts';
-import { PROFILE_CAPABLE_PROVIDERS, profileAgentDir, profileEnv, supportsProfiles } from '../core/agent-profiles.ts';
+import { PROFILE_CAPABLE_PROVIDERS, profileAgentDir, profileEnv, selectsByProfileName, supportsProfiles } from '../core/agent-profiles.ts';
 import { quoteExecutable, shellQuote, withEnvPrefix } from '../core/shell-env.ts';
 import { resolveCursorExecutable } from '../core/cursor-model-catalog.ts';
 import { resolveOmpExecutable } from '../core/omp-model-catalog.ts';
@@ -253,7 +253,7 @@ import { createWorkspaceRunFeed } from './workspace-run-feed.ts';
 import { ProjectContexts, type ProjectContext, type RunManagerFactory } from './project-context.ts';
 
 import { mergeWriteProjectUiState, readUiState } from '../ui-state.ts';
-import { agentHomePaths, expandTilde } from '../paths.ts';
+import { AGENT_HOME_SLOT, agentHomePaths, expandTilde } from '../paths.ts';
 import { isLoopbackHostHeader, normalizeHostname, resolveCapabilities } from './capabilities.ts';
 import type { SocketHub, WsUpgradeVerdict } from './ws.ts';
 import type { PreviewHost } from '../preview/host.ts';
@@ -1440,15 +1440,11 @@ export function createApp(deps: ServerDeps) {
    * ids opaque and stable so the open route below never takes a path from the client.
    */
   const accountFiles = async (profile: ResolvedAgentProfile) => {
+    // A discovered default is already an agent dir; a named account may keep its config in a
+    // subfolder of its folder (omp's `agent/`).
     const home: AgentHomePaths = {
       ...agentHomePaths(),
-      ...(profile.provider === 'claude' ? { claude: profile.path } : {}),
-      ...(profile.provider === 'codex' ? { codex: profile.path } : {}),
-      ...(profile.provider === 'opencode' ? { opencodeConfig: profile.path } : {}),
-      ...(profile.provider === 'pi' ? { pi: profile.path } : {}),
-      // The discovered omp account is already an agent dir; a named one is a profile folder that
-      // keeps its config in `agent/`.
-      ...(profile.provider === 'omp' ? { omp: profile.isDefault ? profile.path : profileAgentDir('omp', profile.path) } : {}),
+      [AGENT_HOME_SLOT[profile.provider]]: profile.isDefault ? profile.path : profileAgentDir(profile.provider, profile.path),
     };
     const defs = listConfigFiles().filter(
       (def) => def.scope === 'user' && def.runners.includes(profile.provider),
@@ -1527,7 +1523,7 @@ export function createApp(deps: ServerDeps) {
     // real Windows path, and this is the only gate the Add-account dialog has.
     if (!isAbsoluteConfigDir(expanded)) return `folder must be an absolute path: ${configDir}`;
     // An omp account is selected by profile NAME, so only a folder in omp's profiles dir can be one.
-    if (provider === 'omp') return ompProfileDirError(expanded);
+    if (selectsByProfileName(provider)) return ompProfileDirError(expanded);
     return null;
   };
 

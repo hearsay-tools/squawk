@@ -8,6 +8,7 @@ import { expandTilde } from '../paths.ts';
 import { loadWorkspaceConfigSync } from '../workspace/config.ts';
 import { parseAgentAccountEntries, readAgentAccountSource, type AgentAccount } from '../workspace/agent-accounts.ts';
 import { recordedProcessLive } from '../core/process-stat.ts';
+import { selectsByProfileName } from '../core/agent-profiles.ts';
 import type { Home } from './home.ts';
 import { replacePrivateTree, insideDirectory, migrationPrivacy } from './migration-files.ts';
 import { HomeStore } from './store.ts';
@@ -59,9 +60,9 @@ export function migrationAccounts(legacy: Home, target: Home): MigrationAccount[
   return migrationAccountInventory(legacy, target).accounts;
 }
 
-/** omp redirects by profile name, not configDir. Copying it cannot redirect the vendor CLI. */
+/** A profile-name provider (omp) redirects by name, not configDir. Copying it cannot redirect the vendor CLI. */
 export function accountMigrationPolicy(account: MigrationAccount): 'copy' | 'keep' {
-  return account.provider === 'omp' ? 'keep' : 'copy';
+  return selectsByProfileName(account.provider) ? 'keep' : 'copy';
 }
 
 /** Read-only query: do not open RunStore, recover runs, or claim a family's execution. */
