@@ -37,7 +37,10 @@ test('queue suites always execute, and PR suites select with the same eight-shar
   assert.match(vitest.run, /--base="\$PR_BASE".*--coverage.enabled/);
   const browser = jobs['cockpit-browser'].steps.find(s => s.id === 'e2e-pr');
   assert.match(browser.run, /set -o pipefail/);
-  assert.match(browser.run, /require-e2e-passed.cjs < "\$RUNNER_TEMP\/e2e.log"/);
+  assert.match(browser.run, /require-e2e-passed.cjs --allow-not-selected < "\$RUNNER_TEMP\/e2e.log"/);
+  const queue = jobs['cockpit-browser'].steps.find(s => s.id === 'e2e');
+  assert.match(queue.run, /require-e2e-passed\.cjs < e2e\.log/);
+  assert.doesNotMatch(queue.run, /--allow-not-selected/, 'the merge queue requires every spec to pass');
 });
 test('native PR suites keep immutable input resolution and block on a failed resolver', () => {
   const { jobs } = ci();

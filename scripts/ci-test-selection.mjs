@@ -16,11 +16,18 @@ export function unitFiles(selection, run = execFileSync) {
   }
 }
 
+/**
+ * PR CI runs browser specs only for a selection shorter than the full set. Every other
+ * answer returns `skip`, the reason PR CI runs no spec; the merge queue runs every spec.
+ */
 export function browserFiles(select) {
+  let chosen;
   try {
-    const chosen = select();
-    return chosen.all || chosen.specs.length === 0 ? null : chosen.specs;
-  } catch {
-    return null;
+    chosen = select();
+  } catch (error) {
+    return { skip: `the selector failed: ${error.message}` };
   }
+  if (chosen.all) return { chosen, skip: 'the selector chose every spec' };
+  if (chosen.specs.length === 0) return { chosen, skip: 'the selector chose no spec' };
+  return { chosen };
 }

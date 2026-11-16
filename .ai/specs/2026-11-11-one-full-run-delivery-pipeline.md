@@ -118,14 +118,17 @@ The rule text lives in the owner's Cezar prompt, outside this repository (§ Own
    the script does today. A source change for which the selection finds no test also runs
    the full suite; the script exits with an error in that case today, and phase 2 changes
    that for CI.
-3. Browser specs run the files that `scripts/e2e-affected.mjs` selects.
-4. A full fallback runs on 8 Vitest and 8 browser shards.
+3. Browser specs run the files that `scripts/e2e-affected.mjs` selects, only when that
+   list is shorter than the full set. A selection of every spec, an empty selection or a
+   selector failure runs no browser spec on the PR and passes with its reason in the log
+   (hearsay-tools/squawk#3727); the merge queue runs every spec.
+4. A full Vitest fallback runs on 8 shards.
 5. Docs-only and infra-only changes keep today's skips.
 
 `scripts/e2e-affected.mjs` reads the spec map that `.github/workflows/e2e-spec-map.yml`
 captures after source changes reach `main`. That workflow runs the browser specs again,
 outside the merge path and the required checks. It stays as it is: it costs runner time,
-not merge time. Without a map, the selector picks every spec, which is the full fallback.
+not merge time. Without a map, the selector picks every spec, so the PR runs no browser spec.
 
 The queue no longer reuses PR suites (§ Merge queue and exact-commit reuse in
 `docs/sdlc/ci.md`), because a PR run with selected tests is not a full run.

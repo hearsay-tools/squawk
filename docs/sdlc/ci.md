@@ -229,10 +229,17 @@ A missing merge-base costs a full run instead of silently skipping tests.
 
 Browser jobs call `scripts/e2e-affected.mjs --ci`. The selector reads the newest
 successful `e2e-spec-map.yml` map on `main`, compares against the map's own commit,
-and keeps its existing conservative selection rules. A missing map, failed
-selector or empty selection runs every spec on eight shards. Selected browser
-runs still require `TEST_E2E_STATUS=passed`; missing browsers fail verification.
-The token used to download the map has read-only Actions and repository scopes.
+and keeps its existing conservative selection rules. A PR runs browser specs only
+when the selector returns a list shorter than the full set. When the selector
+chooses every spec, chooses no spec or fails, the PR runs no browser spec: the log
+and the job summary state the reason, and the step prints
+`TEST_E2E_STATUS=not-selected`. Only the PR step accepts that marker, through
+`require-e2e-passed.cjs --allow-not-selected`, so the browser jobs and `verify`
+stay green. The merge queue runs every spec on every full-matrix entry, so a
+browser failure the PR run does not see fails the queue entry instead. A shorter
+selection still requires `TEST_E2E_STATUS=passed`; missing browsers fail
+verification. The token used to download the map has read-only Actions and
+repository scopes.
 
 Docs-only, infra-only and verified release-stamp skips remain as before. Merge
 groups and manual dispatches run full suites. Main pushes reuse eligible exact-SHA
