@@ -24,7 +24,7 @@ describe('automation session capability', () => {
       properties: { action: { enum: ['create', 'show', 'preview', 'enable'] }, explicit: { type: 'boolean' } },
     });
     for (const key of ['oneOf', 'anyOf', 'allOf']) expect(schema).not.toHaveProperty(key);
-    const properties = schema.properties.definition as { properties: Record<string, unknown> };
+    const properties = (schema.properties as Record<string, unknown>).definition as { properties: Record<string, unknown> };
     expect(properties.properties).not.toHaveProperty('enable');
     expect(properties.properties).not.toHaveProperty('enabled');
   });
