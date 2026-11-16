@@ -5,21 +5,10 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { parseEffort } from '@open-mercato/cezar-contract/effort';
 import {
-  type AgentEvent,
-  type AgentRunResult,
-  type AgentRunSpec,
-  type AgentRunner,
-  type AgentSession,
-  type AgentToolCallRecord,
-  type ContentBlock,
-  type SessionOptions,
-  type AgentRunSpecSupport,
+  type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentSession, type AgentToolCallRecord,
+  type ContentBlock, type SessionOptions, type AgentRunSpecSupport,
   type InputDelivery, prependSystemPrompt, SessionEndedBeforeAcknowledgement, SQUAWK_SIDE_SPEC_SUPPORT, trackChildExit,
 } from './agent-runner.ts';
-
-/** The cause of the requests an explicit `end()` cuts off: only those are a session close
- *  (hearsay-tools/squawk#3508). */
-const ENDED_BY_CALLER = Symbol('codex session ended by its caller');
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { codexToolGrantFields } from './runner-tool-grants.ts';
 import { signalSession } from './session-process.ts';
@@ -51,6 +40,8 @@ import {
   type CodexUiMapping,
   type CodexUiMapperState,
 } from './codex-ui-mapper.ts';
+/** The cause of the requests an explicit `end()` cuts off: only those are a session close (hearsay-tools/squawk#3508). */
+const ENDED_BY_CALLER = Symbol('codex session ended by its caller');
 // One startup budget, including handshake ACKs and the first main-thread turn.
 // This is not a model-turn or human-question lifetime limit.
 const STARTUP_TIMEOUT_MS = 60_000;
