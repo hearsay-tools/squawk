@@ -274,7 +274,9 @@ force, or force only in part. The item numbers are stable: code cites them.
 1. **Runner** — `core/<runner>-runner.ts` implements `AgentRunner` / `AgentSession`.
    Declare `specSupport` and the `RUNNER_FACTS` row from what the wire does, not from a
    similar runner. Probe mid-turn input live for `inputDelivery`. Probe a resumed session
-   for `systemPromptOnResume`; when you cannot, declare `resent`. Use
+   for `systemPromptOnResume`; when you cannot, declare `resent`. A wire that can raise a
+   permission request after its turn ended declares `nativePermission: 'after-turn'` and
+   implements `AgentSession.endWhenQuiet`; the late-permission parity cells check both. Use
    `prependSystemPrompt` when the backend has no system-prompt channel. For a fork of an
    existing runner's wire, read the fork's own protocol documents for the turn boundary,
    the session id and the tool flags before you copy code.

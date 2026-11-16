@@ -329,7 +329,7 @@ export function handlePermissionResolved(context: RunModuleContext, host: Sessio
   if (!pendingPermissions.size) {
     context.store.updateRun(runId, { hasPendingPermission: false });
     transitionTurnBoundary(state, { kind: 'human-wait-opened', phase: 'refresh-question', session: state.liveSession.session, pending: hasPendingHumanAsk(runId, id => pendingHumanAskSeq(context.store, id)) });
-    if (!state.boundary.pendingHumanAsk && state.liveSession.session?.open && !context.store.getRun(runId)?.stopping) {
+    if (!state.boundary.pendingHumanAsk && state.liveSession.sessionLive && !context.store.getRun(runId)?.stopping) {
       host.resumeParkedRun(runId, state);
       host.flushAgentInputs(runId);
     }

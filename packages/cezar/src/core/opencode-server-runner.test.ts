@@ -2328,6 +2328,75 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
     });
   });
 
+  // The close after an accepted done (hearsay-tools/squawk#1680): Squawk calls endWhenQuiet at the
+  // turn end, and OpenCode can still raise a permission request from a run it starts after the idle.
+  describe('endWhenQuiet after an accepted done', () => {
+    async function idleTurnEnd(mock: Harness['mock'], events: AgentEvent[]): Promise<void> {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+    }
+
+    it('takes no input at once and ends after the auto-end delay when no request arrives', async () => {
+      await withSession({}, async ({ child, events, mock, session }) => {
+        await idleTurnEnd(mock, events);
+        vi.useFakeTimers();
+        session.endWhenQuiet!();
+        expect(session.open).toBe(false);
+        expect(session.closingQuietly).toBe(true);
+        expect(session.sendMessage([{ type: 'text', text: 'late human' }])).toBe(false);
+        expect(session.sendAgentMessage([{ type: 'text', text: 'late agent' }])).toBe(false);
+        await vi.advanceTimersByTimeAsync(AUTO_END_DELAY_MS - 1);
+        expect(child.killed).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(child.killed).toBe(true);
+        expect(session.closingQuietly).toBe(false);
+        expect(mock.promptPosts).toHaveLength(1);
+      });
+    });
+
+    it('reports a human prompt queued behind the turn whose done closes the session as not delivered', async () => {
+      let closeOnDone: (() => void) | undefined;
+      const onUiEvent = (event: UiEvent) => { if (event.type === 'turn.completed') closeOnDone?.(); };
+      await withSession({ onUiEvent }, async ({ child, events, mock, session }) => {
+        await waitFor(() => mock.promptPosts.length === 1);
+        expect(session.sendMessage([{ type: 'text', text: 'queued behind the turn' }])).toBe(true);
+        closeOnDone = () => session.endWhenQuiet!();
+        vi.useFakeTimers();
+        mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+        // bound: wait for the idle frame to end this turn before crossing the quiet close.
+        await vi.waitFor(() => expect(count(events, 'turn-end')).toBe(1), { timeout: 10_000 });
+        await vi.advanceTimersByTimeAsync(AUTO_END_DELAY_MS);
+        expect(child.killed).toBe(true);
+        expect(mock.promptPosts).toHaveLength(1);
+        expect(notes(events)).toContain('opencode: message not delivered: the session closed after the agent\'s done. Send it again with Continue.');
+        expect(session.holdsHumanInput()).toBe(false);
+      });
+    });
+
+    it('shows a request that arrives inside the delay, takes its answer, and ends after the turn it reopened', async () => {
+      await withSession(configured, async ({ child, events, uiEvents, mock, session }) => {
+        await idleTurnEnd(mock, events);
+        session.endWhenQuiet!();
+        sendPermission(mock, permissionAsk('per_late', 'skill', { sessionID: 'ses_test' }));
+        await waitFor(() => permissionRequests(uiEvents).length === 1);
+        const [request] = permissionRequests(uiEvents);
+        expect(session.open).toBe(false);
+        vi.useFakeTimers();
+        await vi.advanceTimersByTimeAsync(AUTO_END_DELAY_MS * 4);
+        vi.useRealTimers();
+        expect(child.killed).toBe(false);
+        expect(session.respondPermission!(request!.requestId, optionNamed(request!, 'Allow once'))).toBe(true);
+        await waitFor(() => permissionResolutions(uiEvents).length === 1);
+        expect(mock.permissionReplies).toEqual([{ path: '/permission/per_late/reply', body: { reply: 'once' } }]);
+        expect(child.killed).toBe(false);
+        mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+        await waitFor(() => child.killed);
+        expect(count(events, 'turn-end')).toBe(2);
+      });
+    });
+  });
+
   it('bridges and answers a configured ask from a child session', async () => {
     await withSession(configured, async ({ uiEvents, mock, session }) => {
       await waitFor(() => mock.promptPosts.length === 1);

@@ -32,6 +32,9 @@ export class SessionGroup {
   /** The task worktree, or the repository root. */
   get cwd(): string { return this.#cwd; }
   get session(): AgentSession | undefined { return this.#session; }
+  /** True while `session` is open, or while an accepted done closes it through `endWhenQuiet`: closed
+   *  to input, it still answers a late permission request and a human Finish (hearsay-tools/squawk#1680). */
+  get sessionLive(): boolean { return !!this.#session && (this.#session.open || this.#session.closingQuietly === true); }
   /** Native grants belong only to this live session generation. */
   get pendingPermissions(): ReadonlySet<string> { return this.#permissionsView; }
   get agentSessionError(): string | undefined { return this.#agentSessionError; }
