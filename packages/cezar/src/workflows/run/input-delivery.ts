@@ -17,6 +17,7 @@ import { contentBlocksOf, pastedAttachmentsNote } from '../pasted-content.ts';
 import { startCompletionCycle } from '../completion-policy.ts';
 import { chargesBudget, hasPrWait, openWaitsFooter, resolvedWaits, waitInputId } from '../waits.ts';
 import type { RunExitId } from '../../runs/run-exits.ts';
+import type { OutcomeDependencies } from '../../runs/outcome-commit.ts';
 import { DelegationPolicyError } from '../../delegation/policy.ts';
 import { enqueueAgentInput, agentInputBatch } from '../../delegation/input.ts';
 import { acknowledgedBatch } from '../outcome-batches.ts';
@@ -270,7 +271,7 @@ interface InputDeliveryHost {
   awaitCompletionNudgeReply(id: string, state: ActiveRun, session: AgentSession): void;
   queueWaitWake(id: string): void; owesWake(run: RunRecord, budget?: HumanAnswerBudget): boolean; owedWakeInputIds(run: RunRecord): string[];
   pendingConversationWakes(run: RunRecord, budget?: HumanAnswerBudget): AgentInput[]; routedAnswer(id: string): AgentInput | undefined;
-  spendWakeAdmission(id: string, state: ActiveRun, owed: boolean): void; cancelAutomaticAtCap(id: string, waits: readonly Wait[]): void;
+  spendWakeAdmission(id: string, state: ActiveRun, owed: boolean, turnRuns: boolean): void; cancelAutomaticAtCap(id: string, waits: readonly Wait[]): void;
   reparkWithoutWaits(id: string, state: ActiveRun): void; holdPeerWakesAtCap(id: string): void;
   reconcileWorkerWaits(): void; unreadInputGraceMs(): number;
   submitAgentInput(id: string, state: ActiveRun, content: ContentBlock[], inputs?: readonly string[], budget?: HumanAnswerBudget): boolean;
@@ -624,12 +625,13 @@ export class InputDelivery {
         if (inputIds.length) {
           const batch = analyseAcknowledgedInput(runId, state, flight, inputIds, this.context.store, this.host.line.admissions(), run => this.host.owesWake(run));
           if (!batch) return;
-          const { accepted, resolvedIds, early, spent, observable, at, resumes } = batch;
+          const { accepted, resolvedIds, early, spent, observable, at } = batch;
+          const turnEnded = state.boundary.atTurnBoundary === session;
           // One commit (hearsay-tools/cezarion#1805): the messages, then each wait's delivery (a message a wait carries keeps its read receipt), the charge, the early reads, the cleared failure count and the resume (hearsay-tools/cezarion#1235).
           this.context.store.commitOutcome(runId, withFailuresCleared(this.context.store, runId, acknowledgedBatch({ accepted, resolvedIds, early, spent, observable, at }), accepted, resolvedIds.length > 0),
-            resumes ? { exit: 'resume', resumeStepId: resolvedIds.length ? state.liveSession.currentStepId : undefined } : {});
+            acknowledgedExit(batch, turnEnded, state.liveSession.currentStepId));
           attemptWrites.settle(state.inputState, session, inputIds, 'acknowledged');
-          this.applyAcknowledgedInput(runId, state, flight, batch, refusal);
+          this.applyAcknowledgedInput(runId, state, flight, batch, refusal, turnEnded);
         }
       } catch (error) { fail(error, true); }
     }, error => {
@@ -656,7 +658,7 @@ export class InputDelivery {
   }
 
   /** Apply the acknowledgement's effects only after its outcome commit succeeds. */
-  private applyAcknowledgedInput(runId: string, state: ActiveRun, flight: NonNullable<ActiveRun['inputState']['agentInputFlight']>, batch: AcknowledgedInput, refusal: boolean): void {
+  private applyAcknowledgedInput(runId: string, state: ActiveRun, flight: NonNullable<ActiveRun['inputState']['agentInputFlight']>, batch: AcknowledgedInput, refusal: boolean, turnEnded: boolean): void {
     const { accepted, resolvedIds, early, spent, observable, timers, peers, resumes, owedBefore } = batch;
     const { session } = flight;
     if (spent !== undefined) {
@@ -666,7 +668,7 @@ export class InputDelivery {
     }
     // A wake of results always spends its admission; a wake of messages alone, only one it holds.
     if (resumes && (this.host.line.retireAdmission(runId) || resolvedIds.length > 0)) {
-      this.host.spendWakeAdmission(runId, state, resolvedIds.length ? resolvedWaits(this.context.store.getRun(runId) ?? {}).length > 0 : owedBefore);
+      this.host.spendWakeAdmission(runId, state, resolvedIds.length ? resolvedWaits(this.context.store.getRun(runId) ?? {}).length > 0 : owedBefore, !turnEnded);
     }
     // Rearm the refusal turn's bound after the wake checkpoint cleared the park's timers.
     if (refusal && state.boundary.completionNudged === session) this.host.armNoWaitNudgeReplyTimer(runId, state);
@@ -863,6 +865,15 @@ type InputFaultReads = { current(): boolean; sessionFault(): string | undefined;
 
 export function latchInputFault(reads: InputFaultReads): boolean {
   return !(!reads.current() || reads.sessionFault() || reads.inputFault());
+}
+
+/** The exit an acknowledged batch commits with its checkpoint. A wake shows `running` while its
+ *  turn runs. One acknowledged after its turn ended (`turnEnded`) checkpoints in the park the run is
+ *  in: no turn runs, and the boundary settles the park next (hearsay-tools/squawk#1239). */
+export function acknowledgedExit(batch: Pick<AcknowledgedInput, 'resumes' | 'resolvedIds'>, turnEnded: boolean,
+  stepId: string | undefined): Pick<OutcomeDependencies, 'exit' | 'resumeStepId'> {
+  if (!batch.resumes || turnEnded) return {};
+  return { exit: 'resume', resumeStepId: batch.resolvedIds.length ? stepId : undefined };
 }
 
 /** What a rejected acknowledgement means (hearsay-tools/squawk#3508). On a session that is no
