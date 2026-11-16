@@ -1,5 +1,11 @@
 # Pin upstream analysis to committed inputs
 
+**Partly retired.** The upstream ledger and its weekly scan are removed
+(hearsay-tools/squawk#3724), so the dedicated upstream ref, the ledger and the scan's
+reachability check no longer exist. The pinning rule stays: a tool whose report names a
+commit resolves it once and pins every later Git call to it, as
+[docs/areas/git-worktree.md](../areas/git-worktree.md) states.
+
 Upstream scans append decisions to a canonical YAML ledger and derive Markdown from it.
 Fetch upstream into a dedicated ref instead of adding a remote that could change repository
 discovery for normal cockpit work. Resolve the target commit once and analyze that snapshot.
@@ -24,6 +30,6 @@ its original discovery observation.
 - **Add an upstream remote.** Avoided to keep normal forge discovery attached to the fork.
 - **Use git archive for the scratch tree.** The private-index checkout shares the analyzed tree and does not honor export-ignore exclusions.
 
-Implementation: [upstream-scan.cjs](../../.github/scripts/upstream-scan.cjs), [upstream-reachability.cjs](../../.github/scripts/upstream-reachability.cjs), [README.md](../../.ai/upstream/README.md).
+Implementation: [changed-functions.mjs](../../.ai/skills/check-code-quality/scripts/changed-functions.mjs) (`pinnedGit`).
 
-Coverage: [upstream-ledger.test.cjs](../../.github/scripts/upstream-ledger.test.cjs), [upstream-targets.test.cjs](../../.github/scripts/upstream-targets.test.cjs).
+Coverage: [changed-functions.test.mjs](../../.ai/skills/check-code-quality/scripts/changed-functions.test.mjs).

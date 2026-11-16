@@ -265,9 +265,9 @@ test('a docs-only or infra-only merge group may skip the suites; a bump PR shape
   assert.notEqual(queue({ CHANGE_SURFACE: 'docs-only', VITEST_RESULT: 'failure' }).status, 0);
 });
 
-test('ledger-only PRs skip both matrices but cannot bypass the required build and ledger validation', () => {
+test('docs-only PRs skip both matrices but cannot bypass the required build', () => {
   const { runInNewContext } = require('node:vm');
-  const files = ['.ai/upstream/ledger.yaml', '.ai/upstream/LEDGER.md', '.ai/upstream/scans/2026-09-25.md'];
+  const files = ['README.md', 'docs/guide.md', '.ai/specs/2026-09-25-example.md'];
   const classified = runClassification({ apiOutput: files.map(file => JSON.stringify(file)) });
   assert.equal(classified.result.status, 0, classified.result.stderr);
   assert.equal(classified.output, 'surface=docs-only\n');
@@ -290,7 +290,7 @@ test('ledger-only PRs skip both matrices but cannot bypass the required build an
     assert.equal(result.status === 0, buildResult === 'success');
   }
   const renamed = runClassification({ fileObjects: [{
-    filename: '.ai/upstream/scans/2026-09-25.md', previous_filename: 'packages/cezar/src/index.ts',
+    filename: 'docs/guide.md', previous_filename: 'packages/cezar/src/index.ts',
   }] });
   assert.equal(renamed.output, 'surface=full-matrix\n');
   assert.ok(ci.jobs['unit-tests'].steps.some(step => step.run === 'npm run test:unit:${{ matrix.suite }}'));
