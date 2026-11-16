@@ -262,6 +262,10 @@ test('a mapped caller main changed keeps its evidenced specs when other drift li
   const result = selectSpecs({ files: ['packages/cezar/src/core/helper.ts'], map, graph, specFiles: map.specs, drift,
     changes: new Map([['packages/cezar/src/core/helper.ts', [{ start: 5, end: 5 }]]]) });
   assert.deepEqual(result.specs, [spec('artifact-project-links'), spec('smoke')]);
+  // A drift hunk across the end of a recorded function keeps that function's specs.
+  const across = { files: [file], changes: new Map([[file, [{ start: 45, end: 60 }]]]) };
+  assert.deepEqual(selectSpecs({ files: ['packages/cezar/src/core/helper.ts'], map, graph, specFiles: map.specs, drift: across,
+    changes: new Map([['packages/cezar/src/core/helper.ts', [{ start: 5, end: 5 }]]]) }).specs, [spec('artifact-project-links'), spec('smoke')]);
   // The branch's own lines keep the strict rule.
   assert.equal(selectSpecs({ files: [file], map, graph, specFiles: map.specs, changes: drift.changes }).all, true);
 });

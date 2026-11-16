@@ -242,21 +242,31 @@ function e2eFileSpecs(file, readers) {
   return every('an e2e file no spec names: a spec may read it through a computed path');
 }
 
+/** Adds the specs of the innermost recorded functions enclosing start..end; false when none does. */
+function addInnermost(entries, start, end, indexes) {
+  const enclosing = entries.filter(fn => fn.start <= start && fn.end >= end);
+  if (enclosing.length === 0) return false;
+  const width = Math.min(...enclosing.map(fn => fn.end - fn.start));
+  for (const fn of enclosing.filter(fn => fn.end - fn.start === width)) {
+    for (const index of fn.specs) indexes.add(index);
+  }
+  return true;
+}
+
 /**
  * Choose the innermost recorded function enclosing each changed old-source line range. With
- * `partial`, a range no recorded function encloses is skipped instead of selecting every spec.
+ * `partial`, each changed line takes its own innermost function, so a range across a function
+ * boundary keeps the specs of every function it touches, and a line outside all of them adds none.
  */
 export function functionSpecs(file, map, readers, ranges, partial = false) {
   if (!ranges?.length) return every('no line evidence for this change');
   const entries = map.functions[file];
   const indexes = new Set();
   for (const { start, end } of ranges) {
-    const enclosing = entries.filter(fn => fn.start <= start && fn.end >= end);
-    if (enclosing.length === 0 && partial) continue;
-    if (enclosing.length === 0) return every('the changed lines have no function evidence');
-    const width = Math.min(...enclosing.map(fn => fn.end - fn.start));
-    for (const fn of enclosing.filter(fn => fn.end - fn.start === width)) {
-      for (const index of fn.specs) indexes.add(index);
+    if (partial) {
+      for (let line = start; line <= end; line += 1) addInnermost(entries, line, line, indexes);
+    } else if (!addInnermost(entries, start, end, indexes)) {
+      return every('the changed lines have no function evidence');
     }
   }
   return { specs: [...new Set([...indexes].map(index => map.specs[index]).concat(readers))],
