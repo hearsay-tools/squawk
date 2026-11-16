@@ -189,8 +189,8 @@ export class HumanWaits {
     return (this.context.store.getRun(runId)?.waits ?? []).some(wait => !isSquawkHumanWait(wait));
   }
 
-  /** Read fresh: a boundary the turn end re-enters (Cursor print's ready callback from
-   *  `discardQueuedMessages`) may have shown the wait already, and its card stands. */
+  /** Read fresh: another entry that settled this boundary may have shown the wait already, and its
+   *  card stands. */
   humanWaitShown(runId: string, wait: HumanWaitEntry | undefined): boolean {
     return !!wait && WAIT_KINDS.human.select(this.context.store.getRun(runId)?.waits ?? []).some(entry => entry.id === wait.id && entry.askSeq !== undefined) === true;
   }

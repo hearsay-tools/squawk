@@ -114,6 +114,7 @@ export const PARITY_FAMILIES = {
   }),
   'harness:owned': shared('owned input is delivered by run.ts; R8 differs only by steer or boundary delivery', {
     R6: NATIVE_ASK_SCENARIO, R7: NATIVE_ASK_SCENARIO, R9: NATIVE_ASK_SCENARIO,
+    R131: 'each runner\'s own discardQueuedMessages decides whether it signals input readiness inside the turn end (Cursor print does)',
   }),
   ...Object.fromEntries(['continue', 'restart', 'adopt', 'stop', 'cleanup', 'multi-continue', 'superseded', 'disposal']
     .map(group => [`harness:${group}`, shared(SETTLEMENT_RULES)])),

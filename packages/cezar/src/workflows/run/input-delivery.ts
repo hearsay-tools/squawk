@@ -33,7 +33,7 @@ import type { RunLine } from './run-line.ts';
 import type { WorkerExecutions } from './worker-executions.ts';
 import type { RunSkills } from './run-skills.ts';
 import type { AttachmentWriter } from './attachment-writer.ts';
-import type { HumanWaits } from './human-waits.ts';
+import { answeringAskSeq, isQuestionPending, type HumanWaits } from './human-waits.ts';
 import type { QuestionAnswerSource, WorkerQuestions } from './worker-questions.ts';
 import { cancelLivenessTimer, LivenessTimers } from './liveness-timers.ts';
 
@@ -529,8 +529,8 @@ export class InputDelivery {
 
   private admitsAgentInput(runId: string, state: ActiveRun, session: NonNullable<ActiveRun['liveSession']['session']>, inputIds: readonly string[], beforeHumanReset?: HumanAnswerBudget): boolean {
     // A pending question admits only a wake made of resolved-wait results and messages, at a turn boundary: it stays answerable, and nothing else is delivered until it is answered (hearsay-tools/cezarion#1233, #1235).
-    if (state.boundary.pendingHumanAsk) {
-      const run = this.context.store.getRun(runId);
+    const run = this.context.store.getRun(runId);
+    if (this.questionPending(runId, state, run)) {
       const owed = new Set(run ? [...resolvedWaits(run).map(waitInputId), ...this.host.pendingConversationWakes(run, beforeHumanReset).map(input => input.id)] : []);
       if (state.boundary.atTurnBoundary !== session || !inputIds.length || !inputIds.every(id => owed.has(id))) return false;
     }
@@ -617,10 +617,18 @@ export class InputDelivery {
     run = this.supersedeFallbackBeforeFlush(runId, state, run, beforeHumanReset);
     // A question pending at a turn boundary still takes an admitted wake of resolved-wait results
     // and messages; one pending mid-turn (a native ask) takes nothing until its turn ends.
-    const askPending = state.boundary.pendingHumanAsk || this.host.hasUnansweredHumanAsk(runId);
+    const askPending = this.questionPending(runId, state, run);
     if (askPending && state.boundary.atTurnBoundary !== state.liveSession.session) return false;
     run = this.cancelCappedTimersBeforeFlush(runId, state, run, beforeHumanReset);
     return this.flushAgentInputBatch(runId, state, run, askPending, beforeHumanReset);
+  }
+
+  /** A question waits for its answer (hearsay-tools/squawk#2444): an open human wait the agent
+   *  raised, from the moment it registers, other than the one whose answer is in flight; or the
+   *  question this live session shows or the transcript records. A runner callback inside the turn
+   *  end therefore finds it pending before the turn end prepares its card. */
+  private questionPending(runId: string, state: ActiveRun, run: RunRecord | undefined): boolean {
+    return isQuestionPending(run, answeringAskSeq(state)) || state.boundary.pendingHumanAsk || this.host.hasUnansweredHumanAsk(runId);
   }
 
   private supersedeFallbackBeforeFlush(runId: string, state: ActiveRun, run: RunRecord, beforeHumanReset?: HumanAnswerBudget): RunRecord {
