@@ -1,8 +1,7 @@
 import { logPrefix } from '../../home/display.ts';
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
-import { transitionTurnBoundary } from './turn-boundary.ts';
-import { squawkDoneRequestSchema, type SquawkDoneRequest, type SquawkDoneAnswer, type DoneErrorCode } from '@open-mercato/cezar-contract/waits';
+import { squawkDoneRequestSchema, type SquawkDoneRequest, type SquawkDoneAnswer, type DoneErrorCode, type DoneOwedInput } from '@open-mercato/cezar-contract/waits';
 import type { RunRecord, RunStore } from '../../runs/store.ts';
 import { doneErrorMessage } from '../../ci-wait/errors.ts';
 import { openCompletionRequests, recordRequestRefusal, type CompletionRefusal } from '../completion-policy.ts';
@@ -15,7 +14,8 @@ import { hasPendingHumanAsk } from './pending-ask-facts.ts';
 import * as completionGateReads from './completion-gate.ts';
 import type { RunModuleContext, PendingContinuation } from './types.ts';
 import type { RunSettlement } from './run-settlement.ts';
-import type { TurnSettler } from './turn-settler.ts';
+import { retireDoneAccepted, type TurnSettler } from './turn-settler.ts';
+import { owedAtDone } from './done-accepted.ts';
 import type { TurnNudges } from './turn-nudges.ts';
 import type { RunLine } from './run-line.ts';
 
@@ -34,21 +34,25 @@ export class RunFinish {
     private readonly turnNudges: TurnNudges, private readonly line: RunLine, private readonly host: RunFinishHost) {}
 
   /**
-   * `cezar_done` (hearsay-tools/cezarion#1234). Accepted, the run finishes at this turn's end
-   * through the done branch, which cancels every open wait; in a workflow step that is not the
-   * last, that branch completes the step and the next one starts (hearsay-tools/cezarion#1620), and
-   * the answer says which. Refused, the answer says what to do
-   * first. The gate is the completion gate, in order: the session, a root finish, the user's
-   * question, then for a root its workers' questions, live workers and uncollected results. The turn end re-checks it (`deferParentCompletion`).
+   * `cezar_done` (hearsay-tools/cezarion#1234). Accepted, the run records the done
+   * (`doneAccepted`, hearsay-tools/squawk#2587) and finishes at the end of a turn with no new wait
+   * or question, through the done branch, which cancels every open wait; in a workflow step that is
+   * not the last, that branch completes the step and the next one starts
+   * (hearsay-tools/cezarion#1620), and the answer says which. Input that arrives after the done is
+   * delivered first, and the run finishes when that turn ends; `turn-settler.ts` retires the record.
+   * Refused, the answer says what to do first, and nothing is recorded. The gate, in order: the
+   * session, a root finish, the user's question, input still owed to the agent
+   * (`input_pending`), then the completion gate: for a root its workers' questions, live workers
+   * and uncollected results. The turn end re-checks the completion gate (`deferParentCompletion`).
    */
   acceptDone(runId: string, generation: string, request: SquawkDoneRequest, signal?: AbortSignal): SquawkDoneAnswer {
     const parsed = squawkDoneRequestSchema.parse(request);
     const state = this.completionGateHost.active.get(runId);
     const open_waits = openWaitList(this.context.store.getRun(runId)?.waits ?? []);
-    const refuse = (code: DoneErrorCode, message: string, workers: { worker_id: string; reason: 'outstanding' | 'uncollected' | 'question' }[] = []): SquawkDoneAnswer => {
+    const refuse = (code: DoneErrorCode, message: string, workers: { worker_id: string; reason: 'outstanding' | 'uncollected' | 'question' }[] = [], owed: DoneOwedInput[] = []): SquawkDoneAnswer => {
       // Fixed codes only, as for wait registration.
       console.warn(`${logPrefix()} cezar_done refused: ${code}`);
-      return { ok: false, code, message, ...(workers.length ? { workers: workers.slice(0, 64) } : {}), open_waits };
+      return { ok: false, code, message, ...(workers.length ? { workers: workers.slice(0, 64) } : {}), open_waits, ...(owed.length ? { owed } : {}) };
     };
     const session = toolSessionRefusal(this.context.store.getRun(runId), state, this.completionGateHost.active.get(runId), generation, signal, this.context.disposed());
     const run = this.context.store.getRun(runId);
@@ -58,12 +62,17 @@ export class RunFinish {
     // A cezar_ask this turn registered is pending too, before its turn end shows it
     // (hearsay-tools/cezarion#2442).
     if (state.boundary.pendingHumanAsk || this.host.hasUnansweredHumanAsk(runId) || askedThisTurn(run)) return refuse('human_question_pending', doneErrorMessage('human_question_pending'));
+    const owed = owedAtDone(run, state);
+    if (owed.length) return refuse('input_pending', doneErrorMessage('input_pending'), [], owed);
     const refusal = this.completionRefusal(runId);
     if (refusal) {
       recordRequestRefusal(state, refusal, true);
+      // A done accepted earlier in this run no longer holds: the gate refuses it now.
+      retireDoneAccepted(this.context.store, runId, 'reconsidered', `completion refused: ${refusal.code}`);
       return refuse(refusal.code, refusal.message, refusal.workers);
     }
-    transitionTurnBoundary(state, { kind: 'done-request', session: state.liveSession.session, ...(parsed.summary === undefined ? {} : { summary: parsed.summary }) });
+    try { recordDoneAccepted(this.context.store, runId, { session: generation, at: new Date().toISOString(), summary: parsed.summary }); }
+    catch { return refuse('unavailable', doneErrorMessage('unavailable')); }
     const next = state.boundary.nextStep?.session === state.liveSession.session ? state.boundary.nextStep.label : undefined;
     return { ok: true, finishes: 'at_turn_end', ...(next === undefined ? { completes: 'task' as const } : { completes: 'step' as const, next_step: next }), open_waits };
   }
@@ -229,6 +238,15 @@ export class RunFinish {
     const askSeq = this.completionGateHost.pendingHumanAskSeq(runId);
     if (askSeq !== undefined) this.context.store.appendEvent(runId, { type: 'human-ask-closed', askSeq, reason: 'finish' });
   }
+}
+
+/** The only writer of `doneAccepted` (ADR 0064): an accepted `cezar_done`, committed before the
+ *  tool answers, so a restart still finishes the run on it. `seq` is the last event then: what is
+ *  recorded after it is new to the done. A done that replaces one still on record keeps its spent
+ *  free turn, so calling done again earns no second free delivery. */
+function recordDoneAccepted(store: Pick<RunStore, 'commitOutcome' | 'getRun' | 'transcriptFacts'>, runId: string, done: { session: string; at: string; summary?: string | undefined }): void {
+  const spent = store.getRun(runId)?.doneAccepted?.freeTurn;
+  store.commitOutcome(runId, { kind: 'done-accepted', ...done, seq: store.transcriptFacts(runId).lastSeq, ...(spent ? { freeTurn: true as const } : {}) });
 }
 
 /** An agent question registered in this turn: open, and not yet shown (no `askSeq`). */

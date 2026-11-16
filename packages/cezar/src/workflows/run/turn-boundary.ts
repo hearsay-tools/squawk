@@ -3,7 +3,9 @@ import type { ActiveRun } from '../active-run.ts';
 import type { CompletionRefusal } from '../completion-policy.ts';
 import type { TurnEndDecision, TurnEndOutcome } from '../turn-end.ts';
 
-export type DoneRequest = Readonly<{ session: AgentSession; summary?: string }>;
+/** The done a turn end takes to the completion gate: the run's accepted done (`doneAccepted`), or a
+ *  second `requests_outstanding` refusal that waits on the requests (`requestRefusedDone`). */
+export type DoneRequest = Readonly<{ summary?: string }>;
 export type NextStep = Readonly<{ session: AgentSession; label: string }>;
 export type DoneClose = Readonly<{ via: 'cezar_done'; summary?: string }>;
 export type AckBoundary = Readonly<{ session: AgentSession; monitoring: boolean; humanGate?: boolean; nudgedLastTurn?: boolean; scheduleWakeup?: number | null | undefined }>;
@@ -37,7 +39,6 @@ type IdleExpiredEvent =
 type BoundaryMutationEvent = Generation & (
   | SessionOpenEvent | TurnEndEvent | InputSubmittedEvent | ReplyExpiredEvent | IdleExpiredEvent
   | { kind: 'turn-started'; phase: 'clear-boundary' }
-  | { kind: 'done-request'; summary?: string }
   | { kind: 'done-step-consumed'; phase: 'completed' | 'consumed'; stepId?: string | undefined }
   | { kind: 'input-ack'; phase: 'wake-turn' }
   | { kind: 'nudge-fact'; phase: 'record'; nudge: Omit<Nudge, 'session'> }
@@ -91,7 +92,7 @@ export class BoundaryGroup {
   #noWaitNudgeSawContent: boolean | undefined;
   #noWaitNudgeParked: AgentSession | undefined;
   #doneAtBoundary: AgentSession | undefined;
-  #doneRequested: DoneRequest | undefined;
+  #requestRefusedDone: AgentSession | undefined;
   #nextStep: NextStep | undefined;
   #completedStepId: string | undefined;
   #doneClose: DoneClose | undefined;
@@ -119,7 +120,10 @@ export class BoundaryGroup {
   get noWaitNudgeSawContent(): boolean | undefined { return this.#noWaitNudgeSawContent; }
   get noWaitNudgeParked(): AgentSession | undefined { return this.#noWaitNudgeParked; }
   get doneAtBoundary(): AgentSession | undefined { return this.#doneAtBoundary; }
-  get doneRequested(): DoneRequest | undefined { return this.#doneRequested; }
+  /** The session whose second `cezar_done` the completion gate refused for outstanding requests:
+   *  its turn end takes a done to the gate, which then waits on the requests
+   *  (hearsay-tools/cezarion#1301). An accepted done is the run's `doneAccepted` record. */
+  get requestRefusedDone(): AgentSession | undefined { return this.#requestRefusedDone; }
   get nextStep(): NextStep | undefined { return this.#nextStep; }
   get completedStepId(): string | undefined { return this.#completedStepId; }
   get doneClose(): DoneClose | undefined { return this.#doneClose; }
@@ -140,7 +144,7 @@ export class BoundaryGroup {
   #turnEnd(event: Generation & TurnEndEvent): void {
     switch (event.phase) {
       case 'ui-completed': this.#waitWakeTurn = undefined; this.#atTurnBoundary = event.session; return;
-      case 'consume-done': this.#doneRequested = undefined; return;
+      case 'consume-done': this.#requestRefusedDone = undefined; return;
       case 'reset-nudges':
         this.#noWaitNudged = undefined;
         this.#completionNudgeAnswered = this.#completionNudged === event.session ? event.session : undefined;
@@ -180,7 +184,7 @@ export class BoundaryGroup {
       case 'nudge-delivered': this.#noWaitNudged = event.session; return;
       case 'resume': this.#clearBoundary(); return;
       case 'human-delivered':
-        this.#doneRequested = undefined;
+        this.#requestRefusedDone = undefined;
         this.#noWaitNudged = undefined;
         this.#noWaitNudgeParked = undefined;
         this.#noWaitNudgeSawContent = undefined;
@@ -213,7 +217,7 @@ export class BoundaryGroup {
       case 'record':
         if (event.code === 'requests_unanswered') this.#incomingRequestRefused = true;
         if (event.code !== 'requests_outstanding') return;
-        if (event.tool && this.#sentRequestRefused && event.session) this.#doneRequested = Object.freeze({ session: event.session });
+        if (event.tool && this.#sentRequestRefused && event.session) this.#requestRefusedDone = event.session;
         this.#sentRequestRefused = true;
         return;
     }
@@ -241,9 +245,6 @@ export class BoundaryGroup {
     this.#apply(event, effects);
     return undefined;
   }
-  #requestDone(event: Extract<BoundaryMutationEvent, { kind: 'done-request' }>): void {
-    this.#doneRequested = Object.freeze({ session: event.session!, ...(event.summary === undefined ? {} : { summary: event.summary }) });
-  }
   #humanWaitOpened(event: Extract<BoundaryMutationEvent, { kind: 'human-wait-opened' }>): void {
     if (event.phase === 'prepare') this.#pendingHumanAsk = true;
     else this.#pendingHumanAsk = event.pending;
@@ -252,7 +253,6 @@ export class BoundaryGroup {
     switch (event.kind) {
       case 'turn-started': this.#clearBoundary(); return;
       case 'turn-end': this.#turnEnd(event); return;
-      case 'done-request': this.#requestDone(event); return;
       case 'done-step-consumed': this.#completedStepId = event.phase === 'completed' ? event.stepId : undefined; return;
       case 'input-ack': this.#waitWakeTurn = event.session; return;
       case 'nudge-fact':

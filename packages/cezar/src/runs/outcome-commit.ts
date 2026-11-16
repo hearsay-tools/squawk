@@ -46,10 +46,20 @@ export type RunOutcome =
   /** The automatic-wake budget spent so far: a charge, or 0 when the user restarts it. */
   | { kind: 'charged'; automaticWakes: number }
   /** The failed wake-delivery count; `undefined` clears it. */
-  | { kind: 'counted'; waitDeliveryFailures: number | undefined };
+  | { kind: 'counted'; waitDeliveryFailures: number | undefined }
+  /** An accepted `cezar_done` (ADR 0064, hearsay-tools/squawk#2587): only `recordDoneAccepted` in
+   *  `workflows/run/run-finish.ts` stages it. It replaces an earlier record. */
+  | { kind: 'done-accepted'; session: string; at: string; seq: number; summary?: string | undefined; freeTurn?: true | undefined }
+  /** The accepted done's one free delivery turn is spent: later deliveries charge as wakes do.
+   *  Only `spendDoneFreeTurn` in `workflows/run/turn-settler.ts` stages it. */
+  | { kind: 'done-free-turn' }
+  /** The accepted done retires: `completed` when the run or step finishes on it, `reconsidered`
+   *  with the reason when new input, a wait, a question or a completion refusal withdrew it. Only
+   *  `retireDoneAccepted` in `workflows/run/turn-settler.ts` stages it. */
+  | { kind: 'done-retired'; as: 'completed' | 'reconsidered'; reason: string };
 
 /** The record fields only an outcome writes. */
-type OutcomeField = 'agentInputs' | 'waits' | 'lastWaits' | 'queuedMessages' | 'automaticWakes' | 'waitDeliveryFailures';
+type OutcomeField = 'agentInputs' | 'waits' | 'lastWaits' | 'queuedMessages' | 'automaticWakes' | 'waitDeliveryFailures' | 'doneAccepted';
 
 /** What an outcome depends on, committed with it. */
 export interface OutcomeDependencies {
@@ -195,6 +205,19 @@ const APPLY: { [K in RunOutcome['kind']]: Handler<K> } = {
   counted(run, outcome) {
     return run.waitDeliveryFailures === outcome.waitDeliveryFailures ? unchanged(run)
       : { run: { ...run, waitDeliveryFailures: outcome.waitDeliveryFailures }, changed: true };
+  },
+  'done-accepted'(run, outcome) {
+    return { run: { ...run, doneAccepted: { session: outcome.session, at: outcome.at, seq: outcome.seq,
+      ...(outcome.summary === undefined ? {} : { summary: outcome.summary }), ...(outcome.freeTurn ? { freeTurn: true as const } : {}) } }, changed: true };
+  },
+  'done-free-turn'(run) {
+    if (!run.doneAccepted || run.doneAccepted.freeTurn) return unchanged(run);
+    return { run: { ...run, doneAccepted: { ...run.doneAccepted, freeTurn: true } }, changed: true };
+  },
+  'done-retired'(run) {
+    if (!run.doneAccepted) return unchanged(run);
+    const { doneAccepted: _retired, ...rest } = run;
+    return { run: rest, changed: true };
   },
 };
 

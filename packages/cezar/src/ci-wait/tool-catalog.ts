@@ -93,7 +93,7 @@ export const cancelWaitToolDefinition = {
  *  hearsay-tools/cezarion#2397 it is the only way to. */
 export const doneToolDefinition = {
   name: 'cezar_done',
-  description: `Finish the task, or in a workflow step that is not the last, finish that step. Call it when the goal is fully achieved and verified and you have no question for the user; end your turn after it answers. ${productName('Cezar')} closes the session at the end of this turn and cancels every open wait; after a step, ${productName('Cezar')} starts the next step, and the answer names it. It refuses, naming what to do first, while owned workers are live or uncollected, a worker question is unanswered, or your question to the user is still pending.`,
+  description: `Finish the task, or in a workflow step that is not the last, finish that step. Call it when the goal is fully achieved and verified and you have no question for the user; end your turn after it answers. ${productName('Cezar')} closes the session at the end of this turn and cancels every open wait; after a step, ${productName('Cezar')} starts the next step, and the answer names it. It refuses, naming what to do first, while owned workers are live or uncollected, a worker question is unanswered, your question to the user is still pending, or input for you is still to be delivered (input_pending, listed in owed). A result or message that arrives after it is accepted is delivered with a note, and the task still finishes when that turn ends; a new message from the user, a new request or instruction, a failed result, or a wait or question you register withdraws it, so call cezar_done again when the task is complete.`,
   inputSchema: { ...z.toJSONSchema(squawkDoneRequestSchema, { io: 'input' }), type: 'object' as const },
 };
 

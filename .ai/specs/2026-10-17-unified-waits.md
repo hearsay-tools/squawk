@@ -192,7 +192,8 @@ At a turn end, in both handlers, through one shared function:
    (a held human follow-up, an unread or in-flight agent input, an admitted wake),
    make no decision: the next turn end decides. This is today's delivery
    mechanics, unchanged.
-1. **Done.** `cezar_done` was accepted this turn (or the done alias): cancel open
+1. **Done.** An accepted `cezar_done` is on record (`doneAccepted`, hearsay-tools/squawk#2587;
+   or the done alias): cancel open
    waits and finish — the session closes and the run goes to review/done; a
    worker settles; a non-final workflow step completes.
 2. **Any open wait.** Park. Status `waiting`. Nothing else is decided here.
@@ -696,8 +697,10 @@ nudge, and the dry-run mocks answering it) are recorded with it.
   registered, as the done line is overridden today; a root parent also refuses with
   `worker_questions`, `workers_outstanding` or `workers_uncollected`, listing up to 64 workers
   and the command that clears each. The session refusals are the ones `cezar_wait` and `cezar_ask` answer. An
-  accepted done is taken by the turn end that reads it, and a human message clears it, so a
-  later turn must call it again. A workflow step that is not the last refuses it with
+  accepted done is recorded on the run (`doneAccepted`) and holds until the run or step finishes
+  on it (hearsay-tools/squawk#2587). Input still owed when the agent calls it refuses it with
+  `input_pending`; a human message, a new instruction, a failed wait result, a wait or a question
+  the agent registers withdraws it, so a later turn must call it again. A workflow step that is not the last refuses it with
   `not_final_step`, because that step's turn end runs the next step; it still ignores the done
   line. A human wait from the same turn is cancelled by the done (a later done beats an
   earlier ask).
@@ -732,9 +735,10 @@ shipped ones: re-checks on, budget 40, no autonomy.
 | | The step's authored `timeoutMs` passes | The runner's deadline kill | Cancelled into `lastWaits`; the run settles `failed` and later steps do not run (Q8). CI and timer waits still park it |
 | | A CI or timer wait resolves | The CI watcher or the wait timer | Its wake is delivered beside the question and the run re-parks Needs you; the human wait stays open |
 | | Stop, Finish, delete | The user | Cancelled into `lastWaits`; the run settles |
-| `cezar_done` accepted, turn still running (in memory) | The turn ends | The runner's turn end | The run closes as done there, or at the boundary that settles input still owed to the agent; a completion gate that fails at the turn end (`deferParentCompletion`) parks it instead |
-| | A human message arrives | The user | The request is cleared; the agent must call `cezar_done` again |
-| | The session fails or the process exits | The failure path | The request is lost with the session; the run follows its failure path |
+| `cezar_done` accepted (`doneAccepted` on the run, hearsay-tools/squawk#2587) | The turn ends | The runner's turn end | The run closes as done there, or at the end of the turn that delivers input still owed to the agent, with the done note and no wake charge, also at 40 of 40; a completion gate that fails at the turn end (`deferParentCompletion`) withdraws the done instead |
+| | A human message, a new peer or worker instruction, or a failed wait result arrives | The user, a peer, a worker, the wait engine | Delivered; the done is withdrawn; the agent must call `cezar_done` again |
+| | The agent registers a wait or asks | The agent | The done is withdrawn; the run parks as for any wait |
+| | The session fails or the process exits | The failure path | The run follows its failure path; the record stays, so a turn a wake reopens finishes on it, and a Continue withdraws it |
 | `waiting` on CI or timer waits (kept from phase 1) | A wait resolves (result, deadline) | The CI watcher or the wait timer | Its wake is delivered; a timer wake spends one unit of `automaticWakes` |
 | | A timer comes due with the budget spent | The wait timer | The timer is cancelled with the cap note; with nothing else open, a `budget` human wait opens and the run reads Needs you, with or without a live session (recovery fires an overdue timer before one exists; U16b) |
 | | A human message | The user | Delivered; every wait stays open with its deadline; the budget resets |
