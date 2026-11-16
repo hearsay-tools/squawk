@@ -4,6 +4,7 @@ import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factori
 import { ClaudeCliRunner } from '../core/claude-cli-runner.ts';
 import { onlyRunner, useRunners } from '../core/runners-under-test.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
+import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
 import { enqueueAgentInput } from '../delegation/input.ts';
 import { blockedDone, blockingWorker, describeWaitCells, gated, github, nativeWire, parentTurn, pr, prompted } from './waits-parity-fixture.testkit.ts';
 import { manager, parent, restart, store, terminal, timeline, until } from './worker-wait-core.testkit.ts';
@@ -68,7 +69,7 @@ describeWaitCells(() => {
     const run = await quietRun();
     const text = 'Please also update the changelog.';
     await blockedDone(run.id, () => {
-      const input = { id: randomUUID(), source: 'agent' as const, parentRunId: run.id, text, createdAt: new Date().toISOString(),
+      const input = { id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId: run.id, text, createdAt: new Date().toISOString(),
         conversation: { senderRunId: randomUUID(), recipientRunId: run.id, kind: 'request' as const } };
       store.commitAgentInputs(run.id, enqueueAgentInput(store.getRun(run.id)!, input));
       manager.deliverConversationInput(run.id);

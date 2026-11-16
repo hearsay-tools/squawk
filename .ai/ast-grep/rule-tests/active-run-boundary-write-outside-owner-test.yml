@@ -37,8 +37,8 @@ invalid:
   - "function f(target: ActiveRun, key: string, replacement: BoundaryGroup) { Reflect.set(target, key, replacement); }"
   - "class BoundaryGroup { readonly backing = {}; }"
   - "const view = createBoundaryGroup(); Object.assign(view, { idleTimer: replacement });"
-  - 'const { doneRequested: request } = state.boundary; Object.assign(request, { summary: "forged" });'
-  - 'const request = state.boundary.doneRequested; request.summary = "forged";'
+  - 'const { doneClose: close } = state.boundary; Object.assign(close, { summary: "forged" });'
+  - 'const close = state.boundary.doneClose; close.summary = "forged";'
   - 'function f(view: DoneRequest) { view.summary = "forged"; }'
   - 'state.boundary["parkAfterAck"].monitoring = true;'
   - 'function f(state: ActiveRun) { const { boundary: view } = state; Object.defineProperty(view, "pendingHumanAsk", { value: true }); }'

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { AgentInput, Wait } from '@open-mercato/cezar-contract';
+import { agentInputSchema, workerOutcomeSchema } from '@open-mercato/cezar-contract/delegation';
 import { makePeerWait, makePrWait, makeProcessWait, makeRunRecord, makeSubagentWait, makeTimerWait, makeWorkerRequestWait, makeWorkerWait, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentSession } from '../../core/agent-runner.ts';
 import { createActiveRun } from '../active-run.ts';
@@ -8,7 +9,7 @@ import { owedAtDone, reconsideredBy } from './done-accepted.ts';
 import { InputFlight } from './input-delivery.ts';
 
 const resolved = <W extends Wait>(wait: W): W => ({ ...wait, phase: WAIT_PHASE.resolved, resolvedAt: new Date().toISOString() });
-const input = (over: Partial<AgentInput> = {}): AgentInput => ({ id: randomUUID(), source: 'agent', parentRunId: randomUUID(), text: 'input', createdAt: new Date().toISOString(), ...over });
+const input = (over: Partial<AgentInput> = {}): AgentInput => ({ id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId: randomUUID(), text: 'input', createdAt: new Date().toISOString(), ...over });
 const conversation = (kind: 'request' | 'progress' | 'follow-up' | 'reply', relationship?: 'peer') =>
   ({ senderRunId: randomUUID(), recipientRunId: randomUUID(), kind, ...(relationship ? { relationship } : {}) });
 
@@ -31,14 +32,14 @@ describe('input after an accepted done (hearsay-tools/squawk#2587)', () => {
 
   it('a worker outcome that failed withdraws it', () => {
     const wait = makeWorkerWait({ result: { reason: 'outcome' } });
-    const failed = { ...wait, outcomes: [{ workerId: wait.workerIds![0]!, status: 'failed' as const, observedAt: new Date().toISOString() }] };
+    const failed = { ...wait, outcomes: [{ workerId: wait.workerIds![0]!, status: workerOutcomeSchema.shape.status.enum.failed, observedAt: new Date().toISOString() }] };
     expect(reconsideredBy(makeRunRecord({ waits: [resolved(failed)] }), [wait.id])).toBe('a failed worker wait result');
   });
 
   it.each<[string, AgentInput, string | undefined]>([
     ['a progress note keeps it', input({ conversation: conversation('progress', 'peer') }), undefined],
     ['a reply keeps it', input({ conversation: conversation('reply') }), undefined],
-    ['a lifecycle observation keeps it', input({ source: 'lifecycle' }), undefined],
+    ['a lifecycle observation keeps it', input({ source: agentInputSchema.shape.source.enum.lifecycle }), undefined],
     ['a peer request withdraws it', input({ conversation: conversation('request', 'peer') }), 'a new peer request'],
     ['a family follow-up withdraws it', input({ conversation: conversation('follow-up') }), 'a new agent request'],
     ['the parent\'s instruction withdraws it', input(), 'a new instruction from the parent'],
@@ -60,7 +61,7 @@ describe('input owed at cezar_done (hearsay-tools/squawk#2587)', () => {
 
   it('lists a resolved result, queued input and an unread submission, and leaves out what this turn already has', () => {
     const result = resolved(makePrWait());
-    const resultInput = input({ id: result.id, source: 'lifecycle' });
+    const resultInput = input({ id: result.id, source: agentInputSchema.shape.source.enum.lifecycle });
     const queued = input({ conversation: conversation('progress', 'peer') });
     const opening = input();
     const read = input({ deliveredAt: new Date().toISOString(), consumedAt: new Date().toISOString() });
