@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, matchesGlob } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { NO_VITEST_READER, VITEST_TEST, classify, configurationClosure, existingTests, readInputs, testsReaching } from './test-inputs.mjs';
+import { NO_VITEST_READER, VITEST_TEST, classify, configurationClosure, existingTests, readInputs, SOURCE_PATHSPECS, testsReaching } from './test-inputs.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
@@ -42,6 +42,14 @@ test('the configuration closure follows static imports from the Vitest configura
     '.github/scripts/ci-test-sequencer.mjs', 'packages/cezar/src/guard.testkit.ts', 'packages/cezar/src/home.ts',
     'packages/cezar/vitest.setup.ts', 'scripts/helper.mjs', 'vitest.config.ts',
   ]);
+});
+
+test('a deleted file that the Vitest configuration imports still runs the full suite', t => {
+  const cwd = repo(t);
+  rmSync(join(cwd, '.github/scripts/ci-test-sequencer.mjs'));
+  assert.ok(configurationClosure(cwd).has('.github/scripts/ci-test-sequencer.mjs'));
+  assert.deepEqual(classify(['.github/scripts/ci-test-sequencer.mjs'], cwd),
+    { full: 'Vitest configuration input: .github/scripts/ci-test-sequencer.mjs' });
 });
 
 test('an ast-grep rule selects its declared readers, not the full suite', t => {
@@ -175,7 +183,7 @@ function undeclaredReaders(root) {
     const tests = matchesGlob(file, VITEST_TEST) ? [file] : testsReaching(root, [file]);
     return tests !== null && tests.length > 0 && tests.every(test => declaredBy(test, path));
   };
-  const files = execFileSync('git', ['ls-files', '-z', '--others', '--cached', '--exclude-standard', '--', 'packages/*/src/*.ts', 'packages/*/src/*.tsx', 'packages/*/vitest.setup.ts'],
+  const files = execFileSync('git', ['ls-files', '-z', '--others', '--cached', '--exclude-standard', '--', ...SOURCE_PATHSPECS, 'packages/*/vitest.setup.ts'],
     { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0')
     // An unstaged deletion stays in the index: skip what is gone from the tree.
     .filter(file => file && existsSync(join(root, file)));
@@ -214,6 +222,8 @@ test('the tripwire checks each reading test file against its own declaration', t
     'packages/cezar/vitest.setup.ts': "const y = readFileSync('../../.github/scripts/setup-data.json')\nimport { s } from './src/shared.testkit.ts'\n",
     'packages/cezar/src/shared.testkit.ts': "const z = readFileSync('../../../.github/scripts/shared.json')\n",
     'packages/cezar/src/declares-shared.test.ts': "import { s } from './shared.testkit.ts'\n",
+    'packages/cezar/src/reader.mjs': "const w = readFileSync('../../../.github/scripts/js-data.json')\n",
+    'packages/cezar/src/js-reader.test.ts': "import { w } from './reader.mjs'\n",
   });
   execFileSync('git', ['init', '-q'], { cwd: root });
   execFileSync('git', ['add', '.'], { cwd: root });
@@ -221,6 +231,7 @@ test('the tripwire checks each reading test file against its own declaration', t
   rmSync(join(root, 'packages/cezar/src/gone.testkit.ts'));
   assert.deepEqual(undeclaredReaders(root), [
     'packages/cezar/src/helper.testkit.ts:1 reads .github/scripts/growth.cjs',
+    'packages/cezar/src/reader.mjs:1 reads .github/scripts/js-data.json',
     'packages/cezar/src/second.test.ts:1 reads .github/scripts/growth.cjs',
     'packages/cezar/src/shared.testkit.ts:1 reads .github/scripts/shared.json',
     'packages/cezar/vitest.setup.ts:1 reads .github/scripts/setup-data.json',

@@ -58,8 +58,8 @@ function resolveImport(cwd, from, specifier) {
   else if (specifier.startsWith('@/') && from.startsWith('packages/web/')) target = `packages/web/src/${specifier.slice(2)}`;
   else return null;
   const stem = target.replace(/\.(?:js|mjs|cjs)$/, '');
-  return [target, `${stem}.ts`, `${stem}.tsx`, `${target}.ts`, `${target}.tsx`, `${target}.mjs`, `${target}.js`, `${target}/index.ts`]
-    .find(candidate => existsSync(join(cwd, candidate))) ?? null;
+  const candidates = [target, `${stem}.ts`, `${stem}.tsx`, `${target}.ts`, `${target}.tsx`, `${target}.mjs`, `${target}.js`, `${target}/index.ts`];
+  return { file: candidates.find(candidate => existsSync(join(cwd, candidate))), candidates };
 }
 
 // The local files the Vitest configuration and setup files import, transitively.
@@ -72,7 +72,9 @@ export function configurationClosure(cwd) {
     seen.add(path);
     for (const [, specifier] of readFileSync(join(cwd, path), 'utf8').matchAll(IMPORT)) {
       const target = resolveImport(cwd, path, specifier);
-      if (target && !seen.has(target)) queue.push(target);
+      if (target?.file) { if (!seen.has(target.file)) queue.push(target.file); }
+      // A deleted import is still configuration: every path it could have been stays in the set.
+      else if (target) for (const candidate of target.candidates) seen.add(candidate);
     }
   }
   return seen;
@@ -103,7 +105,7 @@ function classifyPath(path, { inputs, configuration }) {
 }
 
 // Every TS/JS file under packages/*/src; Git's `*` crosses directories.
-const SOURCE_PATHSPECS = ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'mts', 'cts'].map(extension => `packages/*/src/*.${extension}`);
+export const SOURCE_PATHSPECS = ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'mts', 'cts'].map(extension => `packages/*/src/*.${extension}`);
 
 // Package files that name one of `paths` as `/<name>.`, `/<name>'` or `/<name>"`: an
 // import, re-export or vi.mock path. A text match, so a shared name over-selects.

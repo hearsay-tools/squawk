@@ -129,7 +129,7 @@ deleted and renamed paths take the same rules:
 | Changed path | Selects |
 | --- | --- |
 | TS/JS source in `packages/{cezar,web,api-client}/src` | Vitest's import graph. A deleted file also selects every Vitest test that reaches it through a chain of files naming it in an import or `vi.mock` path; past 300 such files, full Vitest |
-| Manifests, the lockfile, `tsconfig*.json`, Vitest configuration and setup files, and the local files they import | Full Vitest |
+| Manifests, the lockfile, `tsconfig*.json`, Vitest configuration and setup files, and the local files they import, deleted ones included | Full Vitest |
 | A `__snapshots__/*.snap` file | Its test |
 | A `*.baseline.json` that a test declares by its exact path | The tests that declare it |
 | Any other path under `packages/`, `packages/contract` included | Full Vitest |
