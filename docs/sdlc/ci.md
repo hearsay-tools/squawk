@@ -227,10 +227,13 @@ file all run full Vitest on eight shards. A failing selected test fails its job;
 it never triggers a full-suite retry. The base fetch is bounded to 100 commits.
 A missing merge-base costs a full run instead of silently skipping tests.
 
-Browser jobs call `scripts/e2e-affected.mjs --ci`. The selector reads the newest
-successful `e2e-spec-map.yml` map on `main`, compares against the map's own commit,
-and keeps its existing conservative selection rules. A missing map, failed
-selector or empty selection runs every spec on eight shards. Selected browser
+Browser jobs fetch the PR base and call `scripts/e2e-affected.mjs --ci --base=<PR base SHA>`.
+The selector reads the newest successful `e2e-spec-map.yml` map on `main` and selects from
+the PR's own changes, from the merge-base with the PR base. Merges after the map's commit do
+not count. Its log prints each changed file with its spec count and reason. A missing map,
+missing merge-base or failed selector runs every spec on eight shards. An empty selection
+reaches the job as empty, with its reason, and still runs every spec until
+hearsay-tools/squawk#3727 changes that. Selected browser
 runs still require `TEST_E2E_STATUS=passed`; missing browsers fail verification.
 The token used to download the map has read-only Actions and repository scopes.
 

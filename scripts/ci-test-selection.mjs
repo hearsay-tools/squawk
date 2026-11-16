@@ -16,11 +16,15 @@ export function unitFiles(selection, run = execFileSync) {
   }
 }
 
+/**
+ * The browser selection PR CI receives: `files` is null for every spec or a failed selector, and
+ * empty when no spec reaches the change. `reason` and the per-file `lines` come with it.
+ */
 export function browserFiles(select) {
   try {
     const chosen = select();
-    return chosen.all || chosen.specs.length === 0 ? null : chosen.specs;
-  } catch {
-    return null;
+    return { files: chosen.all ? null : chosen.specs, reason: chosen.reason, lines: chosen.lines };
+  } catch (error) {
+    return { files: null, reason: `the selector failed: ${String(error?.message ?? error).split('\n')[0]}` };
   }
 }

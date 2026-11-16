@@ -40,12 +40,13 @@ const sampleMap = (overrides = {}) => ({
   ...overrides,
 });
 
-test('options: --plan and --map are the selector’s own; everything else goes to npm run test:e2e', () => {
-  assert.deepEqual(parseOptions(['--plan', '--map=m.json', '-t', 'name', '--force']), {
-    plan: true, map: 'm.json', forward: ['-t', 'name', '--force'],
+test('options: --plan, --map and --base are the selector’s own; everything else goes to npm run test:e2e', () => {
+  assert.deepEqual(parseOptions(['--plan', '--map=m.json', '--base=abc', '-t', 'name', '--force']), {
+    plan: true, map: 'm.json', base: 'abc', forward: ['-t', 'name', '--force'],
   });
   assert.throws(() => parseOptions(['--map']), /--map takes a file/);
   assert.throws(() => parseOptions(['--map=']), /--map takes a file/);
+  assert.throws(() => parseOptions(['--base=']), /--base takes a Git ref/);
 });
 
 test('a map is refused when its shape is not the one the refresh writes', () => {
@@ -191,14 +192,34 @@ test('each kind of changed file selects its specs, none, or every spec', () => {
     ['packages/contract/src/runs.ts', null],
     ['.ai/scripts/test-env-up.sh', null],
     ['pnpm-lock.yaml', null],
-    ['AGENT_PROTOCOL.md', null],
     ['something/new.txt', null],
+    // hearsay-tools/squawk#3728: reviewed paths no browser spec reads.
+    ['.ai/ast-grep/rules/no-bare-citation.yml', []],
+    ['sgconfig.yml', []],
+    ['.oxlintrc.json', []],
+    ['packages/cezar/src/lint/undocumented-env-name.ts', []],
+    ['.ai/skills/dev-flow/SKILL.md', []],
+    ['.claude/skills/pr-checks/SKILL.md', []],
+    ['packages/cezar/scripts/benchmark-spawn.mjs', []],
+    ['packages/web/scripts/benchmark-tabs.ts', []],
+    ['AGENT_PROTOCOL.md', []],
+    ['.env.example', []],
+    ['squeal.config.json', []],
   ];
   for (const [file, specs] of cases) {
     const result = choose(file);
     assert.deepEqual(result.specs === null ? null : [...result.specs].sort(), specs, file);
     assert.ok(result.reason, file);
   }
+});
+
+test('a reviewed no-spec path still selects the specs that load it, and setup still selects every spec', () => {
+  const readsSkill = { setup: new Set([...graph.setup, '.ai/skills/setup-loaded.md']), specs: new Map([
+    ...graph.specs, [spec('smoke'), new Set([spec('smoke'), '.ai/skills/fixture/SKILL.md'])],
+  ]) };
+  const pick = file => classify(file, { map: sampleMap(), graph: readsSkill });
+  assert.deepEqual(pick('.ai/skills/fixture/SKILL.md').specs, [spec('smoke')]);
+  assert.equal(pick('.ai/skills/setup-loaded.md').specs, null);
 });
 
 test('selection: every spec when one file needs it, and incomplete specs whenever a bundled source changed', () => {
@@ -213,6 +234,18 @@ test('selection: every spec when one file needs it, and incomplete specs wheneve
   assert.equal(all.all, true);
   assert.deepEqual(all.specs, specFiles);
   assert.deepEqual(all.lines.map(line => line.file), ['docs/x.md', 'packages/cezar/src/index.ts']);
+  assert.match(all.reason, /^packages\/cezar\/src\/index\.ts needs every spec \(server or CLI code/);
+});
+
+test('an empty selection stays empty and carries its reason', () => {
+  const specFiles = sampleMap().specs;
+  const pick = files => selectSpecs({ files, map: sampleMap(), graph, specFiles });
+  const empty = pick(['.ai/ast-grep/rules/x.yml', 'docs/x.md']);
+  assert.equal(empty.all, false);
+  assert.deepEqual(empty.specs, []);
+  assert.equal(empty.reason, 'no changed file reaches a browser spec');
+  assert.equal(pick([]).reason, 'the branch changes no file');
+  assert.equal(pick(['packages/web/e2e/poll.ts']).reason, 'the specs the changed files reach');
 });
 
 function repository(t) {
@@ -274,8 +307,47 @@ test('a change no spec reaches runs nothing and exits 0', t => {
   put('docs/new-page.md', '# New\n');
   const result = affected(dir, map());
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Selected 0 of 3 specs\./);
+  assert.match(result.stdout, /Selected 0 of 3 specs: no changed file reaches a browser spec\./);
   assert.match(result.stdout, /No browser spec reaches these changes, so none runs\./);
+});
+
+test('the branch’s own changes decide, whatever merged after the map’s commit', t => {
+  const { dir, put, map } = repository(t);
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
+  const mapFlag = map();
+  // main moves past the map with a change that alone selects every spec.
+  put('packages/cezar/src/server/server.ts', 'export const port = 1;\n');
+  git('add', '.'); git('commit', '-qm', 'later merge');
+  git('switch', '-qc', 'feature');
+  put('packages/web/src/routes/task-thread/markdown.tsx', 'export function Markdown() { return 1 }\n');
+  git('commit', '-qam', 'own change');
+  const result = affected(dir, '--plan', '--base=main', mapFlag);
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /server\.ts/);
+  assert.match(result.stdout, /markdown\.tsx: 2 specs \(the specs that run it\)/);
+  assert.match(result.stdout, /Selected 2 of 3 specs/);
+  // Without --base the branch forks from main as well.
+  assert.match(affected(dir, '--plan', mapFlag).stdout, /Selected 2 of 3 specs/);
+});
+
+test('a base the branch shares no history with selects every spec, with the reason', t => {
+  const { dir, map } = repository(t);
+  const result = affected(dir, '--plan', '--base=no-such-ref', map());
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /HEAD has no merge-base with no-such-ref\. Every spec runs\./);
+  assert.match(result.stdout, /Selected 3 of 3 specs/);
+});
+
+test('--ci reports each changed file and keeps an empty selection visible', t => {
+  const { dir, put, map } = repository(t);
+  put('.ai/ast-grep/rules/x.yml', 'id: x\n');
+  put('.ai/skills/x/SKILL.md', '# x\n');
+  const result = affected(dir, '--ci', '--plan', map());
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, / {2}\.ai\/ast-grep\/rules\/x\.yml: 0 specs \(lint rules/);
+  assert.match(result.stdout, / {2}\.ai\/skills\/x\/SKILL\.md: 0 specs \(repository skills/);
+  assert.match(result.stdout, /Selected 0 of 3 specs: no changed file reaches a browser spec\./);
+  assert.match(result.stdout, /PR CI runs every spec for an empty selection \(hearsay-tools\/squawk#3727\)\./);
 });
 
 test('a map whose commit the clone lacks selects every spec', t => {
@@ -336,9 +408,10 @@ exec "$REAL_NODE" "$MARKER_SCRIPT" "$@"
   chmodSync(join(temp.dir, 'node'), 0o755);
   const workflow = yaml.parse(readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8'));
   const run = workflow.jobs['cockpit-browser'].steps.find(step => step.id === 'e2e-pr').run;
+  assert.match(run, /--base="\$PR_BASE"/);
   const result = spawnSync('bash', ['-eu', '-c', run.replace('${{ matrix.shard }}', '1')], {
     cwd: dir, encoding: 'utf8', env: { ...process.env, PATH: `${temp.dir}:${process.env.PATH}`,
-      RUNNER_TEMP: temp.dir, REAL_NODE: process.execPath, SELECTOR_SCRIPT: script, MAP_FILE: mapFile,
+      RUNNER_TEMP: temp.dir, PR_BASE: 'main', REAL_NODE: process.execPath, SELECTOR_SCRIPT: script, MAP_FILE: mapFile,
       MARKER_SCRIPT: fileURLToPath(new URL('../.github/scripts/require-e2e-passed.cjs', import.meta.url)) },
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);

@@ -348,9 +348,11 @@ under the new values. The watcher logs why it stopped a server to `.ai/qa/test-e
 
 ## Choosing specs for a change
 
-PR CI uses `scripts/e2e-affected.mjs --ci` with `--shard=N/8`. It resolves the
-complete selection before sharding. A missing map, selector error or empty
-selection runs every spec. A nonempty selection permits empty shard partitions.
+PR CI uses `scripts/e2e-affected.mjs --ci --base=<PR base SHA>` with `--shard=N/8`. It resolves the
+complete selection before sharding and prints each changed file with its spec count and reason.
+A missing map, a missing merge-base or a selector error runs every spec. An empty selection
+reaches PR CI as empty, with its reason; PR CI still runs every spec for it
+(hearsay-tools/squawk#3727). A nonempty selection permits empty shard partitions.
 All eight jobs still require a passed browser marker. Merge-group jobs always
 run the full suite and retain their whole-shard rerun and flake reports. See
 [Selected PR tests](../../../docs/sdlc/ci.md#selected-pr-tests).
@@ -363,6 +365,7 @@ to `npm run test:e2e`.
 npm run test:e2e:affected -- --plan
 npm run test:e2e:affected -- --force-rebuild
 npm run test:e2e:affected -- --plan --map=<file>   # a map you built or downloaded
+npm run test:e2e:affected -- --plan --base=<ref>   # changes since the merge-base with <ref>
 ```
 
 The `E2E spec map` workflow records which specs run cockpit code, server functions and
@@ -374,8 +377,11 @@ A task without a known creating spec makes Node evidence incomplete.
 Failed specs and specs without complete evidence stay incomplete and always run for mapped edits.
 
 The selector downloads the newest successful map from `main` with `gh` into
-`.ai/qa/e2e-spec-map/`. It diffs the working tree, including untracked files, against the map's
-commit. Without a download it uses the newest cached map. Without a usable map it runs every spec.
+`.ai/qa/e2e-spec-map/`. Without a download it uses the newest cached map. Without a usable map it
+runs every spec. The changed files are the branch's own: the diff from its merge-base with `--base`
+(default `origin/main`, then `main`) to the working tree, untracked files included. Merges on `main`
+after the map's commit do not count (hearsay-tools/squawk#3728). Changed lines in mapped
+functions are diffed against the map's commit, where the map's line numbers hold.
 
 | Change | Specs |
 | --- | --- |
@@ -383,6 +389,7 @@ commit. Without a download it uses the newest cached map. Without a usable map i
 | Server source or `mock-*.mjs` with function evidence | Specs that ran the innermost functions containing the changed lines, plus specs that load the file and incomplete specs |
 | Spec, helper or fixture | Specs that load it; every spec if suite setup loads it or no spec names the helper |
 | Documentation, unit tests, `spec-map/`, `.github/` outside suite setup | None |
+| A reviewed path no spec reads (`NO_SPEC` in the selector, each with its reason): lint rules and configs, `packages/cezar/src/lint/`, repository skills, benchmarks no spec imports, `AGENT_PROTOCOL.md`, `.env.example`, `squeal.config.json` | None, unless suite setup or a spec loads it |
 | Server/CLI paths without function evidence; the contract; styles; build configuration; test environment; dependencies; any other unknown path | Every spec |
 
 An edit outside recorded function ranges selects every spec. Insertions at function boundaries

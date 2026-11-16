@@ -3,10 +3,12 @@
 // PR CI uses --ci; the merge queue runs every spec.
 //
 // The spec map, built on each push to main by .github/workflows/e2e-spec-map.yml, links each
-// cockpit source file and covered Node functions to the specs that ran them. The selector diffs the working
-// tree against the map's own commit, so a map older than the branch base still answers for every
-// change since. A change the map cannot answer for (unmapped server code, styles, the test environment)
-// selects every spec. packages/web/e2e/README.md § Choosing specs for a change has the rules.
+// cockpit source file and covered Node functions to the specs that ran them. The selector reads the
+// branch's own changes, from its merge-base with --base (default origin/main) to the working tree, so
+// merges after the map's commit do not count (hearsay-tools/squawk#3728). Changed lines of mapped
+// functions are diffed against the map's commit, where the map's line numbers hold. A change the map
+// cannot answer for (unmapped server code, styles, the test environment) selects every spec.
+// packages/web/e2e/README.md § Choosing specs for a change has the rules.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -23,14 +25,16 @@ const CACHE_DIR = '.ai/qa/e2e-spec-map';
 const DURATIONS = '.github/cockpit-test-durations.json';
 const LOG = '[e2e:affected]';
 
-const usage = 'Use --plan, --map=<file>, or arguments for npm run test:e2e.';
+const usage = 'Use --plan, --map=<file>, --base=<ref>, or arguments for npm run test:e2e.';
 
 export function parseOptions(argv) {
-  const options = { plan: false, map: undefined, forward: [] };
+  const options = { plan: false, map: undefined, base: undefined, forward: [] };
   for (const arg of argv) {
     if (arg === '--plan') options.plan = true;
     else if (arg.startsWith('--map=') && arg.length > 6) options.map = arg.slice(6);
     else if (arg.startsWith('--map')) throw new Error(`--map takes a file: --map=<file>. ${usage}`);
+    else if (arg.startsWith('--base=') && arg.length > 7) options.base = arg.slice(7);
+    else if (arg.startsWith('--base')) throw new Error(`--base takes a Git ref: --base=<ref>. ${usage}`);
     else if (arg === '--ci') options.ci = true;
     else options.forward.push(arg);
   }
@@ -207,6 +211,20 @@ const EVERY_SPEC = [
   [/(?:)/, 'the map does not cover this path'],
 ];
 
+// Paths no browser spec reads, each with the reason it was reviewed safe (hearsay-tools/squawk#3728).
+// The suite-setup rule and a spec that loads the file both still win.
+export const NO_SPEC = [
+  [/^\.ai\/ast-grep\//, 'lint rules, which only the linter and its tests read'],
+  [/^(?:sgconfig\.yml|\.oxlintrc\.json)$/, 'a lint configuration, which no build or spec reads'],
+  [/^packages\/cezar\/src\/lint\//, 'lint code, which only the lint script and unit tests import'],
+  [/^(?:\.ai|\.agents|\.claude)\/skills\//, 'repository skills: the served test clone replaces them with fixture catalogs'],
+  [/^packages\/cezar\/scripts\/benchmark-/, 'a benchmark, which only the bench scripts run'],
+  [/^packages\/web\/scripts\/(?:benchmark-tabs\.ts|vite\.(?:profiling|reports-benchmark)\.config\.ts)$/, 'a benchmark no spec imports'],
+  [/^AGENT_PROTOCOL\.md$/, 'the runner protocol, which only unit tests read'],
+  [/^\.env\.example$/, 'the env contract, which only the linter reads'],
+  [/^squeal\.config\.json$/, "Squeal's configuration, which no spec or server reads"],
+];
+
 const none = reason => ({ specs: [], reason });
 const every = reason => ({ specs: null, reason });
 
@@ -262,19 +280,25 @@ export function classify(file, { map, graph, changes }) {
     return functionSpecs(file, map, readers, changes?.get(file));
   }
   if (file.startsWith('.github/')) return none('CI configuration the browser suite does not load');
+  const unread = NO_SPEC.find(([pattern]) => pattern.test(file));
+  if (unread) return readers.length > 0 ? { specs: readers, reason: 'the specs that load it' } : none(unread[1]);
   return every(EVERY_SPEC.find(([pattern]) => pattern.test(file))[1]);
 }
 
 /**
- * The specs a change selects. A spec the map lists as incomplete runs whenever a bundled source
- * changed, because its evidence may be missing the file.
+ * The specs a change selects, with the reason. A spec the map lists as incomplete runs whenever a
+ * bundled source changed, because its evidence may be missing the file.
  */
 export function selectSpecs({ files, map, graph, specFiles, changes }) {
   const lines = files.map(file => ({ file, ...classify(file, { map, graph, changes }) }));
-  if (lines.some(line => line.specs === null)) return { lines, all: true, specs: specFiles };
+  const full = lines.find(line => line.specs === null);
+  if (full) return { lines, all: true, specs: specFiles, reason: `${full.file} needs every spec (${full.reason})` };
   const chosen = new Set(lines.flatMap(line => line.specs));
   if (lines.some(line => line.mapped)) for (const spec of map.incomplete) chosen.add(spec);
-  return { lines, all: false, specs: specFiles.filter(spec => chosen.has(spec)) };
+  const specs = specFiles.filter(spec => chosen.has(spec));
+  const reason = specs.length > 0 ? 'the specs the changed files reach'
+    : files.length > 0 ? 'no changed file reaches a browser spec' : 'the branch changes no file';
+  return { lines, all: false, specs, reason };
 }
 
 // The command ----------------------------------------------------------------------------------
@@ -301,9 +325,21 @@ function hasCommit(run, commit) {
   }
 }
 
-function changedFiles(run, commit) {
+/** The commit the branch forked from `base`, or `origin/main`, then `main`, when no base is given. */
+function forkPoint(run, base) {
+  const refs = base ? [base] : ['origin/main', 'main'];
+  for (const ref of refs) {
+    try {
+      return run('git', ['merge-base', 'HEAD', ref]).trim();
+    } catch { /* Try the next ref. */ }
+  }
+  return null;
+}
+
+/** The branch's own changes: from its fork point to the working tree, untracked files included. */
+function changedFiles(run, fork) {
   return [...new Set([
-    ...run('git', ['diff', '--no-renames', '--name-only', '-z', commit, '--']).split('\0'),
+    ...run('git', ['diff', '--no-renames', '--name-only', '-z', fork, '--']).split('\0'),
     ...run('git', ['ls-files', '--others', '--exclude-standard', '-z']).split('\0'),
   ].filter(Boolean))].sort();
 }
@@ -322,24 +358,30 @@ function minutes(root, specs) {
 
 function report(root, loaded, selection, specFiles) {
   if (loaded.map) console.log(`${LOG} Spec map: ${loaded.file}, commit ${loaded.map.commit.slice(0, 8)}, built ${loaded.map.createdAt}.`);
-  if (selection.problem) console.log(`${LOG} ${selection.problem}. Every spec runs.`);
   for (const { file, specs, reason } of selection.lines ?? []) {
     const count = specs === null ? 'every spec' : `${specs.length} spec${specs.length === 1 ? '' : 's'}`;
     console.log(`  ${file}: ${count} (${reason})`);
   }
-  if (!selection.all) for (const spec of selection.specs) console.log(`  → ${spec}`);
+  if (selection.empty) {
+    console.log(`${LOG} Selected 0 of ${specFiles.length} specs: ${selection.reason}.`);
+    console.log(`${LOG} PR CI runs every spec for an empty selection (hearsay-tools/squawk#3727).`);
+  } else if (selection.all) console.log(`${LOG} ${selection.reason}. Every spec runs.`);
+  else for (const spec of selection.specs) console.log(`  → ${spec}`);
   const time = selection.specs.length > 0 ? minutes(root, selection.specs) : '';
-  console.log(`${LOG} Selected ${selection.specs.length} of ${specFiles.length} specs${time}.`);
+  const why = selection.specs.length === 0 ? `: ${selection.reason}` : '';
+  console.log(`${LOG} Selected ${selection.specs.length} of ${specFiles.length} specs${time}${why}.`);
   console.log(`${LOG} The merge queue runs every spec.`);
 }
 
-function chooseSpecs(root, run, loaded, specFiles) {
-  if (loaded.error) return { all: true, specs: specFiles, problem: loaded.error };
+function chooseSpecs(root, run, loaded, specFiles, base) {
+  const full = reason => ({ all: true, specs: specFiles, reason });
+  if (loaded.error) return full(loaded.error);
   if (!hasCommit(run, loaded.map.commit)) {
-    const problem = `the map's commit ${loaded.map.commit.slice(0, 8)} is not in this clone and cannot be fetched`;
-    return { all: true, specs: specFiles, problem };
+    return full(`the map's commit ${loaded.map.commit.slice(0, 8)} is not in this clone and cannot be fetched`);
   }
-  const files = changedFiles(run, loaded.map.commit);
+  const fork = forkPoint(run, base);
+  if (!fork) return full(`HEAD has no merge-base with ${base ?? 'origin/main or main'}`);
+  const files = changedFiles(run, fork);
   const changes = new Map();
   for (const file of files.filter(file => loaded.map.functions?.[file])) {
     try {
@@ -347,6 +389,13 @@ function chooseSpecs(root, run, loaded, specFiles) {
     } catch { /* Missing line evidence selects every spec. */ }
   }
   return selectSpecs({ files, map: loaded.map, graph: referenceGraph(root, specFiles), specFiles, changes });
+}
+
+/** PR CI runs every spec for an empty selection until hearsay-tools/squawk#3727 decides otherwise. */
+function ciSelection(picked, specFiles) {
+  if (picked.files === null) return { ...picked, all: true, specs: specFiles };
+  if (picked.files.length === 0) return { ...picked, all: true, specs: specFiles, empty: true };
+  return { ...picked, all: false, specs: picked.files };
 }
 
 export function main(argv) {
@@ -358,12 +407,9 @@ export function main(argv) {
   const select = () => {
     loaded = options.map ? readMap(resolve(options.map)) : latestMap(root, run);
     if (options.map && loaded.error) throw new Error(loaded.error);
-    return chooseSpecs(root, run, loaded, specFiles);
+    return chooseSpecs(root, run, loaded, specFiles, options.base);
   };
-  const files = options.ci ? browserFiles(select) : undefined;
-  const chosen = options.ci
-    ? { all: files === null, specs: files ?? specFiles }
-    : select();
+  const chosen = options.ci ? ciSelection(browserFiles(select), specFiles) : select();
   report(root, loaded ?? {}, chosen, specFiles);
   if (options.plan) return 0;
   if (chosen.specs.length === 0) {

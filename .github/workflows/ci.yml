@@ -1467,6 +1467,13 @@ jobs:
           persist-credentials: false
           fetch-depth: 100
 
+      # The selector reads the PR's own changes from this base (hearsay-tools/squawk#3728).
+      - name: Fetch PR selection base
+        if: github.event_name == 'pull_request_target'
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: git fetch --no-tags --depth=100 origin "$PR_BASE" || echo "Selection base unavailable; the selector runs every spec."
+
       - name: Set up pnpm
         if: (hashFiles('pnpm-lock.yaml') != '')
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -1504,9 +1511,10 @@ jobs:
         if: github.event_name == 'pull_request_target'
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           set -o pipefail
-          node scripts/e2e-affected.mjs --ci --allow-skip --shard=${{ matrix.shard }}/8 2>&1 | tee "$RUNNER_TEMP/e2e.log"
+          node scripts/e2e-affected.mjs --ci --base="$PR_BASE" --allow-skip --shard=${{ matrix.shard }}/8 2>&1 | tee "$RUNNER_TEMP/e2e.log"
           node .github/scripts/require-e2e-passed.cjs < "$RUNNER_TEMP/e2e.log"
 
       - name: Run cockpit browser E2E
