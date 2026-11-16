@@ -1,4 +1,4 @@
-import { latestSessionStep } from '@open-mercato/cezar-api-client/contract/run-predicates'
+import { latestSessionStep, sessionRunner } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { useRunCacheWriter } from '@/api/use-run-cache-writer'
 import { runAddress } from '@/api/run-address'
 import { CpuIcon, GaugeIcon, TerminalIcon } from '@/components/design-icons'
@@ -141,10 +141,10 @@ function continueRequestBody(
 
 function continueStartsNewConversation(
   run: ApiRun, sessionStep: ReturnType<typeof resolveContinueAccount>['sessionStep'],
-  runner: Runner, currentRunner: Runner, account: string | null,
+  runner: Runner, account: string | null,
 ) {
   return !!sessionStep && (
-    runner !== (sessionStep.backend ?? currentRunner) ||
+    runner !== sessionRunner(sessionStep, run) ||
     (account ?? run.agentProfile ?? sessionStep.profileId ?? DEFAULT_AGENT_ACCOUNT_ID) !==
       (sessionStep.profileId ?? DEFAULT_AGENT_ACCOUNT_ID)
   )
@@ -232,7 +232,7 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   return {
     available,
     canContinue,
-    startsNewConversation: continueStartsNewConversation(run, sessionStep, runner, currentRunner, account),
+    startsNewConversation: continueStartsNewConversation(run, sessionStep, runner, account),
     reason: continuation.reason,
     providerPending: continuation.providerPending,
     pills: (
