@@ -63,7 +63,9 @@ export class TurnSettler {
 
   /** Goal achieved (agent contract, #347): the summary `cezar_done` gave as a note, the closing
    *  event naming what declared it, every open wait cancelled (DONE ranks above every wait), and
-   *  the session closes instead of parking, so the run completes and frees its slot. */
+   *  the session closes instead of parking, so the run completes and frees its slot. A session
+   *  whose wire can raise a permission request after the turn closes through `endWhenQuiet`, so
+   *  that request still shows its card (hearsay-tools/squawk#1680). */
   private closeAsDone(runId: string, state: ActiveRun, session: AgentSession | undefined): void {
     const close = state.boundary.doneClose;
     // A workflow step that is not the last completes, and the next step starts (hearsay-tools/cezarion#1620).
@@ -72,7 +74,8 @@ export class TurnSettler {
     if (close?.summary) this.context.store.appendEvent(runId, { type: 'note', message: close.summary });
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: step ? 'step complete — session closed' : 'goal achieved — session closed', via: close?.via ?? 'cezar_done' });
     this.host.waitEngine.cancelAll(runId);
-    session?.end();
+    if (session?.endWhenQuiet) session.endWhenQuiet();
+    else session?.end();
   }
 
   /**

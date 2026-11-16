@@ -25,9 +25,10 @@ export function acknowledgedBatch(batch: { accepted: readonly string[]; resolved
   ];
 }
 
-/** A human message: its answered waits, deferred queue entry and restarted wake accounting. */
-export function answerOutcomes(messageId: string | undefined, automaticWakes: number | undefined): RunOutcome[] {
-  return [{ kind: 'answered' }, ...(messageId ? [{ kind: 'message-delivered' as const, messageId }] : []),
+/** A human message: its answered waits, deferred queue entry and restarted wake accounting. It
+ *  answers the question pending at `askSeq`, when one is. */
+export function answerOutcomes(messageId: string | undefined, automaticWakes: number | undefined, askSeq: number | undefined): RunOutcome[] {
+  return [{ kind: 'answered', ...(askSeq === undefined ? {} : { askSeq }) }, ...(messageId ? [{ kind: 'message-delivered' as const, messageId }] : []),
     ...chargedIf(automaticWakes ? 0 : undefined), { kind: 'counted', waitDeliveryFailures: undefined }];
 }
 

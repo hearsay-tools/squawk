@@ -13,6 +13,38 @@ import { clearHeldHumanInputTimer, clearUnreadInputTimer } from './input-timers.
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
 import { askCardFields, humanWaitCard } from './turn-markers.ts';
 import type { RunModuleContext } from './types.ts';
+import type { RunRecord, RunStore } from '../../runs/store.ts';
+
+/** The question the user still owes an answer: an open human wait the agent raised, other than the
+ *  one whose answer is in flight (`answering`, its `askSeq`). Squawk's own human waits ask nothing. */
+export function pendingQuestion(run: Pick<RunRecord, 'waits'> | undefined, answering?: number): HumanWaitEntry | undefined {
+  return WAIT_KINDS.human.selectOpen(run?.waits ?? []).find(wait => wait.source !== 'cezar' && (answering === undefined || wait.askSeq !== answering));
+}
+
+/** Whether a question is pending, read from the open human wait rows. */
+export function isQuestionPending(run: Pick<RunRecord, 'waits'> | undefined, answering?: number): boolean {
+  return pendingQuestion(run, answering) !== undefined;
+}
+
+/** At the wait limit, the wait of the question this turn's opening answer answers (`answering`) gives
+ *  its slot to the agent's next question: the answer settles it now instead of at the turn's
+ *  acknowledgement, so the new question still gets its own wait (hearsay-tools/squawk#1293).
+ *  Returns the run as it stands after. */
+export function yieldAnsweredSlot(store: Pick<RunStore, 'getRun' | 'commitOutcome'>, runId: string, answering: number | undefined,
+  hasRoom: (run: RunRecord) => boolean): RunRecord | undefined {
+  const run = store.getRun(runId);
+  if (!run || answering === undefined || hasRoom(run)) return run;
+  const answered = WAIT_KINDS.human.selectOpen(run.waits ?? []).find(wait => !isSquawkHumanWait(wait) && wait.askSeq === answering);
+  if (!answered) return run;
+  try { store.commitOutcome(runId, { kind: 'answered', waitIds: [answered.id], askSeq: answering }); }
+  catch (error) { console.warn(`${logPrefix()} human wait checkpoint failed: ${error instanceof Error ? error.message : String(error)}`); }
+  return store.getRun(runId);
+}
+
+/** The question the opening answer of this live turn answers, while that answer is in flight. */
+export function answeringAskSeq(state: ActiveRun | undefined): number | undefined {
+  return state?.liveSession.session?.open ? state.inputState.openingAnswerAskSeq : undefined;
+}
 
 export interface HumanWaitsHost {
   waitEngine: WaitEngine;
@@ -59,17 +91,31 @@ export class HumanWaits {
     return undefined;
   }
 
-  /** An alias's human wait, or the one already open: a run holds one. A full list opens none. */
+  /** An alias's human wait, or the open one it shares with the same owner (hearsay-tools/squawk#1293).
+   *  Squawk's alias shares Squawk's wait. An agent's question shares an agent wait not shown yet or
+   *  shown for the current question, never one shown for an answered question, whose answer settles
+   *  it. A full list opens none. */
   openHumanAlias(runId: string, state: ActiveRun | undefined, via: WaitVia, card?: AskRequest): HumanWaitEntry | undefined {
     const run = this.context.store.getRun(runId);
     if (!run) return undefined;
     const source = WAIT_KINDS.human.aliasSource(via);
     if (source === 'agent') this.withdrawSquawkHumanWaits(runId);
-    const existing = WAIT_KINDS.human.select(openWaits(this.context.store.getRun(runId) ?? run))[0];
+    const question = this.currentQuestionSeq(runId, state);
+    const existing = WAIT_KINDS.human.select(openWaits(this.context.store.getRun(runId) ?? run)).find(wait => wait.source === source
+      && (source === 'cezar' || wait.askSeq === undefined || wait.askSeq === question));
     if (existing) return existing;
-    if (!this.host.waitEngine.hasRoom(this.context.store.getRun(runId) ?? {})) return undefined;
+    const latest = source === 'agent'
+      ? yieldAnsweredSlot(this.context.store, runId, answeringAskSeq(state), candidate => this.host.waitEngine.hasRoom(candidate))
+      : this.context.store.getRun(runId);
+    if (!this.host.waitEngine.hasRoom(latest ?? {})) return undefined;
     const wait = WAIT_KINDS.human.aliasEntry(source, via, state?.waitIdentity.ciTurnId ?? via, card ? askCardFields(card) : undefined);
     return this.host.waitEngine.open(runId, state, wait, { withdraw: false, onCommitFailure: { log: `${logPrefix()} human wait checkpoint failed` }, park: false }).wait;
+  }
+
+  /** The pending question's `askSeq`, unless the answer this turn opened with answers it. */
+  private currentQuestionSeq(runId: string, state: ActiveRun | undefined): number | undefined {
+    const pending = pendingHumanAskSeq(this.context.store, runId);
+    return answeringAskSeq(state) === pending ? undefined : pending;
   }
 
   /** Record which question a human wait is shown as: the pending card or gate, whose answer settles

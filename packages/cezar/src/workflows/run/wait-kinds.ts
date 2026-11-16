@@ -93,7 +93,6 @@ export type WaitKindRow<K extends Wait['kind']> = WaitKindSpec & {
     aliasEntry: typeof humanAliasEntry;
     recoveredEntry: typeof recoveredAskEntry;
     aliasSource: (via: WaitVia) => 'agent' | 'cezar';
-    duplicateAsk: (waits: readonly Wait[], answering: number | undefined) => HumanWaitEntry | undefined;
   };
   timer: {
     monitoring: (wait: Wait) => boolean;
@@ -305,7 +304,6 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     canonicalize: () => {},
     repeatTimeout: wait => 'timeoutSeconds' in wait ? wait.timeoutSeconds : undefined,
     requestedTimeout: () => undefined,
-    duplicateAsk: (waits, answering) => WAIT_KINDS.human.selectOpen(waits).find(wait => wait.source !== 'cezar' && (answering === undefined || wait.askSeq !== answering)),
     answerKind: () => undefined,
     hasDeadline: () => false,
     registration: 'none', requestKinds: [],

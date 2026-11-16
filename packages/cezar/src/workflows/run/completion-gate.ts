@@ -69,7 +69,7 @@ export function finishDecision(context: RunModuleContext, host: CompletionGateHo
   { action: 'session' | 'root' | 'waiting' | 'review' } | { reason: string; warn?: boolean } {
   const blocked = delegationFinishBlockedReason(context, host, runId);
   if (blocked) return { reason: blocked, warn: true };
-  if (host.active.get(runId)?.liveSession.session?.open) return { action: 'session' };
+  if (host.active.get(runId)?.liveSession.sessionLive) return { action: 'session' };
   const run = context.store.getRun(runId);
   if (run?.status === 'waiting' && !hasRegisteredRunProcess(runId) && !host.isActive(runId) &&
     (run.delegation?.role === 'root' || run.delegation === undefined)) {

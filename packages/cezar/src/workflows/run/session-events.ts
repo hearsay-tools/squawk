@@ -130,6 +130,8 @@ export interface SessionHelperHost {
   routeWorkerQuestion(runId: string): void;
   /** `TurnSettler.holdNativeAsk`: a native ask's park holds for native subagents up to their deadline, or arms its idle close. */
   holdNativeAsk(runId: string, state: ActiveRun): void;
+  /** `SubagentWaits.endParkHold`: a permission park ends the park's hold for native subagents. */
+  endParkHold(runId: string, state: ActiveRun): void;
 }
 
 /** Shutdown left this delegated run to restart recovery: its session's events are dropped, and an
@@ -313,6 +315,7 @@ export function handlePermissionRequested(context: RunModuleContext, host: Sessi
   host.humanWaits.prepareHumanAsk(state);
   state.liveSession.session?.discardQueuedMessages();
   clearIdleTimer(state);
+  host.endParkHold(runId, state);
   clearUnreadInputTimer(state);
   clearHeldHumanInputTimer(state);
   host.line.leavePool(runId); // released below; its waits stay open
@@ -326,7 +329,7 @@ export function handlePermissionResolved(context: RunModuleContext, host: Sessio
   if (!pendingPermissions.size) {
     context.store.updateRun(runId, { hasPendingPermission: false });
     transitionTurnBoundary(state, { kind: 'human-wait-opened', phase: 'refresh-question', session: state.liveSession.session, pending: hasPendingHumanAsk(runId, id => pendingHumanAskSeq(context.store, id)) });
-    if (!state.boundary.pendingHumanAsk && state.liveSession.session?.open && !context.store.getRun(runId)?.stopping) {
+    if (!state.boundary.pendingHumanAsk && state.liveSession.sessionLive && !context.store.getRun(runId)?.stopping) {
       host.resumeParkedRun(runId, state);
       host.flushAgentInputs(runId);
     }

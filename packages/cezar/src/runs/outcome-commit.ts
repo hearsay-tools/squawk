@@ -2,7 +2,7 @@ import { WAIT_KINDS } from '../workflows/run/wait-kinds.ts';
 import type { AgentInput, Wait } from '@open-mercato/cezar-contract';
 import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
 import { LAST_WAITS_LIMIT } from '@open-mercato/cezar-contract/waits';
-import { waitInputId } from '../workflows/waits.ts';
+import { isSquawkHumanWait, waitInputId } from '../workflows/waits.ts';
 import { applyExit, type RunExitId } from './run-exits.ts';
 import type { RunRecord } from './store.ts';
 import { checkWaitWrite } from './wait-phases.ts';
@@ -33,8 +33,10 @@ export type RunOutcome =
   | { kind: 'requeued'; inputIds: readonly string[] }
   /** An inbox read's receipt: every member is delivered, and the receipt acknowledged, at `at`. */
   | { kind: 'inbox-acknowledged'; receiptId: string; at: string }
-  /** The user answered: each open human wait (or only those named) settles `delivered`. */
-  | { kind: 'answered'; waitIds?: readonly string[] }
+  /** The user answered: each open human wait (or only those named) settles `delivered`. With
+   *  `askSeq`, the question answered, a wait shown for a later question stays open
+   *  (hearsay-tools/squawk#1293). */
+  | { kind: 'answered'; waitIds?: readonly string[]; askSeq?: number }
   /** Each named open or resolved wait settles `cancelled`, and its undelivered wake input goes.
    *  `superseded`: the runner resumed the parent itself, which a subagent wait records as its result
    *  (hearsay-tools/cezarion#2431). */
@@ -70,6 +72,12 @@ export interface StagedOutcome {
   answered: string[];
   /** Every wait the outcomes settled, as committed to `lastWaits`, in the order they settled. */
   settled: Wait[];
+}
+
+/** An answer to the question at `askSeq` settles the agent's waits shown up to it, the waits not
+ *  shown yet, and Squawk's own wait, which no question binds. */
+function answeredBy(wait: Wait, askSeq: number | undefined): boolean {
+  return askSeq === undefined || !WAIT_KINDS.human.is(wait) || isSquawkHumanWait(wait) || wait.askSeq === undefined || wait.askSeq <= askSeq;
 }
 
 /** What the outcomes settled so far: `StagedOutcome.answered` and `settled`. */
@@ -157,7 +165,8 @@ const APPLY: { [K in RunOutcome['kind']]: Handler<K> } = {
       ? agentInputSchema.parse({ ...input, deliveredAt: outcome.at, inboxClaim: { ...input.inboxClaim, acknowledgedAt: outcome.at } }) : input);
   },
   answered(run, outcome, out) {
-    const waits = (run.waits ?? []).filter((wait) => WAIT_KINDS[wait.kind].userAnswers && wait.phase === 'open' && (!outcome.waitIds || outcome.waitIds.includes(wait.id)));
+    const waits = (run.waits ?? []).filter((wait) => WAIT_KINDS[wait.kind].userAnswers && wait.phase === 'open'
+      && (!outcome.waitIds || outcome.waitIds.includes(wait.id)) && answeredBy(wait, outcome.askSeq));
     if (!waits.length) return unchanged(run);
     const deliveredAt = new Date().toISOString();
     out.answered.push(...waits.map((wait) => wait.id));

@@ -244,7 +244,7 @@ export class ContinuationSession {
     // opening input handled while the question it answers is still open.
     const outcomes: RunOutcome[] = [
       ...(opening ? [{ kind: 'opening-handled' as const, inputId: opening, at: new Date().toISOString() }] : []),
-      ...(askSeq !== undefined ? [{ kind: 'answered' as const, waitIds: answer.waits }] : []),
+      ...(askSeq !== undefined ? [{ kind: 'answered' as const, waitIds: answer.waits, askSeq }] : []),
     ];
     // Only the opening input's checkpoint stops the turn end; the rest is best effort, as before.
     try { this.context.store.commitOutcome(runId, outcomes, { patch: { continuationMessage: undefined } }, { bestEffort: !opening }); }
