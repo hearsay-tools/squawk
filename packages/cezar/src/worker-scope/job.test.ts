@@ -1,7 +1,12 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { POWERSHELL } from '../core/process-stat.ts';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { RunRecord } from '@open-mercato/cezar-contract';
 import { jobCommand, probeJobs, workerJobName, type JobHelper } from './job.ts';
 import type { ScopeRecord } from './scope.ts';
@@ -14,7 +19,8 @@ function fakeJobs() {
   const active = new Map<string, number>();
   const helper: JobHelper = {
     keep: job => {
-      const keeper = Object.assign(new EventEmitter(), { stdin: { ended: false, end() { this.ended = true; } }, exitCode: null, signalCode: null });
+      const keeper: EventEmitter & { stdin: { ended: boolean; end: () => void }; exitCode: null; signalCode: null } =
+        Object.assign(new EventEmitter(), { stdin: { ended: false, end: () => { keeper.stdin.ended = true; keeper.emit('exit', 0); } }, exitCode: null, signalCode: null });
       keepers.push(keeper); active.set(job, active.get(job) ?? 0);
       return keeper as never;
     },
@@ -44,8 +50,11 @@ describe('job backend', () => {
     const workerId = randomUUID(), jobs = fakeJobs(), memory = memoryStore();
     const scopes = new WorkerScopes(memory.store, () => ({ backend: 'job' }), jobs.helper);
     const [file, args] = scopes.spawnScope(workerId).command('node.exe', ['agent.js', 'a b']);
-    expect([file, args]).toEqual(jobCommand(workerJobName(workerId), 'node.exe', ['agent.js', 'a b']));
-    expect(JSON.parse(Buffer.from(args.at(-1)!, 'base64').toString())).toEqual(['node.exe', 'agent.js', 'a b']);
+    expect(file).toBe(POWERSHELL);
+    expect(args.slice(-3, -1)).toEqual(['run', workerJobName(workerId)]);
+    // The argv travels in a private file, so the wrapper's own command line stays short.
+    expect(readFileSync(args.at(-1)!, 'utf8').split('\0')).toEqual(['node.exe', 'agent.js', 'a b']);
+    rmSync(args.at(-1)!, { force: true });
     scopes.spawnScope(workerId).command('cmd.exe', []);
     expect(jobs.keepers).toHaveLength(1);
     expect(memory.record()).toMatchObject({ jobs: [workerJobName(workerId)] });
@@ -82,15 +91,41 @@ describe('job backend', () => {
 
 // Native Windows: the job ends a descendant that outlived its leader, and a command whose job never
 // appears does not run.
-describe.runIf(process.platform === 'win32')('job backend on Windows', { timeout: 120_000 }, () => {
+describe.runIf(process.platform === 'win32')('job backend on Windows', { timeout: 240_000 }, () => {
   const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  // The controller's probe compiles the helper once; every later call loads the cached DLL.
+  beforeAll(() => { expect(probeJobs()).toEqual({ ok: true }); }, 240_000);
+
+  it('the worker ends with its controller, and an unrelated process survives', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cez-job-controller-'));
+    const pidFile = join(dir, 'worker.pid');
+    const sibling = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+    const job = workerJobName(randomUUID());
+    const controller = spawn(process.execPath, ['--input-type=module', '-e', `
+      import { spawn } from 'node:child_process';
+      const { jobCommand, realJobHelper } = await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'job.ts')).href)});
+      realJobHelper.keep(${JSON.stringify(job)});
+      const [file, args] = jobCommand(${JSON.stringify(job)}, process.execPath, ['-e', "require('fs').writeFileSync(" + JSON.stringify(${JSON.stringify(pidFile)}) + ", String(process.pid)); setInterval(() => {}, 1000)"]);
+      spawn(file, args, { stdio: 'ignore' });
+      setInterval(() => {}, 1000);
+    `], { stdio: 'ignore' });
+    try {
+      await vi.waitFor(() => expect(existsSync(pidFile) && readFileSync(pidFile, 'utf8').length > 0).toBe(true), { timeout: 120_000 }); // bound: PowerShell start and the job handshake
+      const worker = Number(readFileSync(pidFile, 'utf8'));
+      expect(alive(worker)).toBe(true);
+      controller.kill();
+      await vi.waitFor(() => expect(alive(worker)).toBe(false), { timeout: 60_000 }); // bound: keeper exit after its stdin closes, then the job's kill
+      expect(alive(sibling.pid!)).toBe(true);
+    } finally { controller.kill(); sibling.kill(); rmSync(dir, { recursive: true, force: true }); }
+  });
 
   it('stop ends a descendant that outlived its leader', async () => {
     const memory = memoryStore(), workerId = randomUUID();
     const scopes = new WorkerScopes(memory.store, () => ({ backend: 'job' }));
     const [file, args] = scopes.spawnScope(workerId).command(process.execPath, ['-e',
       "const c = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' }); c.unref(); console.log(c.pid);"]);
-    const run = spawnSync(file, args, { encoding: 'utf8', timeout: 90_000 });
+    const run = spawnSync(file, args, { encoding: 'utf8', timeout: 180_000 });
+    expect(run.error).toBeUndefined();
     expect(run.status).toBe(0);
     const descendant = Number(run.stdout.trim().split('\n').at(-1));
     expect(alive(descendant)).toBe(true);

@@ -154,7 +154,7 @@ export class WorkerScopes {
     killGroups(this.groups(workerId, record));
     const jobs: string[] = [];
     for (const job of record.jobs) {
-      if (terminateJob(job, Math.max(0, deadline - Date.now()), this.jobs)) this.release(workerId);
+      if (terminateJob(job, Math.max(0, deadline - Date.now()), this.jobs)) await this.release(workerId, deadline);
       else jobs.push(job);
     }
     const cgroups: string[] = [];
@@ -192,11 +192,17 @@ export class WorkerScopes {
     keeper.once('exit', () => { if (this.keepers.get(workerId) === keeper) this.keepers.delete(workerId); });
   }
 
-  /** Ends this controller's keeper for the worker: its job closes once no process holds it. */
-  private release(workerId: string): void {
+  /** Ends this controller's keeper for the worker, and waits (until `deadline`) for it to exit: its
+   * job closes with it once no process holds the job. */
+  private async release(workerId: string, deadline: number): Promise<void> {
     const keeper = this.keepers.get(workerId);
     this.keepers.delete(workerId);
-    keeper?.stdin?.end();
+    if (!keeper) return;
+    const exited = new Promise<void>(resolve => {
+      if (keeper.exitCode !== null || keeper.signalCode !== null) resolve(); else keeper.once('exit', () => resolve());
+    });
+    keeper.stdin?.end();
+    await Promise.race([exited, new Promise(resolve => setTimeout(resolve, Math.max(0, deadline - Date.now())).unref?.())]);
   }
 
   private read(workerId: string): ScopeRecord {

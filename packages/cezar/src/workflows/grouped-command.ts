@@ -68,7 +68,14 @@ export function runGroupedCommand(opts: GroupedCommandOptions): Promise<GroupedC
     let stopAt = 0;
     const signalGroup = (signal: NodeJS.Signals) => {
       if (finished || !pid) return;
-      try { if (grouped) process.kill(-pid, signal); else child.kill(signal); } catch { /* already gone */ }
+      if (!grouped) {
+        // Windows has no group: end the tree, so a command a wrapper started (a worker's job helper,
+        // ADR 0032) ends with it.
+        try { spawn('taskkill', ['/T', '/F', '/PID', String(pid)], { stdio: 'ignore', windowsHide: true }).on('error', () => child.kill(signal)); }
+        catch { child.kill(signal); }
+        return;
+      }
+      try { process.kill(-pid, signal); } catch { /* already gone */ }
     };
     const groupAlive = () => {
       if (!grouped || !pid) return false;

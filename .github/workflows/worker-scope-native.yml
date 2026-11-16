@@ -86,3 +86,4 @@ jobs:
           # The native cases skip off Windows; here they must have run.
           grep -q '✓ .*stop ends a descendant that outlived its leader' "$RUNNER_TEMP/job.log"
           grep -q '✓ .*a command whose job never appears does not run' "$RUNNER_TEMP/job.log"
+          grep -q '✓ .*the worker ends with its controller, and an unrelated process survives' "$RUNNER_TEMP/job.log"

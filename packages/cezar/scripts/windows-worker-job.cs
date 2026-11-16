@@ -150,9 +150,13 @@ public static class SquawkWorkerJob {
     } finally { CloseHandle(job); }
   }
 
-  // The command line CreateProcess parses back into `argv` (the CommandLineToArgvW rules). A .cmd
-  // or .bat file runs through cmd.exe, which CreateProcess requires.
+  // The command line CreateProcess parses back into `argv` (the CommandLineToArgvW rules). cmd.exe
+  // does not parse by those rules: its arguments pass verbatim, as Node's windowsVerbatimArguments
+  // passes them, so a `/s /c "<command>"` string keeps its quotes. A .cmd or .bat file runs through
+  // cmd.exe, which CreateProcess requires.
   static string CommandLine(string[] argv) {
+    string name = System.IO.Path.GetFileName(argv[0]).ToLowerInvariant();
+    if (name == "cmd.exe" || name == "cmd") return Quote(argv[0]) + (argv.Length > 1 ? " " + string.Join(" ", argv, 1, argv.Length - 1) : "");
     var parts = new string[argv.Length];
     for (int i = 0; i < argv.Length; i++) parts[i] = Quote(argv[i]);
     string line = string.Join(" ", parts);

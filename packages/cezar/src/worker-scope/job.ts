@@ -3,6 +3,10 @@
  * the worker's processes end with the controller (product decision 4). Each command starts inside
  * the job at creation through `scripts/windows-worker-job.ps1 run`. */
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { POWERSHELL, powershellEnv } from '../core/process-stat.ts';
 
@@ -36,9 +40,12 @@ export const realJobHelper: JobHelper = {
   }).trim(),
 };
 
-/** The argv that runs `file args` inside `job`. */
+/** The argv that runs `file args` inside `job`. The command's own argv travels in a private file the
+ * helper reads and deletes, so the wrapper's command line stays short whatever the prompt. */
 export function jobCommand(job: string, file: string, args: readonly string[]): [string, string[]] {
-  return [POWERSHELL, [...POWERSHELL_ARGS, 'run', job, Buffer.from(JSON.stringify([file, ...args])).toString('base64')]];
+  const argvFile = join(tmpdir(), `squawk-worker-argv-${randomUUID()}`);
+  writeFileSync(argvFile, [file, ...args].join('\0'), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+  return [POWERSHELL, [...POWERSHELL_ARGS, 'run', job, argvFile]];
 }
 
 /** Whether this host lets this user create a job and start a process inside it at creation. */
