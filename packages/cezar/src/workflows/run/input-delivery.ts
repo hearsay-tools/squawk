@@ -70,8 +70,9 @@ export class InputFlight {
   }
 }
 
-/** Owed input handed to the transport in one session (ADR 0064). A clean close of that session
- *  counts a failed wake delivery only when this attempt did not reach the agent
+/** Owed input handed to the transport in one session (ADR 0064). `inputIds` holds every input
+ *  the session's attempts carried; `outcome` is the latest attempt's. A clean close of that session
+ *  counts a failed wake delivery only when an attempt did not reach the agent
  *  (hearsay-tools/squawk#1289). */
 export interface DeliveryAttempt {
   readonly session: AgentSession;
@@ -81,8 +82,9 @@ export interface DeliveryAttempt {
 
 // Only this module records a delivery attempt and its outcome; readers receive the frozen fact.
 let attemptWrites: {
-  record(group: InputGroup, attempt: DeliveryAttempt | undefined): void;
-  acknowledge(group: InputGroup, inputIds: readonly string[]): void;
+  open(group: InputGroup, attempt: DeliveryAttempt | undefined): void;
+  record(group: InputGroup, attempt: DeliveryAttempt): void;
+  acknowledge(group: InputGroup, session: AgentSession, inputIds: readonly string[]): void;
 };
 
 /** Input transport, receipt and liveness state. All mutation commands live in this module. */
@@ -194,13 +196,19 @@ export class InputGroup {
   }
   static {
     attemptWrites = {
-      record(group, attempt) {
-        group.#deliveryAttempt = attempt && Object.freeze({ ...attempt, inputIds: Object.isFrozen(attempt.inputIds) ? attempt.inputIds : Object.freeze([...attempt.inputIds]) });
+      // A new session starts its own record.
+      open(group, attempt) {
+        group.#deliveryAttempt = attempt && Object.freeze({ ...attempt, inputIds: Object.freeze([...attempt.inputIds]) });
       },
-      // Only the attempt that carried these inputs: a later attempt replaced an older one.
-      acknowledge(group, inputIds) {
+      // A later attempt keeps the inputs the session's earlier attempts carried: a close may still
+      // requeue one of them unread.
+      record(group, attempt) {
+        const earlier = group.#deliveryAttempt?.session === attempt.session ? group.#deliveryAttempt.inputIds : [];
+        group.#deliveryAttempt = Object.freeze({ ...attempt, inputIds: Object.freeze([...new Set([...earlier, ...attempt.inputIds])]) });
+      },
+      acknowledge(group, session, inputIds) {
         const attempt = group.#deliveryAttempt;
-        if (attempt?.inputIds === inputIds) group.#deliveryAttempt = Object.freeze({ ...attempt, outcome: 'acknowledged' });
+        if (attempt?.session === session && inputIds.every(id => attempt.inputIds.includes(id))) group.#deliveryAttempt = Object.freeze({ ...attempt, outcome: 'acknowledged' });
       },
     };
   }
@@ -527,7 +535,7 @@ export class InputDelivery {
    *  prompt is that wake's first delivery attempt (hearsay-tools/squawk#1289). */
   openDeliveryScope(runId: string, state: ActiveRun, session: AgentSession): void {
     const run = this.host.line.isAdmitted(runId) ? this.context.store.getRun(runId) : undefined;
-    attemptWrites.record(state.inputState, run && { session,
+    attemptWrites.open(state.inputState, run && { session,
       inputIds: [...resolvedWaits(run).map(waitInputId), ...this.host.pendingConversationWakes(run).map(input => input.id)] });
   }
 
@@ -601,7 +609,7 @@ export class InputDelivery {
           // One commit (hearsay-tools/cezarion#1805): the messages, then each wait's delivery (a message a wait carries keeps its read receipt), the charge, the early reads, the cleared failure count and the resume (hearsay-tools/cezarion#1235).
           this.context.store.commitOutcome(runId, withFailuresCleared(this.context.store, runId, acknowledgedBatch({ accepted, resolvedIds, early, spent, observable, at }), accepted, resolvedIds.length > 0),
             resumes ? { exit: 'resume', resumeStepId: resolvedIds.length ? state.liveSession.currentStepId : undefined } : {});
-          attemptWrites.acknowledge(state.inputState, inputIds);
+          attemptWrites.acknowledge(state.inputState, session, inputIds);
           this.applyAcknowledgedInput(runId, state, flight, batch, refusal);
         }
       } catch (error) { fail(error, true); }

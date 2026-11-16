@@ -47,8 +47,8 @@ interface WakeAdmissionHost {
 
 /** A clean close fails a wake delivery only when its session attempted one that did not reach the
  *  agent, and something is still owed. Input the scheduler has not admitted yet costs no retry
- *  (hearsay-tools/squawk#1289). An acknowledged attempt failed only when the close requeued an
- *  input it carried (`received` is false). */
+ *  (hearsay-tools/squawk#1289). Once the latest attempt is acknowledged, a delivery failed only
+ *  when the close requeued an input any attempt of the session carried (`received` is false). */
 export function cleanCloseFailsDelivery(attempt: DeliveryAttempt | undefined, received: (inputIds: readonly string[]) => boolean, owesDelivery: () => boolean): boolean {
   if (!attempt || (attempt.outcome === 'acknowledged' && received(attempt.inputIds))) return false;
   return owesDelivery();
