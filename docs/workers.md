@@ -54,7 +54,8 @@ Every process Squawk starts for a worker (its setup, agent sessions, `check` ste
 | --- | --- | --- |
 | Linux where Squawk can create cgroups under its own (systemd user services usually allow it) | `cgroup` | Every process the worker started and every descendant, detached ones too (`guarantee: contained`) |
 | Windows where Squawk can start a process inside a Job Object (a startup probe checks) | `job` | Every process the worker started and every descendant (`guarantee: contained`); the worker's processes also end when Squawk itself exits |
-| macOS, Linux without cgroup delegation, and Windows where that probe fails | `groups` | The worker's own process groups. A descendant that left them (`setsid`, Node `detached`) can outlive destroy (`guarantee: scoped`). Stop such a service with the project's `worktreeTeardown` commands, which destroy runs first |
+| macOS, and Linux without cgroup delegation | `groups` | The worker's own process groups. A descendant that left them (`setsid`, Node `detached`) can outlive destroy (`guarantee: scoped`). Stop such a service with the project's `worktreeTeardown` commands, which destroy runs first |
+| Windows where that probe fails | `groups` | Windows has no process groups: a session's process tree ends (`taskkill /T`) only while the session's own process still runs, and a descendant left after it exits can outlive destroy (`guarantee: scoped`). `worktreeTeardown` stops such a service |
 
 A process that Squawk did not start for the worker, such as an editor or a shell opened in its worktree, is not the worker's: destroy neither waits for it nor signals it. On Linux and macOS it removes the worktree anyway. On Windows, a file such a process holds open stops the removal; destroy then reports `incomplete` with the path and retries after the process lets go.
 
