@@ -235,6 +235,15 @@ reasoned allow-list in the rule's `ignores`, kept current by `liveness-timer-rul
 awaited pause or a manager interval takes a line-level `ast-grep-ignore` with its reason. The rule
 does not follow a timer function under another name. It has no baseline.
 
+### The nudge fact (`nudge-fact-write-outside-owner`)
+
+The rule checks production `.ts` files in `packages/cezar/src`; it ignores tests and testkits
+(hearsay-tools/squawk#2452, ADR 0064). It reports a `kind: 'nudge-fact'` entry in an object
+literal: the boundary event that records or retires the nudge fact. Only
+`workflows/run/turn-nudges.ts` sends it; another module calls `retireNudge(state)` there. The
+generated `active-run-boundary-write-outside-owner` rule keeps the fact itself inside
+`BoundaryGroup`. The rule does not follow an event built under a computed key. It has no baseline.
+
 ### Per-run memory fields (`run-memory-field-outside-owner`)
 
 The rule checks production `.ts` files in `packages/cezar/src/workflows/run/` and

@@ -2,6 +2,7 @@ import { logPrefix } from '../../home/display.ts';
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
 import { transitionTurnBoundary, type BoundaryCarry, type BoundaryCarrierEffects } from './turn-boundary.ts';
+import { nudgeRefusedAt, retireNudge } from './turn-nudges.ts';
 import { TIMER_MIN_SECONDS, type HumanWaitEntry, type WaitVia } from '@open-mercato/cezar-contract/waits';
 import type { AgentSession } from '../../core/claude-cli-runner.ts';
 import type { ContentBlock } from '../../core/agent-runner.ts';
@@ -159,7 +160,7 @@ export class TurnSettler {
     const gate = refusal ?? (turn.done && session?.open ? this.host.completionGate(runId) : 'accept');
     if (gate === 'held') return this.settleHeldTurn(runId, state, entry, turn);
     const refused = typeof gate === 'object' ? gate : undefined;
-    if (entry === 'ready') transitionTurnBoundary(state, { kind: 'input-ready', phase: 'clear-nudge', session });
+    if (entry === 'ready') retireNudge(state);
     let noted = false;
     const noteRefusal = () => {
       if (!refused || noted) return;
@@ -218,7 +219,7 @@ export class TurnSettler {
       inputInFlight: !!state.inputState.agentInputFlight,
       inputQueued: this.host.hasQueuedAgentInputs(runId, state.inputState.agentInputFlight?.inputIds),
       inputTaken,
-      nudgePending: !!session && state.boundary.autonomousNudgePending === session,
+      nudgePending: nudgeRefusedAt(state, session),
       turnAsk: !!turn.ask,
       nativeAsk: !!state.boundary.pendingHumanAsk,
       question: !!turn.ask || turn.humanGate || !!state.boundary.pendingHumanAsk || hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id)),
@@ -237,7 +238,7 @@ export class TurnSettler {
    *  Squawk's subagent wait replaces the alias: its children wake the run (hearsay-tools/cezarion#2431). */
   private openTurnTimerAlias(runId: string, state: ActiveRun, session: AgentSession | undefined, turn: SettledTurn): void {
     if (openSubagentWaitOf(this.context.store.getRun(runId))) return;
-    if (turn.monitoring && session?.open && state.boundary.autonomousNudgePending !== session) this.openTimerAlias(runId, state, turn.scheduleWakeup);
+    if (turn.monitoring && session?.open && !nudgeRefusedAt(state, session)) this.openTimerAlias(runId, state, turn.scheduleWakeup);
   }
 
   /** The done the first decision keeps at the boundary (`decideSettledTurn`): a turn end records
@@ -307,7 +308,7 @@ export class TurnSettler {
 
   /** A refused autonomous nudge waits for readiness at this boundary, bounded by the idle timer. */
   private carryOutDefer({ state, session }: BoundaryCarry, decision: Extract<TurnEndDecision, { kind: 'defer' }>): TurnEndOutcome {
-    return !decision.keepDone && session && state.boundary.autonomousNudgePending === session ? { kind: 'readiness' } : { kind: 'running' };
+    return !decision.keepDone && nudgeRefusedAt(state, session) ? { kind: 'readiness' } : { kind: 'running' };
   }
 
   private carryOutDone({ runId, state, session }: BoundaryCarry): TurnEndOutcome {
@@ -375,7 +376,7 @@ export class TurnSettler {
     const sent = openCompletionRequests(this.context.store, runId).sent;
     if (sent.length) text += ` ${sentRequestInstructions(sent)}`;
     if (this.host.sendTurnEndNudge(runId, state, stepId, text)) return { kind: 'nudge', cause: 'no-wait', autonomous: !!state.boundary.autonomous };
-    if (session && state.boundary.autonomousNudgePending === session) return { kind: 'readiness' };
+    if (nudgeRefusedAt(state, session)) return { kind: 'readiness' };
     if (!this.host.canAutoContinue(runId, state)) this.parkForUser(runId, state, stepId);
     else this.openTurnEndHumanWait(runId, state, stepId, 'no-wait', NO_WAIT_NOTE, true);
     return this.parkedOutcome(runId);

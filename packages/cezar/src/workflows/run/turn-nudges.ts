@@ -17,6 +17,26 @@ import type { HumanWaits } from './human-waits.ts';
 import type { RunLine } from './run-line.ts';
 import type { RunModuleContext } from './types.ts';
 import { LivenessTimers } from './liveness-timers.ts';
+import type { Nudge } from './turn-boundary.ts';
+
+/** Record how far the nudge Squawk just sent or tried at a turn end of the live session got. This
+ *  module is the nudge fact's only writer (hearsay-tools/squawk#2452). */
+function recordNudge(state: ActiveRun, nudge: Omit<Nudge, 'session'>): void {
+  transitionTurnBoundary(state, { kind: 'nudge-fact', phase: 'record', session: state.liveSession.session, nudge });
+}
+
+/** Retire the nudge fact: a new turn, a submitted input, a question or a readiness retry supersedes
+ *  the nudge. */
+export function retireNudge(state: ActiveRun): void {
+  transitionTurnBoundary(state, { kind: 'nudge-fact', phase: 'retire', session: state.liveSession.session });
+}
+
+/** The autonomous nudge `session` refused at its turn end, which waits for input readiness at that
+ *  boundary, bounded by the idle timer. */
+export function nudgeRefusedAt(state: ActiveRun, session: AgentSession | undefined): boolean {
+  const nudge = state.boundary.nudge;
+  return !!session && nudge?.session === session && nudge.state === 'refused';
+}
 
 interface TurnNudgesHost {
   active: Map<string, ActiveRun>;
@@ -58,6 +78,7 @@ export class TurnNudges {
    *  reads the refusal and says nothing parks on Squawk's human wait instead of holding the slot. */
   awaitCompletionNudgeReply(runId: string, state: ActiveRun, session: AgentSession): void {
     transitionTurnBoundary(state, { kind: 'completion-refusal', phase: 'nudge-delivered', session });
+    recordNudge(state, { cause: 'completion', state: 'submitted' });
     const refusal = completionGateReads.completionRefusal(this.context, this.completionGateHost, runId);
     if (refusal) recordRequestRefusal(state, refusal);
     transitionTurnBoundary(state, { kind: 'completion-refusal', phase: 'reset-content', session: state.liveSession.session });
@@ -150,7 +171,7 @@ export class TurnNudges {
     text = stepScopedNudge(AUTONOMOUS_NUDGE, !!state.liveSession.session && state.boundary.nextStep?.session === state.liveSession.session)): boolean {
     const session = state.liveSession.session;
     if (!state.boundary.autonomous || !session || !this.canAutoContinue(runId, state)) return false;
-    transitionTurnBoundary(state, { kind: 'input-ready', phase: 'clear-nudge', session });
+    retireNudge(state);
     clearIdleTimer(state);
     // One budget with the timer wakes (hearsay-tools/cezarion#1234).
     if (this.host.countAutomaticWakes(runId) >= this.maxAutoContinues) {
@@ -163,11 +184,12 @@ export class TurnNudges {
       // Keep this exact boundary running until onAgentInputReady retries, without charging
       // the cap or claiming delivery. Missing readiness closes via the idle bound.
       if (session.open && !state.inputState.agentInputError && !state.liveSession.agentSessionError) {
-        transitionTurnBoundary(state, { kind: 'input-ready', phase: 'retain-nudge', session });
+        recordNudge(state, { cause: 'autonomous', state: 'refused' });
         this.host.armIdleTimer(runId, state);
       }
       return false;
     }
+    recordNudge(state, { cause: 'autonomous', state: 'submitted' });
     const spent = this.host.chargeAutomaticWake(runId);
     this.context.store.appendEvent(runId, {
       type: 'note', stepId,
@@ -185,6 +207,7 @@ export class TurnNudges {
     transitionTurnBoundary(state, { kind: 'turn-end', phase: 'reset-content', session: state.liveSession.session });
     if (!this.host.submitAgentInput(runId, state, [{ type: 'text', text }])) return false;
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'nudge-delivered', session: state.liveSession.session });
+    recordNudge(state, { cause: 'no-wait', state: 'submitted' });
     clearIdleTimer(state);
     this.armNoWaitNudgeReplyTimer(runId, state);
     const spent = this.host.chargeAutomaticWake(runId);

@@ -2,6 +2,7 @@ import { logPrefix } from '../../home/display.ts';
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
+import { retireNudge } from './turn-nudges.ts';
 import { randomUUID } from 'node:crypto';
 import { type HumanWaitEntry, type WaitVia } from '@open-mercato/cezar-contract/waits';
 import type { AskRequest } from '../../core/ask.ts';
@@ -62,6 +63,7 @@ export class HumanWaits {
   /** Ask precedence: the question is pending, and no autonomous nudge goes beside it. Durable
    *  input and waits stay queued until an actual human answer. */
   prepareHumanAsk(state: ActiveRun): void {
+    retireNudge(state);
     transitionTurnBoundary(state, { kind: 'human-wait-opened', phase: 'prepare', session: state.liveSession.session });
   }
 
