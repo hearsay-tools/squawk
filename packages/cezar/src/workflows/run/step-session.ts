@@ -4,7 +4,7 @@ import { atStepOpen } from './launch-read-resolver.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import type { AgentEvent, AgentRunner, AgentSession, ContentBlock, RunnerId } from '../../core/agent-runner.ts';
+import type { AgentRunner, AgentSession, ContentBlock, RunnerId } from '../../core/agent-runner.ts';
 import type { SessionEventHandler } from './session-events.ts';
 import { inputDeliveryOf } from '../../core/agent-runner.ts';
 import { startManagedSession } from '../../core/managed-session.ts';

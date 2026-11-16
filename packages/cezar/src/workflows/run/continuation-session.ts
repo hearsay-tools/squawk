@@ -6,7 +6,7 @@ import { continuationNextStep, waitingWorkflowStepIndex, ciWorkflowResumeStepInd
 import type { QueuedInput } from './queued-input.ts';
 import type { WorkerQuestions } from './worker-questions.ts';
 import { join } from 'node:path';
-import type { AgentEvent, ContentBlock } from '../../core/agent-runner.ts';
+import type { ContentBlock } from '../../core/agent-runner.ts';
 import { inputDeliveryOf } from '../../core/agent-runner.ts';
 import { startManagedSession } from '../../core/managed-session.ts';
 import { pastedAttachmentsText, type PastedContent, type PersistedAttachment } from '../pasted-content.ts';
