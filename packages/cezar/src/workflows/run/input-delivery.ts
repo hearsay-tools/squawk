@@ -127,8 +127,10 @@ export class InputGroup {
   get consumedBeforeAck(): ReadonlySet<string> | undefined { return this.#consumedView; }
   /** Messages carried behind a human answer, read at that turn's end. */
   get bundledInputIds(): readonly string[] | undefined { return this.#bundledInputIds; }
-  /** The input submitted at the last turn boundary: it opened the turn after it, which reads it
-   *  whenever its harness reports the read (hearsay-tools/squawk#2587). */
+  /** The input the transport accepted at the last turn boundary: it opened the turn after it,
+   *  which reads it whenever its harness reports the read (hearsay-tools/squawk#2587). A later
+   *  boundary send, a human message included, replaces it; an accepted send mid-turn takes its
+   *  inputs out of it. */
   get turnOpenerIds(): readonly string[] | undefined { return this.#turnOpenerIds; }
   /** Unread reports received while the same submission's ACK is pending. */
   get retiredInFlight(): ReadonlySet<string> | undefined { return this.#retiredView; }
@@ -164,7 +166,9 @@ export class InputGroup {
     this.#bundledInputIds = Object.freeze([...(this.#bundledInputIds ?? []), ...ids]);
   }
   clearBundledInputs(): void { this.#bundledInputIds = undefined; }
-  openTurnWith(ids: readonly string[]): void { this.#turnOpenerIds = Object.freeze([...ids]); }
+  markTurnOpeners(ids: readonly string[], opensTurn: boolean): void {
+    this.#turnOpenerIds = Object.freeze(opensTurn ? [...ids] : (this.#turnOpenerIds ?? []).filter(id => !ids.includes(id)));
+  }
   retireInFlight(id: string): void {
     if (!this.#retiredInFlight) {
       this.#retiredInFlight = new Set(); this.#retiredView = new ReadonlySetView(this.#retiredInFlight);
@@ -407,9 +411,9 @@ export class InputDelivery {
     const session = state.liveSession.session;
     const content = [{ type: 'text' as const, text }, ...(bundle ? [{ type: 'text' as const, text: bundle.text }] : [])];
     const delivered = [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])];
+    const opensTurn = state.boundary.atTurnBoundary === session;
     if (!handToTransport(state, session, delivered, wire => wire.sendMessage(content))) return;
-    // The answer opens the worker's next turn when it is at a boundary (hearsay-tools/squawk#2587).
-    if (state.boundary.atTurnBoundary === session) state.inputState.openTurnWith(delivered);
+    state.inputState.markTurnOpeners(delivered, opensTurn);
     this.context.store.appendEvent(runId, { type: 'human-input-delivered', askSeq, source });
     inputReceipts.commitRoutedAnswer(this.context, runId, state, { askSeq, delivered: [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])] }, fallback, this.maxAutoContinues);
     // Spend the answer's admission now so later messages can steer before its turn ends.
@@ -583,13 +587,14 @@ export class InputDelivery {
     const refusal = !!this.context.store.getRun(runId)?.agentInputs?.some(input => input.purpose === 'completion-refusal' && inputIds.includes(input.id));
     const atBoundary = state.boundary.atTurnBoundary === session;
     const flight = new InputFlight(session, inputIds, this.host.line.isAdmitted(runId) && atBoundary ? true : undefined);
-    if (atBoundary && inputIds.length) state.inputState.openTurnWith(inputIds);
     // A batch with timer results is an automatic wake: it reserves one unit of the budget now, so a timer that comes due before this acknowledgement counts it, and gives it back if the batch is refused or its acknowledgement rejects (hearsay-tools/cezarion#1233).
     // The accepted done's one free delivery turn costs no wake: the run finishes when it ends (hearsay-tools/squawk#2587).
     if (done !== 'free' && reservesAutomaticWake(this.context.store.getRun(runId), flight, inputIds, () => this.host.countAutomaticWakes(runId, beforeHumanReset), this.maxAutoContinues)) flightWrites.reserve(flight, true);
     state.inputState.attachFlight(flight);
     const settled = this.sendAgentInput(runId, state, flight, content, refusal);
     if (!settled) return false;
+    // Only a send the transport accepted at a boundary opens the turn after it (hearsay-tools/squawk#2587).
+    state.inputState.markTurnOpeners(inputIds, atBoundary);
     this.host.workerExecutions.trackDelivery(runId, settled);
     this.resumeParkedRun(runId, state, beforeHumanReset);
     this.recordAgentInputTurn(runId, state, flight, refusal);
@@ -850,7 +855,9 @@ export class InputDelivery {
     const atTurnBoundary = state.boundary.atTurnBoundary === session;
     // A human message withdraws an accepted done: its turn end reads the message (hearsay-tools/squawk#2587).
     const sent = this.context.store.getRun(runId)?.doneAccepted ? [...deliverable, { type: 'text' as const, text: `\n\n${DONE_RECONSIDERED_NOTE}` }] : deliverable;
-    const delivered = handToTransport(state, session, prepared.bundle?.inputs.map(input => input.id) ?? [], wire => wire.sendMessage(sent));
+    const bundled = prepared.bundle?.inputs.map(input => input.id) ?? [];
+    const delivered = handToTransport(state, session, bundled, wire => wire.sendMessage(sent));
+    if (delivered) state.inputState.markTurnOpeners(bundled, atTurnBoundary);
     if (delivered && expanded !== blocks) this.host.runSkills.provisionLiveSlashSkill(runId, state, blocks);
     if (delivered) this.applyHumanMessageDelivery(runId, state, prepared, messageId, atTurnBoundary);
     return delivered;

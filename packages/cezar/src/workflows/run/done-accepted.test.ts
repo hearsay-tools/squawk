@@ -98,7 +98,7 @@ describe('input owed at cezar_done (hearsay-tools/squawk#2587)', () => {
     const opener = input({ deliveredAt: new Date().toISOString(), awaitingRead: true });
     const state = live('observable');
     state.inputState.recordUnreadInput(opener.id);
-    state.inputState.openTurnWith([opener.id]);
+    state.inputState.markTurnOpeners([opener.id], true);
     expect(owedAtDone(makeRunRecord({ agentInputs: [opener] }), state)).toEqual([]);
   });
 
@@ -152,7 +152,7 @@ describe('whether an accepted done still holds at the turn end (hearsay-tools/sq
     // B4: a peer wait from `hsq message wait --peer`, outside the tool.
     ['a peer wait registered through the CLI withdraws it', {}, { waits: [makePeerWait({ registeredAt: at, via: WAIT_VIA['cez-message-wait'] })] }, withdrawn('the agent registered a wait')],
     // Round 2, B2: a wait registered in the done's own millisecond.
-    ['a wait registered in the done\'s millisecond withdraws it', {}, { waits: [makeTimerWait({ registeredAt: at })] }, withdrawn('the agent registered a wait')],
+    ['a wait registered in the done\'s millisecond withdraws it', {}, { waits: [makeTimerWait({ registeredAt: at, via: WAIT_VIA.cezar_wait })] }, withdrawn('the agent registered a wait')],
     // D2: a replayed registration registers nothing new.
     ['a wait registered before the done keeps it, also in its millisecond', { waits: [timerAt] }, { waits: [timerAt] }, kept],
     ['the completion wait keeps it', {}, { waits: [makeWorkerWait({ registeredAt: at, source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion })] }, kept],
@@ -167,7 +167,7 @@ describe('whether an accepted done still holds at the turn end (hearsay-tools/sq
   // The review's probe: a wait registered in the done's own millisecond is still after it.
   it('a wait registered in the same millisecond as the done, unknown to it, withdraws it', () => {
     const done = { session: 'generation', at, seq: 10, openWaits: [], settledWaits: [] };
-    expect(acceptedDoneHolds(makeRunRecord({ doneAccepted: done, waits: [makeTimerWait({ registeredAt: at })] }), [])).toEqual(withdrawn('the agent registered a wait'));
+    expect(acceptedDoneHolds(makeRunRecord({ doneAccepted: done, waits: [makeTimerWait({ registeredAt: at, via: WAIT_VIA.cezar_wait })] }), [])).toEqual(withdrawn('the agent registered a wait'));
   });
 
   it('a human message recorded after the done withdraws it; one before keeps it', () => {

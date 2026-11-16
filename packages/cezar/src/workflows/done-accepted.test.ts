@@ -10,6 +10,7 @@ import { blockedDone, blockingWorker, describeWaitCells, gated, github, nativeWi
 import { manager, parent, restart, store, terminal, timeline, until } from './worker-wait-core.testkit.ts';
 import { toolCall } from './waits-parity.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
+import { factsAtDone } from './run/done-accepted.ts';
 import { COMPLETION_NUDGE_NOTE, DONE_KEPT_NOTE, DONE_RECONSIDERED_NOTE } from './turn-end.ts';
 
 // hearsay-tools/squawk#2587: what an accepted cezar_done does when input, a wait or a refusal
@@ -102,7 +103,7 @@ describeWaitCells(() => {
     const external = github();
     const run = await waitingOnPr();
     // What a crash right after the tool accepted the done leaves: the record, and the wait it outranks.
-    store.commitOutcome(run.id, { kind: 'done-accepted', session: 'before-restart', at: new Date().toISOString(), seq: store.transcriptFacts(run.id).lastSeq });
+    store.commitOutcome(run.id, { kind: 'done-accepted', done: { session: 'before-restart', at: new Date().toISOString(), seq: store.transcriptFacts(run.id).lastSeq, ...factsAtDone(store.getRun(run.id)!) } });
     await restart();
     external.settle();
     await until(() => finished(run.id), () => timeline(run.id));
