@@ -134,6 +134,16 @@ describe.runIf(process.platform === 'win32')('job backend on Windows', { timeout
     await vi.waitFor(() => expect(alive(descendant)).toBe(false), { timeout: 30_000 }); // bound: process exit after TerminateJobObject is asynchronous
   });
 
+  it('a cmd.exe /s /c command keeps its own quotes inside the job', async () => {
+    const memory = memoryStore(), workerId = randomUUID();
+    const scopes = new WorkerScopes(memory.store, () => ({ backend: 'job' }));
+    const [file, args] = scopes.spawnScope(workerId).command(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `"${process.execPath}" -e "console.log('quoted ok')"`]);
+    const run = spawnSync(file, args, { encoding: 'utf8', timeout: 180_000 });
+    expect(run.error).toBeUndefined();
+    expect(run.stdout).toContain('quoted ok');
+    expect(await scopes.stop(workerId, 60_000)).toEqual({ stopped: true });
+  });
+
   it('a command whose job never appears does not run', () => {
     const [file, args] = jobCommand(workerJobName(randomUUID()), process.execPath, ['-e', 'console.log("ran")']);
     const run = spawnSync(file, args, { encoding: 'utf8', timeout: 90_000 });

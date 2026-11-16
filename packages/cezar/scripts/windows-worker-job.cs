@@ -156,7 +156,13 @@ public static class SquawkWorkerJob {
   // cmd.exe, which CreateProcess requires.
   static string CommandLine(string[] argv) {
     string name = System.IO.Path.GetFileName(argv[0]).ToLowerInvariant();
-    if (name == "cmd.exe" || name == "cmd") return Quote(argv[0]) + (argv.Length > 1 ? " " + string.Join(" ", argv, 1, argv.Length - 1) : "");
+    if (name == "cmd.exe" || name == "cmd") {
+      // cmd.exe /s strips the first and last quote of what follows /c, so the payload gets its own
+      // outer pair and keeps every quote it has.
+      int c = Array.FindIndex(argv, 1, arg => arg.Equals("/c", StringComparison.OrdinalIgnoreCase));
+      if (c < 0 || c == argv.Length - 1) return Quote(argv[0]) + (argv.Length > 1 ? " " + string.Join(" ", argv, 1, argv.Length - 1) : "");
+      return Quote(argv[0]) + " " + string.Join(" ", argv, 1, c) + " \"" + string.Join(" ", argv, c + 1, argv.Length - c - 1) + "\"";
+    }
     var parts = new string[argv.Length];
     for (int i = 0; i < argv.Length; i++) parts[i] = Quote(argv[i]);
     string line = string.Join(" ", parts);

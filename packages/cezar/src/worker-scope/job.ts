@@ -11,7 +11,10 @@ import { fileURLToPath } from 'node:url';
 import { POWERSHELL, powershellEnv } from '../core/process-stat.ts';
 
 const script = fileURLToPath(new URL('../../scripts/windows-worker-job.ps1', import.meta.url));
-const POWERSHELL_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script];
+/** The helper DLL the probe compiled, passed by path to every later call: a worker's environment
+ * has its own temp directory, where the cache is not. */
+let compiled: string | undefined;
+const powershellArgs = () => ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, ...(compiled ? ['-Assembly', compiled] : [])];
 
 /** The job's name in this session's namespace. */
 export function workerJobName(workerId: string): string {
@@ -28,14 +31,14 @@ export type JobHelper = {
 
 export const realJobHelper: JobHelper = {
   keep: job => {
-    const keeper = spawn(POWERSHELL, [...POWERSHELL_ARGS, 'keep', job], { env: powershellEnv(), stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true });
+    const keeper = spawn(POWERSHELL, [...powershellArgs(), 'keep', job], { env: powershellEnv(), stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true });
     keeper.on('error', () => undefined);
     keeper.unref();
     // The pipe must not hold the controller's event loop open; its end is the job's end.
     (keeper.stdin as unknown as { unref?: () => void } | null)?.unref?.();
     return keeper;
   },
-  call: (args, timeoutMs) => execFileSync(POWERSHELL, [...POWERSHELL_ARGS, ...args], {
+  call: (args, timeoutMs) => execFileSync(POWERSHELL, [...powershellArgs(), ...args], {
     env: powershellEnv(), encoding: 'utf8', windowsHide: true, timeout: timeoutMs, maxBuffer: 64 * 1024,
   }).trim(),
 };
@@ -45,13 +48,16 @@ export const realJobHelper: JobHelper = {
 export function jobCommand(job: string, file: string, args: readonly string[]): [string, string[]] {
   const argvFile = join(tmpdir(), `squawk-worker-argv-${randomUUID()}`);
   writeFileSync(argvFile, [file, ...args].join('\0'), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
-  return [POWERSHELL, [...POWERSHELL_ARGS, 'run', job, argvFile]];
+  return [POWERSHELL, [...powershellArgs(), 'run', job, argvFile]];
 }
 
 /** Whether this host lets this user create a job and start a process inside it at creation. */
 export function probeJobs(helper: JobHelper = realJobHelper): { ok: true } | { reason: string } {
   try {
-    return helper.call(['probe'], 60_000) === 'ok' ? { ok: true } : { reason: 'the job probe did not confirm' };
+    const [state, ...dll] = helper.call(['probe'], 60_000).split(' ');
+    if (state !== 'ok') return { reason: 'the job probe did not confirm' };
+    if (dll.length) compiled = dll.join(' ');
+    return { ok: true };
   } catch (error) { return { reason: `cannot run a process inside a job (${(error as Error).message.split('\n')[0]})` }; }
 }
 

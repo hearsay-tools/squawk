@@ -158,9 +158,11 @@ export class DevServer extends EventEmitter {
     if (this.scope) {
       try { argv = this.scope.command(argv[0], argv[1]); } catch (error) { refuse(error); return; }
     }
-    const child = windows && !this.scope
+    // On Windows only a job wraps the command; unwrapped, the shell runs it as before.
+    const wrapped = windows && argv[0] !== (process.env.ComSpec ?? 'cmd.exe');
+    const child = windows && !wrapped
       ? spawn(this.server.command, { cwd, env, shell: true, windowsHide: true, stdio: ['ignore', logFd, logFd] })
-      : windows ? spawn(argv[0], argv[1], { cwd, env, windowsHide: true, windowsVerbatimArguments: /cmd(\.exe)?$/i.test(argv[0]), stdio: ['ignore', logFd, logFd] })
+      : windows ? spawn(argv[0], argv[1], { cwd, env, windowsHide: true, stdio: ['ignore', logFd, logFd] })
       : spawnDetached(argv[0], argv[1], { cwd, env, stdio: ['ignore', logFd, logFd] });
     const pid = child.pid;
     if (process.platform !== 'win32' && this.scope && pid !== undefined) {

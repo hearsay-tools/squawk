@@ -70,7 +70,8 @@ export function runGroupedCommand(opts: GroupedCommandOptions): Promise<GroupedC
       if (finished || !pid) return;
       if (!grouped) {
         // Windows has no group: end the tree, so a command a wrapper started (a worker's job helper,
-        // ADR 0032) ends with it.
+        // ADR 0032) ends with it. Only while the leader runs: an exited leader's pid may be reused.
+        if (child.exitCode !== null || child.signalCode !== null) return;
         try { spawn('taskkill', ['/T', '/F', '/PID', String(pid)], { stdio: 'ignore', windowsHide: true }).on('error', () => child.kill(signal)); }
         catch { child.kill(signal); }
         return;
