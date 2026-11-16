@@ -9,7 +9,7 @@ const session = (name: string) => ({ name }) as unknown as AgentSession;
 
 it('names a scope for every bound kind of the spec', () => {
   expect(Object.keys(LIVENESS_BOUNDS).sort()).toEqual(['acknowledgement', 'auto-resume', 'held-human-input', 'idle-close',
-    'inbox-claim', 'nudge-reply', 'request-deadline', 'subagent-grace', 'subagent-retry', 'unread-input', 'wake-backoff', 'wake-retry']);
+    'inbox-claim', 'nudge-reply', 'request-deadline', 'subagent-ask-hold', 'subagent-grace', 'subagent-retry', 'unread-input', 'wake-backoff', 'wake-retry']);
   const kinds: LivenessKind[] = ['idle-close'];
   // @ts-expect-error a bound kind without a row is not a kind
   kinds.push('nudge-acknowledgement');

@@ -424,10 +424,17 @@ export class TurnSettler {
 
   /** A park for the user: native subagents still running in this session keep it and its slot
    *  beside the question; with none, the run leaves the monitoring pool and its idle close is armed. */
-  holdChildrenOrArmIdle(runId: string, state: ActiveRun): void {
+  private holdChildrenOrArmIdle(runId: string, state: ActiveRun): void {
     transitionTurnBoundary(state, { kind: 'wait-wake-admitted', phase: 'hold-children', session: state.liveSession.session, held: this.host.subagentWaits.holdsLiveSubagents(runId) || undefined });
     if (state.boundary.heldForSubagents) this.host.line.joinPool(runId);
     else { this.host.leaveMonitoringPool(runId); this.armIdleTimer(runId, state); }
+  }
+
+  /** A native ask parks mid-turn as a park for the user; a hold for its children ends at the
+   *  subagent deadline, since no turn end opens a subagent wait for them. */
+  holdNativeAsk(runId: string, state: ActiveRun): void {
+    this.holdChildrenOrArmIdle(runId, state);
+    this.host.subagentWaits.boundNativeAskHold(runId, state);
   }
 
   /**

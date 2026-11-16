@@ -90,7 +90,8 @@ S5 removes those exceptions.
 
 `LivenessTimers` (`workflows/run/liveness-timers.ts`) has one row per bound kind: idle close,
 nudge reply, acknowledgement, unread input, held human input, wake retry, wake backoff,
-auto-resume, subagent grace, subagent retry, inbox claim and request deadline. Each row names its
+auto-resume, subagent grace, a native ask's subagent hold, subagent retry, inbox claim and request
+deadline. Each row names its
 scope (`execution` or `run`). `arm` replaces an existing handle for the same kind, run and key;
 an expiry runs only while its handle is current and its session still matches.
 `clearScope(run, 'execution')` runs at `dropActive`; `clearScope(run, 'run')` runs at release.
