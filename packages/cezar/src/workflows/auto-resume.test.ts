@@ -218,7 +218,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
     const record = first.startRun(twoSteps, { task: 'mock:rate-limit ship it', worktree: false });
     await settle(record.id);
     first.dispose();
-    expect(store.getRun(record.id)?.workflowResumeStepId).toBe('work');
+    expect(store.getRun(record.id)?.workflowCursor).toEqual({ stepId: 'work', mode: 'resume' });
     store.updateRun(record.id, { autoResumeAt: new Date(Date.now() - 1_000).toISOString(), task: 'mock:cezar-done ship it' });
     manager = createFixtureManager(store, repoRoot);
     await manager.recover();

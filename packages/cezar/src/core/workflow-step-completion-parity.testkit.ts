@@ -14,9 +14,12 @@ import { AUTONOMOUS_NUDGE, NO_WAIT_NUDGE, STEP_NUDGE_SUFFIX } from '../workflows
 import { workflowDefSchema } from '../workflows/types.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../workflows/fixture-cleanup.testkit.ts';
 import { readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
+import { execFileSync } from 'node:child_process';
 
 // hearsay-tools/cezarion#1620: an earlier workflow step completes only on an accepted completion
 // signal, on every runner's native wire. Its last agent step signals done; a check step ends the chain.
+// hearsay-tools/squawk#1621 (C7): the workflow position survives a worktree setup that fails before
+// the tail starts.
 const PARTS: Readonly<Record<string, readonly string[]>> = {
   "no-done": [
     "claude C1"
@@ -32,6 +35,9 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
   ],
   "autonomous": [
     "claude C6"
+  ],
+  "setup-failure": [
+    "claude C7"
   ]
 };
 
@@ -129,22 +135,48 @@ describe('explicit step completion parity — hearsay-tools/cezarion#1620', () =
           await complete();
           return;
         }
+        const restart = async () => {
+          store.flush();
+          const dataDir = join(repoRoot, '.ai/cezar');
+          const checkpoint = readPersistedRuns(dataDir);
+          await drainFixtureManagers(repoRoot);
+          store.close();
+          seedRuns(dataDir, checkpoint);
+          store = RunStore.open(dataDir, { keepLive: true });
+          manager = createFixtureManager(store, repoRoot);
+          await manager.recover();
+        };
+        if (row.id === 'C7') {
+          session.end();
+          await incomplete();
+          // The agent left its task branch: the next execution's worktree check refuses the path.
+          const { worktreePath, branch } = run();
+          const git = (...args: string[]) => execFileSync('git', ['-C', worktreePath!, ...args]);
+          git('checkout', '-q', '-b', 'elsewhere');
+          expect(manager.continueRun(runId, { text: 'Carry on. mock:cezar-done' }).ok).toBe(true);
+          await waitFor(() => run().status === 'failed' && !manager.isActive(runId), 15_000);
+          expect(run().error).toContain('managed worktree path is registered to refs/heads/elsewhere');
+          expect(statuses()).toEqual([['implement', 'done'], ['review', 'pending'], ['verify', 'pending']]);
+          // No live session after a restart: the position is read from the saved row.
+          await restart();
+          expect(run().status).toBe('failed');
+          expect(manager.isActive(runId)).toBe(false);
+          // The repair, then a Continue whose done runs the tail; the completed step never replays.
+          git('checkout', '-q', branch!);
+          expect(manager.continueRun(runId, { text: 'Branch restored. mock:cezar-done' }).ok).toBe(true);
+          await complete();
+          const started = store.readEvents(runId).filter(event => event.type === 'step-start').map(event => event.stepId);
+          expect(started.filter(id => workflowDef.steps.some(def => def.id === id))).toEqual(['implement', 'review', 'verify']);
+          return;
+        }
         // C5: a restart keeps the parked earlier step, and a Continue with done runs the tail.
-        store.flush();
-        const dataDir = join(repoRoot, '.ai/cezar');
-        const checkpoint = readPersistedRuns(dataDir);
-        await drainFixtureManagers(repoRoot);
-        store.close();
-        seedRuns(dataDir, checkpoint);
-        store = RunStore.open(dataDir, { keepLive: true });
-        manager = createFixtureManager(store, repoRoot);
-        await manager.recover();
+        await restart();
         expect(run().status).toBe('waiting');
         expect(statuses()).toEqual([['implement', 'waiting'], ['review', 'pending'], ['verify', 'pending']]);
         expect(manager.isActive(runId)).toBe(false);
         expect(manager.continueRun(runId, { text: 'Carry on. mock:cezar-done' }).ok).toBe(true);
         await complete();
-      }, { workflowDef, autonomous: row.id === 'C6', beforeStart: observe, beforeCleanup: () => { idleClock?.restore(); closeClock?.restore(); vi.restoreAllMocks(); } });
+      }, { workflowDef, autonomous: row.id === 'C6', worktree: row.id === 'C7', beforeStart: observe, beforeCleanup: () => { idleClock?.restore(); closeClock?.restore(); vi.restoreAllMocks(); } });
     }, 60_000);
   }
 });

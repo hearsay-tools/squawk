@@ -1,6 +1,25 @@
 import type { parseRunRecords } from './store.ts';
 import type { RunRowInput } from './run-database.ts';
 import { encodeRunRow } from './run-row.ts';
+import { upgradeLegacyWaits } from './legacy-waits.ts';
+
+/** The read-time upgrades of a stored record, in place, before the schema reads it. */
+export function upgradeLegacyRunRow(row: Record<string, unknown>): void {
+  upgradeLegacyWaits(row);
+  upgradeLegacyWorkflowCursor(row);
+}
+
+/**
+ * A row saved before the `workflowCursor` fact (ADR 0064) names its CI or provider-retry step as
+ * `workflowResumeStepId`. It is read as a cursor that resumes that step, and the next write of the
+ * row stores the cursor instead.
+ */
+export function upgradeLegacyWorkflowCursor(row: Record<string, unknown>): void {
+  if (!('workflowResumeStepId' in row)) return;
+  const stepId = row.workflowResumeStepId;
+  delete row.workflowResumeStepId;
+  if (typeof stepId === 'string' && row.workflowCursor === undefined) row.workflowCursor = { stepId, mode: 'resume' };
+}
 
 /** `runs.json`'s records as rows, and how many of its entries were left out. Each row's `data` is
  *  the record's own JSON as `runs.json` held it, so nothing this Squawk's schema does not know is lost

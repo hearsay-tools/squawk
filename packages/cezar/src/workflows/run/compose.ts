@@ -414,7 +414,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
   }, sessionEventHost(), launchPreambleHost(), modules.sessionHelperHost, modules.line,
   modules.runSkills, modules.humanWaits, modules.inputReceiptHost, modules.inputReceiptSteps);
   modules.autoResumeScheduler = new AutoResumeScheduler(context,
-    { move: (id, exit, patch) => host.move(id, exit, patch),
+    { move: (id, exit, patch, call) => host.move(id, exit, patch, call),
       continueRun: (id, opts, defer) => host.continueRun(id, opts, defer), pump: () => modules.line.pump() },
   );
   modules.recovery = new RunRecovery(context, modules.familyReconciler,
@@ -469,7 +469,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     modules.completionGateHost, {
       active: host.active, isSyntheticContinuation: (run, step) => isSyntheticContinuation(run, step),
       generation: id => modules.continuationAcceptance.generation(id), isActive: id => host.isActive(id),
-      move: (id, exit, patch) => host.move(id, exit, patch), dropActive: id => host.dropActive(id),
+      move: (id, exit, patch, call) => host.move(id, exit, patch, call), dropActive: id => host.dropActive(id),
       saveWorktree: (id, state, reason) => modules.worktreeAutosave.saveWorktree(id, state, reason),
       settleSuccess: (id, durable, keep) => modules.runSettlement.settleSuccess(id, durable, keep),
       deferParentCompletion: id => modules.runFinish.deferParentCompletion(id),
@@ -501,7 +501,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
   modules.humanWaits, modules.queuedInput, modules.workerQuestions, modules.runSettlement);
   modules.stepLoop = new WorkflowStepLoop(context, {
     waitEngine: modules.waitEngine,
-    active: host.active, move: (id, exit, patch) => host.move(id, exit, patch), dropActive: id => host.dropActive(id),
+    active: host.active, move: (id, exit, patch, call) => host.move(id, exit, patch, call), dropActive: id => host.dropActive(id),
     closingWakeDecision: (id, holds, cancelled, error) => modules.wakeAdmission.closingWakeDecision(id, holds, cancelled, error),
     owesDelivery: id => modules.wakeAdmission.owesDelivery(id),
     workerExecutionStopped: id => host.workerExecutionStopped(id),

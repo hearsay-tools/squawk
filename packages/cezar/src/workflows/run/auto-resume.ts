@@ -5,13 +5,13 @@ import { noJitter, PROVIDER_RETRY_BACKOFF, retryDelayMs } from '../../delegation
 import type { RunRecord, RunStore } from '../../runs/store.ts';
 import type { ContinueRunOptions } from '../continuation-admission.ts';
 import { formatWakeInstant } from '../run-scheduling.ts';
-import type { RunExitId } from '../../runs/run-exits.ts';
+import type { ExitCall, RunExitId } from '../../runs/run-exits.ts';
 import type { RunModuleContext } from './types.ts';
 import { atContinue } from './launch-read-resolver.ts';
 import { productName } from '../../home/display.ts';
 
 interface AutoResumeHost {
-  move(runId: string, exit: RunExitId, patch: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): RunRecord | undefined;
+  move(runId: string, exit: RunExitId, patch: Omit<Parameters<RunStore['updateRun']>[1], 'status'>, call?: ExitCall): RunRecord | undefined;
   continueRun(runId: string, opts: ContinueRunOptions, deferForCapacity: boolean): { ok: boolean; error?: string };
   pump(): Promise<void>;
 }
@@ -126,8 +126,8 @@ export class AutoResumeScheduler {
     if (!plan) return false;
     const run = this.context.store.getRun(runId);
     const resumeStep = run ? atContinue.heldStep(run) : undefined;
-    this.host.move(runId, 'hold-failure', { error, autoResumeAt: plan.autoResumeAt, autoResumeReason: plan.autoResumeReason,
-      ...(resumeStep ? { workflowResumeStepId: resumeStep } : {}) });
+    this.host.move(runId, 'hold-failure', { error, autoResumeAt: plan.autoResumeAt, autoResumeReason: plan.autoResumeReason },
+      resumeStep ? { stepId: resumeStep, cursor: 'resume' } : {});
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: plan.message });
     return true;
   }

@@ -7,7 +7,7 @@ import type { RunnerId } from '../../core/agent-runner.ts';
 import type { RunRecord, RunStore } from '../../runs/store.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { WorkflowDef } from '../types.ts';
-import type { RunExitId } from '../../runs/run-exits.ts';
+import type { ExitCall, RunExitId } from '../../runs/run-exits.ts';
 import { getHeadCommit, getRepoInfo } from '../../server/git.ts';
 import { seedAgentConfigLocalLayer } from '../../agent-config/seed.ts';
 import { AgentTempDirError, agentTmpEnv } from '../../runs/agent-tmpdir.ts';
@@ -41,7 +41,7 @@ interface StepLoopHost {
   active: Map<string, ActiveRun>;
   closingWakeDecision(id: string, holds: boolean, cancelled: boolean, error: string | undefined): 'park' | 'settle' | 'capped';
   owesDelivery(id: string): boolean;
-  move(id: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): RunRecord | undefined;
+  move(id: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>, call?: ExitCall): RunRecord | undefined;
   dropActive(id: string): void;
   workerExecutionStopped(id: string): boolean;
   executionBlockedByRootFinish(run: RunRecord): boolean;
@@ -315,7 +315,7 @@ export class StepLoop {
       const record = this.context.store.getRun(runId)?.steps.find((s) => s.id === step.id);
       const iteration = (record?.iterations ?? 0) + 1;
 
-      this.host.move(runId, 'start', { currentStepId: step.id });
+      this.host.move(runId, 'start', { currentStepId: step.id }, { stepId: step.id });
       this.context.store.updateStep(runId, step.id, {
         status: 'running',
         iterations: iteration,
@@ -427,7 +427,13 @@ export class StepLoop {
     // runAgentStep already emitted session.ended(error). Record the failed
     // attempt before parking so later successful CI recovery cannot erase it.
     if (failure) {
-      if (holdsClosingWakes(this.context, this.completionGateHost, runId)) this.context.store.updateRun(runId, { workflowResumeStepId: stepId });
+      if (holdsClosingWakes(this.context, this.completionGateHost, runId)) {
+        // The cursor alone, on disk before the delivery decision and the final autosave await. A
+        // run the step's turn already parked stays waiting, for the reason it parked.
+        const parked = this.context.store.getRun(runId)?.status === 'waiting';
+        this.host.move(runId, parked ? 'fail-attempt-parked' : 'fail-attempt', {}, { stepId, cursor: 'resume' });
+        this.context.store.flush();
+      }
       this.finishStep(runId, stepId, 'failed', failure, emit);
       loop.runError = `step "${stepId}" failed: ${failure}`;
     }
