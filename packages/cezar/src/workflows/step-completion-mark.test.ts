@@ -60,7 +60,7 @@ describe('step completion mark at settlement callers', () => {
     type LoopArgs = ConstructorParameters<typeof StepLoop>;
     stepLoop = new StepLoop(context,
       unused<LoopArgs[1]>('loopHost', { active, executionBlockedByRootFinish: () => false,
-        owesDelivery: () => false, closingWakeDecision: () => 'settle' }),
+        cleanCloseFailsDelivery: () => false, closingWakeDecision: () => 'settle' }),
       unused<LoopArgs[2]>('line'), unused<LoopArgs[3]>('autosave'),
       unused<LoopArgs[4]>('humanWaits', { withdrawSquawkHumanWaits: vi.fn() }), settlement,
       unused<LoopArgs[6]>('stepSession'), unused<LoopArgs[7]>('gate', { holdsAgentWaits: () => false }), '');

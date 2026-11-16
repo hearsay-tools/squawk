@@ -230,7 +230,9 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
       const { timer, later } = await timerWaits(run.id);
       // Every session closes cleanly at a turn end while the result is owed, before Squawk can
       // submit it, as U9's clean close does at a boundary. The first is the original session: the
-      // timer resolves as its human turn ends. The others are the continuations that retry.
+      // timer resolves as its human turn ends, and that session attempted no delivery, so its close
+      // charges none (hearsay-tools/squawk#1289). The others are the continuations that retry: each
+      // opening prompt is an attempt.
       let closing = true, resolving = true;
       const closeAtTurnEnd = ({ runId, event }: { runId: string; event: { type: string } }) => {
         if (runId !== run.id || event.type !== 'turn-end' || !closing) return;
@@ -241,8 +243,8 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
       try {
         expect(manager.sendMessage(run.id, [{ type: 'text', text: 'Check the deploy.' }])).toBe(true);
         await until(() => store.getRun(run.id)?.status === 'failed' && !manager.isActive(run.id));
-        // The original session and two continuations, none of which received the result.
-        expect(prompted(runner, TIMER_WAKE_OPENING)).toHaveLength(MAX_WAKE_DELIVERY_ATTEMPTS - 1);
+        // Three continuations, none of which received the result.
+        expect(prompted(runner, TIMER_WAKE_OPENING)).toHaveLength(MAX_WAKE_DELIVERY_ATTEMPTS);
         expect(prompted(runner, `Timer ${timer.id} fired`)).toEqual([]);
         expectHeldAtTheBound(run.id, timer.id, { error: `continue failed: ${WAKE_SESSION_CLOSED_ERROR}`, failed: 1 });
         expect(store.getRun(run.id)?.steps.at(-1)).toMatchObject({ status: STEP_STATUS.failed, error: WAKE_SESSION_CLOSED_ERROR });

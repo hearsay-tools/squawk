@@ -164,7 +164,7 @@ it('the receipt setup contract propagates recordProcess failure before marking p
     semaphore: new WorkspaceSemaphore({ home: testHome() }), work: new TrackedWork(), disposed: () => false };
   const state = createActiveRun({ cwd: root, autonomous: false, pendingHumanAsk: false });
   const calls: string[] = [];
-  const host = unused<InputReceiptsHost>('receipts', { flushAgentInputs: () => { calls.push('inputs'); } });
+  const host = unused<InputReceiptsHost>('receipts', { openDeliveryScope: () => { calls.push('scope'); }, flushAgentInputs: () => { calls.push('inputs'); } });
   const steps = unused<InputReceiptSteps>('steps', {
     flushDeferred: () => { calls.push('deferred'); },
     recordProcess: (id, pid) => { calls.push('record'); expect([id, pid]).toEqual(['run', ABSENT_PROCESS_PID]); throw Error('record refused'); },
@@ -173,7 +173,8 @@ it('the receipt setup contract propagates recordProcess failure before marking p
   const prepared = vi.fn();
   const result = vi.spyOn(runner.session, 'result', 'get');
   expect(() => sessionResultWithReceipts(context, host, steps, 'run', state, runner.session, prepared)).toThrow('record refused');
-  expect(calls).toEqual(['deferred', 'inputs', 'register', 'record']);
+  // The delivery scope opens before anything can be delivered into the session.
+  expect(calls).toEqual(['scope', 'deferred', 'inputs', 'register', 'record']);
   expect(prepared).not.toHaveBeenCalled();
   expect(result).not.toHaveBeenCalled();
 });

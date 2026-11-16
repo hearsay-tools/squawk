@@ -3,7 +3,8 @@ import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentInput, ConversationMessage } from '@open-mercato/cezar-contract';
-import { WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { WAIT_VIA, makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { wakeRetryClock } from './waits-wake.testkit.ts';
 import { manager, parent, store, timeline, until, useWorkerWaitFixture, worker } from './worker-wait.testkit.ts';
 
 /** One accumulating conversation per root, committed the way the delegation service does. */
@@ -154,6 +155,37 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
     await until(() => !manager.isActive(p.id));
     expect(inputOf(p.id, held.id)?.deliveredAt).toBeUndefined();
     expect(inputOf(p.id, held.id)?.awaitingRead).toBeUndefined();
+  });
+
+  // hearsay-tools/squawk#1289: messages bundled behind an answer were handed to the transport, so a
+  // clean close that requeues them unread is a failed wake delivery.
+  it('counts one failed wake delivery when the answer turn closes cleanly with its bundled messages unread', async () => {
+    // The harness never reads the answer line, so the session closes with its bundle unread.
+    vi.stubEnv('CEZ_MOCK_DROP_LINES', 'answer never read');
+    const sessionOf = captureSessions();
+    const retry = wakeRetryClock();
+    const p = await parent('mock:cezar-ask');
+    await until(() => store.readEvents(p.id).some(event => event.type === 'ask.requested'));
+    await until(() => store.getRun(p.id)?.status === 'waiting');
+    const w = await worker(p.id);
+    const held = conversation(p.id)(w.id, p.id, 'progress', 'finding bundled behind the answer');
+    const write = vi.spyOn(sessionOf(p.id), 'sendMessage');
+    expect(manager.sendMessage(p.id, [{ type: 'text', text: 'answer never read' }])).toBe(true);
+    expect(JSON.stringify(write.mock.calls[0]![0])).toContain('finding bundled behind the answer');
+    expect(inputOf(p.id, held.id)?.deliveredAt).toBeDefined();
+    // The answer registers a wait of the agent's own, which keeps what the close leaves owed.
+    store.commitWait(p.id, makeTimerWait());
+    // Without a charge the requeued message reopens the run at once as a continuation.
+    let charged = 0;
+    const watch = () => { charged = Math.max(charged, store.getRun(p.id)?.waitDeliveryFailures ?? 0); };
+    store.on('run', watch);
+    try {
+      sessionOf(p.id).end();
+      await until(() => charged > 0 || !!store.getRun(p.id)?.steps.some(step => step.id.startsWith('continue-')), () => timeline(p.id));
+    } finally { store.off('run', watch); }
+    expect(charged).toBe(1);
+    expect(inputOf(p.id, held.id)?.deliveredAt).toBeUndefined();
+    expect(retry.delays).toHaveLength(1);
   });
 
   it('returns a resumed opening input to the queue when its opening turn fails (#505 review)', async () => {

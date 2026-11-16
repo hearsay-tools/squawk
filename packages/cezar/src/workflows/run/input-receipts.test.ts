@@ -40,7 +40,7 @@ function opening() {
   const state = createActiveRun({ cwd: root, pendingHumanAsk: false, autonomous: false });
   state.inputState.selectOpeningInput(message.id);
   const host = { reconcileWorkerWaits: vi.fn(() => projectConversationEvents(store, store.getRun(parent.id)!)),
-    flushAgentInputs: vi.fn(), isCurrentState: vi.fn(() => true) };
+    openDeliveryScope: vi.fn(), flushAgentInputs: vi.fn(), isCurrentState: vi.fn(() => true) };
   const context = { createRunner: noRunners, home: testHome(), store, repoRoot: root, dataDir: root, semaphore: new WorkspaceSemaphore({ home: testHome() }), work: new TrackedWork(), disposed: () => false };
   const saved = () => readPersistedRuns(root).find(run => run.id === recipient.id)!;
   const deliveries = (id: string) => store.readEvents(id).filter(event => event.type === 'conversation-message' && event.delivery === 'delivered');

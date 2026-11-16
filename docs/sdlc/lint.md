@@ -246,6 +246,17 @@ Its exceptions are the reasoned allow-list in the rule's `ignores`, kept current
 `run-memory-field-rule.test.ts`. It does not follow a map assigned in a constructor or a method,
 a member constructor such as `new globalThis.Map()`, or a map a helper call builds.
 
+### Agent session sends (`agent-session-send-outside-handoff`)
+
+The ast-grep rule checks production `.ts` files in `packages/cezar/src`; it ignores tests,
+testkits and `core/`, where the runners are the transport (hearsay-tools/squawk#1289, ADR 0064).
+It reports a `sendAgentMessage(...)` call on any receiver, and a `sendMessage(...)` call on any
+receiver but the manager and module API (`this`, `manager`, `host`, `this.host` and a receiver
+ending in `inputDelivery`), unless the call sits in the arguments of `handToTransport(...)` in
+`workflows/run/input-delivery.ts`. That function records the session's delivery attempt, which a
+clean close reads before it counts a failed wake delivery. The rule knows no type: it leaves out a
+send through a destructured or renamed method. It has no baseline and no exception.
+
 ### `ChildProcess.killed` reads (`child-killed-read`)
 
 The ast-grep rule checks production `.ts` files in `packages/cezar/src`; it ignores tests and
