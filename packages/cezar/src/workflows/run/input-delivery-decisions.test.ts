@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { WAIT_PHASE, WAIT_VIA, makeHumanWait, makePeerWait, makeProcessWait, makePrWait, makeRunRecord,
   makeSubagentWait, makeTimerWait, makeWorkerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { Wait } from '@open-mercato/cezar-contract/waits';
-import type { AgentSession } from '../../core/agent-runner.ts';
+import { type AgentSession, SessionEndedBeforeAcknowledgement } from '../../core/agent-runner.ts';
 import { acknowledgedExit, cappedTimersBeforeFlush, rejectedAcknowledgement } from './input-delivery.ts';
 import { cleanCloseFailsDelivery } from './wake-admission.ts';
 
@@ -74,25 +74,30 @@ describe('cappedTimersBeforeFlush', () => {
 // closed-session delivery failure; a transport error on an open session still fails the step.
 describe('rejectedAcknowledgement', () => {
   const reads = (overrides: Partial<Parameters<typeof rejectedAcknowledgement>[0]> = {}) =>
-    ({ current: () => true, sessionFault: () => undefined, inputFault: () => undefined, sessionOpen: () => true, ...overrides });
+    ({ current: () => true, sessionFault: () => undefined, inputFault: () => undefined, ...overrides });
+  const aborted = Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
 
-  it('records a rejection after session.end() as closed, and the close counts one failed delivery while the input stays owed', () => {
-    expect(rejectedAcknowledgement(reads({ sessionOpen: () => false }))).toBe('closed');
+  it('records a rejection the session\'s own end() caused as closed, and the close counts one failed delivery while the input stays owed', () => {
+    expect(rejectedAcknowledgement(reads(), new SessionEndedBeforeAcknowledgement())).toBe('closed');
     const owed = new Set(['message']);
     const attempt = { session: {} as AgentSession, inputIds: ['message'], outcome: 'closed' as const };
     expect(cleanCloseFailsDelivery(attempt, ids => !ids.some(id => owed.has(id)), () => owed.size > 0)).toBe(true);
   });
 
-  it('fails the step on a rejection while the session is still open', () => {
-    expect(rejectedAcknowledgement(reads())).toBe('failed');
+  it.each([
+    { name: 'a provider error status', error: new Error('POST /session/s/prompt_async → 500 ') },
+    { name: 'an abort end() did not fire', error: aborted },
+    { name: 'a transport close', error: new Error('codex app-server stdin closed') },
+  ])('fails the step on $name', ({ error }) => {
+    expect(rejectedAcknowledgement(reads(), error)).toBe('failed');
   });
 
   it.each([
     { name: 'a session that is no longer current', overrides: { current: () => false } },
     { name: 'a session fault already recorded', overrides: { sessionFault: () => 'provider error' } },
     { name: 'an input fault already latched', overrides: { inputFault: () => 'agent input delivery failed: earlier' } },
-  ])('takes nothing from a rejection on $name, open or closed', ({ overrides }) => {
-    for (const open of [true, false]) expect(rejectedAcknowledgement(reads({ ...overrides, sessionOpen: () => open }))).toBe('ignored');
+  ])('takes nothing from a rejection on $name', ({ overrides }) => {
+    for (const error of [new SessionEndedBeforeAcknowledgement(), aborted]) expect(rejectedAcknowledgement(reads(overrides), error)).toBe('ignored');
   });
 });
 

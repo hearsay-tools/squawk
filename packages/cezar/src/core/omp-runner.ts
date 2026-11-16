@@ -27,7 +27,7 @@ import type {
   SessionOptions,
   ToolGrant,
 } from './agent-runner.js';
-import { SQUAWK_SIDE_SPEC_SUPPORT } from './agent-runner.ts';
+import { SessionEndedBeforeAcknowledgement, SQUAWK_SIDE_SPEC_SUPPORT } from './agent-runner.ts';
 import { RUNNER_FACTS } from './runner-facts.js';
 import { ompRequestedTools } from './runner-tool-grants.ts';
 import { ownLookup } from './own-lookup.ts';
@@ -438,7 +438,7 @@ export class OmpRunner implements AgentRunner {
       if (!open) return;
       open = false;
       closedByCaller = true;
-      rpcInput.rejectAgentAck();
+      rpcInput.rejectAgentAck(new SessionEndedBeforeAcknowledgement());
       flushOutbox();
       child.stdin.end();
       killWatchdog = armEndWatchdog(() => child, killGraceMs, () => { terminatedBySquawk = true; });
