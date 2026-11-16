@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { WAIT_PHASE, WAIT_VIA, makeHumanWait, makePeerWait, makeProcessWait, makePrWait, makeRunRecord,
   makeSubagentWait, makeTimerWait, makeWorkerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { Wait } from '@open-mercato/cezar-contract/waits';
-import { cappedTimersBeforeFlush } from './input-delivery.ts';
+import type { AgentSession } from '../../core/agent-runner.ts';
+import { cappedTimersBeforeFlush, rejectedAcknowledgement } from './input-delivery.ts';
+import { cleanCloseFailsDelivery } from './wake-admission.ts';
 
 const cap = 40;
 function fixture(spent: number, admitted: boolean, boundary: boolean) {
@@ -65,5 +67,31 @@ describe('cappedTimersBeforeFlush', () => {
   it.each([{ waits: undefined }, { waits: [] }])('returns no charging results without waits: %j', ({ waits }) => {
     const f = fixture(cap, true, true);
     expect(cappedTimersBeforeFlush(makeRunRecord({ waits }), undefined, f.reads, cap)).toEqual([]);
+  });
+});
+
+// hearsay-tools/squawk#3508: a clean close that aborts an acknowledgement in flight is a retryable
+// closed-session delivery failure; a transport error on an open session still fails the step.
+describe('rejectedAcknowledgement', () => {
+  const reads = (overrides: Partial<Parameters<typeof rejectedAcknowledgement>[0]> = {}) =>
+    ({ current: () => true, sessionFault: () => undefined, inputFault: () => undefined, sessionOpen: () => true, ...overrides });
+
+  it('records a rejection after session.end() as closed, and the close counts one failed delivery while the input stays owed', () => {
+    expect(rejectedAcknowledgement(reads({ sessionOpen: () => false }))).toBe('closed');
+    const owed = new Set(['message']);
+    const attempt = { session: {} as AgentSession, inputIds: ['message'], outcome: 'closed' as const };
+    expect(cleanCloseFailsDelivery(attempt, ids => !ids.some(id => owed.has(id)), () => owed.size > 0)).toBe(true);
+  });
+
+  it('fails the step on a rejection while the session is still open', () => {
+    expect(rejectedAcknowledgement(reads())).toBe('failed');
+  });
+
+  it.each([
+    { name: 'a session that is no longer current', overrides: { current: () => false } },
+    { name: 'a session fault already recorded', overrides: { sessionFault: () => 'provider error' } },
+    { name: 'an input fault already latched', overrides: { inputFault: () => 'agent input delivery failed: earlier' } },
+  ])('takes nothing from a rejection on $name, open or closed', ({ overrides }) => {
+    for (const open of [true, false]) expect(rejectedAcknowledgement(reads({ ...overrides, sessionOpen: () => open }))).toBe('ignored');
   });
 });

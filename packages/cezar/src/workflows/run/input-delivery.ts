@@ -75,7 +75,8 @@ export class InputFlight {
 /** Owed input handed to the transport in one session (ADR 0064). `inputIds` holds every input
  *  the session's attempts carried; `outcome` is the latest attempt's. A clean close of that session
  *  counts a failed wake delivery only when an attempt did not reach the agent
- *  (hearsay-tools/squawk#1289). */
+ *  (hearsay-tools/squawk#1289). `closed`: the session closed before the attempt's acknowledgement,
+ *  so its input stays owed (hearsay-tools/squawk#3508). */
 export interface DeliveryAttempt {
   readonly session: AgentSession;
   readonly inputIds: readonly string[];
@@ -86,7 +87,7 @@ export interface DeliveryAttempt {
 let attemptWrites: {
   open(group: InputGroup, attempt: DeliveryAttempt | undefined): void;
   record(group: InputGroup, attempt: DeliveryAttempt): void;
-  acknowledge(group: InputGroup, session: AgentSession, inputIds: readonly string[]): void;
+  settle(group: InputGroup, session: AgentSession, inputIds: readonly string[], outcome: NonNullable<DeliveryAttempt['outcome']>): void;
 };
 
 /** Input transport, receipt and liveness state. All mutation commands live in this module. */
@@ -208,9 +209,10 @@ export class InputGroup {
         const earlier = group.#deliveryAttempt?.session === attempt.session ? group.#deliveryAttempt.inputIds : [];
         group.#deliveryAttempt = Object.freeze({ ...attempt, inputIds: Object.freeze([...new Set([...earlier, ...attempt.inputIds])]) });
       },
-      acknowledge(group, session, inputIds) {
+      // An attempt that carried no input has no outcome to record.
+      settle(group, session, inputIds, outcome) {
         const attempt = group.#deliveryAttempt;
-        if (attempt?.session === session && inputIds.every(id => attempt.inputIds.includes(id))) group.#deliveryAttempt = Object.freeze({ ...attempt, outcome: 'acknowledged' });
+        if (inputIds.length && attempt?.session === session && inputIds.every(id => attempt.inputIds.includes(id))) group.#deliveryAttempt = Object.freeze({ ...attempt, outcome });
       },
     };
   }
@@ -605,8 +607,9 @@ export class InputDelivery {
     const current = (): boolean => !this.context.disposed() && this.host.active.get(runId) === state && state.liveSession.session === session &&
       state.inputState.agentInputFlight === flight && !state.liveSession.cancelled && !state.liveSession.finishRequested && !this.host.workerExecutionStopped(runId) &&
       !!this.context.store.getRun(runId) && !this.host.executionBlockedByRootFinish(this.context.store.getRun(runId)!);
+    const faults = { current, sessionFault: () => state.liveSession.agentSessionError, inputFault: () => state.inputState.agentInputError };
     const fail = (error: unknown, checkpoint: boolean): void => {
-      if (!latchInputFault({ current, sessionFault: () => state.liveSession.agentSessionError, inputFault: () => state.inputState.agentInputError })) return;
+      if (!latchInputFault(faults)) return;
       this.latchAgentInputError(runId, state, session, `${checkpoint ? 'agent input delivery checkpoint failed' : 'agent input delivery failed'}: ${error instanceof Error ? error.message : String(error)}`);
     };
     let acknowledgement: false | Promise<void>;
@@ -627,11 +630,17 @@ export class InputDelivery {
           // One commit (hearsay-tools/cezarion#1805): the messages, then each wait's delivery (a message a wait carries keeps its read receipt), the charge, the early reads, the cleared failure count and the resume (hearsay-tools/cezarion#1235).
           this.context.store.commitOutcome(runId, withFailuresCleared(this.context.store, runId, acknowledgedBatch({ accepted, resolvedIds, early, spent, observable, at }), accepted, resolvedIds.length > 0),
             resumes ? { exit: 'resume', resumeStepId: resolvedIds.length ? state.liveSession.currentStepId : undefined } : {});
-          attemptWrites.acknowledge(state.inputState, session, inputIds);
+          attemptWrites.settle(state.inputState, session, inputIds, 'acknowledged');
           this.applyAcknowledgedInput(runId, state, flight, batch, refusal);
         } else this.host.acknowledgeNudge(runId, state, session);
       } catch (error) { fail(error, true); }
-    }, error => { refund(); fail(error, false); }).then(() => {
+    }, error => {
+      refund();
+      // The close path counts a closed attempt as a failed delivery; its input stays owed.
+      const outcome = rejectedAcknowledgement({ ...faults, sessionOpen: () => session.open });
+      if (outcome !== 'ignored') attemptWrites.settle(state.inputState, session, inputIds, outcome);
+      if (outcome === 'failed') fail(error, false);
+    }).then(() => {
       if (state.inputState.agentInputFlight !== flight) return;
       const authorized = current();
       state.inputState.clearFlight();
@@ -862,6 +871,18 @@ export class InputDelivery {
   }
 }
 
-export function latchInputFault(reads: { current(): boolean; sessionFault(): string | undefined; inputFault(): string | undefined }): boolean {
+type InputFaultReads = { current(): boolean; sessionFault(): string | undefined; inputFault(): string | undefined };
+
+export function latchInputFault(reads: InputFaultReads): boolean {
   return !(!reads.current() || reads.sessionFault() || reads.inputFault());
+}
+
+/** What a rejected acknowledgement means (hearsay-tools/squawk#3508). On a session that is no
+ *  longer open, a clean close aborted it: a retryable closed-session delivery failure, which leaves
+ *  the input owed and charges the close (`closed`). On an open session it is a transport failure
+ *  that fails the step (`failed`). A fault already recorded, or a session that is no longer the
+ *  run's, takes nothing from it (`ignored`). */
+export function rejectedAcknowledgement(reads: InputFaultReads & { sessionOpen(): boolean }): 'closed' | 'failed' | 'ignored' {
+  if (!latchInputFault(reads)) return 'ignored';
+  return reads.sessionOpen() ? 'failed' : 'closed';
 }
