@@ -1,4 +1,4 @@
-import { openingContent, skillOf, validSkillMessage } from './skill-trigger.ts';
+import { openingContent, claudeSkillContent } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { summarizeRunnerStderr } from './runner-stderr.ts';
 import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -176,10 +176,8 @@ export class ClaudeCliRunner implements AgentRunner {
     // hearsay-tools/cezarion#1512: after a result with no line queued, Claude may start a parent turn itself.
     let nativeTurn: 'none' | 'possible' | 'running' = 'none';
     const submissions = new InputSubmissions();
-    // Only live, observed success grants replay eligibility (hearsay-tools/cezarion#1351).
     let reportedModel: string | undefined;
-    let reportedSession: string | undefined;
-    let sessionReported = false;
+    let reportedSession: string | undefined, sessionReported = false;
     let successfulIdentity: string | undefined;
     let attemptDidWork = false;
     const sentLines = new Map<string, string>();
@@ -210,11 +208,11 @@ export class ClaudeCliRunner implements AgentRunner {
       }, AUTO_END_DELAY_MS);
       autoEndTimer.unref?.();
     };
+    const skillInputAllowed = () => this.facts.skillTriggerMidTurn || (unsettled.size === 0 && nativeTurn !== 'running');
     const sendMessage = (content: ContentBlock[], acknowledge?: (error?: Error | null) => void, inputIds: readonly string[] = [], humanFollowUp = false, retryWrite = false): boolean => {
-      if (!stdinOpen || !validSkillMessage(content)) return false;
-      const skill = skillOf(content);
-      if (skill && !this.facts.skillTriggerMidTurn && (unsettled.size > 0 || nativeTurn === 'running')) return false;
-      const wireContent = skill ? [...content.slice(1), { type: 'text' as const, text: `/${skill.id}${skill.args ? ` ${skill.args}` : ''}` }] : content;
+      if (!stdinOpen) return false;
+      const wireContent = claudeSkillContent(content, skillInputAllowed());
+      if (wireContent === false) return false;
       if (refusalRetry && !retryWrite) {
         if (!humanFollowUp) return false;
         const id = randomUUID();
@@ -314,8 +312,6 @@ export class ClaudeCliRunner implements AgentRunner {
       killTimer.unref?.();
     };
 
-    // Seed the first user message — the same path every follow-up takes.
-    // Pasted task screenshots (spec.images) ride along as leading blocks.
     sendMessage(openingContent(spec));
 
     const toolCalls: AgentToolCallRecord[] = [];

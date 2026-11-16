@@ -52,12 +52,14 @@ try {
   const native = readFileSync(capture,'utf8');
   // Keep a small replayable excerpt: first trigger acknowledgement/user message and terminal reply.
   const frames = native.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
-  const expansion = frames.filter(frame => {
-    if (runner === 'claude') return frame.type === 'user' && JSON.stringify(frame).includes('<command-name>/probe-project');
-    if (runner === 'codex') return frame.method === 'item/completed' && frame.params?.item?.type === 'userMessage';
-    if (runner === 'opencode') return frame.type === 'message.updated' && frame.properties?.info?.role === 'user' || frame.type === 'message.part.updated' && frame.properties?.part?.text?.includes('Native trigger fixture') || frame.properties?.part?.text?.includes('Reply with exactly TRIGGER-');
-    return frame.type === 'message_start' && (frame.message?.customType === 'skill-prompt' || (typeof frame.message?.content === 'string' ? frame.message.content : frame.message?.content?.map(p => p.text ?? '').join('')).includes('<skill name="probe-project"'));
-  });
+  const selectors = {
+    claude: frame => frame.type === 'user' && JSON.stringify(frame).includes('<command-name>/probe-project'),
+    codex: frame => frame.method === 'item/completed' && frame.params?.item?.type === 'userMessage',
+    opencode: opencodeExpansion,
+    pi: piExpansion,
+    omp: frame => frame.type === 'message_start' && frame.message?.customType === 'skill-prompt',
+  };
+  const expansion = frames.filter(selectors[runner]);
   const normalized = JSON.parse(JSON.stringify(expansion).replaceAll(cwd,'/probe/repo').replaceAll(token,'TRIGGER-FIXTURE'));
   const output = fileURLToPath(new URL(`../../../packages/cezar/src/core/__fixtures__/${runner}/skill-trigger.json`,import.meta.url));
   if (normalized.length) writeFileSync(output,JSON.stringify(normalized,null,2)+'\n');
@@ -66,3 +68,16 @@ try {
   writeFileSync(fileURLToPath(new URL(`./slice2-${runner}-${mid ? 'mid' : 'opening'}-result.json`,import.meta.url)),JSON.stringify(summary,null,2)+'\n');
   if (!summary.tokenReturned || summary.tools || !expansion.length) process.exitCode=1;
 } finally { watcher.close(); session?.end(); rmSync(cwd,{recursive:true,force:true}); }
+
+function opencodeExpansion(frame) {
+  if (frame.type === 'message.updated') return frame.properties?.info?.role === 'user';
+  if (frame.type !== 'message.part.updated') return false;
+  const text = frame.properties?.part?.text ?? '';
+  return text.includes('Native trigger fixture') || text.includes('Reply with exactly TRIGGER-');
+}
+function piExpansion(frame) {
+  if (frame.type !== 'message_start') return false;
+  const content = frame.message?.content;
+  const text = typeof content === 'string' ? content : content?.map(part => part.text ?? '').join('');
+  return text?.includes('<skill name="probe-project"');
+}

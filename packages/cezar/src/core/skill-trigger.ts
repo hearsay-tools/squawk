@@ -23,3 +23,12 @@ export function slashSkillPrompt(skill: SkillTrigger, context: string): string {
   const args = skill.args.split('\n')[0]?.trim() ? skill.args : `Continue.${skill.args ? ` ${skill.args}` : ''}`;
   return `/skill:${skill.id} ${args}${context ? `\n\n${context}` : ''}`;
 }
+
+/** Claude expands only the last text block, with context before it. */
+export function claudeSkillContent(content: ContentBlock[], allowed: boolean): ContentBlock[] | false {
+  if (!validSkillMessage(content)) return false;
+  const skill = skillOf(content);
+  if (!skill) return content;
+  if (!allowed) return false;
+  return [...content.slice(1), { type: 'text', text: `/${skill.id}${skill.args ? ` ${skill.args}` : ''}` }];
+}

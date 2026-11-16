@@ -22,3 +22,12 @@ export function skillFrames(runner, trigger, context = '') {
     .replaceAll('probe-project', trigger.id) : value;
   return JSON.parse(JSON.stringify(frames), (_key, value) => replace(value));
 }
+
+export function claudeTrigger(blocks) {
+  const last = blocks.at(-1);
+  return last?.type === 'text' ? slashTrigger(last.text, '/') : undefined;
+}
+export function skillUserMessage(runner, text) {
+  const trigger = slashTrigger(text);
+  return trigger && knownSkill(runner, trigger) ? skillFrames(runner, trigger)[0].message : { role: 'user', content: [{ type: 'text', text }] };
+}

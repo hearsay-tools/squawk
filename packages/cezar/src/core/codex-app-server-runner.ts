@@ -1,10 +1,11 @@
+import { codexTurnStartExtras } from './codex-turn-config.ts';
+export { reasoningSummary, codexTurnStartExtras } from './codex-turn-config.ts';
 import { openingContent, skillOf, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { uiAskQuestions } from './ask.ts';
 import { summarizeRunnerStderr } from './runner-stderr.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { parseEffort } from '@open-mercato/cezar-contract/effort';
 import {
   type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentSession, type AgentToolCallRecord,
   type ContentBlock, type SessionOptions, type AgentRunSpecSupport,
@@ -762,14 +763,14 @@ class CodexSession implements AgentSession {
     if (input.some(item => item.type === 'skill') && (this.activeTurnId || this.pendingTurnStarts)) throw new Error('codex: skill turn/start refused while busy');
     this.pendingTurnStarts += 1;
     try {
-    const res = await this.rpc.request('turn/start', {
-      threadId: this.threadId,
-      input,
-      ...ids,
-      ...codexTurnStartExtras(this.spec),
-    }, humanId && !this.activeTurnId ? onStartId : undefined);
-    if (clientUserMessageId) this.recordStartedSubmission(clientUserMessageId, res, completionsBefore);
-    if (this.turnBoundaryVersion === boundaryVersion) this.activeTurnId = turnIdOf(res) ?? this.activeTurnId;
+      const res = await this.rpc.request('turn/start', {
+        threadId: this.threadId,
+        input,
+        ...ids,
+        ...codexTurnStartExtras(this.spec),
+      }, humanId && !this.activeTurnId ? onStartId : undefined);
+      if (clientUserMessageId) this.recordStartedSubmission(clientUserMessageId, res, completionsBefore);
+      if (this.turnBoundaryVersion === boundaryVersion) this.activeTurnId = turnIdOf(res) ?? this.activeTurnId;
     } finally { this.pendingTurnStarts -= 1; }
   }
 
@@ -1203,38 +1204,6 @@ const NON_TOOL_ITEMS = new Set(['agentMessage', 'userMessage', 'reasoning', 'pla
 /** Turn-lifecycle notification methods — the only frames whose child-thread copies must be
  *  dropped so a sub-agent turn can't be mistaken for the parent's (#600). */
 const TURN_LIFECYCLE_METHODS = new Set(['turn/started', 'turn/completed', 'turn/failed']);
-
-const REASONING_SUMMARIES = new Set(['auto', 'concise', 'detailed', 'none']);
-
-/**
- * The reasoning-summary override sent on `turn/start` (TurnStartParams.summary).
- * Defaults to `auto` so reasoning is visible out of the box — without it the
- * app-server runs with its own default (no summary) and the reasoning thread
- * stays empty even when the model reasons. `CEZ_CODEX_REASONING` overrides the
- * default (`auto`/`concise`/`detailed`, or `none` to opt out); an unrecognized
- * value falls back to `auto`.
- */
-export function reasoningSummary(env: NodeJS.ProcessEnv = process.env): string {
-  const raw = productEnv('CODEX_REASONING', env)?.trim().toLowerCase();
-  if (!raw) return 'auto';
-  return REASONING_SUMMARIES.has(raw) ? raw : 'auto';
-}
-
-/**
- * Fields sent on `turn/start` besides thread/input. `summary` is the existing
- * `CEZ_CODEX_REASONING` knob (out of scope for #45). `effort` is the per-run
- * pin — omitted when unset so the app-server keeps its default.
- */
-export function codexTurnStartExtras(
-  spec: Pick<AgentRunSpec, 'effort'>,
-  env: NodeJS.ProcessEnv = process.env,
-): { summary: string; effort?: string } {
-  const effort = parseEffort(spec.effort);
-  return {
-    summary: reasoningSummary(env),
-    ...(effort ? { effort } : {}),
-  };
-}
 
 function textOf(content: ContentBlock[]): string {
   return content

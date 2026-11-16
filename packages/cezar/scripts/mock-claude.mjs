@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { slashTrigger, skillFrames, knownSkill, SKILL_TOKEN } from './mock-skill-trigger.mjs';
+import { claudeTrigger, skillFrames, knownSkill, SKILL_TOKEN } from './mock-skill-trigger.mjs';
 import { productEnv } from './product-env.mjs';
 import { CLAUDE_FAILURES } from './mock-provider-failures.mjs';
 import { loadControls } from './mock-controls.mjs';
@@ -801,8 +801,7 @@ rl.on('line', (line) => {
     const blocks = msg?.message?.content ?? [];
     userText = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n') || '(no text)';
     imageCount = blocks.filter((b) => b.type === 'image').length;
-    const last = blocks.at(-1);
-    trigger = last?.type === 'text' ? slashTrigger(last.text, '/') : undefined;
+    trigger = claudeTrigger(blocks);
     skillBlocks = trigger ? blocks : undefined;
   } catch {
     // keep placeholders

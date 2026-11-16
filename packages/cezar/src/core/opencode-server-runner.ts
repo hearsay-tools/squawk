@@ -1,3 +1,4 @@
+import { opencodeHttp } from './opencode-http.ts';
 import { openingContent, skillOf, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { uiAskQuestions } from './ask.ts';
@@ -22,7 +23,8 @@ import { signalSession, spawnSessionLeader } from './session-process.ts';
 import { buildChildEnv } from './agent-env.ts';
 import { opencodeTaskScopeEnv } from './opencode-task-scope.ts';
 import { ciOpenCodeEnv } from '../ci-wait/injection.ts';
-import { parseAskRequest, type AskQuestion } from './ask.ts';
+import type { AskQuestion } from './ask.ts';
+import { toSquawkQuestions, questionAnswers } from './opencode-questions.ts';
 import { boundOutputDrainAfterExit, AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS } from './runner-runtime.ts';
 import { formatModelIdentity, parseModelIdentity } from './model-identity.ts';
 import { V1TextCoalescer } from './v1-text-coalescer.ts';
@@ -1596,32 +1598,8 @@ class OpencodeSession implements AgentSession {
 
   // ---- http ---------------------------------------------------------------
 
-  private async http(
-    method: string,
-    path: string,
-    body: unknown,
-    signal?: AbortSignal,
-  ): Promise<Record<string, unknown>> {
-    if (!this.baseUrl) throw new Error('opencode server not ready');
-    // Plain fetch is fine here: every call is a short round-trip now that
-    // prompts go through `prompt_async` — nothing long-polls anymore.
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method,
-      ...(signal !== undefined ? { signal } : {}),
-      headers: body !== undefined ? { 'content-type': 'application/json' } : {},
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '');
-      throw new Error(`${method} ${path} → ${res.status} ${detail.slice(0, 200)}`);
-    }
-    const text = await res.text();
-    if (!text) return {};
-    try {
-      return JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      return {};
-    }
+  private http(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    return opencodeHttp(this.baseUrl, method, path, body, signal);
   }
 
   private emit(event: AgentEvent): void {
@@ -1656,62 +1634,6 @@ function textOf(content: ContentBlock[]): string {
     .map((b) => b.text)
     .join('\n')
     .trim();
-}
-
-function toSquawkQuestions(value: unknown): AskQuestion[] | null {
-  if (!isRecord(value) || !Array.isArray(value.questions)) return null;
-  if (value.questions.length < 1 || value.questions.length > 4) return null;
-  const questions: AskQuestion[] = [];
-  for (const rawQuestion of value.questions) {
-    if (!isRecord(rawQuestion)) return null;
-    const header = clippedString(rawQuestion.header, 12);
-    const question = clippedString(rawQuestion.question, 400);
-    if (!header || !question || !Array.isArray(rawQuestion.options)) return null;
-    const options: AskQuestion['options'] = [];
-    for (const rawOption of rawQuestion.options) {
-      if (options.length === 4) break;
-      if (!isRecord(rawOption)) continue;
-      const label = clippedString(rawOption.label, 60);
-      if (!label) continue;
-      const description = clippedString(rawOption.description, 280);
-      options.push({ label, ...(description ? { description } : {}) });
-    }
-    if (options.length < 2) return null;
-    questions.push({
-      header,
-      question,
-      options,
-      ...(rawQuestion.multiple === true ? { multiSelect: true } : {}),
-    });
-  }
-  return parseAskRequest({ questions })?.questions ?? null;
-}
-
-function questionAnswers(questions: AskQuestion[], text: string): string[][] {
-  const answers = questions.map(() => [] as string[]);
-  const matched = new Set<number>();
-  for (const line of text.split('\n')) {
-    const trimmed = line.trim();
-    const index = questions.findIndex(
-      (question, questionIndex) =>
-        !matched.has(questionIndex) && trimmed.startsWith(`${question.header}:`),
-    );
-    if (index < 0) continue;
-    matched.add(index);
-    answers[index] = trimmed
-      .slice(questions[index]!.header.length + 1)
-      .split(',')
-      .map((answer) => answer.trim())
-      .filter(Boolean);
-  }
-  if (matched.size === 0 && answers[0]) answers[0] = [text.trim()];
-  return answers;
-}
-
-function clippedString(value: unknown, max: number): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed ? trimmed.slice(0, max) : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { slashTrigger, skillFrames, knownSkill, SKILL_TOKEN } from './mock-skill-trigger.mjs';
+import { slashTrigger, skillUserMessage, knownSkill, SKILL_TOKEN } from './mock-skill-trigger.mjs';
 import { PI_FAILURES } from './mock-provider-failures.mjs';
 import { loadControls } from './mock-controls.mjs';
 import { scenarioFor, play } from './mock-scenario.mjs';
@@ -49,8 +49,7 @@ const sendNow = (value) => {
     activeTurn = { steers: [], late: false };
     write(value);
     if (currentPrompt !== undefined && process.env.CEZ_MOCK_PI_NO_USER_START !== '1') {
-      const trigger = slashTrigger(currentPrompt);
-      const message = trigger && knownSkill('pi', trigger) ? skillFrames('pi', trigger)[0].message : { role: 'user', content: [{ type: 'text', text: currentPrompt }] };
+      const message = skillUserMessage('pi', currentPrompt);
       currentPrompt = undefined;
       write({ type: 'message_start', message });
       write({ type: 'message_end', message });
@@ -77,8 +76,7 @@ function replaySteer(text, failure) {
     write({ type: 'agent_start' });
     write({ type: 'turn_start' });
   }
-  const trigger = slashTrigger(text);
-  const message = trigger && knownSkill('pi', trigger) ? skillFrames('pi', trigger)[0].message : { role: 'user', content: [{ type: 'text', text }] };
+  const message = skillUserMessage('pi', text);
   write({ type: 'message_start', message });
   write({ type: 'message_end', message });
   if (failure) write(failure);
