@@ -37,8 +37,9 @@ rmdir "$proof_dir"
 Create destination directories for new test paths as needed. Keep the package's
 setup and environment; a scratch worktree needs its own dependency installation,
 not a symlink to another checkout's workspace packages. Do not start Squeal in
-this disposable tree. Run the fixed test in the task worktree too (through Squeal
-when it is validating) so the proof does not replace normal verification.
+this disposable tree. This temporary worktree is the only place where a test runner
+runs by hand (AGENTS.md § Validation). Read the fixed test's verdict in the task worktree
+through Squeal too, so the proof does not replace normal verification.
 
 ## Mutant report instead of the scratch worktree
 
