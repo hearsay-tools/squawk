@@ -272,8 +272,8 @@ export class OmpRunner implements AgentRunner {
       const spawned = spawnSessionLeader(this.bin, args, {
         cwd: spec.cwd,
         timings: spec.timings,
-        scope: spec.scope,
         env: buildChildEnv({ backend: this.backend, extraEnv: spec.env }),
+        scope: spec.scope,
       });
       boundOutputDrainAfterExit(spawned);
       // Observe asynchronous write errors before any startup command can reach stdin.
