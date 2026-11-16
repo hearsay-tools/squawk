@@ -147,10 +147,11 @@ with no result (the first ten and a count when more) and passes when none failed
 Record the named files and their Squeal state in the PR's Verification. A missing verdict
 is covered by CI's shards, which give the full verdict; a failing verdict is never
 covered, and the PR does not merge until the shards pass. To get one test file's verdict
-now, run `squeal run tests <file> --wait 60000` (`run-loop` for a parity or worker file).
-With no daemon, run `npm test -- <file> -t '<name>'` and confirm it reports passed tests,
-not only skipped ones. This also covers a file Squeal re-runs only because the change edited a document it
-reads, for example `AGENT_PROTOCOL.md` prose, which re-runs
+now, run `squeal run tests <file> --wait 60000` (`run-loop` for a parity or worker file);
+for one test in it, `squeal status --wait 60000 <file> --check '<name>'`. With no
+daemon, run `npm test -- <file> -t '<name>'` and confirm it reports passed tests, not
+only skipped ones. This also covers a file Squeal re-runs only because the change edited
+a document it reads, for example `AGENT_PROTOCOL.md` prose, which re-runs
 `packages/cezar/src/core/harness-parity.test.ts`.
 
 ### Clone comparison
