@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import type { RunEvent } from '@open-mercato/cezar-api-client'
 import type { ToolStatus, UiToolItem } from '@open-mercato/cezar-api-client'
 
+import forkedCommand from '../../../../cezar/src/core/__fixtures__/claude/forked-command.expected.json'
 import subagentTask from '../../../../cezar/src/core/__fixtures__/claude/subagent-task.expected.json'
 import thinkingEditWriteTodo from '../../../../cezar/src/core/__fixtures__/claude/thinking-edit-write-todo.expected.json'
 import {
@@ -160,6 +161,17 @@ describe('groupThreadItems — sub-agent nesting (golden subagent-task fixture)'
     expect(topIds).not.toContain('toolu_sub_01')
     // The parent's own final message stays top-level.
     expect(blocks.at(-1)).toMatchObject({ kind: 'entry', id: 'item_2' })
+  })
+
+  it('a typed forked command nests its work under one card titled with the command (hearsay-tools/squawk#1315)', () => {
+    const { turns } = reduceThread(asRunEvents(forkedCommand))
+    expect(turns).toHaveLength(1)
+    const blocks = groupThreadItems(turns[0]!.items)
+    const fork = blocks.find((b) => b.kind === 'tool-card' && b.item.toolKind === 'task')
+    if (fork?.kind !== 'tool-card') throw new Error('expected the fork card')
+    expect(fork.item.title).toBe('/fxfork')
+    expect(fork.children.map((c) => c.id)).toEqual(['toolu_fork_cmd_bash_01'])
+    expect(blocks.map((b) => b.id)).not.toContain('toolu_fork_cmd_bash_01')
   })
 
   it('an orphaned parentItemId (parent not in this turn) renders at top level, never dropped', () => {

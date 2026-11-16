@@ -81,6 +81,11 @@ const GOLDEN_FIXTURES = [
   // argv (CLI 2.1.303, hearsay-tools/cezarion#1284): the forked subagent's items carry
   // the Skill call as their parent, as a Task call's do.
   'forked-skill',
+  // The same skill typed as `/fxfork` (CLI 2.1.321, hearsay-tools/squawk#1315), sanitized from a
+  // live stream-json capture: task frames before `init` with no tool_use_id, children under the
+  // synthetic parent `forked-command-fxfork`. One root task item names the fork and completes
+  // with the turn.
+  'forked-command',
   'failed-and-denied',
   // Wire shapes transcribed from a real `claude --output-format stream-json`
   // capture (CLI 2.1.211) — the task tools' result text is the mapper's only
