@@ -11,7 +11,7 @@ import { lineAt, repoRoot, type SourceRule } from './source-rule.ts';
  * needs one new row and no new branch.
  *
  * Static scope: non-test TS and TSX source in `packages/cezar/src/` outside `core/`, and in
- * `packages/web/src/`. The rule reports
+ * `packages/web/src/`. `packages/contract/` is not scanned: it declares `RUNNER_COCKPIT_FACTS`. The rule reports
  * - an equality comparison (`===`, `!==`, `==`, `!=`) with a runner-id string literal on one side;
  * - a `switch` with one or more runner-id `case` labels, as one site that names its labels.
  * The ids come from `RUNNER_IDS` in `core/agent-runner.ts`, plus the legacy ids. A literal may

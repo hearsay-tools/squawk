@@ -16,6 +16,7 @@ import { observationClock } from './observation-clock.testkit.ts';
 import { IDLE_TIMEOUT_MS } from '../workflows/run/constants.ts';
 import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { createRunner } from './runner-factory.ts';
+import { runnersWhere } from './runner-facts.ts';
 import {
   HARNESS_ADAPTERS,
   PINNED_SESSION_ID,
@@ -39,8 +40,8 @@ const SKILL_BODY = 'PLAYBOOK-BODY-790-SENTINEL';
 const EXTRA_PROMPT = 'EXTRA-PROMPT-790';
 const MISSING_SKILL_LIFECYCLE = `skill /${SKILL_NAME} is not in the skill registry — its instructions were not re-sent to the continued session`;
 
-const RESENT = new Set<RunnerId>(['claude', 'pi', 'omp']);
-const IN_THREAD = new Set<RunnerId>(['codex', 'cursor', 'opencode']);
+const RESENT = new Set(runnersWhere(facts => facts.systemPromptOnResume === 'resent'));
+const IN_THREAD = new Set(runnersWhere(facts => facts.systemPromptOnResume === 'in-thread'));
 const LOST_OPENCODE_SESSION =
   'OpenCode session ses_mock_1 no longer exists; the continuation runs in a fresh session without the earlier conversation.';
 

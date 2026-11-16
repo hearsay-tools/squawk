@@ -59,6 +59,12 @@ describe('screenFiles — the legacy 4×5MB caps, mirrored from the server zod',
     expect(intake.rejected).toEqual([])
   })
 
+  it('refuses an extension that names an Object.prototype member when the browser reports no type (hearsay-tools/squawk#2890)', () => {
+    for (const ext of ['toString', 'constructor', '__proto__']) {
+      expect(attachmentMediaType(fakeFile({ type: '', name: `brief.${ext}` }))).toBeNull()
+    }
+  })
+
   it('refuses an unsupported file out loud, naming it', () => {
     const intake = screenFiles([fakeFile({ type: 'application/zip', name: 'payload.zip' })], 0)
     expect(intake.accepted).toEqual([])

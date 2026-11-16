@@ -5,15 +5,13 @@ import { join } from 'node:path';
 import type { Context } from 'hono';
 import { imageMimeType, isOsOpenableImage } from '@open-mercato/cezar-contract/image-path';
 import type { RunnerId } from '../core/agent-runner.ts';
-import { resolveCursorExecutable } from '../core/cursor-model-catalog.ts';
-import { resolveOmpExecutable } from '../core/omp-model-catalog.ts';
-import { quoteExecutable } from '../core/shell-env.ts';
+import { runnerDisplayName } from '@open-mercato/cezar-contract/runner-facts';
+import { terminalExecutable, type resumeCommand } from '../core/runner-cli.ts';
 import type { RunRecord } from '../runs/store.ts';
 import { AgentAccountUnavailableError, resolveProfileEnvForRoot } from '../workspace/agent-profiles.ts';
 import { readWorktreePath } from './git-changes.ts';
 import type { openFileInDefaultApp, openInApp } from './open-in-app.ts';
 import type { openInTerminal } from './open-in-terminal.ts';
-import type { resumeCommand } from './server.ts';
 
 interface CliHandoffDeps {
   home: Home;
@@ -120,23 +118,16 @@ export async function openRunCli(
 export async function freshCliHandoff(cliRunner: RunnerId, repoRoot: string, home: Home): Promise<
   { command: string; env: Record<string, string> } | { error: string }
 > {
-  // Runners with a CEZ_*_BIN override launch the configured binary, not the PATH name.
-  const command = freshCliCommand(cliRunner);
+  // Only a configured executable can fail to quote; a PATH name always can.
+  const command = terminalExecutable(cliRunner);
   if (command === null) {
-    return { error: `the configured ${cliRunner === 'omp' ? 'OMP' : 'Cursor'} executable cannot be used in a terminal command` };
+    return { error: `the configured ${runnerDisplayName(cliRunner)} executable cannot be used in a terminal command` };
   }
   const account = await resolveProfileEnvForRoot(repoRoot, cliRunner, undefined, process.env, home).then(({ env }) => ({ env }), (err: unknown) => {
     if (err instanceof AgentAccountUnavailableError) return { error: err.message };
     throw err;
   });
   return { command, ...account };
-}
-
-/** Resolve only the fresh-launch executable; resume commands keep their own session flags. */
-function freshCliCommand(cliRunner: RunnerId): string | null {
-  return cliRunner === 'cursor'
-    ? quoteExecutable(resolveCursorExecutable(), process.platform)
-    : cliRunner === 'omp' ? quoteExecutable(resolveOmpExecutable(), process.platform) : cliRunner;
 }
 
 /** Editors, the file manager and a plain terminal all open the same selected directory. */

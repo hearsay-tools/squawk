@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
-import { isSafeSessionId, resumeCommand } from './server.ts';
+import { RUNNER_IDS } from './agent-runner.ts';
+import { isSafeSessionId, resumeCommand, RUNNER_CLI, terminalExecutable } from './runner-cli.ts';
 import { commands as goldenCommands, sessionId, unsafeSessionIds } from '../../test/fixtures/resume-commands.ts';
 
 describe('resume commands — shared golden parity across RUNNER_IDS', () => {
@@ -13,11 +13,11 @@ describe('resume commands — shared golden parity across RUNNER_IDS', () => {
     expect(Object.keys(commands).sort()).toEqual([...RUNNER_IDS].sort());
   });
 
-  it.each([...RUNNER_IDS, undefined])('matches the golden take-over command for %s', (runner) => {
-    expect(resumeCommand(runner, sessionId)).toBe(commands[runner ?? 'claude']);
+  it.each(RUNNER_IDS)('matches the golden take-over command for %s', (runner) => {
+    expect(resumeCommand(runner, sessionId)).toBe(commands[runner]);
   });
 
-  it.each([...RUNNER_IDS, undefined])('rejects unsafe session ids for %s', (runner) => {
+  it.each(RUNNER_IDS)('rejects unsafe session ids for %s', (runner) => {
     for (const id of unsafeSessionIds) {
       expect(resumeCommand(runner, id)).toBeNull();
     }
@@ -25,7 +25,7 @@ describe('resume commands — shared golden parity across RUNNER_IDS', () => {
 });
 
 /**
- * Terminal take-over (#431): `resumeCommand`'s session id is the only variable
+ * Terminal take-over (open-mercato/cezar#431): `resumeCommand`'s session id is the only variable
  * spliced into the command string that openInTerminal hands to bash (darwin),
  * a temp bash script (linux) or `cmd /K` (win32). Because cmd.exe has no
  * concept of `'`-quoting, the id is VALIDATED rather than quoted: recognised
@@ -34,7 +34,7 @@ describe('resume commands — shared golden parity across RUNNER_IDS', () => {
 describe('resumeCommand — session id validation', () => {
   it('splices a normal session id verbatim, per backend — no quoting in any shell', () => {
     const id = '9f8e7d6c-1234-4abc-9def-0123456789ab';
-    expect(resumeCommand(undefined, id)).toBe(`claude --resume ${id}`);
+    expect(resumeCommand('claude', id)).toBe(`claude --resume ${id}`);
     expect(resumeCommand('codex', id)).toBe(`codex resume ${id}`);
     expect(resumeCommand('opencode', id)).toBe(`opencode --session ${id}`);
     expect(resumeCommand('cursor', id)).toBe(`agent --resume ${id}`);
@@ -42,8 +42,8 @@ describe('resumeCommand — session id validation', () => {
     expect(resumeCommand('omp', id)).toBe(`omp --resume ${id}`);
   });
 
-  // Every runner id must map to a command — an id that fell through to the `claude` default
-  // would hand the user a `claude --resume` for a session claude does not own (#387).
+  // Every runner id must map to its own CLI: a `claude --resume` for a session claude does not
+  // own resumes nothing (open-mercato/cezar#387).
   it.each(RUNNER_IDS)('maps %s to its own CLI, never silently to claude', (runner) => {
     const id = '9f8e7d6c-1234-4abc-9def-0123456789ab';
     expect(resumeCommand(runner, id)?.startsWith(`${runner === 'cursor' ? 'agent' : runner} `)).toBe(true);
@@ -84,4 +84,25 @@ describe('resumeCommand — session id validation', () => {
       expect(isSafeSessionId(id)).toBe(true);
     }
   });
+});
+
+describe('terminalExecutable — PATH name or the configured executable', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('starts a path-name runner by its PATH name, even in dry-run', () => {
+    vi.stubEnv('CEZ_DRY_RUN', '1');
+    for (const runner of RUNNER_IDS) {
+      const executable = RUNNER_CLI[runner].terminalExecutable;
+      if (executable.kind === 'path-name') expect(terminalExecutable(runner)).toBe(executable.name);
+    }
+  });
+
+  it.each(RUNNER_IDS.filter(runner => RUNNER_CLI[runner].terminalExecutable.kind === 'configured'))(
+    'quotes the configured %s executable, and refuses one the platform cannot spell', (runner) => {
+      const variable = `HSQ_${runner.toUpperCase()}_BIN`;
+      vi.stubEnv(variable, '/opt/Some Agent/bin');
+      expect(terminalExecutable(runner, 'linux')).toBe("'/opt/Some Agent/bin'");
+      vi.stubEnv(variable, '/opt/a"b/bin');
+      expect(terminalExecutable(runner, 'win32')).toBeNull();
+    });
 });

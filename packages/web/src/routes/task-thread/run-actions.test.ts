@@ -12,14 +12,11 @@ import {
 import { describe, expect, it } from 'vitest'
 import { openHumanWait } from '@/test/run-summary-fixture'
 
-import { runnerSchema, type Runner } from '@open-mercato/cezar-api-client/contract/runner'
+import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
 import { engineOwnsRun } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import type { ApiRun, RunRecord, RunStatus, StepState } from '@open-mercato/cezar-api-client'
 
 import { isUnread } from '@/lib/read-state'
-
-// Cross-package golden fixture: both helpers must match the same expected commands.
-import { commands as goldenCommands, sessionId, unsafeSessionIds } from '../../../../cezar/test/fixtures/resume-commands.ts'
 
 import {
   archiveInComposer,
@@ -29,7 +26,6 @@ import {
   offersComposerFinish,
   queuePosition,
   resolveConflictsPrompt,
-  resumeCommand,
   resumeHint,
   runActionFlags,
 } from './run-actions'
@@ -249,117 +245,36 @@ describe('lastSessionId', () => {
   })
 })
 
-describe('resumeCommand — per backend, mirroring the server', () => {
-  it.each([
-    ['claude', 'claude --resume s1'],
-    [undefined, 'claude --resume s1'], // legacy records predate the runner choice
-    ['codex', 'codex resume s1'],
-    ['cursor', undefined],
-    ['opencode', 'opencode --session s1'],
-    ['omp', undefined], // the server resolves CEZ_OMP_BIN and sends cliResumeCommand, as for Cursor
-  ] as Array<[RunRecord['runner'], string | undefined]>)('%s → %s', (runner, expected) => {
-    expect(resumeCommand(runner, 's1')).toBe(expected)
-  })
-
-  // #431: the hint is a one-click copy for pasting into a shell, so the id gets the server's
-  // validation rather than being trusted — the server refuses these ids too (server.ts).
-  it('refuses a hostile-shaped id instead of building a pasteable command', () => {
-    expect(resumeCommand('claude', '$(touch /tmp/pwn); rm -rf ~ #')).toBeUndefined()
-    expect(resumeCommand('claude', "a'b")).toBeUndefined()
-    expect(resumeCommand('codex', 'a && calc.exe')).toBeUndefined()
-    expect(resumeCommand('opencode', 'a`id`')).toBeUndefined()
-    expect(resumeCommand('claude', 'a b')).toBeUndefined()
-    expect(resumeCommand('claude', '')).toBeUndefined()
-  })
-
-  it('refuses an option-like id — `--resume -x` would be read as a flag', () => {
-    expect(resumeCommand('claude', '-x')).toBeUndefined()
-    expect(resumeCommand('claude', '--help')).toBeUndefined()
-  })
-
-  it('accepts the shapes the backends actually mint', () => {
-    for (const id of ['9f8e7d6c-1234-4abc-9def-0123456789ab', 'ses_01JABCDEF', 'session.2026-07-17']) {
-      expect(resumeCommand('claude', id)).toBe(`claude --resume ${id}`)
-    }
-  })
-
-  it('bounds the id length, like the server', () => {
-    expect(resumeCommand('claude', 'a'.repeat(200))).toBe(`claude --resume ${'a'.repeat(200)}`)
-    expect(resumeCommand('claude', 'a'.repeat(201))).toBeUndefined()
-  })
-})
-
-describe('resume commands — shared golden parity across runners', () => {
-  const commands = goldenCommands satisfies Record<Runner, string>
-
-  it.each([...runnerSchema.options, undefined])('keeps %s take-over commands in sync', (runner) => {
-    const expected = commands[runner ?? 'claude']
-    // Cursor's and OMP's executable/quoting belong to the server (CEZ_*_BIN); the web uses cliResumeCommand.
-    const serverResolved = runner === 'cursor' || runner === 'omp'
-    expect(resumeCommand(runner, sessionId)).toBe(serverResolved ? undefined : expected)
-    expect(resumeHint(run('done', {
-      runner,
-      steps: [step({ sessionId, backend: runner })],
-      ...(serverResolved ? { cliResumeCommand: expected } : {}),
-    }))).toBe(expected)
-  })
-
-  it.each([...runnerSchema.options, undefined])('rejects unsafe session ids for %s', (runner) => {
-    for (const sessionId of unsafeSessionIds) {
-      expect(resumeCommand(runner, sessionId)).toBeUndefined()
-      expect(resumeHint(run('done', {
-        runner,
-        steps: [step({ sessionId, backend: runner })],
-        cliResumeCommand: 'agent --resume s1',
-      }))).toBeUndefined()
-    }
-  })
-})
-
 describe('resumeHint', () => {
   it.each([
     ['claude', 'cursor', 'agent --resume sess-1'],
     ['cursor', 'claude', 'claude --resume sess-1'],
   ] as const)('uses the session backend %s → %s for hints and target labels', (runner, backend, expected) => {
-    const mixed = { ...run('done', { runner, steps: [step({ backend, sessionId: 'sess-1' })] }),
-      ...(backend === 'cursor' ? { cliResumeCommand: expected } : {}) }
+    const mixed = run('done', { runner, steps: [step({ backend, sessionId: 'sess-1' })], cliResumeCommand: expected })
     expect(resumeHint(mixed)).toBe(expected)
     expect(cliTargetResumes(mixed, `cli:${backend}`)).toBe(true)
     expect(cliTargetResumes(mixed, `cli:${runner}`)).toBe(false)
   })
 
-  it('uses the server-resolved Cursor executable and waits for it instead of guessing', () => {
-    const cursor = run('done', { runner: 'cursor' })
-    expect(resumeHint(cursor)).toBeUndefined()
-    expect(resumeHint({ ...cursor, cliResumeCommand: "'/opt/Cursor Agent/agent' --resume sess-1" })).toBe("'/opt/Cursor Agent/agent' --resume sess-1")
-  })
-
-  it('uses the server-resolved OMP executable, so a CEZ_OMP_BIN override reaches the hint', () => {
-    const omp = run('done', { runner: 'omp', steps: [step({ backend: 'omp', sessionId: 'sess-1' })] })
-    expect(resumeHint(omp)).toBeUndefined()
-    expect(resumeHint({ ...omp, cliResumeCommand: "'/opt/Oh My Pi/omp' --resume sess-1" })).toBe("'/opt/Oh My Pi/omp' --resume sess-1")
+  it.each(runnerSchema.options)('shows the server\'s %s take-over command and waits for it instead of guessing', (runner) => {
+    const done = run('done', { runner, steps: [step({ backend: runner, sessionId: 'sess-1' })] })
+    expect(resumeHint(done)).toBeUndefined()
+    expect(resumeHint({ ...done, cliResumeCommand: "'/opt/Some Agent/bin' --resume sess-1" })).toBe("'/opt/Some Agent/bin' --resume sess-1")
   })
 
   it('cd-prefixes into the worktree when the run has one', () => {
-    expect(resumeHint(run('failed', { worktreePath: '/tmp/wt', runner: 'codex' }))).toBe(
+    expect(resumeHint(run('failed', { worktreePath: '/tmp/wt', runner: 'codex', cliResumeCommand: 'codex resume sess-1' }))).toBe(
       'cd /tmp/wt && codex resume sess-1',
     )
   })
 
   it('is just the resume command for a run without a worktree', () => {
-    expect(resumeHint(run('done'))).toBe('claude --resume sess-1')
+    expect(resumeHint(run('done', { cliResumeCommand: 'claude --resume sess-1' }))).toBe('claude --resume sess-1')
   })
 
-  it('is absent while the engine still owns the run, and absent without a session', () => {
-    expect(resumeHint(run('waiting'))).toBeUndefined()
+  it('is absent while the engine still owns the run, and absent without the server\'s command', () => {
+    expect(resumeHint(run('waiting', { cliResumeCommand: 'claude --resume sess-1' }))).toBeUndefined()
     expect(resumeHint(run('done', { steps: [step()] }))).toBeUndefined()
-  })
-
-  // #431: no copyable line at all beats one that runs an injected command on paste.
-  it('is absent for a session id the server would refuse, worktree or not', () => {
-    const hostile = { steps: [step({ sessionId: 'x; rm -rf ~ #' })] }
-    expect(resumeHint(run('done', hostile))).toBeUndefined()
-    expect(resumeHint(run('failed', { ...hostile, worktreePath: '/tmp/wt' }))).toBeUndefined()
   })
 })
 

@@ -1,0 +1,127 @@
+[
+  {
+    "type": "session.started",
+    "sessionId": "5d2c1a0e-1315-4f0a-9b3c-7e6d5c4b3a21",
+    "backend": "claude",
+    "model": "claude-haiku-5-5",
+    "cwd": "/repo",
+    "tools": [
+      "Task",
+      "Bash",
+      "Edit",
+      "Read",
+      "Skill",
+      "TaskStop",
+      "WebFetch",
+      "WebSearch",
+      "Write"
+    ]
+  },
+  {
+    "type": "turn.started",
+    "turnId": "turn_1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "forked-command-fxfork",
+      "name": "Skill",
+      "toolKind": "task",
+      "title": "/fxfork",
+      "status": "running",
+      "input": {
+        "subagent_type": "general-purpose"
+      }
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "tool",
+      "id": "toolu_fork_cmd_bash_01",
+      "name": "Bash",
+      "toolKind": "execute",
+      "title": "Ran echo forked > /dev/null",
+      "status": "running",
+      "input": {
+        "command": "echo forked > /dev/null",
+        "description": "Run the requested no-op echo command"
+      },
+      "parentItemId": "forked-command-fxfork"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "toolu_fork_cmd_bash_01",
+      "name": "Bash",
+      "toolKind": "execute",
+      "title": "Ran echo forked > /dev/null",
+      "status": "completed",
+      "input": {
+        "command": "echo forked > /dev/null",
+        "description": "Run the requested no-op echo command"
+      },
+      "parentItemId": "forked-command-fxfork",
+      "output": "(Bash completed with no output)"
+    }
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "item_1",
+      "role": "assistant",
+      "text": "FXFORK-2W"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "item_1",
+      "role": "assistant",
+      "text": "FXFORK-2W"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "tool",
+      "id": "forked-command-fxfork",
+      "name": "Skill",
+      "toolKind": "task",
+      "title": "/fxfork",
+      "status": "completed",
+      "input": {
+        "subagent_type": "general-purpose"
+      }
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "turn_1",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "costUsd": 0.00262711
+  },
+  {
+    "type": "usage.updated",
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "costUsd": 0.00262711
+  }
+]

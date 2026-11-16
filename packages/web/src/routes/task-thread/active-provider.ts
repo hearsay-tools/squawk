@@ -1,17 +1,9 @@
 import { controlLocation } from '@open-mercato/cezar-api-client/contract/control-locations'
 import { providerForActiveRun } from '@open-mercato/cezar-api-client/contract/active-provider'
+import { runnerDisplayName } from '@open-mercato/cezar-api-client/contract/runner-facts'
 import type { ApiRun, ProviderStatusResponse, Runner } from '@open-mercato/cezar-api-client'
 import { useProviderStatus } from '@/api/queries'
 import { providerStatusFor } from '@/lib/provider-status'
-
-const PROVIDER_LABEL: Record<Runner, string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  opencode: 'OpenCode',
-  pi: 'pi',
-  cursor: 'Cursor',
-  omp: 'OMP',
-}
 
 /** Mirrors the server's providerForExistingRun for an override-free POST /continue. */
 export function providerForExistingRun(run: ApiRun): Runner {
@@ -27,14 +19,14 @@ function providerAvailability(
     return {
       provider,
       usable: false,
-      reason: `${PROVIDER_LABEL[provider]} is disabled. Enable it in ${controlLocation('providers')}.`,
+      reason: `${runnerDisplayName(provider)} is disabled. Enable it in ${controlLocation('providers')}.`,
     }
   }
   if (row?.status !== 'connected') {
     return {
       provider,
       usable: false,
-      reason: `${PROVIDER_LABEL[provider]} credentials are unavailable. Authorize it in ${controlLocation('providers')}.`,
+      reason: `${runnerDisplayName(provider)} credentials are unavailable. Authorize it in ${controlLocation('providers')}.`,
     }
   }
   return { provider, usable: true }

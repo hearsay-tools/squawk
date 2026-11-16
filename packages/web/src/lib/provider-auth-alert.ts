@@ -4,16 +4,9 @@ import type {
   WorkspaceUiState,
 } from '@open-mercato/cezar-api-client'
 import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
+import { runnerDisplayName } from '@open-mercato/cezar-api-client/contract/runner-facts'
 
 const PROVIDERS: readonly ProviderId[] = runnerSchema.options
-const LABELS: Record<ProviderId, string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  opencode: 'OpenCode',
-  pi: 'pi',
-  cursor: 'Cursor',
-  omp: 'OMP',
-}
 
 export interface ProviderAuthIncident {
   provider: ProviderId
@@ -53,7 +46,7 @@ export function visibleProviderAuthIncidents(
     ) return []
     return [{
       provider,
-      label: LABELS[provider],
+      label: runnerDisplayName(provider),
       authFailureId: row.authFailureId,
     }]
   })

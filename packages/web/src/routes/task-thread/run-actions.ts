@@ -26,52 +26,14 @@ export function lastSessionBackend(run: RunRecord): Runner {
   return latestSessionStep(run.steps)?.backend ?? run.runner ?? 'claude'
 }
 
-/**
- * The session id shapes the backends mint — the mirror of the server's `SAFE_SESSION_ID`
- * (server.ts, #431). Kept in lockstep by hand: the cockpit bundles separately from the
- * server, so it cannot import it. Widen both or neither.
- */
-const SAFE_SESSION_ID = /^[A-Za-z0-9._][A-Za-z0-9._-]{0,199}$/
-
-/** The per-backend take-over command — mirrors the server's `resumeCommand` (server.ts), and
- *  like it treats records without a runner as Claude (they predate the choice).
- *
- *  Undefined for an id the server would refuse (#431): this string is offered to the user as a
- *  one-click copy for pasting into a terminal, so it is a shell splice of an agent-recorded id
- *  exactly like the server's take-over command. Validate rather than quote, for the same reason
- *  the server does — the paste target may be bash OR cmd.exe, and no charset here is special to
- *  either. Fails closed: no hint beats a hint that runs `rm -rf ~` on paste. */
-export function resumeCommand(runner: Runner | undefined, sessionId: string): string | undefined {
-  if (!SAFE_SESSION_ID.test(sessionId)) return undefined
-  switch (runner) {
-    case 'codex':
-      return `codex resume ${sessionId}`
-    case 'cursor':
-      // Only the server knows CEZ_CURSOR_BIN and its host shell quoting rules.
-      return undefined
-    case 'opencode':
-      return `opencode --session ${sessionId}`
-    case 'pi':
-      return `pi --session ${sessionId}`
-    case 'omp':
-      // Only the server knows CEZ_OMP_BIN; it sends the command as `cliResumeCommand`.
-      return undefined
-    default:
-      return `claude --resume ${sessionId}`
-  }
-}
-
 /** The copyable "take over interactively" line under the header — only once the engine has
- *  let go of the session (same gate as the Terminal button). Prefixes the `cd` when the run
- *  has its own worktree, because the resume only makes sense from in there. Absent for an id
- *  `resumeCommand` refuses (#431), exactly as for a run that never recorded a session. */
+ *  let go of the session (same gate as the Terminal button). The command is the server's
+ *  `cliResumeCommand`: only the server knows the configured executable and refuses an unsafe
+ *  session id (open-mercato/cezar#431), and without it there is no hint. Prefixes the `cd` when
+ *  the run has its own worktree, because the resume only makes sense from in there. */
 export function resumeHint(run: ApiRun): string | undefined {
   if (engineOwnsRun(run)) return undefined
-  const sessionId = lastSessionId(run)
-  if (sessionId === undefined) return undefined
-  if (!SAFE_SESSION_ID.test(sessionId)) return undefined
-  const backend = lastSessionBackend(run)
-  const command = backend === 'cursor' || backend === 'omp' ? run.cliResumeCommand : resumeCommand(backend, sessionId)
+  const command = run.cliResumeCommand
   if (command === undefined) return undefined
   return run.worktreePath ? `cd ${run.worktreePath} && ${command}` : command
 }

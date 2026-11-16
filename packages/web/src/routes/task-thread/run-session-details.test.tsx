@@ -50,6 +50,8 @@ const run = (status: RunStatus, extra: Partial<ApiRun> = {}): ApiRun => ({
   outputTokens: 2_400,
   archived: false,
   steps: [step({ sessionId: 'sess-1' })],
+  // The server's take-over command for that session, as a detail read sends it.
+  cliResumeCommand: 'claude --resume sess-1',
   ...extra,
 })
 
@@ -637,7 +639,7 @@ describe('Workspace — compact tools (hearsay-tools/cezarion#1333 mockup)', () 
     })
     const writeText = vi.fn(() => Promise.resolve())
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
-    renderCard(run('failed', { id: freshId(), runner: 'opencode', branch: 'cez/x', worktreePath: '/tmp/wt' }))
+    renderCard(run('failed', { id: freshId(), runner: 'opencode', branch: 'cez/x', worktreePath: '/tmp/wt', cliResumeCommand: 'opencode --session sess-1' }))
     const workspace = openRow('workspace')
     // The targets stay behind one trigger, as the ··· menu shows them, so the row stays short.
     const trigger = await within(workspace).findByRole('button', { name: 'Open in…' })

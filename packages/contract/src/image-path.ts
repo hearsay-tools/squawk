@@ -1,3 +1,5 @@
+import { ownLookup } from './own-lookup.ts';
+
 const IMAGE_MIME: Record<string, string> = {
   png: 'image/png',
   jpg: 'image/jpeg',
@@ -15,7 +17,7 @@ export function imageMimeType(path: string): string | null {
   const name = path.slice(path.lastIndexOf('/') + 1);
   const dot = name.lastIndexOf('.');
   if (dot <= 0) return null;
-  return IMAGE_MIME[name.slice(dot + 1).toLowerCase()] ?? null;
+  return ownLookup(IMAGE_MIME, name.slice(dot + 1).toLowerCase()) ?? null;
 }
 
 /**

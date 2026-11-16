@@ -8,6 +8,7 @@ export * from './pending-ask.ts';
 export * from './delegation.ts';
 export * from './effort.ts';
 export * from './health.ts';
+export * from './runner-facts.ts';
 export * from './runs.ts';
 export * from './task-options.ts';
 export * from './run-labels.ts';
@@ -47,6 +48,7 @@ export * from './workspace-events.ts';
 
 export * from './permissions.ts';
 export * from './defined.ts';
+export * from './own-lookup.ts';
 export * from './tool-display.ts';
 export * from './version.ts';
 export * from './active-provider.ts';
