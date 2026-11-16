@@ -1340,6 +1340,90 @@ jobs:
           echo "::warning title=Vitest coverage artifact not uploaded::No vitest-coverage-$HEAD_SHA artifact: $reason (shard jobs: $SHARDS_RESULT). Test verdicts are not affected."
           echo "Vitest coverage not uploaded: $reason (shard jobs: $SHARDS_RESULT)." >> "$GITHUB_STEP_SUMMARY"
 
+  # Scores CRAP for the changed functions from the merged Vitest coverage and uploads
+  # `crap-report-<head SHA>`, which crap-follow-up.yml files from after the merge
+  # (hearsay-tools/squawk#3702). Like complexity-gate, it runs trusted workflow-commit code and
+  # reads the tested commit as Git data. It never fails a check: every step continues on error,
+  # and no required job needs it. See docs/sdlc/ci.md § CRAP report for changed functions.
+  crap-report:
+    name: Report CRAP for changed functions
+    needs: [pr-test-input, vitest-coverage-merge]
+    if: ${{ !cancelled() && (github.event_name == 'pull_request_target' || (github.event_name == 'workflow_dispatch' && inputs.pr_number == '')) && needs.vitest-coverage-merge.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out the trusted workflow commit
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install Node.js from nodejs.org
+        continue-on-error: true
+        uses: ./.github/actions/node-dist
+        with:
+          node-version-file: .node-version
+
+      - name: Set up Node.js
+        continue-on-error: true
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          token: ''
+
+      - name: Download merged coverage
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: vitest-coverage-${{ github.event.pull_request.head.sha || github.sha }}
+          path: coverage
+
+      - name: Score changed functions
+        id: score
+        if: steps.download.outcome == 'success'
+        continue-on-error: true
+        env:
+          TESTED_SHA: ${{ needs.pr-test-input.outputs.sha || github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --unshallow origin +refs/heads/main:refs/remotes/origin/main
+          git fetch --no-tags origin "$TESTED_SHA"
+          npm install --prefix .ai/skills/check-code-quality --ignore-scripts --no-audit --no-fund --no-save
+          mkdir -p crap-report
+          node .ai/skills/check-code-quality/scripts/crap-report.mjs --base origin/main --head "$TESTED_SHA" \
+            --coverage coverage/coverage-final.json --exclude-config squeal.config.json \
+            --artifact "vitest-coverage-$HEAD_SHA" --json crap-report/crap-report.json --summary crap-report/summary.md
+          cat crap-report/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the CRAP report
+        if: steps.score.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: crap-report-${{ github.event.pull_request.head.sha || github.sha }}
+          path: crap-report/
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+      - name: Report a missing CRAP report
+        if: steps.score.outcome != 'success'
+        continue-on-error: true
+        env:
+          DOWNLOAD: ${{ steps.download.outcome }}
+          SCORE: ${{ steps.score.outcome }}
+        run: |
+          echo "::warning title=CRAP report not written::No CRAP report: the coverage download ended as $DOWNLOAD and scoring as ${SCORE:-skipped}. No check is affected."
+          echo "CRAP report not written: the coverage download ended as $DOWNLOAD and scoring as ${SCORE:-skipped}." >> "$GITHUB_STEP_SUMMARY"
+
   # Own GitHub check, separate from the packaged CLI E2E step in build-and-package.
   # Skip is a failure here: a machine that cannot drive the cockpit must not
   # green the required aggregate. This job opts into skip-exit-0 with

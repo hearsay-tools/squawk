@@ -32,16 +32,15 @@ The numbers come from this worktree's Squeal daemon. CRAP reads `pending` until
 every test file that loads the file has run with coverage. When the user asked
 for CRAP and it stays `pending`, wait for it with `squeal status --wait 60000`
 and run the command again. A file that only a child process runs, or that
-`coverage.exclude` lists, has complexity and no CRAP; [Before a PR](pre-pr.md)
-says why.
+`coverage.exclude` lists, has complexity and no CRAP;
+[Bundled tool](tool.md#code-that-only-a-child-process-runs) says why.
 
-For a complete, fresh measurement of the functions a branch changed, use the
-one-shot gate: `squeal code --base origin/main <path>... --json`. It runs the
+For a complete, fresh measurement of the functions a branch changed, when the
+user asks for one, use Squeal's one-shot check: `squeal code --base origin/main <path>... --json`. It runs the
 tests that load those files with coverage and needs no daemon.
 
 Done when every requested function has a complexity score and either a CRAP
-score or its exact reason. Missing CRAP is a measurement limit here; it is an
-incomplete gate only in the pre-PR path.
+score or its exact reason. Missing CRAP is a measurement limit, not a failure.
 
 ## 3. Report and finish
 

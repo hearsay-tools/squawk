@@ -13,7 +13,7 @@ const yaml = require('yaml');
 
 const repoRoot = path.join(__dirname, '..', '..');
 const ci = () => yaml.parse(fs.readFileSync(path.join(repoRoot, '.github', 'workflows', 'ci.yml'), 'utf8'));
-const COVERAGE_JOBS = ['vitest-coverage-merge'];
+const COVERAGE_JOBS = ['vitest-coverage-merge', 'crap-report'];
 const SHARD_RUN = 'npm test -- --shard=${{ matrix.shard }}/8 --maxWorkers=4';
 const named = (job, name) => job.steps.find((step) => step.name === name);
 
@@ -22,7 +22,7 @@ function expression(raw, context) {
   return runInNewContext(code, context);
 }
 
-function context(event, { surface = 'full-matrix', bump = 'false', verified = 'false', shards = 'success', cancelled = false, pr = '' } = {}) {
+function context(event, { surface = 'full-matrix', bump = 'false', verified = 'false', shards = 'success', cancelled = false, pr = '', merged = 'success' } = {}) {
   return {
     github: { event_name: event },
     inputs: { pr_number: pr },
@@ -33,6 +33,7 @@ function context(event, { surface = 'full-matrix', bump = 'false', verified = 'f
       'change-surface': { result: 'success', outputs: { surface } },
       'classify-pr': { result: 'success', outputs: { bump_pr: bump } },
       vitest: { result: shards },
+      'vitest-coverage-merge': { result: merged },
     },
     cancelled: () => cancelled,
   };
@@ -87,6 +88,34 @@ test('no coverage job is a required check, a verify dependency or a merge-queue 
   }
   assert.doesNotMatch(jobs.verify.steps.map((step) => step.run).join('\n'), /coverage/i);
   assert.deepEqual(jobs['vitest-coverage-merge'].needs, ['vitest']);
+  assert.deepEqual(jobs['crap-report'].needs, ['pr-test-input', 'vitest-coverage-merge']);
+});
+
+test('the CRAP report runs after a merged coverage report on PRs and bare dispatches only', () => {
+  const { jobs } = ci();
+  const report = jobs['crap-report'].if;
+  for (const event of ['pull_request_target', 'workflow_dispatch']) {
+    assert.equal(expression(report, context(event)), true, event);
+    assert.equal(expression(report, context(event, { merged: 'skipped' })), false, `${event}: no coverage`);
+    assert.equal(expression(report, context(event, { cancelled: true })), false, `${event}: cancelled`);
+  }
+  assert.equal(expression(report, context('workflow_dispatch', { pr: '12' })), false, 'release PR dispatch');
+  for (const event of ['merge_group', 'push']) assert.equal(expression(report, context(event, { merged: 'skipped' })), false, event);
+});
+
+test('the CRAP report scores the tested commit from trusted code and uploads one report named for the head', () => {
+  const { jobs } = ci();
+  const job = jobs['crap-report'];
+  assert.equal(named(job, 'Check out the trusted workflow commit').with.ref, '${{ github.sha }}');
+  assert.equal(named(job, 'Download merged coverage').with.name, 'vitest-coverage-${{ github.event.pull_request.head.sha || github.sha }}');
+  const score = named(job, 'Score changed functions');
+  assert.equal(score.env.TESTED_SHA, '${{ needs.pr-test-input.outputs.sha || github.sha }}');
+  assert.match(score.run, /crap-report\.mjs --base origin\/main --head "\$TESTED_SHA"/);
+  assert.match(score.run, /--exclude-config squeal\.config\.json/);
+  const upload = named(job, 'Upload the CRAP report');
+  assert.equal(upload.with.name, 'crap-report-${{ github.event.pull_request.head.sha || github.sha }}');
+  assert.equal(upload.with.path, 'crap-report/');
+  assert.equal(upload.if, "steps.score.outcome == 'success'");
 });
 
 test('the coverage jobs hold no secret, read only, pin every action and keep expressions out of scripts', () => {

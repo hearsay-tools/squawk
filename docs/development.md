@@ -139,30 +139,22 @@ Ask an agent to measure a file, function or module for a scoped stats report.
 That path uses available coverage and reports missing CRAP without starting the
 PR process. Ask explicitly for fresh coverage when needed.
 
-The local pre-PR gate uses Squeal 0.1.423's one-shot changed-function check:
+The local pre-PR check is complexity only. Commit, then run the same gate as CI's
+`complexity-gate` job:
 
 ```bash
-quality_report=$(mktemp "${TMPDIR:-/tmp}/code-quality.XXXXXXXX") || exit 2
-squeal code --base origin/main --json > "$quality_report"
-quality_status=$?
-printf 'Report: %s; exit: %s\n' "$quality_report" "$quality_status"
+node .ai/skills/check-code-quality/scripts/complexity-gate.mjs --base origin/main --head HEAD
 ```
 
-It checks changed JS/TS functions, including test callbacks and nested functions,
-with complexity at most 20 and CRAP at most 30. Equality passes. The default
-budget is 600 seconds. The base commit supplies the policy.
+It fails a changed function over complexity 20 that is new or more complex than at
+the merge base. Equality passes. It reads no coverage and takes seconds. See the
+[pre-PR procedure](../.ai/skills/check-code-quality/references/pre-pr.md).
 
-A pass requires complete evidence: no skipped, incomplete or uncounted functions,
-failed or unfinished tests, or exhausted budget. Exit 0 alone is insufficient
-because a report can contain skipped functions. Exits 1, 3 and 2 mean violations,
-incomplete measurement and usage/setup errors. Missing Squeal or unsupported
-evidence blocks the PR. There is no bundled fallback or inherited-refactor
-deferral. See the [pre-PR procedure](../.ai/skills/check-code-quality/references/pre-pr.md)
-for report identity, completeness checks and reviewable evidence.
-
-CI and explicit statistics commands keep their existing paths during this
-local-first rollout. CI artifact reuse and supported exceptions await the
-remaining work in hearsay-tools/squeal#167.
+CRAP is reported in CI, never locally before a merge: the `Report CRAP for changed
+functions` job scores the changed functions from the pull request's Vitest coverage
+and never fails a check. After the merge, each function over CRAP 30 gets a line in
+the open `crap-follow-up` issue. See
+[CRAP report for changed functions](sdlc/ci.md#crap-report-for-changed-functions).
 
 For iteration, run affected test files or `npm run test:changed` (inspect with
 `-- --plan`; override the local main comparison with `-- --base=<ref>`).

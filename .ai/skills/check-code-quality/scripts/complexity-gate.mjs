@@ -4,7 +4,7 @@
 // above the limit that is new or more complex than that counterpart, so a pull request can
 // lower a long function but never grow one. A function the change does not touch is never
 // read. The head is read as Git objects only, so CI can run this from trusted base code.
-// CRAP joins the gate once CI publishes coverage (hearsay-tools/cezarion#1780).
+// CRAP is not part of this gate: CI reports it from coverage with crap-report.mjs (hearsay-tools/squawk#3702).
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -131,11 +131,11 @@ const escapeProperty = text => escapeData(text).replaceAll(':', '%3A').replaceAl
 const annotation = (level, item, limit) =>
   `::${level} file=${escapeProperty(item.fn.file)},line=${item.fn.line},title=Function complexity::${escapeData(headline(item, limit))}`;
 
-/** A notice, not a failure: a changed function over the limit that did not grow still fails the pre-PR check. */
+/** A notice, not a failure: a changed function over the limit that did not grow passes the gate. */
 function keptLines({ kept, limit }) {
   if (!kept.length) return [];
-  const [verb, pronoun] = kept.length === 1 ? ['function stays', 'it'] : ['functions stay', 'them'];
-  return ['', `${kept.length} changed ${verb} over ${limit} without growing. The pre-PR check still reports ${pronoun}:`,
+  const [verb, subject] = kept.length === 1 ? ['function stays', 'It does'] : ['functions stay', 'They do'];
+  return ['', `${kept.length} changed ${verb} over ${limit} without growing. ${subject} not fail the gate:`,
     ...kept.slice(0, MAX_HINTS).map(item => `  ${headline(item, limit)}`),
     ...(kept.length > MAX_HINTS ? [`  ... ${kept.length - MAX_HINTS} more`] : [])];
 }

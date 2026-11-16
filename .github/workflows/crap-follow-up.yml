@@ -1,0 +1,65 @@
+# After a pull request merges into main, adds each changed function over CRAP 30 to the open
+# `crap-follow-up` issue (hearsay-tools/squawk#3702). It reads the `crap-report-<head SHA>`
+# artifact that CI's `crap-report` job wrote on the pull request's last run, and never runs
+# pull request code. See docs/sdlc/ci.md § CRAP report for changed functions.
+name: CRAP Follow-up
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Merged pull request to file the findings of
+        required: true
+        type: string
+      dry_run:
+        description: Print the issue body without writing it
+        required: false
+        type: boolean
+        default: true
+
+permissions: {}
+
+# The issue-body write lock: two merges never edit the issue from the same old body.
+concurrency:
+  group: crap-follow-up
+  cancel-in-progress: false
+
+jobs:
+  follow-up:
+    name: File changed functions over CRAP 30
+    # A dispatch from another branch never runs its own revision against the issue API.
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read # the pull request's CI runs and their artifacts
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Check out trusted follow-up code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - name: File the merged pull request's findings
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMIT: ${{ github.sha }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            args=(--pr "$PR_NUMBER")
+            if [ "$DRY_RUN" = true ]; then args+=(--dry-run); fi
+          else
+            args=(--commit "$COMMIT")
+          fi
+          node .github/scripts/crap-follow-up.cjs --repo "$REPOSITORY" "${args[@]}"

@@ -49,18 +49,17 @@ Before the PR, in this order:
    npm test -- <files> only when no daemon validates, the result is unknown,
    or the repo's own gate requires it. Run the Reader sweep's selected
    packaged checks too; browser specs run in CI.
-5. Start check-code-quality's Squeal one-shot path beside the push, as its
-   reference says. Require complete evidence for every changed or new
-   function, test files included; the report lists a function moved with an
-   unchanged body under `omitted`, which needs none. CI's complexity gate counts a moved function as new when a same-named
-   delegator stays behind; tell the coordinator about any function over 20.
+5. Commit, then run check-code-quality's pre-PR complexity gate, as its
+   reference says. CI's complexity gate counts a moved function as new when a
+   same-named delegator stays behind; tell the coordinator about any function
+   over 20.
 6. <kind section below>
 Read auto-merge before opening the PR. The campaign's owner-merge control
 requires owner review; leave automatic merging off in that case. Workers
 leave the merge action to the coordinator/owner under the recorded authority.
 Run git fetch origin main, then npm run prepr before the push; it covers steps 2 and 3. Repeat the steps
-after any later code change. Leave full suites to Squeal and CI. Missing or
-incomplete one-shot evidence blocks the merge; there is no bundled fallback.
+after any later code change. Leave full suites to Squeal and CI. A complexity
+gate failure blocks the PR.
 
 PR: git push, then gh pr create --base main (ready, not draft). Title in Conventional
 Commits, for example refactor(<area>): <what moved>. Write the body in
