@@ -1,4 +1,3 @@
-import { latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
 import { runCheckout, preparePublishCheckout, reclaimCheckoutError } from './run-checkout.ts';
 import { adoptFallbackControl, protectFallbackRun, runArtifactDirectory } from './project-run-files.ts';
 import { deleteSavedWorkflow } from './workflow-files.ts';
@@ -54,7 +53,7 @@ import { createActivityRoutes, type ActivityServerDeps } from './activity-routes
 import type { Home } from '../home/home.ts';
 import { createWorkspaceProjects, createWorkspaceProjectContexts, createTaskWebhooks, type WorkspaceProjects } from './workspace-projects.ts';
 import { subscribeRunFeed } from './run-event-feed.ts';
-import type { ApiRun, ArchivedRunsResponse, RunSummary, RunsSearchResponse } from '@open-mercato/cezar-contract';
+import { latestSessionStep, type ApiRun, type ArchivedRunsResponse, type RunSummary, type RunsSearchResponse } from '@open-mercato/cezar-contract';
 import { ARCHIVED_RUNS_PAGE_DEFAULT } from '@open-mercato/cezar-contract/run-limits';
 import { RUNS_SEARCH_PER_PROJECT_MAX, archivedRunsQuerySchema, createRunInputSchema, runSummariesQuerySchema, runsSearchQuerySchema } from '@open-mercato/cezar-contract/runs';
 import { workspaceEventsQuerySchema, type RunsIndexResponse } from '@open-mercato/cezar-contract/workspace-events';
