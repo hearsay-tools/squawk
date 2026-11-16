@@ -71,17 +71,18 @@ export class HumanWaits {
     return undefined;
   }
 
-  /** An alias's human wait, or the open one it shares: Squawk's own wait, a wait not shown yet, or
-   *  the one shown for the current question. An agent's wait shown for an answered question is never
-   *  reused: its answer settles it (hearsay-tools/squawk#1293). A full list opens none. */
+  /** An alias's human wait, or the open one it shares with the same owner (hearsay-tools/squawk#1293).
+   *  Squawk's alias shares Squawk's wait. An agent's question shares an agent wait not shown yet or
+   *  shown for the current question, never one shown for an answered question, whose answer settles
+   *  it. A full list opens none. */
   openHumanAlias(runId: string, state: ActiveRun | undefined, via: WaitVia, card?: AskRequest): HumanWaitEntry | undefined {
     const run = this.context.store.getRun(runId);
     if (!run) return undefined;
     const source = WAIT_KINDS.human.aliasSource(via);
     if (source === 'agent') this.withdrawSquawkHumanWaits(runId);
     const question = this.currentQuestionSeq(runId, state);
-    const existing = WAIT_KINDS.human.select(openWaits(this.context.store.getRun(runId) ?? run))
-      .find(wait => isSquawkHumanWait(wait) || wait.askSeq === undefined || wait.askSeq === question);
+    const existing = WAIT_KINDS.human.select(openWaits(this.context.store.getRun(runId) ?? run)).find(wait => wait.source === source
+      && (source === 'cezar' || wait.askSeq === undefined || wait.askSeq === question));
     if (existing) return existing;
     if (!this.host.waitEngine.hasRoom(this.context.store.getRun(runId) ?? {})) return undefined;
     const wait = WAIT_KINDS.human.aliasEntry(source, via, state?.waitIdentity.ciTurnId ?? via, card ? askCardFields(card) : undefined);
