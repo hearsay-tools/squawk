@@ -103,8 +103,23 @@
       "**/*.test.{ts,tsx,mjs,cjs}",
       "**/*.testkit.ts",
       "packages/*/src/**/*.json",
+      "packages/cezar/src/file-length.baseline.json",
+      "packages/cezar/src/lint/contract-root-import.baseline.json",
+      "packages/cezar/src/lint/home-readers.baseline.json",
+      "packages/cezar/src/lint/layer-import.baseline.json",
+      "packages/cezar/src/lint/product-env-read.baseline.json",
+      "packages/cezar/src/lint/runner-id-branch.baseline.json",
+      "packages/cezar/src/lint/runner-roster-literal.baseline.json",
+      "packages/cezar/src/test-wait-discipline.baseline.json",
+      "packages/cezar/src/test-wait-discipline-polls.baseline.json",
+      "packages/web/src/test/card-2-contrast.baseline.json",
+      "packages/web/src/test/search-params-discipline.baseline.json",
+      "packages/web/src/test/unit-wait-discipline.baseline.json",
       "packages/web/src/styles/index.css",
       "packages/web/{src,e2e}/**/*.css"
+    ],
+    "packages/web/src/test/e2e-wait-discipline.test.ts": [
+      "packages/web/src/test/e2e-wait-discipline.baseline.json"
     ],
     "packages/web/src/design-guardian.test.ts": [
       "packages/web/src/styles/index.css",
@@ -137,6 +152,13 @@
       "packages/contract/package.json",
       "packages/api-client/src/**",
       "packages/api-client/package.json"
+    ],
+    "packages/cezar/src/core/harness-parity.test.ts": [
+      "AGENT_PROTOCOL.md",
+      ".ai/specs/2026-09-04-harness-parity-matrix.md"
+    ],
+    "packages/cezar/src/lint/home-boundary.test.ts": [
+      ".github/scripts/baseline-growth.cjs"
     ],
     "packages/cezar/src/lint/card-2-contrast.test.ts": [
       "packages/cezar/src/lint/card-2-contrast.ts"
@@ -222,7 +244,13 @@
       "scripts/test-changed.mjs",
       ".github/scripts/change-surface.cjs",
       ".github/scripts/fixtures/docs-path-cases.cjs",
+      "scripts/test-inputs.mjs",
       "package.json"
+    ],
+    "scripts/test-inputs.test.mjs": [
+      "squeal.config.json",
+      "packages/*/vitest.config.ts",
+      "packages/*/src/**/*.{ts,tsx}"
     ],
     ".github/scripts/change-surface-readers.test.cjs": [
       "packages/**",

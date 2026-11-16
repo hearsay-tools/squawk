@@ -62,8 +62,10 @@ test('selects branch changes plus staged, unstaged, and untracked source files',
   put('packages/web/src/new.test.ts');
   const p = plan(cwd);
   assert.equal(p.mode, 'changed');
+  assert.equal(p.base, git('rev-parse', 'main'));
   assert.deepEqual(p.files, ['packages/web/src/a.ts', 'packages/web/src/committed.ts', 'packages/web/src/new.test.ts', 'packages/web/src/staged.ts']);
-  assert.deepEqual(p.args, ['test', '--', `--changed=${git('rev-parse', 'main')}`, '--passWithNoTests=false']);
+  assert.deepEqual(p.sources, p.files);
+  assert.deepEqual(p.tests, []);
 });
 
 test('compares against merge-base, not unrelated changes on main', t => {
@@ -77,15 +79,39 @@ test('compares against merge-base, not unrelated changes on main', t => {
   assert.deepEqual(p.files, ['packages/web/src/a.ts']);
 });
 
-for (const path of ['package.json', 'vitest.config.ts', '.github/workflows/ci.yml', 'packages/contract/src/runs.ts', 'packages/web/src/global.css', 'packages/cezar/src/fixtures/data.json']) {
+for (const [path, reason] of [
+  ['package.json', 'Vitest configuration input'],
+  ['vitest.config.ts', 'Vitest configuration input'],
+  ['packages/contract/src/runs.ts', 'Package input outside the import graph'],
+  ['packages/web/src/global.css', 'Package input outside the import graph'],
+  ['packages/cezar/src/fixtures/data.json', 'Package input outside the import graph'],
+  ['tools/build.sh', 'Unmapped input'],
+]) {
   test(`falls back to full Vitest for shared/configuration/unknown input: ${path}`, t => {
     // A JSON input must parse: any `--require` preload (NODE_OPTIONS) makes node read the nearest package.json.
     const { cwd, put } = fixture(t); put(path, path.endsWith('.json') ? '{}\n' : undefined);
     const p = plan(cwd);
     assert.equal(p.mode, 'full');
+    assert.equal(p.reason, `${reason}: ${path}`);
     assert.deepEqual(p.args, ['test']);
   });
 }
+
+test('declared readers select their tests and inputs no Vitest test reads skip', t => {
+  const { cwd, git, put } = fixture(t);
+  put('squeal.config.json', JSON.stringify({ inputs: { 'packages/cezar/src/ast-grep-rules.test.ts': ['.ai/ast-grep/**'] } }));
+  put('packages/cezar/src/ast-grep-rules.test.ts', '');
+  git('add', '.'); git('commit', '-m', 'declarations'); git('branch', '-f', 'main', 'HEAD');
+  put('.ai/ast-grep/rules/no-x.yml', 'id: no-x\n');
+  const rules = plan(cwd);
+  assert.equal(rules.mode, 'changed', JSON.stringify(rules));
+  assert.deepEqual(rules.tests, ['packages/cezar/src/ast-grep-rules.test.ts']);
+  rmSync(join(cwd, '.ai'), { recursive: true });
+  put('.github/workflows/ci.yml', 'on: push\n');
+  const workflow = plan(cwd);
+  assert.equal(workflow.mode, 'skip');
+  assert.equal(workflow.reason, 'No Vitest test reads the changed inputs');
+});
 
 test('staged and unstaged changes cannot cancel a shared input out of classification', t => {
   const { cwd, git, put } = fixture(t);
@@ -96,10 +122,12 @@ test('staged and unstaged changes cannot cancel a shared input out of classifica
   assert.equal(plan(cwd).mode, 'full');
 });
 
-test('deletions and renames fall back rather than losing dependents', t => {
+test('deletions and renames select through the import graph instead of the full suite', t => {
   const { cwd, git } = fixture(t);
   git('mv', 'packages/web/src/a.ts', 'packages/web/src/renamed.ts');
-  assert.equal(plan(cwd).mode, 'full');
+  const p = plan(cwd);
+  assert.equal(p.mode, 'changed', JSON.stringify(p));
+  assert.deepEqual(p.sources, ['packages/web/src/a.ts', 'packages/web/src/renamed.ts']);
 });
 
 test('unusual Git-quoted source paths fall back to full selection', t => {
@@ -139,7 +167,7 @@ test('Markdown under packages/ skips unless a test may read it', t => {
     put(path, '# Docs\n');
     const p = plan(cwd);
     assert.equal(p.mode, mode, `${path}: ${JSON.stringify(p)}`);
-    if (mode === 'full') assert.equal(p.reason, 'Shared, configuration, or unclassified input');
+    if (mode === 'full') assert.equal(p.reason, `Package input outside the import graph: ${path}`);
     rmSync(join(cwd, path));
   }
 });
@@ -224,10 +252,11 @@ for (const ci of [false, true]) test(`changed mode executes related tests with i
   put('packages/web/src/orphan.ts', 'export const orphan = true;');
   const orphanPlan = plan(cwd);
   assert.equal(orphanPlan.mode, 'changed', JSON.stringify(orphanPlan));
-  // bound: an empty CI selection must run the fixture's full suite.
+  // bound: an empty selection must run the fixture's full suite.
   const unmatched = spawnSync(process.execPath, [script, ...flags], { cwd, encoding: 'utf8', timeout: 30_000 });
   assert.equal(unmatched.status, 1, unmatched.stdout + unmatched.stderr);
-  assert.match(unmatched.stdout + unmatched.stderr, ci ? /unrelated must not run/ : /No test files found/);
+  assert.match(unmatched.stdout, /full: Vitest selection matched no test file/);
+  assert.match(unmatched.stdout + unmatched.stderr, /unrelated must not run/);
 });
 
 test('unknown flags cannot silently weaken selection', t => {

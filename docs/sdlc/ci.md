@@ -124,10 +124,26 @@ local browser run or a CI failure investigation, use
 `test:changed` is the no-daemon fallback inside `npm run prepr`; agents do not run it by
 hand. It uses the merge-base against local `origin/main` (falling back to
 `main`), plus staged, unstaged and untracked files; it never fetches. Override with
-`npm run test:changed -- --base=<ref>`. `--plan` prints the selection and command
-without executing it. Ordinary TS/JS source changes use Vitest's import graph.
-Contract/configuration/unknown input, removed paths, missing base or failed Git
-inspection run full Vitest. Clean changes, and changes confined to CI's docs-only
+`npm run test:changed -- --base=<ref>`. `--plan` prints the selection without
+executing it. Each changed path takes one rule from `scripts/test-inputs.mjs`;
+deleted and renamed paths take the same rules:
+
+| Changed path | Selects |
+| --- | --- |
+| TS/JS source in `packages/{cezar,web,api-client}/src` | Vitest's import graph. A deleted file also selects every Vitest test that reaches it through a chain of files naming it in an import or `vi.mock` path; past 300 such files, full Vitest |
+| Manifests, the lockfile, `tsconfig*.json`, Vitest configuration and setup files, and the local files they import, deleted ones included | Full Vitest |
+| A `__snapshots__/*.snap` file | Its test |
+| A `*.baseline.json` that a test declares by its exact path | The tests that declare it |
+| Any other path under `packages/`, `packages/contract` included | Full Vitest |
+| A path that `squeal.config.json` `inputs` declares for a Vitest test | That test |
+| `.github/{mutants,workflows,scripts}/**`, `.github/cockpit-test-durations.json`, `.ai/skills/**`, `scripts/*.test.mjs` | Nothing: no Vitest test reads them |
+| Anything else | Full Vitest |
+
+Every path also selects the Vitest tests whose declared `inputs` match it, so a source
+change runs the scanner tests that read every source file. A Vitest test that reads a
+path from the "Nothing" row declares it in `inputs`; `scripts/test-inputs.test.mjs`
+fails when a test reads one without that declaration. An unusual path, a missing base or
+failed Git inspection runs full Vitest. Clean changes, and changes confined to CI's docs-only
 list (`isDocsPath` in `.github/scripts/change-surface.cjs`, which includes Markdown
 under `packages/` outside fixture directories but not the Markdown a test reads),
 explicitly skip.
@@ -221,10 +237,13 @@ empty; `--passWithNoTests=true` permits those empty partitions only after a
 nonempty global selection. An empty global selection runs the full suite.
 
 The unit jobs call `scripts/test-changed.mjs --ci --base=<PR base SHA>` and keep
-`--coverage.enabled`. The CI mode uses the existing source classifier, then
-Vitest's unsharded `list --changed` inventory to resolve the files. Shared inputs,
-configuration, unknown paths, missing history, failed inventory and no matched
-file all run full Vitest on eight shards. A failing selected test fails its job;
+`--coverage.enabled`. The CI mode uses the path rules of `test:changed` above, then
+Vitest's unsharded `list --changed` inventory for the import graph of changed source,
+plus the declared readers. A path the rules send to the full suite, missing history,
+a failed inventory and no matched file run full Vitest on eight shards, and the log line
+`[test:changed] full: <reason>` names the rule and the first path. A change that only
+touches paths no Vitest test reads passes the eight jobs without running Vitest, so those
+jobs upload no coverage. A failing selected test fails its job;
 it never triggers a full-suite retry. The base fetch is bounded to 100 commits.
 A missing merge-base costs a full run instead of silently skipping tests.
 
