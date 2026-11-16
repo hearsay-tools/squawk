@@ -61,10 +61,10 @@ it('stale unread and held callbacks cannot restore a replaced session boundary',
 it('ready flushes durable input before retrying the retained autonomous boundary', () => {
   const f = boundaryInputFixture();
   transitionTurnBoundary(f.state, { kind: 'turn-end', phase: 'ui-completed', session: f.wire });
-  transitionTurnBoundary(f.state, { kind: 'input-ready', phase: 'retain-nudge', session: f.wire });
+  transitionTurnBoundary(f.state, { kind: 'nudge-fact', phase: 'record', session: f.wire, nudge: { cause: 'autonomous', state: 'refused' } });
   f.log.length = 0; f.delivery.handleAgentInputReady(f.run.id, f.state, f.wire);
   selectedOrder(f.log, ['input-flush', 'settle']);
-  expect(f.state.boundary.autonomousNudgePending).toBe(f.wire);
+  expect(f.state.boundary.nudge).toEqual({ session: f.wire, cause: 'autonomous', state: 'refused' });
 });
 
 it('human delivery commits its answer before question refresh and resume and resets monitoring last', () => {

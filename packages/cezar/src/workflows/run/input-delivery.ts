@@ -2,6 +2,7 @@ import { logPrefix } from '../../home/display.ts';
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS, waitDeliveryLabel } from './wait-kinds.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
+import { nudgeRefusedAt, retireNudge } from './turn-nudges.ts';
 import type { AgentInput } from '@open-mercato/cezar-contract/delegation';
 import type { Wait } from '@open-mercato/cezar-contract/waits';
 import type { InputDelivery as InputDeliveryPolicy } from '../../core/agent-runner.ts';
@@ -537,7 +538,7 @@ export class InputDelivery {
     // again (hearsay-tools/cezarion#1525).
     // It keeps tryAutonomousNudge's own guards: a run that may not continue on its own keeps the
     // retry pending, bounded by the idle timer.
-    if (idle && state.boundary.autonomousNudgePending === session && state.boundary.doneAtBoundary !== session && state.liveSession.currentStepId &&
+    if (idle && nudgeRefusedAt(state, session) && state.boundary.doneAtBoundary !== session && state.liveSession.currentStepId &&
       state.boundary.autonomous && this.host.canAutoContinue(runId, state)) {
       this.host.settleTurn(runId, state, 'ready', { ...this.host.boundaryTurn(runId, state, session, false), monitoring: false });
       return;
@@ -756,6 +757,7 @@ export class InputDelivery {
    * resumes work in a parked session. */
   resumeParkedRun(runId: string, state: ActiveRun, beforeHumanReset?: HumanAnswerBudget): void {
     clearHeldHumanInputTimer(state);
+    retireNudge(state);
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'resume', session: state.liveSession.session });
     clearIdleTimer(state);
     this.host.endParkHold(runId, state);

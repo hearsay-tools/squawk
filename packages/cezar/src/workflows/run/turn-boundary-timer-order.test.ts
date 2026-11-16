@@ -84,11 +84,11 @@ it('a refused autonomous nudge retains its boundary before the idle bound and sp
   const f = fixture(true);
   vi.mocked(f.host.submitAgentInput).mockImplementation(() => { f.log.push('submit'); return false; });
   expect(f.nudges.tryAutonomousNudge(f.run.id, f.state, 'step')).toBe(false);
-  order(f.log, ['boundary:input-ready/clear-nudge', 'submit', 'boundary:input-ready/retain-nudge',
+  order(f.log, ['boundary:nudge-fact/retire', 'submit', 'boundary:nudge-fact/record',
     'boundary:idle-expired/reset', 'boundary:idle-expired/armed']);
   expect(f.log).not.toContain('charge');
   expect(f.log).not.toContain('release');
-  expect(f.state.boundary.autonomousNudgePending).toBe(f.wire);
+  expect(f.state.boundary.nudge).toEqual({ session: f.wire, cause: 'autonomous', state: 'refused' });
 });
 
 // An accepted autonomous nudge starts a turn, so neither the idle bound nor the no-wait reply bound
@@ -98,7 +98,8 @@ it('a delivered autonomous nudge cancels the idle bound and arms no other bound 
   f.settler.armIdleTimer(f.run.id, f.state);
   f.log.length = 0;
   expect(f.nudges.tryAutonomousNudge(f.run.id, f.state, 'step')).toBe(true);
-  order(f.log, ['boundary:input-ready/clear-nudge', 'boundary:idle-expired/cancel', 'submit', 'charge', 'event:note']);
+  order(f.log, ['boundary:nudge-fact/retire', 'boundary:idle-expired/cancel', 'submit', 'boundary:nudge-fact/record', 'charge', 'event:note']);
+  expect(f.state.boundary.nudge).toEqual({ session: f.wire, cause: 'autonomous', state: 'submitted' });
   expect(f.log).not.toContain('boundary:idle-expired/armed');
   expect(f.log).not.toContain('boundary:reply-expired/armed');
   expect(f.state.boundary.idleTimer).toBeUndefined();
