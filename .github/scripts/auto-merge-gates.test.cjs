@@ -87,6 +87,7 @@ const NOT_A_GATE = [
   { match: PRODUCT, reason: 'product source: the subject the gates check; tests, typecheck and lint cover it' },
   { match: MOCK, reason: 'runner mock: a test double; like a test file, the content rules guard it' },
   { glob: '{README.md,.env.example,**/*.md}', reason: 'documentation; .env.example has its own content rule' },
+  { glob: '.github/scripts/crap-follow-up.cjs', reason: 'files CRAP follow-ups after a merge to main; it never runs on a pull request and no required check needs it' },
   { glob: '.github/scripts/squeal-ref-warning.cjs', reason: 'warns about a missing Squeal ref; the step may fail and no required check needs its job' },
   { glob: 'packages/desktop/**', reason: 'desktop app build; the desktop workflows are not required checks' },
   { glob: 'packages/cezar/scripts/benchmark-*', reason: 'benchmark run by hand' },

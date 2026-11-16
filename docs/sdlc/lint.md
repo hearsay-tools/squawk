@@ -71,6 +71,7 @@ appropriate boundary or checker explicitly.
 | `cez/design-guardian` | The ten original cockpit design checks; each finding names its original rule, reason and token (hearsay-tools/cezarion#2422) | Original inline allowed predicates and reason comments; tests keep their original scope and the guardian suite excludes itself |
 | `cez/home-boundary` | `cezarHomeDir` references, `resolveHome` outside `home/` and CLI dispatch, unlisted `homedir()` calls in non-test `packages/cezar/src/`, and test-side CEZ_HOME writes/stubs/deletes | `home-readers.baseline.json`: reasoned OS-user readers with exact call counts, shrink-only; shared `vitest.setup.ts` selects test homes |
 | `cez/test-home-write` | Guarded home names in calls, destructuring, runtime import/export specifiers and member references in test code | Same-line `// test-home-read: <reason>` for a deliberate use; use an explicit sandbox path for writes (hearsay-tools/cezarion#2813) |
+| `cez/layer-import` | A `core` file that imports a `feature:<name>` file, type-only imports included, or a `core` file other than `core/runner-factory.ts` that imports a `runner` file. `npm run lint` also fails a source file with no layer in `layers.json` (ADR 0065, hearsay-tools/squawk#3706) | `layer-import.baseline.json`: each importing file and imported file with its count and a reason that starts with the imported layer; shrink-only, stale entries fail. See [Layer import](#layer-import) |
 | `cez/native-mock-source` | A test that reads, splices or swaps native mock source (hearsay-tools/cezarion#1479) | None |
 | `cez/parity-runner-subset` | An array literal in a parity file that lists two or more runner ids but not all of them. A parity test selects runners from their declared facts: `runnersWhere()` over `RUNNER_FACTS`, or `exemptWhere()` (hearsay-tools/squawk#3642) | None; a protocol quirk of one runner names that one runner |
 | `cez/raw-query-setter` | A raw `useSearchParams` setter in the cockpit (hearsay-tools/cezarion#1649) | `packages/web/src/test/search-params-discipline.baseline.json`, shrink-only and reasoned |
@@ -109,6 +110,35 @@ remain in force.
 
 The lists live beside the rules in `packages/cezar/src/lint/`, except the query-setter and card-2 contrast baselines,
 which keep their paths. CI's baseline-growth gate refuses a `*.baseline.json` that grows.
+
+### Layer import
+
+**Static scope:** non-test `.ts` files under `packages/cezar/src/` that `layers.json` puts in
+`core`. The rule reads the relative specifier of each `import` and `export … from` declaration
+(type-only ones included), a literal `import()`, a literal `import('…')` type and an
+`import x = require('…')`, and maps `.js` to `.ts`. It does not read package specifiers, a
+computed specifier, or an import chain through another core file. Imports from `shell`,
+`tooling`, `runner` and feature files are outside its scope. Tests, testkits, `.d.ts` files and
+`__fixtures__/` have no layer.
+
+`packages/cezar/src/lint/layers.json` is the layer map
+([ADR 0065](../adr/0065-define-the-core-by-a-layer-map.md)). Each layer lists paths relative to
+`packages/cezar/src`: a directory (`delegation/`), a file-name prefix (`core/pi-*`) or one file
+(`planner.ts`). The longest matching path wins. The runner's repository checks fail:
+
+- a source file that no path covers: add it to the layer it belongs to;
+- a path that covers no file, a path listed twice, and a layer name other than `core`, `runner`,
+  `shell`, `tooling` or `feature:<name>`;
+- two paths of one length that place one file in two layers;
+- a baseline entry whose count differs from the file's imports of that target, a repeated entry,
+  or an entry with no reason.
+
+To place a new file, add its path, or let a directory path cover it. Put it in `core` only when
+the core needs it with every feature off. To remove an import from the baseline, fix the import,
+then lower the entry's `count` or delete the entry; `npm run lint` names each stale entry. Never
+add an entry: CI's baseline-growth gate refuses it, unless the owner applies the
+`baseline-growth` label. A move to another layer is a one-line change to `layers.json`; when the
+move removes a crossing, lower the baseline in the same commit.
 
 ### Home boundary
 

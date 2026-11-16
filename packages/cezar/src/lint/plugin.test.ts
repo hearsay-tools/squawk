@@ -69,6 +69,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'test-wait-discipline': ['packages/cezar/src/wait-violation.test.ts', 'await sleep(5);\n'],
   'card-2-contrast': ['packages/web/src/unsafe.tsx', '<p className="bg-card-2 text-danger text-xs">bad</p>'],
   'design-guardian': ['packages/web/src/design-violation.tsx', 'const value = "h-screen";\n'],
+  'layer-import': ['packages/cezar/src/core/layer-leak.ts', "import { listAutomations } from '../automations/store.ts';\n"],
   'contract-root-import': ['packages/cezar/src/a.ts', "import { runRecordSchema } from '@open-mercato/cezar-contract';\n"],
   'mock-lifecycle-boundary': ['packages/cezar/scripts/mock-boundary.mjs', "function watchdogStall() {}\n"],
   'mock-scenario-boundary': ['packages/cezar/scripts/mock-scenario-violation.mjs', "import { play } from './mock-scenario.mjs';\nconst x = 'mock:hold';\n"],
@@ -121,6 +122,9 @@ const APPROVED: Record<string, string> = {
   'packages/cezar/src/core/runner-pick.ts': "const print = backend === 'cursor';\n",
   'packages/web/src/routes/runner-branch.test.ts': "const print = backend === 'cursor';\n",
   'packages/web/src/routes/frame.ts': "switch (message.t) { case 'cursor': break; }\n",
+  // layer-import: the runner factory, and a shell file that imports a feature.
+  'packages/cezar/src/core/runner-factory.ts': "import { PiRunner } from './pi-runner.ts';\n",
+  'packages/cezar/src/server/layer-shell.ts': "import { listAutomations } from '../automations/store.ts';\n",
   // runner-roster-literal: the definition, a listed roster, a subset and a derived list.
   'packages/cezar/src/core/agent-runner.ts': `export const RUNNER_IDS = [${ROSTER}] as const;\n`,
   'packages/contract/src/runner.ts': `export const runnerSchema = z.enum([${ROSTER}]);\n`,
@@ -337,6 +341,8 @@ describe('stale entries', () => {
     'packages/cezar/src/lint/home-readers.baseline.json': JSON.stringify({ entries: [] }),
     'packages/cezar/src/lint/runner-id-branch.baseline.json': JSON.stringify({ entries: [] }),
     'packages/cezar/src/lint/runner-roster-literal.baseline.json': JSON.stringify({ entries: [] }),
+    'packages/cezar/src/lint/layers.json': JSON.stringify({ layers: {} }),
+    'packages/cezar/src/lint/layer-import.baseline.json': JSON.stringify({ entries: [] }),
     'packages/cezar/src/lint/resume-time-readers.json': JSON.stringify({ files: { 'packages/web/src/lib/reads.ts': 'reads', 'packages/web/src/lib/stopped.ts': 'stopped' } }),
     'packages/web/src/test/search-params-discipline.baseline.json': JSON.stringify({ sites: [{ file: 'routes/x.tsx', site: '[query, setQuery] = useSearchParams()', reason: 'r' }] }),
     'packages/api-client/src/index.ts': "export * from '@open-mercato/cezar-contract';\n",

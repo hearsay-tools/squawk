@@ -79,7 +79,7 @@ test('a passing run names the changed functions that stay over the limit without
   const head = f.commit({ 'a.ts': complex('lowered', 25) + complex('level', 24, '  x += 1;\n') + complex('fine', 6) });
   const result = gate(f, head);
   assert.equal(result.code, 0, result.output);
-  assert.match(result.output, /^2 changed functions stay over 20 without growing\. The pre-PR check still reports them:$/m);
+  assert.match(result.output, /^2 changed functions stay over 20 without growing\. They do not fail the gate:$/m);
   assert.match(result.output, /a\.ts:\d+ lowered: complexity 26 \(was 31 at the merge base; limit 20\)/);
   assert.match(result.output, /a\.ts:\d+ level: complexity 25 \(was 25 at the merge base; limit 20\)/);
   assert.doesNotMatch(result.output, /fine/);
