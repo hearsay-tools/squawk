@@ -13,6 +13,7 @@ export class SessionGroup {
   #interrupt: () => void = () => undefined;
   #cwd: string;
   #session: AgentSession | undefined;
+  #closingOnDone: AgentSession | undefined;
   #pendingPermissions = new Set<string>();
   #permissionsView = new ReadonlySetView(this.#pendingPermissions);
   #agentSessionError: string | undefined;
@@ -32,6 +33,9 @@ export class SessionGroup {
   /** The task worktree, or the repository root. */
   get cwd(): string { return this.#cwd; }
   get session(): AgentSession | undefined { return this.#session; }
+  /** True while `session` is open, or while an accepted done closes it through `endWhenQuiet`: closed
+   *  to input, it can still raise and answer a late permission request (hearsay-tools/squawk#1680). */
+  get answersPermissions(): boolean { return !!this.#session && (this.#session.open || this.#closingOnDone === this.#session); }
   /** Native grants belong only to this live session generation. */
   get pendingPermissions(): ReadonlySet<string> { return this.#permissionsView; }
   get agentSessionError(): string | undefined { return this.#agentSessionError; }
@@ -54,6 +58,7 @@ export class SessionGroup {
   installInterrupt(interrupt: () => void): void { this.#interrupt = interrupt; }
   changeWorkingDirectory(cwd: string): void { this.#cwd = cwd; }
   attachSession(session: AgentSession): void { this.#session = session; }
+  closeOnDone(session: AgentSession): void { this.#closingOnDone = session; }
   retireSession(): void { this.#session = undefined; }
   markSessionOpened(): void { this.#sessionEverOpened = true; }
   selectStep(stepId: string): void { this.#currentStepId = stepId; }

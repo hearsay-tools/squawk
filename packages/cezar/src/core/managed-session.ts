@@ -99,6 +99,8 @@ export function startManagedSession(
     holdsHumanInput: () => live.holdsHumanInput(),
     ...(live.heldHumanInputCount ? { heldHumanInputCount: () => live.heldHumanInputCount!() } : {}),
     end: () => { stop(); live.end(); },
+    // The guard stays armed: a turn the late request reopens is still an open turn.
+    ...(live.endWhenQuiet ? { endWhenQuiet: () => live.endWhenQuiet!() } : {}),
     interrupt: () => { stop(); live.interrupt(); },
   };
 }

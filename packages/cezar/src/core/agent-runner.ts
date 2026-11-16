@@ -353,6 +353,14 @@ export interface AgentSession {
   heldHumanInputCount?(): number;
   /** Graceful close: end input, then a SIGTERM→SIGKILL watchdog. */
   end(): void;
+  /**
+   * The close after an accepted done (hearsay-tools/squawk#1680). Exactly the runners whose facts
+   * row declares `nativePermission: 'after-turn'` implement it. `open` reads false at once, so the
+   * session takes no input. It stays up `AUTO_END_DELAY_MS` for a permission request the wire raises
+   * after the turn ended; such a request still reaches `respondPermission`, and the session ends once
+   * none is pending and the turn it reopened has ended. Every other runner closes with `end()`.
+   */
+  endWhenQuiet?(): void;
   /** Hard stop (used by cancel). */
   interrupt(): void;
   /** True while the session still accepts messages. */

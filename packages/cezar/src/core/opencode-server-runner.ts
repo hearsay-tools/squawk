@@ -1,6 +1,6 @@
 import { productEnv } from './product-env.ts';
 import { uiAskQuestions } from './ask.ts';
-import { opencodeSkillWarning } from './opencode-session-error.ts';
+import { opencodeSkillWarning, sessionErrorDetail, sessionErrorText } from './opencode-session-error.ts';
 import { summarizeRunnerStderr } from './runner-stderr.ts';
 import { finished } from 'node:stream/promises';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -298,6 +298,8 @@ class OpencodeSession implements AgentSession {
   private permissionRules: Promise<OpencodeUserPermissionRule[] | undefined> | undefined;
   private answeredDefaultAsk = false;
   private autoEndTimer: NodeJS.Timeout | undefined;
+  /** Set by `endWhenQuiet`: the session takes no more input and ends once no late ask is pending. */
+  private closingAfterDone = false;
   private timedOut = false;
   private openingPromptFailed = false;
 
@@ -411,7 +413,7 @@ class OpencodeSession implements AgentSession {
   }
 
   get open(): boolean {
-    return this.serverOpen;
+    return this.serverOpen && !this.closingAfterDone;
   }
 
   get pid(): number | undefined {
@@ -424,7 +426,7 @@ class OpencodeSession implements AgentSession {
     // Nothing may run ahead of the task: refuse until the opening prompt has started,
     // then hint once so the refused input steers the opening turn.
     if (this.serverOpen && this.turnSerial === 0) { this.refusedBeforeOpening = true; return false; }
-    if (!this.serverOpen || !this.sessionId || this.pendingQuestion || this.questionReply || this.pendingPermissions.size > 0 ||
+    if (!this.open || !this.sessionId || this.pendingQuestion || this.questionReply || this.pendingPermissions.size > 0 ||
       this.pendingPromptRequests > 0 || this.agentRequest) return false;
     // A prompt posted before a due follow-on run would have that run's idle close its turn, and
     // its own run would then surface nothing (PR #1291 CI): it waits for that run, as for a turn.
@@ -456,7 +458,7 @@ class OpencodeSession implements AgentSession {
 
   sendMessage(content: ContentBlock[]): boolean {
     this.agentInputReady = false;
-    if (!this.serverOpen) return false;
+    if (!this.open) return false;
     this.cancelAutoEnd();
     const text = textOf(content);
     if (!text) return true;
@@ -530,12 +532,23 @@ class OpencodeSession implements AgentSession {
   }
 
   private scheduleAutoEnd(): void {
-    if (!this.opts.autoEndAfterFirstTurn || !this.serverOpen || this.autoEndTimer || this.agentRequest || this.pendingPermissions.size) return;
+    if (!(this.opts.autoEndAfterFirstTurn || this.closingAfterDone) || !this.serverOpen || this.autoEndTimer || this.agentRequest ||
+      this.pendingPermissions.size) return;
     this.autoEndTimer = setTimeout(() => {
             this.autoEndTimer = undefined;
-            if (this.opts.shouldAutoEnd?.() !== false) this.end();
+            if (this.closingAfterDone || this.opts.shouldAutoEnd?.() !== false) this.end();
           }, AUTO_END_DELAY_MS);
     this.autoEndTimer.unref?.();
+  }
+
+  /** A main-session `permission.asked` can follow the idle (`handlePermissionAsked`), so a done
+   *  waits `AUTO_END_DELAY_MS` for one; its ask holds the close until the run it reopened ends. */
+  endWhenQuiet(): void {
+    if (!this.serverOpen || this.closingAfterDone) return;
+    this.closingAfterDone = true;
+    this.agentInputReady = false;
+    if (this.turnActive) return;
+    this.scheduleAutoEnd();
   }
 
   end(): void {
@@ -1642,42 +1655,6 @@ function sleep(ms: number): Promise<void> {
 function stringField(obj: Record<string, unknown>, key: string): string | undefined {
   const v = obj[key];
   return typeof v === 'string' ? v : undefined;
-}
-
-/** Same reading of the wire error shape as the v2 mapper's `errorText`
- *  (`opencode-ui-mapper.ts`): a bare string, `{message}`, `{data:{message}}`
- *  (the real server's `ProviderAuthError` shape), or `{name}` as a last resort. */
-function sessionErrorText(error: unknown): string {
-  if (typeof error === 'string') return error;
-  if (typeof error !== 'object' || error === null) return 'session error';
-  const rec = error as Record<string, unknown>;
-  const data = typeof rec.data === 'object' && rec.data !== null ? (rec.data as Record<string, unknown>) : undefined;
-  return (
-    stringField(rec, 'message') ??
-    (data && stringField(data, 'message')) ??
-    stringField(rec, 'name') ??
-    'session error'
-  );
-}
-
-/** Structured upstream status or code, when the wire error carries one —
- *  the AI SDK's `AI_APICallError` exposes a numeric `statusCode`, and some
- *  providers nest a `code` inside `data`. Status wins over code; anything
- *  else adds nothing (#53). */
-function sessionErrorDetail(error: unknown): string | undefined {
-  if (typeof error !== 'object' || error === null) return undefined;
-  const rec = error as Record<string, unknown>;
-  const data = isRecord(rec.data) ? rec.data : undefined;
-  const status =
-    numField(rec, 'statusCode') ||
-    numField(rec, 'status') ||
-    (data ? numField(data, 'statusCode') : 0) ||
-    (data ? numField(data, 'status') : 0);
-  if (status > 0) return `HTTP ${status}`;
-  const rawCode = rec.code ?? (data ? data.code : undefined);
-  if (typeof rawCode === 'string' && rawCode.trim()) return `code ${rawCode.trim()}`;
-  if (typeof rawCode === 'number') return `code ${rawCode}`;
-  return undefined;
 }
 
 function numField(obj: Record<string, unknown>, key: string): number {
