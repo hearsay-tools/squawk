@@ -163,7 +163,9 @@ export class Recorder {
   describe(): string {
     const session = this.session;
     const state = session ? `session.open=${session.open} held=${session.heldHumanInputCount?.() ?? session.holdsHumanInput()}` : 'no session';
-    return `${state}\n${describeTimeline(this.timeline)}`;
+    const from = Math.max(0, this.timeline.length - DESCRIBED_EVENTS);
+    const dropped = from > 0 ? [`(${from} earlier events not shown)`] : [];
+    return [state, ...dropped, ...this.timeline.slice(from).map((entry, at) => describeEntry(entry, from + at))].join('\n');
   }
 
   stop(): void {
@@ -293,11 +295,25 @@ function carrierSettled(recorder: Recorder): boolean {
 
 /** A compact stream for a failure message. */
 export function describeTimeline(timeline: readonly ContractEntry[]): string {
-  return timeline.map((entry, index) => {
-    if ('mark' in entry) return `${index} mark ${entry.mark}`;
-    if ('v1' in entry) return `${index} v1 ${entry.v1.type}${entry.v1.type === 'text' ? ` ${JSON.stringify(entry.v1.text.slice(0, 40))}` : ''}`;
-    return `${index} v2 ${entry.v2.type}${textOf(entry) ? ` ${JSON.stringify(textOf(entry).slice(0, 40))}` : ''}`;
-  }).join('\n');
+  return timeline.map(describeEntry).join('\n');
+}
+
+/** The most characters of one event's message a failure message shows. */
+const MESSAGE_CHARS = 200;
+/** The most events a wait's failure message lists: the last ones, after a count of those dropped. */
+export const DESCRIBED_EVENTS = 200;
+
+function describeEntry(entry: ContractEntry, index: number): string {
+  if ('mark' in entry) return `${index} mark ${entry.mark}`;
+  if ('v1' in entry) {
+    const event = entry.v1;
+    if (event.type === 'text') return `${index} v1 text ${JSON.stringify(event.text.slice(0, 40))}`;
+    // An error or note that leaves the session open may be the only trace of a stall's cause.
+    if (event.type === 'error' || event.type === 'note') return `${index} v1 ${event.type} ${JSON.stringify(event.message.slice(0, MESSAGE_CHARS))}`;
+    return `${index} v1 ${event.type}`;
+  }
+  if (entry.v2.type === 'session.error') return `${index} v2 session.error ${JSON.stringify(entry.v2.message.slice(0, MESSAGE_CHARS))}`;
+  return `${index} v2 ${entry.v2.type}${textOf(entry) ? ` ${JSON.stringify(textOf(entry).slice(0, 40))}` : ''}`;
 }
 
 // ---- S36: acknowledgement ------------------------------------------------------------------------
