@@ -771,6 +771,14 @@ rl.on('line', (line) => {
   let uuid;
   try {
     const msg = JSON.parse(trimmed);
+    if (msg.type === 'control_request' && msg.request?.subtype === 'get_skills_dialog') {
+      import('./mock-skill-list.mjs').then(({ mockSkillList }) => {
+        const answer = mockSkillList('claude');
+        answer.response.request_id = msg.request_id;
+        process.stdout.write(`${JSON.stringify(answer)}\n`);
+      });
+      return;
+    }
     if (msg.type === 'control_request' && msg.request?.subtype === 'list_models') {
       process.stdout.write(`${JSON.stringify({
         type: 'control_response',

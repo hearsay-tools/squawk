@@ -405,3 +405,33 @@ two event streams.
 
 omp wrote one more session folder of its own under `~/.omp/agent/sessions/` (the scratch repo, default-home
 runs). Scratch folders under `/tmp` removed; no process started by the probe is left.
+
+## Slice 1 list seam checks (2026-11-16)
+
+omp 18.13.1. No model call. Reproduce:
+
+```
+node .ai/analysis/2026-11-16-runner-native-skills/slice1-open-checks.mjs omp
+node --import tsx .ai/analysis/2026-11-16-runner-native-skills/slice1-probe.mjs omp
+```
+
+**TESTED: OMP_PROFILE against the real omp root.** A unique owned profile under
+`~/.omp/profiles/squawk-list-probe-<timestamp>/agent/skills/probe-profile` held a single
+fixture. `OMP_PROFILE=<name> omp skill list --json` returned:
+
+```json
+{"name":"probe-profile","description":"Profile probe.","filePath":"<root>/profiles/<name>/agent/skills/probe-profile/SKILL.md","source":"native:user"}
+```
+
+It listed 28 skills and 15 warnings, with no login in that profile. The probe removed only
+its owned profile after exit. Other user and plugin sources under HOME remained visible,
+as in round 2. `profileEnv('omp', '<root>/profiles/<name>')` sends that exact profile name.
+
+Implemented adapter output (271 ms, 28 skills, trimmed):
+
+```json
+{"runner":"omp","source":"live","skills":[{"id":"probe-project","name":"probe-project","path":"<repo>/.omp/skills/probe-project/SKILL.md","scope":"repo"},{"id":"audit-agent-readiness","name":"audit-agent-readiness","path":"<home>/.claude/plugins/cache/.../SKILL.md","scope":"user","plugin":"agent-plugins"}],"problems":[{"message":"[Agent Plugins] ... unexpected frontmatter field ..."}]}
+```
+
+Real native response excerpt: `core/__fixtures__/omp/skill-list.json` under the service
+workspace. The adapter keeps native warnings as problems and does not read a skill body.

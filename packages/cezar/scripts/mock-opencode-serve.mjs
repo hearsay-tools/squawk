@@ -266,6 +266,15 @@ async function dispatchReply(replies, body) {
 const server = createServer(handleRequest);
 function handleRequest(req, res) { wireRecorder?.recordHttpResponse(req, res);
   const url = req.url ?? '';
+  if (req.method === 'GET' && url.startsWith('/skill?')) {
+    import('./mock-skill-list.mjs').then(({ mockSkillList }) => {
+    const directory = new URL(url, 'http://localhost').searchParams.get('directory');
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(mockSkillList('opencode', directory ?? process.cwd())));
+    });
+    return;
+  }
+
   if (inputClosed && req.method === 'POST') { req.socket.destroy(); return; }
   if (req.method === 'GET' && url === '/question') {
     res.writeHead(200, { 'content-type': 'application/json' });

@@ -419,6 +419,11 @@ async function handlePromptCommand(command) {
 
 async function handleCommand(command) {
   switch (command.type) {
+    case 'get_commands': {
+      const { mockSkillList } = await import('./mock-skill-list.mjs');
+      send({ ...mockSkillList('pi'), id: command.id });
+      return;
+    }
     case 'prompt': return handlePromptCommand(command);
     case 'get_state': respondState(command); return;
     case 'set_steering_mode': respondSteeringMode(command); return;

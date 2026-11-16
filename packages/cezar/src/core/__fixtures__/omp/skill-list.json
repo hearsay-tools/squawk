@@ -1,0 +1,34 @@
+{
+  "skills": [
+    {
+      "name": "probe-project",
+      "description": "Project probe skill.",
+      "filePath": "/tmp/skill-list-probe/repo/.omp/skills/probe-project/SKILL.md",
+      "baseDir": "/tmp/skill-list-probe/repo/.omp/skills/probe-project",
+      "source": "native:project",
+      "hide": false
+    },
+    {
+      "name": "capture",
+      "description": "Turns a folder of mixed source files (PDF, images, screenshots, whiteboard photos, audio, video, live pages and feeds) into one tagged requirements list, each requirement cited to its file and to where in it (page and region, or seconds into a recording), with conflicts and unreadable files listed. Use when several people sent what they want in different formats and you need one list to build from.",
+      "filePath": "/home/probe/.agents/skills/capture/SKILL.md",
+      "baseDir": "/home/probe/.agents/skills/capture",
+      "source": "agents:user",
+      "hide": false
+    },
+    {
+      "name": "audit-agent-readiness",
+      "description": "Use when judging whether agents can work in a repo safely and alone, or when setup offers it. Mines the repo's history for mistakes agents repeat, probes a disposable worktree, reads agent instructions for prose that works around a code defect, and returns improvements grouped by the highest layer where each fix works. Trigger on intent like \"is this repo ready for agents\", \"audit agent readiness\", or \"why do agents keep tripping here\".",
+      "filePath": "/home/probe/.claude/plugins/cache/apptension-dev/apptension-sdlc/0.25.79/skills/audit-agent-readiness/SKILL.md",
+      "baseDir": "/home/probe/.claude/plugins/cache/apptension-dev/apptension-sdlc/0.25.79/skills/audit-agent-readiness",
+      "source": "agent-plugins:user",
+      "hide": false
+    }
+  ],
+  "warnings": [
+    {
+      "skillPath": "",
+      "message": "[Agent Plugins] [agent-plugins] apptension-sdlc: Skipping skill \"dev-flow\": unexpected frontmatter field \"requires\""
+    }
+  ]
+}

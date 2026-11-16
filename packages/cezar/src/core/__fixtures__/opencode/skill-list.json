@@ -1,0 +1,17 @@
+[
+  {
+    "name": "probe-project",
+    "description": "Project probe skill.",
+    "location": "/tmp/skill-list-probe/repo/.agents/skills/probe-project/SKILL.md"
+  },
+  {
+    "name": "capture",
+    "description": "Turns a folder of mixed source files (PDF, images, screenshots, whiteboard photos, audio, video, live pages and feeds) into one tagged requirements list, each requirement cited to its file and to where in it (page and region, or seconds into a recording), with conflicts and unreadable files listed. Use when several people sent what they want in different formats and you need one list to build from.",
+    "location": "/home/probe/.agents/skills/capture/SKILL.md"
+  },
+  {
+    "name": "setup-verification-maintenance",
+    "description": "Use when installing or updating scheduled maintenance for a project-owned verification skill, including when setup offers maintenance after finding or creating that skill.",
+    "location": "/home/probe/.cache/opencode/packages/apptension-dev-toolkit@git+https:/github.com/apptension/toolkit-dev.git/node_modules/apptension-dev-toolkit/plugins/apptension-sdlc/skills/setup-verification-maintenance/SKILL.md"
+  }
+]
