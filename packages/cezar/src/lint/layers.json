@@ -36,7 +36,6 @@
     "runner": [
       "core/claude-*",
       "core/codex-*",
-      "core/cursor-*",
       "core/omp-*",
       "core/opencode-*",
       "core/pi-*"

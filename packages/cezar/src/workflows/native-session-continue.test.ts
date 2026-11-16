@@ -55,14 +55,12 @@ function flagValues(wire: Row[], flag: string): string[] {
   });
 }
 
-/** How each native wire shows a resumed session, a fresh one, a started turn and its effort.
- *  Cursor resolves effort through its account's model catalog, which the mock does not serve, so
- *  its chain sets no effort and `cursor-bootstrap-continue.test.ts` checks its continued step. */
+/** How each native wire shows a resumed session, a fresh one, a started turn and its effort. */
 const WIRES: Record<RunnerId, {
   resumed(wire: Row[]): string[];
   freshSessions(wire: Row[]): number;
   started(wire: Row[]): boolean;
-  effort?(wire: Row[]): string | undefined;
+  effort(wire: Row[]): string | undefined;
 }> = {
   claude: {
     resumed: wire => flagValues(wire, '--resume'),
@@ -81,11 +79,6 @@ const WIRES: Record<RunnerId, {
     freshSessions: wire => wire.filter(row => argv(row)?.includes('--mode') === true && !argv(row)!.includes('--resume')).length,
     started: wire => wire.some(row => argv(row)?.includes('--mode') === true),
     effort: wire => flagValues(wire, '--thinking').at(-1),
-  },
-  cursor: {
-    resumed: wire => flagValues(wire, '--resume'),
-    freshSessions: wire => wire.filter(row => argv(row)?.includes('-p') === true && !argv(row)!.includes('--resume')).length,
-    started: wire => wire.some(row => argv(row)?.includes('-p') === true),
   },
   codex: {
     resumed: wire => wire.flatMap(row => record(row)?.method === 'thread/resume'
@@ -162,8 +155,7 @@ describe('Continue after a crash before the native session event', () => {
    *  real launch writes before the runner starts; without it the run has no event history. */
   function failedRun(backend: RunnerId, sessionId: string, options: { launched: boolean }): string {
     setEnv(HARNESS_ADAPTERS[backend].binEnv, HARNESS_ADAPTERS[backend].mockBin);
-    const workflowDef = WIRES[backend].effort ? CHAIN_DEF
-      : { ...CHAIN_DEF, steps: CHAIN_DEF.steps.map(({ effort: _effort, ...step }) => step) };
+    const workflowDef = CHAIN_DEF;
     const created = store.createRun({
       title: 't', workflow: workflowDef.name, task: promptFor(backend, 'baseline'), runner: backend,
       steps: workflowDef.steps.map(step => ({ id: step.id, name: step.name ?? step.id, kind: STEP_KIND.agent })),
@@ -200,7 +192,7 @@ describe('Continue after a crash before the native session event', () => {
         expect(WIRES[backend].freshSessions(wire)).toBeGreaterThan(0);
       }
       // The Continue runs as `implement`, the step whose session it continues.
-      if (WIRES[backend].effort) expect(WIRES[backend].effort!(wire)).toBe('high');
+      expect(WIRES[backend].effort(wire)).toBe('high');
       if (source === 'native') {
         // bound: hang guard; the runner reports its own id, which the Continue step records.
         await waitFor(() => store.readEvents(id).some(event => event.type === 'session' && event.stepId === 'continue-1'), 15_000);
@@ -216,6 +208,6 @@ describe('Continue after a crash before the native session event', () => {
     const wire = await continueWire(id, 'codex');
     expect(WIRES.codex.resumed(wire)).toEqual(['thread-from-salvaged-run']);
     expect(WIRES.codex.freshSessions(wire)).toBe(0);
-    expect(WIRES.codex.effort!(wire)).toBe('high');
+    expect(WIRES.codex.effort(wire)).toBe('high');
   }, 60_000);
 });

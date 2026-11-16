@@ -157,7 +157,7 @@ export class RunSkills {
    *
    * The run's OWN task worktree gets every root and the companions their bodies name
    * (`provisionSkills`): links to local and global skills, generated `SKILL.md` files, and marked
-   * team copies, in `.claude/skills`, `.agents/skills` and `.cursor/skills`, recorded in the
+   * team copies, in `.claude/skills` and `.agents/skills`, recorded in the
    * worktree's git dir and kept out of git by a worktree-local `.gitignore`. The project's
    * off-list (`disabledTeamSkills`) is read fresh on every pass and applied to the saved
    * registry, the roots and the team list alike: a team skill switched off for the project is
@@ -170,7 +170,7 @@ export class RunSkills {
    * would shadow the team source for every later run. A selected or leading-slash directory team
    * root gets a per-commit cache copy there instead, and nothing else is installed: a skill only
    * the prompt names gets nothing there, like a companion. So does a worktree where no copy of
-   * it landed, such as one whose three agent dirs all link out of it; one that took only some
+   * it landed, such as one whose agent dirs both link out of it; one that took only some
    * copies names the first that landed, since the runner's own dir may be the one skipped.
    * Returns the step-start notes and, per team root, the directory its prompt must name.
    */
@@ -215,8 +215,7 @@ export class RunSkills {
     for (const skill of teamRoots) {
       const written = result.teamCopies[skill.name] ?? [];
       if (written.length === TEAM_SKILL_AGENT_DIRS.length) {
-        notes.push(`team skill "${skill.name}" materialized to .claude/skills/${skill.name}/ ` +
-          `.agents/skills/${skill.name}/, and .cursor/skills/${skill.name}/`);
+        notes.push(`team skill "${skill.name}" materialized to .claude/skills/${skill.name}/ and .agents/skills/${skill.name}/`);
       } else if (written.length > 0) {
         notes.push(`team skill "${skill.name}" materialized to ${written.map((dir) => `${relative(state.liveSession.cwd, dir)}/`).join(' and ')}`);
         filesDir.set(skill.name, written[0]!);

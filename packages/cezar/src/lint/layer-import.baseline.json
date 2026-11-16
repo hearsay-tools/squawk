@@ -51,12 +51,6 @@
     },
     {
       "file": "packages/cezar/src/core/host-model-catalog.ts",
-      "target": "packages/cezar/src/core/cursor-model-catalog.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
-      "file": "packages/cezar/src/core/host-model-catalog.ts",
       "target": "packages/cezar/src/core/omp-model-catalog.ts",
       "count": 1,
       "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
@@ -70,12 +64,6 @@
     {
       "file": "packages/cezar/src/core/host-model-catalog.ts",
       "target": "packages/cezar/src/core/pi-model-catalog.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
-      "file": "packages/cezar/src/core/runner-cli.ts",
-      "target": "packages/cezar/src/core/cursor-model-catalog.ts",
       "count": 1,
       "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
     },

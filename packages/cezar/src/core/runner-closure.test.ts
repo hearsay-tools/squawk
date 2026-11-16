@@ -13,7 +13,7 @@ import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 const src = join(import.meta.dirname, '..');
 const ADAPTERS: Record<RunnerId, string> = {
   claude: 'core/claude-cli-runner.ts', codex: 'core/codex-app-server-runner.ts', opencode: 'core/opencode-server-runner.ts',
-  cursor: 'core/cursor-runner.ts', pi: 'core/pi-runner.ts', omp: 'core/omp-runner.ts',
+  pi: 'core/pi-runner.ts', omp: 'core/omp-runner.ts',
 };
 const PER_RUNNER = new RegExp(`^(?:harness|waits)-(${RUNNER_IDS.join('|')})-.*-parity\\.test\\.ts$`);
 

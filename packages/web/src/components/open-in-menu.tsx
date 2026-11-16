@@ -26,6 +26,7 @@ import type { ReactNode } from 'react'
 
 import type { OpenTarget, Runner } from '@open-mercato/cezar-api-client'
 import { ownLookup } from '@open-mercato/cezar-api-client/contract/own-lookup'
+import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -90,8 +91,8 @@ export function openInIcon(target: OpenTarget): LucideIcon {
  *  target (editors, Finder, terminal) — mirrors the server's `agentCliRunner` (open-in-app.ts)
  *  without importing server code into the bundle. */
 export function cliTargetRunner(targetId: string): Runner | undefined {
-  const match = /^cli:(claude|codex|opencode|pi|cursor|omp)$/.exec(targetId)
-  return match ? (match[1] as Runner) : undefined
+  const runner = targetId.startsWith('cli:') ? targetId.slice('cli:'.length) : ''
+  return (runnerSchema.options as readonly string[]).includes(runner) ? (runner as Runner) : undefined
 }
 
 /** A target the caller has decided is applicable, plus how it should read in the menu. */

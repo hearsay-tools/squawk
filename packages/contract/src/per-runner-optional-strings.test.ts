@@ -7,7 +7,6 @@ type OptionalRunnerStrings = {
   codex?: string | undefined;
   opencode?: string | undefined;
   pi?: string | undefined;
-  cursor?: string | undefined;
   omp?: string | undefined;
 };
 

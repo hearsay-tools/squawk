@@ -52,7 +52,6 @@ export const RUNNERS: readonly RunnerOption[] = [
   { id: 'codex', label: 'codex', desc: 'OpenAI Codex (app-server)' },
   { id: 'opencode', label: 'opencode', desc: 'OpenCode (serve)' },
   { id: 'pi', label: 'pi', desc: 'pi CLI (provider/model)' },
-  { id: 'cursor', label: 'Cursor', desc: 'Cursor CLI' },
   { id: 'omp', label: 'OMP', desc: 'Oh My Pi CLI (provider/model)' },
 ]
 
@@ -79,7 +78,6 @@ export const MODELS_BY_RUNNER: Record<Runner, readonly ModelPreset[]> = {
   ],
   // pi selects a model with the same `provider/model` convention as opencode, and its
   // entries come from discovery (`pi --list-models`) for the same reason OpenCode's do.
-  cursor: [{ id: '', label: 'auto', desc: 'Use your Cursor default model' }],
   pi: [
     { id: '', label: 'auto', desc: 'Use your pi default model' },
   ],
@@ -101,16 +99,14 @@ export const EFFORT_OPTIONS = [
 
 export type EffortOption = (typeof EFFORT_OPTIONS)[number]
 
-/** Auto plus advertised levels. A `catalog-only` runner has no generic fallback without model
- *  metadata, and reads levels only from its own catalog. */
+/** Auto plus advertised levels; without model metadata, auto plus every generic level. */
 export function effortOptionsForModel(
   runner: Runner,
   model: string,
   catalog?: RunnerModelCatalogResponse,
 ): readonly EffortOption[] {
-  const catalogOnly = RUNNER_COCKPIT_FACTS[runner].effortLevels === 'catalog-only'
-  const fallback = catalogOnly ? [EFFORT_OPTIONS[0]] : EFFORT_OPTIONS
-  const levels = runnerDiscoversModels(runner) && (!catalogOnly || catalog?.runner === runner)
+  const fallback = EFFORT_OPTIONS
+  const levels = runnerDiscoversModels(runner)
     ? catalog?.models.find((entry) => entry.id === model)?.effortLevels
     : undefined
   if (!levels?.length) return fallback
@@ -146,13 +142,11 @@ const RETIRED_MODEL_IDS: Partial<Record<Runner, readonly string[]>> = {
  * (#480).
  * Unknown ids remain valid custom models; only a known cross-runner mismatch is discarded.
  *
- * A runner whose `modelIdScope` is not `own` serves ids of every provider: no id conflicts with
- * an `any-provider` runner, and a `provider-spanning` runner's ids belong to no runner alone, so
- * they never conflict with another runner. This is the cockpit's half of the rule the server
+ * A runner whose `modelIdScope` is `provider-spanning` serves ids of every provider, so its ids
+ * belong to no runner alone and never conflict with another runner. This is the cockpit's half of the rule the server
  * states structurally: a runner with no default provider cannot be contradicted, which is why
  * `KNOWN_PRESETS_BY_RUNNER.pi` is empty in `packages/cezar/src/core/model-presets.ts`. */
 export function modelConflictsWithRunner(model: string, runner: Runner): boolean {
-  if (RUNNER_COCKPIT_FACTS[runner].modelIdScope === 'any-provider') return false
   if (!model || MODELS_BY_RUNNER[runner].some((preset) => preset.id === model)) return false
   const foreign = (other: string) => other !== runner
   if (Object.entries(RETIRED_MODEL_IDS).some(([other, ids]) => foreign(other) && ids.includes(model))) return true

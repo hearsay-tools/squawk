@@ -36,7 +36,7 @@ vi.mock('../skills-provision.ts', async original => {
 
 const execFileAsync = promisify(execFile);
 const GIT_IDENTITY = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
-const AGENT_DIRS = ['.claude', '.agents', '.cursor'];
+const AGENT_DIRS = ['.claude', '.agents'];
 const LEAD = 'lead-1408';
 const HELPER = 'helper-1408';
 const LIVE = 'live-1408';
@@ -173,7 +173,6 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
   "slash-install": [
     "claude R95",
     "codex R95",
-    "cursor R95",
     "omp R95",
     "opencode R95",
     "pi R95"

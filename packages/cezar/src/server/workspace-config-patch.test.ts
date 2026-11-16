@@ -76,11 +76,11 @@ describe('applyWorkspaceConfigPatch', () => {
     const config = defaultWorkspaceConfig();
     applyWorkspaceConfigPatch(config, { agentDefaults: { models: { claude: 'sonnet' } } });
     expect(config.agentDefaults.models).toEqual({ claude: 'sonnet' });
-    applyWorkspaceConfigPatch(config, { agentDefaults: { models: { cursor: 'model[effort=high]' } } });
-    expect(config.agentDefaults.models).toEqual({ claude: 'sonnet', cursor: 'model[effort=high]' });
+    applyWorkspaceConfigPatch(config, { agentDefaults: { models: { omp: 'model[effort=high]' } } });
+    expect(config.agentDefaults.models).toEqual({ claude: 'sonnet', omp: 'model[effort=high]' });
     applyWorkspaceConfigPatch(config, { agentDefaults: { models: { claude: null } } });
-    expect(config.agentDefaults.models).toEqual({ cursor: 'model[effort=high]' });
-    applyWorkspaceConfigPatch(config, { agentDefaults: { models: { cursor: null } } });
+    expect(config.agentDefaults.models).toEqual({ omp: 'model[effort=high]' });
+    applyWorkspaceConfigPatch(config, { agentDefaults: { models: { omp: null } } });
     expect(config.agentDefaults.models).toBeUndefined();
   });
 });

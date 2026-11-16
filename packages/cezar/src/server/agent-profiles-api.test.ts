@@ -95,7 +95,7 @@ describe('agent profiles API', () => {
       expect(body.profiles.every((p) => p.id === 'default')).toBe(true);
     });
 
-    it('names the providers that can carry an account at all — OpenCode and Cursor cannot', async () => {
+    it('names the providers that can carry an account at all — OpenCode cannot', async () => {
       expect((await list()).profileCapableProviders).toEqual(['claude', 'codex', 'pi', 'omp']);
     });
 

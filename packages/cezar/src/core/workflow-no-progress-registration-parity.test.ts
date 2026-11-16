@@ -6,5 +6,5 @@ import { describeWorkflowNoProgressParity } from './workflow-no-progress-parity.
 
 it('registers every workflow-no-progress case exactly once across its files', () => {
   checkParityRegistration('workflow-no-progress-parity', describeWorkflowNoProgressParity,
-    RUNNER_IDS.flatMap(backend => NO_PROGRESS_CRITERIA.map(row => `${backend} ${row.id}`)), 48);
+    RUNNER_IDS.flatMap(backend => NO_PROGRESS_CRITERIA.map(row => `${backend} ${row.id}`)), 40);
 });

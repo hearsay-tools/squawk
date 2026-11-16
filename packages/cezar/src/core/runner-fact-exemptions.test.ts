@@ -22,24 +22,24 @@ const exempted = (criterion: string) => RUNNER_IDS.filter(runner => exemptionFor
 
 describe('parity expectations follow the runner facts rows', () => {
   it('exempts R77 exactly where the wire carries no hook frame (hookEvents)', () => {
-    expect(exempted('R77')).toEqual(['codex', 'opencode', 'cursor', 'omp']);
+    expect(exempted('R77')).toEqual(['codex', 'opencode', 'omp']);
   });
 
   it.each(['S9', 'R12', 'R15'])('exempts %s exactly where the wire carries no child work (childWork)', criterion => {
-    expect(exempted(criterion)).toEqual(['codex', 'cursor']);
+    expect(exempted(criterion)).toEqual(['codex']);
   });
 
   it.each(['S25', 'F7'])('exempts %s exactly where the wire runs over stdio (transport)', criterion => {
-    expect(exempted(criterion)).toEqual(['claude', 'opencode', 'pi', 'cursor', 'omp']);
+    expect(exempted(criterion)).toEqual(['claude', 'opencode', 'pi', 'omp']);
   });
 
   it('exempts the native permission rows by the declared nativePermission', () => {
-    const none = ['claude', 'opencode', 'cursor', 'omp'];
+    const none = ['claude', 'opencode', 'omp'];
     for (const criterion of ['P1', 'P3', 'P4', 'P6']) expect(exempted(criterion), criterion).toEqual(none);
     // P2, P5 and P7 keep a named single-runner exemption for codex beside the declared ones.
-    for (const criterion of ['P2', 'P5', 'P7']) expect(exempted(criterion), criterion).toEqual(['claude', 'codex', 'opencode', 'cursor', 'omp']);
+    for (const criterion of ['P2', 'P5', 'P7']) expect(exempted(criterion), criterion).toEqual(['claude', 'codex', 'opencode', 'omp']);
     // Only a runner whose request can arrive after its turn ended runs P8.
-    expect(exempted('P8')).toEqual(['claude', 'codex', 'opencode', 'cursor', 'omp']);
+    expect(exempted('P8')).toEqual(['claude', 'codex', 'opencode', 'omp']);
   });
 
   it('nudges before a held human acknowledgement exactly where the prompt read ends the hold (humanPromptHold)', () => {

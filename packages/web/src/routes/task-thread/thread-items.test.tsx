@@ -49,7 +49,6 @@ describe('ProviderAuthRequiredCard', () => {
     ['codex', 'Codex'],
     ['opencode', 'OpenCode'],
     ['pi', 'pi'],
-    ['cursor', 'Cursor'],
     ['omp', 'OMP'],
   ] as const)('renders accessible fixed recovery guidance for %s', (provider, label) => {
     render(
@@ -1163,7 +1162,7 @@ describe('conversation card delivery guidance', () => {
   const message = { id: '33333333-3333-4333-8333-333333333333', senderRunId: parent, recipientRunId: recipient,
     kind: 'progress', text: 'Status update', createdAt: '2026-09-22T12:00:00.000Z', state: 'accepted', requestHash: 'a'.repeat(64) }
 
-  function renderDelivery(delivery: 'queued' | 'delivered' | 'consumed', backend?: 'codex' | 'cursor') {
+  function renderDelivery(delivery: 'queued' | 'delivered' | 'consumed', backend?: 'codex') {
     const entries = reduceThread(asRunEvents([{ type: 'conversation-message', message, delivery }])).turns.flatMap(turn => turn.items)
     render(<MemoryRouter><SessionTranscript runId={parent} viewId="main"
       sections={[{ id: 'turn', entries }]} mode="document"
@@ -1177,11 +1176,6 @@ describe('conversation card delivery guidance', () => {
     expect(card.textContent).not.toMatch(/wait.*turn.*end|next safe turn/i)
   })
 
-  it('reserves turn-end guidance for Cursor', () => {
-    const card = renderDelivery('queued', 'cursor')
-    expect(card.querySelector('[data-slot="conversation-delivery-explanation"]')?.textContent).toContain('waits for that turn to end')
-  })
-
   it('does not claim a turn boundary when the recipient backend is unknown', () => {
     const card = renderDelivery('queued')
     expect(card.querySelector('[data-slot="conversation-delivery-explanation"]')?.textContent).toMatch(/Queued for delivery/)
@@ -1189,7 +1183,7 @@ describe('conversation card delivery guidance', () => {
   })
 
   it.each(['delivered', 'consumed'] as const)('keeps the %s receipt without queued guidance', delivery => {
-    const card = renderDelivery(delivery, 'cursor')
+    const card = renderDelivery(delivery, 'codex')
     expect(card.querySelector('[data-slot="conversation-delivery-explanation"]')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Details/ }))
     expect(card.textContent).toContain(delivery === 'consumed' ? 'Read' : 'Delivered')

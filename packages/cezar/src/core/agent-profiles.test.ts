@@ -19,10 +19,9 @@ describe('PROFILE_ENV_VAR', () => {
     expect(PROFILE_ENV_VAR.omp).toBe('OMP_PROFILE');
   });
 
-  it('leaves OpenCode and Cursor unsupported — no single variable moves their credentials', () => {
+  it('leaves OpenCode unsupported — no single variable moves its credentials', () => {
     expect(PROFILE_ENV_VAR.opencode).toBeNull();
     expect(supportsProfiles('opencode')).toBe(false);
-    expect(supportsProfiles('cursor')).toBe(false);
     expect(PROFILE_CAPABLE_PROVIDERS).toEqual(['claude', 'codex', 'pi', 'omp']);
   });
 

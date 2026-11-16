@@ -1,6 +1,7 @@
 import { productName } from '../home/display.ts';
 import { commandText } from '../home/command.ts';
 import { productEnvEntries } from '../core/product-env.ts';
+import { RUNNER_IDS } from '../core/agent-runner.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -93,7 +94,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `Worker questions arrive as requests carrying a question; answer with ${messaging} reply <worker-id> '<answer>' --id <new-message-UUID> --request-id <question-id>, one '<header>: <answer>' line per question (an option's label, or your own words for a question without options), which the worker reads verbatim as its answer. If you cannot decide, ask the human with your own question, then reply. Progress and follow-ups never answer it, and you cannot finish while it is unanswered.`,
     `Use ${invocation} spawn --baseline parent-head --request-id <UUID> '<task>' (or an explicit committed ref).`,
     `Reuse the request ID only for the exact same task/baseline/context/runner/model/effort/workflow/skill on a retry.`,
-    `Optional spawn flags: --workflow <name> or --skill <name> (mutually exclusive), --context '<selected text>' or --context-file <local-UTF-8-file> (mutually exclusive), --attach <path> (repeatable; copies a git-ignored file from your worktree into the worker's worktree at the same relative path before it starts; tracked or unignored files and .gitignore are refused, commit those instead), --runner <claude|codex|opencode|pi|cursor|omp>, --model <model>, --effort <low|medium|high|xhigh|max|auto>.`,
+    `Optional spawn flags: --workflow <name> or --skill <name> (mutually exclusive), --context '<selected text>' or --context-file <local-UTF-8-file> (mutually exclusive), --attach <path> (repeatable; copies a git-ignored file from your worktree into the worker's worktree at the same relative path before it starts; tracked or unignored files and .gitignore are refused, commit those instead), --runner <${RUNNER_IDS.join('|')}>, --model <model>, --effort <low|medium|high|xhigh|max|auto>.`,
     `--workflow runs a catalog workflow (the built-in quick-task or a .ai/cezar/workflows/*.yaml name) inside the worker, agent and check steps alike; --skill runs one discovered skill as the worker task; omitting both means quick-task; a worker inherits your extra system prompt, never your selected skill.`,
     `--runner, --model and --effort fill only the steps that leave those fields unset; an unknown name fails. Agent steps may mix runners: each step is pinned to its own runner, account, model, effort and grants at spawn, and a step's agentProfile names its account explicitly.`,
     `Example: spawn --baseline parent-head --request-id <UUID> --runner codex --effort high --context 'Inspect only the parser' 'Review parser'. Use high here only when the selected model advertises it and overrides are allowed.`,

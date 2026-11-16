@@ -400,34 +400,6 @@ describe('follow-up ContinueAction runner/model selection (#401)', () => {
     expect(continueBody()).toEqual({ runner: 'claude', model: 'opus', effort: '' })
   })
 
-  it('clears an effort pin the switched runner cannot honour, pills untouched (#411)', async () => {
-    // Cursor has no effort levels of its own, so a `high` pin from the claude run is not a
-    // choice the pills can still show — the switch writes the displayed auto back to the
-    // record instead of letting the old pin ride along on the wire.
-    serve(
-      HEALTH_MULTI,
-      {},
-      {
-        providers: [
-          { provider: 'claude', status: 'connected', enabled: true },
-          { provider: 'cursor', status: 'connected', enabled: true },
-        ],
-      },
-    )
-    renderAction(makeRun({ runner: 'claude', effort: 'high' }))
-
-    fireEvent.pointerDown(await screen.findByRole('button', { name: /^Runner · / }))
-    const options = await screen.findAllByRole('menuitemradio')
-    fireEvent.click(options.find((o) => o.textContent?.includes('cursor')) as HTMLElement)
-
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /^Effort · / }).textContent).toContain('auto'))
-
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
-    await waitFor(() => expect(continueBody()).toBeDefined())
-    expect(continueBody()).toEqual({ runner: 'cursor', model: '', effort: '' })
-  })
-
   it('shows a read-only native model while locked and still permits switching runners', async () => {
     serve(
       HEALTH_MULTI,
@@ -678,6 +650,16 @@ const serveAccounts = (
  * Default` / `claude · Klaudiusz` / `codex` — so "continue this on my other Claude login" is
  * sayable after the task has started, not only when it is created.
  */
+describe('a task saved on a removed runner (hearsay-tools/squawk#3715)', () => {
+  it('continues on the project default runner as a new session, naming it on the wire', async () => {
+    serve()
+    renderAction(makeRun({ runner: undefined, removedRunner: 'cursor', steps: [step()] }))
+    fireEvent.click(await screen.findByRole('button', { name: /continue/i }))
+    await waitFor(() => expect(continueBody()).toBeDefined())
+    expect(continueBody()).toMatchObject({ runner: 'claude' })
+  })
+})
+
 describe('the follow-up runner pill carries the account', () => {
   it('lists every agent-and-login as one flat row, on a single-backend host too', async () => {
     serveAccounts(ACCOUNTS, {

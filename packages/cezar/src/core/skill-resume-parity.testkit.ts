@@ -112,12 +112,6 @@ function assertReusedRecordedSession(
     expect(continuationRecording).not.toContain('thread/start');
     return;
   }
-  if (backend === 'cursor') {
-    expect(continuationRecording).toContain('--resume');
-    expect(continuationRecording).toContain(sessionId);
-    expect(continuationRecording).not.toMatch(/"method"\s*:\s*"session\/new"/);
-    return;
-  }
   if (backend === 'claude') {
     expect(continuationRecording).toMatch(/--resume/);
     expect(continuationRecording).toContain(sessionId);
@@ -146,25 +140,12 @@ function appendedSystemPrompts(rows: unknown[]): string[] {
   });
 }
 
-function cursorSystemPrompt(rec: Record<string, unknown>): string | undefined {
-  if (rec.method === 'session/prompt') {
-    const prompt = (rec.params as { prompt?: Array<{ type?: string; text?: string }> } | undefined)?.prompt;
-    const text = prompt?.find((part) => typeof part.text === 'string')?.text;
-    if (typeof text === 'string') return systemFromPrepended(text);
-  }
-  if (rec.method === 'cursor-print/stdin' && typeof rec.prompt === 'string') {
-    return systemFromPrepended(rec.prompt);
-  }
-  return undefined;
-}
-
 function recordedSystemPrompt(backend: RunnerId, rec: Record<string, unknown>): string | undefined {
   if (backend === 'codex' && rec.method === 'turn/start') {
     const input = (rec.params as { input?: Array<{ text?: string }> } | undefined)?.input;
     const text = input?.[0]?.text;
     if (typeof text === 'string') return systemFromPrepended(text);
   }
-  if (backend === 'cursor') return cursorSystemPrompt(rec);
   if (backend === 'opencode' && typeof rec.url === 'string' && rec.url.includes('prompt_async')) {
     const parts = (rec.body as { parts?: Array<{ type?: string; text?: string }> } | undefined)?.parts;
     const text = parts?.[0]?.text;
@@ -178,11 +159,6 @@ function systemPromptsFrom(backend: RunnerId, recording: string): string[] {
   if (backend === 'claude' || backend === 'pi' || backend === 'omp') return appendedSystemPrompts(rows);
   const texts: string[] = [];
   for (const row of rows) {
-    if (backend === 'cursor' && Array.isArray(row)) {
-      const prompt = row.at(-1);
-      if (typeof prompt === 'string' && prompt.includes('\n\n---\n\n')) texts.push(systemFromPrepended(prompt));
-      continue;
-    }
     if (!row || typeof row !== 'object') continue;
     const text = recordedSystemPrompt(backend, row as Record<string, unknown>);
     if (text !== undefined) texts.push(text);
@@ -402,16 +378,13 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
     "omp R53",
     "omp R55"
   ],
-  "live-continue-opencode-cursor": [
-    "cursor R53",
-    "cursor R55",
+  "live-continue-opencode": [
     "opencode R53",
     "opencode R55"
   ],
   "recovery-prompt": [
     "claude R54",
     "codex R54",
-    "cursor R54",
     "omp R54",
     "opencode R54",
     "pi R54"
@@ -419,7 +392,6 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
   "recovery-before-session-event": [
     "claude R59",
     "codex R59",
-    "cursor R59",
     "omp R59",
     "opencode R59",
     "pi R59"
@@ -432,16 +404,13 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
     "codex R57",
     "omp R57"
   ],
-  "session-identity-opencode-cursor": [
-    "cursor R57",
+  "session-identity-opencode": [
     "opencode R57"
   ],
   "wire-and-fallback": [
     "claude R56",
     "codex R56",
     "codex fresh-session continuation includes the skill",
-    "cursor R56",
-    "cursor fresh-session continuation includes the skill",
     "every runner declares systemPromptOnResume",
     "omp R56",
     "opencode R56",
@@ -509,14 +478,12 @@ describe('harness parity — skill system prompt on Continue (#790)', () => {
     it(`${backend} R59 recovers a Continue interrupted before its session event`, async () => {
       await withSkillResumeRun(backend, async (fixture) => {
         const sessionId = recordedSessionId(fixture.store, fixture.runId);
-        const original = fixture.store.getRun(fixture.runId)!.steps[0]!;
         await idleClose(fixture.manager, fixture.runId);
         fixture.store.addStep(fixture.runId, {
           id: 'continue-1', name: 'Continue', kind: STEP_KIND.agent, synthetic: 'continuation',
         });
         fixture.store.updateStep(fixture.runId, 'continue-1', {
           status: STEP_STATUS.running, sessionId, backend,
-          ...(original.sessionTransport ? { sessionTransport: original.sessionTransport } : {}),
         });
         // A user's Continue checkpoints its message before the session opens; it answers the
         // question the run parked on (hearsay-tools/cezarion#1234).
@@ -597,7 +564,6 @@ describe('harness parity — systemPromptOnResume declaration (#790)', () => {
       omp: 'resent',
       opencode: 'in-thread',
       codex: 'in-thread',
-      cursor: 'in-thread',
     };
     for (const backend of RUNNER_IDS) {
       expect(createRunner(backend).systemPromptOnResume).toBe(expected[backend]);
@@ -648,10 +614,6 @@ describe('harness parity — systemPromptOnResume declaration (#790)', () => {
             expect(opencodeSessionGets(resumeWire)).toEqual([PINNED_SESSION_ID]);
             expect(opencodeSessionGets(freshWire)).toEqual([]);
             expect(freshWire).not.toMatch(/thread\/resume|session\/load/);
-          } else if (backend === 'cursor') {
-            expect(resumeWire).toContain('--resume');
-            expect(resumeWire).toContain(PINNED_SESSION_ID);
-            expect(freshWire).not.toContain('--resume');
           } else {
             expect(resumeWire).toMatch(/thread\/resume|session\/load/);
             expect(freshWire).not.toMatch(/thread\/resume|session\/load/);

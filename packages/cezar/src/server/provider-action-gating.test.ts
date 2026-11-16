@@ -14,6 +14,7 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { RunManager, type StartRunInput } from '../workflows/run.ts';
 import type { WorkflowDef } from '../workflows/types.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
+import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 import { createApp } from './server.ts';
 
 const DISABLED_MESSAGE = 'Codex is disabled. Enable it in Settings → Agents → Providers.';
@@ -266,6 +267,20 @@ describe('provider action gating', () => {
 
     expect(response.status).toBe(200);
     expect(continueRun).toHaveBeenCalledOnce();
+  });
+
+  it('refuses a no-override continue of a run saved on a removed runner before any provider check', async () => {
+    const run = createExistingRun('codex');
+    store.updateRun(run.id, { runner: undefined, removedRunner: 'cursor' });
+    const response = await apiRequest(app, `/api/v1/runs/${run.id}/continue`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: removedRunnerMessage('cursor') });
+    expect(continueRun).not.toHaveBeenCalled();
   });
 
   it('uses the active step backend, not a later historical step, for a live message', async () => {

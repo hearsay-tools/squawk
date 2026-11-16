@@ -277,7 +277,7 @@ describe('ProviderSettings', () => {
 
     expect(await screen.findByText('Provider status could not be loaded')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
-    expect(document.querySelectorAll('[data-slot="provider-card"]')).toHaveLength(6)
+    expect(document.querySelectorAll('[data-slot="provider-card"]')).toHaveLength(5)
   })
 
   it('treats a malformed successful response as a safe verification error', async () => {
@@ -287,7 +287,7 @@ describe('ProviderSettings', () => {
 
     expect(await screen.findByText('Provider status could not be loaded')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
-    expect(document.querySelectorAll('[data-slot="provider-card"]')).toHaveLength(6)
+    expect(document.querySelectorAll('[data-slot="provider-card"]')).toHaveLength(5)
     expect(screen.queryByText(secret)).toBeNull()
   })
 

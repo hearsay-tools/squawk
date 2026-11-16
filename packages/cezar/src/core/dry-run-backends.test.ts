@@ -7,50 +7,8 @@ import { resolveCodexExecutable } from './codex-app-server-transport.ts';
 import { driveSeam } from './harness-parity.testkit.ts';
 import { OpencodeServerRunner } from './opencode-server-runner.ts';
 import { OmpRunner } from './omp-runner.ts';
-import { createRunner } from './runner-factory.ts';
-import { CursorRunner } from './cursor-runner.ts';
-import type { UiEvent } from './ui-events.ts';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import { z } from 'zod';
-import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from './codex-ui-mapper.ts';
-import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from './opencode-ui-mapper.ts';
-
-const TOOL_STATUS = z.enum([
-  ...Object.values(CODEX_TOOL_STATUS_MAP),
-  ...Object.values(OPENCODE_TOOL_STATUS_MAP),
-]).enum;
 
 afterEach(() => vi.unstubAllEnvs());
-it('uses bundled Cursor print for a fresh dry run', async () => {
-  vi.stubEnv('CEZ_DRY_RUN', '1');
-  vi.stubEnv('CEZ_CURSOR_BIN', undefined);
-  const dir = mkdtempSync(join(tmpdir(), 'cez-dry-cursor-'));
-  try {
-    expect(createRunner('cursor')).toBeInstanceOf(CursorRunner);
-    const events: Array<{ type: string; sessionTransport?: string }> = [];
-    await createRunner('cursor').run({ toolGrant: UNSET_TOOL_GRANT, cwd: dir, userPrompt: 'hello' }, event => events.push(event));
-    expect(events.find(event => event.type === 'session')?.sessionTransport).toBe('cursor-print');
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
-it('shows Cursor native questions as failed tools without a Squawk answer card', async () => {
-  vi.stubEnv('CEZ_DRY_RUN', '1');
-  vi.stubEnv('CEZ_CURSOR_BIN', undefined);
-  vi.stubEnv('CEZ_MOCK_CURSOR_PRINT_MODE', 'native-question');
-  const dir = mkdtempSync(join(tmpdir(), 'cez-dry-cursor-question-'));
-  try {
-    const ui: UiEvent[] = [];
-    const session = createRunner('cursor').startSession({ toolGrant: UNSET_TOOL_GRANT, cwd: dir, userPrompt: 'Ask a native question' }, undefined,
-      { onUiEvent: event => ui.push(event) });
-    // bound: wait for the fixture's native process receipt on a loaded host.
-    await expect.poll(() => ui.some(event => event.type === 'turn.completed'), { timeout: 10_000 }).toBe(true);
-    session.end();
-    await session.result;
-    expect(ui.filter(event => event.type === 'ask.requested')).toEqual([]);
-    expect(ui).toContainEqual(expect.objectContaining({ type: 'item.completed', item: expect.objectContaining({
-      status: TOOL_STATUS.failed, error: 'Cursor skipped this native question in headless print mode',
-    }) }));
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
 it('selects bundled Codex, OpenCode and OMP mocks in dry runs without host binaries', () => {
   vi.stubEnv('CEZ_DRY_RUN', '1');
   vi.stubEnv('CEZ_CODEX_BIN', undefined);

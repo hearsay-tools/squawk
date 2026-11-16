@@ -13,7 +13,6 @@ import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { hasPendingAsk, muteLockedDatabaseLogs, blockRunWrites } from '../runs/run-store.testkit.ts';
 import { recordCommits } from '../runs/outcome-crash.testkit.ts';
 import { withHeldAck, withHeldResponse, withRejectedInput } from '../core/owned-input-delivery.testkit.ts';
-import { RUNNER_FACTS } from '../core/runner-facts.ts';
 import { persistentWakeFailure, TIMER_WAKE_OPENING, toolCall, gatedProviderFailure } from './waits-parity.testkit.ts';
 
 // The delivery part of the wait parity cells (`WAIT_PARITY_PARTS` in `waits-parity-catalog.testkit.ts`).
@@ -111,8 +110,7 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
         // An acknowledgement after the wake turn ended still leaves the run in the question's park.
         await answerQuestion(run.id, askSeq);
       };
-      // Cursor print acknowledges on its first model work, which the control holds after init.
-      await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp' | 'cursor', exercise);
+      await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp', exercise);
     });
 
     // hearsay-tools/squawk#1239: the acknowledgement of a wake whose turn already ended
@@ -122,21 +120,10 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
         expect(exemptionFor('U12', runner)?.kind).toBe('capability-absent');
         return;
       }
-      await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp' | 'cursor', async release => {
+      await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp', async release => {
         const { run, timer, askSeq } = await timerBesideQuestion(runner, 'mock:agent-echo delay-owned-ack');
         const ends = turnEnds(run.id);
         fireTimer(timer.id);
-        if (RUNNER_FACTS[runner].inputDelivery.acknowledgement === 'model-work') {
-          // Cursor print acknowledges on the turn's first model work: the held acknowledgement
-          // holds the turn too, so no turn can end before it.
-          await until(() => prompted(runner, `Timer ${timer.id} fired`).length > 0);
-          await flushMicrotasks();
-          expect(turnEnds(run.id)).toBe(ends);
-          release();
-          await until(() => settled(run.id, timer.id)?.phase === 'delivered');
-          await answerQuestion(run.id, askSeq);
-          return;
-        }
         await until(() => prompted(runner, `Timer ${timer.id} fired`).length > 0 && turnEnds(run.id) > ends);
         expect(settled(run.id, timer.id)).toBeUndefined();
         expect(store.getRun(run.id)?.status).toBe('waiting');
@@ -156,18 +143,15 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
         return;
       }
       // The response is held after the acknowledgement: the turn is still running when it lands.
-      // On Cursor print the acknowledgement is the turn's first model work, so it lands in the turn too.
       await withHeldResponse(runner, async (release, held) => {
         const { run, timer, askSeq } = await timerBesideQuestion(runner, 'mock:agent-echo hold-wake-response');
         const ends = turnEnds(run.id);
         const statuses = publishedStatuses(run.id);
         fireTimer(timer.id);
         await until(held);
-        if (RUNNER_FACTS[runner].inputDelivery.acknowledgement !== 'model-work') {
-          await until(() => settled(run.id, timer.id)?.phase === 'delivered');
-          expect(turnEnds(run.id)).toBe(ends);
-          expect(store.getRun(run.id)?.status).toBe('running');
-        }
+        await until(() => settled(run.id, timer.id)?.phase === 'delivered');
+        expect(turnEnds(run.id)).toBe(ends);
+        expect(store.getRun(run.id)?.status).toBe('running');
         release();
         await until(() => settled(run.id, timer.id)?.phase === 'delivered' && turnEnds(run.id) > ends);
         expect(statuses).toContain('running');
@@ -180,7 +164,7 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
         expect(exemptionFor('U12', runner)?.kind).toBe('capability-absent');
         return;
       }
-      await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp' | 'cursor', async release => {
+      await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp', async release => {
         const { run, timer, askSeq } = await timerBesideQuestion(runner, 'mock:agent-echo delay-owned-ack');
         store.updateRun(run.id, { automaticWakes: MAX_AUTO_CONTINUES - 1 });
         fireTimer(timer.id);

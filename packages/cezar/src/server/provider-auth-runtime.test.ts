@@ -23,7 +23,6 @@ const HANG_GUARD_MS = 15_000;
 
 const CONNECTED_OUTPUT: Record<ProviderId, string> = {
   claude: '{"loggedIn":true}',
-  cursor: '{"isAuthenticated":true}',
   codex: 'Logged in using ChatGPT',
   opencode: [
     '┌  Credentials ~/.local/share/opencode/auth.json',
@@ -35,7 +34,6 @@ const CONNECTED_OUTPUT: Record<ProviderId, string> = {
 };
 
 const providerForExecutable = (executable: string): ProviderId => {
-  if (executable === 'agent') return 'cursor';
   if (executable === 'claude' || executable === 'codex' || executable === 'opencode' || executable === 'pi' || executable === 'omp') return executable;
   throw new Error(`unexpected executable: ${executable}`);
 };

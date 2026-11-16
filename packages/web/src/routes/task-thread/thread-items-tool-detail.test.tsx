@@ -7,7 +7,6 @@ import type { UiToolItem } from '@open-mercato/cezar-api-client'
 import claudeBackgroundAgent from '../../../../cezar/src/core/__fixtures__/claude/background-agent.expected.json'
 import claudeTask from '../../../../cezar/src/core/__fixtures__/claude/subagent-task.expected.json'
 import codexCollab from '../../../../cezar/src/core/__fixtures__/codex/collab-agent-tool-call.expected.json'
-import cursorTools from '../../../../cezar/src/core/__fixtures__/cursor/print-tools.expected.json'
 import ompSubagents from '../../../../cezar/src/core/__fixtures__/omp/rpc-subagents.expected.json'
 import opencodeSubtask from '../../../../cezar/src/core/__fixtures__/opencode/subtask-nested.expected.json'
 import { ToolCard } from './thread-items'
@@ -67,7 +66,6 @@ describe('ToolCard expanded detail for every runner subagent shape (hearsay-tool
     ['claude Agent', claudeBackgroundAgent, 'toolu_bg_fixture_01', 'prompt'],
     ['claude Task', claudeTask, 'toolu_task_01', 'prompt'],
     ['codex spawnAgent', codexCollab, 'item_spawn', 'prompt'],
-    ['cursor Task', cursorTools, 'task_1', 'prompt'],
     ['omp task', ompSubagents, 'toolu_task_1', 'task'],
     ['opencode subtask', opencodeSubtask, 'prt_01J8ZE51SUBT', 'prompt'],
   ] as const)('shows the whole %s prompt when expanded', (_runner, events, id, key) => {

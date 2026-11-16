@@ -9,8 +9,9 @@ import type { QueuedMessage, RunRecord, RunStore, StepState } from '../runs/stor
 import { DEFAULT_AGENT_ACCOUNT_ID } from '../workspace/agent-accounts.ts';
 import type { PastedContent } from './run/types.ts';
 import { hasRegisteredRunProcess } from '../core/process-usage.ts';
-import { WorkerIdentityError } from '../delegation/execution-identity.ts';
+import { WorkerIdentityError, removedRunnerStepAfter } from '../delegation/execution-identity.ts';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
+import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 
 /** What a Continue may carry (`RunManager.continueRun`). */
 export type ContinueRunOptions = {
@@ -62,6 +63,12 @@ export function settledParentRefusalError(parentId: string, status: RunRecord['s
   return ['done', 'review', 'cancelled'].includes(status) ? `Parent task ${parentId} is ${status}; continue the parent before its worker.` : undefined;
 }
 
+/** A run saved on a runner Squawk no longer ships continues only on a runner the Continue names
+ *  (hearsay-tools/squawk#3715). A wake, a restart and a plain Continue name none. */
+export function removedRunnerRefusal(run: RunRecord, opts: ContinueRunOptions): ContinuationRefusal | undefined {
+  if (run.removedRunner !== undefined && opts.runner === undefined) return { ok: false, error: removedRunnerMessage(run.removedRunner) };
+}
+
 export function stoppingRefusal(run: RunRecord): ContinuationRefusal | undefined {
   if (run.stopping) return { ok: false, error: 'run is still stopping' };
 }
@@ -110,13 +117,6 @@ export function sessionAffinity(run: RunRecord, opts: ContinueRunOptions, identi
   return { originalRunner, targetRunner, resume };
 }
 
-export function cursorSessionRefusal(resume: boolean, sessionStep: StepState | undefined,
-  resumeSessionId: string | undefined): ContinuationRefusal | undefined {
-  if (resume && sessionStep?.sessionTransport === 'cursor-print' && !resumeSessionId) {
-    return { ok: false, error: 'Cursor print session identity lacks a matching recorded session event' };
-  }
-}
-
 export function hasOverrides(opts: ContinueRunOptions): boolean {
   return opts.runner !== undefined || opts.model !== undefined || opts.effort !== undefined || opts.agentProfile !== undefined;
 }
@@ -132,7 +132,7 @@ export function overridePatch(run: RunRecord, opts: ContinueRunOptions, targetRu
   const inheritedPinIsForeign = opts.model === undefined && run.model !== undefined && modelConflictsWithRunner(run.model, targetRunner);
   const inheritedAccountIsForeign = opts.agentProfile === undefined && run.agentProfile !== undefined && targetRunner !== originalRunner;
   return {
-    ...(opts.runner !== undefined ? { runner: opts.runner } : {}),
+    ...(opts.runner !== undefined ? { runner: opts.runner, removedRunner: undefined } : {}),
     ...(opts.model !== undefined ? { model: opts.model === '' ? undefined : opts.model }
       : inheritedPinIsForeign ? { model: undefined } : {}),
     ...(opts.agentProfile !== undefined ? { agentProfile: opts.agentProfile }
@@ -255,7 +255,7 @@ export class ContinuationChecks {
   }
 
   private ownershipRefusal(run: RunRecord): ContinuationRefusal | undefined {
-    return parentMessageRefusal(run, this.defer, this.conversation) || stoppingRefusal(run) ||
+    return removedRunnerRefusal(run, this.opts) || parentMessageRefusal(run, this.defer, this.conversation) || stoppingRefusal(run) ||
       this.historyDeletionRefusal() || this.settledParentRefusal(run);
   }
 
@@ -339,12 +339,14 @@ export class ContinuationChecks {
     const sessionStep = latestSessionStep(run.steps);
     // Command/check steps may have changed the repo; only an untouched workflow can restart.
     const untouched = this.reads.untouched(run);
-    const absent = sessionRefusal(sessionStep, untouched, (run.delegation?.role === 'worker' && !!this.conversation) || this.opts.freshSession === true);
+    // A removed-runner run, or one whose latest work ran on a removed runner, continues in a new
+    // session, never an older one (hearsay-tools/squawk#3715).
+    const fresh = run.removedRunner !== undefined || removedRunnerStepAfter(run.steps, sessionStep?.sessionId) !== undefined;
+    const absent = sessionRefusal(sessionStep, untouched, (run.delegation?.role === 'worker' && !!this.conversation) ||
+      this.opts.freshSession === true || fresh);
     if (absent) return absent;
-    const affinity = sessionAffinity(run, this.opts, identity, sessionStep, untouched);
+    const affinity = { ...sessionAffinity(run, this.opts, identity, sessionStep, untouched), ...(fresh ? { resume: false } : {}) };
     const resumeSessionId = affinity.resume ? this.reads.sessionId(sessionStep) : undefined;
-    const cursor = cursorSessionRefusal(affinity.resume, sessionStep, resumeSessionId);
-    if (cursor) return cursor;
     return { ok: true as const, value: { untouched, ...affinity, resumeSessionId } };
   }
 }

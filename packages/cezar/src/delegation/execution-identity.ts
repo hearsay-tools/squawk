@@ -4,7 +4,7 @@ import { workerInputRecipeSchema, type WorkerInputRecipe } from '@open-mercato/c
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { realpathSync, statSync } from 'node:fs';
 import { z } from 'zod';
-import { latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
+import { latestSessionStep, removedRunnerStepAfter } from '@open-mercato/cezar-contract/run-predicates';
 import { ACCOUNT_LAYOUT, profileEnv, selectsByProfileName, supportsProfiles } from '../core/agent-profiles.ts';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { namedAccountUnavailable, type ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
@@ -227,6 +227,8 @@ export function continuationDefStep(store: RunStore, record: RunRecord | undefin
   return continuedDefStep(defSteps, record, sessionId) ?? [...defSteps].reverse().find((s) => stepKind(s) === 'agent');
 }
 
+export { removedRunnerStepAfter } from '@open-mercato/cezar-contract/run-predicates';
+
 /**
  * The definition step a Continue continues when the run names one: the failed step of a `resume`
  * cursor, else the step owning the continued session. When the step that holds that session last
@@ -238,6 +240,10 @@ export function continuedDefStep(defSteps: readonly WorkflowStepDef[], record: R
   const resumed = record?.workflowCursor?.mode === 'resume' ? record.workflowCursor.stepId : undefined;
   const ciSource = resumed === undefined ? undefined : defSteps.find(step => step.id === resumed && stepKind(step) === 'agent');
   if (ciSource && record?.steps.find(step => step.id === ciSource.id)?.status === 'failed') return ciSource;
+  // The latest work ran on a runner Squawk no longer ships: its session is gone, and it is still
+  // the step the task continues (hearsay-tools/squawk#3715).
+  const removed = record ? removedRunnerStepAfter(record.steps, sessionId) : undefined;
+  if (removed) return defSteps.find((s) => s.id === (removed.synthetic === 'continuation' && removed.continuesStepId !== undefined ? removed.continuesStepId : removed.id));
   const holders = sessionId === undefined ? [] : record?.steps.filter((s) => s.sessionId === sessionId) ?? [];
   const latest = latestSessionStep(holders);
   const extended = latest?.synthetic === 'continuation' && latest.continuesStepId !== undefined ? latest.continuesStepId : holders[0]?.id;

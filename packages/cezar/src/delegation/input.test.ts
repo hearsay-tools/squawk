@@ -26,7 +26,7 @@ import { setRunStatus, blockRunWrites } from '../runs/run-store.testkit.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 
 /** Read at call time, so a test's `vi.spyOn(runners, 'createRunner')` reaches managers built before it. */
-const spiedRunners: RunnerFactory = (backend, options) => runners.createRunner(backend, options);
+const spiedRunners: RunnerFactory = backend => runners.createRunner(backend);
 
 it('bounds batches without splitting messages or crossing lifecycle inputs', () => {
   const make = (text: string): AgentInput => ({ id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId: randomUUID(), text, createdAt: new Date().toISOString(),

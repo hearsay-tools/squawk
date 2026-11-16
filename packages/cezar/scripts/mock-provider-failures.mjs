@@ -23,15 +23,6 @@ export const CODEX_FAILURES = {
   credit: { status: 402, type: 'insufficient_quota', message: 'You exceeded your current quota, please check your plan and billing details.' },
 };
 
-// The Cursor print CLI's failed result names the Connect error code and the HTTP status.
-export const CURSOR_FAILURES = {
-  provider: 'ConnectError: [invalid_argument] HTTP 400 Bad Request: invalid_request_error: messages must be non-empty',
-  unavailable: 'ConnectError: [unavailable] HTTP 503 Service Unavailable',
-  'rate-limit': 'ConnectError: [resource_exhausted] HTTP 429 Too Many Requests: rate limit exceeded',
-  'not-found': 'ConnectError: [not_found] HTTP 404 Not Found',
-  credit: 'ConnectError: [resource_exhausted] You are out of credits. Upgrade your plan in billing settings to continue.',
-};
-
 // OpenCode forwards the AI SDK's `APIError`: `[statusCode, message]`.
 export const OPENCODE_FAILURES = {
   provider: [400, 'Bad Request: invalid_request_error: messages: text content blocks must be non-empty'],

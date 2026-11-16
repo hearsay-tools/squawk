@@ -315,18 +315,6 @@ export function signalSession(child: ChildProcess, signal: NodeJS.Signals, platf
   child.kill(signal);
 }
 
-/** Signal what a leader that already exited left in its group, under the reap's guard: Cursor
- * print ends its group as each turn's leader exits, ahead of the exit drain. A SIGTERM is the reap
- * itself, sent at most once per group; a SIGKILL goes only to a group that is still ours. */
-export function signalExitedSession(child: ChildProcess, signal: 'SIGTERM' | 'SIGKILL'): void {
-  const pid = child.pid;
-  const leader = pid === undefined ? undefined : leaders.get(pid);
-  if (leader?.child !== child || !exited(child)) return;
-  if (signal === 'SIGTERM') reap(pid!, leader);
-  else if (stale(pid!, leader)) drop(pid!, leader);
-  else signalProcessGroup(pid!, 'SIGKILL');
-}
-
 /** The pgid of a registered, still-running grouped leader, for the worker process ledger. */
 /** Whether `pid` leads a session this process spawned: an agent's own process, which a process
  *  wait refuses because it ends only with the session (hearsay-tools/cezarion#1446). */

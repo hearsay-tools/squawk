@@ -154,5 +154,4 @@ const IDENTITY_SOURCE: Record<ProviderId, { read: (configDir: string) => Promise
   opencode: { unreadable: `OpenCode keeps its login outside its config folder, so ${productName('cezar')} cannot read it.` },
   pi: { unreadable: `${productName('cezar')} does not read which login a pi account is signed in as.` },
   omp: { unreadable: `${productName('cezar')} does not read which login an omp account is signed in as.` },
-  cursor: { unreadable: `${productName('cezar')} does not read which login a Cursor account is signed in as.` },
 };

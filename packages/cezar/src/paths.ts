@@ -130,7 +130,7 @@ export function serverLockPath(instance: string = DEFAULT_SERVER_INSTANCE, home:
  */
 /** The slot of `AgentHomePaths` that holds each provider's account home. */
 export const AGENT_HOME_SLOT: Readonly<Record<ProviderId, keyof AgentHomePaths>> = {
-  claude: 'claude', codex: 'codex', opencode: 'opencodeConfig', pi: 'pi', cursor: 'cursor', omp: 'omp',
+  claude: 'claude', codex: 'codex', opencode: 'opencodeConfig', pi: 'pi', omp: 'omp',
 };
 
 export function agentHomePaths(env: NodeJS.ProcessEnv = process.env): AgentHomePaths {
@@ -141,9 +141,6 @@ export function agentHomePaths(env: NodeJS.ProcessEnv = process.env): AgentHomeP
     codex: env.CODEX_HOME?.trim() || join(home, '.codex'),
     opencodeConfig: join(xdgConfig, 'opencode'),
     pi: env.PI_CODING_AGENT_DIR?.trim() || join(home, '.pi', 'agent'),
-    cursor: env.CURSOR_CONFIG_DIR?.trim()
-      || ((process.platform === 'linux' || process.platform === 'freebsd') && env.XDG_CONFIG_HOME?.trim()
-        ? join(env.XDG_CONFIG_HOME.trim(), 'cursor') : join(home, '.cursor')),
     omp: ompAgentDir(env, home),
   };
 }

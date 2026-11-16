@@ -31,7 +31,6 @@ const RUNNER_PROBES: Record<RunnerId, () => Promise<BackendCheck>> = {
   codex: probeCodex,
   opencode: probeOpencode,
   pi: probePi,
-  cursor: probeCursor,
   omp: probeOmp,
 };
 
@@ -150,19 +149,6 @@ async function probePi(): Promise<BackendCheck> {
       available: false,
       hint: 'optional: install the pi CLI and log in to use the pi runner',
     };
-  }
-}
-
-async function probeCursor(): Promise<BackendCheck> {
-  if (productEnv('DRY_RUN') === '1') {
-    return { name: 'cursor', available: true, version: dryRunVersion() };
-  }
-  const bin = productEnv('CURSOR_BIN') ?? 'agent';
-  try {
-    const { stdout } = await exec(bin, ['--version'], { timeout: 10_000 });
-    return { name: 'cursor', available: true, version: stdout.trim(), hint: 'Run `agent login` to connect Cursor.' };
-  } catch {
-    return { name: 'cursor', available: false, hint: 'Optional: install Cursor CLI (https://cursor.com/docs/cli/installation), then run `agent login`.' };
   }
 }
 

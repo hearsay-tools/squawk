@@ -3,7 +3,7 @@ import { ensureTestInstallMarker } from './test-install-marker.mjs'
 
 const AGENT_HOME_KEYS = [
   'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'PI_CODING_AGENT_DIR', 'PI_CONFIG_DIR',
-  'OMP_PROFILE', 'PI_PROFILE', 'CURSOR_CONFIG_DIR',
+  'OMP_PROFILE', 'PI_PROFILE',
 ]
 
 /** Script-only setup: never import product modules before test-file mocks. */

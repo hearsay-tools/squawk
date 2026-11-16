@@ -7,6 +7,64 @@ import { upgradeLegacyWaits } from './legacy-waits.ts';
 export function upgradeLegacyRunRow(row: Record<string, unknown>): void {
   upgradeLegacyWaits(row);
   upgradeLegacyWorkflowCursor(row);
+  upgradeRemovedRunner(row);
+}
+
+/** Runners Squawk no longer ships (hearsay-tools/squawk#3715). A run saved on one still opens,
+ *  lists and shows its transcript. */
+const REMOVED_RUNNER_IDS: readonly string[] = ['cursor'];
+
+function isRemovedRunner(value: unknown): value is string {
+  return typeof value === 'string' && REMOVED_RUNNER_IDS.includes(value);
+}
+
+/**
+ * A run saved on a removed runner, or with any step or workflow-definition step on one, is read as
+ * `removedRunner`; a removed `runner` is cleared. Its steps on that runner keep no backend and no
+ * session, only `removedBackend`, so a Continue knows that step holds the latest work and opens a
+ * new session for it. A definition step on that runner keeps its prompt, skill and checks, and
+ * loses the runner and the model, effort and account that belonged to it. The next write of the
+ * row stores the fold.
+ */
+export function upgradeRemovedRunner(row: Record<string, unknown>): void {
+  let removed = isRemovedRunner(row.runner) ? row.runner : undefined;
+  if (removed !== undefined) delete row.runner;
+  for (const step of records(row.steps)) {
+    if (!isRemovedRunner(step.backend)) continue;
+    removed ??= step.backend;
+    step.removedBackend = step.backend;
+    delete step.backend;
+    delete step.sessionId;
+    delete step.sessionTransport;
+  }
+  const definition = row.workflowDef;
+  for (const step of records(definition && typeof definition === 'object' ? (definition as Record<string, unknown>).steps : undefined)) {
+    if (!isRemovedRunner(step.runner)) continue;
+    removed ??= step.runner;
+    for (const key of ['runner', 'model', 'effort', 'agentProfile']) delete step[key];
+  }
+  if (removed !== undefined && row.removedRunner === undefined) row.removedRunner = removed;
+}
+
+/** A settled row's stored summary skips the record parse; it folds the same way. */
+export function upgradeRemovedRunnerSummary(row: Record<string, unknown>): void {
+  if (isRemovedRunner(row.currentStepBackend)) delete row.currentStepBackend;
+  if (!isRemovedRunner(row.runner)) return;
+  if (row.removedRunner === undefined) row.removedRunner = row.runner;
+  delete row.runner;
+}
+
+/** A saved worker-result snapshot names the runner the worker ran on; a removed one is dropped. */
+export function upgradeRemovedRunnerResult(file: unknown): unknown {
+  const result = file && typeof file === 'object' ? (file as Record<string, unknown>).result : undefined;
+  if (result && typeof result === 'object' && isRemovedRunner((result as Record<string, unknown>).backend)) {
+    delete (result as Record<string, unknown>).backend;
+  }
+  return file;
+}
+
+function records(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object') : [];
 }
 
 /**

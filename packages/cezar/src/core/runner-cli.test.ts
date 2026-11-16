@@ -4,7 +4,7 @@ import { isSafeSessionId, resumeCommand, RUNNER_CLI, terminalExecutable } from '
 import { commands as goldenCommands, sessionId, unsafeSessionIds } from '../../test/fixtures/resume-commands.ts';
 
 describe('resume commands — shared golden parity across RUNNER_IDS', () => {
-  beforeEach(() => { vi.stubEnv('CEZ_CURSOR_BIN', undefined); vi.stubEnv('CEZ_OMP_BIN', undefined); });
+  beforeEach(() => { vi.stubEnv('CEZ_OMP_BIN', undefined); });
   afterEach(() => vi.unstubAllEnvs());
 
   const commands = goldenCommands satisfies Record<(typeof RUNNER_IDS)[number], string>;
@@ -37,7 +37,6 @@ describe('resumeCommand — session id validation', () => {
     expect(resumeCommand('claude', id)).toBe(`claude --resume ${id}`);
     expect(resumeCommand('codex', id)).toBe(`codex resume ${id}`);
     expect(resumeCommand('opencode', id)).toBe(`opencode --session ${id}`);
-    expect(resumeCommand('cursor', id)).toBe(`agent --resume ${id}`);
     expect(resumeCommand('pi', id)).toBe(`pi --session ${id}`);
     expect(resumeCommand('omp', id)).toBe(`omp --resume ${id}`);
   });
@@ -46,7 +45,7 @@ describe('resumeCommand — session id validation', () => {
   // own resumes nothing (open-mercato/cezar#387).
   it.each(RUNNER_IDS)('maps %s to its own CLI, never silently to claude', (runner) => {
     const id = '9f8e7d6c-1234-4abc-9def-0123456789ab';
-    expect(resumeCommand(runner, id)?.startsWith(`${runner === 'cursor' ? 'agent' : runner} `)).toBe(true);
+    expect(resumeCommand(runner, id)?.startsWith(`${runner} `)).toBe(true);
   });
 
   it('never emits a quote character — a POSIX quote would reach cmd.exe literally on win32', () => {
