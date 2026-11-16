@@ -1,4 +1,4 @@
-import { latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
+import { latestSessionStep, sessionRunner } from '@open-mercato/cezar-contract/run-predicates';
 import type { Home } from '../home/home.ts';
 import type { RunnerId } from '../core/agent-runner.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
@@ -102,7 +102,7 @@ export function sessionAffinity(run: RunRecord, opts: ContinueRunOptions, identi
   const originalRunner = identity?.account.provider ?? opts.retryRunner ?? run.runner ?? (untouched ? opts.originalRunner : undefined) ?? 'claude';
   const targetRunner = opts.runner ?? originalRunner;
   // Legacy sessions without explicit affinity belong to the run's current runner/account.
-  const sessionBackend = sessionStep?.backend ?? run.runner ?? 'claude';
+  const sessionBackend = sessionRunner(sessionStep, run);
   const sessionAccount = sessionStep?.profileId ?? DEFAULT_AGENT_ACCOUNT_ID;
   // A provider retry keeps the held step's account, as it keeps its runner (hearsay-tools/squawk#3337).
   const accountSwitched = (opts.agentProfile ?? identity?.account.profileId ?? (opts.retryRunner ? undefined : run.agentProfile) ?? sessionAccount) !== sessionAccount;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveAttention } from './attention.ts';
-import { engineOwnsRun, isSessionOpen, isSweepable, latestSession, latestSessionStep } from './run-predicates.ts';
+import { engineOwnsRun, isSessionOpen, isSweepable, latestSession, latestSessionStep, sessionRunner } from './run-predicates.ts';
 import { runStatusSchema } from './run-status.ts';
 import type { ArchiveFinishedScope, RunStatus } from './runs.ts';
 import { computeWaitingOn, isUsageLimitHold } from './waits.ts';
@@ -132,6 +132,14 @@ describe('latestSessionStep', () => {
   it('keeps array order for steps saved without a start time, and skips steps with no session', () => {
     expect(latestSessionStep([step('a', 's1'), step('b', 's2'), step('c')])?.id).toBe('b');
     expect(latestSessionStep([step('c')])).toBeUndefined();
+  });
+});
+
+describe('sessionRunner', () => {
+  it('reads the step backend, else the run runner, else Claude', () => {
+    expect(sessionRunner({ backend: 'codex' }, { runner: 'claude' })).toBe('codex');
+    expect(sessionRunner({}, { runner: 'pi' })).toBe('pi');
+    expect(sessionRunner(undefined, undefined)).toBe('claude');
   });
 });
 

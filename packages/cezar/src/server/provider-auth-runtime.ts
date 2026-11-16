@@ -1,3 +1,4 @@
+import { sessionRunner } from '@open-mercato/cezar-contract/run-predicates';
 import type { Home } from '../home/home.ts';
 import {
   isRuntimeProviderAuthFailure,
@@ -44,7 +45,7 @@ export function watchProviderRuntimeAuthFailures(
     const step = typeof event.stepId === 'string'
       ? run.steps.find(({ id }) => id === event.stepId)
       : undefined;
-    const provider: ProviderId = step?.backend ?? run.runner ?? 'claude';
+    const provider: ProviderId = sessionRunner(step, run);
     // The run-level profile belongs to the run's RUNNER: a mixed-backend step failing on another
     // backend ran under THAT backend's own default login, and asking the resolver for the runner's
     // profile under the wrong provider can only mis-answer the check or stall it unresolved.

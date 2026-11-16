@@ -1,5 +1,5 @@
 /** Owns launch source selection. Call each narrow operation at its original phase boundary. */
-import { latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
+import { latestSessionStep, sessionRunner } from '@open-mercato/cezar-contract/run-predicates';
 import type { Home } from '../../home/home.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { isImageAttachmentName } from '@open-mercato/cezar-contract/attachments';
@@ -707,7 +707,7 @@ function resumableSessionId(store: Pick<RunStore, 'getRun' | 'readEvents'>, runI
   const sessionId = sessionStep?.sessionId;
   if (!sessionId) return undefined;
   const run = store.getRun(runId);
-  if (RUNNER_FACTS[sessionStep.backend ?? run?.runner ?? 'claude'].sessionIdSource === 'launch') return sessionId;
+  if (RUNNER_FACTS[sessionRunner(sessionStep, run)].sessionIdSource === 'launch') return sessionId;
   const events = store.readEvents(runId);
   if (sessionStep.sessionTransport === 'cursor-print') return printSessionConfirmed(run, events, sessionStep) ? sessionId : undefined;
   if (events.some(event => event.type === 'session' && event.sessionId === sessionId)) return sessionId;
