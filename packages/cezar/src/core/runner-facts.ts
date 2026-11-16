@@ -70,10 +70,10 @@ export interface RunnerFacts {
    *  presets are such aliases, so only such a runner gets them; another runs on its own default. */
   readonly claudeModelAliases: boolean;
   /**
-   * When the runner reports the turn that Squawk's own write opens. `on-write`: `turn.started` is
-   * emitted inside `sendMessage`/`sendAgentMessage`, before the call returns. `on-wire`: it comes
-   * later, from a wire frame or a later process. Shared code must not read it; tests use it to pick
-   * runners.
+   * When the runner reports the turn that a human `sendMessage` to an idle session opens.
+   * `on-write`: `turn.started` is emitted inside `sendMessage`, before the call returns.
+   * `on-wire`: it comes later, from a wire frame or a later process. Seam row S37 checks it. Shared
+   * code must not read it; tests use it to pick runners.
    */
   readonly turnStart: 'on-write' | 'on-wire';
 }
@@ -138,7 +138,7 @@ export const RUNNER_FACTS = {
     systemPromptOnResume: 'in-thread',
     nativeAsk: 'answerable', nativeSubagents: 'turn-held', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'native',
     claudeModelAliases: false,
-    // Emitted when the queued prompt_async POST goes out, after sendMessage returns.
+    // A human prompt_async POST goes out after the ready promise, so after sendMessage returns.
     turnStart: 'on-wire',
   },
   pi: {
