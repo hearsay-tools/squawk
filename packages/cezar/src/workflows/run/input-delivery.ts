@@ -2,7 +2,7 @@ import { logPrefix } from '../../home/display.ts';
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS, waitDeliveryLabel } from './wait-kinds.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
-import { nudgeRefusedAt, retireNudge } from './turn-nudges.ts';
+import { nudgeAwaitsAcknowledgement, nudgeRefusedAt, retireNudge } from './turn-nudges.ts';
 import type { AgentInput } from '@open-mercato/cezar-contract/delegation';
 import type { Wait } from '@open-mercato/cezar-contract/waits';
 import type { InputDelivery as InputDeliveryPolicy } from '../../core/agent-runner.ts';
@@ -767,7 +767,9 @@ export class InputDelivery {
    * resumes work in a parked session. */
   resumeParkedRun(runId: string, state: ActiveRun, beforeHumanReset?: HumanAnswerBudget): void {
     clearHeldHumanInputTimer(state);
-    retireNudge(state);
+    // A resume supersedes a refused nudge. The nudge this submission carries stays until its
+    // acknowledgement (hearsay-tools/squawk#2443).
+    if (!nudgeAwaitsAcknowledgement(state, state.liveSession.session)) retireNudge(state);
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'resume', session: state.liveSession.session });
     clearIdleTimer(state);
     this.host.endParkHold(runId, state);

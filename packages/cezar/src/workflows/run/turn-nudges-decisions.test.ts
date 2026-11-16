@@ -244,9 +244,12 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
   let emit: (event: AgentEvent) => void;
   let emitUi: (event: UiEvent) => void;
   let acknowledge: () => void;
+  /** OpenCode and Cursor emit the nudge's turn.started inside sendAgentMessage, before it returns. */
+  let startsTurnOnSend: boolean;
 
   beforeEach(() => {
     session = undefined;
+    startsTurnOnSend = false;
     f.manager.dispose();
     f.manager = createRunnerFixtureManager(f.store, f.repoRoot, { home: testHome(), noWaitNudgeReplyMs: BOUND_MS });
     runnerHook.runner = {
@@ -260,7 +263,10 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
         emitUi = event => options?.onUiEvent?.(event);
         const close = () => { open = false; finish({ text: '', toolCalls: [], tokensUsed: 0 }); };
         // The nudge's acknowledgement settles only when the test acknowledges it.
-        const sendAgentMessage = vi.fn(() => new Promise<void>(resolve => { acknowledge = resolve; }));
+        const sendAgentMessage = vi.fn(() => {
+          if (startsTurnOnSend) emitUi({ type: 'turn.started', turnId: randomUUID() });
+          return new Promise<void>(resolve => { acknowledge = resolve; });
+        });
         session = { get open() { return open; }, result, sendMessage: vi.fn(() => true), sendAgentMessage,
           end: vi.fn(close), interrupt: vi.fn(close), discardQueuedMessages: vi.fn(), holdsHumanInput: () => false };
         queueMicrotask(() => emit({ type: 'session', sessionId: 'ack-bound-session' }));
@@ -308,6 +314,33 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
     expect(nudged.end).not.toHaveBeenCalled();
     expect(boundNotes(id)).toEqual([]);
     expect(f.store.getRun(id)?.status).toBe(RUN_STATUS.running);
+  });
+
+  it('a nudge whose send starts its turn at once keeps its bound off while the turn works', async () => {
+    startsTurnOnSend = true;
+    const { id, session: nudged } = await startNudged();
+    for (let tick = 0; tick < 3; tick++) {
+      await vi.advanceTimersByTimeAsync(BOUND_MS - 1);
+      emit({ type: 'text', text: `still working ${tick}` });
+    }
+    expect(nudged.end).not.toHaveBeenCalled();
+    expect(boundNotes(id)).toEqual([]);
+    expect(f.store.getRun(id)?.status).toBe(RUN_STATUS.running);
+    emit({ type: 'turn-end' });
+    await vi.advanceTimersByTimeAsync(BOUND_MS);
+    await expectClosedWaiting(id, nudged);
+  });
+
+  it('model work with no turn start stops the bound, as the no-progress guard counts it', async () => {
+    const { id, session: nudged } = await startNudged();
+    await vi.advanceTimersByTimeAsync(BOUND_MS - 1);
+    emit({ type: 'tool-call', id: randomUUID(), tool: 'Read', input: {} });
+    await vi.advanceTimersByTimeAsync(BOUND_MS * 2);
+    expect(nudged.end).not.toHaveBeenCalled();
+    expect(boundNotes(id)).toEqual([]);
+    expect(f.store.getRun(id)?.status).toBe(RUN_STATUS.running);
+    // The run tracks the nudge's delivery until it settles; teardown needs it settled.
+    acknowledge();
   });
 
   it('a reply inside the bound cancels it; its turn end, still unacknowledged, bounds the nudge again', async () => {

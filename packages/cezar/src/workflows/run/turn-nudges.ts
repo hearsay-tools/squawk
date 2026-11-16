@@ -51,6 +51,14 @@ export function nudgeHeldRunning(state: ActiveRun): boolean {
   return state.boundary.nudge?.state === 'refused' || nudgeAwaitsAcknowledgement(state, state.boundary.nudge?.session);
 }
 
+/** The work the no-progress guard counts as the model working (`MODEL_PROGRESS` in
+ *  `core/managed-session.ts`), with the UI frames that carry it: a turn start and a top-level item.
+ *  Heartbeats, usage and a nested subagent's items are not. */
+function isModelActivity(event: { type: string; item?: { parentItemId?: string } }): boolean {
+  if (['turn.started', 'text', 'tool-call', 'tool-result', 'image'].includes(event.type)) return true;
+  return event.type.startsWith('item.') && event.item?.parentItemId === undefined;
+}
+
 interface TurnNudgesHost {
   active: Map<string, ActiveRun>;
   move(id: string, exit: RunExitId, patch: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): RunRecord | undefined;
@@ -196,18 +204,22 @@ export class TurnNudges {
       return false;
     }
     const content: ContentBlock[] = [{ type: 'text', text }];
+    // The fact and its bound exist before the transport can emit an event for this send: a runner
+    // that starts the nudge's turn inside sendAgentMessage (OpenCode, Cursor) finds them
+    // (hearsay-tools/squawk#2443). A refused send takes them back.
+    recordNudge(state, { cause: 'autonomous', state: 'submitted' });
+    this.armAutonomousNudgeBound(runId, state);
     // The nudge keeps #505's acknowledged agent-input failure semantics.
     if (!this.host.submitAgentInput(runId, state, content)) {
+      this.timers.clear('acknowledgement', runId);
       // Keep this exact boundary running until onAgentInputReady retries, without charging
       // the cap or claiming delivery. Missing readiness closes via the idle bound.
       if (session.open && !state.inputState.agentInputError && !state.liveSession.agentSessionError) {
         recordNudge(state, { cause: 'autonomous', state: 'refused' });
         this.host.armIdleTimer(runId, state);
-      }
+      } else retireNudge(state);
       return false;
     }
-    recordNudge(state, { cause: 'autonomous', state: 'submitted' });
-    this.armAutonomousNudgeBound(runId, state);
     const spent = this.host.chargeAutomaticWake(runId);
     this.context.store.appendEvent(runId, {
       type: 'note', stepId,
@@ -242,9 +254,10 @@ export class TurnNudges {
     this.timers.clear('acknowledgement', runId);
   }
 
-  /** Runner activity is the nudge's reply: its bound stops while the turn runs. */
-  cancelAutonomousNudgeBound(runId: string): void {
-    this.timers.clear('acknowledgement', runId);
+  /** Model work in the session is the nudge's reply: its bound stops while the turn runs. A turn end
+   *  that still finds the acknowledgement missing arms it again. */
+  noteNudgeActivity(runId: string, event: { type: string; item?: { parentItemId?: string } }): void {
+    if (isModelActivity(event)) this.timers.clear('acknowledgement', runId);
   }
 
   /** The nudge a turn end with no wait or done gets: one automatic turn, charged to the

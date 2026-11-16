@@ -190,7 +190,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
   };
   modules.inputReceiptSteps = {
     clearUnread: state => clearUnreadInputTimer(state), clearHeld: state => clearHeldHumanInputTimer(state),
-    noteActivity: (id, state, event) => modules.turnNudges.noteNoWaitNudgeContent(id, state, event),
+    noteActivity: (id, state, event) => { modules.turnNudges.noteNudgeActivity(id, event); modules.turnNudges.noteNoWaitNudgeContent(id, state, event); },
     persistAttachment: (id, mediaType, data) => modules.attachments.persistAttachment(id, mediaType, data),
     ready: (id, state, session) => modules.inputDelivery.handleAgentInputReady(id, state, session),
     pid: (id, pid) => { replaceRunProcess(id, pid); modules.workerExecutions.recordWorkerProcess(id, pid); },
@@ -329,7 +329,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     flushAgentInputs: id => modules.inputDelivery.flushAgentInputs(id),
     resumeParkedRun: (...args) => modules.inputDelivery.resumeParkedRun(...args),
     noteNoWaitNudgeContent: (...args) => modules.turnNudges.noteNoWaitNudgeContent(...args),
-    cancelAutonomousNudgeBound: id => modules.turnNudges.cancelAutonomousNudgeBound(id),
+    noteNudgeActivity: (id, event) => modules.turnNudges.noteNudgeActivity(id, event),
     parkedOnWorkers: id => modules.wakeAdmission.parkedOnWorkers(id),
     trackSubagentEvent: (id, state, event) => modules.subagentWaits.trackEvent(id, state, event),
     supersedeOnRunnerResume: id => modules.subagentWaits.supersedeOnRunnerResume(id),
