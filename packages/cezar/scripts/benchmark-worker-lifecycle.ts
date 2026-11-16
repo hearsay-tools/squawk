@@ -1,0 +1,154 @@
+import { benchmarkHome, prepareBenchmarkEnv } from './benchmark-home.ts';
+import { setRunStatus } from '../src/runs/run-store.testkit.ts';
+/**
+ * Worker lifecycle benchmark (hearsay-tools/squawk#2180): spawn and destroy latency of real owned
+ * workers, run unchanged on the commit before worker process ownership and on one after it.
+ *
+ *   node --import tsx packages/cezar/scripts/benchmark-worker-lifecycle.ts --workers 10 --out row.json
+ *
+ * End to end (the same calls on both refs): one process builds what `serve` builds for a project
+ * (`RunStore`, `RunManager`, `DelegationService`) on a temp Git repo, with the dry-run Claude mock.
+ * - spawn: `createOwnedRun` + `enqueueOwnedRun` to the session's first recorded process, and to the
+ *   worker's first settled turn; this includes worktree creation and setup-free start.
+ * - destroy (clean): `destroyForHuman` on a settled worker.
+ * - destroy (outside holder): the same, while an unrelated `sleep` works in the worktree. Before the
+ *   change that holder refuses the destroy (`incomplete`); after it, it is ignored.
+ * Every attempt is recorded with its state, incomplete ones included.
+ *
+ * Fixture (what this ref has, reported apart): before, the host-wide cwd scan destroy ran
+ * (`inspectGeneration`); after, a worker scope's stop of a detached descendant.
+ */
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpus, loadavg, tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { parseArgs } from 'node:util';
+import { randomUUID } from 'node:crypto';
+import { ClaudeCliRunner } from '../src/core/claude-cli-runner.ts';
+import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
+
+installWindowsIdentityStore();
+const ownHome = prepareBenchmarkEnv();
+process.env.CEZ_DRY_RUN = '1'; process.env.CEZ_AUTONAME = '0'; process.env.CEZ_MOCK_NUDGE_REPLY = 'plain'; process.env.CEZ_MOCK_NOTES = '0';
+
+const { values } = parseArgs({ options: { workers: { type: 'string', default: '10' }, out: { type: 'string' }, label: { type: 'string', default: '' } } });
+const workers = Number(values.workers);
+if (!Number.isInteger(workers) || workers < 1) throw new Error('--workers must be a whole number >= 1');
+
+const { RunStore } = await import('../src/runs/store.ts');
+const { RunManager } = await import('../src/workflows/run.ts');
+const home = benchmarkHome((await import('../src/home/resolve.ts')).resolveHome({ purpose: 'cli' }));
+const { DelegationService } = await import('../src/delegation/service.ts');
+const { acquireCiResources } = await import('../src/ci-wait/resources.ts');
+const { workerCleanups } = await import('../src/delegation/worker-cleanup.ts');
+const { planOwnedWorkspace } = await import('../src/delegation/workspace.ts');
+const { WorkspaceSemaphore } = await import('../src/workspace/semaphore.ts');
+
+const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? Number(s[Math.floor(s.length / 2)]!.toFixed(1)) : null; };
+const p90 = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? Number(s[Math.min(s.length - 1, Math.floor(s.length * 0.9))]!.toFixed(1)) : null; };
+async function until(predicate: () => boolean, timeoutMs: number): Promise<boolean> {
+  const deadline = performance.now() + timeoutMs;
+  while (!predicate()) { if (performance.now() > deadline) return false; await sleep(5); }
+  return true;
+}
+
+const root = mkdtempSync(join(tmpdir(), 'cez-bench-lifecycle-'));
+git(root, 'init', '-q', '-b', 'main');
+git(root, 'config', 'gc.auto', '0');
+git(root, 'config', 'maintenance.auto', 'false');
+git(root, '-c', 'user.name=bench', '-c', 'user.email=bench@local', 'commit', '--allow-empty', '-qm', 'base');
+const sha = git(root, 'rev-parse', 'HEAD');
+const dataDir = join(root, '.ai/cezar');
+const holders: ChildProcess[] = [];
+const store = RunStore.open(dataDir, { keepLive: true });
+const manager = new RunManager(store, root, { home, createRunner: () => new ClaudeCliRunner(), semaphore: new WorkspaceSemaphore({ home, initial: { maxParallel: 4 } }), acquireCiResources });
+const service = new DelegationService(workerCleanups());
+const detach = service.registerProject({ id: 'bench', root, store, manager, home });
+try {
+  const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
+  setRunStatus(store, parent.id, 'waiting', { delegation: { role: 'root', permissions: ['spawn'], receipts: [] } });
+  const processesFile = (id: string) => join(dataDir, 'runs', `${id}.processes.json`);
+  const started = (id: string) => existsSync(processesFile(id)) && (JSON.parse(readFileSync(processesFile(id), 'utf8')) as { processes: unknown[] }).processes.length > 0;
+  // A worker that ends its turn parks `waiting`; its execution stays open until destroy stops it.
+  const settled = (id: string) => ['waiting', 'review', 'done', 'failed'].includes(store.getRun(id)?.status ?? '');
+
+  const spawnToSession: number[] = [], spawnToSettled: number[] = [], spawned: string[] = [];
+  for (let i = 0; i < workers; i++) {
+    const id = randomUUID();
+    const t0 = performance.now();
+    const workspace = await planOwnedWorkspace(root, id, sha);
+    store.createOwnedRun({ title: `worker ${i}`, task: 'say hello', workflow: 'quick-task', runner: 'claude', steps: [{ id: 'task', kind: 'agent', name: 'Task' }] },
+      parent.id, randomUUID(), { role: 'worker', permissions: [], parentRunId: parent.id, workspace }, 'a'.repeat(64));
+    manager.enqueueOwnedRun(id);
+    if (await until(() => started(id), 60_000)) spawnToSession.push(performance.now() - t0);
+    if (await until(() => settled(id), 120_000)) { spawnToSettled.push(performance.now() - t0); spawned.push(id); }
+  }
+
+  const destroy = async (id: string) => {
+    const t0 = performance.now();
+    const result = await service.destroyForHuman('bench', id).catch((error: Error) => ({ state: 'error', error: error.message }));
+    return { ms: performance.now() - t0, state: (result as { state: string }).state };
+  };
+  const half = Math.ceil(spawned.length / 2);
+  const clean = [] as Array<{ ms: number; state: string }>, held = [] as Array<{ ms: number; state: string }>;
+  for (const id of spawned.slice(0, half)) clean.push(await destroy(id));
+  for (const id of spawned.slice(half)) {
+    const run = store.getRun(id);
+    const path = run?.delegation?.role === 'worker' ? run.delegation.workspace.path : root;
+    const holder = spawn('sleep', ['600'], { cwd: path, stdio: 'ignore' }); holders.push(holder);
+    held.push(await destroy(id));
+    holder.kill('SIGKILL');
+  }
+
+  // Fixture: the primitive each ref runs.
+  const fixture: Record<string, unknown> = {};
+  const liveness = await import('../src/delegation/process-liveness.ts') as Record<string, unknown>;
+  if (typeof liveness.inspectGeneration === 'function') {
+    const scan = liveness.inspectGeneration as (input: { paths: string[] }) => unknown;
+    const times: number[] = [];
+    for (let i = 0; i < 20; i++) { const t0 = performance.now(); scan({ paths: [root] }); times.push(performance.now() - t0); }
+    fixture.cwdScanMedianMs = median(times); fixture.cwdScanP90Ms = p90(times);
+    fixture.hostProcesses = execFileSync('sh', ['-c', 'ls /proc | grep -c "^[0-9]"'], { encoding: 'utf8' }).trim();
+  }
+  const scopesPath = '../src/worker-scope/worker-scopes.ts';
+  const scopes = await import(scopesPath).catch(() => undefined) as typeof import('../src/worker-scope/worker-scopes.ts') | undefined;
+  if (scopes) {
+    const host = scopes.hostScope();
+    const stops: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      const id = randomUUID();
+      const scope = store.scopes.spawnScope(id);
+      const [file, args] = scope.command('/bin/sh', ['-c', 'setsid sleep 600 & echo $!']);
+      const leader = spawn(file, args, { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
+      scope.started(leader.pid!);
+      await new Promise(resolve => leader.stdout!.once('data', resolve));
+      const t0 = performance.now();
+      await store.scopes.stop(id, 10_000);
+      stops.push(performance.now() - t0);
+    }
+    fixture.scopeBackend = host.backend; fixture.scopeStopMedianMs = median(stops); fixture.scopeStopP90Ms = p90(stops);
+  }
+
+  const states = (rows: Array<{ state: string }>) => rows.reduce<Record<string, number>>((acc, row) => ({ ...acc, [row.state]: (acc[row.state] ?? 0) + 1 }), {});
+  const row = {
+    label: values.label, commit: git(process.cwd(), 'rev-parse', '--short', 'HEAD'), workers, spawned: spawned.length,
+    spawnToSessionMedianMs: median(spawnToSession), spawnToSessionP90Ms: p90(spawnToSession),
+    spawnToSettledMedianMs: median(spawnToSettled), spawnToSettledP90Ms: p90(spawnToSettled),
+    destroyCleanMedianMs: median(clean.map(r => r.ms)), destroyCleanStates: states(clean),
+    destroyHeldMedianMs: median(held.map(r => r.ms)), destroyHeldStates: states(held),
+    fixture, load1: Number(loadavg()[0]!.toFixed(1)), cores: cpus().length, node: process.version,
+  };
+  console.log(JSON.stringify(row, null, 2));
+  if (values.out) writeFileSync(values.out, `${JSON.stringify(row, null, 2)}\n`);
+} finally {
+  for (const child of holders) child.kill('SIGKILL');
+  detach();
+  manager.dispose();
+  store.close();
+  rmSync(root, { recursive: true, force: true });
+  if (ownHome) rmSync(ownHome, { recursive: true, force: true });
+}
+process.exit(0);
