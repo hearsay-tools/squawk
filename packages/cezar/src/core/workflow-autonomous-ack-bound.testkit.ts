@@ -38,12 +38,12 @@ const notesOf = (store: RunStore, runId: string, text: string) =>
  *  running until it expires, then it notes the nudge and settles `waiting` once the process exits.
  *  Where the wire still runs the nudge's turn (`replies`), its activity stops the bound, and the turn
  *  end that finds the acknowledgement missing arms it again. */
-async function assertBoundCloses({ store, manager, runId }: Fixture, cell: Cell, replies: boolean): Promise<void> {
+async function assertBoundCloses({ store, manager, runId }: Fixture, cell: Cell): Promise<void> {
   const nudged = () => store.readEvents(runId).findIndex(e => e.type === 'note' && String(e.message).includes('continuing without pausing'));
   const replied = () => nudged() >= 0 && store.readEvents(runId).slice(nudged()).some(e => e.type === 'text');
-  await waitFor(() => nudged() >= 0 && (!replies || replied()) && cell.clock().pending > 0, STEP_MS);
+  await waitFor(() => nudged() >= 0 && replied() && cell.clock().pending > 0, STEP_MS);
   // One bound at the submission; a reply stopped it and its turn end armed a second.
-  expect(cell.clock().captured).toBe(replies ? 2 : 1);
+  expect(cell.clock().captured).toBe(2);
   const state = cell.state();
   const session = state.liveSession.session!;
   expect(state.boundary.nudge).toEqual({ session, cause: 'autonomous', state: 'submitted' });
@@ -88,8 +88,7 @@ export async function unacknowledgedNudgeBound(backend: RunnerId, { heldAck }: {
     beforeStart: () => { clock = observationClock(delay => delay === NO_WAIT_NUDGE_REPLY_MS && /armAutonomousNudgeBound/.test(new Error().stack ?? '')); },
     beforeCleanup: () => { clock?.restore(); releaseAck(); },
     during: async fixture => {
-      // Cursor print's acknowledgement is the turn's first model work: holding it holds the reply.
-      if (heldAck) await assertBoundCloses(fixture, cell, backend !== 'cursor');
+      if (heldAck) await assertBoundCloses(fixture, cell);
       else await assertAcknowledged(fixture, cell);
       finished = true;
     },

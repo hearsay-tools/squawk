@@ -4,7 +4,6 @@
  */
 
 import type { UiEvent } from './ui-events.ts';
-import type { SessionTransport } from '@open-mercato/cezar-contract';
 import type { RunnerTimings } from './runner-runtime.ts';
 import type { SpawnScope } from '../worker-scope/scope.ts';
 import type { RunnerFacts } from './runner-facts.ts';
@@ -13,7 +12,7 @@ import type { RunnerFacts } from './runner-facts.ts';
  * Canonical user-selectable runner tuple in display order. Derive runtime enumerations and
  * schemas from this set; keep legacy backend ids separate for persisted records.
  */
-export const RUNNER_IDS = ['claude', 'codex', 'opencode', 'pi', 'cursor', 'omp'] as const;
+export const RUNNER_IDS = ['claude', 'codex', 'opencode', 'pi', 'omp'] as const;
 
 /** The user-selectable runners (what config/GUI expose). */
 export type RunnerId = (typeof RUNNER_IDS)[number];
@@ -258,7 +257,7 @@ export type AgentEvent =
   /** The backend's real session id, once known — codex threads and opencode
    *  sessions mint their own id, so the run manager persists this to enable
    *  resume ("Continue") and "open in CLI". Claude's equals `spec.sessionId`. */
-  | { type: 'session'; sessionId: string; sessionTransport?: SessionTransport }
+  | { type: 'session'; sessionId: string }
   /** `unconsumedInputIds`: agent input accepted in this turn that the model never
    *  read before the turn ended idle (#505). */
   | { type: 'turn-end'; unconsumedInputIds?: readonly string[] }
@@ -314,9 +313,8 @@ export interface SessionOptions {
 }
 
 /**
- * A live logical agent session. Most backends retain one process and read
- * follow-ups from it. Cursor print replaces its process after each completed
- * turn and resumes the same native session ID for follow-ups.
+ * A live logical agent session. A backend may replace its process during the
+ * session (`onPidChange`) and resume the same native session id for follow-ups.
  */
 export interface AgentSession {
   /** Resolves when the backend process exits — the session is fully over. */
@@ -393,10 +391,9 @@ interface InputDeliveryFacts {
    * What resolves `sendAgentMessage`'s Promise (hearsay-tools/cezarion#2991). `write`: the local
    * pipe write, so the provider can neither delay nor reject it (Claude's stdin). `response`: a
    * native response to the submission, apart from the turn's frames (an RPC result, an HTTP
-   * acknowledgement, a prompt response id). `model-work`: the first model-work frame of the
-   * turn the input opens, so no turn can end before its input is acknowledged (Cursor print).
+   * acknowledgement, a prompt response id).
    */
-  readonly acknowledgement: 'write' | 'response' | 'model-work';
+  readonly acknowledgement: 'write' | 'response';
   /** The native mechanism. Documentation only: no code branches on it. */
   readonly via: string;
 }
@@ -420,7 +417,8 @@ export type InputDelivery = InputDeliveryFacts & (
 export const BOUNDARY_INPUT_DELIVERY: InputDelivery = {
   mode: 'boundary', consumption: 'unobservable', acknowledgement: 'response', humanInputAtTurnEnd: 'always-held', via: 'next idle turn',
 };
-/** Absent means the pre-#505 behavior every runner had. */
+/** Absent means the pre-#505 behavior every runner had. No shipped runner declares `boundary`;
+ *  it remains the delivery of a runner that declares none. */
 export function inputDeliveryOf(runner: Pick<AgentRunner, 'inputDelivery'>): InputDelivery {
   return runner.inputDelivery ?? BOUNDARY_INPUT_DELIVERY;
 }
@@ -437,12 +435,12 @@ export function inputDeliveryOf(runner: Pick<AgentRunner, 'inputDelivery'>): Inp
  *   not live-verified (not installed here) and is declared `resent` as the
  *   safe value.
  * - `in-thread`: the system prompt was prepended into the opening turn and is
- *   part of the resumed thread's history (OpenCode, Codex, Cursor). Re-sending
+ *   part of the resumed thread's history (OpenCode, Codex). Re-sending
  *   the skill on the same session duplicates it; a fresh-session continuation
  *   (no `sessionId`, or OpenCode's lost-session fallback) still needs it.
  *
  * The flag is the caller's dedupe policy for the skill prefix, not a statement
- * that in-thread runners ignore `systemPrompt` on resume. Codex, Cursor and
+ * that in-thread runners ignore `systemPrompt` on resume. Codex and
  * OpenCode still re-prepend the whole `spec.systemPrompt` (extra prompt + handoff)
  * on every resumed opening turn; Continue omits only the skill prefix on a
  * same-session in-thread resume.
@@ -452,7 +450,7 @@ export type SystemPromptOnResume = 'resent' | 'in-thread';
 /** Builds the runner for a backend id. The engine depends on this type only; the entry points
  *  pass `createRunner` from `runner-factory.ts`, which knows every adapter, and a test passes a
  *  factory for the one runner it drives (hearsay-tools/cezarion#2939). */
-export type RunnerFactory = (backend: AgentBackend | RunnerId | undefined, options?: { sessionTransport?: SessionTransport }) => AgentRunner;
+export type RunnerFactory = (backend: AgentBackend | RunnerId | undefined) => AgentRunner;
 
 export interface AgentRunner {
   readonly backend: AgentBackend;

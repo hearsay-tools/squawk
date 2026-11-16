@@ -17,7 +17,6 @@ const EXPECTED: Record<RunnerId, { planner: string | undefined; namer: string | 
   codex: { planner: undefined, namer: undefined },
   opencode: { planner: undefined, namer: undefined },
   pi: { planner: undefined, namer: undefined },
-  cursor: { planner: undefined, namer: undefined },
   omp: { planner: undefined, namer: undefined },
 };
 

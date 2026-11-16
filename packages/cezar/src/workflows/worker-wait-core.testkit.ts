@@ -39,7 +39,7 @@ import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 
 /** The test file's runners, read when a run starts one (hearsay-tools/cezarion#2939). */
-const fixtureRunners: import('../core/agent-runner.ts').RunnerFactory = (backend, options) => runnersUnderTest()(backend, options);
+const fixtureRunners: import('../core/agent-runner.ts').RunnerFactory = backend => runnersUnderTest()(backend);
 
 export const timeline = (runId: string, afterSeq = 0) => formatTimeline(runId, store.readEvents(runId), afterSeq);
 

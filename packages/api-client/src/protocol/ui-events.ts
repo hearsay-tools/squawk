@@ -8,7 +8,7 @@ import type { PermissionRequest, PermissionResolution } from '@open-mercato/ceza
 export type { PermissionOption, PermissionOptionKind } from '@open-mercato/cezar-contract'
 
 /** The backend that produced a session. */
-export type UiBackend = 'claude' | 'codex' | 'opencode' | 'pi' | 'cursor' | 'omp'
+export type UiBackend = 'claude' | 'codex' | 'opencode' | 'pi' | 'omp'
 
 /** Tool lifecycle status (ACP-aligned; `running` ≡ ACP `in_progress`). */
 export const TOOL_STATUSES = ['pending', 'running', 'completed', 'failed', 'declined'] as const

@@ -62,7 +62,6 @@ describe('parent discovery and model admission', () => {
   it('lists alternate catalog IDs matching the resolved native and canonical model', async () => {
     f.service.setDiscovery({ models: new RunnerModelCatalog({ adapters: {
       codex: { discover: async () => [{ id: 'different', label: '', description: '' }] },
-      cursor: { discover: async () => [{ id: 'gpt-current', label: '', description: '' }] },
       opencode: { discover: async () => [{ id: 'openai/gpt-current', label: '', description: '' }] },
       pi: { discover: async () => [{ id: 'different-provider/gpt-current', label: '', description: '' }] },
     } }), providers: async () => ({ providers: [] }) });

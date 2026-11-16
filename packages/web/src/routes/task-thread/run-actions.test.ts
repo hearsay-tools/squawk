@@ -247,8 +247,8 @@ describe('lastSessionId', () => {
 
 describe('resumeHint', () => {
   it.each([
-    ['claude', 'cursor', 'agent --resume sess-1'],
-    ['cursor', 'claude', 'claude --resume sess-1'],
+    ['claude', 'codex', 'codex resume sess-1'],
+    ['codex', 'claude', 'claude --resume sess-1'],
   ] as const)('uses the session backend %s → %s for hints and target labels', (runner, backend, expected) => {
     const mixed = run('done', { runner, steps: [step({ backend, sessionId: 'sess-1' })], cliResumeCommand: expected })
     expect(resumeHint(mixed)).toBe(expected)

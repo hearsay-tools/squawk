@@ -100,7 +100,6 @@ const PROVIDER_INSTALL: Record<ProviderId, string> = {
   codex: 'npm i -g @openai/codex',
   opencode: 'https://opencode.ai',
   pi: 'https://github.com/badlogic/pi-mono',
-  cursor: 'https://cursor.com/docs/cli/installation',
   omp: 'https://omp.sh',
 }
 

@@ -248,25 +248,6 @@ function parseOmpStatus(result: ProviderCommandResult): ProviderConnectionState 
   }
 }
 
-// Verified against Cursor CLI 2026.09.15 status --format json implementation.
-function parseCursorStatus(result: ProviderCommandResult): ProviderConnectionState | null {
-  try {
-    const value = JSON.parse(result.stdout) as { isAuthenticated?: unknown; status?: unknown };
-    // `agent status` checks stored login tokens only (CLI 2026.09.15), while sessions
-    // also accept environment credentials. Like OpenCode's environment count,
-    // configured credentials permit a run; a vendor rejection is latched at runtime.
-    if (result.exitCode === 0 && (process.env.CURSOR_API_KEY?.trim() || process.env.CURSOR_AUTH_TOKEN?.trim())) {
-      return 'connected';
-    }
-    if (value.isAuthenticated === true && result.exitCode === 0) return 'connected';
-    if (value.isAuthenticated === false && result.exitCode === 0
-      && (value.status === 'unauthenticated' || value.status === 'partially-authenticated')) return 'disconnected';
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 const DESCRIPTORS: readonly ProviderDescriptor[] = [
   {
     id: 'claude',
@@ -299,14 +280,6 @@ const DESCRIPTORS: readonly ProviderDescriptor[] = [
     loginArgs: ['/login'],
     installHint: 'Install pi, then run `pi /login`.',
     parse: parsePiStatus,
-  },
-  {
-    id: 'cursor',
-    executable: () => productEnv('CURSOR_BIN') ?? 'agent',
-    statusArgs: ['status', '--format', 'json'],
-    loginArgs: ['login'],
-    installHint: 'Install Cursor CLI, then run `agent login`.',
-    parse: parseCursorStatus,
   },
   {
     id: 'omp',

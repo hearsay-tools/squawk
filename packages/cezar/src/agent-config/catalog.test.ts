@@ -6,7 +6,6 @@ const HOME: AgentHomePaths = {
   codex: '/home/u/.codex',
   opencodeConfig: '/home/u/.config/opencode',
   pi: '/home/u/.pi/agent',
-  cursor: '/home/u/.cursor',
   omp: '/home/u/.omp/agent',
 };
 

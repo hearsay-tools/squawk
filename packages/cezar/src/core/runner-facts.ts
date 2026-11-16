@@ -15,11 +15,10 @@ export interface RunnerFacts {
   readonly systemPromptOnResume: SystemPromptOnResume;
   /**
    * The harness's own question tool. `answerable`: the wire reports the question and Squawk routes
-   * the human answer back to it. `auto-skipped`: the harness has the tool but answers it itself
-   * before a human can (Cursor print skips it in headless mode). `none`: the wire has no native
-   * question; the agent asks through `cezar_ask`.
+   * the human answer back to it. `none`: the wire has no native question; the agent asks through
+   * `cezar_ask`.
    */
-  readonly nativeAsk: 'answerable' | 'auto-skipped' | 'none';
+  readonly nativeAsk: 'answerable' | 'none';
   /**
    * Backgrounded native subagents. `reported`: the wire reports a child's start and end, so Squawk
    * waits on the child. `unreported`: the wire sends no child signal. `turn-held`: the parent turn
@@ -40,9 +39,9 @@ export interface RunnerFacts {
    * never refused for a human prompt. `consumption`: the hold ends when the wire reports the prompt
    * read; a prompt that starts a turn is also released by that start's acknowledgement, and a prompt
    * steered into a running turn by the turn's end. `acknowledgement`: the hold ends only at the
-   * prompt's acknowledgement. `turn-end`: the hold ends when the turn the prompt opened ends.
+   * prompt's acknowledgement.
    */
-  readonly humanPromptHold: 'none' | 'consumption' | 'acknowledgement' | 'turn-end';
+  readonly humanPromptHold: 'none' | 'consumption' | 'acknowledgement';
   /**
    * The harness's native permission request, which Squawk answers through the cockpit permission
    * card. `none`: the wire carries no permission request. `in-turn`: a request arrives only inside
@@ -163,26 +162,6 @@ export const RUNNER_FACTS = {
     claudeModelAliases: false,
     // A prompt to an idle session emits piTurnStarted in the same write.
     turnStart: 'on-write',
-  },
-  // Every Cursor session runs on print (hearsay-tools/cezarion#1267).
-  cursor: {
-    // childWork: print stream-json reports the parent Task call but no child-session transcript and
-    // no child terminal frame (__fixtures__/cursor/README.md).
-    // hookEvents: Cursor 2026.10.01-e373342 print stream-json carries no hook lifecycle frame.
-    // nativePermission: print runs with --force; its stream-json wire carries no permission request.
-    // transport: agent -p --output-format stream-json; the prompt on stdin, frames on stdout.
-    // humanPromptHold: sendAgentMessage refuses while busy; a human prompt keeps its print process
-    // busy until the process exits (cursor-print-runner.ts).
-    childWork: 'none', hookEvents: 'none', nativePermission: 'none', transport: 'stdio', humanPromptHold: 'turn-end',
-    inputDelivery: {
-      mode: 'boundary', consumption: 'unobservable', acknowledgement: 'model-work', humanInputAtTurnEnd: 'always-held',
-      via: 'next exact-resume print process',
-    },
-    systemPromptOnResume: 'in-thread',
-    nativeAsk: 'auto-skipped', nativeSubagents: 'unreported', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'native',
-    claudeModelAliases: false,
-    // The init frame of the next print process.
-    turnStart: 'on-wire',
   },
   omp: {
     // childWork: subagent_event frames carry subagent_lifecycle.parentToolCallId of their task call

@@ -56,9 +56,6 @@ export const completionActionSchema = z.object({
   message: z.string().optional(),
 });
 
-/** Cursor native session transport; legacy ones omit it (ACP). `cursor-acp` is only read (hearsay-tools/cezarion#1267). */
-export const sessionTransportSchema = z.enum(['cursor-acp', 'cursor-print']);
-export type SessionTransport = z.infer<typeof sessionTransportSchema>;
 
 const usageCounterSchema = z.number().finite().nonnegative();
 
@@ -84,7 +81,6 @@ export const stepStateSchema = z.object({
   error: z.string().optional(),
   /** Latest agent session id — `claude --resume <id>` and friends. */
   sessionId: z.string().optional(),
-  sessionTransport: sessionTransportSchema.optional(),
   /** Backend that owns `sessionId`; absent on records written before backend affinity. */
   backend: runnerSchema.optional(),
   /** Agent account (spec 2026-07-29-agent-profiles) that owns `sessionId` — `default`, or a

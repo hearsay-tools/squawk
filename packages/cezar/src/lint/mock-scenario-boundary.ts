@@ -8,7 +8,6 @@ export const RUNNER_MOCKS = {
   codex: 'mock-codex-app-server.mjs',
   opencode: 'mock-opencode-serve.mjs',
   pi: 'mock-pi-rpc.mjs',
-  cursor: 'mock-cursor-print.mjs',
   omp: 'mock-omp-rpc.mjs',
 } satisfies Record<RunnerId, string>;
 const REQUIRED_MOCKS = new Set(Object.values(RUNNER_MOCKS).map(name => `packages/cezar/scripts/${name}`));

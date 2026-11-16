@@ -129,7 +129,6 @@ const EXPECTED: Readonly<Record<RunnerId, Readonly<Record<ToolGrantCaseId, Expec
   },
   codex: IGNORED,
   opencode: IGNORED,
-  cursor: IGNORED,
 };
 
 function toolFlags(backend: RunnerId, argv: readonly string[]): string[] {

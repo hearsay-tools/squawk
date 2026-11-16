@@ -533,32 +533,6 @@ export const HARNESS_ADAPTERS: Readonly<Record<RunnerId, HarnessAdapter>> = {
       'steer-late': 'mock:steer-late',
     },
   },
-  cursor: {
-    backend: 'cursor',
-    askResumeCases: [{ kind: 'cezar_ask', scenario: 'ask-resume', answer: 'Library: Vitest' }],
-    binEnv: 'CEZ_CURSOR_BIN',
-    mockBin: join(HERE, '..', '..', 'scripts', 'mock-cursor-print.mjs'),
-    scenarios: {
-      ...SQUAWK_TOOL_SCENARIOS,
-      'multi-pr-refs': 'mock:multi-pr-refs',
-      'turn-messages': 'mock:turn-messages', 'missing-binary': BASELINE_PROMPT,
-      autonomous: 'mock:autonomous',
-      'autonomous-cap': 'mock:autonomous-cap',
-      'autonomous-cezar-ask-cap': 'mock:autonomous-cezar-ask-cap',
-      'silent-tail': 'mock:silent-tail',
-      'silent-tail-slow-done': 'mock:silent-tail-slow-done',
-      baseline: BASELINE_PROMPT,
-      'crash-stderr-pre-ack': 'mock:crash-stderr-pre-ack',
-      'crash-stderr-held-pipe': 'mock:crash-stderr-held-pipe',
-      'shutdown-stderr': 'mock:crash-stderr-clean',
-      'crash-stderr': 'mock:crash-stderr',
-      'crash-stderr-single': 'mock:crash-stderr-single', 'cezar-done': 'mock:cezar-done', hold: 'mock:hold', 'hold-gated': 'mock:hold-gated', 'hold-cezar-done': 'mock:hold-cezar-done', 'hold-cezar-ask': 'mock:hold-cezar-ask', 'no-progress': 'mock:no-progress', 'no-progress-ignore-term': 'mock:no-progress-ignore-term', 'no-progress-held-pipe': 'mock:no-progress-held-pipe', 'no-progress-leftover': 'mock:no-progress-leftover', 'busy-progress': 'mock:busy-progress', 'provider-error': 'mock:provider-error', 'provider-error-controlled': 'mock:provider-error',
-      'provider-unavailable': 'mock:provider-unavailable',
-      'provider-rate-limit': 'mock:provider-rate-limit', 'provider-not-found': 'mock:provider-not-found', 'provider-credit': 'mock:provider-credit',
-      'post-success-refusal': 'mock:provider-error',
-      ask: 'mock:cezar-ask',
-      'ask-resume': 'mock:cezar-ask mock:resume-cezar-done', 'ask-bad': 'mock:ask-bad', 'ask-reply-late': 'mock:cezar-ask-reply-late' },
-  },
   pi: {
     backend: 'pi',
     askResumeCases: [{ kind: 'cezar_ask', scenario: 'ask-resume', answer: 'Library: Vitest' }],
@@ -695,7 +669,6 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     ['claude', 'Claude print mode settles every tool permission inside Claude under its headless --permission-mode and sends Squawk no MCP tool approval request; Squawk\'s own tools are pre-authorized through generated --allowedTools entries (R35).'],
     ['opencode', 'OpenCode sends no MCP-specific approval request: an ask before any tool call arrives as an ordinary permission.asked from a rule the user wrote, which P1 routes to the cockpit card (hearsay-tools/cezarion#1266).'],
     ['pi', 'Pi\'s RPC wire carries no tool approval request for Squawk to answer; Squawk\'s tools reach Pi as an --extension admitted through --tools (R35), not as an MCP server.'],
-    ['cursor', 'Cursor print runs with --force and its stream-json wire carries no MCP tool approval request; Squawk\'s own tools load from a private --plugin-dir.'],
     ['omp', 'OMP\'s RPC wire carries no tool approval request for Squawk to answer: tool admission is its --tools list and --config overlay; Squawk\'s tools reach OMP as an --extension admitted through --tools (R35), not as an MCP server.'],
   ] as const).map(([backend, reason]) => ({ criterion: 'P9', backend, kind: 'scenario-unconstructible' as const, reason })),
   {
@@ -723,10 +696,6 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     criterion: 'P7', backend: 'codex', kind: 'scenario-unconstructible',
     reason: "A Codex approval request is already Codex's own decision to ask (its approval policy runs server-side), so Squawk shows the card on receipt with nothing to read first; there is no window between receipt and the card.",
   },
-  {
-    criterion: 'S29', backend: 'cursor', kind: 'scenario-unconstructible',
-    reason: 'Cursor print writes the prompt to stdin once per turn and then closes stdin. It refuses agent input while busy and queues human follow-ups for a new per-turn child, so this admitted-turn/live-followup cell has no writable input transport to close.',
-  },
   // S9/R12/R15: a child session's work exists only where the wire nests it under its parent call.
   ...exemptWhere('S9', 'scenario-unconstructible', facts => facts.childWork === 'none', () =>
     'This wire carries no child session: a native subagent is a plain tool call on the parent session, so no child terminal signal exists that could end the parent turn.'),
@@ -751,7 +720,6 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
   ...(['A13', 'A14'] as const).flatMap(criterion => ([
     ['claude', 'Claude acknowledges input with its own stdin write, so no prompt acknowledgement is outstanding at a turn end, and it refuses agent input only while its own agent write is pending.'],
     ['codex', 'Codex refuses agent input only while a human prompt is still on its way to the wire, and that prompt is held human input: the turn end takes it before any nudge.'],
-    ['cursor', 'Cursor print acknowledges a follow-up with its first model work, so the follow-up\'s turn cannot end before its acknowledgement. It refuses agent input only while a turn runs or a follow-up is queued, and a queued follow-up is held human input: the turn end takes it before any nudge.'],
   ] as const).map(([backend, reason]) => ({ criterion, backend, kind: 'capability-absent' as const, reason }))),
   // hearsay-tools/squawk#2443: the live row holds the nudge's acknowledgement on every wire that
   // acknowledges apart from its own write.
@@ -761,14 +729,6 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
   },
   ...exemptWhere('F7', 'scenario-unconstructible', facts => facts.transport === 'stdio', () =>
     'This wire has no separate HTTP ACK retained after turn completion. Turn frames and the transport ACK share one stream, so a silent-tail turn cannot end while its agent-input ACK is still pending.'),
-  ...(['F8', 'F9'] as const).map(criterion => ({
-    criterion, backend: 'cursor' as const, kind: 'scenario-unconstructible' as const,
-    reason: 'Cursor print has no independent nudge ACK before native model work. It cannot acknowledge a silent nudge and then withhold or delay that turn; the native turn and no-progress cells exercise the available liveness bound.',
-  })),
-  {
-    criterion: 'N8', backend: 'cursor', kind: 'scenario-unconstructible',
-    reason: 'Every Cursor print process emits a native init frame mapped to turn.started before model-work admission. The native no-progress rows exercise the timeout after that start; no turn-start-free acknowledged input can be constructed.',
-  },
   // hearsay-tools/cezarion#961 wire survey 2026-10-15; each runner's hookEvents comment names its wire.
   ...exemptWhere('R77', 'scenario-unconstructible', facts => facts.hookEvents === 'none', () =>
     'This wire carries no hook lifecycle frame: hooks run inside the harness, so no hook item can arrive after a park.'),
@@ -779,26 +739,9 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
   // A9: a native mid-turn ask.requested exists only where the declared native ask is answerable.
   ...exemptWhere('A9', 'capability-absent', facts => facts.nativeAsk !== 'answerable', backend => reasonFor('A9', backend, {
     claude: 'Claude stream-json asks through cezar_ask; its wire emits no native mid-turn ask.requested (A3/A4 cover the cezar_ask policy).',
-    cursor: 'Cursor print auto-skips native AskQuestion before a human can answer. The executable native-question rejection and the A3/A4 cezar_ask cells cover the available paths.',
     pi: 'Pi RPC asks through cezar_ask; its wire emits no native mid-turn ask.requested (A3/A4 cover the cezar_ask policy).',
     omp: 'OMP v18.4.11 plain `--mode rpc` never constructs the ask tool: sessionOptions.hasUI is true only for interactive or rpc-ui (src/main.ts) and AskTool.createIf returns null without it, so the native ask path cannot exist on the wire Squawk uses. Asks go through cezar_ask (A3/A4 cover the cezar_ask policy).',
   })),
-  {
-    criterion: 'I1', backend: 'cursor', kind: 'scenario-unconstructible',
-    reason: 'Cursor print runs one process per turn and writes its prompt to stdin once, so a running turn has no input channel. sendAgentMessage refuses while busy, and inputDelivery is boundary: input waits for the next exact-resume print process (#505).',
-  },
-  {
-    criterion: 'I2', backend: 'cursor', kind: 'scenario-unconstructible',
-    reason: 'Same wire as I1: Cursor admits no mid-turn agent input, so none can be left unread (#505).',
-  },
-  {
-    criterion: 'I6', backend: 'cursor', kind: 'scenario-unconstructible',
-    reason: 'Same wire as I1: Cursor admits no mid-turn agent input, so none awaits a follow-on run (#505).',
-  },
-  {
-    criterion: 'I3', backend: 'cursor', kind: 'scenario-unconstructible',
-    reason: 'Same wire as I1: a running Cursor print turn has no input channel, so a conversation message cannot steer the answer turn. I4 pins its boundary delivery after that turn (hearsay-tools/cezarion#935).',
-  },
   {
     criterion: 'I2', backend: 'claude', kind: 'capability-absent',
     reason: 'Claude 2.1.280 runs a stdin line written after the last model call as its own following result (queued_turn_count), so accepted input is never left unread (#505).',
@@ -811,17 +754,12 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     criterion: 'I2', backend: 'omp', kind: 'capability-absent',
     reason: 'OMP v18.4.11 session_settled requires queuedMessageCount === 0 (isRpcSessionSettled, modes/rpc/rpc-session-settle.ts), and agent_end is rewritten to isTerminal:false while agent.hasQueuedMessages() (session/agent-session.ts), so a steer accepted before settle is read in the same turn and accepted input is never left unread.',
   },
-  {
-    criterion: 'S4', backend: 'cursor', kind: 'capability-absent',
-    reason: 'Cursor print 2026.10.01-e373342 emits no token usage: its terminal result frame carries no usage or total_cost_usd (Cursor output-format reference; cursor-print-ui-mapper.ts header). Do not manufacture counts from text. Revisit when upstream emits telemetry.',
-  },
   // S11 (hearsay-tools/cezarion#2397): these wires have no answerable native ask; the `ask`
   // scenario calls cezar_ask, whose human wait the workflow holds input behind (R6), not the runner.
   ...exemptWhere('S11', 'capability-absent', facts => facts.nativeAsk !== 'answerable', () =>
     'this wire has no native ask; cezar_ask is the workflow\'s human wait, so the runner admits non-human input and the run tier holds it (R6)'),
   // R4: a malformed question is a native ask's failure. cezar_ask validates its arguments and
-  // answers the agent with invalid_request, so no malformed question reaches the run. Cursor's
-  // auto-skipped native question still runs the row on its wire.
+  // answers the agent with invalid_request, so no malformed question reaches the run.
   ...exemptWhere('R4', 'scenario-unconstructible', facts => facts.nativeAsk === 'none', () =>
     'this wire has no native ask; a malformed cezar_ask is refused to the agent as invalid_request before any card exists'),
   // hearsay-tools/cezarion#1233 U7: cezar_wait stays live on every wire; only a declared native
@@ -841,43 +779,23 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     criterion: 'U13', backend: 'claude', kind: 'capability-absent',
     reason: 'Claude acknowledges agent input with the local stdin pipe write; a written line has no provider rejection.',
   },
-  {
-    criterion: 'U13', backend: 'cursor', kind: 'capability-absent',
-    reason: 'Cursor print rejects an input receipt when its process does not exit 0 after a result, a failed turn; the print wire carries no provider rejection of an admitted prompt.',
-  },
   // U27 (hearsay-tools/cezarion#1525): the late-acknowledgement entry needs a turn that ends before
   // its input is acknowledged. The fresh-step and Continue cells run on every wire.
   {
     criterion: 'U27', backend: 'claude', kind: 'capability-absent',
     reason: 'Claude acknowledges agent input with the local stdin pipe write, so no turn can end before its input is acknowledged; its fresh-step and Continue cells still run.',
   },
-  {
-    criterion: 'U27', backend: 'cursor', kind: 'capability-absent',
-    reason: 'Cursor print acknowledges agent input on the first model work of the process it spawns, so no turn can end before its input is acknowledged; its fresh-step and Continue cells still run.',
-  },
-  // U20h/U22s (hearsay-tools/cezarion#1301): a refusal the harness acknowledges and never answers.
-  ...(['U20h', 'U22s'] as const).map(criterion => ({
-    criterion, backend: 'cursor' as const, kind: 'capability-absent' as const,
-    reason: 'Cursor print has no acknowledgement before native model work: each prompt spawns a process whose init frame is turn.started, which answers the nudge, so a refusal cannot be acknowledged and left unanswered (as F8).',
-  })),
+  // U20h (hearsay-tools/cezarion#1301): a refusal the harness acknowledges and never answers.
   {
     criterion: 'U20h', backend: 'opencode', kind: 'capability-absent',
     reason: 'OpenCode runs one prompt per turn: a human prompt waits for the busy turn to go idle, and a refusal acknowledged without a turn never goes idle, so the human message the cell sends after the bound is never posted.',
   },
-  // S40/S41 (hearsay-tools/cezarion#2991): Cursor print reads a prompt only when its process starts,
-  // so its mock has no mid-turn read point to time a message against. runner-facts.test.ts ties
-  // these ids to the declared boundary delivery.
-  ...(['S40', 'S41'] as const).map(criterion => ({
-    criterion, backend: 'cursor' as const, kind: 'scenario-unconstructible' as const,
-    reason: 'Cursor print has no input channel into a running print process: every mid-turn message waits for the next process (boundary delivery, always-held), which S38 and S39 hold on its wire.',
-  })),
   // D1 (hearsay-tools/cezarion#2279): a governed session keeps native subagents, and Squawk adds a
   // control only where a runner's cross-session tool is separate from subagent messaging. Each
   // reason was checked against the installed CLI on 2026-10-30.
   ...([
     ['claude', 'Claude Code 2.1.312 SendMessage and ListAgents also reach the session\'s own subagents, so no outbound tool is separate from subagent messaging; inbound messages from other sessions are refused on every launch (D3).'],
     ['pi', 'pi 1.4.0 has no built-in cross-session tool; an extension may add one, and its name cannot be discovered as messaging.'],
-    ['cursor', 'Cursor 2026.10.22-27dcf5f send_message (to cloud agents) has no CLI handler, and its native agent tools reach the session\'s own subagents.'],
     ['omp', 'OMP 18.13.1 has no cross-session tool in its default set; its irc tool is an in-process bus that reaches only agents inside the same OMP process.'],
   ] as const).map(([backend, reason]) => ({
     criterion: 'D1', backend, kind: 'capability-absent' as const, reason,
@@ -888,7 +806,6 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     ['codex', 'Codex 0.164.0 multi-agent tools reach only agents of the same session; the cross-thread agent_message_board feature is under development and off by default, so Squawk sends no flag for an unstable key.'],
     ['opencode', 'OpenCode 1.19.4 has no messaging tool and no inbound channel. Its task tool resumes any session by task_id with no parent check, and the task permission pattern matches only subagent_type, so no session rule blocks a foreign task_id while subagents keep working. Only the shell finds another session\'s ID, and the shell reaches that session directly (opencode run --session); the same-user shell is outside hard isolation.'],
     ['pi', 'pi 1.4.0 has no built-in messaging tool; an extension may add one, and its name cannot be discovered as messaging.'],
-    ['cursor', 'Cursor 2026.10.22-27dcf5f defines send_message (to cloud agents) in its protocol, but the CLI never sets sendMessageEnabled and has no handler for it.'],
     ['omp', 'OMP 18.13.1 get_state.dumpTools default set holds no messaging tool; vibe_* and irc are opt-in in the user\'s own config.'],
   ] as const).map(([backend, reason]) => ({
     criterion: 'D3', backend, kind: 'capability-absent' as const, reason,
@@ -1007,7 +924,7 @@ export async function driveSeam(
   let session: AgentSession | undefined;
   let pid: number | undefined;
   try {
-    session = runnersUnderTest()(backend, backend === 'cursor' ? { sessionTransport: 'cursor-print' } : {}).startSession(
+    session = runnersUnderTest()(backend).startSession(
       {
         userPrompt: promptFor(backend, scenario),
         cwd,

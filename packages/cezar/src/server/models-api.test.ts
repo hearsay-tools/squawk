@@ -42,7 +42,6 @@ describe('workspace model catalog API', () => {
         adapters: {
           claude: { discover },
           codex: { discover },
-          cursor: { discover },
           opencode: { discover: opencodeDiscover },
           ...(piDiscover ? { pi: { discover: piDiscover } } : {}),
           ...(ompDiscover ? { omp: { discover: ompDiscover } } : {}),

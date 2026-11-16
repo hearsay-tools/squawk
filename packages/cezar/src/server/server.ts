@@ -28,7 +28,6 @@ import { githubRefsQuerySchema } from '@open-mercato/cezar-contract/github-reque
 import { commitQuerySchema } from '@open-mercato/cezar-contract/query-requests';
 import { imageMimeType } from '@open-mercato/cezar-contract/image-path';
 import { providerForActiveRun } from '@open-mercato/cezar-contract/active-provider';
-import { RUNNER_COCKPIT_FACTS, cockpitRunnersWhere } from '@open-mercato/cezar-contract/runner-facts';
 import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 import { defined } from '../core/defined.ts';
 import { isAbsoluteHostPath } from '../core/host-path.ts';
@@ -495,7 +494,6 @@ export type WorkspaceEventName =
   | 'project-removed'
   | 'checkout-progress'
   | 'health'
-  | 'model-catalog'
   | 'provider-status'
   | 'automation-change'
   | 'project-ready';
@@ -1140,33 +1138,7 @@ export function createApp(deps: ServerDeps) {
   // app in tests does not, so tests never spawn the probes here): the cache
   // fills while the browser is still downloading the bundle, so its first
   // `GET /api/health` reads a warm value instead of the cold ~1 s compute.
-  const pushedCatalogRunners = cockpitRunnersWhere(facts => facts.modelCatalogDelivery === 'pushed');
-  if (deps.socketHub) {
-    void refreshHealth();
-    for (const runner of pushedCatalogRunners) void modelCatalog.get(runner);
-  }
-  // Authenticated SSE carries completion to remote cockpits too. Reuse the HTTP
-  // contract; no CLI output, paths or account data enter this payload.
-  modelCatalog.onRefresh((result) => {
-    if (RUNNER_COCKPIT_FACTS[result.runner].modelCatalogDelivery === 'pushed') workspaceEvents.emit('model-catalog', result);
-  });
-  for (const runner of pushedCatalogRunners) {
-    deps.socketHub?.registerTopic(`models:${runner}`, {
-      snapshot: async () => modelCatalog.getCached(runner),
-      start: (publish) => {
-        let previous = '';
-        const off = modelCatalog.onRefresh((result) => {
-          if (result.runner !== runner) return;
-          const body = JSON.stringify(result);
-          if (body !== previous) { previous = body; publish(result); }
-        });
-        // Only active pickers keep discovery warm. Last unsubscribe stops all work.
-        const timer = setInterval(() => { void modelCatalog.get(runner); }, 5 * 60_000);
-        timer.unref?.();
-        return () => { clearInterval(timer); off(); };
-      },
-    });
-  }
+  if (deps.socketHub) void refreshHealth();
   /**
    * Warm the whole of Squawk's agent knowledge — the three discovered defaults AND every extra
    * account — so no reader ever pays the first shell-out.
@@ -1210,9 +1182,7 @@ export function createApp(deps: ServerDeps) {
     .get('/models', queryZodValidator(modelDiscoveryQuerySchema, { message: `runner must be ${MODEL_DISCOVERY_RUNNERS.slice(0, -1).join(', ')}, or ${MODEL_DISCOVERY_RUNNERS.at(-1)}` }), async (c) => {
       const query = { data: c.req.valid('query') };
       const { runner } = query.data;
-      return c.json(RUNNER_COCKPIT_FACTS[runner].modelCatalogDelivery === 'pushed'
-        ? modelCatalog.getCached(runner)
-        : await modelCatalog.get(runner));
+      return c.json(await modelCatalog.get(runner));
     });
 
   /**

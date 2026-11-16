@@ -43,13 +43,6 @@ describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
     }
   });
 
-  it('keeps every boundary runner holding a mid-turn human message until the turn ends', () => {
-    for (const id of RUNNER_IDS) {
-      const delivery = RUNNER_FACTS[id].inputDelivery;
-      if (delivery.mode === 'boundary') expect(delivery.humanInputAtTurnEnd, id).toBe('always-held');
-    }
-  });
-
   // These rows hold runner ids by hand; this check ties each one to the declared acknowledgement.
   it.each([
     ['U12', (runner: RunnerId) => RUNNER_FACTS[runner].inputDelivery.acknowledgement === 'write'],
@@ -58,22 +51,11 @@ describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
   ] as const)('exempts a runner from %s exactly when its acknowledgement cannot be delayed or rejected', (criterion, exempt) => {
     expect(RUNNER_IDS.filter(runner => exemptionFor(criterion, runner) !== undefined)).toEqual(RUNNER_IDS.filter(exempt));
   });
-
-  // S40/S41 time a mid-turn human message against the turn's last model call; a boundary runner has
-  // no mid-turn input channel, so its mock has no read point to time it against.
-  it.each(['S40', 'S41'])('exempts a runner from %s exactly when its delivery is boundary', criterion => {
-    expect(RUNNER_IDS.filter(runner => exemptionFor(criterion, runner) !== undefined))
-      .toEqual(RUNNER_IDS.filter(runner => RUNNER_FACTS[runner].inputDelivery.mode === 'boundary'));
-  });
 });
 
 describe('cockpit runner facts (hearsay-tools/squawk#3642)', () => {
   it('lists the runners of RUNNER_IDS, in the same order, in the contract roster and the cockpit table', () => {
     expect(runnerSchema.options).toEqual([...RUNNER_IDS]);
     expect(Object.keys(RUNNER_COCKPIT_FACTS)).toEqual([...RUNNER_IDS]);
-  });
-
-  it('states the input mode each runner declares in its wire facts', () => {
-    for (const id of RUNNER_IDS) expect(RUNNER_COCKPIT_FACTS[id].inputMode, id).toBe(RUNNER_FACTS[id].inputDelivery.mode);
   });
 });

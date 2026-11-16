@@ -272,10 +272,10 @@ function exitReaping(backend: RunnerId, it: typeof registerTest = registerTest):
 
     // hearsay-tools/cezarion#1286: Squawk signals nothing when the agent exits on EOF, so the stdio MCP
     // servers and background jobs it left in its group are ended by the reap after its exit.
-    // OpenCode's runner and Cursor print end by a Squawk signal on end (S27/S28's path), so their
-    // cells do not reach the reap; S31 does.
+    // OpenCode's runner ends by a Squawk signal on end (S27/S28's path), so its cell does not
+    // reach the reap; S31 does.
     it.skipIf(process.platform === 'win32')(`${backend} ${ownExit.id} ${ownExit.name}`, async () => {
-      const signalsOnEnd = backend === 'opencode' || backend === 'cursor';
+      const signalsOnEnd = backend === 'opencode';
       // Past any EOF exit and short of the test timeout: only the leader's own exit settles it.
       await withChild(backend, async (session, child, _events, settled, cwd) => {
         const { group, session: setsid } = await leftovers(cwd);
@@ -333,24 +333,6 @@ globalThis.setTimeout = function(callback, ms, ...args) {
         rmSync(preloadDir, { recursive: true, force: true });
       }
     }, 15_000);
-
-    if (backend === 'cursor') {
-      it('cursor input-closed stall exits nonzero and names its unsupported mock', async () => {
-        const cwd = mkdtempSync(join(tmpdir(), 'cez-cursor-input-closed-'));
-        try {
-          const result = await new Promise<{ error: Error | null; stderr: string }>(resolve => {
-            // bound: the unsupported mode must exit; execFile kills a broken fixture at the bound.
-            childProcess.execFile(process.execPath, [HARNESS_ADAPTERS.cursor.mockBin, 'mock:no-progress-input-closed'],
-              { cwd, timeout: 5000 }, (error, _stdout, stderr) => resolve({ error, stderr }));
-          });
-          expect(result.error).toMatchObject({ code: 1 });
-          expect(result.stderr).toContain('mock-cursor-print.mjs');
-          expect(result.stderr).toContain('input-closed');
-        } finally {
-          rmSync(cwd, { recursive: true, force: true });
-        }
-      }, 10_000);
-    }
 
     // hearsay-tools/cezarion#1625: N5 signals as soon as `watchdog.pid` appears. A mock that
     // published it before replacing its SIGTERM handler died from that SIGTERM.

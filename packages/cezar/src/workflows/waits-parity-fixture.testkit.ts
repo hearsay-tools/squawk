@@ -82,7 +82,7 @@ const runnerBoundary = vi.hoisted(() => ({
 /** The test file's runner for its parents, and the Claude runner for the workers this kit runs on
  *  the Claude wire whatever the parent's runner is (hearsay-tools/cezarion#2939). */
 function withClaudeWorkers(inner: RunnerFactory): RunnerFactory {
-  return (backend, options) => backend === 'claude' || backend === 'claude-cli' ? new ClaudeCliRunner() : inner(backend, options);
+  return backend => backend === 'claude' || backend === 'claude-cli' ? new ClaudeCliRunner() : inner(backend);
 }
 
 /** The test file's runners, with each session recorded at its boundary. */

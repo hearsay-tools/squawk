@@ -1,4 +1,5 @@
 import { latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
+import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 import { atTaskHead, atContinue } from './launch-read-resolver.ts';
 import type { WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import type { RunRecord, RunStore, QueuedMessage } from '../../runs/store.ts';
@@ -84,9 +85,10 @@ export async function reviveQueuedRun(context: RunModuleContext, host: QueuedRev
 
 export function reviveQueuedContinuation(context: RunModuleContext, host: QueuedRevivalHost, run: RunRecord, reason: string, queuedStepId: string, sessionStep: RunRecord['steps'][number]): void {
   if (reason === 'cezar restarted') run = host.checkpointRestartContext(run, queuedStepId);
-  const { backend, sessionBackend, sameAccount, recoveredSessionId } = queuedResumeSession(context, host, run, sessionStep);
-  if (atContinue.isPrintTransport(sessionStep) && sessionBackend === backend && sameAccount && !recoveredSessionId) {
-    const error = 'Cursor print session identity lacks a matching recorded session event';
+  const { backend, recoveredSessionId } = queuedResumeSession(context, host, run, sessionStep);
+  // A continuation queued on a runner Squawk no longer ships has no runner to start on (hearsay-tools/squawk#3715).
+  if (run.removedRunner !== undefined) {
+    const error = removedRunnerMessage(run.removedRunner);
     const finishedAt = new Date().toISOString();
     context.store.updateStep(run.id, queuedStepId, { status: 'failed', error, finishedAt });
     host.move(run.id, 'fail-start', { error, finishedAt });

@@ -101,8 +101,7 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
         // An acknowledgement after the wake turn ended still leaves the run in the question's park.
         await answerQuestion(run.id, askSeq);
       };
-      // Cursor print acknowledges on its first model work, which the control holds after init.
-      await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp' | 'cursor', exercise);
+      await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp', exercise);
     });
 
     it(`${runner} U12 a human answer resets the budget while a timer acknowledgement keeps its reserved charge`, async () => {
@@ -110,7 +109,7 @@ export function deliveryCells(runners: RunnerId[], it: typeof registerTest = reg
         expect(exemptionFor('U12', runner)?.kind).toBe('capability-absent');
         return;
       }
-      await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp' | 'cursor', async release => {
+      await withHeldAck(runner as 'codex' | 'opencode' | 'pi' | 'omp', async release => {
         const { run, timer, askSeq } = await timerBesideQuestion(runner, 'mock:agent-echo delay-owned-ack');
         store.updateRun(run.id, { automaticWakes: MAX_AUTO_CONTINUES - 1 });
         fireTimer(timer.id);

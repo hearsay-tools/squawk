@@ -123,8 +123,8 @@ describe('autonomous turn-end parity — #426', () => {
     for (const row of AUTONOMOUS_CRITERIA) {
       const exemption = exemptionFor(row.id, backend);
       if (row.id === 'A13' || row.id === 'A14') {
-        // Claude's stdin write and Cursor print's first model work are their acknowledgements.
-        const options = { refuses: !exemption, heldAck: backend !== 'claude' && backend !== 'cursor' };
+        // Claude's stdin write is its acknowledgement.
+        const options = { refuses: !exemption, heldAck: backend !== 'claude' };
         it(`${backend} ${row.id} ${exemption ? `exemption — ${exemption.reason}` : row.name}`,
           () => refusedNudgeIdleClose(backend, row.id === 'A14', options), 60_000);
         continue;

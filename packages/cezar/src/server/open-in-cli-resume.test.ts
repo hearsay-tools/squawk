@@ -29,7 +29,6 @@ const { createApp } = await import('./server.ts');
 const providerAuth = (disconnected: ProviderId[] = []) => new ProviderAuthService({
   platform: 'linux',
   runCommand: async (executable) => {
-    if (executable === (process.env.CEZ_CURSOR_BIN ?? 'agent')) return { stdout: '{"status":"authenticated","isAuthenticated":true}', stderr: '', exitCode: 0 };
     if (executable === (process.env.CEZ_OMP_BIN ?? 'omp')) return { stdout: '{"models":[{"provider":"xai","id":"grok"}]}', stderr: '', exitCode: 0 };
     const provider = executable === 'claude'
       ? 'claude'
@@ -174,8 +173,8 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
     expect(await response.json()).toEqual({ opened: true, command: 'claude --resume sess-1' });
   });
 
-  it.each(['omp', 'cursor'] as const)('open-in-cli refuses an unusable %s executable on a fresh launch', async (backend) => {
-    vi.stubEnv(backend === 'omp' ? 'CEZ_OMP_BIN' : 'CEZ_CURSOR_BIN', 'invalid\nexecutable');
+  it.each(['omp'] as const)('open-in-cli refuses an unusable %s executable on a fresh launch', async (backend) => {
+    vi.stubEnv('CEZ_OMP_BIN', 'invalid\nexecutable');
     try {
       const run = makeRun(backend, 'sess-1');
       setRunStatus(store, run.id, RUN_STATUS.running);
@@ -191,8 +190,8 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
   });
 
   it.each([
-    ['claude', 'cursor', 'agent --resume sess-1'],
-    ['cursor', 'claude', 'claude --resume sess-1'],
+    ['claude', 'codex', 'codex resume sess-1'],
+    ['codex', 'claude', 'claude --resume sess-1'],
   ] as const)('hands a %s run to its latest %s session backend', async (runner, backend, expected) => {
     const run = makeRun(runner, 'sess-1');
     store.updateStep(run.id, 'work', { backend });
@@ -205,21 +204,7 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
     const selected = await openIn(run.id, `cli:${backend}`);
     expect(await selected.json()).toMatchObject({ command: expected });
     const foreign = await openIn(run.id, `cli:${runner}`);
-    expect(await foreign.json()).toMatchObject({ command: runner === 'cursor' ? 'agent' : runner });
-  });
-
-  it('exposes the configured Cursor resume command without launching a terminal', async () => {
-    const prior = process.env.CEZ_CURSOR_BIN;
-    process.env.CEZ_CURSOR_BIN = '/opt/Cursor Agent/agent';
-    try {
-      const run = makeRun('cursor', 'sess-1');
-      const response = await apiRequest(app(), `/api/v1/runs/${run.id}`);
-      expect(await response.json()).toMatchObject({ cliResumeCommand: "'/opt/Cursor Agent/agent' --resume sess-1" });
-      expect(mockOpenInTerminal).not.toHaveBeenCalled();
-    } finally {
-      if (prior === undefined) delete process.env.CEZ_CURSOR_BIN;
-      else process.env.CEZ_CURSOR_BIN = prior;
-    }
+    expect(await foreign.json()).toMatchObject({ command: runner });
   });
 
   it('exposes the configured OMP resume command, quoting a CEZ_OMP_BIN override', async () => {
@@ -262,23 +247,6 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
     expect(res.status).toBe(200);
     expect(((await res.json()) as { command: string }).command).toBe('codex');
     expect(mockOpenInTerminal).toHaveBeenCalledWith(expect.any(String), 'codex', {});
-  });
-
-  it('opens Cursor with agent rather than launching the desktop cursor command', async () => {
-    const run = makeRun('claude', undefined);
-    const res = await openIn(run.id, 'cli:cursor');
-    expect(res.status).toBe(200);
-    expect(((await res.json()) as { command: string }).command).toBe('agent');
-  });
-
-  it.each([false, true])('uses the quoted Cursor override for handoff with resume=%s', async (resume) => {
-    vi.stubEnv('CEZ_CURSOR_BIN', '/custom path/agent');
-    try {
-      const run = makeRun('cursor', resume ? 'sess-1' : undefined);
-      const res = await openIn(run.id, 'cli:cursor');
-      expect(res.status).toBe(200);
-      expect(((await res.json()) as { command: string }).command).toBe(`'/custom path/agent'${resume ? ' --resume sess-1' : ''}`);
-    } finally { vi.unstubAllEnvs(); }
   });
 
   it('no session yet: even the matching CLI launches fresh instead of erroring', async () => {

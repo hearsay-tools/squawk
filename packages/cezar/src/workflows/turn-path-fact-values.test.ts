@@ -118,19 +118,16 @@ for (const consumption of ['observable', 'unobservable'] as const) {
 }
 
 // inputDelivery.acknowledgement and inputDelivery.mode: Squawk reads neither value. It sees only
-// when the session acknowledges a write: at once ('write'), after the native response
-// ('response'), or after model work of the turn the input opens ('model-work'), which a 'boundary'
-// runner does after the running turn ends. Input stays undelivered until then, across a turn end.
+// when the session acknowledges a write: at once ('write') or after the native response
+// ('response'). Input stays undelivered until then, across a turn end.
 const ACKNOWLEDGEMENTS = [
   { mode: 'steer', acknowledgement: 'write', humanInputAtTurnEnd: 'held-when-late', afterTurnEnd: false },
   { mode: 'steer', acknowledgement: 'response', humanInputAtTurnEnd: 'held-when-late', afterTurnEnd: false },
   { mode: 'steer', acknowledgement: 'response', humanInputAtTurnEnd: 'held-when-late', afterTurnEnd: true },
-  { mode: 'boundary', acknowledgement: 'model-work', humanInputAtTurnEnd: 'always-held', afterTurnEnd: true },
 ] as const;
 for (const { mode, acknowledgement, humanInputAtTurnEnd, afterTurnEnd } of ACKNOWLEDGEMENTS) {
   it(`mode '${mode}' with acknowledgement '${acknowledgement}' delivers an input only at its acknowledgement${afterTurnEnd ? ', after the turn ends' : ''}`, async () => {
-    const consumption = mode === 'boundary' ? 'unobservable' : 'observable';
-    const { record, group, input } = await openRun({ mode, consumption, acknowledgement, humanInputAtTurnEnd, via: 'fact-values fixture' } as InputDelivery);
+    const { record, group, input } = await openRun({ mode, consumption: 'observable', acknowledgement, humanInputAtTurnEnd, via: 'fact-values fixture' });
     const message = input('work for the next model call');
     const ack = deferred<void>();
     sendAck = () => ack.promise;
@@ -156,9 +153,7 @@ for (const { mode, acknowledgement, humanInputAtTurnEnd, afterTurnEnd } of ACKNO
 // then the run keeps its session for the turn that message opens, under the held-input timer.
 for (const humanInputAtTurnEnd of ['never-held', 'held-when-late', 'always-held'] as const) {
   it(`humanInputAtTurnEnd '${humanInputAtTurnEnd}' decides whether a turn end keeps a held human message`, async () => {
-    const delivery: InputDelivery = humanInputAtTurnEnd === 'always-held'
-      ? { mode: 'boundary', consumption: 'unobservable', acknowledgement: 'model-work', humanInputAtTurnEnd, via: 'fact-values fixture' }
-      : { ...STEER, humanInputAtTurnEnd };
+    const delivery: InputDelivery = { ...STEER, humanInputAtTurnEnd };
     const { group } = await openRun(delivery);
     holdsInput = () => humanInputAtTurnEnd !== 'never-held';
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });

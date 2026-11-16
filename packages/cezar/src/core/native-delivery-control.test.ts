@@ -121,11 +121,9 @@ describe('native delivery control module', () => {
 });
 
 // What each native wire can carry. Claude acknowledges agent input with its local stdin
-// write, and Cursor print rejects an input only when its process does not exit 0 after a result,
-// never by a provider refusal, so those kinds are named exemptions.
+// write, never by a provider refusal, so those kinds are named exemptions.
 const EXEMPT: Partial<Record<RunnerId, Partial<Record<DeliveryKind, string>>>> = {
   claude: { reject: 'U13', 'hold-ack': 'U12' },
-  cursor: { reject: 'U13' },
 };
 const ENV_BASE = { CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: '' };
 type Wire = { v1: readonly AgentEvent[]; v2: readonly UiEvent[] };
@@ -217,11 +215,8 @@ describe.each(RUNNER_IDS)('%s native delivery control', runner => {
       const input = send(session, 'mock:agent-echo delay-owned-ack');
       await waitFor(holdAck.held);
       // The turn's content and its end follow on the wire while the ACK is held, so the runner
-      // has read past the point where it could settle the input. Cursor print holds before its
-      // first model work, its acknowledgement; the runner has mapped the init frame it wrote
-      // before the hold once the second turn starts.
-      if (runner === 'cursor') await waitFor(() => wire.v2.filter(event => event.type === 'turn.started').length === 2);
-      else await waitFor(() => echoed(wire, 'delay-owned-ack') && turnEnds(wire) === 2);
+      // has read past the point where it could settle the input.
+      await waitFor(() => echoed(wire, 'delay-owned-ack') && turnEnds(wire) === 2);
       expect(input.state.settled).toBe(false);
       holdAck.release();
       await input.done;
@@ -240,12 +235,9 @@ describe.each(RUNNER_IDS)('%s native delivery control', runner => {
     await seam(runner, holdResponse.path, async (session, wire) => {
       const input = send(session, 'mock:agent-echo hold-owned-response');
       await waitFor(holdResponse.held);
-      // The input is admitted while its content is held. Cursor print is the exception: its
-      // acknowledgement is its first model work, the same frame the hold withholds.
-      if (runner !== 'cursor') {
-        await input.done;
-        expect(input.state.rejected).toBe(false);
-      }
+      // The input is admitted while its content is held.
+      await input.done;
+      expect(input.state.rejected).toBe(false);
       // bound: proves an absence; unheld content would arrive within a few ms.
       await new Promise(resolve => setTimeout(resolve, 100));
       expect(echoed(wire, 'hold-owned-response')).toBe(false);

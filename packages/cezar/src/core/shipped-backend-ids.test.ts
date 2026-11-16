@@ -25,7 +25,6 @@ const SHIPPED_BACKEND_IDS = {
   codex: 'codex',
   opencode: 'opencode',
   pi: 'pi',
-  cursor: 'cursor',
   omp: 'omp',
 } as const satisfies Record<AgentBackend, RunnerId>;
 

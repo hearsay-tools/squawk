@@ -257,7 +257,6 @@ describe('agent CLI installers', () => {
     codex: 'info: DRY RUN — would run: npm install -g @openai/codex',
     opencode: 'note opencode: Install OpenCode from https://opencode.ai, then re-run.',
     pi: 'warn: no known installer for pi — install it manually',
-    cursor: 'warn: no known installer for cursor — install it manually',
     omp: 'warn: no known installer for omp — install it manually',
   };
 

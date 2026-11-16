@@ -30,7 +30,6 @@ const gaps: Array<{ runner: RunnerId; scenario: string; reason: string }> = [];
 const counts: Partial<Record<RunnerId, number>> = {};
 
 function gap(runner: RunnerId, scenario: string): string | undefined {
-  if (runner === 'cursor' && ['ack-only', 'resume-cezar-done', 'steer-tool', 'steer-late', 'subagent-after-park', 'silent-tail-late-turn-start'].includes(scenario)) return 'Cursor print has no persistent input, steering or child wire for this recipe.';
   if (runner === 'pi' && scenario === 'subagent-after-park') return 'Pi has no child wire for this recipe.';
   if (runner === 'claude' && scenario === 'steer-late') return 'Claude has no direct mock:steer-late token.';
   if (scenario === 'silent-tail-ack-delay' && runner !== 'opencode') return 'f7-delay-ack is an OpenCode HTTP acknowledgement recipe.';
@@ -60,7 +59,6 @@ function acknowledgementBoundary(runner: RunnerId, file: string, offset = 0): nu
     try {
       const frame = JSON.parse(record.data);
       if (runner === 'claude') return frame.isReplay === true;
-      if (runner === 'cursor') return frame.type === 'system' && frame.subtype === 'init';
       if (runner === 'codex') return frame.result?.turn !== undefined;
       return frame.type === 'response' && frame.command === 'prompt';
     } catch { return false; }
@@ -128,8 +126,8 @@ async function send(session: AgentSession, text: string) {
 
 function openingTurnActive(runner: RunnerId, file: string, events: AgentEvent[]): boolean {
   const data = readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line).data).join('\n');
-  const starts = { claude: /isReplay/, codex: /turn\/started/, opencode: /message.updated/, pi: /turn_start/, omp: /turn_start/, cursor: /never/ };
-  const ends = { claude: /"type":"result"/, codex: /turn\/completed/, opencode: /session.idle/, pi: /turn_end/, omp: /turn_end/, cursor: /never/ };
+  const starts = { claude: /isReplay/, codex: /turn\/started/, opencode: /message.updated/, pi: /turn_start/, omp: /turn_start/ };
+  const ends = { claude: /"type":"result"/, codex: /turn\/completed/, opencode: /session.idle/, pi: /turn_end/, omp: /turn_end/ };
   return starts[runner].test(data) && !ends[runner].test(data) && turns(events) === 0;
 }
 
@@ -152,7 +150,7 @@ async function followTurn(session: AgentSession, events: AgentEvent[], text: str
 }
 
 async function driveRecipe(scenario: string, runner: RunnerId, session: AgentSession, events: AgentEvent[], activity: () => number, cwd: string, file: string, exits: ReturnType<typeof observeExits>['exits'], asked: () => boolean) {
-  if ((scenario.startsWith('crash-stderr') && scenario !== 'crash-stderr-clean') || (runner === 'cursor' && scenario === 'no-progress-input-closed')) {
+  if (scenario.startsWith('crash-stderr') && scenario !== 'crash-stderr-clean') {
     // bound: the held-pipe recipe starts its leader exit only after child readiness.
     await waitFor(() => exits.length > 0, 5_000);
     appendFileSync(file, `${JSON.stringify({ channel: 'process-exit', ...exits[0] })}\n`);
@@ -216,7 +214,7 @@ async function driveFollowups(scenario: string, runner: RunnerId, session: Agent
       const offset = readFileSync(file, 'utf8').length;
       await send(session, FINAL);
       // This wire deliberately never emits a turn. Stop after ACK/activity, not a turn-end.
-      // bound: no-reply ACK arrives on its native wire; Cursor print has only process startup.
+      // bound: no-reply ACK arrives on its native wire.
       await waitFor(() => acknowledged(runner, file, offset), 5_000);
       return transcriptAtAcknowledgement(runner, file, offset);
     } else await followTurn(session, events, FINAL);
@@ -242,7 +240,7 @@ async function recordRecipe(runner: RunnerId, scenario: string) {
   let asked = false;
   let session: AgentSession | undefined;
   try {
-    session = createRunner(runner, runner === 'cursor' ? { sessionTransport: 'cursor-print' } : {}).startSession({
+    session = createRunner(runner).startSession({
       cwd, userPrompt: prompt(scenario, runner, join(cwd, 'park')), toolGrant: { kind: 'unset' },
       sessionId: PINNED_SESSION_ID, timeoutMs: 0,
       // The real tool transport returns a stable unavailable receipt without a controller.

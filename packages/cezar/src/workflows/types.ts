@@ -121,7 +121,6 @@ export const HARNESS_EXTRA_TOOLS: { readonly [K in RunnerId]: readonly string[] 
   // allowlist for it (hearsay-tools/cezarion#1305): the default-tools extension activates these
   // names with the built-ins, so MCP and other extension tools stay callable.
   pi: ['Subagent', 'SubagentSupervisor', 'SubagentWait'],
-  cursor: [],
   // R1 (rulings): find and ast_grep are gated behind settings that default off, and a --tools
   // list naming an unavailable built-in exits 2, so they cannot be in the zero-config default.
   omp: ['todo', 'lsp', 'ast_edit', 'task', 'wait'],

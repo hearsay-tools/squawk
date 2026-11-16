@@ -117,13 +117,6 @@ export function sessionAffinity(run: RunRecord, opts: ContinueRunOptions, identi
   return { originalRunner, targetRunner, resume };
 }
 
-export function cursorSessionRefusal(resume: boolean, sessionStep: StepState | undefined,
-  resumeSessionId: string | undefined): ContinuationRefusal | undefined {
-  if (resume && sessionStep?.sessionTransport === 'cursor-print' && !resumeSessionId) {
-    return { ok: false, error: 'Cursor print session identity lacks a matching recorded session event' };
-  }
-}
-
 export function hasOverrides(opts: ContinueRunOptions): boolean {
   return opts.runner !== undefined || opts.model !== undefined || opts.effort !== undefined || opts.agentProfile !== undefined;
 }
@@ -351,8 +344,6 @@ export class ContinuationChecks {
     if (absent) return absent;
     const affinity = sessionAffinity(run, this.opts, identity, sessionStep, untouched);
     const resumeSessionId = affinity.resume ? this.reads.sessionId(sessionStep) : undefined;
-    const cursor = cursorSessionRefusal(affinity.resume, sessionStep, resumeSessionId);
-    if (cursor) return cursor;
     return { ok: true as const, value: { untouched, ...affinity, resumeSessionId } };
   }
 }
