@@ -2,10 +2,11 @@ import { projectPaths } from './project-paths.ts';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { PassThrough, type Readable } from 'node:stream';
+import { StringDecoder } from 'node:string_decoder';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from './runs/store.ts';
@@ -102,8 +103,9 @@ async function stalledRun(url: string): Promise<string> {
 
 /**
  * Runs argv on a pseudo-terminal as its session leader, then closes the master when `hangup`
- * appears: the kernel hangs up the foreground group, as closing a terminal window does. Prints
- * the child's exit status ("signal N" or "code N") once it ends.
+ * appears: the kernel hangs up the foreground group, as closing a terminal window does. Relays the
+ * child's output, and prints its exit status ("signal N" or "code N") once it ends, without
+ * waiting for `hangup` when the child ends first.
  */
 const PTY_HOST = `
 import os, pty, sys, time, signal
@@ -112,13 +114,51 @@ pid, fd = pty.fork()
 if pid == 0:
     os.execvp(sys.argv[2], sys.argv[2:])
 os.set_blocking(fd, False)
-while not os.path.exists(hangup):
-    try: os.read(fd, 65536)
-    except (BlockingIOError, OSError): time.sleep(0.05)
+def relay():
+    try: data = os.read(fd, 65536)
+    except (BlockingIOError, OSError): return False
+    sys.stdout.buffer.write(data); sys.stdout.buffer.flush()
+    return bool(data)
+status = None
+while status is None and not os.path.exists(hangup):
+    done, ended = os.waitpid(pid, os.WNOHANG)
+    if done:
+        status = ended
+        while relay(): pass
+    elif not relay(): time.sleep(0.05)
 os.close(fd)
-_, status = os.waitpid(pid, 0)
+if status is None: _, status = os.waitpid(pid, 0)
 print('signal %d' % os.WTERMSIG(status) if os.WIFSIGNALED(status) else 'code %d' % os.WEXITSTATUS(status), flush=True)
 `;
+
+/**
+ * Reads `output` as UTF-8 lines, decoded across chunks. `url` is the URL in the first complete
+ * `cockpit →` line, the one `serve` prints once it listens on the port it picked; it rejects with
+ * everything read when the output ends first. `last` is the last complete line once it ends.
+ */
+function bannerUrl(output: Readable): { url: Promise<string>; last: Promise<string> } {
+  const decoder = new StringDecoder('utf8');
+  let pending = '';
+  const lines: string[] = [];
+  let found: ((url: string) => void) | undefined;
+  const url = new Promise<string>((resolveUrl, reject) => {
+    found = resolveUrl;
+    output.once('end', () => reject(new Error(`the output ended before serve listened:\n${lines.map((line) => `${line}\n`).join('')}${pending}`)));
+  });
+  url.catch(() => { /* a caller that never asks for the URL ignores it */ });
+  output.on('data', (chunk: Buffer) => {
+    pending += decoder.write(chunk);
+    for (let end = pending.indexOf('\n'); end >= 0; end = pending.indexOf('\n')) {
+      const line = pending.slice(0, end).replace(/\r$/, '');
+      pending = pending.slice(end + 1);
+      lines.push(line);
+      const match = /cockpit → (http:\/\/\S+)/.exec(line)?.[1];
+      if (match) found?.(match);
+    }
+  });
+  const last = once(output, 'end').then(() => lines.filter(Boolean).at(-1) ?? '');
+  return { url, last };
+}
 
 /**
  * A `--import` preload for `serve`. Recovery resumes an agent without waiting for its spawn, so
@@ -150,26 +190,14 @@ defaultServeDeps.recoverServeProject = async (...args) => { await recover(...arg
 `;
 }
 
-async function freePort(): Promise<number> {
-  const probe = createServer();
-  probe.listen(0, '127.0.0.1');
-  await once(probe, 'listening');
-  const { port } = probe.address() as AddressInfo;
-  probe.close();
-  await once(probe, 'close');
-  return port;
-}
-
-function onPty(args: string[]): { hangUp: () => void; ended: Promise<string> } {
+function onPty(args: string[]): { hangUp: () => void; ended: Promise<string>; url: Promise<string> } {
   const hangup = join(root, 'hangup');
   const host = spawn('python3', ['-I', '-c', PTY_HOST, hangup, process.execPath, '--import', 'tsx', CLI, ...args], {
     cwd: PACKAGE_DIR, env: env(), stdio: ['ignore', 'pipe', 'inherit'],
   });
   cez = host;
-  let out = '';
-  host.stdout!.on('data', (chunk) => { out += chunk; });
-  const ended = once(host, 'exit').then(() => out.trim().split('\n').at(-1) ?? '');
-  return { hangUp: () => writeFileSync(hangup, ''), ended };
+  const { url, last } = bannerUrl(host.stdout!);
+  return { hangUp: () => writeFileSync(hangup, ''), ended: last, url };
 }
 
 describe.skipIf(process.platform === 'win32')('Squawk forwards SIGINT and SIGTERM to agent sessions (hearsay-tools/cezarion#890)', () => {
@@ -248,9 +276,8 @@ describe.skipIf(process.platform === 'win32')('Squawk forwards SIGINT and SIGTER
     const hasPython = (() => { try { execFileSync('python3', ['-c', 'import pty']); return true; } catch { return false; } })();
 
     it.skipIf(!hasPython)('closing the terminal of cez serve stops the agent and leaves the run for recovery', async () => {
-      const port = await freePort();
-      const url = `http://127.0.0.1:${port}`;
-      const terminal = onPty(['serve', '--repo', root, '--port', String(port), '--no-open']);
+      const terminal = onPty(['serve', '--repo', root, '--port', '0', '--no-open']);
+      const url = await terminal.url;
       await vi.waitFor(async () => expect((await fetch(`${url}/api/v1/health`)).ok).toBe(true), { timeout: 30_000, interval: 200 });
       const id = await stalledRun(url);
       const agent = await agentPid();
@@ -260,6 +287,13 @@ describe.skipIf(process.platform === 'win32')('Squawk forwards SIGINT and SIGTER
       const store = RunStore.open(projectPaths(root).write, { keepLive: true });
       try { expect(store.getRun(id)?.status).toBe('running'); } finally { store.close(); }
     }, 60_000);
+
+    // bound: a hang guard; before the host watched its child, this waited for a hangup no test sends.
+    it.skipIf(!hasPython)('a serve that exits before its banner fails the URL wait at once, with its output', async () => {
+      const terminal = onPty(['serve', '--bogus-flag']);
+      await expect(terminal.url).rejects.toThrow(/before serve listened:[\s\S]*Unknown option '--bogus-flag'/);
+      expect(await terminal.ended).toBe('code 1');
+    }, 30_000);
 
     it.skipIf(!hasPython)('closing the terminal of cez run stops the agent and ends cez by SIGHUP', async () => {
       const terminal = onPty(['run', 'mock:no-progress', '--repo', root]);
@@ -288,5 +322,33 @@ describe.skipIf(process.platform === 'win32')('Squawk forwards SIGINT and SIGTER
       expect(alive(cez.pid!)).toBe(true);
       expect(alive(agent)).toBe(true);
     }, 60_000);
+  });
+});
+
+describe('bannerUrl', () => {
+  it('reads the URL from a complete line, with the arrow and the port split across chunks', async () => {
+    const output = new PassThrough();
+    const { url, last } = bannerUrl(output);
+    let settled: string | undefined;
+    void url.then((value) => { settled = value; });
+    const line = Buffer.from('\r\n  cockpit → http://127.0.0.1:43219\r\n');
+    const arrow = line.indexOf(Buffer.from('→'));
+    const port = line.indexOf(Buffer.from(':43')) + 3;
+    output.write(line.subarray(0, arrow + 1));
+    output.write(line.subarray(arrow + 1, port));
+    await new Promise(setImmediate);
+    // ":43" ends this chunk: the line is not complete, so no URL yet.
+    expect(settled).toBeUndefined();
+    output.write(line.subarray(port));
+    expect(await url).toBe('http://127.0.0.1:43219');
+    output.end('code 0\n');
+    expect(await last).toBe('code 0');
+  });
+
+  it('rejects with the output read when it ends before the banner', async () => {
+    const output = new PassThrough();
+    const { url } = bannerUrl(output);
+    output.end('Unknown option\n  cockpit → http://127.0.0.1:43');
+    await expect(url).rejects.toThrow(/before serve listened:\nUnknown option\n {2}cockpit → http:\/\/127\.0\.0\.1:43$/);
   });
 });

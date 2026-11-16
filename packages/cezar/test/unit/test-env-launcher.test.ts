@@ -28,8 +28,25 @@ afterEach(() => {
     }
   }
   launchedPids.clear();
-  for (const fixture of fixtures.splice(0)) rmSync(fixture, { recursive: true, force: true });
+  for (const fixture of fixtures.splice(0)) {
+    // A boot killed before it wrote its descriptor leaves an app no pid above names, and a killed
+    // e2e.sh leaves its children booting: stop whatever still runs from this checkout.
+    for (const pid of fixtureProcesses(fixture)) try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
+    // A watcher's lease poll can still write into .ai/qa while it is removed.
+    rmSync(fixture, { recursive: true, force: true, maxRetries: 10 });
+  }
 });
+
+/** Every process whose command line names the fixture checkout: its apps, watchers and boot scripts. */
+function fixtureProcesses(root: string): number[] {
+  const table = execFileSync('ps', ['axww', '-o', 'pid=,args='], { encoding: 'utf8' });
+  return table.split('\n').flatMap((row) => {
+    const match = /^\s*(\d+)\s(.*)$/.exec(row);
+    const pid = match ? Number(match[1]) : 0;
+    const args = match?.[2] ?? '';
+    return pid > 1 && pid !== process.pid && (args.includes(`${root}/`) || args.endsWith(root)) ? [pid] : [];
+  });
+}
 
 function commandPath(command: string): string {
   return execFileSync('/bin/sh', ['-c', `command -v ${command}`], { encoding: 'utf8' }).trim();
@@ -128,10 +145,11 @@ if (process.env.FIXTURE_APP_MEMBER) {
   const member = "process.on('SIGTERM', () => {}); const fs = require('node:fs'); fs.writeFileSync('.ai/app-member.pid.tmp', String(process.pid)); fs.renameSync('.ai/app-member.pid.tmp', '.ai/app-member.pid'); setInterval(() => {}, 1000);";
   require('node:child_process').spawn(process.execPath, ['-e', member], { stdio: 'ignore' });
 }
-http.createServer((req, res) => {
+// Binds the port it is given (0: the kernel picks) and prints its URL, as the real server's banner does.
+const app = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': req.url === '/api/health' ? 'application/json' : 'text/html' });
   res.end(req.url === '/api/health' ? '{"ok":true}' : '<!doctype html>');
-}).listen(port, '127.0.0.1');
+}).listen(port, '127.0.0.1', () => console.log('  cockpit → http://127.0.0.1:' + app.address().port));
 EOF
 }
 web() {
@@ -401,7 +419,7 @@ test('a prebuilt lane boots without rebuilding shared assets and records its nam
 function descriptor(root: string): {
   baseUrl: string;
   servedRoot: string;
-  app: { pid: number; startCommand: string };
+  app: { pid: number; port: number; startCommand: string };
   startedAt: string;
   inputs: { file: string; sha256: string };
   browser: {
@@ -417,7 +435,7 @@ function descriptor(root: string): {
   return JSON.parse(readFileSync(join(root, '.ai/qa/test-env.json'), 'utf8')) as {
     baseUrl: string;
     servedRoot: string;
-    app: { pid: number; startCommand: string };
+    app: { pid: number; port: number; startCommand: string };
     startedAt: string;
     inputs: { file: string; sha256: string };
     browser: {
@@ -449,6 +467,9 @@ test('a cold boot serves an isolated clone of the checkout, never the checkout i
   // What the app was really started with, not what the descriptor says it was.
   const argv = readFileSync(join(fixture.root, '.ai/app-argv'), 'utf8').split('\n');
   assert.equal(argv[argv.indexOf('--repo') + 1], served);
+  // The app picks its own port and the env records the one it printed: no probed port to lose.
+  assert.equal(argv[argv.indexOf('--port') + 1], '0');
+  assert.equal(first.baseUrl, `http://127.0.0.1:${first.app.port}`);
   // Its own administration: a linked worktree would share the checkout's refs and queue (#795).
   assert.equal(realpathSync(execFileSync('git', ['-C', served, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim()),
     realpathSync(join(served, '.git')));
@@ -726,9 +747,9 @@ function unhealthyFixture(mode: 'stalled' | 'unavailable' | 'exited') {
 ${writePidSource('app.pid')}
 for (let i = 1; i <= 25; i++) console.log('boot-line-' + i);
 ${mode === 'exited' ? 'process.exit(1);' : `
-require('node:http').createServer((req, res) => {
+const app = require('node:http').createServer((req, res) => {
   ${mode === 'unavailable' ? 'res.writeHead(503); res.end();' : '/* Keep the health request open until curl times out. */'}
-}).listen(Number(process.argv[process.argv.indexOf('--port') + 1]), '127.0.0.1');
+}).listen(Number(process.argv[process.argv.indexOf('--port') + 1]), '127.0.0.1', () => console.log('  cockpit → http://127.0.0.1:' + app.address().port));
 `}
 `);
   return { ...fixture, env };
@@ -799,8 +820,10 @@ exec "${commandPath('curl')}" "$@"
       `probe at ${clock - healthStart}s was budgeted ${value}s past the 5s deadline:\n${traced}`);
   }
   assert.ok(probes >= 1, `no health probe traced:\n${traced}`);
+  // The last 20 log lines: boot lines 7-25, then the URL line the app printed once it listened.
   assert.deepEqual(result.stderr.match(/^boot-line-\d+$/gm),
-    Array.from({ length: 20 }, (_, i) => `boot-line-${i + 6}`));
+    Array.from({ length: 19 }, (_, i) => `boot-line-${i + 7}`));
+  assert.match(result.stderr, /^ {2}cockpit → http:\/\/127\.0\.0\.1:\d+$/m);
   assert.equal(result.stdout, '', 'a failed boot must not emit running markers');
   // Observe termination, including delivery of the launcher's SIGTERM after it exits.
   await waitForExit(pid, 'timed-out app', () => result.stderr);
@@ -845,6 +868,59 @@ test('health wait still detects an app that exits during boot', () => {
   assert.match(result.stderr, /boot-line-25/);
   assert.doesNotMatch(result.stderr, /health wait timed out/);
   assert.equal(result.stdout, '');
+});
+
+/** Starts a boot of an app that never turns healthy and returns once the app listens: it runs
+ * and the boot has written no descriptor naming it yet. */
+async function bootUntilListening() {
+  const fixture = unhealthyFixture('unavailable');
+  const boot = spawn('/bin/sh', [join(fixture.root, '.ai/scripts/test-env-up.sh')], {
+    env: { ...fixture.env, TEST_ENV_HEALTH_TIMEOUT_SECONDS: '600' }, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const closed = once(boot, 'close');
+  let stderr = '';
+  boot.stderr!.setEncoding('utf8');
+  boot.stderr!.on('data', (chunk: string) => { stderr += chunk; });
+  boot.stdout!.resume();
+  // The launcher logs this once it read the app's URL.
+  // bound: a hang guard; the line follows the app's first listen by one 1 s health poll.
+  const deadline = Date.now() + 30_000;
+  while (!/Squawk listens on/.test(stderr)) {
+    if (boot.exitCode !== null || Date.now() >= deadline) boot.kill('SIGKILL');
+    assert.equal(boot.exitCode, null, stderr);
+    assert.ok(Date.now() < deadline, `the app never listened: ${stderr}`);
+    await delay(20);
+  }
+  return { root: fixture.root, boot, closed, pid: requirePid(join(fixture.root, 'app.pid')), stderr: () => stderr };
+}
+
+// A boot stopped between the app's start and its descriptor must not leave the app running:
+// nothing would name it, so neither test-env-down.sh nor a test's cleanup could stop it.
+test('a boot stopped before it records its app stops that app', async () => {
+  const { root, boot, closed, pid, stderr } = await bootUntilListening();
+  launchedPids.add(pid);
+  boot.kill('SIGTERM');
+  // bound: a hang guard; before the fix the boot went on probing for its 600 s health budget.
+  const guard = setTimeout(() => boot.kill('SIGKILL'), 30_000);
+  const [code, signal] = await closed;
+  clearTimeout(guard);
+  assert.equal(code, 143, `the boot did not end on SIGTERM (signal ${signal}): ${stderr()}`);
+  await waitForExit(pid, 'unrecorded app', stderr);
+  launchedPids.delete(pid);
+  assert.match(stderr(), new RegExp(`stopping the app this boot started \\(pid ${pid}\\)`));
+  assert.equal(existsSync(join(root, '.ai/qa/test-env.json')), false);
+});
+
+// SIGKILL leaves the lease supervisor no step to run: its boot shell goes on, reparented, and the
+// app has no descriptor yet. This file's cleanup finds them by their checkout instead.
+test('cleanup finds the app of a boot whose supervisor was killed before it recorded the app', async () => {
+  const { root, boot, pid } = await bootUntilListening();
+  const exited = once(boot, 'exit');
+  boot.kill('SIGKILL');
+  await exited;
+  const left = fixtureProcesses(root);
+  assert.ok(alive(pid), 'the app ended with its supervisor');
+  assert.ok(left.includes(pid), `the app (pid ${pid}) is not found by its checkout ${root}: ${left.join(' ')}`);
 });
 
 for (const timeout of ['0', '-1', '1.5', 'invalid', '--version', '--help']) {
@@ -1174,7 +1250,8 @@ test('the server exits when its checkout is deleted', async () => {
 test('the server exits when its test-env state is deleted, and the checkout is not recreated', async () => {
   const { root, pid } = bootWatched({});
   const watcher = await watcherPid(root);
-  rmSync(join(root, '.ai/qa'), { recursive: true, force: true });
+  // The watcher's lease poll can still write into .ai/qa while it is removed (ENOTEMPTY).
+  rmSync(join(root, '.ai/qa'), { recursive: true, force: true, maxRetries: 10 });
   await waitForExit(pid, 'server', () => '(.ai/qa deleted)');
   await waitForExit(watcher, 'watcher', () => '(.ai/qa deleted)');
   assert.equal(existsSync(join(root, '.ai/qa')), false);
