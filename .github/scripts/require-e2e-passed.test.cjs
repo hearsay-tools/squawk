@@ -6,9 +6,10 @@ const { spawnSync } = require('node:child_process');
 
 const script = path.join(__dirname, 'require-e2e-passed.cjs');
 
-function evaluate(output, ...args) {
+function evaluate(output, event = 'merge_group') {
   assert.equal(fs.existsSync(script), true, 'CI must gate TEST_E2E_STATUS through require-e2e-passed.cjs');
-  return spawnSync(process.execPath, [script, ...args], {
+  return spawnSync(process.execPath, [script], {
+    env: { ...process.env, GITHUB_EVENT_NAME: event },
     encoding: 'utf8',
     input: output,
   });
@@ -43,12 +44,14 @@ test('CI reads the last TEST_E2E_STATUS when the log contains more than one', ()
   assert.equal(skippedThenPassed.status, 0, skippedThenPassed.stderr);
 });
 
-test('CI accepts TEST_E2E_STATUS=not-selected only with --allow-not-selected', () => {
+test('CI accepts TEST_E2E_STATUS=not-selected only on a pull_request_target run', () => {
   const log = '[e2e:affected] PR CI runs no browser spec: the selector chose every spec.\nTEST_E2E_STATUS=not-selected\n';
-  const strict = evaluate(log);
-  assert.notEqual(strict.status, 0);
-  assert.match(strict.stderr, /not-selected/);
-  assert.equal(evaluate(log, '--allow-not-selected').status, 0);
-  assert.notEqual(evaluate('TEST_E2E_STATUS=skipped\n', '--allow-not-selected').status, 0);
-  assert.notEqual(evaluate('TEST_E2E_STATUS=failed\n', '--allow-not-selected').status, 0);
+  for (const event of ['merge_group', 'push', 'workflow_dispatch', 'schedule', '']) {
+    const strict = evaluate(log, event);
+    assert.notEqual(strict.status, 0, event);
+    assert.match(strict.stderr, /not-selected/);
+  }
+  assert.equal(evaluate(log, 'pull_request_target').status, 0);
+  assert.notEqual(evaluate('TEST_E2E_STATUS=skipped\n', 'pull_request_target').status, 0);
+  assert.notEqual(evaluate('TEST_E2E_STATUS=failed\n', 'pull_request_target').status, 0);
 });

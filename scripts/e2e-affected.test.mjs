@@ -352,7 +352,7 @@ exec "$REAL_NODE" "$MARKER_SCRIPT" "$@"
   const run = workflow.jobs['cockpit-browser'].steps.find(step => step.id === 'e2e-pr').run;
   const result = spawnSync('bash', ['-eu', '-c', run.replace('${{ matrix.shard }}', '1')], {
     cwd: dir, encoding: 'utf8', env: { ...process.env, PATH: `${temp.dir}:${process.env.PATH}`,
-      RUNNER_TEMP: temp.dir, GITHUB_STEP_SUMMARY: join(temp.dir, 'summary.md'),
+      RUNNER_TEMP: temp.dir, GITHUB_STEP_SUMMARY: join(temp.dir, 'summary.md'), GITHUB_EVENT_NAME: 'pull_request_target',
       REAL_NODE: process.execPath, SELECTOR_SCRIPT: script, MAP_FILE: mapFile,
       MARKER_SCRIPT: fileURLToPath(new URL('../.github/scripts/require-e2e-passed.cjs', import.meta.url)) },
   });

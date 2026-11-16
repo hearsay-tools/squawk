@@ -1511,7 +1511,7 @@ jobs:
           node scripts/e2e-affected.mjs --ci --allow-skip --shard=${{ matrix.shard }}/8 2>&1 | tee "$RUNNER_TEMP/e2e.log"
           # A full, empty or failed selection runs no spec here: the merge queue runs every spec.
           grep -h '^\[e2e:affected\] PR CI runs no browser spec' "$RUNNER_TEMP/e2e.log" >> "$GITHUB_STEP_SUMMARY" || true
-          node .github/scripts/require-e2e-passed.cjs --allow-not-selected < "$RUNNER_TEMP/e2e.log"
+          node .github/scripts/require-e2e-passed.cjs < "$RUNNER_TEMP/e2e.log"
 
       - name: Run cockpit browser E2E
         id: e2e

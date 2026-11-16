@@ -233,9 +233,9 @@ and keeps its existing conservative selection rules. A PR runs browser specs onl
 when the selector returns a list shorter than the full set. When the selector
 chooses every spec, chooses no spec or fails, the PR runs no browser spec: the log
 and the job summary state the reason, and the step prints
-`TEST_E2E_STATUS=not-selected`. Only the PR step accepts that marker, through
-`require-e2e-passed.cjs --allow-not-selected`, so the browser jobs and `verify`
-stay green. The merge queue runs every spec on every full-matrix entry, so a
+`TEST_E2E_STATUS=not-selected`. `require-e2e-passed.cjs` accepts that marker only
+when `GITHUB_EVENT_NAME` is `pull_request_target`, so the browser jobs and `verify`
+stay green on the PR and every other event still requires `passed`. The merge queue runs every spec on every full-matrix entry, so a
 browser failure the PR run does not see fails the queue entry instead. A shorter
 selection still requires `TEST_E2E_STATUS=passed`; missing browsers fail
 verification. The token used to download the map has read-only Actions and

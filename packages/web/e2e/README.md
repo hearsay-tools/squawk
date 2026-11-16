@@ -353,7 +353,7 @@ complete selection before sharding, and runs specs only when the selection is
 shorter than the full set. Such a selection permits empty shard partitions and
 requires a passed browser marker. A selection of every spec, an empty selection,
 a missing map or a selector error runs no spec: the log states the reason and
-the step prints `TEST_E2E_STATUS=not-selected`, which only the PR step accepts.
+the step prints `TEST_E2E_STATUS=not-selected`, which only a `pull_request_target` run accepts.
 Merge-group jobs always run the full suite and retain their whole-shard rerun
 and flake reports. See
 [Selected PR tests](../../../docs/sdlc/ci.md#selected-pr-tests).
