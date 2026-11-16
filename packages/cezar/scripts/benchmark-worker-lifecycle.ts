@@ -59,6 +59,9 @@ try {
   const settled = (id: string) => ['waiting', 'review', 'done', 'failed'].includes(store.getRun(id)?.status ?? '');
 
   const spawnToSession: number[] = [], spawnToSettled: number[] = [], spawned: string[] = [];
+  // Every attempt's outcome, so a timed-out or failed start is counted, never dropped.
+  const spawnOutcomes: Record<string, number> = {};
+  const outcome = (key: string) => { spawnOutcomes[key] = (spawnOutcomes[key] ?? 0) + 1; };
   for (let i = 0; i < workers; i++) {
     const id = randomUUID();
     const t0 = performance.now();
@@ -67,7 +70,12 @@ try {
       parent.id, randomUUID(), { role: 'worker', permissions: [], parentRunId: parent.id, workspace }, 'a'.repeat(64));
     manager.enqueueOwnedRun(id);
     if (await until(() => started(id), 60_000)) spawnToSession.push(performance.now() - t0);
-    if (await until(() => settled(id), 120_000)) { spawnToSettled.push(performance.now() - t0); spawned.push(id); }
+    else outcome('no-session-within-60s');
+    if (!await until(() => settled(id), 120_000)) { outcome(`not-settled-within-120s:${store.getRun(id)?.status}`); continue; }
+    const status = store.getRun(id)!.status;
+    outcome(status);
+    // Only a worker whose turn ended cleanly is a spawn sample; a failed one is counted above.
+    if (status === 'waiting' || status === 'review') { spawnToSettled.push(performance.now() - t0); spawned.push(id); }
   }
 
   const destroy = async (id: string) => {
@@ -98,26 +106,32 @@ try {
   }
   const scopesPath = '../src/worker-scope/worker-scopes.ts';
   const scopes = await import(scopesPath).catch(() => undefined) as typeof import('../src/worker-scope/worker-scopes.ts') | undefined;
-  if (scopes) {
-    const host = scopes.hostScope();
+  // A scope stop is measured only where the scope contains the setsid descendant; a `groups` host
+  // does not (ADR 0032), and its stop would time a different, weaker thing.
+  const host = scopes?.hostScope();
+  if (host && host.backend === 'groups') fixture.scopeStopSkipped = `groups backend (${host.reason}) does not contain a setsid descendant`;
+  if (scopes && host && host.backend !== 'groups') {
     const stops: number[] = [];
+    let stopFailures = 0;
     for (let i = 0; i < 10; i++) {
       const id = randomUUID();
       const scope = store.scopes.spawnScope(id);
       const [file, args] = scope.command('/bin/sh', ['-c', 'setsid sleep 600 & echo $!']);
       const leader = spawn(file, args, { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
       scope.started(leader.pid!);
-      await new Promise(resolve => leader.stdout!.once('data', resolve));
+      const descendant = Number(String(await new Promise(resolve => leader.stdout!.once('data', resolve))).trim());
       const t0 = performance.now();
-      await store.scopes.stop(id, 10_000);
-      stops.push(performance.now() - t0);
+      const stopped = await store.scopes.stop(id, 10_000);
+      if (stopped.stopped) stops.push(performance.now() - t0); else stopFailures++;
+      // A `groups` host does not contain a setsid descendant (ADR 0032): end it here.
+      try { process.kill(descendant, 'SIGKILL'); } catch { /* the scope ended it */ }
     }
-    fixture.scopeBackend = host.backend; fixture.scopeStopMedianMs = median(stops); fixture.scopeStopP90Ms = p90(stops);
+    fixture.scopeBackend = host.backend; fixture.scopeStopMedianMs = median(stops); fixture.scopeStopP90Ms = p90(stops); fixture.scopeStopFailures = stopFailures;
   }
 
   const states = (rows: Array<{ state: string }>) => rows.reduce<Record<string, number>>((acc, row) => ({ ...acc, [row.state]: (acc[row.state] ?? 0) + 1 }), {});
   const row = {
-    label: values.label, commit: git(process.cwd(), 'rev-parse', '--short', 'HEAD'), workers, spawned: spawned.length,
+    label: values.label, commit: git(process.cwd(), 'rev-parse', '--short', 'HEAD'), workers, spawned: spawned.length, spawnOutcomes,
     spawnToSessionMedianMs: median(spawnToSession), spawnToSessionP90Ms: p90(spawnToSession),
     spawnToSettledMedianMs: median(spawnToSettled), spawnToSettledP90Ms: p90(spawnToSettled),
     destroyCleanMedianMs: median(clean.map(r => r.ms)), destroyCleanStates: states(clean),
