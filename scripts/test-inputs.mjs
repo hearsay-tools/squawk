@@ -102,6 +102,9 @@ function classifyPath(path, { inputs, configuration }) {
   return { full: 'Unmapped input' };
 }
 
+// Every TS/JS file under packages/*/src; Git's `*` crosses directories.
+const SOURCE_PATHSPECS = ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'mts', 'cts'].map(extension => `packages/*/src/*.${extension}`);
+
 // Package files that name one of `paths` as `/<name>.`, `/<name>'` or `/<name>"`: an
 // import, re-export or vi.mock path. A text match, so a shared name over-selects.
 function namers(cwd, paths) {
@@ -110,7 +113,7 @@ function namers(cwd, paths) {
     return ['.', "'", '"'].flatMap(end => ['-e', `/${name}${end}`]);
   });
   try {
-    return execFileSync('git', ['grep', '-l', '-F', ...patterns, '--', 'packages/*/src/*.ts', 'packages/*/src/*.tsx'],
+    return execFileSync('git', ['grep', '-l', '--untracked', '-F', ...patterns, '--', ...SOURCE_PATHSPECS],
       { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024 }).split('\n').filter(Boolean);
   } catch (error) {
     if (error.status === 1) return [];

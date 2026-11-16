@@ -71,6 +71,17 @@ test('a deleted source selects the unchanged tests that reach it directly, by a 
   assert.deepEqual(classify(['packages/cezar/src/gone.ts'], cwd), { sources: ['packages/cezar/src/gone.ts'], tests: reaching });
 });
 
+test('the importer walk follows JavaScript helpers and untracked tests', t => {
+  const cwd = fixture(t, {
+    'packages/cezar/src/helper.mjs': "export { gone } from './gone.ts'\n",
+    'packages/cezar/src/tracked.test.ts': "import { gone } from './helper.mjs'\n",
+  });
+  execFileSync('git', ['init', '-q'], { cwd });
+  execFileSync('git', ['add', '.'], { cwd });
+  writeFileSync(join(cwd, 'packages/cezar/src/untracked.test.ts'), "import { gone } from './gone.js'\n");
+  assert.deepEqual(testsReaching(cwd, ['packages/cezar/src/gone.ts']), ['packages/cezar/src/tracked.test.ts', 'packages/cezar/src/untracked.test.ts']);
+});
+
 test('a deleted source whose importers pass the walk limit runs the full suite', t => {
   const files = { 'packages/cezar/src/hub0.ts': "import { gone } from './gone.js'\n" };
   for (let i = 1; i <= 310; i++) files[`packages/cezar/src/hub${i}.ts`] = `import { x } from './hub${i - 1}.js'\n`;
@@ -155,9 +166,11 @@ function undeclaredReaders(root) {
   // A test file must declare what it reads itself; a helper's read may be declared by any test.
   const declaredBy = (test, path) => inputs.some(({ test: key, globs }) => matchesGlob(test, key) && globs.some(glob => matchesGlob(path, glob)));
   // A test declares what it reads; every test that reaches a reading helper declares the helper's reads.
+  // A reader no test reaches is a setup file or its helper, which every test loads: that
+  // path is configuration, and an empty list must not pass `every`.
   const declares = (file, path) => {
     const tests = matchesGlob(file, VITEST_TEST) ? [file] : testsReaching(root, [file]);
-    return tests !== null && tests.every(test => declaredBy(test, path));
+    return tests !== null && tests.length > 0 && tests.every(test => declaredBy(test, path));
   };
   const files = execFileSync('git', ['ls-files', '-z', '--others', '--cached', '--exclude-standard', '--', 'packages/*/src/*.ts', 'packages/*/src/*.tsx', 'packages/*/vitest.setup.ts'],
     { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0')
@@ -192,6 +205,7 @@ test('the tripwire checks each reading test file against its own declaration', t
     'packages/cezar/src/helper.testkit.ts': read,
     'packages/cezar/src/third.test.ts': "import { x } from './helper.testkit.ts'\n",
     'packages/cezar/src/gone.testkit.ts': read,
+    'packages/cezar/vitest.setup.ts': "const y = readFileSync('../../.github/scripts/setup-data.json')\n",
   });
   execFileSync('git', ['init', '-q'], { cwd: root });
   execFileSync('git', ['add', '.'], { cwd: root });
@@ -200,6 +214,7 @@ test('the tripwire checks each reading test file against its own declaration', t
   assert.deepEqual(undeclaredReaders(root), [
     'packages/cezar/src/helper.testkit.ts:1 reads .github/scripts/growth.cjs',
     'packages/cezar/src/second.test.ts:1 reads .github/scripts/growth.cjs',
+    'packages/cezar/vitest.setup.ts:1 reads .github/scripts/setup-data.json',
   ]);
 });
 
