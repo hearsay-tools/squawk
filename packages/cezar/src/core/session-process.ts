@@ -2,6 +2,7 @@ import { ChildProcess, execFile, spawn, spawnSync, type ChildProcessWithoutNullS
 import { readdirSync, readFileSync } from 'node:fs';
 import { afterExitDrain, exitDrainBudget, DEFAULT_RUNNER_TIMINGS, type RunnerTimings } from './runner-runtime.ts';
 import { disclaimedCommand } from './disclaim-spawn.ts';
+import { exitedStat, statFields } from './process-stat.ts';
 import type { SpawnScope } from '../worker-scope/scope.ts';
 
 /**
@@ -161,10 +162,26 @@ export function processGroupOf(pid: number): number | undefined {
   return identity(pid)?.pgrp;
 }
 
-/** Every live process in group `pgid`, by incarnation: zombies are not members (a zombie has no
- * identity). Empty when the platform cannot enumerate. */
-export function processGroupMembers(pgid: number): Member[] {
-  return groupMembers(pgid);
+/** Whether group `pgid` still has a running member. A zombie whose other threads run still holds
+ * its files and sockets, so it counts (`exitedStat`); a plain zombie does not. Only this
+ * controller's recorded groups are asked, after it killed them. */
+export function processGroupRunning(pgid: number): boolean {
+  if (!groupId(pgid)) return false;
+  if (process.platform === 'linux') {
+    let names: string[];
+    try { names = readdirSync('/proc').filter(name => /^\d+$/.test(name)); } catch { return true; }
+    return names.some(name => {
+      let fields: string[];
+      try { fields = statFields(readFileSync(`/proc/${name}/stat`, 'utf8')); } catch { return false; }
+      return Number(fields[2]) === pgid && !exitedStat(fields);
+    });
+  }
+  const ps = spawnSync('ps', ['-A', '-o', 'pgid=,stat='], { encoding: 'utf8', timeout: 2_000, env: psEnv() });
+  if (ps.status !== 0) return true;
+  return ps.stdout.split('\n').some(line => {
+    const match = /^\s*(\d+)\s+(\S+)/.exec(line);
+    return !!match && Number(match[1]) === pgid && !match[2]!.startsWith('Z');
+  });
 }
 
 function groupMembers(pgid: number): Member[] {

@@ -7,10 +7,10 @@ import { WorkerScopes, type ScopeStore } from './worker-scopes.ts';
 // A group of zombies under an init that never reaps: `kill(-pgid, 0)` keeps succeeding, and no
 // member runs. Both answers are pinned, as such an init would leave them.
 const signalled = vi.hoisted(() => [] as Array<[number, string]>);
-const members = vi.hoisted(() => ({ live: [] as Array<{ pid: number; token: string }> }));
+const members = vi.hoisted(() => ({ running: false }));
 vi.mock('../core/session-process.ts', () => ({
   processGroupAlive: () => true,
-  processGroupMembers: () => members.live,
+  processGroupRunning: () => members.running,
   signalProcessGroup: (pgid: number, signal: string) => { signalled.push([pgid, signal]); },
 }));
 vi.mock('../core/process-stat.ts', async original => ({
@@ -51,12 +51,12 @@ describe.runIf(process.platform === 'linux')('a zombie-only group (hearsay-tools
       readWorkerExecution: () => undefined, readWorkerProcesses: () => 'absent',
     };
     const scopes = new WorkerScopes(store, () => ({ backend: 'groups', reason: 'test' }));
-    members.live = [{ pid: 4344, token: '200' }];
+    members.running = true;
     try {
       scopes.kill(workerId);
       expect(scopes.stopped(workerId)).toBe(false);
       expect(await scopes.stop(workerId, 50)).toMatchObject({ stopped: false });
       expect(record.groups).toEqual([group]);
-    } finally { members.live = []; }
+    } finally { members.running = false; }
   });
 });
