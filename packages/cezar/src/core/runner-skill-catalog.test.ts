@@ -36,8 +36,28 @@ describe('runner skill cache', () => {
       } } });
       const pending = catalog.get(query);
       await vi.advanceTimersByTimeAsync(100);
-      expect(await pending).toMatchObject({ source: 'unavailable', reason: expect.any(String) });
       expect(signal?.aborted).toBe(true);
+      // A non-cooperating adapter is still bounded by one second of cleanup after abort.
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(await pending).toMatchObject({ source: 'unavailable', reason: expect.any(String) });
+    } finally { vi.useRealTimers(); }
+  });
+  it('waits for cancelled adapter cleanup before returning unavailable', async () => {
+    vi.useFakeTimers();
+    try {
+      let finishCleanup!: () => void;
+      const catalog = new RunnerSkillCatalog({ timeoutMs: 100, adapters: { codex: {
+        discover: (_, signal) => new Promise((_, reject) => {
+          signal.addEventListener('abort', () => { finishCleanup = () => reject(new Error('cancelled')); }, { once: true });
+        }),
+      } } });
+      let answered = false;
+      const pending = catalog.get(query).then(result => { answered = true; return result; });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(answered).toBe(false);
+      finishCleanup();
+      expect(await pending).toMatchObject({ source: 'unavailable', reason: expect.any(String) });
+      expect(vi.getTimerCount()).toBe(0);
     } finally { vi.useRealTimers(); }
   });
   it('does not repopulate an invalidated key from an older pending read', async () => {

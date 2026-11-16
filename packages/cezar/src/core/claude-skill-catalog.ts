@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { claudeSettingSourceArgs } from './claude-setting-sources.ts';
 import type { SkillCatalog } from './runner-skill-catalog.ts';
 import { skillLines, skillProbe, type SkillDiscoveryOptions } from './skill-probe.ts';
 
@@ -15,7 +16,7 @@ export function parseClaudeSkills(value: unknown): SkillCatalog {
 export function discoverClaudeSkills(options: SkillDiscoveryOptions): Promise<SkillCatalog> {
   return skillProbe('claude', ['--print', '--input-format', 'stream-json', '--output-format', 'stream-json',
     '--verbose', '--settings', '{"disableAllHooks":true}', '--no-session-persistence',
-    '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}'], options, async child => {
+    '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', ...claudeSettingSourceArgs()], options, async child => {
     child.stdin.write(JSON.stringify({ type: 'control_request', request_id: 'skills', request: { subtype: 'get_skills_dialog' } }) + '\n');
     for await (const line of skillLines(child)) {
       const message = JSON.parse(line);

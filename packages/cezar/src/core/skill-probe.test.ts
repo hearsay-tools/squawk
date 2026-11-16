@@ -1,5 +1,6 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
+import { spawnSessionLeader } from './session-process.ts';
 import { tmpdir } from 'node:os';
 import { describe, it, expect } from 'vitest';
 import { RUNNER_IDS } from './agent-runner.ts';
@@ -26,20 +27,23 @@ for (const runner of RUNNER_IDS) describe(`${runner} skill probe process cleanup
         expect(args).toContain('--strict-mcp-config');
       }
       if (runner === 'pi') expect(args.some(a => a.endsWith('/pi-project-skills.mjs'))).toBe(true);
-      child = spawn(process.execPath, ['-e', failure === 'hung'
+      child = spawnSessionLeader(process.execPath, ['-e', failure === 'hung'
         ? "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"
         : 'process.exit(1)'], { cwd, env });
       exit = once(child, 'exit');
       return child;
     };
-    const catalog = new RunnerSkillCatalog({ timeoutMs: 4000, adapters: { [runner]: {
-      discover: (q: SkillCatalogQuery, signal: AbortSignal) => discovers[runner]({ ...q, spawn: launch, timeoutMs: failure === 'hung' ? 200 : 3000, signal }),
+    const catalog = new RunnerSkillCatalog({ timeoutMs: failure === 'hung' ? 200 : 4000, adapters: { [runner]: {
+      discover: (q: SkillCatalogQuery, signal: AbortSignal) => discovers[runner]({ ...q, spawn: launch, timeoutMs: 3000, signal }),
     } } });
+    // Real child exit and OS process-group reaping require the product's exit signal.
     const result = await catalog.get({ runner, cwd: tmpdir(), accountHome: '/profiles/probe' });
     expect(result).toMatchObject({ source: 'unavailable', reason: expect.any(String) });
-    await exit;
     expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
     if (failure === 'crashed') expect(child.exitCode).toBe(1);
-    expect(() => process.kill(child.pid!, 0)).toThrow();
-  }, 5000); // bound: a 200ms probe must reap its process even when it ignores SIGTERM.
+    // Check immediately on return; waiting for the exit here would hide the catalog race.
+    const target = process.platform === 'win32' ? child.pid! : -child.pid!;
+    expect(() => process.kill(target, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }));
+    await exit;
+  }, 5000); // bound: a 200ms catalog deadline plus bounded cleanup must reap its group; a crash gets 3 seconds to start.
 });

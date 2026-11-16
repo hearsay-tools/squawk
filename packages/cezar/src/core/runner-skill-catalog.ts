@@ -54,18 +54,23 @@ export class RunnerSkillCatalog {
   async #refresh(query: SkillCatalogQuery, old?: Entry): Promise<Entry> {
     const controller = new AbortController();
     let timer: NodeJS.Timeout | undefined;
+    let discovery: Promise<SkillCatalog> | undefined;
     const deadline = new Promise<never>((_, reject) => {
       timer = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, this.#timeout);
     });
     try {
       const adapter = this.options.adapters[query.runner];
       if (!adapter) throw new Error('adapter missing');
-      const value = await Promise.race([adapter.discover(query, controller.signal), deadline]);
+      discovery = adapter.discover(query, controller.signal);
+      const value = await Promise.race([discovery, deadline]);
       return { value: structuredClone(value), expiresAt: this.#now() + this.#ttl };
     } catch {
       return { value: old?.value, expiresAt: this.#now() + this.#ttl,
         reason: `${query.runner} skill discovery is temporarily unavailable` };
-    } finally { clearTimeout(timer); }
+    } finally {
+      clearTimeout(timer);
+      if (controller.signal.aborted && discovery) await settleCancelledProbe(discovery);
+    }
   }
 }
 function catalogKey(query: SkillCatalogQuery): string {
@@ -75,4 +80,16 @@ function answer(runner: RunnerId, entry: Entry, fresh = false): RunnerSkillList 
   return structuredClone({ runner, skills: entry.value?.skills ?? [], problems: entry.value?.problems ?? [],
     source: entry.value ? (fresh && !entry.reason ? 'live' : 'cache') : 'unavailable',
     ...(entry.reason ? { reason: entry.reason } : {}) });
+}
+
+/** Cancellation sends the kill immediately; observe adapter cleanup before answering. A broken
+ * adapter cannot extend a request by more than this one-second cleanup bound. */
+async function settleCancelledProbe(discovery: Promise<SkillCatalog>): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      discovery.catch(() => undefined),
+      new Promise<void>(resolve => { timer = setTimeout(resolve, 1000); }),
+    ]);
+  } finally { clearTimeout(timer); }
 }
