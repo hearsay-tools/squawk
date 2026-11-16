@@ -179,7 +179,9 @@ Owners. Paths are relative to `packages/cezar/src/`.
 - **Spec-support rows:** `SPEC_FIELD_PROBES` in `core/harness-parity-cells.testkit.ts`.
 - **Per-runner files:** `core/harness-<runner>-<part>-parity.test.ts`
   (`harnessParityFile`) and `workflows/waits-<runner>-<part>-parity.test.ts`
-  (`WAIT_PARITY_FILES`, `WAIT_FOLDS` in `workflows/waits-parity-catalog.testkit.ts`).
+  (`WAIT_PARITY_FILES`, `FAMILY_FILE_PARTS`, `WAIT_FOLDS` in
+  `workflows/waits-parity-catalog.testkit.ts`). A part in `FAMILY_FILE_PARTS` runs one
+  `waits-<runner>-<part>-<family>-parity.test.ts` file per row family.
 - **Matrix guards and single-runner cells:** `core/harness-parity.test.ts` and
   `workflows/waits-parity.test.ts`.
 

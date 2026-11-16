@@ -30,7 +30,7 @@ import { processCells } from './waits-parity-process-cells.testkit.ts';
 import { recoveryCells } from './waits-parity-recovery-cells.testkit.ts';
 import { refusalCells } from './waits-parity-refusal-cells.testkit.ts';
 import { registrationCells } from './waits-parity-registration-cells.testkit.ts';
-import { type WaitParityPart, type WaitCells, type WaitFold, foldCells, folded, WAIT_PARITY_FILES, WAIT_FOLDS, foldedWaitFile, FOLDED_WAIT_RUNNERS, waitPartModule, waitFoldModule } from './waits-parity-catalog.testkit.ts';
+import { type WaitParityPart, type WaitCells, type WaitFold, type FamilyPart, type RowFamily, foldCells, folded, WAIT_PARITY_FILES, WAIT_FOLDS, foldedWaitFile, FOLDED_WAIT_RUNNERS, waitPartModule, waitFoldModule, fileFamilies, rowFamily, waitFamilyFile } from './waits-parity-catalog.testkit.ts';
 
 // The full registry of the wait parity cells. Only `waits-parity.test.ts` imports it: it guards the
 // catalog and runs the single-runner cells. Each per-runner file imports its part's or fold's module
@@ -76,14 +76,32 @@ export function partRuns(runner: RunnerId, part: WaitParityPart): boolean {
   return any;
 }
 
+/** Whether a runner runs any cell of one row family of a part. */
+function familyRuns(runner: RunnerId, part: WaitParityPart, family: RowFamily): boolean {
+  let any = false;
+  WAIT_PARITY_CELLS[part]([runner], familyCells('waits', runner, ((title: string) => {
+    if (rowFamily(part as FamilyPart, title) === family) any = true;
+  }) as typeof registerTest));
+  return any;
+}
+
+/** The files a runner that is not folded runs a part from, each with the scope its describer
+ *  names: one file, or one per row family with cells for a part in `FAMILY_FILE_PARTS`. */
+function partFiles(runner: RunnerId, part: WaitParityPart): Array<{ file: string; scope: string }> {
+  const families = fileFamilies(part);
+  if (families.length === 0) return partRuns(runner, part) ? [{ file: WAIT_PARITY_FILES[part](runner), scope: `{ runner: '${runner}', part: '${part}' }` }] : [];
+  return families.filter(family => familyRuns(runner, part, family))
+    .map(family => ({ file: waitFamilyFile(runner, part, family), scope: `{ runner: '${runner}', part: '${part}', family: '${family}' }` }));
+}
+
 function expectPartLeaf(runner: RunnerId, part: WaitParityPart): void {
   if (folded(runner)) return; // Its one file is checked below.
-  if (!partRuns(runner, part)) return;
-  const file = WAIT_PARITY_FILES[part](runner);
-  const source = readFileSync(new URL(`./${file}`, import.meta.url), 'utf8');
-  expect(source.match(/describeWaitParity\([^;]+\)/g), file).toEqual([`describeWaitParity({ runner: '${runner}', part: '${part}' })`]);
-  // It imports its part's module and no other cells module.
-  expect(cellModules(file), file).toEqual([waitPartModule(part)]);
+  for (const { file, scope } of partFiles(runner, part)) {
+    const source = readFileSync(new URL(`./${file}`, import.meta.url), 'utf8');
+    expect(source.match(/describeWaitParity\([^;]+\)/g), file).toEqual([`describeWaitParity(${scope})`]);
+    // It imports its part's module and no other cells module.
+    expect(cellModules(file), file).toEqual([waitPartModule(part)]);
+  }
 }
 
 // hearsay-tools/cezarion#1531: the single-runner cells run once, on the claude wire, from
@@ -220,10 +238,16 @@ export function describeWaitParity(scope: 'once'): void {
       const parts = Object.keys(WAIT_PARITY_FILES) as WaitParityPart[];
       expect(files.sort()).toEqual(RUNNER_IDS.flatMap(runner => {
         if (folded(runner)) return (Object.keys(WAIT_FOLDS) as WaitFold[]).filter(fold => foldTitles(runner, fold).length > 0).map(fold => foldedWaitFile(runner, fold));
-        return parts.filter(part => partRuns(runner, part)).map(part => WAIT_PARITY_FILES[part](runner));
+        return parts.flatMap(part => partFiles(runner, part).map(({ file }) => file));
       }).sort());
-      for (const runner of RUNNER_IDS) for (const [part, file] of Object.entries(WAIT_PARITY_FILES) as Array<[WaitParityPart, (runner: RunnerId) => string]>) {
-        expect(existsSync(new URL(`./${file(runner)}`, import.meta.url)), file(runner)).toBe(!folded(runner) && partRuns(runner, part));
+      for (const runner of RUNNER_IDS) for (const part of parts) {
+        const families = fileFamilies(part);
+        const file = WAIT_PARITY_FILES[part](runner);
+        expect(existsSync(new URL(`./${file}`, import.meta.url)), file).toBe(!folded(runner) && families.length === 0 && partRuns(runner, part));
+        for (const family of families) {
+          const familyFile = waitFamilyFile(runner, part, family);
+          expect(existsSync(new URL(`./${familyFile}`, import.meta.url)), familyFile).toBe(!folded(runner) && familyRuns(runner, part, family));
+        }
       }
       for (const runner of FOLDED_WAIT_RUNNERS) {
         // A folded runner's groups register each of its cells exactly once, and each group with

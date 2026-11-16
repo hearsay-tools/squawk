@@ -21,7 +21,7 @@ import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { ciNativeMessages, toolCall, gate, thenSay } from './waits-parity.testkit.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
-import { type WaitParityPart, type WaitCells, type WaitPartScope, waitPartModule, type WaitFold, type WaitFoldScope, waitFoldModule, foldCells } from './waits-parity-catalog.testkit.ts';
+import { type WaitParityPart, type WaitCells, type WaitPartScope, waitPartModule, type WaitFold, type WaitFoldScope, waitFoldModule, foldCells, fileFamilies, rowFamily, type FamilyPart } from './waits-parity-catalog.testkit.ts';
 import { productName } from '../home/display.ts';
 
 // hearsay-tools/cezarion#1233: every runner opens, cancels and survives CI and timer waits on its
@@ -420,7 +420,13 @@ export function describeWaitCells(register: () => void): void {
 export function waitPartDescribers(part: WaitParityPart, cells: WaitCells) {
   const describeWaitParity = (scope: WaitPartScope): void => {
     if (scope.part !== part) throw Error(`The ${part} cells cannot run the ${scope.part} part: import ${waitPartModule(scope.part)}`);
-    const register = familyCells('waits', scope.runner, registerTest);
+    const families = fileFamilies(part);
+    if ((scope.family === undefined) !== (families.length === 0)) throw Error(`The ${part} part runs ${families.length ? `one file per row family: ${families.join(', ')}` : 'one file, with no family'}`);
+    const classed = familyCells('waits', scope.runner, registerTest);
+    // A family file registers only the rows of its family (`FAMILY_FILE_PARTS`).
+    const register = scope.family === undefined ? classed : ((title: string, body: () => Promise<void>) => {
+      if (rowFamily(part as FamilyPart, title) === scope.family) classed(title, body);
+    }) as typeof registerTest;
     describeWaitCells(() => cells([scope.runner], register));
   };
   return { describeWaitParity };
