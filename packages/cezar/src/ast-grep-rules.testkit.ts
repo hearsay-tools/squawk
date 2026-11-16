@@ -89,11 +89,11 @@ export interface AstGrepRun {
 
 const failedRunSchema = z.object({ code: z.number(), stdout: z.string(), stderr: z.string() });
 
-/** Runs ast-grep from the repo root. A non-zero exit is a result; a missing binary or a timeout throws. */
-export async function runAstGrep(args: string[]): Promise<AstGrepRun> {
+/** Runs ast-grep from the repo root, or from `cwd`. A non-zero exit is a result; a missing binary or a timeout throws. */
+export async function runAstGrep(args: string[], cwd = repoRoot): Promise<AstGrepRun> {
   try {
     const { stdout, stderr } = await promisify(execFile)(resolveBinary(), args, {
-      cwd: repoRoot,
+      cwd,
       encoding: 'utf8',
       maxBuffer: MAX_OUTPUT_BYTES,
       timeout: RUN_TIMEOUT_MS,

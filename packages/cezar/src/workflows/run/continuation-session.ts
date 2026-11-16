@@ -406,6 +406,8 @@ export class ContinuationSession {
     // names this skill instead of waiting out a slow first fetch of the day.
     try {
       await new Promise<void>((resolve) => {
+        // A local awaited pause of this Continue, not a liveness bound of the run.
+        // ast-grep-ignore: liveness-timer-outside-owner
         const timeout = setTimeout(resolve, 1_500);
         timeout.unref?.();
         const settle = () => { clearTimeout(timeout); resolve(); };

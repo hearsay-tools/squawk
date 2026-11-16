@@ -16,6 +16,7 @@ import * as completionGateReads from './completion-gate.ts';
 import type { HumanWaits } from './human-waits.ts';
 import type { RunLine } from './run-line.ts';
 import type { RunModuleContext } from './types.ts';
+import { LivenessTimers } from './liveness-timers.ts';
 
 interface TurnNudgesHost {
   active: Map<string, ActiveRun>;
@@ -51,7 +52,7 @@ export class TurnNudges {
     private readonly line: RunLine, private readonly completionGateHost: completionGateReads.CompletionGateHost,
     private readonly host: TurnNudgesHost, private readonly maxAutoContinues: number, private readonly completionWillWait: string,
     /** Quiet window after a final-message nudge before a still-silent session parks (#544). */
-    public noWaitNudgeReplyMs: number) {}
+    public noWaitNudgeReplyMs: number, private readonly timers = new LivenessTimers()) {}
   /** The session just took a refusal nudge, live or queued (hearsay-tools/cezarion#1301): its turn is
    *  the nudge's, and its reply is bounded by the no-wait nudge's reply timer, so a harness that
    *  reads the refusal and says nothing parks on Squawk's human wait instead of holding the slot. */
@@ -222,16 +223,16 @@ export class TurnNudges {
     if (state.boundary.noWaitNudgeSawContent) return;
     const session = state.liveSession.session;
     if (!session?.open) return;
-    const timer = setTimeout(() => {
-      transitionTurnBoundary(state, { kind: 'reply-expired', phase: 'fired', session });
-      if (this.context.disposed() || this.host.active.get(runId) !== state || state.liveSession.session !== session || !session.open ||
+    const timer = this.timers.arm({ kind: 'nudge-reply', runId, delayMs: this.noWaitNudgeReplyMs,
+      session: { armed: session, current: () => state.liveSession.session },
+      forget: () => transitionTurnBoundary(state, { kind: 'reply-expired', phase: 'fired', session }) }, () => {
+      if (this.context.disposed() || this.host.active.get(runId) !== state || !session.open ||
         state.liveSession.cancelled || state.liveSession.finishRequested || this.line.isParked(runId)) return;
       transitionTurnBoundary(state, { kind: 'reply-expired', phase: 'park', session });
       // The note names the nudge left unanswered (hearsay-tools/cezarion#1301).
       this.host.openTurnEndHumanWait(runId, state, state.liveSession.currentStepId, 'no-wait', state.boundary.completionNudged === session ? COMPLETION_NO_REPLY_NOTE : NO_WAIT_NO_REPLY_NOTE);
       this.host.settledTurnOutcome(runId, 'reply-timer', { kind: 'park', keepsSlot: false });
-    }, this.noWaitNudgeReplyMs);
-    timer.unref?.();
+    });
     transitionTurnBoundary(state, { kind: 'reply-expired', phase: 'armed', session, timer });
   }
 }

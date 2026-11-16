@@ -19,6 +19,7 @@ import { canProceedWithRun } from './run-guards.ts';
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
 import { monitorsLiveWorkers, type CompletionGateHost } from './completion-gate.ts';
 import type { RunModuleContext, SettledTurn } from './types.ts';
+import { LivenessTimers } from './liveness-timers.ts';
 import type { HumanWaits } from './human-waits.ts';
 import type { RunLine } from './run-line.ts';
 import type { WaitRegistry } from './wait-registry.ts';
@@ -44,7 +45,8 @@ interface TurnSettlerHost {
 export class TurnSettler {
   constructor(private readonly context: RunModuleContext, private readonly host: TurnSettlerHost,
     private readonly idleTimeoutMs: number, private readonly maxAutoContinues: number,
-    private readonly completionWillWait: string, private readonly scheduleWakeupMaxSeconds: number) {}
+    private readonly completionWillWait: string, private readonly scheduleWakeupMaxSeconds: number,
+    private readonly timers = new LivenessTimers()) {}
 
   /** The `cezar_done` this session accepted since its last turn end, taken by this turn end: a
    *  later turn must call it again. */
@@ -395,7 +397,8 @@ export class TurnSettler {
   armIdleTimer(runId: string, state: ActiveRun): void {
     clearIdleTimer(state);
     transitionTurnBoundary(state, { kind: 'idle-expired', phase: 'reset', session: state.liveSession.session });
-    const timer = setTimeout(() => {
+    // Not bound to a session: the expiry closes the session that is open when it fires.
+    const timer = this.timers.arm({ kind: 'idle-close', runId, delayMs: this.idleTimeoutMs }, () => {
       if (state.liveSession.session?.open && !state.liveSession.cancelled) {
         transitionTurnBoundary(state, { kind: 'idle-expired', phase: 'close', session: state.liveSession.session });
         this.context.store.appendEvent(runId, {
@@ -404,9 +407,8 @@ export class TurnSettler {
         });
         state.liveSession.session.end();
       }
-    }, this.idleTimeoutMs);
+    });
     transitionTurnBoundary(state, { kind: 'idle-expired', phase: 'armed', session: state.liveSession.session, timer });
-    state.boundary.idleTimer!.unref?.();
   }
 
   /** The turn-end tail's park for the user: `waiting` with the idle timer, no slot. A result

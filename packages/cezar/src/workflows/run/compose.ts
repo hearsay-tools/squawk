@@ -23,6 +23,7 @@ import { FamilyReconciler } from './family-reconciler.ts';
 import * as completionGateReads from './completion-gate.ts';
 import { WaitRegistry } from './wait-registry.ts';
 import { WakeRetries } from './wake-retries.ts';
+import type { LivenessTimers } from './liveness-timers.ts';
 import { HumanWaits } from './human-waits.ts';
 import { SubagentWaits } from './subagent-waits.ts';
 import { RunStart } from './run-start.ts';
@@ -71,6 +72,8 @@ import { type RunRecord, type RunStore, type StepState } from '../../runs/store.
 import { type WorkflowDef } from '../types.ts';
 
 export interface RunModules {
+  /** The one timer owner of every run's liveness bounds (hearsay-tools/squawk#3662). */
+  liveness: LivenessTimers;
   /** Per-run memory that outlives an execution (ADR 0064). */
   memory: RunMemory;
   memoryGuard: MemoryGuard;
@@ -173,7 +176,8 @@ export interface FacadeHost {
 export function composeRunModules(context: RunModuleContext, host: FacadeHost, memory: RunMemory): RunModules {
   const modules = {} as RunModules;
   modules.memory = memory;
-  const releaseRunMemory = (id: string) => modules.memory.releaseIfEnded(id, context.store.getRun(id), () => host.isActive(id));
+  const releaseRunMemory = (id: string) => modules.memory.releaseIfEnded(id, () => context.store.getRun(id), () => host.isActive(id));
+  modules.liveness = memory.liveness;
   modules.workerScratchCleanup = new WorkerScratchCleanup(context.store, context.dataDir, id => host.isActive(id) || modules.workerExecutions.has(id) || modules.claims.has(id) || !!host.autosaveCleanupBlocker(id));
   modules.completionGateHost = {
     active: host.active,
@@ -232,7 +236,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
   modules.retries = new WakeRetries(context, {
     owesWake: run => modules.wakeAdmission.owesWake(run), queueWaitWake: id => modules.wakeAdmission.queueWaitWake(id),
     retryWaitAdmission: id => modules.retries.retryWaitAdmission(id),
-  }, modules.memory);
+  }, modules.memory, modules.liveness);
   modules.queuedRevivalHost = {
     move: (id, exit, patch) => host.move(id, exit, patch), isActive: id => host.isActive(id),
     workerExecutionStopped: id => host.workerExecutionStopped(id), ownedJob: run => modules.runStart.ownedJob(run),
@@ -275,7 +279,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     cancel: id => host.cancel(id),
     retireSettledQuestions: id => modules.workerQuestions.retireSettledQuestions(id), closeRoutedQuestions: id => modules.workerQuestions.closeRoutedQuestions(id),
     reconcileWorkerWaits: id => host.reconcileWorkerWaits(id),
-  });
+  }, modules.liveness);
   modules.waitEngine = new WaitEngine(context, {
     active: id => host.active.get(id), canProceedWithRun: (id, run) => host.canProceedWithRun(id, run), ciSupervisor: () => host.ciSupervisor,
     reconcileWorkerWaits: family => host.reconcileWorkerWaits(family),
@@ -311,7 +315,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     waitEngine: modules.waitEngine,
     active: host.active, isParked: id => modules.line.isParked(id), isAdmitted: id => modules.line.isAdmitted(id),
     releaseHeldPark: (id, state) => { modules.wakeAdmission.leaveMonitoringPool(id); modules.turnSettler.armIdleTimer(id, state); },
-  }, host.subagentWaitMs().graceMs, host.subagentWaitMs().deadlineMs);
+  }, host.subagentWaitMs().graceMs, host.subagentWaitMs().deadlineMs, modules.liveness);
   modules.humanWaits = new HumanWaits(context, { waitEngine: modules.waitEngine, routeWorkerQuestion: id => modules.workerQuestions.routeWorkerQuestion(id) }, MAX_AUTO_CONTINUES);
   modules.sessionHelperHost = {
     active: host.active, line: modules.line, humanWaits: modules.humanWaits, inputReceiptHost: modules.inputReceiptHost,
@@ -339,7 +343,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     chargeAutomaticWake: id => modules.wakeAdmission.chargeAutomaticWake(id), retryWaitAdmission: id => modules.retries.retryWaitAdmission(id), armIdleTimer: (id, state) => modules.turnSettler.armIdleTimer(id, state),
     openTurnEndHumanWait: (id, state, step, via, note) => modules.turnSettler.openTurnEndHumanWait(id, state, step, via, note),
     settledTurnOutcome: (id, entry, outcome) => host.settledTurnOutcome(id, entry, outcome), queueWaitWake: id => modules.wakeAdmission.queueWaitWake(id),
-  }, MAX_AUTO_CONTINUES, COMPLETION_WILL_WAIT, host.noWaitNudgeReplyMs() ?? NO_WAIT_NUDGE_REPLY_MS);
+  }, MAX_AUTO_CONTINUES, COMPLETION_WILL_WAIT, host.noWaitNudgeReplyMs() ?? NO_WAIT_NUDGE_REPLY_MS, modules.liveness);
   modules.worktreeAutosave = new WorktreeAutosave(context,
     { holdForMaintenance: ids => modules.claims.holdForMaintenance(ids),
       reapTerminalScratch: id => modules.runSettlement.reapTerminalScratch(id), releaseSlot: () => modules.line.releaseSlot(),
@@ -390,6 +394,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
       releaseSlot: () => modules.line.releaseSlot(), providerOwnsInboxInput: (id, inputId) => modules.inboxClaims.providerOwnsInboxInput(id, inputId),
       canClaimInboxInput: (id, inputId) => host.canClaimInboxInput(id, inputId),
       armInboxClaimExpiry: id => modules.inboxClaims.armInboxClaimExpiry(id) },
+    modules.liveness,
   );
   modules.repoRootLease = new RepoRootLease(context,
     { park: id => { modules.line.park(id); }, unpark: id => { modules.line.unpark(id); },
@@ -416,6 +421,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
   modules.autoResumeScheduler = new AutoResumeScheduler(context,
     { move: (id, exit, patch, call) => host.move(id, exit, patch, call),
       continueRun: (id, opts, defer) => host.continueRun(id, opts, defer), pump: () => modules.line.pump() },
+    modules.liveness,
   );
   modules.recovery = new RunRecovery(context, modules.familyReconciler,
     modules.workerQuestions, modules.autoResumeScheduler, {
@@ -530,7 +536,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     awaitCompletionNudgeReply: (id, state, session) => modules.turnNudges.awaitCompletionNudgeReply(id, state, session),
     noticeParkedWorker: id => modules.workerQuestions.noticeParkedWorker(id), routeWorkerQuestion: id => modules.workerQuestions.routeWorkerQuestion(id),
     settledTurnOutcome: (id, entry, outcome) => host.settledTurnOutcome(id, entry, outcome),
-  }, IDLE_TIMEOUT_MS, MAX_AUTO_CONTINUES, COMPLETION_WILL_WAIT, SCHEDULE_WAKEUP_MAX_SECONDS);
+  }, IDLE_TIMEOUT_MS, MAX_AUTO_CONTINUES, COMPLETION_WILL_WAIT, SCHEDULE_WAKEUP_MAX_SECONDS, modules.liveness);
   modules.runFinish = new RunFinish(context, modules.completionGateHost, modules.runSettlement, modules.turnSettler, modules.turnNudges, modules.line, {
     move: (...args) => host.move(...args), dropActive: id => host.dropActive(id),
     get waitEngine() { return modules.waitEngine; }, reconcileWorkerWaits: id => host.reconcileWorkerWaits(id),
@@ -561,7 +567,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     reparkWithoutWaits: (id, state) => modules.wakeAdmission.reparkWithoutWaits(id, state), holdPeerWakesAtCap: id => modules.wakeAdmission.holdPeerWakesAtCap(id),
     reconcileWorkerWaits: () => host.reconcileWorkerWaits(), unreadInputGraceMs: () => host.unreadInputGraceMs(),
     submitAgentInput: (id, state, content, inputs, budget) => modules.inputDelivery.submitAgentInput(id, state, content, inputs, budget),
-  }, MAX_AUTO_CONTINUES, ROUTED_QUESTION_REFUSAL);
+  }, MAX_AUTO_CONTINUES, ROUTED_QUESTION_REFUSAL, modules.liveness);
   modules.squawkToolsHost = { store: context.store,
     registerWait: (...args) => host.registerWait(...args), registerAsk: (...args) => modules.waitRegistry.registerAsk(...args),
     cancelWait: (...args) => host.cancelWait(...args), acceptDone: (...args) => host.acceptDone(...args),

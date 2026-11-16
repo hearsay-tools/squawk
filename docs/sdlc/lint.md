@@ -222,6 +222,17 @@ literal, case labels with one, and `kind:` entry literals, including `as const` 
 Its exceptions are the reasoned allow-list in the rule's `ignores`, kept current by the stale-entry test.
 It does not follow kinds held in variables, indexes or types, and excludes the request kind `request`.
 
+### Liveness timers (`liveness-timer-outside-owner`)
+
+The rule checks production `.ts` files in `packages/cezar/src/workflows/run/` and
+`packages/cezar/src/workflows/run.ts`; it ignores tests and testkits (hearsay-tools/squawk#3662).
+It reports a call of `setTimeout` or `setInterval`, bare or as a member. A run's liveness bound
+is a row of `LIVENESS_BOUNDS` in `workflows/run/liveness-timers.ts`, armed through
+`LivenessTimers.arm`. The wait engine, `worker-orphans.ts` and `worktree-autosave.ts` are in the
+reasoned allow-list in the rule's `ignores`, kept current by `liveness-timer-rule.test.ts`. A local
+awaited pause or a manager interval takes a line-level `ast-grep-ignore` with its reason. The rule
+does not follow a timer function under another name. It has no baseline.
+
 ### Per-run memory fields (`run-memory-field-outside-owner`)
 
 The rule checks production `.ts` files in `packages/cezar/src/workflows/run/` and
