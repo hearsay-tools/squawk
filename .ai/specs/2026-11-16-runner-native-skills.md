@@ -1,5 +1,5 @@
 # Runner-native skills
-Status: draft
+Status: active
 
 Baseline: `main` at `00958e289`. Drafted with the owner on 2026-11-16 in task b99fbdec. The probe
 reports are in [`.ai/analysis/2026-11-16-runner-native-skills/`](../analysis/2026-11-16-runner-native-skills/).
@@ -238,7 +238,9 @@ Saved data still opens: a `config.json` that holds `skillsRepos` and a `ui-state
 
 ## Plan
 
-Slices in order. Each is one pull request. A `-plan.md` follows before slice 1.
+Slices in order. Each is one pull request. [The plan](2026-11-16-runner-native-skills-plan.md)
+says what each slice changes. It adds one slice, R, that makes this repository's own skills
+reachable natively before slice 3 (D5).
 Slice 1 starts after hearsay-tools/squawk#3715 merges, so that no slice writes Cursor code that
 the removal then deletes.
 
