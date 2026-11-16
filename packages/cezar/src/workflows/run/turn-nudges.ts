@@ -292,9 +292,12 @@ export class TurnNudges {
 
   /** A reply to the nudge clears its bound. One that arrives after the bound parked the run resumes
    *  it, as the final-message nudge's did (#544); its turn end then decides, and a run still on
-   *  Squawk's no-wait wait parks on it again. */
-  noteNoWaitNudgeContent(runId: string, state: ActiveRun, event: { type: string; item?: { parentItemId?: string } }): void {
-    if (!this.isNoWaitNudgeReply(state, event)) return;
+   *  Squawk's no-wait wait parks on it again. Only the live session's own events count: one `ActiveRun`
+   *  spans workflow steps, so a retired step's late reply must not clear the current bound
+   *  (hearsay-tools/squawk#3740). */
+  noteNoWaitNudgeContent(runId: string, state: ActiveRun, emitting: AgentSession | undefined, event: { type: string; item?: { parentItemId?: string } }): void {
+    if (!emitting || this.host.active.get(runId) !== state || state.liveSession.session !== emitting ||
+      !this.isNoWaitNudgeReply(state, event)) return;
     transitionTurnBoundary(state, { kind: 'reply-content', phase: 'received', session: state.liveSession.session });
     clearNoWaitNudgeReplyTimer(state);
     if (state.boundary.noWaitNudgeParked !== state.liveSession.session || !this.line.isParked(runId)) return;

@@ -124,7 +124,7 @@ export interface SessionHelperHost {
   automationsPart(): string | undefined;
   flushAgentInputs(runId: string): boolean;
   resumeParkedRun(runId: string, state: ActiveRun): void;
-  noteNoWaitNudgeContent(runId: string, state: ActiveRun, event: { type: string; item?: { parentItemId?: string } }): void;
+  noteNoWaitNudgeContent(runId: string, state: ActiveRun, emitting: AgentSession | undefined, event: { type: string; item?: { parentItemId?: string } }): void;
   noteNudgeActivity(runId: string, state: ActiveRun, emitting: AgentSession | undefined, event: UiEvent): void;
   parkedOnWorkers(runId: string): boolean;
   /** Native subagents (hearsay-tools/cezarion#2431): track a background child's events, and close
@@ -284,7 +284,7 @@ export function handleRunnerUiEvent(context: RunModuleContext, host: SessionHelp
   sink.handle(event);
   if (state.liveSession.cancelled) return;
   host.trackSubagentEvent(runId, state, event);
-  host.noteNoWaitNudgeContent(runId, state, event);
+  host.noteNoWaitNudgeContent(runId, state, emitting, event);
   host.noteNudgeActivity(runId, state, emitting, event);
   if (isRunnerActivity(event)) {
     // Activity answers the nudge. A refused one's bound was the idle timer. One still owed its

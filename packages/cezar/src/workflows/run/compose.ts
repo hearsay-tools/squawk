@@ -189,7 +189,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
   };
   modules.inputReceiptSteps = {
     clearUnread: state => clearUnreadInputTimer(state), clearHeld: state => clearHeldHumanInputTimer(state),
-    noteActivity: (id, state, event, emitting) => { modules.turnNudges.noteNudgeActivity(id, state, emitting, event); modules.turnNudges.noteNoWaitNudgeContent(id, state, event); },
+    noteActivity: (id, state, event, emitting) => { modules.turnNudges.noteNudgeActivity(id, state, emitting, event); modules.turnNudges.noteNoWaitNudgeContent(id, state, emitting, event); },
     persistAttachment: (id, mediaType, data) => modules.attachments.persistAttachment(id, mediaType, data),
     ready: (id, state, session) => modules.inputDelivery.handleAgentInputReady(id, state, session),
     pid: (id, pid) => { replaceRunProcess(id, pid); modules.workerExecutions.recordWorkerProcess(id, pid); },
