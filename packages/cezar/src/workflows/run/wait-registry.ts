@@ -25,6 +25,7 @@ import { isSessionLeader } from '../../core/session-process.ts';
 import { probeProcessWait } from '../../process-wait/supervisor.ts';
 import { confineExitFile } from '../../process-wait/exit-file.ts';
 import { processStartToken, recordedProcessLive } from '../../delegation/process-liveness.ts';
+import { retireDoneAccepted } from './turn-settler.ts';
 
 /** CI identity stays live across registration and rotates at the existing turn boundaries. */
 export class WaitGroup {
@@ -184,6 +185,13 @@ export class WaitRegistry {
    * its automatic wakes are spent.
    */
   async registerAsk(runId: string, request: SquawkAskRequest, generation: string, capabilitySignal?: AbortSignal): Promise<HumanWaitEntry> {
+    const wait = this.openAsk(runId, request, generation, capabilitySignal);
+    // A question withdraws an accepted done: the run waits for the answer (hearsay-tools/squawk#2587).
+    retireDoneAccepted(this.context.store, runId, 'reconsidered', 'the agent asked the user');
+    return wait;
+  }
+
+  private openAsk(runId: string, request: SquawkAskRequest, generation: string, capabilitySignal?: AbortSignal): HumanWaitEntry {
     const card = askCardFields(squawkAskRequestSchema.parse(request));
     const { refuse, assertCanRegister } = this.registrationGate(runId, generation, capabilitySignal);
     const { state: active, run } = assertCanRegister();
@@ -208,6 +216,13 @@ export class WaitRegistry {
    * returns the open wait it repeats.
    */
   async registerWait(runId: string, request: SquawkWaitRequestInput, via: WaitVia, generation: string, capabilitySignal?: AbortSignal): Promise<PrWaitEntry | TimerWaitEntry | WorkerWaitEntry | ProcessWaitEntry | PeerWaitEntry> {
+    const wait = await this.openAgentWait(runId, request, via, generation, capabilitySignal);
+    // A wait withdraws an accepted done: the run parks on it (hearsay-tools/squawk#2587).
+    retireDoneAccepted(this.context.store, runId, 'reconsidered', 'the agent registered a wait');
+    return wait;
+  }
+
+  private async openAgentWait(runId: string, request: SquawkWaitRequestInput, via: WaitVia, generation: string, capabilitySignal?: AbortSignal): Promise<PrWaitEntry | TimerWaitEntry | WorkerWaitEntry | ProcessWaitEntry | PeerWaitEntry> {
     const parsed = squawkWaitRequestSchema.parse(request);
     const registration = registrationIdentity(parsed);
     const replay = replayRegistration(this.context.store.getRun(runId), registration);

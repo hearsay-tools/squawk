@@ -15,7 +15,8 @@ import { productName } from '../home/display.ts';
 export type TurnEndFacts = {
   /** The session is still open. A closed one settles elsewhere. */
   sessionOpen: boolean;
-  /** `cezar_done` was accepted this turn. */
+  /** An accepted `cezar_done` is on record (`doneAccepted`, hearsay-tools/squawk#2587): accepted
+   *  this turn, or before the input this turn received. It ranks above the budget human wait. */
   done: boolean;
   /** The completion gate refused that done. `liveWorkers`: live workers block it. */
   doneRefused?: { liveWorkers: boolean };

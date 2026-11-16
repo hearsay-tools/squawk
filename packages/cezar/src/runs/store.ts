@@ -149,8 +149,7 @@ export const runRecordSchema = contractRunRecordSchema.extend({
       })
     : undefined, z.array(runPullRequestSchema).optional()),
   worktreeSetup: contractRunRecordSchema.shape.worktreeSetup.catch(undefined), workflowCursor: contractRunRecordSchema.shape.workflowCursor.catch(undefined),
-  doneAccepted: contractRunRecordSchema.shape.doneAccepted.catch(undefined),
-  archived: z.boolean().default(false),
+  doneAccepted: contractRunRecordSchema.shape.doneAccepted.catch(undefined), archived: z.boolean().default(false),
   workflowDef: workflowDefSchema.optional().catch(undefined),
   steps: z.array(stepStateSchema),
   automation: contractRunRecordSchema.shape.automation.unwrap().extend({

@@ -22,6 +22,7 @@ import { admissionRefusal } from '../../runs/worker-execution.ts';
 import { logPrefix } from '../../home/display.ts';
 import * as workflowPosition from './workflow-position.ts';
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
+import { retireDoneAccepted } from './turn-settler.ts';
 
 interface ContinuationAcceptanceHost {
   isActive(runId: string): boolean;
@@ -59,6 +60,8 @@ export class ContinuationAcceptance {
     const outcomes: RunOutcome[] = [{ kind: 'answered' }, { kind: 'counted', waitDeliveryFailures: undefined },
       ...(this.context.store.getRun(runId)?.automaticWakes ? [{ kind: 'charged' as const, automaticWakes: 0 }] : [])];
     if (!human || !this.context.store.commitOutcome(runId, outcomes, {}, { bestEffort: true }).committed) this.context.store.flush();
+    // A human Continue is a new human message: it withdraws an accepted done (hearsay-tools/squawk#2587).
+    if (human) retireDoneAccepted(this.context.store, runId, 'reconsidered', 'a new human message');
   }
 
   admitContinuation(

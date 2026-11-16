@@ -30,6 +30,10 @@ describe('decideTurnEnd decides both nudge causes (hearsay-tools/cezarion#1234, 
     ['done waits behind a native ask', { done: true, nativeAsk: true, question: true }, { kind: 'park' }],
     ['done waits behind input in flight', { done: true, inputInFlight: true }, noWaitNudge],
     ['done waits behind queued input', { done: true, inputQueued: true }, noWaitNudge],
+    // hearsay-tools/squawk#2587: the done on record finishes the turn that delivered input after it,
+    // above the budget human wait.
+    ['a done on record finishes with the budget spent', { done: true, budgetSpent: true }, { kind: 'done' }],
+    ['a done on record finishes an autonomous run with the budget spent', { done: true, budgetSpent: true, autonomous: true }, { kind: 'done' }],
     // No-wait cause
     ['a refused autonomous nudge defers to input readiness', { nudgePending: true }, { kind: 'defer' }],
     ['readiness outranks an open wait', { nudgePending: true, agentWaits: true }, { kind: 'defer' }],

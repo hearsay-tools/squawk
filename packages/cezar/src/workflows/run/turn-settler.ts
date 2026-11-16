@@ -1,13 +1,13 @@
 import { logPrefix } from '../../home/display.ts';
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
-import { transitionTurnBoundary, type BoundaryCarry, type BoundaryCarrierEffects } from './turn-boundary.ts';
+import { transitionTurnBoundary, type BoundaryCarry, type BoundaryCarrierEffects, type DoneRequest } from './turn-boundary.ts';
 import { TIMER_MIN_SECONDS, type HumanWaitEntry, type WaitVia } from '@open-mercato/cezar-contract/waits';
 import type { AgentSession } from '../../core/claude-cli-runner.ts';
 import type { ContentBlock } from '../../core/agent-runner.ts';
 import type { AskRequest } from '../../core/ask.ts';
 import type { UiEventSink } from '../../runs/ui-event-sink.ts';
-import type { RunRecord } from '../../runs/store.ts';
+import type { RunRecord, RunStore } from '../../runs/store.ts';
 import type { RunExitId, ExitCall, RunPatch } from '../../runs/run-exits.ts';
 import type { ActiveRun } from '../active-run.ts';
 import { openCompletionRequests, sentRequestInstructions, type CompletionRefusal } from '../completion-policy.ts';
@@ -48,16 +48,20 @@ export class TurnSettler {
     private readonly completionWillWait: string, private readonly scheduleWakeupMaxSeconds: number,
     private readonly timers = new LivenessTimers()) {}
 
-  /** The `cezar_done` this session accepted since its last turn end, taken by this turn end: a
-   *  later turn must call it again. */
-  private takeDoneRequest(state: ActiveRun) {
-    const request = state.boundary.doneRequested?.session === state.liveSession.session ? state.boundary.doneRequested : undefined;
+  /** The done this turn end takes to the completion gate: the run's accepted done
+   *  (`doneAccepted`, hearsay-tools/squawk#2587), which stays on record across the turns that
+   *  deliver input after it until `retireDoneAccepted` retires it, or this session's second refusal
+   *  for outstanding requests, which this turn end consumes. */
+  private takeDoneRequest(runId: string, state: ActiveRun): DoneRequest | undefined {
+    const accepted = this.context.store.getRun(runId)?.doneAccepted;
+    const refused = !!state.liveSession.session && state.boundary.requestRefusedDone === state.liveSession.session;
     transitionTurnBoundary(state, { kind: 'turn-end', phase: 'consume-done', session: state.liveSession.session });
-    return request;
+    if (accepted) return Object.freeze(accepted.summary === undefined ? {} : { summary: accepted.summary });
+    return refused ? Object.freeze({}) : undefined;
   }
 
   /** The DONE boundary and close metadata; a refused DONE may retain metadata for readiness. */
-  private recordDoneAtBoundary(state: ActiveRun, done: boolean, request: ActiveRun['boundary']['doneRequested'], keepClose = done): void {
+  private recordDoneAtBoundary(state: ActiveRun, done: boolean, request: DoneRequest | undefined, keepClose = done): void {
     transitionTurnBoundary(state, { kind: 'turn-end', phase: 'record-done', session: state.liveSession.session, done, request, keepClose });
   }
 
@@ -71,6 +75,7 @@ export class TurnSettler {
     // A workflow step that is not the last completes, and the next step starts (hearsay-tools/cezarion#1620).
     const step = !!session && state.boundary.nextStep?.session === session;
     transitionTurnBoundary(state, { kind: 'done-step-consumed', phase: 'completed', session: state.liveSession.session, stepId: state.liveSession.currentStepId });
+    retireDoneAccepted(this.context.store, runId, 'completed', step ? 'step complete' : 'goal achieved');
     if (close?.summary) this.context.store.appendEvent(runId, { type: 'note', message: close.summary });
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: step ? 'step complete — session closed' : 'goal achieved — session closed', via: close?.via ?? 'cezar_done' });
     this.host.waitEngine.cancelAll(runId);
@@ -89,7 +94,7 @@ export class TurnSettler {
   }): void {
     const sessionOpen = !state.liveSession.cancelled && !!state.liveSession.session?.open;
     const humanWait = this.host.humanWaits.turnEndHumanWait(runId);
-    const doneRequest = this.takeDoneRequest(state);
+    const doneRequest = this.takeDoneRequest(runId, state);
     const read = classifyTurnEnd({
       sessionOpen, pendingHumanAsk: !!state.boundary.pendingHumanAsk,
       scheduledWake: turn.scheduleWakeup !== undefined,
@@ -283,8 +288,11 @@ export class TurnSettler {
     const decisionRefused = 'refused' in decision && !!decision.refused;
     if (decisionRefused) noteRefusal();
     // A refusal that settles the turn end replaces Squawk's own human wait, as the agent's own wait would.
-    const settlesRefusal = !!refused && !decisionRefused && !(decision.kind === 'defer' && decision.keepDone);
+    const keepsDone = decision.kind === 'defer' && !!decision.keepDone;
+    const settlesRefusal = !!refused && !decisionRefused && !keepsDone;
     if (settlesRefusal) this.host.humanWaits.withdrawSquawkHumanWaits(runId);
+    // The completion gate refused the done: the agent must call it again (hearsay-tools/squawk#2587).
+    if (refused && !keepsDone) retireDoneAccepted(this.context.store, runId, 'reconsidered', `completion refused: ${refused.code}`);
     return transitionTurnBoundary(runId, state, { kind: 'turn-end', phase: 'carry', session,
       carry: { runId, state, session, stepId, refused, noteRefusal, settlesRefusal }, decision }, this.boundaryEffects);
   }
@@ -489,4 +497,15 @@ export class TurnSettler {
     const wait = WAIT_KINDS.timer.monitoringEntry(via, now, delay, minutes, state.waitIdentity.ciTurnId ?? 'monitoring');
     this.host.waitEngine.open(runId, state, wait, { withdraw: true, onCommitFailure: { log: `${logPrefix()} monitoring timer checkpoint failed` }, park: false });
   }
+}
+
+/** The only writer that retires `doneAccepted` (ADR 0064, hearsay-tools/squawk#2587): `completed`
+ *  when the run or its step finishes on the done; `reconsidered` when a human message, a new
+ *  instruction, a failed wait result, a wait or question the agent registers, or a completion
+ *  refusal withdraws it, and the agent must call `cezar_done` again. False when none was on record. */
+export function retireDoneAccepted(store: Pick<RunStore, 'getRun' | 'commitOutcome' | 'appendEvent'>, runId: string, as: 'completed' | 'reconsidered', reason: string): boolean {
+  if (!store.getRun(runId)?.doneAccepted) return false;
+  store.commitOutcome(runId, { kind: 'done-retired', as, reason }, {}, { bestEffort: true });
+  if (as === 'reconsidered') store.appendEvent(runId, { type: 'note', message: `cezar_done withdrawn: ${reason}` });
+  return true;
 }

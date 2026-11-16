@@ -85,7 +85,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 describe('turn settler entry orders', () => {
   it('turn-end consumes done before resetting nudges, saves boundary before settlement, then clears resume attempts', () => {
     const f = fixture();
-    transitionTurnBoundary(f.state, { kind: 'done-request', session: f.state.liveSession.session });
+    f.run.doneAccepted = { session: 'generation', at: new Date().toISOString() };
     transitionTurnBoundary(f.state, { kind: 'input-submitted', phase: 'nudge-delivered', session: f.session });
     transitionTurnBoundary(f.state, { kind: 'completion-refusal', phase: 'nudge-delivered', session: f.session });
     decide({ kind: 'park' });
@@ -169,7 +169,7 @@ describe('turn settler entry orders', () => {
       expect(f.state.boundary.doneClose).toEqual({ summary: 'finished', via: 'cezar_done' });
       f.log.push('inPool'); return false;
     });
-    f.settler.settleTurn('run', f.state, 'turn-end', { ...turn, done: true, doneRequest: { session: f.session, summary: 'finished' } });
+    f.settler.settleTurn('run', f.state, 'turn-end', { ...turn, done: true, doneRequest: { summary: 'finished' } });
     order(f, ['gate', 'boundary:turn-end/record-done', 'inPool', 'outcome']);
   });
 
@@ -273,7 +273,7 @@ describe('turn settler carrier orders', () => {
 
   it('done marks the step before summary, lifecycle, wait cancellation, and session close, without an outcome', () => {
     const f = fixture();
-    transitionTurnBoundary(f.state, { kind: 'turn-end', phase: 'record-done', session: f.state.liveSession.session, done: false, keepClose: true, request: { session: f.state.liveSession.session!, summary: 'finished' } });
+    transitionTurnBoundary(f.state, { kind: 'turn-end', phase: 'record-done', session: f.state.liveSession.session, done: false, keepClose: true, request: { summary: 'finished' } });
     decide({ kind: 'done' });
     f.settler.settleTurn('run', f.state, 'ack', { ...turn, done: true });
     order(f, ['boundary:done-step-consumed/completed', 'event:note', 'event:lifecycle', 'cancelWaits', 'end']);

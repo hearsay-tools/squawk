@@ -51,7 +51,12 @@ done and verified, the agent calls `cezar_done` (an optional `summary`), and the
 finishes at the end of that turn: its open waits are cancelled and the summary is
 written as a note. In a workflow step that is not the last, `cezar_done` finishes that step
 and Squawk starts the next one. `cezar_done` refuses while owned workers are live or uncollected,
-a worker question is unanswered or a question to you is still pending, and says what to do first. An
+a worker question is unanswered or a question to you is still pending, and says what to do first. It
+also refuses while a result or a message for the agent is still to be delivered (`input_pending`).
+A result or a progress message that arrives after an accepted `cezar_done` is delivered first, and the
+task finishes when that turn ends, without spending the automatic-wake budget. A message from you, a
+new request from another task, a failed result, or a wait or question the agent opens withdraws the
+done, and the agent must call it again. An
 autonomous task does not wait for you until its automatic-wake budget is spent.
 
 A run can have several waits open at once, up to 16. Each answer carries the
