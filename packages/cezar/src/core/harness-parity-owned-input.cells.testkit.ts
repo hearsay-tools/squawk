@@ -45,25 +45,14 @@ export const OWNED_INPUT_GROUPS = {
             expect(manager.steerWorker(runId, second)).toBe('queued');
             expect(store.getRun(runId)?.status).toBe('waiting');
             // #505: input queued before the session opened steers into the opening turn on a
-            // `steer` runner. A native ask holds a `boundary` runner's turn open, so nothing reaches
-            // it. A cezar_ask is the workflow's human wait, not the runner's: the parent's message
-            // reaches a `boundary` runner at the turn boundary as an admitted wake beside the open
-            // question, which stays pending and is never answered by it (hearsay-tools/cezarion#1235).
+            // `steer` runner. A `boundary` runner holds it to the turn end, where the question is
+            // already pending: the parent's instruction is no message beside it, so it waits for the
+            // answer, on a native ask and on cezar_ask alike (hearsay-tools/squawk#2444).
             const steer = inputDeliveryOf(runnersUnderTest()(backend)).mode === 'steer';
-            const humanWait = store.getRun(runId)?.waits?.find(wait => wait.kind === WAIT_KIND.human && wait.phase === WAIT_PHASE.open);
             const delivered = (id: string) => !!store.getRun(runId)?.agentInputs?.find(input => input.id === id)?.deliveredAt;
-            if (!steer && humanWait?.via === WAIT_VIA.cezar_ask) {
-              await waitFor(() => delivered(first.id));
-              await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('parent steering')));
-              const beside = store.readEvents(runId).filter(e => e.type === 'text' && String(e.text).includes('parent steering')).map(e => String(e.text)).join('\n');
-              expect(beside).toContain('Still open:');
-              expect(store.transcriptFacts(runId).pendingAsk?.seq).toBe(askSeq);
-            } else if (steer) {
-              // The opening turn's acknowledgement records the delivery.
-              await waitFor(() => delivered(first.id));
-            } else {
-              expect(delivered(first.id)).toBe(false);
-            }
+            // The opening turn's acknowledgement records the delivery.
+            if (steer) await waitFor(() => delivered(first.id));
+            else expect(delivered(first.id)).toBe(false);
             // Input accepted while the question is pending never reaches the session before the answer.
             // Each flush offers input synchronously: in steerWorker, or in the handler that recorded
             // the first input's delivery. Neither offered the second input to the session at the ask.
@@ -92,6 +81,46 @@ export const OWNED_INPUT_GROUPS = {
             const afterAsk = agentInput(parentRunId, 'mock:agent-echo after ask');
             expect(manager.steerWorker(runId, afterAsk)).toBe('queued');
             await waitFor(() => !!store.getRun(runId)?.agentInputs?.find(input => input.id === afterAsk.id)?.deliveredAt);
+          });
+        }, 60_000);
+
+        // hearsay-tools/squawk#2444: the open human wait holds input from the moment cezar_ask
+        // registers it, so no session callback at the turn end (Cursor print's ready signal from
+        // `discardQueuedMessages`) delivers the input before the card is answered.
+        it(`${backend} R131 input queued after cezar_ask in the same turn reaches the agent only after the answer`, async () => {
+          await withOwnedInputRun(backend, 'cezar-ask', async ({ store, manager, runId, parentRunId, answer }) => {
+            const held = agentInput(parentRunId, 'mock:agent-echo held behind the question');
+            const offers: { answered: boolean }[] = [];
+            const answeredYet = () => store.readEvents(runId).some(e => e.type === 'human-input-delivered');
+            const commitWait = store.commitWait.bind(store);
+            let steered: ReturnType<typeof manager.steerWorker> | undefined;
+            // Mid-turn: the question's wait is open, its card not shown yet, and the turn not ended.
+            vi.spyOn(store, 'commitWait').mockImplementation((...args: Parameters<typeof store.commitWait>) => {
+              const result = commitWait(...args);
+              const [id, wait] = args;
+              if (steered === undefined && id === runId && wait.kind === WAIT_KIND.human && wait.via === WAIT_VIA.cezar_ask && wait.phase === WAIT_PHASE.open) {
+                for (const session of fixtureWork(manager).liveSessions) {
+                  const send = session.sendAgentMessage.bind(session);
+                  vi.spyOn(session, 'sendAgentMessage').mockImplementation((content, inputIds) => {
+                    if (inputIds?.includes(held.id)) offers.push({ answered: answeredYet() });
+                    return send(content, inputIds);
+                  });
+                }
+                steered = manager.steerWorker(runId, held);
+              }
+              return result;
+            });
+            manager.enqueueOwnedRun(runId);
+            await waitFor(() => store.readEvents(runId).some(e => e.type === 'ask.requested') && store.getRun(runId)?.status === 'waiting');
+            const delivered = () => !!store.getRun(runId)?.agentInputs?.find(input => input.id === held.id)?.deliveredAt;
+            expect(steered).toBe('queued');
+            expect(offers).toEqual([]);
+            expect(delivered()).toBe(false);
+            await answer('Vitest');
+            await waitFor(delivered);
+            await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('held behind the question')));
+            expect(offers.length).toBeGreaterThan(0);
+            expect(offers.every(offer => offer.answered)).toBe(true);
           });
         }, 60_000);
 

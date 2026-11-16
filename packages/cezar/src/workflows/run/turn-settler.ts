@@ -97,12 +97,14 @@ export class TurnSettler {
       humanWait, doneRequested: !!doneRequest,
     });
     const { monitoring, humanGate, ask } = read;
-    discardQueuedMessagesOnAsk(state.liveSession.session, read);
     // The turn that just ended answered a nudge: one flag per cause (hearsay-tools/cezarion#1234,
     // hearsay-tools/cezarion#1301).
     const nudgedLastTurn = state.boundary.noWaitNudged === state.liveSession.session;
     transitionTurnBoundary(state, { kind: 'turn-end', phase: 'reset-nudges', session: state.liveSession.session });
+    // The question is pending before the discard: a runner may signal input readiness from inside
+    // it (Cursor print), and that input must wait for the answer (hearsay-tools/squawk#2444).
     this.prepareTurnAsk(runId, state, humanWait, read);
+    discardQueuedMessagesOnAsk(state.liveSession.session, read);
     // Native subagents still running: Squawk waits on them, instead of a timer (hearsay-tools/cezarion#2431).
     this.host.subagentWaits.atTurnEnd(runId, state, { sessionOpen, done: read.done, asks: !!ask || humanGate });
     transitionTurnBoundary(state, { kind: 'turn-end', phase: 'save-ack', session: state.liveSession.session, boundary: sessionOpen && state.liveSession.session
