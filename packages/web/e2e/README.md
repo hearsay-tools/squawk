@@ -1,8 +1,12 @@
 # Cockpit e2e specs
 
 The specs in this directory drive the built cockpit in a real Chrome through the
-`agent-browser` seam (`agent-browser.ts`). Run them via `npm run test:e2e`, or through
-Squeal's slow tier when installed. The root Vitest config exposes the browser project.
+`agent-browser` seam (`agent-browser.ts`). Agents get their results through
+`squeal run browser [<spec paths>] --wait 60000` and never run the `npm run test:e2e`
+commands on this page by hand ([AGENTS.md § Validation](../../../AGENTS.md#validation));
+those commands are for humans and CI. The wait-discipline baseline update and
+§ Forcing a race with a delayed route are named tools, not verdicts.
+The root Vitest config exposes the browser project.
 Its `environment.ts` reporter prepares the environment, with the same bootstrap as the
 wrapper, at the start of each test run and releases it, with the lease, when that run
 ends. A long-lived host such as the Squeal daemon holds no lease between runs, so the

@@ -80,9 +80,9 @@ or a committed file diff over the per-file patch limit or with a NUL byte.
   the command names the files with no result and passes. CI runs them.
 - With no Squeal daemon for the worktree, the command says so and runs
   `npm run test:changed` (unless its selection is the full suite, which is left to CI) and
-  `npm run lint`.
-- Local `npm run test:parity`, local browser specs and coverage runs are not duties
-  before a PR. CI runs them. Run one only to debug a failure. With a daemon,
+  `npm run lint`. Run `squeal start` and run the gate again instead.
+- Local parity, browser and coverage runs are not duties before a PR. CI runs them. To
+  debug one, use `squeal run run-loop|browser <paths> --wait 60000`. With a daemon,
   `npm run test:parity` asks `squeal run run-loop` for the parity files and waits for
   their verdicts.
 - The changed-function check ([`check-code-quality`](../../.ai/skills/check-code-quality/SKILL.md))
@@ -98,9 +98,10 @@ Before adding a YAML, shell or Markdown reader, read [Script readers](script-rea
 When Squeal is installed and validating the worktree, use its results during
 implementation. It covers unit Vitest, both fast node:test groups, and cockpit
 browser E2E in the slow tier. It does not run packaged CLI E2E
-(`npm run test:package -- <files>`): run those tests by hand, with or without
-Squeal. Pass repo-root paths; the command builds missing or stale outputs. Otherwise use affected tests and
-focused browser specs. `npm test` and `npm run test:watch` select only the four
+(`npm run test:package`): CI's package job is its verdict, and agents do not run it
+locally. With no
+daemon, run `squeal start`; do not run other test runners by hand
+(AGENTS.md § Validation). `npm test` and `npm run test:watch` select only the four
 unit projects; Squeal also discovers the browser project from the root config.
 
 Squeal does not run every unit file after each edit. The `run-loop` check group in
@@ -116,11 +117,12 @@ This is a three-day trial (hearsay-tools/squawk#3551); revert the group to retur
 The final six-command gate and full-suite runs belong in CI. Do not run the
 complete local gate just to commit, open a PR, or complete a review. Record
 revision/diff, commands or Squeal status, results, and subsequent changes in the
-handoff, and rerun affected checks after later code edits. For an explicitly
-requested full local browser run or CI failure investigation, use
-`npm run test:e2e:local`: four isolated lanes, about 8 GiB of free RAM.
+handoff, and read affected verdicts again after later code edits. For a requested
+local browser run or a CI failure investigation, use
+`squeal run browser [<spec paths>] --wait 60000`.
 
-`test:changed` uses the merge-base against local `origin/main` (falling back to
+`test:changed` is the no-daemon fallback inside `npm run prepr`; agents do not run it by
+hand. It uses the merge-base against local `origin/main` (falling back to
 `main`), plus staged, unstaged and untracked files; it never fetches. Override with
 `npm run test:changed -- --base=<ref>`. `--plan` prints the selection and command
 without executing it. Ordinary TS/JS source changes use Vitest's import graph.
@@ -129,10 +131,7 @@ inspection run full Vitest. Clean changes, and changes confined to CI's docs-onl
 list (`isDocsPath` in `.github/scripts/change-surface.cjs`, which includes Markdown
 under `packages/` outside fixture directories but not the Markdown a test reads),
 explicitly skip.
-Inspect `--plan` before running it; if it selects the full suite, choose focused
-checks and leave full verification to CI. No matching tests fails rather than
-reporting a pass; select test files explicitly and report any coverage gap.
-This does not cover all runtime dependencies, Node tests, or browser tests and is
+No matching tests fails rather than reporting a pass. This does not cover all runtime dependencies, Node tests, or browser tests and is
 not a final gate. `.ai/agentic.config.json` records CI's complete final command list.
 
 #### Squeal wait bound
@@ -148,9 +147,9 @@ Record the named files and their Squeal state in the PR's Verification. A missin
 is covered by CI's shards, which give the full verdict; a failing verdict is never
 covered, and the PR does not merge until the shards pass. To get one test file's verdict
 now, run `squeal run tests <file> --wait 60000` (`run-loop` for a parity or worker file);
-for one test in it, `squeal status --wait 60000 <file> --check '<name>'`. With no
-daemon, run `npm test -- <file> -t '<name>'` and confirm it reports passed tests, not
-only skipped ones. This also covers a file Squeal re-runs only because the change edited
+for one test in it, `squeal status --wait 60000 <file> --check '<name>'`, and confirm it
+lists passed tests, not only skipped ones. With no daemon, run `squeal start` first.
+This also covers a file Squeal re-runs only because the change edited
 a document it reads, for example `AGENT_PROTOCOL.md` prose, which re-runs
 `packages/cezar/src/core/harness-parity.test.ts`.
 
@@ -327,8 +326,9 @@ under `.ai/qa/local-runs/`. A skipped browser exits nonzero there, since it did 
 verify the full suite. CI keeps eight separate serial shards on its matrix.
 `npm run test:e2e` without arguments still runs the full sequential suite,
 with the existing environment reuse. A missing browser exits 3 unless the caller
-passes `--allow-skip` to permit exit 0. For iteration use
-`npm run test:e2e -- smoke.e2e.ts -t 'test name'`. Optional `--force` and
+passes `--allow-skip` to permit exit 0. Agents iterate with
+`squeal run browser <spec paths> --wait 60000`, never these commands
+(AGENTS.md § Validation). Optional `--force` and
 `--force-rebuild` go only to environment bootstrap; other arguments (including
 `--shard=N/M`, spec paths and test-name filters) go to Vitest with quoting preserved.
 A literal `--` ends wrapper option parsing. A filtered pass is selection-only
@@ -872,11 +872,11 @@ GitHub returns at most 1,000 results per query.
 
 ### Investigating a CI or load failure
 
-A full local Vitest run (or one shard) that fails only under host load can still
-back a PR. Record the load average (`uptime`) and the failed files, rerun those
-files (`npm test -- <files>`) until they pass, state both in the PR's
-Verification, and let CI's Vitest shards decide. Squeal reports and
-`squeal why <check>` output are the same evidence. The rerun is not a full pass;
+A Squeal or CI failure that happens only under host load can still back a PR. Record
+the load average (`uptime`) and the failed files, retry them with
+`squeal retry <files> --reason load`, which waits for low load, state both in the PR's
+Verification, and let CI's Vitest shards decide. `squeal why <check>` output is the
+same evidence. The retry is not a full pass;
 green CI shards are. A failure in a file the branch touches never qualifies: fix it.
 
 Count a test file's observed CI failure annotations across rerun attempts with:

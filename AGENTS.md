@@ -99,22 +99,24 @@ In a fresh task worktree (`.ai/cezar/worktrees/<runId>`), run `pnpm install --fr
 unless `worktreeSetup` already did.
 
 - Squeal runs the unit tests after each edit and the parity and worker tests at turn end.
-  Read its verdicts; never run Vitest to learn a result. For a verdict now:
-  `squeal run tests|run-loop <paths> --wait 60000`. A brief or parent that says "run the
-  focused tests" means this. One test: `squeal status --wait 60000 <file> --check '<name>'`.
-  A failure's diff, stack and console output: `squeal why '<check>' --include-logs`
-  (names from `squeal failures <file>`). A failure you think load caused:
-  `squeal retry <file> --reason load`. Use `npm test -- <args>` (the pinned Vitest) only for a
-  [red proof](docs/sdlc/regression-proof.md), debug output or with no daemon. Follow the
+  Read its verdicts. For a verdict now: `squeal run tests|run-loop <paths> --wait 60000`.
+  A brief or parent that says "run the focused tests" means this. One test:
+  `squeal status --wait 60000 <file> --check '<name>'` (exit 1: failed; else read the
+  listed checks). A failure's diff, stack and console output:
+  `squeal why '<check>' --include-logs` (names from `squeal failures <file>`). A failure
+  you think load caused: `squeal retry <file> --reason load`. With no daemon, run
+  `squeal start`. Never run a test runner by hand. Exceptions: a
+  [red proof recipe](docs/sdlc/regression-proof.md) and a documented measurement,
+  reproduction or baseline tool; neither is a verdict. Follow the
   [wait bound](docs/sdlc/ci.md#squeal-wait-bound).
 - CI owns the final gate and full-suite runs.
 - In a unit test, wait on the product's own signal. A timeout is only a hang guard, with a
   `// bound: <reason>` comment at the call site. A test that proves something did not happen
   uses fake timers or states at the call site why it needs real time.
 - `npm run typecheck`: no build or `dist` writes; after a build: `npm run typecheck:package`.
-- CLI E2E: `npm run test:package -- <repo-root paths>`. Parity and browser specs run in CI;
-  to debug one, see the [e2e guide](packages/web/e2e/README.md) and `npm run test:parity`.
-- Selection: `npm run test:changed -- --help`.
+- Packaged CLI E2E (`npm run test:package`) runs only in CI. Parity and browser specs run in
+  CI; to debug one: `squeal run run-loop|browser <paths> --wait 60000` and the
+  [e2e guide](packages/web/e2e/README.md).
 
 ### Before opening a PR
 
