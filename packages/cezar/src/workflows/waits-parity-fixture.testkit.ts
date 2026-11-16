@@ -299,13 +299,20 @@ export const noReplyNotes = (id: string) => store.readEvents(id).filter(event =>
 export function silenceRefusals() {
   const clock = observationClock(delay => delay === NO_WAIT_NUDGE_REPLY_MS && /\bat TurnNudges\./.test(new Error().stack ?? ''));
   process.env.CEZ_MOCK_COMPLETION_REPLY = 'mock:ack-only';
-  return async (runner: RunnerId, refusal: string, { after = 0 }: { after?: number } = {}) => {
+  return Object.assign(async (runner: RunnerId, refusal: string, { after = 0 }: { after?: number } = {}) => {
     // bound: until's 15 s guards a missing mock record or a reply timer that never arms.
     await until(() => prompted(runner, refusal).length > after && clock.pending > 0);
     // A native ACK may rearm the same reply bound after the mock recorded the prompt.
     const timer = nativeTimeout(() => { if (clock.pending) clock.fire(clock.captured - 1); }, 300);
     onTestFinished(() => clearNativeTimeout(timer));
-  };
+  }, {
+    /** Expire the next nudge reply bound the clock holds, as a short bound under load does. */
+    async expireReply() {
+      // bound: until's 15 s guards a reply timer that never arms.
+      await until(() => clock.pending > 0);
+      clock.fire(clock.captured - 1);
+    },
+  });
 }
 
 /** A steering parent on `runner`'s native wire and a worker running on the Claude wire, parked,

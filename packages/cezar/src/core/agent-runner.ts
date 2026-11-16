@@ -21,6 +21,22 @@ export type RunnerId = (typeof RUNNER_IDS)[number];
 export type AgentBackend = RunnerId | 'claude-cli';
 
 /** Narrow an arbitrary string (a config value, a check name) to a runner id. */
+/** The rejection of an agent-input acknowledgement that the session's own `end()` cut off
+ *  (hearsay-tools/squawk#3508). Squawk keeps such input owed as a closed-session delivery
+ *  failure. A runner raises it only for the abort its `end()` fired: a provider error that
+ *  arrived first, even one whose body the close cut off, keeps its own error. */
+export class SessionEndedBeforeAcknowledgement extends Error {
+  constructor() {
+    super('the session ended before the input was acknowledged');
+    this.name = 'SessionEndedBeforeAcknowledgement';
+  }
+}
+
+/** The abort an `AbortController` fires rejects a fetch or a read with this name. */
+export function isAbortError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'AbortError';
+}
+
 export function isRunnerId(value: string): value is RunnerId {
   return (RUNNER_IDS as readonly string[]).includes(value);
 }
@@ -331,7 +347,9 @@ export interface AgentSession {
    * confirms the HARNESS ACCEPTED the input — mid-turn on a `steer` runner — not that
    * the model consumed it (#505). Reject retains caller ownership for replay.
    * `inputIds` correlate `onAgentInputConsumed` and `turn-end.unconsumedInputIds`.
-   * Never fall back to the human-answer seam. */
+   * Never fall back to the human-answer seam. A submission this session's own `end()`
+   * cuts off rejects with `SessionEndedBeforeAcknowledgement`; any other rejection is a
+   * delivery failure (hearsay-tools/squawk#3508). */
   sendAgentMessage(content: ContentBlock[], inputIds?: readonly string[]): false | Promise<void>;
   /**
    * Drop follow-ups queued while a turn was still in flight. A turn end that

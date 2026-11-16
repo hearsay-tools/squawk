@@ -13,6 +13,7 @@ import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { recordCommits } from '../runs/outcome-crash.testkit.ts';
 import { withHeldAck } from '../core/owned-input-delivery.testkit.ts';
 import { MESSAGE_WAKE_OPENING, toolCall, thenSay } from './waits-parity.testkit.ts';
+import { NO_WAIT_NUDGE } from './turn-end.ts';
 
 // The closed part of the wait parity cells (`WAIT_PARITY_PARTS` in `waits-parity-catalog.testkit.ts`).
 // A wait parity file imports this module first, so it loads no other part's cells (hearsay-tools/cezarion#3242).
@@ -53,6 +54,29 @@ async function refusalDeliveryBound(runner: RunnerId, id: string, cell: string, 
   await refusalStep(runner, id, `${cell}: delivery cap and inactive`, failed);
   expectDeliveryCap(id);
 }
+/** Close the parent's session at its first park, the moment the merge-group cell of
+ *  hearsay-tools/squawk#3508 saw `waiting`, and release the held acknowledgement after it.
+ *  Returns the parked run's id. */
+function closeAtOpeningPark(release: () => void): () => string {
+  let parked: string | undefined;
+  const park = (run: RunRecord) => {
+    if (parked || run.status !== 'waiting') return;
+    parked = run.id;
+    queueMicrotask(() => { sessionOf(run.id).end(); release(); });
+  };
+  store.on('run', park);
+  onTestFinished(() => { store.off('run', park); });
+  return () => parked!;
+}
+
+/** The opening close aborted only the no-wait nudge's acknowledgement: no error and no failed
+ *  delivery. The cell's own wake count then proves no later charge either. */
+function expectOpeningClosedClean(id: string, parked: string) {
+  expect(parked).toBe(id);
+  expect(store.readEvents(id).filter(event => event.type === 'error'), timeline(id)).toEqual([]);
+  expect(store.getRun(id)?.waitDeliveryFailures, timeline(id)).toBeUndefined();
+}
+
 /** A nudge reply whose cezar_done the tool refuses while the blocker stays: no done at its turn
  *  end, so a live worker's turn end opens the implicit re-check timer (`parkedOnWorkersTimer`). */
 const refusedDoneReply = () => `${toolCall('cezar_done', {})} ${thenSay('Still done.')}`;
@@ -149,7 +173,11 @@ export function closedCells(runners: RunnerId[], it: typeof registerTest = regis
     for (const variant of ['silent', 'closing'] as const) {
       const how = variant === 'silent' ? 'as the nudge: a harness that never answers parks at the reply bound'
         : 'with the delivery retry: a session that closes before it counts a failure, and one copy is delivered';
-      it(`${runner} U22k after a refusal failed at the delivery bound, Continue delivers it ${how}`, async () => {
+      // On OpenCode the silent variant opens as in the merge-group failure of
+      // hearsay-tools/squawk#3508: the opening no-wait nudge's HTTP acknowledgement is held, its
+      // reply bound expires and parks the parent, and the session closes at that park.
+      const heldOpening = runner === 'opencode' && variant === 'silent';
+      const cell = async (release: () => void) => {
         if (variant === 'silent' && exemptionFor('U22s', runner)) {
           expect(exemptionFor('U22s', runner)?.kind).toBe('capability-absent');
           return;
@@ -157,7 +185,12 @@ export function closedCells(runners: RunnerId[], it: typeof registerTest = regis
         retryAtOnce();
         const silence = variant === 'silent' ? silenceRefusals() : undefined;
         if (variant === 'closing') process.env.CEZ_MOCK_COMPLETION_REPLY = refusedDoneReply();
-        const { p, w } = await parentWithWorker(runner, runner === 'claude' ? 'U22k' : undefined);
+        const opening = heldOpening ? closeAtOpeningPark(release) : undefined;
+        const started = parentWithWorker(runner, runner === 'claude' ? 'U22k' : undefined);
+        if (opening) await silence!.expireReply();
+        const { p, w } = await started;
+        // The aborted nudge carried no input: the close charged nothing and failed nothing.
+        if (opening) expectOpeningClosedClean(p.id, opening());
         const refusal = `Workers are still live: ${w.id}.`;
         const refusals = () => store.getRun(p.id)?.agentInputs?.filter(input => input.text.includes(refusal)) ?? [];
         let closes = MAX_WAKE_DELIVERY_ATTEMPTS;
@@ -199,7 +232,9 @@ export function closedCells(runners: RunnerId[], it: typeof registerTest = regis
         expect(prompted(runner, refusal)).toHaveLength(1);
         expect(refusals()).toEqual([expect.objectContaining({ deliveredAt: expect.any(String) })]);
         expect(nudgeNotes(p.id)).toHaveLength(1);
-      });
+      };
+      it(`${runner} U22k after a refusal failed at the delivery bound, Continue delivers it ${how}`, () =>
+        heldOpening ? withHeldAck(runner, cell, NO_WAIT_NUDGE.slice(0, 40)) : cell(() => {}));
 
       it(`${runner} U22r after a restart, a refusal queued for a closed session is delivered ${how}`, async () => {
         const exercise = async (releaseAck: () => void) => {

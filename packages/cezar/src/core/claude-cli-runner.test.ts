@@ -7,7 +7,7 @@ import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent } from './agent-runner.ts';
-import { isSignalTerminationExit, prependSystemPrompt } from './agent-runner.ts';
+import { isSignalTerminationExit, prependSystemPrompt, SessionEndedBeforeAcknowledgement } from './agent-runner.ts';
 import { buildClaudeArgs, ClaudeCliRunner, claudeHelpFeatures } from './claude-cli-runner.ts';
 import { AUTO_END_DELAY_MS, EOF_KILL_GRACE_MS, EOF_TERM_GRACE_MS, KILL_GRACE_MS } from './runner-runtime.ts';
 import { autoEndObservationClock } from './observation-clock.testkit.ts';
@@ -524,7 +524,9 @@ it('steers non-human input behind a queued human turn', async () => {
 }, 25_000);
 
 describe('Claude non-human stdin acknowledgement boundary', () => {
-  it.each(['acknowledged', 'write error', 'closed'] as const)('%s settles only the reserved write and never a mere turn-end', async outcome => {
+  // 'ended': this session's own end() precedes the close, so the rejection is the close
+  // (hearsay-tools/squawk#3508); a close or write error without it stays a delivery failure.
+  it.each(['acknowledged', 'write error', 'closed', 'ended'] as const)('%s settles only the reserved write and never a mere turn-end', async outcome => {
     vi.useFakeTimers();
     const { Writable } = await import('node:stream');
     let completeWrite: ((error?: Error | null) => void) | undefined;
@@ -559,7 +561,8 @@ describe('Claude non-human stdin acknowledgement boundary', () => {
       expect(ack).toBeInstanceOf(Promise);
       if (!ack) throw new Error('expected reserved write');
       let settlement: 'pending' | 'accepted' | 'rejected' = 'pending';
-      const observed = ack.then(() => { settlement = 'accepted'; }, () => { settlement = 'rejected'; });
+      let rejection: unknown;
+      const observed = ack.then(() => { settlement = 'accepted'; }, (error: unknown) => { settlement = 'rejected'; rejection = error; });
       resultFrame();
       // bound: wait for this native turn-end before advancing the test.
       await vi.waitFor(() => expect(events.filter(event => event.type === 'turn-end')).toHaveLength(2), { timeout: 10_000 });
@@ -568,9 +571,11 @@ describe('Claude non-human stdin acknowledgement boundary', () => {
       expect(session.sendAgentMessage([{ type: 'text', text: 'duplicate' }])).toBe(false);
       expect(writes).toBe(2);
       if (outcome === 'closed') close();
+      else if (outcome === 'ended') { session.end(); close(); }
       else completeWrite?.(outcome === 'write error' ? new Error('pipe refused') : undefined);
       await observed;
       expect(settlement).toBe(outcome === 'acknowledged' ? 'accepted' : 'rejected');
+      if (outcome !== 'acknowledged') expect(rejection instanceof SessionEndedBeforeAcknowledgement).toBe(outcome === 'ended');
       // bound: wait for the acknowledged input to allow session closure.
       if (outcome === 'acknowledged') await vi.waitFor(() => expect(session.open).toBe(false), { timeout: 10_000 });
     } finally {

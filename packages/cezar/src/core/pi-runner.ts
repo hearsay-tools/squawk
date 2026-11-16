@@ -28,7 +28,7 @@ import type {
   ToolGrant,
 } from './agent-runner.js';
 import { RUNNER_FACTS } from './runner-facts.js';
-import { SQUAWK_SIDE_SPEC_SUPPORT, unknownToolGrant } from './agent-runner.js';
+import { SessionEndedBeforeAcknowledgement, SQUAWK_SIDE_SPEC_SUPPORT, unknownToolGrant } from './agent-runner.js';
 import { signalSession, spawnSessionLeader, waitForEofExit } from './session-process.js';
 import { buildChildEnv } from './agent-env.js';
 import { squawkToolNames } from '../ci-wait/tool-catalog.js';
@@ -244,7 +244,7 @@ export class PiRunner implements AgentRunner {
       }
       if (!open) return;
       open = false;
-      rpcInput.rejectAgentAck();
+      rpcInput.rejectAgentAck(new SessionEndedBeforeAcknowledgement());
       child.stdin.end();
       killWatchdog = armEndWatchdog(() => child, (spec.timings?.killGraceMs ?? DEFAULT_RUNNER_TIMINGS.killGraceMs), () => { terminatedBySquawk = true; });
     };
