@@ -19,6 +19,10 @@ The failure carries the rule's `message`, which names the owner to use instead.
 `packages/cezar/src/ast-grep-rules.test.ts` runs each rule's own cases. [The lint guide](../../docs/sdlc/lint.md)
 covers every repository rule.
 
+These rules are moving into AST rules of the `cez` oxlint plugin (hearsay-tools/squawk#3774).
+Add no new ast-grep rule: write an AST rule, as [Add a rule](../../docs/sdlc/lint.md#add-a-rule) says.
+A ported rule's `rules/` and `rule-tests/` files are deleted in the PR that adds its replacement.
+
 ## What each rule has
 
 | File | Holds |

@@ -16,15 +16,27 @@ import { runnerIdBranch } from './runner-id-branch.ts';
 import { runnerRosterLiteral } from './runner-roster-literal.ts';
 import { parityRunnerSubset } from './parity-runner-subset.ts';
 import { oxlintRule, type SourceRule } from './source-rule.ts';
+import { oxlintAstRule, type AstRule } from './ast-rule.ts';
+import { childKilledRead } from './child-killed-read.ts';
+import { runStoreTestkitImport } from './run-store-testkit-import.ts';
 import { testWaitDiscipline } from './test-wait-discipline.ts';
 import { undocumentedEnvName } from './undocumented-env-name.ts';
 import { unitWaitDiscipline } from './unit-wait-discipline.ts';
 
+/** The rules that visit oxlint's syntax tree (hearsay-tools/squawk#3774). */
+export const AST_RULES: AstRule[] = [childKilledRead, runStoreTestkitImport];
+
+/** The rules that scan a file's text. New rules are AST rules. */
+export const TEXT_RULES: SourceRule[] = [productEnvRead, homeBoundary, testHomeWrite, card2Contrast, contractRootImport, designGuardian, layerImport, mockLifecycleBoundary, mockScenarioBoundary, nativeMockSource, parityRunnerSubset, rawQuerySetter, runFactReader, runHistoryReader, runnerFactCombination, runnerIdBranch, runnerRosterLiteral, testWaitDiscipline, undocumentedEnvName, unitWaitDiscipline];
+
 /** Every repository rule. `.oxlintrc.json` turns each one on as `cez/<name>`. */
-export const RULES: SourceRule[] = [productEnvRead, homeBoundary, testHomeWrite, card2Contrast, contractRootImport, designGuardian, layerImport, mockLifecycleBoundary, mockScenarioBoundary, nativeMockSource, parityRunnerSubset, rawQuerySetter, runFactReader, runHistoryReader, runnerFactCombination, runnerIdBranch, runnerRosterLiteral, testWaitDiscipline, undocumentedEnvName, unitWaitDiscipline];
+export const RULES: (AstRule | SourceRule)[] = [...TEXT_RULES, ...AST_RULES];
 
 /** The `cez` oxlint JS plugin (hearsay-tools/cezarion#2416). */
 export default {
   meta: { name: 'cez' },
-  rules: Object.fromEntries(RULES.map((rule) => [rule.name, oxlintRule(rule)])),
+  rules: Object.fromEntries([
+    ...TEXT_RULES.map((rule) => [rule.name, oxlintRule(rule)] as const),
+    ...AST_RULES.map((rule) => [rule.name, oxlintAstRule(rule)] as const),
+  ]),
 };
