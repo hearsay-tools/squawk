@@ -45,10 +45,10 @@ Before the PR, in this order:
    tsconfig.scripts.json. It needs no build.
 3. git fetch origin; node .github/scripts/check-clones.cjs --base origin/main
    --head HEAD; node .github/scripts/check-citations.cjs.
-4. Read focused test results through Squeal as AGENTS.md says; use
-   npm test -- <files> only when no daemon validates, the result is unknown,
-   or the repo's own gate requires it. Run the Reader sweep's selected
-   packaged checks too; browser specs run in CI.
+4. Read focused test results through Squeal as AGENTS.md § Validation says;
+   for a verdict now, run squeal run tests|run-loop <files> --wait 60000. Use
+   npm test -- <files> only for the exceptions that section names. Run the
+   Reader sweep's selected packaged checks too; browser specs run in CI.
 5. Commit, then run check-code-quality's pre-PR complexity gate, as its
    reference says. CI's complexity gate counts a moved function as new when a
    same-named delegator stays behind; tell the coordinator about any function
