@@ -1,5 +1,5 @@
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -16,7 +16,6 @@ import { SEAM_CRITERIA, seamRows } from './harness-parity-seam-tier.testkit.ts';
 import { autoEndObservationClock } from './observation-clock.testkit.ts';
 import { AUTO_END_DELAY_MS } from './runner-runtime.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
-import { shellQuote } from './shell-env.ts';
 import { explicitToolGrant } from './tool-grant.testkit.ts';
 import { TOOL_GRANT_CASES, describeToolGrantParity } from './tool-grant-parity-cells.testkit.ts';
 
@@ -353,25 +352,6 @@ export const SESSION_GROUPS = {
           },
           45_000,
         );
-
-        // Desktop privacy attribution: macOS execs this shim in place; other platforms bypass it.
-        it(`${backend} S35 keeps the native session working through the desktop launch trampoline`, async () => {
-          const dir = mkdtempSync(join(tmpdir(), 'cez-desktop-parity-'));
-          const trampoline = join(dir, 'desktop');
-          const marker = join(dir, 'called');
-          writeFileSync(trampoline, `#!/bin/sh\n[ "$1" = "--cez-disclaim-exec" ] || exit 91\nshift\nprintf called > ${shellQuote(marker)}\nexec "$@"\n`);
-          chmodSync(trampoline, 0o755);
-          vi.stubEnv('CEZ_DISCLAIM_EXEC', trampoline);
-          try {
-            const obs = await driveSeam(backend, 'baseline');
-            expect(obs.failure).toBeUndefined();
-            expect(obs.v1.some((e) => e.type === 'turn-end')).toBe(true);
-            expect(existsSync(marker)).toBe(process.platform === 'darwin');
-          } finally {
-            vi.unstubAllEnvs();
-            rmSync(dir, { recursive: true, force: true });
-          }
-        }, 45_000);
       }
     });
   },

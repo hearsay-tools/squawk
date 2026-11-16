@@ -303,7 +303,7 @@ describe('Views group', () => {
       '/new', '/', '/activity', '/git', '/github', '/automations', '/skills', '/workflows', '/reports', '/settings',
     ])
     expect(views[0]?.textContent).toContain('New task')
-    // The chip advertises `c` — ⌘N is browser-reserved and only fires in the desktop shell.
+    // The chip advertises `c` — browsers reserve ⌘N.
     expect(views[0]?.textContent).toContain('C')
   })
 
