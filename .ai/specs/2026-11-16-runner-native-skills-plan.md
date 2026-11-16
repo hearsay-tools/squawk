@@ -176,7 +176,13 @@ Server and run path:
   (`packages/contract/src/workflows.ts`) gains an optional `skillPath` next to `skill`. The
   cockpit sets it on the inline step of `POST /runs` when the picked entry has a path. The run
   record keeps the step, so a later step open, a recovery and a fresh-session Continue start
-  the same copy. A path is specific to one host, so nothing portable holds one: the workflow
+  the same copy.
+- The picker lists the project folder, and the step runs in a task worktree. A skill inside
+  the project has another absolute path there. So `skillPath` is relative to the listed folder
+  when the skill lies inside it, and absolute otherwise (a user or system skill). The server
+  makes it relative when it answers the list, with the folder it listed. At step open Squawk
+  resolves a relative `skillPath` against the step's working folder, then compares it with the
+  paths in that folder's list. A path is specific to one host, so nothing portable holds one: the workflow
   builder writes no `skillPath` into a saved workflow file, and an automation definition,
   `worker spawn --skill` and the task CLI's `--skill` name a skill by id. For those, the D8
   scope rule decides. A `skillPath` that the list no longer holds fails the step at step open.
@@ -244,7 +250,7 @@ draft's runner and account.
 | Reopen with a drafted skill that the drafted runner lists | The drafted `{ id, path? }` | The skill, with the runner's description |
 | Switch between two projects that each hold a draft | Each project's own draft | Each skill checked against its own runner's list |
 | Change the runner or the account in the form to one that does not list the drafted skill | The draft keeps the id | No skill selected. The draft keeps the id, so a change back shows the skill again |
-| The drafted `path` is gone and the id is still listed | The draft keeps the id | The listed entry, when exactly one has the id. With two, no skill selected until the user picks |
+| The drafted `path` is gone and the id is still listed | The draft keeps the id and the path | No skill selected until the user picks again. Squawk does not take another copy of the same name in its place, as at step open |
 | The list is unavailable when the form opens | The drafted id | The id, marked unchecked. Step open still checks it |
 
 The form derives the selection from the draft and the current list. It never writes a masked
