@@ -213,7 +213,7 @@ a session that started last. A Continue appends its step, so the array order is 
 
 Only `workflows/continuation-admission.ts` writes `continuesStepId`, once, when it admits the
 Continue (ADR 0064). It names the step a Continue runs as, never the workflow position.
-`delegation/provision-intent-catalog.test.ts`, `workflows/continuation-tools.test.ts` and
+`delegation/provision-step-identity.test.ts`, `workflows/continuation-tools.test.ts` and
 `workflows/run/launch-read-resolver.test.ts` cover every row except the `resume`-cursor row.
 
 ### Governed delegation controls (D1)

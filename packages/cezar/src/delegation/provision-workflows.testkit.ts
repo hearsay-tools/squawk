@@ -152,6 +152,7 @@ export const PROVISION_ROWS = {
 
 export const PROVISION_TEST_FILES = [
   'provision-intent-catalog.test.ts',
+  'provision-step-identity.test.ts',
   'provision-accepted-grants.test.ts',
   'provision-input-recipes.test.ts',
   'provision-claude-layouts.test.ts',
