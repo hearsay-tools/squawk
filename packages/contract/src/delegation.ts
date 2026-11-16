@@ -322,7 +322,7 @@ export const workerInspectionSchema = z.object({
   outcome: workerOutcomeSchema.optional(),
   /** How this host contains the worker's processes (ADR 0032). `contained`: destroy ends every
    *  descendant. `scoped`: it ends the worker's own process groups; a detached descendant can survive. */
-  scope: z.object({ backend: z.enum(['cgroup', 'groups']), guarantee: z.enum(['contained', 'scoped']) }).strict().optional(),
+  scope: z.object({ backend: z.enum(['cgroup', 'job', 'groups']), guarantee: z.enum(['contained', 'scoped']) }).strict().optional(),
 });
 export type WorkerInspection = z.infer<typeof workerInspectionSchema>;
 

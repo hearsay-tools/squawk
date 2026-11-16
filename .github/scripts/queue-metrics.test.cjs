@@ -49,7 +49,9 @@ test('recorded window prints every pilot metric and both rollback verdicts', asy
     'Native-suite reuse hits: 1 of 5 runs',
     'Invalidated runs: 0, 0 runner-min (0.0 per merge)',
     'Queue-run wall (successful runs): p50 12.5 min, p90 12.8 min',
-    'Main-push proof fallbacks: 2 of 4 pushes; reasons: source-not-successful 1, unexplained 1',
+    // The failed queue run behind one fallback has a green gate, which is proof under the current rule.
+    'Main-push proof fallbacks: 2 of 4 pushes; reasons: unexplained 2',
+    `  unexplained: read the "${PROOF_JOB}" job summary at https://github.com/hearsay-tools/cezarion/actions/runs/41334112445`,
     `  unexplained: read the "${PROOF_JOB}" job summary at https://github.com/hearsay-tools/cezarion/actions/runs/41326268652`,
     'Verdict, queue failure rate: 40.0% against 30.0%: above limit: roll back',
     'Verdict, runner-minutes per merge: 102.5 against 179.2: within limit',
@@ -79,7 +81,7 @@ test('--json carries the same numbers as the report', async () => {
   assert.deepEqual(metrics.queue.minutes, { hosted: 249, ubicloud: 161, other: 0, all: 410 });
   assert.equal(metrics.merges.total, 4);
   assert.equal(metrics.runnerMinutesPerMerge.all, 102.5);
-  assert.deepEqual(metrics.mainPush.reasons, { 'source-not-successful': 1, unexplained: 1 });
+  assert.deepEqual(metrics.mainPush.reasons, { unexplained: 2 });
   assert.equal(metrics.verdicts.failureRate.verdict, 'above limit: roll back');
   assert.equal(metrics.verdicts.runnerMinutesPerMerge.verdict, 'within limit');
 });
@@ -265,7 +267,10 @@ test('fallback reasons rebuild the checks queue-ci-proof.cjs makes', () => {
   assert.equal(proofReason(push([proof('failure')])), 'proof-job-failure');
   assert.equal(proofReason(push([proof('success')], { queueRun: null, queueJobs: [] })), 'no-exact-queue-run');
   assert.equal(proofReason(push([proof('success')], { queueRun: { ...done, updated_at: '2026-11-02T01:00:01Z' }, queueJobs: gate })), 'source-pending');
-  assert.equal(proofReason(push([proof('success')], { queueRun: { ...done, conclusion: 'failure' }, queueJobs: gate })), 'source-not-successful');
+  assert.equal(proofReason(push([proof('success')], { queueRun: { ...done, conclusion: 'cancelled' }, queueJobs: gate })), 'source-not-successful');
+  // A failed run with a green gate is proof: only a job outside the gate failed.
+  assert.equal(proofReason(push([proof('success')], { queueRun: { ...done, conclusion: 'failure' }, queueJobs: gate })), 'unexplained');
+  assert.equal(proofReason(push([proof('success')], { queueRun: { ...done, conclusion: 'failure' }, queueJobs: gate.slice(1) })), 'incomplete-gate');
   assert.equal(proofReason(push([proof('success')], { queueRun: done, queueJobs: gate.slice(1) })), 'incomplete-gate');
   assert.equal(proofReason(push([proof('success')], { queueRun: done, queueJobs: gate })), 'unexplained');
   // A queue run from before the eight-shard matrices is judged by the roster of its own shard count.
@@ -331,8 +336,10 @@ test('a queue run re-run after a decision is read as the attempt that ran when t
   // The proof completed between the two attempts and read attempt 1.
   const proof = { name: PROOF_JOB, run_attempt: 1, conclusion: 'success', completed_at: '2026-11-02T02:00:00Z' };
   const push = { run: { run_attempt: 1, html_url: 'u' }, jobs: [proof],
-    evidence: { queueRun: rerun, attempts: [first, rerun], queueJobs: [] } };
-  assert.equal(proofReason(push), 'source-not-successful');
+    evidence: { queueRun: rerun, attempts: [first, rerun], queueJobs: REQUIRED_QUEUE_JOBS.map((name, i) =>
+      ({ id: 200 + i, name, run_attempt: 2, status: 'completed', conclusion: 'success' })) } };
+  // Attempt 2's green gate does not count: attempt 1 has no gate jobs.
+  assert.equal(proofReason(push), 'incomplete-gate');
 });
 
 test('the command reads each attempt of a re-run queue run', async () => {

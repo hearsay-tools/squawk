@@ -3,7 +3,7 @@ import { WAIT_PHASE, WAIT_VIA, makeHumanWait, makePeerWait, makeProcessWait, mak
   makeSubagentWait, makeTimerWait, makeWorkerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { Wait } from '@open-mercato/cezar-contract/waits';
 import { type AgentSession, SessionEndedBeforeAcknowledgement } from '../../core/agent-runner.ts';
-import { cappedTimersBeforeFlush, rejectedAcknowledgement } from './input-delivery.ts';
+import { acknowledgedExit, cappedTimersBeforeFlush, rejectedAcknowledgement } from './input-delivery.ts';
 import { cleanCloseFailsDelivery } from './wake-admission.ts';
 
 const cap = 40;
@@ -98,5 +98,19 @@ describe('rejectedAcknowledgement', () => {
     { name: 'an input fault already latched', overrides: { inputFault: () => 'agent input delivery failed: earlier' } },
   ])('takes nothing from a rejection on $name', ({ overrides }) => {
     for (const error of [new SessionEndedBeforeAcknowledgement(), aborted]) expect(rejectedAcknowledgement(reads(overrides), error)).toBe('ignored');
+  });
+});
+
+// hearsay-tools/squawk#1239: an acknowledgement after its turn ended checkpoints in the park; one
+// during the turn shows the wake turn running.
+describe('acknowledgedExit', () => {
+  it.each([
+    { name: 'a wake of results during its turn resumes its step', resumes: true, resolvedIds: ['w'], turnEnded: false, exit: { exit: 'resume', resumeStepId: 'task' } },
+    { name: 'a wake of messages during its turn resumes the run only', resumes: true, resolvedIds: [], turnEnded: false, exit: { exit: 'resume', resumeStepId: undefined } },
+    { name: 'a wake of results after its turn ended stays parked', resumes: true, resolvedIds: ['w'], turnEnded: true, exit: {} },
+    { name: 'a wake of messages after its turn ended stays parked', resumes: true, resolvedIds: [], turnEnded: true, exit: {} },
+    { name: 'steering input never moves the run', resumes: false, resolvedIds: [], turnEnded: false, exit: {} },
+  ])('$name', ({ resumes, resolvedIds, turnEnded, exit }) => {
+    expect(acknowledgedExit({ resumes, resolvedIds }, turnEnded, 'task')).toEqual(exit);
   });
 });

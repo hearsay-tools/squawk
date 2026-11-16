@@ -69,11 +69,11 @@ describe('WorkerScopes', () => {
     const scopes = new WorkerScopes(store, () => ({ backend: 'groups', reason: 'test' }));
     // The leader prints a background child's pid and stays; the child is in the leader's group.
     const { leader, printed } = await launch(scopes, workerId, 'sleep 30 & echo $!; wait');
-    expect(state.record).toMatchObject({ workerId, cgroups: [], groups: [{ pid: leader, pgid: leader }] });
+    expect(state.record).toMatchObject({ workerId, cgroups: [], jobs: [], groups: [{ pid: leader, pgid: leader }] });
     expect(await scopes.stop(workerId, HANG_GUARD_MS)).toEqual({ stopped: true });
     expect(pidExists(printed)).toBe(false);
     expect(pidExists(leader)).toBe(false);
-    expect(state.record).toEqual({ workerId, cgroups: [], groups: [] });
+    expect(state.record).toEqual({ workerId, cgroups: [], jobs: [], groups: [] });
   });
 
   it.runIf(process.platform === 'linux')('groups: a leaderless group counts only with a token from this boot', async () => {
@@ -102,7 +102,7 @@ describe('WorkerScopes', () => {
     };
     const first = spawnLeader(), late = spawnLeader();
     let reads = 0;
-    let record: ScopeRecord = { workerId, cgroups: [], groups: [first] };
+    let record: ScopeRecord = { workerId, cgroups: [], jobs: [], groups: [first] };
     const store: ScopeStore = {
       // The first read is stop's snapshot; by the next, a start admitted earlier has registered.
       readWorkerScope: () => { if (++reads === 2) record = { ...record, groups: [...record.groups, late] }; return record; },
@@ -128,7 +128,7 @@ describe('WorkerScopes', () => {
     const { store, state } = memoryStore();
     const scopes = new WorkerScopes(store, () => ({ backend: 'groups', reason: 'test' }));
     const live = { pid: process.pid, pgid: process.pid, startToken: 'live' };
-    state.record = { workerId, cgroups: [], groups: Array.from({ length: SCOPE_GROUP_CAP }, () => live) };
+    state.record = { workerId, cgroups: [], jobs: [], groups: Array.from({ length: SCOPE_GROUP_CAP }, () => live) };
     vi.spyOn(groupsModule, 'liveGroups').mockImplementation(entries => [...entries]);
     // Refused before the command runs, and again if a start races past that check.
     expect(() => scopes.spawnScope(workerId).command('true', [])).toThrow(/already owns/);
@@ -166,14 +166,14 @@ describe('WorkerScopes', () => {
     const scopes = new WorkerScopes(store, () => ({ backend: 'cgroup', base }));
     const { leader, printed } = await launch(scopes, workerId, "setsid sh -c 'echo $$; exec sleep 30' &");
     const path = `${base}/squawk-worker-${workerId}`;
-    expect(state.record).toEqual({ workerId, cgroups: [path], groups: [] });
+    expect(state.record).toEqual({ workerId, cgroups: [path], jobs: [], groups: [] });
     expect(readFileSync(`/proc/${printed}/cgroup`, 'utf8')).toContain(`/squawk-worker-${workerId}`);
     await vi.waitFor(() => expect(pidExists(leader)).toBe(false), { timeout: HANG_GUARD_MS });
     expect(pidExists(printed)).toBe(true);
     expect(await scopes.stop(workerId, HANG_GUARD_MS)).toEqual({ stopped: true });
     expect(pidExists(printed)).toBe(false);
     expect(existsSync(path)).toBe(false);
-    expect(state.record).toEqual({ workerId, cgroups: [], groups: [] });
+    expect(state.record).toEqual({ workerId, cgroups: [], jobs: [], groups: [] });
   });
 
   it.runIf('base' in cgroupHost)('cgroup: a command whose move fails never runs', async () => {

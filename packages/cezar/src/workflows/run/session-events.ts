@@ -1,6 +1,6 @@
 import { productEnv } from '../../core/product-env.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
-import { retireNudge } from './turn-nudges.ts';
+import { nudgeAwaitsAcknowledgement, retireNudge } from './turn-nudges.ts';
 import { randomUUID } from 'node:crypto';
 import { askPayloadOf, askRequestOf } from '@open-mercato/cezar-contract/pending-ask';
 import type { RunRecord, RunStore } from '../../runs/store.ts';
@@ -25,7 +25,7 @@ import type { RunLine } from './run-line.ts';
 import type { HumanWaits } from './human-waits.ts';
 import * as inputReceipts from './input-receipts.ts';
 
-import type { AgentEvent, RunnerId } from '../../core/agent-runner.ts';
+import type { AgentEvent, AgentSession, RunnerId } from '../../core/agent-runner.ts';
 import { UiEventSink } from '../../runs/ui-event-sink.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { ExecutionEmit, LaunchCiTools, LaunchDelegation, RunModuleContext, SessionTurn } from './types.ts';
@@ -35,21 +35,25 @@ import { reportsNativeSubagents } from './subagent-waits.ts';
 
 export interface SessionEventHost {
   disposedSessionEvent(runId: string, state: ActiveRun, event: AgentEvent): boolean;
-  handleReceiptEvent(runId: string, state: ActiveRun, turn: SessionTurn, event: AgentEvent, stepId: string, emit: ExecutionEmit): boolean;
+  handleReceiptEvent(runId: string, state: ActiveRun, turn: SessionTurn, event: AgentEvent, stepId: string, emit: ExecutionEmit, emitting: AgentSession | undefined): boolean;
   recordSessionFault(state: ActiveRun, turn: SessionTurn, message: string): void;
   markTurnBoundary(runId: string, state: ActiveRun, event: Extract<AgentEvent, { type: 'turn-end' }>): void;
   trackTurnEnd(runId: string, text: string): void;
   endTurn(runId: string, state: ActiveRun, sink: UiEventSink, turn: { stepId: string; scheduleWakeup: number | null | undefined }): void;
 }
 
+/** A session's agent events, each with the session that emitted it: `undefined` while
+ *  `startSession` has not returned. */
+export type SessionEventHandler = (event: AgentEvent, emitting: AgentSession | undefined) => void;
+
 export function createSessionEventHandler(context: RunModuleContext, host: SessionEventHost, options: {
   runId: string; state: ActiveRun; turn: SessionTurn; stepId: string; backend: RunnerId; sink: UiEventSink;
   tokenBase: number; emit: ExecutionEmit; acknowledge(): boolean;
-}): (event: AgentEvent) => void {
+}): SessionEventHandler {
   const { runId, state, turn, stepId, backend, sink, tokenBase, emit, acknowledge } = options;
-  return (event) => {
+  return (event, emitting) => {
     if (host.disposedSessionEvent(runId, state, event)) return;
-    if (host.handleReceiptEvent(runId, state, turn, event, stepId, emit)) return;
+    if (host.handleReceiptEvent(runId, state, turn, event, stepId, emit, emitting)) return;
     emit({ ...event, stepId });
     if (event.type === 'cost') recordReportedCost(context.store, runId, stepId, state, backend, event.usd);
     if (event.type === 'error') { host.recordSessionFault(state, turn, event.message); return; }
@@ -122,6 +126,7 @@ export interface SessionHelperHost {
   flushAgentInputs(runId: string): boolean;
   resumeParkedRun(runId: string, state: ActiveRun): void;
   noteNoWaitNudgeContent(runId: string, state: ActiveRun, event: { type: string; item?: { parentItemId?: string } }): void;
+  noteNudgeActivity(runId: string, state: ActiveRun, emitting: AgentSession | undefined, event: UiEvent): void;
   parkedOnWorkers(runId: string): boolean;
   /** Native subagents (hearsay-tools/cezarion#2431): track a background child's events, and close
    *  the subagent wait and the timers when the runner resumes the parent itself. */
@@ -274,17 +279,19 @@ export function makeUiSink(context: RunModuleContext, host: SessionHelperHost, r
 
 /** Native backend asks arrive before turn-end. Persist and park immediately
  * so the cockpit shows attention and the run releases its workspace slot. */
-export function handleRunnerUiEvent(context: RunModuleContext, host: SessionHelperHost, runId: string, state: ActiveRun, sink: UiEventSink, event: UiEvent): void {
+export function handleRunnerUiEvent(context: RunModuleContext, host: SessionHelperHost, runId: string, state: ActiveRun, sink: UiEventSink, event: UiEvent, emitting: AgentSession | undefined): void {
   if (isDisposedDelegatedRun(context.store, context.disposed, runId)) return;
   recordUsageUiEvent(context.store, runId, state, event);
   sink.handle(event);
   if (state.liveSession.cancelled) return;
   host.trackSubagentEvent(runId, state, event);
   host.noteNoWaitNudgeContent(runId, state, event);
+  host.noteNudgeActivity(runId, state, emitting, event);
   if (isRunnerActivity(event)) {
-    // Activity answers the nudge. A refused one's bound was the idle timer.
+    // Activity answers the nudge. A refused one's bound was the idle timer. One still owed its
+    // acknowledgement stays until it arrives (hearsay-tools/squawk#2443).
     const refused = state.boundary.nudge?.state === 'refused';
-    if (state.boundary.nudge) retireNudge(state);
+    if (state.boundary.nudge && !nudgeAwaitsAcknowledgement(state, state.liveSession.session)) retireNudge(state);
     if (refused) clearIdleTimer(state);
     clearHeldHumanInputTimer(state);
     transitionTurnBoundary(state, { kind: 'turn-started', phase: 'clear-boundary', session: state.liveSession.session });

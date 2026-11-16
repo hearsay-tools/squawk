@@ -136,14 +136,17 @@ it.each(['cancelled', 'stale', 'empty'] as const)('rejects unread retirement for
 
 it.each([true, false])('routes an image once with its step id when saving succeeds=%s', saved => {
   const f = receiptFixture();
+  // An image is model work too: it stops an autonomous nudge's acknowledgement bound (hearsay-tools/squawk#2443).
+  const emitting = f.state.liveSession.session;
+  f.steps.noteActivity = vi.fn((_id, _state, _event, from) => { expect(from).toBe(emitting); f.calls.push('activity'); });
   const attachment = { path: 'image.png', url: '/image.png', mediaType: 'image/png', name: 'image.png' };
   f.steps.persistAttachment = vi.fn(() => saved ? attachment : null);
   const emit = vi.fn();
   expect(receipts.handleReceiptEvent(f.context, f.host, f.steps, f.recipient.id, f.state, f.turn,
-    { type: 'image', mediaType: 'image/png', data: 'png' }, 'step-image', emit)).toBe(true);
+    { type: 'image', mediaType: 'image/png', data: 'png' }, 'step-image', emit, emitting)).toBe(true);
   expect(f.steps.persistAttachment).toHaveBeenCalledWith(f.recipient.id, 'image/png', 'png');
   expect(emit.mock.calls).toEqual(saved ? [[{ type: 'image', stepId: 'step-image', ...attachment }]] : []);
-  expect(f.calls).toEqual([]);
+  expect(f.calls).toEqual(['activity']);
 });
 
 it.each([{ type: 'text', text: 'answer\nCEZ:PR=12' },
@@ -151,7 +154,7 @@ it.each([{ type: 'text', text: 'answer\nCEZ:PR=12' },
   const f = receiptFixture();
   f.steps.noteActivity = () => { expect(f.turn.text).toBe(''); f.calls.push('activity'); };
   const emit = vi.fn(() => { expect(f.turn.text).toBe('answer\nCEZ:PR=12'); f.calls.push('emit'); });
-  const handled = receipts.handleReceiptEvent(f.context, f.host, f.steps, f.recipient.id, f.state, f.turn, event, 'step-text', emit);
+  const handled = receipts.handleReceiptEvent(f.context, f.host, f.steps, f.recipient.id, f.state, f.turn, event, 'step-text', emit, f.state.liveSession.session);
   expect(handled).toBe(event.type === 'text');
   expect(f.calls).toEqual(event.type === 'text' ? ['unread', 'held', 'activity', 'emit'] : ['unread', 'held', 'activity']);
   if (event.type === 'text') expect(emit).toHaveBeenCalledWith({ type: 'text', stepId: 'step-text', text: 'answer' });

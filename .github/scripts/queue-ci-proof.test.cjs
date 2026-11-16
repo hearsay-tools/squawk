@@ -53,7 +53,10 @@ for (const [label, [reason, change]] of Object.entries({
   'wrong workflow': ['no-exact-queue-run', s => { s.run.workflow_id = 4; }],
   'wrong path': ['no-exact-queue-run', s => { s.run.path = '.github/workflows/other.yml'; }],
   'wrong queue': ['no-exact-queue-run', s => { s.run.head_branch = 'gh-readonly-queue/release/pr-7'; }],
-  'failed latest attempt': ['source-not-successful', s => { s.run.run_attempt = 2; s.run.conclusion = 'failure'; }],
+  'failed latest attempt': ['incomplete-gate', s => {
+    s.run.run_attempt = 2; s.run.conclusion = 'failure'; s.jobs.find(j => j.name === 'Typecheck').conclusion = 'failure';
+  }],
+  'cancelled run with a green gate': ['source-not-successful', s => { s.run.conclusion = 'cancelled'; }],
   'skipped aggregate': ['incomplete-gate', s => { s.jobs.find(j => j.name === 'Unit, build, E2E, and package').conclusion = 'skipped'; }],
   'missing typecheck': ['incomplete-gate', s => { s.jobs = s.jobs.filter(j => j.name !== 'Typecheck'); }],
   'missing browser shard': ['incomplete-gate', s => { s.jobs = s.jobs.filter(j => j.name !== 'Cockpit browser E2E shard 8/8'); }],
@@ -67,6 +70,18 @@ for (const [label, [reason, change]] of Object.entries({
   'newer failed run': ['source-changed', s => { s.runs.push({ ...s.run, id: 21, conclusion: 'failure' }); }],
 })) test(`full CI fallback: ${label}`, async () => {
   const h = fixture(); change(h.state); assert.deepEqual(await queueCiProof(h.options), { verified: false, reason });
+});
+// The roster decides: a failed job outside it, such as the Squeal export, costs no full main run.
+test('a failed run whose only failed job is outside the gate is proof', async () => {
+  const h = fixture(); h.state.run.conclusion = 'failure';
+  h.state.jobs.push({ id: 900, name: 'Export Squeal shared results', status: 'completed', conclusion: 'failure' });
+  const proof = await queueCiProof(h.options);
+  assert.equal(proof.verified, true); assert.equal(proof.runId, 20); assert.equal(proof.suites, 'ran');
+});
+test('a failed run that turns successful during the final read is a changed source', async () => {
+  const h = fixture(); h.state.run.conclusion = 'failure'; let reads = 0;
+  h.state.onRead = () => { if (++reads === 2) h.state.run.conclusion = 'success'; };
+  assert.deepEqual(await queueCiProof(h.options), { verified: false, reason: 'source-changed' });
 });
 test('pending queue completion gets a bounded wait and then full fallback', async () => {
   const h = fixture(); h.state.run.status = 'in_progress'; h.state.run.conclusion = null;
@@ -229,7 +244,8 @@ test('a push of a group head based on the previous group head reuses its own que
 });
 test('a push over two group heads cannot reuse the skipped head\'s run', async () => {
   const { h, second } = speculative(); h.options.sha = second; h.state.runs[1].conclusion = 'failure';
-  assert.deepEqual(await queueCiProof(h.options), { verified: false, reason: 'source-not-successful' });
+  h.state.jobs.find(job => job.name === 'Vitest shard 3/8').conclusion = 'failure';
+  assert.deepEqual(await queueCiProof(h.options), { verified: false, reason: 'incomplete-gate' });
   assert.ok(!h.state.calls.some(({ args }) => args.run_id === 20));
 });
 test('a push of entry 1 ignores the newer queue run of entry 2', async () => {

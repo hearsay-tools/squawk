@@ -1,7 +1,7 @@
 # Worker process ownership (hearsay-tools/squawk#2180)
 Status: active
 
-Slice A (interface, Linux `cgroup`, `groups`, scan removal) is this change. Slices B
+Slice A (interface, Linux `cgroup`, `groups`, scan removal) shipped in hearsay-tools/squawk#3698. Slice B (the Windows `job` backend) follows it. Slices B
 (Windows Job Object backend, shared with hearsay-tools/squawk#1876), C (native macOS checks) and
 D (before/after spawn and destroy timings) follow as their own pull requests.
 
@@ -49,6 +49,9 @@ Behavior at shipped defaults. "Contained" is the `cgroup` backend; "scoped" is `
 | Outside process with its cwd in the worktree | — | Never signalled; the worktree is removed (POSIX). It keeps a deleted cwd |
 | Scratch with a process still in the scope | scratch cleanup | Retained until the scope is empty |
 | cgroup does not empty before the timeout | — | Destroy incomplete, `process` remaining, the cgroup stays recorded for the retry |
+| Windows: controller ends (crash or exit) | the keeper's stdin closes, the keeper exits, the job's last handle closes | Every process of the worker ends (decision 4); the next destroy finds the job gone and completes |
+| Windows: a command starts before its keeper created the job | `windows-worker-job.ps1 run` waits up to 30 s for the job | It starts inside the job once it exists; if the job never appears the command never runs and the start fails |
+| Windows: a descendant outlives the session leader | `scopes.stop` → `TerminateJobObject` | Ended: it joined the job at creation |
 | Restart or reboot after the destroy intent | the destroy retry timer | Same path from the start; each step is safe to repeat; after a reboot the cgroups and groups are gone |
 
 ## Worktree cases

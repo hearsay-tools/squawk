@@ -84,7 +84,8 @@ it('a refused autonomous nudge retains its boundary before the idle bound and sp
   const f = fixture(true);
   vi.mocked(f.host.submitAgentInput).mockImplementation(() => { f.log.push('submit'); return false; });
   expect(f.nudges.tryAutonomousNudge(f.run.id, f.state, 'step')).toBe(false);
-  order(f.log, ['boundary:nudge-fact/retire', 'submit', 'boundary:nudge-fact/record',
+  // The submitted fact is recorded before the send, and the refusal replaces it (hearsay-tools/squawk#2443).
+  order(f.log, ['boundary:nudge-fact/retire', 'boundary:nudge-fact/record', 'submit', 'boundary:nudge-fact/record',
     'boundary:idle-expired/reset', 'boundary:idle-expired/armed']);
   expect(f.log).not.toContain('charge');
   expect(f.log).not.toContain('release');
@@ -98,7 +99,7 @@ it('a delivered autonomous nudge cancels the idle bound and arms no other bound 
   f.settler.armIdleTimer(f.run.id, f.state);
   f.log.length = 0;
   expect(f.nudges.tryAutonomousNudge(f.run.id, f.state, 'step')).toBe(true);
-  order(f.log, ['boundary:nudge-fact/retire', 'boundary:idle-expired/cancel', 'submit', 'boundary:nudge-fact/record', 'charge', 'event:note']);
+  order(f.log, ['boundary:nudge-fact/retire', 'boundary:idle-expired/cancel', 'boundary:nudge-fact/record', 'submit', 'charge', 'event:note']);
   expect(f.state.boundary.nudge).toEqual({ session: f.wire, cause: 'autonomous', state: 'submitted' });
   expect(f.log).not.toContain('boundary:idle-expired/armed');
   expect(f.log).not.toContain('boundary:reply-expired/armed');
