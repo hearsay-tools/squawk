@@ -50,7 +50,9 @@ test('an ast-grep rule selects its declared readers, not the full suite', t => {
 
 test('source selects the import graph plus every scanner that reads it, deleted source included', t => {
   // packages/cezar/src/gone.ts does not exist: a deletion is classified like any other path.
-  assert.deepEqual(classify(['packages/cezar/src/gone.ts', 'packages/cezar/src/home.ts'], repo(t)),
+  const cwd = repo(t);
+  execFileSync('git', ['init', '-q'], { cwd });
+  assert.deepEqual(classify(['packages/cezar/src/gone.ts', 'packages/cezar/src/home.ts'], cwd),
     { sources: ['packages/cezar/src/gone.ts', 'packages/cezar/src/home.ts'], tests: [scanner] });
 });
 
