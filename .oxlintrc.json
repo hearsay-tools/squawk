@@ -38,6 +38,8 @@
     "cez/test-wait-discipline": "error",
     "cez/undocumented-env-name": "error",
     "cez/unit-wait-discipline": "error",
+    "cez/child-killed-read": "error",
+    "cez/run-store-testkit-import": "error",
     "constructor-super": "error",
     "for-direction": "error",
     "getter-return": "error",

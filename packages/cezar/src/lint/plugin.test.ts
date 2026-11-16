@@ -82,6 +82,8 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'runner-id-branch': ['packages/web/src/routes/runner-branch.ts', "export const held = (runner: string) => runner === 'omp';\n"],
   'runner-roster-literal': ['packages/web/src/lib/runner-roster.test.ts', `const all = [${ROSTER}];\n`],
   'undocumented-env-name': ['packages/cezar/scripts/e.mjs', "process.env.CEZ_NOT_DOCUMENTED_ANYWHERE = '1';\n"],
+  'child-killed-read': ['packages/cezar/src/core/watchdog-killed.ts', "if (!child.killed) child.kill('SIGKILL');\n"],
+  'run-store-testkit-import': ['packages/cezar/src/runs/kit-import.ts', "import { setRunStatus } from './run-store.testkit.ts';\n"],
 };
 
 /** Each approved exception, by the rule it exercises. None may produce a finding. */

@@ -9,6 +9,9 @@ command, it fails closed, and it does not depend on which tests a change selects
 `file:line:column rule: reason → owner`:
 
 1. **oxlint** with the `cez` JS plugin (`packages/cezar/src/lint/plugin.ts`) over `packages/`.
+   AST rules (`AST_RULES`) visit oxlint's own syntax tree; text rules (`TEXT_RULES`) scan the
+   file's text. The ast-grep rules move into AST rules one slice at a time
+   (hearsay-tools/squawk#3774).
    `.oxlintrc.json` keeps every category off and explicitly enables all `cez` rules and 93
    built-in correctness rules. The `typescript`, `unicorn` and `oxc` plugins are enabled.
 2. **ast-grep** with the rules in `.ai/ast-grep/rules`, each against its shrink-only baseline.
@@ -83,6 +86,8 @@ appropriate boundary or checker explicitly.
 | `cez/test-wait-discipline` | Bare sleeps, bounds under 10 s and poll loops without a sufficient deadline in server tests (hearsay-tools/cezarion#2421) | `packages/cezar/src/test-wait-discipline.baseline.json` and `test-wait-discipline-polls.baseline.json`, shrink-only |
 | `cez/undocumented-env-name` | A `CEZ_*` name in a shipped source or runner script that `.env.example` lacks | The `CEZ_MOCK_*` prefix |
 | `cez/unit-wait-discipline` | Bare sleeps, bounds under 3 s and poll loops without a sufficient deadline in cockpit unit tests (hearsay-tools/cezarion#2421) | `packages/web/src/test/unit-wait-discipline.baseline.json`, shrink-only |
+| `cez/child-killed-read` | A `ChildProcess.killed` read (open-mercato/cezar#844). See [`ChildProcess.killed` reads](#childprocesskilled-reads-child-killed-read) | None |
+| `cez/run-store-testkit-import` | A run-store testkit loaded from production code (hearsay-tools/cezarion#2685) | None |
 
 ### Static scope of guards without a separate section
 
@@ -93,6 +98,7 @@ remain in force.
 
 | Guard | Static scope |
 | --- | --- |
+| `cez/run-store-testkit-import` | Non-test `.ts` files in `packages/cezar/src`: a string literal ending in `run-store.testkit` or `run-store-open.testkit`, with or without `.ts`/`.js`, inside an import, an export, an `import()`, an `import x = require()` or any call. A template literal and a path assembled from pieces are out of scope. |
 | `cez/card-2-contrast` | Cockpit TSX source: JSX text and literal class branches, inherited card surfaces, ink, size and weight. Unknown sizes are conservatively small. Arbitrary runtime class values and computed styles require rendered checks; this is not a browser contrast audit. |
 | `cez/contract-root-import` | Static root specifiers in runtime imports and re-exports in the selected package TS/TSX trees, including literal dynamic imports; `import type` declarations and import queries inside type aliases stay allowed. Inline type specifiers and variable-annotation queries are still reported. It does not resolve computed specifiers or transitive imports. |
 | `cez/native-mock-source` | TS files under service `src/` and `test/`, excluding the scanner itself: named read calls whose argument text identifies native mock source, `.mockBin` assignments and mock-patcher specifiers. It does not track arbitrary aliases or source bytes through helpers. |
@@ -298,8 +304,8 @@ send through a destructured or renamed method. It has no baseline and no excepti
 
 ### `ChildProcess.killed` reads (`child-killed-read`)
 
-The ast-grep rule checks production `.ts` files in `packages/cezar/src`; it ignores tests and
-testkits (open-mercato/cezar#844). It reports a `.killed` member read on any receiver and a
+The `cez/child-killed-read` AST rule checks production `.ts` files in `packages/cezar/src`; it
+ignores tests and testkits (open-mercato/cezar#844). It reports a `.killed` member read on any receiver and a
 `killed` key in a destructuring pattern. `ChildProcess.killed` says a signal was delivered, not
 that the child ended; a watchdog asks `trackChildExit(child)` in `core/agent-runner.ts`.
 The rule knows no type. It leaves out a receiver whose name ends in `error`, `err` or `failure`,
@@ -324,14 +330,18 @@ from another module. It has no baseline and no exception.
 For a safety guard, first apply [New safety guards](#new-safety-guards) and document
 its static scope before implementing its scanner.
 
-1. Write the scanner as a pure function of a file's path and source, in
-   `packages/cezar/src/lint/<rule>.ts`, and export a `SourceRule` with its scope (`applies`) and its
-   findings (`check`). TypeScript 7 has no parser API: read `blankOnce(source)` for code without
-   strings and comments, or use the parser the scanner already has.
+1. Write the rule in `packages/cezar/src/lint/<rule>.ts` as an `AstRule` (`ast-rule.ts`): its
+   scope (`applies`) and the ESTree visitors it returns from `create(report)`, such as
+   `MemberExpression` or `ImportDeclaration`. Oxlint parses each file once for every rule, so a
+   visitor costs no parse. Read node fields through `child`, `children`, `nameOf` and `stringOf`.
+   Never match text over a whole file in a new rule.
 2. Name the owner or helper to use instead in each message, with a repository-qualified citation.
-3. Add it to `RULES` in `plugin.ts` and turn it on in `.oxlintrc.json` as `"error"`.
-4. Pin it with fixture cases on inline samples, and add a seeded violation and an approved
-   exception to `plugin.test.ts`, which runs the real oxlint.
+3. Add it to `AST_RULES` in `plugin.ts` and turn it on in `.oxlintrc.json` as `"error"`.
+4. Pin it with `ruleCases(rule, { file, valid, invalid })` from `ast-rule.testkit.ts` in
+   `ast-rules.test.ts`. Oxlint's own `RuleTester` runs each snippet in the test process, and each
+   invalid snippet must give exactly one finding. Add a seeded violation to `plugin.test.ts`,
+   which runs the real oxlint. A deliberate exception is
+   `// oxlint-disable-next-line cez/<rule> -- <reason>`; add no baseline.
 5. Put a whole-repository check (a baseline, a stale entry) in `run.ts`, never in a rule: oxlint
    runs rules per file, in parallel.
 
