@@ -2343,12 +2343,14 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
         vi.useFakeTimers();
         session.endWhenQuiet!();
         expect(session.open).toBe(false);
+        expect(session.closingQuietly).toBe(true);
         expect(session.sendMessage([{ type: 'text', text: 'late human' }])).toBe(false);
         expect(session.sendAgentMessage([{ type: 'text', text: 'late agent' }])).toBe(false);
         await vi.advanceTimersByTimeAsync(AUTO_END_DELAY_MS - 1);
         expect(child.killed).toBe(false);
         await vi.advanceTimersByTimeAsync(1);
         expect(child.killed).toBe(true);
+        expect(session.closingQuietly).toBe(false);
         expect(mock.promptPosts).toHaveLength(1);
       });
     });

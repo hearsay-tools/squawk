@@ -416,6 +416,8 @@ class OpencodeSession implements AgentSession {
     return this.serverOpen && !this.closingAfterDone;
   }
 
+  get closingQuietly(): boolean { return this.serverOpen && this.closingAfterDone; }
+
   get pid(): number | undefined {
     return this.serve.child.pid;
   }

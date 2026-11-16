@@ -361,6 +361,9 @@ export interface AgentSession {
    * none is pending and the turn it reopened has ended. Every other runner closes with `end()`.
    */
   endWhenQuiet?(): void;
+  /** True from `endWhenQuiet` until the session ends: closed to input, still live for its late
+   *  permission request and for a human Finish or Stop. */
+  readonly closingQuietly?: boolean;
   /** Hard stop (used by cancel). */
   interrupt(): void;
   /** True while the session still accepts messages. */

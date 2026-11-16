@@ -72,6 +72,7 @@ export function startManagedSession(
     result,
     get pid() { return live.pid; },
     get open() { return live.open; },
+    get closingQuietly() { return live.closingQuietly === true; },
     sendMessage(content) {
       if (pendingPermissions.size) return false;
       const wasOpen = turnOpen;

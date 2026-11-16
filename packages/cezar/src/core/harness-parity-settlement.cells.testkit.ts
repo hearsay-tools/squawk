@@ -714,6 +714,50 @@ export const SETTLEMENT_GROUPS = {
           // bound: per-cell hang guard above driveRun's own 30 s settle bound, sized for a parity cell under host load.
           }, 45_000);
         }
+
+        it(`${backend} P8 shows a late card after a Continue's done and settles it done once the card is answered`, async () => {
+          let repoRoot = '';
+          let allowId = '';
+          // bound: hang guard for the live mock run; the predicate waits on the first session settling.
+          const observation = await driveRun(backend, 'cezar-done', run => !!run && ['done', 'review'].includes(run.status), 30_000, async ({ store, manager, runId }) => {
+            await waitFor(() => !manager.isActive(runId));
+            expect(manager.continueRun(runId, { text: promptFor(backend, 'permission-late') })).toEqual({ ok: true });
+            await waitFor(() => store.readEvents(runId).some(event => event.type === 'permission.requested'));
+            expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
+            const request = store.readEvents(runId).find(event => event.type === 'permission.requested')!;
+            allowId = (request.options as Array<{ id: string; label: string }>).find(option => option.label.toLowerCase().includes('allow once'))!.id;
+            const response = await answerThroughRoute(repoRoot, store, manager, runId, request, allowId);
+            expect(await response.json()).toEqual({ delivered: true });
+            await waitFor(() => ['done', 'review'].includes(store.getRun(runId)?.status ?? '') && !manager.isActive(runId));
+          }, { beforeStart: context => { repoRoot = context.repoRoot; } });
+          expect(observation.record?.status).toBe('done');
+          expect(observation.record?.hasPendingPermission).toBe(false);
+          expect(permissionResolutionsOf(observation.events)).toEqual([expect.objectContaining({ optionId: allowId })]);
+          expect(joinedText(observation.events)).toContain('Approval response: {"reply":"once"}');
+        // bound: per-cell hang guard above driveRun's own 30 s settle bound, sized for a parity cell under host load.
+        }, 60_000);
+
+        // A human Finish still reaches the session that closes on its done, as it reaches an open one.
+        it(`${backend} P8 Finish while a late card pends closes the session and settles the run done`, async () => {
+          let repoRoot = '';
+          // bound: hang guard for the live mock run; the predicate waits on the run settling, and a refused Finish fails here instead of at the test timeout.
+          const observation = await driveRun(backend, 'permission-late', run => !!run && ['done', 'review'].includes(run.status), 30_000, undefined, {
+            beforeStart: context => { repoRoot = context.repoRoot; },
+            during: async ({ store, manager, runId }) => {
+              await waitFor(() => store.readEvents(runId).some(event => event.type === 'permission.requested'));
+              expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
+              expect(manager.finishBlockedReason(runId)).toBeUndefined();
+              const response = await apiRequest(createApp({ home: testHome(), repoRoot, store, manager, version: 'test' }), `/api/v1/runs/${runId}/finish`, { method: 'POST' });
+              expect(await response.json()).toEqual({ finished: true });
+            },
+          });
+          expect(observation.record?.status).toBe('done');
+          expect(observation.record?.hasPendingPermission).toBe(false);
+          expect(permissionResolutionsOf(observation.events)).toEqual([expect.not.objectContaining({ optionId: expect.anything() })]);
+          expect(observation.events).toContainEqual(expect.objectContaining({ type: 'lifecycle', message: 'session closed by user' }));
+          expect(joinedText(observation.events)).not.toContain('Approval response');
+        // bound: per-cell hang guard above driveRun's own 30 s settle bound, sized for a parity cell under host load.
+        }, 45_000);
       }
     });
   },

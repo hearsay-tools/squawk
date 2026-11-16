@@ -74,10 +74,8 @@ export class TurnSettler {
     if (close?.summary) this.context.store.appendEvent(runId, { type: 'note', message: close.summary });
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: step ? 'step complete — session closed' : 'goal achieved — session closed', via: close?.via ?? 'cezar_done' });
     this.host.waitEngine.cancelAll(runId);
-    if (session?.endWhenQuiet) {
-      state.liveSession.closeOnDone(session);
-      session.endWhenQuiet();
-    } else session?.end();
+    if (session?.endWhenQuiet) session.endWhenQuiet();
+    else session?.end();
   }
 
   /**

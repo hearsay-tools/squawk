@@ -257,7 +257,7 @@ export class InputDelivery {
   respondPermission(runId: string, requestId: string, optionId: string): boolean {
     const state = this.host.active.get(runId);
     const run = this.context.store.getRun(runId);
-    if (this.context.disposed() || !state?.liveSession.answersPermissions || state.liveSession.cancelled || state.liveSession.finishRequested || !this.host.canProceedWithRun(runId, run) ||
+    if (this.context.disposed() || !state?.liveSession.sessionLive || state.liveSession.cancelled || state.liveSession.finishRequested || !this.host.canProceedWithRun(runId, run) ||
         !state.liveSession.pendingPermissions?.has(requestId)) return false;
     return state.liveSession.session!.respondPermission?.(requestId, optionId) ?? false;
   }
