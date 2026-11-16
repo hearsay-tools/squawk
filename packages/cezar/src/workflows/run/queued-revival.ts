@@ -61,6 +61,12 @@ export async function reviveQueuedRun(context: RunModuleContext, host: QueuedRev
     reviveQueuedContinuation(context, host, run, reason, queuedContinuation.id, sessionStep?.sessionId ? sessionStep : queuedContinuation);
     return;
   }
+  // A task queued on a runner Squawk no longer ships has no runner to start on: the project
+  // default is no one's choice for it (hearsay-tools/squawk#3715).
+  if (run.removedRunner !== undefined) {
+    failRemovedRunner(context, host, run.id, run.removedRunner, reason);
+    return;
+  }
   if (run.delegation?.role === 'worker') {
     reviveQueuedWorker(context, host, run, reason);
     return;
@@ -85,15 +91,12 @@ export async function reviveQueuedRun(context: RunModuleContext, host: QueuedRev
 
 export function reviveQueuedContinuation(context: RunModuleContext, host: QueuedRevivalHost, run: RunRecord, reason: string, queuedStepId: string, sessionStep: RunRecord['steps'][number]): void {
   if (reason === 'cezar restarted') run = host.checkpointRestartContext(run, queuedStepId);
-  const { backend, recoveredSessionId } = queuedResumeSession(context, host, run, sessionStep);
-  // A continuation queued on a runner Squawk no longer ships has no runner to start on (hearsay-tools/squawk#3715).
   if (run.removedRunner !== undefined) {
-    const error = removedRunnerMessage(run.removedRunner);
-    const finishedAt = new Date().toISOString();
-    context.store.updateStep(run.id, queuedStepId, { status: 'failed', error, finishedAt });
-    host.move(run.id, 'fail-start', { error, finishedAt });
+    context.store.updateStep(run.id, queuedStepId, { status: 'failed', error: removedRunnerMessage(run.removedRunner), finishedAt: new Date().toISOString() });
+    failRemovedRunner(context, host, run.id, run.removedRunner, reason);
     return;
   }
+  const { backend, recoveredSessionId } = queuedResumeSession(context, host, run, sessionStep);
   host.enqueueContinuation(run.id, {
     stepId: queuedStepId,
     sessionId: recoveredSessionId,
@@ -153,3 +156,10 @@ export function requeueInterruptedRun(context: RunModuleContext, host: QueuedRev
 
 /** The persisted definition when it looks sane, else the catalog by name. */
 export const reviveWorkflow = atTaskHead.reviveWorkflow;
+
+/** Fail a queued task saved on a removed runner before it starts (hearsay-tools/squawk#3715). */
+function failRemovedRunner(context: RunModuleContext, host: QueuedRevivalHost, runId: string, removedRunner: string, reason: string): void {
+  const error = removedRunnerMessage(removedRunner);
+  host.move(runId, 'fail-start', { error, finishedAt: new Date().toISOString() });
+  context.store.appendEvent(runId, { type: 'lifecycle', message: `${reason} — task failed: ${error}` });
+}

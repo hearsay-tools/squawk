@@ -10,6 +10,7 @@ import { noRunners } from '../../core/runners-under-test.testkit.ts';
 import { TrackedWork } from './tracked-work.ts';
 import { reviveQueuedRun, type QueuedRevivalHost } from './queued-revival.ts';
 import type { RunModuleContext } from './types.ts';
+import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 
 let root: string | undefined;
 afterEach(() => { if (root) rmSync(root, { recursive: true, force: true }); root = undefined; });
@@ -36,4 +37,23 @@ it('revives a queued continuation with no earlier session as that continuation',
   expect(enqueueJob).not.toHaveBeenCalled();
   expect(enqueueContinuation).toHaveBeenCalledWith(run.id, expect.objectContaining({ stepId: 'continue-1', sessionId: undefined, backend: 'claude',
     prompt: expect.stringContaining('Your instructions: build it') }));
+});
+
+// hearsay-tools/squawk#3715: a task queued on a runner Squawk no longer ships has no runner to start on.
+it('fails a queued task saved on a removed runner instead of starting it on the project default', async () => {
+  root = mkdtempSync(join(tmpdir(), 'cez-queued-revival-'));
+  const store = RunStore.open(root);
+  const context = { createRunner: noRunners, home: testHome(), store, dataDir: root, repoRoot: root,
+    semaphore: new WorkspaceSemaphore({ home: testHome() }), work: new TrackedWork(), disposed: () => false } as RunModuleContext;
+  const created = store.createRun({ title: 'queued', task: 'build it', workflow: 'quick-task',
+    steps: [{ id: 'task', name: 'Task', kind: STEP_KIND.agent }] });
+  const run = makeRunRecord({ id: created.id, status: RUN_STATUS.queued, removedRunner: 'cursor',
+    steps: [makeStepState({ id: 'task', kind: STEP_KIND.agent, status: STEP_STATUS.pending })] });
+  const enqueueContinuation = vi.fn(); const enqueueJob = vi.fn(); const move = vi.fn();
+  const host = { isActive: () => false, workerExecutionStopped: () => false, isSyntheticContinuation: () => false,
+    enqueueContinuation, enqueueJob, move, reviveWorkflow: async () => ({ name: 'quick-task', steps: [] }) } as unknown as QueuedRevivalHost;
+  await reviveQueuedRun(context, host, run, 'cezar restarted');
+  expect(enqueueJob).not.toHaveBeenCalled();
+  expect(enqueueContinuation).not.toHaveBeenCalled();
+  expect(move).toHaveBeenCalledWith(run.id, 'fail-start', expect.objectContaining({ error: removedRunnerMessage('cursor') }));
 });
