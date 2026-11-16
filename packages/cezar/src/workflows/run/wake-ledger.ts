@@ -77,24 +77,27 @@ export function pendingConversationWakes(run: RunRecord, reads: ConversationWake
     !owed.has(input.id) && input.id !== answer?.id && !reads.providerOwnsInboxInput(run.id, input.id); });
 }
 
-/** The inputs a wake owes: each resolved wait's result, each message, and a parent's answer the
- *  run has not received. A wake's opening prompt is an attempt to deliver exactly these
- *  (hearsay-tools/squawk#1289). */
-export function owedWakeInputIds(run: RunRecord, reads: WakeReads, beforeHumanReset?: { spent: number }): string[] {
-  const answer = reads.routedAnswer(run.id)?.id;
-  // A pending native question takes nothing but its answer: results and messages wait for the
-  // answer's turn end, and a run with no session is not reopened for them, where its provider
-  // would ask again (hearsay-tools/cezarion#1235, parent spec § Wakes beside questions).
-  if (WAIT_KINDS.human.select(openWaits(run)).some(wait => wait.via === 'native-ask')) return answer === undefined ? [] : [answer];
-  return [...resolvedWaits(run).map(waitInputId), ...reads.pendingConversationWakes(run, beforeHumanReset).map(input => input.id), ...(answer === undefined ? [] : [answer])];
+/** The sources of an owed wake, in delivery order, each read only when called: each resolved
+ *  wait's result, each message, and a parent's answer the run has not received. A pending native
+ *  question takes nothing but its answer: results and messages wait for the answer's turn end,
+ *  and a run with no session is not reopened for them, where its provider would ask again
+ *  (hearsay-tools/cezarion#1235, parent spec § Wakes beside questions). */
+function owedWakeSources(run: RunRecord, reads: WakeReads, beforeHumanReset?: { spent: number }): (() => string[])[] {
+  const answer = () => { const id = reads.routedAnswer(run.id)?.id; return id === undefined ? [] : [id]; };
+  if (WAIT_KINDS.human.select(openWaits(run)).some(wait => wait.via === 'native-ask')) return [answer];
+  return [() => resolvedWaits(run).map(waitInputId), () => reads.pendingConversationWakes(run, beforeHumanReset).map(input => input.id), answer];
 }
 
-/** A wake is owed: a resolved wait, a message, or a parent's answer the run has not received.
- *  It reads what `owedWakeInputIds` lists, and stops at the first source that owes. */
+/** The inputs a wake owes, from every owed-wake source. A wake's opening prompt is an attempt to
+ *  deliver exactly these (hearsay-tools/squawk#1289). */
+export function owedWakeInputIds(run: RunRecord, reads: WakeReads, beforeHumanReset?: { spent: number }): string[] {
+  return owedWakeSources(run, reads, beforeHumanReset).flatMap(source => source());
+}
+
+/** A wake is owed: some owed-wake source lists an input. It reads the sources `owedWakeInputIds`
+ *  lists, and stops at the first one that owes. */
 export function owesWake(run: RunRecord, reads: WakeReads, beforeHumanReset?: { spent: number }): boolean {
-  if (WAIT_KINDS.human.select(openWaits(run)).some(wait => wait.via === 'native-ask')) return reads.routedAnswer(run.id) !== undefined;
-  if (resolvedWaits(run).length) return true;
-  return reads.pendingConversationWakes(run, beforeHumanReset).length > 0 || reads.routedAnswer(run.id) !== undefined;
+  return owedWakeSources(run, reads, beforeHumanReset).some(source => source().length > 0);
 }
 
 /** A live session takes a wake at its turn boundary. A native question is mid-turn and takes one
