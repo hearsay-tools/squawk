@@ -189,11 +189,11 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
   };
   modules.inputReceiptSteps = {
     clearUnread: state => clearUnreadInputTimer(state), clearHeld: state => clearHeldHumanInputTimer(state),
-    noteActivity: (id, state, event) => modules.turnNudges.noteNoWaitNudgeContent(id, state, event),
+    noteActivity: (id, state, event, emitting) => { modules.turnNudges.noteNudgeActivity(id, state, emitting, event); modules.turnNudges.noteNoWaitNudgeContent(id, state, event); },
     persistAttachment: (id, mediaType, data) => modules.attachments.persistAttachment(id, mediaType, data),
     ready: (id, state, session) => modules.inputDelivery.handleAgentInputReady(id, state, session),
     pid: (id, pid) => { replaceRunProcess(id, pid); modules.workerExecutions.recordWorkerProcess(id, pid); },
-    ui: (id, state, sink, event) => sessionEvents.handleRunnerUiEvent(context, modules.sessionHelperHost, id, state, sink, event),
+    ui: (id, state, sink, event, emitting) => sessionEvents.handleRunnerUiEvent(context, modules.sessionHelperHost, id, state, sink, event, emitting),
     flushDeferred: id => modules.queuedInput.flushDeferred(id), recordProcess: (id, pid) => modules.workerExecutions.recordWorkerProcess(id, pid),
   };
   modules.inputReceiptHost = {
@@ -328,6 +328,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     flushAgentInputs: id => modules.inputDelivery.flushAgentInputs(id),
     resumeParkedRun: (...args) => modules.inputDelivery.resumeParkedRun(...args),
     noteNoWaitNudgeContent: (...args) => modules.turnNudges.noteNoWaitNudgeContent(...args),
+    noteNudgeActivity: (id, state, emitting, event) => modules.turnNudges.noteNudgeActivity(id, state, emitting, event),
     parkedOnWorkers: id => modules.wakeAdmission.parkedOnWorkers(id),
     trackSubagentEvent: (id, state, event) => modules.subagentWaits.trackEvent(id, state, event),
     supersedeOnRunnerResume: id => modules.subagentWaits.supersedeOnRunnerResume(id),
@@ -342,6 +343,8 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     countAutomaticWakes: id => modules.wakeAdmission.automaticWakes(id), hasQueuedAgentInputs: id => modules.inputDelivery.hasQueuedAgentInputs(id),
     submitAgentInput: (id, state, content) => modules.inputDelivery.submitAgentInput(id, state, content), resumeParkedRun: (id, state) => modules.inputDelivery.resumeParkedRun(id, state),
     chargeAutomaticWake: id => modules.wakeAdmission.chargeAutomaticWake(id), retryWaitAdmission: id => modules.retries.retryWaitAdmission(id), armIdleTimer: (id, state) => modules.turnSettler.armIdleTimer(id, state),
+    closeIdleSession: (id, state, event) => modules.turnSettler.closeIdleSession(id, state, event),
+    abandonNudgeFlight: (state, session) => modules.inputDelivery.abandonNudgeFlight(state, session),
     openTurnEndHumanWait: (id, state, step, via, note) => modules.turnSettler.openTurnEndHumanWait(id, state, step, via, note),
     settledTurnOutcome: (id, entry, outcome) => host.settledTurnOutcome(id, entry, outcome), queueWaitWake: id => modules.wakeAdmission.queueWaitWake(id),
   }, MAX_AUTO_CONTINUES, COMPLETION_WILL_WAIT, host.noWaitNudgeReplyMs() ?? NO_WAIT_NUDGE_REPLY_MS, modules.liveness);
@@ -535,6 +538,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     canAutoContinue: (id, state) => modules.turnNudges.canAutoContinue(id, state),
     sendTurnEndNudge: (id, state, step, text) => modules.turnNudges.sendTurnEndNudge(id, state, step, text),
     awaitCompletionNudgeReply: (id, state, session) => modules.turnNudges.awaitCompletionNudgeReply(id, state, session),
+    armAutonomousNudgeBound: (id, state) => modules.turnNudges.armAutonomousNudgeBound(id, state),
     noticeParkedWorker: id => modules.workerQuestions.noticeParkedWorker(id), routeWorkerQuestion: id => modules.workerQuestions.routeWorkerQuestion(id),
     settledTurnOutcome: (id, entry, outcome) => host.settledTurnOutcome(id, entry, outcome),
   }, IDLE_TIMEOUT_MS, MAX_AUTO_CONTINUES, COMPLETION_WILL_WAIT, SCHEDULE_WAKEUP_MAX_SECONDS, modules.liveness);
@@ -563,6 +567,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     boundaryTurn: (id, state, session, done) => modules.turnSettler.boundaryTurn(id, state, session, done),
     canAutoContinue: (id, state) => modules.turnNudges.canAutoContinue(id, state), armNoWaitNudgeReplyTimer: (id, state) => modules.turnNudges.armNoWaitNudgeReplyTimer(id, state),
     awaitCompletionNudgeReply: (id, state, session) => modules.turnNudges.awaitCompletionNudgeReply(id, state, session),
+    acknowledgeNudge: (id, state, session) => modules.turnNudges.acknowledgeNudge(id, state, session),
     queueWaitWake: id => modules.wakeAdmission.queueWaitWake(id), owesWake: (run, budget) => modules.wakeAdmission.owesWake(run, budget),
     owedWakeInputIds: run => modules.wakeAdmission.owedWakeInputIds(run),
     pendingConversationWakes: (run, budget) => modules.wakeAdmission.pendingConversationWakes(run, budget), routedAnswer: id => modules.wakeAdmission.routedAnswer(id),

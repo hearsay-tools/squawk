@@ -2,7 +2,7 @@ import { logPrefix } from '../../home/display.ts';
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS, waitDeliveryLabel } from './wait-kinds.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
-import { nudgeRefusedAt, retireNudge } from './turn-nudges.ts';
+import { nudgeAwaitsAcknowledgement, nudgeRefusedAt, retireNudge } from './turn-nudges.ts';
 import type { AgentInput } from '@open-mercato/cezar-contract/delegation';
 import type { Wait } from '@open-mercato/cezar-contract/waits';
 import type { InputDelivery as InputDeliveryPolicy } from '../../core/agent-runner.ts';
@@ -277,6 +277,8 @@ interface InputDeliveryHost {
   submitAgentInput(id: string, state: ActiveRun, content: ContentBlock[], inputs?: readonly string[], budget?: HumanAnswerBudget): boolean;
   /** `SubagentWaits.endParkHold`: a park's hold for native subagents ends when the run leaves it. */
   endParkHold(id: string, state: ActiveRun): void;
+  /** `TurnNudges.acknowledgeNudge`: the harness acknowledged the nudge `session` was sent. */
+  acknowledgeNudge(id: string, state: ActiveRun, session: AgentSession): void;
 }
 
 function unreadInputUnconfirmedNote(count: number): string {
@@ -632,7 +634,7 @@ export class InputDelivery {
             acknowledgedExit(batch, turnEnded, state.liveSession.currentStepId));
           attemptWrites.settle(state.inputState, session, inputIds, 'acknowledged');
           this.applyAcknowledgedInput(runId, state, flight, batch, refusal, turnEnded);
-        }
+        } else this.host.acknowledgeNudge(runId, state, session);
       } catch (error) { fail(error, true); }
     }, error => {
       refund();
@@ -655,6 +657,14 @@ export class InputDelivery {
       try { fail(error, true); } finally { if (state.inputState.agentInputFlight === flight) state.inputState.clearFlight(); }
     }));
     return flight.settled!;
+  }
+
+  /** A nudge's bound expired before its acknowledgement (hearsay-tools/squawk#2443): its flight
+   *  carries no input, so it is dropped, and a later acknowledgement or a rejection from the closing
+   *  session settles nothing. */
+  abandonNudgeFlight(state: ActiveRun, session: AgentSession): void {
+    const flight = state.inputState.agentInputFlight;
+    if (flight?.session === session && !flight.inputIds.length) state.inputState.clearFlight();
   }
 
   /** Apply the acknowledgement's effects only after its outcome commit succeeds. */
@@ -768,7 +778,9 @@ export class InputDelivery {
    * resumes work in a parked session. */
   resumeParkedRun(runId: string, state: ActiveRun, beforeHumanReset?: HumanAnswerBudget): void {
     clearHeldHumanInputTimer(state);
-    retireNudge(state);
+    // A resume supersedes a refused nudge. The nudge this submission carries stays until its
+    // acknowledgement (hearsay-tools/squawk#2443).
+    if (!nudgeAwaitsAcknowledgement(state, state.liveSession.session)) retireNudge(state);
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'resume', session: state.liveSession.session });
     clearIdleTimer(state);
     this.host.endParkHold(runId, state);
