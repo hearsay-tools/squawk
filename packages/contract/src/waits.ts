@@ -423,9 +423,19 @@ export const doneErrorCodeSchema = z.enum([
   'workers_outstanding', 'workers_uncollected', 'worker_questions', 'requests_outstanding', 'requests_unanswered', 'human_question_pending', 'worker_wait_pending',
   'root_finish_pending', 'not_final_step', 'manager_disposed', 'capability_revoked', 'run_missing', 'run_not_running', 'run_stopping',
   'session_replaced', 'session_closed', 'run_cancelled', 'finish_requested', 'generation_mismatch', 'invalid_request',
-  'unavailable',
+  'unavailable', 'input_pending',
 ]);
 export type DoneErrorCode = z.infer<typeof doneErrorCodeSchema>;
+
+/** Input the run owes the agent when it calls `cezar_done`: a resolved wait's result not yet
+ *  delivered (`wait_result`, with the wait's kind), a message or result queued for delivery
+ *  (`queued`), or a delivery still waiting for its acknowledgement or its read (`in_flight`). */
+export const doneOwedInputSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('wait_result'), wait_id: z.string(), wait_kind: z.string() }).strict(),
+  z.object({ kind: z.literal('queued'), input_id: z.string(), source: z.string() }).strict(),
+  z.object({ kind: z.literal('in_flight'), input_id: z.string() }).strict(),
+]);
+export type DoneOwedInput = z.infer<typeof doneOwedInputSchema>;
 
 const doneAccepted = {
   ok: z.literal(true),
@@ -450,6 +460,8 @@ export const squawkDoneAnswerSchema = z.discriminatedUnion('ok', [
       reason: z.enum(['outstanding', 'uncollected', 'question']),
     }).strict()).max(64).optional(),
     open_waits: z.array(openWaitSchema).max(WAIT_LIMIT).optional(),
+    /** `input_pending` (hearsay-tools/squawk#2587): what the run still owes the agent. */
+    owed: z.array(doneOwedInputSchema).max(64).optional(),
   }).strict(),
 ]);
 export type SquawkDoneAnswer = z.infer<typeof squawkDoneAnswerSchema>;
