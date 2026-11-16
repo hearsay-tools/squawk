@@ -141,6 +141,13 @@
       "packages/api-client/src/**",
       "packages/api-client/package.json"
     ],
+    "packages/cezar/src/core/harness-parity.test.ts": [
+      "AGENT_PROTOCOL.md",
+      ".ai/specs/2026-09-04-harness-parity-matrix.md"
+    ],
+    "packages/cezar/src/lint/home-boundary.test.ts": [
+      ".github/scripts/baseline-growth.cjs"
+    ],
     "packages/cezar/src/lint/card-2-contrast.test.ts": [
       "packages/cezar/src/lint/card-2-contrast.ts"
     ],
@@ -228,7 +235,13 @@
       "scripts/test-changed.mjs",
       ".github/scripts/change-surface.cjs",
       ".github/scripts/fixtures/docs-path-cases.cjs",
+      "scripts/test-inputs.mjs",
       "package.json"
+    ],
+    "scripts/test-inputs.test.mjs": [
+      "squeal.config.json",
+      "packages/*/vitest.config.ts",
+      "packages/*/src/**/*.{ts,tsx}"
     ],
     ".github/scripts/change-surface-readers.test.cjs": [
       "packages/**",

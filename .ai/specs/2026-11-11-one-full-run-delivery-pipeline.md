@@ -114,10 +114,10 @@ The rule text lives in the owner's Cezar prompt, outside this repository (§ Own
 
 1. Lint, typecheck and build run as today.
 2. Vitest runs the files that `scripts/test-changed.mjs` selects against the PR base. A
-   change to shared inputs, configuration or an unknown path selects the full suite, as
-   the script does today. A source change for which the selection finds no test also runs
-   the full suite; the script exits with an error in that case today, and phase 2 changes
-   that for CI.
+   change to configuration or an unknown path selects the full suite. A non-source input
+   selects the tests that `squeal.config.json` `inputs` declares as its readers
+   (hearsay-tools/squawk#3729). A source change for which the selection finds no test also
+   runs the full suite.
 3. Browser specs run the files that `scripts/e2e-affected.mjs` selects.
 4. A full fallback runs on 8 Vitest and 8 browser shards.
 5. Docs-only and infra-only changes keep today's skips.
