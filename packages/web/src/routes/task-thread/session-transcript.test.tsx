@@ -914,3 +914,25 @@ it('shows one omp skill start from the persisted native expansion', () => {
   render(<MemoryRouter><SessionTranscript runId="r1" viewId="main" mode="document" sections={sections} /></MemoryRouter>)
   expect(screen.getAllByText('/skill:probe-project fixture arguments')).toHaveLength(1)
 })
+
+
+it.each(['opening', 'mid-turn'] as const)('shows one human skill start with the omp expansion during %s input', timing => {
+  const text = '/skill:probe-project fixture arguments'
+  const thread = reduceThread(asRunEvents([
+    ...(timing === 'mid-turn' ? [{ type: 'turn.started', turnId: 'turn_1' }] : []),
+    { type: 'user-message', text, imageCount: 1, images: ['/api/v1/fixture.png'] },
+    ...ompSkillTrigger.filter(event => timing !== 'mid-turn' || event.type !== 'turn.started'),
+  ]))
+  expect(thread.turns.flatMap(turn => turn.items).filter(item => item.kind === 'message')).toHaveLength(0)
+  expect(thread.turns.at(-1)?.userMessage).toMatchObject({ text, imageCount: 1, images: ['/api/v1/fixture.png'] })
+  render(<MemoryRouter><SessionTranscript runId="r1" viewId="main" mode="document" sections={mainTranscriptSections(run({ task: '' }), thread)} /></MemoryRouter>)
+  expect(screen.getAllByText(text)).toHaveLength(1)
+})
+
+it('keeps a different runner user message beside the human skill input', () => {
+  const thread = reduceThread(asRunEvents([
+    { type: 'user-message', text: '/skill:other different arguments' },
+    ...ompSkillTrigger,
+  ]))
+  expect(thread.turns.flatMap(turn => turn.items).filter(item => item.kind === 'message')).toHaveLength(1)
+})

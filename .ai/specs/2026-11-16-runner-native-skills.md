@@ -115,7 +115,7 @@ needs to choose between them.
   | Codex | A `{type:"skill", name, path}` item with the listed `path`, plus the args as text, on `turn/start` | Never on `turn/steer`, and never on a `turn/start` sent during an active turn: both drop the skill |
   | OpenCode | `POST /session/{id}/command` | Read the response in the background. HTTP errors or `session.error` fail and end the turn; a dropped connection leaves SSE in charge. The request returns only at turn end and Node's `fetch` fails at 300 s. The user message that holds the skill body arrives on the event stream about 30 ms after the request; that is the sign of expansion. Never during a busy turn: a second command is steered into the running turn and the first skill's result is lost |
   | pi | `/skill:id args` at the start of the message | At least one argument must follow the id on the same line. `/skill:id` followed by a line break is not expanded. Opening context goes after the args |
-  | omp | `/skill:id args` | The adapter maps the `custom` message with `customType: "skill-prompt"` to one user item on `message_start`. Repeated end frames add no item, and the frame releases the input hold |
+  | omp | `/skill:id args` | The adapter maps the `custom` message with `customType: "skill-prompt"` to one user item on `message_start`. Repeated end frames add no item, and the frame releases the input hold. The transcript reconciles an exact same-turn echo with the saved human input, preserving its attachments and timestamp |
 
 - **Facts:** `skillTriggerMidTurn: boolean`, `skillUnknownName: 'error' | 'silent'` and
   `skillsSeenBySession: 'live' | 'at-start'` (Codex is `live`). All five runners list, so no

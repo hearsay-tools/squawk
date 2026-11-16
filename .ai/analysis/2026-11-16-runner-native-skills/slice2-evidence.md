@@ -59,7 +59,7 @@ the native persisted payload. Fixtures were captured before those mock routes we
 | OpenCode dropped command and turn beyond 300 s | `opencode-skill-trigger.test.ts`: two child commands gated by a file: one drops HTTP at once; one aborts its real fetch at a fake 300000 ms header deadline. Advance 301000 ms, require no error/boundary until gate release, then token. Only the parent deadline is fake; child/SSE keep real I/O |
 | OpenCode error and receipt settlement | Same file: HTTP-only error, SSE-only error with HTTP held, and end/interrupt/process death before user ACK; receipt rejects, one boundary, v1/v2 error on native failures |
 | Codex active turn/start refusal | `codex-steering.test.ts`: human and agent sends refuse synchronously during active turn or pending plain/skill start; no skill `turn/steer` and no extra `turn/start` |
-| omp skill starts once above adapter | `omp-ui-mapper.test.ts` replays captured start plus repeated end messages to `skill-trigger.expected.json`; `runs/ui-event-sink.test.ts` pins persistence/live snapshots; `session-transcript.test.tsx` renders exactly one skill text |
+| omp skill starts once above adapter | `omp-ui-mapper.test.ts` replays captured start plus repeated end messages to `skill-trigger.expected.json`; `runs/ui-event-sink.test.ts` pins persistence/live snapshots; `session-transcript.test.tsx` renders exactly one skill text, including full saved-human + runner-expansion histories for opening and mid-turn input; the saved human attachments remain. Unmatched and runner-only skill items stay visible |
 | pi mid-turn correlation | pi trigger parity also sends human and agent skill triggers; the native expanded wrapper releases the human hold and consumes agent input before its reply, including literal XML and trailing spaces in arguments |
 | Seam facts | Contract rows S45 unknown-name behavior, S46 mid-turn admission/expansion, S47 late skill visibility, on each native wire |
 | Session identity | S3 requires one fresh session report; trigger resume rows require one same-id `resumed:true` report; OpenCode existing missing-session fallback reports false |
@@ -84,3 +84,20 @@ The event remains v1; v2 `session.started` already has its own lifecycle.
 A source search for `skillOf`, `openingContent`, `spec.skill` and the `skill` content variant
 finds trigger delivery only in the five adapters and their adapter helper. No workflow,
 launch resolver, conversation or cockpit sender uses the new trigger seam yet.
+
+## Review correction: human skill echo
+
+Round 1 identified that omp's skill display item duplicated the saved human `user-message`.
+The transcript reducer now removes only an exact user-item echo in the same turn. It keeps
+the saved human bubble, attachments and timestamp. It keeps unmatched runner user items and
+runner-only skill starts. The adapter still maps and persists the native expansion once.
+
+Native-capture guards in `skill-trigger.test.ts` check the same class on the other runners:
+pi omits user expansion frames; Claude maps user tool results only; Codex omits userMessage;
+OpenCode omits user text parts. None emits another UI user message for its captured expansion.
+
+Red proof through Squeal: revision 58, run `f711e921-548e-409d-ba8b-13e0218d0a7b`.
+Both `shows one human skill start ... opening input` and `... mid-turn input` failed before
+the reducer change: expected zero extra user items, received one. Green verification: Squeal revision 59 reports current passing results for the full
+`session-transcript.test.tsx`, `thread-state.test.ts`, and `skill-trigger.test.ts` files.
+Lint, typecheck and citations also pass after the correction.

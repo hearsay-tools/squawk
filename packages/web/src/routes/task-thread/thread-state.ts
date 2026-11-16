@@ -349,6 +349,17 @@ function dropTwinnedV1Messages(draft: DraftTurn): void {
   dropLegacyDeltaRuns(draft)
 }
 
+/** The saved human message owns its bubble, attachments and timestamp. A runner may
+ * echo that same input as a user item (including an expanded skill's display prompt).
+ * Reconcile only exact echoes in that turn; keep unmatched and runner-only messages. */
+function dropHumanInputEchoes(draft: DraftTurn): void {
+  const human = draft.userMessage
+  if (!human) return
+  draft.entries = draft.entries.filter(({ entry }) =>
+    !(entry.kind === 'message' && entry.role === 'user' && entry.text === human.text),
+  )
+}
+
 /**
  * Only a request the engine actually enqueued can still settle: `delegation/service.ts`
  * enqueues when the recipient is neither destroyed nor resumable, and gives only those
@@ -397,6 +408,7 @@ export function reduceThread(events: RunEvent[], options: ThreadReduceOptions = 
   for (const event of events) applyThreadEvent(fold, event)
   for (const draft of fold.turns) {
     if (draft.v2Items) dropTwinnedV1Messages(draft)
+    dropHumanInputEchoes(draft)
   }
   markPendingRequests(fold)
   const lastIndex = fold.turns.length - 1
