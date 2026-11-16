@@ -23,7 +23,7 @@ import { productName } from '../home/display.ts';
 
 // Re-exported for backends and the run manager that still import them from here.
 export type { AgentSession, SessionOptions } from './agent-runner.ts';
-import { isSignalTerminationExit, trackChildExit, unknownToolGrant, SQUAWK_SIDE_SPEC_SUPPORT } from './agent-runner.ts';
+import { isSignalTerminationExit, SessionEndedBeforeAcknowledgement, trackChildExit, unknownToolGrant, SQUAWK_SIDE_SPEC_SUPPORT } from './agent-runner.ts';
 import { signalSession, spawnSessionLeader, waitForEofExit } from './session-process.ts';
 import { buildChildEnv } from './agent-env.ts';
 import { squawkToolEnvNames, squawkToolNames } from '../ci-wait/tool-catalog.ts';
@@ -671,12 +671,14 @@ export class ClaudeCliRunner implements AgentRunner {
         let resolve!: () => void, reject!: (error: Error) => void;
         const acknowledged = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
         agentWritePending = true;
-        const closed = () => { agentWritePending = false; reject(new Error('claude closed before stdin delivery completed')); };
+        // After this session's own end(), a close or write error before the write completed is the close.
+        const failed = (error: Error) => reject(explicitEnd ? new SessionEndedBeforeAcknowledgement() : error);
+        const closed = () => { agentWritePending = false; failed(new Error('claude closed before stdin delivery completed')); };
         child.once('close', closed);
         const sent = sendMessage(content, error => {
           child.off('close', closed);
           agentWritePending = false;
-          if (error) reject(error);
+          if (error) failed(error);
           else resolve();
           if (stdinOpen && agentInputReady) { opts.onAgentInputReady?.(); scheduleAutoEnd(); }
         }, inputIds);

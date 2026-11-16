@@ -17,7 +17,7 @@ import {
   type AgentToolCallRecord,
   type ContentBlock,
   type AgentRunSpecSupport,
-  type InputDelivery, type AgentSession, type SessionOptions, isSignalTerminationExit, prependSystemPrompt, SQUAWK_SIDE_SPEC_SUPPORT, trackChildExit,
+  type InputDelivery, type AgentSession, type SessionOptions, isAbortError, isSignalTerminationExit, prependSystemPrompt, SessionEndedBeforeAcknowledgement, SQUAWK_SIDE_SPEC_SUPPORT, trackChildExit,
 } from './agent-runner.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { InputSubmissions } from './input-submissions.ts';
@@ -256,6 +256,8 @@ class OpencodeSession implements AgentSession {
   private turnActive = false;
   private agentInputReady = false;
   private agentRequest: AbortController | undefined;
+  /** The agent request `end()` aborted: that abort is the session's close (hearsay-tools/squawk#3508). */
+  private endedAgentRequest: AbortController | undefined;
   /** Human prompts scheduled behind the active turn, through their HTTP ack. */
   private pendingPromptRequests = 0;
   /** A provider error must not abort its own independently arriving receipt. */
@@ -444,7 +446,7 @@ class OpencodeSession implements AgentSession {
     const post = steering ? this.steerPrompt(text, request.signal) : this.prompt(text, 'agent', request.signal);
     const acknowledgement = post.catch((err: unknown) => {
       this.submissions.consume(submissionId); this.turnOpeners.delete(submissionId);
-      throw err;
+      throw this.endedAgentRequest === request && isAbortError(err) ? new SessionEndedBeforeAcknowledgement() : err;
     }).finally(() => {
       if (this.agentRequest === request) this.agentRequest = undefined;
       if (this.serverOpen && !this.providerErrorPending && !this.turnActive && !this.pendingQuestion && !this.questionReply &&
@@ -557,6 +559,7 @@ class OpencodeSession implements AgentSession {
     if (!this.serverOpen) return;
     this.serverOpen = false;
     this.clearLostWakeTimer();
+    this.endedAgentRequest = this.agentRequest;
     this.agentRequest?.abort();
     this.expirePermissions('session ended');
     this.sse.abort();

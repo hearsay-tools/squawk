@@ -8,7 +8,7 @@ import type {
   AgentSession, AgentToolCallRecord, ContentBlock, InputDelivery, SessionOptions,
 } from './agent-runner.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
-import { prependSystemPrompt, SQUAWK_SIDE_SPEC_SUPPORT } from './agent-runner.ts';
+import { prependSystemPrompt, SessionEndedBeforeAcknowledgement, SQUAWK_SIDE_SPEC_SUPPORT } from './agent-runner.ts';
 import { cursorPrintToolGrantArgs } from './runner-tool-grants.ts';
 import { buildChildEnv } from './agent-env.ts';
 import { squawkToolEnvNames } from '../ci-wait/tool-catalog.ts';
@@ -100,6 +100,8 @@ class CursorPrintSession implements AgentSession {
   private resolveResult!: (result: AgentRunResult) => void;
   private isOpen = true;
   private closing = false;
+  /** `end()` closed the session: a receipt it leaves unconfirmed is the close (hearsay-tools/squawk#3508). */
+  private endedByCaller = false;
   private finished = false;
   /** A held follow-up between its rejected process and the retry that relaunches it. */
   private heldAcrossRetry = false;
@@ -412,7 +414,7 @@ class CursorPrintSession implements AgentSession {
     if (active.receipt && !active.receipt.settled) {
       active.receipt.settled = true;
       if (active.resultSeen && !spawnError && exitCode === 0) active.receipt.resolve();
-      else active.receipt.reject(new Error('Cursor print input admission was not confirmed'));
+      else active.receipt.reject(this.endedByCaller ? new SessionEndedBeforeAcknowledgement() : new Error('Cursor print input admission was not confirmed'));
     }
     const completedTurn = active.resultSeen && !spawnError && exitCode === 0 && signal === null;
     // The workflow can submit an autonomous follow-up synchronously from
@@ -485,6 +487,7 @@ class CursorPrintSession implements AgentSession {
   end(): void {
     if (this.closing || this.finished) return;
     this.closing = true;
+    this.endedByCaller = true;
     this.isOpen = false;
     this.clearAutoEnd();
     if (this.active) void this.active.process.stop('graceful');

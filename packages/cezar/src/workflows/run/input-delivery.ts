@@ -7,7 +7,7 @@ import type { AgentInput } from '@open-mercato/cezar-contract/delegation';
 import type { Wait } from '@open-mercato/cezar-contract/waits';
 import type { InputDelivery as InputDeliveryPolicy } from '../../core/agent-runner.ts';
 import { ReadonlySetView } from './readonly-collections.ts';
-import type { ContentBlock } from '../../core/agent-runner.ts';
+import { type ContentBlock, SessionEndedBeforeAcknowledgement } from '../../core/agent-runner.ts';
 import type { AgentSession } from '../../core/claude-cli-runner.ts';
 import type { RunRecord } from '../../runs/store.ts';
 import type { ContinueRunOptions } from '../continuation-admission.ts';
@@ -635,7 +635,7 @@ export class InputDelivery {
     }, error => {
       refund();
       // The close path counts a closed attempt as a failed delivery; its input stays owed.
-      const outcome = rejectedAcknowledgement({ ...faults, sessionOpen: () => session.open });
+      const outcome = rejectedAcknowledgement(faults, error);
       if (outcome !== 'ignored') attemptWrites.settle(state.inputState, session, inputIds, outcome);
       if (outcome === 'failed') fail(error, false);
     }).then(() => {
@@ -865,12 +865,13 @@ export function latchInputFault(reads: InputFaultReads): boolean {
   return !(!reads.current() || reads.sessionFault() || reads.inputFault());
 }
 
-/** What a rejected acknowledgement means (hearsay-tools/squawk#3508). On a session that is no
- *  longer open, a clean close aborted it: a retryable closed-session delivery failure, which leaves
- *  the input owed and charges the close (`closed`). On an open session it is a transport failure
- *  that fails the step (`failed`). A fault already recorded, or a session that is no longer the
- *  run's, takes nothing from it (`ignored`). */
-export function rejectedAcknowledgement(reads: InputFaultReads & { sessionOpen(): boolean }): 'closed' | 'failed' | 'ignored' {
+/** What a rejected acknowledgement means (hearsay-tools/squawk#3508), read from the rejection
+ *  itself. The session's own `end()` cut it off (`SessionEndedBeforeAcknowledgement`): a retryable
+ *  closed-session delivery failure, which leaves the input owed and charges the close (`closed`).
+ *  Any other rejection, also a provider error whose body the close cut off, fails the step
+ *  (`failed`). A fault already recorded, or a session that is no longer the run's, takes nothing
+ *  from it (`ignored`). */
+export function rejectedAcknowledgement(reads: InputFaultReads, error: unknown): 'closed' | 'failed' | 'ignored' {
   if (!latchInputFault(reads)) return 'ignored';
-  return reads.sessionOpen() ? 'failed' : 'closed';
+  return error instanceof SessionEndedBeforeAcknowledgement ? 'closed' : 'failed';
 }

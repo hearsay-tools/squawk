@@ -113,15 +113,16 @@ export class CodexAppServerRpc {
     this.notify('initialized', {});
   }
 
-  rejectPending(message = 'codex app-server exited'): void {
-    for (const request of this.pending.values()) request.reject(new Error(message));
+  rejectPending(message = 'codex app-server exited', cause?: unknown): void {
+    for (const request of this.pending.values()) request.reject(new Error(message, cause === undefined ? undefined : { cause }));
     this.pending.clear();
   }
 
-  /** Revoke this connection, independently of whether its process has exited. */
-  close(message = 'codex app-server connection closed'): void {
+  /** Revoke this connection, independently of whether its process has exited. `cause` marks the
+   *  requests this close rejects; a connection already closed has none left. */
+  close(message = 'codex app-server connection closed', cause?: unknown): void {
     this.closed ??= new Error(message);
-    this.rejectPending(this.closed.message);
+    this.rejectPending(this.closed.message, cause);
   }
 
   private fail(message: string): void {

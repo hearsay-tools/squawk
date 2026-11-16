@@ -9,6 +9,7 @@ import { AUTO_END_DELAY_MS } from './runner-runtime.ts';
 import { KILL_GRACE_MS, OpencodeServerRunner } from './opencode-server-runner.ts';
 import type { UiEvent } from './ui-events.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
+import { rejectedAcknowledgement } from '../workflows/run/input-delivery.ts';
 
 const spawnHook = vi.hoisted(() => ({ override: null as null | (() => unknown) }));
 
@@ -162,6 +163,8 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
     promptStatus?: number;
     /** Hold every prompt acknowledgement after the first until `acknowledgeFollowups()`. */
     holdFollowupPrompt?: boolean;
+    /** Answer every prompt after the first with this status, and hold its body until `acknowledgeFollowups()`. */
+    followupErrorStatus?: number;
     refuseSse?: boolean;
     sseStatus?: number;
     questionReplyStatus?: number;
@@ -257,7 +260,11 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
             res.writeHead(opts.promptStatus ?? 200, { 'content-type': 'application/json' });
             res.end('{}');
           };
-          if (promptPosts.length > 1 && opts.holdFollowupPrompt) heldAcknowledgements.push(acknowledge);
+          if (promptPosts.length > 1 && opts.followupErrorStatus) {
+            res.writeHead(opts.followupErrorStatus, { 'content-type': 'application/json' });
+            res.flushHeaders();
+            heldAcknowledgements.push(() => res.end('{"error":"provider"}'));
+          } else if (promptPosts.length > 1 && opts.holdFollowupPrompt) heldAcknowledgements.push(acknowledge);
           else acknowledge();
           return;
         }
@@ -437,6 +444,8 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
     questionGetReads: () => number;
     httpStarts: (path: string) => number;
     httpReads: (path: string) => number;
+    /** Requests whose response headers the runner has received. */
+    httpResponses: (path: string) => number;
   }
 
   /** Tracks synchronous HTTP starts and completed body reads through `fetch`. */
@@ -446,12 +455,14 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
     let getReads = 0;
     const starts: string[] = [];
     const completedReads: string[] = [];
+    const responses: string[] = [];
     const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const path = new URL(String(input)).pathname;
       // Record before fetch yields: an SSE barrier can expose an unwanted request
       // even when its network delivery and response are delayed.
       starts.push(path);
       const res = await realFetch(input, init);
+      responses.push(path);
       const isGet = String(input).endsWith('/question');
       const isReply = /\/question\/[^/]+\/reply$/.test(String(input));
       const text = res.text.bind(res);
@@ -471,6 +482,7 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
     return { reads: () => reads, getReads: () => getReads,
       starts: (path: string) => starts.filter(value => value === path).length,
       completedReads: (path: string) => completedReads.filter(value => value === path).length,
+      responses: (path: string) => responses.filter(value => value === path).length,
       restore: () => spy.mockRestore() };
   }
 
@@ -507,7 +519,7 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
       },
     );
     try {
-      await run({ child, events, uiEvents, mock, session, questionReplyReads: replyReads.reads, questionGetReads: replyReads.getReads, httpStarts: replyReads.starts, httpReads: replyReads.completedReads });
+      await run({ child, events, uiEvents, mock, session, questionReplyReads: replyReads.reads, questionGetReads: replyReads.getReads, httpStarts: replyReads.starts, httpReads: replyReads.completedReads, httpResponses: replyReads.responses });
     } finally {
       vi.useRealTimers();
       spawnHook.override = null;
@@ -935,6 +947,40 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
 
       mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
       await waitFor(() => count(events, 'turn-end') === 2);
+    });
+  });
+
+  // hearsay-tools/squawk#3508: only the abort that end() fires is a session close. A provider
+  // error whose body end() cuts off stays a delivery failure.
+  describe('an acknowledgement end() cuts off', () => {
+    const reads = { current: () => true, sessionFault: () => undefined, inputFault: () => undefined };
+    const rejection = async (ack: false | Promise<void>): Promise<unknown> => {
+      expect(ack).not.toBe(false);
+      return (ack as Promise<void>).then(() => { throw new Error('the acknowledgement resolved'); }, (error: unknown) => error);
+    };
+
+    it('is a closed-session delivery failure when no response arrived', async () => {
+      await withSession({ holdFollowupPrompt: true }, async ({ events, mock, session }) => {
+        await waitFor(() => mock.promptPosts.length === 1);
+        const ack = session.sendAgentMessage([{ type: 'text', text: 'agent-origin' }], ['in-1']);
+        await waitFor(() => mock.promptPosts.length === 2);
+        session.end();
+        expect(rejectedAcknowledgement(reads, await rejection(ack))).toBe('closed');
+        expect(events.filter(event => event.type === 'error')).toEqual([]);
+      });
+    });
+
+    it('stays a delivery failure when the provider answered an error status', async () => {
+      await withSession({ followupErrorStatus: 500 }, async ({ httpResponses, mock, session }) => {
+        await waitFor(() => mock.promptPosts.length === 1);
+        const ack = session.sendAgentMessage([{ type: 'text', text: 'agent-origin' }], ['in-1']);
+        // The error status arrived; its body is still held when the session closes.
+        await waitFor(() => httpResponses('/session/ses_test/prompt_async') === 2);
+        session.end();
+        const error = await rejection(ack);
+        expect(String(error)).toContain('POST /session/ses_test/prompt_async → 500');
+        expect(rejectedAcknowledgement(reads, error)).toBe('failed');
+      });
     });
   });
 

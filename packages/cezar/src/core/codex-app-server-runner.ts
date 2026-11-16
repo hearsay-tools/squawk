@@ -14,8 +14,12 @@ import {
   type ContentBlock,
   type SessionOptions,
   type AgentRunSpecSupport,
-  type InputDelivery, prependSystemPrompt, SQUAWK_SIDE_SPEC_SUPPORT, trackChildExit,
+  type InputDelivery, prependSystemPrompt, SessionEndedBeforeAcknowledgement, SQUAWK_SIDE_SPEC_SUPPORT, trackChildExit,
 } from './agent-runner.ts';
+
+/** The cause of the requests an explicit `end()` cuts off: only those are a session close
+ *  (hearsay-tools/squawk#3508). */
+const ENDED_BY_CALLER = Symbol('codex session ended by its caller');
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { codexToolGrantFields } from './runner-tool-grants.ts';
 import { signalSession } from './session-process.ts';
@@ -385,7 +389,7 @@ class CodexSession implements AgentSession {
     return this.startOrSteerTurn(textOf(content), submissionId).catch((err: unknown) => {
       this.submissions.consume(submissionId); // never accepted: the caller keeps ownership
       if (this.stdinOpen) this.emit({ type: 'error', message: `codex: agent input failed: ${String(err)}` });
-      throw err;
+      throw err instanceof Error && err.cause === ENDED_BY_CALLER ? new SessionEndedBeforeAcknowledgement() : err;
     }).finally(() => {
       this.agentSubmissionPending = false;
       if (this.inFlightSubmissionId === submissionId) this.inFlightSubmissionId = undefined;
@@ -520,7 +524,7 @@ class CodexSession implements AgentSession {
       this.terminatedBySquawk ||= this.automaticCleanupStarted;
     }
     if (!this.stdinOpen) return;
-    this.closeInput('session ended');
+    this.closeInput('session ended', explicit ? ENDED_BY_CALLER : undefined);
     try {
       endCodexAppServer(
         this.child,
@@ -556,7 +560,8 @@ class CodexSession implements AgentSession {
     this.stopKillTimer.unref?.();
   }
 
-  private closeInput(reason: string): void {
+  /** `cause` marks the pending requests this close rejects (`ENDED_BY_CALLER` for `end()`). */
+  private closeInput(reason: string, cause?: unknown): void {
     this.clearStreamRetry();
     this.stdinOpen = false;
     // Respond while stdin is still writable, before rpc.close or EOF/TERM.
@@ -570,7 +575,7 @@ class CodexSession implements AgentSession {
     this.agentInputReady = false;
     if (this.startupTimer) clearTimeout(this.startupTimer);
     if (this.autoEndTimer) clearTimeout(this.autoEndTimer);
-    this.rpc.close(reason);
+    this.rpc.close(reason, cause);
   }
 
   private fail(error: Error, diagnostic = 'failed'): void {
