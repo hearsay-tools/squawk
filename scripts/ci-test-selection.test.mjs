@@ -29,10 +29,10 @@ test('shared input, missing base and an unexpected skip select full without an i
 test('CI browser selection: null for every spec or an error, empty stays empty, each with its reason', () => {
   assert.deepEqual(browserFiles(() => { throw new Error('missing base\nstack'); }),
     { files: null, reason: 'the selector failed: missing base' });
-  assert.deepEqual(browserFiles(() => ({ all: true, specs: ['a'], reason: 'x needs every spec', lines: [] })),
-    { files: null, reason: 'x needs every spec', lines: [] });
-  assert.deepEqual(browserFiles(() => ({ all: false, specs: [], reason: 'no changed file reaches a browser spec', lines: [] })),
-    { files: [], reason: 'no changed file reaches a browser spec', lines: [] });
+  assert.deepEqual(browserFiles(() => ({ all: true, specs: ['a'], reason: 'x needs every spec', lines: [], drift: [] })),
+    { files: null, reason: 'x needs every spec', lines: [], drift: [] });
+  assert.deepEqual(browserFiles(() => ({ all: false, specs: [], reason: 'no changed file reaches a browser spec', lines: [], drift: [{ file: 'f', specs: [], reason: 'r' }] })),
+    { files: [], reason: 'no changed file reaches a browser spec', lines: [], drift: [{ file: 'f', specs: [], reason: 'r' }] });
   assert.deepEqual(browserFiles(() => ({ all: false, specs: ['packages/web/e2e/smoke.e2e.ts'], reason: 'r', lines: [] })).files,
     ['packages/web/e2e/smoke.e2e.ts']);
 });

@@ -251,6 +251,21 @@ test('when the branch touches mapped code, mapped files main changed after the m
   assert.deepEqual(pick(['.ai/ast-grep/rules/x.yml']).specs, []);
 });
 
+test('a mapped caller main changed keeps its evidenced specs when other drift lines have none', () => {
+  // hearsay-tools/squawk#3733 review round 2: main adds a call inside run() and a new function at EOF.
+  const file = 'packages/cezar/src/core/caller.ts';
+  const map = sampleMap({ functions: {
+    [file]: [{ start: 1, end: 50, specs: [2] }],
+    'packages/cezar/src/core/helper.ts': [{ start: 1, end: 20, specs: [0] }],
+  } });
+  const drift = { files: [file], changes: new Map([[file, [{ start: 10, end: 10 }, { start: 100, end: 101 }]]]) };
+  const result = selectSpecs({ files: ['packages/cezar/src/core/helper.ts'], map, graph, specFiles: map.specs, drift,
+    changes: new Map([['packages/cezar/src/core/helper.ts', [{ start: 5, end: 5 }]]]) });
+  assert.deepEqual(result.specs, [spec('artifact-project-links'), spec('smoke')]);
+  // The branch's own lines keep the strict rule.
+  assert.equal(selectSpecs({ files: [file], map, graph, specFiles: map.specs, changes: drift.changes }).all, true);
+});
+
 test('specs added or changed on main after the map run when the branch touches mapped code', () => {
   // hearsay-tools/squawk#3733 review thread: the map predates markdown-regression.e2e.ts.
   const specFiles = [...sampleMap().specs, spec('markdown-regression'), spec('late')].sort();
@@ -392,6 +407,19 @@ test('--ci reports each changed file and keeps an empty selection visible', t =>
   assert.match(result.stdout, / {2}\.ai\/skills\/x\/SKILL\.md: 0 specs \(repository skills/);
   assert.match(result.stdout, /Selected 0 of 3 specs: no changed file reaches a browser spec\./);
   assert.match(result.stdout, /PR CI runs every spec for an empty selection \(hearsay-tools\/squawk#3727\)\./);
+});
+
+test('--ci prints the files main changed after the map', t => {
+  const { dir, put, map } = repository(t);
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
+  const mapFlag = map();
+  put(spec('late'), '');
+  git('add', '.'); git('commit', '-qm', 'later spec');
+  put('packages/web/src/routes/task-thread/markdown.tsx', 'export function Markdown() { return 1 }\n');
+  const result = affected(dir, '--ci', '--plan', '--base=main', mapFlag);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /late\.e2e\.ts, changed on main after the map: 1 spec/);
+  assert.match(result.stdout, /Selected 3 of 4 specs/);
 });
 
 test('a map whose commit the clone lacks selects every spec', t => {

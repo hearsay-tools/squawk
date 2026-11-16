@@ -242,13 +242,17 @@ function e2eFileSpecs(file, readers) {
   return every('an e2e file no spec names: a spec may read it through a computed path');
 }
 
-/** Choose the innermost recorded function enclosing each changed old-source line range. */
-export function functionSpecs(file, map, readers, ranges) {
+/**
+ * Choose the innermost recorded function enclosing each changed old-source line range. With
+ * `partial`, a range no recorded function encloses is skipped instead of selecting every spec.
+ */
+export function functionSpecs(file, map, readers, ranges, partial = false) {
   if (!ranges?.length) return every('no line evidence for this change');
   const entries = map.functions[file];
   const indexes = new Set();
   for (const { start, end } of ranges) {
     const enclosing = entries.filter(fn => fn.start <= start && fn.end >= end);
+    if (enclosing.length === 0 && partial) continue;
     if (enclosing.length === 0) return every('the changed lines have no function evidence');
     const width = Math.min(...enclosing.map(fn => fn.end - fn.start));
     for (const fn of enclosing.filter(fn => fn.end - fn.start === width)) {
@@ -269,7 +273,7 @@ export function changedLines(diff) {
 }
 
 /** The specs one changed file selects: a list, or null for every spec, with the reason. */
-export function classify(file, { map, graph, changes }) {
+export function classify(file, { map, graph, changes, partial }) {
   if (isDocsPath(file)) return none('documentation');
   if (reaches(graph.setup, file)) return every('the browser suite setup loads it');
   const readers = [...graph.specs].filter(([, set]) => reaches(set, file)).map(([spec]) => spec);
@@ -277,7 +281,7 @@ export function classify(file, { map, graph, changes }) {
   if (UNIT_TEST.test(file)) return none('a unit test file');
   if (BUNDLED.test(file)) return mappedSpecs(file, map, readers);
   if (map.functions?.[file] && /^packages\/cezar\/(?:src\/|scripts\/mock-[^/]+\.mjs$)/.test(file)) {
-    return functionSpecs(file, map, readers, changes?.get(file));
+    return functionSpecs(file, map, readers, changes?.get(file), partial);
   }
   if (file.startsWith('.github/')) return none('CI configuration the browser suite does not load');
   const unread = NO_SPEC.find(([pattern]) => pattern.test(file));
@@ -293,7 +297,8 @@ export function classify(file, { map, graph, changes }) {
  * may have added a call or an import that makes another spec run a file the branch edits, or added
  * or changed a spec the map has no evidence for. So when the branch touches mapped code, every
  * drift file the map or the spec tree answers adds its specs, and every spec the map does not list
- * runs. A drift file that would need every spec adds nothing: a new path into the branch's code
+ * runs. Drift lines outside every recorded function add nothing, and neither does a drift file
+ * that would need every spec: that code is new since the map, and a path from a spec into it
  * passes through an edit the map does answer.
  */
 export function selectSpecs({ files, map, graph, specFiles, changes, drift }) {
@@ -302,7 +307,7 @@ export function selectSpecs({ files, map, graph, specFiles, changes, drift }) {
   if (full) return { lines, all: true, specs: specFiles, reason: `${full.file} needs every spec (${full.reason})` };
   const mapped = lines.some(line => line.mapped);
   const driftLines = mapped ? (drift?.files ?? []).filter(file => !files.includes(file))
-    .map(file => ({ file, ...classify(file, { map, graph, changes: drift.changes }) }))
+    .map(file => ({ file, ...classify(file, { map, graph, changes: drift.changes, partial: true }) }))
     .filter(line => line.specs !== null && (line.mapped || line.file.startsWith(`${SPEC_DIR}/`))) : [];
   const chosen = new Set([...lines, ...driftLines].flatMap(line => line.specs));
   if (mapped) {
