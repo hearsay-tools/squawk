@@ -168,7 +168,10 @@ function undeclaredReaders(root) {
   // A test declares what it reads; every test that reaches a reading helper declares the helper's reads.
   // A reader no test reaches is a setup file or its helper, which every test loads: that
   // path is configuration, and an empty list must not pass `every`.
+  const setup = configurationClosure(root);
   const declares = (file, path) => {
+    // A setup file or a helper it imports runs for every test, whichever tests also import it.
+    if (setup.has(file)) return false;
     const tests = matchesGlob(file, VITEST_TEST) ? [file] : testsReaching(root, [file]);
     return tests !== null && tests.length > 0 && tests.every(test => declaredBy(test, path));
   };
@@ -199,13 +202,18 @@ test('every Vitest reader of a path no Vitest test reads is declared', () => {
 test('the tripwire checks each reading test file against its own declaration', t => {
   const read = "const x = readFileSync('../../.github/scripts/growth.cjs')\n";
   const root = fixture(t, {
-    'squeal.config.json': JSON.stringify({ inputs: { 'packages/cezar/src/first.test.ts': ['.github/scripts/growth.cjs'] } }),
+    'squeal.config.json': JSON.stringify({ inputs: {
+      'packages/cezar/src/first.test.ts': ['.github/scripts/growth.cjs'],
+      'packages/cezar/src/declares-shared.test.ts': ['.github/scripts/shared.json'],
+    } }),
     'packages/cezar/src/first.test.ts': read,
     'packages/cezar/src/second.test.ts': read,
     'packages/cezar/src/helper.testkit.ts': read,
     'packages/cezar/src/third.test.ts': "import { x } from './helper.testkit.ts'\n",
     'packages/cezar/src/gone.testkit.ts': read,
-    'packages/cezar/vitest.setup.ts': "const y = readFileSync('../../.github/scripts/setup-data.json')\n",
+    'packages/cezar/vitest.setup.ts': "const y = readFileSync('../../.github/scripts/setup-data.json')\nimport { s } from './src/shared.testkit.ts'\n",
+    'packages/cezar/src/shared.testkit.ts': "const z = readFileSync('../../../.github/scripts/shared.json')\n",
+    'packages/cezar/src/declares-shared.test.ts': "import { s } from './shared.testkit.ts'\n",
   });
   execFileSync('git', ['init', '-q'], { cwd: root });
   execFileSync('git', ['add', '.'], { cwd: root });
@@ -214,6 +222,7 @@ test('the tripwire checks each reading test file against its own declaration', t
   assert.deepEqual(undeclaredReaders(root), [
     'packages/cezar/src/helper.testkit.ts:1 reads .github/scripts/growth.cjs',
     'packages/cezar/src/second.test.ts:1 reads .github/scripts/growth.cjs',
+    'packages/cezar/src/shared.testkit.ts:1 reads .github/scripts/shared.json',
     'packages/cezar/vitest.setup.ts:1 reads .github/scripts/setup-data.json',
   ]);
 });
