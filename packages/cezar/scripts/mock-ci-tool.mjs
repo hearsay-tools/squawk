@@ -115,12 +115,17 @@ export async function toolPrompt(backend, wire, text) {
   if (!steps.some(step => step[1])) throw new Error('mock:cezar-tool needs a tool name and base64 JSON arguments');
   const responses = [];
   let last;
+  let lastAutomation;
   for (const [, name, encoded, gate] of steps) {
     if (gate) { await gateOpen(Buffer.from(gate, 'base64').toString('utf8')); continue; }
     const args = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
     if (args.wait_id === 'last') args.wait_id = last;
+    if (name === 'cezar_automation' && args.id === 'last') args.id = lastAutomation;
     const result = await probeSquawkTool(backend, wire, name, args);
     try { last = JSON.parse(result.response.content[0].text.split('\n')[0]).wait_id ?? last; } catch { /* a refusal names no wait */ }
+    if (name === 'cezar_automation') {
+      try { lastAutomation = JSON.parse(result.response.content[0].text.split('\n')[0]).automation?.id ?? lastAutomation; } catch { /* a refusal names no automation */ }
+    }
     responses.push(JSON.stringify(result.response));
   }
   // `mock:then <base64 text>` ends the turn with that text after the calls (an ask line, say).

@@ -1,4 +1,6 @@
+import { automationToolAnswerSchema, type AutomationToolAnswer } from '@open-mercato/cezar-contract/automation-tool';
 import { productName } from '../home/display.ts';
+import { AUTOMATION_TOOL_CLIENT_TIMEOUT_MS } from '../core/github-request-limits.ts';
 import { productEnv } from '../core/product-env.ts';
 import { randomUUID } from 'node:crypto';
 import { request } from 'node:http';
@@ -61,6 +63,10 @@ export function callScheduleTask(input: unknown, env: NodeJS.ProcessEnv = proces
 
 export function callScheduledTasks(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<ScheduledTasksAnswer> {
   return callTool(input, env, 'scheduled-tasks', scheduledTasksAnswerSchema, { ok: false, code: 'unavailable', message: SCHEDULE_UNAVAILABLE }, SCHEDULED_TASK_LIMITS.wireBytes);
+}
+
+export function callAutomation(input: unknown, env: NodeJS.ProcessEnv = process.env): Promise<AutomationToolAnswer> {
+  return callTool(input, env, 'automation', automationToolAnswerSchema, { ok: false, code: 'unavailable', message: SCHEDULE_UNAVAILABLE }, SCHEDULED_TASK_LIMITS.wireBytes, AUTOMATION_TOOL_CLIENT_TIMEOUT_MS);
 }
 
 function callTool<T>(input: unknown, env: NodeJS.ProcessEnv, route: string, schema: { safeParse(input: unknown): { success: true; data: T } | { success: false } }, unavailable: T, maxAnswerBytes = 32_768, timeoutMs = 15_000, typedErrors = false): Promise<T> {

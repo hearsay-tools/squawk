@@ -71,6 +71,10 @@ export function squawkToolHandlers(runId: string, generation: string, host: Tool
     finishTurn: async (request, signal) => host.acceptDone(runId, generation, request, signal),
     registerPreview: (request, signal) => host.registerPreviewServer(runId, request, signal),
     stopPreview: (request, signal) => host.stopPreviewServer(runId, request, signal),
+    automation: async (request, signal) => {
+      const tools = await host.awaitAutomationTools(signal);
+      return tools?.automation ? tools.automation(request, signal) : scheduleRefusal('unavailable');
+    },
     // A schedule belongs to the project, not to this run: any session there may manage one.
     scheduleTask: async (request, signal) => {
       const tools = await host.awaitAutomationTools(signal);

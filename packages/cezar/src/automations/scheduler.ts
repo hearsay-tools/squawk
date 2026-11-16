@@ -63,7 +63,7 @@ class ObsoleteAutomationCheck extends Error {
 export class ProjectAutomationScheduler {
   constructor(private readonly handle: ProjectAutomationHandle) {}
 
-  async check(definition: GithubAutomationDefinition, mode: 'preview' | 'execute' = 'execute'): Promise<GithubPollResult> {
+  async check(definition: GithubAutomationDefinition, mode: 'preview' | 'execute' = 'execute', signal?: AbortSignal): Promise<GithubPollResult> {
     const { github } = this.handle;
     if (!github) throw new Error('No GitHub remote is configured');
     const detectionOnly = mode === 'execute' && !this.handle.launch;
@@ -83,6 +83,7 @@ export class ProjectAutomationScheduler {
       }
       const { baseline, overlapSince } = pollWindow(definition, state, mode);
       const { result, duplicates } = await githubRequests.run(() => readUnderCanonicalName(github, async ({ owner, repo }) => {
+        signal?.throwIfAborted();
         // Each attempt starts clean: a retry under a new name must not see the failed one's matches as handled.
         const found: GithubCandidate[] = [];
         const accept = candidateAcceptor(definition, baseline, mode, store, candidate => found.push(candidate));
@@ -90,6 +91,7 @@ export class ProjectAutomationScheduler {
           { since: overlapSince, accept, ...(mode === 'execute' && state.historyScan ? { historyScan: state.historyScan } : {}) });
         return { result: polled, duplicates: found };
       }));
+      signal?.throwIfAborted();
       this.assertCurrent(definition);
       const eligible = result.candidates.filter(candidate => afterBaseline(candidate, definition, baseline));
       if (mode === 'execute') await this.launchCandidates(definition, eligible);

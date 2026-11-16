@@ -109,7 +109,7 @@ export const WAIT_CRITERIA = [
 
 /** The native mocks' `mock:cezar-tool` prompt: one Squawk tool call through the runner's own wire.
  *  Several in one prompt run in order; `wait_id: 'last'` names the previous answer's wait. */
-export function toolCall(name: 'cezar_wait' | 'cezar_ask' | 'cezar_cancel_wait' | 'cezar_done', args: Record<string, unknown>): string {
+export function toolCall(name: 'cezar_wait' | 'cezar_ask' | 'cezar_cancel_wait' | 'cezar_done' | 'cezar_automation', args: Record<string, unknown>): string {
   return `mock:cezar-tool ${name} ${Buffer.from(JSON.stringify(args)).toString('base64url')}`;
 }
 /** Between the `toolCall`s around it, the mock holds its turn until the file at `path` exists. */

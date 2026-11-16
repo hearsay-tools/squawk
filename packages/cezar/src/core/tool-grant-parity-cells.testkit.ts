@@ -61,7 +61,7 @@ export const TOOL_GRANT_CASES: readonly ToolGrantCase[] = [
   { id: 'unset-bash-allowlist', name: 'TG10 an unset grant with a bashAllowlist', grant: () => ({ kind: 'unset', bashAllowlist: ['git status'] }) },
 ];
 
-const SQUAWK_TOOLS = ['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_scheduled_tasks'];
+const SQUAWK_TOOLS = ['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks'];
 const DESCRIPTOR = { name: 'cezar_ci_probe', command: 'node', args: ['/installed/ci-wait/mcp.js'] };
 const CLAUDE_SQUAWK = SQUAWK_TOOLS.map(tool => `mcp__${DESCRIPTOR.name}__${tool}`).join(',');
 const CEZAR = SQUAWK_TOOLS.join(',');

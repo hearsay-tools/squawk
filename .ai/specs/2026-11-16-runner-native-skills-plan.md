@@ -276,6 +276,20 @@ skill (D7).
   of the CLI steps. This is agent-facing text: keep every rule the current text holds.
 - The built-in skill stays until slice 5.
 
+**Tool cases (slice 4).** The existing one-time tools and CLI retain their behavior.
+
+| Call | Result |
+| --- | --- |
+| Create repeating poll or schedule | Paused definition and cockpit URL; schedule also reports next occurrence |
+| Create with enable/enabled, or a one-time schedule | Invalid request; one-time schedules use their existing tools |
+| Enable without explicit true | Refuse before changing state |
+| Enable poll before successful preview in this capability | Refuse before changing state |
+| Enable poll after preview in a different session, Continue or recovery | Refuse; preview again in the calling session |
+| Enable after definition edit or failed preview | Refuse; successful preview must name the current revision |
+| Preview GitHub poll | Existing scheduler in preview mode, without a launcher; return match count and truncation |
+| Enable repeating schedule with explicit true | Enable; no preview required |
+| Automations gate off | Tool omitted and private endpoint refuses before validation |
+
 **Tests.** Tool rows on every runner through the native mock wires, on fresh, Continue and
 recovery paths, as `AGENT_PROTOCOL.md` requires for a Squawk tool. Unit tests for each refusal.
 

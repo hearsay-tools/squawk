@@ -133,7 +133,7 @@ describe('private CI controller', () => {
     const client = new Client({ name: 'owner-death-test', version: '1' });
     try {
       await client.connect(new StdioClientTransport({ ...session.descriptor, env: session.env, stderr: 'pipe' }));
-      expect((await client.listTools()).tools).toHaveLength(6);
+      expect((await client.listTools()).tools).toHaveLength(7);
       const closed = new Promise<void>(resolve => { client.onclose = resolve; });
       child.kill('SIGKILL');
       await closed;
@@ -148,7 +148,7 @@ describe('private CI controller', () => {
     try {
       await client.connect(transport);
       const listed = await client.listTools();
-      expect(listed.tools.map(tool => tool.name)).toEqual(['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_scheduled_tasks']);
+      expect(listed.tools.map(tool => tool.name)).toEqual(['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks']);
       for (const tool of listed.tools) expect(tool.inputSchema.additionalProperties).toBe(false);
       expect(register).not.toHaveBeenCalled();
       const invalid = await client.callTool({ name: 'cezar_wait', arguments: { kind: WAIT_KIND.pr, pr: wait.prUrl, runId: 'evil' } });

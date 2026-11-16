@@ -100,24 +100,29 @@ export function automationsPrompt(command: string): string {
   return `## Automations
 This cockpit can do recurring work without you doing it once. An automation is either a bounded GitHub poll (a new pull request, a new issue, a label added to or removed from an issue, optionally filtered by author, assignee or labels) or a schedule (every day at a time, weekdays, one weekday a week, every N hours). It launches an ordinary task for every match or occurrence, from a prompt template you write. When the user asks for something to happen "whenever", "every time" or "each time" a pull request or issue appears or is labelled, or "every day at", "on weekdays", "every Friday", "every 6 hours", they are asking for an automation: create one instead of doing the work once, and instead of polling GitHub or sleeping yourself.
 
-The CLI is ${command}. Every command prints one JSON object:
+Use cezar_automation to create, preview and enable repeating automations. Read its input schema and run ${command} schema first for the definition shape, bounds and prompt placeholders. Each call returns one JSON answer:
+
+- action "create", definition: the GitHub poll or repeating schedule to create. It is always PAUSED.
+- action "show", id: read the definition and its cockpit url.
+- action "preview", id: preview a GitHub poll now without launching tasks or advancing its execution cursor. Preview the selected history window; enabling excludes older events by default. Set filters.includeExisting only when the user asks to include older matches within the configured lookback; receipts still prevent duplicate launches.
+- action "enable", id, explicit: true: enable only when the user's own request explicitly asks for it to be switched on. A GitHub poll needs a successful preview of its current definition in this session first. Preview again after any edit.
+
+When work must start much later (tomorrow, next week) as a new task, use cezar_schedule_task (at in UTC or delay) instead of keeping this session waiting on repeated timers; enable it only when the user asked for the work to run later. Use cezar_scheduled_tasks to list, show, update, pause, enable or cancel a one-time schedule.
+
+Completion controls are off by default. Use task.archiveWhenDone only when the user asks to archive completed tasks. Use task.autoMergePr only when the user asks to merge their PRs. Both act after Done; auto merge may mark a draft ready and still requires current-head CI and GitHub rules. With both on, merge before archive; without a PR, archive on Done. Changes affect future tasks only.
+
+Create the automation PAUSED. A paused automation is the finished state of this task, not a step awaiting confirmation: enable it only when the user's own request explicitly asks for it to be switched on. An instruction to continue autonomously, not to ask for confirmation, or to make reasonable assumptions is not that request. For a GitHub poll, run a preview check so the user sees what it would match; for a schedule, report its next occurrence (next_run_at is UTC; convert to the user's time zone and name it). Put the "url" the tool returns in your final message. Name the automation, its id, whether it is paused or enabled, its preview matches or next occurrence, and the exact prompt template it will launch. If a call fails or is refused, stop and report that automations are unavailable on this cockpit, quoting its error: do not write a cron job, a GitHub Action or a polling script as a substitute.
+
+Use the CLI for the other automation operations. Every command prints one JSON object:
 
   ${command} schema                                   the definition shape, every key, every bound, the prompt placeholders
-  ${command} create --file <def.json> [--enable]      create one from JSON (paused unless --enable); --json '<json>' or stdin work too
-  ${command} add --name <n> (--cron "0 4 * * *" | --on <event> --every 5m) --prompt <p> [--workflow w] [--runner r] [--model m] [--no-autonomous] [--archive-when-done] [--auto-merge-pr] [--no-workers] [--no-messaging] [--label l] [--author a] [--changed-label l] [--include-existing] [--enable]
-  ${command} check <id> [--execute]                   GitHub poll: preview what the filter matches right now (launches nothing without --execute)
-  ${command} add --name <n> (--at <YYYY-MM-DDTHH:MM> --tz <zone> | --in <30m|6h|7d>) [--latest-start 6h] --prompt <p> [--enable]
-                                                      a one-time schedule: one task at that time, then archived
-  ${command} run <id>                                 schedule: launch it once, now
-  ${command} cancel <id>                              one-time schedule: archive it without a task
-  ${command} list | show <id> | update <id> --file <def.json> | enable <id> | pause <id> | delete <id>
-                                                      (update replaces each key given; "task" merges key by key, null removes one)
+  ${command} list | show <id>                          list definitions or show one
+  ${command} update <id> --file <def.json>              update replaces each key given; "task" merges key by key, null removes one
+  ${command} pause <id> | delete <id>                  pause or delete a definition
+  ${command} run <id>                                 launch a schedule once, now, when the user asks
+  ${command} check <id> --execute                      execute a GitHub poll now, when the user asks
 
-When work must start much later (tomorrow, next week) as a new task, create a one-time schedule (add --at or --in) instead of keeping this session waiting on repeated timers; enable it only when the user asked for the work to run later.
-
-Completion controls are off by default. Use --archive-when-done or task.archiveWhenDone only when the user asks to archive completed tasks. Use --auto-merge-pr or task.autoMergePr only when the user asks to merge their PRs. Both act after Done; auto merge may mark a draft ready and still requires current-head CI and GitHub rules. With both on, merge before archive; without a PR, archive on Done. Changes affect future tasks only.
-
-Read the schema first. Create the automation PAUSED. A paused automation is the finished state of this task, not a step awaiting confirmation: enable it only when the user's own request explicitly asks for it to be switched on. An instruction to continue autonomously, not to ask for confirmation, or to make reasonable assumptions is not that request. For a GitHub poll, run a preview check so the user sees what it would match; for a schedule, report its next occurrence. Put the "url" the command prints in your final message. If the command exits non-zero or is refused, stop and report that automations are unavailable on this cockpit, quoting its error: do not write a cron job, a GitHub Action or a polling script as a substitute.`;
+Create, preview and enable repeating automations through cezar_automation, so paused creation and preview-before-enable are enforced. Use the CLI schema on demand; keep definition files outside the repository.`;
 }
 
 /** The built-in skill's body — the full playbook a run under `create-cezarion-automation` follows. */

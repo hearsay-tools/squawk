@@ -588,7 +588,7 @@ export const SESSION_GROUPS = {
             const obs = await driveSeam(backend, 'baseline', { spec: { squawkTools: session.descriptor, toolGrant, env: { ...session.env, CEZ_MOCK_ARGS_FILE: join(dir, 'wire'), CEZ_MOCK_CI_PR: wait.prUrl, CEZ_MOCK_CI_RESULT: join(dir, 'result'), CEZ_HANDOFF_FILE: '', } } });
             expect(obs.v1.filter((event) => event.type === 'error')).toEqual([]);
             const waits = ['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done'];
-            const expected = [...waits, ...(value === '1' ? ['cezar_preview_serve', 'cezar_preview_stop'] : []), ...(value !== '0' ? ['cezar_schedule_task', 'cezar_scheduled_tasks'] : [])];
+            const expected = [...waits, ...(value === '1' ? ['cezar_preview_serve', 'cezar_preview_stop'] : []), ...(value !== '0' ? ['cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks'] : [])];
             expect(JSON.parse(readFileSync(join(dir, 'result'), 'utf8')).names).toEqual(expected);
             const argv: string[] = JSON.parse(readFileSync(join(dir, 'wire'), 'utf8').trim().split('\n')[0]!);
             if (backend === 'claude') {

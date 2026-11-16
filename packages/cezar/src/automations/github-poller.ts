@@ -1,16 +1,12 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { z } from 'zod';
+import { GITHUB_COMMAND_TIMEOUT_MS, HISTORY_REQUEST_CAP, TIMELINE_PAGE_CAP } from '../core/github-request-limits.ts';
 import type { AutomationEvent, AutomationRuntimeState, GithubAutomationDefinition } from './types.ts';
 
 const execFileAsync = promisify(execFile);
 const HARD_CANDIDATE_CAP = 100;
-const GITHUB_COMMAND_TIMEOUT_MS = 30_000;
-/** Provider requests one history check may spend, its search included. */
-const HISTORY_REQUEST_CAP = 10;
 const TIMELINE_PAGE_SIZE = 100;
-/** The timeline is oldest first, so a live poll reads every page up to this cap. */
-const TIMELINE_PAGE_CAP = 10;
 
 const githubItemSchema = z.object({
   id: z.number().int().positive().optional(),

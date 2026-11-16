@@ -168,6 +168,7 @@ export const PARITY_FAMILIES = {
     R57: 'the recorded session on each runner\'s wire', R59: 'reuses each runner\'s recorded session',
   }),
   'skill-provision': shared('skill installs go to every agent directory', { R95: 'branches on codex' }),
+  'automation-tools': everyRunner('creates and previews through each runner’s native tool transport on fresh, Continue and recovery paths'),
   'worktree-setup': shared('Cezar appends the setup note to the prompt'),
   'model-refusal': everyRunner('each runner maps its own model refusal'),
   'runner-shutdown': everyRunner('each runner class stops its own process'),
@@ -181,6 +182,7 @@ export type ParityFamilyName = keyof typeof PARITY_FAMILIES;
 /** Parity test files by family; a file may hold several harness groups. */
 export const PARITY_FILES: ReadonlyArray<readonly [RegExp, readonly ParityFamilyName[]]> = [
   [/^core\/runner-skills-parity\.test\.ts$/, ['runner-skills']],
+  [/^workflows\/automation-tools-[a-z]+-parity\.test\.ts$/, ['automation-tools']],
   [/^core\/harness-(?:[a-z]+-[a-z-]+-)?parity(?:-closure)?\.test\.ts$/, Object.keys(PARITY_FAMILIES).filter(name => name.startsWith('harness:')) as ParityFamilyName[]],
   [/^workflows\/waits-(?:[a-z]+-subagents-)parity\.test\.ts$/, ['waits-subagents']],
   [/^workflows\/waits-(?![a-z]+-subagents-)(?:[a-z]+-[a-z-]+-)?parity\.test\.ts$/, ['waits']],

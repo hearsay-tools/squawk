@@ -1084,7 +1084,7 @@ describe('pi tool selection (hearsay-tools/cezarion#1305)', () => {
   // hearsay-tools/cezarion#1465: a narrowed list admits schedule tools by default and honors the opt-out.
   it('admits schedule tools in a narrowed list by default', () => {
     const on = buildPiArgs({ ...base, toolGrant: { kind: 'explicit', tools: ['Read'] }, squawkTools: ci, env: {} });
-    expect(on[on.indexOf('--tools') + 1]!.split(',')).toEqual(expect.arrayContaining(['cezar_schedule_task', 'cezar_scheduled_tasks']));
+    expect(on[on.indexOf('--tools') + 1]!.split(',')).toEqual(expect.arrayContaining(['cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks']));
     const off = buildPiArgs({ ...base, toolGrant: { kind: 'explicit', tools: ['Read'] }, squawkTools: ci, env: { CEZ_AUTOMATIONS: '0' } });
     expect(off[off.indexOf('--tools') + 1]!.split(',')).not.toContain('cezar_schedule_task');
   });
