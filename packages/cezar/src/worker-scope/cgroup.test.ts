@@ -89,10 +89,15 @@ describe('cgroup backend', () => {
     expect(probeCgroups(fs.fs, () => true)).toEqual({ reason: 'cannot remove a child cgroup (EBUSY)' });
   });
 
-  it('removes the child cgroups a worker made before its own', async () => {
-    const { fs, dirs } = fakeFs();
-    const path = ensureCgroup('/sys/fs/cgroup/app.slice/squawk.service', 'w1', fs);
+  it('removes the child cgroups a worker made before its own, killing only through its own', async () => {
+    const { fs: base, dirs } = fakeFs();
+    const path = ensureCgroup('/sys/fs/cgroup/app.slice/squawk.service', 'w1', base);
     dirs.add(`${path}/nested`); dirs.add(`${path}/nested/deeper`);
+    // A threaded child refuses its own cgroup.kill; the worker cgroup's kill covers it.
+    const fs = { ...base, writeFile: (file: string, data: string) => {
+      if (file.startsWith(`${path}/nested`) && file.endsWith('cgroup.kill')) throw Object.assign(new Error('EOPNOTSUPP'), { code: 'EOPNOTSUPP' });
+      base.writeFile(file, data);
+    } };
     expect(await removeCgroup(path, Date.now() + 5_000, fs)).toBe(true);
     expect([...dirs].filter(dir => dir.startsWith(path))).toEqual([]);
   });

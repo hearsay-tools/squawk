@@ -107,25 +107,37 @@ export function killCgroup(path: string, fs: CgroupFs = realCgroupFs): void {
   try { fs.writeFile(join(path, 'cgroup.kill'), '1'); } catch (error) { if (code(error) !== 'ENOENT') throw error; }
 }
 
-/** Kill, wait until empty, remove; repeated until the group is gone or `deadline` passes. A process
- * that placed itself after a kill makes the removal fail with EBUSY, so it is killed in turn; once
- * the group is removed no process can enter it. Child cgroups a worker made are removed first: the
- * kernel removes only a cgroup without children. True when the group is gone; a lookup that fails
- * for any reason but absence answers false, never success. */
+/** Kill, wait until empty, remove; repeated until the group is gone or `deadline` passes. One
+ * `cgroup.kill` on the worker's cgroup ends every process in it and in its descendants, and its
+ * `populated 0` covers them all; a child cgroup the worker made (threaded ones refuse their own
+ * `cgroup.kill`) is then removed depth-first, since the kernel removes only a cgroup without
+ * children. A process that placed itself after the kill makes a removal fail with EBUSY, so the
+ * round repeats; once the group is removed no process can enter it. True when the group is gone;
+ * a lookup that fails for any reason but absence answers false, never success. */
 export async function removeCgroup(path: string, deadline: number, fs: CgroupFs = realCgroupFs): Promise<boolean> {
   try {
     for (;;) {
       if (!fs.isDir(path)) return true;
       killCgroup(path, fs);
       while (cgroupPopulated(path, fs) && Date.now() < deadline) await sleep(POLL_MS);
-      for (const child of fs.children(path)) if (!await removeCgroup(child, deadline, fs)) return false;
-      try { fs.rmdir(path); return true; } catch (error) {
-        if (code(error) === 'ENOENT') return true;
-        if (code(error) !== 'EBUSY' || Date.now() >= deadline) return false;
-      }
+      const removed = removeTree(path, fs);
+      if (removed === true) return true;
+      if (removed === 'fatal' || Date.now() >= deadline) return false;
       await sleep(POLL_MS);
     }
   } catch { return false; }
+}
+
+/** Removes `path` and its child cgroups, deepest first. `busy` when a cgroup still holds a process. */
+function removeTree(path: string, fs: CgroupFs): true | 'busy' | 'fatal' {
+  for (const child of fs.children(path)) {
+    const removed = removeTree(child, fs);
+    if (removed !== true) return removed;
+  }
+  try { fs.rmdir(path); return true; } catch (error) {
+    if (code(error) === 'ENOENT') return true;
+    return code(error) === 'EBUSY' ? 'busy' : 'fatal';
+  }
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

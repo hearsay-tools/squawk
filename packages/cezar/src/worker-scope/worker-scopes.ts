@@ -115,9 +115,19 @@ export class WorkerScopes {
   /** End everything the worker owns and remove its cgroups, within `timeoutMs`. What could not be
    * stopped stays recorded, so a retry starts from it. */
   async stop(workerId: string, timeoutMs: number): Promise<ScopeStop> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const round = await this.stopRound(workerId, deadline, timeoutMs);
+      // A start admitted before destroy began can register while a round waits: stop it too.
+      if (round !== 'late') return round;
+      if (Date.now() >= deadline) return { stopped: false, error: `worker processes started while stopping did not stop within ${Math.round(timeoutMs / 1000)}s` };
+    }
+  }
+
+  /** One kill-and-wait over the record as read now; `late` when the record gained entries meanwhile. */
+  private async stopRound(workerId: string, deadline: number, timeoutMs: number): Promise<ScopeStop | 'late'> {
     let record: ScopeRecord;
     try { record = this.read(workerId); } catch (error) { return { stopped: false, error: (error as Error).message }; }
-    const deadline = Date.now() + timeoutMs;
     killGroups(this.groups(workerId, record));
     const cgroups: string[] = [];
     for (const path of record.cgroups) if (!await removeCgroup(path, deadline)) cgroups.push(path);
@@ -130,8 +140,12 @@ export class WorkerScopes {
     // what this stop ended leaves it. Groups only the execution record names stay there.
     const removed = new Set(record.cgroups.filter(path => !cgroups.includes(path)));
     const ended = new Set(record.groups.filter(group => !groups.some(left => key(left) === key(group))).map(key));
-    this.update(workerId, current => ({ ...current, cgroups: current.cgroups.filter(path => !removed.has(path)),
-      groups: current.groups.filter(group => !ended.has(key(group))) }));
+    let late = false;
+    this.update(workerId, current => {
+      late = current.cgroups.some(path => !record.cgroups.includes(path)) || current.groups.some(group => !record.groups.some(known => key(known) === key(group)));
+      return { ...current, cgroups: current.cgroups.filter(path => !removed.has(path)), groups: current.groups.filter(group => !ended.has(key(group))) };
+    });
+    if (late) return 'late';
     if (!cgroups.length && !groups.length) return { stopped: true };
     return { stopped: false, error: `worker processes did not stop within ${Math.round(timeoutMs / 1000)}s: ${
       [...cgroups.map(path => `cgroup ${path}`), ...groups.map(group => `process group ${group.pgid}`)].join(', ')}` };
