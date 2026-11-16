@@ -100,22 +100,21 @@ export class SubagentWaits {
    * One UI event of the run's session. A background root task item is tracked from its first event;
    * a later event of a tracked item updates its status, and a terminal one is final, so a duplicate
    * or late end changes nothing. A change while the subagent wait is open is saved in it and moves
-   * its deadline; once no child runs, a parked run waits out the grace.
+   * its deadline; once no child runs, a parked run waits out the grace. Any event of a running child,
+   * its progress included, moves a native ask's hold deadline.
    */
   trackEvent(runId: string, state: ActiveRun, event: UiEvent): void {
     const child = backgroundChildEvent(event);
     if (!child) return;
     const known = state.children.backgroundChildren.get(child.id);
     if (!known && !child.background) return;
+    if ((!known || known.status === 'running') && this.timers.has('subagent-ask-hold', runId)) this.boundNativeAskHold(runId, state);
     if (known && (known.status !== 'running' || known.status === child.status)) return;
     observeBackgroundChild(state.children, child.id, { session: known ? known.session : state.liveSession.session, status: child.status });
     // A child that runs again voids the grace: the next time none runs, a full grace starts.
     const live = liveSubagents(state);
     if (live) this.clearGrace(runId);
-    if (this.timers.has('subagent-ask-hold', runId)) {
-      if (live) this.boundNativeAskHold(runId, state);
-      else { this.clearAskHold(runId); this.releaseHeldPark(runId, state); }
-    }
+    if (!live && this.timers.has('subagent-ask-hold', runId)) { this.clearAskHold(runId); this.releaseHeldPark(runId, state); }
     const wait = openSubagentWaitOf(this.context.store.getRun(runId));
     if (!wait) { if (!live) this.releaseHeldPark(runId, state); return; }
     // A grace starts only from a saved snapshot, so the settled wait names every child's end.
