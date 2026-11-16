@@ -1,5 +1,7 @@
 # Upstream ledger
-Status: done
+Status: superseded
+
+Retired by hearsay-tools/squawk#3724 on 2026-11-16. Kept as historical design evidence; to port an upstream change, file an ordinary issue that links the upstream commit.
 
 Recorded status: accepted · Date: 2026-09-18 · Relates: `.ai/upstream/`, `.github/scripts/upstream-ledger.cjs`, `.github/scripts/upstream-targets.cjs`, `.github/scripts/upstream-reachability.cjs`, `.github/workflows/upstream-scan.yml`
 

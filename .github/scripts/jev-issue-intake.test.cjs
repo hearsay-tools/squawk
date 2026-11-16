@@ -8,7 +8,7 @@ const { validateIntake } = require('./apply-issue-intake.cjs');
 
 const labels = [
   'accessibility', 'bug', 'documentation', 'duplicate', 'enhancement', 'question', 'repo-setup',
-  'area-cezar', 'area-web', 'area-ci', 'needs-qa', 'in-progress', 'epic', 'upstream-port', 'friction',
+  'area-cezar', 'area-web', 'area-ci', 'needs-qa', 'in-progress', 'epic', 'friction',
 ].map((name) => ({ name, description: `${name} description` }));
 
 const issue = { number: 211, title: 'Focus ring missing', body: 'The cockpit drops focus.' };

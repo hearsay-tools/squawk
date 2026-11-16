@@ -13,9 +13,9 @@ trackers reuse numbers, so never infer the tracker from the number or the curren
 remote. Cite issues and PRs as `hearsay-tools/cezarion#N` / `open-mercato/cezar#N`,
 `fork #N` / `upstream #N`, or a repository-qualified GitHub link. A bare `#N` in older
 code is legacy; CI's `Check issue citations` step fails a change that adds one. Run
-`node .github/scripts/check-citations.cjs` before a PR. Archives, upstream commit
-titles and ledger fields follow
-[the ledger guide](.ai/upstream/README.md#citation-provenance).
+`node .github/scripts/check-citations.cjs` before a PR. An archive under a
+`> Historical source:` note keeps upstream's bare citations. A verbatim upstream
+commit title keeps its numbers, which belong to `open-mercato/cezar`.
 
 ## Zero config
 
@@ -92,7 +92,6 @@ holds that area's rules.
 | Agent config files (Settings → Agent config) | [`docs/areas/agent-config.md`](docs/areas/agent-config.md) |
 | Cockpit e2e specs, the browser seam, a flaky shard | [`packages/web/e2e/README.md`](packages/web/e2e/README.md) |
 | Feature specs / design history | `.ai/specs/` says why a design was chosen. Code, tests and ADRs win; a plan binds until its work ends |
-| Upstream drift: what open-mercato/cezar shipped, ported, declined | [`.ai/upstream/README.md`](.ai/upstream/README.md); fetch upstream into `refs/cez-upstream/main`, as its scan does |
 
 ## Validation
 

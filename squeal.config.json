@@ -223,9 +223,6 @@
     ".github/scripts/e2e-runner.test.cjs": [
       ".ai/scripts/e2e.sh"
     ],
-    ".github/scripts/upstream-ledger.test.cjs": [
-      ".ai/upstream/**"
-    ],
     ".github/scripts/vitest-actions-report.test.cjs": [
       "vitest.config.ts"
     ],
