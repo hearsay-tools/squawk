@@ -761,6 +761,10 @@ async function dispatchReply(scenarios, userText, uuid) {
   return false;
 }
 
+function isSkillListRequest(msg) {
+  return msg.type === 'control_request' && msg.request?.subtype === 'get_skills_dialog';
+}
+
 const rl = createInterface({ input: process.stdin });
 let queue = Promise.resolve();
 rl.on('line', (line) => {
@@ -771,7 +775,7 @@ rl.on('line', (line) => {
   let uuid;
   try {
     const msg = JSON.parse(trimmed);
-    if (msg.type === 'control_request' && msg.request?.subtype === 'get_skills_dialog') {
+    if (isSkillListRequest(msg)) {
       import('./mock-skill-list.mjs').then(({ mockSkillList }) => {
         const answer = mockSkillList('claude');
         answer.response.request_id = msg.request_id;
