@@ -2355,7 +2355,7 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
       });
     });
 
-    it('drops a human prompt queued behind the turn whose done closes the session', async () => {
+    it('reports a human prompt queued behind the turn whose done closes the session as not delivered', async () => {
       let closeOnDone: (() => void) | undefined;
       const onUiEvent = (event: UiEvent) => { if (event.type === 'turn.completed') closeOnDone?.(); };
       await withSession({ onUiEvent }, async ({ child, events, mock, session }) => {
@@ -2369,6 +2369,8 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
         await vi.advanceTimersByTimeAsync(AUTO_END_DELAY_MS);
         expect(child.killed).toBe(true);
         expect(mock.promptPosts).toHaveLength(1);
+        expect(notes(events)).toContain('opencode: message not delivered: the session closed after the agent\'s done. Send it again with Continue.');
+        expect(session.holdsHumanInput()).toBe(false);
       });
     });
 
