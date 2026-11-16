@@ -101,12 +101,13 @@ unless `worktreeSetup` already did.
 - Squeal runs the unit tests after each edit and the parity and worker tests at turn end.
   Read its verdicts. For a verdict now: `squeal run tests|run-loop <paths> --wait 60000`.
   A brief or parent that says "run the focused tests" means this. One test:
-  `squeal status --wait 60000 <file> --check '<name>'` (exit 1: failed; 3: passed).
-  A failure's diff, stack and console output: `squeal why '<check>' --include-logs`
-  (names from `squeal failures <file>`). A failure you think load caused:
-  `squeal retry <file> --reason load`. With no daemon, run `squeal start`. Never run a test
-  runner by hand; the one exception is a [red proof](docs/sdlc/regression-proof.md) in its
-  temporary worktree. Follow the [wait bound](docs/sdlc/ci.md#squeal-wait-bound).
+  `squeal status --wait 60000 <file> --check '<name>'` (exit 1: failed; else read the
+  listed checks). A failure's diff, stack and console output:
+  `squeal why '<check>' --include-logs` (names from `squeal failures <file>`). A failure
+  you think load caused: `squeal retry <file> --reason load`. With no daemon, run
+  `squeal start`. Never run a test runner by hand; the one exception is a
+  [red proof recipe](docs/sdlc/regression-proof.md). Follow the
+  [wait bound](docs/sdlc/ci.md#squeal-wait-bound).
 - CI owns the final gate and full-suite runs.
 - In a unit test, wait on the product's own signal. A timeout is only a hang guard, with a
   `// bound: <reason>` comment at the call site. A test that proves something did not happen
