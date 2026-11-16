@@ -3,6 +3,7 @@ import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
 import { randomUUID } from 'node:crypto';
 
 import { expect, it } from 'vitest';
+import { runnersWhere } from './runner-facts.ts';
 import { withRejectedInput } from './owned-input-delivery.testkit.ts';
 
 import { waitFor } from './harness-parity.testkit.ts';
@@ -11,7 +12,7 @@ import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 const delivered = (input: object, stored: { consumedAt?: string | undefined; awaitingRead?: true | undefined } | undefined) =>
   ({ ...input, deliveredAt: expect.any(String), ...(stored?.consumedAt ? { consumedAt: expect.any(String) } : {}),
     ...(stored?.awaitingRead ? { awaitingRead: true } : {}) });
-for (const backend of ['codex', 'opencode', 'pi', 'omp'] as const) {
+for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement === 'response')) {
   it.each(['fresh', 'continuation'] as const)(`${backend} %s rejected transport remains queued and replays the same input after reopening`, async mode => {
     await withRejectedInput(backend, async () => {
       await withOwnedInputRun(backend, 'baseline', async fixture => {

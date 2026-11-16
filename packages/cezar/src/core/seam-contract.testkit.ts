@@ -4,11 +4,12 @@
  * Shared parity rows above the `AgentSession` seam can run on fewer runners only while every runner
  * proves at the seam that it behaves as it declares. These rows drive each real runner class on its
  * own native mock through `driveSeam`, and read the runner's declared facts (`inputDelivery`,
- * `systemPromptOnResume`) instead of runner ids:
+ * `systemPromptOnResume`, `turnStart`) instead of runner ids:
  *
  * - S36: agent input is acknowledged at the declared point (`write`, `response`, `model-work`), and
  *   consumption is reported only after that acknowledgement, never at it.
- * - S37: a follow-up turn emits normalized `turn.started` before its content and its turn end.
+ * - S37: a follow-up turn emits normalized `turn.started` before its content and its turn end, and
+ *   before `sendMessage` returns exactly when the runner declares `turnStart: 'on-write'`.
  * - S38: a human follow-up stays held from `sendMessage` until the turn that carries it has started
  *   or reads it, including when its native turn starts late.
  * - S39: a turn that ends while it holds human input reports the hold, and the session opens the
@@ -34,6 +35,7 @@ import { expect } from 'vitest';
 import { createFailureControl } from '../../scripts/mock-failure-control.mjs';
 import { inputDeliveryOf, type AgentEvent, type AgentSession, type InputDelivery, type RunnerId } from './agent-runner.ts';
 import { driveSeam, PINNED_SESSION_ID, promptFor, seedOpencodeMockSession, waitFor, type DriveSeamOptions, type ScenarioName, type SeamObservation } from './harness-parity-core.testkit.ts';
+import { RUNNER_FACTS } from './runner-facts.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
 
@@ -382,13 +384,15 @@ async function observeTurnStart(backend: RunnerId): Promise<ContractObservation>
   });
 }
 
-function assertTurnStart({ timeline }: ContractObservation): void {
+function assertTurnStart({ backend, timeline, at }: ContractObservation): void {
   const trace = `\n${describeTimeline(timeline)}`;
   const firstCompleted = nth(timeline, isCompleted, 1);
   const firstTurnEnd = nth(timeline, isTurnEnd, 1);
   expect(firstCompleted).toBeGreaterThanOrEqual(0);
   const started = indexFrom(timeline, isStart, firstCompleted + 1);
   expect(started, `the follow-up turn starts${trace}`).toBeGreaterThan(firstCompleted);
+  expect(started < at.get('sent')!, `turn.started before sendMessage returns: turnStart ${RUNNER_FACTS[backend].turnStart}${trace}`)
+    .toBe(RUNNER_FACTS[backend].turnStart === 'on-write');
   const content = [indexFrom(timeline, isItem, firstCompleted + 1), indexFrom(timeline, isV1Content, firstTurnEnd + 1)].filter(index => index >= 0);
   expect(content.length, `the follow-up turn has content${trace}`).toBeGreaterThan(0);
   for (const index of content) expect(index, `content follows turn.started${trace}`).toBeGreaterThan(started);

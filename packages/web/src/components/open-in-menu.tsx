@@ -25,6 +25,7 @@ import {
 import type { ReactNode } from 'react'
 
 import type { OpenTarget, Runner } from '@open-mercato/cezar-api-client'
+import { ownLookup } from '@open-mercato/cezar-api-client/contract/own-lookup'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -82,7 +83,7 @@ const OPEN_IN_ICONS: Record<string, LucideIcon> = {
 /** The icon component for a target — `target.icon` when it's one the UI knows, else the
  *  same generic glyph the trigger button itself uses. */
 export function openInIcon(target: OpenTarget): LucideIcon {
-  return (target.icon && OPEN_IN_ICONS[target.icon]) || ExternalLinkIcon
+  return ownLookup(OPEN_IN_ICONS, target.icon) ?? ExternalLinkIcon
 }
 
 /** The runner a `cli:<runner>` Open-in target hands off to, or undefined for every other

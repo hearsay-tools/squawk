@@ -6,6 +6,9 @@ import { describe, expect, it } from 'vitest'
 
 import type { RunEvent, ToolStatus, UiToolItem } from '@open-mercato/cezar-api-client'
 
+import forkedCommand from '../../../../cezar/src/core/__fixtures__/claude/forked-command.expected.json'
+import forkedSkill from '../../../../cezar/src/core/__fixtures__/claude/forked-skill.expected.json'
+
 import {
   collectSubagents,
   findSubagent,
@@ -78,6 +81,22 @@ describe('collectSubagents — which items become rows', () => {
 
   it('returns [] for no turns at all', () => {
     expect(collectSubagents([])).toEqual([])
+  })
+
+  it('lists a typed forked command as it lists a Skill-tool fork (hearsay-tools/squawk#1315)', () => {
+    const turnsOf = (events: object[]) =>
+      reduceThread(events.map((event, index) => ({ seq: index + 1, ts: '2026-07-14T12:00:00.000Z', ...event }) as RunEvent)).turns
+    const [typed] = collectSubagents(turnsOf(forkedCommand))
+    const [called] = collectSubagents(turnsOf(forkedSkill))
+    expect(typed).toEqual({
+      id: 'forked-command-fxfork',
+      title: '/fxfork',
+      agentType: 'general-purpose',
+      status: TOOL_STATUS.completed,
+      toolCalls: 1,
+      activity: 'Ran echo forked > /dev/null',
+    })
+    expect(called).toMatchObject({ status: TOOL_STATUS.completed, toolCalls: typed!.toolCalls })
   })
 
   it('anchors on the MOST RECENT turn holding task items', () => {

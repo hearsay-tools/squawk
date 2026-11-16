@@ -120,6 +120,8 @@ export class WorkerExecutions {
     if (this.context.disposed()) return false;
     await new Promise<void>(resolve => {
       const settle = () => { clearTimeout(timer); this.terminationWaiters.delete(settle); resolve(); };
+      // A local awaited pause of this caller, not a liveness bound of the run.
+      // ast-grep-ignore: liveness-timer-outside-owner
       const timer = setTimeout(settle, Math.min(30_000, Math.max(0, Number.isFinite(timeoutMs) ? timeoutMs : 0)));
       this.terminationWaiters.add(settle);
       void execution.promise.then(settle);

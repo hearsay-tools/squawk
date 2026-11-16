@@ -21,7 +21,7 @@ import type { WorkflowDef } from '../workflows/types.ts';
 import { driveSeam, exemptionFor, HARNESS_ADAPTERS, PERMISSION_CRITERIA, promptFor, textEvents, waitFor } from './harness-parity-core.testkit.ts';
 import { driveObservedRun } from './harness-parity-run-tier.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
-import { runnersWhere } from './runner-facts.ts';
+import { RUNNER_FACTS, runnersWhere } from './runner-facts.ts';
 import type { UiEvent } from './ui-events.ts';
 import { driveRun, withOwnedInputRun, type RunObservation } from './workflow-parity-core.testkit.ts';
 
@@ -635,6 +635,23 @@ export const SETTLEMENT_GROUPS = {
     const { describeRunners, runners, it, permissionExemption } = r;
     describeRunners('late-permission', `P8 ${PERMISSION_CRITERIA.find(c => c.id === 'P8')!.name} (hearsay-tools/cezarion#1266)`, () => {
       for (const backend of runners) {
+        // The close after an accepted done follows the declared nativePermission (hearsay-tools/squawk#1680):
+        // only a wire that can raise a request after its turn keeps the session up for one.
+        const closesWhenQuiet = RUNNER_FACTS[backend].nativePermission === 'after-turn';
+        it(`${backend} closes on an accepted done ${closesWhenQuiet ? 'once no late permission request is pending' : 'at once'}, as its nativePermission declares`, async () => {
+          const observation = await driveSeam(backend, 'baseline', {
+            whileOpen: async (session, observed) => {
+              await waitFor(() => observed.v1.some(event => event.type === 'turn-end'));
+              expect(typeof session.endWhenQuiet).toBe(closesWhenQuiet ? 'function' : 'undefined');
+              if (!session.endWhenQuiet) return;
+              session.endWhenQuiet();
+              expect(session.open).toBe(false);
+              await waitFor(() => observed.v1.some(event => event.type === 'done'));
+            },
+          });
+          expect(observation.failure).toBeUndefined();
+        // bound: per-cell hang guard for one mock session, sized for a parity cell under host load.
+        }, 45_000);
         if (permissionExemption('P8', backend, 'permission-late')) continue;
         // A session's own close (autoEndAfterFirstTurn) lives at the seam.
         it(`${backend} P8 reopens the turn for the late card and ends the session after that turn`, async () => {
@@ -664,18 +681,81 @@ export const SETTLEMENT_GROUPS = {
         // bound: per-cell hang guard above driveRun's own 30 s settle bound, sized for a parity cell under host load.
         }, 45_000);
 
-        // Through RunManager a step's done closes its session at once (hearsay-tools/cezarion#1620),
-        // as a final step's done already did: the late card never pends and the next step runs.
-        it(`${backend} P8 completes a non-final step on its done before a late card can pend`, async () => {
-          const workflowDef: WorkflowDef = {
-            name: 'permission-late', source: 'built-in',
-            steps: [{ id: 'first', name: 'First', prompt: '{{task}}' }, { id: 'second', name: 'Second', prompt: promptFor(backend, 'cezar-done') }],
-          };
-          // bound: hang guard for the live mock run; the predicate waits on the run settling, and a stuck card fails here instead of at the test timeout.
-          const observation = await driveRun(backend, 'permission-late', run => !!run && ['done', 'review', 'waiting'].includes(run.status), 30_000, undefined, { workflowDef });
+        // Through RunManager an accepted done keeps this session open briefly (hearsay-tools/squawk#1680):
+        // the late card pends, its answer reaches the runner, and the step settles as the done said.
+        for (const [where, steps] of [
+          ['a non-final step', [{ id: 'first', name: 'First', prompt: '{{task}}' }, { id: 'second', name: 'Second', prompt: promptFor(backend, 'cezar-done') }]],
+          ['the final step', [{ id: 'first', name: 'First', prompt: '{{task}}' }]],
+        ] as const) {
+          it(`${backend} P8 shows a late card after the done of ${where} and settles it done once the card is answered`, async () => {
+            const workflowDef: WorkflowDef = { name: 'permission-late', source: 'built-in', steps: steps.map(step => ({ ...step })) };
+            let repoRoot = '';
+            let allowId = '';
+            // bound: hang guard for the live mock run; the predicate waits on the run settling, and a stuck card fails here instead of at the test timeout.
+            const observation = await driveRun(backend, 'permission-late', run => !!run && ['done', 'review'].includes(run.status), 30_000, undefined, {
+              workflowDef,
+              beforeStart: context => { repoRoot = context.repoRoot; },
+              during: async ({ store, manager, runId }) => {
+                await waitFor(() => store.readEvents(runId).some(event => event.type === 'permission.requested'));
+                expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
+                expect(store.getRun(runId)?.steps.map(step => step.status)).toEqual(steps.map((_, index) => index === 0 ? STEP_STATUS.waiting : STEP_STATUS.pending));
+                const request = store.readEvents(runId).find(event => event.type === 'permission.requested')!;
+                allowId = (request.options as Array<{ id: string; label: string }>).find(option => option.label.toLowerCase().includes('allow once'))!.id;
+                const response = await answerThroughRoute(repoRoot, store, manager, runId, request, allowId);
+                expect(response.status).toBe(200);
+                expect(await response.json()).toEqual({ delivered: true });
+              },
+            });
+            expect(observation.record?.status).toBe('done');
+            expect(observation.record?.hasPendingPermission).toBe(false);
+            expect(observation.record?.steps.map(step => [step.id, step.status])).toEqual(steps.map(step => [step.id, 'done']));
+            expect(permissionResolutionsOf(observation.events)).toEqual([expect.objectContaining({ optionId: allowId })]);
+            expect(joinedText(observation.events)).toContain('Approval response: {"reply":"once"}');
+          // bound: per-cell hang guard above driveRun's own 30 s settle bound, sized for a parity cell under host load.
+          }, 45_000);
+        }
+
+        it(`${backend} P8 shows a late card after a Continue's done and settles it done once the card is answered`, async () => {
+          let repoRoot = '';
+          let allowId = '';
+          // bound: hang guard for the live mock run; the predicate waits on the first session settling.
+          const observation = await driveRun(backend, 'cezar-done', run => !!run && ['done', 'review'].includes(run.status), 30_000, async ({ store, manager, runId }) => {
+            await waitFor(() => !manager.isActive(runId));
+            expect(manager.continueRun(runId, { text: promptFor(backend, 'permission-late') })).toEqual({ ok: true });
+            await waitFor(() => store.readEvents(runId).some(event => event.type === 'permission.requested'));
+            expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
+            const request = store.readEvents(runId).find(event => event.type === 'permission.requested')!;
+            allowId = (request.options as Array<{ id: string; label: string }>).find(option => option.label.toLowerCase().includes('allow once'))!.id;
+            const response = await answerThroughRoute(repoRoot, store, manager, runId, request, allowId);
+            expect(await response.json()).toEqual({ delivered: true });
+            await waitFor(() => ['done', 'review'].includes(store.getRun(runId)?.status ?? '') && !manager.isActive(runId));
+          }, { beforeStart: context => { repoRoot = context.repoRoot; } });
           expect(observation.record?.status).toBe('done');
-          expect(observation.record?.hasPendingPermission).toBeFalsy();
-          expect(observation.record?.steps.map(step => [step.id, step.status])).toEqual([['first', 'done'], ['second', 'done']]);
+          expect(observation.record?.hasPendingPermission).toBe(false);
+          expect(permissionResolutionsOf(observation.events)).toEqual([expect.objectContaining({ optionId: allowId })]);
+          expect(joinedText(observation.events)).toContain('Approval response: {"reply":"once"}');
+        // bound: per-cell hang guard above driveRun's own 30 s settle bound, sized for a parity cell under host load.
+        }, 60_000);
+
+        // A human Finish still reaches the session that closes on its done, as it reaches an open one.
+        it(`${backend} P8 Finish while a late card pends closes the session and settles the run done`, async () => {
+          let repoRoot = '';
+          // bound: hang guard for the live mock run; the predicate waits on the run settling, and a refused Finish fails here instead of at the test timeout.
+          const observation = await driveRun(backend, 'permission-late', run => !!run && ['done', 'review'].includes(run.status), 30_000, undefined, {
+            beforeStart: context => { repoRoot = context.repoRoot; },
+            during: async ({ store, manager, runId }) => {
+              await waitFor(() => store.readEvents(runId).some(event => event.type === 'permission.requested'));
+              expect(store.getRun(runId)).toMatchObject({ status: RUN_STATUS.waiting, hasPendingPermission: true });
+              expect(manager.finishBlockedReason(runId)).toBeUndefined();
+              const response = await apiRequest(createApp({ home: testHome(), repoRoot, store, manager, version: 'test' }), `/api/v1/runs/${runId}/finish`, { method: 'POST' });
+              expect(await response.json()).toEqual({ finished: true });
+            },
+          });
+          expect(observation.record?.status).toBe('done');
+          expect(observation.record?.hasPendingPermission).toBe(false);
+          expect(permissionResolutionsOf(observation.events)).toEqual([expect.not.objectContaining({ optionId: expect.anything() })]);
+          expect(observation.events).toContainEqual(expect.objectContaining({ type: 'lifecycle', message: 'session closed by user' }));
+          expect(joinedText(observation.events)).not.toContain('Approval response');
         // bound: per-cell hang guard above driveRun's own 30 s settle bound, sized for a parity cell under host load.
         }, 45_000);
       }

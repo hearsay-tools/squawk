@@ -244,7 +244,7 @@ export class ContinuationSession {
     // opening input handled while the question it answers is still open.
     const outcomes: RunOutcome[] = [
       ...(opening ? [{ kind: 'opening-handled' as const, inputId: opening, at: new Date().toISOString() }] : []),
-      ...(askSeq !== undefined ? [{ kind: 'answered' as const, waitIds: answer.waits }] : []),
+      ...(askSeq !== undefined ? [{ kind: 'answered' as const, waitIds: answer.waits, askSeq }] : []),
     ];
     // Only the opening input's checkpoint stops the turn end; the rest is best effort, as before.
     try { this.context.store.commitOutcome(runId, outcomes, { patch: { continuationMessage: undefined } }, { bestEffort: !opening }); }
@@ -405,6 +405,8 @@ export class ContinuationSession {
     // names this skill instead of waiting out a slow first fetch of the day.
     try {
       await new Promise<void>((resolve) => {
+        // A local awaited pause of this Continue, not a liveness bound of the run.
+        // ast-grep-ignore: liveness-timer-outside-owner
         const timeout = setTimeout(resolve, 1_500);
         timeout.unref?.();
         const settle = () => { clearTimeout(timeout); resolve(); };

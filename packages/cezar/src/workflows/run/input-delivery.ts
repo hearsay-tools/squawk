@@ -35,6 +35,7 @@ import type { RunSkills } from './run-skills.ts';
 import type { AttachmentWriter } from './attachment-writer.ts';
 import type { HumanWaits } from './human-waits.ts';
 import type { QuestionAnswerSource, WorkerQuestions } from './worker-questions.ts';
+import { cancelLivenessTimer, LivenessTimers } from './liveness-timers.ts';
 
 // The flight keeps its identity across asynchronous acknowledgement. Only this module can
 // change the reservation or attach the settled promise; readers receive getters only.
@@ -169,13 +170,13 @@ export class InputGroup {
   retainUnreadTimer(timer: NodeJS.Timeout): void { this.#unreadInputTimer = timer; }
   unreadTimerFired(): void { this.#unreadInputTimer = undefined; }
   clearUnreadTimer(): void {
-    if (this.#unreadInputTimer) clearTimeout(this.#unreadInputTimer);
+    cancelLivenessTimer(this.#unreadInputTimer);
     this.#unreadInputTimer = undefined;
   }
   retainHeldTimer(timer: NodeJS.Timeout): void { this.#heldHumanInputTimer = timer; }
   heldTimerFired(): void { this.#heldHumanInputTimer = undefined; }
   clearHeldTimer(resetClock = true): void {
-    if (this.#heldHumanInputTimer) clearTimeout(this.#heldHumanInputTimer);
+    cancelLivenessTimer(this.#heldHumanInputTimer);
     this.#heldHumanInputTimer = undefined;
     if (resetClock) {
       this.#heldHumanInputSince = undefined;
@@ -230,7 +231,10 @@ function handToTransport<T>(state: ActiveRun, session: AgentSession, inputIds: r
   return sent;
 }
 
-type HumanAnswerBudget = { spent: number };
+/** The budget a human answer resets, as its flush saw it before the answer. `atTurnBoundary` is
+ *  the turn boundary before Squawk wrote the answer: a runner may report the answer's turn inside
+ *  that write (`RunnerFacts.turnStart`), and the cap decision must not depend on it. */
+type HumanAnswerBudget = { spent: number; atTurnBoundary?: boolean };
 
 /** Charging results cancelled by this flush, before a human answer resets its budget. */
 export function cappedTimersBeforeFlush(run: RunRecord, beforeHumanReset: HumanAnswerBudget | undefined, reads: {
@@ -267,6 +271,8 @@ interface InputDeliveryHost {
   reparkWithoutWaits(id: string, state: ActiveRun): void; holdPeerWakesAtCap(id: string): void;
   reconcileWorkerWaits(): void; unreadInputGraceMs(): number;
   submitAgentInput(id: string, state: ActiveRun, content: ContentBlock[], inputs?: readonly string[], budget?: HumanAnswerBudget): boolean;
+  /** `SubagentWaits.endParkHold`: a park's hold for native subagents ends when the run leaves it. */
+  endParkHold(id: string, state: ActiveRun): void;
 }
 
 function unreadInputUnconfirmedNote(count: number): string {
@@ -274,7 +280,8 @@ function unreadInputUnconfirmedNote(count: number): string {
 }
 
 export class InputDelivery {
-  constructor(private readonly context: RunModuleContext, private readonly host: InputDeliveryHost, private readonly maxAutoContinues: number, private readonly routedQuestionRefusal: string) {}
+  constructor(private readonly context: RunModuleContext, private readonly host: InputDeliveryHost, private readonly maxAutoContinues: number, private readonly routedQuestionRefusal: string,
+    private readonly timers = new LivenessTimers()) {}
 
   steerWorker(runId: string, input: AgentInput): 'queued' | 'delivered' {
     const run = this.context.store.getRun(runId);
@@ -303,9 +310,9 @@ export class InputDelivery {
   respondPermission(runId: string, requestId: string, optionId: string): boolean {
     const state = this.host.active.get(runId);
     const run = this.context.store.getRun(runId);
-    if (this.context.disposed() || !state?.liveSession.session?.open || state.liveSession.cancelled || state.liveSession.finishRequested || !this.host.canProceedWithRun(runId, run) ||
+    if (this.context.disposed() || !state?.liveSession.sessionLive || state.liveSession.cancelled || state.liveSession.finishRequested || !this.host.canProceedWithRun(runId, run) ||
         !state.liveSession.pendingPermissions?.has(requestId)) return false;
-    return state.liveSession.session.respondPermission?.(requestId, optionId) ?? false;
+    return state.liveSession.session!.respondPermission?.(requestId, optionId) ?? false;
   }
 
   /** Latch an agent input error, then interrupt: a transport failure the interrupt causes is secondary. */
@@ -387,7 +394,7 @@ export class InputDelivery {
     const content = [{ type: 'text' as const, text }, ...(bundle ? [{ type: 'text' as const, text: bundle.text }] : [])];
     if (!handToTransport(state, session, [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])], wire => wire.sendMessage(content))) return;
     this.context.store.appendEvent(runId, { type: 'human-input-delivered', askSeq, source });
-    inputReceipts.commitRoutedAnswer(this.context, runId, state, [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])], fallback, this.maxAutoContinues);
+    inputReceipts.commitRoutedAnswer(this.context, runId, state, { askSeq, delivered: [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])] }, fallback, this.maxAutoContinues);
     // Spend the answer's admission now so later messages can steer before its turn ends.
     if (this.host.line.retireAdmission(runId)) transitionTurnBoundary(state, { kind: 'input-ack', phase: 'wake-turn', session: state.liveSession.session });
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'refresh-question', session: state.liveSession.session, pending: hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id)) });
@@ -444,9 +451,9 @@ export class InputDelivery {
     clearUnreadInputTimer(state);
     const session = state.liveSession.session;
     if (!session?.open || state.boundary.pendingHumanAsk || !harnessOwesInput(state) || state.inputState.agentInputFlight) return;
-    const timer = setTimeout(() => {
-      state.inputState.unreadTimerFired();
-      if (this.context.disposed() || this.host.active.get(runId) !== state || state.liveSession.session !== session || !session.open || state.liveSession.cancelled ||
+    const timer = this.timers.arm({ kind: 'unread-input', runId, delayMs: this.host.unreadInputGraceMs(),
+      session: { armed: session, current: () => state.liveSession.session }, forget: () => state.inputState.unreadTimerFired() }, () => {
+      if (this.context.disposed() || this.host.active.get(runId) !== state || !session.open || state.liveSession.cancelled ||
         state.boundary.pendingHumanAsk || state.inputState.agentInputFlight || !harnessOwesInput(state)) return;
       const ids = [...state.inputState.unreadInputIds!];
       const retried = ids.filter(id => state.inputState.unreadRetried?.has(id));
@@ -467,8 +474,7 @@ export class InputDelivery {
         if (state.boundary.parkAfterAck?.session !== session) transitionTurnBoundary(state, { kind: 'unread-expired', phase: 'restore-ack', session });
         this.settleIdleBoundary(runId, state, session);
       }
-    }, this.host.unreadInputGraceMs());
-    timer.unref?.();
+    });
     state.inputState.retainUnreadTimer(timer);
   }
 
@@ -481,9 +487,9 @@ export class InputDelivery {
       return;
     }
     state.inputState.beginHeldClock();
-    const timer = setTimeout(() => {
-      state.inputState.heldTimerFired();
-      if (this.context.disposed() || this.host.active.get(runId) !== state || state.liveSession.session !== session || !session.open ||
+    const timer = this.timers.arm({ kind: 'held-human-input', runId, delayMs: HELD_HUMAN_INPUT_RECHECK_MS,
+      session: { armed: session, current: () => state.liveSession.session }, forget: () => state.inputState.heldTimerFired() }, () => {
+      if (this.context.disposed() || this.host.active.get(runId) !== state || !session.open ||
         state.liveSession.cancelled || state.boundary.idleClosed || state.boundary.atTurnBoundary !== session) return;
       if (harnessHoldsHumanInput(state)) {
         // An in-flight ACK still owns this boundary; its .then re-settles.
@@ -507,8 +513,7 @@ export class InputDelivery {
         return;
       }
       this.settleIdleBoundary(runId, state, session);
-    }, HELD_HUMAN_INPUT_RECHECK_MS);
-    timer.unref?.();
+    });
     state.inputState.retainHeldTimer(timer);
   }
 
@@ -698,7 +703,7 @@ export class InputDelivery {
     const owedTimers = cappedTimersBeforeFlush(run, beforeHumanReset, {
       countAutomaticWakes: before => this.host.countAutomaticWakes(runId, before),
       isAdmitted: () => this.host.line.isAdmitted(runId),
-      atTurnBoundary: () => state.boundary.atTurnBoundary === state.liveSession.session,
+      atTurnBoundary: () => beforeHumanReset?.atTurnBoundary ?? state.boundary.atTurnBoundary === state.liveSession.session,
     }, this.maxAutoContinues);
     if (owedTimers.length) {
       this.host.cancelAutomaticAtCap(runId, owedTimers);
@@ -745,6 +750,7 @@ export class InputDelivery {
     clearHeldHumanInputTimer(state);
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'resume', session: state.liveSession.session });
     clearIdleTimer(state);
+    this.host.endParkHold(runId, state);
     // A wake command can emit activity before its transport ACK. Keep its park
     // until the durable delivery checkpoint; admission already reserves capacity.
     const owing = this.context.store.getRun(runId);
@@ -776,9 +782,10 @@ export class InputDelivery {
     const prepared = this.prepareMessageContent(runId, state, content);
     const { blocks, expanded, deliverable } = prepared;
     const session = state.liveSession.session;
+    const atTurnBoundary = state.boundary.atTurnBoundary === session;
     const delivered = handToTransport(state, session, prepared.bundle?.inputs.map(input => input.id) ?? [], wire => wire.sendMessage(deliverable));
     if (delivered && expanded !== blocks) this.host.runSkills.provisionLiveSlashSkill(runId, state, blocks);
-    if (delivered) this.applyHumanMessageDelivery(runId, state, prepared, messageId);
+    if (delivered) this.applyHumanMessageDelivery(runId, state, prepared, messageId, atTurnBoundary);
     return delivered;
   }
 
@@ -815,9 +822,9 @@ export class InputDelivery {
     return { blocks, expanded, deliverable, answeringAskSeq, bundle };
   }
 
-  private applyHumanMessageDelivery(runId: string, state: ActiveRun, prepared: ReturnType<InputDelivery['prepareMessageContent']>, messageId: string | undefined): void {
+  private applyHumanMessageDelivery(runId: string, state: ActiveRun, prepared: ReturnType<InputDelivery['prepareMessageContent']>, messageId: string | undefined, atTurnBoundary: boolean): void {
     const { answeringAskSeq, bundle } = prepared;
-    const beforeHumanReset = { spent: this.context.store.getRun(runId)?.automaticWakes ?? 0 };
+    const beforeHumanReset = { spent: this.context.store.getRun(runId)?.automaticWakes ?? 0, atTurnBoundary };
     // The turn that would have finished now answers the user (hearsay-tools/cezarion#1234).
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'human-delivered', session: state.liveSession.session });
     // A human message starts a fresh completion cycle (hearsay-tools/cezarion#1301).
@@ -825,7 +832,7 @@ export class InputDelivery {
     if (answeringAskSeq !== undefined) {
       this.context.store.appendEvent(runId, { type: 'human-input-delivered', askSeq: answeringAskSeq });
     }
-    inputReceipts.commitAnswer(this.context, runId, state, bundle, messageId);
+    inputReceipts.commitAnswer(this.context, runId, state, { askSeq: answeringAskSeq, bundle }, messageId);
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'refresh-question', session: state.liveSession.session, pending: hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id)) });
     // A native answer or a full bundle leaves remaining messages to steer behind the answer.
     if (answeringAskSeq !== undefined && !state.boundary.pendingHumanAsk) this.flushAgentInputs(runId, beforeHumanReset);

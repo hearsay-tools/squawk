@@ -24,7 +24,7 @@ export function boundaryInputFixture(): ReturnType<typeof boundaryOrderFixture> 
     runSkills: unused<Host['runSkills']>('skills', { enabledSkills: () => [] }),
     humanWaits: unused<Host['humanWaits']>('human waits', { holdsAgentWaits: () => true }),
     inputReceiptHost: unused<Host['inputReceiptHost']>('receipts', { reconcileWorkerWaits: call('receipt-reconcile', undefined), isCurrentState: () => true, flushAgentInputs: call('retry-flush', undefined) }),
-    settleTurn: call('settle', true),
+    settleTurn: call('settle', true), endParkHold: () => undefined,
     boundaryTurn: (_id, _state, session, done) => ({ session, done, stepId: 'step', ask: null, nudgedLastTurn: false, humanGate: false, monitoring: false }),
   });
   const delivery = new InputDelivery(f.context, host, 40, 'routed refusal');

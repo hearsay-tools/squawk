@@ -14,6 +14,7 @@ import type { RunRecord } from '../../runs/store.ts';
 import type { ActiveRun } from '../active-run.ts';
 import { openWaits } from '../waits.ts';
 import type { RunModuleContext } from './types.ts';
+import { LivenessTimers } from './liveness-timers.ts';
 
 /**
  * Squawk's wait on the native subagents a turn left running (hearsay-tools/cezarion#2431). The
@@ -91,30 +92,29 @@ export function openSubagentWaitOf(run: Pick<RunRecord, 'waits'> | undefined): S
 }
 
 export class SubagentWaits {
-  /** The grace after the last child ended, by run id. */
-  private readonly graces = new Map<string, NodeJS.Timeout>();
-  /** The retry of an interruption whose transcript write failed, by run id. */
-  private readonly retries = new Map<string, NodeJS.Timeout>();
-
   constructor(private readonly context: RunModuleContext, private readonly host: SubagentWaitsHost,
-    private readonly graceMs = SUBAGENT_WAIT_GRACE_SECONDS * 1000, private readonly deadlineMs = SUBAGENT_WAIT_DEADLINE_SECONDS * 1000) {}
+    private readonly graceMs = SUBAGENT_WAIT_GRACE_SECONDS * 1000, private readonly deadlineMs = SUBAGENT_WAIT_DEADLINE_SECONDS * 1000,
+    private readonly timers = new LivenessTimers()) {}
 
   /**
    * One UI event of the run's session. A background root task item is tracked from its first event;
    * a later event of a tracked item updates its status, and a terminal one is final, so a duplicate
    * or late end changes nothing. A change while the subagent wait is open is saved in it and moves
-   * its deadline; once no child runs, a parked run waits out the grace.
+   * its deadline; once no child runs, a parked run waits out the grace. Any event of a running child,
+   * its progress included, moves a native ask's hold deadline.
    */
   trackEvent(runId: string, state: ActiveRun, event: UiEvent): void {
     const child = backgroundChildEvent(event);
     if (!child) return;
     const known = state.children.backgroundChildren.get(child.id);
     if (!known && !child.background) return;
+    if ((!known || known.status === 'running') && this.timers.has('subagent-ask-hold', runId)) this.boundNativeAskHold(runId, state);
     if (known && (known.status !== 'running' || known.status === child.status)) return;
     observeBackgroundChild(state.children, child.id, { session: known ? known.session : state.liveSession.session, status: child.status });
     // A child that runs again voids the grace: the next time none runs, a full grace starts.
     const live = liveSubagents(state);
     if (live) this.clearGrace(runId);
+    if (!live && this.timers.has('subagent-ask-hold', runId)) { this.clearAskHold(runId); this.releaseHeldPark(runId, state); }
     const wait = openSubagentWaitOf(this.context.store.getRun(runId));
     if (!wait) { if (!live) this.releaseHeldPark(runId, state); return; }
     // A grace starts only from a saved snapshot, so the settled wait names every child's end.
@@ -143,6 +143,34 @@ export class SubagentWaits {
   holdsLiveSubagents(runId: string): boolean {
     const state = this.host.active.get(runId);
     return !!state && liveSubagents(state) > 0;
+  }
+
+  /**
+   * A native ask holds its turn open beside running children (hearsay-tools/squawk#2701), so no turn
+   * end opens a subagent wait for them. The hold ends at the same deadline instead, which each
+   * child event moves: the park gives its slot back and arms its idle close.
+   */
+  boundNativeAskHold(runId: string, state: ActiveRun): void {
+    this.clearAskHold(runId);
+    const session = state.liveSession.session;
+    if (!state.boundary.heldForSubagents || !session) return;
+    this.timers.arm({ kind: 'subagent-ask-hold', runId, delayMs: this.deadlineMs, session: { armed: session, current: () => state.liveSession.session } }, () => {
+      // A later park at a turn end holds for its own children under its own subagent wait.
+      if (state.boundary.atTurnBoundary === session) return;
+      this.releaseHeldPark(runId, state);
+    });
+  }
+
+  /** The run leaves its park (it resumes, or a permission request parks it instead): a hold for
+   *  its children ends with it, so neither the hold's deadline nor a child's end releases a later
+   *  park. */
+  endParkHold(runId: string, state: ActiveRun): void {
+    this.clearAskHold(runId);
+    if (state.boundary.heldForSubagents) transitionTurnBoundary(state, { kind: 'subagents-changed', phase: 'release', session: state.liveSession.session });
+  }
+
+  private clearAskHold(runId: string): void {
+    this.timers.clear('subagent-ask-hold', runId);
   }
 
   /** The last child of a park for the user that held its slot for them ended, with no subagent wait
@@ -184,10 +212,8 @@ export class SubagentWaits {
 
   /** Every child ended: unless the runner starts a parent turn first, the wait resolves `settled`. */
   private armGrace(runId: string): void {
-    if (this.graces.has(runId)) return;
-    const timer = setTimeout(() => {
-      if (this.graces.get(runId) !== timer) return;
-      this.graces.delete(runId);
+    if (this.timers.has('subagent-grace', runId)) return;
+    this.timers.arm({ kind: 'subagent-grace', runId, delayMs: this.graceMs }, () => {
       const state = this.host.active.get(runId);
       const wait = openSubagentWaitOf(this.context.store.getRun(runId));
       // A parent turn that started in the grace (a human message, another wake) sees the ends
@@ -195,15 +221,11 @@ export class SubagentWaits {
       if (!state || !wait || liveSubagents(state) || this.context.disposed() || !this.host.isParked(runId)) return;
       if (!this.refreshWait(runId, state, wait)) return;
       this.host.waitEngine.settleWait(runId, wait.id, { reason: 'settled' });
-    }, this.graceMs);
-    timer.unref?.();
-    this.graces.set(runId, timer);
+    });
   }
 
   private clearGrace(runId: string): void {
-    const timer = this.graces.get(runId);
-    if (timer) clearTimeout(timer);
-    this.graces.delete(runId);
+    this.timers.clear('subagent-grace', runId);
   }
 
   /**
@@ -230,6 +252,7 @@ export class SubagentWaits {
    *  (a park held beside a question), the children still end in the transcript. */
   afterSessionGone(runId: string, state?: ActiveRun): void {
     this.clearGrace(runId);
+    this.clearAskHold(runId);
     if (this.context.disposed()) return;
     const wait = openSubagentWaitOf(this.context.store.getRun(runId));
     if (wait) this.interrupt(runId, wait.id);
@@ -251,21 +274,15 @@ export class SubagentWaits {
   /** Write the stopped children's ends again later: through the wait while it is open, or on their
    *  own when no wait held them. */
   private armRetry(runId: string, waitId?: string): void {
-    const timer = setTimeout(() => {
-      if (this.retries.get(runId) !== timer) return;
-      this.retries.delete(runId);
+    this.timers.arm({ kind: 'subagent-retry', runId, delayMs: Math.min(this.deadlineMs / 2, INTERRUPT_RETRY_MS) }, () => {
       if (this.context.disposed()) return;
       if (waitId === undefined) { if (!this.endStoppedChildren(runId)) this.armRetry(runId); return; }
       if (openWaits(this.context.store.getRun(runId) ?? {}).some(entry => entry.id === waitId)) this.interrupt(runId, waitId);
-    }, Math.min(this.deadlineMs / 2, INTERRUPT_RETRY_MS));
-    timer.unref?.();
-    this.retries.set(runId, timer);
+    });
   }
 
   private clearRetry(runId: string): void {
-    const timer = this.retries.get(runId);
-    if (timer) clearTimeout(timer);
-    this.retries.delete(runId);
+    this.timers.clear('subagent-retry', runId);
   }
 
   /**
@@ -297,8 +314,8 @@ export class SubagentWaits {
   }
 
   dispose(): void {
-    for (const timer of [...this.graces.values(), ...this.retries.values()]) clearTimeout(timer);
-    this.graces.clear();
-    this.retries.clear();
+    this.timers.clearKind('subagent-grace');
+    this.timers.clearKind('subagent-retry');
+    this.timers.clearKind('subagent-ask-hold');
   }
 }

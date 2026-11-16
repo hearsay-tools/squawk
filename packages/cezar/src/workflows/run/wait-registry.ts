@@ -17,8 +17,9 @@ import { squawkAskRequestSchema, squawkWaitRequestSchema, type AskErrorCode, typ
 import type { CiWatcherSupervisor } from '../../ci-wait/supervisor.ts';
 import { askErrorMessage, waitErrorMessage } from '../../ci-wait/errors.ts';
 import { toolSessionRefusal } from './squawk-tools.ts';
+import { answeringAskSeq, pendingQuestion, yieldAnsweredSlot } from './human-waits.ts';
 import { askCardFields } from './turn-markers.ts';
-import { identicalWait, normalizePrUrl, openWaits, timerWaitEntry, prWaitEntry, processWaitEntry } from '../waits.ts';
+import { identicalWait, normalizePrUrl, timerWaitEntry, prWaitEntry, processWaitEntry } from '../waits.ts';
 import { delegationWaitRefusal, workerListTarget } from '../wait-scope.ts';
 import { isSessionLeader } from '../../core/session-process.ts';
 import { probeProcessWait } from '../../process-wait/supervisor.ts';
@@ -191,10 +192,10 @@ export class WaitRegistry {
     // The question this turn's opening answers stays open only until the turn end settles it, so
     // a question asked in that turn is a new one, never the answered one returned
     // (hearsay-tools/cezarion#2397).
-    const answering = active.liveSession.session?.open ? active.inputState.openingAnswerAskSeq : undefined;
-    const open = WAIT_KINDS.human.duplicateAsk(openWaits(run), answering);
+    const answering = answeringAskSeq(active);
+    const open = pendingQuestion(run, answering);
     if (open?.askSeq !== undefined) return open;
-    if (!open && !this.host.waitEngine.hasRoom(run)) refuse('capacity');
+    if (!open && !this.host.waitEngine.hasRoom(yieldAnsweredSlot(this.context.store, runId, answering, candidate => this.host.waitEngine.hasRoom(candidate)) ?? run)) refuse('capacity');
     const base: HumanWaitEntry = open ?? WAIT_KINDS.human.entry(turnId);
     const { context: _replaced, ...kept } = base;
     return this.host.waitEngine.open(runId, active, { ...kept, ...card }, OPEN_REGISTERED(undefined)).wait!;

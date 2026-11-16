@@ -14,20 +14,18 @@ ignores:
   - packages/cezar/src/workflows/run/**/*.testkit.ts
   - packages/cezar/src/workflows/run/run-memory.ts # The owner.
   - packages/cezar/src/workflows/run.ts # #active: the active-run registry; only activate and dropActive write it (ADR 0053).
-  - packages/cezar/src/workflows/run/auto-resume.ts # Timer handles; slice S5 (hearsay-tools/squawk#3662) moves them into LivenessTimers.
   - packages/cezar/src/workflows/run/continuation-acceptance.ts # successSuperseded compares the continuation token after its I/O, also after dispose.
-  - packages/cezar/src/workflows/run/family-reconciler.ts # Request deadline timers (slice S5, hearsay-tools/squawk#3662); family roots queued for one reconcile pass.
-  - packages/cezar/src/workflows/run/inbox-claims.ts # Timer handles; slice S5 (hearsay-tools/squawk#3662) moves them into LivenessTimers.
+  - packages/cezar/src/workflows/run/family-reconciler.ts # Family roots queued for one reconcile pass.
+  - packages/cezar/src/workflows/run/liveness-timers.ts # The owner of every liveness bound, keyed by kind, run and key; RunMemory's release clears a run's run scope (hearsay-tools/squawk#3662).
   - packages/cezar/src/workflows/run/live-session-state.ts # A session group on the ActiveRun: it goes with the ActiveRun at dropActive.
   - packages/cezar/src/workflows/run/maintenance-claims.ts # reclaiming: cleanup evidence that outlives an execution.
   - packages/cezar/src/workflows/run/run-line.ts # The scheduler indexes: busySlots and pump order and count them; dropActive calls line.forget.
   - packages/cezar/src/workflows/run/squawk-tools.ts # Tool calls that wait for the automation service, not per-run memory.
-  - packages/cezar/src/workflows/run/subagent-waits.ts # A session group on the ActiveRun; grace and retry timers (slice S5, hearsay-tools/squawk#3662).
+  - packages/cezar/src/workflows/run/subagent-waits.ts # A session group on the ActiveRun: it goes with the ActiveRun at dropActive.
   - packages/cezar/src/workflows/run/tracked-work.ts # Process work keyed by promise and session, not by run.
   - packages/cezar/src/workflows/run/usage-accounting.ts # The turn ids of one runner invocation, held by its step.
   - packages/cezar/src/workflows/run/wait-engine.ts # Keyed by wait id (ADR 0061).
   - packages/cezar/src/workflows/run/wait-registry.ts # Keyed by wait id (ADR 0061).
-  - packages/cezar/src/workflows/run/wake-retries.ts # Timer handles; slice S5 (hearsay-tools/squawk#3662) moves them into LivenessTimers.
   - packages/cezar/src/workflows/run/worker-executions.ts # One worker generation's execution, and proveRunTermination waiters.
   - packages/cezar/src/workflows/run/worker-orphans.ts # The orphan maps: each entry lives for one worker generation.
   - packages/cezar/src/workflows/run/worktree-autosave.ts # autosaveTasks: cleanup evidence that outlives an execution.

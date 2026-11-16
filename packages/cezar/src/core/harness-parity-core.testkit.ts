@@ -28,7 +28,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
-import type { AgentRunSpec, AgentEvent, AgentRunResult, AgentSession, RunnerId, SessionOptions } from './agent-runner.ts';
+import { RUNNER_IDS, type AgentRunSpec, type AgentEvent, type AgentRunResult, type AgentSession, type RunnerId, type SessionOptions } from './agent-runner.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
 import { runnersWhere, type RunnerFacts } from './runner-facts.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
@@ -686,10 +686,8 @@ export interface ParityExemption {
  * is the runner, not this table.
  */
 export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
-  ...(['claude', 'pi', 'cursor', 'omp'] as const).map(backend => ({
-    criterion: 'P1', backend, kind: 'scenario-unconstructible' as const,
-    reason: `${backend}'s native wire does not carry a native permission request that Squawk answers through the cockpit permission card. This cell checks that native request/response protocol; ordinary human questions remain covered by R26.`,
-  })),
+  ...exemptWhere('P1', 'scenario-unconstructible', facts => facts.nativePermission === 'none', backend =>
+    `${backend}'s native wire does not carry a native permission request that Squawk answers through the cockpit permission card. This cell checks that native request/response protocol; ordinary human questions remain covered by R26.`),
   ...([
     ['claude', 'Claude print mode settles every tool permission inside Claude under its headless --permission-mode and sends Squawk no MCP tool approval request; Squawk\'s own tools are pre-authorized through generated --allowedTools entries (R35).'],
     ['opencode', 'OpenCode sends no MCP-specific approval request: an ask before any tool call arrives as an ordinary permission.asked from a rule the user wrote, which P1 routes to the cockpit card (hearsay-tools/cezarion#1266).'],
@@ -698,28 +696,22 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     ['omp', 'OMP\'s RPC wire carries no tool approval request for Squawk to answer: tool admission is its --tools list and --config overlay; Squawk\'s tools reach OMP as an --extension admitted through --tools (R35), not as an MCP server.'],
   ] as const).map(([backend, reason]) => ({ criterion: 'P9', backend, kind: 'scenario-unconstructible' as const, reason })),
   {
-    criterion: 'P2', backend: 'claude', kind: 'scenario-unconstructible',
-    reason: "dontAsk (the default) denies unapproved tools without emitting a permission request, so no built-in default ask reaches Squawk to answer.",
-  },
-  {
     criterion: 'P2', backend: 'codex', kind: 'scenario-unconstructible',
     reason: "every app-server approval request comes from Codex's own approval policy or MCP tool approval mode, which Squawk leaves to Codex and P1 and P9 route to the human; the wire has no built-in ask that Squawk answers.",
   },
-  ...(['pi', 'cursor', 'omp'] as const).map(backend => ({
-    criterion: 'P2', backend, kind: 'scenario-unconstructible' as const,
-    reason: `${backend}'s native wire carries no permission request at all, so there is no built-in default ask for Squawk to answer.`,
-  })),
-  ...(['claude', 'pi', 'cursor', 'omp'] as const).flatMap(backend => { return ([
+  ...exemptWhere('P2', 'scenario-unconstructible', facts => facts.nativePermission === 'none', backend =>
+    `${backend}'s native wire carries no permission request at all, so there is no built-in default ask for Squawk to answer.`),
+  ...([
     ['P3', 'for the backend to settle itself'],
     ['P4', 'to outlive its turn'],
     ['P5', 'whose answer the backend could refuse'],
     ['P6', 'to arrive malformed'],
     ['P7', 'to hold input while Squawk classifies it'],
     ['P8', 'to arrive after its turn ended'],
-  ] as const).map(([criterion, situation]) => ({
-    criterion, backend, kind: 'scenario-unconstructible' as const,
-    reason: `${backend}'s native wire does not carry a native permission request that Squawk answers through the cockpit permission card, so there is no pending request ${situation}.`,
-  })); }),
+  ] as const).flatMap(([criterion, situation]) => exemptWhere(criterion, 'scenario-unconstructible', facts => facts.nativePermission === 'none', backend =>
+    `${backend}'s native wire does not carry a native permission request that Squawk answers through the cockpit permission card, so there is no pending request ${situation}.`)),
+  ...exemptWhere('P8', 'scenario-unconstructible', facts => facts.nativePermission === 'in-turn', () =>
+    'This wire sends a permission request only inside the turn it names, so none can arrive after that turn completed.'),
   {
     criterion: 'P5', backend: 'codex', kind: 'scenario-unconstructible',
     reason: 'Codex answers an approval with a JSON-RPC response written to app-server stdin. JSON-RPC sends no reply to a response, so the wire has no per-answer refusal: the write reaches the server, or the transport fails and the session ends.',
@@ -729,37 +721,30 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     reason: "A Codex approval request is already Codex's own decision to ask (its approval policy runs server-side), so Squawk shows the card on receipt with nothing to read first; there is no window between receipt and the card.",
   },
   {
-    criterion: 'P8', backend: 'codex', kind: 'scenario-unconstructible',
-    reason: 'Codex app-server sends an approval request only inside the turn it names (`turnId`), so none can arrive after that turn completed.',
-  },
-  {
     criterion: 'S29', backend: 'cursor', kind: 'scenario-unconstructible',
     reason: 'Cursor print writes the prompt to stdin once per turn and then closes stdin. It refuses agent input while busy and queues human follow-ups for a new per-turn child, so this admitted-turn/live-followup cell has no writable input transport to close.',
   },
-  ...(['S9', 'R12', 'R15'] as const).map(criterion => ({
-    criterion, backend: 'cursor' as const, kind: 'scenario-unconstructible' as const,
-    reason: 'Cursor 2026.10.01-e373342 print stream-json reports parent tool calls but no child-session transcript or child terminal frames; native delegation is suppressed for governed runs.',
-  })),
-  ...(['claude', 'codex', 'pi', 'cursor', 'omp'] as const).map(backend => ({
-    criterion: 'S25', backend, kind: 'scenario-unconstructible' as const,
-    reason: 'This runner speaks its native wire over the spawned process\'s stdio, so there is no listen phase between spawn and session: a start that exits before listening cannot be constructed, and an early exit is the crash path (S15–S18). hearsay-tools/cezarion#872 retries only `opencode serve`; other runners\' process starts are out of scope.',
-  })),
-  ...(['claude', 'codex', 'opencode', 'pi', 'cursor'] as const).map(backend => ({
+  // S9/R12/R15: a child session's work exists only where the wire nests it under its parent call.
+  ...exemptWhere('S9', 'scenario-unconstructible', facts => facts.childWork === 'none', () =>
+    'This wire carries no child session: a native subagent is a plain tool call on the parent session, so no child terminal signal exists that could end the parent turn.'),
+  ...exemptWhere('R12', 'scenario-unconstructible', facts => facts.childWork === 'none', () =>
+    'This wire carries no child session or child transcript, so no child message can arrive between the parent cezar_wait call and turn end.'),
+  ...exemptWhere('R15', 'scenario-unconstructible', facts => facts.childWork === 'none', () =>
+    'This wire carries no child session or child transcript, so no child item can arrive after the parent parks.'),
+  ...exemptWhere('S25', 'scenario-unconstructible', facts => facts.transport === 'stdio', () =>
+    'This runner speaks its native wire over the spawned process\'s stdio, so there is no listen phase between spawn and session: a start that exits before listening cannot be constructed, and an early exit is the crash path (S15–S18). hearsay-tools/cezarion#872 retries only a server start; stdio process starts are out of scope.'),
+  ...exceptRunner('omp').map(backend => ({
     criterion: 'S21', backend, kind: 'scenario-unconstructible' as const,
     reason: 'This native wire has no OMP get_state.messageCount response for an implicit autoResume. Fresh/start and explicit resume remain covered by S1/S3/S14 and spec-support rows.',
   })),
-  ...(['R44', 'R45'] as const).flatMap(criterion => { return (['claude', 'codex', 'pi', 'cursor', 'omp'] as const).map(backend => ({
+  ...(['R44', 'R45'] as const).flatMap(criterion => { return exceptRunner('opencode').map(backend => ({
     criterion, backend, kind: 'scenario-unconstructible' as const,
     reason: 'The OpenCode server-wide unscoped session.error UnknownError skill diagnostics (an unreadable skill file, or a skill with malformed YAML frontmatter) have no equivalent on this native wire. R2/R46 retain native provider failure coverage.',
   })); }),
-  ...(['H2'] as const).flatMap(criterion => { return (['claude', 'codex', 'pi', 'omp'] as const).map(backend => ({
-    criterion, backend, kind: 'capability-absent' as const,
-    reason: 'This wire writes or steers a mid-turn human follow-up immediately; discardQueuedMessages cannot unwrite it. OpenCode and Cursor queue and drop (H2 live rows).',
-  })); }),
-  ...(['claude', 'codex', 'pi', 'cursor', 'omp'] as const).map(backend => ({
-    criterion: 'F7', backend, kind: 'scenario-unconstructible' as const,
-    reason: 'This wire has no separate HTTP ACK retained after turn completion. Turn frames and the transport ACK share one stream, so a silent-tail turn cannot end while its agent-input ACK is still pending.',
-  })),
+  ...exemptWhere('H2', 'capability-absent', facts => facts.inputDelivery.humanInputAtTurnEnd !== 'always-held', () =>
+    'This wire writes or steers a mid-turn human follow-up immediately; discardQueuedMessages cannot unwrite it. A runner that holds every mid-turn human message until the turn ends queues and drops it (H2 live rows).'),
+  ...exemptWhere('F7', 'scenario-unconstructible', facts => facts.transport === 'stdio', () =>
+    'This wire has no separate HTTP ACK retained after turn completion. Turn frames and the transport ACK share one stream, so a silent-tail turn cannot end while its agent-input ACK is still pending.'),
   ...(['F8', 'F9'] as const).map(criterion => ({
     criterion, backend: 'cursor' as const, kind: 'scenario-unconstructible' as const,
     reason: 'Cursor print has no independent nudge ACK before native model work. It cannot acknowledge a silent nudge and then withhold or delay that turn; the native turn and no-progress cells exercise the available liveness bound.',
@@ -768,16 +753,10 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     criterion: 'N8', backend: 'cursor', kind: 'scenario-unconstructible',
     reason: 'Every Cursor print process emits a native init frame mapped to turn.started before model-work admission. The native no-progress rows exercise the timeout after that start; no turn-start-free acknowledged input can be constructed.',
   },
-  // #961 wire survey 2026-10-15: no hook lifecycle frame on these wires.
-  ...([
-    ['opencode', 'OpenCode 1.18.35 runs plugin hooks in-process and streams no hook lifecycle event over its SSE wire.'],
-    ['pi', 'Pi 1.0.4 runs extensions in-process; its RPC wire reports only extension_error, never a hook run.'],
-    ['omp', 'OMP 18.8.0 shares Pi\'s RPC wire: extensions run in-process and report only extension_error.'],
-    ['cursor', 'Cursor 2026.10.01-e373342 print stream-json carries no hook lifecycle frame.'],
-  ] as const).map(([backend, reason]) => ({
-    criterion: 'R77', backend, kind: 'scenario-unconstructible' as const, reason,
-  })),
-  ...(['claude', 'opencode', 'pi', 'cursor', 'omp'] as const).map(backend => ({
+  // hearsay-tools/cezarion#961 wire survey 2026-10-15; each runner's hookEvents comment names its wire.
+  ...exemptWhere('R77', 'scenario-unconstructible', facts => facts.hookEvents === 'none', () =>
+    'This wire carries no hook lifecycle frame: hooks run inside the harness, so no hook item can arrive after a park.'),
+  ...exceptRunner('codex').map(backend => ({
     criterion: 'F11', backend, kind: 'scenario-unconstructible' as const,
     reason: 'This wire has no native turn-start frame that reaches v2 after the nudge is sent; turn.started is synthetic inside sendAgentMessage and fires at nudge send, before the bound.',
   })),
@@ -788,10 +767,6 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     pi: 'Pi RPC asks through cezar_ask; its wire emits no native mid-turn ask.requested (A3/A4 cover the cezar_ask policy).',
     omp: 'OMP v18.4.11 plain `--mode rpc` never constructs the ask tool: sessionOptions.hasUI is true only for interactive or rpc-ui (src/main.ts) and AskTool.createIf returns null without it, so the native ask path cannot exist on the wire Squawk uses. Asks go through cezar_ask (A3/A4 cover the cezar_ask policy).',
   })),
-  {
-    criterion: 'R15', backend: 'pi', kind: 'scenario-unconstructible',
-    reason: 'Pi RPC has no child session or nested child transcript (rpc-lifecycle.ndjson); like S9/R12, post-park child items cannot be constructed on that wire.',
-  },
   {
     criterion: 'I1', backend: 'cursor', kind: 'scenario-unconstructible',
     reason: 'Cursor print runs one process per turn and writes its prompt to stdin once, so a running turn has no input channel. sendAgentMessage refuses while busy, and inputDelivery is boundary: input waits for the next exact-resume print process (#505).',
@@ -823,25 +798,6 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
   {
     criterion: 'S4', backend: 'cursor', kind: 'capability-absent',
     reason: 'Cursor print 2026.10.01-e373342 emits no token usage: its terminal result frame carries no usage or total_cost_usd (Cursor output-format reference; cursor-print-ui-mapper.ts header). Do not manufacture counts from text. Revisit when upstream emits telemetry.',
-  },
-  {
-    criterion: 'R12',
-    backend: 'pi',
-    kind: 'scenario-unconstructible',
-    reason:
-      "pi's RPC has no child session or child transcript: task tools run on the parent " +
-      'session (see `__fixtures__/pi/rpc-lifecycle.expected.json`), so no child message can ' +
-      'arrive between the parent cezar_wait call and turn-end.',
-  },
-  {
-    criterion: 'S9',
-    backend: 'pi',
-    kind: 'scenario-unconstructible',
-    reason:
-      "pi's RPC has no child session: a `task` tool is a plain tool call on the parent " +
-      'session (see `__fixtures__/pi/rpc-lifecycle.expected.json` — the task item carries no ' +
-      'parentItemId and no child transcript), so there is no child terminal signal that could ' +
-      'end the parent turn.',
   },
   // S11 (hearsay-tools/cezarion#2397): these wires have no answerable native ask; the `ask`
   // scenario calls cezar_ask, whose human wait the workflow holds input behind (R6), not the runner.
@@ -930,6 +886,17 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
 function exemptWhere(criterion: string, kind: ExemptionKind, matches: (facts: RunnerFacts) => boolean,
   reason: (backend: RunnerId) => string): ParityExemption[] {
   return runnersWhere(matches).map(backend => ({ criterion, backend, kind, reason: reason(backend) }));
+}
+
+/** The runners whose human-prompt hold ends when the wire reports the prompt read, before the
+ *  prompt's acknowledgement (`humanPromptHold`). */
+export function humanPromptReadReleases(): RunnerId[] {
+  return runnersWhere(facts => facts.humanPromptHold === 'consumption');
+}
+
+/** Every runner but `live`: a protocol quirk that only one runner's wire carries. */
+function exceptRunner(live: RunnerId): RunnerId[] {
+  return RUNNER_IDS.filter(backend => backend !== live);
 }
 
 /** A runner-specific reason; a runner the facts select without one fails the table at load. */

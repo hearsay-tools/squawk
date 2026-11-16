@@ -4,13 +4,15 @@ import { randomUUID } from 'node:crypto';
 
 import { expect, it } from 'vitest';
 
+import { runnersWhere } from './runner-facts.ts';
+
 import { promptFor, waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 
 const delivered = (input: object, stored: { consumedAt?: string | undefined; awaitingRead?: true | undefined } | undefined) =>
   ({ ...input, deliveredAt: expect.any(String), ...(stored?.consumedAt ? { consumedAt: expect.any(String) } : {}),
     ...(stored?.awaitingRead ? { awaitingRead: true } : {}) });
-for (const backend of ['claude', 'codex', 'opencode', 'pi', 'omp'] as const) {
+for (const backend of runnersWhere(facts => facts.inputDelivery.mode === 'steer')) {
   it(`${backend} transport acceptance remains delivered when the accepted turn subsequently reports a provider failure`, async () => {
     await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId, parentRunId }) => {
       manager.enqueueOwnedRun(runId);

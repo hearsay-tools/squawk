@@ -28,6 +28,7 @@ import { githubRefsQuerySchema } from '@open-mercato/cezar-contract/github-reque
 import { commitQuerySchema } from '@open-mercato/cezar-contract/query-requests';
 import { imageMimeType } from '@open-mercato/cezar-contract/image-path';
 import { providerForActiveRun } from '@open-mercato/cezar-contract/active-provider';
+import { RUNNER_COCKPIT_FACTS, cockpitRunnersWhere } from '@open-mercato/cezar-contract/runner-facts';
 import { defined } from '../core/defined.ts';
 import { isAbsoluteHostPath } from '../core/host-path.ts';
 import { resolveArchiveOnMerge, resolveGlobalArchiveOnMerge } from '../archive-on-merge-setting.ts';
@@ -232,9 +233,8 @@ import {
   type ResolvedAgentProfile,
 } from '../workspace/agent-profiles.ts';
 import { PROFILE_CAPABLE_PROVIDERS, profileAgentDir, profileEnv, selectsByProfileName, supportsProfiles } from '../core/agent-profiles.ts';
-import { quoteExecutable, shellQuote, withEnvPrefix } from '../core/shell-env.ts';
-import { resolveCursorExecutable } from '../core/cursor-model-catalog.ts';
-import { resolveOmpExecutable } from '../core/omp-model-catalog.ts';
+import { shellQuote, withEnvPrefix } from '../core/shell-env.ts';
+import { resumeCommand } from '../core/runner-cli.ts';
 import {
   allocateProjectSlug,
   normalizeProjectTags,
@@ -1138,30 +1138,33 @@ export function createApp(deps: ServerDeps) {
   // app in tests does not, so tests never spawn the probes here): the cache
   // fills while the browser is still downloading the bundle, so its first
   // `GET /api/health` reads a warm value instead of the cold ~1 s compute.
+  const pushedCatalogRunners = cockpitRunnersWhere(facts => facts.modelCatalogDelivery === 'pushed');
   if (deps.socketHub) {
     void refreshHealth();
-    void modelCatalog.get('cursor');
+    for (const runner of pushedCatalogRunners) void modelCatalog.get(runner);
   }
   // Authenticated SSE carries completion to remote cockpits too. Reuse the HTTP
   // contract; no CLI output, paths or account data enter this payload.
   modelCatalog.onRefresh((result) => {
-    if (result.runner === 'cursor') workspaceEvents.emit('model-catalog', result);
+    if (RUNNER_COCKPIT_FACTS[result.runner].modelCatalogDelivery === 'pushed') workspaceEvents.emit('model-catalog', result);
   });
-  deps.socketHub?.registerTopic('models:cursor', {
-    snapshot: async () => modelCatalog.getCached('cursor'),
-    start: (publish) => {
-      let previous = '';
-      const off = modelCatalog.onRefresh((result) => {
-        if (result.runner !== 'cursor') return;
-        const body = JSON.stringify(result);
-        if (body !== previous) { previous = body; publish(result); }
-      });
-      // Only active pickers keep discovery warm. Last unsubscribe stops all work.
-      const timer = setInterval(() => { void modelCatalog.get('cursor'); }, 5 * 60_000);
-      timer.unref?.();
-      return () => { clearInterval(timer); off(); };
-    },
-  });
+  for (const runner of pushedCatalogRunners) {
+    deps.socketHub?.registerTopic(`models:${runner}`, {
+      snapshot: async () => modelCatalog.getCached(runner),
+      start: (publish) => {
+        let previous = '';
+        const off = modelCatalog.onRefresh((result) => {
+          if (result.runner !== runner) return;
+          const body = JSON.stringify(result);
+          if (body !== previous) { previous = body; publish(result); }
+        });
+        // Only active pickers keep discovery warm. Last unsubscribe stops all work.
+        const timer = setInterval(() => { void modelCatalog.get(runner); }, 5 * 60_000);
+        timer.unref?.();
+        return () => { clearInterval(timer); off(); };
+      },
+    });
+  }
   /**
    * Warm the whole of Squawk's agent knowledge — the three discovered defaults AND every extra
    * account — so no reader ever pays the first shell-out.
@@ -1204,9 +1207,10 @@ export function createApp(deps: ServerDeps) {
     // validates, including Claude stream-json discovery (#89).
     .get('/models', queryZodValidator(modelDiscoveryQuerySchema, { message: `runner must be ${MODEL_DISCOVERY_RUNNERS.slice(0, -1).join(', ')}, or ${MODEL_DISCOVERY_RUNNERS.at(-1)}` }), async (c) => {
       const query = { data: c.req.valid('query') };
-      return c.json(query.data.runner === 'cursor'
-        ? modelCatalog.getCached('cursor')
-        : await modelCatalog.get(query.data.runner));
+      const { runner } = query.data;
+      return c.json(RUNNER_COCKPIT_FACTS[runner].modelCatalogDelivery === 'pushed'
+        ? modelCatalog.getCached(runner)
+        : await modelCatalog.get(runner));
     });
 
   /**
@@ -2968,8 +2972,7 @@ export function createApp(deps: ServerDeps) {
     const sessionStep = [...run.steps].reverse().find(step => step.sessionId);
     const sessionId = sessionStep?.sessionId;
     const backend = sessionStep?.backend ?? run.runner ?? 'claude';
-    // Runners whose take-over command depends on a server-side binary override (CEZ_*_BIN).
-    const command = (backend === 'cursor' || backend === 'omp') && sessionId ? resumeCommand(backend, sessionId) : null;
+    const command = sessionId ? resumeCommand(backend, sessionId) : null;
     return { ...run, ...(usage ? { usage } : {}), ...(command ? { cliResumeCommand: command } : {}),
       ...(finishBlocked !== undefined ? { finishBlocked } : {}) };
   };
@@ -4946,45 +4949,4 @@ function resolveWebDir(): string {
   const here = dirname(fileURLToPath(import.meta.url));
   // here = <pkg>/dist/server (built) or <pkg>/src/server (tsx dev).
   return join(here, '..', '..', 'web');
-}
-
-/**
- * The session id shape every backend actually mints: UUIDs (claude/codex) and
- * the CLIs' own slug-ish ids. No character here is special to bash, AppleScript
- * OR cmd.exe, and a leading `-` is refused so the id can never be read as an
- * option by the CLI it is passed to (same dash-guard as `isSafeGitRef`, #431).
- * Bounded, like every other input that reaches a spawned process.
- */
-const SAFE_SESSION_ID = /^[A-Za-z0-9._][A-Za-z0-9._-]{0,199}$/;
-
-/** True for session ids safe to splice into the take-over command (see above). */
-export function isSafeSessionId(sessionId: string): boolean {
-  return SAFE_SESSION_ID.test(sessionId);
-}
-
-/**
- * Build native session takeover commands. Legacy/undefined backend defaults to Claude. Refuse
- * unrecognized session-id shapes rather than embedding unsafe or platform-misquoted values.
- */
-export function resumeCommand(runner: string | undefined, sessionId: string): string | null {
-  if (!isSafeSessionId(sessionId)) return null;
-  switch (runner) {
-    case 'codex':
-      return `codex resume ${sessionId}`;
-    case 'opencode':
-      return `opencode --session ${sessionId}`;
-    case 'cursor': {
-      const executable = quoteExecutable(resolveCursorExecutable(), process.platform);
-      return executable === null ? null : `${executable} --resume ${sessionId}`;
-    }
-    case 'pi':
-      return `pi --session ${sessionId}`;
-    case 'omp': {
-      // CEZ_OMP_BIN may name a different install than `omp` on PATH; resume with the configured one.
-      const executable = quoteExecutable(resolveOmpExecutable(), process.platform);
-      return executable === null ? null : `${executable} --resume ${sessionId}`;
-    }
-    default:
-      return `claude --resume ${sessionId}`;
-  }
 }

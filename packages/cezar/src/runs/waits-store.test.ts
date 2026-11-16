@@ -362,6 +362,19 @@ describe('wait checkpoints', () => {
     expect(store.commitOutcome(id, { kind: 'answered' })).toEqual({ committed: false, answered: [], settled: [] });
   });
 
+  // hearsay-tools/squawk#1293: an answer settles the agent's waits shown up to its question, the
+  // waits not shown yet and Squawk's own wait; an agent's wait shown for a later question stays open.
+  it('an answered outcome with an askSeq leaves a wait shown for a later question open', () => {
+    const earlier = humanEntry({ askSeq: 3 });
+    const unshown = humanEntry();
+    const squawk = humanEntry({ source: WAIT_SOURCE.cezar, via: WAIT_VIA.budget, askSeq: 5 });
+    const later = humanEntry({ askSeq: 7 });
+    for (const wait of [earlier, unshown, squawk, later]) store.commitWait(id, wait);
+    expect(store.commitOutcome(id, { kind: 'answered', askSeq: 3 }).answered).toEqual([earlier.id, unshown.id, squawk.id]);
+    expect(store.getRun(id)!.waits).toEqual([later]);
+    expect(store.commitOutcome(id, { kind: 'answered', askSeq: 7 }).answered).toEqual([later.id]);
+  });
+
   it('a human wait round-trips through close and reopen with its askSeq', () => {
     const human = humanEntry();
     store.commitWait(id, human);

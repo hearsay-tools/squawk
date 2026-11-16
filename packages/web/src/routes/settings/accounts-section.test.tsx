@@ -891,7 +891,7 @@ describe('the add-account dialog', () => {
     expect(screen.getByLabelText<HTMLSelectElement>('Agent').value).toBe('pi')
     expect(dirField().placeholder).toBe('~/.pi-second/agent')
     // pi takes any folder, like Claude and Codex, so it carries no omp rule.
-    expect(document.querySelector('[data-slot="add-account-omp-hint"]')).toBeNull()
+    expect(document.querySelector('[data-slot="add-account-folder-hint"]')).toBeNull()
   })
 
   it('tells an omp user the folder is an omp profile, before the server has to', async () => {
@@ -902,11 +902,11 @@ describe('the add-account dialog', () => {
 
     await openDialog('omp')
     expect(dirField().placeholder).toBe('~/.omp/profiles/second')
-    expect(document.querySelector('[data-slot="add-account-omp-hint"]')?.textContent).toContain('~/.omp/profiles/')
+    expect(document.querySelector('[data-slot="add-account-folder-hint"]')?.textContent).toContain('~/.omp/profiles/')
 
     // Switching agent inside the dialog takes the rule away with it.
     fireEvent.change(screen.getByLabelText<HTMLSelectElement>('Agent'), { target: { value: 'claude' } })
-    expect(document.querySelector('[data-slot="add-account-omp-hint"]')).toBeNull()
+    expect(document.querySelector('[data-slot="add-account-folder-hint"]')).toBeNull()
     expect(dirField().placeholder).toBe('~/.claude-second')
   })
 

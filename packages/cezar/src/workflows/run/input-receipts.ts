@@ -101,17 +101,18 @@ export function commitBundledDelivery(context: RunModuleContext, runId: string, 
 
 /** The fallback reply's charge, the question it answers and the reply it delivers are one commit
  *  (hearsay-tools/cezarion#1805): no restart reads the charge without the reply. */
-export function commitRoutedAnswer(context: RunModuleContext, runId: string, state: ActiveRun, delivered: readonly string[], fallback: boolean, maxAutoContinues: number): void {
+export function commitRoutedAnswer(context: RunModuleContext, runId: string, state: ActiveRun, answer: { askSeq: number; delivered: readonly string[] }, fallback: boolean, maxAutoContinues: number): void {
   const spent = fallback ? (context.store.getRun(runId)?.automaticWakes ?? 0) + 1 : undefined;
-  commitBundledDelivery(context, runId, state, delivered, [{ kind: 'answered' }, ...chargedIf(spent)]);
+  commitBundledDelivery(context, runId, state, answer.delivered, [{ kind: 'answered', askSeq: answer.askSeq }, ...chargedIf(spent)]);
   if (spent !== undefined) context.store.appendEvent(runId, { type: 'note', message: `${WORKER_FALLBACK_REPLY_NOTE} (${spent}/${maxAutoContinues})` });
 }
 
 /** One commit (hearsay-tools/cezarion#1805): the human waits a message answers, the messages bundled
  *  with it and a deferred message's queue entry. A refused queue entry interrupts the session:
  *  stdin and disk cannot transact, so it stays for conservative recovery. */
-export function commitAnswer(context: RunModuleContext, runId: string, state: ActiveRun, bundle: { inputs: AgentInput[] } | undefined, messageId: string | undefined): void {
-  const refused = commitBundledDelivery(context, runId, state, bundle?.inputs.map(input => input.id) ?? [], answerOutcomes(messageId, context.store.getRun(runId)?.automaticWakes));
+export function commitAnswer(context: RunModuleContext, runId: string, state: ActiveRun, answer: { askSeq: number | undefined; bundle: { inputs: AgentInput[] } | undefined }, messageId: string | undefined): void {
+  const { askSeq, bundle } = answer;
+  const refused = commitBundledDelivery(context, runId, state, bundle?.inputs.map(input => input.id) ?? [], answerOutcomes(messageId, context.store.getRun(runId)?.automaticWakes, askSeq));
   if (!refused || !messageId) return;
   state.inputState.recordInputError(`human input delivery checkpoint failed: ${refused}`);
   state.liveSession.session?.interrupt();

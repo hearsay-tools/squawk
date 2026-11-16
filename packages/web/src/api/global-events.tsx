@@ -18,6 +18,7 @@ import {
   type WorkspaceRunEvent,
 } from './events'
 import { runnerModelCatalogResponseSchema } from '@open-mercato/cezar-api-client/contract/workspace'
+import { RUNNER_COCKPIT_FACTS, cockpitRunnersWhere } from '@open-mercato/cezar-api-client/contract/runner-facts'
 import { apiPath, getApiScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { healthPayloadSchema } from './health-payload'
 import { queryKeys, useHealthSubscription, workspaceQueryKeys } from './queries'
@@ -149,13 +150,17 @@ function invalidateRepoBranchesSoon(queryClient: QueryClient): void {
   }, REPO_BRANCHES_COALESCE_MS)
 }
 
+/** The runners whose model catalog the server pushes; their cached catalogs follow the stream. */
+const PUSHED_CATALOG_KEYS = cockpitRunnersWhere(facts => facts.modelCatalogDelivery === 'pushed')
+  .map(runner => workspaceQueryKeys.models(runner))
+
 function reconcile(queryClient: QueryClient, signal?: AbortSignal, periodic = false): Promise<void> {
   if (signal?.aborted) return Promise.resolve()
   // Cancel just this reconciliation's demanded families when the document hides or its
   // finite recovery deadline expires. Query functions receive TanStack's own AbortSignal.
   const keys = [queryKeys.runs.all, workspaceQueryKeys.runsIndex, workspaceQueryKeys.projects,
     queryKeys.health, queryKeys.worktrees, queryKeys.repoBranches,
-    workspaceQueryKeys.providerStatus, workspaceQueryKeys.models('cursor')]
+    workspaceQueryKeys.providerStatus, ...PUSHED_CATALOG_KEYS]
   const cancel = () => { for (const key of keys) void queryClient.cancelQueries({ queryKey: key }) }
   signal?.addEventListener('abort', cancel, { once: true })
   return trackSseReconcile(() => {
@@ -183,7 +188,7 @@ function reconcile(queryClient: QueryClient, signal?: AbortSignal, periodic = fa
       // Branch classes follow run state (issue 08): a finish, a delete or a reclaim moves them.
       queryClient.invalidateQueries({ queryKey: queryKeys.repoBranches }),
       queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.providerStatus }),
-      reconcileBackgroundQuery(queryClient, workspaceQueryKeys.models('cursor')),
+      ...PUSHED_CATALOG_KEYS.map(key => reconcileBackgroundQuery(queryClient, key)),
       // GitHub edits never enter this stream. Reconnect (including server restart) must
       // invalidate every project's list, leaving inactive caches stale until revisited.
       // Restrict this to list keys: comments/checks/search have separate cache policies.
@@ -667,7 +672,7 @@ export function useGlobalEvents(usage: UsageStore, url: string = SSE_URL): void 
           trackSseReconcile(() => reconcileRunLists(queryClient))
           // Discovery can finish between the cold HTTP read and SSE connection.
           // Cancel that read and reconcile once after the completion listener is attached.
-          for (const key of [queryKeys.health, workspaceQueryKeys.models('cursor')]) {
+          for (const key of [queryKeys.health, ...PUSHED_CATALOG_KEYS]) {
             void queryClient.cancelQueries({ queryKey: key }).then(() => {
               if (!disposed) void queryClient.invalidateQueries({ queryKey: key })
             })
@@ -783,8 +788,8 @@ export function useGlobalEvents(usage: UsageStore, url: string = SSE_URL): void 
         let payload: unknown
         try { payload = JSON.parse((event as MessageEvent<string>).data) } catch { return }
         const result = runnerModelCatalogResponseSchema.safeParse(payload)
-        if (!result.success || result.data.runner !== 'cursor') return
-        const key = workspaceQueryKeys.models('cursor')
+        if (!result.success || RUNNER_COCKPIT_FACTS[result.data.runner].modelCatalogDelivery !== 'pushed') return
+        const key = workspaceQueryKeys.models(result.data.runner)
         void queryClient.cancelQueries({ queryKey: key })
         queryClient.setQueryData(key, result.data)
       })

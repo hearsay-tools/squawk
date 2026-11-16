@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { findLibraries, installTailwindConfig, loadLibraries, scriptLibrary, TAILWIND_V3_COMPAT } from './report-libraries'
+import { findLibraries, installTailwindConfig, loadLibraries, scriptLibrary, TAILWIND_V3_COMPAT, TAILWIND_V3_CONFIG_SHIM } from './report-libraries'
 
 describe('scriptLibrary', () => {
   it.each([
@@ -100,6 +100,22 @@ describe('installTailwindConfig', () => {
     const tailwind = install()
     tailwind.config = { darkMode }
     expect(document.head.firstElementChild!.textContent).toBe(`${variant}@theme {\n\n}`)
+  })
+
+  it('skips theme keys that name an Object.prototype member (hearsay-tools/squawk#2890)', () => {
+    const tailwind = install()
+    const own = '"toString":{"a":"1"},"constructor":{"a":"1"},"__proto__":{"a":"1"}'
+    tailwind.config = JSON.parse(`{"theme":{${own},"extend":{${own}}}}`)
+    expect(document.head.firstElementChild!.textContent).toBe('@theme {\n\n}')
+  })
+
+  it('runs as the serialized shim, with no module scope, for a nonempty theme (hearsay-tools/squawk#2890)', () => {
+    document.head.innerHTML = '<script id="shim"></script>'
+    Object.defineProperty(document, 'currentScript', { configurable: true, value: document.getElementById('shim') })
+    new Function(TAILWIND_V3_CONFIG_SHIM)()
+    const tailwind = (globalThis as unknown as { tailwind: { config: unknown } }).tailwind
+    tailwind.config = JSON.parse('{"theme":{"colors":{"ink":"#111"},"constructor":{"a":"1"},"extend":{"spacing":{"18":"4.5rem"},"__proto__":{"a":"1"}}}}')
+    expect(document.head.firstElementChild!.textContent).toBe(['@theme {', '--color-*: initial;', '--color-ink: #111;', '--spacing-18: 4.5rem;', '}'].join('\n'))
   })
 
   it('tolerates a config that is not an object', () => {

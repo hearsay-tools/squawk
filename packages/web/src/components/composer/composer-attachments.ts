@@ -4,6 +4,7 @@ import {
   isImageMediaType,
 } from '@open-mercato/cezar-api-client/contract/attachments'
 import type { AttachmentInput } from '@open-mercato/cezar-api-client'
+import { ownLookup } from '@open-mercato/cezar-api-client/contract/own-lookup'
 
 /**
  * The composer's attachment intake — paperclip, ⌘V paste, and drag-drop all funnel here, exactly
@@ -50,7 +51,7 @@ const EXTENSION_MEDIA_TYPES: Record<string, string> = {
 export function attachmentMediaType(file: File): string | null {
   if (isAttachmentMediaType(file.type)) return file.type
   const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
-  return EXTENSION_MEDIA_TYPES[ext] ?? null
+  return ownLookup(EXTENSION_MEDIA_TYPES, ext) ?? null
 }
 
 /** A pending attachment: the wire shape, plus what the composer's row needs to show it. */

@@ -414,14 +414,15 @@ export type RunRecord = z.infer<typeof runRecordSchema>;
 /**
  * What `GET /runs` and `GET /runs/:id` answer: the stored record plus host-derived fields.
  * The live `usage` sample is absent for finished runs and wherever `ps` yields nothing.
- * Cursor resume commands use the server executable override. Finish eligibility is computed
+ * The take-over command uses the server's executable override. Finish eligibility is computed
  * only for detail reads. These fields are never persisted or attached by mutation routes.
  */
 export const apiRunSchema = runRecordSchema.extend({
   /** Read-only GET /runs/:id verdict: null permits Finish, a string explains refusal.
    * Absent on lists, stored records and mutation responses; absence is not permission. */
   finishBlocked: z.string().nullable().optional(),
-  /** Server-resolved Cursor CLI command, including the configured executable. Never persisted. */
+  /** The server's take-over command for the run's latest session, with the executable the server
+   *  resolves. Absent without a session or for an id the server refuses. Never persisted. */
   cliResumeCommand: z.string().optional(),
   usage: processUsageSchema.optional(),
 });

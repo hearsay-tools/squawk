@@ -19,6 +19,7 @@ import { canProceedWithRun } from './run-guards.ts';
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
 import { monitorsLiveWorkers, type CompletionGateHost } from './completion-gate.ts';
 import type { RunModuleContext, SettledTurn } from './types.ts';
+import { LivenessTimers } from './liveness-timers.ts';
 import type { HumanWaits } from './human-waits.ts';
 import type { RunLine } from './run-line.ts';
 import type { WaitRegistry } from './wait-registry.ts';
@@ -44,7 +45,8 @@ interface TurnSettlerHost {
 export class TurnSettler {
   constructor(private readonly context: RunModuleContext, private readonly host: TurnSettlerHost,
     private readonly idleTimeoutMs: number, private readonly maxAutoContinues: number,
-    private readonly completionWillWait: string, private readonly scheduleWakeupMaxSeconds: number) {}
+    private readonly completionWillWait: string, private readonly scheduleWakeupMaxSeconds: number,
+    private readonly timers = new LivenessTimers()) {}
 
   /** The `cezar_done` this session accepted since its last turn end, taken by this turn end: a
    *  later turn must call it again. */
@@ -61,7 +63,9 @@ export class TurnSettler {
 
   /** Goal achieved (agent contract, #347): the summary `cezar_done` gave as a note, the closing
    *  event naming what declared it, every open wait cancelled (DONE ranks above every wait), and
-   *  the session closes instead of parking, so the run completes and frees its slot. */
+   *  the session closes instead of parking, so the run completes and frees its slot. A session
+   *  whose wire can raise a permission request after the turn closes through `endWhenQuiet`, so
+   *  that request still shows its card (hearsay-tools/squawk#1680). */
   private closeAsDone(runId: string, state: ActiveRun, session: AgentSession | undefined): void {
     const close = state.boundary.doneClose;
     // A workflow step that is not the last completes, and the next step starts (hearsay-tools/cezarion#1620).
@@ -70,7 +74,8 @@ export class TurnSettler {
     if (close?.summary) this.context.store.appendEvent(runId, { type: 'note', message: close.summary });
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: step ? 'step complete — session closed' : 'goal achieved — session closed', via: close?.via ?? 'cezar_done' });
     this.host.waitEngine.cancelAll(runId);
-    session?.end();
+    if (session?.endWhenQuiet) session.endWhenQuiet();
+    else session?.end();
   }
 
   /**
@@ -395,7 +400,8 @@ export class TurnSettler {
   armIdleTimer(runId: string, state: ActiveRun): void {
     clearIdleTimer(state);
     transitionTurnBoundary(state, { kind: 'idle-expired', phase: 'reset', session: state.liveSession.session });
-    const timer = setTimeout(() => {
+    // Not bound to a session: the expiry closes the session that is open when it fires.
+    const timer = this.timers.arm({ kind: 'idle-close', runId, delayMs: this.idleTimeoutMs }, () => {
       if (state.liveSession.session?.open && !state.liveSession.cancelled) {
         transitionTurnBoundary(state, { kind: 'idle-expired', phase: 'close', session: state.liveSession.session });
         this.context.store.appendEvent(runId, {
@@ -404,9 +410,8 @@ export class TurnSettler {
         });
         state.liveSession.session.end();
       }
-    }, this.idleTimeoutMs);
+    });
     transitionTurnBoundary(state, { kind: 'idle-expired', phase: 'armed', session: state.liveSession.session, timer });
-    state.boundary.idleTimer!.unref?.();
   }
 
   /** The turn-end tail's park for the user: `waiting` with the idle timer, no slot. A result
@@ -422,10 +427,17 @@ export class TurnSettler {
 
   /** A park for the user: native subagents still running in this session keep it and its slot
    *  beside the question; with none, the run leaves the monitoring pool and its idle close is armed. */
-  holdChildrenOrArmIdle(runId: string, state: ActiveRun): void {
+  private holdChildrenOrArmIdle(runId: string, state: ActiveRun): void {
     transitionTurnBoundary(state, { kind: 'wait-wake-admitted', phase: 'hold-children', session: state.liveSession.session, held: this.host.subagentWaits.holdsLiveSubagents(runId) || undefined });
     if (state.boundary.heldForSubagents) this.host.line.joinPool(runId);
     else { this.host.leaveMonitoringPool(runId); this.armIdleTimer(runId, state); }
+  }
+
+  /** A native ask parks mid-turn as a park for the user; a hold for its children ends at the
+   *  subagent deadline, since no turn end opens a subagent wait for them. */
+  holdNativeAsk(runId: string, state: ActiveRun): void {
+    this.holdChildrenOrArmIdle(runId, state);
+    this.host.subagentWaits.boundNativeAskHold(runId, state);
   }
 
   /**

@@ -1,4 +1,5 @@
 import { defined } from '@open-mercato/cezar-api-client/contract/defined'
+import { ownLookup } from '@open-mercato/cezar-api-client/contract/own-lookup'
 import type { HighlighterCore } from 'shiki/core'
 
 import { highlighterLoads, highlighterSettledForTests } from './highlighter-loads'
@@ -122,8 +123,8 @@ const PLAIN = new Set(['', 'plaintext', 'text', 'txt', 'plain'])
 /** The canonical grammar id for a fence language, or null when we don't carry one. */
 export function canonicalLang(lang: string): string | null {
   const key = lang.trim().toLowerCase()
-  if (key in LANG_LOADERS) return key
-  return ALIASES[key] ?? null
+  if (Object.hasOwn(LANG_LOADERS, key)) return key
+  return ownLookup(ALIASES, key) ?? null
 }
 
 export function isPlainLang(lang: string): boolean {
@@ -143,7 +144,7 @@ export function langForPath(path: string): string | null {
   if (dot <= 0) return null
   const ext = name.slice(dot + 1).toLowerCase()
   const extra: Record<string, string> = { mts: 'typescript', cts: 'typescript', htm: 'html' }
-  return canonicalLang(extra[ext] ?? ext)
+  return canonicalLang(ownLookup(extra, ext) ?? ext)
 }
 
 // ---- singleton state --------------------------------------------------------------------------
