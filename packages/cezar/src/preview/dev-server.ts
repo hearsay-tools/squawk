@@ -150,14 +150,17 @@ export class DevServer extends EventEmitter {
       closeSync(logFd);
       this.finish('exited');
     };
-    let argv: [string, string[]] = ['/bin/sh', ['-c', this.server.command]];
-    // Admission holds on every platform: on Windows the scope wraps nothing yet, but still refuses
-    // a start once destroy has begun.
+    const windows = process.platform === 'win32';
+    let argv: [string, string[]] = windows ? [process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', this.server.command]]
+      : ['/bin/sh', ['-c', this.server.command]];
+    // A worker's server starts in its scope on every platform (a Windows Job Object or a cgroup,
+    // ADR 0032), and the scope refuses a start once destroy has begun.
     if (this.scope) {
       try { argv = this.scope.command(argv[0], argv[1]); } catch (error) { refuse(error); return; }
     }
-    const child = process.platform === 'win32'
+    const child = windows && !this.scope
       ? spawn(this.server.command, { cwd, env, shell: true, windowsHide: true, stdio: ['ignore', logFd, logFd] })
+      : windows ? spawn(argv[0], argv[1], { cwd, env, windowsHide: true, windowsVerbatimArguments: /cmd(\.exe)?$/i.test(argv[0]), stdio: ['ignore', logFd, logFd] })
       : spawnDetached(argv[0], argv[1], { cwd, env, stdio: ['ignore', logFd, logFd] });
     const pid = child.pid;
     if (process.platform !== 'win32' && this.scope && pid !== undefined) {

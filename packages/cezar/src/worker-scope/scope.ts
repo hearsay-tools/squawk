@@ -3,12 +3,13 @@
 import { z } from 'zod';
 
 /** How a host contains a worker. `cgroup`: a private Linux cgroup, which every descendant inherits.
+ * `job`: a Windows Job Object, which every descendant joins at creation and cannot leave.
  * `groups`: the worker's own POSIX process groups, which a detached descendant can leave. */
-export type ScopeBackend = 'cgroup' | 'groups';
+export type ScopeBackend = 'cgroup' | 'job' | 'groups';
 /** `contained`: stopping the scope ends every descendant. `scoped`: it ends the recorded groups
  * only; a descendant that left them survives. */
 export type ScopeGuarantee = 'contained' | 'scoped';
-export const GUARANTEE: Readonly<Record<ScopeBackend, ScopeGuarantee>> = { cgroup: 'contained', groups: 'scoped' };
+export const GUARANTEE: Readonly<Record<ScopeBackend, ScopeGuarantee>> = { cgroup: 'contained', job: 'contained', groups: 'scoped' };
 
 /** Recorded groups kept per worker. A dead group is dropped before a new one is added. */
 export const SCOPE_GROUP_CAP = 64;
@@ -24,6 +25,8 @@ export const scopeRecordSchema = z.object({
   workerId: z.string().uuid(),
   cgroups: z.array(z.string().startsWith('/sys/fs/cgroup/').max(4096)).max(SCOPE_CGROUP_CAP),
   groups: z.array(recordedGroupSchema).max(SCOPE_GROUP_CAP),
+  /** Windows Job Object names; a record written before the `job` backend has none. */
+  jobs: z.array(z.string().regex(/^Local\\squawk-worker-[0-9a-f-]{36}$/)).max(1).default([]),
 }).strict();
 export type ScopeRecord = z.infer<typeof scopeRecordSchema>;
 
