@@ -213,21 +213,32 @@ export function continuationDefSteps(store: RunStore, record: RunRecord | undefi
 
 /**
  * The definition step a continuation extends: the one owning the continued session, else the
- * chain's last agent step — a synthetic `continue-N` owner and a run with no recorded session
- * extend the run's tail. Callers pass the continued session, never only the resumable one, so a
- * Continue that opens a fresh session keeps its step (hearsay-tools/cezarion#2991). Shared by
- * `continueRun` (which identity to hold the override against) and `runContinuation` (which
- * tools, model, effort and account the turn gets).
+ * chain's last agent step. A run with no recorded session, and a synthetic `continue-N` owner
+ * saved without the step it continues, extend the run's tail. Callers pass the continued
+ * session, never only the resumable one, so a Continue that opens a fresh session keeps its step
+ * (hearsay-tools/cezarion#2991). Shared by `continueRun` (which identity to hold the override
+ * against) and `runContinuation` (which tools, model, effort and account the turn gets).
  */
 export function continuationDefStep(store: RunStore, record: RunRecord | undefined, sessionId: string | undefined): WorkflowStepDef | undefined {
   const defSteps = continuationDefSteps(store, record);
   if (defSteps === undefined) return undefined;
-  const owningStep = sessionId === undefined ? undefined : record?.steps.find((s) => s.sessionId === sessionId);
-  if (sessionId !== undefined && owningStep === undefined) return undefined;
+  if (sessionId !== undefined && !record?.steps.some((s) => s.sessionId === sessionId)) return undefined;
+  return continuedDefStep(defSteps, record, sessionId) ?? [...defSteps].reverse().find((s) => stepKind(s) === 'agent');
+}
+
+/**
+ * The definition step a Continue continues when the run names one: the failed step of a `resume`
+ * cursor, else the step owning the continued session. A synthetic `continue-N` owner names the
+ * step it recorded at admission (`continuesStepId`, ADR 0064, hearsay-tools/squawk#3024).
+ * Undefined when only the tail fallback of `continuationDefStep` would answer.
+ */
+export function continuedDefStep(defSteps: readonly WorkflowStepDef[], record: RunRecord | undefined, sessionId: string | undefined): WorkflowStepDef | undefined {
   const resumed = record?.workflowCursor?.mode === 'resume' ? record.workflowCursor.stepId : undefined;
   const ciSource = resumed === undefined ? undefined : defSteps.find(step => step.id === resumed && stepKind(step) === 'agent');
   if (ciSource && record?.steps.find(step => step.id === ciSource.id)?.status === 'failed') return ciSource;
-  return defSteps.find((s) => s.id === owningStep?.id) ?? [...defSteps].reverse().find((s) => stepKind(s) === 'agent');
+  const owningStep = sessionId === undefined ? undefined : record?.steps.find((s) => s.sessionId === sessionId);
+  const extended = owningStep?.synthetic === 'continuation' ? owningStep.continuesStepId : owningStep?.id;
+  return defSteps.find((s) => s.id === extended);
 }
 
 /**

@@ -247,6 +247,39 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
     expect(continued).toMatchObject({ model: 'gpt-5.1-codex', toolGrant: { kind: 'inherited', tools: ['Read'] } });
     expect(continued.env?.CODEX_HOME).toBe(codexHome);
   }, 60_000);
+  // hearsay-tools/squawk#3024: the fresh Codex session of that Continue belongs to the synthetic
+  // `continue-1`. When its process ends, the next Continue still runs as `implement`, under its
+  // pinned Codex identity, not as the chain's last agent step `review` on Claude.
+  it('continues a crashed synthetic continuation of a mixed chain\'s codex step as that step', async () => {
+    const codexHome = join(f.root, 'codex-account'); mkdirSync(codexHome); vi.stubEnv('CODEX_HOME', codexHome);
+    writeFileSync(join(codexHome, 'config.toml'), 'model = "gpt-5.1-codex"');
+    const dir = join(f.root, '.ai/cezar/workflows'); mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'mixed.yaml'), ['name: mixed', 'steps:',
+      '  - id: implement', '    prompt: "Implement: {{task}}"', '    runner: codex', '    allowedTools: [Read]',
+      '  - id: review', '    prompt: "Review: {{task}}"', '    runner: claude'].join('\n'));
+    const a = await acceptIdentityWorker(undefined, undefined, { workflow: 'mixed' });
+    const workerId = a.child.workerId;
+    await launchAccepted(a, 'queued'); await until(() => sessions.length === 2);
+    sessions[1]!.finish();
+    expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
+    expect(f.manager.continueRun(workerId, { text: 'again' })).toEqual({ ok: true });
+    await until(() => sessions.length === 3);
+    sessions[2]!.emit({ type: 'session', sessionId: 'continue-thread' });
+    await until(() => f.store.getRun(workerId)?.steps.find(step => step.id === 'continue-1')?.sessionId === 'continue-thread');
+    expect(f.store.getRun(workerId)?.steps.find(step => step.id === 'continue-1')).toMatchObject({ synthetic: 'continuation', continuesStepId: 'implement' });
+    // continue-1's process ends before `review` starts. The next Continue resumes its session.
+    sessions[2]!.finish();
+    expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
+    expect(f.manager.continueRun(workerId, { text: 'again' })).toEqual({ ok: true });
+    await until(() => sessions.length === 4 || f.store.getRun(workerId)?.status === 'failed');
+    expect(f.store.getRun(workerId)?.error).toBeUndefined();
+    const continued = sessions[3]!.spec;
+    expect(continued).toMatchObject({ resume: true, sessionId: 'continue-thread', model: 'gpt-5.1-codex', toolGrant: { kind: 'inherited', tools: ['Read'] } });
+    expect(continued.effort).toBeUndefined();
+    expect(continued.env?.CODEX_HOME).toBe(codexHome);
+    expect(continued.env?.CLAUDE_CONFIG_DIR).not.toBe(a.home);
+    expect(f.store.getRun(workerId)?.steps.find(step => step.id === 'continue-2')).toMatchObject({ synthetic: 'continuation', continuesStepId: 'implement' });
+  }, 60_000);
   it('launches a later step under its own account even after the first step\'s account home is gone (#465 review)', async () => {
     const codexHome = join(f.root, 'codex-account'); mkdirSync(codexHome); vi.stubEnv('CODEX_HOME', codexHome);
     const dir = join(f.root, '.ai/cezar/workflows'); mkdirSync(dir, { recursive: true });

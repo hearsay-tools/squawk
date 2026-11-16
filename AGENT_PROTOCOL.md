@@ -202,6 +202,19 @@ Autosave process attribution is observation, not OS containment: `autosave-holde
 `continuedSessionId` and `resumableSessionId` in `workflows/run/launch-read-resolver.ts` own
 which step a Continue continues and which session it resumes.
 `workflows/native-session-continue.test.ts` drives every runner through them.
+`continuationDefStep` in `delegation/execution-identity.ts` names the workflow step that the
+continued session's owner runs as: its skill, grants, model, effort and worker identity.
+
+| State | Trigger | Who or what fires it | Behavior at shipped defaults |
+| --- | --- | --- | --- |
+| latest session owned by workflow step `implement` | Continue | the user, a parent, recovery | runs as `implement`; the synthetic `continue-N` records `continuesStepId: implement` |
+| latest session owned by `continue-N` with `continuesStepId: implement` (for example its process crashed) | Continue | the user, a parent, recovery | runs as `implement`, on a mixed-runner chain too (hearsay-tools/squawk#3024) |
+| latest session owned by a saved `continue-N` without `continuesStepId` | Continue | the user, a parent, recovery | runs as the chain's last agent step, as before; the new `continue-N` records no `continuesStepId` |
+| a `resume` cursor on failed step `implement` | Continue | the user, a parent, recovery | runs as `implement` and records it |
+
+Only `workflows/continuation-admission.ts` writes `continuesStepId`, once, when it admits the
+Continue (ADR 0064). `delegation/provision-intent-catalog.test.ts` and
+`workflows/continuation-tools.test.ts` cover the first three rows.
 
 ### Governed delegation controls (D1)
 

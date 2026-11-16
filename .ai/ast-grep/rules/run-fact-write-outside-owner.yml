@@ -6,6 +6,8 @@ message: >-
   .ai/specs/2026-11-15-run-lifecycle-facts.md). `workflowCursor` and `parkReason` are written only
   by the exits' fields() in runs/run-exits.ts: for the cursor, name the step and the mode in the
   ExitCall (`{ stepId, cursor: 'start' | 'resume' }`) of the exit you move the run with.
+  `continuesStepId` is written only by workflows/continuation-admission.ts, once, on the synthetic
+  step a Continue admits.
 files:
   - packages/cezar/src/**/*.ts
   - packages/contract/src/**/*.ts
@@ -17,8 +19,10 @@ ignores:
   # The owner: each exit's fields() writes the cursor (cursorFields, enteredStep, succeeded) and the
   # park reason.
   - packages/cezar/src/runs/run-exits.ts
+  # The owner of `continuesStepId`: `nextStep` records it on the synthetic step it admits.
+  - packages/cezar/src/workflows/continuation-admission.ts
 utils:
-  run-fact: { regex: '^(workflowCursor|parkReason)$' }
+  run-fact: { regex: '^(workflowCursor|continuesStepId|parkReason)$' }
 rule:
   all:
     - any:

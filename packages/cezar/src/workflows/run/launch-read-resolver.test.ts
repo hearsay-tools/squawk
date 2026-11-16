@@ -204,6 +204,22 @@ it('holds the failing workflow step, not an earlier one a retry already recovere
   // A later Continue's failure, after the recovered workflow finished, is no workflow step's.
   expect(atContinue.heldStep(heldRun({ build: STEP_STATUS.failed, review: STEP_STATUS.done, 'continue-2': STEP_STATUS.failed }, 'continue-2'))).toBeUndefined();
 });
+// hearsay-tools/squawk#3024: the position a synthetic continuation resumes is the step it recorded.
+it('reads the workflow position from the step the current continuation continues', () => {
+  const position = (run: ReturnType<typeof makeRunRecord>) => atContinue.waitingWorkflowStepIndex(run, atContinue.isSyntheticContinuation, atContinue.ciWorkflowResumeStepIndex);
+  const continuation = (over: Partial<ReturnType<typeof makeStepState>>) =>
+    makeStepState({ id: 'continue-2', name: 'Continue', kind: STEP_KIND.agent, status: STEP_STATUS.running, synthetic: 'continuation', ...over });
+  const run = (build: (typeof STEP_STATUS)[keyof typeof STEP_STATUS], current: ReturnType<typeof makeStepState>) => {
+    const held = heldRun({ build, review: STEP_STATUS.pending }, current.id);
+    return { ...held, steps: [...held.steps.map(step => ({ ...step, error: step.id === 'build' ? 'boom' : undefined })), current] };
+  };
+  // A failed `build` is neither waiting, running nor interrupted: only the record names it.
+  expect(position(run(STEP_STATUS.failed, continuation({ continuesStepId: 'build' })))).toBe(0);
+  // A saved continuation without the record keeps the status scan.
+  expect(position(run(STEP_STATUS.failed, continuation({})))).toBe(-1);
+  // A done step is no position: a Continue of a finished chain resumes none.
+  expect(position(run(STEP_STATUS.done, continuation({ continuesStepId: 'build' })))).toBe(-1);
+});
 it('gives a fresh retry the held step\'s own prompt', () => {
   const run = { ...heldRun({ build: STEP_STATUS.done, review: STEP_STATUS.failed }, 'review'), workflowCursor: { stepId: 'review', mode: 'resume' as const } };
   expect(atContinue.task(run)).toBe('Review this change: add the parser. Do not edit files.');

@@ -7,6 +7,8 @@ valid:
   - 'const salvaged = { workflowCursor: contractRunRecordSchema.shape.workflowCursor.catch(undefined) }'
   - "const row = z.object({ parkReason: z.enum(['turn', 'hold', 'closing-wakes']).optional() })"
   - 'const reason = run.parkReason'
+  - 'const row = z.object({ continuesStepId: z.string().optional() })'
+  - 'const extended = owningStep.continuesStepId ?? owningStep.id'
   # Reads, comparisons, destructuring and type members.
   - "const resumed = run.workflowCursor?.mode === 'resume' ? run.workflowCursor.stepId : undefined"
   - 'if (run.workflowCursor) start(run.workflowCursor.stepId)'
@@ -25,3 +27,6 @@ invalid:
   - "record.workflowCursor = { stepId: 'review', mode: 'resume' }"
   - "this.context.store.updateRun(runId, { parkReason: 'turn' })"
   - 'const parked = { ...run, parkReason }'
+  - "this.context.store.updateStep(runId, 'continue-1', { continuesStepId: 'review' })"
+  - "store.addStep(runId, { id: 'continue-2', name: 'Continue', kind: 'agent', synthetic: 'continuation', continuesStepId })"
+  - "step.continuesStepId = 'implement'"

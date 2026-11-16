@@ -11,7 +11,7 @@ import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../../core/agent-m
 import { ModelIdentityError, formatModelIdentity, normalizeModelForBackend } from '../../core/model-identity.ts';
 import { RUNNER_FACTS } from '../../core/runner-facts.ts';
 import { parseDelegationEffort } from '../../delegation/effort.ts';
-import { boundWorkerAccountEnv, captureWorkerAccount, continuationDefStep, ownedWorkflow, workerIdentity, workerStepIdentity, WorkerIdentityError, type WorkerAccountBinding, type WorkerStepIdentity } from '../../delegation/execution-identity.ts';
+import { boundWorkerAccountEnv, captureWorkerAccount, continuationDefStep, continuationDefSteps, continuedDefStep, ownedWorkflow, workerIdentity, workerStepIdentity, WorkerIdentityError, type WorkerAccountBinding, type WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import { DelegationPolicyError } from '../../delegation/policy.ts';
 import type { QueuedMessage, RunEvent, RunRecord, RunStore, StepState } from '../../runs/store.ts';
 import { makeRunTitle } from '../../runs/run-title.ts';
@@ -225,7 +225,7 @@ const skillSourceReads = {
 export const atTaskHead = { executionPayload, queuedPayload, resumedPayload, acceptedWorkflowFields, recordedRunner, defaultRunner, runnerless, heldFor, accountFor, workerStep, executionInput, executionWorkflow, requeueJob, baseBranch, worktreeSetup: continuationWorktreeSetup, jobInput, jobWorkflow, resumedJob, storedWorkflow, interruptedIndex, interruptedDefinition, heldAccount, worktree: inputWorktree, workflowName, images: acceptedImages, task: acceptedTask, skillHint: acceptedSkillHint, ownedJob, verifyIdentity: verifyWorkerIdentity, autonomous: inputAutonomous, reviveWorkflow, queuedResumeSession, recoveryInput: queuedRecoveryInput, registry: discoverRunSkills, acceptedRunFields, acceptInput, modelIdentity: taskModelIdentity, config: readLaunchConfig, runner: taskRunner, systemPrompt: taskSystemPrompt, hydrateQueuedInput, attachments: readPersistedAttachments };
 export const atStepOpen = { afterStepPayload, sessionPayload, sessionWaitPayload, retryIndex, workflowLength, workflowStep, workflowSlice, workflowChainNote, runner: stepRunner, prompt: stepPrompt, skill: stepSkill, toolGrant: continuationToolGrant, enabledSkills: skillSourceReads.enabledSkills, disabledSkills: readDisabledTeamSkills, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, teamSkills, filterSkills: filterDisabledTeamSkills, contextVariables, model: stepModel, effort: stepEffort, openingInputs, agentEnvForStep, workerStep };
 export const atLiveInput = { disabledSkills: readDisabledTeamSkills, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, teamSkills, filterSkills: filterDisabledTeamSkills, queuedMessages: queuedMessageSource, taskAttachmentUrls, enabledSkills: skillSourceReads.enabledSkills };
-export const atContinue = { task: retriedTask, heldStep: heldWorkflowStepId, heldRunner: heldStepRunner, resumedStep, storedWorkflow, workflowStep, workflowLength, agentEnvForStep, workerStep, registry: discoverRunSkills, enabledSkills: skillSourceReads.enabledSkills, disabledSkills: readDisabledTeamSkills, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, teamSkills, filterSkills: filterDisabledTeamSkills, isPrintTransport: printSessionTransport, skill: continuedSkill, checkpoint: continuedCheckpoint, prompt: continuedPrompt, rejoinLine: rejoinContinuationLine, verifyIdentity: verifyWorkerIdentity, waitingBeforeFinalWorkflowStep, waitingWorkflowStepIndex, continuationNextStep, ciWorkflowResumeStepIndex, workflowStartIndex, resumableSessionId, continuedSessionId, isSyntheticContinuation, owningStep: continuationOwningStep, definitionStep: continuationDefStep, toolGrant: continuationToolGrant, extraSystemPrompt: continuedSystemPrompt, recordedProfile: continuedProfileId, definitionId: continuationStepId, model: continuationModel, effort: continuationEffort, runner: continuationRunner, hydrateQueuedContinuation, config: readLaunchConfig, worktreeSetup: continuationWorktreeSetup, opening: continuationOpening, openingImages: continuationImages };
+export const atContinue = { task: retriedTask, heldStep: heldWorkflowStepId, heldRunner: heldStepRunner, resumedStep, storedWorkflow, workflowStep, workflowLength, agentEnvForStep, workerStep, registry: discoverRunSkills, enabledSkills: skillSourceReads.enabledSkills, disabledSkills: readDisabledTeamSkills, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, teamSkills, filterSkills: filterDisabledTeamSkills, isPrintTransport: printSessionTransport, skill: continuedSkill, checkpoint: continuedCheckpoint, prompt: continuedPrompt, rejoinLine: rejoinContinuationLine, verifyIdentity: verifyWorkerIdentity, waitingBeforeFinalWorkflowStep, waitingWorkflowStepIndex, continuationNextStep, ciWorkflowResumeStepIndex, workflowStartIndex, resumableSessionId, continuedSessionId, isSyntheticContinuation, owningStep: continuationOwningStep, definitionStep: continuationDefStep, continuedStep: continuedStepId, toolGrant: continuationToolGrant, extraSystemPrompt: continuedSystemPrompt, recordedProfile: continuedProfileId, definitionId: continuationStepId, model: continuationModel, effort: continuationEffort, runner: continuationRunner, hydrateQueuedContinuation, config: readLaunchConfig, worktreeSetup: continuationWorktreeSetup, opening: continuationOpening, openingImages: continuationImages };
 
 function hydrateQueuedInput(context: RunModuleContext, readAttachments: AttachmentReader, runId: string, input: StartRunInput): StartRunInput {
     const run = context.store.getRun(runId);
@@ -565,6 +565,11 @@ function continuationToolGrant(identity: WorkerStepIdentity | undefined, definit
 function continuedSystemPrompt(record: RunRecord | undefined): string | undefined { return record?.systemPrompt; }
 function continuedProfileId(owningStep: RunRecord['steps'][number] | undefined): string | undefined { return owningStep?.profileId; }
 function continuationStepId(toolsStep: WorkflowStepDef | undefined): string | undefined { return toolsStep?.id; }
+/** The workflow step a Continue admitted now continues, when the run names one (ADR 0064). */
+function continuedStepId(store: RunStore, record: RunRecord, sessionId: string | undefined): string | undefined {
+  const defSteps = continuationDefSteps(store, record);
+  return defSteps === undefined ? undefined : continuedDefStep(defSteps, record, sessionId)?.id;
+}
 
 function contextVariables(run: RunRecord): { task: string; 'workflow.name': string } {
   return { task: run.task, 'workflow.name': run.workflow };
@@ -624,6 +629,8 @@ function waitingWorkflowStepIndex(run: RunRecord, isSyntheticContinuation: Synth
   // synthetic continuation replacing currentStepId and wait delivery retiring the wait.
   const ciSource = ciWorkflowResumeStepIndex(run);
   if (ciSource >= 0) return ciSource;
+  const recorded = continuedWorkflowStepIndex(run, steps, isSyntheticContinuation);
+  if (recorded >= 0) return recorded;
   const interrupted = steps.findIndex((step) => {
     const persisted = run.steps.find((candidate) => candidate.id === step.id);
     return stepKind(step) === 'agent' && persisted?.status === 'failed' && persisted.error === 'interrupted — cezar process exited during the run';
@@ -637,6 +644,16 @@ function waitingWorkflowStepIndex(run: RunRecord, isSyntheticContinuation: Synth
     if (persisted?.status === 'waiting' || persisted?.status === 'running') return index;
   }
   return -1;
+}
+
+/** The step the current synthetic continuation recorded at admission (ADR 0064,
+ *  hearsay-tools/squawk#3024), unless that step is done: a Continue of a finished chain resumes no
+ *  position. A synthetic step saved without the record answers -1, so the status scan decides. */
+function continuedWorkflowStepIndex(run: RunRecord, steps: readonly { id: string }[], isSyntheticContinuation: SyntheticContinuationRead): number {
+  const current = run.steps.find(step => step.id === run.currentStepId);
+  const continued = current && isSyntheticContinuation(run, current) ? current.continuesStepId : undefined;
+  if (continued === undefined || run.steps.find(step => step.id === continued)?.status === 'done') return -1;
+  return steps.findIndex(step => step.id === continued);
 }
 
 /** The workflow step a Continue's done starts: the run's `start` cursor (hearsay-tools/squawk#1621),
