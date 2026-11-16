@@ -1,3 +1,4 @@
+import { latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
 import { runCheckout, preparePublishCheckout, reclaimCheckoutError } from './run-checkout.ts';
 import { adoptFallbackControl, protectFallbackRun, runArtifactDirectory } from './project-run-files.ts';
 import { deleteSavedWorkflow } from './workflow-files.ts';
@@ -2965,7 +2966,7 @@ export function createApp(deps: ServerDeps) {
   // nothing. The stored record itself is never touched.
   const withUsage = (run: RunRecord, finishBlocked?: string | null): ApiRun => {
     const usage = currentUsage(run.id);
-    const sessionStep = [...run.steps].reverse().find(step => step.sessionId);
+    const sessionStep = latestSessionStep(run.steps);
     const sessionId = sessionStep?.sessionId;
     const backend = sessionStep?.backend ?? run.runner ?? 'claude';
     // Runners whose take-over command depends on a server-side binary override (CEZ_*_BIN).
@@ -3472,7 +3473,7 @@ export function createApp(deps: ServerDeps) {
       const project = c.get('project');
       const checkout = openHandoffCheckout(c, '; resume the session from a machine that has the checkout');
       if ('status' in checkout) return c.json(checkout.body, checkout.status);
-      const sessionStep = [...checkout.run.steps].reverse().find((s) => s.sessionId);
+      const sessionStep = latestSessionStep(checkout.run.steps);
       const sessionId = sessionStep?.sessionId;
       if (!sessionId) return c.json({ error: 'no agent session to resume' }, 409);
       const backend = sessionStep?.backend ?? checkout.run.runner ?? 'claude';

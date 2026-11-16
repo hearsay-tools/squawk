@@ -4,6 +4,7 @@ import { workerInputRecipeSchema, type WorkerInputRecipe } from '@open-mercato/c
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { realpathSync, statSync } from 'node:fs';
 import { z } from 'zod';
+import { latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
 import { ACCOUNT_LAYOUT, profileEnv, selectsByProfileName, supportsProfiles } from '../core/agent-profiles.ts';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { namedAccountUnavailable, type ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
@@ -228,16 +229,18 @@ export function continuationDefStep(store: RunStore, record: RunRecord | undefin
 
 /**
  * The definition step a Continue continues when the run names one: the failed step of a `resume`
- * cursor, else the step owning the continued session. A synthetic `continue-N` owner names the
- * step it recorded at admission (`continuesStepId`, ADR 0064, hearsay-tools/squawk#3024).
+ * cursor, else the step owning the continued session. When the step that holds that session last
+ * is a synthetic `continue-N`, it names the step it recorded at admission (`continuesStepId`,
+ * ADR 0064, hearsay-tools/squawk#3024); otherwise the first step that holds the session owns it.
  * Undefined when only the tail fallback of `continuationDefStep` would answer.
  */
 export function continuedDefStep(defSteps: readonly WorkflowStepDef[], record: RunRecord | undefined, sessionId: string | undefined): WorkflowStepDef | undefined {
   const resumed = record?.workflowCursor?.mode === 'resume' ? record.workflowCursor.stepId : undefined;
   const ciSource = resumed === undefined ? undefined : defSteps.find(step => step.id === resumed && stepKind(step) === 'agent');
   if (ciSource && record?.steps.find(step => step.id === ciSource.id)?.status === 'failed') return ciSource;
-  const owningStep = sessionId === undefined ? undefined : record?.steps.find((s) => s.sessionId === sessionId);
-  const extended = owningStep?.synthetic === 'continuation' ? owningStep.continuesStepId : owningStep?.id;
+  const holders = sessionId === undefined ? [] : record?.steps.filter((s) => s.sessionId === sessionId) ?? [];
+  const latest = latestSessionStep(holders);
+  const extended = latest?.synthetic === 'continuation' && latest.continuesStepId !== undefined ? latest.continuesStepId : holders[0]?.id;
   return defSteps.find((s) => s.id === extended);
 }
 

@@ -1,3 +1,4 @@
+import { latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
 import type { Home } from '../home/home.ts';
 import { fallbackProjectWriteError } from '../project-paths.ts';
 import { join } from 'node:path';
@@ -93,7 +94,7 @@ export async function openRunCli(
   const blocked = await providerActionError([cliRunner]);
   if (blocked) return c.json({ error: blocked }, 409);
   // A usage-limit hold has no session until its resume (hearsay-tools/cezarion#1236), so it resumes.
-  const sessionStep = !checkout.resumeAllowed ? undefined : [...run.steps].reverse().find((s) => s.sessionId);
+  const sessionStep = !checkout.resumeAllowed ? undefined : latestSessionStep(run.steps);
   const sessionId = sessionStep?.sessionId;
   // An id resumeCommand refuses (open-mercato/cezar#431) degrades to a fresh CLI in the worktree,
   // exactly like a run that never recorded a session.

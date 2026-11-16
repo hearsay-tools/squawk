@@ -1,3 +1,4 @@
+import { latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
 import type { Home } from '../home/home.ts';
 import type { RunnerId } from '../core/agent-runner.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
@@ -275,7 +276,7 @@ export class ContinuationChecks {
 
   private checkIdentity(run: RunRecord) {
     try {
-      const session = [...run.steps].reverse().find(s => s.sessionId)?.sessionId;
+      const session = latestSessionStep(run.steps)?.sessionId;
       const value = this.reads.identity(run, session);
       return identityRefusal(value, this.opts) ?? { ok: true as const, value, continuedStep: this.reads.continuedStep(run, session) };
     } catch (error) {
@@ -335,7 +336,7 @@ export class ContinuationChecks {
   }
 
   private checkSession(run: RunRecord, identity: WorkerStepIdentity | undefined) {
-    const sessionStep = [...run.steps].reverse().find(s => s.sessionId);
+    const sessionStep = latestSessionStep(run.steps);
     // Command/check steps may have changed the repo; only an untouched workflow can restart.
     const untouched = this.reads.untouched(run);
     const absent = sessionRefusal(sessionStep, untouched, (run.delegation?.role === 'worker' && !!this.conversation) || this.opts.freshSession === true);

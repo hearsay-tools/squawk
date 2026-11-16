@@ -1,3 +1,4 @@
+import { latestSessionStep } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { useRunCacheWriter } from '@/api/use-run-cache-writer'
 import { runAddress } from '@/api/run-address'
 import { CpuIcon, GaugeIcon, TerminalIcon } from '@/components/design-icons'
@@ -82,7 +83,7 @@ function resolveContinueAccount(
   // `sessionId` and `profileId` are a pair, so that step is the account a resume reattaches to and
   // therefore the row that is selected until the user picks another. A run from before accounts
   // existed recorded none and ran under the discovered one.
-  const sessionStep = [...run.steps].reverse().find((step) => step.sessionId)
+  const sessionStep = latestSessionStep(run.steps)
   const runAccount =
     sessionStep?.profileId
     ?? run.agentProfile

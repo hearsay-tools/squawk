@@ -209,16 +209,20 @@ it('reads the workflow position from the step the current continuation continues
   const position = (run: ReturnType<typeof makeRunRecord>) => atContinue.waitingWorkflowStepIndex(run, atContinue.isSyntheticContinuation, atContinue.ciWorkflowResumeStepIndex);
   const continuation = (over: Partial<ReturnType<typeof makeStepState>>) =>
     makeStepState({ id: 'continue-2', name: 'Continue', kind: STEP_KIND.agent, status: STEP_STATUS.running, synthetic: 'continuation', ...over });
-  const run = (build: (typeof STEP_STATUS)[keyof typeof STEP_STATUS], current: ReturnType<typeof makeStepState>) => {
-    const held = heldRun({ build, review: STEP_STATUS.pending }, current.id);
-    return { ...held, steps: [...held.steps.map(step => ({ ...step, error: step.id === 'build' ? 'boom' : undefined })), current] };
+  const run = (review: Partial<ReturnType<typeof makeStepState>>, current: ReturnType<typeof makeStepState>) => {
+    const held = heldRun({ build: STEP_STATUS.failed, review: STEP_STATUS.pending }, current.id);
+    return { ...held, steps: [...held.steps.map(step => step.id === 'build' ? { ...step, error: 'boom' } : { ...step, ...review }), current] };
   };
   // A failed `build` is neither waiting, running nor interrupted: only the record names it.
-  expect(position(run(STEP_STATUS.failed, continuation({ continuesStepId: 'build' })))).toBe(0);
+  expect(position(run({}, continuation({ continuesStepId: 'build' })))).toBe(0);
   // A saved continuation without the record keeps the status scan.
-  expect(position(run(STEP_STATUS.failed, continuation({})))).toBe(-1);
-  // A done step is no position: a Continue of a finished chain resumes none.
-  expect(position(run(STEP_STATUS.done, continuation({ continuesStepId: 'build' })))).toBe(-1);
+  expect(position(run({}, continuation({})))).toBe(-1);
+  // Once a later workflow step started, the run is past `build`: the Continue resumes no position,
+  // so its done does not run `review` again.
+  expect(position(run({ status: STEP_STATUS.done, startedAt: '2026-11-16T00:00:02Z' }, continuation({ continuesStepId: 'build' })))).toBe(-1);
+  // A done step is no position either: a Continue of a finished chain resumes none.
+  expect(position({ ...run({}, continuation({ continuesStepId: 'build' })), steps: run({}, continuation({ continuesStepId: 'build' })).steps
+    .map(step => step.id === 'build' ? { ...step, status: STEP_STATUS.done } : step) })).toBe(-1);
 });
 it('gives a fresh retry the held step\'s own prompt', () => {
   const run = { ...heldRun({ build: STEP_STATUS.done, review: STEP_STATUS.failed }, 'review'), workflowCursor: { stepId: 'review', mode: 'resume' as const } };

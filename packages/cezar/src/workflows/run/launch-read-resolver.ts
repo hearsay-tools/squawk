@@ -1,4 +1,5 @@
 /** Owns launch source selection. Call each narrow operation at its original phase boundary. */
+import { latestSessionStep } from '@open-mercato/cezar-contract/run-predicates';
 import type { Home } from '../../home/home.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { isImageAttachmentName } from '@open-mercato/cezar-contract/attachments';
@@ -647,13 +648,18 @@ function waitingWorkflowStepIndex(run: RunRecord, isSyntheticContinuation: Synth
 }
 
 /** The step the current synthetic continuation recorded at admission (ADR 0064,
- *  hearsay-tools/squawk#3024), unless that step is done: a Continue of a finished chain resumes no
- *  position. A synthetic step saved without the record answers -1, so the status scan decides. */
+ *  hearsay-tools/squawk#3024), while the run has not passed it: that step is not done and no
+ *  later workflow step has started. A Continue of a step the run is past resumes no position, so
+ *  its done does not run the rest of the chain again. A synthetic step saved without the record
+ *  answers -1, so the status scan decides. */
 function continuedWorkflowStepIndex(run: RunRecord, steps: readonly { id: string }[], isSyntheticContinuation: SyntheticContinuationRead): number {
   const current = run.steps.find(step => step.id === run.currentStepId);
   const continued = current && isSyntheticContinuation(run, current) ? current.continuesStepId : undefined;
-  if (continued === undefined || run.steps.find(step => step.id === continued)?.status === 'done') return -1;
-  return steps.findIndex(step => step.id === continued);
+  const index = continued === undefined ? -1 : steps.findIndex(step => step.id === continued);
+  const persisted = (id: string) => run.steps.find(step => step.id === id);
+  const passed = persisted(continued ?? '')?.status === 'done' ||
+    steps.slice(index + 1).some(later => persisted(later.id)?.startedAt !== undefined);
+  return index >= 0 && !passed ? index : -1;
 }
 
 /** The workflow step a Continue's done starts: the run's `start` cursor (hearsay-tools/squawk#1621),
@@ -743,7 +749,7 @@ function printSessionConfirmed(run: RunRecord | undefined, events: RunEvent[], s
  *  effort and worker identity the Continue runs with, also when the Continue opens a fresh session
  *  (hearsay-tools/cezarion#2991). Undefined when no earlier step recorded a session. */
 function continuedSessionId(record: RunRecord | undefined, continuationStepId: string, resumeSessionId: string | undefined): string | undefined {
-  return resumeSessionId ?? [...record?.steps ?? []].reverse().find(step => step.id !== continuationStepId && step.sessionId)?.sessionId;
+  return resumeSessionId ?? latestSessionStep(record?.steps ?? [], continuationStepId)?.sessionId;
 }
 
 function isSyntheticContinuation(run: RunRecord, step: StepState): boolean {
