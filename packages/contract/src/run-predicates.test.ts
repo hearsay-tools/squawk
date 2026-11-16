@@ -151,3 +151,20 @@ describe('latestSession', () => {
     expect(latestSession({ steps: [] })).toEqual({ sessionId: undefined, backend: 'claude', profileId: undefined });
   });
 });
+
+// hearsay-tools/squawk#3715: work on a removed runner after the latest session leaves nothing to hand off.
+describe('latestSession after work on a removed runner', () => {
+  const steps = [
+    { id: 'plan', sessionId: 'plan-session', backend: 'claude' as const, startedAt: '2026-01-01T10:00:00.000Z' },
+    { id: 'build', removedBackend: 'cursor', startedAt: '2026-01-01T10:01:00.000Z' },
+  ];
+
+  it('names no session when a removed-runner step started after the latest session', () => {
+    expect(latestSession({ steps, runner: 'claude' }).sessionId).toBeUndefined();
+  });
+
+  it('keeps the latest session when it started after the removed-runner step', () => {
+    const later = [...steps, { id: 'review', sessionId: 'review-session', backend: 'codex' as const, startedAt: '2026-01-01T10:02:00.000Z' }];
+    expect(latestSession({ steps: later, runner: 'claude' })).toMatchObject({ sessionId: 'review-session', backend: 'codex' });
+  });
+});

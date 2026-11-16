@@ -12,7 +12,7 @@ import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-api-clie
 import { toRunSummary } from '@open-mercato/cezar-api-client/contract/runs'
 import { createQueryClient } from './query-client'
 import { runsIndexSync } from './runs-index-sync'
-import { queryKeys, useHealth, useRunnerModels, useRun, useRuns, useProjectRuns, useProviderStatus, workspaceQueryKeys } from './queries'
+import { queryKeys, useHealth, useRun, useRuns, useProjectRuns, useProviderStatus, workspaceQueryKeys } from './queries'
 import { TaskQuickList } from '../components/task-quick-list'
 import { HandoffAction } from '../routes/task-thread/handoff-action'
 import { RunNotifications } from '../components/run-notifications'
@@ -1101,7 +1101,7 @@ describe('useGlobalEvents — run events', () => {
     client.setQueryData<ApiRun>(queryKeys.runs.detail('r1'), runRecord('r1', { runner: 'claude' }))
     const invalidate = vi.spyOn(client, 'invalidateQueries')
     const { source } = mount()
-    source.emit('run-summary', stampedRun(runRecord('r1', { runner: 'claude', status: RUN_STATUS.done, steps: [{ id: 'task', name: 'Task', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0, backend: 'cursor', sessionId: 's1' }] })))
+    source.emit('run-summary', stampedRun(runRecord('r1', { runner: 'claude', status: RUN_STATUS.done, steps: [{ id: 'task', name: 'Task', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0, backend: 'codex', sessionId: 's1' }] })))
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.runs.detail('r1'), exact: true, refetchType: 'none' })
   })
 
@@ -1342,7 +1342,7 @@ describe('useGlobalEvents — provider status', () => {
       version: 'test', repoRoot: 'repo', repo: null, defaultRunner: 'claude', forge: null,
       projects: [], bootProject: BOOT,
       capabilities: { localHandoff: false, settingsAdmin: false, remoteSettingsAdmin: false, automations: false, preview: false, tokenMetrics: true, tokenUsageMetrics: true, costMetrics: true },
-      checks: [{ name: 'cursor', available: true }],
+      checks: [{ name: 'codex', available: true }],
     }
     client.removeQueries({ queryKey: queryKeys.health })
     const initial = deferredResponse()
@@ -1364,7 +1364,7 @@ describe('useGlobalEvents — provider status', () => {
       version: 'old', repoRoot: 'repo', repo: null, defaultRunner: 'claude', forge: null,
       projects: [], bootProject: BOOT,
       capabilities: { localHandoff: false, settingsAdmin: false, remoteSettingsAdmin: false },
-      checks: [{ name: 'cursor', available: true }],
+      checks: [{ name: 'codex', available: true }],
     }
     client.removeQueries({ queryKey: queryKeys.health })
     vi.mocked(fetch).mockReturnValue(deferredResponse().promise)
@@ -1373,33 +1373,6 @@ describe('useGlobalEvents — provider status', () => {
     source.emit('health', JSON.stringify(health))
     await waitFor(() => expect(result.current.data?.checks).toEqual(health.checks))
     expect(result.current.data?.capabilities.preview).toBeUndefined()
-  })
-
-  it('replaces a pending cold Cursor HTTP response after SSE reconnect', async () => {
-    const { source } = mount()
-    await act(async () => source.open())
-    const initial = deferredResponse()
-    const fresh = { runner: 'cursor', models: [{ id: 'auto', label: 'Auto', description: '' }], source: 'cache', stale: false }
-    vi.mocked(fetch).mockReturnValueOnce(initial.promise).mockResolvedValue(json(fresh))
-    const { result } = renderHook(() => useRunnerModels('cursor'), { wrapper })
-    expect(result.current.data).toBeUndefined()
-    source.drop()
-    source.open()
-    await waitFor(() => expect(result.current.data?.models[0]?.id).toBe('auto'))
-    await act(async () => initial.resolve(json({ runner: 'cursor', models: [], source: 'unavailable', stale: false })))
-    expect(result.current.data?.models[0]?.id).toBe('auto')
-  })
-
-  it('fills the Cursor catalog from authenticated SSE completion and rejects malformed events', () => {
-    const { source } = mount()
-    const key = workspaceQueryKeys.models('cursor')
-    source.emit('model-catalog', 'not json')
-    source.emit('model-catalog', JSON.stringify({ runner: 'cursor', models: 'invalid' }))
-    expect(client.getQueryData(key)).toBeUndefined()
-    const result = { runner: 'cursor', models: [{ id: 'auto', label: 'Auto', description: '' }], source: 'live', stale: false }
-    source.emit('model-catalog', JSON.stringify(result))
-    expect(client.getQueryData(key)).toEqual(result)
-    expect(fetch).not.toHaveBeenCalled()
   })
 
   it('patches the provider cache immediately from a workspace provider-status event', () => {
@@ -1819,8 +1792,8 @@ describe('useGlobalEvents — reconcile doctrine', () => {
 
     source.open()
 
-    // The index reconciles through its fence at once; health and models cancel their cold read first.
-    await waitFor(() => expect(invalidatedKeys(invalidate)).toEqual([workspaceQueryKeys.runsIndex, workspaceQueryKeys.models('cursor'), queryKeys.health]))
+    // The index reconciles through its fence at once; health cancels its cold read first.
+    await waitFor(() => expect(invalidatedKeys(invalidate)).toEqual([workspaceQueryKeys.runsIndex, queryKeys.health]))
   })
 
   it('reconciles the cross-project index on first open, covering a project-ready sent before it (#667)', async () => {
@@ -1853,7 +1826,6 @@ describe('useGlobalEvents — reconcile doctrine', () => {
       queryKeys.worktrees, // the Resources panel's list/total (#483)
       queryKeys.repoBranches, // the Git view's branch classes (issue 08)
       workspaceQueryKeys.providerStatus,
-      workspaceQueryKeys.models('cursor'),
       queryKeys.health,
     ]))
   })

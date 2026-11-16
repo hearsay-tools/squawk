@@ -11,7 +11,6 @@ it('registers every runner-shutdown row exactly once', () => {
   const expected = RUNNER_IDS.flatMap(runner => [
     ...['S22', 'S23', 'S24', 'S26', 'S27', 'S28', 'S30', 'S31', 'S33', 'S34'].map(row => `${runner}:${row}`),
     `${runner} an ignore-term stall exits through its own backstop without SIGKILL`,
-    ...(runner === 'cursor' ? ['cursor input-closed stall exits nonzero and names its unsupported mock'] : []),
     `${runner} an ignore-term stall survives SIGTERM sent as soon as it publishes its pid`,
     ...(CLEAN_EOF_REAP_RUNNERS.includes(runner) ? [`${runner} reaps a live child after stdout ends cleanly`] : []),
     ...(EOF_CLEANUP_RUNNERS.includes(runner) ? [

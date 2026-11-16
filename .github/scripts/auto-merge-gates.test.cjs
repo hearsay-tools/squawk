@@ -66,7 +66,6 @@ const NPM_RUN = /\bnpm\s+(?:run\s+([\w:*-]+)|(test)\b)(?:[^\n;&|]*?\s(?:-w|--wor
 const BOT_WORKFLOWS = {
   'friction-intake.yml': 'labels friction issues',
   'issue-intake.yml': 'labels new issues',
-  'upstream-scan.yml': 'opens upstream drift pull requests',
   'mutants-weekly.yml': 'reports mutation scores',
   'mutation-report.yml': 'reports mutation scores',
   'mutation-report-comment.yml': 'comments mutation scores',
@@ -89,7 +88,6 @@ const NOT_A_GATE = [
   { glob: '{README.md,.env.example,**/*.md}', reason: 'documentation; .env.example has its own content rule' },
   { glob: '.github/scripts/crap-follow-up.cjs', reason: 'files CRAP follow-ups after a merge to main; it never runs on a pull request and no required check needs it' },
   { glob: '.github/scripts/squeal-ref-warning.cjs', reason: 'warns about a missing Squeal ref; the step may fail and no required check needs its job' },
-  { glob: 'packages/desktop/**', reason: 'desktop app build; the desktop workflows are not required checks' },
   { glob: 'packages/cezar/scripts/benchmark-*', reason: 'benchmark run by hand' },
   { glob: 'packages/cezar/scripts/record-mock-wires.mjs', reason: 'records mock wire files by hand' },
   { glob: 'scripts/dev.mjs', reason: 'local development server' },

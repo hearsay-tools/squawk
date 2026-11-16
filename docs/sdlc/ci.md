@@ -146,10 +146,12 @@ with no result (the first ten and a count when more) and passes when none failed
 
 Record the named files and their Squeal state in the PR's Verification. A missing verdict
 is covered by CI's shards, which give the full verdict; a failing verdict is never
-covered, and the PR does not merge until the shards pass. To check one test file by hand,
-run `npm test -- <file> -t '<name>'` and confirm it reports passed tests, not only skipped
-ones. This also covers a file Squeal re-runs only because the change edited a document it
-reads, for example `AGENT_PROTOCOL.md` prose, which re-runs
+covered, and the PR does not merge until the shards pass. To get one test file's verdict
+now, run `squeal run tests <file> --wait 60000` (`run-loop` for a parity or worker file);
+for one test in it, `squeal status --wait 60000 <file> --check '<name>'`. With no
+daemon, run `npm test -- <file> -t '<name>'` and confirm it reports passed tests, not
+only skipped ones. This also covers a file Squeal re-runs only because the change edited
+a document it reads, for example `AGENT_PROTOCOL.md` prose, which re-runs
 `packages/cezar/src/core/harness-parity.test.ts`.
 
 ### Clone comparison
@@ -227,12 +229,23 @@ file all run full Vitest on eight shards. A failing selected test fails its job;
 it never triggers a full-suite retry. The base fetch is bounded to 100 commits.
 A missing merge-base costs a full run instead of silently skipping tests.
 
-Browser jobs call `scripts/e2e-affected.mjs --ci`. The selector reads the newest
-successful `e2e-spec-map.yml` map on `main`, compares against the map's own commit,
-and keeps its existing conservative selection rules. A missing map, failed
-selector or empty selection runs every spec on eight shards. Selected browser
-runs still require `TEST_E2E_STATUS=passed`; missing browsers fail verification.
-The token used to download the map has read-only Actions and repository scopes.
+Browser jobs fetch the PR base branch's current tip and call
+`scripts/e2e-affected.mjs --ci --base=origin/<base branch>`; the event's base SHA can be older
+than the tested merge's base parent. The selector reads the newest successful `e2e-spec-map.yml`
+map on `main` and selects from the PR's own changes, from the merge-base with that tip. Merges
+after the map's commit do not count, except that mapped files they changed add their specs
+when the PR touches mapped code. Its log prints each changed file with its spec count and
+reason. A PR runs browser specs only
+when the selector returns a list shorter than the full set. When the selector
+chooses every spec, chooses no spec or fails, the PR runs no browser spec: the log
+and the job summary state the reason, and the step prints
+`TEST_E2E_STATUS=not-selected`. `require-e2e-passed.cjs` accepts that marker only
+when `GITHUB_EVENT_NAME` is `pull_request_target`, so the browser jobs and `verify`
+stay green on the PR and every other event still requires `passed`. The merge queue runs every spec on every full-matrix entry, so a
+browser failure the PR run does not see fails the queue entry instead. A shorter
+selection still requires `TEST_E2E_STATUS=passed`; missing browsers fail
+verification. The token used to download the map has read-only Actions and
+repository scopes.
 
 Docs-only, infra-only and verified release-stamp skips remain as before. Merge
 groups and manual dispatches run full suites. Main pushes reuse eligible exact-SHA
@@ -495,8 +508,7 @@ Each failure names the file, the line and the qualified forms to use. The check
 counts each number's bare citations in the changed files before and after the
 change, so rewording or moving a legacy citation passes. It never reads string
 literals, code, JSX text, backtick spans, a `#` joined to a word or path,
-generated upstream scan files, test-data directories, or a file the change adds
-with a historical source note. A change that removes an archive's source note
+test-data directories, or a file the change adds with a historical source note. A change that removes an archive's source note
 fails every bare citation left in it. On a PR, the step checks the merge commit
 against its first parent (`--base HEAD^1`). A push to `main` skips the step,
 because every change reaches `main` through a PR that the step already checked.
@@ -702,27 +714,6 @@ had three passing shards and one failed assertion. Runner recovery remains unpro
 Open hearsay-tools/cezarion#2682 adds disabled owner-PR routing and keeps this manual
 canary separate. Keep the canary and its LXC scripts until that recovery and workload
 question is decided. This trial changes no required check or merge-queue behavior.
-
-### Upstream scan PRs
-
-The weekly upstream scan also creates PRs with the repository's existing release
-App token. `GITHUB_TOKEN` still pushes the branch and lists open PRs; the App has
-only Pull requests write permission and starts native `pull_request_target` CI
-through PR creation. Missing App settings stop creation rather than falling back
-to a token that suppresses CI. Existing scan PRs are never overwritten.
-
-The change-surface classifier treats only `.ai/upstream/ledger.yaml`,
-`.ai/upstream/LEDGER.md`, and `.ai/upstream/scans/YYYY-MM-DD.md` (including numeric
-same-day suffixes starting at `-2`) as scan data eligible for `docs-only`. A complete allowlisted diff skips Vitest and cockpit
-browser shards; mixed code changes, unsafe renames, and incomplete API results
-keep the full matrix. `unit-tests` stays unconditional, so malformed ledger
-entries, missing reports, and an out-of-date render fail the repository script tests and
-the required **Unit, build, E2E, and package** check.
-
-A maintainer must close/reopen legacy `GITHUB_TOKEN`-created scan PRs once after
-this change reaches `main`, including PR #577. This starts native CI without
-changing ledger decisions or branch protection. Confirm the required check on
-the current head before merging; a scan rerun will not reopen an existing PR.
 
 ### Diagnostic dispatch
 

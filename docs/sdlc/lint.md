@@ -102,7 +102,7 @@ remain in force.
 | `cez/run-fact-reader` | Selected package TS/TSX trees: named attention-label comparisons, nearby waiting/resume-time condition shapes, and `.autoResumeAt` reads. Contract owners and test oracles have the existing exclusions. It does not infer arbitrary receivers' types or follow values between modules. |
 | `cez/run-history-reader` | Non-test `.ts` files beneath service `src/`: named history path calls, renamed `historyPaths` imports and literal `.ndjson` fragments. It does not track path values through arbitrary aliases, helpers or computed strings. |
 | `cez/runner-fact-combination` | Non-test workflow TS files: functions touching the listed fact sources and at least two declared fact-key names. Import/type aliases and static keys are recognized; receiver values are not tracked. Its source/key forms, over-approximation and excluded helper/dynamic/cross-module flows are listed in the rule table above. |
-| `cez/runner-id-branch` | Non-test TS/TSX source in `packages/cezar/src/` outside `core/`, and in `packages/web/src/`. The ids come from `RUNNER_IDS` in `core/agent-runner.ts`, plus the legacy `claude-cli`. A literal may sit under parentheses, `as`, `satisfies` or `!`, or be a template with no substitution. The rule tracks no value and knows no type, so it over-approximates: `'pi'` and `'cursor'` are also plain words. It leaves out an operand named `t` or `type` (a message or event tag), a comparison of two literals, an id held in a variable or constant, an id tested with `includes`, `has`, a map lookup or a regular expression, and an id used as an object key. |
+| `cez/runner-id-branch` | Non-test TS/TSX source in `packages/cezar/src/` outside `core/`, and in `packages/web/src/`. The ids come from `RUNNER_IDS` in `core/agent-runner.ts`, plus the legacy `claude-cli`. A literal may sit under parentheses, `as`, `satisfies` or `!`, or be a template with no substitution. The rule tracks no value and knows no type, so it over-approximates: `'pi'` is also a plain word. It leaves out an operand named `t` or `type` (a message or event tag), a comparison of two literals, an id held in a variable or constant, an id tested with `includes`, `has`, a map lookup or a regular expression, and an id used as an object key. |
 | `cez/runner-roster-literal` | Every JS/TS file under `packages/`, tests included, except `core/agent-runner.ts`: array literals whose string elements name every id of `RUNNER_IDS`, in any order, with any other element beside them. It leaves out a list that omits a runner, a roster spelled as a union type, as object keys or as separate arguments, and a list built from parts. |
 | `cez/test-wait-discipline` | Server `src/` `.test.ts`/`.testkit.ts` files, excluding fixtures and scanner self-fixtures: source-text patterns for awaited sleeps, recognized wait calls and poll-loop exits, with a 10 s floor. Strings and comments are blanked. The scanner evaluates supported local bound expressions; bounds supplied from outside the file or through parameters are left to callers. It does not prove those bounds are sufficient or cover arbitrary helper/control-flow forms. Reasoned `// bound:` comments and the shrink-only baselines remain the exceptions. |
 | `cez/unit-wait-discipline` | Cockpit `src/` `.test.ts`/`.test.tsx` files: source-text sleep, wait-bound and poll-deadline patterns with a 3 s floor. Strings and comments are blanked. Supported local bound expressions are evaluated; externally supplied bounds are left to callers. It does not prove those bounds are sufficient or analyze arbitrary helper/control-flow forms. Reasoned `// bound:` comments and the shrink-only baseline remain the exceptions. |
@@ -502,13 +502,6 @@ literal aliases. Member access, calls, mutable bindings, cycles and duplicate or
 shadowed binding names remain unknown computed reads. REMOTE uses the explicit
 `remoteEnvEnabled` accessor: either prefix's exact `1` keeps hosted mode enabled,
 including for old CEZ-only service files awaiting their next deploy.
-
-Native shell controls use `shellProductEnv`: DESKTOP, SUPERVISED, SUPERVISOR_PID,
-SUPERVISOR_STDIN and DISCLAIM_EXEC. A defined CEZ value wins, including empty;
-HSQ is a fallback only when CEZ is absent. Old and new native shells always pin
-CEZ, so inherited HSQ aliases cannot disable supervision or the macOS trampoline.
-P5 must revisit this precedence when it removes the CEZ fallback. This is separate
-from ordinary HSQ-first operator settings (coordinator decision D11).
 
 #### Known limits
 

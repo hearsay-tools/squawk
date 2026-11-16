@@ -142,15 +142,6 @@ describe('CI tool injection', () => {
           expect(config[`mcp_servers.${descriptor.name}`]).toEqual({ command: descriptor.command, args: descriptor.args, env_vars: ['CEZ_TOOL_TOKEN', 'CEZ_TOOL_SOCKET', 'CEZ_AUTOMATIONS'], default_tools_approval_mode: 'approve' });
           expect(config).not.toHaveProperty('approval_policy');
         }
-        if (backend === 'cursor') {
-          const args: string[] = rows[0];
-          expect(args).toContain('--plugin-dir');
-          expect(args.includes('--resume')).toBe(resume);
-          expect(args).not.toContain('--allowed-tools');
-          const plugin = rows.find(row => row.type === 'cursor-print-plugin');
-          expect(plugin.mcpServers[descriptor.name]).toEqual({ type: 'stdio', command: descriptor.command,
-            args: descriptor.args, env: {} });
-        }
         if (backend === 'opencode') {
           const config = rows.find(row => row.type === 'runtime-config').config;
           expect(config.mcp[descriptor.name].command).toEqual([descriptor.command, ...descriptor.args]);

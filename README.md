@@ -10,7 +10,7 @@
 **Parallel coding agents orchestrator** — a local cockpit for running and
 tracking AI coding-agent tasks in your repo.
 
-Type a task, pick a workflow and an agent — **Claude Code, Codex, OpenCode, Cursor, pi or
+Type a task, pick a workflow and an agent — **Claude Code, Codex, OpenCode, pi or
 OMP (OpenCode, pi and OMP experimental), or a mix of them per step** — and watch it work live: steps, tool calls,
 tokens, diffs, in a browser cockpit that runs entirely on your machine.
 Your CLI logins, your `gh`, your files. No accounts, no database server, no cloud.
@@ -51,7 +51,7 @@ It does not install updates. Install the newer release the way you installed thi
 then restart the cockpit.
 
 Upgrading from Cezarion? Read the [migration guide](docs/migration.md) before
-moving a desktop, server or custom-home install. User paths such as `<config>`
+moving a server or custom-home install. User paths such as `<config>`
 and `<state>` below refer to its [platform roots](docs/migration.md#home-directories).
 A cockpit moves each idle project's state from `.ai/cezar/` to `.ai/squawk/` at start
 ([project folders](docs/migration.md#project-folders)). Release operators use the [publishing runbook](docs/publishing.md).
@@ -83,7 +83,7 @@ it does better than any of them:
 
 - 🪶 **Genuinely zero config.** `npx -p @hearsay-tools/squawk hsq` in your repo and you're running —
   no wizard, no API keys, no env vars, no schema, no database server. It rides the
-  `claude` / `codex` / `opencode` / `agent` (Cursor) / `pi` / `omp` logins and the `gh` you already have, and every
+  `claude` / `codex` / `opencode` / `pi` / `omp` logins and the `gh` you already have, and every
   missing piece degrades gracefully instead of blocking you.
 - 🖥️ **Built for a server (VPS mode).** Squawk is made to live on a **VPS, cloud,
   or dedicated box** as an always-on janitor for your repo — headless-first, with
@@ -134,7 +134,7 @@ and an orchestrator keeps a whole queue of them moving.
   also explains the restart when replaying a saved message. Background commands
   may have stopped; the agent is told to verify their state before restarting them.
 - 🔀 **Locked into one agent vendor.** Most tools wed you to a single CLI. Squawk
-  drives **Claude Code, Codex, OpenCode, Cursor, pi and OMP** (OpenCode, pi and OMP
+  drives **Claude Code, Codex, OpenCode, pi and OMP** (OpenCode, pi and OMP
   experimental) through one runner seam — set a
   default, pick a backend per task, or mix them inside one workflow (implement
   with one agent, review with another) — and through **OpenCode**, **pi** or
@@ -172,7 +172,6 @@ and an orchestrator keeps a whole queue of them moving.
 [`claude` CLI](https://github.com/anthropics/claude-code) (Pro/Max subscription),
 the [`codex` CLI](https://github.com/openai/codex),
 [OpenCode](https://opencode.ai), the
-[Cursor CLI](https://cursor.com/docs/cli/installation) (`agent`),
 [pi](https://github.com/badlogic/pi-mono), or
 [OMP](https://github.com/can1357/oh-my-pi) — and, optionally, `git` and the
 `gh` CLI.
@@ -261,7 +260,7 @@ resolves to the latest stable release.
 
 You describe a task. Squawk runs it as a **workflow** — an ordered list of agent
 steps and shell checks — shelling out to your locally installed agent CLI
-(Claude Code by default; Codex, OpenCode, Cursor, pi and OMP are drop-in
+(Claude Code by default; Codex, OpenCode, pi and OMP are drop-in
 alternatives, per task or per step). Each task gets its own git worktree; the
 cockpit streams every event live and leaves the diff on the task's branch for
 you to inspect.
@@ -440,10 +439,6 @@ See [How it runs agents](docs/areas/runners.md).
 ## Coding agent backends
 
 See [Coding agent backends](docs/areas/runners.md).
-
-## Desktop app
-
-See [Desktop app](docs/desktop.md).
 
 ## Remote access (host Squawk on a server)
 

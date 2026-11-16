@@ -1,7 +1,7 @@
 export type PlaybackResult = 'handled' | 'continue';
 export type Lifecycle = (call: [string, Record<string, unknown>]) => Promise<string>;
 export interface ScenarioContext {
-  runner: 'claude' | 'codex' | 'opencode' | 'pi' | 'omp' | 'cursor';
+  runner: 'claude' | 'codex' | 'opencode' | 'pi' | 'omp';
   lifecycle: Lifecycle;
   toolPrompt(prompt: string): Promise<string>;
   ciPrompt(prompt: string): Promise<string>;

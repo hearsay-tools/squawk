@@ -56,9 +56,6 @@ export const completionActionSchema = z.object({
   message: z.string().optional(),
 });
 
-/** Cursor native session transport; legacy ones omit it (ACP). `cursor-acp` is only read (hearsay-tools/cezarion#1267). */
-export const sessionTransportSchema = z.enum(['cursor-acp', 'cursor-print']);
-export type SessionTransport = z.infer<typeof sessionTransportSchema>;
 
 const usageCounterSchema = z.number().finite().nonnegative();
 
@@ -84,9 +81,10 @@ export const stepStateSchema = z.object({
   error: z.string().optional(),
   /** Latest agent session id — `claude --resume <id>` and friends. */
   sessionId: z.string().optional(),
-  sessionTransport: sessionTransportSchema.optional(),
   /** Backend that owns `sessionId`; absent on records written before backend affinity. */
   backend: runnerSchema.optional(),
+  /** A runner Squawk no longer ships that this step ran on; its session is gone (hearsay-tools/squawk#3715). */
+  removedBackend: z.string().optional(),
   /** Agent account (spec 2026-07-29-agent-profiles) that owns `sessionId` — `default`, or a
    *  stored profile id. The two are a PAIR: a session id only resolves inside the config dir
    *  that created it, so resume and Continue read this rather than the project's current
@@ -254,6 +252,8 @@ export const runRecordSchema = z.object({
   /** Normalized provider/model identity used for attribution and reproducible replay. */
   modelIdentity: z.string().optional(),
   runner: runnerSchema.optional(),
+  /** A runner Squawk no longer ships that this run ran on; it continues only on a named runner (hearsay-tools/squawk#3715). */
+  removedRunner: z.string().optional(),
   /** The composer's per-task agent account (spec 2026-07-29-agent-profiles), applying to steps
    *  on `runner`. Absent = the run follows the project's own selection. */
   agentProfile: z.string().optional(),
@@ -549,6 +549,7 @@ export const runSummarySchema = z.object({
    *  task no automation launched; the sidebar files the task under Automations when present. */
   automationId: z.string().optional(),
   runner: runRecordSchema.shape.runner,
+  removedRunner: runRecordSchema.shape.removedRunner,
   model: z.string().optional(),
   notify: z.boolean().optional(),
   diffStat: diffStatSchema.optional(),
@@ -581,7 +582,7 @@ const SUMMARY_OPTIONAL_KEYS = [
   'titleSummary', 'titleOrigin', 'hasPendingPermission', 'finishedAt', 'seenAt',
   'autoResumeAt', 'autoResumeReason', 'branch', 'startedAt', 'pullRequestUrl', 'pullRequests', 'referencedPullRequestUrl', 'prNumber',
   'issueNumber', 'referencedIssueUrl', 'markerRefs', 'costUsd', 'peakRssBytes', 'peakProcCount',
-  'groupId', 'variant', 'pinned', 'runner', 'model', 'notify', 'diffStat', 'inputTokens',
+  'groupId', 'variant', 'pinned', 'runner', 'removedRunner', 'model', 'notify', 'diffStat', 'inputTokens',
   'outputTokens', 'currentStepId', 'error', 'worktreePath',
 ] as const satisfies readonly (keyof RunSummary & keyof RunRecord)[];
 

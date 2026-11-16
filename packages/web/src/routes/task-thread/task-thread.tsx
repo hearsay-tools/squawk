@@ -37,8 +37,7 @@ import { useContinueAction } from './follow-up-engine'
 import { findSubagent, subagentEntries } from './subagent-dock'
 import { SubagentSheet } from './subagent-sheet'
 import { AcceptCelebration, ReviewPanel } from './review-panel'
-import { isSessionOpen } from '@open-mercato/cezar-api-client/contract/run-predicates'
-import { archiveInComposer, offersComposerFinish, queuePosition, runActionFlags } from './run-actions'
+import { archiveInComposer, hasLiveSession, offersComposerFinish, queuePosition, runActionFlags } from './run-actions'
 import { useWorkersLive } from './run-relationships'
 import { ArchiveButton } from './archive-action'
 import { useFinishRun } from './use-finish-run'
@@ -63,6 +62,7 @@ import {
   mainTranscriptSections,
   type TranscriptMessageActions,
 } from './session-transcript'
+import { removedRunnerMessage } from '@open-mercato/cezar-api-client/contract/runner'
 import { recipientBackendsFromRuns, titlesFromRuns } from './conversation-presentation'
 import {
   reduceThread,
@@ -203,7 +203,7 @@ export function ThreadView({
   // The legacy session-open rule (web/app.js `updateDetail`): the composer can deliver while
   // the engine owns a live session — running queues the message, waiting answers it.
   // A usage-limit hold is `waiting` with no session until its resume (hearsay-tools/cezarion#1236).
-  const sessionOpen = isSessionOpen(run)
+  const sessionOpen = hasLiveSession(run)
   // Closed runs keep their in-flight sub-agent cards as historical rows.
   const runIsTerminal = !sessionOpen && run.status !== 'queued'
   // Queued sends amend the original prompt; they do not open a provider session.
@@ -661,7 +661,9 @@ function ThreadFooterDock({
           </div>
         ) : null}
 
-        {continuable && continueAction.startsNewConversation ? (
+        {continuable && run.removedRunner !== undefined ? (
+          <p className="px-1 text-xs text-muted-foreground" role="status">{removedRunnerMessage(run.removedRunner)}</p>
+        ) : continuable && continueAction.startsNewConversation ? (
           <p className="px-1 text-xs text-muted-foreground" role="status">Starts a new agent conversation.</p>
         ) : null}
 

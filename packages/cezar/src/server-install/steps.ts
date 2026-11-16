@@ -357,7 +357,6 @@ const AGENT_CLI_SOURCE: Record<RunnerId, { npm: string } | { site: string; label
   codex: { npm: '@openai/codex' },
   opencode: { site: 'https://opencode.ai', label: 'OpenCode' },
   pi: null,
-  cursor: null,
   omp: null,
 };
 

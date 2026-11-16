@@ -17,13 +17,13 @@ const ASK_PROMPT = toolCall('cezar_ask', { context: 'A choice is needed.', quest
 // Exhaustive transport classification: a new runner must provide either the real
 // delayed-ACK race or an executable wire limitation, never an omitted/skip row.
 const ACK_WIRES = {
-  claude: 'pipe-write', codex: 'protocol', opencode: 'protocol', pi: 'protocol', cursor: 'model-work', omp: 'protocol',
-} as const satisfies Record<RunnerId, 'pipe-write' | 'protocol' | 'model-work'>;
+  claude: 'pipe-write', codex: 'protocol', opencode: 'protocol', pi: 'protocol', omp: 'protocol',
+} as const satisfies Record<RunnerId, 'pipe-write' | 'protocol'>;
 
 export { ACK_WIRES };
 
 type AttentionRow =
- | { family: 'progress'; backend: RunnerId; mode: 'fresh' | 'continuation'; transport: 'ordinary' | 'pipe-write' | 'protocol' | 'model-work' }
+ | { family: 'progress'; backend: RunnerId; mode: 'fresh' | 'continuation'; transport: 'ordinary' | 'pipe-write' | 'protocol' }
  | { family: 'spawn-ask'; backend: RunnerId; mode: 'fresh' | 'continuation' }
  | { family: 'completion' | 'timeout' | 'restart' | 'human-ask'; backend: RunnerId };
 export const ATTENTION_GROUPS = {
@@ -62,7 +62,7 @@ if(row.family === 'progress') {
  const {mode, transport} = row;
  // No prose is read (hearsay-tools/cezarion#1234, hearsay-tools/cezarion#2397): the turn the
  // progress message starts parks on the monitoring timer the live worker opens.
-it(`${mode} ${mode === 'fresh' ? 'M26' : 'M27'} worker progress through an input ACK keeps monitoring with live workers (${transport === 'pipe-write' ? 'pipe-write ACK exemption: acceptance precedes provider response' : transport === 'model-work' ? 'model-work admission boundary' : transport === 'protocol' ? 'delayed ACK' : 'ordinary ACK'})`, async () => {
+it(`${mode} ${mode === 'fresh' ? 'M26' : 'M27'} worker progress through an input ACK keeps monitoring with live workers (${transport === 'pipe-write' ? 'pipe-write ACK exemption: acceptance precedes provider response' : transport === 'protocol' ? 'delayed ACK' : 'ordinary ACK'})`, async () => {
         const exercise = async (release: () => void, responseHeld?: () => boolean) => {
           process.env.CEZ_DRY_RUN = '0';
           process.env[HARNESS_ADAPTERS[backend].binEnv] = HARNESS_ADAPTERS[backend].mockBin;
@@ -86,15 +86,9 @@ it(`${mode} ${mode === 'fresh' ? 'M26' : 'M27'} worker progress through an input
             const id = randomUUID();
             const boundaries = store.readEvents(p.id).filter(event => event.type === 'turn-end').length;
             const delivery = service.send(caller, { id, recipientRunId: p.id, kind: 'progress', text: 'Progress mock:agent-echo delay-owned-ack', timeoutSeconds: 600 });
-            if (transport === 'model-work') {
-              await until(() => responseHeld?.() === true);
-              expect(store.getRun(p.id)?.agentInputs?.find(input => input.id === id)?.deliveredAt).toBeUndefined();
-              release();
-            }
             await delivery;
             if (responseHeld) {
-              // Claude acknowledges the local pipe write; Cursor print waits
-              // for native model work before acknowledging owned input.
+              // Claude acknowledges the local pipe write.
               if (transport === 'pipe-write') {
                 await until(responseHeld);
                 await until(() => !!store.getRun(p.id)?.agentInputs?.find(input => input.id === id)?.deliveredAt);
@@ -117,9 +111,8 @@ it(`${mode} ${mode === 'fresh' ? 'M26' : 'M27'} worker progress through an input
             expect(monitoringWakeOf(store.getRun(p.id))).toBeDefined();
           } finally { release(); close(); }
         };
-        if (transport === 'protocol' && backend !== 'claude' && backend !== 'cursor') await withHeldAck(backend, exercise);
+        if (transport === 'protocol' && backend !== 'claude') await withHeldAck(backend, exercise);
         else if (transport === 'pipe-write' && backend === 'claude') await withHeldResponse(backend, exercise);
-        else if (transport === 'model-work' && backend === 'cursor') await withHeldResponse('cursor', exercise);
         else await exercise(() => {});
       });
 }

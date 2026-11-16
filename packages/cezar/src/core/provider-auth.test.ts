@@ -28,7 +28,6 @@ const connectedResults: Record<string, ProviderCommandResult> = {
     stderr: '',
     exitCode: 0,
   },
-  cursor: { stdout: '{"status":"authenticated","isAuthenticated":true}', stderr: '', exitCode: 0 },
   pi: {
     stdout: 'provider  model  context  max-out  thinking  images\nanthropic  claude  200K  64K  yes  yes',
     stderr: '',
@@ -69,7 +68,6 @@ const originalEnv = {
   CEZ_CODEX_BIN: process.env.CEZ_CODEX_BIN,
   CEZ_OPENCODE_BIN: process.env.CEZ_OPENCODE_BIN,
   CEZ_PI_BIN: process.env.CEZ_PI_BIN,
-  CEZ_CURSOR_BIN: process.env.CEZ_CURSOR_BIN,
   CEZ_CLAUDE_PERMISSION_MODE: process.env.CEZ_CLAUDE_PERMISSION_MODE,
   CEZ_CLAUDE_SETTING_SOURCES: process.env.CEZ_CLAUDE_SETTING_SOURCES,
 };
@@ -81,7 +79,6 @@ beforeEach(() => {
   delete process.env.CEZ_CODEX_BIN;
   delete process.env.CEZ_OPENCODE_BIN;
   delete process.env.CEZ_PI_BIN;
-  delete process.env.CEZ_CURSOR_BIN;
   delete process.env.CEZ_CLAUDE_PERMISSION_MODE;
   delete process.env.CEZ_CLAUDE_SETTING_SOURCES;
 });
@@ -94,7 +91,6 @@ afterEach(() => {
 });
 
 function resultFor(executable: string): ProviderCommandResult {
-  if (executable === 'agent') return connectedResults.cursor!;
   if (executable === 'claude') return connectedResults.claude!;
   if (executable.includes('codex')) return connectedResults.codex!;
   if (executable.includes('opencode')) return connectedResults.opencode!;
@@ -574,7 +570,7 @@ describe('omp provider status (omp models --json)', () => {
       "process.stdout.write(JSON.stringify({ models }) + '\\n');",
     ].join('\n'));
     chmodSync(bin, 0o755);
-    const keys = ['CEZ_CLAUDE_BIN', 'CEZ_CODEX_BIN', 'CEZ_OPENCODE_BIN', 'CEZ_PI_BIN', 'CEZ_CURSOR_BIN', 'CEZ_OMP_BIN'] as const;
+    const keys = ['CEZ_CLAUDE_BIN', 'CEZ_CODEX_BIN', 'CEZ_OPENCODE_BIN', 'CEZ_PI_BIN', 'CEZ_OMP_BIN'] as const;
     const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
     try {
       // Every other provider points at a path that cannot exist, so this case never spawns a
@@ -605,7 +601,7 @@ describe('omp provider status (omp models --json)', () => {
 });
 
 describe('ProviderAuthService', () => {
-  it('always returns claude, codex, opencode, pi, cursor, omp in descriptor order', async () => {
+  it('always returns claude, codex, opencode, pi, omp in descriptor order', async () => {
     const service = new ProviderAuthService({ runCommand: runner() });
 
     await expect(service.status()).resolves.toMatchObject({
@@ -614,13 +610,12 @@ describe('ProviderAuthService', () => {
         { provider: 'codex' },
         { provider: 'opencode' },
         { provider: 'pi' },
-        { provider: 'cursor' },
         { provider: 'omp' },
       ],
     });
   });
 
-  it('runs the six status commands concurrently with a 10 second timeout', async () => {
+  it('runs the five status commands concurrently with a 10 second timeout', async () => {
     const calls: Array<{ executable: string; args: readonly string[]; timeoutMs: number }> = [];
     let release!: () => void;
     const waiting = new Promise<void>((resolve) => { release = resolve; });
@@ -639,7 +634,6 @@ describe('ProviderAuthService', () => {
       { executable: 'codex', args: ['login', 'status'], timeoutMs: 10_000 },
       { executable: 'opencode', args: ['auth', 'list'], timeoutMs: 10_000 },
       { executable: 'pi', args: ['--list-models'], timeoutMs: 10_000 },
-      { executable: 'agent', args: ['status', '--format', 'json'], timeoutMs: 10_000 },
       { executable: 'omp', args: ['models', '--json'], timeoutMs: 10_000 },
     ]);
     release();
@@ -1477,7 +1471,6 @@ describe('ProviderAuthService', () => {
         { provider: 'codex', status: 'connected' },
         { provider: 'opencode', status: 'connected' },
         { provider: 'pi', status: 'connected' },
-        { provider: 'cursor', status: 'connected' },
         { provider: 'omp', status: 'connected' },
       ],
     });
@@ -1591,7 +1584,7 @@ describe('ProviderAuthService', () => {
       .toBe('"C:\\Program Files\\op^%en^&co^!de^".exe" auth login');
   });
 
-  it('reports all six providers connected in CEZ_DRY_RUN without executing a command', async () => {
+  it('reports all five providers connected in CEZ_DRY_RUN without executing a command', async () => {
     process.env.CEZ_DRY_RUN = '1';
     const runCommand = runner();
     const service = new ProviderAuthService({ runCommand });
@@ -1602,7 +1595,6 @@ describe('ProviderAuthService', () => {
         { provider: 'codex', status: 'connected' },
         { provider: 'opencode', status: 'connected' },
         { provider: 'pi', status: 'connected' },
-        { provider: 'cursor', status: 'connected' },
         { provider: 'omp', status: 'connected' },
       ],
     });

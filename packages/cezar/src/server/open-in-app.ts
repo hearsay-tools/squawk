@@ -130,7 +130,6 @@ const AGENT_CLIS: Array<{ runner: RunnerId; label: string; icon: string; bin: st
   { runner: 'claude', label: 'Claude CLI', icon: 'claude', bin: 'claude', envBin: productEnv('CLAUDE_BIN') },
   { runner: 'codex', label: 'Codex CLI', icon: 'codex', bin: 'codex', envBin: productEnv('CODEX_BIN') },
   { runner: 'opencode', label: 'OpenCode', icon: 'opencode', bin: 'opencode', envBin: productEnv('OPENCODE_BIN') },
-  { runner: 'cursor', label: 'Cursor CLI', icon: 'cursor', bin: 'agent', envBin: productEnv('CURSOR_BIN') },
   { runner: 'pi', label: 'pi CLI', icon: 'pi', bin: 'pi', envBin: productEnv('PI_BIN') },
   { runner: 'omp', label: 'OMP CLI', icon: 'omp', bin: 'omp', envBin: productEnv('OMP_BIN') },
 ];

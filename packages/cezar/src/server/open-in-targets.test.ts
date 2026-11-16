@@ -151,14 +151,11 @@ describe('run open-in target dispatch and refusals', () => {
     expect(openTerminal).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['CEZ_CURSOR_BIN', 'cursor', 'Cursor'],
-    ['CEZ_OMP_BIN', 'omp', 'OMP'],
-  ])('refuses an unsafe %s executable before launching', async (key, runner, label) => {
-    vi.stubEnv(key, '/unsafe\nexecutable');
-    const res = await post(`cli:${runner}`);
+  it('refuses an unsafe CEZ_OMP_BIN executable before launching', async () => {
+    vi.stubEnv('CEZ_OMP_BIN', '/unsafe\nexecutable');
+    const res = await post('cli:omp');
     expect(res.status).toBe(409);
-    expect(await res.json()).toEqual({ error: `the configured ${label} executable cannot be used in a terminal command` });
+    expect(await res.json()).toEqual({ error: 'the configured OMP executable cannot be used in a terminal command' });
     expect(openTerminal).not.toHaveBeenCalled();
   });
 

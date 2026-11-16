@@ -58,7 +58,7 @@ describe('provisionSkills after an interrupted write', { timeout: 30_000 }, () =
     await provisionSkills(worktree, [builtin], [builtin], { home: testHome() });
     expect(fault.failNextSkillWrite).toBe(false);
     await provisionSkills(worktree, [builtin], [builtin], { home: testHome() });
-    for (const dir of ['.claude', '.agents', '.cursor']) {
+    for (const dir of ['.claude', '.agents']) {
       expect(readFileSync(join(worktree, dir, 'skills', 'auto-skill', 'SKILL.md'), 'utf8'))
         .toBe('---\nname: "auto-skill"\ndescription: "Built in."\n---\n\nBUILTIN-BODY\n');
     }

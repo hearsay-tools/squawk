@@ -1,7 +1,6 @@
 import { ChildProcess, execFile, spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { afterExitDrain, exitDrainBudget, DEFAULT_RUNNER_TIMINGS, type RunnerTimings } from './runner-runtime.ts';
-import { disclaimedCommand } from './disclaim-spawn.ts';
 import { exitedStat, statFields } from './process-stat.ts';
 import type { SpawnScope } from '../worker-scope/scope.ts';
 
@@ -257,16 +256,14 @@ function reap(pgid: number, leader: Leader): void {
 }
 
 /** Spawn an agent session leader. Only a real detached `ChildProcess` with a pid is registered,
- * so a test's fake child (made-up pid) never reaches `process.kill(-pid)`. Under the macOS desktop
- * shell the leader starts through its trampoline, which execs in place (same pid and group). */
+ * so a test's fake child (made-up pid) never reaches `process.kill(-pid)`. */
 export function spawnSessionLeader(
   bin: string,
   args: readonly string[],
   options: { cwd: string; env: NodeJS.ProcessEnv; timings?: Partial<RunnerTimings> | undefined; scope?: SpawnScope | undefined },
 ): ChildProcessWithoutNullStreams {
   const grouped = process.platform !== 'win32';
-  const [disclaimed, disclaimedArgv] = disclaimedCommand(bin, args, options.env);
-  const [file, argv] = options.scope ? options.scope.command(disclaimed, disclaimedArgv) : [disclaimed, disclaimedArgv];
+  const [file, argv] = options.scope ? options.scope.command(bin, args) : [bin, [...args]];
   const child = spawn(file, argv, { cwd: options.cwd, env: options.env, detached: grouped });
   spawned.add(child);
   const pid = child.pid;
@@ -316,18 +313,6 @@ export function signalSession(child: ChildProcess, signal: NodeJS.Signals, platf
     } catch { /* fall back to the leader alone */ }
   }
   child.kill(signal);
-}
-
-/** Signal what a leader that already exited left in its group, under the reap's guard: Cursor
- * print ends its group as each turn's leader exits, ahead of the exit drain. A SIGTERM is the reap
- * itself, sent at most once per group; a SIGKILL goes only to a group that is still ours. */
-export function signalExitedSession(child: ChildProcess, signal: 'SIGTERM' | 'SIGKILL'): void {
-  const pid = child.pid;
-  const leader = pid === undefined ? undefined : leaders.get(pid);
-  if (leader?.child !== child || !exited(child)) return;
-  if (signal === 'SIGTERM') reap(pid!, leader);
-  else if (stale(pid!, leader)) drop(pid!, leader);
-  else signalProcessGroup(pid!, 'SIGKILL');
 }
 
 /** The pgid of a registered, still-running grouped leader, for the worker process ledger. */

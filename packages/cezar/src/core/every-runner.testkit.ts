@@ -7,4 +7,4 @@ import { useRunners } from './runners-under-test.testkit.ts';
 // that starts no runner imports `no-runner.testkit.ts`, and one that runs only Claude imports
 // `claude-runner.testkit.ts`. This kit's choice is explicit, so it beats both of them when one test
 // file loads them together (hearsay-tools/cezarion#3242).
-useRunners((backend, options) => createRunner(backend, options));
+useRunners(backend => createRunner(backend));

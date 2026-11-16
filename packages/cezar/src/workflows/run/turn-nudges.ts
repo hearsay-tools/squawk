@@ -205,7 +205,7 @@ export class TurnNudges {
     }
     const content: ContentBlock[] = [{ type: 'text', text }];
     // The fact and its bound exist before the transport can emit an event for this send: a runner
-    // that starts the nudge's turn inside sendAgentMessage (OpenCode, Cursor) finds them
+    // that starts the nudge's turn inside sendAgentMessage (OpenCode) finds them
     // (hearsay-tools/squawk#2443). A refused send takes them back.
     recordNudge(state, { cause: 'autonomous', state: 'submitted' });
     this.armAutonomousNudgeBound(runId, state);
@@ -281,7 +281,7 @@ export class TurnNudges {
   }
 
   /** Heartbeats and nested subagent items are not a reply. A `turn.started` counts only while the
-   *  reply timer runs or after it expired on this session: OpenCode and Cursor emit a synthetic one
+   *  reply timer runs or after it expired on this session: OpenCode emits a synthetic one
    *  inside `sendAgentMessage`, and a later send goes through `submitAgentInput`, which resumes. */
   isNoWaitNudgeReply(state: ActiveRun, event: { type: string; item?: { parentItemId?: string } }): boolean {
     if (event.type === 'turn.started') return state.boundary.noWaitNudgeReplyTimer !== undefined || state.boundary.noWaitNudgeParked === state.liveSession.session;

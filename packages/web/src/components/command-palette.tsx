@@ -292,9 +292,9 @@ export function CommandPalette() {
     setOpen(false)
     navigate('/new')
   }, [navigate])
-  // ⌘N works only in the desktop shell — the browser reserves it (new window), so the page
-  // never sees it. `c`-to-create (GitHub/Linear) is the browser-usable accelerator and the one
-  // the hint chips advertise; ⌘N stays registered for the Electron shell where it fires.
+  // Most browsers reserve ⌘N (new window), so the page rarely sees it. `c`-to-create
+  // (GitHub/Linear) is the browser-usable accelerator and the one the hint chips advertise;
+  // ⌘N stays registered for a window that lets it through.
   useCommandShortcut('n', newTask)
   useKeyShortcut('c', newTask)
 

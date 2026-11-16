@@ -151,9 +151,9 @@ describe('health topic + cache (live-server path)', () => {
     return ((await res.json()) as { defaultRunner?: string }).defaultRunner;
   };
 
-  it('registers the health, Cursor models, activity, reports and home recovery topics', () => {
+  it('registers the health, activity, reports and home recovery topics', () => {
     const { topics, families } = build();
-    expect([...topics.keys()]).toEqual(['health', 'models:cursor', 'home:recovery', 'activity:workspace']);
+    expect([...topics.keys()]).toEqual(['health', 'home:recovery', 'activity:workspace']);
     expect(families).toEqual(['reports:project:', 'activity:project:']);
   });
 

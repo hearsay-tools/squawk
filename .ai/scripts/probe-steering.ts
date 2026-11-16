@@ -3,10 +3,9 @@
 //
 // Spends ONE paid session on the named backend. Never run by CI or `npm test`, and
 // never packed (it lives outside packages/). Usage, from the repo root:
-//   node_modules/.bin/tsx .ai/scripts/probe-steering.ts <claude|codex|pi|opencode|cursor> [model]
+//   node_modules/.bin/tsx .ai/scripts/probe-steering.ts <claude|codex|pi|opencode|omp> [model]
 // Expected on a steer runner: ACK ~instantly after SENT, CONSUMED after tool-result and
-// before turn-end, a single turn-end, and RESULT.textHasToken true. Cursor refuses busy
-// input (SENT refused) and receives it at the turn boundary instead.
+// before turn-end, a single turn-end, and RESULT.textHasToken true.
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -26,7 +25,7 @@ After it finishes, reply with every user message you received after this one, ve
 const runner = createRunner(backend);
 rec('delivery', inputDeliveryOf(runner));
 let sent = false; let turnEnds = 0;
-const session = runner.startSession({ userPrompt: PROMPT, cwd, model, ...(backend === 'cursor' ? {} : { effort: 'low' }), toolGrant: { kind: 'explicit', tools: ['Bash'] }, timeoutMs: 300_000 }, (event: AgentEvent) => {
+const session = runner.startSession({ userPrompt: PROMPT, cwd, model, effort: 'low', toolGrant: { kind: 'explicit', tools: ['Bash'] }, timeoutMs: 300_000 }, (event: AgentEvent) => {
   if (event.type === 'tool-call') { rec('tool-call', event.tool); if (!sent) { sent = true; setTimeout(send, 8_000); } }
   else if (event.type === 'tool-result') rec('tool-result', event.result.slice(0, 60));
   else if (event.type === 'text') rec('text', event.text.slice(0, 160));

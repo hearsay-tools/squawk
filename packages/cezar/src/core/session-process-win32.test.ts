@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const spawned = vi.hoisted(() => ({ calls: [] as unknown[][], throws: false }));
 vi.mock('node:child_process', async (original) => {
@@ -17,7 +17,6 @@ vi.mock('node:child_process', async (original) => {
 });
 
 import { signalSession, spawnSessionLeader } from './session-process.ts';
-import { startCursorPrintProcess } from './cursor-print-process.ts';
 
 const fake = (exitCode: number | null) =>
   ({ pid: 4242, exitCode, signalCode: null, kill: vi.fn(() => true) }) as unknown as ChildProcess;
@@ -59,22 +58,5 @@ describe('session signals on win32', () => {
     spawned.throws = true;
     signalSession(child, 'SIGKILL', 'win32');
     expect(child.kill).toHaveBeenCalledWith('SIGKILL');
-  });
-
-  // hearsay-tools/cezarion#1286: Cursor print stops through the same seam as every other runner.
-  describe('Cursor print', () => {
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
-    beforeEach(() => { Object.defineProperty(process, 'platform', { ...platform, value: 'win32' }); });
-    afterEach(() => { Object.defineProperty(process, 'platform', platform); vi.restoreAllMocks(); });
-
-    it('ends a live turn\'s tree with taskkill /T /F', () => {
-      // Every pid here is the mocked spawn's: nothing may reach a real process.
-      const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
-      const proc = startCursorPrintProcess({ bin: 'agent', args: [], cwd: '.', env: {} }, { onStdout: () => {}, onStderr: () => {} });
-      spawned.calls.length = 0;
-      void proc.stop('interrupt');
-      expect(spawned.calls).toEqual([['taskkill', ['/T', '/F', '/PID', '4242'], { stdio: 'ignore', windowsHide: true }]]);
-      expect(kill).not.toHaveBeenCalled();
-    });
   });
 });

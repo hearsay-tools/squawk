@@ -20,18 +20,16 @@ import { WAIT_KIND, WAIT_PHASE, RUN_STATUS } from '@open-mercato/cezar-contract/
 // 10 s default (hearsay-tools/cezarion#873).
 //
 // The cap rows (A5, A11, A12) run MAX_AUTO_CONTINUES + 1 SEQUENTIAL turns, so their
-// cost is per turn times turns, not one bound. Cursor print makes it visible: every
-// turn is a fresh `-p` process plus the runner's 250 ms post-exit settle drain
-// (cursor-print-process.ts). Measured 2026-10-16 at load 5 on 24 cores: 327-348 ms
-// between nudges, 13.5 s per cell. With CEZ_MOCK_CURSOR_SPAWN_DELAY_MS=400 every gap
-// grew to 725-734 ms (max 771 ms, no stalled nudge) and the cell needed 28-31 s, past
-// this bound: the shape of the load-75 failure in hearsay-tools/cezarion#1125. So the
-// settle wait bounds the gap between turns, not the whole row: each nudge resets the
-// window, and a nudge that never lands (an autonomous run stuck between turns) still
-// fails within ROW_SETTLE_MS of the last one.
+// cost is per turn times turns, not one bound: on a loaded host the whole row outgrew
+// one fixed wait (hearsay-tools/cezarion#1125). So the settle wait bounds the gap
+// between turns, not the whole row: each nudge resets the window, and a nudge that
+// never lands (an autonomous run stuck between turns) still fails within
+// ROW_SETTLE_MS of the last one.
 const ROW_SETTLE_MS = 25_000;
 // The cell timeout for the cap rows grants each of their turns a budget instead.
-// 2 s is about six times Cursor's idle per-turn cost, the slowest runner's turn.
+// 2 s was sized at about six times the idle per-turn cost of a runner that spawned a
+// fresh process every turn (about 340 ms between nudges, measured 2026-10-16 at load 5
+// on 24 cores). Every remaining runner keeps one process across turns.
 const CAP_TURN_BUDGET_MS = 2_000;
 const CAP_ROW_TIMEOUT_MS = 30_000 + (MAX_AUTO_CONTINUES + 1) * CAP_TURN_BUDGET_MS;
 
@@ -123,8 +121,8 @@ describe('autonomous turn-end parity — #426', () => {
     for (const row of AUTONOMOUS_CRITERIA) {
       const exemption = exemptionFor(row.id, backend);
       if (row.id === 'A13' || row.id === 'A14') {
-        // Claude's stdin write and Cursor print's first model work are their acknowledgements.
-        const options = { refuses: !exemption, heldAck: backend !== 'claude' && backend !== 'cursor' };
+        // Claude's stdin write is its acknowledgement.
+        const options = { refuses: !exemption, heldAck: backend !== 'claude' };
         it(`${backend} ${row.id} ${exemption ? `exemption — ${exemption.reason}` : row.name}`,
           () => refusedNudgeIdleClose(backend, row.id === 'A14', options), 60_000);
         continue;

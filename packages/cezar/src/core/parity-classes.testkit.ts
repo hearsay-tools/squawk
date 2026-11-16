@@ -64,9 +64,9 @@ const FACT_VALUES = 'workflows/turn-path-fact-values.test.ts';
  * is a parity file, or does not spell its value.
  */
 export const FACT_VALUE_TESTS: Readonly<Record<TurnPathFact, Readonly<Record<string, readonly string[]>>>> = {
-  'inputDelivery.mode': { boundary: [FACT_VALUES] },
-  'inputDelivery.consumption': { unobservable: [FACT_VALUES] },
-  'inputDelivery.acknowledgement': { response: [FACT_VALUES], 'model-work': [FACT_VALUES] },
+  'inputDelivery.mode': {},
+  'inputDelivery.consumption': {},
+  'inputDelivery.acknowledgement': { response: [FACT_VALUES] },
   'inputDelivery.humanInputAtTurnEnd': { 'never-held': [FACT_VALUES], 'always-held': [FACT_VALUES] },
   systemPromptOnResume: { 'in-thread': ['workflows/launch-system-prompt.test.ts'] },
 };
@@ -112,9 +112,9 @@ export const PARITY_FAMILIES = {
     R14: 'a mixed-runner chain: each runner hands over to the next in RUNNER_IDS',
     R41: 'asserts on the native wire recording', R42: 'asserts on the native wire recording',
   }),
-  'harness:owned': shared('owned input is delivered by run.ts; R8 differs only by steer or boundary delivery', {
+  'harness:owned': shared('owned input is delivered by run.ts; R8 differs only by each runner\'s delivery', {
     R6: NATIVE_ASK_SCENARIO, R7: NATIVE_ASK_SCENARIO, R9: NATIVE_ASK_SCENARIO,
-    R131: 'each runner\'s own discardQueuedMessages decides whether it signals input readiness inside the turn end (Cursor print does)',
+    R131: 'each runner\'s own discardQueuedMessages decides whether it signals input readiness inside the turn end',
   }),
   ...Object.fromEntries(['continue', 'restart', 'adopt', 'stop', 'cleanup', 'multi-continue', 'superseded', 'disposal']
     .map(group => [`harness:${group}`, shared(SETTLEMENT_RULES)])),
@@ -150,7 +150,9 @@ export const PARITY_FAMILIES = {
     Q8: 'its authored timeout reaches each runner\'s own step deadline',
   }),
   'workflow-final-message': shared('the final-message rules are decided in turn-end.ts', {
-    F10: 'branches on cursor',
+    F8: 'its silent-tail scenario runs each runner\'s own nudge acknowledgement',
+    F9: 'its silent-tail scenario runs each runner\'s own late reply',
+    F10: 'its silent-tail scenario runs each runner\'s own slow wrap-up turn',
   }),
   'workflow-followup': everyRunner('the follow-up hold (H rows) is each runner class\'s own'),
   'workflow-no-progress': everyRunner('each runner reports its own model progress'),

@@ -1,4 +1,3 @@
-import type { SessionTransport } from '@open-mercato/cezar-contract';
 import type { AgentRunner, RunnerFactory, RunnerId } from './agent-runner.ts';
 
 /** The runner factory a test file drives. Each test file is its own module graph, so this is per
@@ -39,16 +38,16 @@ export function runnersUnderTest(): RunnerFactory {
   return current;
 }
 
-type RunnerMaker = (options: { sessionTransport?: SessionTransport }) => AgentRunner;
+type RunnerMaker = () => AgentRunner;
 
 /** A factory that builds the named runners and refuses every other backend, so a per-runner test
  *  loads and starts only the adapters it names. */
 export function onlyRunners(makers: Partial<Record<RunnerId, RunnerMaker>>): RunnerFactory {
-  return (backend, options = {}) => {
+  return (backend) => {
     const requested = backend === undefined || backend === 'claude-cli' ? 'claude' : backend;
     const make = makers[requested];
     if (!make) throw new Error(`This test drives only the ${Object.keys(makers).join(' and ')} runner; it was asked for ${String(backend)}.`);
-    return make(options);
+    return make();
   };
 }
 

@@ -14,6 +14,13 @@ describe('account holds', () => {
     expect(accountHeldFor(makeRunRecord({ status: RUN_STATUS.queued, runner: 'claude' }), holds, 'claude')).toBe(true);
   });
 
+  // hearsay-tools/squawk#3715: the limit belonged to a runner Squawk no longer ships.
+  it('a usage-limit hold on a removed runner blocks no live account', () => {
+    const holds = deriveAccountHolds([makeRunRecord({ status: RUN_STATUS.waiting, removedRunner: 'cursor', autoResumeAt: later })], same, NOW);
+    expect(holds.deadline.size).toBe(0);
+    expect(holds.inFlight.size).toBe(0);
+  });
+
   it('a provider-error hold blocks no account', () => {
     const holds = deriveAccountHolds([makeRunRecord({ status: RUN_STATUS.waiting, runner: 'claude', autoResumeAt: later, autoResumeReason: 'provider-error' })], same, NOW);
     expect(holds.deadline.size).toBe(0);

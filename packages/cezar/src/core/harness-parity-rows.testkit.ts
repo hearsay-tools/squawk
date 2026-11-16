@@ -80,7 +80,6 @@ export const CONTROL_CRITERIA = [
   { id: 'D3', scenario: 'baseline' },
   { id: 'S5', scenario: 'baseline' },
   { id: 'S6', scenario: 'baseline' },
-  { id: 'S35', scenario: 'baseline' },
   { id: 'S11', scenario: 'ask' },
   { id: 'S12', scenario: 'hold' },
   { id: 'S13', scenario: 'hold' },

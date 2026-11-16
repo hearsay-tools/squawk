@@ -1,3 +1,4 @@
+import { upgradeRemovedRunnerSummary } from './legacy-run-rows.ts';
 import { toRunSummary, type RunSummary } from '@open-mercato/cezar-contract/runs';
 import type { RunDatabase } from './run-database.ts';
 import type { RunRecord } from './store.ts';
@@ -47,6 +48,7 @@ export function parseStoredSummary(text: string): RunSummary | undefined {
     const raw: unknown = JSON.parse(text);
     if (!raw || typeof raw !== 'object') return undefined;
     const row = raw as Record<string, unknown>;
+    upgradeRemovedRunnerSummary(row);
     return typeof row.id === 'string' && typeof row.title === 'string' && typeof row.status === 'string' &&
       typeof row.createdAt === 'string' && typeof row.archived === 'boolean' ? raw as RunSummary : undefined;
   } catch {

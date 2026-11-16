@@ -49,16 +49,8 @@ reason), use the ACP name.
 
 ## 4. Per-backend mapping (summary)
 
-Each backend's mapper is `packages/cezar/src/core/<backend>-ui-mapper.ts`
-(`cursor-print-ui-mapper.ts` for Cursor). Its golden fixtures (§8) are the wire-to-event
-table.
-
-<a id="cursor-acp-264"></a>
-
-### Cursor print
-
-`packages/cezar/src/core/__fixtures__/cursor/README.md` holds the limits that a user meets
-on Cursor, with their evidence.
+Each backend's mapper is `packages/cezar/src/core/<backend>-ui-mapper.ts`. Its golden
+fixtures (§8) are the wire-to-event table.
 
 <a id="codex-managed-permissions-708"></a>
 

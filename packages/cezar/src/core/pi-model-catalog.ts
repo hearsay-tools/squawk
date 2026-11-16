@@ -1,9 +1,9 @@
 import type { ModelDiscoveryOptions } from './model-discovery-options.ts';
 import { productEnv } from './product-env.ts';
-import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { spawnModelProbe, type ModelProbeSpawnImpl } from './model-probe-spawn.ts';
 import { effortLevelSchema, type EffortLevel } from '@open-mercato/cezar-contract/effort';
 import { modelProbeTeardown } from './model-probe-teardown.ts';
-import { buildChildEnv } from './agent-env.ts';
 import type { ModelOption } from './runner-model-catalog.ts';
 
 export type PiModelDiscoveryOptions = ModelDiscoveryOptions;
@@ -260,18 +260,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function spawnPi(
-  bin: string,
-  args: readonly string[],
-  cwd: string,
-  spawnImpl: (
-    bin: string,
-    args: string[],
-    options: { cwd: string; env: NodeJS.ProcessEnv },
-  ) => ChildProcessWithoutNullStreams = nodeSpawn,
-): ChildProcessWithoutNullStreams {
-  return spawnImpl(bin, [...args], {
-    cwd,
-    env: buildChildEnv({ backend: 'pi' }),
-  });
+export function spawnPi(bin: string, args: readonly string[], cwd: string, spawnImpl?: ModelProbeSpawnImpl): ChildProcessWithoutNullStreams {
+  return spawnModelProbe('pi', bin, args, cwd, spawnImpl);
 }

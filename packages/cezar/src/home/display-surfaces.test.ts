@@ -6,6 +6,7 @@ import { runMessageCommand, runWorkerCommand } from '../delegation/cli.ts';
 import { taskHelp } from '../task-cli/cli.ts';
 import { detectEnvironment } from '../core/backend-detect.ts';
 import { checkoutRoot, discoverCockpit } from '../task-cli/discovery.ts';
+import { RUNNER_IDS } from '../core/agent-runner.ts';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -32,7 +33,7 @@ it('uses the preferred dry-run setting name for every agent', async () => {
   vi.stubEnv('CEZ_DRY_RUN', undefined);
   const checks = await detectEnvironment();
   expect(checks.filter(check => !['gh', 'git'].includes(check.name)).map(check => check.version))
-    .toEqual(Array(6).fill('mock (HSQ_DRY_RUN=1)'));
+    .toEqual(Array(RUNNER_IDS.length).fill('mock (HSQ_DRY_RUN=1)'));
 });
 
 it('uses the preferred command in the missing cockpit hint', async () => {

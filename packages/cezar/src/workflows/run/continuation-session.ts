@@ -193,8 +193,7 @@ export class ContinuationSession {
     );
   }
 
-  /** Mark the run and the Continue's step as running, then open the step. A Cursor session resumes
-   *  on the transport it was opened with; the runner refuses an ACP one (hearsay-tools/cezarion#1267). */
+  /** Mark the run and the Continue's step as running, then open the step. */
   private startContinuationStep(
     runId: string,
     stepId: string,
@@ -207,15 +206,12 @@ export class ContinuationSession {
       finishedAt: undefined,
       currentStepId: stepId,
     });
-    // The Continue keeps the transport its session was opened on, for any runner that records one.
-    const sessionTransport = sessionId ? record?.steps.find((step) => step.sessionId === sessionId)?.sessionTransport : undefined;
     this.context.store.updateStep(runId, stepId, {
       status: 'running',
       iterations: 1,
       startedAt: new Date().toISOString(),
       sessionId,
       backend,
-      ...(sessionTransport ? { sessionTransport } : {}),
     });
     this.context.store.appendEvent(runId, { type: 'step-start', stepId, name: 'Continue', kind: 'agent', iteration: 1 });
   }

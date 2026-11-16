@@ -32,8 +32,6 @@ What changes in the Squawk release:
 - **Servers.** An install made with `server-install` (Ubuntu or macOS + ngrok)
   does not migrate at boot. It keeps the old home until you run
   `hsq server-migrate`.
-- **Desktop.** The app gets a new ID. A bridge build of the old desktop app
-  installs the new app and hands over its state.
 - **Older binaries.** An older build opens `.ai/cezar/` directly. It does not see
   the tasks of a project that a newer cockpit moved, but no data is lost.
 
@@ -54,7 +52,7 @@ The rebrand release PR merges first. Then the owner:
    releases `@wjarka/cezarion` and `cezarion` of the same version
    ([publishing runbook](publishing.md#owner-runbook-for-the-npm-rename));
 4. renames the repository to `hearsay-tools/squawk`;
-5. publishes the desktop and mobile store listings for the new IDs;
+5. publishes the mobile store listings for the new IDs;
 6. runs `hsq server-migrate` on each server install that `server-install`
    recorded (Ubuntu and macOS + ngrok);
 7. after the first start of the new build on each host, checks that the new
@@ -94,8 +92,8 @@ in this table. They are path placeholders, not shell variables.
 | Root | Contents | Linux default | macOS default | Windows default |
 | --- | --- | --- | --- | --- |
 | config | Registry and settings, accounts, remote grants, tracker connections, install marker | `~/.config/hearsay-squawk` | `~/Library/Application Support/Hearsay Squawk/config` | `%APPDATA%\Hearsay Squawk` |
-| state | UI state, server records, backups, update recovery, desktop window and connection state | `~/.local/state/hearsay-squawk` | `~/Library/Application Support/Hearsay Squawk/state` | `%LOCALAPPDATA%\Hearsay Squawk\state` |
-| data | Managed versions and launchers, copied account directories, desktop browser profiles on Linux/Windows | `~/.local/share/hearsay-squawk` | `~/Library/Application Support/Hearsay Squawk/data` | `%LOCALAPPDATA%\Hearsay Squawk\data` |
+| state | UI state, server records, backups, update recovery, window and connection state left by the former desktop app | `~/.local/state/hearsay-squawk` | `~/Library/Application Support/Hearsay Squawk/state` | `%LOCALAPPDATA%\Hearsay Squawk\state` |
+| data | Managed versions and launchers, copied account directories, browser profiles left by the former desktop app on Linux/Windows | `~/.local/share/hearsay-squawk` | `~/Library/Application Support/Hearsay Squawk/data` | `%LOCALAPPDATA%\Hearsay Squawk\data` |
 | cache | Team skills, dry-run caches | `~/.cache/hearsay-squawk` | `~/Library/Caches/Hearsay Squawk` | `%LOCALAPPDATA%\Hearsay Squawk\cache` |
 | runtime | Sockets and temporary runtime files | `$XDG_RUNTIME_DIR/hearsay-squawk`, else `<state>/run` | `$TMPDIR/hearsay-squawk`, else `/tmp/hearsay-squawk` | `%LOCALAPPDATA%\Hearsay Squawk\run` |
 
@@ -152,7 +150,7 @@ opens `.ai/cezar/` directly and does not see the tasks of a moved project.
 
 ## Inspect and migrate a local install
 
-Quit every cockpit and desktop app that uses the old home. Finish active agent
+Quit every cockpit that uses the old home. Finish active agent
 sessions before moving their account directories. Run these commands as the
 same OS user that owns the installation:
 
@@ -166,7 +164,7 @@ Check the source, all target roots, the backup path, files and account
 deferrals. The real migration takes a claim and the legacy write lock. It
 refuses a live cockpit lease and names the holder. It copies and verifies data
 before committing the new marker. Repeating a committed migration is safe.
-Normal local and desktop boot use this same migration path.
+Normal local boot uses this same migration path.
 
 An account directory inside the old home is copied to `<data>/accounts/<id>`
 when it is not in use. Accounts outside the old home keep their paths.
@@ -274,27 +272,6 @@ launchd agents stay untouched. The macOS path is checked by unit tests with a fa
 See the [Ubuntu guide](server-install/ubuntu-vps.md) and
 [macOS guide](server-install/macosx-ngrok.md) for platform details.
 
-## Desktop
-
-The desktop identity changes from `tools.hearsay.cezarion` to
-`tools.hearsay.squawk`. The owner publishes a final bridge on the old feed.
-For macOS apps, per-user Windows NSIS and Linux AppImage installs, it installs
-the new app beside the old app, copies closed window state, connections and
-persistent browser profiles, then waits for the new app to acknowledge startup
-before removing the old app. Connection UUIDs and trusted origins stay the same.
-On failure, the old app and source state remain usable. Close both apps before
-retrying; a conflicting destination is never overwritten silently.
-
-DEB and Arch installs receive a manual package-move notice. Use the same package
-manager to install the new package and later remove the old one. These builds
-do not transfer profiles or run a privileged updater. Keep the old app and its
-state until you verify the new app. See [desktop setup](desktop.md) for details.
-
-macOS asks again for permissions tied to the app ID, including notifications
-and automation. Squawk has no app-managed Keychain or password store. macOS 14+
-closed WebKit stores carry cookies and site storage through the bridge;
-macOS 12–13 remote profiles remain temporary.
-
 ## Rollback and the deprecation window
 
 A failed pre-commit home migration leaves the old home intact. A failed server
@@ -308,15 +285,13 @@ binary against the retained legacy home (`CEZ_HOME` for a custom source).
 That home is the old snapshot; changes made only in the new home are not copied
 back. Save and reconcile those changes before resuming work. Server operators
 must also restore their retained units/sites and verify authentication and
-health; do not run old and new services on the same ports. Desktop rollback
-also needs the matching old app and its retained source state.
+health; do not run old and new services on the same ports.
 
 The deprecation window lasts **two minor releases or 60 days, whichever is
 later**. During it, old command names and `CEZ_*` settings work with notices.
 Ordinary settings prefer `HSQ_*`, including an explicitly empty value, then
 fall back to `CEZ_*`. Boot lists old names that are still set, without values.
 Hosted mode is an exception: `HSQ_REMOTE=1` or `CEZ_REMOTE=1` enables it.
-Native sidecar controls have their own precedence; do not configure them.
 
 After the window, old binaries and ordinary env fallbacks are scheduled for
 removal in the cleanup release. `CEZ_HOME` keeps its permanent fallback. The

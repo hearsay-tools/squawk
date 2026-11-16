@@ -1,5 +1,4 @@
 import type { RunnerId } from './agent-runner.ts';
-import { resolveCursorExecutable } from './cursor-model-catalog.ts';
 import { resolveOmpExecutable } from './omp-model-catalog.ts';
 import { quoteExecutable } from './shell-env.ts';
 
@@ -22,7 +21,6 @@ export const RUNNER_CLI: Readonly<Record<RunnerId, RunnerCli>> = {
   codex: { terminalExecutable: { kind: 'path-name', name: 'codex' }, resumeArgs: id => `resume ${id}` },
   opencode: { terminalExecutable: { kind: 'path-name', name: 'opencode' }, resumeArgs: id => `--session ${id}` },
   pi: { terminalExecutable: { kind: 'path-name', name: 'pi' }, resumeArgs: id => `--session ${id}` },
-  cursor: { terminalExecutable: { kind: 'configured', resolve: () => resolveCursorExecutable() }, resumeArgs: id => `--resume ${id}` },
   omp: { terminalExecutable: { kind: 'configured', resolve: () => resolveOmpExecutable() }, resumeArgs: id => `--resume ${id}` },
 };
 

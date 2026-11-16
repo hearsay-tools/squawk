@@ -26,9 +26,14 @@ test('shared input, missing base and an unexpected skip select full without an i
   }
 });
 
-test('CI browser selection falls back on an error, a missing map or no selected spec', () => {
-  assert.equal(browserFiles(() => { throw new Error('missing base'); }), null);
-  assert.equal(browserFiles(() => ({ all: true, specs: ['a'] })), null);
-  assert.equal(browserFiles(() => ({ all: false, specs: [] })), null);
-  assert.deepEqual(browserFiles(() => ({ all: false, specs: ['packages/web/e2e/smoke.e2e.ts'] })), ['packages/web/e2e/smoke.e2e.ts']);
+test('CI browser selection runs only a shorter list and gives the reason for every other answer', () => {
+  assert.deepEqual(browserFiles(() => { throw new Error('missing base\nstack'); }, 2), { skip: 'the selector failed: missing base' });
+  const all = { all: true, specs: ['a', 'b'], reason: 'x needs every spec' };
+  assert.deepEqual(browserFiles(() => all, 2), { chosen: all, skip: 'the selector chose every spec: x needs every spec' });
+  const mappedAll = { all: false, specs: ['a', 'b'] };
+  assert.deepEqual(browserFiles(() => mappedAll, 2), { chosen: mappedAll, skip: 'the selector chose every spec' });
+  const none = { all: false, specs: [], reason: 'no changed file reaches a browser spec' };
+  assert.deepEqual(browserFiles(() => none, 2), { chosen: none, skip: 'the selector chose no spec: no changed file reaches a browser spec' });
+  const short = { all: false, specs: ['packages/web/e2e/smoke.e2e.ts'] };
+  assert.deepEqual(browserFiles(() => short, 2), { chosen: short });
 });

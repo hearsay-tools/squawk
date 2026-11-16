@@ -95,7 +95,6 @@ export const setWorkspaceConfigInputSchema = z.object({
           codex: z.string().trim().min(1).max(200).nullable().optional(),
           opencode: z.string().trim().min(1).max(200).nullable().optional(),
           pi: z.string().trim().min(1).max(200).nullable().optional(),
-          cursor: z.string().trim().min(1).max(200).nullable().optional(),
           omp: z.string().trim().min(1).max(200).nullable().optional(),
         })
         .optional(),
@@ -412,7 +411,6 @@ export const setConfigInputSchema = z.object({
       codex: z.string().trim().max(200).nullable().optional(),
       opencode: z.string().trim().max(200).nullable().optional(),
       pi: z.string().trim().max(200).nullable().optional(),
-      cursor: z.string().trim().max(200).nullable().optional(),
       omp: z.string().trim().max(200).nullable().optional(),
     })
     .optional(),
@@ -488,7 +486,7 @@ export type ProviderConnectResponse = z.infer<typeof providerConnectResponseSche
 /**
  * The runners whose model list is discovered from the host rather than hard-coded: Codex
  * through its app-server protocol, OpenCode through its own `models` listing (#794), Pi
- * through `pi --list-models`, Cursor through `agent --list-models`, and Claude through
+ * through `pi --list-models`, and Claude through
  * stream-json `list_models`. One definition, used by the route's query validator and the picker.
  */
 export const modelDiscoveryRunnerSchema = runnerSchema;

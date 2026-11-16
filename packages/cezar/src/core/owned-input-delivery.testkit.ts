@@ -35,7 +35,7 @@ export function withRejectedInput(runner: RunnerId, body: (lift: () => void) => 
 }
 
 /** Hold only the transport acknowledgement of a matching input; the turn's real frames
- * still reach the runner. On Cursor print the acknowledgement is the first model work. */
+ * still reach the runner. */
 export function withHeldAck(runner: RunnerId, body: (release: () => void) => Promise<void>,
   match = 'delay-owned-ack'): Promise<void> {
   return withDeliveryControl(runner, { kind: 'hold-ack', match }, control => body(control.release));

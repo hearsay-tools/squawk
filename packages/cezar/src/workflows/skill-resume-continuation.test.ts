@@ -51,9 +51,9 @@ const TEAM_SKILL_BODY = 'TEAM-PLAYBOOK-BODY-790';
 const MISSING_SKILL_LIFECYCLE = `skill /${TEAM_SKILL} is not in the skill registry — its instructions were not re-sent to the continued session`;
 const MATERIALIZED_NOTE = `team skill "${TEAM_SKILL}" materialized to`;
 
-/** All three in-worktree copies, which `materializeSkillDir` reports written. */
+/** Both in-worktree copies, which `materializeSkillDir` reports written. */
 function writtenSkillDirs(worktree: string): string[] {
-  return ['.claude', '.agents', '.cursor'].map((agentDir) => join(worktree, agentDir, 'skills', TEAM_SKILL));
+  return ['.claude', '.agents'].map((agentDir) => join(worktree, agentDir, 'skills', TEAM_SKILL));
 }
 
 function teamDirSkill(): Skill {

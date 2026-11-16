@@ -104,17 +104,6 @@ const CAPABILITIES: ReadonlyArray<[name: string, produced: (events: UiEvent[]) =
   }],
 ] as const;
 
-/** Cursor print 2026.10.01-e373342 (hearsay-tools/cezarion#1267 removed ACP): per the Cursor
- * output-format reference, print suppresses `thinking` events and its terminal `result` frame
- * carries no usage, so no reasoning item and no usage can be mapped. Keep inverse assertions so
- * fabricated fixture data cannot erase the gaps.
- */
-const CURSOR_PRINT_GAPS = new Set([
-  'reasoning items (thinking / reasoning items / reasoning parts)',
-  'usage.updated with raw token counts',
-  'turn.completed with per-turn directional usage',
-]);
-
 /** hearsay-tools/cezarion#961: a runner whose declared `hookEvents` is `none` streams no hook
  * lifecycle; its facts row names the wire. The inverse assertion keeps a fabricated hook item from
  * erasing the gap.
@@ -130,11 +119,6 @@ const HOOK_ROW = 'hook items (hook_response / hook/completed)';
 const NO_BACKGROUND_SUBAGENTS = new Set(runnersWhere(facts => facts.nativeSubagents !== 'reported'));
 
 describe('protocol v2 backend parity (every mapper emits every matrix capability)', () => {
-  it('Cursor print independently emits a plan from its native todo wire', () => {
-    const printEvents = JSON.parse(readFileSync(join(HERE, '__fixtures__', 'cursor',
-      'print-lifecycle.expected.json'), 'utf8')) as UiEvent[];
-    expect(printEvents.some(event => event.type === 'plan.updated' && event.entries.length > 0)).toBe(true);
-  });
   for (const backend of BACKENDS) {
     const events = fixtureEvents(backend);
     for (const [name, produced] of CAPABILITIES) {
@@ -148,15 +132,6 @@ describe('protocol v2 backend parity (every mapper emits every matrix capability
         it(`${backend} explicitly lacks ${name} (no child outlives a parent turn on its wire)`, () => {
           expect(produced(events)).toBe(false);
           expect(items(events).some((item) => item.kind === 'tool' && item.background === true)).toBe(false);
-        });
-        continue;
-      }
-      if (backend === 'cursor' && CURSOR_PRINT_GAPS.has(name)) {
-        it(`cursor explicitly lacks ${name} (2026.10.01-e373342 print suppresses thinking and usage)`, () => {
-          expect(produced(events)).toBe(false);
-          expect(events.some((event) => event.type === 'usage.updated')).toBe(false);
-          expect(events.some((event) => event.type === 'turn.completed' && event.usage !== undefined)).toBe(false);
-          expect(items(events).some((item) => item.kind === 'reasoning')).toBe(false);
         });
         continue;
       }

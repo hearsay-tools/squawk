@@ -244,7 +244,7 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
   let emit: (event: AgentEvent) => void;
   let emitUi: (event: UiEvent) => void;
   let acknowledge: () => void;
-  /** OpenCode and Cursor emit the nudge's turn.started inside sendAgentMessage, before it returns. */
+  /** OpenCode emits the nudge's turn.started inside sendAgentMessage, before it returns. */
   let startsTurnOnSend: boolean;
 
   beforeEach(() => {

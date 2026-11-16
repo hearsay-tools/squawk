@@ -1,5 +1,4 @@
 import { productName } from '@/lib/product-name'
-import { DesktopControls, isDesktopShell } from './desktop-controls'
 import { ChevronDownIcon, FolderIcon, MenuIcon, PlusIcon, SearchIcon, ShieldCheckIcon } from '@/components/design-icons'
 
 import { ChevronLeftIcon } from 'lucide-react'
@@ -218,10 +217,8 @@ export function AppShell({
     // The Sheet root renders no DOM of its own — it is the context that lets the top bar's menu
     // button be a real SheetTrigger while the open state stays ours to close on navigation.
     <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-      {isDesktopShell() ? <DesktopControls /> : null}
       <div
         data-slot="app-shell"
-        style={isDesktopShell() ? { paddingTop: 28 } : undefined}
         className="flex h-dvh overflow-hidden bg-background text-foreground pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
       >
         <DesktopSidebar
@@ -632,8 +629,8 @@ function SidebarContent({
             <PlusIcon className="size-[15px]" aria-hidden="true" />
             New task
             {/* Decorative: the `c`-to-create accelerator is registered in the command palette.
-                (⌘N is also bound there, but only the desktop shell receives it — the browser
-                reserves ⌘N for a new window — so the chip advertises the one that always works.) */}
+                (⌘N is also bound there, but most browsers reserve ⌘N for a new window, so the
+                chip advertises the one that always works.) */}
             <kbd
               aria-hidden="true"
               className="sr-only"

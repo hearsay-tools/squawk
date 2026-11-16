@@ -40,8 +40,6 @@ export const ACCOUNT_LAYOUT: Readonly<Record<ProviderId, AccountLayout>> = {
   codex: { select: { envVar: 'CODEX_HOME', by: 'folder' }, configSubdir: null, defaultBindsHome: true, stateFile: 'in-home' },
   opencode: { select: null, configSubdir: null, defaultBindsHome: false, stateFile: 'in-home' },
   pi: { select: { envVar: 'PI_CODING_AGENT_DIR', by: 'folder' }, configSubdir: null, defaultBindsHome: false, stateFile: 'in-home' },
-  // CURSOR_CONFIG_DIR relocates configuration, not a verified whole account home.
-  cursor: { select: null, configSubdir: null, defaultBindsHome: false, stateFile: 'in-home' },
   // A named omp account is a profile folder that keeps its config in `agent/`.
   omp: { select: { envVar: 'OMP_PROFILE', by: 'profile-name' }, configSubdir: 'agent', defaultBindsHome: false, stateFile: 'in-home' },
 };
@@ -149,7 +147,6 @@ const PROFILE_DIR_MARKERS: Record<ProviderId, readonly string[]> = {
   // dir is probed, but nothing it holds marks a login.
   opencode: [],
   pi: ['auth.json', 'settings.json', 'models.json', 'sessions'],
-  cursor: [],
   // A named account is a profile folder (`agent/`, `logs/`, `run/`, `cache/`); the discovered
   // default is an agent dir (`agent.db`, `config.yml`, `sessions/`). Either listing answers.
   omp: ['agent', 'agent.db', 'config.yml', 'sessions'],

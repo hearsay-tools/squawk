@@ -35,7 +35,7 @@ export function createFixtureManager(...args: [store: RunStore, root: string, op
   const [store, root, options] = args;
   const group = fixtures.get(root) ?? { work: options?.work ?? new TrackedWork(), managers: [] };
   const manager = new FixtureManager(store, root, {
-    home: testHome(), createRunner: (backend, runnerOptions) => runnersUnderTest()(backend, runnerOptions), acquireCiResources: acquireInertCiResources,
+    home: testHome(), createRunner: backend => runnersUnderTest()(backend), acquireCiResources: acquireInertCiResources,
     ...options, work: group.work,
   });
   managerWork.set(manager, group.work);

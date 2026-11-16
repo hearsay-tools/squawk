@@ -1,5 +1,5 @@
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -16,7 +16,6 @@ import { SEAM_CRITERIA, seamRows } from './harness-parity-seam-tier.testkit.ts';
 import { autoEndObservationClock } from './observation-clock.testkit.ts';
 import { AUTO_END_DELAY_MS } from './runner-runtime.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
-import { shellQuote } from './shell-env.ts';
 import { explicitToolGrant } from './tool-grant.testkit.ts';
 import { TOOL_GRANT_CASES, describeToolGrantParity } from './tool-grant-parity-cells.testkit.ts';
 
@@ -186,10 +185,6 @@ export const SPEC_FIELD_PROBES: Readonly<Record<AgentRunSpecField, SpecFieldProb
 };
 
 const variantKey = (spec: Partial<AgentRunSpec>): string => JSON.stringify(spec);
-const fieldVariants = (backend: RunnerId, field: AgentRunSpecField, probe: Extract<SpecFieldProbe, { kind: 'boundary' }>) =>
-  backend === 'cursor' && field === 'sessionId'
-    ? { kind: 'boundary' as const, without: {}, with: probe.with }
-    : probe;
 
 export const SESSION_GROUPS = {
   seam(r: HarnessRegistrar) {
@@ -357,25 +352,6 @@ export const SESSION_GROUPS = {
           },
           45_000,
         );
-
-        // Desktop privacy attribution: macOS execs this shim in place; other platforms bypass it.
-        it(`${backend} S35 keeps the native session working through the desktop launch trampoline`, async () => {
-          const dir = mkdtempSync(join(tmpdir(), 'cez-desktop-parity-'));
-          const trampoline = join(dir, 'desktop');
-          const marker = join(dir, 'called');
-          writeFileSync(trampoline, `#!/bin/sh\n[ "$1" = "--cez-disclaim-exec" ] || exit 91\nshift\nprintf called > ${shellQuote(marker)}\nexec "$@"\n`);
-          chmodSync(trampoline, 0o755);
-          vi.stubEnv('CEZ_DISCLAIM_EXEC', trampoline);
-          try {
-            const obs = await driveSeam(backend, 'baseline');
-            expect(obs.failure).toBeUndefined();
-            expect(obs.v1.some((e) => e.type === 'turn-end')).toBe(true);
-            expect(existsSync(marker)).toBe(process.platform === 'darwin');
-          } finally {
-            vi.unstubAllEnvs();
-            rmSync(dir, { recursive: true, force: true });
-          }
-        }, 45_000);
       }
     });
   },
@@ -512,8 +488,8 @@ export const SESSION_GROUPS = {
           beforeAll(async () => {
             dir = mkdtempSync(join(tmpdir(), `cez-spec-support-${backend}-`));
             const variants = new Map<string, Partial<AgentRunSpec>>();
-            for (const [field, entry] of Object.entries(SPEC_FIELD_PROBES) as [AgentRunSpecField, SpecFieldProbe][]) {
-              const probe = entry.kind === 'boundary' ? fieldVariants(backend, field, entry) : entry;
+            for (const [_field, entry] of Object.entries(SPEC_FIELD_PROBES) as [AgentRunSpecField, SpecFieldProbe][]) {
+              const probe = entry;
               if (probe.kind !== 'boundary') continue;
               variants.set(variantKey(probe.without), probe.without);
               variants.set(variantKey(probe.with), probe.with);
@@ -559,7 +535,7 @@ export const SESSION_GROUPS = {
               const probe = SPEC_FIELD_PROBES[field];
               let observed: boolean;
               if (probe.kind === 'boundary') {
-                const variants = fieldVariants(backend, field, probe);
+                const variants = probe;
                 const without = recordings.get(variantKey(variants.without));
                 const withField = recordings.get(variantKey(variants.with));
                 expect(without?.length ?? 0).toBeGreaterThan(0);
@@ -585,9 +561,9 @@ export const SESSION_GROUPS = {
   },
 
   // #781: the `squawkTools` cell, live. One shared Squawk tool list feeds every
-  // runner's own wire (Claude's MCP config and generated allow-list entry, Codex
-  // and Cursor forwarded env, OpenCode's runtime config, Pi's extension and tool
-  // admission), and each mock lists the tools through the real bundled adapter.
+  // runner's own wire (Claude's MCP config and generated allow-list entry, Codex's
+  // forwarded env, OpenCode's runtime config, Pi's extension and tool admission),
+  // and each mock lists the tools through the real bundled adapter.
   // `cezar_preview_serve` and `cezar_preview_stop` are listed under `CEZ_PREVIEW=1` exactly, and
   // `cezar_schedule_task` and `cezar_scheduled_tasks` unless `CEZ_AUTOMATIONS=0` (hearsay-tools/cezarion#1465).
   // Exercise the default and both explicit automation states on every native wire.

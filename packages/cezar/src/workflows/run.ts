@@ -1,4 +1,5 @@
 import { fallbackProjectWriteError, projectPaths } from '../project-paths.ts';
+import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 import { assertProjectAdmitted, projectAdmissionRefusal } from '../server/cockpit-ownership.ts';
 import { isLiveRecord } from '../runs/run-row.ts';
 import type { Home } from '../home/home.ts';
@@ -676,6 +677,17 @@ export class RunManager {
 
   async #execute(runId: string, workflow: WorkflowDef, input: StartRunInput, startAt = 0): Promise<void> {
     if (this.#workerExecutionStopped(runId)) { this.#modules.line.unmarkStarting(runId); return; }
+    // A task saved on a runner Squawk no longer ships starts only once a Continue names a live
+    // runner, which clears the mark; every other start would run the project default, which no one
+    // chose for it (hearsay-tools/squawk#3715).
+    const removedRunner = this.#store.getRun(runId)?.removedRunner;
+    if (removedRunner !== undefined) {
+      const error = removedRunnerMessage(removedRunner);
+      this.#move(runId, 'fail-start', { error, finishedAt: new Date().toISOString() });
+      this.#store.appendEvent(runId, { type: 'lifecycle', message: `run failed — ${error}` });
+      this.#modules.line.unmarkStarting(runId);
+      return;
+    }
     atTaskHead.verifyIdentity(this.#store, this.#repoRoot, runId, this.#context.home);
     const state = createActiveRun({
       cwd: this.#repoRoot,

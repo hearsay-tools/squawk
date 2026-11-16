@@ -23,7 +23,7 @@ Classification still uses the pull request file list, never labels. A PR is
 every path is one of:
 
 - `.github/workflows/report-workflow-failure.yml`, `sweep-ci-failures.yml`,
-  `upstream-scan.yml`, `npm-preview-cleanup.yml`, `publish-pr-snapshot.yml`,
+  `npm-preview-cleanup.yml`, `publish-pr-snapshot.yml`,
   or `issue-intake.yml` — workflows that never run product-test suites;
 - `.github/scripts/ci-sweep-api.cjs`, `ci-sweep-collect.cjs`,
   `ci-sweep-patterns.cjs`, `ci-sweep-report.cjs`, or `apply-issue-intake.cjs`,

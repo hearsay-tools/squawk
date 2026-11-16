@@ -55,9 +55,6 @@
       "packages/cezar/scripts/mock-codex-coalesce-steer.mjs",
       "packages/cezar/scripts/mock-codex-reverse-steer.mjs",
       "packages/cezar/scripts/mock-codex-subagents.mjs",
-      "packages/cezar/scripts/mock-cursor-hang-stdin-late.mjs",
-      "packages/cezar/scripts/mock-cursor-hang-stdin.mjs",
-      "packages/cezar/scripts/mock-cursor-print.mjs",
       "packages/cezar/scripts/mock-deferred-turn-start.mjs",
       "packages/cezar/scripts/mock-env-record.mjs",
       "packages/cezar/scripts/mock-multi-pr.mjs",
@@ -201,9 +198,6 @@
     ".github/scripts/e2e-runner.test.cjs": [
       ".ai/scripts/e2e.sh"
     ],
-    ".github/scripts/upstream-ledger.test.cjs": [
-      ".ai/upstream/**"
-    ],
     ".github/scripts/vitest-actions-report.test.cjs": [
       "vitest.config.ts"
     ],
@@ -242,9 +236,6 @@
     "packages/cezar/src/test-task-env.test.ts": [
       "scripts/test-git-env.mjs",
       "scripts/test-home-setup.mjs"
-    ],
-    "packages/cezar/test/unit/cursor-hang-stdin.test.ts": [
-      "packages/cezar/scripts/mock-cursor-hang-stdin.mjs"
     ],
     "packages/cezar/src/inline-contract-check.test.ts": [
       "packages/cezar/scripts/inline-contract.mjs",

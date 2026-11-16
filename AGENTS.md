@@ -13,9 +13,9 @@ trackers reuse numbers, so never infer the tracker from the number or the curren
 remote. Cite issues and PRs as `hearsay-tools/cezarion#N` / `open-mercato/cezar#N`,
 `fork #N` / `upstream #N`, or a repository-qualified GitHub link. A bare `#N` in older
 code is legacy; CI's `Check issue citations` step fails a change that adds one. Run
-`node .github/scripts/check-citations.cjs` before a PR. Archives, upstream commit
-titles and ledger fields follow
-[the ledger guide](.ai/upstream/README.md#citation-provenance).
+`node .github/scripts/check-citations.cjs` before a PR. An archive under a
+`> Historical source:` note keeps upstream's bare citations. A verbatim upstream
+commit title keeps its numbers, which belong to `open-mercato/cezar`.
 
 ## Zero config
 
@@ -92,17 +92,22 @@ holds that area's rules.
 | Agent config files (Settings → Agent config) | [`docs/areas/agent-config.md`](docs/areas/agent-config.md) |
 | Cockpit e2e specs, the browser seam, a flaky shard | [`packages/web/e2e/README.md`](packages/web/e2e/README.md) |
 | Feature specs / design history | `.ai/specs/` says why a design was chosen. Code, tests and ADRs win; a plan binds until its work ends |
-| Upstream drift: what open-mercato/cezar shipped, ported, declined | [`.ai/upstream/README.md`](.ai/upstream/README.md); fetch upstream into `refs/cez-upstream/main`, as its scan does |
 
 ## Validation
 
 In a fresh task worktree (`.ai/cezar/worktrees/<runId>`), run `pnpm install --frozen-lockfile`
 unless `worktreeSetup` already did.
 
-- When Squeal validates this worktree, it runs the unit tests after each edit: read its
-  verdicts and let it run them. Follow the [wait bound](docs/sdlc/ci.md#squeal-wait-bound).
-- Run Vitest through `npm test -- <args>`, the repo's pinned binary.
-- CI owns the final gate and full-suite runs. Locally, run what the change affects.
+- Squeal runs the unit tests after each edit and the parity and worker tests at turn end.
+  Read its verdicts; never run Vitest to learn a result. For a verdict now:
+  `squeal run tests|run-loop <paths> --wait 60000`. A brief or parent that says "run the
+  focused tests" means this. One test: `squeal status --wait 60000 <file> --check '<name>'`.
+  A failure's diff, stack and console output: `squeal why '<check>' --include-logs`
+  (names from `squeal failures <file>`). A failure you think load caused:
+  `squeal retry <file> --reason load`. Use `npm test -- <args>` (the pinned Vitest) only for a
+  [red proof](docs/sdlc/regression-proof.md), debug output or with no daemon. Follow the
+  [wait bound](docs/sdlc/ci.md#squeal-wait-bound).
+- CI owns the final gate and full-suite runs.
 - In a unit test, wait on the product's own signal. A timeout is only a hang guard, with a
   `// bound: <reason>` comment at the call site. A test that proves something did not happen
   uses fake timers or states at the call site why it needs real time.

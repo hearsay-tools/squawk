@@ -42,7 +42,6 @@ describe('workspace model catalog API', () => {
         adapters: {
           claude: { discover },
           codex: { discover },
-          cursor: { discover },
           opencode: { discover: opencodeDiscover },
           ...(piDiscover ? { pi: { discover: piDiscover } } : {}),
           ...(ompDiscover ? { omp: { discover: ompDiscover } } : {}),
@@ -67,15 +66,6 @@ describe('workspace model catalog API', () => {
       });
     }
     expect(calls).toBe(1);
-  });
-
-  it('degrades a Cursor discovery failure without leaking CLI output', async () => {
-    const response = await apiRequest(app(async () => { throw new Error('private output'); }), '/api/v1/models?runner=cursor');
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      runner: 'cursor', models: [], source: 'unavailable', stale: false,
-      reason: 'Cursor model discovery is temporarily unavailable',
-    });
   });
 
   it('degrades discovery failures to an unavailable 200 response', async () => {

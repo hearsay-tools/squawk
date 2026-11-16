@@ -222,7 +222,6 @@ const agentDefaultsSchema = z
         codex: z.string().trim().min(1).max(200).optional().catch(undefined),
         opencode: z.string().trim().min(1).max(200).optional().catch(undefined),
         pi: z.string().trim().min(1).max(200).optional().catch(undefined),
-        cursor: z.string().trim().min(1).max(200).optional().catch(undefined),
         omp: z.string().trim().min(1).max(200).optional().catch(undefined),
       })
       .passthrough()

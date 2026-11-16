@@ -26,7 +26,6 @@ import { createRunManager } from './run-manager.testkit.ts';
 const HANG_GUARD_MS = 15_000;
 
 const CONNECTED_OUTPUT: Record<ProviderId, string> = {
-  cursor: '{"status":"authenticated","isAuthenticated":true}',
   claude: '{"loggedIn":true}',
   codex: 'Logged in using ChatGPT',
   opencode: [
@@ -39,7 +38,6 @@ const CONNECTED_OUTPUT: Record<ProviderId, string> = {
 };
 
 const DISCONNECTED_OUTPUT: Record<ProviderId, string> = {
-  cursor: '{"status":"unauthenticated","isAuthenticated":false}',
   claude: '{"loggedIn":false}',
   codex: 'Not logged in',
   opencode: [
@@ -51,7 +49,6 @@ const DISCONNECTED_OUTPUT: Record<ProviderId, string> = {
 };
 
 const providerForExecutable = (executable: string): ProviderId => {
-  if (executable === 'agent') return 'cursor';
   if (executable === 'claude' || executable === 'codex' || executable === 'opencode' || executable === 'pi' || executable === 'omp') return executable;
   throw new Error(`unexpected executable: ${executable}`);
 };
@@ -179,7 +176,6 @@ describe('workspace provider API', () => {
           enabled: true,
         },
         { provider: 'pi', status: 'connected', enabled: true },
-        { provider: 'cursor', status: 'connected', enabled: true },
         { provider: 'omp', status: 'connected', enabled: true },
       ],
     });
@@ -201,7 +197,6 @@ describe('workspace provider API', () => {
         { provider: 'codex', status: 'connected', enabled: true },
         { provider: 'opencode', status: 'connected', enabled: true },
         { provider: 'pi', status: 'connected', enabled: true },
-        { provider: 'cursor', status: 'connected', enabled: true },
         { provider: 'omp', status: 'connected', enabled: true },
       ],
     });
@@ -708,7 +703,7 @@ describe('workspace provider API', () => {
     });
 
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: 'provider must be claude, codex, opencode, pi, cursor, or omp' });
+    expect(await response.json()).toEqual({ error: 'provider must be claude, codex, opencode, pi, or omp' });
   });
 
   it('never places request-controlled text in the opened command', async () => {
