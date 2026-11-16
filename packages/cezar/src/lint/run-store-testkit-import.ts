@@ -18,6 +18,7 @@ const LOADERS = new Set([
   'ImportDeclaration',
   'ExportNamedDeclaration',
   'ExportAllDeclaration',
+  'ExportDefaultDeclaration',
   'ImportExpression',
   'TSImportEqualsDeclaration',
   'CallExpression',

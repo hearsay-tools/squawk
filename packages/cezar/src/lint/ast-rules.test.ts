@@ -20,6 +20,7 @@ ruleCases(childKilledRead, {
     'counts.killedWorkers += 1',
     '// child.killed',
     "const gone = child['killed']",
+    'class Guard { #killed = false; stop() { return this.#killed } }',
   ],
   invalid: [
     "if (!child.killed) child.kill('SIGKILL')",
@@ -51,6 +52,7 @@ ruleCases(runStoreTestkitImport, {
     "import { openTestRunStore } from './run-store-open.testkit.ts'",
     "const kit = await import('../runs/run-store-open.testkit.js')",
     "export * from './run-store.testkit'",
+    "export default './run-store.testkit.ts'",
   ],
 });
 

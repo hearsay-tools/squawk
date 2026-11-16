@@ -22,7 +22,11 @@ function isErrorReceiver(receiver: EsNode | undefined): boolean {
   return name !== undefined && ERROR_NAME.test(name);
 }
 
-const isKilledKey = (owner: EsNode, field: string): boolean => owner.computed !== true && nameOf(child(owner, field)) === 'killed';
+/** A public `killed` name; `this.#killed` is a class's own private field, not the child's. */
+function isKilledKey(owner: EsNode, field: string): boolean {
+  const key = child(owner, field);
+  return owner.computed !== true && key?.type === 'Identifier' && nameOf(key) === 'killed';
+}
 
 export const childKilledRead: AstRule = {
   name: 'child-killed-read',
