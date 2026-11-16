@@ -121,17 +121,26 @@ describe.runIf(process.platform === 'win32')('job backend on Windows', { timeout
 
   it('stop ends a descendant that outlived its leader', async () => {
     const memory = memoryStore(), workerId = randomUUID();
+    const dir = mkdtempSync(join(tmpdir(), 'cez-job-descendant-'));
+    const pidFile = join(dir, 'descendant.pid');
     const scopes = new WorkerScopes(memory.store, () => ({ backend: 'job' }));
+    // The leader starts a detached descendant, records its pid and exits. Its stdio is ignored: a
+    // descendant that inherits a pipe would hold it open for as long as it runs.
     const [file, args] = scopes.spawnScope(workerId).command(process.execPath, ['-e',
-      "const c = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' }); c.unref(); console.log(c.pid);"]);
-    const run = spawnSync(file, args, { encoding: 'utf8', timeout: 180_000 });
-    expect(run.error).toBeUndefined();
-    expect(run.status).toBe(0);
-    const descendant = Number(run.stdout.trim().split('\n').at(-1));
-    expect(alive(descendant)).toBe(true);
-    expect(scopes.empty(workerId)).toBe(false);
-    expect(await scopes.stop(workerId, 60_000)).toEqual({ stopped: true });
-    await vi.waitFor(() => expect(alive(descendant)).toBe(false), { timeout: 30_000 }); // bound: process exit after TerminateJobObject is asynchronous
+      `const c = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' }); c.unref(); require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(c.pid));`]);
+    try {
+      const run = spawnSync(file, args, { stdio: 'ignore', timeout: 180_000 });
+      expect(run.error).toBeUndefined();
+      expect(run.status).toBe(0);
+      const descendant = Number(readFileSync(pidFile, 'utf8'));
+      expect(alive(descendant)).toBe(true);
+      expect(scopes.empty(workerId)).toBe(false);
+      expect(await scopes.stop(workerId, 60_000)).toEqual({ stopped: true });
+      await vi.waitFor(() => expect(alive(descendant)).toBe(false), { timeout: 30_000 }); // bound: process exit after TerminateJobObject is asynchronous
+    } finally {
+      await scopes.stop(workerId, 60_000);
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('a cmd.exe /s /c command keeps its own quotes inside the job', async () => {
