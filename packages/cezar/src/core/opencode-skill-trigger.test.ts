@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import type { AgentEvent, AgentSession } from './agent-runner.ts';
 import { SessionEndedBeforeAcknowledgement } from './agent-runner.ts';
 import { waitFor } from './harness-parity-core.testkit.ts';
@@ -14,6 +14,7 @@ import type { UiEvent } from './ui-events.ts';
 const bin = fileURLToPath(new URL('../../scripts/mock-opencode-serve.mjs', import.meta.url));
 const owned: { dir: string; session: AgentSession }[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const { dir, session } of owned.splice(0)) {
     session.end();
     await session.result.catch(() => undefined);
@@ -34,15 +35,27 @@ function start() {
 const ends = (events: AgentEvent[]) => events.filter(event => event.type === 'turn-end').length;
 const skill = (args: string, id = 'probe-project') => [{ type: 'skill' as const, id, args }];
 
-it('keeps a dropped command alive beyond 300 seconds, then completes from SSE', async () => {
+it.each(['drop', 'headers-timeout'] as const)('keeps a command alive after %s and beyond 300 seconds, then completes from SSE', async mode => {
   const { dir, session, events } = start();
   await waitFor(() => ends(events) === 1);
   const gate = join(dir, 'release');
   // Fake the parent deadline clock; the child waits on a file, so no wall-clock race decides completion.
   const clock = observationClock(delay => delay !== undefined && delay >= 300_000);
-  const ack = session.sendAgentMessage(skill(`mock:skill-drop mock:skill-gated ${gate}`), ['skill-input']);
+  if (mode === 'headers-timeout') {
+    const nativeFetch = globalThis.fetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      if (!String(input).endsWith('/command')) return nativeFetch(input, init);
+      // Model fetch's 300 s header deadline while the real native command/SSE stay gated.
+      const deadline = new AbortController();
+      const timer = setTimeout(() => deadline.abort(new Error('mock fetch headers timeout')), 300_000);
+      const signal = init?.signal ? AbortSignal.any([init.signal, deadline.signal]) : deadline.signal;
+      return nativeFetch(input, { ...init, signal }).finally(() => clearTimeout(timer));
+    });
+  }
+  const ack = session.sendAgentMessage(skill(`${mode === 'drop' ? 'mock:skill-drop ' : ''}mock:skill-gated ${gate}`), ['skill-input']);
   expect(ack).not.toBe(false);
   await ack;
+  if (mode === 'headers-timeout') expect(clock.captured).toBeGreaterThan(0);
   await clock.advance(301_000);
   expect(ends(events)).toBe(1);
   expect(events.filter(event => event.type === 'error')).toEqual([]);
