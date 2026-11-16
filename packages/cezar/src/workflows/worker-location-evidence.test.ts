@@ -14,9 +14,6 @@ import { DelegationService } from '../delegation/service.ts';
 import { agentTmpDir, agentTmpEnv, agentTmpDirLocations } from '../runs/agent-tmpdir.ts';
 import { manager, root, store, worker, until, executions, bookkeeping, reopenRuntime, useWorkerWaitFixture } from './worker-wait.testkit.ts';
 
-/** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
-const HANG_GUARD_MS = 15_000;
-
 // Node's os.tmpdir reads the original environment, including after this fixture replaces process.env.
 const nativeEnvironment = process.env;
 function setTmpRoot(value: string | undefined) {
@@ -39,7 +36,7 @@ describe.runIf(process.platform === 'linux' && process.getuid?.() !== 0)('R43 or
     vi.restoreAllMocks(); syncBuiltinESMExports();
   });
 
-  for (const damage of cases) it.each(RUNNER_IDS)(`%s keeps legacy execution unsettled with a real fallback holder and ${damage}`, async runner => {
+  for (const damage of cases) it.each(RUNNER_IDS)(`%s settles a crashed generation beside an outside fallback holder, keeping scratch while ${damage}`, async runner => {
     // Explicit opt-in: this recovery fixture seeds an inactive parent and registers the rebuilt runtime.
     const adapter = HARNESS_ADAPTERS[runner];
     process.env.CEZ_DRY_RUN = '0'; process.env[adapter.binEnv] = adapter.mockBin;
@@ -85,25 +82,21 @@ describe.runIf(process.platform === 'linux' && process.getuid?.() !== 0)('R43 or
       if (damage.startsWith('denied')) {
         chmodSync(metadata, 0); expect(() => readFileSync(metadata)).toThrow(/EACCES/);
       } else writeFileSync(metadata, '{corrupt');
-      expect(manager.settleOrphanedWorkerExecution(run.id, { fresh: true })).toBe(false);
-      expect(store.readWorkerExecution(run.id)).toMatchObject({ generation, phase: 'starting' });
-      if (damage.endsWith('receipt')) expect(agentTmpDirLocations(dataDir, run.id)).toContain(scratch);
-      expect(await service.collect(caller, { workerId: run.id })).toMatchObject({ settled: false });
-      expect(manager.finishBlockedReason(parent.id)).toContain(run.id);
-      expect(manager.finish(parent.id)).toBe(false);
-      const written = once(holder.stdout, 'data'); holder.stdin.write('still writable\n'); await written;
-      expect(readFileSync(join(scratch, 'holder-writes'), 'utf8')).toBe('still writable\n');
-      holder.stdin.end(); await exited;
-      // A clear scan of known locations cannot prove that undiscoverable locations are clear.
-      expect(manager.settleOrphanedWorkerExecution(run.id, { fresh: true })).toBe(false);
-      chmodSync(metadata, 0o600); writeFileSync(metadata, original);
+      // ADR 0032: the generation's recorded processes are gone, so it settles; a process outside the
+      // worker's scope that works in its scratch neither keeps it alive nor is signalled.
       expect(manager.settleOrphanedWorkerExecution(run.id, { fresh: true })).toBe(true);
       expect(store.readWorkerExecution(run.id)).toMatchObject({ generation, phase: 'complete' });
+      if (damage.endsWith('receipt')) expect(agentTmpDirLocations(dataDir, run.id)).toContain(scratch);
       expect(await service.collect(caller, { workerId: run.id })).toMatchObject({ settled: true });
-      expect(manager.finishBlockedReason(parent.id)).toBeUndefined();
+      const written = once(holder.stdout, 'data'); holder.stdin.write('still writable\n'); await written;
+      expect(readFileSync(join(scratch, 'holder-writes'), 'utf8')).toBe('still writable\n');
+      // Damaged location evidence still keeps the scratch: its ownership cannot be proven.
+      expect(existsSync(scratch)).toBe(true);
+      holder.stdin.end(); await exited;
+      chmodSync(metadata, 0o600); writeFileSync(metadata, original);
       expect(manager.finish(parent.id)).toBe(true);
       await until(() => store.getRun(parent.id)?.status === 'done');
-      await vi.waitFor(() => expect(existsSync(scratch)).toBe(false), { timeout: HANG_GUARD_MS });
+      // Its removal waits for the cleanup retry once the evidence is repaired (scratch-cleanup.test.ts).
     } finally {
       detach(); credentials.close();
       holder.stdin.end(); await exited;

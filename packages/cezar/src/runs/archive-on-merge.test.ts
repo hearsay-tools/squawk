@@ -16,18 +16,6 @@ import { seedRuns, blockRunWrites, readPersistedRuns } from './run-store.testkit
 import { archivePullRequests } from './pull-requests.ts';
 import { registerRunProcess, unregisterRunProcess } from '../core/process-usage.ts';
 
-const processProbes = vi.hoisted(() => ({ scan: vi.fn(() => new Map<number, string>()), unshared: vi.fn() }));
-vi.mock('../delegation/process-liveness.ts', async original => {
-  const actual = await original<typeof import('../delegation/process-liveness.ts')>();
-  return { ...actual,
-    sharedCwdScan: () => actual.sharedCwdScan(processProbes.scan),
-    inspectGeneration: (input: Parameters<typeof actual.inspectGeneration>[0]) => {
-      if (!input.cwds) processProbes.unshared();
-      return actual.inspectGeneration(input);
-    },
-  };
-});
-
 const repo = 'https://github.com/o/r';
 const pr = { number: 42, source: 'declared' as const };
 const mergedAt = '2026-01-02T00:00:00.000Z';
@@ -150,17 +138,13 @@ describe('guarded automatic archive', () => {
     mkdirSync(join(dir, 'absent-worktree'));
     mkdirSync(join(dir, 'root-worktree'));
     store.updateRun(id, { worktreePath: join(dir, 'root-worktree') }); store.flush();
-    processProbes.scan.mockClear(); processProbes.unshared.mockClear();
     const snapshot = store.archiveOnMergeSnapshot(id, repo)!;
     expect(snapshot?.pullRequests).toEqual([{ owner: 'o', repo: 'r', number: 42 }]);
     store.archiveMergeBlocker(snapshot, snapshot.pullRequests[0]!, repo);
     expect(store.getRun(id)?.archiveBlocker).toMatchObject({ runId: worker.id, pullRequestUrl: `${repo}/pull/42` });
-    expect(processProbes.scan).not.toHaveBeenCalled();
     const seen: boolean[][] = [];
     store.on('run', () => seen.push([store.getRun(id)!.archived, store.getRun(worker.id)!.archived]));
     expect(store.archiveAfterMerge(snapshot, observations(snapshot), repo)).toBe(true);
-    expect(processProbes.scan).not.toHaveBeenCalled();
-    expect(processProbes.unshared).not.toHaveBeenCalled();
     expect(seen.every(pair => pair.every(Boolean))).toBe(true);
     expect(readPersistedRuns(dir).every(run => run.archived)).toBe(true);
   });

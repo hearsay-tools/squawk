@@ -1,5 +1,6 @@
 import { fallbackProjectWriteError } from '../project-paths.ts';
 import { spawn } from 'node:child_process';
+import type { SpawnScope } from '../worker-scope/scope.ts';
 
 /** Stop on a workflow check: SIGTERM first, SIGKILL to its process group after this grace. */
 export const CHECK_KILL_GRACE_MS = 3_000;
@@ -18,6 +19,8 @@ export interface GroupedCommandOptions {
    *  setup, #917 — an install reports its error at the end). */
   keep: 'head' | 'tail';
   cap: number;
+  /** A worker's scope: the command starts inside it (ADR 0032). */
+  scope?: SpawnScope | undefined;
 }
 
 export interface GroupedCommandResult {
@@ -35,13 +38,25 @@ export interface GroupedCommandResult {
  * confirmed gone or the confirmation bound passes, which the output then says.
  */
 export function runGroupedCommand(opts: GroupedCommandOptions): Promise<GroupedCommandResult> {
-  const { command, cwd, env, setInterrupt, timeoutMs, keep, cap } = opts;
+  const { command, cwd, env, setInterrupt, timeoutMs, keep, cap, scope } = opts;
   const refusal = fallbackProjectWriteError(cwd);
   if (refusal) return Promise.resolve({ exitCode: null, output: '', timedOut: false, spawnError: refusal });
+  let argv: [string, string[]];
+  try { argv = scope ? scope.command('bash', ['-lc', command]) : ['bash', ['-lc', command]]; }
+  catch (error) { const message = (error as Error).message; return Promise.resolve({ exitCode: null, output: `failed to start: ${message}`, timedOut: false, spawnError: message }); }
   return new Promise((resolve) => {
     const grouped = process.platform !== 'win32';
-    const child = spawn('bash', ['-lc', command], { cwd, env, detached: grouped });
+    const child = spawn(argv[0], argv[1], { cwd, env, detached: grouped });
     const pid = child.pid;
+    if (pid !== undefined) {
+      try { scope?.started(pid); } catch (error) {
+        child.on('error', () => undefined);
+        try { if (grouped) process.kill(-pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch { /* already gone */ }
+        const message = (error as Error).message;
+        resolve({ exitCode: null, output: `failed to start: ${message}`, timedOut: false, spawnError: message });
+        return;
+      }
+    }
 
     let output = '';
     let truncated = false;

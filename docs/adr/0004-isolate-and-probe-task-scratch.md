@@ -14,8 +14,9 @@ The resolver can refuse a spawn when no candidate fits or accepts writes. `CEZ_A
 disables isolation, path selection and the probe together.
 
 Session close does not end scratch ownership. Continue needs the files. Terminal cleanup and
-startup sweeps retain paths required by live runs or resource holders, and do not remove
-paths with uncertain ownership. Cleanup failures must not break terminal settlement.
+startup sweeps retain paths required by live runs, by a worker whose process scope still holds a
+process ([ADR 0032](0032-prove-process-and-workspace-ownership-before-cleanup.md)), or by
+autosave holders, and do not remove paths with uncertain ownership. Cleanup failures must not break terminal settlement.
 
 ## Considered Options
 

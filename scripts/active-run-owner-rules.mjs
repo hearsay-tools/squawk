@@ -6,10 +6,10 @@ import { isMap, isSeq, parseDocument, visit } from 'yaml';
 export const ownerGroups = {
   boundary: {
     owner: 'turn-boundary.ts', factory: 'createBoundaryGroup',
-    types: ['BoundaryGroup', 'DoneRequest', 'NextStep', 'DoneClose', 'AckBoundary'],
+    types: ['BoundaryGroup', 'DoneRequest', 'NextStep', 'DoneClose', 'AckBoundary', 'Nudge'],
     getters: ['boundary'],
-    bindings: ['boundary', 'nextStep', 'doneClose', 'parkAfterAck'],
-    fields: ['boundary', 'waitWakeTurn', 'pendingHumanAsk', 'noWaitNudgeReplyTimer', 'noWaitNudgeSawContent', 'noWaitNudgeParked', 'doneAtBoundary', 'requestRefusedDone', 'nextStep', 'completedStepId', 'doneClose', 'parkAfterAck', 'atTurnBoundary', 'idleTimer', 'idleClosed', 'monitoringCapNoted', 'autonomous', 'autonomousNudgePending', 'noWaitNudged', 'incomingRequestRefused', 'sentRequestRefused', 'completionNudged', 'completionNudgeAnswered', 'heldForSubagents', 'session', 'summary', 'label', 'via', 'monitoring', 'humanGate', 'nudgedLastTurn', 'scheduleWakeup'],
+    bindings: ['boundary', 'nextStep', 'doneClose', 'parkAfterAck', 'nudge'],
+    fields: ['boundary', 'waitWakeTurn', 'pendingHumanAsk', 'noWaitNudgeReplyTimer', 'noWaitNudgeSawContent', 'noWaitNudgeParked', 'doneAtBoundary', 'requestRefusedDone', 'nextStep', 'completedStepId', 'doneClose', 'parkAfterAck', 'atTurnBoundary', 'idleTimer', 'idleClosed', 'monitoringCapNoted', 'autonomous', 'nudge', 'noWaitNudged', 'incomingRequestRefused', 'sentRequestRefused', 'completionNudged', 'completionNudgeAnswered', 'heldForSubagents', 'session', 'summary', 'label', 'via', 'monitoring', 'humanGate', 'nudgedLastTurn', 'scheduleWakeup', 'cause', 'state'],
   },
 
   wait: {

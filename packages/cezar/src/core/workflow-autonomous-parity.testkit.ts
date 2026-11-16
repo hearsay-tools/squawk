@@ -6,6 +6,7 @@ import type { RunRecord } from '../runs/store.ts';
 import { RUNNER_IDS } from './agent-runner.ts';
 import { AUTONOMOUS_CRITERIA, driveSeam, exemptionFor, promptFor, waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
+import { refusedNudgeIdleClose } from './workflow-autonomous-idle-close.testkit.ts';
 import { MAX_AUTO_CONTINUES } from '../workflows/run.ts';
 import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { RUN_EXITS } from '../runs/run-exits.ts';
@@ -80,6 +81,22 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
     "claude A7 fresh",
     "claude A8 fresh"
   ],
+  "idle-close-fresh": [
+    "claude A13",
+    "codex A13",
+    "cursor A13",
+    "omp A13",
+    "opencode A13",
+    "pi A13"
+  ],
+  "idle-close-continuation": [
+    "claude A14",
+    "codex A14",
+    "cursor A14",
+    "omp A14",
+    "opencode A14",
+    "pi A14"
+  ],
   "native-questions": [
     "claude A9",
     "codex A9 fresh",
@@ -96,6 +113,13 @@ describe('autonomous turn-end parity — #426', () => {
   for (const backend of RUNNER_IDS) {
     for (const row of AUTONOMOUS_CRITERIA) {
       const exemption = exemptionFor(row.id, backend);
+      if (row.id === 'A13' || row.id === 'A14') {
+        // Claude's stdin write and Cursor print's first model work are their acknowledgements.
+        const options = { refuses: !exemption, heldAck: backend !== 'claude' && backend !== 'cursor' };
+        it(`${backend} ${row.id} ${exemption ? `exemption — ${exemption.reason}` : row.name}`,
+          () => refusedNudgeIdleClose(backend, row.id === 'A14', options), 60_000);
+        continue;
+      }
       if (exemption) {
         it(`${backend} ${row.id} exemption — ${exemption.reason}`, async () => {
           // The wire's ask scenario is a cezar_ask call, which no seam answers: the turn ends with no

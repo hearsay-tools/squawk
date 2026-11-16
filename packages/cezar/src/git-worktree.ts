@@ -1,7 +1,6 @@
 import { logPrefix } from './home/display.ts';
 import { execFile } from 'node:child_process';
 import { projectPaths, isFallbackProjectPath } from './project-paths.ts';
-import { inspectGeneration } from './delegation/process-liveness.ts';
 import { git } from './git-command.ts';
 import { workerWorkspaceSchema } from '@open-mercato/cezar-contract/delegation';
 import { existsSync, realpathSync, type Dirent } from 'node:fs';
@@ -347,16 +346,9 @@ export async function removeWorktree(
 
 type OwnedCleanupProtection = { paths: Set<string>; branches: Set<string>; uncertain: boolean };
 
-async function runBeforeWorktreeRemove(
-  opts: RemoveWorktreeOptions | undefined,
-  protection: OwnedCleanupProtection,
-  worktreePath: string,
-): Promise<void> {
+async function runBeforeWorktreeRemove(opts: RemoveWorktreeOptions | undefined): Promise<void> {
   await opts?.beforeRemove?.().catch(() => undefined);
   opts?.assertCurrent?.();
-  if (protection.paths.has(worktreePath) && inspectGeneration({ paths: [worktreePath] }).liveness !== 'gone') {
-    throw new Error('Owned worktree may still be held by a process');
-  }
 }
 
 async function removeCleanWorktree(
@@ -402,7 +394,7 @@ async function removeWorktreeLocked(
   opts: RemoveWorktreeOptions | undefined, git: WorktreeGit,
 ): Promise<void> {
   if (isFallbackProjectPath(repoRoot, worktreePath)) return;
-  const beforeRemove = async () => runBeforeWorktreeRemove(opts, protection, worktreePath);
+  const beforeRemove = async () => runBeforeWorktreeRemove(opts);
   const protection = await ownedCleanupProtection(repoRoot);
   // Directory-only retention (#575) may reclaim a finished owned-worker checkout
   // while keeping its branch and receipts. Unowned deletion still refuses owned

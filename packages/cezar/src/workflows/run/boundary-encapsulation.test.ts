@@ -67,7 +67,7 @@ it('keeps absent optional defaults and independent factory generations', () => {
   for (const value of [a.boundary.waitWakeTurn, a.boundary.noWaitNudgeReplyTimer, a.boundary.noWaitNudgeSawContent,
     a.boundary.noWaitNudgeParked, a.boundary.doneAtBoundary, a.boundary.requestRefusedDone, a.boundary.nextStep,
     a.boundary.completedStepId, a.boundary.doneClose, a.boundary.parkAfterAck, a.boundary.atTurnBoundary,
-    a.boundary.idleTimer, a.boundary.idleClosed, a.boundary.monitoringCapNoted, a.boundary.autonomousNudgePending,
+    a.boundary.idleTimer, a.boundary.idleClosed, a.boundary.monitoringCapNoted, a.boundary.nudge,
     a.boundary.noWaitNudged, a.boundary.incomingRequestRefused, a.boundary.sentRequestRefused,
     a.boundary.completionNudged, a.boundary.completionNudgeAnswered, a.boundary.heldForSubagents]) expect(value).toBeUndefined();
   transitionTurnBoundary(a, { kind: 'mode-disabled', phase: 'disable', session: undefined });

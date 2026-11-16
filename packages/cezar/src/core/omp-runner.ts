@@ -27,6 +27,7 @@ import type {
   SessionOptions,
   ToolGrant,
 } from './agent-runner.js';
+import { SQUAWK_SIDE_SPEC_SUPPORT } from './agent-runner.ts';
 import { RUNNER_FACTS } from './runner-facts.js';
 import { ompRequestedTools } from './runner-tool-grants.ts';
 import { ownLookup } from './own-lookup.ts';
@@ -92,7 +93,7 @@ const OMP_TOOL_MAP: Readonly<Record<string, string>> = {
  */
 export const OMP_SPEC_SUPPORT: AgentRunSpecSupport = {
   squawkTools: { honored: true, via: `explicit CI --extension; the ${productName('Cezar')} tools admitted when --tools is set` },
-  timings: { honored: true, via: 'internal runner deadlines; omitted fields retain production defaults' },
+  ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: '--append-system-prompt' },
   userPrompt: { honored: true, via: 'RPC prompt.message' },
   images: { honored: true, via: "RPC prompt.images ({type:'image', data, mimeType})" },
@@ -272,6 +273,7 @@ export class OmpRunner implements AgentRunner {
         cwd: spec.cwd,
         timings: spec.timings,
         env: buildChildEnv({ backend: this.backend, extraEnv: spec.env }),
+        scope: spec.scope,
       });
       boundOutputDrainAfterExit(spawned);
       // Observe asynchronous write errors before any startup command can reach stdin.
