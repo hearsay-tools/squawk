@@ -96,6 +96,7 @@ function VirtualTaskItems<T>({ items, keys, handle, scroll, margin, focused, edi
   children: (item: T, index: number) => ReactElement
 }) {
   const [measured, setMeasured] = useState(false)
+  const active = useActiveTaskItem(scroll)
   useLayoutEffect(() => {
     const owner = scroll.current
     if (!owner) return
@@ -109,9 +110,33 @@ function VirtualTaskItems<T>({ items, keys, handle, scroll, margin, focused, edi
     return () => observer.disconnect()
   }, [scroll])
   return <Virtualizer ref={handle} {...(itemSize === undefined ? {} : { itemSize })} scrollRef={scroll} startMargin={margin}
-    keepMounted={[...new Set([...(!measured && items.length ? [0] : []), ...taskListKeepMounted(keys, focused), ...taskListKeepMounted(keys, editing)])]} data={items}>
+    keepMounted={[...new Set([...(!measured && items.length ? [0] : []), ...taskListKeepMounted(keys, focused), ...taskListKeepMounted(keys, active), ...taskListKeepMounted(keys, editing)])]} data={items}>
     {(item, index) => <div key={keys[index]} data-task-item={keys[index]} data-first={index === 0} data-last={index === items.length - 1}>{children(item, index)}</div>}
   </Virtualizer>
+}
+
+/**
+ * The item that holds document focus, read before each scroll reaches virtua. Chrome moves focus without a focus
+ * event while the page itself is unfocused, so the focus-event state alone can miss the row a scroll would unmount.
+ */
+function useActiveTaskItem(scroll: React.RefObject<HTMLElement | null>) {
+  const [active, setActive] = useState<string | null>(null)
+  const current = useRef(active)
+  useLayoutEffect(() => {
+    const owner = scroll.current
+    if (!owner) return
+    // Capture on the document runs before virtua's own listener on the owner, so the pin commits first.
+    const read = (event: Event) => {
+      if (event.target !== owner) return
+      const item = owner.contains(document.activeElement) ? document.activeElement!.closest<HTMLElement>('[data-task-item]')?.dataset.taskItem ?? null : null
+      if (item === current.current) return
+      current.current = item
+      flushSync(() => setActive(item))
+    }
+    document.addEventListener('scroll', read, { capture: true, passive: true })
+    return () => document.removeEventListener('scroll', read, { capture: true })
+  }, [scroll])
+  return active
 }
 
 type Snapshot = { key: string | null; top: number; scrollTop: number }

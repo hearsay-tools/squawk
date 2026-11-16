@@ -234,6 +234,8 @@ it.each([
     browser.evaluate(`(() => {const owner=document.querySelector('[data-slot="main"]'),group=document.querySelector('${route} [data-bucket="Working"]');owner.scrollTop+=group.getBoundingClientRect().top-owner.getBoundingClientRect().top+${scope === 'global' ? 12000 : 15000}})()`)
     const sample = `(() => {const owner=document.querySelector('[data-slot="main"]'),edge=owner.getBoundingClientRect().top;const row=[...document.querySelectorAll('${route} [data-bucket="Working"] [data-run-id]')].find(e=>e.getBoundingClientRect().bottom>edge&&e.getBoundingClientRect().top<edge+owner.clientHeight);return row?{id:row.dataset.runId,top:row.getBoundingClientRect().top}:null})()`
     const before = waitForSettledSample(browser, sample) as { id: string; top: number }
+    // The focused row must survive the scroll; a lost pin fails here, not at the collapse.
+    if (change === 'preview') browser.waitForFunction('window.__collapsePreview.isConnected')
     browser.evaluate(startFrames(before.id))
     if (change !== 'preview') {
       if (change === 'storage') browser.evaluate(`localStorage.setItem('cez-task-list-folds',JSON.stringify({[JSON.stringify([${JSON.stringify(scope === 'global' ? 'global' : 'project:boot')},'active','Finished'])]:true}));window.dispatchEvent(new StorageEvent('storage',{key:'cez-task-list-folds'}))`)
