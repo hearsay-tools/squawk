@@ -802,7 +802,7 @@ rl.on('line', (line) => {
     userText = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n') || '(no text)';
     imageCount = blocks.filter((b) => b.type === 'image').length;
     trigger = claudeTrigger(blocks);
-    skillBlocks = trigger ? blocks : undefined;
+    skillBlocks = blocks;
   } catch {
     // keep placeholders
   }
@@ -813,7 +813,7 @@ rl.on('line', (line) => {
   // text this hook captures.
   if (process.env.CEZ_MOCK_STDIN_FILE) {
     try {
-      appendFileSync(process.env.CEZ_MOCK_STDIN_FILE, `${JSON.stringify({ userText, imageCount, ...(skillBlocks ? { blocks: skillBlocks } : {}) })}\n`);
+      appendFileSync(process.env.CEZ_MOCK_STDIN_FILE, `${JSON.stringify({ userText, imageCount, ...(trigger ? { blocks: skillBlocks } : {}) })}\n`);
     } catch {
       // best effort — never break the mock over the hook
     }
