@@ -123,9 +123,9 @@ it('explicit migrate recopies legacy and clears the skip without removing the fa
   expect(warn).not.toHaveBeenCalled();
 });
 
-it.each(['desktop', 'incomplete server', 'dry-run server'])('%s keeps the current boot migration after a failed copy', kind => {
+it.each(['local', 'incomplete server', 'dry-run server'])('%s keeps the current boot migration after a failed copy', kind => {
   const f = rolledBackHome();
-  if (kind !== 'desktop') Home.seed(f.legacy, f.legacy.serverState(), {
+  if (kind !== 'local') Home.seed(f.legacy, f.legacy.serverState(), {
     schema: 1, installed: kind === 'dry-run server', dryRun: kind === 'dry-run server', steps: {},
   });
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

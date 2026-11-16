@@ -11,21 +11,18 @@ vi.mock('./product-name', async importOriginal => {
 vi.mock('@/api/queries', () => ({ useHealth: () => ({ data: { capabilities: { remoteSettingsAdmin: true } } }) }))
 
 import { readProductIdentity } from '../../product-identity'
-import { DesktopControls } from '@/components/desktop-controls'
 import { documentTitleOf } from './use-document-title'
 
 afterEach(() => { vi.resetModules() })
 
 describe('cockpit product display', () => {
-  it('renders the desktop label and task controls from the same identity', async () => {
+  it('renders the task controls from the product identity', async () => {
     Object.assign(state, readProductIdentity())
     // Task row labels are built at module load, as they are in the shipped bundle.
     const { TaskAccessControls } = await import('@/components/task-access-controls')
-    const desktop = renderToStaticMarkup(<DesktopControls />)
     const access = renderToStaticMarkup(<TaskAccessControls allowWorkers allowMessaging onChange={() => {}} />)
-    expect(desktop).toContain(state.displayName)
     expect(access).toContain(state.displayName)
-    expect(`${desktop}${access}`).not.toMatch(/cezar/i)
+    expect(access).not.toMatch(/cezar/i)
   })
 
   it('renders both shared remote-settings hints from the command identity', async () => {

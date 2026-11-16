@@ -81,7 +81,7 @@ export function useCommandShortcut(key: string, handler: (event: KeyboardEvent) 
  * The browser-safe sibling of the command chord: ⌘N/⌘T/⌘W are reserved by the browser and
  * never reach the page (a page's `preventDefault` cannot claim them), so a browser-usable
  * "new task" accelerator has to be a lone letter — the `c`-to-create convention (GitHub,
- * Linear). Any held modifier disqualifies (so it never eats ⌘N in the desktop shell), and —
+ * Linear). Any held modifier disqualifies (so it never eats ⌘N), and —
  * unlike the chord — a focused editable, INCLUDING the ⌘K palette input, always swallows it:
  * a bare letter is a keystroke someone is probably typing.
  */
