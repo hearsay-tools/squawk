@@ -44,6 +44,31 @@ it('bounds mounted rows with the real virtualizer and keeps a focused row when s
   expect(document.activeElement).toBe(first)
 })
 
+it('keeps the row holding focus mounted when no focus event reached the list', async () => {
+  vi.stubGlobal('ResizeObserver', class {
+    constructor(private callback: ResizeObserverCallback) {}
+    observe(element: HTMLElement) {
+      Object.defineProperty(element, 'offsetParent', { configurable: true, get: () => document.body })
+      queueMicrotask(() => this.callback([{ target: element, contentRect: { width: 1000, height: element.dataset.slot === 'main' ? 300 : 60 } } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver))
+    }
+    unobserve() {} disconnect() {}
+  })
+  render(<List />)
+  await act(async () => {})
+  const first = screen.getByRole('button', { name: 'run-0' })
+  // Chrome moves activeElement without dispatching focus events while the page itself is unfocused.
+  const swallow = (event: Event) => event.stopImmediatePropagation()
+  for (const type of ['focus', 'focusin']) window.addEventListener(type, swallow, true)
+  act(() => first.focus())
+  for (const type of ['focus', 'focusin']) window.removeEventListener(type, swallow, true)
+  expect(document.activeElement).toBe(first)
+  const owner = document.querySelector<HTMLElement>('[data-slot="main"]')!
+  act(() => { owner.scrollTop = 4000; owner.dispatchEvent(new Event('scroll')) })
+  await act(async () => {})
+  expect(first.isConnected).toBe(true)
+  expect(document.activeElement).toBe(first)
+})
+
 it('never renders the full virtual-eligible group during owner lookup', async () => {
   vi.stubGlobal('ResizeObserver', class {
     constructor(private callback: ResizeObserverCallback) {}
