@@ -9,12 +9,17 @@ export function nonDumpableHolder(cwd: string) {
   return holder(cwd, false);
 }
 
-/** The same holder with a readable cwd: the one kind of unrecorded process that blocks. */
+/** The same holder with a readable cwd. */
 export function readableHolder(cwd: string) {
   return holder(cwd, true);
 }
 
-async function holder(cwd: string, dumpable: boolean) {
+/** A readable holder that leads its own process group, so a worker scope can record it. */
+export function groupHolder(cwd: string) {
+  return holder(cwd, true, true);
+}
+
+async function holder(cwd: string, dumpable: boolean, detached = false) {
   const child = spawn('python3', ['-u', '-c', `
 import ctypes, sys
 ${dumpable ? '' : 'assert ctypes.CDLL(None).prctl(4, 0, 0, 0, 0) == 0'}
@@ -22,7 +27,7 @@ print('ready', flush=True)
 for line in sys.stdin:
     with open('holder-writes', 'a') as f: f.write(line)
     print('written', flush=True)
-`], { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+`], { cwd, stdio: ['pipe', 'pipe', 'pipe'], detached });
   const exited = once(child, 'exit');
   const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
   const expectLine = async (expected: string) => {

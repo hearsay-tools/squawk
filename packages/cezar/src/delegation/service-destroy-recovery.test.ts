@@ -105,13 +105,12 @@ describe('destroy backoff recovery', { timeout: 30_000 }, () => {
 
   it.runIf(linux)('a tick cut off by project replacement writes nothing afterwards (guard)', async () => {
     await cadence();
-    const { workerId, holder } = await settled();
+    const { workerId } = await settled();
     await f.service.destroy(f.caller, { workerId });
     let release!: (value: boolean) => void;
     const gate = new Promise<boolean>(resolve => { release = resolve; });
     const termination = vi.spyOn(f.manager, 'awaitRunTermination').mockReturnValue(gate);
-    // The holder exits, so the next tick makes a full attempt; hold it inside termination.
-    await holder!.close();
+    // The next tick makes a full attempt; hold it inside termination.
     await vi.waitFor(() => expect(termination).toHaveBeenCalled(), { timeout: 10_000 });
     const before = structuredClone(destroyOf(workerId));
     const replacementManager = createFixtureManager(f.store, f.root);

@@ -17,7 +17,7 @@ import {
   type AgentToolCallRecord,
   type ContentBlock,
   type AgentRunSpecSupport,
-  type InputDelivery, type AgentSession, type SessionOptions, isSignalTerminationExit, prependSystemPrompt, trackChildExit,
+  type InputDelivery, type AgentSession, type SessionOptions, isSignalTerminationExit, prependSystemPrompt, SQUAWK_SIDE_SPEC_SUPPORT, trackChildExit,
 } from './agent-runner.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { InputSubmissions } from './input-submissions.ts';
@@ -143,7 +143,7 @@ export const KILL_GRACE_MS = 4_000;
  */
 export const OPENCODE_SPEC_SUPPORT: AgentRunSpecSupport = {
   squawkTools: { honored: true, via: 'merged OPENCODE_CONFIG_CONTENT local mcp entry' },
-  timings: { honored: true, via: 'internal runner deadlines; omitted fields retain production defaults' },
+  ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: 'prepended to the opening prompt_async text through prependSystemPrompt' },
   userPrompt: { honored: true, via: 'prompt_async text part' },
   images: { honored: false, reason: 'the adapter posts text parts only; image blocks are dropped' },
@@ -607,7 +607,7 @@ class OpencodeSession implements AgentSession {
     let child: ChildProcessWithoutNullStreams;
     try {
       child = spawnSessionLeader(this.bin, ['serve', '--hostname', '127.0.0.1', '--port', String(port)], {
-        cwd: this.spec.cwd, timings: this.spec.timings,
+        cwd: this.spec.cwd, timings: this.spec.timings, scope: this.spec.scope,
         env: buildChildEnv({ backend: 'opencode', extraEnv: opencodeTaskScopeEnv(ciOpenCodeEnv(this.spec), this.spec.restrictCrossSessionMessaging) }),
       });
     } catch (err) {

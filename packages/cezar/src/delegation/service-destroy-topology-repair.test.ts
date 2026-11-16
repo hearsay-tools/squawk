@@ -17,7 +17,7 @@ import { f, linux, cadence, settled, destroyOf, useDestroyBackoffFixture } from 
 describe('destroy backoff topology-repair', { timeout: 30_000 }, () => {
   useDestroyBackoffFixture();
 
-  it.runIf(linux)('lock contention is retried in full once it clears, never skipped as unchanged', async () => {
+  it.runIf(linux)('lock contention is retried in full once it clears', async () => {
     await cadence({ fastMs: 200, fastCount: 10, capMs: 2_000 });
     const { workerId, workspace } = await settled(false);
     let unlock!: () => void, locked!: () => void;
@@ -34,7 +34,7 @@ describe('destroy backoff topology-repair', { timeout: 30_000 }, () => {
     expect(existsSync(workspace.path)).toBe(false);
   });
 
-  it.runIf(linux)('an in-place repair of the ownership marker ends the skipping', async () => {
+  it.runIf(linux)('an in-place repair of the ownership marker lets the next attempt complete', async () => {
     await cadence({ fastMs: 200, fastCount: 10, capMs: 2_000 });
     const { workerId, workspace } = await settled(false);
     const admin = resolve(workspace.path, /^gitdir: (.+)$/m.exec(readFileSync(join(workspace.path, '.git'), 'utf8'))![1]!.trim());

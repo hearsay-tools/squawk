@@ -8,7 +8,7 @@ import type {
   AgentSession, AgentToolCallRecord, ContentBlock, InputDelivery, SessionOptions,
 } from './agent-runner.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
-import { prependSystemPrompt } from './agent-runner.ts';
+import { prependSystemPrompt, SQUAWK_SIDE_SPEC_SUPPORT } from './agent-runner.ts';
 import { cursorPrintToolGrantArgs } from './runner-tool-grants.ts';
 import { buildChildEnv } from './agent-env.ts';
 import { squawkToolEnvNames } from '../ci-wait/tool-catalog.ts';
@@ -25,7 +25,7 @@ import { productName } from '../home/display.ts';
 /** Cursor print fields with live-qualified invocation mechanisms. */
 export const CURSOR_PRINT_SPEC_SUPPORT: AgentRunSpecSupport = {
   squawkTools: { honored: true, via: 'private local --plugin-dir with mcp.json env placeholders on every turn' },
-  timings: { honored: true, via: 'internal runner deadlines; omitted fields retain production defaults' },
+  ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: 'prepended to each print prompt' },
   userPrompt: { honored: true, via: 'print stdin' },
   images: { honored: true, via: 'private temporary image files passed with --image' },
@@ -243,6 +243,7 @@ class CursorPrintSession implements AgentSession {
         bin: this.bin, args, cwd: this.spec.cwd,
         env,
         timings: this.spec.timings,
+        scope: this.spec.scope,
         ...this.options.processOptions,
       }, {
         onStdout: chunk => this.onStdout(chunk),

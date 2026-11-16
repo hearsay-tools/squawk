@@ -1,24 +1,29 @@
 import type { RunModuleContext, WorkerTerminationBlocker } from './types.ts';
-import { agentTmpDirLocationEvidence } from '../../runs/agent-tmpdir.ts';
-import { processGroupAlive, processGroupOf, signalProcessGroup } from '../../core/session-process.ts';
 import { noJitter, ORPHAN_BACKOFF, retryDelayMs, type Backoff } from '../../delegation/retry-backoff.ts';
-import { describeProcesses, inspectExecutionGeneration, isCurrentProcess, processesWithCwdUnder, processStartToken, recordedGroupSignalable, recordedProcessLive, sharedCwdScan, type CwdSource, type GenerationProbe, type RecordedProcess, type WorkerProcessRecord } from '../../delegation/process-liveness.ts';
+import { isCurrentProcess, recordedProcessLive, type WorkerProcessRecord } from '../../delegation/process-liveness.ts';
 import { productName } from '../../home/display.ts';
 import { WorkerAdmissionRefusal } from '../../runs/worker-execution.ts';
 
-/** How long a non-gone orphan probe stands before the next scan. */
-const ORPHAN_PROBE_CACHE_MS = 2_000;
-
-type OrphanOptions = { admitting?: boolean; fresh?: boolean; cwds?: CwdSource };
+type OrphanOptions = { admitting?: boolean; fresh?: boolean };
 interface WorkerOrphansHost {
   holds(runId: string, admitting: boolean): boolean;
   reapTerminalScratch(runId: string): void;
   settleOrphanedWorkerExecution(runId: string, opts?: OrphanOptions): boolean;
 }
 
+/** What still runs of a crashed generation: its live recorded controller, else its live recorded
+ * session processes. Only the record decides; nothing scans the host (ADR 0032). */
+type OrphanProbe = { liveness: 'gone' } | { liveness: 'alive'; controller?: number; pids: number[] };
+
+function probeOrphan(record: WorkerProcessRecord | undefined): OrphanProbe {
+  if (!record) return { liveness: 'gone' };
+  if (!isCurrentProcess(record.controller) && recordedProcessLive(record.controller)) return { liveness: 'alive', controller: record.controller.pid, pids: [] };
+  const pids = record.processes.filter(recordedProcessLive).map(entry => entry.pid);
+  return pids.length ? { liveness: 'alive', pids } : { liveness: 'gone' };
+}
+
 export class WorkerOrphans {
   orphanBackoff: Backoff = ORPHAN_BACKOFF;
-  orphanTermGraceMs = 10_000;
   constructor(private readonly context: RunModuleContext, private readonly host: WorkerOrphansHost) {}
 
   forgetBlockers(runId: string): void {
@@ -27,7 +32,7 @@ export class WorkerOrphans {
 
   dispose(): void {
     this.orphanDue.clear(); clearTimeout(this.orphanTimer); this.orphanTimer = undefined;
-    this.orphanProbes.clear(); this.orphanBlockers.clear(); this.reportedOrphanBlockers.clear();
+    this.orphanBlockers.clear(); this.reportedOrphanBlockers.clear();
   }
 
   /** #469: the generation a dead controller left `starting`, if this manager may judge it. A
@@ -36,21 +41,18 @@ export class WorkerOrphans {
    * manager holds the run); `unknown` is a present record that proves nothing. */
   private orphanState(runId: string, admitting = false):
     | { state: 'none' | 'busy' | 'unknown' }
-    | { state: 'orphan'; generation: string; record?: WorkerProcessRecord; paths: string[]; pathsComplete: boolean } {
+    | { state: 'orphan'; generation: string; record?: WorkerProcessRecord } {
     const run = this.context.store.getRun(runId);
     if (run?.delegation?.role !== 'worker' || this.context.disposed()) return { state: 'none' };
     if (this.host.holds(runId, admitting)) return { state: 'busy' };
     const proof = this.context.store.readWorkerExecution(runId);
     if (proof?.phase !== 'starting') return { state: 'none' };
     const record = this.context.store.readWorkerProcesses(runId, proof.generation);
-    // A present record that proves nothing (unreadable, malformed, another generation) blocks both
-    // finalization and reaping; only an absent one is legacy, scan-only evidence.
+    // A present record that proves nothing (unreadable, malformed, another generation) blocks
+    // finalization; an absent one is a generation from before process records, with nothing to wait for.
     if (record === 'unknown') return { state: 'unknown' };
     if (record !== 'absent' && isCurrentProcess(record.controller)) return { state: 'none' };
-    // Legacy execution proof also considers scratch holders; cleanup uses a separate strict proof.
-    const locations = agentTmpDirLocationEvidence(this.context.dataDir, runId);
-    return { state: 'orphan', generation: proof.generation, ...(record === 'absent' ? {} : { record }),
-      paths: [run.delegation.workspace.path, ...locations.paths], pathsComplete: locations.complete };
+    return { state: 'orphan', generation: proof.generation, ...(record === 'absent' ? {} : { record }) };
   }
 
   orphanedWorkerGeneration(runId: string, admitting = false) {
@@ -58,22 +60,18 @@ export class WorkerOrphans {
     return orphan.state === 'orphan' ? orphan : undefined;
   }
 
-  /** Settles a crashed generation after exit proof. Sync and signal-free; recovery, resume,
-   * delivery, collect and destroy then take their normal paths.
-   * A non-gone probe is cached briefly: on darwin the scan is a synchronous `lsof` on the event loop. */
-  settleOrphanedWorkerExecution(runId: string, opts: { admitting?: boolean; fresh?: boolean; cwds?: CwdSource } = {}): boolean {
+  /** Settles a crashed generation once its recorded processes are gone. Sync and signal-free;
+   * recovery, resume, delivery, collect and destroy then take their normal paths. */
+  settleOrphanedWorkerExecution(runId: string, opts: OrphanOptions = {}): boolean {
     const orphan = this.orphanedWorkerGeneration(runId, opts.admitting);
     if (!orphan) return false;
-    const cached = this.orphanProbes.get(runId);
-    if (!opts.fresh && cached?.generation === orphan.generation && Date.now() - cached.at < ORPHAN_PROBE_CACHE_MS) return false;
-    const probe = inspectExecutionGeneration({ ...orphan, cwds: opts.cwds });
-    if (probe.liveness !== 'gone') { this.orphanProbes.set(runId, { generation: orphan.generation, at: Date.now(), probe }); return false; }
-    // A stale `alive` must not outlive a `gone` probe, even when the commit below fails.
+    const probe = probeOrphan(orphan.record);
+    if (probe.liveness !== 'gone') { this.orphanProbes.set(runId, { generation: orphan.generation, probe }); return false; }
     this.orphanProbes.delete(runId);
     try {
       if (!this.context.store.commitWorkerExecutionComplete(runId, orphan.generation)) return false;
     } catch { return false; }
-    this.orphanProbes.delete(runId); this.orphanBlockers.delete(runId); this.reportedOrphanBlockers.delete(runId); this.clearOrphanReprobe(runId);
+    this.orphanBlockers.delete(runId); this.reportedOrphanBlockers.delete(runId); this.orphanDue.delete(runId);
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: "the interrupted worker's processes are gone; its execution was finalized" });
     this.host.reapTerminalScratch(runId);
     return true;
@@ -81,7 +79,7 @@ export class WorkerOrphans {
 
   // The orphan maps stay here, not in `RunMemory`: each entry describes one worker generation and
   // goes when that generation settles or a new one starts (ADR 0064).
-  private readonly orphanProbes = new Map<string, { generation: string; at: number; probe: GenerationProbe }>();
+  private readonly orphanProbes = new Map<string, { generation: string; probe: OrphanProbe }>();
   /** Pending orphan reprobes by run id. One timer serves them all (hearsay-tools/cezarion#879). */
   readonly orphanDue = new Map<string, { generation: string; at: number; attempts: number }>();
   private orphanTimer?: NodeJS.Timeout | undefined;
@@ -93,10 +91,8 @@ export class WorkerOrphans {
   /** #469: a survivor that dies after recovery has no other wake source (no exit callback for a
    * process another Squawk spawned). Unref'd; finalization's `run` event then lets worker waits and
    * outcomes observe it. Every 15 s for the first 15 minutes, then backing off to hourly
-   * (hearsay-tools/cezarion#879), so a long-lived survivor is still noticed when it exits. One
-   * timer serves every orphan, and a tick shares one `/proc` scan across them. A tick while this
-   * manager holds the run is skipped; only terminal reasons (proof settled, generation changed,
-   * run gone, unknown record, dispose) stop it. */
+   * (hearsay-tools/cezarion#879). A tick while this manager holds the run is skipped; only terminal
+   * reasons (proof settled, generation changed, run gone, unknown record, dispose) stop it. */
   armOrphanReprobe(runId: string): void {
     const armed = this.orphanedWorkerGeneration(runId);
     if (this.context.disposed() || this.orphanDue.has(runId) || !armed) return;
@@ -117,29 +113,23 @@ export class WorkerOrphans {
   private orphanReprobeTick(): void {
     this.orphanTimer = undefined;
     if (this.context.disposed()) return;
-    // Orphans due within 5 % of the fast cadence ride along, so near neighbours share the scan, and
-    // every orphan this tick keeps is re-armed from the same instant, so they stay together.
+    // Orphans due within 5 % of the fast cadence ride along, and every orphan this tick keeps is
+    // re-armed from the same instant, so they stay together.
     const now = Date.now();
     const dueBy = Math.max(this.orphanArmedFor, now) + this.orphanBackoff.fastMs / 20;
-    const cwds = sharedCwdScan();
     for (const [runId, pending] of [...this.orphanDue]) {
       if (pending.at > dueBy) continue;
       this.orphanDue.delete(runId);
       const orphan = this.orphanState(runId);
       let attempts = pending.attempts;
       if (orphan.state !== 'busy') {
-        // Ticks are seconds apart, so the brief probe cache would only skip them: probe fresh.
         if (orphan.state !== 'orphan' || orphan.generation !== pending.generation ||
-          this.host.settleOrphanedWorkerExecution(runId, { fresh: true, cwds })) continue;
+          this.host.settleOrphanedWorkerExecution(runId, { fresh: true })) continue;
         attempts++;
       }
       this.orphanDue.set(runId, { ...pending, attempts, at: now + retryDelayMs(attempts, this.orphanBackoff, noJitter) });
     }
     this.wakeOrphanReprobes();
-  }
-
-  private clearOrphanReprobe(runId: string): void {
-    this.orphanDue.delete(runId);
   }
 
   /** Why the last destroy could not prove termination (#469), and whether that differs from the
@@ -153,22 +143,33 @@ export class WorkerOrphans {
     return { blocker, changed };
   }
 
-  /** Continue over a live orphan names what still runs and how to get past it. */
+  /** Continue refuses only while another live Squawk controls the worker. Processes a crashed
+   * controller left are stopped by Continue itself (`stopCrashedGeneration`). */
   orphanAdmissionRefusal(runId: string): WorkerAdmissionRefusal | undefined {
     const orphan = this.orphanedWorkerGeneration(runId, true);
     const probe = orphan && this.orphanProbes.get(runId);
-    if (!probe || probe.generation !== orphan.generation) return undefined;
-    if (probe.probe.controller !== undefined) {
-      return new WorkerAdmissionRefusal(`the worker is still controlled by a live ${productName('Cezar')} (pid ${probe.probe.controller})`,
-        `retry the same command after that ${productName('Cezar')} ends the worker's execution`);
-    }
-    const { pids } = probe.probe;
-    return pids.length ? new WorkerAdmissionRefusal(`processes ${describeProcesses(pids)} of the previous execution still run`,
-      'end them, then retry the same command') : undefined;
+    if (!probe || probe.generation !== orphan.generation || probe.probe.liveness !== 'alive' || probe.probe.controller === undefined) return undefined;
+    return new WorkerAdmissionRefusal(`the worker is still controlled by a live ${productName('Cezar')} (pid ${probe.probe.controller})`,
+      `retry the same command after that ${productName('Cezar')} ends the worker's execution`);
   }
 
-  /** Destroy only (#469): signal the recorded, token-verified survivors of a generation whose
-   * controller is proven dead, then finalize on `gone`. Scan-only processes are never signalled. */
+  /** Continue after a controller crash: end everything the worker's scope holds, then wait (up to
+   * `waitMs`, synchronously: admission is synchronous) for the recorded processes to be gone. Does
+   * nothing while another live controller owns the generation. */
+  stopCrashedGeneration(runId: string, waitMs = 2_000): void {
+    const orphan = this.orphanedWorkerGeneration(runId, true);
+    if (!orphan?.record) return;
+    const probe = probeOrphan(orphan.record);
+    if (probe.liveness !== 'alive' || probe.controller !== undefined) return;
+    this.context.store.scopes.kill(runId);
+    this.context.store.appendEvent(runId, { type: 'lifecycle', message: "Continue stopped the processes the interrupted worker's previous execution left running" });
+    const deadline = Date.now() + waitMs;
+    const pause = new Int32Array(new SharedArrayBuffer(4));
+    while (probeOrphan(orphan.record).liveness !== 'gone' && Date.now() < deadline) Atomics.wait(pause, 0, 0, 5);
+  }
+
+  /** Destroy only (#469): end everything the worker's scope holds, then finalize once the recorded
+   * processes are gone. A live foreign controller's generation is not ours to stop. */
   async reapOrphanedWorker(runId: string, timeoutMs: number): Promise<void> {
     const deadline = Date.now() + Math.min(30_000, Math.max(0, Number.isFinite(timeoutMs) ? timeoutMs : 0));
     this.orphanBlockers.delete(runId);
@@ -177,74 +178,20 @@ export class WorkerOrphans {
     const orphan = this.orphanedWorkerGeneration(runId);
     if (!orphan || this.host.settleOrphanedWorkerExecution(runId, { fresh: true })) return;
     const same = () => this.orphanedWorkerGeneration(runId)?.generation === orphan.generation;
-    // >= 500 ms: every probe may be a synchronous darwin `lsof`.
-    const pause = () => new Promise(resolve => setTimeout(resolve, Math.max(0, Math.min(500, deadline - Date.now()))));
-    // A live controller is another Squawk's: nothing to signal or wait for. Otherwise signal only
-    // recorded, token-verified survivors and recorded session groups (none for a legacy
-    // record-less generation), then wait for readable cwd holders until the deadline.
-    if (!orphan.record || !recordedProcessLive(orphan.record.controller)) {
-      if (orphan.record) {
-        const { processes } = orphan.record;
-        await this.terminateRecorded({
-          pids: processes.filter(entry => entry.pgid === undefined && entry.startToken !== undefined && recordedProcessLive(entry)),
-          groups: processes.filter(entry => entry.pgid !== undefined),
-          paths: orphan.paths,
-        }, deadline, pause, same);
-      }
-      while (!this.host.settleOrphanedWorkerExecution(runId, { fresh: true }) && Date.now() < deadline && same()) await pause();
+    const probe = probeOrphan(orphan.record);
+    // A live controller is another Squawk's: nothing to stop or wait for.
+    if (probe.liveness === 'alive' && probe.controller !== undefined) {
+      this.orphanBlockers.set(runId, { kind: 'controller', pid: probe.controller });
+      return;
+    }
+    if (probe.liveness === 'alive') this.context.store.scopes.kill(runId);
+    while (!this.host.settleOrphanedWorkerExecution(runId, { fresh: true }) && Date.now() < deadline && same()) {
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, Math.min(50, deadline - Date.now()))));
     }
     if (!same()) return;
-    const probe = this.orphanProbes.get(runId)?.probe;
-    if (probe?.controller !== undefined) this.orphanBlockers.set(runId, { kind: 'controller', pid: probe.controller });
-    else if (probe?.pids.length) this.orphanBlockers.set(runId, { kind: 'processes', pids: probe.pids });
+    const last = this.orphanProbes.get(runId)?.probe;
+    if (last?.liveness !== 'alive') return;
+    if (last.controller !== undefined) this.orphanBlockers.set(runId, { kind: 'controller', pid: last.controller });
+    else if (last.pids.length) this.orphanBlockers.set(runId, { kind: 'processes', pids: last.pids });
   }
-
-  /** Destroy only: SIGTERM recorded survivors, then SIGKILL what outlives `orphanTermGraceMs`.
-   * `pids` are signalled by token-verified pid; `groups` are session leaders whose whole process
-   * group is signalled (hearsay-tools/cezarion#890), so what an agent left behind exits with it. A
-   * dead leader's group counts only while a process holding `paths` is in it. Every signal
-   * re-verifies first: a reused PID or group number is never touched. */
-  private async terminateRecorded(targets: { pids: RecordedProcess[]; groups: RecordedProcess[]; paths: readonly string[] }, deadline: number,
-    pause: () => Promise<unknown>, current: () => boolean = () => true): Promise<void> {
-    const holders = processesWithCwdUnder(targets.paths);
-    const holderGroups = () => { return (holders === 'unknown' ? [] : holders).map(processGroupOf).filter((pgid): pgid is number => pgid !== undefined); };
-    const groups = targets.groups.filter(entry => recordedGroupSignalable(entry, holderGroups()) && processGroupAlive(entry.pgid!));
-    const living = () => targets.pids.some(recordedProcessLive) || groups.some(entry => processGroupAlive(entry.pgid!));
-    const signal = (name: NodeJS.Signals) => {
-      for (const entry of targets.pids) {
-        if (!current()) return;
-        if (processStartToken(entry.pid) === entry.startToken) try { process.kill(entry.pid, name); } catch { /* already gone */ }
-      }
-      const evidence = holderGroups();
-      for (const entry of groups) {
-        if (!current()) return;
-        if (recordedGroupSignalable(entry, evidence)) signalProcessGroup(entry.pgid!, name);
-      }
-    };
-    if (!living()) return;
-    signal('SIGTERM');
-    const killAt = Math.min(deadline, Date.now() + this.orphanTermGraceMs);
-    while (Date.now() < killAt && living()) await pause();
-    if (living()) signal('SIGKILL');
-  }
-
-  /** Destroy of a finished generation (hearsay-tools/cezarion#890): a dev server or watcher its
-   * agent left in its process group holds the worktree, and nothing else ties it to the worker.
-   * A record whose controller is another live Squawk is not ours to act on. */
-  async terminateFinishedWorkerGroups(runId: string, timeoutMs: number): Promise<void> {
-    const proof = this.context.store.readWorkerExecution(runId);
-    if (proof?.phase !== 'complete') return;
-    const record = this.context.store.readWorkerProcesses(runId, proof.generation);
-    const run = this.context.store.getRun(runId);
-    if (typeof record === 'string' || run?.delegation?.role !== 'worker' ||
-      (recordedProcessLive(record.controller) && !isCurrentProcess(record.controller))) return;
-    const groups = record.processes.filter(entry => entry.pgid !== undefined);
-    if (!groups.length) return;
-    const deadline = Date.now() + Math.min(30_000, Math.max(0, Number.isFinite(timeoutMs) ? timeoutMs : 0));
-    const pause = () => new Promise(resolve => setTimeout(resolve, Math.max(0, Math.min(100, deadline - Date.now()))));
-    const paths = [run.delegation.workspace.path, ...agentTmpDirLocationEvidence(this.context.dataDir, runId).paths];
-    await this.terminateRecorded({ pids: [], groups, paths }, deadline, pause);
-  }
-
 }
-

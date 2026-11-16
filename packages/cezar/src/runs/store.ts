@@ -6,7 +6,7 @@ import { productEnv } from '../core/product-env.ts';
 import { registeredWaitRecord, registeredReceiptRecord } from './wait-registration-write.ts';
 import { stageCommit, stageLoaded, stageDurableUpdate, stageDebouncedUpdate, stageConversation, stageArchiveFields, stagePullRequests, stageStepUpdate, redactPatch, redactText, clearPin, type RecordPatch } from './record-write-rules.ts';
 import { workerDeletionProof } from './worker-deletion-proof.ts';
-import { workerResourceAbsentHolders, workerResourceAuthorized, workerResourceLiveHolders, workerResourcePathsGone } from './worker-resource-holders.ts';
+import { recordedHolders, workerResourceAuthorized } from './worker-resource-holders.ts';
 import { listPeerTaskSummaries, parseStoredSummary, type PeerTaskPageOptions } from './run-summary-page.ts';
 export { parseStoredSummary } from './run-summary-page.ts';
 import { defined } from '../core/defined.ts';
@@ -18,9 +18,12 @@ import { jobRunsIn } from '../jobs/job.ts';
 import { removeArtifacts } from '../artifacts/lifecycle.ts';
 import { randomUUID, createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { appendFileSync, closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync, readSync, realpathSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync, readSync, realpathSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { z } from 'zod';
+import { scopeRecordSchema, type ScopeRecord, type SpawnScope } from '../worker-scope/scope.ts';
+import { WorkerScopes } from '../worker-scope/worker-scopes.ts';
+import { readPrivateRecord, writePrivateRecord } from './private-record-file.ts';
 import {
   agentInputSchema,
   inboxClaimSchema,
@@ -52,7 +55,7 @@ import { LiveItemSnapshots } from './live-item-snapshots.ts';
 import { emptyFacts, stampOf, TranscriptFactsIndex, type TranscriptFacts } from './transcript-facts.ts';
 import { hasPlainHistory, historyPaths, readHistoryText, readHistoryTextAsync, removeHistory, restoreHistory } from './history-file.ts';
 import { workerExecutionIdentitySchema, type WorkerExecutionIdentity } from '../delegation/execution-identity.ts';
-import { inspectGeneration, processStartToken, type CwdSource, type RecordedProcess, type WorkerProcessRecord } from '../delegation/process-liveness.ts';
+import { processStartToken, type RecordedProcess, type WorkerProcessRecord } from '../delegation/process-liveness.ts';
 import { collectSecretValues, redactDeep } from '../core/secret-redaction.ts';
 // Pure, dependency-free reference helpers — the same sanity bound the marker parser applies.
 import { archivePullRequests, pullRequestKey } from './pull-requests.ts';
@@ -542,6 +545,8 @@ export class RunStore extends EventEmitter {
   private readonly dirty = new Set<string>();
   /** The lifecycle events run exits write (B12). */
   private readonly exitEvents = new ExitEvents((id, event) => this.appendEvent(id, event));
+  /** Every worker's process scope (ADR 0032): spawn sites, Continue and destroy reach it here. */
+  readonly scopes = new WorkerScopes(this);
   /** Runs gone from memory whose rows the next save or commit deletes. */
   private readonly deleted = new Set<string>();
   /** Deleted runs whose history files (events, handoff, images, artifacts) go once the delete of
@@ -2725,27 +2730,13 @@ export class RunStore extends EventEmitter {
 
   readWorkerExecution(id: string): WorkerExecution | undefined {
     try {
-      const path = this.executionPath(id);
-      const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-      try {
-        const info = fstatSync(fd);
-        if (!info.isFile() || info.size > 16384 || (info.mode & 0o077)) return undefined;
-        const buffer = Buffer.alloc(16385); const count = readSync(fd, buffer, 0, buffer.length, 0);
-        return workerExecutionSchema.parse(JSON.parse(buffer.subarray(0, count).toString('utf8')));
-      } finally { closeSync(fd); }
+      const proof = readPrivateRecord(this.executionPath(id), 16384, value => workerExecutionSchema.parse(value));
+      return typeof proof === 'string' ? undefined : proof;
     } catch { return undefined; }
   }
 
   private writeWorkerExecution(id: string, proof: WorkerExecution, fresh = false): void {
-    const path = this.executionPath(id, true);
-    try {
-      const existing = lstatSync(path);
-      if (fresh || !existing.isFile() || existing.isSymbolicLink()) throw new Error('Unsafe execution checkpoint');
-    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-    const temporary = `${path}.${randomUUID()}.tmp`;
-    const fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-    try { writeFileSync(fd, JSON.stringify(proof)); fsyncSync(fd); } finally { closeSync(fd); }
-    try { renameSync(temporary, path); } finally { rmSync(temporary, { force: true }); }
+    writePrivateRecord(this.executionPath(id, true), proof, { fresh });
   }
 
   /** Complete execution is not permission to reuse/delete persistent resources (#738).
@@ -2756,19 +2747,16 @@ export class RunStore extends EventEmitter {
 
   /** `workerResourcesSafe` with the refusal's live PIDs (empty when no PID explains it). */
   workerResourceHolders(id: string, generation: string, resourceId: string,
-    opts: { admittingQueued?: boolean; cwds?: CwdSource | undefined } = {}): 'safe' | number[] {
+    opts: { admittingQueued?: boolean } = {}): 'safe' | number[] {
     if (autosaveCleanupBlocker(this.dataDir, id)) return [];
     const run = this.peek(id);
     const proof = this.readWorkerExecution(id);
     if (!workerResourceAuthorized(run, proof, id, generation, resourceId, opts.admittingQueued)) return [];
     const record = this.readWorkerProcesses(id, generation);
     if (record === 'unknown' || !agentTmpDirOwnershipProven(this.dataDir, id)) return [];
-    const paths = [run.delegation.workspace.path, ...agentTmpDirLocations(this.dataDir, id)];
-    // Nothing can be deleted/reused at an absent path. This lets explicit history deletion
-    // retire completed cleanup despite ambient denial, while recorded survivors/unknown evidence
-    // still block. Only ENOENT proves absence; existsSync would also hide access errors.
-    if (workerResourcePathsGone(paths)) return workerResourceAbsentHolders(record);
-    return workerResourceLiveHolders(inspectGeneration({ ...(record === 'absent' ? {} : { record }), paths, cwds: opts.cwds }));
+    // Only the generation's own recorded processes count; a process outside the worker's scope
+    // that works in its paths is not the worker's and blocks nothing (ADR 0032).
+    return recordedHolders(record);
   }
 
   /** Upgrade a legacy completed checkpoint while terminal task ownership is still known.
@@ -2783,20 +2771,20 @@ export class RunStore extends EventEmitter {
 
   /** Cleanup can outlive its index row, but never its generation or terminal task intent.
    * `cwds` is the scratch reprobe tick's shared `/proc` snapshot (hearsay-tools/cezarion#879). */
-  workerScratchResourcesSafe(id: string, generation: string, resourceId: string, cwds?: CwdSource): boolean {
+  workerScratchResourcesSafe(id: string, generation: string, resourceId: string): boolean {
     if (autosaveCleanupBlocker(this.dataDir, id)) return false;
     const run = this.peek(id), proof = this.readWorkerExecution(id);
     if (proof?.phase !== 'complete' || proof.generation !== generation || proof.scratchCleanup?.resourceId !== resourceId ||
       (run && ['queued', 'running', 'waiting'].includes(run.status))) return false;
+    // A process still in the worker's scope may use its scratch; one outside it is not the worker's.
     if (run?.delegation?.role === 'worker') return run.delegation.workspace.path === proof.scratchCleanup.path &&
-      this.workerResourceHolders(id, generation, resourceId, { cwds }) === 'safe';
+      this.workerResourceHolders(id, generation, resourceId) === 'safe' && this.scopes.empty(id);
     // A valid different role contradicts the retained intent. Quarantined/missing metadata
     // supplies no new authority; only the private terminal checkpoint authorizes scratch.
     if (run && run.delegation?.role !== 'invalid') return false;
     const record = this.readWorkerProcesses(id, generation);
     if (record === 'unknown' || !agentTmpDirOwnershipProven(this.dataDir, id)) return false;
-    return inspectGeneration({ ...(record === 'absent' ? {} : { record }),
-      paths: [proof.scratchCleanup.path, ...agentTmpDirLocations(this.dataDir, id)], cwds }).liveness === 'gone';
+    return recordedHolders(record) === 'safe' && this.scopes.empty(id);
   }
 
   commitWorkerExecutionStart(id: string): string {
@@ -2820,28 +2808,33 @@ export class RunStore extends EventEmitter {
   /** Tri-state: only ENOENT is `absent` (legacy, scan-only). A present record that is unreadable,
    * wrongly permissioned, malformed or of another generation is `unknown`: never finalized or reaped. */
   readWorkerProcesses(id: string, generation: string): WorkerProcessRecord | 'absent' | 'unknown' {
-    try {
-      const fd = openSync(this.processesPath(id), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-      try {
-        const info = fstatSync(fd);
-        if (!info.isFile() || info.size > 8192 || (info.mode & 0o077)) return 'unknown';
-        const buffer = Buffer.alloc(8193); const count = readSync(fd, buffer, 0, buffer.length, 0);
-        const record = workerProcessRecordSchema.parse(JSON.parse(buffer.subarray(0, count).toString('utf8')));
-        return record.generation === generation ? record : 'unknown';
-      } finally { closeSync(fd); }
-    } catch (error) { return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'absent' : 'unknown'; }
+    const record = readPrivateRecord(this.processesPath(id), 8192, value => workerProcessRecordSchema.parse(value));
+    return typeof record === 'string' || record.generation === generation ? record : 'unknown';
   }
 
   private writeWorkerProcesses(id: string, record: WorkerProcessRecord): void {
-    const path = this.processesPath(id, true);
-    try {
-      const existing = lstatSync(path);
-      if (!existing.isFile() || existing.isSymbolicLink()) throw new Error('Unsafe process record');
-    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-    const temporary = `${path}.${randomUUID()}.tmp`;
-    const fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-    try { writeFileSync(fd, JSON.stringify(workerProcessRecordSchema.parse(record))); fsyncSync(fd); } finally { closeSync(fd); }
-    try { renameSync(temporary, path); } finally { rmSync(temporary, { force: true }); }
+    writePrivateRecord(this.processesPath(id, true), workerProcessRecordSchema.parse(record));
+  }
+
+  /** Private scope record: the cgroups and process groups the worker owns (ADR 0032). */
+  private scopePath(id: string, write = false): string {
+    return this.executionPath(id, write).replace(/\.execution\.json$/, '.scope.json');
+  }
+
+  /** Tri-state like the process record: only ENOENT is `absent`. */
+  readWorkerScope(id: string): ScopeRecord | 'absent' | 'unknown' {
+    const record = readPrivateRecord(this.scopePath(id), 65_536, value => scopeRecordSchema.parse(value));
+    return typeof record === 'string' || record.workerId === id ? record : 'unknown';
+  }
+
+  /** Durable before the caller acts on it. */
+  writeWorkerScope(id: string, record: ScopeRecord): void {
+    writePrivateRecord(this.scopePath(id, true), scopeRecordSchema.parse(record));
+  }
+
+  /** The scope a run's processes start in: a worker's own, none for any other run (ADR 0032). */
+  spawnScope(id: string): SpawnScope | undefined {
+    return this.peek(id)?.delegation?.role === 'worker' ? this.scopes.spawnScope(id) : undefined;
   }
 
   /** Bound to the current generation. Past the cap the record never drops an entry: the
@@ -2966,6 +2959,7 @@ export class RunStore extends EventEmitter {
         // Private process/account evidence is now replaced by the exact parent receipt.
         rmSync(this.identityPath(id), { force: true });
         rmSync(this.processesPath(id), { force: true });
+        rmSync(this.scopePath(id), { force: true });
         rmSync(this.executionPath(id), { force: true });
         const retained = this.readWorkerResult(parent.id, id)!;
         this.commitWorkerResult(parent.id, { ...retained, observedAt: new Date().toISOString(),

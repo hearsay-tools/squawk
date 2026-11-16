@@ -2,6 +2,7 @@ import { ChildProcess, execFile, spawn, spawnSync, type ChildProcessWithoutNullS
 import { readdirSync, readFileSync } from 'node:fs';
 import { afterExitDrain, exitDrainBudget, DEFAULT_RUNNER_TIMINGS, type RunnerTimings } from './runner-runtime.ts';
 import { disclaimedCommand } from './disclaim-spawn.ts';
+import type { SpawnScope } from '../worker-scope/scope.ts';
 
 /**
  * Own POSIX session process groups and track member incarnations before signalling after leader
@@ -239,13 +240,18 @@ function reap(pgid: number, leader: Leader): void {
 export function spawnSessionLeader(
   bin: string,
   args: readonly string[],
-  options: { cwd: string; env: NodeJS.ProcessEnv; timings?: Partial<RunnerTimings> | undefined },
+  options: { cwd: string; env: NodeJS.ProcessEnv; timings?: Partial<RunnerTimings> | undefined; scope?: SpawnScope | undefined },
 ): ChildProcessWithoutNullStreams {
   const grouped = process.platform !== 'win32';
-  const [file, argv] = disclaimedCommand(bin, args, options.env);
+  const [disclaimed, disclaimedArgv] = disclaimedCommand(bin, args, options.env);
+  const [file, argv] = options.scope ? options.scope.command(disclaimed, disclaimedArgv) : [disclaimed, disclaimedArgv];
   const child = spawn(file, argv, { cwd: options.cwd, env: options.env, detached: grouped });
   spawned.add(child);
   const pid = child.pid;
+  // A process the scope could not record is not owned: end it before anything relies on it.
+  if (pid !== undefined && child instanceof ChildProcess) {
+    try { options.scope?.started(pid); } catch (error) { child.kill('SIGKILL'); throw error; }
+  }
   if (!grouped || !(child instanceof ChildProcess) || pid === undefined || !groupId(pid)) return child;
   prune();
   const leader: Leader = { child, timings: options.timings };

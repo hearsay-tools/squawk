@@ -10,6 +10,7 @@ import { processStartToken, recordedProcessLive } from '../delegation/process-li
 import { spawnDetached, stopGroup, type GroupLeader } from '../detached-process.ts';
 import { CHROMIUM_PID_FILE } from './chromium.ts';
 import { legacyRunsBeside, runDataDir } from '../legacy-runs.ts';
+import type { SpawnScope } from '../worker-scope/scope.ts';
 
 /**
  * Supervisor for one cezar-owned dev server (#781, spec 2026-10-02-live-preview-v1): spawn the
@@ -110,6 +111,7 @@ export class DevServer extends EventEmitter {
   private readonly dir: string;
   private readonly probeMs: number;
   private readonly waitMs: number;
+  private readonly scope: SpawnScope | undefined;
   private child?: ChildProcess;
   private childExited?: Promise<void>;
   private probeTimer?: NodeJS.Timeout | undefined;
@@ -118,8 +120,9 @@ export class DevServer extends EventEmitter {
   private probing = false;
   private stopping?: Promise<void>;
 
-  constructor(opts: { server: PreviewServer; worktreePath: string; dir: string; probeMs?: number; waitMs?: number }) {
+  constructor(opts: { server: PreviewServer; worktreePath: string; dir: string; probeMs?: number; waitMs?: number; scope?: SpawnScope | undefined }) {
     super();
+    this.scope = opts.scope;
     this.server = opts.server;
     this.worktreePath = opts.worktreePath;
     this.dir = opts.dir;
@@ -140,9 +143,24 @@ export class DevServer extends EventEmitter {
     // stdin is closed: nobody can answer a prompt from the cockpit, so one fails fast into `exited` with its log.
     // The command is the agent's and runs outside its sandbox: it gets the curated env, never Squawk's secrets (#427).
     const env = buildCommandEnv();
-    const child = process.platform === 'win32'
-      ? spawn(this.server.command, { cwd, env, shell: true, windowsHide: true, stdio: ['ignore', logFd, logFd] })
-      : spawnDetached('/bin/sh', ['-c', this.server.command], { cwd, env, stdio: ['ignore', logFd, logFd] });
+    let child: ChildProcess;
+    try {
+      if (process.platform === 'win32') child = spawn(this.server.command, { cwd, env, shell: true, windowsHide: true, stdio: ['ignore', logFd, logFd] });
+      else {
+        const [file, args] = this.scope ? this.scope.command('/bin/sh', ['-c', this.server.command]) : ['/bin/sh', ['-c', this.server.command]];
+        child = spawnDetached(file, args, { cwd, env, stdio: ['ignore', logFd, logFd] });
+        const pid = child.pid;
+        if (pid !== undefined) {
+          try { this.scope?.started(pid); } catch (error) { child.on('error', () => undefined); try { process.kill(-pid, 'SIGKILL'); } catch { /* gone */ } throw error; }
+        }
+      }
+    } catch (error) {
+      // The worker's scope refused (its destroy has begun) or could not record the process.
+      try { appendFileSync(this.logPath, `${productName('cezar')} could not start the command: ${(error as Error).message}\n`); } catch { /* log is best effort */ }
+      closeSync(logFd);
+      this.finish('exited');
+      return;
+    }
     closeSync(logFd);
     this.child = child;
     this.childExited = new Promise<void>(resolveExit => {

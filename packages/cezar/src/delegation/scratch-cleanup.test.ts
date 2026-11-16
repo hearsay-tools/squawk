@@ -1,14 +1,14 @@
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { spawn } from 'node:child_process';
-import fs from 'node:fs';
 import { once } from 'node:events';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agentTmpDir, agentTmpDirMayExist, agentTmpEnv, removeAgentTmpDir } from '../runs/agent-tmpdir.ts';
 import { manager, store, root, worker, reopenRuntime, useWorkerWaitFixture } from '../workflows/worker-wait-claude.testkit.ts';
-import { nonDumpableHolder, readableHolder } from './non-dumpable.testkit.ts';
+import { groupHolder, readableHolder } from './non-dumpable.testkit.ts';
+import { setHostScope } from '../worker-scope/worker-scopes.ts';
 import { WorkerScratchCleanup } from './scratch-cleanup.ts';
 import { claimJob, jobPaths } from '../jobs/job.ts';
 import { processStartToken } from '../detached-process.ts';
@@ -22,9 +22,14 @@ function setTmpRoot(value: string | undefined) {
   }
 }
 
+/** Records `pid`'s group in the worker's scope, as a spawn site does. The host backend is pinned to
+ * process groups, so the same test holds on every host. */
+const own = (runId: string, pid: number) => store.scopes.spawnScope(runId).started(pid);
+
 describe('durable scratch cleanup evidence', () => {
   useWorkerWaitFixture();
-  afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports(); });
+  beforeEach(() => { setHostScope({ backend: 'groups', reason: 'test' }); });
+  afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports(); setHostScope(undefined); });
 
   async function completed(location = 'local') {
     const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
@@ -60,7 +65,7 @@ describe('durable scratch cleanup evidence', () => {
     } finally { cleanup.pause(); vi.useRealTimers(); removeAgentTmpDir(dataDir, run.id); }
   });
 
-  it.runIf(process.platform === 'linux' && process.getuid?.() !== 0)('retains an unreadable old fallback owner and its pointer until ownership and the real holder clear', async () => {
+  it.runIf(process.platform === 'linux' && process.getuid?.() !== 0)('retains an unreadable old fallback owner and its pointer until ownership clears and the worker\'s process exits', async () => {
     const priorTmpdir = process.env.TMPDIR;
     const oldRoot = mkdtempSync('/tmp/cez-old-');
     setTmpRoot(oldRoot);
@@ -71,8 +76,9 @@ describe('durable scratch cleanup evidence', () => {
       const fs = require('node:fs'); process.stdout.write('ready');
       process.stdin.on('data', data => { fs.appendFileSync('holder-writes', data); process.stdout.write('written'); });
       process.stdin.on('end', () => process.exit(0));
-    `], { cwd: scratch, stdio: ['pipe', 'pipe', 'inherit'] });
+    `], { cwd: scratch, stdio: ['pipe', 'pipe', 'inherit'], detached: true });
     const exited = once(child, 'exit'); await once(child.stdout, 'data');
+    own(run.id, child.pid!);
     const write = async () => { const done = once(child.stdout, 'data'); child.stdin.write('still writable\n'); await done; };
     const cleanup = new WorkerScratchCleanup(store, dataDir, () => false);
     try {
@@ -163,9 +169,10 @@ describe('durable scratch cleanup evidence', () => {
 
   it.runIf(process.platform === 'linux').each(['corrupt', 'missing', 'quarantined'].flatMap(mode => ['local', 'fallback'].map(location => ({ mode, location }))))('retains held $location scratch across $mode index recovery and retries after the holder exits', async ({ mode, location }) => {
     const { run, dataDir, scratch } = await completed(location);
-    const holder = await readableHolder(scratch);
+    const holder = await groupHolder(scratch);
+    own(run.id, holder.pid);
     try {
-      // A real readable holder; no cwd or liveness read is mocked.
+      // A real process in the worker's scope; no liveness read is mocked.
       await holder.write();
       manager.dispose(); store.close();
       const database = join(dataDir, 'runs.db');
@@ -250,35 +257,22 @@ describe('durable scratch cleanup evidence', () => {
     } finally { vi.useRealTimers(); }
   });
 
-  it.runIf(process.platform === 'linux')('ambient denial never refuses admission or reuse; a readable holder of retained paths does (hearsay-tools/cezarion#889)', async () => {
+  it.runIf(process.platform === 'linux')('a process outside the worker\'s scope never refuses admission, even inside its retained scratch (ADR 0032)', async () => {
     const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
     setRunStatus(store, parent.id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: ['spawn'], receipts: [] } });
     const run = await worker(parent.id);
     if (run.delegation?.role !== 'worker') throw Error('missing worker');
     const scratch = agentTmpDir(join(root, '.ai/cezar'), run.id);
-    const ambient = await nonDumpableHolder(root); // outside every worker resource, and unreadable
-    let retained: Awaited<ReturnType<typeof nonDumpableHolder>> | undefined;
+    const generation = store.commitWorkerExecutionStart(run.id);
+    setRunStatus(store, run.id, RUN_STATUS.cancelled); store.commitWorkerExecutionComplete(run.id, generation);
+    manager.pauseWorkerCleanup();
+    mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, 'retained'), 'task files');
+    const outsider = await readableHolder(scratch);
     try {
-      expect(existsSync(run.delegation.workspace.path)).toBe(false);
-      expect(agentTmpDirMayExist(join(root, '.ai/cezar'), run.id)).toBe(false);
-      const generation = store.commitWorkerExecutionStart(run.id);
-      expect(store.readWorkerExecution(run.id)).toMatchObject({ generation, phase: 'starting' });
-      setRunStatus(store, run.id, RUN_STATUS.cancelled); store.commitWorkerExecutionComplete(run.id, generation);
-      manager.pauseWorkerCleanup();
-      mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, 'retained'), 'task files');
-      // An unreadable cwd is no evidence even inside the retained scratch.
-      retained = await nonDumpableHolder(scratch);
-      const reader = await readableHolder(scratch);
-      try {
-        // hearsay-tools/squawk#867: the refusal names the holder.
-        expect(() => store.commitWorkerExecutionStart(run.id)).toThrow(new RegExp(`^processes ${reader.pid} \\(python[\\d.]*\\) still hold the worker's worktree or scratch$`));
-        expect(store.readWorkerExecution(run.id)?.generation).toBe(generation);
-        await reader.write();
-      } finally { await reader.close(); }
       expect(store.commitWorkerExecutionStart(run.id)).not.toBe(generation);
       expect(readFileSync(join(scratch, 'retained'), 'utf8')).toBe('task files');
-      await ambient.write(); await retained.write();
-    } finally { await ambient.close(); await retained?.close(); }
+      await outsider.write();
+    } finally { await outsider.close(); }
   });
 
   it.each(['execution', 'processes'])('reconstructs and keeps retrying while the private %s evidence is unreadable', async sidecar => {
@@ -316,7 +310,8 @@ describe('durable scratch cleanup evidence', () => {
 
 describe('scratch reprobe cadence (hearsay-tools/cezarion#879)', () => {
   useWorkerWaitFixture();
-  afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports(); vi.useRealTimers(); });
+  beforeEach(() => { setHostScope({ backend: 'groups', reason: 'test' }); });
+  afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports(); vi.useRealTimers(); setHostScope(undefined); });
 
   async function completed() {
     const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
@@ -329,43 +324,29 @@ describe('scratch reprobe cadence (hearsay-tools/cezarion#879)', () => {
     mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, 'keep'), 'durable');
     return { run, dataDir, scratch };
   }
-  /** One `/proc` listing is one full holder scan; the fixture's scope spies the listing. */
-  const listings = () => vi.mocked(fs.readdirSync).mock.calls.filter(([path]) => path === '/proc').length;
+  /** One probe is one ownership check of one id. */
+  const probes = () => vi.mocked(store.workerScratchResourcesSafe).mock.calls.length;
   type Due = Map<string, { at: number; attempts: number; generation?: string }>;
   const dueOf = (cleanup: WorkerScratchCleanup) => (cleanup as unknown as { due: Due }).due;
 
-  it.runIf(process.platform === 'linux')('held dirs due together share one /proc scan per tick', async () => {
-    const held = [await completed(), await completed(), await completed()];
-    const holders = await Promise.all(held.map(({ scratch }) => readableHolder(scratch)));
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    const cleanup = new WorkerScratchCleanup(store, held[0]!.dataDir, () => false);
-    try {
-      const before = listings();
-      for (const { run } of held) cleanup.schedule(run.id);
-      await vi.advanceTimersByTimeAsync(0);
-      expect(listings() - before).toBe(1);
-      await vi.advanceTimersByTimeAsync(60_000);
-      expect(listings() - before).toBe(2);
-      for (const { scratch } of held) expect(readFileSync(join(scratch, 'keep'), 'utf8')).toBe('durable');
-    } finally { cleanup.pause(); vi.useRealTimers(); for (const holder of holders) await holder.close(); }
-  });
-
   it.runIf(process.platform === 'linux')('a held dir backs off to hourly and is still removed once its holder exits', async () => {
     const { run, dataDir, scratch } = await completed();
-    const holder = await readableHolder(scratch);
+    const holder = await groupHolder(scratch);
+    own(run.id, holder.pid);
+    vi.spyOn(store, 'workerScratchResourcesSafe');
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const cleanup = new WorkerScratchCleanup(store, dataDir, () => false);
     try {
-      const before = listings();
+      const before = probes();
       cleanup.schedule(run.id);
       // The fast window: a probe at once, then five a minute apart.
       await vi.advanceTimersByTimeAsync(300_000);
-      expect(listings() - before).toBe(6);
+      expect(probes() - before).toBe(6);
       // Then two minutes: nothing at 6 or 6:59, a probe by 7:00.
       await vi.advanceTimersByTimeAsync(119_000);
-      expect(listings() - before).toBe(6);
+      expect(probes() - before).toBe(6);
       await vi.advanceTimersByTimeAsync(1_000);
-      expect(listings() - before).toBe(7);
+      expect(probes() - before).toBe(7);
       await vi.advanceTimersByTimeAsync(4 * 3_600_000);
       expect(dueOf(cleanup).get(run.id)!.at - Date.now()).toBeGreaterThan(3_000_000);
       expect(readFileSync(join(scratch, 'keep'), 'utf8')).toBe('durable');
@@ -378,7 +359,8 @@ describe('scratch reprobe cadence (hearsay-tools/cezarion#879)', () => {
 
   it.runIf(process.platform === 'linux')('keeps a pending id in its backoff, and probes a new generation at once', async () => {
     const { run, dataDir, scratch } = await completed();
-    const holder = await readableHolder(scratch);
+    const holder = await groupHolder(scratch);
+    own(run.id, holder.pid);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const cleanup = new WorkerScratchCleanup(store, dataDir, () => false);
     try {

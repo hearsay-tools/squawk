@@ -7,7 +7,7 @@ import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:c
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import { agentTmpDir } from '../runs/agent-tmpdir.ts';
 import { ensureOwnedWorkspace } from '../delegation/workspace.ts';
@@ -23,9 +23,13 @@ import { signalSession, spawnSessionLeader } from '../core/session-process.ts';
 import { until, root, store, manager, releases, worker, workspace, useWorkerDestroyFixture } from './worker-destroy.testkit.ts';
 import { createRunner } from '../core/runner-factory.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
+import { setHostScope } from '../worker-scope/worker-scopes.ts';
 
 describe('worker termination barrier', { timeout: 30_000 }, () => {
- useWorkerDestroyFixture();
+  useWorkerDestroyFixture();
+  // Ownership is the worker's recorded process groups on every host (ADR 0032).
+  beforeEach(() => { setHostScope({ backend: 'groups', reason: 'test' }); });
+  afterEach(() => { setHostScope(undefined); });
   describe('unreadable processes at destroy (hearsay-tools/cezarion#889)', () => {
     const branchExists = (branch: string) => execFileSync('git', ['branch', '--list', branch], { cwd: root, encoding: 'utf8' }).includes(branch);
     /** A settled worker with a materialized worktree; the scratch stays unmaterialized. */
@@ -87,22 +91,22 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       } finally { Object.defineProperty(process, 'platform', platform); }
     });
 
-    it.each(['worktree', 'scratch'] as const)('retains resources and names the PID of a process whose cwd is in the %s', async location => {
+    it.each(['worktree', 'scratch'] as const)("a process outside the worker's scope whose cwd is in the %s blocks nothing and is never signalled", async location => {
       const { w, service, detach } = await settled();
       const cwd = location === 'worktree' ? workspace(w).path : agentTmpDir(join(root, '.ai/cezar'), w.id);
       mkdirSync(cwd, { recursive: true });
-      const holder = spawn(process.execPath, ['-e', "console.log('ready'); setInterval(()=>{},1000)"], { cwd, stdio: ['ignore', 'pipe', 'ignore'] });
-      const exited = new Promise(resolve => holder.once('exit', resolve));
-      releases.push(() => holder.kill('SIGKILL'));
-      await new Promise(resolve => holder.stdout!.once('data', resolve));
+      const outsider = spawn(process.execPath, ['-e', "console.log('ready'); setInterval(()=>{},1000)"], { cwd, stdio: ['ignore', 'pipe', 'ignore'] });
+      const exited = new Promise(resolve => outsider.once('exit', resolve));
+      releases.push(() => outsider.kill('SIGKILL'));
+      await new Promise(resolve => outsider.stdout!.once('data', resolve));
+      const kills = vi.spyOn(process, 'kill'); const own = vi.spyOn(outsider, 'kill');
       try {
-        const result = await service.destroyForHuman('p', w.id);
-        expect(result).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
-        expect(result.error).toContain(String(holder.pid));
-        expect(existsSync(workspace(w).path)).toBe(true); expect(holder.exitCode).toBeNull(); expect(holder.signalCode).toBeNull();
-        holder.kill('SIGKILL'); await exited;
         expect(await service.destroyForHuman('p', w.id)).toMatchObject({ state: 'complete', remaining: [] });
-      } finally { holder.kill('SIGKILL'); await exited; detach(); }
+        expect(existsSync(workspace(w).path)).toBe(false); expect(branchExists(workspace(w).branch)).toBe(false);
+        expect(outsider.exitCode).toBeNull(); expect(outsider.signalCode).toBeNull();
+        expect(kills.mock.calls.filter(([pid, signal]) => Math.abs(pid) === outsider.pid && signal !== 0)).toEqual([]);
+        expect(own.mock.calls).toEqual([]);
+      } finally { own.mockRestore(); outsider.kill('SIGKILL'); await exited; detach(); }
     });
   });
 
@@ -187,36 +191,16 @@ console.log(String(m.pid)); ${opts.leader === 'exit' ? "m.unref(); process.stdin
       } finally { other.dispose(); reopened.flush(); }
     });
 
-    it.skipIf(process.platform === 'win32')("destroy never signals a dead leader's recorded group that holds nothing of the worker", async () => {
-      const w = await worker();
-      const generation = store.commitWorkerExecutionStart(w.id);
-      await ensureOwnedWorkspace(root, w);
-      setRunStatus(store, w.id, RUN_STATUS.done); store.commitWorkerExecutionComplete(w.id, generation); store.flush();
-      // An unrelated group whose number equals the recorded leader's pid, its leader already gone:
-      // the shape a double-fork daemon leaves once a freed number is reused.
-      const script = `const m = require('child_process').spawn(process.execPath, ['-e', "process.on('SIGTERM',()=>{}); setInterval(()=>{},1000)"], { stdio: 'ignore' }); console.log(String(m.pid)); m.unref(); setTimeout(() => process.exit(0), 50);`;
-      const foreign = spawn(process.execPath, ['-e', script], { cwd: tmpdir(), detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
-      const member = requirePidText(String(await new Promise<Buffer>(resolve => foreign.stdout!.once('data', resolve))), 'member stdout');
-      releases.push(() => { try { process.kill(member, 'SIGKILL'); } catch { /* gone */ } });
-      await new Promise(resolve => foreign.once('exit', resolve));
-      expect(alive(member)).toBe(true);
-      writeFileSync(recordPath(w.id), JSON.stringify({ ...readRecord(w.id), processes: [{ pid: foreign.pid!, pgid: foreign.pid! }] }));
-      const kills = vi.spyOn(process, 'kill');
-      expect(await service(store, manager).destroyForHuman('p', w.id)).toMatchObject({ state: 'complete', remaining: [] });
-      expect(kills.mock.calls.filter(([pid, signal]) => pid === -foreign.pid! && signal !== 0)).toEqual([]);
-      expect(alive(member)).toBe(true);
-    });
-
-    it.skipIf(process.platform === 'win32')('a setsid child keeps destroy incomplete and is never signalled', async () => {
+    // The `groups` backend's documented limit (ADR 0032): a child that left the worker's group is
+    // not the worker's, so it outlives destroy and keeps nothing from completing.
+    it.skipIf(process.platform === 'win32')('on the groups backend a setsid child outlives destroy, which still completes', async () => {
       const { w, member } = await groupedWorker({ member: 'setsid', leader: 'exit' });
       await until(() => !manager.isActive(w.id) && store.readWorkerExecution(w.id)?.phase === 'complete');
       const kills = vi.spyOn(process, 'kill');
-      const result = await service(store, manager).destroyForHuman('p', w.id);
-      expect(result).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
-      expect(result.error).toContain(String(member));
+      expect(await service(store, manager).destroyForHuman('p', w.id)).toMatchObject({ state: 'complete', remaining: [] });
       expect(alive(member)).toBe(true);
       expect(kills.mock.calls.filter(([pid, signal]) => Math.abs(pid) === member && signal !== 0)).toEqual([]);
-      expect(existsSync(workspace(w).path)).toBe(true);
+      expect(existsSync(workspace(w).path)).toBe(false); expect(branchExists(workspace(w).branch)).toBe(false);
     });
   });
 });

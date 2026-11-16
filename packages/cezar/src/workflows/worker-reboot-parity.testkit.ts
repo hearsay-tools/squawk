@@ -7,24 +7,17 @@ import { execFileSync } from 'node:child_process';
 import fs, { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parityRunners } from '../core/parity-classes.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
-import { nonDumpableHolder, readableHolder } from '../delegation/non-dumpable.testkit.ts';
+import { groupHolder, nonDumpableHolder, readableHolder } from '../delegation/non-dumpable.testkit.ts';
+import { setHostScope } from '../worker-scope/worker-scopes.ts';
 import { agentTmpDir } from '../runs/agent-tmpdir.ts';
+import { processStartToken } from '../delegation/process-liveness.ts';
 import { CredentialRegistry } from '../delegation/credentials.ts';
 import { DelegationService } from '../delegation/service.ts';
 import { manager, store, root, worker, until, semaphore, executions, bookkeeping, reopenRuntime, useWorkerWaitFixture } from './worker-wait.testkit.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
-
-// Enumerate only fixture processes to make eventual release independent of host daemons.
-// cwd permissions, process tokens, exit, runner wires, Git and all deletion stay real.
-function scopeProcesses(pids: number[]) {
-  const readdir = fs.readdirSync;
-  vi.spyOn(fs, 'readdirSync').mockImplementation(((...args: unknown[]) => String(args[0]) === '/proc'
-    ? pids.map(String) : Reflect.apply(readdir, fs, args)) as typeof fs.readdirSync);
-  syncBuiltinESMExports();
-}
 
 // A shared family (core/parity-classes.testkit.ts): seam row S43 holds each runner to reporting the
 // native processes the ledger records, and runner-shutdown to stopping them.
@@ -32,10 +25,12 @@ const runners = parityRunners('worker-reboot', 'R43');
 export const GROUPS = { collect: runners, destroy: runners, reuse: runners };
 export function registerGroup(settleVia: keyof typeof GROUPS) {
 describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hearsay-tools/cezarion#738)', { timeout: 30_000 }, () => {
-  useWorkerWaitFixture({ processScope: false }); // Explicit PID scope below includes unreadable holders.
-  afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports(); });
+  useWorkerWaitFixture();
+  // Pinned so a fixture group leader can join the worker's scope on every host.
+  beforeEach(() => { setHostScope({ backend: 'groups', reason: 'test' }); });
+  afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports(); setHostScope(undefined); });
 
-  if (settleVia !== 'reuse') it.each(GROUPS[settleVia])(`%s ${settleVia} settles and clears parent Finish; after restart, cleanup completes while an unreadable holder runs`, async runner => {
+  if (settleVia !== 'reuse') it.each(GROUPS[settleVia])(`%s ${settleVia} settles and clears parent Finish; after restart, cleanup completes while an outside holder runs`, async runner => {
     // Service collection is opt-in; useWorkerWaitFixture restores the caller's environment.
     // Explicit opt-in: this recovery fixture seeds an inactive parent and registers the rebuilt runtime.
     const adapter = HARNESS_ADAPTERS[runner];
@@ -72,11 +67,10 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
     mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, 'retained'), 'scratch');
     // Unknown location evidence blocks legacy settlement, but cannot negate known-reboot
     // execution proof. The independent cleanup still requires this evidence to recover.
-    // The holder's cwd is unreadable, so it is no evidence at all (hearsay-tools/cezarion#889).
+    // The holder is outside the worker's scope, so it holds nothing of the worker's (ADR 0032).
     const receipt = join(scratch, '.cez-fallback-removal.json');
     writeFileSync(receipt, '{corrupt', { mode: 0o600 });
-    const holder = await nonDumpableHolder(settleVia === 'collect' ? scratch : workspace.path);
-    const scopedPids = [holder.pid]; scopeProcesses(scopedPids);
+    const holder = await readableHolder(settleVia === 'collect' ? scratch : workspace.path);
     reopenRuntime();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const credentials = new CredentialRegistry();
@@ -128,27 +122,30 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
       expect(store.canDeleteRun(orphan.id)).toBe(true);
       await holder.close(); holderClosed = true;
       // With every resource physically absent, an ambient denial cannot strand history.
-      const ambient = await nonDumpableHolder(root); scopedPids.push(ambient.pid);
+      const ambient = await nonDumpableHolder(root);
       try { expect(store.canDeleteRun(orphan.id)).toBe(true); } finally { await ambient.close(); }
-      // A completed cleanup/checkpoint cannot authorize later history removal over a new readable holder.
+      // A completed cleanup/checkpoint cannot authorize later history removal over a live recorded
+      // process of the generation.
       mkdirSync(scratch, { recursive: true });
-      const later = await readableHolder(scratch); scopedPids.push(later.pid);
+      const survivor = await readableHolder(root);
+      writeFileSync(join(files, `${orphan.id}.processes.json`), JSON.stringify({ ...processes,
+        controller: { pid: ABSENT_PROCESS_PID, startToken: '11111111-1111-4111-8111-111111111111:100' },
+        processes: [...processes.processes, { pid: survivor.pid, startToken: processStartToken(survivor.pid) }] }));
       try {
         expect(store.deleteRun(orphan.id)).toBe(false);
         expect(existsSync(join(files, `${orphan.id}.processes.json`))).toBe(true);
         expect(existsSync(join(files, `${orphan.id}.execution.json`))).toBe(true);
-        await later.write();
-      } finally { await later.close(); }
-      // An unreadable one does not stop it.
-      const unreadable = await nonDumpableHolder(scratch); scopedPids.push(unreadable.pid);
+      } finally { await survivor.close(); }
+      // Outside processes in its scratch, readable or not, do not stop it and are never signalled.
+      const readable = await readableHolder(scratch); const unreadable = await nonDumpableHolder(scratch);
       try {
         expect(store.deleteRun(orphan.id)).toBe(true);
-        expect(unreadable.running).toBe(true);
-      } finally { await unreadable.close(); }
+        expect(readable.running).toBe(true); expect(unreadable.running).toBe(true);
+      } finally { await readable.close(); await unreadable.close(); }
       expect(existsSync(scratch)).toBe(false);
     } finally { detach(); credentials.close(); if (!holderClosed) await holder.close(); vi.useRealTimers(); }
   });
-  if (settleVia === 'reuse') it.each(GROUPS[settleVia])('%s refuses reuse until the real holder exits and a stale cleanup wake preserves the next native execution', async runner => {
+  if (settleVia === 'reuse') it.each(GROUPS[settleVia])('%s retains scratch for a scoped process, never for an outside holder, and a stale cleanup wake preserves the next native execution', async runner => {
     const adapter = HARNESS_ADAPTERS[runner];
     process.env.CEZ_DRY_RUN = '0'; process.env[adapter.binEnv] = adapter.mockBin;
     const p = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [{ id: 'task', kind: STEP_KIND.agent, name: 'Task' }] });
@@ -159,21 +156,20 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
     manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
     await Promise.all(executions.splice(0)); await Promise.all(bookkeeping.splice(0));
     const generation = store.readWorkerExecution(w.id)!.generation;
+    // Nothing holds the old scratch yet: keep the cleanup the stop scheduled from racing the fixture.
+    manager.pauseWorkerCleanup();
     const scratch = agentTmpDir(join(root, '.ai/cezar'), w.id);
     mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, 'retained'), 'old task scratch');
-    // A readable holder: an unreadable cwd would be no evidence (hearsay-tools/cezarion#889).
-    const holder = await readableHolder(scratch); let closed = false;
-    const scoped = [holder.pid]; scopeProcesses(scoped);
+    // A process in the worker's scope holds its scratch; one outside it holds nothing (ADR 0032).
+    const scoped = await groupHolder(scratch); store.scopes.spawnScope(w.id).started(scoped.pid);
+    const holder = await readableHolder(scratch);
     try {
-      manager.pauseWorkerCleanup();
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       manager.recoverWorkerCleanup(); await vi.advanceTimersByTimeAsync(0);
-      expect(manager.continueRun(w.id)).toMatchObject({ ok: false });
-      expect(store.readWorkerExecution(w.id)?.generation).toBe(generation);
-      await holder.write();
-      await holder.close(); closed = true;
-      // Pending retry is still captured against generation one. Admit generation two using
-      // the real native continuation and give it task scratch before that old timer fires.
+      expect(readFileSync(join(scratch, 'retained'), 'utf8')).toBe('old task scratch');
+      await scoped.write(); await scoped.close();
+      // A cleanup retry is captured against generation one. Admit generation two using the real
+      // native continuation and give it task scratch before that old timer fires.
       expect(manager.continueRun(w.id)).toMatchObject({ ok: true });
       const next = store.readWorkerExecution(w.id)!; expect(next.generation).not.toBe(generation);
       writeFileSync(join(scratch, 'new-generation'), next.generation);
@@ -181,12 +177,11 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
       expect(readFileSync(join(scratch, 'new-generation'), 'utf8')).toBe(next.generation);
       vi.useRealTimers();
       await until(() => store.getRun(w.id)?.status === 'waiting');
-      const record = store.readWorkerProcesses(w.id, next.generation);
-      expect(typeof record).toBe('object');
-      if (typeof record !== 'string') scoped.push(...record.processes.map(entry => entry.pid));
+      expect(typeof store.readWorkerProcesses(w.id, next.generation)).toBe('object');
       manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
       await until(() => !existsSync(scratch));
-    } finally { if (!closed) await holder.close(); vi.useRealTimers(); }
+      expect(holder.running).toBe(true);
+    } finally { await scoped.close(); await holder.close(); vi.useRealTimers(); }
   });
 
 });

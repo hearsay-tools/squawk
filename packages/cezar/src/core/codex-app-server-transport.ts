@@ -6,6 +6,7 @@ import { trackChildExit } from './agent-runner.ts';
 import { probeLeaderState, type LeaderState, signalSession, spawnSessionLeader } from './session-process.ts';
 import { buildChildEnv } from './agent-env.ts';
 import { DEFAULT_RUNNER_TIMINGS, type RunnerTimings } from './runner-runtime.ts';
+import type { SpawnScope } from '../worker-scope/scope.ts';
 
 export interface CodexAppServerMessage {
   id?: number | string;
@@ -36,11 +37,11 @@ export function spawnCodexAppServer(
   bin: string,
   cwd: string,
   extraEnv?: Record<string, string>,
-  opts: { session?: boolean; timings?: Partial<RunnerTimings> | undefined } = {},
+  opts: { session?: boolean; timings?: Partial<RunnerTimings> | undefined; scope?: SpawnScope | undefined } = {},
 ): ChildProcessWithoutNullStreams {
   try {
     const options = { cwd, timings: opts.timings, env: buildCodexAppServerEnv(extraEnv) };
-    return opts.session ? spawnSessionLeader(bin, ['app-server'], options) : nodeSpawn(bin, ['app-server'], options);
+    return opts.session ? spawnSessionLeader(bin, ['app-server'], { ...options, scope: opts.scope }) : nodeSpawn(bin, ['app-server'], options);
   } catch (error) {
     throw codexSpawnError(error, bin);
   }

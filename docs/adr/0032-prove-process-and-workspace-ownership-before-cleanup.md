@@ -1,20 +1,69 @@
 # Prove process and workspace ownership before cleanup
 
-Session cleanup must reach owned descendants without signalling a reused process id.
-POSIX sessions start in their own groups. Record live member incarnations and retain a group
-only while recorded evidence still matches. After leader exit, bounded output drain precedes
-cleanup. Windows uses the owned child’s process tree mechanism.
+A worker's processes belong to it because Squawk started them inside the worker's **scope**, never
+because they use the worker's files. A process that works in a worker's worktree or scratch but
+was not started in its scope is not the worker's: destroy, Continue and scratch cleanup never
+signal it and never wait for it (hearsay-tools/squawk#2180). Squawk does not scan the host's
+processes to decide anything about a worker.
 
-## Consequences
+## The scope
 
-A process that leaves the group is outside group cleanup. If the last recorded member exits
-before a child can be vouched for, cezar can retain that child rather than risk a reused group.
-Do not state that every descendant is always killed.
+Every process Squawk starts for a worker starts inside its scope: worktree setup, every runner
+session (and each Cursor turn, each OpenCode or OMP respawn), `check` steps, and what those
+processes start in turn. Shared controller work (Git helpers, the cockpit) stays outside. The
+scope lives from the worker's first spawn to its destroy, across Continue; a settled run does not
+require an empty scope, so a worker's Squeal daemon or test server may keep running in it.
 
-Worker destroy and path reuse require fresh resource proof, not just controller death or boot
-identity. Unknown evidence retains resources and retries. Persist intent before deletion and
-compare branch tip/reflog content, not inode identity, before removing owned Git state. Cleanup
-and admission checks must not yield between their final ownership proof and mutation.
+The controller picks one backend at start and logs it; it never changes inside that controller:
+
+| Host | Backend | Guarantee |
+| --- | --- | --- |
+| Linux where a real probe can create, enter, kill and remove a child cgroup v2 | `cgroup`: a private child of the controller's own cgroup, `squawk-worker-<id>`. Each command runs as `sh -c 'echo 0 > <cgroup>/cgroup.procs && exec "$@"'`, so it places itself before it runs; a failed move runs nothing | `contained`: every descendant, `setsid` and Node `detached` included, ends with the scope |
+| macOS, Linux without delegation, Windows until its Job Object helper lands | `groups`: the process groups of the leaders Squawk started | `scoped`: a descendant that leaves its group (`setsid`, `detached`) can survive destroy. The owner accepted this limit for macOS on 2026-10-29 and for Linux without delegation in hearsay-tools/squawk#2180 |
+
+There is no runtime fallback. A backend error fails the spawn or the destroy step that met it;
+it never switches to another mechanism. `hsq worker inspect` reports `scope.backend` and
+`scope.guarantee`.
+
+The scope record (`<run>.scope.json`, private, written with fsync and an atomic rename) names
+every cgroup and recorded group the worker owns. A cgroup is recorded before it is created and
+before anything enters it, so a crash at any point leaves nothing unrecorded. A record holds both
+kinds, so a worker continued by a controller that runs elsewhere is stopped whole. A worker from
+before scopes has its session groups only in its execution record (`<run>.processes.json`); the
+scope reads them from there, so destroy has no separate path for it.
+
+A recorded group is signalled only while it is still the one Squawk started: its leader is the
+recorded incarnation, or its leader is gone and the group still has members (the kernel does not
+reuse a pid while a group of that id exists). A live process at that pid with another start token
+means the number was reused, and the group is left alone.
+
+## Lifecycle
+
+- **Admission and Continue** refuse while another live Squawk controls the worker. A crashed
+  controller's leftovers do not refuse: Continue SIGKILLs everything in the scope, waits briefly
+  for the recorded session processes to end, settles the old generation and starts the new one.
+- **Destroy** runs one path, and every scheduled retry runs it in full:
+  1. persist the destroy intent; from here the scope starts nothing new;
+  2. stop the run and run the project's optional `worktreeTeardown` commands in the worktree
+     (hearsay-tools/squawk#914), after proving the worktree is the one its receipt and identity
+     marker name, at its own real path, so registered services stop gracefully while their root
+     exists;
+  3. prove the execution ended (a crashed generation: kill the scope, then wait for its recorded
+     session processes);
+  4. stop the scope: kill, wait until empty, remove each cgroup; kill the recorded groups. What
+     cannot be stopped stays recorded and the destroy stays incomplete with `process` remaining;
+  5. preserve the worker's result, diff and artifacts for the parent, then remove the worktree,
+     its Git registration and its branch with the checks below; retry only Git or file-system
+     failures;
+  6. persist completion.
+- **Scratch** (the agent's temp directory) is removed once the generation completed, its
+  recorded processes are gone and its scope holds no process.
+
+## Workspace checks
+
+Persist intent before deletion and compare branch tip/reflog content, not inode identity, before
+removing owned Git state. Cleanup and admission checks must not yield between their final
+ownership check and mutation. Unknown evidence retains resources and retries.
 
 On Windows, receipt directories, receipts, cleanup checkpoints and Git administration
 markers use protected ACLs owned by the current user. Only that user, SYSTEM and
@@ -25,7 +74,8 @@ ancestor directories without delete sharing while reading, creating or replacing
 identity. Checkpoints use a flushed temporary file and a handle-based atomic rename,
 so an interruption preserves either the old or the new checkpoint. An incomplete
 temporary file cannot authorize cleanup. This store requires a local drive with Windows
-ACL support; unsupported or unreadable evidence retains resources.
+ACL support; unsupported or unreadable evidence retains resources. Windows refuses to delete
+a directory another process holds open, so there the removal stays incomplete and names the path.
 
 The ownership policy (`delegation/workspace-record.ts`, used by `workspace.ts` and
 `workspace-removal.ts`) reaches these files only through the
@@ -37,19 +87,21 @@ Only process entries reach that module or the native helper `windows-workspace-i
 so the policy's importers never load the Windows store.
 `identity-store-entries.test.ts` holds both rules.
 
-Destroy stops no tool of its own. After it proves the worktree is the one its receipt and
-identity marker name, at its own real path, it runs the project's optional `worktreeTeardown`
-commands there (hearsay-tools/squawk#914), before the termination proof and the holder scans.
-They stop what the worktree started for itself, such as a test server or a file watcher. A
-missing hook, a failed command or a timeout changes nothing else: the scans still decide, a
-remaining holder is named by its pid and executable name (never its arguments, which may hold secrets) and never signalled, and the next scheduled
-attempt runs the teardown again. With a hook configured, no scheduled attempt is skipped, so a
-service the worker started after one teardown is stopped by the next.
+## Consequences
 
-Implementation: [session-process.ts](../../packages/cezar/src/core/session-process.ts), [process-liveness.ts](../../packages/cezar/src/delegation/process-liveness.ts), [workspace.ts](../../packages/cezar/src/delegation/workspace.ts), [workspace-record.ts](../../packages/cezar/src/delegation/workspace-record.ts), [workspace-removal.ts](../../packages/cezar/src/delegation/workspace-removal.ts), [worktree-teardown.ts](../../packages/cezar/src/delegation/worktree-teardown.ts).
+Destroy no longer refuses because an editor, a shell or another task's process works in the
+worktree: those processes keep running with a deleted directory. On a `scoped` host, a detached
+descendant the worker started can outlive destroy; teardown commands are the way to stop such a
+service. Do not state that every descendant is always killed on such a host.
 
-Coverage: [session-process.test.ts](../../packages/cezar/src/core/session-process.test.ts), [process-liveness.test.ts](../../packages/cezar/src/delegation/process-liveness.test.ts), [workspace.test.ts](../../packages/cezar/src/delegation/workspace.test.ts), [workspace-destruction-identity.test.ts](../../packages/cezar/src/delegation/workspace-destruction-identity.test.ts), [workspace-destruction-refs.test.ts](../../packages/cezar/src/delegation/workspace-destruction-refs.test.ts) [workspace-generic-cleanup.test.ts](../../packages/cezar/src/delegation/workspace-generic-cleanup.test.ts) and [service-destroy-holder.test.ts](../../packages/cezar/src/delegation/service-destroy-holder.test.ts).
+Session process groups (`core/session-process.ts`) still reap what a runner leaves in its own
+group when the leader exits, and forward Squawk's own SIGINT/SIGTERM to them.
 
 The test environment's lease, its idle-app watcher and their holder reclamation belong to the
 repository's own scripts (`.ai/scripts/test-env-lease.mjs`), not to destroy: the product ships
-no test-environment code (hearsay-tools/squawk#3515).
+no test-environment code (hearsay-tools/squawk#3515). Autosave keeps its own cwd observation
+(`autosave-holders.ts`); it never decides a worker's cleanup.
+
+Implementation: [worker-scope/](../../packages/cezar/src/worker-scope/), [session-process.ts](../../packages/cezar/src/core/session-process.ts), [worker-orphans.ts](../../packages/cezar/src/workflows/run/worker-orphans.ts), [worker-cleanup.ts](../../packages/cezar/src/delegation/worker-cleanup.ts), [workspace.ts](../../packages/cezar/src/delegation/workspace.ts), [workspace-record.ts](../../packages/cezar/src/delegation/workspace-record.ts), [workspace-removal.ts](../../packages/cezar/src/delegation/workspace-removal.ts), [worktree-teardown.ts](../../packages/cezar/src/delegation/worktree-teardown.ts).
+
+Coverage: [worker-scopes.test.ts](../../packages/cezar/src/worker-scope/worker-scopes.test.ts), [cgroup.test.ts](../../packages/cezar/src/worker-scope/cgroup.test.ts), [session-process.test.ts](../../packages/cezar/src/core/session-process.test.ts), [workspace.test.ts](../../packages/cezar/src/delegation/workspace.test.ts), [workspace-destruction-identity.test.ts](../../packages/cezar/src/delegation/workspace-destruction-identity.test.ts), [workspace-destruction-refs.test.ts](../../packages/cezar/src/delegation/workspace-destruction-refs.test.ts), [workspace-generic-cleanup.test.ts](../../packages/cezar/src/delegation/workspace-generic-cleanup.test.ts), [scratch-cleanup.test.ts](../../packages/cezar/src/delegation/scratch-cleanup.test.ts) and the `worker-scope-native` CI job.

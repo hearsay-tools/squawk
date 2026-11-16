@@ -567,6 +567,7 @@ export class ContinuationSession {
       session = startManagedSession(runner,
         {
           timings: this.context.timings,
+          scope: this.context.store.spawnScope(runId),
           // Skill body (when resent), then the run's extra system prompt, then
           // the handoff contract — the same order as the opening session (#790).
           // In-thread resume omits the skill from systemPrompt; OpenCode's 404

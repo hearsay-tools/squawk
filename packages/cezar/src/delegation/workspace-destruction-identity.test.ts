@@ -1,14 +1,13 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import fs, { existsSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, sep } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { projectMovedMarker } from '../project-paths.ts';
-import { describeProcesses } from './process-liveness.ts';
 import { createOwnedWorkspace } from './workspace.ts';
 import { ownedWorktreePresent, removeOwnedWorkspace } from './workspace-removal.ts';
-import { fixture, git, receiptPath, recordingReport, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
+import { fixture, git, receiptPath, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
 
 describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, () => {
   it('preserves owned resources when shared mutation coordination is unavailable', async () => {
@@ -99,11 +98,8 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     expect(await readFile(join(parentPath, 'tracked.txt'), 'utf8')).toBe('dirty');
   });
 
-  // Refusals that a retrying caller cannot explain from what it observes report unexplained, once.
-  const unexplained = [['unexplained']];
-  for (const [attack, reported] of [['symlink', unexplained], ['moved', []], ['moved, path reused', []], ['replacement', unexplained],
-    ['foreign checkout', unexplained], ['detached', unexplained], ['same-tip branch', unexplained], ['missing identity', unexplained],
-    ['rewritten reflog', unexplained], ['symlink reflog', unexplained], ['resource collision', unexplained], ['workspace names another baseline', []]] as const) {
+  for (const attack of ['symlink', 'moved', 'moved, path reused', 'replacement', 'foreign checkout', 'detached', 'same-tip branch',
+    'missing identity', 'rewritten reflog', 'symlink reflog', 'resource collision', 'workspace names another baseline'] as const) {
     it(`preserves ambiguous resources: ${attack}`, async () => {
       const { root, first, second } = await fixture();
       const workspace = await createOwnedWorkspace(root, randomUUID(), first);
@@ -134,10 +130,8 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
       if (attack === 'symlink reflog') { await rename(log, log + '-real'); await symlink(log + '-real', log); }
       const target = attack === 'resource collision' ? { ...workspace, resourceId: randomUUID() }
         : attack === 'workspace names another baseline' ? { ...workspace, baselineSha: second } : workspace;
-      const { calls, report } = recordingReport();
-      const result = await removeOwnedWorkspace(root, target, undefined, undefined, undefined, report);
+      const result = await removeOwnedWorkspace(root, target);
       expect(result).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
-      expect(calls).toEqual(reported);
       expect(existsSync(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'))).toBe(false);
       expect(git(root, 'branch', '--list', workspace.branch)).not.toBe('');
       expect(existsSync(attack === 'moved' ? workspace.path + '-moved' : workspace.path)).toBe(true);
@@ -180,72 +174,20 @@ describe('ownedWorktreePresent', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, () => {
 });
 
 describe('removeOwnedWorkspace refusals that keep every resource', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, () => {
-  it.runIf(process.platform !== 'win32')('keeps the worktree while a process runs in it, names that process and finishes after it exits', async () => {
+  // ADR 0032: which processes work in the worktree decides nothing. The worker's own ended with its
+  // scope; any other is not the worker's and is never signalled.
+  it.runIf(process.platform !== 'win32')('removes the worktree while an outside process runs in it, and leaves that process alone', async () => {
     const { root, first } = await fixture();
     const workspace = await createOwnedWorkspace(root, randomUUID(), first);
-    const holder = spawn('sleep', ['30'], { cwd: workspace.path, stdio: 'ignore' });
-    const exited = new Promise(resolve => holder.once('exit', resolve));
-    const { calls, report } = recordingReport();
+    const outsider = spawn('sleep', ['30'], { cwd: workspace.path, stdio: 'ignore' });
+    const exited = new Promise(resolve => outsider.once('exit', resolve));
     try {
-      const result = await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report);
-      expect(result).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
-      expect(result.error).toContain(describeProcesses([holder.pid!]));
-      expect(calls).toEqual([['held', [holder.pid]]]);
-      expect(JSON.parse(await readFile(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'), 'utf8'))).toMatchObject({ phase: 'prepared' });
-      expect(existsSync(workspace.path)).toBe(true);
-      expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
-    } finally { holder.kill(); await exited; }
-    expect(await removeOwnedWorkspace(root, workspace)).toMatchObject({ state: 'complete', remaining: [] });
+      expect(await removeOwnedWorkspace(root, workspace)).toMatchObject({ state: 'complete', remaining: [] });
+      expect(existsSync(workspace.path)).toBe(false);
+      expect(outsider.exitCode).toBeNull();
+      expect(outsider.signalCode).toBeNull();
+    } finally { outsider.kill(); await exited; }
   });
-
-  it.runIf(process.platform === 'linux')('keeps the worktree when its processes cannot be listed, and reports the refusal as unexplained', async () => {
-    const { root, first } = await fixture();
-    const workspace = await createOwnedWorkspace(root, randomUUID(), first);
-    // /proc can deny listing (hidepid, a locked-down container): no holder is known, none is ruled out.
-    const scope = vi.spyOn(fs, 'readdirSync');
-    const scoped = scope.getMockImplementation()!;
-    scope.mockImplementation(((path: fs.PathLike, options?: unknown) => {
-      if (path === '/proc') throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
-      return (scoped as (path: fs.PathLike, options?: unknown) => unknown)(path, options);
-    }) as typeof fs.readdirSync);
-    const { calls, report } = recordingReport();
-    const result = await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report);
-    expect(result).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
-    expect(calls).toEqual([['unexplained']]);
-    expect(JSON.parse(await readFile(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'), 'utf8'))).toMatchObject({ phase: 'prepared' });
-    expect(existsSync(workspace.path)).toBe(true);
-    expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
-  });
-
-  // A refusal is reported once and the attempt stops there, even when a later check would throw:
-  // a second report would turn a held refusal unexplained, and a retry would stop skipping it.
-  // Root ignores directory modes, so the unreadable parent cannot be made there.
-  it.runIf(process.platform === 'linux' && process.getuid?.() !== 0).each(['a live holder', 'unlistable processes'] as const)(
-    'reports a refusal for %s once when the worktree parent turns unreadable at the holder scan', async refusal => {
-      const { root, first } = await fixture();
-      const workspace = await createOwnedWorkspace(root, randomUUID(), first);
-      const holder = refusal === 'a live holder' ? spawn('sleep', ['30'], { cwd: workspace.path, stdio: 'ignore' }) : undefined;
-      const exited = holder && new Promise(resolve => holder.once('exit', resolve));
-      const parent = dirname(workspace.path);
-      const scope = vi.spyOn(fs, 'readdirSync');
-      const scoped = scope.getMockImplementation()!;
-      scope.mockImplementation(((path: fs.PathLike, options?: unknown) => {
-        if (path === '/proc') {
-          fs.chmodSync(parent, 0o000);
-          if (!holder) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
-        }
-        return (scoped as (path: fs.PathLike, options?: unknown) => unknown)(path, options);
-      }) as typeof fs.readdirSync);
-      const { calls, report } = recordingReport();
-      try {
-        expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, report))
-          .toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
-      } finally { fs.chmodSync(parent, 0o755); holder?.kill(); await exited; }
-      expect(calls).toEqual(holder ? [['held', [holder.pid]]] : [['unexplained']]);
-      expect(existsSync(workspace.path)).toBe(true);
-      expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
-    });
-
   it('keeps a worker workspace left in the read-only data of a moved project', async () => {
     const { root, first } = await fixture();
     // A project that still wrote .ai/cezar/ when the worker was provisioned, then moved to .ai/squawk/.
