@@ -8,8 +8,6 @@ export type LegacyProductIdentity = {
   npmAliasDirectory: 'alias-cezarion';
   npx: 'npx cezarion';
   envPrefix: 'CEZ_';
-  desktopExecutable: 'cezar-desktop';
-  desktopAppId: 'tools.hearsay.cezarion';
 };
 
 /** The new identity. npm refuses the unscoped name `hsq`, so it has no alias package. */
@@ -22,14 +20,12 @@ export type RebrandProductIdentity = {
   npmAliasDirectory: null;
   npx: 'npx -p @hearsay-tools/squawk hsq';
   envPrefix: 'HSQ_';
-  desktopExecutable: 'squawk-desktop';
-  desktopAppId: 'tools.hearsay.squawk';
 };
 
-/** Shared product names for the CLI, browser and native build tools. */
+/** Shared product names for the CLI and the browser. */
 export type ProductIdentity = LegacyProductIdentity | RebrandProductIdentity;
 
-/** The new identity by default; `false` names the old one, which compatibility packages and old-app builds still carry. */
+/** The new identity by default; `false` names the old one, which compatibility packages still carry. */
 export function productIdentity(rebrand?: true): RebrandProductIdentity;
 export function productIdentity(rebrand: false): LegacyProductIdentity;
 export function productIdentity(rebrand: boolean): ProductIdentity;
@@ -37,11 +33,9 @@ export function productIdentity(rebrand = true): ProductIdentity {
   return rebrand ? {
     rebrand, displayName: 'Squawk', command: 'hsq', npmPackage: '@hearsay-tools/squawk',
     npmAlias: null, npmAliasDirectory: null, npx: 'npx -p @hearsay-tools/squawk hsq', envPrefix: 'HSQ_',
-    desktopAppId: 'tools.hearsay.squawk', desktopExecutable: 'squawk-desktop',
   } : {
     rebrand, displayName: 'Cezarion', command: 'cez', npmPackage: '@wjarka/cezarion',
     npmAlias: 'cezarion', npmAliasDirectory: 'alias-cezarion', npx: 'npx cezarion', envPrefix: 'CEZ_',
-    desktopAppId: 'tools.hearsay.cezarion', desktopExecutable: 'cezar-desktop',
   };
 }
 

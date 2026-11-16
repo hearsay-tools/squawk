@@ -158,7 +158,7 @@ function BrowseError({ error, path, onEnter, onRetry }: {
         {error instanceof Error ? error.message : 'could not list that folder'}
       </p>
       {/* macOS remembers a "Don't Allow" and never asks again — the switch is in System
-          Settings. The desktop shell hands a `_blank` link to `open`, which opens the pane. */}
+          Settings. */}
       {privacyBlocked ? (
         <p data-slot="fs-privacy-hint" className="text-[12.5px] text-soft-foreground">
           Allow it under Privacy &amp; Security ▸ Files &amp; Folders, then try again.

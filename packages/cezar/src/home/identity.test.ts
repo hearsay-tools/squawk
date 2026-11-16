@@ -4,19 +4,17 @@ import { describe, expect, it } from 'vitest';
 import { NPM_LAUNCH_PACKAGES, npmPackageIdentity, npxCommand, productIdentity } from './identity.ts';
 
 describe('shared product identity', () => {
-  it('keeps the old identity for compatibility packages and old-app builds', () => {
+  it('keeps the old identity for compatibility packages', () => {
     expect(productIdentity(false)).toEqual({
       rebrand: false, displayName: 'Cezarion', command: 'cez', npmPackage: '@wjarka/cezarion',
-      npmAlias: 'cezarion', npmAliasDirectory: 'alias-cezarion', npx: 'npx cezarion', envPrefix: 'CEZ_', desktopAppId: 'tools.hearsay.cezarion',
-      desktopExecutable: 'cezar-desktop',
+      npmAlias: 'cezarion', npmAliasDirectory: 'alias-cezarion', npx: 'npx cezarion', envPrefix: 'CEZ_',
     });
   });
   it('selects the new identity by default', () => {
     expect(productIdentity()).toEqual(productIdentity(true));
     expect(productIdentity(true)).toEqual({
       rebrand: true, displayName: 'Squawk', command: 'hsq', npmPackage: '@hearsay-tools/squawk',
-      npmAlias: null, npmAliasDirectory: null, npx: 'npx -p @hearsay-tools/squawk hsq', envPrefix: 'HSQ_', desktopAppId: 'tools.hearsay.squawk',
-      desktopExecutable: 'squawk-desktop',
+      npmAlias: null, npmAliasDirectory: null, npx: 'npx -p @hearsay-tools/squawk hsq', envPrefix: 'HSQ_',
     });
   });
   it('runs the scoped package for a one-off command, because npm refuses the name hsq', () => {

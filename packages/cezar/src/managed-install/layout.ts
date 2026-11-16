@@ -1,6 +1,6 @@
 import { productIdentity } from '../home/identity.ts';
 /**
- * The managed install layout that `cez install` created and the desktop shell still uses:
+ * The managed install layout that `cez install` created:
  *
  *   <versions>/<id>/                       one `npm install --prefix` tree per version
  *   <versions>/<id>/.cezar-install.json    manifest: version, source, installedAt
@@ -8,8 +8,7 @@ import { productIdentity } from '../home/identity.ts';
  *   <bin>/cezar, cez, hsq                  launchers that exec `current`'s entry
  *
  * The cockpit no longer installs or switches versions here. The home migration still copies an
- * existing tree and rewrites its launchers (home/migrate.ts), and the desktop shell installs
- * into it on first start.
+ * existing tree and rewrites its launchers (home/migrate.ts).
  */
 
 import type { Home } from '../home/home.ts';
