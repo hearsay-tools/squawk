@@ -13,6 +13,7 @@ import {
   PiRpcInput,
   PiTextBlocks,
   type PiTurnMessages,
+  type PiSkillSubmission,
   settlePiFamilyExit,
 } from './pi-rpc-turn.ts';
 import type {
@@ -34,7 +35,7 @@ import { ompRequestedTools } from './runner-tool-grants.ts';
 import { ownLookup } from './own-lookup.ts';
 import { signalSession, spawnSessionLeader } from './session-process.js';
 import { buildChildEnv } from './agent-env.js';
-import type { UiEvent } from './ui-events.js';
+import type { SkillInputIdentity, UiEvent } from './ui-events.js';
 import { squawkToolNames } from '../ci-wait/tool-catalog.js';
 import { readNdjson } from './ndjson.js';
 import {
@@ -324,8 +325,8 @@ export class OmpRunner implements AgentRunner {
     let startupStateChecked = false;
     let tokensUsed = 0;
 
-    const emitUi = (value: unknown): void => {
-      const mapped = mapOmpRpcMessage(value, ompUi);
+    const emitUi = (value: unknown, skillInput?: SkillInputIdentity): void => {
+      const mapped = mapOmpRpcMessage(value, ompUi, skillInput);
       ompUi = mapped.state;
       for (const event of mapped.events) {
         emitUiEvent(event);
@@ -424,7 +425,7 @@ export class OmpRunner implements AgentRunner {
       ) {
         return false;
       }
-      if (requestId) rpcInput.submissions.accept(requestId, inputIds, message);
+      rpcInput.recordPrompt(content, message, id, requestId ? inputIds : undefined);
       if (!ompUi.turnId) {
         const mapped = ompTurnStarted(ompUi, id);
         ompUi = mapped.state;
@@ -554,6 +555,7 @@ export class OmpRunner implements AgentRunner {
       // failure leaves the turn running: both are only a note.
       if (value.success === false) reportPromptFailure(`omp: prompt failed: ${rpcError(value)}`, endsTurn);
       const id = string(value.id);
+      if (id && (value.success === false || isRecord(value.data) && value.data.agentInvoked === false)) rpcInput.forgetSkillPrompt(id);
       const pending = rpcInput.takeAgentAck(id);
       if (pending) {
         if (value.success === true) rpcInput.acceptAgentAck(pending);
@@ -585,9 +587,9 @@ export class OmpRunner implements AgentRunner {
       const error = isRecord(value.error) ? value.error : {};
       reportPromptFailure(ompProviderErrorMessage({ provider: error.provider, model: error.model, errorMessage: error.message }), endsTurn);
     };
-    const settleHumanPromptRead = (text: string): void => {
+    const settleHumanPromptRead = (text: string, submissionId?: string): void => {
       for (const [id, held] of humanHeld) {
-        if (held.text !== text) continue;
+        if (submissionId ? id !== submissionId : held.text !== text) continue;
         // Read with no normalized turn open: held until that turn.started (as pi-runner.ts).
         if (ompUi.turnId) humanHeld.delete(id);
         else held.acked = true;
@@ -605,7 +607,7 @@ export class OmpRunner implements AgentRunner {
     };
     // Each type has one case. A message its handler's guard refuses ends there, as it did
     // when this was one if/else chain: no later case reads the same type.
-    const dispatchNative = (value: Record<string, unknown>, endsTurn: boolean): void => {
+    const dispatchNative = (value: Record<string, unknown>, endsTurn: boolean, skill?: PiSkillSubmission): void => {
       switch (value.type) {
         case 'response': handleResponse(value, endsTurn); break;
         case 'prompt_result': handlePromptResult(value, endsTurn); break;
@@ -617,7 +619,7 @@ export class OmpRunner implements AgentRunner {
           if (message) onEvent?.({ type: 'note', message: `omp: ${message}` });
           break;
         }
-        default: dispatchPiTurnMessage(value, turnMessages);
+        default: dispatchPiTurnMessage(value, turnMessages, skill);
       }
     };
     const handleOutputLine = (line: string): void => {
@@ -634,13 +636,19 @@ export class OmpRunner implements AgentRunner {
       // A boundary only ends a turn that is open: OMP never settles an idle session, and a
       // second boundary for the same prompt must not end the next one.
       const turnOpen = ompUi.turnId !== null;
-      emitUi(value);
+      const skill = isRecord(value) && value.type === 'message_start' && isRecord(value.message)
+        ? rpcInput.takeSkillPrompt(value.message) : undefined;
+      emitUi(value, skill?.input);
       reportUsage(value);
       // The mapper closed its turn on this frame: v1 ends the turn with it.
       const endsTurn = turnOpen && ompUi.turnId === null;
       if (!isRecord(value)) return;
-      if (value.type === 'prompt_result') humanHeld.delete(string(value.id) ?? '');
-      dispatchNative(value, endsTurn);
+      if (value.type === 'prompt_result') {
+        const id = string(value.id) ?? '';
+        humanHeld.delete(id);
+        rpcInput.forgetSkillPrompt(id);
+      }
+      dispatchNative(value, endsTurn, skill);
       if (endsTurn) rpcInput.settleTurn();
     };
 
@@ -757,7 +765,10 @@ export class OmpRunner implements AgentRunner {
       sendAgentMessage: (content, inputIds = []) =>
         rpcInput.sendAgentMessage(content, inputIds, sendMessage, () => false),
       // A written prompt cannot be unwritten; only stop reporting an acknowledged one as held.
-      discardQueuedMessages: () => { humanHeld.clear(); },
+      discardQueuedMessages: () => {
+        for (const id of humanHeld.keys()) rpcInput.forgetSkillPrompt(id);
+        humanHeld.clear();
+      },
       holdsHumanInput: () => humanHeld.size > 0,
       heldHumanInputCount: () => humanHeld.size,
       end,

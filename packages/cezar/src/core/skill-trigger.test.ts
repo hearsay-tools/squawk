@@ -7,6 +7,7 @@ import { createOpencodeUiState, mapOpencodeEvent } from './opencode-ui-mapper.ts
 import { createPiUiState, mapPiRpcMessage } from './pi-ui-mapper.ts';
 import type { UiEvent } from './ui-events.ts';
 import { RUNNER_IDS } from './agent-runner.ts';
+import { matchesSkillPrompt } from './pi-rpc-wire.ts';
 import { slashSkillPrompt, validSkillMessage } from './skill-trigger.ts';
 
 for (const runner of RUNNER_IDS) it(`${runner}: packaged mock capture equals its real CLI fixture`, () => {
@@ -44,4 +45,12 @@ it.each([
   ['pi', () => mappedSkillEcho('pi', createPiUiState(), mapPiRpcMessage)],
 ] as const)('%s native skill expansion does not duplicate the saved human input', (_runner, events) => {
   expect(events().filter(event => 'item' in event && event.item.kind === 'message' && event.item.role === 'user')).toEqual([]);
+});
+
+
+it.each(['', 'trailing spaces  ', 'literal </skill> args  '])('binds pi native expansion with normalized args %j', args => {
+  const prompt = `/skill:probe-project${args ? ` ${args}` : ''}`;
+  const content = `<skill name="probe-project" location="/tmp/SKILL.md">body</skill>\n\n${args.trim()}`;
+  expect(matchesSkillPrompt({ role: 'user', content }, prompt)).toBe(true);
+  expect(matchesSkillPrompt({ role: 'assistant', content }, prompt)).toBe(false);
 });

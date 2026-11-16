@@ -13,7 +13,7 @@ export function knownSkill(runner, trigger) {
 /** Native payloads are cloned from captured CLI frames, with per-turn identities substituted. */
 export function skillFrames(runner, trigger, context = '') {
   const frames = structuredClone(captures[runner]);
-  const nativeArgs = runner === 'pi' ? trigger.args.trim() : trigger.args;
+  const nativeArgs = runner === 'pi' ? trigger.args.trim() : runner === 'omp' ? trigger.args.trimEnd() : trigger.args;
   const args = [nativeArgs, context].filter(Boolean).join('\n\n');
   const replace = value => typeof value === 'string' ? value
     .replaceAll('/probe/repo', process.cwd())

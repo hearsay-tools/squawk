@@ -190,7 +190,8 @@ export class PiRunner implements AgentRunner {
     // before the turn that reads the prompt is reported. A steer acked after the turn's last
     // model call is read as pi's next prompt, after agent_settled, so the ack alone never
     // releases it.
-    const humanHeld: Array<{ text: string; acked: boolean; turnId?: string | undefined }> = [];
+    let humanSerial = 0;
+    const humanHeld: Array<{ id: string; text: string; acked: boolean; turnId?: string | undefined }> = [];
     /** A turn.started was just emitted: it reads every human prompt pi acknowledged before it. */
     function releaseHeldIntoTurn(): void {
       for (let at = humanHeld.length - 1; at >= 0; at--) if (humanHeld[at]!.acked) humanHeld.splice(at, 1);
@@ -214,6 +215,7 @@ export class PiRunner implements AgentRunner {
       const opensTurn = !piUi.turnId;
       rpcInput.beginPrompt();
       const { message, images } = toPiPrompt(content);
+      const id = requestId ?? `cezar-prompt-${++humanSerial}`;
       rpcInput.cancelAutoEnd();
       if (
         !write({
@@ -226,8 +228,7 @@ export class PiRunner implements AgentRunner {
       ) {
         return false;
       }
-      rpcInput.trackSkillPrompt(content, message);
-      if (requestId) rpcInput.submissions.accept(requestId, inputIds, message);
+      rpcInput.recordPrompt(content, message, id, requestId ? inputIds : undefined);
       if (!piUi.turnId) {
         const mapped = piTurnStarted(piUi);
         piUi = mapped.state;
@@ -236,7 +237,7 @@ export class PiRunner implements AgentRunner {
       // An idle prompt names the turn it opened: its ack releases it while that turn is open.
       if (!requestId) {
         humanPromptAcks += 1;
-        humanHeld.push({ text: message, acked: false, ...(opensTurn ? { turnId: piUi.turnId ?? undefined } : {}) });
+        humanHeld.push({ id, text: message, acked: false, ...(opensTurn ? { turnId: piUi.turnId ?? undefined } : {}) });
       }
       return true;
     };
@@ -315,8 +316,8 @@ export class PiRunner implements AgentRunner {
     };
     // A user message pi read with no normalized turn open (a late steer's own run): the run is
     // not reported yet, so the prompt stays held until that turn.started.
-    const settleHumanPromptRead = (text: string): void => {
-      const human = humanHeld.findIndex(entry => entry.text === text);
+    const settleHumanPromptRead = (text: string, submissionId?: string): void => {
+      const human = humanHeld.findIndex(entry => submissionId ? entry.id === submissionId : entry.text === text);
       if (human >= 0 && piUi.turnId) humanHeld.splice(human, 1);
       else if (human >= 0) humanHeld[human]!.acked = true;
     };
@@ -336,6 +337,7 @@ export class PiRunner implements AgentRunner {
     const settleHumanAck = (value: Record<string, unknown>): void => {
       const held = humanPromptAcks > 0 ? humanHeld.find(entry => !entry.acked) : undefined;
       humanPromptAcks = Math.max(0, humanPromptAcks - 1);
+      if (held && value.success === false) rpcInput.forgetSkillPrompt(held.id);
       if (held && value.success === true && (!held.turnId || held.turnId !== piUi.turnId)) held.acked = true;
       else if (held) humanHeld.splice(humanHeld.indexOf(held), 1);
       if (value.success === false) onEvent?.({ type: 'error', message: rpcError(value) });
@@ -345,6 +347,7 @@ export class PiRunner implements AgentRunner {
       if (pending) {
         if (value.success === true) rpcInput.acceptAgentAck(pending);
         else {
+          rpcInput.forgetSkillPrompt(pending.id);
           const message = rpcError(value);
           if (open) onEvent?.({ type: 'error', message });
           pending.reject(new Error(message));
@@ -458,7 +461,10 @@ export class PiRunner implements AgentRunner {
       sendAgentMessage: (content, inputIds = []) =>
         rpcInput.sendAgentMessage(content, inputIds, sendMessage, () => Boolean(inputError)),
       // A written prompt cannot be unwritten; only stop reporting an acknowledged one as held.
-      discardQueuedMessages: () => { humanHeld.length = 0; },
+      discardQueuedMessages: () => {
+        for (const held of humanHeld) rpcInput.forgetSkillPrompt(held.id);
+        humanHeld.length = 0;
+      },
       holdsHumanInput: () => humanHeld.length > 0,
       heldHumanInputCount: () => humanHeld.length,
       end,

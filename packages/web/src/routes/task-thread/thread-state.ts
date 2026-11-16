@@ -1,3 +1,4 @@
+import { isSkillInputEcho } from './thread-skill-input'
 import type {
   RunEvent,
   RunStatus,
@@ -349,15 +350,10 @@ function dropTwinnedV1Messages(draft: DraftTurn): void {
   dropLegacyDeltaRuns(draft)
 }
 
-/** The saved human message owns its bubble, attachments and timestamp. A runner may
- * echo that same input as a user item (including an expanded skill's display prompt).
- * Reconcile only exact echoes in that turn; keep unmatched and runner-only messages. */
+/** The adapter identifies which submission expanded. Display text can include context,
+ * attachment notes or native trimming, so it must never decide whether an input is an echo. */
 function dropHumanInputEchoes(draft: DraftTurn): void {
-  const human = draft.userMessage
-  if (!human) return
-  draft.entries = draft.entries.filter(({ entry }) =>
-    !(entry.kind === 'message' && entry.role === 'user' && entry.text === human.text),
-  )
+  if (draft.userMessage) draft.entries = draft.entries.filter(({ entry }) => !isSkillInputEcho(entry, 'human'))
 }
 
 /**

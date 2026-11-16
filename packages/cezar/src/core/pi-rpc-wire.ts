@@ -104,13 +104,17 @@ export function ompSkillPrompt(message: Record<string, unknown>): string | undef
   return string(message.details.prompt);
 }
 
-/** Match the native wrapper against registered arguments, which may themselves contain XML. */
-export function piSkillPrompt(message: Record<string, unknown>, prompts: readonly string[]): string | undefined {
+/** Native expansions omit the request id. Bind once here, retaining the registered id.
+ * Omp trims the prompt; pi trims arguments and wraps the skill body in XML. */
+export function matchesSkillPrompt(message: Record<string, unknown>, prompt: string): boolean {
+  const omp = ompSkillPrompt(message);
+  if (omp !== undefined) return omp.trim() === prompt.trim();
+  if (message.role !== 'user') return false;
   const text = piMessageText(message);
-  return prompts.find(prompt => {
-    const space = prompt.indexOf(' ');
-    const name = prompt.slice('/skill:'.length, space);
-    const args = prompt.slice(space + 1).trim();
-    return text.startsWith(`<skill name="${name}" location="`) && text.endsWith(`</skill>\n\n${args}`);
-  });
+  const trigger = prompt.trim();
+  const space = trigger.indexOf(' ');
+  const name = trigger.slice('/skill:'.length, space < 0 ? undefined : space);
+  const args = space < 0 ? '' : trigger.slice(space + 1).trim();
+  return text.trim() === prompt.trim() ||
+    text.startsWith(`<skill name="${name}" location="`) && text.endsWith(`</skill>\n\n${args}`);
 }

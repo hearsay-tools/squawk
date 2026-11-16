@@ -238,7 +238,9 @@ Saved data still opens: a `config.json` that holds `skillsRepos` and a `ui-state
 - Codex: fresh-home native state writes are accepted; a symlinked mirror is deduplicated by
   resolved path. See [Codex checks](../analysis/2026-11-16-runner-native-skills/codex.md).
 - omp: `OMP_PROFILE` works against the real root. Its mid-turn trigger expands inside the
-  current turn. The skill appears once through mapper, persistence and rendered transcript.
+  current turn. The adapter carries the skill submission id and source on the display item.
+  The transcript reconciles that identity with the saved task or human input, including
+  attachment notes. Old saved items without identity stay visible.
   See [omp checks](../analysis/2026-11-16-runner-native-skills/omp.md).
 - Claude: the mid-turn trigger runs in a second turn, so its fact stays false.
 - All five runners return the fixture token without tools. Native mock parity and command

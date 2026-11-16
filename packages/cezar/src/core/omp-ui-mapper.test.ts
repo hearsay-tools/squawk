@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import type { UiEvent, UiItem, UiToolItem } from './ui-events.js';
+import type { SkillInputIdentity, UiEvent, UiItem, UiToolItem } from './ui-events.js';
 import {
   createOmpUiState,
   mapOmpRpcMessage,
@@ -590,4 +590,15 @@ it('maps a real skill expansion once across message_start, message_end and agent
   const [start] = JSON.parse(readFileSync(join(FIXTURES, 'skill-trigger.json'), 'utf8'));
   const values = [start, { ...start, type: 'message_end' }, { type: 'agent_end', messages: [start.message], yielded: true }, { type: 'session_settled' }];
   expect(fold(values).events).toEqual(expected('skill-trigger'));
+});
+
+it('keeps a correlated skill submission identity on the mapped item', () => {
+  const [start] = JSON.parse(readFileSync(join(FIXTURES, 'skill-trigger.json'), 'utf8'));
+  // ast-grep-ignore: test-enum-literal — skill submission source has no contract enum.
+  const skillInput: SkillInputIdentity = { id: 'cezar-agent-7', source: 'agent' };
+  const mapped = mapOmpRpcMessage(start, ompTurnStarted(createOmpUiState(), 'opening').state, skillInput);
+  expect(mapped.events).toMatchObject([
+    { type: 'item.started', item: { skillInput } },
+    { type: 'item.completed', item: { skillInput } },
+  ]);
 });

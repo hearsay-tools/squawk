@@ -85,19 +85,32 @@ A source search for `skillOf`, `openingContent`, `spec.skill` and the `skill` co
 finds trigger delivery only in the five adapters and their adapter helper. No workflow,
 launch resolver, conversation or cockpit sender uses the new trigger seam yet.
 
-## Review correction: human skill echo
+## Review correction: skill submission identity
 
-Round 1 identified that omp's skill display item duplicated the saved human `user-message`.
-The transcript reducer now removes only an exact user-item echo in the same turn. It keeps
-the saved human bubble, attachments and timestamp. It keeps unmatched runner user items and
-runner-only skill starts. The adapter still maps and persists the native expansion once.
+Rounds 1 and 2 found the same duplicate-start class. Display text cannot identify an
+input: an opening task lives in `run.task`, delivery adds attachment notes, and native
+expansion trims arguments. The adapters now register each skill submission with its local
+id and source (`opening`, `human` or `agent`). One native-normalization helper binds the
+expansion once to that registration. Pi-family consumption and human holds use that id.
+Rejected or discarded inputs lose their registration.
 
-Native-capture guards in `skill-trigger.test.ts` check the same class on the other runners:
-pi omits user expansion frames; Claude maps user tool results only; Codex omits userMessage;
-OpenCode omits user text parts. None emits another UI user message for its captured expansion.
+The optional `UiMessageItem.skillInput` carries the identity on omp's display item.
+The transcript keeps the saved opening task or human bubble and removes only its identified
+expansion. It preserves attachments and timestamps. Unidentified old saved items, unmatched
+items and runner-only skill starts stay visible. Shared `AgentSession` is unchanged.
 
-Red proof through Squeal: revision 58, run `f711e921-548e-409d-ba8b-13e0218d0a7b`.
-Both `shows one human skill start ... opening input` and `... mid-turn input` failed before
-the reducer change: expected zero extra user items, received one. Green verification: Squeal revision 59 reports current passing results for the full
-`session-transcript.test.tsx`, `thread-state.test.ts`, and `skill-trigger.test.ts` files.
-Lint, typecheck and citations also pass after the correction.
+Reader sweep: service and API-client UI message types declare the same optional field;
+`omp-ui-mapper.ts` writes it, `ui-event-sink.ts` persists and publishes whole snapshots,
+and thread reduction plus transcript sections read it. Other UI item readers ignore the
+optional metadata. No text comparison remains in transcript reconciliation.
+Native-capture guards in `skill-trigger.test.ts` check the other runners: pi omits user
+expansion frames; Claude maps user tool results only; Codex omits userMessage;
+OpenCode omits user text parts. None emits a UI user message for its captured expansion.
+
+Red proof through Squeal revision 62: run `d534d902-bfca-487a-8ad0-65cad79c29bb`
+failed omp human hold and agent consumption checks with trailing argument whitespace;
+run `7d79bba5-95b7-401e-89ab-d481b438526c` failed initial-task and human-attachment
+transcript checks (two starts instead of one). Revision 64 reports FAIL to PASS for all
+four cases. Pi's equivalent human and agent cases also pass with trailing whitespace and
+literal `</skill>` in the arguments. Mapper tests verify identity propagation; transcript
+tests cover old saved items and each identity source without a saved input.
