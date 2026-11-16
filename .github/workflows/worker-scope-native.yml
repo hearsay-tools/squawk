@@ -88,3 +88,4 @@ jobs:
           grep -q '✓ .*a command whose job never appears does not run' "$RUNNER_TEMP/job.log"
           grep -q '✓ .*the worker ends with its controller, and an unrelated process survives' "$RUNNER_TEMP/job.log"
           grep -q '✓ .*a cmd.exe /s /c command keeps its own quotes inside the job' "$RUNNER_TEMP/job.log"
+          grep -q '✓ .*runs in an agent environment with its own TEMP and a PowerShell 7 module path' "$RUNNER_TEMP/job.log"

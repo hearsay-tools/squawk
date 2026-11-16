@@ -153,6 +153,25 @@ describe.runIf(process.platform === 'win32')('job backend on Windows', { timeout
     expect(await scopes.stop(workerId, 60_000)).toEqual({ stopped: true });
   });
 
+  it('runs in an agent environment with its own TEMP and a PowerShell 7 module path', async () => {
+    const memory = memoryStore(), workerId = randomUUID();
+    const dir = mkdtempSync(join(tmpdir(), 'cez-job-agent-env-'));
+    const marker = join(dir, 'ran');
+    const scopes = new WorkerScopes(memory.store, () => ({ backend: 'job' }));
+    const [file, args] = scopes.spawnScope(workerId).command(process.execPath, ['-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ok')`]);
+    // A worker's environment: scratch TEMP (no cached helper there) and PowerShell 7's modules first.
+    const env = { ...process.env, TEMP: dir, TMP: dir, PSModulePath: `C:\\Program Files\\PowerShell\\7\\Modules;${process.env.PSModulePath ?? ''}` };
+    try {
+      const run = spawnSync(file, args, { env, stdio: 'ignore', timeout: 180_000 });
+      expect(run.error).toBeUndefined();
+      expect(run.status).toBe(0);
+      expect(readFileSync(marker, 'utf8')).toBe('ok');
+    } finally {
+      await scopes.stop(workerId, 60_000);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('a command whose job never appears does not run', () => {
     const [file, args] = jobCommand(workerJobName(randomUUID()), process.execPath, ['-e', 'console.log("ran")']);
     const run = spawnSync(file, args, { encoding: 'utf8', timeout: 90_000 });
