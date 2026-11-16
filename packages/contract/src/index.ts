@@ -8,6 +8,7 @@ export * from './pending-ask.ts';
 export * from './delegation.ts';
 export * from './effort.ts';
 export * from './health.ts';
+export * from './runner-facts.ts';
 export * from './runs.ts';
 export * from './task-options.ts';
 export * from './run-labels.ts';

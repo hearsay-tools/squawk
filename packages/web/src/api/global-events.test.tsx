@@ -1097,7 +1097,7 @@ describe('useGlobalEvents — run events', () => {
     }
   })
 
-  it('refreshes an opened Cursor detail for its server-resolved resume command', () => {
+  it('refreshes an opened detail for its server-resolved resume command', () => {
     client.setQueryData<ApiRun>(queryKeys.runs.detail('r1'), runRecord('r1', { runner: 'claude' }))
     const invalidate = vi.spyOn(client, 'invalidateQueries')
     const { source } = mount()

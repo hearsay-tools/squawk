@@ -23,7 +23,7 @@ export {
   restoreRememberedStatuses,
 } from './reference-status-memory'
 import { getApiBaseUrl } from '@open-mercato/cezar-api-client/utils/project-scope'
-import { normalizeSidebarLimits, runnerModelCatalogResponseSchema } from '@open-mercato/cezar-api-client/contract/workspace'
+import { normalizeSidebarLimits, runnerDiscoversModels, runnerModelCatalogResponseSchema } from '@open-mercato/cezar-api-client/contract/workspace'
 import { toast } from '@/components/ui/toaster'
 import { keepPreviousData, useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient, type QueryClient, type MutateOptions } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo } from 'react'
@@ -114,7 +114,7 @@ import {
 import { ARCHIVED_RUNS_PAGE_MAX } from '@open-mercato/cezar-api-client/contract/run-limits'
 import { queryScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { REFERENCE_STATUS_MAX } from '@open-mercato/cezar-api-client/contract/github'
-import { runnerDiscoversModels } from '@open-mercato/cezar-api-client/contract/workspace'
+import { RUNNER_COCKPIT_FACTS } from '@open-mercato/cezar-api-client/contract/runner-facts'
 import { useProjectScope } from './project-scope-context'
 import { githubRepoBase } from '@/lib/github-repo-base'
 import { normalizeTagsForDisplay } from '@/lib/project-tags'
@@ -336,17 +336,17 @@ export function invalidateRunnerModels(
 export function useRunnerModels(runner: Runner, enabled = true) {
   const queryClient = useQueryClient()
   useEffect(() => {
-    if (!enabled || runner !== 'cursor') return
+    if (!enabled || RUNNER_COCKPIT_FACTS[runner].modelCatalogDelivery !== 'pushed') return
     let releaseTopic: (() => void) | undefined
     const syncTransport = () => {
       const local = queryClient.getQueryData<HealthResponse>(queryKeys.health)?.capabilities?.localHandoff === true
       if (local && !releaseTopic) {
-        releaseTopic = subscribeTopic('models:cursor', (data) => {
+        releaseTopic = subscribeTopic(`models:${runner}`, (data) => {
           const result = runnerModelCatalogResponseSchema.safeParse(data)
-          if (result.success && result.data.runner === 'cursor') {
+          if (result.success && result.data.runner === runner) {
             // Cancel an older cold HTTP response before installing discovery's completed result.
-            void queryClient.cancelQueries({ queryKey: workspaceQueryKeys.models('cursor') })
-            queryClient.setQueryData(workspaceQueryKeys.models('cursor'), result.data)
+            void queryClient.cancelQueries({ queryKey: workspaceQueryKeys.models(runner) })
+            queryClient.setQueryData(workspaceQueryKeys.models(runner), result.data)
           }
         })
       } else if (!local && releaseTopic) {

@@ -1,4 +1,5 @@
 import type { EffortLevel } from '@open-mercato/cezar-contract';
+import { runnerModelListName } from '@open-mercato/cezar-contract/runner-facts';
 import type { RunnerId } from './agent-runner.ts';
 
 export interface ModelOption {
@@ -137,15 +138,6 @@ export class RunnerModelCatalog {
   }
 }
 
-const RUNNER_DISPLAY_NAME: Record<RunnerId, string> = {
-  claude: 'Claude',
-  codex: 'Codex',
-  opencode: 'OpenCode',
-  pi: 'Pi',
-  cursor: 'Cursor',
-  omp: 'OMP',
-};
-
 function unavailableReason(runner: RunnerId): string {
-  return `${RUNNER_DISPLAY_NAME[runner]} model discovery is temporarily unavailable`;
+  return `${runnerModelListName(runner)} model discovery is temporarily unavailable`;
 }

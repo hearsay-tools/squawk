@@ -7,6 +7,7 @@ import { ZoomableImage } from '@/components/zoomable-image'
 import { Link } from '@/lib/project-router'
 import { resolveApiUrl } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { isImageAttachmentName } from '@open-mercato/cezar-api-client/contract/attachments'
+import { runnerDisplayName } from '@open-mercato/cezar-api-client/contract/runner-facts'
 import type { FileDiff, ToolKind, UiHookItem, UiToolItem } from '@open-mercato/cezar-api-client'
 import { toolDetailText, toolDisplay } from '@open-mercato/cezar-api-client/contract/tool-display'
 import { cn } from '@/lib/utils'
@@ -421,22 +422,13 @@ export function NoteLine({ note }: { note: ThreadNote }) {
   )
 }
 
-const PROVIDER_LABEL: Record<ThreadProviderAuthRequired['provider'], string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  opencode: 'OpenCode',
-  pi: 'pi',
-  cursor: 'Cursor',
-  omp: 'OMP',
-}
-
 /** Persisted recovery guidance for an authoritative runtime authentication rejection. */
 export function ProviderAuthRequiredCard({
   incident,
 }: {
   incident: ThreadProviderAuthRequired
 }) {
-  const label = PROVIDER_LABEL[incident.provider]
+  const label = runnerDisplayName(incident.provider)
   return (
     <div
       role="alert"
