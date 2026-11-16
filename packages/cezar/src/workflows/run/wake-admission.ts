@@ -146,13 +146,14 @@ export class WakeAdmission {
     this.host.retries.clearWakeBackoff(runId);
   }
 
-  /** An acknowledged wake turn runs: a retry stops unless a wake is still `owed`. Pool membership
-   *  changes only at a turn end or a terminal path; a worker park's idle timer belongs to the park,
-   *  not to the wake turn. */
-  spendWakeAdmission(runId: string, state: ActiveRun, owed: boolean): void {
+  /** An acknowledged wake spends its admission: a retry stops unless a wake is still `owed`. Pool
+   *  membership changes only at a turn end or a terminal path; a worker park's idle timer belongs to
+   *  the park, not to the wake turn. The run shows `running` only while the wake's turn runs
+   *  (`turnRuns`); after its turn ended, the boundary settles the park (hearsay-tools/squawk#1239). */
+  spendWakeAdmission(runId: string, state: ActiveRun, owed: boolean, turnRuns: boolean): void {
     if (!owed) { this.host.retries.stopRetry(runId); }
     this.host.line.unpark(runId); clearIdleTimer(state);
-    this.host.move(runId, 'resume');
+    if (turnRuns) this.host.move(runId, 'resume');
   }
 
   withFailuresCleared(runId: string, outcomes: RunOutcome[], ids: readonly string[], cleared = false): RunOutcome[] {

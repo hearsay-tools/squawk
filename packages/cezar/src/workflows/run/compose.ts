@@ -571,7 +571,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     queueWaitWake: id => modules.wakeAdmission.queueWaitWake(id), owesWake: (run, budget) => modules.wakeAdmission.owesWake(run, budget),
     owedWakeInputIds: run => modules.wakeAdmission.owedWakeInputIds(run),
     pendingConversationWakes: (run, budget) => modules.wakeAdmission.pendingConversationWakes(run, budget), routedAnswer: id => modules.wakeAdmission.routedAnswer(id),
-    spendWakeAdmission: (id, state, owed) => modules.wakeAdmission.spendWakeAdmission(id, state, owed), cancelAutomaticAtCap: (id, waits) => modules.wakeAdmission.cancelAutomaticAtCap(id, waits),
+    spendWakeAdmission: (id, state, owed, turnRuns) => modules.wakeAdmission.spendWakeAdmission(id, state, owed, turnRuns), cancelAutomaticAtCap: (id, waits) => modules.wakeAdmission.cancelAutomaticAtCap(id, waits),
     reparkWithoutWaits: (id, state) => modules.wakeAdmission.reparkWithoutWaits(id, state), holdPeerWakesAtCap: id => modules.wakeAdmission.holdPeerWakesAtCap(id),
     reconcileWorkerWaits: () => host.reconcileWorkerWaits(), unreadInputGraceMs: () => host.unreadInputGraceMs(),
     submitAgentInput: (id, state, content, inputs, budget) => modules.inputDelivery.submitAgentInput(id, state, content, inputs, budget),
