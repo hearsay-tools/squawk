@@ -199,3 +199,35 @@ NOT TESTED: the server queue and the interrupt route with a real model; a struct
 - Sessions Codex wrote in its home by itself: two real threads (the steer turns) and one mock thread (the non-ephemeral queue test; an earlier attempt of that test was cut off by a session restart and may have left one more). The other mock threads were `ephemeral`.
 - One runner process at a time. Every app-server PID was recorded and seen to exit with code 0, except the run cut off by the restart; after it, no process with a cwd inside the scratch root existed. The scratch root is removed.
 - No Squawk, hsq, cez or squeal command was run; no subagent; this report is the only file this probe changed in the worktree, and it is not committed.
+
+## Slice 1 list seam checks (2026-11-16)
+
+Codex CLI 0.164.0. No thread and no model call. Reproduce:
+
+```
+node .ai/analysis/2026-11-16-runner-native-skills/slice1-open-checks.mjs codex
+node --import tsx .ai/analysis/2026-11-16-runner-native-skills/slice1-probe.mjs codex
+```
+
+- **TESTED: list-only writes into a fresh CODEX_HOME.** `initialize`, then
+  `skills/list {cwds:[repo]}` created `installation_id`, `skills/.system`, `.tmp`,
+  `goals_1.sqlite`, `logs_2.sqlite`, `memories_1.sqlite`, `queue_1.sqlite`, `state_5.sqlite`,
+  and SQLite sidecars. No credential file was copied or read by the probe driver.
+- **Decision: the probe may use a Squawk-managed account home.** That folder is already
+  the native CLI's account home for login and sessions. These are native CLI-owned state
+  writes, not Squawk-authored configuration. The list probe passes the selected home through
+  `profileEnv`; it does not clone a home, rewrite account settings, or create a thread.
+- **TESTED: a symlink mirror of the same skill folder is deduplicated.** The repo has
+  `.agents/skills/probe-original/SKILL.md`; `.codex/skills/probe-mirror` links to that folder.
+  Output: `mirrors [{"name":"probe-original","path":"<repo>/.agents/skills/probe-original/SKILL.md","scope":"repo","enabled":true,"pluginId":null}]`.
+  One entry, not two. This differs from two separate files with the same name, which remain
+  two entries (the original probe and the adapter's duplicate-name unit test cover those).
+
+Implemented adapter output (364 ms, 39 skills, trimmed):
+
+```json
+{"runner":"codex","source":"live","skills":[{"id":"probe-project","name":"probe-project","path":"<repo>/.agents/skills/probe-project/SKILL.md","scope":"repo"},{"id":"apptension-review:code-review","name":"apptension-review:code-review","scope":"user","plugin":"apptension-review@apptension-dev","path":"<account>/plugins/cache/.../SKILL.md"}],"problems":[]}
+```
+
+Real native response excerpt: `core/__fixtures__/codex/skill-list.json` under the service
+workspace. It also records one invalid skill: `errors:[{path,message:"missing YAML frontmatter delimited by ---"}]`.

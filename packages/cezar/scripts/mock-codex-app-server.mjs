@@ -253,6 +253,10 @@ if (ignoreEof) {
 
 // Matcher order is scenario priority; terminal replies return without an extra await.
 const messageReplies = [
+  [msg => msg.method === 'skills/list', async msg => {
+    const { mockSkillList } = await import('./mock-skill-list.mjs');
+    emit({ id: msg.id, result: mockSkillList('codex', msg.params.cwds[0]).result });
+  }],
   [msg => msg.id === 'ask-bad-1' && msg.error, replyToMalformedAsk],
   [msg => msg.id === 'ask-1' && msg.result, replyToAsk],
   [msg => msg.method === 'turn/steer', handleSteer],

@@ -25,7 +25,7 @@ vi.mock('node:fs', async (original) => {
   };
 });
 
-import { forwardToSessionGroups, sessionGroupOf, spawnSessionLeader } from './session-process.ts';
+import { forwardToSessionGroups, sessionGroupOf, signalOwnedSessionGroup, spawnSessionLeader } from './session-process.ts';
 
 /** `process.kill(-PGID, 0)` and `process.kill(PGID, 0)` answer from the fake /proc; `onSignal`
  * plays what a real signal would do to it. */
@@ -54,6 +54,21 @@ describe.runIf(process.platform === 'linux')('session group registry after the l
   // restored the real process.kill: switching back drops whatever is still scheduled.
   beforeEach(() => { vi.useFakeTimers(); proc.clear(); proc.set(4_000_124, { pgrp: PGID, start: '777' }); });
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  it('immediate probe cleanup signals the members an exited leader left behind', () => {
+    const kill = kernel();
+    const leader = exitedLeader();
+    signalOwnedSessionGroup(leader, 'SIGKILL');
+    expect(forwarded(kill)).toEqual([[-PGID, 'SIGKILL']]);
+  });
+
+  it('immediate probe cleanup never signals a reused group', () => {
+    const kill = kernel();
+    const leader = exitedLeader();
+    proc.set(4_000_124, { pgrp: PGID, start: '888' });
+    signalOwnedSessionGroup(leader, 'SIGKILL');
+    expect(forwarded(kill)).toEqual([]);
+  });
 
   it('forwards to the members an exited leader left behind', () => {
     const kill = kernel();

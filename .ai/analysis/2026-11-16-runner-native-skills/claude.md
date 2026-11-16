@@ -262,3 +262,43 @@ Hook detection: `--include-hook-events` frame count, plus a marker `SessionStart
 - Sending `get_skills_dialog` before any user line does not avoid hooks: `SessionStart` hooks run at process start.
 - With `disableAllHooks` the `/reload-plugins` text still says `12 hooks`: they are loaded, not run.
 - NOT TESTED: hooks from managed (policy) settings, and whether `--strict-mcp-config` stops the user's MCP servers from starting during the probe (only the list was compared).
+
+## Slice 1 list seam checks (2026-11-16)
+
+Claude Code 2.1.321. No model call. Scratch repos and an empty account home under `/tmp`.
+Reproduce from the repo root:
+
+```
+node .ai/analysis/2026-11-16-runner-native-skills/slice1-open-checks.mjs claude-mcp-start
+node .ai/analysis/2026-11-16-runner-native-skills/slice1-open-checks.mjs claude
+node --import tsx .ai/analysis/2026-11-16-runner-native-skills/slice1-probe.mjs claude
+```
+
+- **TESTED: user MCP servers start** with `get_skills_dialog`, even with
+  `--settings '{"disableAllHooks":true}' --no-session-persistence`. A scratch stdio MCP
+  server wrote a marker before the list answered: `hook marker false MCP marker true`.
+- **TESTED: strict empty MCP configuration prevents this startup and retains skills.**
+  The implemented probe adds `--strict-mcp-config --mcp-config '{"mcpServers":{}}'`.
+  Output: `list names probe-project,probe-user`, `hook marker false MCP marker false`.
+  Against the default account the same flags still listed 36 skills, including plugin skills.
+- **TESTED: user and project SessionStart hooks do not run.** Both scratch settings files
+  point at a marker-writing hook. The marker is absent after the implemented probe.
+- **TESTED: no session transcript.** The scratch home held no `*.jsonl` after the call;
+  Claude did create `.claude.json`, `backups/`, and an empty `sessions/` directory.
+  `--no-session-persistence` is present on every probe launch.
+- **NOT TESTED: managed-policy hooks.** This is a shared host with no managed-policy
+  fixture. Policy files are host-wide; this probe did not change `/etc/claude-code` or
+  any other host policy. The coordinator accepted this limit.
+- **DOCS:** the [Claude Code hooks reference](https://code.claude.com/docs/en/hooks.md),
+  “Hook configuration”, says: “the `disableAllHooks` setting can't disable managed hooks
+  from outside managed settings.” The probe therefore promises to disable user and project
+  hooks only. A host with managed hooks can still execute them.
+
+Implemented adapter output (389 ms, trimmed metadata):
+
+```json
+{"runner":"claude","source":"live","skills":[{"id":"probe-project","name":"probe-project","description":"Project fixture.","scope":"repo"},{"id":"apptension-review:code-review","name":"apptension-review:code-review","scope":"other","plugin":"apptension-review"}],"problems":[]}
+```
+
+Real native response excerpt: `core/__fixtures__/claude/skill-list.json` under the service
+workspace. Only metadata entries were retained; no skill body or account response.

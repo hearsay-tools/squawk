@@ -13,6 +13,12 @@ const { failureControl, delivery } = await loadControls({ delivery: ['reject', '
 const { answerNudge } = await import('./mock-nudge.mjs');
 
 const argv = process.argv.slice(2);
+if (argv.join(' ') === 'skill list --json') {
+  const { mockSkillList } = await import('./mock-skill-list.mjs');
+  console.log(JSON.stringify(mockSkillList('omp')));
+  process.exit(0);
+}
+
 if (process.env.CEZ_MOCK_ARGS_FILE) appendFileSync(process.env.CEZ_MOCK_ARGS_FILE, `${JSON.stringify(argv)}\n`);
 
 // OMP reports SIGTERM as 128 + 15 (real binary, 2026-10-05).

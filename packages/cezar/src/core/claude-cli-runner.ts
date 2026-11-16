@@ -4,6 +4,7 @@ import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_pr
 import { randomUUID } from 'node:crypto';
 import { parseEffort } from '@open-mercato/cezar-contract/effort';
 import { resolveClaudeExecutable } from './claude-executable.ts';
+import { claudeSettingSourceArgs } from './claude-setting-sources.ts';
 import { AUTO_END_DELAY_MS, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS, type RunnerTimings } from './runner-runtime.ts';
 import type {
   AgentEvent,
@@ -759,10 +760,7 @@ export function buildClaudeArgs(
   args.push(...claudePermissionArgs(env));
   // Refuse other Claude sessions' SendMessage on every launch; fails open (spec 2026-10-27-task-communication-protocol § 11).
   args.push('--settings', JSON.stringify({ crossSessionInbound: 'refuse' }));
-  const settingSources = productEnv('CLAUDE_SETTING_SOURCES', env);
-  if (settingSources) {
-    args.push('--setting-sources', settingSources);
-  }
+  args.push(...claudeSettingSourceArgs(env));
   if (spec.systemPrompt) {
     args.push('--append-system-prompt', spec.systemPrompt);
   }
