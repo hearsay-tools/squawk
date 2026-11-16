@@ -100,7 +100,8 @@ describe('Continue on a run saved on a removed runner', () => {
       steps: [{ id: 'work', name: 'Work', kind: STEP_KIND.agent }] });
     // Interrupted during worktree setup, before any session: recovery requeues the whole workflow.
     store.updateRun(run.id, { removedRunner: 'cursor',
-      workflowDef: { name: 'quick-task', steps: [{ id: 'work', name: 'Work', prompt: '{{task}}' }] },
+      workflowDef: { name: 'quick-task', source: 'built-in', steps: [{ id: 'work', name: 'Work', prompt: '{{task}}' }] },
+      // ast-grep-ignore: test-enum-literal — a worktree setup status, not a run status; the contract has no constant for it
       worktreeSetup: { status: 'running', startedAt: new Date().toISOString() } });
     setRunStatus(store, run.id, RUN_STATUS.running);
 
