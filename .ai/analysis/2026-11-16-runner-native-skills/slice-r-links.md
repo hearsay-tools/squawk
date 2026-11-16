@@ -29,8 +29,9 @@ stopped at the expanded user message. No production skill was invoked.
 
 Created with `git worktree add -b probe/slice-r-bb428373 /tmp/slice-r-fresh-bb428373 HEAD`,
 then fast-forwarded to implementation fix `2e88481004ea66fa1d4de1e386c1ced5e258b5b8`.
-No dependency installation, worktree setup hook, skill copy, or provisioning ran
-before these lists. The links came from Git alone.
+The initial five lists ran before dependency installation, any worktree setup
+hook, skill copying, or provisioning. All five lists were repeated after the
+ignore-rule fix and cleanup of the provisioning proof. The links came from Git alone.
 
 | Runner | No-model list route | Listed repository skills |
 | --- | --- | --- |
