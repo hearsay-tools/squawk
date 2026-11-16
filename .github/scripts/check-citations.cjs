@@ -18,8 +18,8 @@ const { parseArgs } = require('node:util');
 
 const ZERO_SHA = /^0+$/;
 const ARCHIVE_NOTE = /^> Historical source: /m;
-// Generated from upstream commit titles (.ai/upstream/README.md), and test data.
-const SKIPPED_PATH = /^\.ai\/upstream\/(?:LEDGER\.md$|scans\/)|(?:^|\/)(?:fixtures|__fixtures__|__snapshots__)\//;
+// Test data.
+const SKIPPED_PATH = /(?:^|\/)(?:fixtures|__fixtures__|__snapshots__)\//;
 
 // `#` and a number with no leading zero, which `#000` colors have. A following word
 // character or `-` makes it a color or an anchor (`#12ab`, `#12-step`).

@@ -8,8 +8,8 @@ export const ownerGroups = {
     owner: 'turn-boundary.ts', factory: 'createBoundaryGroup',
     types: ['BoundaryGroup', 'DoneRequest', 'NextStep', 'DoneClose', 'AckBoundary', 'Nudge'],
     getters: ['boundary'],
-    bindings: ['boundary', 'doneRequested', 'nextStep', 'doneClose', 'parkAfterAck', 'nudge'],
-    fields: ['boundary', 'waitWakeTurn', 'pendingHumanAsk', 'noWaitNudgeReplyTimer', 'noWaitNudgeSawContent', 'noWaitNudgeParked', 'doneAtBoundary', 'doneRequested', 'nextStep', 'completedStepId', 'doneClose', 'parkAfterAck', 'atTurnBoundary', 'idleTimer', 'idleClosed', 'monitoringCapNoted', 'autonomous', 'nudge', 'noWaitNudged', 'incomingRequestRefused', 'sentRequestRefused', 'completionNudged', 'completionNudgeAnswered', 'heldForSubagents', 'session', 'summary', 'label', 'via', 'monitoring', 'humanGate', 'nudgedLastTurn', 'scheduleWakeup', 'cause', 'state'],
+    bindings: ['boundary', 'nextStep', 'doneClose', 'parkAfterAck', 'nudge'],
+    fields: ['boundary', 'waitWakeTurn', 'pendingHumanAsk', 'noWaitNudgeReplyTimer', 'noWaitNudgeSawContent', 'noWaitNudgeParked', 'doneAtBoundary', 'requestRefusedDone', 'nextStep', 'completedStepId', 'doneClose', 'parkAfterAck', 'atTurnBoundary', 'idleTimer', 'idleClosed', 'monitoringCapNoted', 'autonomous', 'nudge', 'noWaitNudged', 'incomingRequestRefused', 'sentRequestRefused', 'completionNudged', 'completionNudgeAnswered', 'heldForSubagents', 'session', 'summary', 'label', 'via', 'monitoring', 'humanGate', 'nudgedLastTurn', 'scheduleWakeup', 'cause', 'state'],
   },
 
   wait: {
@@ -26,8 +26,8 @@ export const ownerGroups = {
     slot: 'inputState', owner: 'input-delivery.ts', factory: 'createInputGroup',
     types: ['InputGroup', 'InputFlight', 'DeliveryAttempt', 'ReadonlySetView'],
     getters: ['inputState'],
-    bindings: ['inputState', 'agentInputFlight', 'inputDelivery', 'unreadInputIds', 'consumedBeforeAck', 'bundledInputIds', 'retiredInFlight', 'unreadRetried', 'inputIds'],
-    fields: ['inputState', 'agentInputError', 'agentInputFlight', 'inputDelivery', 'unreadInputIds', 'consumedBeforeAck', 'bundledInputIds', 'retiredInFlight', 'unreadInputTimer', 'unreadRetried', 'heldHumanInputTimer', 'heldHumanInputSince', 'heldHumanInputExpired', 'openingAnswerAskSeq', 'openingAgentInputId', 'writingInput', 'deliveryAttempt', 'session', 'inputIds', 'outcome', 'settled', 'wakeReserved', 'admittedWake', 'mode', 'consumption', 'via', 'length', 'size'],
+    bindings: ['inputState', 'agentInputFlight', 'inputDelivery', 'unreadInputIds', 'consumedBeforeAck', 'bundledInputIds', 'turnOpenerIds', 'retiredInFlight', 'unreadRetried', 'inputIds'],
+    fields: ['inputState', 'agentInputError', 'agentInputFlight', 'inputDelivery', 'unreadInputIds', 'consumedBeforeAck', 'bundledInputIds', 'turnOpenerIds', 'retiredInFlight', 'unreadInputTimer', 'unreadRetried', 'heldHumanInputTimer', 'heldHumanInputSince', 'heldHumanInputExpired', 'openingAnswerAskSeq', 'openingAgentInputId', 'writingInput', 'deliveryAttempt', 'session', 'inputIds', 'outcome', 'settled', 'wakeReserved', 'admittedWake', 'mode', 'consumption', 'via', 'length', 'size'],
   },
   session: {
     slot: 'liveSession', owner: 'live-session-state.ts', factory: 'createSessionGroup',

@@ -151,6 +151,8 @@ rl.on('line', line => {
   const message = JSON.parse(line);
   if (message.type !== 'user') return;
   queue = queue.then(async () => {
+    // Claude's --replay-user-messages echo: the model read this line now (#505).
+    if (typeof message.uuid === 'string') emit({ type: 'user', isReplay: true, uuid: message.uuid, message: message.message });
     const text = message.message.content.filter(b => b.type === 'text').map(b => b.text).join('\\n');
     appendFileSync(join(wire, id + '.inputs'), JSON.stringify({ text }) + '\\n');
     turn++;

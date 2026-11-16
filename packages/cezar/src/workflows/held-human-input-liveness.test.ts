@@ -35,10 +35,13 @@ const SINGLE_STEP: WorkflowDef = {
 
 const launchedTools = new WeakMap<RunManager, ReturnType<RunManager['squawkToolHandlers']>>();
 
-/** The turn calls cezar_done, then ends (hearsay-tools/cezarion#2397). */
-async function doneTurn(manager: RunManager, onEvent: ((event: AgentEvent) => void) | undefined): Promise<void> {
+/** The turn calls cezar_done, then ends (hearsay-tools/cezarion#2397). The harness takes the human
+ *  follow-up it holds after the done was accepted: held input at the call refuses it
+ *  (`input_pending`, hearsay-tools/squawk#2587). */
+async function doneTurn(manager: RunManager, onEvent: ((event: AgentEvent) => void) | undefined, hold: () => void): Promise<void> {
   const answer = await launchedTools.get(manager)!.finishTurn({}, new AbortController().signal);
   if (!answer.ok) throw new Error(`cezar_done refused: ${answer.code}`);
+  hold();
   onEvent?.({ type: 'turn-end' });
 }
 
@@ -82,7 +85,7 @@ describe('held human input liveness bound (#486)', () => {
   });
 
   it('re-settles a DONE boundary after holdsHumanInput flips false without a new turn', async () => {
-    let holding = true;
+    let holding = false;
     let open = true;
     let finish!: (result: AgentRunResult) => void;
     runnerHook.runner = {
@@ -95,7 +98,7 @@ describe('held human input liveness bound (#486)', () => {
           opts?.onUiEvent?.({ type: 'session.started', sessionId: spec.sessionId ?? 's', backend: 'claude' });
           opts?.onUiEvent?.({ type: 'turn.started', turnId: 't1' });
           onEvent?.({ type: 'text', text: 'Working.' });
-          void doneTurn(manager, onEvent);
+          void doneTurn(manager, onEvent, () => { holding = true; });
         });
         const close = () => {
           if (!open) return;
@@ -122,6 +125,7 @@ describe('held human input liveness bound (#486)', () => {
 
   it('expires a hold that never drains and settles with an unconfirmed-read note', async () => {
     let open = true;
+    let held = false;
     let finish!: (result: AgentRunResult) => void;
     runnerHook.runner = {
       backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
@@ -133,7 +137,7 @@ describe('held human input liveness bound (#486)', () => {
           opts?.onUiEvent?.({ type: 'session.started', sessionId: spec.sessionId ?? 's', backend: 'claude' });
           opts?.onUiEvent?.({ type: 'turn.started', turnId: 't1' });
           onEvent?.({ type: 'text', text: 'Working.' });
-          void doneTurn(manager, onEvent);
+          void doneTurn(manager, onEvent, () => { held = true; });
         });
         const close = () => {
           if (!open) return;
@@ -142,7 +146,7 @@ describe('held human input liveness bound (#486)', () => {
         };
         return {
           result, sendMessage: () => true, sendAgentMessage: () => false,
-          discardQueuedMessages: () => undefined, holdsHumanInput: () => true,
+          discardQueuedMessages: () => undefined, holdsHumanInput: () => held,
           end: close, interrupt: close, get open() { return open; },
         };
       },
@@ -160,6 +164,7 @@ describe('held human input liveness bound (#486)', () => {
 
   it('expires a counted hold with the exact unconfirmed-read note', async () => {
     let open = true;
+    let held = false;
     let finish!: (result: AgentRunResult) => void;
     runnerHook.runner = {
       backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
@@ -171,7 +176,7 @@ describe('held human input liveness bound (#486)', () => {
           opts?.onUiEvent?.({ type: 'session.started', sessionId: spec.sessionId ?? 's', backend: 'claude' });
           opts?.onUiEvent?.({ type: 'turn.started', turnId: 't1' });
           onEvent?.({ type: 'text', text: 'Working.' });
-          void doneTurn(manager, onEvent);
+          void doneTurn(manager, onEvent, () => { held = true; });
         });
         const close = () => {
           if (!open) return;
@@ -180,7 +185,7 @@ describe('held human input liveness bound (#486)', () => {
         };
         return {
           result, sendMessage: () => true, sendAgentMessage: () => false,
-          discardQueuedMessages: () => undefined, holdsHumanInput: () => true,
+          discardQueuedMessages: () => undefined, holdsHumanInput: () => held,
           heldHumanInputCount: () => 2,
           end: close, interrupt: close, get open() { return open; },
         };

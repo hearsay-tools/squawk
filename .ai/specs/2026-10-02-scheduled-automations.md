@@ -83,7 +83,7 @@ web routes/automations/*: route shell, list, editor (+ schedule / github fields)
 | `packages/web/src/components/nav-items.ts` | Automations item: `automations: true`, no `forge`. |
 | `packages/web/src/api/client.ts` | `runAutomationNow`, `deleteAutomation`. |
 | `packages/web/src/routes/automations/` | `automations.tsx` is replaced by `automations-route.tsx` (gate, data, mode switch), `automations-list.tsx`, `editor.tsx`, `editor-schedule-fields.tsx`, `editor-github-fields.tsx`, `next-runs-preview.tsx`, `log.tsx`. `lib/automation-format.ts` (`relativeIn`, `dayTime`). |
-| `.env.example`, `README.md`, `BACKWARD_COMPATIBILITY.md`, `AGENTS.md`, `.ai/upstream/ledger.yaml` | Env row rewritten for both kinds; README Automations paragraph; §2 lists `POST /automations/:id/run` and the schedule semantics, §3 `automationTrigger`; AGENTS.md routing row for automations; ledger row for open-mercato/cezar#985 → `partial`, `fork.issue: 766`. |
+| `.env.example`, `README.md`, `BACKWARD_COMPATIBILITY.md`, `AGENTS.md`, the upstream ledger (since removed) | Env row rewritten for both kinds; README Automations paragraph; §2 lists `POST /automations/:id/run` and the schedule semantics, §3 `automationTrigger`; AGENTS.md routing row for automations; ledger row for open-mercato/cezar#985 → `partial`, `fork.issue: 766`. |
 
 ## Lifecycle (schedule kind)
 

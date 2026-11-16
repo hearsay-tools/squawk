@@ -10,7 +10,6 @@ module.exports = [
   { path: 'docs/assets/diagram.svg', docs: true },
   { path: '.ai/specs/2026-09-16.md', docs: true },
   { path: '.ai/analysis/notes.md', docs: true },
-  { path: '.ai/upstream/LEDGER.md', docs: true },
   { path: 'LICENSE', docs: true },
   { path: 'packages/web/e2e/README.md', docs: true },
   { path: 'packages/api-client/README.md', docs: true },

@@ -16,6 +16,15 @@ valid:
   - 'const { workflowCursor: _cursor, ...rest } = run'
   - 'type Read = { workflowCursor?: WorkflowCursor }'
   - 'interface Row { workflowCursor?: { stepId: string } }'
+  # The owners of `doneAccepted` and the outcome handlers.
+  - "export function recordDoneAccepted(store, runId, done) { store.commitOutcome(runId, { kind: 'done-accepted', ...done }) }"
+  - "export function retireDoneAccepted(store, runId, as, reason) { store.commitOutcome(runId, { kind: 'done-retired', as, reason }) }"
+  - "const APPLY = { 'done-accepted'(run, outcome) { return { run: { ...run, doneAccepted: { session: outcome.session, at: outcome.at } }, changed: true } } }"
+  - "const APPLY = { 'done-retired'(run) { const { doneAccepted: _done, ...rest } = run; return { run: rest, changed: true } } }"
+  - "type RunOutcome = { kind: 'done-accepted'; session: string } | { kind: 'done-retired'; as: 'completed' }"
+  - "export function spendDoneFreeTurn(store, runId) { store.commitOutcome(runId, { kind: 'done-free-turn' }) }"
+  - 'const done = run.doneAccepted'
+  - 'const row = z.object({ doneAccepted: doneAcceptedSchema.optional() })'
   # The read-time upgrade of a saved row.
   - "export function upgradeLegacyWorkflowCursor(row) { row.workflowCursor = { stepId, mode: 'resume' } }"
 invalid:
@@ -30,3 +39,9 @@ invalid:
   - "this.context.store.updateStep(runId, 'continue-1', { continuesStepId: 'review' })"
   - "store.addStep(runId, { id: 'continue-2', name: 'Continue', kind: 'agent', synthetic: 'continuation', continuesStepId })"
   - "step.continuesStepId = 'implement'"
+  - "this.context.store.updateRun(runId, { doneAccepted: { session, at } })"
+  - "this.context.store.commitOutcome(runId, [], { patch: { doneAccepted: undefined } })"
+  - "this.context.store.commitOutcome(runId, { kind: 'done-accepted', session, at })"
+  - "store.commitOutcome(runId, { kind: 'done-retired', as: 'reconsidered', reason: 'human message' })"
+  - 'run.doneAccepted = undefined'
+  - "this.context.store.commitOutcome(runId, { kind: 'done-free-turn' })"

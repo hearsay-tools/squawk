@@ -21,7 +21,7 @@ import { TrackedWork } from './run/tracked-work.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { RunModuleContext } from './run/types.ts';
 import type { CompletionGateHost } from './run/completion-gate.ts';
-import type { TurnEndOutcome } from './turn-end.ts';
+import { DONE_RECONSIDERED_NOTE, type TurnEndOutcome } from './turn-end.ts';
 import { clearIdleTimer } from './run/input-timers.ts';
 import { createActiveRun, type ActiveRun } from './active-run.ts';
 import { randomUUID } from 'node:crypto';
@@ -271,7 +271,9 @@ describe('completion refusal through a live runner', () => {
       text: 'Read this first', createdAt: new Date().toISOString() }]);
     emit({ type: 'turn-end' });
     await waitForProduct(f.manager, f.store, () => !!f.store.getRun(id)?.agentInputs?.find(input => input.id === inputId)?.deliveredAt);
-    expect(session.sendAgentMessage).toHaveBeenCalledWith([{ type: 'text', text: expect.stringContaining('Read this first') }], [inputId]);
+    // The parent's instruction also withdraws the done (hearsay-tools/squawk#2587), and says so.
+    expect(session.sendAgentMessage).toHaveBeenCalledWith([{ type: 'text', text: expect.stringContaining('Read this first') },
+      { type: 'text', text: `\n\n${DONE_RECONSIDERED_NOTE}` }], [inputId]);
     expect(f.store.getRun(id)?.status).toBe('running');
     expect(semaphore.busy()).toBe(1);
   });
@@ -294,7 +296,8 @@ describe('completion refusal through a live runner', () => {
     expect(session.sendAgentMessage).not.toHaveBeenCalled();
   });
 
-  it('parks the step and releases capacity for a pending human question', async () => {
+  // A question after the done withdraws it (hearsay-tools/squawk#2587): the run parks on the question.
+  it('parks the step and releases capacity for a question asked after the done', async () => {
     const id = await start();
     expect(await handlers.finishTurn({}, new AbortController().signal)).toMatchObject({ ok: true });
     // The question holds completion only for a root with workers (hearsay-tools/cezarion#2784).
@@ -314,7 +317,8 @@ describe('completion refusal through a live runner', () => {
     expect(semaphore.busy()).toBe(0);
     expect(release).toHaveBeenCalledOnce();
     expect(f.store.readEvents(id)).toEqual(expect.arrayContaining([expect.objectContaining({
-      type: 'note', message: 'Completion blocked: answer the pending human question.',
+      type: 'note', message: 'cezar_done withdrawn: the agent asked the user',
     })]));
+    expect(f.store.getRun(id)?.doneAccepted).toBeUndefined();
   });
 });

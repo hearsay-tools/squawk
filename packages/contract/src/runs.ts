@@ -195,6 +195,11 @@ export type RunPullRequest = z.infer<typeof runPullRequestSchema>;
 export const workflowCursorSchema = z.object({ stepId: z.string(), mode: z.enum(['resume', 'start']) });
 export type WorkflowCursor = z.infer<typeof workflowCursorSchema>;
 
+/** An accepted `cezar_done`: the tool generation that accepted it, when, the last event sequence
+ *  then, its summary, and whether its one free delivery turn is spent. */
+export const doneAcceptedSchema = z.object({ session: z.string(), at: z.string(), seq: z.number().int().nonnegative(), summary: z.string().optional(), freeTurn: z.literal(true).optional() });
+export type DoneAccepted = z.infer<typeof doneAcceptedSchema>;
+
 export const runRecordSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -216,6 +221,10 @@ export const runRecordSchema = z.object({
    *  failed attempt awaiting CI recovery or a provider retry), `start` runs it after a Continue
    *  completed the step before it. Only the run exits write it (`runs/run-exits.ts`). */
   workflowCursor: workflowCursorSchema.optional(),
+  /** An accepted `cezar_done` (ADR 0064): the run finishes at the end of a turn with no new wait or
+   *  question, also one that delivered input after it (hearsay-tools/squawk#2587). `run-finish.ts`
+   *  records it and `turn-settler.ts` retires it, through `commitOutcome`; a final run keeps it. */
+  doneAccepted: doneAcceptedSchema.optional(),
   /** The last turn carried a malformed explicit structured question. */
   invalidAsk: z.boolean().optional(),
   /** Owned-run authority; absence is legacy, invalid is explicitly quarantined. */

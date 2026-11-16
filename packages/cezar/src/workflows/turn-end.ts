@@ -15,7 +15,8 @@ import { productName } from '../home/display.ts';
 export type TurnEndFacts = {
   /** The session is still open. A closed one settles elsewhere. */
   sessionOpen: boolean;
-  /** `cezar_done` was accepted this turn. */
+  /** An accepted `cezar_done` is on record (`doneAccepted`, hearsay-tools/squawk#2587): accepted
+   *  this turn, or before the input this turn received. It ranks above the budget human wait. */
   done: boolean;
   /** The completion gate refused that done. `liveWorkers`: live workers block it. */
   doneRefused?: { liveWorkers: boolean };
@@ -117,6 +118,15 @@ function decideWithoutDone(facts: TurnEndFacts): TurnEndDecision {
   if (facts.noWaitNudgedLastTurn) return { kind: 'human-wait', via: 'no-wait' };
   return { kind: 'nudge', cause: 'no-wait', text: scoped(NO_WAIT_NUDGE), ifRefused: 'human-wait' };
 }
+
+/** Appended to input delivered after an accepted `cezar_done` that the input keeps
+ *  (hearsay-tools/squawk#2587): a wait result or a message that asks nothing of the agent. */
+export const DONE_KEPT_NOTE =
+  'Your cezar_done is accepted; the task finishes when this turn ends unless you register a wait or ask.';
+/** Appended to input that withdraws an accepted `cezar_done` (hearsay-tools/squawk#2587): a human
+ *  message, a peer's or the parent's instruction, or a failed wait result. */
+export const DONE_RECONSIDERED_NOTE =
+  'Your earlier cezar_done is withdrawn because this input needs your attention. Call cezar_done again when the task is complete.';
 
 /** How a settled turn end left the run. */
 export type TurnEndOutcome =

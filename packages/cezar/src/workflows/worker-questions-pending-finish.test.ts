@@ -14,11 +14,11 @@ import { conversationOf, eventsOf, closedAs, noHumanCard, steeringParent, askedP
 describe("worker questions route to the parent (hearsay-tools/cezarion#505)", { timeout: 45_000 }, () => {
   useWorkerQuestionsFixture();
 
-// The turn end's completion gate still holds a done the tool accepted when a worker's question
-  // arrives later in that turn (`deferParentCompletion`). The question is owed input then, so the
-  // refusal is a note, beside an open wait or not, and the question reaches the parent's next
-  // turn; never a wait on that worker, and no completion nudge beside owed input.
-  for (const besideWait of [true, false]) it(`holds a cezar_done accepted before a worker question arrives: a refusal note${besideWait ? ' beside an open wait' : ''}, the question delivered, never a wait on that worker`, async () => {
+// A worker's question that arrives after the parent's cezar_done was accepted is a new request:
+  // it withdraws the done (hearsay-tools/squawk#2587), beside an open wait or not, and reaches the
+  // parent in that turn; the turn end then has no done to refuse, so no refusal note, never a wait
+  // on that worker, and no completion nudge.
+  for (const besideWait of [true, false]) it(`withdraws a cezar_done accepted before a worker question arrives${besideWait ? ' beside an open wait' : ''}: the question delivered, never a wait on that worker`, async () => {
     // The worker asks while the parent's turn holds its slot.
     const sessionOf = captureSessions();
     const accepted = new Set<string>();
@@ -53,7 +53,11 @@ describe("worker questions route to the parent (hearsay-tools/cezarion#505)", { 
       const refusal = `hsq message reply ${w.id} '<answer>' --id <new-UUID> --request-id ${questionId}`;
       const refusedNotes = () => eventsOf(p.id, 'note').filter(event => String(event.message).startsWith('Completion blocked: ') && String(event.message).includes(refusal));
       const nudges = () => eventsOf(p.id, 'note').filter(event => String(event.message).startsWith(COMPLETION_NUDGE_NOTE));
-      await until(() => refusedNotes().length === 1 && !!store.getRun(p.id)?.agentInputs?.find(input => input.id === questionId)?.deliveredAt && store.getRun(p.id)?.status === 'waiting');
+      const withdrawn = () => eventsOf(p.id, 'note').filter(event => String(event.message).startsWith('cezar_done withdrawn: ')).map(event => event.message);
+      await until(() => withdrawn().length === 1 && !!store.getRun(p.id)?.agentInputs?.find(input => input.id === questionId)?.deliveredAt && store.getRun(p.id)?.status === 'waiting');
+      expect(withdrawn()).toEqual(['cezar_done withdrawn: a new agent request']);
+      expect(store.getRun(p.id)?.doneAccepted).toBeUndefined();
+      expect(refusedNotes()).toEqual([]);
       expect(nudges()).toEqual([]);
       expect(sent.filter(text => text.includes(refusal))).toEqual([]);
       // The agent's own timer stays; without it, only the timer live workers open.

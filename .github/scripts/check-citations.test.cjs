@@ -416,13 +416,11 @@ test('the CLI exits 2, naming the file, when it cannot parse a script', (t) => {
   assert.match(result.stderr, /cannot parse src\/broken\.ts/);
 });
 
-test('skips generated files, test data and an archive import, and checks a later archive edit', (t) => {
+test('skips test data and an archive import, and checks a later archive edit', (t) => {
   const repo = fixtureRepo(t);
   const note = '> Historical source: `open-mercato/cezar` (upstream), preserved at fork point `feb85666`.\n';
   const base = repo.commit({ 'README.md': 'Hello.\n' });
   repo.commit({
-    '.ai/upstream/LEDGER.md': '| fix (#943) |\n',
-    '.ai/upstream/scans/2026-10-25.md': '| fix (#944) |\n',
     'src/fixtures/issue.md': 'Fixes #945.\n',
     'src/__snapshots__/a.test.ts.snap': '// #946\n',
     '.ai/specs/old.md': `# Old\n\n${note}\nRelates to #947.\n`,

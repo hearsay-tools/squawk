@@ -1,14 +1,15 @@
 import { logPrefix } from '../../home/display.ts';
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
-import { transitionTurnBoundary, type BoundaryCarry, type BoundaryCarrierEffects } from './turn-boundary.ts';
+import { transitionTurnBoundary, type BoundaryCarry, type BoundaryCarrierEffects, type DoneRequest } from './turn-boundary.ts';
 import { nudgeRefusedAt, retireNudge } from './turn-nudges.ts';
 import { TIMER_MIN_SECONDS, type HumanWaitEntry, type WaitVia } from '@open-mercato/cezar-contract/waits';
 import type { AgentSession } from '../../core/claude-cli-runner.ts';
 import type { ContentBlock } from '../../core/agent-runner.ts';
 import type { AskRequest } from '../../core/ask.ts';
 import type { UiEventSink } from '../../runs/ui-event-sink.ts';
-import type { RunRecord, RunStore } from '../../runs/store.ts';
+import type { RunEvent, RunRecord, RunStore } from '../../runs/store.ts';
+import { failedResultAfter, humanMessageAfter, instructionAfter, laterTurn, registeredAfter } from './done-accepted.ts';
 import type { RunExitId, ExitCall, RunPatch } from '../../runs/run-exits.ts';
 import type { ActiveRun } from '../active-run.ts';
 import { openCompletionRequests, sentRequestInstructions, type CompletionRefusal } from '../completion-policy.ts';
@@ -50,16 +51,33 @@ export class TurnSettler {
     private readonly completionWillWait: string, private readonly scheduleWakeupMaxSeconds: number,
     private readonly timers = new LivenessTimers()) {}
 
-  /** The `cezar_done` this session accepted since its last turn end, taken by this turn end: a
-   *  later turn must call it again. */
-  private takeDoneRequest(state: ActiveRun) {
-    const request = state.boundary.doneRequested?.session === state.liveSession.session ? state.boundary.doneRequested : undefined;
+  /** The done this turn end takes to the completion gate: the run's accepted done
+   *  (`doneAccepted`, hearsay-tools/squawk#2587) while it still holds (`heldDone`), or this
+   *  session's second refusal for outstanding requests, which this turn end consumes. */
+  private takeDoneRequest(runId: string, state: ActiveRun, scheduledWake: boolean): DoneRequest | undefined {
+    const accepted = this.heldDone(runId, state, scheduledWake);
+    const refused = !!state.liveSession.session && state.boundary.requestRefusedDone === state.liveSession.session;
     transitionTurnBoundary(state, { kind: 'turn-end', phase: 'consume-done', session: state.liveSession.session });
-    return request;
+    if (accepted) return Object.freeze(accepted.summary === undefined ? {} : { summary: accepted.summary });
+    return refused ? Object.freeze({}) : undefined;
+  }
+
+  /** The run's accepted done when it still holds at this turn end (`acceptedDoneHolds`); one that
+   *  no longer holds is retired here as `reconsidered`, with its reason. Input that withdraws it
+   *  and is not delivered yet goes first, with the withdrawal note (`acceptedDoneDelivery`): the
+   *  record stays for that delivery, which this turn end takes before any done, and the next turn
+   *  end retires it. */
+  private heldDone(runId: string, state: ActiveRun, scheduledWake: boolean): NonNullable<RunRecord['doneAccepted']> | undefined {
+    const run = this.context.store.getRun(runId);
+    if (!run?.doneAccepted) return undefined;
+    const decision = acceptedDoneHolds(run, this.context.store.readEvents(runId), { scheduledWake, nativeAsk: !!state.boundary.pendingHumanAsk });
+    if (decision.holds || (decision.byInput && undeliveredInput(run))) return run.doneAccepted;
+    retireDoneAccepted(this.context.store, runId, 'reconsidered', decision.reason);
+    return undefined;
   }
 
   /** The DONE boundary and close metadata; a refused DONE may retain metadata for readiness. */
-  private recordDoneAtBoundary(state: ActiveRun, done: boolean, request: ActiveRun['boundary']['doneRequested'], keepClose = done): void {
+  private recordDoneAtBoundary(state: ActiveRun, done: boolean, request: DoneRequest | undefined, keepClose = done): void {
     transitionTurnBoundary(state, { kind: 'turn-end', phase: 'record-done', session: state.liveSession.session, done, request, keepClose });
   }
 
@@ -73,6 +91,7 @@ export class TurnSettler {
     // A workflow step that is not the last completes, and the next step starts (hearsay-tools/cezarion#1620).
     const step = !!session && state.boundary.nextStep?.session === session;
     transitionTurnBoundary(state, { kind: 'done-step-consumed', phase: 'completed', session: state.liveSession.session, stepId: state.liveSession.currentStepId });
+    retireDoneAccepted(this.context.store, runId, 'completed', step ? 'step complete' : 'goal achieved');
     if (close?.summary) this.context.store.appendEvent(runId, { type: 'note', message: close.summary });
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: step ? 'step complete — session closed' : 'goal achieved — session closed', via: close?.via ?? 'cezar_done' });
     this.host.waitEngine.cancelAll(runId);
@@ -91,7 +110,7 @@ export class TurnSettler {
   }): void {
     const sessionOpen = !state.liveSession.cancelled && !!state.liveSession.session?.open;
     const humanWait = this.host.humanWaits.turnEndHumanWait(runId);
-    const doneRequest = this.takeDoneRequest(state);
+    const doneRequest = this.takeDoneRequest(runId, state, turn.scheduleWakeup !== undefined);
     const read = classifyTurnEnd({
       sessionOpen, pendingHumanAsk: !!state.boundary.pendingHumanAsk,
       scheduledWake: turn.scheduleWakeup !== undefined,
@@ -155,8 +174,9 @@ export class TurnSettler {
    * decision. False when nothing was settled: the done closed the session, or the input checkpoint
    * failed.
    */
-  settleTurn(runId: string, state: ActiveRun, entry: 'turn-end' | 'ack' | 'ready' | 'gate', turn: SettledTurn,
+  settleTurn(runId: string, state: ActiveRun, entry: 'turn-end' | 'ack' | 'ready' | 'gate', settled: SettledTurn,
     refusal?: CompletionRefusal): boolean {
+    const turn = entry === 'turn-end' ? settled : this.recheckBoundaryDone(runId, state, settled);
     const session = state.liveSession.session;
     const stepId = turn.stepId;
     // A done goes to the completion gate first (hearsay-tools/cezarion#1301). A refused done is not a done.
@@ -181,6 +201,15 @@ export class TurnSettler {
     if (outcome.kind === 'running') this.host.armAutonomousNudgeBound(runId, state);
     this.host.settledTurnOutcome(runId, entry, outcome);
     return true;
+  }
+
+  /** A done a boundary kept for a later entry (an acknowledgement, readiness, the gate) is decided
+   *  again there: what was recorded since may withdraw it. A refused done the boundary kept has
+   *  no record, and the gate decides it as before. */
+  private recheckBoundaryDone(runId: string, state: ActiveRun, turn: SettledTurn): SettledTurn {
+    if (!turn.done || !this.context.store.getRun(runId)?.doneAccepted || this.heldDone(runId, state, turn.scheduleWakeup !== undefined)) return turn;
+    transitionTurnBoundary(state, { kind: 'turn-end', phase: 'drop-done', session: state.liveSession.session });
+    return { ...turn, done: false };
   }
 
   /** The completion gate held the done (`settleTurn`). A stopped root, or a question that parked
@@ -288,8 +317,11 @@ export class TurnSettler {
     const decisionRefused = 'refused' in decision && !!decision.refused;
     if (decisionRefused) noteRefusal();
     // A refusal that settles the turn end replaces Squawk's own human wait, as the agent's own wait would.
-    const settlesRefusal = !!refused && !decisionRefused && !(decision.kind === 'defer' && decision.keepDone);
+    const keepsDone = decision.kind === 'defer' && !!decision.keepDone;
+    const settlesRefusal = !!refused && !decisionRefused && !keepsDone;
     if (settlesRefusal) this.host.humanWaits.withdrawSquawkHumanWaits(runId);
+    // The completion gate refused the done: the agent must call it again (hearsay-tools/squawk#2587).
+    if (refused && !keepsDone) retireDoneAccepted(this.context.store, runId, 'reconsidered', `completion refused: ${refused.code}`);
     return transitionTurnBoundary(runId, state, { kind: 'turn-end', phase: 'carry', session,
       carry: { runId, state, session, stepId, refused, noteRefusal, settlesRefusal }, decision }, this.boundaryEffects);
   }
@@ -497,4 +529,49 @@ export class TurnSettler {
     const wait = WAIT_KINDS.timer.monitoringEntry(via, now, delay, minutes, state.waitIdentity.ciTurnId ?? 'monitoring');
     this.host.waitEngine.open(runId, state, wait, { withdraw: true, onCommitFailure: { log: `${logPrefix()} monitoring timer checkpoint failed` }, park: false });
   }
+}
+
+/** The only writer that retires `doneAccepted` (ADR 0064, hearsay-tools/squawk#2587): `completed`
+ *  when the run or its step finishes on the done; `reconsidered` when a human message, a new
+ *  instruction, a failed wait result, a wait or question the agent registers, or a completion
+ *  refusal withdraws it, and the agent must call `cezar_done` again. False when none was on record. */
+export function retireDoneAccepted(store: Pick<RunStore, 'getRun' | 'commitOutcome' | 'appendEvent'>, runId: string, as: 'completed' | 'reconsidered', reason: string): boolean {
+  if (!store.getRun(runId)?.doneAccepted) return false;
+  store.commitOutcome(runId, { kind: 'done-retired', as, reason }, {}, { bestEffort: true });
+  if (as === 'reconsidered') store.appendEvent(runId, { type: 'note', message: `cezar_done withdrawn: ${reason}` });
+  return true;
+}
+
+/** Signals of the turn that ends, beside what the run recorded: a ScheduleWakeup it asked for and
+ *  a native question still pending in it. */
+export type DoneTurnSignals = { scheduledWake?: boolean | undefined; nativeAsk?: boolean | undefined };
+
+/**
+ * Whether the run's accepted `cezar_done` still holds (ADR 0064, hearsay-tools/squawk#2587): the
+ * one decision, made from what was recorded after the done on any path. It no longer holds after a
+ * human message (its `user-message` event), an instruction among the agent inputs (a steer, an
+ * inbox read, a continuation's opening input), a failed wait result, a wait or question the agent
+ * registered (the tool, the CLI, a native ask; a replay registers nothing), a native question in
+ * this turn, or a ScheduleWakeup in a turn after the done's own. Input still owed is not read here:
+ * the call refused it (`input_pending`), and a turn end delivers owed input before any done.
+ */
+export function acceptedDoneHolds(run: RunRecord, events: readonly RunEvent[], turn: DoneTurnSignals = {}): { holds: true } | { holds: false; reason: string; byInput: boolean } {
+  const done = run.doneAccepted;
+  if (!done) return { holds: false, reason: 'no done on record', byInput: false };
+  const input = humanMessageAfter(events, done.seq) ?? instructionAfter(run, done.at) ?? failedResultAfter(run, done.at);
+  if (input) return { holds: false, reason: input, byInput: true };
+  const agent = registeredAfter(run, done.at) ?? (turn.nativeAsk ? 'the agent asked the user' : undefined)
+    ?? (turn.scheduledWake && laterTurn(events, done.seq) ? 'the agent scheduled a wake-up' : undefined);
+  return agent === undefined ? { holds: true } : { holds: false, reason: agent, byInput: false };
+}
+
+/** The only writer that spends the accepted done's one free delivery turn (hearsay-tools/squawk#2587):
+ *  later deliveries charge as wakes do, so the wake cap still holds. */
+export function spendDoneFreeTurn(store: Pick<RunStore, 'commitOutcome'>, runId: string): void {
+  store.commitOutcome(runId, { kind: 'done-free-turn' }, {}, { bestEffort: true });
+}
+
+/** Input the run has not handed to the agent yet: a queued agent input or a resolved wait result. */
+function undeliveredInput(run: RunRecord): boolean {
+  return !!run.agentInputs?.some(input => !input.deliveredAt) || (run.waits ?? []).some(wait => wait.phase === 'resolved');
 }

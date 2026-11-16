@@ -9,7 +9,6 @@ import type { UiEventSink } from '../../runs/ui-event-sink.ts';
 import { boundaryOrderFixture } from './boundary-order.testkit.ts';
 import { WaitRegistry } from './wait-registry.ts';
 import { WakeAdmission } from './wake-admission.ts';
-import { transitionTurnBoundary } from './turn-boundary.ts';
 
 function fixture(count: number) {
   const f = boundaryOrderFixture();
@@ -76,7 +75,7 @@ it.each(['endTurn', 'settleTurn'] as const)('%s parks and frees the slot after a
     parkOnWaits: (id: string, state: typeof f.state) => admission.parkOnWaits(id, state),
   });
   if (entry === 'endTurn') {
-    transitionTurnBoundary(f.state, { kind: 'done-request', session: f.wire });
+    f.store.commitOutcome(f.run.id, { kind: 'done-accepted', session: 'generation', at: new Date().toISOString(), seq: f.store.transcriptFacts(f.run.id).lastSeq });
     f.settler.endTurn(f.run.id, f.state, unused<UiEventSink>('sink'), { stepId: 'step', scheduleWakeup: undefined });
   } else {
     expect(f.settler.settleTurn(f.run.id, f.state, 'ack', {

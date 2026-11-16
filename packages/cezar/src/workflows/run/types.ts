@@ -3,6 +3,7 @@ import type { TrackedWork } from './tracked-work.ts';
 import type { HumanWaitEntry } from '@open-mercato/cezar-contract/waits';
 import type { AskRequest } from '../../core/ask.ts';
 import type { UiEventSink } from '../../runs/ui-event-sink.ts';
+import type { DoneRequest } from './turn-boundary.ts';
 import type { ScheduleTaskAnswer, ScheduleTaskRequest, ScheduledTasksAnswer, ScheduledTasksRequest } from '@open-mercato/cezar-contract/scheduled-tasks';
 import type { ContentBlock, RunnerId, ToolGrant } from '../../core/agent-runner.ts';
 import type { CiToolSession } from '../../ci-wait/controller.ts';
@@ -243,7 +244,8 @@ export type SettledTurn = {
   humanWait?: HumanWaitEntry | undefined;
   sink?: UiEventSink;
   done: boolean;
-  doneRequest?: ActiveRun['boundary']['doneRequested'];
+  /** The done the turn end takes to the gate, with the summary it closes with. */
+  doneRequest?: DoneRequest | undefined;
   /** The turn answered the no-wait nudge. The completion cause's flag is `completionNudgeAnswered`. */
   nudgedLastTurn: boolean;
   scheduleWakeup?: number | null | undefined;
