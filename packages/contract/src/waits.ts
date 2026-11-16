@@ -429,8 +429,8 @@ export type DoneErrorCode = z.infer<typeof doneErrorCodeSchema>;
 
 /** Input the run owes the agent when it calls `cezar_done`: a resolved wait's result not yet
  *  delivered (`wait_result`, with the wait's kind), a message or result queued for delivery
- *  (`queued`; a human message has no `input_id`), or a delivery still waiting for its acknowledgement
- *  or its read (`in_flight`). */
+ *  (`queued`; a human message has no `input_id`), or a submission still waiting for its
+ *  acknowledgement (`in_flight`). */
 export const doneOwedInputSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('wait_result'), wait_id: z.string(), wait_kind: z.string() }).strict(),
   z.object({ kind: z.literal('queued'), input_id: z.string().optional(), source: z.string() }).strict(),

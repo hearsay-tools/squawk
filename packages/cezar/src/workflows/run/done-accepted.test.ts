@@ -58,7 +58,7 @@ describe('input owed at cezar_done (hearsay-tools/squawk#2587)', () => {
     return state;
   };
 
-  it('lists a resolved result, queued input and unread input, and leaves out what this turn already read', () => {
+  it('lists a resolved result, queued input and an unread submission, and leaves out what this turn already has', () => {
     const result = resolved(makePrWait());
     const resultInput = input({ id: result.id, source: 'lifecycle' });
     const queued = input({ conversation: conversation('progress', 'peer') });
@@ -74,7 +74,6 @@ describe('input owed at cezar_done (hearsay-tools/squawk#2587)', () => {
     expect(owedAtDone(run, state)).toEqual([
       { kind: 'wait_result', wait_id: result.id, wait_kind: 'pr' },
       { kind: 'in_flight', input_id: steered.id },
-      { kind: 'in_flight', input_id: unread.id },
       { kind: 'queued', input_id: queued.id, source: 'peer' },
     ]);
   });

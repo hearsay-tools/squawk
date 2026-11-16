@@ -36,11 +36,13 @@ export function reconsideredBy(run: RunRecord, inputIds: readonly string[]): str
   return undefined;
 }
 
-/** What the run still owes the agent when it calls `cezar_done`: resolved wait results not yet
- *  delivered, input queued for it, and input handed to its harness that the model has not read
- *  (`input_pending`). The input that opened this turn is read once the turn runs: a continuation's
- *  opening input, and input the harness reported read before its acknowledgement. A harness that
- *  cannot report reads takes input only at a turn boundary, so its flight opened this turn. */
+/** What the run still owes the agent when it calls `cezar_done` (`input_pending`): resolved wait
+ *  results not yet delivered, input queued for it, a human follow-up its harness holds, and a
+ *  submission still waiting for its acknowledgement. Input the harness acknowledged is delivered:
+ *  this turn reads it. A submission in flight is owed unless the harness already reported it read,
+ *  as it does for the input that opened this turn, or cannot report reads at all: such a harness
+ *  takes input only at a turn boundary, so its flight opened this turn. A continuation's opening
+ *  input is this turn's own. */
 export function owedAtDone(run: RunRecord, state: ActiveRun): DoneOwedInput[] {
   const owed: DoneOwedInput[] = [];
   const results = resolvedWaits(run);
@@ -52,7 +54,6 @@ export function owedAtDone(run: RunRecord, state: ActiveRun): DoneOwedInput[] {
   const observable = input.inputDelivery?.consumption === 'observable';
   const unread = (id: string) => id !== opening && observable && !input.consumedBeforeAck?.has(id);
   for (const id of flight?.inputIds ?? []) if (unread(id)) owed.push({ kind: 'in_flight', input_id: id });
-  for (const id of input.unreadInputIds ?? []) if (id !== opening && !flight?.inputIds.includes(id)) owed.push({ kind: 'in_flight', input_id: id });
   for (const queued of run.agentInputs ?? []) {
     if (queued.deliveredAt || resultIds.has(queued.id) || queued.id === opening || flight?.inputIds.includes(queued.id)) continue;
     owed.push({ kind: 'queued', input_id: queued.id, source: queued.conversation?.relationship === 'peer' ? 'peer' : queued.source });
