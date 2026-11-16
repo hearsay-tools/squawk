@@ -61,3 +61,41 @@ Behavior at shipped defaults. "Contained" is the `cgroup` backend; "scoped" is `
 | Git admin entry and `.git` pointer gone, files remain | Unchanged from before this change: targeted removal of the recorded path, then the exact branch | Destroy completes |
 | Checkout absent, registration remains | Unchanged: targeted `git worktree remove --force`, then the exact branch | Destroy completes |
 | Removal refused by the OS (Windows open handle) | Kept; the refusal names the path and Git's reason | Retried with backoff |
+
+## Measurements (slice D)
+
+`packages/cezar/scripts/benchmark-worker-lifecycle.ts` (with `benchmark-project.ts` beside it), run
+unchanged on `588275223` (main just before hearsay-tools/squawk#3698) and `3f1044ebb` (main with slices
+A and B, plus this benchmark), alternating, on the coding host (24 cores, Linux, cgroup delegation
+present, one-minute load 20-23, Node 26.13.0). Each run: 10 owned workers through `createOwnedRun` +
+`enqueueOwnedRun` with the dry-run Claude mock, then `destroyForHuman` on 5 settled workers as they are
+and on 5 with an unrelated `sleep` working in the worktree. Every attempt is counted: each spawn's
+outcome, and each destroy's result. Times in milliseconds.
+
+### End to end
+
+| Run | Spawn outcomes | Spawn → session (median / p90) | Spawn → first turn ended (median) | Destroy, clean (median) | Destroy, outside process in the worktree (median) |
+| --- | --- | --- | --- | --- | --- |
+| before-1 | 10/10 settled `waiting` | 301 / 530 | 416 | 438, 5/5 complete | 348, **5/5 incomplete** |
+| before-2 | 10/10 settled `waiting` | 292 / 477 | 411 | 426, 5/5 complete | 354, **5/5 incomplete** |
+| after-1 | 10/10 settled `waiting` | 313 / 488 | 452 | 413, 5/5 complete | 439, 5/5 complete |
+| after-2 | 10/10 settled `waiting` | 278 / 594 | 402 | 525, 5/5 complete | 463, 5/5 complete |
+
+Spawn and clean destroy latency do not change beyond run-to-run noise at this load. The difference is
+the outcome: before, an outside process in the worktree left every destroy `incomplete`, and in
+production such a destroy keeps retrying until a human ends the process (the friction digests recorded
+retries over hours). After, the destroy completes and the outside process is left running. No spawn
+timed out or failed on either ref.
+
+### Fixtures (primitives, apart from the end-to-end numbers)
+
+| Ref | Primitive | Median | p90 | Failures |
+| --- | --- | --- | --- | --- |
+| before | `inspectGeneration` host-wide cwd scan, 479-485 host processes | 3.6-3.8 ms | 4.8-5.7 ms | — |
+| after | `scopes.stop` of a cgroup holding a `setsid` descendant (kill, wait empty, remove) | 13.2-13.8 ms | 14.3-15.0 ms | 0 of 20 |
+
+The scan's cost grows with every process on the host and was paid by every destroy attempt and
+admission; a scope stop's cost is bounded by the worker's own processes. The scan is cheap on this
+host's ~480 processes; the reviewed hearsay-tools/cezarion#1973 design exhausted its scan budget in CI,
+which this design removes rather than tunes. The scope-stop fixture runs only on a containing backend
+(`cgroup`, `job`); a `groups` host records why it skipped it.
