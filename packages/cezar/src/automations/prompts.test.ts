@@ -83,32 +83,37 @@ describe('automationsPrompt and the skill body', () => {
   const command = "'/usr/bin/node' '/opt/cezar/dist/index.js' automation";
 
   it('addresses the CLI by the command it is given, never a bare cez on PATH', () => {
-    for (const text of [automationsPrompt(command), createAutomationSkillBody(command)]) {
+    for (const text of [createAutomationSkillBody(command)]) {
       expect(text).toContain(command);
       const withoutCommand = text.replaceAll(command, '<CLI>');
       expect(withoutCommand).not.toMatch(/(^|[\s`"'(])(cez|cezar|cezarion) automation /m);
     }
   });
 
+  it('uses the repeating tool and requires explicit consent and a preview in this session', () => {
+    const prompt = automationsPrompt();
+    for (const text of ['Use cezar_automation', 'explicit: true', 'in this session first', 'always PAUSED', 'without launching tasks or advancing its execution cursor', '"url" the tool returns', 'exact prompt template', AUTOMATION_SCHEMA_REFERENCE]) expect(prompt).toContain(text);
+    expect(prompt).not.toContain(`${command} create`);
+  });
+
   it('never tells an agent to start a cockpit', () => {
-    for (const text of [automationsPrompt(command), createAutomationSkillBody(command), AUTOMATION_SCHEMA_REFERENCE]) {
+    for (const text of [automationsPrompt(), createAutomationSkillBody(command), AUTOMATION_SCHEMA_REFERENCE]) {
       expect(text).not.toMatch(/start (the|a) cockpit|run `?cez`?\b|\bcez serve\b/i);
     }
   });
 
   it('steers work that starts much later to a one-time schedule, enabled only when the user asked', () => {
-    expect(automationsPrompt(command)).toContain('When work must start much later (tomorrow, next week) as a new task, create a one-time schedule (add --at or --in) instead of keeping this session waiting on repeated timers; enable it only when the user asked for the work to run later.');
-    expect(automationsPrompt(command)).toMatch(/--at <YYYY-MM-DDTHH:MM> --tz <zone> \| --in <30m\|6h\|7d>/);
-    expect(automationsPrompt(command)).toContain(`${command} cancel <id>`);
+    expect(automationsPrompt()).toContain('use cezar_schedule_task (at in UTC or delay) instead of keeping this session waiting on repeated timers; enable it only when the user asked for the work to run later.');
+    expect(automationsPrompt()).toContain('Use cezar_scheduled_tasks to list, show, update, pause, enable or cancel a one-time schedule.');
   });
 
   it('tells the agent to stop and report when the CLI is refused, not to substitute a cron job', () => {
-    expect(automationsPrompt(command)).toMatch(/stop and report that automations are unavailable/);
-    expect(automationsPrompt(command)).toMatch(/cron job/);
+    expect(automationsPrompt()).toMatch(/stop and report that automations are unavailable/);
+    expect(automationsPrompt()).toMatch(/cron job/);
   });
 
   it('keeps the automation paused under an autonomy nudge: only the user\'s request enables it', () => {
-    for (const text of [automationsPrompt(command), createAutomationSkillBody(command)]) {
+    for (const text of [automationsPrompt(), createAutomationSkillBody(command)]) {
       expect(text).toContain('A paused automation is the finished state of this task');
       expect(text).toMatch(/continue autonomously, not to ask for confirmation, or to make reasonable assumptions is not that request/);
     }
@@ -120,8 +125,8 @@ describe('automationsPrompt and the skill body', () => {
   });
 
   it('does not infer completion consent from autonomy or enabling an automation', () => {
-    expect(automationsPrompt(command)).toContain('[--archive-when-done] [--auto-merge-pr]');
-    for (const text of [automationsPrompt(command), createAutomationSkillBody(command)]) {
+    expect(automationsPrompt()).toContain('Use task.archiveWhenDone only when the user asks');
+    for (const text of [automationsPrompt(), createAutomationSkillBody(command)]) {
       expect(text).toMatch(/only when the user asks|unless the user asks/);
       expect(text).toContain('current-head CI and GitHub rules');
       expect(text).toContain('future tasks only');

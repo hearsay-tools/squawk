@@ -80,7 +80,7 @@ describe('cezar-ci MCP server instructions', () => {
   it.each([undefined, '', '1', 'true', 'false'])('lists schedule tools by default: %j', async (value) => {
     const on = await connect(value === undefined ? {} : { CEZ_AUTOMATIONS: value });
     try {
-      expect((await on.client.listTools()).tools.map(tool => tool.name)).toEqual(['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_scheduled_tasks']);
+      expect((await on.client.listTools()).tools.map(tool => tool.name)).toEqual(['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks']);
     } finally { await on.close(); }
   });
 

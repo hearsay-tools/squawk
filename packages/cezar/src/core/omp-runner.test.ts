@@ -118,7 +118,7 @@ describe('ompTools', () => {
 
   it('exclude narrows before the Squawk tools are appended, so it never turns --no-tools into a CI-only list', () => {
     expect(ompTools(explicitToolGrant(['TodoWrite']), { squawkTools: true, exclude: ['todo'] })).toEqual({ flag: 'no-tools', tools: [], dropped: [] });
-    expect(ompTools(explicitToolGrant(['Read', 'TodoWrite']), { squawkTools: true, exclude: ['todo'] }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_scheduled_tasks']);
+    expect(ompTools(explicitToolGrant(['Read', 'TodoWrite']), { squawkTools: true, exclude: ['todo'] }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks']);
   });
 
   it('undefined passes no flag, [] passes --no-tools, all-dropped passes --no-tools', () => {
@@ -129,20 +129,20 @@ describe('ompTools', () => {
 
   it('squawkTools admits the preview tools exactly when the extension registers it (CEZ_PREVIEW=1)', () => {
     expect(ompTools(explicitToolGrant(['Read']), { squawkTools: true, env: { CEZ_PREVIEW: '1', CEZ_AUTOMATIONS: '0' } }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_preview_serve', 'cezar_preview_stop']);
-    expect(ompTools(explicitToolGrant(['Read']), { squawkTools: true, env: { CEZ_PREVIEW: '0' } }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_scheduled_tasks']);
+    expect(ompTools(explicitToolGrant(['Read']), { squawkTools: true, env: { CEZ_PREVIEW: '0' } }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks']);
     expect(ompTools(explicitToolGrant(['Read']), { env: { CEZ_PREVIEW: '1' } }).tools).toEqual(['read']);
   });
 
   // hearsay-tools/cezarion#1465: the schedule tools are present by default and honor the opt-out.
   it('squawkTools admits schedule tools by default and honors CEZ_AUTOMATIONS=0', () => {
-    expect(ompTools(explicitToolGrant(['Read']), { squawkTools: true, env: {} }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_scheduled_tasks']);
+    expect(ompTools(explicitToolGrant(['Read']), { squawkTools: true, env: {} }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks']);
     expect(ompTools(explicitToolGrant(['Read']), { squawkTools: true, env: { CEZ_AUTOMATIONS: '0' } }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done']);
   });
 
   it('bashAllowlist drops bash; squawkTools appends the Squawk tools', () => {
     expect(ompTools(explicitToolGrant(['Read', 'Bash'], ['npm test']), {}).tools).toEqual(['read']);
     expect(ompTools(explicitToolGrant(['Read', 'Bash'], []), {}).tools).toEqual(['read', 'bash']);
-    expect(ompTools(explicitToolGrant(['Read']), { squawkTools: true }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_scheduled_tasks']);
+    expect(ompTools(explicitToolGrant(['Read']), { squawkTools: true }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks']);
   });
 
   it('fails closed when every granted tool is narrowed away, and adds no Squawk tool to --no-tools', () => {
@@ -194,7 +194,7 @@ describe('buildOmpArgs', () => {
       '--mode', 'rpc',
       '--extension', expect.stringMatching(/scripts\/omp-ci-wait\.mjs$/),
       '--append-system-prompt', 'S',
-      '--tools', 'read,edit,write,grep,glob,bash,cezar_wait,cezar_ask,cezar_cancel_wait,cezar_done,cezar_schedule_task,cezar_scheduled_tasks',
+      '--tools', 'read,edit,write,grep,glob,bash,cezar_wait,cezar_ask,cezar_cancel_wait,cezar_done,cezar_schedule_task,cezar_automation,cezar_scheduled_tasks',
     ]);
   });
 

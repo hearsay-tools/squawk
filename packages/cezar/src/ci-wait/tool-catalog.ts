@@ -1,3 +1,4 @@
+import { automationToolRequestSchema } from '@open-mercato/cezar-contract/automation-tool';
 import { productName } from '../home/display.ts';
 import { productEnv } from '../core/product-env.ts';
 import { automationsEnabled } from '../automations/enabled.ts';
@@ -141,12 +142,26 @@ export const scheduledTasksToolDefinition = {
   inputSchema: flatScheduledTasksInputSchema(),
 };
 
+function flatAutomationInputSchema() {
+  const properties: Record<string, unknown> = {};
+  for (const option of automationToolRequestSchema.options) Object.assign(properties, z.toJSONSchema(option, { io: 'input' }).properties);
+  return { type: 'object' as const, properties: {
+    ...properties,
+    action: { type: 'string', enum: automationToolRequestSchema.options.map(option => option.shape.action.value) },
+  }, required: ['action'], additionalProperties: false };
+}
+export const automationToolDefinition = {
+  name: 'cezar_automation',
+  description: 'Create, show, preview or enable a repeating automation in this project. "create" takes definition: a GitHub poll (kind github, events, intervalSeconds, filters and task) or repeating schedule (kind schedule, schedule and task). Creation is always paused. Read the definition schema and its prompt placeholders first. "show", "preview" and "enable" take its id. "preview" checks a GitHub poll without launching tasks. "enable" requires explicit: true, only when the user explicitly asked to switch it on; a poll also needs a successful preview of its current definition in this session. Autonomy is not enable consent. Report the url and preview matches, or next_run_at for a schedule (UTC; convert to the user’s zone). On refusal stop and report the error; never substitute a cron job, GitHub Action or polling script. Use cezar_schedule_task and cezar_scheduled_tasks for one-time schedules. Leave task.archiveWhenDone and task.autoMergePr off unless the user asks for each completion action.',
+  inputSchema: flatAutomationInputSchema(),
+};
+
 /** Tool definitions in the same order every adapter advertises them. */
 export function squawkToolDefinitions(env: NodeJS.ProcessEnv = process.env) {
   return [
     waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition,
     ...(previewToolEnabled(env) ? [previewToolDefinition, previewStopToolDefinition] : []),
-    ...(automationsToolEnabled(env) ? [scheduleTaskToolDefinition, scheduledTasksToolDefinition] : []),
+    ...(automationsToolEnabled(env) ? [scheduleTaskToolDefinition, automationToolDefinition, scheduledTasksToolDefinition] : []),
   ];
 }
 export function squawkToolNames(env: NodeJS.ProcessEnv = process.env): string[] {

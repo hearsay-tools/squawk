@@ -109,6 +109,11 @@ tools. Read each fact from its owner:
   it, and `squawkToolEnvNames` lists the environment names a harness forwards. A new tool is
   one entry there. `errors.ts` beside it and `workflows/completion-policy.ts` hold the refusal
   messages.
+- `packages/contract/src/automation-tool.ts`: `cezar_automation` creates repeating automations
+  paused, shows them, previews GitHub polls and enables them only with explicit consent.
+  Preview evidence belongs to the calling capability's lifetime signal and current definition
+  revision. Continue and recovery must preview again. Its gate is `automationsToolEnabled`,
+  shared with the unchanged one-time schedule tools.
 - The `CI_*` constants in `packages/cezar/src/ci-wait/supervisor.ts` and `github.ts`: the PR
   watcher bounds. `packages/cezar/src/workflows/run/constants.ts`: the wake and delivery bounds.
 - `.ai/specs/2026-10-17-unified-waits.md`: the model (the turn-end rule, waking, slots and

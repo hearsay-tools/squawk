@@ -1,3 +1,4 @@
+import type { AutomationToolAnswer, AutomationToolRequest } from '@open-mercato/cezar-contract/automation-tool';
 import type { Home } from '../../home/home.ts';
 import type { TrackedWork } from './tracked-work.ts';
 import type { HumanWaitEntry } from '@open-mercato/cezar-contract/waits';
@@ -209,6 +210,7 @@ export type WorkerTerminationBlocker = { kind: 'unreadable' } | { kind: 'control
 
 /** hearsay-tools/cezarion#1465: what `startServer` hands a manager for the schedule tools. */
 export type AutomationToolService = {
+  automation?: (request: AutomationToolRequest, signal: AbortSignal) => Promise<AutomationToolAnswer>;
   scheduleTask(request: ScheduleTaskRequest): Promise<ScheduleTaskAnswer>;
   scheduledTasks(request: ScheduledTasksRequest): Promise<ScheduledTasksAnswer>;
 };

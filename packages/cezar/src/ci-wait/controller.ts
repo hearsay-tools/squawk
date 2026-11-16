@@ -1,3 +1,4 @@
+import { automationToolRequestSchema, automationToolAnswerSchema, type AutomationToolRequest, type AutomationToolAnswer } from '@open-mercato/cezar-contract/automation-tool';
 import { productEnvEntries } from '../core/product-env.ts';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { chmod, mkdtemp, rm } from 'node:fs/promises';
@@ -45,6 +46,7 @@ export type SquawkToolHandlers = {
   stopPreview?: PreviewStop | undefined;
   /** hearsay-tools/cezarion#1465: absent where no cockpit serves the project, answered as `unavailable`. */
   scheduleTask?: (request: ScheduleTaskRequest, signal: AbortSignal) => Promise<ScheduleTaskAnswer>;
+  automation?: (request: AutomationToolRequest, signal: AbortSignal) => Promise<AutomationToolAnswer>;
   scheduledTasks?: (request: ScheduledTasksRequest, signal: AbortSignal) => Promise<ScheduledTasksAnswer>;
 };
 type Capability = SquawkToolHandlers & { lifetime: AbortController };
@@ -269,6 +271,16 @@ export function ciToolRoutes(capabilities: Map<string, Capability>) {
       } catch {
         return capabilityRevoked(c, capability, () => c.json(previewRefusal('unavailable')));
       }
+    })
+    .use('/api/v1/tools/automation', requireCapability)
+    .post('/api/v1/tools/automation', bodyLimit({ maxSize: SCHEDULED_TASK_LIMITS.wireBytes, onError: c => c.json(scheduleRefusal('invalid_request', 'The arguments exceed 1 MiB.')) }), async (c, next) => {
+      if (!automationsToolEnabled()) return c.json(scheduleRefusal('automations_off'));
+      await next();
+    }, jsonZodValidator(automationToolRequestSchema, { invalid: (c, error) => c.json(scheduleRefusal('invalid_request', scheduleInvalidInput(error))) }), async c => {
+      const capability = c.get('capability');
+      const automation = capability.automation;
+      if (!automation) return c.json(scheduleRefusal('unavailable'));
+      return capabilityAnswer(c, capability, async () => automationToolAnswerSchema.parse(await automation.call(capability, c.req.valid('json'), capability.lifetime.signal)), answer => c.json(answer), () => c.json(scheduleRefusal('unavailable')));
     })
     .use('/api/v1/tools/schedule-task', requireCapability)
     // A prompt takes up to 100 000 characters, so these bodies get their own limit. The flag gate

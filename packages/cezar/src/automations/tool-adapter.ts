@@ -1,3 +1,9 @@
+import { automationToolGithub } from './tool-github.ts';
+import { automationToolRequestSchema, type AutomationToolAnswer, type AutomationToolRequest } from '@open-mercato/cezar-contract/automation-tool';
+import { nextOccurrence } from '@open-mercato/cezar-contract/automation-schedule';
+import { ProjectAutomationScheduler } from './scheduler.ts';
+import type { GithubRepository } from './github-repository.ts';
+import type { GithubPoller } from './github-poller.ts';
 import { writableAutomationTask } from '@open-mercato/cezar-contract/automations';
 import { automationCreateSchema, automationUpdateSchema } from '@open-mercato/cezar-contract/automation-requests';
 import { isValidTimeZone } from '@open-mercato/cezar-contract/zoned-time';
@@ -20,7 +26,7 @@ import type { AutomationToolService } from '../workflows/run/types.ts';
 import { projectPaths } from '../project-paths.ts';
 import { withProjectAdmission } from '../server/cockpit-ownership.ts';
 import { onceStatus, type AutomationService, type AutomationServiceProject } from './service.ts';
-import { isOnceSchedule, type AutomationDefinition } from './types.ts';
+import { isGithubAutomation, isScheduleAutomation, isOnceSchedule, type AutomationDefinition } from './types.ts';
 
 /**
  * hearsay-tools/cezarion#1465: `cezar_schedule_task` and `cezar_scheduled_tasks` over the same
@@ -51,9 +57,65 @@ function taskSettings({ workflow, runner, model, effort }: { workflow?: string |
 export function createAutomationToolService(
   service: AutomationService,
   project: AutomationServiceProject,
-  deps: { timeZone: () => string; now?: () => number },
-): AutomationToolService {
+  deps: { timeZone: () => string; now?: () => number; github?: () => Promise<(GithubRepository & { poller: GithubPoller }) | undefined> },
+): Required<AutomationToolService> {
   const now = deps.now ?? Date.now;
+  // A capability's lifetime signal is unique to one session, including Continue and recovery.
+  // Weak keys release preview evidence when that session is gone; no project-wide permission.
+  const previews = new WeakMap<AbortSignal, Map<string, number>>();
+  const repeatingView = (automation: AutomationDefinition): Extract<AutomationToolAnswer, { ok: true }> => {
+    const address = project.manager.cockpitAddress?.();
+    const next = isScheduleAutomation(automation) ? nextOccurrence(automation.schedule, now(), deps.timeZone()) : null;
+    return { ok: true, automation,
+      ...(address ? { url: `${address.origin}/p/${address.projectId}/automations/${automation.id}` } : {}),
+      ...(next !== null ? { next_run_at: new Date(next).toISOString() } : {}),
+    };
+  };
+
+  async function automation(request: AutomationToolRequest, signal: AbortSignal): Promise<AutomationToolAnswer> {
+    const parsed = automationToolRequestSchema.safeParse(request);
+    if (!parsed.success) return refuse('invalid_request', parsed.error.issues[0]?.message ?? 'invalid automation');
+    request = parsed.data;
+    if (signal.aborted) return refuse('unavailable', 'The calling session is closed.');
+    if (request.action === 'create') {
+      const body = { ...request.definition, task: { worktree: true, autonomous: true, ...request.definition.task }, enable: false };
+      const result = await service.create(project, body);
+      return result.ok ? repeatingView(result.automation) : fromStatus(result);
+    }
+    // Refresh before checking preview revisions: other sessions and the CLI can edit definitions.
+    project.automationStore.reload();
+    const found = service.get(project, request.id);
+    if (!found.ok) return fromStatus(found);
+    const stored = found.body.automation;
+    if (isOnceSchedule(stored)) return refuse('not_found', 'Use cezar_scheduled_tasks for a one-time schedule.');
+    if (request.action === 'show') return repeatingView(stored);
+    if (request.action === 'enable') {
+      if (request.explicit !== true) return { ok: false, code: 'explicit_required', message: 'Pass explicit: true only when the user explicitly asked to enable this automation.' };
+      if (isGithubAutomation(stored) && previews.get(signal)?.get(stored.id) !== stored.revision) {
+        return { ok: false, code: 'preview_required', message: 'Preview this GitHub poll in this session before enabling it. Preview again after any edit.' };
+      }
+      const result = await service.enable(project, stored.id);
+      return result.ok ? repeatingView(result.automation) : fromStatus(result);
+    }
+    if (!isGithubAutomation(stored)) return refuse('invalid_request', 'A schedule has nothing to preview; report next_run_at.');
+    // A failed repeat preview cannot leave an earlier successful receipt usable.
+    previews.get(signal)?.delete(stored.id);
+    try {
+      const github = await (deps.github ? deps.github() : automationToolGithub(project.root));
+      signal.throwIfAborted();
+      const scheduler = new ProjectAutomationScheduler({ projectId: project.id, store: project.automationStore, timeZone: deps.timeZone(), ...(github ? { github } : {}) });
+      const result = await scheduler.check(stored, 'preview');
+      signal.throwIfAborted();
+      project.automationStore.reload();
+      if (project.automationStore.get(stored.id)?.revision !== stored.revision) return refuse('conflict', 'The automation changed during preview; preview it again.');
+      const sessionPreviews = previews.get(signal) ?? new Map<string, number>();
+      sessionPreviews.set(stored.id, stored.revision);
+      previews.set(signal, sessionPreviews);
+      return { ...repeatingView(stored), preview: { matches: result.candidates.length, truncated: result.truncated } };
+    } catch (error) {
+      return refuse('unavailable', error instanceof Error ? error.message : String(error));
+    }
+  }
 
   const view = (definition: AutomationDefinition): ScheduledTask => {
     const schedule = definition.schedule!;
@@ -88,7 +150,7 @@ export function createAutomationToolService(
   const settled = (result: { ok: true; automation: AutomationDefinition } | { ok: false; status: 400 | 404 | 409; error: string }) =>
     result.ok ? { ok: true as const, task: view(result.automation) } : fromStatus(result);
 
-  const tools: AutomationToolService = {
+  const tools = {
     async scheduleTask(request: ScheduleTaskRequest): Promise<ScheduleTaskAnswer> {
       const schedule = scheduleOf(request);
       if (isRefusal(schedule)) return schedule;
@@ -140,6 +202,8 @@ export function createAutomationToolService(
   };
   // Session tools do not pass through the HTTP route admission middleware.
   return {
+    automation: (request, signal) => withProjectAdmission(projectPaths(project.root).write,
+      () => automation(request, signal), error => refuse('conflict', error.message)),
     scheduleTask: request => withProjectAdmission(projectPaths(project.root).write,
       () => tools.scheduleTask(request), error => refuse('conflict', error.message)),
     scheduledTasks: request => withProjectAdmission(projectPaths(project.root).write,

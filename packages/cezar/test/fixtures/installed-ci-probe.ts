@@ -55,7 +55,7 @@ export async function probe({ Client, StdioClientTransport, CiToolController, cr
    // hearsay-tools/cezarion#1236: the deprecated CI alias is gone.
    assert.ok(!(client.getInstructions() ?? '').includes('cezar_wait_for_ci'));
    const tools = await client.listTools();
-   const defaultTools = ['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_scheduled_tasks'];
+   const defaultTools = ['cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks'];
    assert.deepEqual(tools.tools.map(tool => tool.name), defaultTools);
    const optedOutClient = new Client({ name:'installed-opt-out-smoke', version:'1' });
    try {

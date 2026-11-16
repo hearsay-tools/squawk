@@ -72,3 +72,4 @@ export * from './control-locations.ts';
 export * from './home-recovery.ts';
 
 export * from './runner-skills.ts';
+export * from './automation-tool.ts';

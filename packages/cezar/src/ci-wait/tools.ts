@@ -1,9 +1,9 @@
 import { productName } from '../home/display.ts';
 import type { SquawkAskAnswer, SquawkWaitAnswer } from '@open-mercato/cezar-contract/waits';
 import type { ScheduleTaskAnswer, ScheduledTasksAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
-import { squawkToolDefinitions, waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition, previewToolDefinition, previewStopToolDefinition, scheduleTaskToolDefinition, scheduledTasksToolDefinition } from './tool-catalog.ts';
-export { previewToolEnabled, automationsToolEnabled, waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition, previewToolDefinition, previewStopToolDefinition, scheduleTaskToolDefinition, scheduledTasksToolDefinition, squawkToolNames, squawkToolEnvNames } from './tool-catalog.ts';
-import { callSquawkAsk, callSquawkCancelWait, callSquawkDone, callSquawkWait, callPreviewServe, callPreviewStop, callScheduleTask, callScheduledTasks } from './client.ts';
+import { squawkToolDefinitions, waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition, previewToolDefinition, previewStopToolDefinition, scheduleTaskToolDefinition, automationToolDefinition, scheduledTasksToolDefinition } from './tool-catalog.ts';
+export { previewToolEnabled, automationsToolEnabled, waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition, previewToolDefinition, previewStopToolDefinition, scheduleTaskToolDefinition, automationToolDefinition, scheduledTasksToolDefinition, squawkToolNames, squawkToolEnvNames } from './tool-catalog.ts';
+import { callSquawkAsk, callSquawkCancelWait, callSquawkDone, callSquawkWait, callPreviewServe, callPreviewStop, callScheduleTask, callAutomation, callScheduledTasks } from './client.ts';
 
 /**
  * The one list of Squawk tools (#781). The MCP adapter lists it, Pi's extension registers it, and
@@ -83,6 +83,12 @@ export async function invokeScheduledTasksTool(input: unknown) {
   const answer = await callScheduledTasks(input);
   return { content: [{ type: 'text' as const, text: `${JSON.stringify(answer)}\n${scheduleHint(answer)}` }], isError: !answer.ok, details: answer };
 }
+export async function invokeAutomationTool(input: unknown) {
+  const answer = await callAutomation(input);
+  const hint = answer.ok ? 'Report the url and preview matches, or the next occurrence in the user’s time zone.' : 'Stop and report the error. Do not substitute another automation mechanism.';
+  return { content: [{ type: 'text' as const, text: `${JSON.stringify(answer)}\n${hint}` }], isError: !answer.ok, details: answer };
+}
+const AUTOMATION_TOOL: SquawkTool = { definition: automationToolDefinition, trigger: 'load when the user asks for recurring work, or wants to inspect or activate an automation.', label: 'Automations', invoke: invokeAutomationTool };
 const SCHEDULE_TASK_TOOL: SquawkTool = { definition: scheduleTaskToolDefinition, trigger: 'load when work should start later as a new task (in an hour, tomorrow, next week) instead of keeping this session waiting.', label: 'Schedule a task', invoke: invokeScheduleTaskTool };
 const SCHEDULED_TASKS_TOOL: SquawkTool = { definition: scheduledTasksToolDefinition, trigger: 'load when you need to list, change, pause, resume or cancel a one-time scheduled task.', label: 'Scheduled tasks', invoke: invokeScheduledTasksTool };
 
@@ -94,7 +100,7 @@ const PREVIEW_TOOL: SquawkTool = { definition: previewToolDefinition, trigger: '
 
 const TOOLS_BY_NAME = new Map([
   WAIT_TOOL, ASK_TOOL, CANCEL_WAIT_TOOL, DONE_TOOL,
-  PREVIEW_TOOL, PREVIEW_STOP_TOOL, SCHEDULE_TASK_TOOL, SCHEDULED_TASKS_TOOL,
+  PREVIEW_TOOL, PREVIEW_STOP_TOOL, SCHEDULE_TASK_TOOL, AUTOMATION_TOOL, SCHEDULED_TASKS_TOOL,
 ].map(tool => [tool.definition.name, tool]));
 
 export function squawkTools(env: NodeJS.ProcessEnv = process.env): SquawkTool[] {

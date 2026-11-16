@@ -340,8 +340,8 @@ export class RunManager {
   cockpitAddress(): { origin: string; projectId: string } | undefined { return launchContext.cockpitAddress(this.#cockpit); }
 
   /**
-   * hearsay-tools/cezarion#1465: the project's one-time schedule service behind
-   * `cezar_schedule_task` and `cezar_scheduled_tasks`, set by `startServer` beside the cockpit
+   * hearsay-tools/cezarion#1465: the project's automation service behind
+   * `cezar_automation`, `cezar_schedule_task` and `cezar_scheduled_tasks`, set by `startServer` beside the cockpit
    * address. Headless `cez run` never sets it, so the tools answer `unavailable` there. The
    * boot manager recovers runs before the server sets it, and a lazy project's manager recovers
    * before its context is announced: a resumed session can call a tool in that window. With a
