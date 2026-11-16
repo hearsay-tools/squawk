@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, matchesGlob } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -128,7 +128,9 @@ function undeclaredReaders(root) {
   const declares = (file, path) => inputs.some(({ test, globs }) =>
     (!matchesGlob(file, VITEST_TEST) || matchesGlob(file, test)) && globs.some(glob => matchesGlob(path, glob)));
   const files = execFileSync('git', ['ls-files', '-z', '--others', '--cached', '--exclude-standard', '--', 'packages/*/src/*.ts', 'packages/*/src/*.tsx', 'packages/*/vitest.setup.ts'],
-    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0').filter(Boolean);
+    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0')
+    // An unstaged deletion stays in the index: skip what is gone from the tree.
+    .filter(file => file && existsSync(join(root, file)));
   const undeclared = [];
   for (const file of files) {
     const lines = readFileSync(join(root, file), 'utf8').split('\n');
@@ -158,6 +160,8 @@ test('the tripwire checks each reading test file against its own declaration', t
     'packages/cezar/src/helper.testkit.ts': read,
   });
   execFileSync('git', ['init', '-q'], { cwd: root });
+  execFileSync('git', ['add', '.'], { cwd: root });
+  rmSync(join(root, 'packages/cezar/src/helper.testkit.ts'));
   assert.deepEqual(undeclaredReaders(root), ['packages/cezar/src/second.test.ts:1 reads .github/scripts/growth.cjs']);
 });
 
