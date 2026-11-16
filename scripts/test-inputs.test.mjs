@@ -24,7 +24,7 @@ const astGrep = 'packages/cezar/src/ast-grep-rules.test.ts';
 const repo = t => fixture(t, {
   'squeal.config.json': JSON.stringify({ inputs: {
     [astGrep]: ['.ai/ast-grep/**'],
-    [scanner]: ['packages/**/*.ts', 'packages/*/src/**/*.json'],
+    [scanner]: ['packages/**/*.ts', 'packages/*/src/**/*.json', 'packages/cezar/src/lint/rule.baseline.json'],
     'packages/cezar/src/protocol.test.ts': ['AGENT_PROTOCOL.md'],
     '.github/scripts/*.test.cjs': ['.github/scripts/**'],
     'packages/cezar/test/unit/launcher.test.ts': ['.ai/scripts/test-env-up.sh'],
@@ -58,6 +58,9 @@ test('a snapshot selects its test and a lint baseline selects its declared reade
   const cwd = repo(t);
   assert.deepEqual(classify(['packages/web/src/__snapshots__/view.test.tsx.snap'], cwd), { sources: [], tests: ['packages/web/src/view.test.tsx'] });
   assert.deepEqual(classify(['packages/cezar/src/lint/rule.baseline.json'], cwd), { sources: [], tests: [scanner] });
+  // The wildcard JSON declaration alone does not name a baseline's reader.
+  assert.deepEqual(classify(['packages/web/src/test/other.baseline.json'], cwd),
+    { full: 'Package input outside the import graph: packages/web/src/test/other.baseline.json' });
 });
 
 test('inputs no Vitest test reads select nothing', t => {
@@ -115,24 +118,43 @@ const TOKEN = /['"`]((?:\.\.\/)*(?:\.github|\.ai|scripts)(?:\/[\w.@*-]+)*)['"`/]
 const READ_CALL = /\b(?:readFile|readFileSync|readdirSync|existsSync|createReadStream|require|import)\s*\(|new URL\(/;
 const READ_WINDOW_LINES = 5;
 
-test('every Vitest reader of a path no Vitest test reads is declared', () => {
-  const declared = readInputs(repoRoot).filter(({ test }) => matchesGlob(test, VITEST_TEST)).flatMap(({ globs }) => globs);
-  const files = execFileSync('git', ['ls-files', '-z', '--', 'packages/*/src/**/*.ts', 'packages/*/src/**/*.tsx', 'packages/*/vitest.setup.ts'],
-    { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0').filter(Boolean);
+function undeclaredReaders(root) {
+  const inputs = readInputs(root).filter(({ test }) => matchesGlob(test, VITEST_TEST));
+  // A test file must declare what it reads itself; a helper's read may be declared by any test.
+  const declares = (file, path) => inputs.some(({ test, globs }) =>
+    (!matchesGlob(file, VITEST_TEST) || matchesGlob(file, test)) && globs.some(glob => matchesGlob(path, glob)));
+  const files = execFileSync('git', ['ls-files', '-z', '--others', '--cached', '--exclude-standard', '--', 'packages/*/src/*.ts', 'packages/*/src/*.tsx', 'packages/*/vitest.setup.ts'],
+    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0').filter(Boolean);
   const undeclared = [];
   for (const file of files) {
-    const lines = readFileSync(join(repoRoot, file), 'utf8').split('\n');
+    const lines = readFileSync(join(root, file), 'utf8').split('\n');
     lines.forEach((line, index) => {
       if (/^\s*(?:\/\/|\/\*|\*)/.test(line)) return;
       for (const [, raw] of line.matchAll(TOKEN)) {
         const path = raw.replace(/^(?:\.\.\/)+/, '');
         if (!NO_VITEST_READER.some(glob => matchesGlob(path, glob) || matchesGlob(`${path}/x`, glob))) continue;
         if (!lines.slice(Math.max(0, index - READ_WINDOW_LINES), index + READ_WINDOW_LINES + 1).some(near => READ_CALL.test(near))) continue;
-        if (!declared.some(glob => matchesGlob(path, glob))) undeclared.push(`${file}:${index + 1} reads ${path}`);
+        if (!declares(file, path)) undeclared.push(`${file}:${index + 1} reads ${path}`);
       }
     });
   }
-  assert.deepEqual(undeclared, [], 'declare each reader in squeal.config.json inputs');
+  return undeclared;
+}
+
+test('every Vitest reader of a path no Vitest test reads is declared', () => {
+  assert.deepEqual(undeclaredReaders(repoRoot), [], 'declare each reader in squeal.config.json inputs');
+});
+
+test('the tripwire checks each reading test file against its own declaration', t => {
+  const read = "const x = readFileSync('../../.github/scripts/growth.cjs')\n";
+  const root = fixture(t, {
+    'squeal.config.json': JSON.stringify({ inputs: { 'packages/cezar/src/first.test.ts': ['.github/scripts/growth.cjs'] } }),
+    'packages/cezar/src/first.test.ts': read,
+    'packages/cezar/src/second.test.ts': read,
+    'packages/cezar/src/helper.testkit.ts': read,
+  });
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  assert.deepEqual(undeclaredReaders(root), ['packages/cezar/src/second.test.ts:1 reads .github/scripts/growth.cjs']);
 });
 
 test('the tripwire finds the declared reader of .github/scripts/baseline-growth.cjs', () => {

@@ -83,16 +83,16 @@ const describeFull = list => `${list[0][0]}: ${list[0][1]}${list.length > 1 ? ` 
 // `source` marks an import-graph member and `tests` lists the tests it selects.
 function classifyPath(path, { inputs, configuration }) {
   if (!isPlain(path)) return { full: 'Unusual path' };
-  const readers = inputs
-    .filter(({ test, globs }) => matchesGlob(test, VITEST_TEST) && globs.some(glob => matchesGlob(path, glob)))
-    .map(({ test }) => test);
+  const vitest = inputs.filter(({ test }) => matchesGlob(test, VITEST_TEST));
+  const readers = vitest.filter(({ globs }) => globs.some(glob => matchesGlob(path, glob))).map(({ test }) => test);
   // Source a setup file imports keeps its import-graph selection, as before.
   if (isSource(path)) return { source: true, tests: readers };
   if (configuration.has(path) || CONFIGURATION.some(glob => matchesGlob(path, glob))) return { full: 'Vitest configuration input' };
   const snapshot = snapshotTest(path);
   if (snapshot && matchesGlob(snapshot, VITEST_TEST)) return { tests: [snapshot, ...readers] };
-  // Only the lint rules read a lint baseline, and the declared lint tests run them.
-  if (path.endsWith('.baseline.json') && readers.length) return { tests: readers };
+  // A baseline selects its readers only when a test declares the baseline by its exact
+  // path: a wildcard such as packages/*/src/**/*.json also matches baselines that test never reads.
+  if (path.endsWith('.baseline.json') && vitest.some(({ globs }) => globs.includes(path))) return { tests: readers };
   if (path.startsWith('packages/')) return { full: 'Package input outside the import graph' };
   if (readers.length || NO_VITEST_READER.some(glob => matchesGlob(path, glob))) return { tests: readers };
   return { full: 'Unmapped input' };
