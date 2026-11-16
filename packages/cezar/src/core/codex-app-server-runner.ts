@@ -1,6 +1,6 @@
 import { codexTurnStartExtras } from './codex-turn-config.ts';
 export { reasoningSummary, codexTurnStartExtras } from './codex-turn-config.ts';
-import { openingContent, skillOf, validSkillMessage } from './skill-trigger.ts';
+import { skillOf, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { uiAskQuestions } from './ask.ts';
 import { summarizeRunnerStderr } from './runner-stderr.ts';
@@ -677,7 +677,7 @@ class CodexSession implements AgentSession {
     // Seed the first turn. The system prompt (skill body + handoff contract)
     // has no dedicated app-server field, so it rides along as a leading block
     // of the opening message.
-    const first = prependSystemPrompt(this.spec.systemPrompt, textOf(openingContent(this.spec)));
+    const first = prependSystemPrompt(this.spec.systemPrompt, this.spec.userPrompt);
     this.startupWaitingFor('turn/start');
     await this.startOrSteerTurn(first, undefined, this.spec.skill);
     this.assertOpen();

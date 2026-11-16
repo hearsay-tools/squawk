@@ -1,8 +1,9 @@
+import { skillOf } from './skill-trigger.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentEvent, AgentRunResult, AgentToolCallRecord, ContentBlock, SessionOptions } from './agent-runner.js';
 import { isSignalTerminationExit } from './agent-runner.js';
 import { InputSubmissions } from './input-submissions.ts';
-import { contentText, emitImages, isRecord, piMessageText, ompSkillPrompt, string } from './pi-rpc-wire.ts';
+import { contentText, emitImages, isRecord, piMessageText, piSkillPrompt, ompSkillPrompt, string } from './pi-rpc-wire.ts';
 import { AUTO_END_DELAY_MS } from './runner-runtime.js';
 import { signalSession } from './session-process.js';
 import type { UiEvent } from './ui-events.js';
@@ -130,6 +131,7 @@ export class PiRpcInput {
   private promptSerial = 0;
   private agentAck: PiAgentAck | undefined;
   private readonly acked = new Set<string>();
+  private readonly skillPrompts: string[] = [];
   // Submissions already queued when a turn began: that turn reads them.
   private carried = new Set<string>();
   private turnFailed = false;
@@ -141,6 +143,11 @@ export class PiRpcInput {
   /** The head of sendMessage: input is no longer ready. */
   beginPrompt(): void {
     this.agentInputReady = false;
+  }
+
+  /** Register only explicit seam triggers; ordinary XML user text keeps exact-text matching. */
+  trackSkillPrompt(content: ContentBlock[], text: string): void {
+    if (skillOf(content)) this.skillPrompts.push(text);
   }
 
   /** A prompt goes out: the auto-end timer stops and may be scheduled again. */
@@ -213,7 +220,10 @@ export class PiRpcInput {
    *  An agent submission with its text is read and reported; otherwise the text is returned, so
    *  the runner can settle the human prompt it holds. */
   readUserMessage(message: Record<string, unknown>): string | undefined {
-    const text = ompSkillPrompt(message) ?? piMessageText(message);
+    let text = ompSkillPrompt(message) ?? piMessageText(message);
+    const expanded = piSkillPrompt(message, this.skillPrompts);
+    const at = this.skillPrompts.indexOf(expanded ?? text);
+    if (at >= 0) text = this.skillPrompts.splice(at, 1)[0]!;
     const ids = this.submissions.consumeOldestByText(text);
     if (!ids.length) return text;
     this.host.opts.onAgentInputConsumed?.(ids);

@@ -103,3 +103,14 @@ export function ompSkillPrompt(message: Record<string, unknown>): string | undef
   if (message.role !== 'custom' || message.customType !== 'skill-prompt' || !isRecord(message.details)) return undefined;
   return string(message.details.prompt);
 }
+
+/** Match the native wrapper against registered arguments, which may themselves contain XML. */
+export function piSkillPrompt(message: Record<string, unknown>, prompts: readonly string[]): string | undefined {
+  const text = piMessageText(message);
+  return prompts.find(prompt => {
+    const space = prompt.indexOf(' ');
+    const name = prompt.slice('/skill:'.length, space);
+    const args = prompt.slice(space + 1).trim();
+    return text.startsWith(`<skill name="${name}" location="`) && text.endsWith(`</skill>\n\n${args}`);
+  });
+}

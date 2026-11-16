@@ -200,5 +200,8 @@ pi 1.4.0, `zai/glm-5.3-flash`. The recorded turn returned the random fixture tok
 2239 ms with zero tool calls. A first real turn also returned the token but the selector missed
 the XML skill marker. The corrected selector captured native `message_start` on the second
 turn. Two real turns total. The trigger has arguments on the same line; opening context follows.
+The adapter correlates the expanded wrapper with its registered trigger to release a human
+hold and report agent-input consumption. It compares the full argument suffix, including
+literal XML, with the native trim rule (`agent-session.js` `_expandSkillCommand`).
 
 See [slice 2 evidence](slice2-evidence.md) for commands, captures and offline checks.

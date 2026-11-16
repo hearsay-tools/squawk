@@ -1,5 +1,5 @@
 import { opencodeHttp } from './opencode-http.ts';
-import { openingContent, skillOf, validSkillMessage } from './skill-trigger.ts';
+import { skillOf, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { uiAskQuestions } from './ask.ts';
 import { opencodeSkillWarning, sessionErrorDetail, sessionErrorText } from './opencode-session-error.ts';
@@ -807,7 +807,7 @@ class OpencodeSession implements AgentSession {
     const systemPrompt = !resumed && requested
       ? (this.spec.resumeFallbackSystemPrompt ?? this.spec.systemPrompt)
       : this.spec.systemPrompt;
-    const first = prependSystemPrompt(systemPrompt, textOf(openingContent(this.spec)));
+    const first = prependSystemPrompt(systemPrompt, this.spec.userPrompt);
     await this.prompt(first, 'opening', undefined, this.queuedPromptGeneration, this.spec.skill);
     if (this.refusedBeforeOpening) queueMicrotask(() => {
       this.refusedBeforeOpening = false;

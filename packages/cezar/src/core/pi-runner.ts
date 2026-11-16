@@ -226,6 +226,7 @@ export class PiRunner implements AgentRunner {
       ) {
         return false;
       }
+      rpcInput.trackSkillPrompt(content, message);
       if (requestId) rpcInput.submissions.accept(requestId, inputIds, message);
       if (!piUi.turnId) {
         const mapped = piTurnStarted(piUi);

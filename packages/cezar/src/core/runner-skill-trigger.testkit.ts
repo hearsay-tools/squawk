@@ -10,7 +10,7 @@ import { RUNNER_FACTS } from './runner-facts.ts';
 const TOKEN = 'TRIGGER-FIXTURE';
 const ARGS = 'native arguments';
 const CONTEXT = 'opening context sentinel';
-export const SKILL_TRIGGER_ROWS = ['first', 'context', 'later', 'resume', 'unknown', 'position'] as const;
+export const SKILL_TRIGGER_ROWS = ['first', 'context', 'later', 'resume', 'unknown', 'position', 'plain'] as const;
 
 function assertTriggerWire(runner: RunnerId, wire: string, context = ''): void {
   const rows = wire.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
@@ -52,6 +52,19 @@ export function describeNativeSkillTriggers(runner: RunnerId): void {
       const skill = { id: row === 'unknown' ? 'probe-missing' : 'probe-project', path: join(dir, 'SKILL.md'), args: ARGS };
       const base: Partial<AgentRunSpec> = { cwd: dir, userPrompt: '', env: { CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: argsFile, CEZ_MOCK_STDIN_FILE: stdinFile } };
       try {
+        if (row === 'plain') {
+          const prompt = '  opening code\n\n  last line \n';
+          const obs = await driveSeam(runner, 'baseline', { spec: { ...base, userPrompt: prompt } });
+          expect(obs.failure).toBeUndefined();
+          const rows = wire().trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+          const texts = rows.flatMap(row => [
+            row.userText,
+            row.method === 'turn/start' ? row.params.input[0].text : undefined,
+            row.url?.endsWith('/prompt_async') ? row.body.parts[0].text : undefined,
+          ]);
+          expect(texts).toContain(prompt);
+          return;
+        }
         if (row === 'later' || row === 'position') {
           const obs = await driveSeam(runner, 'baseline', {
             spec: { ...base, userPrompt: 'inspect the tree' },

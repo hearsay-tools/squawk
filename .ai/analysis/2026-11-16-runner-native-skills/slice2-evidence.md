@@ -55,11 +55,12 @@ the native persisted payload. Fixtures were captured before those mock routes we
 
 | Criterion | Executable evidence |
 | --- | --- |
-| Arguments, opening context, later turn, resume, unknown id on all runners | Five `runner-skill-trigger-<runner>-parity.test.ts` files, six rows each including invalid block position; every-runner registry entry |
+| Arguments, opening context, later turn, resume, unknown id on all runners | Five `runner-skill-trigger-<runner>-parity.test.ts` files, seven rows each including invalid block position and unchanged plain-prompt whitespace; every-runner registry entry |
 | OpenCode dropped command and turn beyond 300 s | `opencode-skill-trigger.test.ts`: two child commands gated by a file: one drops HTTP at once; one aborts its real fetch at a fake 300000 ms header deadline. Advance 301000 ms, require no error/boundary until gate release, then token. Only the parent deadline is fake; child/SSE keep real I/O |
 | OpenCode error and receipt settlement | Same file: HTTP-only error, SSE-only error with HTTP held, and end/interrupt/process death before user ACK; receipt rejects, one boundary, v1/v2 error on native failures |
 | Codex active turn/start refusal | `codex-steering.test.ts`: human and agent sends refuse synchronously during active turn or pending plain/skill start; no skill `turn/steer` and no extra `turn/start` |
 | omp skill starts once above adapter | `omp-ui-mapper.test.ts` replays captured start plus repeated end messages to `skill-trigger.expected.json`; `runs/ui-event-sink.test.ts` pins persistence/live snapshots; `session-transcript.test.tsx` renders exactly one skill text |
+| pi mid-turn correlation | pi trigger parity also sends human and agent skill triggers; the native expanded wrapper releases the human hold and consumes agent input before its reply, including literal XML and trailing spaces in arguments |
 | Seam facts | Contract rows S45 unknown-name behavior, S46 mid-turn admission/expansion, S47 late skill visibility, on each native wire |
 | Session identity | S3 requires one fresh session report; trigger resume rows require one same-id `resumed:true` report; OpenCode existing missing-session fallback reports false |
 | Real CLI output and mid-turn facts | Real summary table above, with explicit capture limits |
