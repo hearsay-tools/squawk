@@ -25,6 +25,18 @@ export function isRunnerId(value: string): value is RunnerId {
   return (RUNNER_IDS as readonly string[]).includes(value);
 }
 
+/** Legacy ids that old records carry, each with the runner it now names. */
+const LEGACY_RUNNER_IDS: ReadonlyMap<string, RunnerId> = new Map([['claude-cli', 'claude']]);
+
+/**
+ * The runner a backend value names. A legacy id maps to its runner; undefined and an unknown value
+ * map to `claude`, as `createRunner` does.
+ */
+export function runnerIdOf(backend: string | undefined): RunnerId {
+  if (backend === undefined) return 'claude';
+  return isRunnerId(backend) ? backend : LEGACY_RUNNER_IDS.get(backend) ?? 'claude';
+}
+
 export interface AgentRunSpec {
   /** Internal deadline overrides; never persisted or sent to the native wire. */
   timings?: Partial<RunnerTimings> | undefined;

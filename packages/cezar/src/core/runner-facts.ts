@@ -39,6 +39,9 @@ export interface RunnerFacts {
    * runner never knew. The `sessionId` row of each runner's `specSupport` names the wire.
    */
   readonly sessionIdSource: 'launch' | 'native';
+  /** The CLI takes Claude's model aliases (`sonnet`, `haiku`). The `plannerModel` and `namerModel`
+   *  presets are such aliases, so only such a runner gets them; another runs on its own default. */
+  readonly claudeModelAliases: boolean;
 }
 
 export const RUNNER_FACTS = {
@@ -49,6 +52,7 @@ export const RUNNER_FACTS = {
     },
     systemPromptOnResume: 'resent',
     nativeAsk: 'none', nativeSubagents: 'reported', nativeTimerTool: 'ScheduleWakeup', costReport: 'cumulative', sessionIdSource: 'launch',
+    claudeModelAliases: true,
   },
   codex: {
     inputDelivery: {
@@ -59,6 +63,7 @@ export const RUNNER_FACTS = {
     },
     systemPromptOnResume: 'in-thread',
     nativeAsk: 'answerable', nativeSubagents: 'reported', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'native',
+    claudeModelAliases: false,
   },
   opencode: {
     inputDelivery: {
@@ -67,6 +72,7 @@ export const RUNNER_FACTS = {
     },
     systemPromptOnResume: 'in-thread',
     nativeAsk: 'answerable', nativeSubagents: 'turn-held', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'native',
+    claudeModelAliases: false,
   },
   pi: {
     inputDelivery: {
@@ -75,6 +81,7 @@ export const RUNNER_FACTS = {
     },
     systemPromptOnResume: 'resent',
     nativeAsk: 'none', nativeSubagents: 'unreported', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'launch',
+    claudeModelAliases: false,
   },
   // Every Cursor session runs on print (hearsay-tools/cezarion#1267).
   cursor: {
@@ -84,6 +91,7 @@ export const RUNNER_FACTS = {
     },
     systemPromptOnResume: 'in-thread',
     nativeAsk: 'auto-skipped', nativeSubagents: 'unreported', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'native',
+    claudeModelAliases: false,
   },
   omp: {
     inputDelivery: {
@@ -92,6 +100,7 @@ export const RUNNER_FACTS = {
     },
     systemPromptOnResume: 'resent',
     nativeAsk: 'none', nativeSubagents: 'turn-held', nativeTimerTool: null, costReport: 'per-turn', sessionIdSource: 'native',
+    claudeModelAliases: false,
   },
 } as const satisfies Readonly<Record<RunnerId, RunnerFacts>>;
 

@@ -7,6 +7,7 @@ import {
   ompProfileName,
   profileAgentDir,
   profileEnv,
+  selectsByProfileName,
   supportsProfiles,
 } from './agent-profiles.ts';
 
@@ -134,5 +135,15 @@ describe('looksLikeProfileDir', () => {
   it('says no for an unrelated directory — advisory, so the caller still accepts it', () => {
     expect(looksLikeProfileDir('claude', ['README.md'])).toBe(false);
     expect(looksLikeProfileDir('claude', [])).toBe(false);
+  });
+});
+
+describe('selectsByProfileName', () => {
+  it('is true only for omp among the providers', () => {
+    expect(PROVIDER_IDS.filter((provider) => selectsByProfileName(provider))).toEqual(['omp']);
+  });
+
+  it.each([undefined, 7, 'claude-cli', 'unknown', 'toString', 'constructor'])('is false for a stored value that names no provider: %s', (value) => {
+    expect(selectsByProfileName(value)).toBe(false);
   });
 });
