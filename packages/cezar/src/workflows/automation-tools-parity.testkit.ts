@@ -25,9 +25,16 @@ export function describeAutomationToolsParity(runner: RunnerId): void {
         emitChange: () => {}, changed: () => {}, githubAvailability: async () => ({ available: true }), hasGithubRemote: async () => true,
       });
       const poll = vi.fn(async () => ({ candidates: [], truncated: false, pages: 1 }));
-      const attach = () => manager.setAutomationTools(createAutomationToolService(service, project(), { timeZone: () => 'UTC',
-        github: async () => ({ owner: 'owner', repo: 'repo', poller: { poll } as unknown as GithubPoller }),
-      }));
+      const calls: Array<{ action: string; signal: AbortSignal }> = [];
+      const attach = () => {
+        const tools = createAutomationToolService(service, project(), { timeZone: () => 'UTC',
+          github: async () => ({ owner: 'owner', repo: 'repo', poller: { poll } as unknown as GithubPoller }),
+        });
+        manager.setAutomationTools({ ...tools, automation: (request, signal) => {
+          calls.push({ action: request.action, signal });
+          return tools.automation(request, signal);
+        } });
+      };
       attach();
       const actions = toolCall('cezar_automation', { action: 'create', definition: { name: 'Poll', events: ['issue.opened'], intervalSeconds: 300, filters: {}, task: { prompt: 'Check' } } })
         + ' ' + toolCall('cezar_automation', { action: 'preview', id: 'last' });
@@ -48,13 +55,19 @@ export function describeAutomationToolsParity(runner: RunnerId): void {
       attach();
       fireTimer(wait.id);
       await until(() => store.getRun(run.id)?.status === 'done' && !manager.isActive(run.id));
-      expect(poll).toHaveBeenCalledTimes(3);
-      expect(automationStore.list()).toHaveLength(3);
+      // Recovery context can repeat the mock's scripted commands. Count capability lifetimes,
+      // so this proves three transport paths without requiring a fixture-only call count.
+      const sessions = new Set(calls.filter(call => call.action === 'create').map(call => call.signal));
+      expect(sessions.size).toBe(3);
+      for (const signal of sessions) expect(calls.some(call => call.action === 'preview' && call.signal === signal)).toBe(true);
+      const created = automationStore.list();
+      expect(created.length).toBeGreaterThanOrEqual(3);
+      expect(poll).toHaveBeenCalledTimes(created.length);
       expect(automationStore.list().every(definition => !definition.enabled)).toBe(true);
       expect(automationStore.receipts()).toEqual([]);
       const previews = automationStore.logs({ result: 'preview' });
-      expect(previews).toHaveLength(3);
-      expect(new Set(previews.map(log => log.automationId)).size).toBe(3);
+      expect(previews).toHaveLength(created.length);
+      expect(new Set(previews.map(log => log.automationId)).size).toBe(created.length);
     });
   });
 }

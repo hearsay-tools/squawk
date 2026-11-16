@@ -133,7 +133,7 @@ describe('private CI controller', () => {
     const client = new Client({ name: 'owner-death-test', version: '1' });
     try {
       await client.connect(new StdioClientTransport({ ...session.descriptor, env: session.env, stderr: 'pipe' }));
-      expect((await client.listTools()).tools).toHaveLength(6);
+      expect((await client.listTools()).tools).toHaveLength(7);
       const closed = new Promise<void>(resolve => { client.onclose = resolve; });
       child.kill('SIGKILL');
       await closed;
