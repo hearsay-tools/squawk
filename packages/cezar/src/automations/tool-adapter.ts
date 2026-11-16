@@ -66,10 +66,12 @@ export function createAutomationToolService(
   const previews = new WeakMap<AbortSignal, Map<string, number>>();
   const repeatingView = (automation: AutomationDefinition): Extract<AutomationToolAnswer, { ok: true }> => {
     const address = project.manager.cockpitAddress?.();
-    const next = isScheduleAutomation(automation) ? nextOccurrence(automation.schedule, now(), deps.timeZone()) : null;
+    const next = isScheduleAutomation(automation)
+      ? automation.enabled ? project.automationStore.state(automation.id)?.nextRunAt : nextOccurrence(automation.schedule, now(), deps.timeZone())
+      : null;
     return { ok: true, automation,
       ...(address ? { url: `${address.origin}/p/${address.projectId}/automations/${automation.id}` } : {}),
-      ...(next !== null ? { next_run_at: new Date(next).toISOString() } : {}),
+      ...(next !== null && next !== undefined ? { next_run_at: new Date(next).toISOString() } : {}),
     };
   };
 

@@ -109,6 +109,27 @@ describe('repeating automation tool', () => {
     expect(await tools.automation({ action: 'enable', id: made.automation.id, explicit: true }, session.signal)).toMatchObject({ ok: true, automation: { enabled: true } });
   });
 
+  it('reports the armed occurrence when the clock crosses its boundary before the enable reply', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2030-01-01T09:59:59.999Z'));
+    const { tools, service, project, session } = fixture();
+    const made = await tools.automation({ action: 'create', definition: { name: 'Hourly', kind: 'schedule', schedule: { type: 'hours', every: 1 }, task: { prompt: 'Check it' } } }, session.signal);
+    expect(made).toMatchObject({ ok: true, next_run_at: '2030-01-01T10:00:00.000Z' });
+    if (!made.ok) throw new Error(made.message);
+    const id = made.automation.id;
+    const enable = service.enable.bind(service);
+    vi.spyOn(service, 'enable').mockImplementation(async (...args) => {
+      const result = await enable(...args);
+      vi.setSystemTime(new Date('2030-01-01T10:00:00.001Z'));
+      return result;
+    });
+    expect(await tools.automation({ action: 'enable', id, explicit: true }, session.signal)).toMatchObject({ ok: true, next_run_at: '2030-01-01T10:00:00.000Z' });
+    expect(project.automationStore.state(id)?.nextRunAt).toBe('2030-01-01T10:00:00.000Z');
+    expect(await tools.automation({ action: 'show', id }, session.signal)).toMatchObject({ ok: true, next_run_at: '2030-01-01T10:00:00.000Z' });
+    await service.pause(project, id);
+    expect(await tools.automation({ action: 'show', id }, session.signal)).toMatchObject({ ok: true, next_run_at: '2030-01-01T11:00:00.000Z' });
+  });
+
   it('bounds a stalled preview on the server and discards its earlier preview evidence', async () => {
     const { tools, session, create, poll, project } = fixture(); const made = await create();
     if (!made.ok) throw new Error(made.message);
