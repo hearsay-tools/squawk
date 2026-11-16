@@ -67,3 +67,9 @@ test('a fence opener or a title that opens a comment hides what follows', () => 
   assert.equal(hasValidStatus('```html <!--\n```\n# Design\nStatus: done\n'), true);
   assert.equal(hasValidStatus('# Design <!--\nStatus: done\n-->\n'), false);
 });
+
+test('a comment marker inside inline code opens no comment', () => {
+  assert.equal(hasValidStatus('# The `<!--` marker\nStatus: done\n'), true);
+  assert.equal(hasValidStatus('Use ``a ` <!-- b`` here\n# Design\nStatus: done\n'), true);
+  assert.equal(hasValidStatus('An unclosed ` tick <!--\n# Example\nStatus: done\n-->\n'), false);
+});

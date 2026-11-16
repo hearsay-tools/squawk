@@ -29,17 +29,20 @@ export const NEVER = [
   { why: 'gate or test harness', globs: [
     '.github/workflows/**', '.github/codex/**', '.github/schemas/**', '.github/actionlint.yaml',
     '.github/scripts/{baseline-growth*,change-surface,change-surface-readers,queue-ci-proof,pr-test-proof,pr-test-input,review-threads,review-signal,pr-readiness,require-e2e-passed,release-*,pr-snapshot,node-floor-reporter,ci-test-sequencer,cockpit-test-sequencer,vitest-rerun-reset,merge-queue-admission,merge-recommendation*}.*',
-    '.github/scripts/{check-clones,check-spec-status,check-citations,change-coupling,api-budget,missing-patches,merge-vitest-coverage,failure-diagnostics}.*',
-    '.github/scripts/*.workflow.test.cjs', '.github/actions/**',
+    '.github/scripts/{check-clones,check-spec-status,check-citations,change-coupling,api-budget,missing-patches,merge-vitest-coverage,failure-diagnostics,vitest-worker-count,vitest-coverage-tests,vitest-file-duration}.*',
+    '.github/scripts/{*.workflow,auto-merge-gates,auto-merge-admission}.test.cjs', '.github/actions/**',
     '**/vitest.config.ts', '**/vitest.setup.ts',
-    'packages/web/e2e/{agent-browser,failure-setup,environment,fixture-server,held-browser-daemon,poll}.ts',
     'squeal.config.json',
-    'scripts/{test-changed,test-git-env,prepr,check-typecheck-coverage,test-home-env,test-home-setup,test-install-marker,test-sandbox,test-package,e2e-affected,ci-test-selection,check-workspace-resolution}.mjs',
-    '.ai/scripts/**', '**/tsconfig*.json', 'packages/cezar/src/ast-grep-rules.testkit.ts',
+    'scripts/{test-changed,test-git-env,prepr,check-typecheck-coverage,test-home-env,test-browser-home-env,test-home-setup,test-install-marker,test-sandbox,test-package,e2e-affected,ci-test-selection,check-workspace-resolution}.mjs',
+    '.ai/scripts/**', '**/tsconfig*.json',
+    'packages/cezar/src/{ast-grep-rules,test-outbound-guard,test-launch-guard,home/test-home-selector}.testkit.ts',
   ] },
+  { why: 'gate or test harness', source: true, globs: ['packages/web/e2e/*.{ts,mjs}', 'packages/web/e2e/spec-map/**'] },
   { why: 'lint gate', source: true, except: [LINT_CASES], globs: [
     'packages/cezar/src/lint/**', '.oxlintrc.json', 'sgconfig.yml',
     '.ai/ast-grep/*', '.ai/ast-grep/{rules,utils,launch-read-normalization}/**',
+    'packages/cezar/src/{file-length,test-wait-discipline,test-wait-discipline-polls}.baseline.json',
+    'packages/web/src/test/{card-2-contrast,search-params-discipline,unit-wait-discipline}.baseline.json',
   ] },
   { why: 'guard test change', unless: 'adds', globs: [
     'packages/cezar/src/server/{contract-parity*,route-parity,versioned-surface,bc-route-inventory,typed-bodies,api-types,origin-guard,host-guard}.test.ts',
@@ -48,6 +51,7 @@ export const NEVER = [
     'packages/cezar/test/e2e/inline-contract.test.ts',
 
     'packages/web/src/test/{api-client-subpaths,e2e-wait-discipline}.test.ts', 'packages/web/src/design-guardian.test.ts',
+    'packages/web/src/test/wait-baseline.ts',
   ] },
   { why: 'agent instructions or contracts', globs: [
     '**/AGENTS.md', '**/CLAUDE.md', 'CODE_REVIEW.md', 'SDLC.md', 'AGENT_PROTOCOL.md',
@@ -68,6 +72,7 @@ export const NEVER = [
     'scripts/release*.mjs', 'packages/cezar/src/release/**',
     'packages/cezar/scripts/{check-pack,inline-contract,sync-readme,install-as-command}.mjs',
     'packages/cezar/src/pack-check.ts', 'packages/web/vite.config.ts', 'packages/web/index.html',
+    'packages/web/{product-identity.ts,src/lib/build-env.ts}', 'packages/cezar/scripts/product-identity.mjs',
   ] },
   { why: 'security', source: true, globs: [
     'packages/cezar/src/server/{capabilities,validators,upgrade-router,ws,provider-auth-runtime,provider-action-gate,fs-browse,open-in-app,open-in-terminal,wsl}.ts',
