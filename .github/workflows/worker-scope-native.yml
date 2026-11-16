@@ -46,7 +46,8 @@ jobs:
           echo $$ | sudo tee "$base/cgroup.procs" >/dev/null
           grep -qx "0::/squawk-ci" /proc/self/cgroup
           cd packages/cezar
-          npx vitest run --reporter=verbose src/worker-scope 2>&1 | tee "$RUNNER_TEMP/scope.log"
+          # Plain output: the checks below read the test names.
+          NO_COLOR=1 FORCE_COLOR=0 npx vitest run --reporter=verbose src/worker-scope 2>&1 | tee "$RUNNER_TEMP/scope.log"
           # The native cases skip without delegation; here they must have run.
           grep -q '✓ .*cgroup: stop ends a detached descendant after its leader exited' "$RUNNER_TEMP/scope.log"
           grep -q '✓ .*cgroup: kill ends the scope now' "$RUNNER_TEMP/scope.log"

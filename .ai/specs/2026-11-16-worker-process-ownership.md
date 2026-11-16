@@ -1,6 +1,7 @@
 # Worker process ownership (hearsay-tools/squawk#2180)
+Status: active
 
-Status: slice A (interface, Linux `cgroup`, `groups`, scan removal) in this change. Slices B
+Slice A (interface, Linux `cgroup`, `groups`, scan removal) is this change. Slices B
 (Windows Job Object backend, shared with hearsay-tools/squawk#1876), C (native macOS checks) and
 D (before/after spawn and destroy timings) follow as their own pull requests.
 
