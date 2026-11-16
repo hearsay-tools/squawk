@@ -8,20 +8,31 @@ import type { RunRecord } from '@open-mercato/cezar-contract';
 import type { WorkerProcessRecord } from '../delegation/process-liveness.ts';
 import { cgroupCommand, cgroupPopulated, ensureCgroup, killCgroup, probeCgroups, removeCgroup, workerCgroupPath } from './cgroup.ts';
 import { groupEntry, groupsStillStopping, killGroups, liveGroups } from './groups.ts';
+import { jobCommand, jobEmpty, probeJobs, realJobHelper, terminateJob, workerJobName, type JobHelper } from './job.ts';
+import type { ChildProcess } from 'node:child_process';
 import { GUARANTEE, SCOPE_CGROUP_CAP, SCOPE_GROUP_CAP, type ScopeBackend, type ScopeGuarantee, type ScopeRecord, type SpawnScope } from './scope.ts';
 
-export type HostScope = { backend: 'cgroup'; base: string } | { backend: 'groups'; reason: string };
+export type HostScope = { backend: 'cgroup'; base: string } | { backend: 'job' } | { backend: 'groups'; reason: string };
 
 let host: HostScope | undefined;
 
 /** This controller's backend: `cgroup` where a real probe proves delegation, else `groups`. */
 export function hostScope(): HostScope {
   if (host) return host;
-  const probe = process.platform === 'linux' ? probeCgroups() : { reason: `${process.platform} has no cgroups` };
-  host = 'base' in probe ? { backend: 'cgroup', base: probe.base } : { backend: 'groups', reason: probe.reason };
+  host = detectHost();
   console.info(`${logPrefix()} worker scope: ${host.backend === 'cgroup' ? `cgroup (contained) under ${host.base}`
+    : host.backend === 'job' ? 'Windows Job Object (contained)'
     : `process groups (scoped: a detached descendant can outlive destroy) — ${host.reason}`}`);
   return host;
+}
+
+function detectHost(): HostScope {
+  if (process.platform === 'win32') {
+    const probe = probeJobs();
+    return 'ok' in probe ? { backend: 'job' } : { backend: 'groups', reason: probe.reason };
+  }
+  const probe = process.platform === 'linux' ? probeCgroups() : { reason: `${process.platform} has no cgroups` };
+  return 'base' in probe ? { backend: 'cgroup', base: probe.base } : { backend: 'groups', reason: probe.reason };
 }
 
 /** Tests pin the backend; `undefined` re-probes on next use. */
@@ -47,7 +58,10 @@ export type ScopeStop = { stopped: true } | { stopped: false; error: string };
 const STOP_POLL_MS = 10;
 
 export class WorkerScopes {
-  constructor(private readonly store: ScopeStore, private readonly hostOf: () => HostScope = hostScope) {}
+  /** This controller's job keepers, by worker: each holds its worker's job open while it runs. */
+  private readonly keepers = new Map<string, ChildProcess>();
+  constructor(private readonly store: ScopeStore, private readonly hostOf: () => HostScope = hostScope,
+    private readonly jobs: JobHelper = realJobHelper) {}
 
   describe(): { backend: ScopeBackend; guarantee: ScopeGuarantee } {
     const { backend } = this.hostOf();
@@ -64,6 +78,12 @@ export class WorkerScopes {
         const host = this.hostOf();
         // Refused before anything runs: a full group record never has to end a started process.
         if (host.backend === 'groups' && liveGroups(this.read(workerId).groups).length >= SCOPE_GROUP_CAP) throw capacityError(workerId);
+        if (host.backend === 'job') {
+          const job = workerJobName(workerId);
+          this.update(workerId, record => record.jobs.includes(job) ? record : { ...record, jobs: [job] });
+          this.keeper(workerId, job);
+          return jobCommand(job, file, args);
+        }
         if (host.backend !== 'cgroup') return [file, [...args]];
         const path = workerCgroupPath(host.base, workerId);
         this.update(workerId, record => {
@@ -94,7 +114,8 @@ export class WorkerScopes {
   empty(workerId: string): boolean {
     let record: ScopeRecord;
     try { record = this.read(workerId); } catch { return false; }
-    return !record.cgroups.some(path => cgroupPopulated(path)) && !liveGroups(this.groups(workerId, record)).length;
+    return record.jobs.every(job => jobEmpty(job, this.jobs)) && !record.cgroups.some(path => cgroupPopulated(path)) &&
+      !liveGroups(this.groups(workerId, record)).length;
   }
 
   /** After `kill`: whether nothing the worker owned still runs. A cgroup drops a task when it exits,
@@ -102,12 +123,14 @@ export class WorkerScopes {
   stopped(workerId: string): boolean {
     let record: ScopeRecord;
     try { record = this.read(workerId); } catch { return false; }
-    return !record.cgroups.some(path => cgroupPopulated(path)) && !groupsStillStopping(this.groups(workerId, record)).length;
+    return record.jobs.every(job => jobEmpty(job, this.jobs)) && !record.cgroups.some(path => cgroupPopulated(path)) &&
+      !groupsStillStopping(this.groups(workerId, record)).length;
   }
 
   /** SIGKILL everything the worker owns, now, without waiting. */
   kill(workerId: string): void {
     const record = this.read(workerId);
+    for (const job of record.jobs) terminateJob(job, 0, this.jobs);
     for (const path of record.cgroups) killCgroup(path);
     killGroups(this.groups(workerId, record));
   }
@@ -129,6 +152,11 @@ export class WorkerScopes {
     let record: ScopeRecord;
     try { record = this.read(workerId); } catch (error) { return { stopped: false, error: (error as Error).message }; }
     killGroups(this.groups(workerId, record));
+    const jobs: string[] = [];
+    for (const job of record.jobs) {
+      if (terminateJob(job, Math.max(0, deadline - Date.now()), this.jobs)) await this.release(workerId, deadline);
+      else jobs.push(job);
+    }
     const cgroups: string[] = [];
     for (const path of record.cgroups) if (!await removeCgroup(path, deadline)) cgroups.push(path);
     let groups = groupsStillStopping(this.groups(workerId, record));
@@ -139,22 +167,48 @@ export class WorkerScopes {
     // Merged into the record as it is now: an entry written while this stop waited is kept, and only
     // what this stop ended leaves it. Groups only the execution record names stay there.
     const removed = new Set(record.cgroups.filter(path => !cgroups.includes(path)));
+    const closed = new Set(record.jobs.filter(job => !jobs.includes(job)));
     const ended = new Set(record.groups.filter(group => !groups.some(left => key(left) === key(group))).map(key));
     let late = false;
     this.update(workerId, current => {
-      late = current.cgroups.some(path => !record.cgroups.includes(path)) || current.groups.some(group => !record.groups.some(known => key(known) === key(group)));
-      return { ...current, cgroups: current.cgroups.filter(path => !removed.has(path)), groups: current.groups.filter(group => !ended.has(key(group))) };
+      late = current.cgroups.some(path => !record.cgroups.includes(path)) || current.jobs.some(job => !record.jobs.includes(job)) ||
+        current.groups.some(group => !record.groups.some(known => key(known) === key(group)));
+      return { ...current, cgroups: current.cgroups.filter(path => !removed.has(path)), jobs: current.jobs.filter(job => !closed.has(job)),
+        groups: current.groups.filter(group => !ended.has(key(group))) };
     });
     if (late) return 'late';
-    if (!cgroups.length && !groups.length) return { stopped: true };
+    if (!jobs.length && !cgroups.length && !groups.length) return { stopped: true };
     return { stopped: false, error: `worker processes did not stop within ${Math.round(timeoutMs / 1000)}s: ${
-      [...cgroups.map(path => `cgroup ${path}`), ...groups.map(group => `process group ${group.pgid}`)].join(', ')}` };
+      [...jobs.map(job => `job ${job}`), ...cgroups.map(path => `cgroup ${path}`), ...groups.map(group => `process group ${group.pgid}`)].join(', ')}` };
+  }
+
+  /** Starts the keeper that creates and holds the worker's job, unless one of this controller runs.
+   * A command's `run` helper waits for the job to appear, so this need not wait for the keeper. */
+  private keeper(workerId: string, job: string): void {
+    const running = this.keepers.get(workerId);
+    if (running && running.exitCode === null && running.signalCode === null) return;
+    const keeper = this.jobs.keep(job);
+    this.keepers.set(workerId, keeper);
+    keeper.once('exit', () => { if (this.keepers.get(workerId) === keeper) this.keepers.delete(workerId); });
+  }
+
+  /** Ends this controller's keeper for the worker, and waits (until `deadline`) for it to exit: its
+   * job closes with it once no process holds the job. */
+  private async release(workerId: string, deadline: number): Promise<void> {
+    const keeper = this.keepers.get(workerId);
+    this.keepers.delete(workerId);
+    if (!keeper) return;
+    const exited = new Promise<void>(resolve => {
+      if (keeper.exitCode !== null || keeper.signalCode !== null) resolve(); else keeper.once('exit', () => resolve());
+    });
+    keeper.stdin?.end();
+    await Promise.race([exited, new Promise(resolve => setTimeout(resolve, Math.max(0, deadline - Date.now())).unref?.())]);
   }
 
   private read(workerId: string): ScopeRecord {
     const record = this.store.readWorkerScope(workerId);
     if (record === 'unknown') throw new WorkerScopeUnreadable();
-    return record === 'absent' ? { workerId, cgroups: [], groups: [] } : record;
+    return record === 'absent' ? { workerId, cgroups: [], groups: [], jobs: [] } : record;
   }
 
   /** The record's groups and the current execution's recorded processes, without duplicates. A
