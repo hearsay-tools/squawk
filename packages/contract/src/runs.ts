@@ -246,6 +246,9 @@ export const runRecordSchema = z.object({
   /** Normalized provider/model identity used for attribution and reproducible replay. */
   modelIdentity: z.string().optional(),
   runner: runnerSchema.optional(),
+  /** The runner a run was saved on when Squawk no longer ships it (hearsay-tools/squawk#3715).
+   *  Such a run has no `runner`, and continues only on a runner the Continue names. */
+  removedRunner: z.string().optional(),
   /** The composer's per-task agent account (spec 2026-07-29-agent-profiles), applying to steps
    *  on `runner`. Absent = the run follows the project's own selection. */
   agentProfile: z.string().optional(),
@@ -541,6 +544,7 @@ export const runSummarySchema = z.object({
    *  task no automation launched; the sidebar files the task under Automations when present. */
   automationId: z.string().optional(),
   runner: runRecordSchema.shape.runner,
+  removedRunner: runRecordSchema.shape.removedRunner,
   model: z.string().optional(),
   notify: z.boolean().optional(),
   diffStat: diffStatSchema.optional(),
@@ -573,7 +577,7 @@ const SUMMARY_OPTIONAL_KEYS = [
   'titleSummary', 'titleOrigin', 'hasPendingPermission', 'finishedAt', 'seenAt',
   'autoResumeAt', 'autoResumeReason', 'branch', 'startedAt', 'pullRequestUrl', 'pullRequests', 'referencedPullRequestUrl', 'prNumber',
   'issueNumber', 'referencedIssueUrl', 'markerRefs', 'costUsd', 'peakRssBytes', 'peakProcCount',
-  'groupId', 'variant', 'pinned', 'runner', 'model', 'notify', 'diffStat', 'inputTokens',
+  'groupId', 'variant', 'pinned', 'runner', 'removedRunner', 'model', 'notify', 'diffStat', 'inputTokens',
   'outputTokens', 'currentStepId', 'error', 'worktreePath',
 ] as const satisfies readonly (keyof RunSummary & keyof RunRecord)[];
 

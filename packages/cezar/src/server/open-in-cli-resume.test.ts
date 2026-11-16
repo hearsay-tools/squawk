@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
 import type { RunnerId } from '../core/agent-runner.ts';
 import { runnerDisplayName } from '@open-mercato/cezar-contract/runner-facts';
+import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 import { RunStore } from '../runs/store.ts';
 import { defaultWorkspaceConfig, type WorkspaceConfig } from '../workspace/config.ts';
 import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
@@ -155,6 +156,16 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
       expect(mockOpenInTerminal).not.toHaveBeenCalled();
     },
   );
+
+  it('open-in-cli refuses a run saved on a removed runner (hearsay-tools/squawk#3715)', async () => {
+    const run = makeRun('claude', 'sess-1');
+    store.updateRun(run.id, { removedRunner: 'cursor' });
+    setRunStatus(store, run.id, RUN_STATUS.done);
+    const response = await openInCli(run.id);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: removedRunnerMessage('cursor') });
+    expect(mockOpenInTerminal).not.toHaveBeenCalled();
+  });
 
   it('open-in-cli still resumes a usage-limit hold', async () => {
     const run = makeRun('claude', 'sess-1');

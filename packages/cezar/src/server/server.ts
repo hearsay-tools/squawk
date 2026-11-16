@@ -29,6 +29,7 @@ import { commitQuerySchema } from '@open-mercato/cezar-contract/query-requests';
 import { imageMimeType } from '@open-mercato/cezar-contract/image-path';
 import { providerForActiveRun } from '@open-mercato/cezar-contract/active-provider';
 import { RUNNER_COCKPIT_FACTS, cockpitRunnersWhere } from '@open-mercato/cezar-contract/runner-facts';
+import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 import { defined } from '../core/defined.ts';
 import { isAbsoluteHostPath } from '../core/host-path.ts';
 import { resolveArchiveOnMerge, resolveGlobalArchiveOnMerge } from '../archive-on-merge-setting.ts';
@@ -3437,6 +3438,10 @@ export function createApp(deps: ServerDeps) {
       // Untouched tasks execute their original workflow, including step-level runners.
       // Resolve the same fallback as POST /runs, and pass it through so validation
       // and execution use the same provider even when the record inherited config.
+      // Before the provider check: a run saved on a removed runner has no provider of its own.
+      if (run.removedRunner !== undefined && parsed.data.runner === undefined) {
+        return c.json({ error: removedRunnerMessage(run.removedRunner) }, 409);
+      }
       const untouched = isUntouchedCancelledRun(run);
       const originalProvider = untouched
         ? run.runner ?? (await loadConfig(repoRoot, deps.home)).defaultRunner
@@ -3474,6 +3479,7 @@ export function createApp(deps: ServerDeps) {
       const project = c.get('project');
       const checkout = openHandoffCheckout(c, '; resume the session from a machine that has the checkout');
       if ('status' in checkout) return c.json(checkout.body, checkout.status);
+      if (checkout.run.removedRunner !== undefined) return c.json({ error: removedRunnerMessage(checkout.run.removedRunner) }, 409);
       const { sessionId, backend, profileId } = latestSession(checkout.run);
       if (!sessionId) return c.json({ error: 'no agent session to resume' }, 409);
       const blocked = await providerActionError([backend]);

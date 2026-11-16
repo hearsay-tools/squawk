@@ -7,6 +7,35 @@ import { upgradeLegacyWaits } from './legacy-waits.ts';
 export function upgradeLegacyRunRow(row: Record<string, unknown>): void {
   upgradeLegacyWaits(row);
   upgradeLegacyWorkflowCursor(row);
+  upgradeRemovedRunner(row);
+}
+
+/** Runners Squawk no longer ships (hearsay-tools/squawk#3715). A run saved on one still opens,
+ *  lists and shows its transcript. */
+const REMOVED_RUNNER_IDS: readonly string[] = ['cursor'];
+
+function isRemovedRunner(value: unknown): value is string {
+  return typeof value === 'string' && REMOVED_RUNNER_IDS.includes(value);
+}
+
+/**
+ * A run saved on a removed runner is read as `removedRunner`, with no `runner`. Its steps on that
+ * runner keep no backend and no session, so a Continue on a live runner can never resume a session
+ * that runner does not own: it starts a new one. The next write of the row stores the fold.
+ */
+export function upgradeRemovedRunner(row: Record<string, unknown>): void {
+  let removed = isRemovedRunner(row.runner) ? row.runner : undefined;
+  if (removed !== undefined) delete row.runner;
+  for (const step of Array.isArray(row.steps) ? row.steps as unknown[] : []) {
+    if (!step || typeof step !== 'object') continue;
+    const fields = step as Record<string, unknown>;
+    if (!isRemovedRunner(fields.backend)) continue;
+    if (row.runner === undefined) removed ??= fields.backend;
+    delete fields.backend;
+    delete fields.sessionId;
+    delete fields.sessionTransport;
+  }
+  if (removed !== undefined && row.removedRunner === undefined) row.removedRunner = removed;
 }
 
 /**

@@ -11,6 +11,7 @@ import type { PastedContent } from './run/types.ts';
 import { hasRegisteredRunProcess } from '../core/process-usage.ts';
 import { WorkerIdentityError } from '../delegation/execution-identity.ts';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
+import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 
 /** What a Continue may carry (`RunManager.continueRun`). */
 export type ContinueRunOptions = {
@@ -60,6 +61,12 @@ export function parentMessageRefusal(run: RunRecord, defer: boolean, conversatio
  *  failed parent leaves its workers running, so they continue and retry (hearsay-tools/squawk#3337). */
 export function settledParentRefusalError(parentId: string, status: RunRecord['status']): string | undefined {
   return ['done', 'review', 'cancelled'].includes(status) ? `Parent task ${parentId} is ${status}; continue the parent before its worker.` : undefined;
+}
+
+/** A run saved on a runner Squawk no longer ships continues only on a runner the Continue names
+ *  (hearsay-tools/squawk#3715). A wake, a restart and a plain Continue name none. */
+export function removedRunnerRefusal(run: RunRecord, opts: ContinueRunOptions): ContinuationRefusal | undefined {
+  if (run.removedRunner !== undefined && opts.runner === undefined) return { ok: false, error: removedRunnerMessage(run.removedRunner) };
 }
 
 export function stoppingRefusal(run: RunRecord): ContinuationRefusal | undefined {
@@ -132,7 +139,7 @@ export function overridePatch(run: RunRecord, opts: ContinueRunOptions, targetRu
   const inheritedPinIsForeign = opts.model === undefined && run.model !== undefined && modelConflictsWithRunner(run.model, targetRunner);
   const inheritedAccountIsForeign = opts.agentProfile === undefined && run.agentProfile !== undefined && targetRunner !== originalRunner;
   return {
-    ...(opts.runner !== undefined ? { runner: opts.runner } : {}),
+    ...(opts.runner !== undefined ? { runner: opts.runner, removedRunner: undefined } : {}),
     ...(opts.model !== undefined ? { model: opts.model === '' ? undefined : opts.model }
       : inheritedPinIsForeign ? { model: undefined } : {}),
     ...(opts.agentProfile !== undefined ? { agentProfile: opts.agentProfile }
@@ -255,7 +262,7 @@ export class ContinuationChecks {
   }
 
   private ownershipRefusal(run: RunRecord): ContinuationRefusal | undefined {
-    return parentMessageRefusal(run, this.defer, this.conversation) || stoppingRefusal(run) ||
+    return removedRunnerRefusal(run, this.opts) || parentMessageRefusal(run, this.defer, this.conversation) || stoppingRefusal(run) ||
       this.historyDeletionRefusal() || this.settledParentRefusal(run);
   }
 
@@ -339,7 +346,8 @@ export class ContinuationChecks {
     const sessionStep = latestSessionStep(run.steps);
     // Command/check steps may have changed the repo; only an untouched workflow can restart.
     const untouched = this.reads.untouched(run);
-    const absent = sessionRefusal(sessionStep, untouched, (run.delegation?.role === 'worker' && !!this.conversation) || this.opts.freshSession === true);
+    const absent = sessionRefusal(sessionStep, untouched, (run.delegation?.role === 'worker' && !!this.conversation) ||
+      this.opts.freshSession === true || run.removedRunner !== undefined);
     if (absent) return absent;
     const affinity = sessionAffinity(run, this.opts, identity, sessionStep, untouched);
     const resumeSessionId = affinity.resume ? this.reads.sessionId(sessionStep) : undefined;

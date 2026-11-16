@@ -2646,6 +2646,48 @@ describe('RunStore — the legacy `claude-cli` runner id (#547)', () => {
     expect(store.getRun('modern')?.runner).toBe('codex');
   });
 
+  it('opens a run saved on a removed runner, marks it, and keeps none of its sessions (hearsay-tools/squawk#3715)', () => {
+    seedRuns(dataDir, [
+      {
+        ...LEGACY_RUN,
+        id: 'removed',
+        runner: 'cursor',
+        steps: [
+          { id: 'plan', name: 'Plan', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0,
+            sessionId: 'claude-sess', backend: 'claude' },
+          { id: 'task', name: 'Do the task', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0,
+            sessionId: 'cursor-sess', sessionTransport: 'cursor-print', backend: 'cursor' },
+        ],
+      },
+      { ...LEGACY_RUN, id: 'modern', runner: 'codex' },
+    ]);
+
+    const store = RunStore.open(dataDir);
+    const run = store.getRun('removed');
+    expect(run?.removedRunner).toBe('cursor');
+    expect(run?.runner).toBeUndefined();
+    // A live runner's session stays; the removed runner's session can never reach another runner.
+    expect(run?.steps[0]).toMatchObject({ sessionId: 'claude-sess', backend: 'claude' });
+    expect(run?.steps[1]).not.toHaveProperty('sessionId');
+    expect(run?.steps[1]).not.toHaveProperty('backend');
+    expect(run?.steps[1]).not.toHaveProperty('sessionTransport');
+    expect(store.getRun('modern')?.runner).toBe('codex');
+    expect(store.getRun('modern')?.removedRunner).toBeUndefined();
+  });
+
+  it('marks a run with no runner of its own when one of its steps ran on a removed runner', () => {
+    seedRuns(dataDir, [{
+      ...LEGACY_RUN,
+      id: 'removed-step',
+      steps: [{ id: 'task', name: 'Do the task', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1,
+        tokensUsed: 0, sessionId: 'cursor-sess', backend: 'cursor' }],
+    }]);
+
+    const run = RunStore.open(dataDir).getRun('removed-step');
+    expect(run?.removedRunner).toBe('cursor');
+    expect(run?.steps[0]).not.toHaveProperty('sessionId');
+  });
+
   it('persists and reloads a `pi` run, index and step alike (#387)', () => {
     // `storedRunnerSchema` derives from `RUNNER_IDS` rather than re-listing the ids, so a new
     // runner is readable the moment it is registered. Without this, a completed pi run would
