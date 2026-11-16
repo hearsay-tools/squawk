@@ -564,11 +564,8 @@ export class InputDelivery {
     const session = state.liveSession.session;
     if (!session?.open || state.inputState.agentInputFlight || state.liveSession.cancelled || state.liveSession.finishRequested || state.inputState.agentInputError) return false;
     if (!this.admitsAgentInput(runId, state, session, inputIds, beforeHumanReset)) return false;
-    // Every delivered turn ends with the waits still open.
-    const footer = openWaitsFooter(this.context.store.getRun(runId)?.waits ?? []);
-    if (footer) content = [...content, { type: 'text', text: `\n\n${footer}` }];
     const keepsDone = this.noteAcceptedDone(runId, inputIds);
-    if (keepsDone !== undefined) content = [...content, { type: 'text', text: `\n\n${keepsDone ? DONE_KEPT_NOTE : DONE_RECONSIDERED_NOTE}` }];
+    content = this.withTurnNotes(runId, content, keepsDone);
     // A refusal queued for a closed session (hearsay-tools/cezarion#1301): this turn is the nudge's.
     const refusal = !!this.context.store.getRun(runId)?.agentInputs?.some(input => input.purpose === 'completion-refusal' && inputIds.includes(input.id));
     const flight = new InputFlight(session, inputIds,
@@ -583,6 +580,14 @@ export class InputDelivery {
     this.resumeParkedRun(runId, state, beforeHumanReset);
     this.recordAgentInputTurn(runId, state, flight, refusal);
     return true;
+  }
+
+  /** Every delivered turn ends with the waits still open, then the accepted done's note
+   *  (`noteAcceptedDone`, hearsay-tools/squawk#2587). */
+  private withTurnNotes(runId: string, content: ContentBlock[], keepsDone: boolean | undefined): ContentBlock[] {
+    const footer = openWaitsFooter(this.context.store.getRun(runId)?.waits ?? []);
+    const done = keepsDone === undefined ? undefined : keepsDone ? DONE_KEPT_NOTE : DONE_RECONSIDERED_NOTE;
+    return [...content, ...[footer, done].flatMap(note => note ? [{ type: 'text' as const, text: `\n\n${note}` }] : [])];
   }
 
   /** Input delivered after an accepted `cezar_done` (hearsay-tools/squawk#2587): true when the
