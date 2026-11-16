@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { callAutomation } from './client.ts';
 import { CiToolController } from './controller.ts';
 import type { AutomationToolAnswer, AutomationToolRequest } from '@open-mercato/cezar-contract/automation-tool';
-import { GITHUB_COMMAND_TIMEOUT_MS } from '../automations/github-poller.ts';
+import { GITHUB_COMMAND_TIMEOUT_MS } from '../core/github-request-limits.ts';
 import { automationToolDefinition, squawkToolNames } from './tool-catalog.ts';
 
 const controllers: CiToolController[] = [];
@@ -49,6 +49,7 @@ describe('automation session capability', () => {
     const started = Promise.withResolvers<void>();
     automation.mockImplementationOnce(async () => {
       started.resolve();
+      // bound: simulate a full provider command budget under fake timers.
       await new Promise(resolve => setTimeout(resolve, GITHUB_COMMAND_TIMEOUT_MS));
       return { ok: true, automation: { id: 'poll', revision: 1, name: 'Issues', enabled: false, kind: 'github', events: ['issue.opened'], intervalSeconds: 300, filters: { lookbackDays: 7, maxRecords: 25 }, task: { prompt: 'Review' }, createdAt: '2026-11-16T00:00:00.000Z', updatedAt: '2026-11-16T00:00:00.000Z' }, preview: { matches: 2, truncated: false } };
     });

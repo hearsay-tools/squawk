@@ -9,7 +9,7 @@ import { createAutomationService, type AutomationServiceProject } from './servic
 import { AutomationStore } from './store.ts';
 import { createAutomationToolService } from './tool-adapter.ts';
 import type { GithubPoller } from './github-poller.ts';
-import { AUTOMATION_TOOL_TIMEOUT_MS } from './tool-timeout.ts';
+import { AUTOMATION_TOOL_TIMEOUT_MS } from '../core/github-request-limits.ts';
 
 const dirs: string[] = [];
 afterEach(() => { vi.useRealTimers(); for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });

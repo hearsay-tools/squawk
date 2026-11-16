@@ -1,6 +1,6 @@
 import { automationToolAnswerSchema, type AutomationToolAnswer } from '@open-mercato/cezar-contract/automation-tool';
 import { productName } from '../home/display.ts';
-import { AUTOMATION_TOOL_CLIENT_TIMEOUT_MS } from '../automations/tool-timeout.ts';
+import { AUTOMATION_TOOL_CLIENT_TIMEOUT_MS } from '../core/github-request-limits.ts';
 import { productEnv } from '../core/product-env.ts';
 import { randomUUID } from 'node:crypto';
 import { request } from 'node:http';
