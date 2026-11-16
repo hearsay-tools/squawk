@@ -127,6 +127,44 @@ it('cancels a finite recovery read when the page becomes hidden', async () => {
   expect(client.getQueryData(HOME_RECOVERY_QUERY_KEY)).toBeUndefined()
 });
 
+it('keeps the shared read of a reader alive when the reconcile that started it is aborted', async () => {
+  const { wrapper } = setup(false)
+  fetchMock.mockResolvedValueOnce(json(flagged))
+  const reader = renderHook(() => useHomeRecovery(), { wrapper })
+  await waitFor(() => expect(reader.result.current.data).toEqual(flagged))
+  const answers: Array<() => void> = []
+  fetchMock.mockImplementation((_url, init) => new Promise((resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => reject(init.signal!.reason), { once: true })
+    answers.push(() => resolve(json({ files: [] })))
+  }))
+  renderHook(() => useHomeRecoverySubscription(), { wrapper })
+  const reconcile = vi.mocked(onLiveReconcile).mock.calls[0]![0]
+  // A newer reconcile, or its deadline, ends this caller's wait; the reader still consumes the read.
+  const caller = new AbortController()
+  void Promise.resolve(reconcile(caller.signal, false)).catch(() => {})
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+  caller.abort()
+  expect(fetchMock.mock.calls[1]?.[1]?.signal?.aborted).toBe(false)
+  await act(async () => { for (const answer of answers.splice(0)) answer() })
+  await waitFor(() => expect(reader.result.current.data).toEqual({ files: [] }))
+  expect(reader.result.current.error).toBeNull()
+});
+
+it('aborts a reconcile read when its caller was the last consumer', async () => {
+  const { wrapper } = setup(false)
+  fetchMock.mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => reject(init.signal!.reason), { once: true })
+  }))
+  renderHook(() => useHomeRecoverySubscription(), { wrapper })
+  const reconcile = vi.mocked(onLiveReconcile).mock.calls[0]![0]
+  const caller = new AbortController()
+  const settled = Promise.resolve(reconcile(caller.signal, false)).then(() => 'resolved', () => 'rejected')
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+  caller.abort()
+  expect(await settled).toBe('rejected')
+  expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBe(true)
+});
+
 it('writes restore and accept actions, keeps their authoritative result, and refreshes the affected caches', async () => {
   const { client, wrapper } = setup()
   const invalidate = vi.spyOn(client, 'invalidateQueries')

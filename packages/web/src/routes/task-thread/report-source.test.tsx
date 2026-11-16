@@ -99,7 +99,7 @@ describe('report source sharing a metadata request', () => {
     expect(hook.result.current.data).toBe('parent')
   })
 
-  it('resolves when a source card unmounts while it shares the metadata request', async () => {
+  it('resolves when a source card joins and leaves the metadata request of the lookup', async () => {
     const pending = pendingMetadata()
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     // The card's own metadata read, as a virtualized row mounts and then leaves the viewport.
@@ -112,14 +112,37 @@ describe('report source sharing a metadata request', () => {
       lookup = useReportSource('parent', 'report')
       return null
     }
-    const view = render(<QueryClientProvider client={client}><Card /><Pane /></QueryClientProvider>)
+    const tree = (card: boolean) => <QueryClientProvider client={client}>{card ? <Card key="card" /> : null}<Pane key="pane" /></QueryClientProvider>
+    const view = render(tree(false))
     await waitFor(() => expect(metadata).toHaveBeenCalledTimes(1))
-    view.rerender(<QueryClientProvider client={client}><Pane /></QueryClientProvider>)
-    // The card's unmount cancels the shared request; the lookup starts it again.
-    await waitFor(() => expect(metadata).toHaveBeenCalledTimes(2))
+    view.rerender(tree(true))
+    view.rerender(tree(false))
     await act(async () => { pending.answerAll() })
     await waitFor(() => expect(lookup?.isPending).toBe(false))
     expect(lookup?.error).toBeNull()
     expect(lookup?.data).toBe('parent')
+    expect(metadata).toHaveBeenCalledTimes(1)
+    expect(metadata.mock.calls[0]?.[2]?.signal?.aborted).toBe(false)
+  })
+
+  it('aborts the metadata request when the lookup was its last consumer', async () => {
+    pendingMetadata()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const hook = renderHook(() => useReportSource('parent', 'report'), { wrapper: wrapperFor(client) })
+    await waitFor(() => expect(metadata).toHaveBeenCalledTimes(1))
+    hook.unmount()
+    expect(metadata.mock.calls[0]?.[2]?.signal?.aborted).toBe(true)
+  })
+
+  it('aborts the relationships request when the lookup was its last consumer', async () => {
+    metadata.mockRejectedValue(missing())
+    relationships.mockImplementation((_runId, opts) => new Promise((_resolve, reject) => {
+      opts?.signal?.addEventListener('abort', () => reject(opts.signal!.reason))
+    }))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const hook = renderHook(() => useReportSource('parent', 'report'), { wrapper: wrapperFor(client) })
+    await waitFor(() => expect(relationships).toHaveBeenCalledTimes(1))
+    hook.unmount()
+    expect(relationships.mock.calls[0]?.[1]?.signal?.aborted).toBe(true)
   })
 })
