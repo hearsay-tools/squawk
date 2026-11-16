@@ -19,7 +19,6 @@ export interface ServeStopDeps {
   stopServe: (server: StoppableServer, signal: NodeJS.Signals, opts: StopServeOptions) => Promise<void>;
   onTerminal: () => boolean;
   ignoreHangupOffTerminal: () => void;
-  watchSupervisor: (onLost: () => void) => unknown;
 }
 
 export interface ServeStop {
@@ -62,7 +61,6 @@ export function installServeStop(deps: ServeStopDeps): ServeStop {
   deps.process.on('SIGTERM', () => stop('SIGTERM'));
   if (deps.onTerminal()) deps.process.on('SIGHUP', () => stop('SIGHUP'));
   else deps.ignoreHangupOffTerminal();
-  deps.watchSupervisor(() => stop('SIGTERM'));
   return {
     parts,
     get stopping() { return stopped !== undefined; },

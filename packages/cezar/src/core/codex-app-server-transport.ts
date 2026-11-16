@@ -1,7 +1,7 @@
 import { productEnv } from './product-env.ts';
 import { fileURLToPath } from 'node:url';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { spawnAgent as nodeSpawn } from './disclaim-spawn.ts';
+import { spawn as nodeSpawn } from 'node:child_process';
 import { trackChildExit } from './agent-runner.ts';
 import { probeLeaderState, type LeaderState, signalSession, spawnSessionLeader } from './session-process.ts';
 import { buildChildEnv } from './agent-env.ts';

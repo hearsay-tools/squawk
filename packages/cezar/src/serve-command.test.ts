@@ -57,7 +57,6 @@ function fixture() {
     stopServe: vi.fn().mockResolvedValue(undefined),
     onTerminal: vi.fn(() => true),
     ignoreHangupOffTerminal: vi.fn(),
-    watchSupervisor: vi.fn(),
     waitForHealth: vi.fn().mockResolvedValue(true),
     openUrl: vi.fn(),
     sweepMergedBranches: vi.fn().mockResolvedValue(undefined),
@@ -218,7 +217,6 @@ describe('serveCommand', () => {
     });
     await f.run();
     expect(listenersAtFirstStep).toEqual([1, 1, 1]);
-    expect(f.effects.watchSupervisor).toHaveBeenCalledBefore(f.effects.recoverProjectMigration);
   });
 
   it.each(['SIGINT', 'SIGTERM', 'SIGHUP'] as const)('stops the parts boot built when %s arrives during recovery, and serves nothing', async (signal) => {
@@ -279,14 +277,12 @@ describe('serveCommand', () => {
     expect(f.effects.stopServe).not.toHaveBeenCalled();
   });
 
-  it('ignores off-terminal hangups and maps supervisor loss to SIGTERM', async () => {
+  it('ignores off-terminal hangups', async () => {
     const f = fixture();
     f.effects.onTerminal.mockReturnValue(false);
     await f.run();
     expect(f.effects.ignoreHangupOffTerminal).toHaveBeenCalledOnce();
     expect(f.processStub.listenerCount('SIGHUP')).toBe(0);
-    f.effects.watchSupervisor.mock.calls[0]![0]();
-    expect(f.effects.stopServe).toHaveBeenCalledWith(f.server, 'SIGTERM', { store: f.store });
   });
 
   it('leaves update discovery in the background and announces an available version', async () => {

@@ -1,7 +1,0 @@
-{
-  "$schema": "https://schema.tauri.app/config/2/capability",
-  "identifier": "connections",
-  "description": "Only bundled connection forms may create unprivileged remote windows.",
-  "windows": ["main", "connections"],
-  "permissions": ["allow-connect-remote", "allow-list-connections", "allow-forget-connection"]
-}
