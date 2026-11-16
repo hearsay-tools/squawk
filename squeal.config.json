@@ -198,6 +198,12 @@
       "AGENTS.md",
       ".github/agents-md.baseline.json"
     ],
+    ".github/scripts/repository-skill-links.test.cjs": [
+      ".gitignore",
+      ".ai/skills/**",
+      ".agents/skills/*",
+      ".claude/skills/*"
+    ],
     ".github/scripts/no-compat-policy.test.cjs": [
       "**/*.{md,ts,tsx,cjs,mjs,js,yaml,yml,json}"
     ],

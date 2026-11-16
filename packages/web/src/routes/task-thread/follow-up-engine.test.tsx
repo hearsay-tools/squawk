@@ -778,6 +778,17 @@ describe('continuation conversation hint (#201)', () => {
     expect(screen.queryByText('Starts a new agent conversation.')).toBeNull()
     expect(continueBody()).toBeUndefined()
   })
+
+  // hearsay-tools/squawk#3743: a session step saved without a backend belongs to the run's runner.
+  it("reads a session saved without a backend as the run's runner's", async () => {
+    serve()
+    renderAction(makeRun({ runner: 'codex', steps: [step({ sessionId: 'sess-1' })] }))
+    expect(await screen.findByRole('button', { name: /^Runner · / })).toBeTruthy()
+    expect(screen.queryByText('Starts a new agent conversation.')).toBeNull()
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Runner · / }))
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: /claude/ }))
+    expect(screen.getByText('Starts a new agent conversation.')).toBeTruthy()
+  })
 })
 
 describe('untouched workflow provider requirements', () => {
