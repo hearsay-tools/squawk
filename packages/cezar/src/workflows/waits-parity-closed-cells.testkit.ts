@@ -23,9 +23,20 @@ export const { describeWaitParity } = waitPartDescribers('closed', closedCells);
 const refusalStep = (runner: RunnerId, id: string, step: string, predicate: () => boolean) =>
   until(predicate, runner === 'claude' ? () => `${runner} ${step}\n${timeline(id)}` : undefined);
 
+/** The failure these cells mean is the delivery cap, on every runner: any other failure fails the
+ *  cell here, with its own error (hearsay-tools/squawk#3508). */
+function expectDeliveryCap(id: string) {
+  expect(store.getRun(id)?.error, timeline(id)).toBe(`continue failed: ${WAKE_SESSION_CLOSED_ERROR}`);
+  expect(store.readEvents(id).filter(event => event.type === 'note' && event.message === WAKE_DELIVERY_CAP_NOTE), timeline(id)).toHaveLength(1);
+}
+
 async function refusalDeliveryBound(runner: RunnerId, id: string, cell: string, closed: () => number) {
   const failed = () => store.getRun(id)?.status === 'failed' && !manager.isActive(id);
-  if (runner !== 'claude') { await until(failed); return; }
+  if (runner !== 'claude') {
+    await until(failed);
+    expectDeliveryCap(id);
+    return;
+  }
   // bound: each existing 15 s guard covers one durable queue write, native admission, close,
   // or retry checkpoint. Three fresh mock processes no longer share one launch budget.
   await refusalStep(runner, id, `${cell}: refusal queued`, () =>
@@ -40,6 +51,7 @@ async function refusalDeliveryBound(runner: RunnerId, id: string, cell: string, 
     }
   }
   await refusalStep(runner, id, `${cell}: delivery cap and inactive`, failed);
+  expectDeliveryCap(id);
 }
 /** A nudge reply whose cezar_done the tool refuses while the blocker stays: no done at its turn
  *  end, so a live worker's turn end opens the implicit re-check timer (`parkedOnWorkersTimer`). */
@@ -82,8 +94,6 @@ export function closedCells(runners: RunnerId[], it: typeof registerTest = regis
           expect(refusals()[0]!.deliveredAt).toBeUndefined();
           expect(nudgeNotes(p.id)).toHaveLength(1);
           expect(store.getRun(p.id)?.automaticWakes).toBe(wakes + 1);
-          expect(store.getRun(p.id)?.error).toBe(`continue failed: ${WAKE_SESSION_CLOSED_ERROR}`);
-          expect(store.readEvents(p.id).filter(event => event.type === 'note' && event.message === WAKE_DELIVERY_CAP_NOTE)).toHaveLength(1);
           expect(retryClock.pending).toBe(0);
           expect(store.getRun(p.id)?.delegation).not.toHaveProperty('finishRequestedAt');
           closing = false;
