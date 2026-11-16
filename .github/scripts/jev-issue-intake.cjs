@@ -14,7 +14,7 @@ const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_MODEL = 'jev-1.13.0';
 
 // Labels other processes set. Intake never asks about them.
-const NEVER_ASKED = new Set(['friction', 'upstream-port', 'epic', 'in-progress', 'needs-qa', 'repo-setup']);
+const NEVER_ASKED = new Set(['friction', 'epic', 'in-progress', 'needs-qa', 'repo-setup']);
 const ACCESSIBILITY = 'accessibility';
 const NONE = 'none';
 // Code-owned option text: GitHub's one-line label descriptions left Jev no

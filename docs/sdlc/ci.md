@@ -500,8 +500,7 @@ Each failure names the file, the line and the qualified forms to use. The check
 counts each number's bare citations in the changed files before and after the
 change, so rewording or moving a legacy citation passes. It never reads string
 literals, code, JSX text, backtick spans, a `#` joined to a word or path,
-generated upstream scan files, test-data directories, or a file the change adds
-with a historical source note. A change that removes an archive's source note
+test-data directories, or a file the change adds with a historical source note. A change that removes an archive's source note
 fails every bare citation left in it. On a PR, the step checks the merge commit
 against its first parent (`--base HEAD^1`). A push to `main` skips the step,
 because every change reaches `main` through a PR that the step already checked.
@@ -707,27 +706,6 @@ had three passing shards and one failed assertion. Runner recovery remains unpro
 Open hearsay-tools/cezarion#2682 adds disabled owner-PR routing and keeps this manual
 canary separate. Keep the canary and its LXC scripts until that recovery and workload
 question is decided. This trial changes no required check or merge-queue behavior.
-
-### Upstream scan PRs
-
-The weekly upstream scan also creates PRs with the repository's existing release
-App token. `GITHUB_TOKEN` still pushes the branch and lists open PRs; the App has
-only Pull requests write permission and starts native `pull_request_target` CI
-through PR creation. Missing App settings stop creation rather than falling back
-to a token that suppresses CI. Existing scan PRs are never overwritten.
-
-The change-surface classifier treats only `.ai/upstream/ledger.yaml`,
-`.ai/upstream/LEDGER.md`, and `.ai/upstream/scans/YYYY-MM-DD.md` (including numeric
-same-day suffixes starting at `-2`) as scan data eligible for `docs-only`. A complete allowlisted diff skips Vitest and cockpit
-browser shards; mixed code changes, unsafe renames, and incomplete API results
-keep the full matrix. `unit-tests` stays unconditional, so malformed ledger
-entries, missing reports, and an out-of-date render fail the repository script tests and
-the required **Unit, build, E2E, and package** check.
-
-A maintainer must close/reopen legacy `GITHUB_TOKEN`-created scan PRs once after
-this change reaches `main`, including PR #577. This starts native CI without
-changing ledger decisions or branch protection. Confirm the required check on
-the current head before merging; a scan rerun will not reopen an existing PR.
 
 ### Diagnostic dispatch
 

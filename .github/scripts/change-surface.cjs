@@ -17,10 +17,6 @@ const docsAllowlisted = [
   // directory, where it may be test data (hearsay-tools/cezarion#1099).
   // change-surface-readers.test.cjs fails when package code reads one.
   /^packages\/(?!(?:[^/]+\/)*(?:__fixtures__|fixtures|__snapshots__)\/)(?:[^/]+\/)*[^/]+\.md$/,
-  // Generated scan data only, not arbitrary files under .ai/upstream. The
-  // unconditional build-and-package job validates the ledger via test:unit.
-  /^\.ai\/upstream\/(?:ledger\.yaml|LEDGER\.md)$/,
-  /^\.ai\/upstream\/scans\/\d{4}-\d{2}-\d{2}(?:-(?:[2-9]|[1-9]\d+))?\.md$/,
   /^(?:AGENTS|CODE_REVIEW|SDLC)\.md$/,
   /^LICENSE[^/]*$/,
 ];
@@ -46,7 +42,7 @@ const testReadDocuments = [
 // Engine-script tests stay covered: they run under `npm run test:unit` inside
 // the unconditional build-and-package job.
 const infraAllowlisted = [
-  /^\.github\/workflows\/(?:report-workflow-failure|sweep-ci-failures|upstream-scan|npm-preview-cleanup|publish-pr-snapshot|issue-intake)\.yml$/,
+  /^\.github\/workflows\/(?:report-workflow-failure|sweep-ci-failures|npm-preview-cleanup|publish-pr-snapshot|issue-intake)\.yml$/,
   /^\.github\/scripts\/(?:ci-sweep-api|ci-sweep-collect|ci-sweep-patterns|ci-sweep-report|apply-issue-intake|issue-intake-candidates|jev-issue-intake|jev-intake-replay)(?:\.test)?\.cjs$/,
 ];
 

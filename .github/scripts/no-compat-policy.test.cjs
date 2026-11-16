@@ -5,7 +5,7 @@
 // something a "protected surface", made agents add aliases, fallbacks and
 // compatibility paragraphs. This test keeps the file deleted and its citations out
 // of live docs and code. History stays as written: the changelog, run records,
-// upstream ledgers, analyses and specs dated before the policy ended.
+// analyses and specs dated before the policy ended.
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
@@ -20,7 +20,6 @@ const LIVE_SPEC_DATE = '2026-11-15';
 const HISTORY = [
   'CHANGELOG.md',
   '.ai/runs/',
-  '.ai/upstream/',
   '.ai/analysis/',
   '.ai/specs/assets/',
   '.ai/specs/briefs/',
