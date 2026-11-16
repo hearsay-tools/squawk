@@ -2,7 +2,7 @@ import { isAutomationTask } from '@open-mercato/cezar-api-client/contract/runs'
 import type { RunIndexEntry, RunSummary } from '@open-mercato/cezar-api-client'
 
 import { deriveAttention, type AttentionTone } from './attention'
-import { groupRuns, isOwnedWorker, queuePositions, type BucketLabel, type ListView } from './task-groups'
+import { ARCHIVED_WINDOW, groupRuns, isOwnedWorker, listCounts, queuePositions, type BucketLabel, type ListView } from './task-groups'
 
 /**
  * The Tasks pages' origin filter and status groups (hearsay-tools/cezarion#1616): the pure half
@@ -20,11 +20,23 @@ import { groupRuns, isOwnedWorker, queuePositions, type BucketLabel, type ListVi
 
 export type TaskOrigin = 'all' | 'direct' | 'automations'
 
-export const TASK_ORIGINS: readonly { value: TaskOrigin; label: string }[] = [
+const TASK_ORIGINS: readonly { value: TaskOrigin; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'direct', label: 'Direct tasks' },
   { value: 'automations', label: 'Automations' },
 ]
+
+/** The origin chips a Tasks page offers: no Automations while automations are off
+ *  (`automationsAvailable`, hearsay-tools/squawk#1401). */
+export function taskOrigins(automations: boolean): readonly { value: TaskOrigin; label: string }[] {
+  return automations ? TASK_ORIGINS : TASK_ORIGINS.filter((option) => option.value !== 'automations')
+}
+
+/** The origin a page lists: a picked or linked Automations origin reads as All while automations
+ *  are off, so the list shows what the chips say. */
+export function availableOrigin(origin: TaskOrigin, automations: boolean): TaskOrigin {
+  return origin === 'automations' && !automations ? 'all' : origin
+}
 
 /** The URL spelling: `origin=direct|automations`, absent for All. Anything else reads as All. */
 export function parseOrigin(value: string | null | undefined): TaskOrigin {
@@ -55,6 +67,26 @@ export function originCounts(
     else counts.direct += 1
   }
   return counts
+}
+
+/**
+ * The Archived tab's count. For All it is the server's total, or the window with a `+` while
+ * none is known; for one origin it is what has loaded, with a `+` while the plain archive has
+ * older pages (`plainHasMore`), or while that is unknown.
+ */
+export function archivedTabCount(
+  all: readonly RunSummary[],
+  withPages: readonly RunSummary[],
+  origin: TaskOrigin,
+  plainHasMore: boolean | undefined,
+  archivedTotal: number | undefined,
+): number | string {
+  const archived = listCounts(all).archived
+  const full = archived >= ARCHIVED_WINDOW
+  if (origin === 'all') return archivedTotal ?? (full ? `${ARCHIVED_WINDOW}+` : archived)
+  const loaded = originCounts(withPages, 'archived')[origin]
+  // Whether the plain archive has older pages; a search's own paging says nothing about that.
+  return full && plainHasMore !== false ? `${loaded}+` : loaded
 }
 
 /** One row of a status group, over any row type: a project's `RunSummary` or a global task. */

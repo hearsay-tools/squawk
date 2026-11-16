@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Link } from '@/lib/project-router'
 
 import { createRun, putUiState } from '@/api/client'
-import { queryKeys, useHealth, useUiState } from '@/api/queries'
+import { queryKeys, useUiState } from '@/api/queries'
 import type { GithubItem, Skill, WorkflowDef } from '@open-mercato/cezar-api-client'
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import { EnginePills, engineRunBody, useResolvedEngine, type EnginePick, type ResolvedEngine } from '@/components/engine-pills'
@@ -43,6 +43,7 @@ import {
 } from '@/lib/skills'
 import { isSubmitShortcut, submitShortcutHint } from '@/lib/use-submit-shortcut'
 import { cn, isHttpUrl } from '@/lib/utils'
+import { useAutomationsAvailable } from '@/lib/capabilities'
 
 import { readFollowupPrompt, writeFollowupPrompt } from './hand-to-agent-draft'
 
@@ -98,7 +99,7 @@ export function HandToAgent({
 }) {
   const queryClient = useQueryClient()
   const uiState = useUiState()
-  const automationsOn = useHealth().data?.capabilities.automations === true
+  const automationsOn = useAutomationsAvailable()
   const kindLabel = item.kind === 'pr' ? 'PR' : 'issue'
   // A skill deleted since it was toggled must not reach the server (legacy rule).
   const validSkills = selectedSkills.filter((name) => skills.some((skill) => skill.name === name))

@@ -35,6 +35,7 @@ describe('TasksOverviewRoute — wired to the app', () => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input).replace('?archived=recent', '')
       if (url === '/api/v1/run-summaries') return new Response(JSON.stringify(runs), { status: 200 })
+      if (url === '/api/v1/health') return new Response(JSON.stringify({ capabilities: { automations: true } }), { status: 200 })
       if (url === '/api/v1/runs/archive-finished')
         return new Response(JSON.stringify({ archived: 1 }), { status: 200 })
       return new Response('[]', { status: 200 })
@@ -228,6 +229,7 @@ describe('TasksOverviewRoute — wired to the app', () => {
       { ...run({ id: 'auto', status: RUN_STATUS.done }), automationId: 'auto-1' },
     ])
     await waitFor(() => expect(tableRow('act')).not.toBeNull())
+    await waitFor(() => expect(sidebarTab('automations')).not.toBeNull())
     expect(sidebarRow('act')).not.toBeNull()
     expect(sidebarRow('auto')).toBeNull()
     // The table's Active is every unarchived task, automation-created ones included.

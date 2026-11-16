@@ -25,7 +25,7 @@ it('starts a repeated edit from the current archived-page summary', () => {
   const saved = vi.fn()
   function Page() {
     const [task, setTask] = useState(run({ id: 'older', title: 'Old title', archived: true }))
-    return <TasksOverview runs={[]} view="archived" onViewChange={vi.fn()} onArchiveFinished={vi.fn()} onMarkAllRead={vi.fn()}
+    return <TasksOverview runs={[]} view="archived" automations onViewChange={vi.fn()} onArchiveFinished={vi.fn()} onMarkAllRead={vi.fn()}
       archivedPages={{ runs: [task], query: '', hasMore: false, loading: false, onLoadMore: vi.fn() }}
       onRename={(id, title) => { saved(id, title); setTask({ ...task, title }) }} />
   }

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useParams } from 'react-router'
 import { ZapIcon } from '@/components/design-icons'
 
-import { useHealth } from '@/api/queries'
+import { useAutomationsAvailability } from '@/lib/capabilities'
 import { CenteredState } from '@/components/centered-state'
 import { Button } from '@/components/ui/button'
 import { Link, useNavigate } from '@/lib/project-router'
@@ -26,15 +26,13 @@ export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'e
   const [reloadToken, setReloadToken] = useState(0)
   // Automations are disabled by CEZ_AUTOMATIONS=0. A bookmarked `/automations…` URL still routes here with the
   // capability off, so the view says so rather than rendering an editor whose every request
-  // would 409. `!== true` deliberately: only a health payload that HAS answered switches this on.
-  const health = useHealth()
-  const healthKnown = health.data !== undefined
-  const automationsOff = healthKnown && health.data.capabilities?.automations !== true
+  // would 409.
+  const availability = useAutomationsAvailability()
 
   // Every mode below needs the capability answer, so none of them renders before health has given
   // it. Without this a cold deep link into `/automations/new` painted a full creation form on a
   // gated server — and a submit inside that window POSTs straight into a 409.
-  if (!healthKnown) {
+  if (availability === 'unknown') {
     return (
       <div data-route="automations" className="task-flow-page flex min-h-full flex-col">
         <PageState text="Loading automations…" />
@@ -43,7 +41,7 @@ export function AutomationsRoute({ mode = 'list' }: { mode?: 'list' | 'new' | 'e
   }
 
   // Before every mode branch, so all four `/automations*` routes degrade the same way.
-  if (automationsOff) {
+  if (availability === 'unavailable') {
     return (
       <div data-route="automations" className="task-flow-page flex min-h-full flex-col">
         <CenteredState

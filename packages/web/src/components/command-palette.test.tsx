@@ -30,7 +30,6 @@ import {
   orderRuns,
   paletteScore,
 } from '@/components/command-palette'
-import { ListViewProvider } from '@/components/list-view'
 import { orderSkills } from '@/lib/skills'
 import { ThemeProvider } from '@/components/theme-provider'
 import { THEME_STORAGE_KEY, type Theme } from '@/lib/theme'
@@ -190,11 +189,9 @@ function renderPalette({
       <ThemeProvider>
         <MemoryRouter initialEntries={[entry]}>
           <ProjectRouteMatcherContext.Provider value={matchProjectRoute}>
-            <ListViewProvider>
-              <CommandPalette />
-              <LocationProbe />
-              <input data-testid="outside-input" aria-label="outside" />
-            </ListViewProvider>
+            <CommandPalette />
+            <LocationProbe />
+            <input data-testid="outside-input" aria-label="outside" />
           </ProjectRouteMatcherContext.Provider>
         </MemoryRouter>
       </ThemeProvider>

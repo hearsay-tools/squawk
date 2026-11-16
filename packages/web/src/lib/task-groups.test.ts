@@ -557,8 +557,8 @@ describe('a pending permission request needs you (hearsay-tools/squawk#2275)', (
     expect(bucketOf(record, 'active')).toBe('Needs you')
     expect(shape(groupRuns([record], 'active'))).toEqual([`Needs you: ${record.id}`])
     expect(listCounts([record])).toEqual({ active: 1, archived: 0, waiting: 1 })
-    expect(sidebarCounts([record])).toEqual({ active: 1, automations: 0, activeWaiting: 1, automationsWaiting: 0 })
-    expect(sidebarCounts([{ ...record, automationId: 'auto-1' }])).toEqual({ active: 0, automations: 1, activeWaiting: 0, automationsWaiting: 1 })
+    expect(sidebarCounts([record], true)).toEqual({ active: 1, automations: 0, activeWaiting: 1, automationsWaiting: 0 })
+    expect(sidebarCounts([{ ...record, automationId: 'auto-1' }], true)).toEqual({ active: 0, automations: 1, activeWaiting: 0, automationsWaiting: 1 })
   })
 
   it('leaves Needs you when the last request resolves, unless a human gate is still open', () => {
@@ -566,20 +566,20 @@ describe('a pending permission request needs you (hearsay-tools/squawk#2275)', (
     const resolved: RunSummary = { ...running, hasPendingPermission: false }
     expect(bucketOf(resolved, 'active')).toBe('Working')
     expect(listCounts([resolved])).toEqual({ active: 1, archived: 0, waiting: 0 })
-    expect(sidebarCounts([resolved])).toEqual({ active: 1, automations: 0, activeWaiting: 0, automationsWaiting: 0 })
+    expect(sidebarCounts([resolved], true)).toEqual({ active: 1, automations: 0, activeWaiting: 0, automationsWaiting: 0 })
 
     const gated = asking(RUN_STATUS.waiting, { waits: [openHumanWait()] } as Partial<RunRecord>)
     const stillAsks: RunSummary = { ...gated, hasPendingPermission: false }
     expect(bucketOf(stillAsks, 'active')).toBe('Needs you')
     expect(listCounts([stillAsks])).toEqual({ active: 1, archived: 0, waiting: 1 })
-    expect(sidebarCounts([stillAsks])).toEqual({ active: 1, automations: 0, activeWaiting: 1, automationsWaiting: 0 })
+    expect(sidebarCounts([stillAsks], true)).toEqual({ active: 1, automations: 0, activeWaiting: 1, automationsWaiting: 0 })
   })
 
   it('an archived run with a pending request is history, never counted', () => {
     const record = asking(RUN_STATUS.waiting, { archived: true })
     expect(bucketOf(record, 'archived')).toBe('Archived')
     expect(listCounts([record])).toEqual({ active: 0, archived: 1, waiting: 0 })
-    expect(sidebarCounts([record])).toEqual({ active: 0, automations: 0, activeWaiting: 0, automationsWaiting: 0 })
+    expect(sidebarCounts([record], true)).toEqual({ active: 0, automations: 0, activeWaiting: 0, automationsWaiting: 0 })
   })
 })
 
@@ -729,30 +729,44 @@ describe('sidebar Active and Automations (#1332)', () => {
   ]
 
   it('splits unarchived tasks by recorded origin, never by autonomy', () => {
-    expect(sidebarRuns(fixture(), 'active').map((r) => r.id)).toEqual(['manual', 'autonomous'])
-    expect(sidebarRuns(fixture(), 'automations').map((r) => r.id)).toEqual(['scheduled', 'asks', 'worker'])
+    expect(sidebarRuns(fixture(), 'active', true).map((r) => r.id)).toEqual(['manual', 'autonomous'])
+    expect(sidebarRuns(fixture(), 'automations', true).map((r) => r.id)).toEqual(['scheduled', 'asks', 'worker'])
+  })
+
+  it('lists automation tasks in Active while automations are off (hearsay-tools/squawk#1401)', () => {
+    expect(sidebarRuns(fixture(), 'active', false).map((r) => r.id)).toEqual(['manual', 'autonomous', 'scheduled', 'asks', 'worker'])
   })
 
   it('places automation tasks in their status sections', () => {
-    expect(shape(groupRuns(sidebarRuns(fixture(), 'automations'), 'active'))).toEqual(['Needs you: asks', 'Finished: scheduled'])
+    expect(shape(groupRuns(sidebarRuns(fixture(), 'automations', true), 'active'))).toEqual(['Needs you: asks', 'Finished: scheduled'])
   })
 
   it('counts each tab and its own attention, without workers or archived tasks', () => {
-    expect(sidebarCounts(fixture())).toEqual({ active: 2, automations: 2, activeWaiting: 0, automationsWaiting: 1 })
-    expect(sidebarCounts([])).toEqual({ active: 0, automations: 0, activeWaiting: 0, automationsWaiting: 0 })
+    expect(sidebarCounts(fixture(), true)).toEqual({ active: 2, automations: 2, activeWaiting: 0, automationsWaiting: 1 })
+    expect(sidebarCounts([], true)).toEqual({ active: 0, automations: 0, activeWaiting: 0, automationsWaiting: 0 })
+  })
+
+  it('counts automation tasks in Active while automations are off (hearsay-tools/squawk#1401)', () => {
+    expect(sidebarCounts(fixture(), false)).toEqual({ active: 4, automations: 0, activeWaiting: 1, automationsWaiting: 0 })
   })
 })
 
 describe('sectionTasksPath / parseSectionParam', () => {
   it('opens each section on the origin of its sidebar tab, and reads it back', () => {
-    expect(sectionTasksPath('Needs you', 'active')).toBe('/?origin=direct&section=needs-you')
-    expect(sectionTasksPath('Working', 'automations')).toBe('/?origin=automations&section=working')
-    for (const section of SIDEBAR_SECTIONS) {
-      const param = new URLSearchParams(sectionTasksPath(section, 'active').slice(2)).get('section')
-      expect(parseSectionParam(param)).toBe(section)
+    expect(sectionTasksPath('Needs you', 'active', true)).toBe('/?origin=direct&section=needs-you')
+    expect(sectionTasksPath('Working', 'automations', true)).toBe('/?origin=automations&section=working')
+    for (const automations of [true, false]) {
+      for (const section of SIDEBAR_SECTIONS) {
+        const param = new URLSearchParams(sectionTasksPath(section, 'active', automations).slice(2)).get('section')
+        expect(parseSectionParam(param)).toBe(section)
+      }
     }
     expect(parseSectionParam(null)).toBeNull()
     expect(parseSectionParam('Finished')).toBeNull()
     expect(parseSectionParam('archived')).toBeNull()
+  })
+
+  it('opens every origin while automations are off, as the Active tab then lists them all (hearsay-tools/squawk#1401)', () => {
+    expect(sectionTasksPath('Finished', 'active', false)).toBe('/?section=finished')
   })
 })

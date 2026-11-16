@@ -11,8 +11,8 @@
     "packages/web/e2e/agent-browser.ts": 1233,
     "packages/web/src/api/client.ts": 2168,
     "packages/web/src/api/queries.ts": 2108,
-    "packages/web/src/routes/github/github.tsx": 1244,
-    "packages/web/src/routes/global-tasks.tsx": 1070,
-    "packages/web/src/routes/tasks-overview.tsx": 1629
+    "packages/web/src/routes/github/github.tsx": 1243,
+    "packages/web/src/routes/global-tasks.tsx": 1069,
+    "packages/web/src/routes/tasks-overview.tsx": 1619
   }
 }

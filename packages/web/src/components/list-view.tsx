@@ -1,6 +1,7 @@
 import * as React from 'react'
 import type { ReactNode } from 'react'
 
+import { useAutomationsAvailable } from '@/lib/capabilities'
 import type { SidebarView } from '@/lib/task-groups'
 
 /**
@@ -13,20 +14,28 @@ import type { SidebarView } from '@/lib/task-groups'
  *
  * In-memory, not persisted: the filter resets to Active on every reload, and a filter that
  * silently survives a restart hides runs the user does not know are hidden.
+ *
+ * The third value says whether automations are available (`useAutomationsAvailable`). While they
+ * are not, the view reads Active whatever was picked, and Active lists every origin
+ * (hearsay-tools/squawk#1401); the pick returns when automations do.
  */
-const ListViewContext = React.createContext<[SidebarView, (view: SidebarView) => void] | null>(null)
+type ListViewValue = [view: SidebarView, setView: (view: SidebarView) => void, automations: boolean]
+
+const ListViewContext = React.createContext<ListViewValue | null>(null)
 
 export function ListViewProvider({ children }: { children: ReactNode }) {
-  const [view, setView] = React.useState<SidebarView>('active')
+  const [picked, setView] = React.useState<SidebarView>('active')
+  const automations = useAutomationsAvailable()
+  const view = automations ? picked : 'active'
   // The tuple is memoized so a re-render of the provider (which sits high in the tree) does not
   // invalidate the context for every consumer below it.
-  const value = React.useMemo(() => [view, setView] as [SidebarView, (view: SidebarView) => void], [view])
+  const value = React.useMemo((): ListViewValue => [view, setView, automations], [view, automations])
   return <ListViewContext.Provider value={value}>{children}</ListViewContext.Provider>
 }
 
 /** Throws without a provider, on purpose: a default would let a sidebar consumer mount outside
  *  the shell and quietly keep its own private filter. */
-export function useListView(): [SidebarView, (view: SidebarView) => void] {
+export function useListView(): ListViewValue {
   const value = React.useContext(ListViewContext)
   if (!value) throw new Error('useListView must be used inside a <ListViewProvider>')
   return value

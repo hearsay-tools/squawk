@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 import type { RunIndexEntry, RunRecord, RunSummary } from '@open-mercato/cezar-api-client'
 import { groupRuns } from '@/lib/task-groups'
 import {
+  availableOrigin,
   groupIndexedTasks,
   groupMembers,
   groupProjectRuns,
@@ -16,6 +17,7 @@ import {
   originAutomationFlag,
   originCounts,
   parseOrigin,
+  taskOrigins,
   type TaskStatusGroup,
 } from '@/lib/task-origin'
 
@@ -158,5 +160,19 @@ describe('groupIndexedTasks', () => {
   it('collapses archived history into one Archived group', () => {
     const tasks = [run({ archived: true, status: RUN_STATUS.failed }), run({ archived: true })].map((summary) => task(indexed('p', summary)))
     expect(groupIndexedTasks(tasks, 'archived', []).map((group) => group.label)).toEqual(['Archived'])
+  })
+})
+
+describe('origins while automations are off (hearsay-tools/squawk#1401)', () => {
+  it('offers the Automations origin only while automations are available', () => {
+    expect(taskOrigins(true).map((option) => option.value)).toEqual(['all', 'direct', 'automations'])
+    expect(taskOrigins(false).map((option) => option.value)).toEqual(['all', 'direct'])
+  })
+
+  it('reads a picked Automations origin as All while automations are off', () => {
+    expect(availableOrigin('automations', false)).toBe('all')
+    expect(availableOrigin('direct', false)).toBe('direct')
+    expect(availableOrigin('all', false)).toBe('all')
+    expect(availableOrigin('automations', true)).toBe('automations')
   })
 })

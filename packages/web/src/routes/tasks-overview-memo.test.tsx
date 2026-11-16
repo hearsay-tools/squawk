@@ -14,7 +14,7 @@ it('skips unchanged detailed rows when another run updates', () => {
   const stable = run({ id: 'stable' }), changing = run({ id: 'changing' })
   const client = createQueryClient(), onRename = vi.fn(), onViewChange = vi.fn(), onArchiveFinished = vi.fn(), onMarkAllRead = vi.fn()
   const expandedColumns = {}, automationName = () => undefined
-  const page = (runs: typeof stable[]) => <QueryClientProvider client={client}><MemoryRouter><TasksOverview runs={runs} view="active" now={NOW} onRename={onRename} onViewChange={onViewChange} onArchiveFinished={onArchiveFinished} onMarkAllRead={onMarkAllRead} expandedColumns={expandedColumns} automationName={automationName} /></MemoryRouter></QueryClientProvider>
+  const page = (runs: typeof stable[]) => <QueryClientProvider client={client}><MemoryRouter><TasksOverview runs={runs} view="active" automations now={NOW} onRename={onRename} onViewChange={onViewChange} onArchiveFinished={onArchiveFinished} onMarkAllRead={onMarkAllRead} expandedColumns={expandedColumns} automationName={automationName} /></MemoryRouter></QueryClientProvider>
   const view = render(page([stable, changing]))
   fireEvent.click(screen.getByRole('button', { name: 'Columns' }))
   fireEvent.click(screen.getByRole('button', { name: 'Resource columns' }))

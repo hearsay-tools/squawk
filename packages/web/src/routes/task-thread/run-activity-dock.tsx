@@ -22,6 +22,7 @@ import { Link } from '@/lib/project-router'
 import { queuePositions } from '@/lib/task-groups'
 import { formatCost, referenceKey, taskIssueUrl, taskPrUrl, workflowLabel, type TaskReference } from '@/lib/tasks-table'
 import { usageMetricVisibility } from '@/lib/token-metrics'
+import { automationsAvailable } from '@/lib/capabilities'
 import { cn } from '@/lib/utils'
 import { useIsDesktop } from '@/lib/use-desktop'
 
@@ -219,7 +220,7 @@ function useSessionActivity(run: ApiRun, currentThread: ThreadState, currentComp
     agentCounts,
     planEntries,
     planCounts: planCountsValue,
-    automations: health.data?.capabilities?.automations === true,
+    automations: automationsAvailable(health.data),
   }
 }
 

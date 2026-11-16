@@ -53,6 +53,7 @@ import { cn } from '@/lib/utils'
 export function TaskQuickList({
   runs,
   view,
+  automations,
   onViewChange,
   currentRunId = null,
   now = Date.now(),
@@ -67,6 +68,8 @@ export function TaskQuickList({
 }: {
   runs: RunSummary[]
   view: SidebarView
+  /** `useAutomationsAvailable`: false hides the Automations tab and lists every origin in Active. */
+  automations: boolean
   onViewChange: (view: SidebarView) => void
   /** The run open at `/tasks/:id`, so its row can show as active. */
   currentRunId?: string | null
@@ -88,10 +91,10 @@ export function TaskQuickList({
   projectId?: string | null | undefined
 }) {
   const onNavigate = useSidebarNavigate()
-  const counts = sidebarCounts(runs)
+  const counts = sidebarCounts(runs, automations)
   // Both tabs list unarchived tasks in status sections (hearsay-tools/cezarion#1332); archived
   // history and Restore live on the Tasks table.
-  const inView = sidebarRuns(runs, view)
+  const inView = sidebarRuns(runs, view, automations)
   const allBuckets = groupRuns(inView, 'active')
   const buckets = capBuckets(allBuckets, sidebarLimits ?? rowLimit ?? { overall: null })
   // From the tab's FULL list, not the capped buckets: "Archive all" sweeps rows the cap hides, so
@@ -112,7 +115,7 @@ export function TaskQuickList({
           must not be able to hide that the view is filtered. */}
       {showViewControls ? <div className="sticky top-0 z-10 bg-sidebar pt-2 pb-1">
         <div className="inline-flex w-full gap-0.5 rounded-md bg-muted p-[2px]">
-          <SidebarViewTabs view={view} onSelect={onViewChange} counts={counts} />
+          <SidebarViewTabs view={view} automations={automations} onSelect={onViewChange} counts={counts} />
         </div>
       </div> : null}
 
@@ -133,6 +136,7 @@ export function TaskQuickList({
           sweeping={sweeping}
           sweepCounts={sweepCounts}
           view={view}
+          automations={automations}
         />
       )}
     </div>
@@ -166,6 +170,7 @@ export function QuickListBuckets({
   allBuckets = buckets,
   sectionProjectId = scope,
   view = 'active',
+  automations,
 }: {
   buckets: QuickListBucket[]
   /** Full sections retain honest task counts/attention even when the row budget is exhausted. */
@@ -184,6 +189,8 @@ export function QuickListBuckets({
   projectName?: string | undefined
   /** The sidebar tab, so a cut section's "3 of 24" opens the Tasks page on the same origin. */
   view?: SidebarView
+  /** `useAutomationsAvailable`, which decides what the tab's origin is. */
+  automations: boolean
 }) {
   const headingId = React.useId()
   const sections = useSidebarSections(sectionProjectId)
@@ -231,7 +238,7 @@ export function QuickListBuckets({
           <div className="flex items-center justify-between gap-2 pr-[6px]">
             <SectionHeading id={id} bucket={bucket} collapsed={collapsed} cut={cut} onToggle={sections.toggle} />
             {/* Outside the heading for the same reason as the sweep button below. */}
-            {cut ? <SectionCutLink section={bucket.label as SidebarSection} shown={rows.length} total={count} scope={scope} view={view} /> : null}
+            {cut ? <SectionCutLink section={bucket.label as SidebarSection} shown={rows.length} total={count} scope={scope} view={view} automations={automations} /> : null}
             {/* A sibling of the heading, so its accessible name stays `Finished 3`. */}
             {onSweep && sweepCounts ? <GroupSweepButton label={bucket.label} headingId={id} projectName={projectName} counts={sweepCounts} onSweep={onSweep} sweeping={sweeping} /> : null}
           </div>
@@ -252,17 +259,18 @@ export function QuickListBuckets({
  * A cut section's count, `3 of 24`: the sidebar shows 3 of the section's 24 tasks. It opens the
  * Tasks page with only this section unfolded; the tooltip names the setting that sets the cut.
  */
-function SectionCutLink({ section, shown, total, scope, view }: {
+function SectionCutLink({ section, shown, total, scope, view, automations }: {
   section: SidebarSection
   shown: number
   total: number
   scope: string | null
   view: SidebarView
+  automations: boolean
 }) {
   const onNavigate = useSidebarNavigate()
   return (
     <Link
-      to={scopeTo(scope, sectionTasksPath(section, view))}
+      to={scopeTo(scope, sectionTasksPath(section, view, automations))}
       onClick={onNavigate}
       data-slot="section-cut-link"
       aria-label={`${section}: showing ${shown} of ${total}, see all`}
@@ -832,7 +840,7 @@ export function TaskQuickListContainer({ showViewControls = true, projectId: exp
   const pin = usePinRun(projectAddress({ projectId: scope, boot }))
   const archive = useSidebarArchive(projectAddress({ projectId: scope, boot }), onNavigate)
   const health = useHealth()
-  const [view, setView] = useListView()
+  const [view, setView, automations] = useListView()
   // Project-prefix-agnostic matches (step 3.2): `/p/<id>/tasks/:id` must light its row too.
   const match = useProjectMatch('/tasks/:id/*')
   const exact = useProjectMatch('/tasks/:id')
@@ -842,7 +850,7 @@ export function TaskQuickListContainer({ showViewControls = true, projectId: exp
   const referenceProjectId = useReferenceProjectId()
   const projectId = explicitProjectId ?? referenceProjectId
   const repoBase = useProjectRepoBase(projectId)
-  const buckets = capBuckets(groupRuns(sidebarRuns(runs.data ?? [], view), 'active'), sidebarLimits)
+  const buckets = capBuckets(groupRuns(sidebarRuns(runs.data ?? [], view, automations), 'active'), sidebarLimits)
   const referenceRequests = projectId === undefined ? [] : buckets.flatMap(bucket =>
     bucket.rows.flatMap(({ run }) =>
       taskReferences(run, repoBase).filter(ref => isOwnRepoReference(ref, repoBase)).map(
@@ -863,6 +871,7 @@ export function TaskQuickListContainer({ showViewControls = true, projectId: exp
         projectId={projectId === 'default' ? health.data?.bootProject ?? null : projectId ?? null}
         runs={runs.data}
         view={view}
+        automations={automations}
         onViewChange={setView}
         // Both matches: `/tasks/:id` and its `/changes` and `/files` children all keep the row lit.
         currentRunId={match?.params.id ?? exact?.params.id ?? null}
@@ -873,7 +882,7 @@ export function TaskQuickListContainer({ showViewControls = true, projectId: exp
         }
         onArchiveRun={archive.archiveOne}
         // Each tab sweeps only its own finished tasks: the ones it lists and counts.
-        onSweep={(scope) => archive.sweep(scope, view === 'automations')}
+        onSweep={(scope) => archive.sweep(scope, automations ? view === 'automations' : undefined)}
         sweeping={archive.sweeping}
       />
     </ReferenceStatusProvider>
@@ -882,7 +891,7 @@ export function TaskQuickListContainer({ showViewControls = true, projectId: exp
 
 /** One scope switcher above the project tree, shared by every sidebar run list. */
 export function SidebarSessionScope() {
-  const [view, setView] = useListView()
+  const [view, setView, automations] = useListView()
   const runs = useRuns()
   const registry = useProjects().data
   const runsProjectId = queryScope()
@@ -908,16 +917,17 @@ export function SidebarSessionScope() {
   })
   return (
     <div data-slot="sidebar-session-scope" role="group" aria-label="Session scope" className="flex w-full gap-1 rounded-lg bg-muted p-[3px]">
-      <SidebarViewTabs view={view} onSelect={setView} counts={sidebarCounts(combined)} />
+      <SidebarViewTabs view={view} automations={automations} onSelect={setView} counts={sidebarCounts(combined, automations)} />
     </div>
   )
 }
 
 /** Active and Automations (hearsay-tools/cezarion#1332), each with its count and, while another
  *  tab is selected, a dot when its own tasks need you: the one reason to look at a tab you are
- *  not on. */
-function SidebarViewTabs({ view, onSelect, counts }: {
+ *  not on. Automations exists only while automations are available (hearsay-tools/squawk#1401). */
+function SidebarViewTabs({ view, automations, onSelect, counts }: {
   view: SidebarView
+  automations: boolean
   onSelect: (view: SidebarView) => void
   counts: ReturnType<typeof sidebarCounts>
 }) {
@@ -928,10 +938,12 @@ function SidebarViewTabs({ view, onSelect, counts }: {
         Active
         {counts.activeWaiting > 0 && view !== 'active' ? dot : null}
       </ViewTab>
-      <ViewTab view="automations" current={view} onSelect={onSelect} count={counts.automations}>
-        Automations
-        {counts.automationsWaiting > 0 && view !== 'automations' ? dot : null}
-      </ViewTab>
+      {automations ? (
+        <ViewTab view="automations" current={view} onSelect={onSelect} count={counts.automations}>
+          Automations
+          {counts.automationsWaiting > 0 && view !== 'automations' ? dot : null}
+        </ViewTab>
+      ) : null}
     </>
   )
 }

@@ -356,11 +356,12 @@ export function listCounts(runs: readonly RunSummary[]): {
 }
 
 /** The unarchived runs a sidebar tab lists: Automations holds the tasks an automation launched
- *  (`isAutomationTask`, the recorded origin), Active every other one. The result goes through
- *  `groupRuns(…, 'active')`, which drops owned workers and keeps the status sections. */
-export function sidebarRuns(runs: readonly RunSummary[], view: SidebarView): RunSummary[] {
-  const automations = view === 'automations'
-  return runs.filter((run) => !run.archived && isAutomationTask(run) === automations)
+ *  (`isAutomationTask`, the recorded origin), Active every other one. While automations are off
+ *  (`automationsAvailable`) there is no Automations tab, and Active lists every unarchived run
+ *  (hearsay-tools/squawk#1401). The result goes through `groupRuns(…, 'active')`, which drops
+ *  owned workers and keeps the status sections. */
+export function sidebarRuns(runs: readonly RunSummary[], view: SidebarView, automations: boolean): RunSummary[] {
+  return runs.filter((run) => !run.archived && (!automations || isAutomationTask(run) === (view === 'automations')))
 }
 
 /** The sidebar's status sections, the ones a row budget can cut. */
@@ -375,19 +376,22 @@ export const SECTION_PARAM = 'section'
 
 /**
  * Where a cut sidebar section's "3 of 24" goes: the Tasks page, filtered to the tab's origin so it
- * lists the same 24 tasks, with only that section unfolded.
+ * lists the same 24 tasks, with only that section unfolded. While automations are off the Active
+ * tab lists every origin, so the link names none.
  */
-export function sectionTasksPath(section: SidebarSection, view: SidebarView): string {
-  const origin = view === 'automations' ? 'automations' : 'direct'
-  return `/?origin=${origin}&${SECTION_PARAM}=${SECTION_SLUGS[section]}`
+export function sectionTasksPath(section: SidebarSection, view: SidebarView, automations: boolean): string {
+  const slug = `${SECTION_PARAM}=${SECTION_SLUGS[section]}`
+  if (!automations) return `/?${slug}`
+  return `/?origin=${view === 'automations' ? 'automations' : 'direct'}&${slug}`
 }
 
 export function parseSectionParam(value: string | null): SidebarSection | null {
   return SIDEBAR_SECTIONS.find((section) => SECTION_SLUGS[section] === value) ?? null
 }
 
-/** The sidebar tab counts, and each tab's own "needs you" count for its attention dot. */
-export function sidebarCounts(runs: readonly RunSummary[]): {
+/** The sidebar tab counts, and each tab's own "needs you" count for its attention dot. While
+ *  automations are off, Active counts every run, as it lists them (`sidebarRuns`). */
+export function sidebarCounts(runs: readonly RunSummary[], automations: boolean): {
   active: number
   automations: number
   activeWaiting: number
@@ -397,7 +401,7 @@ export function sidebarCounts(runs: readonly RunSummary[]): {
   for (const run of runs) {
     if (isOwnedWorker(run) || run.archived) continue
     const waiting = needsYou(run) ? 1 : 0
-    if (isAutomationTask(run)) {
+    if (automations && isAutomationTask(run)) {
       counts.automations += 1
       counts.automationsWaiting += waiting
     } else {
