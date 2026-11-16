@@ -248,9 +248,13 @@ jobs upload no coverage. A failing selected test fails its job;
 it never triggers a full-suite retry. The base fetch is bounded to 100 commits.
 A missing merge-base costs a full run instead of silently skipping tests.
 
-Browser jobs call `scripts/e2e-affected.mjs --ci`. The selector reads the newest
-successful `e2e-spec-map.yml` map on `main`, compares against the map's own commit,
-and keeps its existing conservative selection rules. A PR runs browser specs only
+Browser jobs fetch the PR base branch's current tip and call
+`scripts/e2e-affected.mjs --ci --base=origin/<base branch>`; the event's base SHA can be older
+than the tested merge's base parent. The selector reads the newest successful `e2e-spec-map.yml`
+map on `main` and selects from the PR's own changes, from the merge-base with that tip. Merges
+after the map's commit do not count, except that mapped files they changed add their specs
+when the PR touches mapped code. Its log prints each changed file with its spec count and
+reason. A PR runs browser specs only
 when the selector returns a list shorter than the full set. When the selector
 chooses every spec, chooses no spec or fails, the PR runs no browser spec: the log
 and the job summary state the reason, and the step prints

@@ -34,9 +34,10 @@ export function browserFiles(select, total) {
   try {
     chosen = select();
   } catch (error) {
-    return { skip: `the selector failed: ${error.message}` };
+    return { skip: `the selector failed: ${String(error?.message ?? error).split('\n')[0]}` };
   }
-  if (chosen.all || chosen.specs.length >= total) return { chosen, skip: 'the selector chose every spec' };
-  if (chosen.specs.length === 0) return { chosen, skip: 'the selector chose no spec' };
+  const why = chosen.reason ? `: ${chosen.reason}` : '';
+  if (chosen.all || chosen.specs.length >= total) return { chosen, skip: `the selector chose every spec${why}` };
+  if (chosen.specs.length === 0) return { chosen, skip: `the selector chose no spec${why}` };
   return { chosen };
 }
