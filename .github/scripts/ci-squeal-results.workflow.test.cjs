@@ -52,7 +52,7 @@ test('the Vitest shards and the Squeal jobs read one exact Node version from .no
   const { jobs } = ci();
   const readers = Object.entries(jobs).filter(([, job]) => (job.steps ?? []).some((s) => s.with?.['node-version-file']))
     .map(([id]) => id);
-  assert.deepEqual(readers.sort(), ['cockpit-browser', 'prepare-pr-snapshot', 'publish-snapshot', 'squeal-export', 'squeal-publish', 'vitest',
+  assert.deepEqual(readers.sort(), ['cockpit-browser', 'crap-report', 'prepare-pr-snapshot', 'publish-snapshot', 'squeal-export', 'squeal-publish', 'vitest',
     'vitest-coverage-merge'], 'the minimum-Node jobs keep engines.node');
   for (const id of readers) {
     const setup = jobs[id].steps.find((s) => s.uses?.startsWith('actions/setup-node@'));
