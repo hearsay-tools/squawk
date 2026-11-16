@@ -7,6 +7,7 @@ import { RUNNER_IDS } from './agent-runner.ts';
 import { AUTONOMOUS_CRITERIA, driveSeam, exemptionFor, promptFor, waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 import { refusedNudgeIdleClose } from './workflow-autonomous-idle-close.testkit.ts';
+import { unacknowledgedNudgeBound } from './workflow-autonomous-ack-bound.testkit.ts';
 import { MAX_AUTO_CONTINUES } from '../workflows/run.ts';
 import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { RUN_EXITS } from '../runs/run-exits.ts';
@@ -97,6 +98,14 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
     "opencode A14",
     "pi A14"
   ],
+  "ack-bound": [
+    "claude A15",
+    "codex A15",
+    "cursor A15",
+    "omp A15",
+    "opencode A15",
+    "pi A15"
+  ],
   "native-questions": [
     "claude A9",
     "codex A9 fresh",
@@ -118,6 +127,11 @@ describe('autonomous turn-end parity — #426', () => {
         const options = { refuses: !exemption, heldAck: backend !== 'claude' && backend !== 'cursor' };
         it(`${backend} ${row.id} ${exemption ? `exemption — ${exemption.reason}` : row.name}`,
           () => refusedNudgeIdleClose(backend, row.id === 'A14', options), 60_000);
+        continue;
+      }
+      if (row.id === 'A15') {
+        it(`${backend} ${row.id} ${exemption ? `exemption — ${exemption.reason}` : row.name}`,
+          () => unacknowledgedNudgeBound(backend, { heldAck: !exemption }), 60_000);
         continue;
       }
       if (exemption) {

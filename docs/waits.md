@@ -52,7 +52,10 @@ finishes at the end of that turn: its open waits are cancelled and the summary i
 written as a note. In a workflow step that is not the last, `cezar_done` finishes that step
 and Squawk starts the next one. `cezar_done` refuses while owned workers are live or uncollected,
 a worker question is unanswered or a question to you is still pending, and says what to do first. An
-autonomous task does not wait for you until its automatic-wake budget is spent.
+autonomous task does not wait for you until its automatic-wake budget is spent. When the
+agent's harness neither acknowledges nor answers an autonomous nudge within 5 minutes, Squawk
+writes a note that names the nudge and closes the session. The task then waits for a Continue,
+with no question to you.
 
 A run can have several waits open at once, up to 16. Each answer carries the
 wait's id, its absolute deadline and the list of waits still open, and

@@ -8,7 +8,7 @@ import type { AgentSession } from '../../core/claude-cli-runner.ts';
 import type { ContentBlock } from '../../core/agent-runner.ts';
 import type { AskRequest } from '../../core/ask.ts';
 import type { UiEventSink } from '../../runs/ui-event-sink.ts';
-import type { RunRecord } from '../../runs/store.ts';
+import type { RunRecord, RunStore } from '../../runs/store.ts';
 import type { RunExitId, ExitCall, RunPatch } from '../../runs/run-exits.ts';
 import type { ActiveRun } from '../active-run.ts';
 import { openCompletionRequests, sentRequestInstructions, type CompletionRefusal } from '../completion-policy.ts';
@@ -40,6 +40,7 @@ interface TurnSettlerHost {
   parkOnWaits(id: string, state: ActiveRun): boolean; queueWaitWake(id: string): void; leaveMonitoringPool(id: string): void; chargeAutomaticWake(id: string): number;
   canAutoContinue(id: string, state: ActiveRun): boolean;
   sendTurnEndNudge(id: string, state: ActiveRun, step: string | undefined, text: string): boolean; awaitCompletionNudgeReply(id: string, state: ActiveRun, session: AgentSession): void;
+  armAutonomousNudgeBound(id: string, state: ActiveRun): void;
   noticeParkedWorker(id: string): void; routeWorkerQuestion(id: string): void; settledTurnOutcome(id: string, entry: 'turn-end' | 'ack' | 'ready' | 'gate' | 'reply-timer', outcome: TurnEndOutcome): TurnEndOutcome | undefined;
 }
 
@@ -175,6 +176,9 @@ export class TurnSettler {
     if (entry !== 'turn-end' && decision.kind === 'park' && this.host.line.isParked(runId)) return true;
     const outcome = this.carryOutTurnEnd(runId, state, stepId, decision, refused, noteRefusal);
     if (outcome.kind === 'done') return false;
+    // A run left running on an autonomous nudge's missing acknowledgement is bounded again
+    // (hearsay-tools/squawk#2443).
+    if (outcome.kind === 'running') this.host.armAutonomousNudgeBound(runId, state);
     this.host.settledTurnOutcome(runId, entry, outcome);
     return true;
   }
@@ -405,16 +409,19 @@ export class TurnSettler {
     transitionTurnBoundary(state, { kind: 'idle-expired', phase: 'reset', session: state.liveSession.session });
     // Not bound to a session: the expiry closes the session that is open when it fires.
     const timer = this.timers.arm({ kind: 'idle-close', runId, delayMs: this.idleTimeoutMs }, () => {
-      if (state.liveSession.session?.open && !state.liveSession.cancelled) {
-        transitionTurnBoundary(state, { kind: 'idle-expired', phase: 'close', session: state.liveSession.session });
-        this.context.store.appendEvent(runId, {
-          type: 'lifecycle',
-          message: `session closed after ${Math.round(this.idleTimeoutMs / 60_000)}m of inactivity`,
-        });
-        state.liveSession.session.end();
-      }
+      this.closeIdleSession(runId, state, { type: 'lifecycle', message: `session closed after ${Math.round(this.idleTimeoutMs / 60_000)}m of inactivity` });
     });
     transitionTurnBoundary(state, { kind: 'idle-expired', phase: 'armed', session: state.liveSession.session, timer });
+  }
+
+  /** The idle path's close: `event` says why, the open session ends, and the run settles once its
+   *  process has exited (`RunSettlement.settleIdleClosedRun`). */
+  closeIdleSession(runId: string, state: ActiveRun, event: Parameters<RunStore['appendEvent']>[1]): void {
+    const session = state.liveSession.session;
+    if (!session?.open || state.liveSession.cancelled) return;
+    transitionTurnBoundary(state, { kind: 'idle-expired', phase: 'close', session });
+    this.context.store.appendEvent(runId, event);
+    session.end();
   }
 
   /** The turn-end tail's park for the user: `waiting` with the idle timer, no slot. A result

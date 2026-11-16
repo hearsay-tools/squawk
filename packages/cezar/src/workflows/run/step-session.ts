@@ -4,7 +4,8 @@ import { atStepOpen } from './launch-read-resolver.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import type { AgentEvent, AgentRunner, AgentSession, ContentBlock, RunnerId } from '../../core/agent-runner.ts';
+import type { AgentRunner, AgentSession, ContentBlock, RunnerId } from '../../core/agent-runner.ts';
+import type { SessionEventHandler } from './session-events.ts';
 import { inputDeliveryOf } from '../../core/agent-runner.ts';
 import { startManagedSession } from '../../core/managed-session.ts';
 import type { WorkerStepIdentity } from '../../delegation/execution-identity.ts';
@@ -209,7 +210,7 @@ export class StepSession {
     state: ActiveRun,
     runner: AgentRunner,
     launch: StepSessionLaunch,
-    onEvent: (event: AgentEvent) => void,
+    onEvent: SessionEventHandler,
     turn: SessionTurn,
     sink: UiEventSink,
   ): AgentSession | string {
@@ -242,7 +243,8 @@ export class StepSession {
           // Only an authored step opts in; turn completion still advances the chain.
           timeoutMs: launch.step.timeoutMs ?? 0,
         },
-        onEvent,
+        // Every agent event names the session that emitted it.
+        event => onEvent(event, session),
         inputReceipts.inputReceiptCallbacks(this.context, this.inputReceiptHost, this.inputReceiptSteps, runId, state, () => session, turn, sink, false),
       );
     } catch (err) {

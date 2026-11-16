@@ -13,7 +13,7 @@ export const LIVENESS_BOUNDS = {
   'idle-close': { scope: 'execution' },
   /** A nudge the harness never answers parks on the no-wait human wait (`TurnNudges.armNoWaitNudgeReplyTimer`). */
   'nudge-reply': { scope: 'execution' },
-  /** A submitted input the harness never acknowledges. No arm yet: hearsay-tools/squawk#2443 adds it. */
+  /** An autonomous nudge the harness never acknowledges closes through the idle path (`TurnNudges.armAutonomousNudgeBound`, hearsay-tools/squawk#2443). */
   'acknowledgement': { scope: 'execution' },
   /** Accepted input the harness never reads (`InputDelivery.armUnreadInputTimer`, hearsay-tools/cezarion#505). */
   'unread-input': { scope: 'execution' },

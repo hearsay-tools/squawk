@@ -240,6 +240,7 @@ export const AUTONOMOUS_CRITERIA = [
   { id: 'A12', scenario: 'autonomous-cezar-ask-cap', name: 'continues a resumed refused cezar_ask after delayed readiness' },
   { id: 'A13', scenario: 'hold-gated', name: 'keeps a refused nudge running until the idle bound, then settles waiting' },
   { id: 'A14', scenario: 'hold-gated', name: 'keeps a refused nudge on a Continue running until the idle bound, then settles waiting' },
+  { id: 'A15', scenario: 'autonomous-cap', name: 'bounds a nudge whose acknowledgement never arrives, then settles waiting' },
 ] as const;
 
 /** #544: workflow-final-message-cells.testkit.ts, the no-wait nudge's reply bound on every native wire. */
@@ -752,6 +753,12 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
     ['codex', 'Codex refuses agent input only while a human prompt is still on its way to the wire, and that prompt is held human input: the turn end takes it before any nudge.'],
     ['cursor', 'Cursor print acknowledges a follow-up with its first model work, so the follow-up\'s turn cannot end before its acknowledgement. It refuses agent input only while a turn runs or a follow-up is queued, and a queued follow-up is held human input: the turn end takes it before any nudge.'],
   ] as const).map(([backend, reason]) => ({ criterion, backend, kind: 'capability-absent' as const, reason }))),
+  // hearsay-tools/squawk#2443: the live row holds the nudge's acknowledgement on every wire that
+  // acknowledges apart from its own write.
+  {
+    criterion: 'A15', backend: 'claude', kind: 'capability-absent',
+    reason: 'Claude acknowledges input with its own stdin write, so a submitted nudge cannot wait for its acknowledgement. The cell pins the inverted assertion: every acknowledgement cancels its bound and the run continues to the cap.',
+  },
   ...exemptWhere('F7', 'scenario-unconstructible', facts => facts.transport === 'stdio', () =>
     'This wire has no separate HTTP ACK retained after turn completion. Turn frames and the transport ACK share one stream, so a silent-tail turn cannot end while its agent-input ACK is still pending.'),
   ...(['F8', 'F9'] as const).map(criterion => ({
