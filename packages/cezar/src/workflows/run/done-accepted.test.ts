@@ -15,6 +15,7 @@ const resolved = <W extends Wait>(wait: W): W => ({ ...wait, phase: WAIT_PHASE.r
 const input = (over: Partial<AgentInput> = {}): AgentInput => ({ id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId: randomUUID(), text: 'input', createdAt: new Date().toISOString(), ...over });
 const timerAt = makeTimerWait({ registeredAt: '2026-11-16T10:00:00.000Z' });
 const prAt = makePrWait({ registeredAt: '2026-11-16T10:00:00.000Z' });
+const askedAt = makeHumanWait({ registeredAt: '2026-11-16T10:00:00.000Z' });
 const conversation = (kind: 'request' | 'progress' | 'follow-up' | 'reply', relationship?: 'peer') =>
   ({ senderRunId: randomUUID(), recipientRunId: randomUUID(), kind, ...(relationship ? { relationship } : {}) });
 
@@ -159,6 +160,8 @@ describe('whether an accepted done still holds at the turn end (hearsay-tools/sq
     ['a question asked after the done withdraws it', {}, { waits: [makeHumanWait({ registeredAt: at })] }, withdrawn('the agent asked the user')],
     ['a failed result of a wait open at the done withdraws it', { waits: [prAt] }, { waits: [resolved({ ...prAt, resolvedAt: at, result: pr('failed') })] }, withdrawn('a failed pr wait result')],
     ['a passed result after the done keeps it', { waits: [prAt] }, { waits: [resolved({ ...prAt, resolvedAt: at, result: pr('passed') })] }, kept],
+    // The question this turn's opening answered is settled at its turn end, after the done.
+    ['an answered question settled after the done keeps it', { waits: [askedAt] }, { waits: [], lastWaits: [{ ...askedAt, phase: WAIT_PHASE.delivered, deliveredAt: at }] }, kept],
     ['a failed result settled before the done keeps it', { lastWaits: [{ ...prAt, phase: WAIT_PHASE.delivered, resolvedAt: at, result: pr('failed') }] }, {}, kept],
   ])('%s', (_name, then, now, expected) => {
     expect(decide(then, now)).toEqual(expected);

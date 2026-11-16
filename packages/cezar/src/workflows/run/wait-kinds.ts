@@ -75,8 +75,8 @@ export type WaitKindRow<K extends Wait['kind']> = WaitKindSpec & {
   chargesWake: K extends 'process' | 'peer' | 'subagent' ? (wait: Wait) => boolean : boolean;
   /** The result ends the wait without what the agent waited for: a failed, cancelled or timed-out
    *  check, process, worker, request, peer or subagent. Such a result withdraws an accepted
-   *  `cezar_done`; a success keeps it (hearsay-tools/squawk#2587). A user's answer is a human
-   *  message, which withdraws it too. */
+   *  `cezar_done`; a success keeps it (hearsay-tools/squawk#2587). A human wait has no such
+   *  result: the user's answer is a human message. */
   failedResult: (wait: Wait) => boolean;
   refusesSpentBudget: boolean;
   holdsSession: boolean;
@@ -324,7 +324,8 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     delegation: false,
     userAnswers: true, holdsConversationInput: false, runnerResumeCancels: [],
     chargesWake: false, refusesSpentBudget: false, holdsSession: false, cancellable: 'unshown', timersDisabled: false,
-    failedResult: () => true,
+    // The user's answer is a human message: its own event withdraws a done (acceptedDoneHolds).
+    failedResult: () => false,
     deadline: 'none', keepsSlot: false, humanOnly: 'The question is the user\'s gate.',
     cancels: [`the agent's own wait replaces ${productName('Cezar')}'s`, 'a done in the same turn', 'Stop', 'Finish', 'an authored step timeoutMs'],
     resolves: [{ trigger: 'an answer; the parent\'s for a routed worker question', firedBy: 'human' }] },
