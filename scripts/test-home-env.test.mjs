@@ -22,8 +22,7 @@ test('node:test replaces inherited home and task context before a case runs', ()
       assert.equal(homedir(), process.env.HOME);
       assert.equal(process.env.CEZ_HOME, require('node:path').join(process.env.HOME, '.cezar'));
       for (const key of ['CEZ_REMOTE', 'CEZ_TASK_ID', 'HSQ_REMOTE', 'HSQ_TASK_ID', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME',
-        'PI_CODING_AGENT_DIR', 'PI_CONFIG_DIR', 'OMP_PROFILE', 'PI_PROFILE',
-        'CURSOR_CONFIG_DIR']) assert.equal(process.env[key], undefined, key);
+        'PI_CODING_AGENT_DIR', 'PI_CONFIG_DIR', 'OMP_PROFILE', 'PI_PROFILE']) assert.equal(process.env[key], undefined, key);
       for (const [key, suffix] of Object.entries({ XDG_CONFIG_HOME: '.config', XDG_DATA_HOME: '.local/share',
         XDG_STATE_HOME: '.local/state', XDG_CACHE_HOME: '.cache' })) {
         const expected = require('node:path').join(process.env.HOME, suffix);
@@ -44,7 +43,7 @@ test('node:test replaces inherited home and task context before a case runs', ()
       PI_CONFIG_DIR: '/real/omp', OMP_PROFILE: 'work', PI_PROFILE: 'work',
       XDG_CONFIG_HOME: '/real/XDG_CONFIG_HOME', XDG_DATA_HOME: '/real/XDG_DATA_HOME',
       XDG_STATE_HOME: '/real/XDG_STATE_HOME', XDG_CACHE_HOME: '/real/XDG_CACHE_HOME',
-      XDG_RUNTIME_DIR: '/real/runtime', CURSOR_CONFIG_DIR: '/real/cursor' },
+      XDG_RUNTIME_DIR: '/real/runtime' },
   })
   assert.equal(result.status, 0, result.stdout + result.stderr)
   assert.match(result.stdout, /# pass 1/)

@@ -115,7 +115,6 @@ describe('agent-config catalog', () => {
       'claude.project.mcp',
       'codex.project.config',
       'codex.user.config',
-      'cursor.project.mcp',
       'omp.project.mcp',
       'omp.user.mcp',
       'opencode.project.config',

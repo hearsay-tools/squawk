@@ -47,8 +47,3 @@ export function runnerDisplayName(runner: Runner): string {
 export function runnerModelListName(runner: Runner): string {
   return RUNNER_COCKPIT_FACTS[runner].modelListName;
 }
-
-/** The runners whose cockpit facts match, in the table's order. */
-export function cockpitRunnersWhere(matches: (facts: CockpitRunnerFacts) => boolean): Runner[] {
-  return (Object.keys(RUNNER_COCKPIT_FACTS) as Runner[]).filter(runner => matches(RUNNER_COCKPIT_FACTS[runner]));
-}

@@ -39,7 +39,7 @@ process.env.TEMP = sandboxTemp
 // (hearsay-tools/cezarion#2453). CI has none of these, so every host now resolves them as CI does,
 // to ENOENT. A test that sets its own binary or PATH still runs what it names. Set once per file,
 // like the task keys below. The mirror directories live in the sandbox and go with it.
-const HOST_RUNNER_COMMANDS = ['claude', 'codex', 'opencode', 'pi', 'omp', 'agent', 'cursor-agent']
+const HOST_RUNNER_COMMANDS = ['claude', 'codex', 'opencode', 'pi', 'omp']
 process.env.PATH = hideHostCommands(HOST_RUNNER_COMMANDS, join(sandboxTemp, 'path'))
 // Nor the host gh, which answers with the developer's login and leaves its state in the sandbox
 // (hearsay-tools/squawk#2459), nor a browser opener (hearsay-tools/squawk#2369). They live in

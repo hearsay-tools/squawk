@@ -34,7 +34,7 @@ const TEAM_SKILL = 'team-dir-playbook';
 const V1_BODY = 'TEAM-DIR-PLAYBOOK-V1-1024';
 const V2_BODY = 'TEAM-DIR-PLAYBOOK-V2-1024';
 const NOTES = 'companion notes 1024\n';
-const AGENT_SKILL_DIRS = ['.claude', '.agents', '.cursor'];
+const AGENT_SKILL_DIRS = ['.claude', '.agents'];
 
 describe('team directory skills never land in the main checkout (#1024)', { timeout: 30_000 }, () => {
   let repoRoot: string;
@@ -232,10 +232,8 @@ describe('team directory skills never land in the main checkout (#1024)', { time
     const outside = mkdtempSync(join(tmpdir(), 'cez-team-dir-outside-'));
     cleanup.push(outside);
     symlinkSync(outside, join(repoRoot, '.claude'));
-    for (const agentDir of ['.agents', '.cursor']) {
-      mkdirSync(join(repoRoot, agentDir));
-      writeFileSync(join(repoRoot, agentDir, '.keep'), '');
-    }
+    mkdirSync(join(repoRoot, '.agents'));
+    writeFileSync(join(repoRoot, '.agents', '.keep'), '');
     await execFileAsync('git', ['add', '-A'], { cwd: repoRoot });
     await execFileAsync('git', [...GIT_ID, 'commit', '-q', '-m', 'linked .claude'], { cwd: repoRoot });
 
@@ -248,11 +246,11 @@ describe('team directory skills never land in the main checkout (#1024)', { time
     expect(worktreeRun.spec.systemPrompt).toContain(`Skill files are installed on disk at: ${filesDir}`);
     expect(readFileSync(join(filesDir, 'references', 'notes.md'), 'utf8')).toBe(NOTES);
     expect(materializedNotes(worktreeRun.id)).toEqual([
-      `team skill "${TEAM_SKILL}" materialized to .agents/skills/${TEAM_SKILL}/ and .cursor/skills/${TEAM_SKILL}/`,
+      `team skill "${TEAM_SKILL}" materialized to .agents/skills/${TEAM_SKILL}/`,
     ]);
   });
 
-  it('a worktree that takes all three copies keeps the note and names no path', async () => {
+  it('a worktree that takes both copies keeps the note and names no path', async () => {
     await seedTeamSource();
 
     const worktreeRun = await runToEnd(undefined);
@@ -260,8 +258,7 @@ describe('team directory skills never land in the main checkout (#1024)', { time
     expect(worktreeRun.spec.systemPrompt).toContain(V1_BODY);
     expect(worktreeRun.spec.systemPrompt).not.toContain('Skill files are installed on disk at:');
     expect(materializedNotes(worktreeRun.id)).toEqual([
-      `team skill "${TEAM_SKILL}" materialized to .claude/skills/${TEAM_SKILL}/ ` +
-        `.agents/skills/${TEAM_SKILL}/, and .cursor/skills/${TEAM_SKILL}/`,
+      `team skill "${TEAM_SKILL}" materialized to .claude/skills/${TEAM_SKILL}/ and .agents/skills/${TEAM_SKILL}/`,
     ]);
   });
 

@@ -24,7 +24,7 @@ import { readManifest, uncoveredPaths } from './worktree-manifest.testkit.ts';
 
 const execFileAsync = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
-const AGENT_DIRS = ['.claude', '.agents', '.cursor'];
+const AGENT_DIRS = ['.claude', '.agents'];
 
 /** The instruction `improve-codebase-architecture` (mattpocock/skills@5beb35b) gives for its companion. */
 const GRILLING_INSTRUCTION =
@@ -212,7 +212,7 @@ describe('provisionSkills', { timeout: 30_000 }, () => {
   const manifestPath = async () => join(await gitDir(), 'cezar-manifest.json');
   const status = (cwd: string) => git(cwd, 'status', '--porcelain', '--untracked-files=all');
 
-  it('links a local directory skill and its single-file companion into all three dirs', async () => {
+  it('links a local directory skill and its single-file companion into both dirs', async () => {
     const mainStatus = await status(main);
     const result = await provisionSkills(worktree, [lead], [lead, helper], { home: testHome() });
     expect(result.installed).toEqual(['lead-skill', 'helper-skill']);
@@ -261,7 +261,7 @@ describe('provisionSkills', { timeout: 30_000 }, () => {
       };
       const result = await provisionSkills(worktree, [team], [team], { home: testHome() });
       expect(result.installed).toEqual(['team-skill']);
-      expect(result.teamCopies['team-skill']).toHaveLength(3);
+      expect(result.teamCopies['team-skill']).toHaveLength(AGENT_DIRS.length);
       expect(readFileSync(join(worktree, '.claude', 'skills', 'team-skill', 'references', 'r.md'), 'utf8')).toBe('ref\n');
       expect(await status(worktree)).toBe('');
     } finally {
@@ -428,7 +428,7 @@ describe('provisionSkills', { timeout: 30_000 }, () => {
       const result = await provisionSkills(worktree, [team], [team], { home: testHome() });
       expect(readFileSync(join(mine, 'SKILL.md'), 'utf8')).toBe('MINE\n');
       expect(existsSync(join(mine, 'references'))).toBe(false);
-      expect(result.teamCopies['team-mine']).toHaveLength(2);
+      expect(result.teamCopies['team-mine']).toHaveLength(AGENT_DIRS.length - 1);
     } finally {
       cleanup();
     }
@@ -659,9 +659,7 @@ describe('provisionSkills', { timeout: 30_000 }, () => {
       const result = await provisionSkills(worktree, [team], [team], { home: testHome() });
       expect(readFileSync(join(dest, 'SKILL.md'), 'utf8')).toBe('OLD\n');
       expect(existsSync(join(dest, 'references'))).toBe(false);
-      expect(result.teamCopies['team-unrecorded']).toEqual([
-        join(worktree, '.claude', 'skills', 'team-unrecorded'), join(worktree, '.cursor', 'skills', 'team-unrecorded'),
-      ]);
+      expect(result.teamCopies['team-unrecorded']).toEqual([join(worktree, '.claude', 'skills', 'team-unrecorded')]);
     } finally {
       cleanup();
     }
