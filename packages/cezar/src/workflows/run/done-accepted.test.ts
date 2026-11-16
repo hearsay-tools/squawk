@@ -2,9 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentInput, Wait } from '@open-mercato/cezar-contract';
 import { agentInputSchema, workerOutcomeSchema } from '@open-mercato/cezar-contract/delegation';
-import { makeHumanWait, makePeerWait, makePrWait, makeProcessWait, makeRunEvent, makeRunRecord, makeSubagentWait, makeTimerWait, makeWorkerRequestWait, makeWorkerWait, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeHumanWait, makePeerWait, makePrWait, makeProcessWait, makeRunEvent, makeRunRecord, makeSubagentWait, makeTimerWait, makeWorkerRequestWait, makeWorkerWait, RUN_STATUS, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentSession } from '../../core/agent-runner.ts';
 import { createActiveRun } from '../active-run.ts';
+import { decodeRunRow } from '../../runs/store.ts';
 import { acceptedDoneDelivery, factsAtDone, owedAtDone, reconsideredBy } from './done-accepted.ts';
 import { acceptedDoneHolds } from './turn-settler.ts';
 import { InputFlight } from './input-delivery.ts';
@@ -158,8 +159,8 @@ describe('whether an accepted done still holds at the turn end (hearsay-tools/sq
     ['a wait registered before the done keeps it, also in its millisecond', { waits: [timerAt] }, { waits: [timerAt] }, kept],
     ['the completion wait keeps it', {}, { waits: [makeWorkerWait({ registeredAt: at, source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion })] }, kept],
     ['a question asked after the done withdraws it', {}, { waits: [makeHumanWait({ registeredAt: at })] }, withdrawn('the agent asked the user')],
-    ['a failed result of a wait open at the done withdraws it', { waits: [prAt] }, { waits: [resolved({ ...prAt, resolvedAt: at, result: pr('failed') })] }, withdrawn('a failed pr wait result')],
-    ['a passed result after the done keeps it', { waits: [prAt] }, { waits: [resolved({ ...prAt, resolvedAt: at, result: pr('passed') })] }, kept],
+    ['a failed result of a wait open at the done withdraws it', { waits: [prAt] }, { waits: [{ ...resolved({ ...prAt, result: pr('failed') }), resolvedAt: at }] }, withdrawn('a failed pr wait result')],
+    ['a passed result after the done keeps it', { waits: [prAt] }, { waits: [{ ...resolved({ ...prAt, result: pr('passed') }), resolvedAt: at }] }, kept],
     // The question this turn's opening answered is settled at its turn end, after the done.
     ['an answered question settled after the done keeps it', { waits: [askedAt] }, { waits: [], lastWaits: [{ ...askedAt, phase: WAIT_PHASE.delivered, deliveredAt: at }] }, kept],
     ['a failed result settled before the done keeps it', { lastWaits: [{ ...prAt, phase: WAIT_PHASE.delivered, resolvedAt: at, result: pr('failed') }] }, {}, kept],
@@ -215,5 +216,30 @@ describe('the input that opened this turn (hearsay-tools/squawk#2587)', () => {
     expect(f.delivery.submitAgentInput(f.run.id, f.state, [{ type: 'text', text: 'retried' }], [retried.id])).toBe(true);
     await f.state.inputState.agentInputFlight?.settled;
     expect(owedAtDone(f.store.getRun(f.run.id)!, f.state)).toEqual([{ kind: 'unread', input_id: retried.id }]);
+  });
+});
+
+describe('a done saved before its identity facts (hearsay-tools/squawk#2587)', () => {
+  // hearsay-tools/squawk#3708 saved `{ session, at, seq, summary? }`. The upgrade reads what the run
+  // held at `at`, as that build decided, so the done survives and still holds.
+  const at = '2026-11-16T10:00:00.000Z', before = '2026-11-16T09:59:59.000Z', after = '2026-11-16T10:00:01.000Z';
+  const known = makePrWait({ registeredAt: before });
+  const earlier = input({ createdAt: before, deliveredAt: before, consumedAt: before });
+  const saved = (over: Partial<Parameters<typeof makeRunRecord>[0]> = {}) => decodeRunRow(JSON.stringify({
+    ...makeRunRecord({ status: RUN_STATUS.waiting, waits: [known], agentInputs: [earlier], ...over }),
+    doneAccepted: { session: 'generation', at, seq: 10, summary: 'shipped' },
+  }))!.run;
+
+  it('reads the waits and the last input it held at the done, and the done still holds', () => {
+    const run = saved();
+    expect(run.doneAccepted).toEqual({ session: 'generation', at, seq: 10, summary: 'shipped', openWaits: [known.id], settledWaits: [], lastInput: earlier.id });
+    expect(acceptedDoneHolds(run, [])).toEqual({ holds: true });
+  });
+
+  it('reads a wait registered after the done as new to it', () => {
+    const later = makePrWait({ registeredAt: after, via: WAIT_VIA.cezar_wait });
+    const run = saved({ waits: [known, later] });
+    expect(run.doneAccepted?.openWaits).toEqual([known.id]);
+    expect(acceptedDoneHolds(run, [])).toEqual({ holds: false, reason: 'the agent registered a wait', byInput: false });
   });
 });
