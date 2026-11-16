@@ -333,6 +333,19 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
     expect(f.store.getRun(id)?.waits ?? []).toEqual([]);
   });
 
+  it('a turn start the send emits is no answer: the acknowledged nudge still closes the run after the bound', async () => {
+    startsTurnOnSend = true;
+    const { id, session: nudged } = await startNudged();
+    acknowledge();
+    await vi.advanceTimersByTimeAsync(0);
+    heartbeat();
+    await vi.advanceTimersByTimeAsync(BOUND_MS - 1);
+    expect(nudged.end).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(nudged.end).toHaveBeenCalledOnce();
+    expect(answerNotes(id)).toHaveLength(1);
+  });
+
   it('a turn start after the acknowledgement cancels the answer bound', async () => {
     const { id, session: nudged } = await startNudged();
     acknowledge();

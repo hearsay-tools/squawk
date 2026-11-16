@@ -78,6 +78,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * | `silent-tail-late-reply` | the same first turn; a final-message nudge is ACKed, then replies after the bound |
  * | `silent-tail-late-turn-start` | the same first turn; after the bound, native turn-start holds before any content |
  * | `silent-tail-slow-done` | the same first turn; a nudge reply starts before the bound and ends after it |
+ * | `autonomous-silent` | an autonomous first turn with no done; its nudge is ACKed and answered with heartbeats only |
  * | `serve-start-exit` | the backend server's first start exits before listening; the next start answers `baseline` |
  *
  * hearsay-tools/cezarion#2397 removed the lifecycle markers, and with them the scenarios that
@@ -109,6 +110,7 @@ export const SCENARIOS = [
   'autonomous',
   'autonomous-cap',
   'autonomous-cezar-ask-cap',
+  'autonomous-silent',
   'silent-tail',
   'silent-tail-ack-delay',
   'silent-tail-no-reply',
@@ -241,6 +243,7 @@ export const AUTONOMOUS_CRITERIA = [
   { id: 'A13', scenario: 'hold-gated', name: 'keeps a refused nudge running until the idle bound, then settles waiting' },
   { id: 'A14', scenario: 'hold-gated', name: 'keeps a refused nudge on a Continue running until the idle bound, then settles waiting' },
   { id: 'A15', scenario: 'autonomous-cap', name: 'bounds a nudge whose acknowledgement never arrives, then settles waiting' },
+  { id: 'A16', scenario: 'autonomous-silent', name: 'bounds an acknowledged nudge that gets only heartbeats, then settles waiting' },
 ] as const;
 
 /** #544: workflow-final-message-cells.testkit.ts, the no-wait nudge's reply bound on every native wire. */
@@ -390,6 +393,7 @@ export const HARNESS_ADAPTERS: Readonly<Record<RunnerId, HarnessAdapter>> = {
       'missing-binary': BASELINE_PROMPT,
       autonomous: 'mock:autonomous',
       'autonomous-cap': 'mock:autonomous-cap',
+      'autonomous-silent': 'mock:autonomous-silent',
       'autonomous-cezar-ask-cap': 'mock:autonomous-cezar-ask-cap',
       'silent-tail': 'mock:silent-tail',
       'silent-tail-no-reply': 'mock:silent-tail-no-reply',
@@ -444,6 +448,7 @@ export const HARNESS_ADAPTERS: Readonly<Record<RunnerId, HarnessAdapter>> = {
       'missing-binary': BASELINE_PROMPT,
       autonomous: 'mock:autonomous',
       'autonomous-cap': 'mock:autonomous-cap',
+      'autonomous-silent': 'mock:autonomous-silent',
       'autonomous-cezar-ask-cap': 'mock:autonomous-cezar-ask-cap',
       'silent-tail': 'mock:silent-tail',
       'silent-tail-no-reply': 'mock:silent-tail-no-reply',
@@ -504,6 +509,7 @@ export const HARNESS_ADAPTERS: Readonly<Record<RunnerId, HarnessAdapter>> = {
       'serve-start-exit': BASELINE_PROMPT,
       autonomous: 'mock:autonomous',
       'autonomous-cap': 'mock:autonomous-cap',
+      'autonomous-silent': 'mock:autonomous-silent',
       'autonomous-cezar-ask-cap': 'mock:autonomous-cezar-ask-cap',
       'silent-tail': 'mock:silent-tail',
       'silent-tail-ack-delay': 'mock:silent-tail f7-delay-ack',
@@ -546,6 +552,7 @@ export const HARNESS_ADAPTERS: Readonly<Record<RunnerId, HarnessAdapter>> = {
       'missing-binary': BASELINE_PROMPT,
       autonomous: 'mock:autonomous',
       'autonomous-cap': 'mock:autonomous-cap',
+      'autonomous-silent': 'mock:autonomous-silent',
       'autonomous-cezar-ask-cap': 'mock:autonomous-cezar-ask-cap',
       'silent-tail': 'mock:silent-tail',
       'silent-tail-no-reply': 'mock:silent-tail-no-reply',
@@ -592,6 +599,7 @@ export const HARNESS_ADAPTERS: Readonly<Record<RunnerId, HarnessAdapter>> = {
       'missing-binary': BASELINE_PROMPT,
       autonomous: 'mock:autonomous',
       'autonomous-cap': 'mock:autonomous-cap',
+      'autonomous-silent': 'mock:autonomous-silent',
       'autonomous-cezar-ask-cap': 'mock:autonomous-cezar-ask-cap',
       'silent-tail': 'mock:silent-tail',
       'silent-tail-no-reply': 'mock:silent-tail-no-reply',

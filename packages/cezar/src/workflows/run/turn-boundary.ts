@@ -11,8 +11,10 @@ export type DoneClose = Readonly<{ via: 'cezar_done'; summary?: string }>;
 export type AckBoundary = Readonly<{ session: AgentSession; monitoring: boolean; humanGate?: boolean; nudgedLastTurn?: boolean; scheduleWakeup?: number | null | undefined }>;
 /** The last nudge Squawk sent or tried at a turn end of `session`, and how far it got
  *  (hearsay-tools/squawk#2452). `turn-nudges.ts` records and retires it. `acknowledged` is the state
- *  the nudge's acknowledgement bound records (hearsay-tools/squawk#2443). */
-export type Nudge = Readonly<{ session: AgentSession; cause: 'autonomous' | 'no-wait' | 'completion'; state: 'refused' | 'submitted' | 'acknowledged' }>;
+ *  the nudge's acknowledgement bound records (hearsay-tools/squawk#2443). `answered` marks model
+ *  work in the nudge's session before its acknowledgement; a turn start does not count, since a
+ *  runner may emit one when it writes the nudge (hearsay-tools/squawk#3741). */
+export type Nudge = Readonly<{ session: AgentSession; cause: 'autonomous' | 'no-wait' | 'completion'; state: 'refused' | 'submitted' | 'acknowledged'; answered?: true }>;
 
 type Generation = { session: AgentSession | undefined };
 type TurnEndEvent =

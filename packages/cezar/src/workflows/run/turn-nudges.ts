@@ -49,7 +49,7 @@ export function nudgeAwaitsAcknowledgement(state: ActiveRun, session: AgentSessi
  *  (hearsay-tools/squawk#3741). A turn start retires the fact. */
 export function nudgeAwaitsAnswer(state: ActiveRun, session: AgentSession | undefined): boolean {
   const nudge = state.boundary.nudge;
-  return !!session && nudge?.session === session && nudge.cause === 'autonomous' && nudge.state === 'acknowledged';
+  return !!session && nudge?.session === session && nudge.cause === 'autonomous' && nudge.state === 'acknowledged' && !nudge.answered;
 }
 
 /** A run an autonomous nudge kept running: refused, submitted and never acknowledged, or
@@ -271,14 +271,14 @@ export class TurnNudges {
   }
 
   /** The harness acknowledged the nudge `session` was sent: its acknowledgement bound ends, and the
-   *  fact records it. An autonomous nudge whose session showed no model work since the send (its
-   *  acknowledgement bound still runs) gets its answer bound (hearsay-tools/squawk#3741). */
+   *  fact records it. An autonomous nudge whose session showed no model work since the send gets
+   *  its answer bound (hearsay-tools/squawk#3741). */
   acknowledgeNudge(runId: string, state: ActiveRun, session: AgentSession): void {
     if (state.boundary.nudge?.session !== session || state.boundary.nudge.state !== 'submitted') return;
-    const unanswered = this.timers.has('acknowledgement', runId);
-    recordNudge(state, { cause: state.boundary.nudge.cause, state: 'acknowledged' });
+    const { cause, answered } = state.boundary.nudge;
+    recordNudge(state, { cause, state: 'acknowledged', ...(answered ? { answered } : {}) });
     this.timers.clear('acknowledgement', runId);
-    if (unanswered) this.armAutonomousNudgeAnswerBound(runId, state);
+    if (!answered) this.armAutonomousNudgeAnswerBound(runId, state);
   }
 
   /** Model work in the nudge's own session is its reply: its bounds stop while the turn runs. A turn
@@ -287,6 +287,8 @@ export class TurnNudges {
   noteNudgeActivity(runId: string, state: ActiveRun, emitting: AgentSession | undefined, event: { type: string; item?: { parentItemId?: string } }): void {
     if (!emitting || this.host.active.get(runId) !== state || state.liveSession.session !== emitting ||
       state.boundary.nudge?.session !== emitting || !isModelActivity(event)) return;
+    const nudge = state.boundary.nudge;
+    if (event.type !== 'turn.started' && nudge.state === 'submitted' && !nudge.answered) recordNudge(state, { cause: nudge.cause, state: nudge.state, answered: true });
     this.timers.clear('acknowledgement', runId);
     this.timers.clear('nudge-answer', runId);
   }

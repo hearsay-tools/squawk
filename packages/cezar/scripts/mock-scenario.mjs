@@ -202,11 +202,22 @@ function* waitReply(prompt, context, opening) {
 const scenario = (name, steps, options = {}) => ({ name, beforeFailure: false, steps, ...options });
 const has = (prompt, name) => prompt.includes(`mock:${name}`);
 
+/** 50 ms apart, past any answer bound a parity cell sets. */
+const AUTONOMOUS_SILENT_HEARTBEATS = 200;
+
 function* autonomous(prompt, context) {
   let shared;
   yield effect(async function loadAutonomous() {
     shared = await import('./mock-autonomous.mjs');
   });
+  if (!shared.answersNudge(prompt)) {
+    // Heartbeats only: no turn opens, so the nudge stays unanswered (hearsay-tools/squawk#3741).
+    for (let i = 0; i < AUTONOMOUS_SILENT_HEARTBEATS; i++) {
+      yield { kind: 'progress' };
+      yield { kind: 'sleep', ms: 50 };
+    }
+    return;
+  }
   yield open();
   yield text(() => shared.autonomousReply(prompt, context.lifecycle));
   yield end();

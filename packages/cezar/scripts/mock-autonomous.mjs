@@ -2,6 +2,13 @@
 // `lifecycle([name, args])` makes the caller's Squawk tool call and returns a note for the text.
 import { DONE, ask } from './mock-ci-tool.mjs';
 let cap = false;
+// `mock:autonomous-silent`: the session's autonomous nudge is ACKed and never answered; the wire
+// sends heartbeats only (hearsay-tools/squawk#3741).
+let silent = false;
+export function answersNudge(prompt) {
+  if (prompt.includes('mock:autonomous-silent')) silent = true;
+  return !(silent && prompt.startsWith('Continue working autonomously until the task is fully complete.'));
+}
 export async function autonomousReply(prompt, lifecycle) {
   const askCap = prompt.includes('mock:autonomous-cezar-ask-cap');
   if (prompt.includes('mock:autonomous-cap') || askCap) cap = true;
