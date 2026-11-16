@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, matchesGlob } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { NO_VITEST_READER, VITEST_TEST, classify, configurationClosure, existingTests, importersOfDeleted, readInputs } from './test-inputs.mjs';
+import { NO_VITEST_READER, VITEST_TEST, classify, configurationClosure, existingTests, readInputs, testsReaching } from './test-inputs.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
@@ -56,17 +56,30 @@ test('source selects the import graph plus every scanner that reads it, deleted 
     { sources: ['packages/cezar/src/gone.ts', 'packages/cezar/src/home.ts'], tests: [scanner] });
 });
 
-test('a deleted source selects the unchanged tests that still import or mock it', t => {
+test('a deleted source selects the unchanged tests that reach it directly, by a mock or through a helper', t => {
   const cwd = fixture(t, {
     'packages/cezar/src/a.test.ts': "import { gone } from './gone.js'\n",
     'packages/web/src/b.test.tsx': "vi.mock('../../cezar/src/gone')\n",
-    'packages/cezar/src/c.test.ts': "import { gonezo } from './gonezo.js'\n",
+    'packages/cezar/src/store.testkit.ts': "export { gone } from './gone.ts'\n",
+    'packages/cezar/src/c.test.ts': "import { store } from './store.testkit.ts'\n",
+    'packages/cezar/src/d.test.ts': "import { gonezo } from './gonezo.js'\n",
   });
   execFileSync('git', ['init', '-q'], { cwd });
   execFileSync('git', ['add', '.'], { cwd });
-  assert.deepEqual(importersOfDeleted(cwd, ['packages/cezar/src/gone.ts']), ['packages/cezar/src/a.test.ts', 'packages/web/src/b.test.tsx']);
-  assert.deepEqual(importersOfDeleted(cwd, []), []);
-  assert.deepEqual(classify(['packages/cezar/src/gone.ts'], cwd), { sources: ['packages/cezar/src/gone.ts'], tests: ['packages/cezar/src/a.test.ts', 'packages/web/src/b.test.tsx'] });
+  const reaching = ['packages/cezar/src/a.test.ts', 'packages/cezar/src/c.test.ts', 'packages/web/src/b.test.tsx'];
+  assert.deepEqual(testsReaching(cwd, ['packages/cezar/src/gone.ts']), reaching);
+  assert.deepEqual(classify(['packages/cezar/src/gone.ts'], cwd), { sources: ['packages/cezar/src/gone.ts'], tests: reaching });
+});
+
+test('a deleted source whose importers pass the walk limit runs the full suite', t => {
+  const files = { 'packages/cezar/src/hub0.ts': "import { gone } from './gone.js'\n" };
+  for (let i = 1; i <= 310; i++) files[`packages/cezar/src/hub${i}.ts`] = `import { x } from './hub${i - 1}.js'\n`;
+  const cwd = fixture(t, files);
+  execFileSync('git', ['init', '-q'], { cwd });
+  execFileSync('git', ['add', '.'], { cwd });
+  assert.equal(testsReaching(cwd, ['packages/cezar/src/gone.ts']), null);
+  assert.deepEqual(classify(['packages/cezar/src/gone.ts'], cwd),
+    { full: 'Deleted source with more than 300 transitive importers: packages/cezar/src/gone.ts' });
 });
 
 test('a snapshot selects its test and a lint baseline selects its declared readers', t => {
@@ -140,8 +153,12 @@ const READ_WINDOW_LINES = 5;
 function undeclaredReaders(root) {
   const inputs = readInputs(root).filter(({ test }) => matchesGlob(test, VITEST_TEST));
   // A test file must declare what it reads itself; a helper's read may be declared by any test.
-  const declares = (file, path) => inputs.some(({ test, globs }) =>
-    (!matchesGlob(file, VITEST_TEST) || matchesGlob(file, test)) && globs.some(glob => matchesGlob(path, glob)));
+  const declaredBy = (test, path) => inputs.some(({ test: key, globs }) => matchesGlob(test, key) && globs.some(glob => matchesGlob(path, glob)));
+  // A test declares what it reads; every test that reaches a reading helper declares the helper's reads.
+  const declares = (file, path) => {
+    const tests = matchesGlob(file, VITEST_TEST) ? [file] : testsReaching(root, [file]);
+    return tests !== null && tests.every(test => declaredBy(test, path));
+  };
   const files = execFileSync('git', ['ls-files', '-z', '--others', '--cached', '--exclude-standard', '--', 'packages/*/src/*.ts', 'packages/*/src/*.tsx', 'packages/*/vitest.setup.ts'],
     { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0')
     // An unstaged deletion stays in the index: skip what is gone from the tree.
@@ -173,11 +190,17 @@ test('the tripwire checks each reading test file against its own declaration', t
     'packages/cezar/src/first.test.ts': read,
     'packages/cezar/src/second.test.ts': read,
     'packages/cezar/src/helper.testkit.ts': read,
+    'packages/cezar/src/third.test.ts': "import { x } from './helper.testkit.ts'\n",
+    'packages/cezar/src/gone.testkit.ts': read,
   });
   execFileSync('git', ['init', '-q'], { cwd: root });
   execFileSync('git', ['add', '.'], { cwd: root });
-  rmSync(join(root, 'packages/cezar/src/helper.testkit.ts'));
-  assert.deepEqual(undeclaredReaders(root), ['packages/cezar/src/second.test.ts:1 reads .github/scripts/growth.cjs']);
+  // An unstaged deletion stays in the index; the scan skips it.
+  rmSync(join(root, 'packages/cezar/src/gone.testkit.ts'));
+  assert.deepEqual(undeclaredReaders(root), [
+    'packages/cezar/src/helper.testkit.ts:1 reads .github/scripts/growth.cjs',
+    'packages/cezar/src/second.test.ts:1 reads .github/scripts/growth.cjs',
+  ]);
 });
 
 test('the tripwire finds the declared reader of .github/scripts/baseline-growth.cjs', () => {

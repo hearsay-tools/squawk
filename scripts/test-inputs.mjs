@@ -102,27 +102,48 @@ function classifyPath(path, { inputs, configuration }) {
   return { full: 'Unmapped input' };
 }
 
-// Vitest tests that still name a deleted module, as `/<name>.` or `/<name>'` in an
-// import or vi.mock path. Vitest's import graph has no node for a deleted file, so
-// its unchanged importers would otherwise drop out of the selection.
-export function importersOfDeleted(cwd, deleted) {
-  const patterns = deleted.flatMap(path => {
+// Package files that name one of `paths` as `/<name>.`, `/<name>'` or `/<name>"`: an
+// import, re-export or vi.mock path. A text match, so a shared name over-selects.
+function namers(cwd, paths) {
+  const patterns = paths.flatMap(path => {
     const name = posix.basename(path).replace(/\.[^.]+$/, '');
     return ['.', "'", '"'].flatMap(end => ['-e', `/${name}${end}`]);
   });
-  if (!patterns.length) return [];
   try {
-    return execFileSync('git', ['grep', '-l', '-F', ...patterns, '--', 'packages/*/src/*.test.ts', 'packages/*/src/*.test.tsx'],
-      { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(Boolean);
+    return execFileSync('git', ['grep', '-l', '-F', ...patterns, '--', 'packages/*/src/*.ts', 'packages/*/src/*.tsx'],
+      { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024 }).split('\n').filter(Boolean);
   } catch (error) {
     if (error.status === 1) return [];
     throw error;
   }
 }
 
+// A walk this wide selects most of the suite anyway: the caller runs it all.
+export const IMPORTER_WALK_LIMIT = 300;
+
+// The Vitest tests that reach one of `modules` through a chain of files that name the
+// next one, directly or through helpers. Returns null when the walk passes
+// IMPORTER_WALK_LIMIT modules. Vitest's import graph has no node for a deleted file,
+// so its unchanged importers would otherwise drop out of the selection.
+export function testsReaching(cwd, modules) {
+  const tests = new Set();
+  const seen = new Set(modules);
+  let frontier = modules;
+  while (frontier.length) {
+    const next = [];
+    for (const file of namers(cwd, frontier)) {
+      if (matchesGlob(file, VITEST_TEST)) tests.add(file);
+      else if (!seen.has(file)) { seen.add(file); next.push(file); }
+    }
+    if (seen.size > IMPORTER_WALK_LIMIT) return null;
+    frontier = next;
+  }
+  return [...tests].sort();
+}
+
 // Classifies changed, non-docs paths. A path may be deleted: deleted source
-// selects its changed importers through the import graph and its unchanged ones
-// through importersOfDeleted.
+// selects its changed importers through the import graph and its unchanged ones,
+// direct or through helpers, through testsReaching.
 export function classify(paths, cwd) {
   const context = { inputs: readInputs(cwd), configuration: configurationClosure(cwd) };
   const sources = [];
@@ -135,7 +156,10 @@ export function classify(paths, cwd) {
     for (const test of rule.tests ?? []) tests.add(test);
   }
   if (full.length) return { full: describeFull(full) };
-  for (const test of importersOfDeleted(cwd, sources.filter(path => !existsSync(join(cwd, path))))) tests.add(test);
+  const deleted = sources.filter(path => !existsSync(join(cwd, path)));
+  const reaching = deleted.length ? testsReaching(cwd, deleted) : [];
+  if (!reaching) return { full: `Deleted source with more than ${IMPORTER_WALK_LIMIT} transitive importers: ${deleted[0]}` };
+  for (const test of reaching) tests.add(test);
   return { sources, tests: [...tests].sort() };
 }
 
