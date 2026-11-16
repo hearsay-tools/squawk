@@ -96,11 +96,11 @@ Prompt placeholders, substituted per launch. GitHub poll: {{github.kind}} (issue
 A new automation is PAUSED unless created with --enable. Enabling a GitHub poll establishes a current-time baseline by default; filters.includeExisting opts in to older matches within the configured lookback. Test filter previews the selected window without advancing the execution cursor or launching tasks. Enabling a schedule arms its next occurrence.`;
 
 /** The part composed into every task's system prompt while automations are on and reachable. */
-export function automationsPrompt(): string {
+export function automationsPrompt(command: string): string {
   return `## Automations
 This cockpit can do recurring work without you doing it once. An automation is either a bounded GitHub poll (a new pull request, a new issue, a label added to or removed from an issue, optionally filtered by author, assignee or labels) or a schedule (every day at a time, weekdays, one weekday a week, every N hours). It launches an ordinary task for every match or occurrence, from a prompt template you write. When the user asks for something to happen "whenever", "every time" or "each time" a pull request or issue appears or is labelled, or "every day at", "on weekdays", "every Friday", "every 6 hours", they are asking for an automation: create one instead of doing the work once, and instead of polling GitHub or sleeping yourself.
 
-Use cezar_automation for repeating automations. Read its input schema and the definition reference below first. Each call returns one JSON answer:
+Use cezar_automation to create, preview and enable repeating automations. Read its input schema and run ${command} schema first for the definition shape, bounds and prompt placeholders. Each call returns one JSON answer:
 
 - action "create", definition: the GitHub poll or repeating schedule to create. It is always PAUSED.
 - action "show", id: read the definition and its cockpit url.
@@ -113,9 +113,16 @@ Completion controls are off by default. Use task.archiveWhenDone only when the u
 
 Create the automation PAUSED. A paused automation is the finished state of this task, not a step awaiting confirmation: enable it only when the user's own request explicitly asks for it to be switched on. An instruction to continue autonomously, not to ask for confirmation, or to make reasonable assumptions is not that request. For a GitHub poll, run a preview check so the user sees what it would match; for a schedule, report its next occurrence (next_run_at is UTC; convert to the user's time zone and name it). Put the "url" the tool returns in your final message. Name the automation, its id, whether it is paused or enabled, its preview matches or next occurrence, and the exact prompt template it will launch. If a call fails or is refused, stop and report that automations are unavailable on this cockpit, quoting its error: do not write a cron job, a GitHub Action or a polling script as a substitute.
 
-Definition reference (the CLI and the built-in skill use the same definitions; creation through this tool never accepts an enable flag):
+Use the CLI for the other automation operations. Every command prints one JSON object:
 
-${AUTOMATION_SCHEMA_REFERENCE}`;
+  ${command} schema                                   the definition shape, every key, every bound, the prompt placeholders
+  ${command} list | show <id>                          list definitions or show one
+  ${command} update <id> --file <def.json>              update a definition ("task" merges key by key, null removes one)
+  ${command} pause <id> | delete <id>                  pause or delete a definition
+  ${command} run <id>                                 launch a schedule once, now, when the user asks
+  ${command} check <id> --execute                      execute a GitHub poll now, when the user asks
+
+Create, preview and enable repeating automations through cezar_automation, so paused creation and preview-before-enable are enforced. Use the CLI schema on demand; keep definition files outside the repository.`;
 }
 
 /** The built-in skill's body — the full playbook a run under `create-cezarion-automation` follows. */

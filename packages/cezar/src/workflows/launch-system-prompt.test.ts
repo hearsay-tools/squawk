@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { artifactInstructions } from '../artifacts/lifecycle.ts';
 import { jobInstructions } from '../jobs/command.ts';
-import { automationsPrompt } from '../automations/prompts.ts';
+import { automationCliCommand, automationsPrompt } from '../automations/prompts.ts';
 import type { AgentRunSpec } from '../core/agent-runner.ts';
 import { handoffInstructions } from '../handoff.ts';
 import { RunStore } from '../runs/store.ts';
@@ -147,7 +147,7 @@ describe('launch system prompt at both sites (#1632)', () => {
   async function tail(spec: AgentRunSpec): Promise<string[]> {
     const webhooks = agentWebhooksPrompt(webhookCliCommand(), agentWebhooks(await registryEntry(projectId, repoRoot, testHome())));
     return [
-      EXTRA, DELEGATION, automationsPrompt(), webhooks!,
+      EXTRA, DELEGATION, automationsPrompt(automationCliCommand()), webhooks!,
       artifactInstructions(spec.env?.CEZ_ARTIFACTS_DIR), jobInstructions(), handoffInstructions({ handoffInjected: true, nativeSubagents: true }),
     ];
   }

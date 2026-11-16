@@ -67,7 +67,7 @@ export function builtinSkills(cockpit: CockpitAddress): Skill[] {
 
 /** The automations part of every session's system prompt, or nothing. */
 export function automationsPart(cockpit: CockpitAddress): string | undefined {
-  return automationsReachable(cockpit) ? automationsPrompt() : undefined;
+  return automationsReachable(cockpit) ? automationsPrompt(automationCliCommand()) : undefined;
 }
 
 /** The "Project webhooks" part (#1576): the webhooks this project exposes to agents, read from
