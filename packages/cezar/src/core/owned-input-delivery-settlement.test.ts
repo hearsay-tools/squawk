@@ -3,6 +3,7 @@ import { fixtureWork } from '../workflows/fixture-cleanup.testkit.ts';
 import { randomUUID } from 'node:crypto';
 
 import { expect, it, vi } from 'vitest';
+import { runnersWhere } from './runner-facts.ts';
 import { withHeldAck } from './owned-input-delivery.testkit.ts';
 import { autoEndObservationClock } from './observation-clock.testkit.ts';
 import { AUTO_END_DELAY_MS } from './runner-runtime.ts';
@@ -11,7 +12,7 @@ import { driveSeam, waitFor } from './harness-parity.testkit.ts';
 import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 
 
-for (const backend of ['codex', 'opencode', 'pi', 'omp'] as const) {
+for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement === 'response')) {
   it(`${backend} a completed turn with a delayed ACK holds auto-end and resumes it after acceptance`, async () => {
     await withHeldAck(backend, async release => {
       const autoEnd = autoEndObservationClock();

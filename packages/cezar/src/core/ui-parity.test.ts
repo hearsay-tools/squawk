@@ -26,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
+import { runnersWhere } from './runner-facts.ts';
 import type { UiEvent, UiItem } from './ui-events.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -114,23 +115,19 @@ const CURSOR_PRINT_GAPS = new Set([
   'turn.completed with per-turn directional usage',
 ]);
 
-/** #961, wire survey 2026-10-15: OpenCode 1.18.35 plugin hooks, Pi 1.0.4 and OMP 18.8.0
- * extensions run in-process and stream no hook lifecycle (Pi/OMP surface only
- * `extension_error`, already mapped as a session error); Cursor 2026.10.01-e373342's stream
- * carries no hook frame. Claude (`--include-hook-events`) and Codex (`hook/completed`) do.
- * The inverse assertion keeps a fabricated hook item from erasing the gap.
+/** hearsay-tools/cezarion#961: a runner whose declared `hookEvents` is `none` streams no hook
+ * lifecycle; its facts row names the wire. The inverse assertion keeps a fabricated hook item from
+ * erasing the gap.
  */
-const NO_HOOK_TELEMETRY = new Set(['opencode', 'pi', 'cursor', 'omp']);
+const NO_HOOK_TELEMETRY = new Set(runnersWhere(facts => facts.hookEvents === 'none'));
 const HOOK_ROW = 'hook items (hook_response / hook/completed)';
 
-/** hearsay-tools/cezarion#2431, wire survey 2026-11-01: OpenCode and OMP settle the parent only
- * once its child sessions have ended, so no child outlives a parent turn; Pi 1.0.4 and Cursor
- * 2026.10.01-e373342 report no child end at all (Pi has no child wire, Cursor print reports only
- * the parent Task call). Their runs keep the monitoring timer. Claude (`task_notification`) and
- * Codex 0.164.0 (`subAgentActivity(kind: completed)`) report it. The inverse assertion keeps a
- * fabricated background item from erasing the gap.
+/** hearsay-tools/cezarion#2431: only a runner whose declared `nativeSubagents` is `reported`
+ * reports a backgrounded child's end. On a `turn-held` wire no child outlives a parent turn; on
+ * an `unreported` wire no child end arrives, and the run keeps the monitoring timer. The inverse
+ * assertion keeps a fabricated background item from erasing the gap.
  */
-const NO_BACKGROUND_SUBAGENTS = new Set(['opencode', 'pi', 'cursor', 'omp']);
+const NO_BACKGROUND_SUBAGENTS = new Set(runnersWhere(facts => facts.nativeSubagents !== 'reported'));
 
 describe('protocol v2 backend parity (every mapper emits every matrix capability)', () => {
   it('Cursor print independently emits a plan from its native todo wire', () => {
@@ -169,21 +166,17 @@ describe('protocol v2 backend parity (every mapper emits every matrix capability
     }
   }
 
-  // Sub-agent NESTING rides on parentItemId where the wire attributes work
-  // to its parent: claude `parent_tool_use_id` and opencode child-session
-  // parts under a `subtask`; OMP `subagent_event` frames under their `task` call
-  // (`subagent_lifecycle.parentToolCallId`). Codex's wire has no parent attribution — its
-  // matrix cell is the review-mode task items asserted above.
-  for (const backend of ['claude', 'opencode', 'omp'] as const) {
+  // Sub-agent NESTING rides on parentItemId where the declared `childWork` is `nested`; each
+  // runner's facts row names the wire field that attributes child work to its parent call.
+  for (const backend of runnersWhere(facts => facts.childWork === 'nested')) {
     it(`${backend} nests sub-agent work via parentItemId`, () => {
       expect(items(fixtureEvents(backend)).some((item) => item.parentItemId !== undefined)).toBe(true);
     });
   }
-  // Cursor print 2026.10.01-e373342 reports the parent Task call but no child-session transcript
-  // (__fixtures__/cursor/README.md), so nothing can nest under it.
-  it('cursor explicitly lacks sub-agent nesting (print has no child-session transcript)', () => {
-    const events = fixtureEvents('cursor');
-    expect(items(events).some((item) => item.kind === 'tool' && item.toolKind === 'task')).toBe(true);
-    expect(items(events).some((item) => item.parentItemId !== undefined)).toBe(false);
-  });
+  // A `none` wire carries no child-session transcript, so nothing can nest.
+  for (const backend of runnersWhere(facts => facts.childWork === 'none')) {
+    it(`${backend} explicitly lacks sub-agent nesting (its wire has no child-session transcript)`, () => {
+      expect(items(fixtureEvents(backend)).some((item) => item.parentItemId !== undefined)).toBe(false);
+    });
+  }
 });

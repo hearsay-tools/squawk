@@ -72,6 +72,15 @@ Three guards hold the rule:
    a seam contract row holds the runner's part of it on every runner, as S44 does
    for `provider-error-controlled`.
 
+A parity test selects the runners a row covers from their declared facts:
+`runnersWhere()` over `RUNNER_FACTS`, or `exemptWhere()` in
+`core/harness-parity-core.testkit.ts` for an exemption. A changed facts row then
+changes the expected result with no per-runner test edit. The
+`cez/parity-runner-subset` lint rule fails a parity file that lists two or more
+runner ids, but not all of them, by hand. A protocol quirk of one runner names
+that one runner. `core/runner-fact-exemptions.test.ts` swaps facts rows and checks
+that the exemptions follow (hearsay-tools/squawk#3642).
+
 A per-runner parity file loads only its own adapter. It picks its runner with
 `useRunners(onlyRunner(...))`. The testkits it reaches import a kit's `-core` file, never
 `runner-factory.ts` or a kit's plain name (`fixture-cleanup`, `worker-wait`, `harness-parity`,

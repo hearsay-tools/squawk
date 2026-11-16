@@ -86,13 +86,17 @@ function replaySteer(text, failure) {
 // A configured delivery control decides when a prompt's acknowledgement and its turn content
 // go out. Every scripted branch sends through here, so none of them needs its own hook.
 const deliveryTexts = new Map();
+// A human prompt carries no id, and pi answers such prompts in write order (pi-runner.ts).
+const idlessTexts = [];
 let heldFrames;
 const send = !delivery ? sendNow : (value) => {
-  if (value?.type === 'response' && value.command === 'prompt' && value.success && deliveryTexts.has(value.id)) {
-    const text = deliveryTexts.get(value.id);
+  if (value?.type === 'response' && value.command === 'prompt') {
+    const text = value.id === undefined ? idlessTexts.shift() : deliveryTexts.get(value.id);
     deliveryTexts.delete(value.id);
-    delivery.ack(text, () => sendNow(value));
-    return;
+    if (value.success && text !== undefined) {
+      delivery.ack(text, () => sendNow(value));
+      return;
+    }
   }
   if (heldFrames && value?.type !== 'response' && value?.type !== 'agent_start' && value?.type !== 'turn_start') {
     heldFrames.push(value);
@@ -110,6 +114,7 @@ async function handleControlled(command) {
     return;
   }
   if (command.id !== undefined) deliveryTexts.set(command.id, command.message);
+  else idlessTexts.push(command.message);
   const hold = delivery.holdResponse(command.message);
   const frames = hold ? heldFrames = [] : undefined;
   await handleCommand(command);

@@ -27,6 +27,7 @@
     "cez/mock-lifecycle-boundary": "error",
     "cez/mock-scenario-boundary": "error",
     "cez/native-mock-source": "error",
+    "cez/parity-runner-subset": "error",
     "cez/raw-query-setter": "error",
     "cez/run-fact-reader": "error",
     "cez/run-history-reader": "error",

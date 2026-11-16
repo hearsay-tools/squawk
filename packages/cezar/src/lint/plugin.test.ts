@@ -73,6 +73,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'mock-lifecycle-boundary': ['packages/cezar/scripts/mock-boundary.mjs', "function watchdogStall() {}\n"],
   'mock-scenario-boundary': ['packages/cezar/scripts/mock-scenario-violation.mjs', "import { play } from './mock-scenario.mjs';\nconst x = 'mock:hold';\n"],
   'native-mock-source': ['packages/cezar/test/b.test.ts', "const text = readFileSync(adapter.mockBin, 'utf8');\n"],
+  'parity-runner-subset': ['packages/cezar/src/core/runner-group-parity.test.ts', "const held = new Set(['opencode', 'cursor']);\n"],
   'raw-query-setter': ['packages/web/src/c.tsx', "import { useSearchParams } from 'react-router';\nconst [p, setP] = useSearchParams();\n"],
   'run-fact-reader': ['packages/web/src/lib/d.ts', "const held = attention.label === 'usage limit';\n"],
   'run-history-reader': ['packages/cezar/src/raw-history.ts', 'const text = readFileSync(historyPaths(dir, id).plain);\n'],
@@ -102,6 +103,9 @@ const APPROVED: Record<string, string> = {
   'packages/web/src/f.ts': "import type { RunRecord } from '@open-mercato/cezar-contract';\ntype T = import('@open-mercato/cezar-api-client').X;\n",
   // native-mock-source: pointing the runner at the real mock.
   'packages/cezar/test/g.test.ts': 'process.env[adapter.binEnv] = adapter.mockBin;\n',
+  // parity-runner-subset: a one-runner shard, a per-runner reason table, and a group outside a parity file.
+  'packages/cezar/src/workflows/waits-one-runner-parity.test.ts': "subagentCells(['pi']);\nconst reasons = [['pi', 'no child wire'], ['cursor', 'no child frame']];\n",
+  'packages/cezar/src/core/runner-group.test.ts': "for (const backend of ['codex', 'pi']) {}\n",
   // raw-query-setter: the baseline's reasoned exception, and a read-only tuple.
   'packages/web/src/routes/task-git/task-files.tsx': "import { useSearchParams } from 'react-router';\nconst [query, setQuery] = useSearchParams();\n",
   'packages/web/src/h.tsx': "import { useSearchParams } from 'react-router';\nconst [query] = useSearchParams();\n",
@@ -152,7 +156,7 @@ describe('the cez rules under oxlint', () => {
   });
 
   it.each(Object.entries(VIOLATIONS))('%s reports its seeded violation with file, line and rule', (rule, [file]) => {
-    expect(problems.filter((p) => p.startsWith(`${file}:`))).toEqual([expect.stringMatching(new RegExp(`^${file.replaceAll('.', '\\.')}:\\d+:\\d+ cez\\(${rule}\\): .+(?:hearsay-tools/cezarion#|open-mercato/cezar#|AGENTS\\.md)`))]);
+    expect(problems.filter((p) => p.startsWith(`${file}:`))).toEqual([expect.stringMatching(new RegExp(`^${file.replaceAll('.', '\\.')}:\\d+:\\d+ cez\\(${rule}\\): .+(?:hearsay-tools/(?:cezarion|squawk)#|open-mercato/cezar#|AGENTS\\.md)`))]);
   });
 
   it('passes every approved exception', () => {

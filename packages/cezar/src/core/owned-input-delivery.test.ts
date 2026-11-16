@@ -3,6 +3,7 @@ import { fixtureWork } from '../workflows/fixture-cleanup.testkit.ts';
 import { randomUUID } from 'node:crypto';
 
 import { expect, it } from 'vitest';
+import { runnersWhere } from './runner-facts.ts';
 import { withHeldAck } from './owned-input-delivery.testkit.ts';
 
 import { waitFor } from './harness-parity.testkit.ts';
@@ -11,7 +12,7 @@ import { thenSay, toolCall } from '../workflows/waits-parity.testkit.ts';
 const delivered = (input: object, stored: { consumedAt?: string | undefined; awaitingRead?: true | undefined } | undefined) =>
   ({ ...input, deliveredAt: expect.any(String), ...(stored?.consumedAt ? { consumedAt: expect.any(String) } : {}),
     ...(stored?.awaitingRead ? { awaitingRead: true } : {}) });
-for (const backend of ['codex', 'opencode', 'pi', 'omp'] as const) {
+for (const backend of runnersWhere(facts => facts.inputDelivery.acknowledgement === 'response')) {
   it(`${backend} delayed ACK keeps the in-flight input in the 32 cap and merges concurrent queue writes exactly once`, async () => {
     await withHeldAck(backend, async release => {
       await withOwnedInputRun(backend, 'baseline', async ({ store, manager, runId, parentRunId }) => {
