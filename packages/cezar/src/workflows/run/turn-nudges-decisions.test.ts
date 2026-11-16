@@ -12,11 +12,13 @@ import { setRunStatus } from '../../runs/run-store.testkit.ts';
 import { WorkspaceSemaphore } from '../../workspace/semaphore.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../fixture-no-runner.testkit.ts';
 import type { RunManager } from '../run.ts';
-import { AUTONOMOUS_NO_ACK_NOTE, AUTONOMOUS_NO_REPLY_NOTE, AUTONOMOUS_NUDGE, COMPLETION_NUDGE_NOTE } from '../turn-end.ts';
+import { AUTONOMOUS_NO_ACK_NOTE, AUTONOMOUS_NO_REPLY_NOTE, AUTONOMOUS_NUDGE, COMPLETION_NUDGE_NOTE, NO_WAIT_NO_REPLY_NOTE, NO_WAIT_NUDGE_NOTE } from '../turn-end.ts';
 import { COMPLETION_WILL_WAIT, MAX_AUTO_CONTINUES } from './constants.ts';
 import { QUICK_TASK_WORKFLOW } from '../types.ts';
 import { observationClock } from '../../core/observation-clock.testkit.ts';
 import { completionRefusalQueueDecision } from './turn-nudges.ts';
+import * as activeRuns from '../active-run.ts';
+import { transitionTurnBoundary } from './turn-boundary.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from '../run-fixture.testkit.ts';
 import { createFixtureManager as createRunnerFixtureManager } from '../fixture-cleanup.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../../core/claude-cli-runner.ts';
@@ -447,5 +449,81 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
     expect(nudged.sendAgentMessage).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(BOUND_MS);
     await expectClosedWaiting(id, nudged);
+  });
+});
+
+// hearsay-tools/squawk#3740: StepLoop keeps one ActiveRun across workflow steps, so a late reply
+// from an earlier step's session reaches the same run state. It must not clear the reply bound of
+// the current step's no-wait nudge. The events go through the runner's own event callbacks.
+describe('the no-wait nudge reply bound across workflow steps', () => {
+  const f = setupMonitoringFixture();
+  const BOUND_MS = 300;
+  const TWO_STEPS = { name: 'two-steps', source: 'built-in' as const, steps: [{ id: 'first', name: 'First', prompt: '{{task}}' }, { id: 'second', name: 'Second', prompt: '{{task}}' }] };
+  type Wire = { session: AgentSession; emit: (event: AgentEvent) => void; emitUi: (event: UiEvent) => void; close: () => void };
+  let wires: Wire[];
+
+  let states: activeRuns.ActiveRun[];
+
+  beforeEach(() => {
+    wires = [];
+    states = [];
+    const create = activeRuns.createActiveRun;
+    vi.spyOn(activeRuns, 'createActiveRun').mockImplementation(init => { const state = create(init); states.push(state); return state; });
+    f.manager.dispose();
+    f.manager = createRunnerFixtureManager(f.store, f.repoRoot, { home: testHome(), noWaitNudgeReplyMs: BOUND_MS });
+    runnerHook.runner = {
+      backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
+      run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: async () => {},
+      startSession(_spec, onEvent, options) {
+        let open = true;
+        let finish!: (result: AgentRunResult) => void;
+        const result = new Promise<AgentRunResult>(resolve => { finish = resolve; });
+        const close = () => { open = false; finish({ text: '', toolCalls: [], tokensUsed: 0 }); };
+        const session: AgentSession = { get open() { return open; }, result, sendMessage: vi.fn(() => true), sendAgentMessage: vi.fn(() => Promise.resolve()),
+          end: vi.fn(close), interrupt: vi.fn(close), discardQueuedMessages: vi.fn(), holdsHumanInput: () => false };
+        const emit = (event: AgentEvent) => onEvent?.(event);
+        wires.push({ session, emit, emitUi: event => options?.onUiEvent?.(event), close });
+        queueMicrotask(() => emit({ type: 'session', sessionId: `step-${wires.length}` }));
+        return session;
+      },
+    };
+  });
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+  /** Close the first step's session, open the second step's, and nudge it at a turn end with no wait. */
+  async function secondStepNudged() {
+    const record = f.manager.startRun(TWO_STEPS, { task: 'work', runner: 'claude', worktree: false });
+    f.currentId = record.id;
+    await waitForProduct(f.manager, f.store, () => wires.length === 1);
+    const first = wires[0]!;
+    // The done tool's completion mark lets the first step hand over to the second.
+    const state = states.at(-1)!;
+    transitionTurnBoundary(state, { kind: 'done-step-consumed', phase: 'completed', session: state.liveSession.session, stepId: 'first' });
+    first.close();
+    await waitForProduct(f.manager, f.store, () => wires.length === 2);
+    const second = wires[1]!;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    second.emit({ type: 'turn-end' });
+    expect(second.session.sendAgentMessage).toHaveBeenCalledOnce();
+    expect(f.store.readEvents(record.id).filter(e => e.type === 'note' && String(e.message).startsWith(NO_WAIT_NUDGE_NOTE))).toHaveLength(1);
+    return { id: record.id, first, second };
+  }
+  const unanswered = (id: string) => f.store.readEvents(id).filter(e => e.type === 'note' && e.message === NO_WAIT_NO_REPLY_NOTE);
+
+  it('a late reply from the first step\'s session leaves the second step\'s bound armed', async () => {
+    const { id, first } = await secondStepNudged();
+    first.emit({ type: 'text', text: 'late text from the first step' });
+    first.emit({ type: 'tool-call', id: randomUUID(), tool: 'Read', input: {} });
+    first.emitUi({ type: 'turn.started', turnId: randomUUID() });
+    await vi.advanceTimersByTimeAsync(BOUND_MS);
+    expect(unanswered(id)).toHaveLength(1);
+  });
+
+  it('a reply from the second step\'s session still clears its bound', async () => {
+    const { id, second } = await secondStepNudged();
+    second.emit({ type: 'text', text: 'reply from the second step' });
+    await vi.advanceTimersByTimeAsync(BOUND_MS);
+    expect(unanswered(id)).toEqual([]);
+    expect(f.store.getRun(id)?.status).toBe(RUN_STATUS.running);
   });
 });

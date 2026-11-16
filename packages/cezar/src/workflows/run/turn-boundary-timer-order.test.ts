@@ -114,7 +114,7 @@ it('late parent content clears the reply bound before resuming and then clears t
   vi.spyOn(f.line, 'isParked').mockReturnValue(true);
   f.nudges.armNoWaitNudgeReplyTimer(f.run.id, f.state);
   f.log.length = 0;
-  f.nudges.noteNoWaitNudgeContent(f.run.id, f.state, { type: 'text' });
+  f.nudges.noteNoWaitNudgeContent(f.run.id, f.state, f.wire, { type: 'text' });
   order(f.log, ['boundary:reply-content/received', 'boundary:reply-expired/cancel', 'resume', 'boundary:reply-content/resumed']);
   expect(f.state.boundary.noWaitNudgeParked).toBeUndefined();
   expect(f.time.pending).toBe(0);
@@ -125,7 +125,7 @@ it('child content leaves the reply bound and parked fact untouched', () => {
   f.nudges.armNoWaitNudgeReplyTimer(f.run.id, f.state);
   const timer = f.state.boundary.noWaitNudgeReplyTimer;
   f.log.length = 0;
-  f.nudges.noteNoWaitNudgeContent(f.run.id, f.state, { type: 'item.completed', item: { parentItemId: 'child' } });
+  f.nudges.noteNoWaitNudgeContent(f.run.id, f.state, f.wire, { type: 'item.completed', item: { parentItemId: 'child' } });
   expect(f.log).toEqual([]);
   expect(f.state.boundary.noWaitNudgeReplyTimer).toBe(timer);
   expect(f.time.pending).toBe(1);

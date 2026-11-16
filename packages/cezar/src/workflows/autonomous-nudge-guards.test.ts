@@ -225,24 +225,43 @@ describe('autonomous nudge priority and lifecycle guards', () => {
     active.set(id, state);
     nudges.armNoWaitNudgeReplyTimer(id, state);
     expect(state.boundary.noWaitNudgeReplyTimer).toBeDefined();
-    nudges.noteNoWaitNudgeContent(id, state, {
+    nudges.noteNoWaitNudgeContent(id, state, session, {
       type: 'item.started',
       item: { parentItemId: 'parent' },
     });
     expect(state.boundary.noWaitNudgeReplyTimer).toBeDefined();
-    nudges.noteNoWaitNudgeContent(id, state, { type: 'item.delta' });
+    nudges.noteNoWaitNudgeContent(id, state, session, { type: 'item.delta' });
     expect(state.boundary.noWaitNudgeReplyTimer).toBeDefined();
-    nudges.noteNoWaitNudgeContent(id, state, {
+    nudges.noteNoWaitNudgeContent(id, state, session, {
       type: 'item.started',
       item: {},
     });
     expect(state.boundary.noWaitNudgeReplyTimer).toBeUndefined();
   });
 
+  it('a late reply from an earlier step session leaves the current step reply bound armed (hearsay-tools/squawk#3740)', () => {
+    // Step one's session ran on this ActiveRun; StepLoop attaches step two's session to the same state.
+    const first = session;
+    const second: AgentSession = { ...session, sendMessage: vi.fn(() => true), sendAgentMessage: vi.fn(() => Promise.resolve()) };
+    state.liveSession.attachSession(second);
+    transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'nudge-delivered', session: second });
+    nudges.armNoWaitNudgeReplyTimer(id, state);
+    const timer = state.boundary.noWaitNudgeReplyTimer;
+    expect(timer).toBeDefined();
+    for (const event of [{ type: 'text' }, { type: 'tool-call' }, { type: 'turn.started' }, { type: 'item.started', item: {} }]) {
+      nudges.noteNoWaitNudgeContent(id, state, first, event);
+      expect(state.boundary.noWaitNudgeReplyTimer).toBe(timer);
+    }
+    nudges.noteNoWaitNudgeContent(id, state, undefined, { type: 'text' });
+    expect(state.boundary.noWaitNudgeReplyTimer).toBe(timer);
+    nudges.noteNoWaitNudgeContent(id, state, second, { type: 'text' });
+    expect(state.boundary.noWaitNudgeReplyTimer).toBeUndefined();
+  });
+
   it('text before the reply timer is armed means the nudge was answered', () => {
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'nudge-delivered', session: session });
     active.set(id, state);
-    nudges.noteNoWaitNudgeContent(id, state, { type: 'text' });
+    nudges.noteNoWaitNudgeContent(id, state, session, { type: 'text' });
     nudges.armNoWaitNudgeReplyTimer(id, state);
     expect(state.boundary.noWaitNudgeReplyTimer).toBeUndefined();
   });
@@ -250,10 +269,10 @@ describe('autonomous nudge priority and lifecycle guards', () => {
   it('turn.started before the reply timer is armed does not count as a nudge reply', () => {
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'nudge-delivered', session: session });
     active.set(id, state);
-    nudges.noteNoWaitNudgeContent(id, state, { type: 'turn.started' });
+    nudges.noteNoWaitNudgeContent(id, state, session, { type: 'turn.started' });
     nudges.armNoWaitNudgeReplyTimer(id, state);
     expect(state.boundary.noWaitNudgeReplyTimer).toBeDefined();
-    nudges.noteNoWaitNudgeContent(id, state, { type: 'turn.started' });
+    nudges.noteNoWaitNudgeContent(id, state, session, { type: 'turn.started' });
     expect(state.boundary.noWaitNudgeReplyTimer).toBeUndefined();
   });
 
