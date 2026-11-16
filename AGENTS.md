@@ -99,10 +99,13 @@ holds that area's rules.
 In a fresh task worktree (`.ai/cezar/worktrees/<runId>`), run `pnpm install --frozen-lockfile`
 unless `worktreeSetup` already did.
 
-- When Squeal validates this worktree, it runs the unit tests after each edit: read its
-  verdicts and let it run them. Follow the [wait bound](docs/sdlc/ci.md#squeal-wait-bound).
-- Run Vitest through `npm test -- <args>`, the repo's pinned binary.
-- CI owns the final gate and full-suite runs. Locally, run what the change affects.
+- Squeal runs the unit tests after each edit and the parity and worker tests at turn end.
+  Read its verdicts; never run Vitest to learn a result. For a verdict now:
+  `squeal run tests|run-loop <paths> --wait 60000`. A brief or parent that says "run the
+  focused tests" means this. Use `npm test -- <args>` (the pinned Vitest) only for a
+  [red proof](docs/sdlc/regression-proof.md), debug output or with no daemon. Follow the
+  [wait bound](docs/sdlc/ci.md#squeal-wait-bound).
+- CI owns the final gate and full-suite runs.
 - In a unit test, wait on the product's own signal. A timeout is only a hang guard, with a
   `// bound: <reason>` comment at the call site. A test that proves something did not happen
   uses fake timers or states at the call site why it needs real time.
