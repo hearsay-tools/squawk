@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentInput, ConversationMessage } from '@open-mercato/cezar-contract';
 import { WAIT_VIA, makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { wakeRetryClock } from './waits-wake.testkit.ts';
+import { withHeldAck } from '../core/owned-input-delivery.testkit.ts';
 import { manager, parent, store, timeline, until, useWorkerWaitFixture, worker } from './worker-wait.testkit.ts';
 
 /** One accumulating conversation per root, committed the way the delegation service does. */
@@ -186,6 +187,37 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
     expect(charged).toBe(1);
     expect(inputOf(p.id, held.id)?.deliveredAt).toBeUndefined();
     expect(retry.delays).toHaveLength(1);
+  });
+
+  // hearsay-tools/squawk#3508: a clean close that aborts an acknowledgement in flight is a
+  // retryable closed-session delivery failure, not a step failure.
+  it('requeues a message whose acknowledgement a clean close aborts, and counts one failed wake delivery', async () => {
+    await withHeldAck('opencode', async () => {
+      const sessionOf = captureSessions();
+      const retry = wakeRetryClock();
+      const p = await parent('mock:hold', 'opencode');
+      await until(() => store.getRun(p.id)?.status === 'waiting', () => timeline(p.id));
+      const w = await worker(p.id);
+      const submitted = vi.spyOn(sessionOf(p.id), 'sendAgentMessage');
+      const held = conversation(p.id)(w.id, p.id, 'progress', 'held-ack finding');
+      manager.deliverConversationInput(p.id);
+      // The submission is out and its HTTP acknowledgement is held.
+      await until(() => submitted.mock.calls.some(([content]) => JSON.stringify(content).includes('held-ack finding')), () => timeline(p.id));
+      // A wait of the agent's own keeps what the close leaves owed.
+      store.commitWait(p.id, makeTimerWait());
+      let charged = 0;
+      const watch = () => { charged = Math.max(charged, store.getRun(p.id)?.waitDeliveryFailures ?? 0); };
+      store.on('run', watch);
+      try {
+        sessionOf(p.id).end();
+        await until(() => charged > 0 || store.getRun(p.id)?.status === 'failed', () => timeline(p.id));
+      } finally { store.off('run', watch); }
+      expect(store.readEvents(p.id).filter(event => event.type === 'error').map(event => event.message)).toEqual([]);
+      expect(store.getRun(p.id)?.status).not.toBe('failed');
+      expect(inputOf(p.id, held.id)?.deliveredAt).toBeUndefined();
+      expect(charged).toBe(1);
+      expect(retry.delays).toHaveLength(1);
+    }, 'held-ack finding');
   });
 
   it('returns a resumed opening input to the queue when its opening turn fails (#505 review)', async () => {
