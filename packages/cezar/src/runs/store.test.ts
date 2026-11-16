@@ -2691,6 +2691,28 @@ describe('RunStore — the legacy `claude-cli` runner id (#547)', () => {
     const run = RunStore.open(dataDir).getRun('mixed');
     expect(run).toMatchObject({ runner: 'claude', removedRunner: 'cursor' });
     expect(run?.steps[1]).not.toHaveProperty('sessionId');
+    // The step keeps which removed runner held its session, so a Continue knows it was the latest work.
+    expect(run?.steps[1]?.removedBackend).toBe('cursor');
+  });
+
+  it('keeps a saved workflow definition whose step names a removed runner, without that runner', () => {
+    seedRuns(dataDir, [{
+      ...LEGACY_RUN,
+      id: 'chain',
+      runner: 'claude',
+      workflowDef: { name: 'plan-and-build', source: 'file', steps: [
+        { id: 'plan', name: 'Plan', prompt: 'plan {{task}}' },
+        { id: 'build', name: 'Build', prompt: 'build {{task}}', runner: 'cursor', model: 'auto', effort: 'high', agentProfile: 'work' },
+      ] },
+      steps: [],
+    }]);
+
+    const run = RunStore.open(dataDir).getRun('chain');
+    expect(run?.removedRunner).toBe('cursor');
+    expect(run?.workflowDef?.steps).toEqual([
+      { id: 'plan', name: 'Plan', prompt: 'plan {{task}}' },
+      { id: 'build', name: 'Build', prompt: 'build {{task}}' },
+    ]);
   });
 
   it('marks a run with no runner of its own when one of its steps ran on a removed runner', () => {

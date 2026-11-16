@@ -1,4 +1,4 @@
-import { legacyIndexRows, upgradeLegacyRunRow } from './legacy-run-rows.ts';
+import { legacyIndexRows, upgradeLegacyRunRow, upgradeRemovedRunnerResult } from './legacy-run-rows.ts';
 import { dataReadDirs, runDataDir } from '../project-paths.ts';
 import { addRunSource, copyFallbackFamily, fallbackRunSource, bindWorkerResultPath, fallbackRunDeleteError, workerResultsDirectory } from './project-run-sources.ts';
 import { productName, logPrefix } from '../home/display.ts';
@@ -1853,7 +1853,7 @@ export class RunStore extends EventEmitter {
       const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
       let raw: string;
       try { const info = fstatSync(fd); if (!info.isFile() || info.size > 3_145_728) return undefined; raw = readFileSync(fd, 'utf8'); } finally { closeSync(fd); }
-      const file = workerResultFileSchema.parse(JSON.parse(raw));
+      const file = workerResultFileSchema.parse(upgradeRemovedRunnerResult(JSON.parse(raw)));
       if (!bindWorkerResultPath(file.result.diff, this.dataDir, this.hasFallbackRun(parentId), parentId, path)) return undefined;
       if (file.result.parentRunId !== parentId || file.result.workerId !== workerId || file.result.workspace.ownerRunId !== workerId || file.result.revision !== reference.revision || file.result.observedAt !== reference.observedAt ||
         (file.result.diff.state === 'available' && (file.result.diff.snapshotId !== reference.snapshotId || file.diffSnapshot === undefined))) return undefined;

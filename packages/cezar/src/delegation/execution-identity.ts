@@ -227,6 +227,18 @@ export function continuationDefStep(store: RunStore, record: RunRecord | undefin
   return continuedDefStep(defSteps, record, sessionId) ?? [...defSteps].reverse().find((s) => stepKind(s) === 'agent');
 }
 
+/** The latest step that ran on a removed runner, when it is newer than every step holding
+ *  `sessionId` (any such step when there is none): the work a Continue picks up, in a new session. */
+export function removedRunnerStepAfter(steps: RunRecord['steps'], sessionId: string | undefined): RunRecord['steps'][number] | undefined {
+  let holder = -1;
+  let removed = -1;
+  steps.forEach((step, index) => {
+    if (sessionId !== undefined && step.sessionId === sessionId) holder = index;
+    if (step.removedBackend !== undefined) removed = index;
+  });
+  return removed > holder ? steps[removed] : undefined;
+}
+
 /**
  * The definition step a Continue continues when the run names one: the failed step of a `resume`
  * cursor, else the step owning the continued session. When the step that holds that session last
@@ -238,6 +250,10 @@ export function continuedDefStep(defSteps: readonly WorkflowStepDef[], record: R
   const resumed = record?.workflowCursor?.mode === 'resume' ? record.workflowCursor.stepId : undefined;
   const ciSource = resumed === undefined ? undefined : defSteps.find(step => step.id === resumed && stepKind(step) === 'agent');
   if (ciSource && record?.steps.find(step => step.id === ciSource.id)?.status === 'failed') return ciSource;
+  // The latest work ran on a runner Squawk no longer ships: its session is gone, and it is still
+  // the step the task continues (hearsay-tools/squawk#3715).
+  const removed = record ? removedRunnerStepAfter(record.steps, sessionId) : undefined;
+  if (removed) return defSteps.find((s) => s.id === (removed.synthetic === 'continuation' && removed.continuesStepId !== undefined ? removed.continuesStepId : removed.id));
   const holders = sessionId === undefined ? [] : record?.steps.filter((s) => s.sessionId === sessionId) ?? [];
   const latest = latestSessionStep(holders);
   const extended = latest?.synthetic === 'continuation' && latest.continuesStepId !== undefined ? latest.continuesStepId : holders[0]?.id;

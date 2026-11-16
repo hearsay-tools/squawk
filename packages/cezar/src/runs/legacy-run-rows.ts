@@ -19,24 +19,44 @@ function isRemovedRunner(value: unknown): value is string {
 }
 
 /**
- * A run saved on a removed runner, or with any step on one, is read as `removedRunner`; a removed
- * `runner` is cleared. Its steps on that runner keep no backend and no session, and a Continue on
- * a live runner always opens a new session: the latest work is the removed runner's, so an older
- * session of another runner is not where the task stands. The next write of the row stores the fold.
+ * A run saved on a removed runner, or with any step or workflow-definition step on one, is read as
+ * `removedRunner`; a removed `runner` is cleared. Its steps on that runner keep no backend and no
+ * session, only `removedBackend`, so a Continue knows that step holds the latest work and opens a
+ * new session for it. A definition step on that runner keeps its prompt, skill and checks, and
+ * loses the runner and the model, effort and account that belonged to it. The next write of the
+ * row stores the fold.
  */
 export function upgradeRemovedRunner(row: Record<string, unknown>): void {
   let removed = isRemovedRunner(row.runner) ? row.runner : undefined;
   if (removed !== undefined) delete row.runner;
-  for (const step of Array.isArray(row.steps) ? row.steps as unknown[] : []) {
-    if (!step || typeof step !== 'object') continue;
-    const fields = step as Record<string, unknown>;
-    if (!isRemovedRunner(fields.backend)) continue;
-    removed ??= fields.backend;
-    delete fields.backend;
-    delete fields.sessionId;
-    delete fields.sessionTransport;
+  for (const step of records(row.steps)) {
+    if (!isRemovedRunner(step.backend)) continue;
+    removed ??= step.backend;
+    step.removedBackend = step.backend;
+    delete step.backend;
+    delete step.sessionId;
+    delete step.sessionTransport;
+  }
+  const definition = row.workflowDef;
+  for (const step of records(definition && typeof definition === 'object' ? (definition as Record<string, unknown>).steps : undefined)) {
+    if (!isRemovedRunner(step.runner)) continue;
+    removed ??= step.runner;
+    for (const key of ['runner', 'model', 'effort', 'agentProfile']) delete step[key];
   }
   if (removed !== undefined && row.removedRunner === undefined) row.removedRunner = removed;
+}
+
+/** A saved worker-result snapshot names the runner the worker ran on; a removed one is dropped. */
+export function upgradeRemovedRunnerResult(file: unknown): unknown {
+  const result = file && typeof file === 'object' ? (file as Record<string, unknown>).result : undefined;
+  if (result && typeof result === 'object' && isRemovedRunner((result as Record<string, unknown>).backend)) {
+    delete (result as Record<string, unknown>).backend;
+  }
+  return file;
+}
+
+function records(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object') : [];
 }
 
 /**

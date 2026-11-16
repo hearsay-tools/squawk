@@ -94,6 +94,23 @@ describe('Continue on a run saved on a removed runner', () => {
     expect(spec.sessionId).not.toBe('old-codex-session');
   });
 
+  it('continues the step that ran on the removed runner, not an earlier step whose session survived', async () => {
+    const { store, manager } = fixture();
+    const run = store.createRun({ title: 'task', task: 'task', workflow: 'plan-and-build',
+      steps: [{ id: 'plan', name: 'Plan', kind: STEP_KIND.agent }, { id: 'build', name: 'Build', kind: STEP_KIND.agent }] });
+    store.updateRun(run.id, { removedRunner: 'cursor',
+      workflowDef: { name: 'plan-and-build', source: 'file', steps: [{ id: 'plan', name: 'Plan', prompt: 'plan' }, { id: 'build', name: 'Build', prompt: 'build' }] } });
+    store.updateStep(run.id, 'plan', { status: STEP_STATUS.done, sessionId: 'plan-session', backend: 'codex' });
+    store.updateStep(run.id, 'build', { status: STEP_STATUS.done, removedBackend: 'cursor' });
+    setRunStatus(store, run.id, RUN_STATUS.done);
+    const started = new Promise<AgentRunSpec>(resolve => { captured.started = resolve; });
+
+    expect(manager.continueRun(run.id, { text: 'keep going', runner: 'codex' })).toEqual({ ok: true });
+
+    expect((await started).resume).toBeFalsy();
+    expect(store.getRun(run.id)?.steps.at(-1)).toMatchObject({ synthetic: 'continuation', continuesStepId: 'build' });
+  });
+
   it('fails a task interrupted at start instead of starting it on the project default runner', async () => {
     const { store, manager } = fixture();
     const run = store.createRun({ title: 'task', task: 'task', workflow: 'quick-task',

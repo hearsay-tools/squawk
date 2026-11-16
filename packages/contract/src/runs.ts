@@ -83,6 +83,9 @@ export const stepStateSchema = z.object({
   sessionId: z.string().optional(),
   /** Backend that owns `sessionId`; absent on records written before backend affinity. */
   backend: runnerSchema.optional(),
+  /** The runner Squawk no longer ships that this step ran on (hearsay-tools/squawk#3715). Its
+   *  session is gone; a Continue that finds it newer than every recorded session continues it. */
+  removedBackend: z.string().optional(),
   /** Agent account (spec 2026-07-29-agent-profiles) that owns `sessionId` — `default`, or a
    *  stored profile id. The two are a PAIR: a session id only resolves inside the config dir
    *  that created it, so resume and Continue read this rather than the project's current

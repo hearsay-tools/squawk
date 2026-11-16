@@ -9,7 +9,7 @@ import type { QueuedMessage, RunRecord, RunStore, StepState } from '../runs/stor
 import { DEFAULT_AGENT_ACCOUNT_ID } from '../workspace/agent-accounts.ts';
 import type { PastedContent } from './run/types.ts';
 import { hasRegisteredRunProcess } from '../core/process-usage.ts';
-import { WorkerIdentityError } from '../delegation/execution-identity.ts';
+import { WorkerIdentityError, removedRunnerStepAfter } from '../delegation/execution-identity.ts';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
 import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 
@@ -339,11 +339,12 @@ export class ContinuationChecks {
     const sessionStep = latestSessionStep(run.steps);
     // Command/check steps may have changed the repo; only an untouched workflow can restart.
     const untouched = this.reads.untouched(run);
+    // A removed-runner run, or one whose latest work ran on a removed runner, continues in a new
+    // session, never an older one (hearsay-tools/squawk#3715).
+    const fresh = run.removedRunner !== undefined || removedRunnerStepAfter(run.steps, sessionStep?.sessionId) !== undefined;
     const absent = sessionRefusal(sessionStep, untouched, (run.delegation?.role === 'worker' && !!this.conversation) ||
-      this.opts.freshSession === true || run.removedRunner !== undefined);
+      this.opts.freshSession === true || fresh);
     if (absent) return absent;
-    // A removed-runner run continues in a new session, never an older one (hearsay-tools/squawk#3715).
-    const fresh = run.removedRunner !== undefined;
     const affinity = { ...sessionAffinity(run, this.opts, identity, sessionStep, untouched), ...(fresh ? { resume: false } : {}) };
     const resumeSessionId = affinity.resume ? this.reads.sessionId(sessionStep) : undefined;
     return { ok: true as const, value: { untouched, ...affinity, resumeSessionId } };
