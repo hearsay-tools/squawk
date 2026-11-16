@@ -113,6 +113,14 @@ test('a row names its scope, so same-named nested functions stay apart', t => {
   assert.deepEqual(scopes, ['build', 'build / helper', 'parse', 'parse / helper']);
 });
 
+test('an anonymous enclosing function names the scope without its position, so the scope survives a moved line', t => {
+  const f = repo(t, { 'src/a.ts': 'export const keep = 1;\n' });
+  const head = f.commit({ 'src/a.ts': 'export const keep = 1;\n\nregister(() => {\n  const helper = () => 1;\n  return helper();\n});\n' });
+  const result = run(f, head, { 'src/a.ts': entry([]) });
+  assert.equal(result.code, 0, result.error);
+  assert.deepEqual(result.report.functions.map(fn => fn.scope).sort(), ['anonymous', 'anonymous / helper']);
+});
+
 test('missing arguments or an unreadable coverage file exit 2', t => {
   const f = repo(t, { 'a.ts': 'export const a = 1;\n' });
   assert.equal(runCrapReport(['--base', f.base], { cwd: f.cwd, stdout: { write() {} }, stderr: { write() {} } }), 2);

@@ -15,6 +15,11 @@ const MARKER = '<!-- crap-follow-up:v1 -->';
 const TITLE = 'Changed functions over CRAP 30';
 const KEY = /<!-- crap:(.+?) -->\s*$/;
 
+// A pull request can merge before its optional `crap-report` job uploads the report. While that
+// head's CI run is unfinished, look again every 30 seconds, for at most 20 minutes.
+const POLL_MS = 30 * 1000;
+const POLL_ATTEMPTS = 40;
+
 const percent = (share) => `${Math.round(share * 100)}%`;
 // A function's scope names it and every function around it, so same-named nested helpers stay apart.
 const keyOf = (fn) => `${fn.file}#${fn.scope ?? fn.name}`;
@@ -59,7 +64,8 @@ const overLimit = (report) => (report.functions ?? []).filter((fn) => fn.status 
 function cli(run = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 32 * 1024 * 1024 })) {
   const gh = (...args) => run('gh', args);
   const api = (path) => JSON.parse(gh('api', path));
-  return { gh, api };
+  const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  return { gh, api, sleep };
 }
 
 /** The merged pull request: by number, or the one whose merge commit is `commit`. */
@@ -71,11 +77,26 @@ function resolvePullRequest({ api }, repo, { pr, commit }) {
   return api(`repos/${repo}/commits/${commit}/pulls`).find((pull) => pull.merged_at && pull.merge_commit_sha === commit);
 }
 
-/** The newest CI run on the pull request's head that kept a `crap-report-<head>` artifact, with that report. */
-function downloadReport({ gh, api }, repo, head) {
+/**
+ * The newest CI run on the pull request's head that kept a `crap-report-<head>` artifact, with that
+ * report. While a CI run on the head is unfinished and none has the report, it looks again; `pending`
+ * says the bound ran out first.
+ */
+function downloadReport(io, repo, head) {
+  for (let attempt = 1; ; attempt++) {
+    const ci = (io.api(`repos/${repo}/actions/runs?head_sha=${head}&event=pull_request_target&per_page=30`).workflow_runs ?? [])
+      .filter((run) => run.path === '.github/workflows/ci.yml').sort((a, b) => b.id - a.id);
+    const found = reportFrom(io, repo, head, ci);
+    if (found) return found;
+    const pending = ci.some((run) => run.status !== 'completed');
+    if (!pending) return undefined;
+    if (attempt >= POLL_ATTEMPTS) return { pending: true };
+    io.sleep(POLL_MS);
+  }
+}
+
+function reportFrom({ gh, api }, repo, head, ci) {
   const name = `crap-report-${head}`;
-  const runs = api(`repos/${repo}/actions/runs?head_sha=${head}&event=pull_request_target&per_page=30`).workflow_runs ?? [];
-  const ci = runs.filter((run) => run.path === '.github/workflows/ci.yml').sort((a, b) => b.id - a.id);
   for (const run of ci) {
     const artifacts = api(`repos/${repo}/actions/runs/${run.id}/artifacts?name=${name}`).artifacts ?? [];
     if (!artifacts.some((artifact) => !artifact.expired)) continue;
@@ -118,6 +139,7 @@ function followUp(io, { repo, pr, commit, dryRun }) {
   if (!pull) return [`No merged pull request for ${pr ? `#${pr}` : commit} in ${repo}; nothing to file.`];
   const ref = `${repo}#${pull.number}`;
   const found = downloadReport(io, repo, pull.head.sha);
+  if (found?.pending) return [`The CI run on ${ref}'s head is still running after 20 minutes and has no CRAP report yet. Nothing is filed: replay with a dispatch of this workflow, pr_number=${pull.number} and dry_run=false, once it ends.`];
   if (!found) return [`No \`crap-report-${pull.head.sha}\` artifact for ${ref}: its last CI run wrote no CRAP report (no Vitest coverage, or the report job failed). Nothing to file.`];
   const findings = overLimit(found.report);
   const lines = [`CRAP report of ${ref} from CI run ${found.run}: ${found.report.functions.length} changed functions, ${findings.length} over ${found.report.limit}.`];

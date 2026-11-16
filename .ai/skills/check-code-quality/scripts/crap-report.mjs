@@ -54,9 +54,13 @@ function excludePatterns(path) {
   return exclude;
 }
 
-/** The names of `fn` and every function around it, outermost first: two same-named helpers in different functions differ. */
-const scopeOf = (fn, functions) =>
-  functions.filter(item => item.start <= fn.start && item.end >= fn.end).map(item => item.name).join(' / ');
+/**
+ * The names of `fn` and every function around it, outermost first: two same-named helpers in different
+ * functions differ. An anonymous function's position is dropped, as changed-functions.mjs drops it, so
+ * the scope survives a line moving above it.
+ */
+const scopeOf = (fn, functions) => functions.filter(item => item.start <= fn.start && item.end >= fn.end)
+  .map(item => item.name.replace(/^anonymous@\d+:\d+$/, 'anonymous')).join(' / ');
 
 /** One row per changed function: `over`, `pass`, `excluded` (child-process-only code) or `no-coverage`. */
 export function scoreChanges(scan, coverage, { exclude = [], read, limit = thresholds.crap } = {}) {

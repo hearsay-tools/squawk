@@ -77,7 +77,7 @@ function fakeIo({ pulls = [], runs = [], artifacts = {}, report, issues = [] }) 
 }
 
 const pull = { number: 7, merged_at: '2026-11-16T00:00:00Z', merge_commit_sha: 'm1', head: { sha: 'h1' } };
-const ciRun = (id) => ({ id, path: '.github/workflows/ci.yml' });
+const ciRun = (id) => ({ id, path: '.github/workflows/ci.yml', status: 'completed' });
 
 test('the merge commit finds its pull request and the newest CI run that kept the report, then opens the issue', () => {
   const { io, calls } = fakeIo({
@@ -108,6 +108,30 @@ test('an open follow-up issue is edited, and a dry run writes nothing', () => {
   const edit = real.calls.find((args) => args[1] === 'edit');
   assert.match(edit.at(-1), /CRAP 50\.0 .*acme\/widgets#7/);
   assert.doesNotMatch(edit.at(-1), /CRAP 40\.0/);
+});
+
+test('a CI run still in progress is polled until its report appears', () => {
+  const setup = { pulls: [pull], runs: [{ ...ciRun(3), status: 'in_progress' }], artifacts: {}, report: { limit: 30, functions: [over('a', 40)] } };
+  const { io, calls } = fakeIo(setup);
+  const sleeps = [];
+  io.sleep = (ms) => {
+    sleeps.push(ms);
+    if (sleeps.length === 2) { setup.runs[0].status = 'completed'; setup.artifacts[3] = [{ expired: false }]; }
+  };
+  const lines = followUp(io, { repo: REPO, commit: 'm1' });
+  assert.equal(sleeps.length, 2);
+  assert.match(lines[0], /from CI run 3: 1 changed functions, 1 over 30/);
+  assert.ok(calls.some((args) => args[0] === 'issue' && args[1] === 'create'));
+});
+
+test('a CI run that stays in progress past the bound files nothing and names the replay', () => {
+  const { io } = fakeIo({ pulls: [pull], runs: [{ ...ciRun(3), status: 'queued' }] });
+  let sleeps = 0;
+  io.sleep = () => { sleeps++; };
+  const lines = followUp(io, { repo: REPO, commit: 'm1' });
+  assert.equal(sleeps, 39);
+  assert.match(lines[0], /still running after 20 minutes/);
+  assert.match(lines[0], /pr_number=7/);
 });
 
 test('no merged pull request, no report, or no finding files nothing', () => {
