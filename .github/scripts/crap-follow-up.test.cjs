@@ -14,6 +14,15 @@ test('a finding line names the function, its scores and the pull request, keyed 
   );
 });
 
+test('same-named functions in different scopes keep separate lines', () => {
+  const findings = [over('helper', 40, { scope: 'build / helper', line: 2 }), over('helper', 35, { scope: 'parse / helper', line: 9 })];
+  const { body, added, updated } = mergeBody(undefined, findings, { pr: 'acme/widgets#7', limit: 30 });
+  assert.deepEqual([added, updated], [2, 0]);
+  assert.match(body, /<!-- crap:src\/a\.ts#build \/ helper -->/);
+  assert.match(body, /<!-- crap:src\/a\.ts#parse \/ helper -->/);
+  assert.match(body, /`build \/ helper`: CRAP 40\.0/);
+});
+
 test('a new body gets the header and one line per finding', () => {
   const { body, added, updated } = mergeBody(undefined, [over('a', 40), over('b', 31)], { pr: 'acme/widgets#7', limit: 30 });
   assert.equal(added, 2);
@@ -119,7 +128,7 @@ test('the follow-up workflow runs trusted main code after a push, one run at a t
   assert.deepEqual(workflow.on.push.branches, ['main']);
   assert.equal(workflow.on.workflow_dispatch.inputs.dry_run.default, true);
   assert.deepEqual(workflow.permissions, {});
-  assert.deepEqual(workflow.concurrency, { group: 'crap-follow-up', 'cancel-in-progress': false });
+  assert.deepEqual(workflow.concurrency, { group: 'crap-follow-up', queue: 'max', 'cancel-in-progress': false });
   const job = workflow.jobs['follow-up'];
   assert.equal(job.if, "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)");
   assert.deepEqual(job.permissions, { actions: 'read', contents: 'read', issues: 'write', 'pull-requests': 'read' });

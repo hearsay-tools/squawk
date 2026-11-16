@@ -16,11 +16,12 @@ const TITLE = 'Changed functions over CRAP 30';
 const KEY = /<!-- crap:(.+?) -->\s*$/;
 
 const percent = (share) => `${Math.round(share * 100)}%`;
-const keyOf = (fn) => `${fn.file}#${fn.name}`;
+// A function's scope names it and every function around it, so same-named nested helpers stay apart.
+const keyOf = (fn) => `${fn.file}#${fn.scope ?? fn.name}`;
 
 /** The checklist line for one function over the limit, keyed by file and function name. */
 function findingLine(fn, pr) {
-  return `- [ ] \`${fn.file}:${fn.line}\` \`${fn.name}\`: CRAP ${fn.crap.toFixed(1)} (complexity ${fn.complexity}, coverage ${percent(fn.coverage)}), from ${pr} <!-- crap:${keyOf(fn)} -->`;
+  return `- [ ] \`${fn.file}:${fn.line}\` \`${fn.scope ?? fn.name}\`: CRAP ${fn.crap.toFixed(1)} (complexity ${fn.complexity}, coverage ${percent(fn.coverage)}), from ${pr} <!-- crap:${keyOf(fn)} -->`;
 }
 
 function header(limit) {

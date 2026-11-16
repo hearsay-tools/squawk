@@ -104,6 +104,15 @@ test('a covered function passes, a file missing from the report has no coverage 
   assert.doesNotMatch(result.output, /::warning/);
 });
 
+test('a row names its scope, so same-named nested functions stay apart', t => {
+  const f = repo(t, { 'src/a.ts': 'export const keep = 1;\n' });
+  const head = f.commit({ 'src/a.ts': 'export const keep = 1;\nexport function build() {\n  const helper = () => 1;\n  return helper();\n}\nexport function parse() {\n  const helper = () => 2;\n  return helper();\n}\n' });
+  const result = run(f, head, { 'src/a.ts': entry([[3, 2, 1], [3, 23, 1], [4, 2, 1], [7, 2, 1], [7, 23, 0], [8, 2, 1]]) });
+  assert.equal(result.code, 0, result.error);
+  const scopes = result.report.functions.map(fn => fn.scope).sort();
+  assert.deepEqual(scopes, ['build', 'build / helper', 'parse', 'parse / helper']);
+});
+
 test('missing arguments or an unreadable coverage file exit 2', t => {
   const f = repo(t, { 'a.ts': 'export const a = 1;\n' });
   assert.equal(runCrapReport(['--base', f.base], { cwd: f.cwd, stdout: { write() {} }, stderr: { write() {} } }), 2);

@@ -54,27 +54,29 @@ function excludePatterns(path) {
   return exclude;
 }
 
+/** The names of `fn` and every function around it, outermost first: two same-named helpers in different functions differ. */
+const scopeOf = (fn, functions) =>
+  functions.filter(item => item.start <= fn.start && item.end >= fn.end).map(item => item.name).join(' / ');
+
 /** One row per changed function: `over`, `pass`, `excluded` (child-process-only code) or `no-coverage`. */
 export function scoreChanges(scan, coverage, { exclude = [], read, limit = thresholds.crap } = {}) {
   return scan.files.flatMap(({ file, functions: changed }) => {
-    const base = { file };
-    if (exclude.some(pattern => matchesGlob(file, pattern))) return changed.map(fn => row(base, fn, 'excluded'));
-    const entry = coverage[file];
-    if (!entry) return changed.map(fn => row(base, fn, 'no-coverage'));
     const source = read(file);
     const functions = analyzeSource(source, file);
     const starts = lineStarts(source);
+    const excluded = exclude.some(pattern => matchesGlob(file, pattern));
+    const entry = coverage[file];
     return changed.map(fn => {
       const located = functions.find(item => item.line === fn.line && item.column === fn.column);
-      const share = located ? functionCoverage(located, functions, entry, starts) : null;
-      if (share === null) return row(base, fn, 'no-coverage');
+      const row = status => ({ file, name: fn.name, scope: located ? scopeOf(located, functions) : fn.name, line: fn.line, complexity: fn.complexity, coverage: null, crap: null, status });
+      if (excluded) return row('excluded');
+      const share = entry && located ? functionCoverage(located, functions, entry, starts) : null;
+      if (share === null) return row('no-coverage');
       const crap = crapScore(fn.complexity, share);
-      return { ...row(base, fn, crap > limit ? 'over' : 'pass'), coverage: share, crap };
+      return { ...row(crap > limit ? 'over' : 'pass'), coverage: share, crap };
     });
   });
 }
-
-const row = (base, fn, status) => ({ ...base, name: fn.name, line: fn.line, complexity: fn.complexity, coverage: null, crap: null, status });
 
 const percent = share => (share === null ? '—' : `${Math.round(share * 100)}%`);
 const score = crap => (crap === null ? '—' : crap.toFixed(1));

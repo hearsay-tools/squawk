@@ -615,7 +615,7 @@ whose file is in the report but never ran counts as 0% covered.
 **After the merge.** `.github/workflows/crap-follow-up.yml` runs on each push to `main`. It finds
 the merged pull request, reads the `crap-report-<head SHA>` artifact of that head's newest CI
 run, and adds each function over 30 to the open issue labelled `crap-follow-up`, which it opens
-when none is open. Each function is one checklist line, keyed by file and function name: a later
+when none is open. Each function is one checklist line, keyed by file and scope (the function and the functions around it): a later
 merge that changes a listed function replaces its line. A pull request without a report (no
 Vitest run, or the report job failed) files nothing and says so in the job summary. The workflow
 runs trusted `main` code and holds the issue write behind one concurrency group. A

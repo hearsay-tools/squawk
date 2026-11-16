@@ -21,9 +21,12 @@ on:
 
 permissions: {}
 
-# The issue-body write lock: two merges never edit the issue from the same old body.
+# The issue-body write lock: two merges never edit the issue from the same old body. Each run files
+# only its own merge, so every pending run must survive: `queue: max` keeps them all, where the
+# default keeps one and cancels the rest.
 concurrency:
   group: crap-follow-up
+  queue: max
   cancel-in-progress: false
 
 jobs:
