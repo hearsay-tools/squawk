@@ -138,31 +138,48 @@ function queueRun(run, fullName, workflowId, sha) {
 // A failed run can still be proof: the job roster (completeGate) decides, so a
 // failed job outside the gate, such as the Squeal export, costs no full main run.
 const PROOF_CONCLUSIONS = ['success', 'failure'];
-// The race re-check: the run just verified, and the same run as the newest
-// merge-group run for the sha, must still read back completed with its conclusion.
-function sameCompletedRun(final, authoritative, run, fullName, workflowId, sha) {
-  return queueRun(final, fullName, workflowId, sha) && final.id === run.id && final.run_attempt === run.run_attempt
-    && final.status === 'completed' && final.conclusion === run.conclusion
-    && queueRun(authoritative, fullName, workflowId, sha) && authoritative?.id === run.id
-    && authoritative.run_attempt === run.run_attempt
-    && authoritative.status === 'completed' && authoritative.conclusion === run.conclusion;
+// A run still running is proof once its gate is complete, so main does not wait
+// for jobs outside the gate, such as the Squeal export and publish.
+const running = run => run.status !== 'completed' && run.conclusion === null;
+async function gateOf(read, run, surfaceOf) {
+  return completeGate(await readCiJobs(read, run.id), run, surfaceOf);
+}
+// The race re-check reads the same attempt. A run proven while completed must
+// read back with its conclusion. A run proven while running may still run, or
+// complete with a proof conclusion.
+function stillProof(current, run) {
+  if (current.id !== run.id || current.run_attempt !== run.run_attempt) return false;
+  if (!running(run)) return current.status === 'completed' && current.conclusion === run.conclusion;
+  return running(current) || (current.status === 'completed' && PROOF_CONCLUSIONS.includes(current.conclusion));
+}
+// The run just verified, and the same run as the newest merge-group run for the
+// sha, must both still be that proof.
+function sameRun(final, authoritative, run, fullName, workflowId, sha) {
+  return [final, authoritative].every(current => queueRun(current, fullName, workflowId, sha) && stillProof(current, run));
 }
 
 // One poll iteration: list and read the queue run for sha, then wait while it
-// is pending. Returns the completed run, a fallback reason, or nothing after
-// a pending wait (the caller polls again).
-async function pollQueueRun({ read, fullName, workflowId, sha, poll, deadline, now, sleep }) {
+// is pending. Returns the run (with its gate when it was read while running),
+// a fallback reason, or nothing after a pending wait (the caller polls again).
+async function pollQueueRun({ read, fullName, workflowId, sha, poll, deadline, now, sleep, surfaceOf }) {
   const listed = newest(await readCiRuns(read, workflowId, sha, 'merge_group'));
   if (!queueRun(listed, fullName, workflowId, sha)) return { reason: 'no-exact-queue-run' };
   const run = await read('GET /repos/{owner}/{repo}/actions/runs/{run_id}', { run_id: listed.id });
   if (!queueRun(run, fullName, workflowId, sha) || run.id !== listed.id) return { reason: 'source-changed' };
-  if (run.status !== 'completed') {
-    if (poll === 6 || now() >= deadline) return { reason: 'source-pending' };
-    await sleep(Math.min(10000, deadline - now()));
-    // No read fits after the deadline, so a run still pending then is the reason.
-    return now() >= deadline ? { reason: 'source-pending' } : {};
-  }
-  return { run };
+  if (run.status === 'completed') return { run };
+  const suites = running(run) && await gateOf(read, run, surfaceOf);
+  if (suites) return { run, suites };
+  if (poll === 6 || now() >= deadline) return { reason: 'source-pending' };
+  await sleep(Math.min(10000, deadline - now()));
+  // No read fits after the deadline, so a run still pending then is the reason.
+  return now() >= deadline ? { reason: 'source-pending' } : {};
+}
+
+// The gate of a completed run, or a fallback reason.
+async function completedGate(read, run, surfaceOf) {
+  if (!PROOF_CONCLUSIONS.includes(run.conclusion)) return { reason: 'source-not-successful' };
+  const suites = await gateOf(read, run, surfaceOf);
+  return suites ? { suites } : { reason: 'incomplete-gate' };
 }
 
 async function queueCiProof({ github, owner, repo, eventName, ref, sha, now = Date.now, sleep = delay, surfaceOf }) {
@@ -175,17 +192,16 @@ async function queueCiProof({ github, owner, repo, eventName, ref, sha, now = Da
     if (!positive(workflow?.id) || workflow.path !== CI_PATH || workflow.state !== 'active') return fallback('workflow-unavailable');
     const fullName = `${owner}/${repo}`;
     for (let poll = 0; poll < 7; poll++) {
-      const step = await pollQueueRun({ read, fullName, workflowId: workflow.id, sha, poll, deadline, now, sleep });
+      const step = await pollQueueRun({ read, fullName, workflowId: workflow.id, sha, poll, deadline, now, sleep, surfaceOf });
       if (step.reason) return fallback(step.reason);
       if (!step.run) continue;
       const run = step.run;
-      if (!PROOF_CONCLUSIONS.includes(run.conclusion)) return fallback('source-not-successful');
-      const jobs = await readCiJobs(read, run.id);
-      const suites = await completeGate(jobs, run, surfaceOf);
-      if (!suites) return fallback('incomplete-gate');
+      const gate = step.suites ? step : await completedGate(read, run, surfaceOf);
+      if (gate.reason) return fallback(gate.reason);
+      const suites = gate.suites;
       const final = await read('GET /repos/{owner}/{repo}/actions/runs/{run_id}', { run_id: run.id });
       const authoritative = newest(await readCiRuns(read, workflow.id, sha, 'merge_group'));
-      if (!sameCompletedRun(final, authoritative, run, fullName, workflow.id, sha)) return fallback('source-changed');
+      if (!sameRun(final, authoritative, run, fullName, workflow.id, sha)) return fallback('source-changed');
       return { verified: true, runId: run.id, attempt: run.run_attempt, sha, suites,
         url: `https://github.com/${fullName}/actions/runs/${run.id}/attempts/${run.run_attempt}` };
     }

@@ -266,7 +266,11 @@ test('fallback reasons rebuild the checks queue-ci-proof.cjs makes', () => {
   assert.equal(proofReason(push([])), 'proof-job-missing');
   assert.equal(proofReason(push([proof('failure')])), 'proof-job-failure');
   assert.equal(proofReason(push([proof('success')], { queueRun: null, queueJobs: [] })), 'no-exact-queue-run');
-  assert.equal(proofReason(push([proof('success')], { queueRun: { ...done, updated_at: '2026-11-02T01:00:01Z' }, queueJobs: gate })), 'source-pending');
+  // A run still running at proof time is pending only while its gate is not complete.
+  const late = { ...done, updated_at: '2026-11-02T01:00:01Z' };
+  const gateAt = completed_at => gate.map(job => ({ ...job, completed_at }));
+  assert.equal(proofReason(push([proof('success')], { queueRun: late, queueJobs: gateAt('2026-11-02T01:00:01Z') })), 'source-pending');
+  assert.equal(proofReason(push([proof('success')], { queueRun: late, queueJobs: gateAt('2026-11-02T00:59:30Z') })), 'unexplained');
   assert.equal(proofReason(push([proof('success')], { queueRun: { ...done, conclusion: 'cancelled' }, queueJobs: gate })), 'source-not-successful');
   // A failed run with a green gate is proof: only a job outside the gate failed.
   assert.equal(proofReason(push([proof('success')], { queueRun: { ...done, conclusion: 'failure' }, queueJobs: gate })), 'unexplained');
