@@ -140,6 +140,7 @@ export const NO_WAIT_NUDGE_NOTE = 'no wait or done — reminding the agent once'
 export const NO_WAIT_NOTE = 'waiting for you: the agent ended its turn without a wait or done';
 export const NO_WAIT_NO_REPLY_NOTE = 'no reply to the no-wait nudge — waiting for you';
 export const COMPLETION_NO_REPLY_NOTE = 'no reply to the completion nudge — waiting for you';
+export const AUTONOMOUS_NO_ACK_NOTE = 'no acknowledgement or reply to the autonomous nudge — session closed';
 export const WORKER_FALLBACK_NOTE = 'no wait or done after the nudge — asking the parent';
 export const WORKER_FALLBACK_REPLY_NOTE = 'parent answered the idle worker';
 export const COMPLETION_NUDGE_NOTE = 'completion blocked — refusal sent to the agent';

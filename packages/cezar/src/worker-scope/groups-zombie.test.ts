@@ -23,7 +23,7 @@ describe.runIf(process.platform === 'linux')('a zombie-only group (hearsay-tools
   it('stop kills it once and does not wait for it; a scope never stopped still counts it as running', async () => {
     const workerId = randomUUID();
     const group = { pid: 4242, pgid: 4242, startToken: '11111111-1111-4111-8111-111111111111:100' };
-    let record: ScopeRecord = { workerId, cgroups: [], groups: [group] };
+    let record: ScopeRecord = { workerId, cgroups: [], jobs: [], groups: [group] };
     const store: ScopeStore = {
       readWorkerScope: () => record, writeWorkerScope: (_id, next) => { record = next; },
       getRun: id => ({ id, delegation: { role: 'worker' } }) as unknown as RunRecord,
@@ -36,7 +36,7 @@ describe.runIf(process.platform === 'linux')('a zombie-only group (hearsay-tools
     expect(Date.now() - started).toBeLessThan(1_000);
     expect(signalled).toEqual([[4242, 'SIGKILL']]);
     expect(record.groups).toEqual([]);
-    record = { workerId, cgroups: [], groups: [group] };
+    record = { workerId, cgroups: [], jobs: [], groups: [group] };
     scopes.kill(workerId);
     expect(scopes.stopped(workerId)).toBe(true);
   });
@@ -44,7 +44,7 @@ describe.runIf(process.platform === 'linux')('a zombie-only group (hearsay-tools
   it('a leaderless group with a member still exiting is waited for, and stays recorded', async () => {
     const workerId = randomUUID();
     const group = { pid: 4343, pgid: 4343, startToken: '11111111-1111-4111-8111-111111111111:100' };
-    let record: ScopeRecord = { workerId, cgroups: [], groups: [group] };
+    let record: ScopeRecord = { workerId, cgroups: [], jobs: [], groups: [group] };
     const store: ScopeStore = {
       readWorkerScope: () => record, writeWorkerScope: (_id, next) => { record = next; },
       getRun: id => ({ id, delegation: { role: 'worker' } }) as unknown as RunRecord,

@@ -148,18 +148,20 @@ export function requeueUnreadAtClose(context: RunModuleContext, host: InputRecei
 export interface InputReceiptSteps {
   clearUnread(state: ActiveRun): void;
   clearHeld(state: ActiveRun): void;
-  noteActivity(runId: string, state: ActiveRun, event: AgentEvent): void;
+  /** Model work, with the session that emitted it (hearsay-tools/squawk#2443). */
+  noteActivity(runId: string, state: ActiveRun, event: AgentEvent, emitting: AgentSession | undefined): void;
   persistAttachment(runId: string, mediaType: string, data: string): PersistedAttachment | null;
   ready(runId: string, state: ActiveRun, session: AgentSession | undefined): void;
   pid(runId: string, pid: number): void;
-  ui(runId: string, state: ActiveRun, sink: UiEventSink, event: UiEvent): void;
+  ui(runId: string, state: ActiveRun, sink: UiEventSink, event: UiEvent, emitting: AgentSession | undefined): void;
   flushDeferred(runId: string): void;
   recordProcess(runId: string, pid: number): void;
 }
 
 /** Both launch entries process images, text, unread receipts and tool activity in this order. */
-export function handleReceiptEvent(context: RunModuleContext, host: InputReceiptsHost, steps: InputReceiptSteps, runId: string, state: ActiveRun, turn: SessionTurn, event: AgentEvent, stepId: string, emit: ExecutionEmit): boolean {
+export function handleReceiptEvent(context: RunModuleContext, host: InputReceiptsHost, steps: InputReceiptSteps, runId: string, state: ActiveRun, turn: SessionTurn, event: AgentEvent, stepId: string, emit: ExecutionEmit, emitting: AgentSession | undefined): boolean {
   if (event.type === 'image') {
+    steps.noteActivity(runId, state, event, emitting);
     const saved = steps.persistAttachment(runId, event.mediaType, event.data);
     if (saved) emit({ type: 'image', stepId, ...saved });
     return true;
@@ -167,7 +169,7 @@ export function handleReceiptEvent(context: RunModuleContext, host: InputReceipt
   if (event.type === 'text') {
     steps.clearUnread(state); // real content: the harness is working
     steps.clearHeld(state);
-    steps.noteActivity(runId, state, event);
+    steps.noteActivity(runId, state, event, emitting);
     turn.text = appendTurnText(turn.text, event.text);
     const text = stripTaskMarkers(event.text);
     if (text) emit({ type: 'text', text, stepId });
@@ -177,7 +179,7 @@ export function handleReceiptEvent(context: RunModuleContext, host: InputReceipt
   if (event.type === 'tool-call' || event.type === 'tool-result') {
     steps.clearUnread(state);
     steps.clearHeld(state);
-    steps.noteActivity(runId, state, event);
+    steps.noteActivity(runId, state, event, emitting);
   }
   return false;
 }
@@ -187,7 +189,7 @@ export function inputReceiptCallbacks(context: RunModuleContext, host: InputRece
   return {
     onUiEvent: (event: UiEvent) => {
       if (openingAccepted && event.type === 'turn.started') recordOpeningAccepted(context, host, runId, state);
-      steps.ui(runId, state, sink, event);
+      steps.ui(runId, state, sink, event, session());
     },
     onAgentInputReady: () => steps.ready(runId, state, session()),
     onAgentInputConsumed: (ids: readonly string[]) => handleAgentInputConsumed(context, host, runId, state, session(), ids),

@@ -57,7 +57,10 @@ A result or a progress message that arrives after an accepted `cezar_done` is de
 task finishes when that turn ends, without spending the automatic-wake budget. A message from you, a
 new request from another task, a failed result, or a wait or question the agent opens withdraws the
 done, and the agent must call it again. An
-autonomous task does not wait for you until its automatic-wake budget is spent.
+autonomous task does not wait for you until its automatic-wake budget is spent. When the
+agent's harness neither acknowledges nor answers an autonomous nudge within 5 minutes, Squawk
+writes a note that names the nudge and closes the session. The task then waits for a Continue,
+with no question to you.
 
 A run can have several waits open at once, up to 16. Each answer carries the
 wait's id, its absolute deadline and the list of waits still open, and
