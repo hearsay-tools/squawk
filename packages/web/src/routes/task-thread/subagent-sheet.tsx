@@ -35,7 +35,7 @@ export function SubagentSheet({
   renderPermission?: ((permission: ThreadPermission) => ReactNode) | undefined
   /** The selected agent, or `undefined` when the sheet is closed. */
   agent: SubagentSummary | undefined
-  /** That agent's child entries, in stream order (`subagentChildren`). */
+  /** That agent's child entries, in event order (`subagentEntries`). */
   entries: ThreadEntry[]
   onClose: () => void
   taskTitles?: TaskTitleMap | undefined

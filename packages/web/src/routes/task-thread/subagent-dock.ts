@@ -2,7 +2,7 @@ import type { ToolStatus, UiItem, UiToolItem } from '@open-mercato/cezar-api-cli
 
 import { isSubagentChildKind } from './subagent-child-kind'
 import { splitToolTitle } from './thread-groups'
-import type { ThreadEntry, ThreadTurn } from './thread-state'
+import type { ItemSeqs, ThreadEntry, ThreadTurn } from './thread-state'
 
 /**
  * The Agents dock's data (spec `.ai/specs/2026-07-20-grouped-subagent-display.md` §Collector,
@@ -67,14 +67,6 @@ const isChildCandidate = (entry: ThreadEntry): entry is UiItem =>
   isSubagentChildKind(entry.kind) &&
   !(entry.kind === 'tool' && entry.toolKind === 'plan')
 
-/** The first turn holding any of the given roots — where child scanning must begin. */
-function indexOfFirstRoot(turns: ThreadTurn[], rootIds: ReadonlySet<string>): number {
-  for (let i = 0; i < turns.length; i += 1) {
-    if (turns[i]!.items.some((entry) => isRootTaskItem(entry) && rootIds.has(entry.id))) return i
-  }
-  return 0
-}
-
 /**
  * The agent's declared type, from whichever key the backend used. Read defensively: `input` is
  * raw backend JSON that may still be arriving incrementally, so anything non-string is dropped
@@ -120,11 +112,15 @@ function truncate(text: string): string {
  * message mid-fan-out opens a new turn, and the dock must not vanish while agents still run.
  * Once every agent settles and a newer turn exists, the dock yields to the transcript.
  *
- * Children are gathered from the first turn that contributes a row through the last turn —
- * output produced after a steering message still belongs to the agent that produced it, and a
- * carried-over agent owns children recorded back in its original turn.
+ * Rows come from `turns`, the run's current state. Each row's children are `subagentEntries`:
+ * the same merged list the sheet renders, so a message only the visible page holds still
+ * reaches the row's activity line.
  */
-export function collectSubagents(turns: ThreadTurn[], runIsTerminal = false): SubagentSummary[] {
+export function collectSubagents(
+  turns: ThreadTurn[],
+  runIsTerminal = false,
+  visibleTurns: ThreadTurn[] = turns,
+): SubagentSummary[] {
   const anchorIndex = findLastIndex(turns, (turn) => turn.items.some(isRootTaskItem))
   if (anchorIndex === -1) return []
 
@@ -168,25 +164,7 @@ export function collectSubagents(turns: ThreadTurn[], runIsTerminal = false): Su
   const isLatestTurn = anchorIndex === turns.length - 1
   if (!isLatestTurn && !roots.some(live)) return []
 
-  // Children by parent id. Scanned from the FIRST turn that contributes a row (not the
-  // anchor): an agent carried over from an earlier turn owns children recorded back there
-  // too. An id that names no root is ignored — exactly as `groupThreadItems` renders such an
-  // orphan at top level.
-  const rootIds = new Set(roots.map((item) => item.id))
-  const firstIndex = carried.length > 0 ? indexOfFirstRoot(turns, rootIds) : anchorIndex
-  const childrenOf = new Map<string, ThreadEntry[]>()
-  for (let i = firstIndex; i < turns.length; i += 1) {
-    for (const entry of turns[i]!.items) {
-      if (!isChildCandidate(entry)) continue
-      const parentId = entry.parentItemId
-      if (parentId === undefined || !rootIds.has(parentId)) continue
-      const siblings = childrenOf.get(parentId)
-      if (siblings) siblings.push(entry)
-      else childrenOf.set(parentId, [entry])
-    }
-  }
-
-  return roots.map((item) => summarize(item, childrenOf.get(item.id) ?? [], runIsTerminal))
+  return roots.map((item) => summarize(item, subagentEntries(visibleTurns, turns, item.id), runIsTerminal))
 }
 
 /** The one place a `SubagentSummary` is built — the dock and the sheet must never disagree. */
@@ -253,32 +231,85 @@ export function findSubagent(
   turns: ThreadTurn[],
   id: string,
   runIsTerminal = false,
+  visibleTurns: ThreadTurn[] = turns,
 ): SubagentSummary | undefined {
   for (let i = turns.length - 1; i >= 0; i -= 1) {
     const item = turns[i]!.items.find((entry): entry is UiToolItem => entry.id === id && isRootTaskItem(entry))
     if (item === undefined) continue
     // The SAME summarizer the dock row uses — the sheet's header must not disagree with the
     // row the user clicked (and must carry `activity` rather than a structural blank).
-    return summarize(item, subagentChildren(turns, id), runIsTerminal)
+    return summarize(item, subagentEntries(visibleTurns, turns, id), runIsTerminal)
   }
   return undefined
 }
 
-/**
- * The children the sheet renders for one agent — the same cross-turn relation the dock counts,
- * exposed so the drill-down and the row count can never drift apart.
- */
+/** One agent's children in one view of the run, from the turn that last spawned it. */
 export function subagentChildren(turns: ThreadTurn[], parentId: string): ThreadEntry[] {
-  const anchorIndex = turns.findIndex((turn) =>
-    turn.items.some((entry) => entry.id === parentId && isRootTaskItem(entry)),
-  )
-  if (anchorIndex === -1) return []
-  const children: ThreadEntry[] = []
-  for (let i = anchorIndex; i < turns.length; i += 1) {
-    for (const entry of turns[i]!.items) {
+  const spawnIndex = spawnTurnIndex(turns, parentId)
+  return spawnIndex === -1 ? [] : childrenFrom(turns, parentId, spawnIndex).map(({ entry }) => entry)
+}
+
+interface SeqEntry {
+  entry: ThreadEntry
+  seqs: ItemSeqs | undefined
+}
+
+/** A later workflow step can reuse an agent's item id: the latest spawn is the agent. */
+function spawnTurnIndex(turns: ThreadTurn[], parentId: string): number {
+  return findLastIndex(turns, (turn) => turn.items.some((entry) => entry.id === parentId && isRootTaskItem(entry)))
+}
+
+function childrenFrom(turns: ThreadTurn[], parentId: string, startIndex: number): SeqEntry[] {
+  const children: SeqEntry[] = []
+  for (let i = startIndex; i < turns.length; i += 1) {
+    const turn = turns[i]!
+    for (const entry of turn.items) {
       if (!isChildCandidate(entry)) continue
-      if (entry.parentItemId === parentId && entry.id !== parentId) children.push(entry)
+      if (entry.parentItemId === parentId && entry.id !== parentId) children.push({ entry, seqs: turn.itemSeqs?.get(entry.id) })
     }
   }
   return children
+}
+
+/**
+ * The children the sheet renders and the dock row summarizes for one agent
+ * (hearsay-tools/squawk#2463). `currentTurns` is the run's current state: it holds the spawning
+ * item and every tool child, but no messages before its high-water mark. `visibleTurns` is the
+ * loaded transcript, which holds those messages. The result holds each child of the latest spawn
+ * once, in event order. When both views hold a child, the copy with the later event wins.
+ */
+export function subagentEntries(visibleTurns: ThreadTurn[], currentTurns: ThreadTurn[], parentId: string): ThreadEntry[] {
+  const spawnIndex = spawnTurnIndex(currentTurns, parentId)
+  if (spawnIndex === -1) return []
+  const current = childrenFrom(currentTurns, parentId, spawnIndex)
+  if (visibleTurns === currentTurns) return current.map(({ entry }) => entry)
+  // The current state holds the spawn's first event. Loaded pages can skip that spawn and still
+  // hold an earlier agent with the same id, so a visible child must start after the spawn.
+  const spawnSeq = currentTurns[spawnIndex]!.itemSeqs?.get(parentId)?.first
+  const afterSpawn = (child: SeqEntry) => spawnSeq === undefined || child.seqs === undefined || child.seqs.first > spawnSeq
+  const merged = new Map<string, SeqEntry>()
+  for (const child of childrenFrom(visibleTurns, parentId, Math.max(spawnTurnIndex(visibleTurns, parentId), 0))) {
+    if (afterSpawn(child) && !merged.has(child.entry.id)) merged.set(child.entry.id, child)
+  }
+  for (const child of current) {
+    const kept = merged.get(child.entry.id)
+    merged.set(child.entry.id, kept === undefined ? child : mergeCopies(kept, child))
+  }
+  return [...merged.values()].sort(bySeq).map(({ entry }) => entry)
+}
+
+/** The copy with the later latest event, placed at the earlier first event. A tie keeps the visible copy. */
+function mergeCopies(visible: SeqEntry, current: SeqEntry): SeqEntry {
+  if (visible.seqs === undefined || current.seqs === undefined) return visible
+  const newer = current.seqs.last > visible.seqs.last ? current : visible
+  return {
+    entry: newer.entry,
+    seqs: { first: Math.min(visible.seqs.first, current.seqs.first), last: Math.max(visible.seqs.last, current.seqs.last) },
+  }
+}
+
+/** Event order; an entry without seqs keeps its place after the ones before it. */
+function bySeq(a: SeqEntry, b: SeqEntry): number {
+  if (a.seqs === undefined || b.seqs === undefined) return 0
+  return a.seqs.first - b.seqs.first
 }

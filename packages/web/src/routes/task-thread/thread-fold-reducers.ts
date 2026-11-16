@@ -86,6 +86,8 @@ function reducePreviewRegistered(fold: FoldState, event: RunEvent): void {
   const turn = currentTurn(fold)
   const draft: DraftEntry = {
     origin: 'meta',
+    firstSeq: event.seq,
+    lastSeq: event.seq,
     entry: {
       kind: 'preview-server',
       id: `preview-server:${server.data.port}`,
@@ -104,6 +106,7 @@ function reducePreviewState(fold: FoldState, event: RunEvent): void {
   if (!state.success || !live || live.draft.entry.kind !== 'preview-server') return
   const { server, id } = live.draft.entry
   // Rebuilt, not patched: a field of the old state (an exit code) must not outlive it.
+  live.draft.lastSeq = event.seq
   live.draft.entry = {
     kind: 'preview-server',
     id,
@@ -236,6 +239,7 @@ function reduceItemDelta(fold: FoldState, event: RunEvent): void {
   const delta = str(event.delta) ?? ''
   if (!located || delta === '' || !isUiItem(located.entry.entry)) return
   const item = located.entry.entry
+  located.entry.lastSeq = event.seq
   if (event.field === 'output' && item.kind === 'tool') {
     item.output = (item.output ?? '') + delta
   } else if (event.field !== 'output' && (item.kind === 'message' || item.kind === 'reasoning')) {
@@ -255,6 +259,8 @@ function reduceText(fold: FoldState, event: RunEvent): void {
   const ts = stamp(event.ts)
   turn.entries.push({
     origin: 'v1',
+    firstSeq: event.seq,
+    lastSeq: event.seq,
     entry: { kind: 'message', id: `v1:${event.seq}`, role: 'assistant', text, ...(ts !== undefined ? { ts } : {}) },
   })
 }
@@ -306,7 +312,7 @@ function reduceToolCall(fold: FoldState, event: RunEvent): void {
     status: 'running',
     input: event.input,
   }
-  const draft: DraftEntry = { origin: 'v1', entry: item }
+  const draft: DraftEntry = { origin: 'v1', entry: item, firstSeq: event.seq, lastSeq: event.seq }
   turn.entries.push(draft)
   fold.itemsById.set(item.id, { turn, entry: draft })
 }
@@ -327,6 +333,7 @@ function reduceToolResult(fold: FoldState, event: RunEvent): void {
   if (!located || located.turn.v2Items || located.entry.origin !== 'v1') return
   const item = located.entry.entry
   if (item.kind !== 'tool') return
+  located.entry.lastSeq = event.seq
   item.status = 'completed'
   item.output = resultText(event.result)
 }
@@ -601,5 +608,6 @@ const THREAD_EVENT_REDUCERS: ReadonlyMap<string, EventReducer> = new Map<string,
  * nothing rather than as debug output.)
  */
 export function applyThreadEvent(fold: FoldState, event: RunEvent): void {
+  fold.eventSeq = event.seq
   THREAD_EVENT_REDUCERS.get(event.type)?.(fold, event)
 }

@@ -4,7 +4,7 @@ const TOOL_STATUS = Object.fromEntries(TOOL_STATUSES.map(status => [status, stat
 
 import { describe, expect, it } from 'vitest'
 
-import type { ToolStatus, UiToolItem } from '@open-mercato/cezar-api-client'
+import type { RunEvent, ToolStatus, UiToolItem } from '@open-mercato/cezar-api-client'
 
 import {
   collectSubagents,
@@ -12,8 +12,9 @@ import {
   subagentActivityText,
   subagentChildren,
   subagentCounts,
+  subagentEntries,
 } from './subagent-dock'
-import type { ThreadEntry, ThreadTurn } from './thread-state'
+import { reduceThread, type ThreadEntry, type ThreadTurn } from './thread-state'
 
 /** A `Task` spawn in the shape the claude mapper emits (title precomputed by `toolDisplay`). */
 const task = (id: string, status: ToolStatus, extra: Partial<UiToolItem> = {}): UiToolItem => ({
@@ -561,5 +562,102 @@ describe('collectSubagents — OMP turns (shapes from omp-ui-mapper)', () => {
     ])
     expect(single!.agentType).toBe('explore')
     expect(batched!.agentType).toBe('reviewer')
+  })
+})
+
+describe('subagentEntries — the visible transcript and the current state are one source (hearsay-tools/squawk#2463)', () => {
+  const at = '2026-11-15T12:00:00.000Z'
+  const item = (seq: number, entry: ThreadEntry): RunEvent =>
+    ({ seq, ts: at, stepId: 'task', type: 'item.completed', item: entry }) as RunEvent
+  const spawn = item(1, task('a', 'running'))
+  const firstTool = item(2, childTool('t1', 'a', 'Ran one'))
+  const message = item(3, childText('m1', 'a', 'Found the bug'))
+  const secondTool = item(4, childTool('t2', 'a', 'Ran two'))
+  const ids = (entries: ThreadEntry[]) => entries.map((entry) => entry.id)
+
+  it('puts a message only the visible page holds between the tools only the current state holds', () => {
+    const visible = reduceThread([message]).turns
+    const current = reduceThread([spawn, firstTool, secondTool]).turns
+    expect(ids(subagentEntries(visible, current, 'a'))).toEqual(['t1', 'm1', 't2'])
+  })
+
+  it('keeps one copy of each entry when both views hold it', () => {
+    const visible = reduceThread([spawn, firstTool, message, secondTool]).turns
+    const current = reduceThread([spawn, firstTool, secondTool]).turns
+    expect(ids(subagentEntries(visible, current, 'a'))).toEqual(['t1', 'm1', 't2'])
+  })
+
+  it('shows a live message once when both views hold it', () => {
+    const live = reduceThread([spawn, firstTool, message]).turns
+    expect(ids(subagentEntries(live, live, 'a'))).toEqual(['t1', 'm1'])
+  })
+
+  it('keeps the visible copy when the visible page holds the later event', () => {
+    const settled = item(5, { ...childTool('t1', 'a', 'Ran one'), status: TOOL_STATUS.failed })
+    const visible = reduceThread([firstTool, settled]).turns
+    const current = reduceThread([spawn, firstTool]).turns
+    expect(subagentEntries(visible, current, 'a')).toMatchObject([{ id: 't1', status: TOOL_STATUS.failed }])
+  })
+
+  it('keeps the current copy when the current state holds a later event for it', () => {
+    const settled = item(6, { ...childTool('t1', 'a', 'Ran one'), status: TOOL_STATUS.failed })
+    const visible = reduceThread([{ ...firstTool, type: 'item.started' }, message]).turns
+    const current = reduceThread([spawn, firstTool, settled]).turns
+    expect(subagentEntries(visible, current, 'a')).toMatchObject([{ id: 't1', status: TOOL_STATUS.failed }, { id: 'm1' }])
+  })
+
+  it('reads only the latest spawn when a later workflow step reuses the agent id', () => {
+    const step = (seq: number, stepId: string, entry: ThreadEntry): RunEvent =>
+      ({ seq, ts: at, stepId, type: 'item.completed', item: entry }) as RunEvent
+    const turnStarted = (seq: number, turnId: string): RunEvent => ({ seq, ts: at, type: 'turn.started', turnId }) as RunEvent
+    const events = [
+      turnStarted(1, 'turn-1'),
+      step(2, 'review', task('a', 'completed')),
+      step(3, 'review', childTool('old', 'a', 'Ran the old probe')),
+      turnStarted(10, 'turn-2'),
+      step(11, 'fix', task('a', 'running')),
+      step(12, 'fix', childTool('new', 'a', 'Ran the new probe')),
+    ]
+    const current = reduceThread(events).turns
+    const visible = reduceThread([...events]).turns
+    expect(ids(subagentEntries(visible, current, 'a'))).toEqual(['new'])
+    expect(subagentChildren(current, 'a').map((entry) => entry.id)).toEqual(['new'])
+    expect(collectSubagents(current, false, visible)[0]).toMatchObject({ toolCalls: 1, activity: 'Ran the new probe' })
+  })
+
+  describe('a later workflow step reuses the agent id and the views are partial', () => {
+    const step = (seq: number, stepId: string, entry: ThreadEntry, type = 'item.completed'): RunEvent =>
+      ({ seq, ts: at, stepId, type, item: entry }) as RunEvent
+    const turnStarted = (seq: number, turnId: string): RunEvent => ({ seq, ts: at, type: 'turn.started', turnId }) as RunEvent
+    const oldPage = [turnStarted(1, 'turn-1'), step(2, 'review', task('a', 'completed')), step(3, 'review', childTool('old', 'a', 'Ran the old probe'))]
+    const newSpawn = step(101, 'fix', task('a', 'running'), 'item.started')
+    const newChild = step(102, 'fix', childTool('new', 'a', 'Ran the new probe'))
+
+    it('keeps the old page children out when the new spawn falls in the unloaded gap', () => {
+      const visible = reduceThread([...oldPage, newChild]).turns
+      const current = reduceThread([turnStarted(100, 'turn-2'), newSpawn, newChild]).turns
+      expect(ids(subagentEntries(visible, current, 'a'))).toEqual(['new'])
+      expect(collectSubagents(current, false, visible)[0]).toMatchObject({ toolCalls: 1 })
+    })
+
+    it('keeps the new agent children when the page holds only a later event of its spawn', () => {
+      const message = step(103, 'fix', childText('m-new', 'a', 'Found it'))
+      const settled = step(104, 'fix', task('a', 'completed'))
+      const visible = reduceThread([message, settled]).turns
+      const current = reduceThread([turnStarted(100, 'turn-2'), newSpawn, newChild, settled]).turns
+      expect(ids(subagentEntries(visible, current, 'a'))).toEqual(['new', 'm-new'])
+    })
+  })
+
+  it('is empty when the current state holds no spawning item', () => {
+    expect(subagentEntries(reduceThread([message]).turns, reduceThread([firstTool]).turns, 'a')).toEqual([])
+  })
+
+  it('gives the dock row and the sheet header the same merged entries', () => {
+    const visible = reduceThread([item(5, childText('m2', 'a', 'Wrote the report'))]).turns
+    const current = reduceThread([spawn, firstTool, secondTool]).turns
+    const [row] = collectSubagents(current, false, visible)
+    expect(row).toMatchObject({ id: 'a', toolCalls: 2, activity: 'Wrote the report' })
+    expect(findSubagent(current, 'a', false, visible)).toEqual(row)
   })
 })

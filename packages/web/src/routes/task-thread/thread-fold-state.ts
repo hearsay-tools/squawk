@@ -23,6 +23,10 @@ import type {
 export interface DraftEntry {
   origin: 'v1' | 'v2' | 'meta'
   entry: ThreadEntry
+  /** The seq of the event that placed this entry in its turn. */
+  firstSeq: number
+  /** The seq of the latest event that changed this entry. */
+  lastSeq: number
 }
 
 export interface DraftTurn {
@@ -45,6 +49,8 @@ export interface FoldState {
   itemsById: Map<string, { turn: DraftTurn; entry: DraftEntry }>
   sessionEnded?: ThreadState['sessionEnded']
   turnSeq: number
+  /** The seq of the event being folded. */
+  eventSeq: number
   /** The latest unresolved AskUser card (#473). The next `user-message` resolves
    *  it client-side (only one ask is ever pending — the agent asks once, then
    *  parks `waiting` until the user answers). */
@@ -64,6 +70,7 @@ export function createFoldState(): FoldState {
     turns: [],
     itemsById: new Map(),
     turnSeq: 0,
+    eventSeq: 0,
     permissions: new Map(),
     conversationEntries: new Map(),
     outcomesByRequest: new Map(),
@@ -129,7 +136,7 @@ export function currentTurn(fold: FoldState): DraftTurn {
 
 /** Append a cezar-owned entry (`origin: 'meta'`) to the current turn: it survives every dedup. */
 export function pushMeta(fold: FoldState, entry: ThreadEntry): void {
-  currentTurn(fold).entries.push({ origin: 'meta', entry })
+  currentTurn(fold).entries.push({ origin: 'meta', entry, firstSeq: fold.eventSeq, lastSeq: fold.eventSeq })
 }
 
 export function expirePermissions(fold: FoldState): void {
@@ -175,9 +182,10 @@ export function upsertV2(fold: FoldState, turn: DraftTurn, raw: UiItem, key: str
   const existing = fold.itemsById.get(key)
   if (existing && existing.turn === turn) {
     existing.entry.entry = item
+    existing.entry.lastSeq = fold.eventSeq
     return
   }
-  const draft: DraftEntry = { origin: 'v2', entry: item }
+  const draft: DraftEntry = { origin: 'v2', entry: item, firstSeq: fold.eventSeq, lastSeq: fold.eventSeq }
   turn.entries.push(draft)
   fold.itemsById.set(key, { turn, entry: draft })
 }

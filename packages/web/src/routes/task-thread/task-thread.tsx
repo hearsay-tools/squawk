@@ -34,7 +34,7 @@ import { cn, isHttpUrl } from '@/lib/utils'
 import { AutoResumeHint } from './auto-resume-hint'
 import { WorkingIndicator } from './thread-items'
 import { useContinueAction } from './follow-up-engine'
-import { findSubagent, subagentChildren } from './subagent-dock'
+import { findSubagent, subagentEntries } from './subagent-dock'
 import { SubagentSheet } from './subagent-sheet'
 import { AcceptCelebration, ReviewPanel } from './review-panel'
 import { isSessionOpen } from '@open-mercato/cezar-api-client/contract/run-predicates'
@@ -248,12 +248,12 @@ export function ThreadView({
     () =>
       openAgentId === undefined ?
         undefined
-      : findSubagent(currentThread.turns, openAgentId, runIsTerminal),
-    [currentThread.turns, openAgentId, runIsTerminal],
+      : findSubagent(currentThread.turns, openAgentId, runIsTerminal, thread.turns),
+    [currentThread.turns, openAgentId, runIsTerminal, thread.turns],
   )
   const openAgentChildren = useMemo(
-    () => (openAgentId === undefined ? [] : subagentChildren(currentThread.turns, openAgentId)),
-    [currentThread.turns, openAgentId],
+    () => (openAgentId === undefined ? [] : subagentEntries(thread.turns, currentThread.turns, openAgentId)),
+    [thread.turns, currentThread.turns, openAgentId],
   )
   const sendMessage = useSendMessage(run.id)
   const reply = useAskAnswer(run)
@@ -632,7 +632,7 @@ function ThreadFooterDock({
         {/* Keyed by run id, like the docks it replaced: the route survives a task change, so
             an unkeyed dock would carry the previous run's collapse state — its own and every
             nested section's — into the next one. */}
-        <RunActivityDock key={run.id} run={run} currentThread={currentThread} currentComplete={currentComplete} onOpenWorker={onOpenWorker} readerScroll={scroll.subscribeReaderScroll} />
+        <RunActivityDock key={run.id} run={run} thread={thread} currentThread={currentThread} currentComplete={currentComplete} onOpenWorker={onOpenWorker} readerScroll={scroll.subscribeReaderScroll} />
 
         {/* A usage-limit hold is a `waiting` run with a resume booked — the dock says when,
             before the composer offers a Continue nobody needs to press. */}

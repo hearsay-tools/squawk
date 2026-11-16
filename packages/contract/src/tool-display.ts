@@ -8,11 +8,11 @@
  *              WebSearch, Task, Agent, Skill, TodoWrite, TaskCreate,
  *              TaskUpdate, TaskList, mcp__server__tool
  *  - codex:    commandExecution, contextCompaction, fileChange, imageView,
- *              mcpToolCall, webSearch, plan
+ *              mcpToolCall, webSearch, plan, spawnAgent (the mapper's subagent row)
  *              (codex's checklist arrives as the `turn/plan/updated`
  *              notification, not as a tool call — `todoList` is kept below only
  *              as tolerance for its non-app-server transports)
- *  - opencode: bash, edit, write, read, grep, glob, webfetch, task, todowrite
+ *  - opencode: bash, edit, write, read, grep, glob, webfetch, task, subtask, todowrite
  */
 
 export type ToolKind = 'read' | 'edit' | 'delete' | 'move' | 'search' | 'execute' | 'think' | 'fetch' | 'task' | 'plan' | 'other';
@@ -39,25 +39,32 @@ function oneLine(text: string): string {
   return collapsed.length > MAX_LABEL ? `${collapsed.slice(0, MAX_LABEL - 1)}…` : collapsed;
 }
 
-/** First non-empty string among `input[keys...]`, normalized for display. */
-function field(input: unknown, ...keys: string[]): string | undefined {
+const label = (text: string | undefined): string | undefined => (text === undefined ? undefined : oneLine(text));
+
+/** First non-empty string among `input[keys...]`, verbatim. */
+function rawField(input: unknown, ...keys: string[]): string | undefined {
   if (!isRecord(input)) return undefined;
   for (const key of keys) {
     const value = input[key];
-    if (typeof value === 'string' && value.trim() !== '') return oneLine(value);
+    if (typeof value === 'string' && value.trim() !== '') return value;
   }
   return undefined;
 }
 
+/** First non-empty string among `input[keys...]`, normalized for display. */
+function field(input: unknown, ...keys: string[]): string | undefined {
+  return label(rawField(input, ...keys));
+}
+
 /** claude Bash carries `command: string`; codex commandExecution may carry
  *  a string or an argv array — join the string members. */
-function commandText(input: unknown): string | undefined {
+function rawCommand(input: unknown): string | undefined {
   if (!isRecord(input)) return undefined;
   const command = input.command;
-  if (typeof command === 'string' && command.trim() !== '') return oneLine(command);
+  if (typeof command === 'string' && command.trim() !== '') return command;
   if (Array.isArray(command)) {
     const argv = command.filter((part): part is string => typeof part === 'string');
-    if (argv.length > 0) return oneLine(argv.join(' '));
+    if (argv.length > 0) return argv.join(' ');
   }
   return undefined;
 }
@@ -93,47 +100,66 @@ const TOOL_KINDS = new Map<string, ToolKind>([
   ['read', 'read'], ['imageview', 'read'],
   ['glob', 'search'], ['grep', 'search'],
   ['webfetch', 'fetch'], ['websearch', 'fetch'],
-  ['task', 'task'], ['agent', 'task'], ['skill', 'task'],
+  ['task', 'task'], ['agent', 'task'], ['skill', 'task'], ['spawnagent', 'task'], ['subtask', 'task'],
   ['todowrite', 'plan'], ['todolist', 'plan'], ['plan', 'plan'],
   ['taskcreate', 'plan'], ['taskupdate', 'plan'], ['tasklist', 'plan'],
   ['contextcompaction', 'other'], ['mcptoolcall', 'other'],
 ]);
 
-function editDisplay(key: string, input: unknown): ToolDisplay {
+/** The file an edit tool names, verbatim; a multi-file codex `fileChange` names none. */
+function editTarget(key: string, input: unknown): string | undefined {
   switch (key) {
-    case 'write':
-      return { toolKind: 'edit', title: titled('Write', field(input, 'file_path', 'filePath', 'path')) };
     case 'notebookedit':
-      return {
-        toolKind: 'edit',
-        title: titled('Edit', field(input, 'notebook_path', 'notebookPath', 'file_path', 'filePath', 'path')),
-      };
+      return rawField(input, 'notebook_path', 'notebookPath', 'file_path', 'filePath', 'path');
     case 'filechange': {
       const paths = changePaths(input);
-      const label = paths.length === 1 ? paths[0] : paths.length > 1 ? `${paths.length} files` : undefined;
-      return { toolKind: 'edit', title: titled('Edit', label) };
+      return paths.length === 1 ? paths[0] : undefined;
     }
     default:
-      return { toolKind: 'edit', title: titled('Edit', field(input, 'file_path', 'filePath', 'path')) };
+      return rawField(input, 'file_path', 'filePath', 'path');
   }
 }
 
+function editDisplay(key: string, input: unknown): ToolDisplay {
+  const verb = key === 'write' ? 'Write' : 'Edit';
+  if (key !== 'filechange') return { toolKind: 'edit', title: titled(verb, label(editTarget(key, input))) };
+  const paths = changePaths(input);
+  return { toolKind: 'edit', title: titled(verb, paths.length > 1 ? `${paths.length} files` : paths[0]) };
+}
+
+function readTarget(key: string, input: unknown): string | undefined {
+  return key === 'imageview' ? rawField(input, 'path') : rawField(input, 'file_path', 'filePath', 'path');
+}
+
 function readDisplay(key: string, input: unknown): ToolDisplay {
-  return key === 'imageview'
-    ? { toolKind: 'read', title: titled('View image', field(input, 'path')) }
-    : { toolKind: 'read', title: titled('Read', field(input, 'file_path', 'filePath', 'path')) };
+  return { toolKind: 'read', title: titled(key === 'imageview' ? 'View image' : 'Read', label(readTarget(key, input))) };
+}
+
+function searchTarget(input: unknown): string | undefined {
+  return rawField(input, 'pattern', 'query');
+}
+
+function fetchTarget(key: string, input: unknown): string | undefined {
+  return key === 'webfetch' ? rawField(input, 'url') : rawField(input, 'query');
 }
 
 function fetchDisplay(key: string, input: unknown): ToolDisplay {
-  return key === 'webfetch'
-    ? { toolKind: 'fetch', title: titled('Fetch', field(input, 'url')) }
-    : { toolKind: 'fetch', title: titled('Web search', field(input, 'query')) };
+  return { toolKind: 'fetch', title: titled(key === 'webfetch' ? 'Fetch' : 'Web search', label(fetchTarget(key, input))) };
+}
+
+const skillName = (input: unknown): string | undefined => rawField(input, 'skill', 'name', 'command');
+const subagentType = (input: unknown): string | undefined => rawField(input, 'subagent_type', 'subagentType');
+
+/** A Skill's name; an agent's whole prompt (OMP: `task`), which its title shortens to the description. */
+function taskTarget(key: string, input: unknown): string | undefined {
+  if (key === 'skill') return skillName(input);
+  return rawField(input, 'prompt', 'task', 'description') ?? subagentType(input);
 }
 
 function taskDisplay(key: string, input: unknown): ToolDisplay {
   // claude's `Skill` invocation: `{skill, args?}` — the skill name is the whole title.
   if (key === 'skill') {
-    const skill = field(input, 'skill', 'name', 'command');
+    const skill = label(skillName(input));
     return {
       toolKind: 'task',
       title: skill ? `Skill: ${skill}` : 'Skill',
@@ -144,13 +170,13 @@ function taskDisplay(key: string, input: unknown): ToolDisplay {
   // claude dispatches sub-agents through `Agent` today and `Task` historically;
   // opencode uses `task`. Fall back to the subagent type when no description is usable.
   const verb = key === 'agent' ? 'Agent' : 'Task';
-  const subagent = field(input, 'subagent_type', 'subagentType');
-  const label = field(input, 'description', 'prompt') ?? subagent;
+  const subagent = label(subagentType(input));
+  const detail = field(input, 'description', 'prompt') ?? subagent;
   return {
     toolKind: 'task',
-    title: label ? `${verb}: ${label}` : verb,
+    title: detail ? `${verb}: ${detail}` : verb,
     // Don't repeat the subagent type when it is already the title.
-    subtitle: label === subagent ? undefined : subagent,
+    subtitle: detail === subagent ? undefined : subagent,
   };
 }
 
@@ -185,7 +211,7 @@ export function toolDisplay(name: string, input?: unknown): ToolDisplay {
     case 'execute':
       return {
         toolKind: 'execute',
-        title: titled('Ran', commandText(input)),
+        title: titled('Ran', label(rawCommand(input))),
         subtitle: field(input, 'description'),
       };
     case 'edit':
@@ -195,7 +221,7 @@ export function toolDisplay(name: string, input?: unknown): ToolDisplay {
     case 'search':
       return {
         toolKind: 'search',
-        title: titled('Search', field(input, 'pattern', 'query')),
+        title: titled('Search', label(searchTarget(input))),
         subtitle: field(input, 'path'),
       };
     case 'fetch':
@@ -206,5 +232,30 @@ export function toolDisplay(name: string, input?: unknown): ToolDisplay {
       return { toolKind: 'plan', title: 'Update plan' };
     default:
       return otherDisplay(name, key, input);
+  }
+}
+
+/**
+ * The whole text a tool title's detail shortens, read with the same keys as `toolDisplay`: the
+ * command, path, pattern, URL or query, verbatim. An agent's is its full prompt, while its title
+ * keeps the description. `undefined` when the title has no detail from one input field.
+ */
+export function toolDetailText(name: string, input?: unknown): string | undefined {
+  const key = typeof name === 'string' ? name.toLowerCase() : '';
+  switch (TOOL_KINDS.get(key)) {
+    case 'execute':
+      return rawCommand(input);
+    case 'edit':
+      return editTarget(key, input);
+    case 'read':
+      return readTarget(key, input);
+    case 'search':
+      return searchTarget(input);
+    case 'fetch':
+      return fetchTarget(key, input);
+    case 'task':
+      return taskTarget(key, input);
+    default:
+      return undefined;
   }
 }
