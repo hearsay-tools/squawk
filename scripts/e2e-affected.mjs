@@ -320,9 +320,9 @@ function minutes(root, specs) {
   return `, about ${Math.max(1, Math.round(total / 60_000))} min`;
 }
 
-function report(root, loaded, selection, specFiles) {
+function report(root, loaded, selection, specFiles, ci) {
   if (loaded.map) console.log(`${LOG} Spec map: ${loaded.file}, commit ${loaded.map.commit.slice(0, 8)}, built ${loaded.map.createdAt}.`);
-  if (selection.problem) console.log(`${LOG} ${selection.problem}. Every spec runs.`);
+  if (selection.problem) console.log(`${LOG} ${selection.problem}. ${ci ? 'The selector chooses every spec' : 'Every spec runs'}.`);
   for (const { file, specs, reason } of selection.lines ?? []) {
     const count = specs === null ? 'every spec' : `${specs.length} spec${specs.length === 1 ? '' : 's'}`;
     console.log(`  ${file}: ${count} (${reason})`);
@@ -360,17 +360,34 @@ export function main(argv) {
     if (options.map && loaded.error) throw new Error(loaded.error);
     return chooseSpecs(root, run, loaded, specFiles);
   };
-  const files = options.ci ? browserFiles(select) : undefined;
-  const chosen = options.ci
-    ? { all: files === null, specs: files ?? specFiles }
-    : select();
-  report(root, loaded ?? {}, chosen, specFiles);
+  return options.ci ? runCi(root, options, select, specFiles, () => loaded) : runLocal(root, options, select(), loaded, specFiles);
+}
+
+function runLocal(root, options, chosen, loaded, specFiles) {
+  report(root, loaded, chosen, specFiles, false);
   if (options.plan) return 0;
   if (chosen.specs.length === 0) {
     console.log(`${LOG} No browser spec reaches these changes, so none runs.`);
     return 0;
   }
-  const args = ['.ai/scripts/e2e.sh', ...options.forward, ...(chosen.all ? [] : chosen.specs), ...(options.ci && !chosen.all ? ['--passWithNoTests=true'] : [])];
+  return runE2e(root, [...options.forward, ...(chosen.all ? [] : chosen.specs)]);
+}
+
+// PR CI: a shorter selection runs; every other answer runs nothing and passes with its reason.
+function runCi(root, options, select, specFiles, loaded) {
+  const { chosen, skip } = browserFiles(select, specFiles.length);
+  if (chosen) report(root, loaded() ?? {}, chosen, specFiles, true);
+  if (skip) {
+    console.log(`${LOG} PR CI runs no browser spec: ${skip}.`);
+    console.log('TEST_E2E_STATUS=not-selected');
+    return 0;
+  }
+  if (options.plan) return 0;
+  return runE2e(root, [...options.forward, ...chosen.specs, '--passWithNoTests=true']);
+}
+
+function runE2e(root, forward) {
+  const args = ['.ai/scripts/e2e.sh', ...forward];
   const result = spawnSync('sh', args, { cwd: root, stdio: 'inherit' });
   if (result.error) console.error(result.error.message);
   return result.status ?? 1;
