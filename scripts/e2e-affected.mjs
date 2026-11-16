@@ -290,10 +290,11 @@ export function classify(file, { map, graph, changes }) {
  * bundled source changed, because its evidence may be missing the file.
  *
  * `drift` holds the files main changed between the map's commit and the branch's fork point. Main
- * may have added a call or an import that makes another spec run a file the branch edits, so when
- * the branch touches mapped code, every drift file the map answers adds its specs. A drift file
- * the map cannot answer adds nothing: a new path into the branch's code passes through an edit
- * the map does answer.
+ * may have added a call or an import that makes another spec run a file the branch edits, or added
+ * or changed a spec the map has no evidence for. So when the branch touches mapped code, every
+ * drift file the map or the spec tree answers adds its specs, and every spec the map does not list
+ * runs. A drift file that would need every spec adds nothing: a new path into the branch's code
+ * passes through an edit the map does answer.
  */
 export function selectSpecs({ files, map, graph, specFiles, changes, drift }) {
   const lines = files.map(file => ({ file, ...classify(file, { map, graph, changes }) }));
@@ -302,9 +303,12 @@ export function selectSpecs({ files, map, graph, specFiles, changes, drift }) {
   const mapped = lines.some(line => line.mapped);
   const driftLines = mapped ? (drift?.files ?? []).filter(file => !files.includes(file))
     .map(file => ({ file, ...classify(file, { map, graph, changes: drift.changes }) }))
-    .filter(line => line.mapped && line.specs !== null) : [];
+    .filter(line => line.specs !== null && (line.mapped || line.file.startsWith(`${SPEC_DIR}/`))) : [];
   const chosen = new Set([...lines, ...driftLines].flatMap(line => line.specs));
-  if (mapped) for (const spec of map.incomplete) chosen.add(spec);
+  if (mapped) {
+    for (const spec of map.incomplete) chosen.add(spec);
+    for (const spec of specFiles) if (!map.specs.includes(spec)) chosen.add(spec);
+  }
   const specs = specFiles.filter(spec => chosen.has(spec));
   const reason = specs.length > 0 ? 'the specs the changed files reach'
     : files.length > 0 ? 'no changed file reaches a browser spec' : 'the branch changes no file';

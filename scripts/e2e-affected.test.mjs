@@ -251,6 +251,17 @@ test('when the branch touches mapped code, mapped files main changed after the m
   assert.deepEqual(pick(['.ai/ast-grep/rules/x.yml']).specs, []);
 });
 
+test('specs added or changed on main after the map run when the branch touches mapped code', () => {
+  // hearsay-tools/squawk#3733 review thread: the map predates markdown-regression.e2e.ts.
+  const specFiles = [...sampleMap().specs, spec('markdown-regression'), spec('late')].sort();
+  const drift = { files: [spec('markdown-regression'), 'packages/web/e2e/poll.ts'], changes: new Map() };
+  const pick = files => selectSpecs({ files, map: sampleMap(), graph, specFiles, drift });
+  const result = pick(['packages/web/src/routes/task-thread/markdown.tsx']);
+  assert.deepEqual(result.specs, [spec('artifact-project-links'), spec('chat-code-fence'), spec('late'), spec('markdown-regression')]);
+  assert.deepEqual(result.drift.map(line => line.file), [spec('markdown-regression'), 'packages/web/e2e/poll.ts']);
+  assert.deepEqual(pick(['docs/x.md']).specs, []);
+});
+
 test('an empty selection stays empty and carries its reason', () => {
   const specFiles = sampleMap().specs;
   const pick = files => selectSpecs({ files, map: sampleMap(), graph, specFiles });

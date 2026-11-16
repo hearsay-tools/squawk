@@ -384,7 +384,8 @@ after the map's commit do not count (hearsay-tools/squawk#3728). Changed lines i
 functions are diffed against the map's commit, where the map's line numbers hold. When the branch
 touches mapped code, the mapped files `main` changed between the map's commit and the fork point
 add their specs too: `main` may have added a call or import that runs the branch's code from
-another spec. The log lists them as `changed on main after the map`.
+another spec. Specs and spec helpers `main` changed since the map add the specs that load them,
+and every spec the map does not list runs. The log lists these files as `changed on main after the map`.
 
 | Change | Specs |
 | --- | --- |
