@@ -85,8 +85,7 @@ it('done admission keeps gates before the done record and preserves its synchron
   const commit = f.store.commitOutcome.bind(f.store);
   vi.spyOn(f.store, 'commitOutcome').mockImplementation((...args) => { f.log.push('done-record'); return commit(...args); });
   expect(f.finish.acceptDone(f.run.id, 'generation', { summary: 'Complete' })).toMatchObject({ ok: true, completes: 'task' });
-  // The input check reads the session's held human input between the question and the completion gate.
-  expect(f.log).toEqual(['root-gate', 'question-gate', 'holds', 'completion-gate', 'done-record']);
+  expect(f.log).toEqual(['root-gate', 'question-gate', 'completion-gate', 'done-record']);
   expect(f.store.getRun(f.run.id)?.doneAccepted).toMatchObject({ session: 'generation', summary: 'Complete' });
 });
 it('stale done stops before gates and a pending question stops before completion refusal', () => {

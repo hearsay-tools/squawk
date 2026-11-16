@@ -405,7 +405,10 @@ export class InputDelivery {
     const bundle = state.boundary.atTurnBoundary === state.liveSession.session ? pendingConversationBatch(this.context.store.getRun(runId), state, input => formatAgentInput(input, id => this.context.store.getRun(id)), reply.id) : undefined;
     const session = state.liveSession.session;
     const content = [{ type: 'text' as const, text }, ...(bundle ? [{ type: 'text' as const, text: bundle.text }] : [])];
-    if (!handToTransport(state, session, [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])], wire => wire.sendMessage(content))) return;
+    const delivered = [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])];
+    if (!handToTransport(state, session, delivered, wire => wire.sendMessage(content))) return;
+    // The answer opens the worker's next turn when it is at a boundary (hearsay-tools/squawk#2587).
+    if (state.boundary.atTurnBoundary === session) state.inputState.openTurnWith(delivered);
     this.context.store.appendEvent(runId, { type: 'human-input-delivered', askSeq, source });
     inputReceipts.commitRoutedAnswer(this.context, runId, state, { askSeq, delivered: [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])] }, fallback, this.maxAutoContinues);
     // Spend the answer's admission now so later messages can steer before its turn ends.

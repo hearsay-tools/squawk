@@ -3,7 +3,6 @@ import type { DoneOwedInput } from '@open-mercato/cezar-contract/waits';
 import type { RunRecord } from '../../runs/store.ts';
 import type { ActiveRun } from '../active-run.ts';
 import { resolvedWaits, waitInputId } from '../waits.ts';
-import { harnessHoldsHumanInput } from './input-timers.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
 import { acceptedDoneHolds } from './turn-settler.ts';
 
@@ -38,12 +37,16 @@ export function reconsideredBy(run: RunRecord, inputIds: readonly string[]): str
 }
 
 /** What the run still owes the agent when it calls `cezar_done` (`input_pending`): resolved wait
- *  results not yet delivered, input queued for it, a human follow-up its harness holds, a
- *  submission still waiting for its acknowledgement, and input its harness acknowledged but the
+ *  results not yet delivered, input queued for it, a submission still waiting for its
+ *  acknowledgement, and input its harness acknowledged but the
  *  model has not read: an acknowledgement is not a read. Input the harness reported read is this
  *  turn's own, as are the input submitted at the boundary that opened this turn (a harness may
- *  report its read only when the turn completes) and a continuation's opening input. A harness
- *  that cannot report reads takes input only at a turn boundary, so what it holds opened this turn. */
+ *  report its read only when the turn completes), the messages bundled behind the answer that
+ *  opened it, and a continuation's opening input. A harness
+ *  that cannot report reads takes input only at a turn boundary, so what it holds opened this turn.
+ *  A message the agent read through its inbox (an inbox claim) is its own too. A human follow-up the harness holds is not owed: harnesses report it held until the turn it
+ *  opens completes, so it cannot be told from the message that opened this turn. It runs as the
+ *  next turn before any done, and one sent after the done withdraws it (`acceptedDoneHolds`). */
 export function owedAtDone(run: RunRecord, state: ActiveRun): DoneOwedInput[] {
   const input = state.inputState;
   const flight = new Set(input.agentInputFlight?.inputIds ?? []);
@@ -56,10 +59,9 @@ export function owedAtDone(run: RunRecord, state: ActiveRun): DoneOwedInput[] {
   const awaiting = new Set([...input.unreadInputIds ?? [], ...(run.agentInputs ?? []).filter(entry => entry.awaitingRead).map(entry => entry.id)]);
   for (const id of awaiting) if (!flight.has(id) && unread(id)) owed.push({ kind: 'unread', input_id: id });
   for (const queued of run.agentInputs ?? []) {
-    if (queued.deliveredAt || resultIds.has(queued.id) || queued.id === input.openingAgentInputId || flight.has(queued.id)) continue;
+    if (queued.deliveredAt || queued.inboxClaim || resultIds.has(queued.id) || queued.id === input.openingAgentInputId || flight.has(queued.id)) continue;
     owed.push({ kind: 'queued', input_id: queued.id, source: queued.conversation?.relationship === 'peer' ? 'peer' : queued.source });
   }
-  if (harnessHoldsHumanInput(state)) owed.push({ kind: 'queued', source: 'human' });
   return owed.slice(0, 64);
 }
 
@@ -67,7 +69,7 @@ export function owedAtDone(run: RunRecord, state: ActiveRun): DoneOwedInput[] {
 function notReadYet(state: ActiveRun): (id: string) => boolean {
   const input = state.inputState;
   if (input.inputDelivery?.consumption !== 'observable') return () => false;
-  const thisTurn = new Set([...input.turnOpenerIds ?? [], ...input.consumedBeforeAck ?? [], ...(input.openingAgentInputId ? [input.openingAgentInputId] : [])]);
+  const thisTurn = new Set([...input.turnOpenerIds ?? [], ...input.bundledInputIds ?? [], ...input.consumedBeforeAck ?? [], ...(input.openingAgentInputId ? [input.openingAgentInputId] : [])]);
   return id => !thisTurn.has(id);
 }
 

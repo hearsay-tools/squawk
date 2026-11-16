@@ -98,6 +98,11 @@ describe('input owed at cezar_done (hearsay-tools/squawk#2587)', () => {
     expect(owedAtDone(makeRunRecord({ agentInputs: [opener] }), state)).toEqual([]);
   });
 
+  it('owes no message the agent already read through its inbox', () => {
+    const claimed = input({ inboxClaim: { receiptId: randomUUID(), generation: randomUUID(), expiresAt: new Date(Date.now() + 60_000).toISOString() } });
+    expect(owedAtDone(makeRunRecord({ agentInputs: [claimed] }), live('observable'))).toEqual([]);
+  });
+
   // D1: a result the harness reported read before its acknowledgement is not owed again.
   it('owes no wait result whose delivery the harness already reported read', () => {
     const result = resolved(makeTimerWait());
