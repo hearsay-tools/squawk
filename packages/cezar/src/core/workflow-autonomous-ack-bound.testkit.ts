@@ -6,7 +6,6 @@
  * The mock withholds the nudge's transport acknowledgement (`hold-ack`). Where the turn's frames
  * still reach the runner (Codex, OpenCode, Pi, OMP), the nudge's reply turn ends with its
  * acknowledgement still outstanding, so the turn end defers to it and the bound runs from there.
- * On Cursor print the acknowledgement is the turn's first model work, so no reply comes either.
  * Claude acknowledges at its own stdin write: its cell is the inverted assertion, where every
  * acknowledgement cancels its bound and the run continues to the cap.
  */

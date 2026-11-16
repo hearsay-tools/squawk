@@ -24,7 +24,7 @@ function controlDeadlines(killEscalation: boolean, onDeadlineArmed?: () => void)
   const controlled = new Set<ReturnType<typeof setTimeout>>();
   vi.spyOn(globalThis, 'setTimeout').mockImplementation(((...params: Parameters<typeof setTimeout>) => {
     const [callback, ms, ...args] = params;
-    // Cursor and OpenCode keep their own 4 s kill grace; the other runners
+    // OpenCode keeps its own 4 s kill grace; the other runners
     // use the injected 150 ms grace below.
     if (ms !== 800 && !(killEscalation && (ms === 150 || ms === 4_000))) {
       return realSetTimeout(callback, ms, ...args);

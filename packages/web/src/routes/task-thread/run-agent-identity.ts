@@ -109,7 +109,7 @@ export function useAgentIdentity(run: ApiRun): AgentIdentity {
   // one this header may invent.
   const identity = run.modelIdentity && run.modelIdentity !== model ? run.modelIdentity : undefined
   return {
-    // A task saved on a runner Squawk no longer ships names it, marked removed (#3715).
+    // A task saved on a runner Squawk no longer ships names it, marked removed (hearsay-tools/squawk#3715).
     runner: run.removedRunner !== undefined ? removedRunnerLabel(run.removedRunner) : runner,
     ...(account ? { account } : {}),
     model,

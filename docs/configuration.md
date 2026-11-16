@@ -18,7 +18,7 @@ JSON:
   // a source listed but loads none of its skills. The Skills page edits this list,
   // keeps every other key, and refuses to write a file it cannot read.
   "worktreeRetention": 10,   // keep the last N finished worktrees on disk; 0 = unlimited (no reclaim, no branch sweep)
-  "defaultRunner": "claude", // agent backend: "claude" (default) · "codex" · "opencode" · "cursor" · "pi" · "omp"
+  "defaultRunner": "claude", // agent backend: "claude" (default) · "codex" · "opencode" · "pi" · "omp"
   "modelsLocked": true,      // optional: native per-runner model is fixed/read-only; runner stays selectable
   "plannerModel": "sonnet",  // model the "Plan first" button uses to draft chains
   "baseBranch": "develop",   // branch worktrees fork from + PRs target (also settable in the Git view)
@@ -144,7 +144,7 @@ the config file only; Settings does not show it. Without the key nothing runs, e
 ### Editing the agents' own config (Settings → Agent config)
 
 Squawk picks *which* agent runs; **Settings → Agent config** lets you edit *how* it
-behaves — the raw config files Claude, Codex, OpenCode, Cursor, pi and OMP read
+behaves — the raw config files Claude, Codex, OpenCode, pi and OMP read
 for settings, MCP, and memory. In the multi-project cockpit the section is project-scoped:
 repo-relative files resolve from the selected project's root, while user-scope
 files continue to resolve from the agent's home.

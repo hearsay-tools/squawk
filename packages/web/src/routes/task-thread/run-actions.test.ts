@@ -153,7 +153,7 @@ describe('runActionFlags — the visibility matrix, all 7 statuses × archived',
     expect(flags.deleteRun).toBe(true)
   })
 
-  it('a task saved on a removed runner offers Continue on a live runner, but no terminal (#3715)', () => {
+  it('a task saved on a removed runner offers Continue on a live runner, but no terminal (hearsay-tools/squawk#3715)', () => {
     const flags = runActionFlags(run('done', { removedRunner: 'cursor', steps: [step()] }))
     expect(flags.continueRun).toBe(true)
     expect(flags.terminal).toBe(false)

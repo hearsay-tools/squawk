@@ -116,7 +116,7 @@ export function runActionFlags(run: RunRecord, workersLive = false): RunActionFl
     continueRun: !active && !run.stopping &&
       run.delegation?.role !== 'invalid' &&
       !(run.delegation?.role === 'worker' && run.delegation.destroy) &&
-      // A task saved on a removed runner keeps no session; it continues on a live runner (#3715).
+      // A task saved on a removed runner keeps no session; it continues on a live runner (hearsay-tools/squawk#3715).
       (hasSession || isStoppedBeforeStarting(run) || run.removedRunner !== undefined),
     terminal: !active && hasSession,
     notes: true,

@@ -142,13 +142,12 @@ function toolFlags(backend: RunnerId, argv: readonly string[]): string[] {
   });
 }
 
-/** The mock's record of what reached it: argv or requests, then stdin where hooked. Cursor
- *  print writes its plugin into a new temp dir per session, so that name is masked. */
+/** The mock's record of what reached it: argv or requests, then stdin where hooked. */
 function readRecording(dir: string, name: string): string[] {
   return [`${name}.args.ndjson`, `${name}.stdin.ndjson`].flatMap(file => {
     const path = join(dir, file);
     return existsSync(path) ? readFileSync(path, 'utf8').trim().split('\n').filter(Boolean) : [];
-  }).map(line => line.replace(/cez-cursor-print-[^/"\\]+/g, 'cez-cursor-print-<session>'));
+  });
 }
 
 export function describeToolGrantParity(scope: RunnerId | 'once'): void {
