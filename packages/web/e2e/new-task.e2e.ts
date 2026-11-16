@@ -7,6 +7,7 @@ import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
 
 import { waitForSettledSample } from './visual-ready'
 import { dismissWithEscape } from './contrast'
+import { clearWithKeyboard } from './clear-field'
 import { spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from './fixture-server'
 import { AgentBrowser, bootProjectId, squawkCli, fixtureServeEnv, getJson } from './agent-browser'
 import { pollJson, pollFor } from './poll'
@@ -154,9 +155,7 @@ describe('the full-screen /new against a live dry-run server', () => {
       expect(geometry.optionHeight).toBeGreaterThanOrEqual(44)
       browser.screenshot(`${artifactsDir}/base-branch-filter-${theme}.png`, { viewport: true })
       // agent-browser fill('') clears the DOM without the input event React needs.
-      browser.click(search)
-      browser.press('Control+a')
-      browser.press('Backspace')
+      clearWithKeyboard(browser, search)
       expect(browser.waitForValue(`document.querySelectorAll('[role="menuitemradio"]').length`, value => value === 4)).toBe(4)
       browser.fill(search, 'no-match')
       browser.waitForFunction(`document.querySelector('[data-testid="base-pill-menu"] [role="status"]') !== null`)

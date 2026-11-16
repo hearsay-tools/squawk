@@ -6,6 +6,7 @@ import { spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from './f
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { AgentBrowser, squawkCli, fixtureServeEnv } from './agent-browser'
 import { focusWithKeyboard, contrastSampleExpression, type ContrastSample } from './contrast'
+import { clearWithKeyboard } from './clear-field'
 import { waitForSettledSample } from './visual-ready'
 // fixture-server starts: 1
 
@@ -238,10 +239,7 @@ it('older-browser composer fallback responds to width changes and keeps focus', 
   open('/new', selector, 1440, 900)
   // Navigation restores the previous test's draft. Clear it through React-observed
   // keyboard input before fill: direct value clearing can retain controlled state.
-  browser.click(selector)
-  browser.press('Control+a')
-  browser.press('Backspace')
-  browser.waitForFunction(`document.querySelector('${selector}').value === ''`)
+  clearWithKeyboard(browser, selector)
   // Simulate an engine lacking field-sizing without replacing the textarea or its React state.
   browser.evaluate(`window.__originalSupports = CSS.supports; CSS.supports = (...args) => args[0] === 'field-sizing' ? false : window.__originalSupports(...args)`)
   try {

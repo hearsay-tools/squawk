@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { settleVisual, waitForSettledSample } from './visual-ready'
 import { dismissWithEscape } from './contrast'
+import { clearWithKeyboard } from './clear-field'
 import { artifactsDir, createGitHubFixture, DESKTOP } from './github-fixture'
 import type { GitHubFixture, GithubPayload } from './github-fixture'
 
@@ -604,6 +605,9 @@ it.each([1440, 402, 360].flatMap(width => ['light', 'dark'].map(theme => ({ widt
   browser.setViewport(width, 1000)
   await openGitHub(`/github/issues/${first.number}`)
   browser.waitForFunction(`document.querySelector('[data-slot="gh-hand"]') !== null`)
+  // The thread mounts after its own request and pushes the hand-off box down. Scroll, measure
+  // and click only the final layout (hearsay-tools/squawk#3762).
+  browser.waitForFunction(`document.querySelector('[data-slot="gh-thread"]') !== null`)
   browser.evaluate(`document.documentElement.classList.toggle('light', ${theme === 'light'}); document.documentElement.dataset.width = 'wide'; delete document.documentElement.dataset.density; document.querySelector('[data-slot="gh-hand"]').scrollIntoView({block:'start'})`)
   // #724: the engine pills share New Task's row, so the geometry depends on the row's own width
   // (>= 550px: one row; narrower, or a phone viewport: Runner + Effort over a full-width Model).
@@ -633,13 +637,9 @@ it.each([1440, 402, 360].flatMap(width => ['light', 'dark'].map(theme => ({ widt
     return Math.abs(page.getBoundingClientRect().width - narrow);
   })()`)).toBeLessThan(1)
 
-  // agent-browser 0.36 clears via a tracked value assignment before inserting text.
-  // A React rerender between those steps can restore the old prompt. Clear with trusted
-  // keyboard input first so component state observes the replacement, then type the draft.
-  browser.click('[data-slot="gh-custom-prompt"]')
-  browser.press('Control+a')
-  browser.press('Backspace')
-  browser.waitForFunction(`document.querySelector('[data-slot="gh-custom-prompt"]').value === ''`)
+  // The page restores the previous case's draft. Clear it with trusted keys so React state
+  // observes the clear, then type the draft.
+  clearWithKeyboard(browser, '[data-slot="gh-custom-prompt"]')
   browser.fill('[data-slot="gh-custom-prompt"]', 'Review this issue and keep this draft')
   browser.waitForFunction(`document.querySelector('[data-slot="gh-custom-prompt"]').value === 'Review this issue and keep this draft'`)
   settleVisual(browser, '[data-route="github"]', { theme, width: 'wide', idle: true })
