@@ -38,7 +38,7 @@ export function github() {
   const result = new Promise<CiWaitResult>(resolve => { settle = resolve; });
   vi.spyOn(CiWatcherSupervisor.prototype, 'resolve').mockResolvedValue(identity);
   vi.spyOn(CiWatcherSupervisor.prototype, 'watch').mockImplementation((_wait, abort) => { signal = abort; return result; });
-  return { settle: () => settle(passed()), aborted: () => signal?.aborted };
+  return { settle: (outcome: CiWaitResult['outcome'] = 'passed') => settle({ ...passed(), outcome }), aborted: () => signal?.aborted };
 }
 
 // hearsay-tools/cezarion#1446: only the process watch is controlled; registration, the park and the

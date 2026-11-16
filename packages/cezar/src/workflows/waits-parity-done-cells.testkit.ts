@@ -1,6 +1,7 @@
-import { waitPartDescribers, github, nativeWire, turnEnds, pr, stepStatus, prompted, ASK_CONTEXT, questions, pendingQuestion, humanOpen, sessionOf, settled, gated } from './waits-parity-fixture.testkit.ts';
+import { waitPartDescribers, github, nativeWire, turnEnds, pr, stepStatus, prompted, ASK_CONTEXT, questions, pendingQuestion, humanOpen, sessionOf, settled, gated, parentTurn, blockedDone } from './waits-parity-fixture.testkit.ts';
 import { NO_WAIT_NUDGE_NOTE, MAX_AUTO_CONTINUES, NO_WAIT_NOTE } from './run.ts';
-import { rmSync, existsSync, readFileSync } from 'node:fs';
+import { rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { it as registerTest, expect } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
@@ -8,12 +9,12 @@ import { WAIT_KIND, WAIT_PHASE, WAIT_VIA, WAIT_SOURCE } from '@open-mercato/ceza
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
 import type { RunnerId } from '../core/agent-runner.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
-import { root, parent, until, store, worker, manager, collect, terminal } from './worker-wait-core.testkit.ts';
+import { root, parent, until, store, worker, manager, collect, terminal, timeline } from './worker-wait-core.testkit.ts';
 import { workflowDefSchema, QUICK_TASK_WORKFLOW } from './types.ts';
-import { NO_WAIT_NUDGE } from './turn-end.ts';
+import { NO_WAIT_NUDGE, DONE_KEPT_NOTE } from './turn-end.ts';
 import { expectNoWaitNudgeKinds } from './turn-end.testkit.ts';
 import { recordCommits } from '../runs/outcome-crash.testkit.ts';
-import { toolCall } from './waits-parity.testkit.ts';
+import { toolCall, gate, thenSay } from './waits-parity.testkit.ts';
 
 // The done part of the wait parity cells (`WAIT_PARITY_PARTS` in `waits-parity-catalog.testkit.ts`).
 // A wait parity file imports this module first, so it loads no other part's cells (hearsay-tools/cezarion#3242).
@@ -58,6 +59,60 @@ export function doneCells(runners: RunnerId[], it: typeof registerTest = registe
       expect(external.aborted()).toBe(true);
       const closed = store.readEvents(p.id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed');
       expect(closed).toEqual([expect.objectContaining({ via: 'cezar_done' })]);
+    });
+
+    // hearsay-tools/squawk#2587: the incident. The PR wait resolves after the agent's done was
+    // accepted and before its turn ends, with the wake budget spent. Its result is delivered with
+    // the done note, and the turn that receives it ends the task: no budget human wait, no Needs you.
+    it(`${runner} U6r a wait result that arrives after an accepted cezar_done is delivered with the done note, and the run finishes when that turn ends, also with the wake budget spent`, async () => {
+      const external = github();
+      nativeWire(runner);
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner });
+      await until(() => store.getRun(run.id)?.status === 'waiting');
+      const prWait = () => store.getRun(run.id)?.waits?.find(wait => wait.kind === 'pr');
+      await parentTurn(run.id, toolCall('cezar_wait', { kind: WAIT_KIND.pr, pr }), () => prWait()?.phase === WAIT_PHASE.open);
+      await blockedDone(run.id, async () => {
+        // The human message that opened this turn restarted the budget: spend it again.
+        store.updateRun(run.id, { automaticWakes: MAX_AUTO_CONTINUES });
+        external.settle();
+        await until(() => prWait()?.phase === WAIT_PHASE.resolved);
+      });
+      await until(() => terminal.includes(store.getRun(run.id)?.status ?? '') && !manager.isActive(run.id), () => timeline(run.id));
+      const finished = store.getRun(run.id)!;
+      expect(finished.lastWaits?.find(wait => wait.kind === 'pr')).toMatchObject({ phase: WAIT_PHASE.delivered });
+      expect(finished.lastWaits?.some(wait => wait.kind === 'human' && wait.via === WAIT_VIA.budget)).toBe(false);
+      expect(finished.automaticWakes).toBe(MAX_AUTO_CONTINUES);
+      expect(finished.doneAccepted).toBeUndefined();
+      expect(prompted(runner, DONE_KEPT_NOTE)).toHaveLength(1);
+      const closed = store.readEvents(run.id).filter(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed');
+      expect(closed).toEqual([expect.objectContaining({ via: 'cezar_done' })]);
+    });
+
+    it(`${runner} U6p cezar_done is refused with input_pending while a resolved wait result awaits delivery, and records nothing`, async () => {
+      const external = github();
+      nativeWire(runner);
+      const answers = join(root, 'done-answers');
+      process.env.CEZ_MOCK_CI_RESULT = answers;
+      const run = manager.startRun(QUICK_TASK_WORKFLOW, { task: HARNESS_ADAPTERS[runner].scenarios.baseline!, runner });
+      await until(() => store.getRun(run.id)?.status === 'waiting');
+      const prWait = () => store.getRun(run.id)?.waits?.find(wait => wait.kind === 'pr');
+      await parentTurn(run.id, toolCall('cezar_wait', { kind: WAIT_KIND.pr, pr }), () => prWait()?.phase === WAIT_PHASE.open);
+      const wait = prWait()!;
+      // The mock holds its turn at the gate until the result is in, then calls cezar_done.
+      const held = join(root, `gate-pending-${randomUUID()}`);
+      rmSync(answers, { force: true });
+      const turns = turnEnds(run.id);
+      expect(manager.sendMessage(run.id, [{ type: 'text', text: `${gate(held)} ${toolCall('cezar_done', {})} ${thenSay('Done?')}` }])).toBe(true);
+      external.settle();
+      await until(() => prWait()?.phase === WAIT_PHASE.resolved);
+      writeFileSync(held, '');
+      await until(() => turnEnds(run.id) > turns && existsSync(answers), () => timeline(run.id));
+      const answer = JSON.parse(JSON.parse(readFileSync(answers, 'utf8')).response.content[0].text.split('\n')[0]);
+      expect(answer).toMatchObject({ ok: false, code: 'input_pending', owed: [{ kind: 'wait_result', wait_id: wait.id, wait_kind: WAIT_KIND.pr }] });
+      expect(store.getRun(run.id)?.doneAccepted).toBeUndefined();
+      // The turn end delivers the result as the next turn's wake.
+      await until(() => !!store.getRun(run.id)?.lastWaits?.some(entry => entry.id === wait.id && entry.phase === WAIT_PHASE.delivered), () => timeline(run.id));
+      expect(store.readEvents(run.id).some(event => event.type === 'lifecycle' && event.message === 'goal achieved — session closed')).toBe(false);
     });
 
     // hearsay-tools/cezarion#1620: every agent step accepts the done. In a step that is not the

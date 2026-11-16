@@ -80,11 +80,13 @@ function finishFixture() {
   vi.spyOn(completion, 'completionRefusal').mockImplementation(() => { f.log.push('completion-gate'); return undefined; });
   return { ...f, finish };
 }
-it('done admission keeps gates before boundary request and preserves its synchronous return', () => {
+it('done admission keeps gates before the done record and preserves its synchronous return', () => {
   const f = finishFixture();
+  const commit = f.store.commitOutcome.bind(f.store);
+  vi.spyOn(f.store, 'commitOutcome').mockImplementation((...args) => { f.log.push('done-record'); return commit(...args); });
   expect(f.finish.acceptDone(f.run.id, 'generation', { summary: 'Complete' })).toMatchObject({ ok: true, completes: 'task' });
-  expect(f.log).toEqual(['root-gate', 'question-gate', 'completion-gate', 'boundary:done-request/request']);
-  expect(f.state.boundary.doneRequested).toEqual({ session: f.wire, summary: 'Complete' });
+  expect(f.log).toEqual(['root-gate', 'question-gate', 'completion-gate', 'done-record']);
+  expect(f.store.getRun(f.run.id)?.doneAccepted).toMatchObject({ session: 'generation', summary: 'Complete' });
 });
 it('stale done stops before gates and a pending question stops before completion refusal', () => {
   const f = finishFixture();
@@ -93,7 +95,7 @@ it('stale done stops before gates and a pending question stops before completion
   transitionTurnBoundary(f.state, { kind: 'human-wait-opened', phase: 'prepare', session: f.wire });
   f.log.length = 0;
   expect(f.finish.acceptDone(f.run.id, 'generation', {})).toMatchObject({ ok: false, code: 'human_question_pending' });
-  expect(f.log).toEqual(['root-gate']); expect(f.state.boundary.doneRequested).toBeUndefined();
+  expect(f.log).toEqual(['root-gate']); expect(f.store.getRun(f.run.id)?.doneAccepted).toBeUndefined();
 });
 
 
