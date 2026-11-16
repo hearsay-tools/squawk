@@ -219,6 +219,23 @@ describe('peer waits (R9)', { timeout: 45_000 }, () => {
     expect(delivered(a, id)).toBe(false);
   });
 
+  // hearsay-tools/squawk#1293: Squawk's own human wait is not bound to a question, so each held
+  // peer message reuses the one budget wait instead of opening and showing another.
+  it('repeated peer sends and an exact retry at the spent budget keep one budget wait and one note', async () => {
+    const { service, callerFor } = conversations();
+    const { a, b } = await parkedOnPeer();
+    store.updateRun(a, { automaticWakes: MAX_AUTO_CONTINUES });
+    const send = (id: string) => service.send(callerFor(b), { id, recipientRunId: a, kind: 'progress', text: 'peer update', timeoutSeconds: 600 });
+    const first = randomUUID();
+    await send(first);
+    await until(() => stateOf(store.getRun(a)!) === 'waiting:human');
+    for (let n = 0; n < 3; n++) await send(randomUUID());
+    await send(first);
+    const budget = (store.getRun(a)?.waits ?? []).filter(wait => wait.kind === WAIT_KIND.human);
+    expect(budget).toMatchObject([{ via: WAIT_VIA.budget, phase: WAIT_PHASE.open }]);
+    expect(notes(a).filter(note => note === `automatic-wake budget spent (${MAX_AUTO_CONTINUES}); waiting for you`)).toHaveLength(1);
+  });
+
   it('Stop cancels the run and the wait', async () => {
     const { a, entry } = await parkedOnPeer();
     manager.cancel(a);

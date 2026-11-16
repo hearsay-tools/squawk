@@ -1,7 +1,7 @@
 import type { RunnerId } from './agent-runner.ts';
 import type { HarnessParityPart } from './harness-parity-parts.testkit.ts';
 import { describeHarnessPart, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
-import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,6 +14,7 @@ import { exemptionFor, HARNESS_ADAPTERS, promptFor, waitFor } from './harness-pa
 import { PROVIDER_HOLD_ROW_IDS } from './harness-parity-rows.testkit.ts';
 import { driveObservedRun, openTimerWait, RUN_CRITERIA, runRows, TERMINAL, timerWakeOf } from './harness-parity-run-tier.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
+import { RUNNER_FACTS } from './runner-facts.ts';
 import { driveRun, withOwnedInputRun, type RunObservation } from './workflow-parity-core.testkit.ts';
 
 // #723: use the real RunManager on both event-handler construction paths.
@@ -243,6 +244,34 @@ export const RUN_GROUPS = {
             });
           }, 45_000);
         }
+      }
+      // hearsay-tools/squawk#1293: the parent's answer reopens the closed worker through a
+      // continuation, and the mock asks again in the answer's turn: natively where nativeAsk is
+      // answerable, through cezar_ask otherwise. That question waits on its own human wait.
+      for (const backend of runners) {
+        it(`${backend} R130 a question asked in its answer's turn gets its own human wait`, async () => {
+          await withOwnedInputRun(backend, 'ask', async fixture => {
+            fixture.manager.enqueueOwnedRun(fixture.runId);
+            const asks = (store: typeof fixture.store) => store.readEvents(fixture.runId).filter(event => event.type === 'ask.requested');
+            await waitFor(() => asks(fixture.store).length === 1 && fixture.store.getRun(fixture.runId)?.status === 'waiting');
+            const { store } = await fixture.restart();
+            const first = store.getRun(fixture.runId)!.waits!.find(wait => wait.kind === WAIT_KIND.human)!;
+            expect(first).toMatchObject({ phase: WAIT_PHASE.open, askSeq: asks(store)[0]!.seq });
+            await fixture.answer(`Vitest. ${promptFor(backend, RUNNER_FACTS[backend].nativeAsk === 'answerable' ? 'ask' : 'cezar-ask')}`);
+            await waitFor(() => asks(store).length === 2 && store.getRun(fixture.runId)?.status === 'waiting');
+            const second = asks(store)[1]!;
+            const human = (store.getRun(fixture.runId)?.waits ?? []).filter(wait => wait.kind === WAIT_KIND.human);
+            // The open wait shows the new question, never the answered one.
+            const next = human.find(wait => wait.askSeq === second.seq);
+            expect(next).toMatchObject({ phase: WAIT_PHASE.open, questions: second.questions });
+            expect(human.filter(wait => wait.id === first.id && wait.askSeq !== first.askSeq)).toEqual([]);
+            // Its answer settles it, and the answered question's wait with it at the latest.
+            await fixture.answer('Library: Vitest');
+            const settled = (id: string) => store.getRun(fixture.runId)?.lastWaits?.find(wait => wait.id === id);
+            await waitFor(() => !!settled(first.id) && !!settled(next!.id));
+            expect([settled(first.id)?.phase, settled(next!.id)?.phase]).toEqual([WAIT_PHASE.delivered, WAIT_PHASE.delivered]);
+          });
+        }, 45_000);
       }
     });
   },

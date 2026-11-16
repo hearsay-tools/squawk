@@ -345,7 +345,7 @@ export class InputDelivery {
     const session = state.liveSession.session;
     if (!state.inputState.writeInput(() => session.sendMessage([{ type: 'text', text }, ...(bundle ? [{ type: 'text' as const, text: bundle.text }] : [])]))) return;
     this.context.store.appendEvent(runId, { type: 'human-input-delivered', askSeq, source });
-    inputReceipts.commitRoutedAnswer(this.context, runId, state, [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])], fallback, this.maxAutoContinues);
+    inputReceipts.commitRoutedAnswer(this.context, runId, state, { askSeq, delivered: [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])] }, fallback, this.maxAutoContinues);
     // Spend the answer's admission now so later messages can steer before its turn ends.
     if (this.host.line.retireAdmission(runId)) transitionTurnBoundary(state, { kind: 'input-ack', phase: 'wake-turn', session: state.liveSession.session });
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'refresh-question', session: state.liveSession.session, pending: hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id)) });
@@ -772,7 +772,7 @@ export class InputDelivery {
     if (answeringAskSeq !== undefined) {
       this.context.store.appendEvent(runId, { type: 'human-input-delivered', askSeq: answeringAskSeq });
     }
-    inputReceipts.commitAnswer(this.context, runId, state, bundle, messageId);
+    inputReceipts.commitAnswer(this.context, runId, state, { askSeq: answeringAskSeq, bundle }, messageId);
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'refresh-question', session: state.liveSession.session, pending: hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id)) });
     // A native answer or a full bundle leaves remaining messages to steer behind the answer.
     if (answeringAskSeq !== undefined && !state.boundary.pendingHumanAsk) this.flushAgentInputs(runId, beforeHumanReset);
