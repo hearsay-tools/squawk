@@ -5,11 +5,21 @@ import type { RunRecord } from '../runs/store.ts';
 import { releaseThenRemoveOwnedWorkspace } from './owned-workspace-release.ts';
 import { collectWorkerEvidence } from './results.ts';
 import { DelegationPolicyError } from './policy.ts';
-import { describeProcesses } from './process-liveness.ts';
+import { describeProcesses, isCurrentProcess, recordedProcessLive } from './process-liveness.ts';
 import { runWorktreeTeardown } from './worktree-teardown.ts';
 import { loadConfig } from '../config.ts';
 import { DESTROY_ATTENTION_ATTEMPTS, DESTROY_BACKOFF, retryDelayMs, type Backoff } from './retry-backoff.ts';
 import type { DelegationProject, WorkerCleanupFactory } from './service.ts';
+
+/** Why the worker's scope is not this controller's to stop: its current generation's record names
+ * another live Squawk, or cannot be read. Undefined when it is ours. */
+function foreignControl(store: DelegationProject['store'], workerId: string): string | undefined {
+  const generation = store.readWorkerExecution(workerId)?.generation;
+  const record = generation ? store.readWorkerProcesses(workerId, generation) : 'absent';
+  if (record === 'unknown') return 'worker process record is unreadable';
+  if (record === 'absent' || isCurrentProcess(record.controller) || !recordedProcessLive(record.controller)) return undefined;
+  return `the worker is still controlled by a live ${productName('cezar')} (pid ${record.controller.pid})`;
+}
 
 /** Tests pass shorter cadences and termination waits through these constructor options. */
 export type WorkerCleanupOptions = {
@@ -262,6 +272,9 @@ export class WorkerCleanup {
       const terminated = await project.manager.awaitRunTermination(workerId, this.terminationTimeoutMs, { reapOrphans: true });
       assertAttached();
       if (!terminated) return terminationFailure();
+      // A worker another live Squawk still controls is not ours to stop, settled or not.
+      const foreign = foreignControl(project.store, workerId);
+      if (foreign) return scopeFailure(foreign);
       // Everything else the worker started, detached descendants included where the host contains
       // them, ends with its scope (ADR 0032).
       const stopped = await project.store.scopes.stop(workerId, this.terminationTimeoutMs);

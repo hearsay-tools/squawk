@@ -7,7 +7,7 @@ import type { RecordedProcess } from '../core/process-stat.ts';
 import type { RunRecord } from '@open-mercato/cezar-contract';
 import type { WorkerProcessRecord } from '../delegation/process-liveness.ts';
 import { cgroupCommand, cgroupPopulated, ensureCgroup, killCgroup, probeCgroups, removeCgroup, workerCgroupPath } from './cgroup.ts';
-import { groupEntry, killGroups, liveGroups } from './groups.ts';
+import { groupEntry, groupsStillStopping, killGroups, liveGroups } from './groups.ts';
 import { GUARANTEE, SCOPE_CGROUP_CAP, SCOPE_GROUP_CAP, type ScopeBackend, type ScopeGuarantee, type ScopeRecord, type SpawnScope } from './scope.ts';
 
 export type HostScope = { backend: 'cgroup'; base: string } | { backend: 'groups'; reason: string };
@@ -92,6 +92,14 @@ export class WorkerScopes {
     return !record.cgroups.some(path => cgroupPopulated(path)) && !liveGroups(this.groups(workerId, record)).length;
   }
 
+  /** After `kill`: whether nothing the worker owned still runs. A cgroup drops a task when it exits,
+   * zombie or not; a group counts while its recorded leader runs (see `groupsStillStopping`). */
+  stopped(workerId: string): boolean {
+    let record: ScopeRecord;
+    try { record = this.read(workerId); } catch { return false; }
+    return !record.cgroups.some(path => cgroupPopulated(path)) && !groupsStillStopping(this.groups(workerId, record)).length;
+  }
+
   /** SIGKILL everything the worker owns, now, without waiting. */
   kill(workerId: string): void {
     const record = this.read(workerId);
@@ -108,10 +116,10 @@ export class WorkerScopes {
     killGroups(this.groups(workerId, record));
     const cgroups: string[] = [];
     for (const path of record.cgroups) if (!await removeCgroup(path, deadline)) cgroups.push(path);
-    let groups = liveGroups(this.groups(workerId, record));
+    let groups = groupsStillStopping(this.groups(workerId, record));
     while (groups.length && Date.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, STOP_POLL_MS));
-      groups = liveGroups(groups);
+      groups = groupsStillStopping(groups);
     }
     this.store.writeWorkerScope(workerId, { workerId, cgroups, groups });
     if (!cgroups.length && !groups.length) return { stopped: true };

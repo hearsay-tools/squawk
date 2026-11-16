@@ -35,6 +35,14 @@ export function killGroups(entries: readonly RecordedProcess[]): void {
   }
 }
 
+/** After a SIGKILL to the whole group, the groups whose recorded leader still runs. A SIGKILL
+ * cannot be caught, so every other member is ending; a group of zombies still answers
+ * `kill(-pgid, 0)` until its reaper reaps it, which an init that does not reap never does, so a
+ * stop never waits for one. */
+export function groupsStillStopping(entries: readonly RecordedProcess[]): RecordedProcess[] {
+  return entries.filter(entry => entry.startToken !== undefined && pidExists(entry.pid) && processStartToken(entry.pid) === entry.startToken);
+}
+
 /** The recorded groups that are still ours and have a member, and the recorded processes outside
  * a group that are still the recorded incarnation. */
 export function liveGroups(entries: readonly RecordedProcess[]): RecordedProcess[] {

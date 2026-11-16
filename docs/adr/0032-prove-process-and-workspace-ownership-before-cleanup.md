@@ -61,8 +61,11 @@ exceed the recorded-group cap is refused; a live group is never forgotten to mak
      exists;
   3. prove the execution ended (a crashed generation: kill the scope, then wait for its recorded
      session processes);
-  4. stop the scope: kill, wait until empty, remove each cgroup; kill the recorded groups. What
-     cannot be stopped stays recorded and the destroy stays incomplete with `process` remaining;
+  4. stop the scope, unless the generation's record names another live Squawk (then destroy
+     stays incomplete and signals nothing): kill, wait until empty, remove each cgroup; kill the
+     recorded groups and wait only for leaders that still run (a SIGKILL cannot be caught, and a
+     group of zombies under an init that never reaps would never look empty). What cannot be
+     stopped stays recorded and the destroy stays incomplete with `process` remaining;
   5. preserve the worker's result, diff and artifacts for the parent, then remove the worktree,
      its Git registration and its branch with the checks below; retry only Git or file-system
      failures;

@@ -5,6 +5,7 @@ import { nonDumpableHolder } from '../delegation/non-dumpable.testkit.ts';
 import { requirePidText } from '../pid-file.testkit.ts';
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { processStartToken } from '../core/process-stat.ts';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -172,6 +173,19 @@ console.log(String(m.pid)); ${opts.leader === 'exit' ? "m.unref(); process.stdin
       expect(await service(store, manager).destroyForHuman('p', w.id)).toMatchObject({ state: 'complete', remaining: [] });
       expect(alive(member)).toBe(false);
       expect(existsSync(workspace(w).path)).toBe(false); expect(branchExists(workspace(w).branch)).toBe(false);
+    });
+
+    // A settled generation whose controller is another live Squawk is not this controller's to stop.
+    it.skipIf(process.platform === 'win32')('destroy leaves a settled worker alone while another live controller owns it', async () => {
+      const { w, member } = await groupedWorker({ member: 'group', leader: 'exit' });
+      await until(() => !manager.isActive(w.id) && store.readWorkerExecution(w.id)?.phase === 'complete');
+      const other = spawn('sleep', ['30'], { stdio: 'ignore' });
+      releases.push(() => { try { other.kill('SIGKILL'); } catch { /* gone */ } });
+      writeFileSync(recordPath(w.id), JSON.stringify({ ...readRecord(w.id), controller: { pid: other.pid!, startToken: processStartToken(other.pid!) } }));
+      expect(await service(store, manager).destroyForHuman('p', w.id)).toMatchObject({ state: 'incomplete',
+        remaining: ['process', 'worktree', 'branch'], error: expect.stringMatching(/still controlled by a live .* \(pid \d+\)/) });
+      expect(alive(member)).toBe(true);
+      expect(existsSync(workspace(w).path)).toBe(true);
     });
 
     it.skipIf(process.platform === 'win32')("destroy reaps a crashed generation's recorded group after its leader died", async () => {

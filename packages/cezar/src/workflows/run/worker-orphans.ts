@@ -170,7 +170,7 @@ export class WorkerOrphans {
     // Nothing new starts until the old processes are gone, so none keeps a port or a file.
     const deadline = Date.now() + waitMs;
     const pause = new Int32Array(new SharedArrayBuffer(4));
-    const stopped = () => (!orphan || probeOrphan(orphan.record).liveness === 'gone') && this.context.store.scopes.empty(runId);
+    const stopped = () => (!orphan || probeOrphan(orphan.record).liveness === 'gone') && this.context.store.scopes.stopped(runId);
     while (!stopped() && Date.now() < deadline) Atomics.wait(pause, 0, 0, 5);
     if (!stopped()) throw new WorkerAdmissionRefusal("the processes the interrupted execution left are still stopping", 'retry the same command in a few seconds');
   }

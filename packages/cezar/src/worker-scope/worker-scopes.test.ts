@@ -87,10 +87,11 @@ describe('WorkerScopes', () => {
     state.record = { ...record, groups: record.groups.map(group => ({ ...group, startToken: `00000000-0000-4000-8000-000000000000:${group.startToken!.split(':')[1]}` })) };
     expect(await scopes.stop(workerId, HANG_GUARD_MS)).toEqual({ stopped: true });
     expect(pidExists(printed)).toBe(true);
-    // Recorded at this boot: the member is ended.
+    // Recorded at this boot: the member gets the SIGKILL. Stop does not wait for a leaderless
+    // group's members, which a zombie-only group would never let finish.
     state.record = record;
     expect(await scopes.stop(workerId, HANG_GUARD_MS)).toEqual({ stopped: true });
-    expect(pidExists(printed)).toBe(false);
+    await vi.waitFor(() => expect(pidExists(printed)).toBe(false), { timeout: HANG_GUARD_MS });
   });
 
   it.runIf(posix)('groups: refuses a start past the cap instead of forgetting a live group', async () => {
