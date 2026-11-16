@@ -1,5 +1,5 @@
 # Record run lifecycle facts and derive states from them
-Status: active
+Status: done
 
 ## Goal
 
