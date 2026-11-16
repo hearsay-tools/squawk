@@ -36,24 +36,22 @@ describe('the scenario runner and the fact-value unit tests (docs/adr/0063-one-s
   });
 
   it('fails a missing value, a stale value, the scenario runner\'s own value and a bad file', () => {
-    const tests = { ...FACT_VALUE_TESTS, 'inputDelivery.mode': {} };
-    expect(factValueProblems(tests, RUNNER_FACTS)).toEqual(['inputDelivery.mode boundary: no unit test is named']);
-    // Without cursor, no runner declares boundary, unobservable or model-work: their entries go stale.
-    const { cursor: _cursor, ...withoutCursor } = RUNNER_FACTS;
-    expect(factValueProblems(FACT_VALUE_TESTS, withoutCursor)).toEqual([
-      'inputDelivery.mode boundary: no runner declares it',
-      'inputDelivery.consumption unobservable: no runner declares it',
-      'inputDelivery.acknowledgement model-work: no runner declares it',
+    const tests = { ...FACT_VALUE_TESTS, 'inputDelivery.acknowledgement': {} };
+    expect(factValueProblems(tests, RUNNER_FACTS)).toEqual(['inputDelivery.acknowledgement response: no unit test is named']);
+    // Without opencode, no runner declares always-held: its entry goes stale.
+    const { opencode: _opencode, ...withoutOpencode } = RUNNER_FACTS;
+    expect(factValueProblems(FACT_VALUE_TESTS, withoutOpencode)).toEqual([
+      'inputDelivery.humanInputAtTurnEnd always-held: no runner declares it',
     ]);
     const stale = { ...FACT_VALUE_TESTS, 'inputDelivery.consumption': { ...FACT_VALUE_TESTS['inputDelivery.consumption'], gone: ['workflows/turn-path-fact-values.test.ts'] } };
     expect(factValueProblems(stale, RUNNER_FACTS)).toEqual(['inputDelivery.consumption gone: no runner declares it']);
     const own = { ...FACT_VALUE_TESTS, systemPromptOnResume: { ...FACT_VALUE_TESTS.systemPromptOnResume, resent: ['workflows/launch-system-prompt.test.ts'] } };
     expect(factValueProblems(own, RUNNER_FACTS)).toEqual([`systemPromptOnResume resent: the scenario runner ${SCENARIO_RUNNER} declares it, so its parity rows test it`]);
-    const files = { ...FACT_VALUE_TESTS, 'inputDelivery.mode': { boundary: ['workflows/nowhere.test.ts', 'workflows/waits-parity.test.ts', 'workflows/launch-system-prompt.test.ts'] } };
+    const files = { ...FACT_VALUE_TESTS, 'inputDelivery.humanInputAtTurnEnd': { ...FACT_VALUE_TESTS['inputDelivery.humanInputAtTurnEnd'], 'never-held': ['workflows/nowhere.test.ts', 'workflows/waits-parity.test.ts', 'workflows/launch-system-prompt.test.ts'] } };
     expect(factValueProblems(files, RUNNER_FACTS)).toEqual([
-      'inputDelivery.mode boundary: workflows/nowhere.test.ts does not exist',
-      'inputDelivery.mode boundary: workflows/waits-parity.test.ts is a parity file',
-      'inputDelivery.mode boundary: workflows/launch-system-prompt.test.ts does not spell \'boundary\'',
+      'inputDelivery.humanInputAtTurnEnd never-held: workflows/nowhere.test.ts does not exist',
+      'inputDelivery.humanInputAtTurnEnd never-held: workflows/waits-parity.test.ts is a parity file',
+      'inputDelivery.humanInputAtTurnEnd never-held: workflows/launch-system-prompt.test.ts does not spell \'never-held\'',
     ]);
   });
 });

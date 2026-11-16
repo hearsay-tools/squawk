@@ -55,8 +55,3 @@ describe('modelConflictsWithRunner', () => {
     }
   });
 });
-
-it('accepts Cursor live models that share names with another backend preset', () => {
-  expect(modelConflictsWithRunner('claude-sonnet-5', 'cursor')).toBe(false);
-  expect(modelConflictsWithRunner('gpt-5.1-codex', 'cursor')).toBe(false);
-});

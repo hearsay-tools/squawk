@@ -1,5 +1,5 @@
 import type { ApiRun, RunRecord, RunStatus, Runner } from '@open-mercato/cezar-api-client'
-import { engineOwnsRun, latestSession } from '@open-mercato/cezar-api-client/contract/run-predicates'
+import { engineOwnsRun, isSessionOpen, latestSession } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { isUsageLimitHold } from '@open-mercato/cezar-api-client/contract/waits'
 import { cliTargetRunner } from '@/components/open-in-menu'
 import { deriveAttention } from '@/lib/attention'
@@ -108,15 +108,23 @@ export function isStoppedBeforeStarting(run: RunRecord): boolean {
     run.steps.every(step => step.status === 'pending' && step.startedAt === undefined && !step.sessionId)
 }
 
+/** Whether a live agent session can hold this run. A task saved on a removed runner never has
+ *  one: a Continue that names a live runner clears the mark before anything starts
+ *  (hearsay-tools/squawk#3715). */
+export function hasLiveSession(run: RunRecord): boolean {
+  return isSessionOpen(run) && run.removedRunner === undefined
+}
+
 export function runActionFlags(run: RunRecord, workersLive = false): RunActionFlags {
   const active = engineOwnsRun(run)
   const hasSession = lastSessionId(run) !== undefined
   return {
     finish: (run.status === 'waiting' && active) || run.status === 'review',
-    continueRun: !active && !run.stopping &&
+    continueRun: (!active || (run.removedRunner !== undefined && run.status !== 'queued')) && !run.stopping &&
       run.delegation?.role !== 'invalid' &&
       !(run.delegation?.role === 'worker' && run.delegation.destroy) &&
-      (hasSession || isStoppedBeforeStarting(run)),
+      // A task saved on a removed runner keeps no session; it continues on a live runner (hearsay-tools/squawk#3715).
+      (hasSession || isStoppedBeforeStarting(run) || run.removedRunner !== undefined),
     terminal: !active && hasSession,
     notes: true,
     archive: !active,

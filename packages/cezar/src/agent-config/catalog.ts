@@ -28,8 +28,6 @@ export interface AgentHomePaths {
   opencodeConfig: string;
   /** `$PI_CODING_AGENT_DIR` or `~/.pi/agent` */
   pi: string;
-  /** Cursor CLI configuration directory; not an account home. */
-  cursor: string;
   /** `$PI_CODING_AGENT_DIR` or `~/${PI_CONFIG_DIR || '.omp'}/agent` — OMP's default profile. */
   omp: string;
 }
@@ -412,49 +410,10 @@ export const CONFIG_FILES: ConfigFileDef[] = [
     docsUrl: OMP_CONFIG_DOCS,
   },
 
-  // ---- Cursor — verified against vendor docs 2026-09-16 ----
-  {
-    id: 'cursor.user.settings',
-    runners: ['cursor'],
-    kind: 'settings',
-    scope: 'user',
-    resolve: (_repo, home) => join(home.cursor, 'cli-config.json'),
-    label: '~/.cursor/cli-config.json',
-    format: 'json',
-    tracked: 'outside-repo',
-    precedence: 'Global CLI settings. Only permissions can be configured at the project level.',
-    docsUrl: 'https://cursor.com/docs/cli/reference/configuration',
-  },
-  {
-    id: 'cursor.project.settings',
-    runners: ['cursor'],
-    kind: 'settings',
-    scope: 'project',
-    resolve: (repo) => join(repo, '.cursor', 'cli.json'),
-    label: '.cursor/cli.json',
-    format: 'json',
-    tracked: 'tracked',
-    precedence: 'Project permissions only. All other CLI settings must be set globally.',
-    docsUrl: 'https://cursor.com/docs/cli/reference/configuration',
-  },
-  {
-    id: 'cursor.project.mcp',
-    runners: ['cursor'],
-    kind: 'mcp',
-    scope: 'project',
-    resolve: (repo) => join(repo, '.cursor', 'mcp.json'),
-    label: '.cursor/mcp.json',
-    format: 'json',
-    tracked: 'tracked',
-    holdsMcp: true,
-    precedence: 'MCP in the CLI uses the same configuration as the editor.',
-    docsUrl: 'https://cursor.com/docs/cli/mcp',
-  },
-
-  // ---- Shared: <repo>/AGENTS.md is read by Codex, OpenCode, Pi, Cursor AND OMP ----
+  // ---- Shared: <repo>/AGENTS.md is read by Codex, OpenCode, Pi AND OMP ----
   {
     id: 'project.agents',
-    runners: ['codex', 'opencode', 'pi', 'cursor', 'omp'],
+    runners: ['codex', 'opencode', 'pi', 'omp'],
     kind: 'memory',
     scope: 'project',
     resolve: (repo) => join(repo, 'AGENTS.md'),
@@ -462,7 +421,7 @@ export const CONFIG_FILES: ConfigFileDef[] = [
     format: 'markdown',
     tracked: 'tracked',
     precedence:
-      'Read by Codex, OpenCode, Pi, Cursor and OMP (Claude ignores it). Codex concatenates it root-down; OpenCode uses the first match and prefers it over CLAUDE.md; Pi concatenates every AGENTS.md (or CLAUDE.md) from the parent directories down, after its global file; OMP loads standalone ancestor AGENTS.md files through its low-priority `agents-md` provider. Runs read the committed copy.',
+      'Read by Codex, OpenCode, Pi and OMP (Claude ignores it). Codex concatenates it root-down; OpenCode uses the first match and prefers it over CLAUDE.md; Pi concatenates every AGENTS.md (or CLAUDE.md) from the parent directories down, after its global file; OMP loads standalone ancestor AGENTS.md files through its low-priority `agents-md` provider. Runs read the committed copy.',
     docsUrl: OPENCODE_RULES_DOCS,
   },
 ];

@@ -5,7 +5,6 @@ export const commands = {
   codex: 'codex resume s1',
   opencode: 'opencode --session s1',
   pi: 'pi --session s1',
-  cursor: 'agent --resume s1',
   omp: 'omp --resume s1',
 };
 

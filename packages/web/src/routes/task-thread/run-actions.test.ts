@@ -28,6 +28,7 @@ import {
   resolveConflictsPrompt,
   resumeHint,
   runActionFlags,
+  hasLiveSession,
 } from './run-actions'
 
 const step = (extra: Partial<StepState> = {}): StepState => ({
@@ -153,6 +154,19 @@ describe('runActionFlags — the visibility matrix, all 7 statuses × archived',
     expect(flags.deleteRun).toBe(true)
   })
 
+  it('a task saved on a removed runner offers Continue on a live runner, but no terminal (hearsay-tools/squawk#3715)', () => {
+    const flags = runActionFlags(run('done', { removedRunner: 'cursor', steps: [step()] }))
+    expect(flags.continueRun).toBe(true)
+    expect(flags.terminal).toBe(false)
+  })
+
+  it('a task saved on a removed runner and left waiting has no live session, so it offers Continue', () => {
+    const waiting = run('waiting', { removedRunner: 'cursor', steps: [step()] })
+    expect(hasLiveSession(waiting)).toBe(false)
+    expect(runActionFlags(waiting).continueRun).toBe(true)
+    expect(hasLiveSession(run('waiting', { steps: [step()] }))).toBe(true)
+  })
+
   it('a live worker has pin: false', () => {
     expect(
       runActionFlags(
@@ -247,8 +261,8 @@ describe('lastSessionId', () => {
 
 describe('resumeHint', () => {
   it.each([
-    ['claude', 'cursor', 'agent --resume sess-1'],
-    ['cursor', 'claude', 'claude --resume sess-1'],
+    ['claude', 'codex', 'codex resume sess-1'],
+    ['codex', 'claude', 'claude --resume sess-1'],
   ] as const)('uses the session backend %s → %s for hints and target labels', (runner, backend, expected) => {
     const mixed = run('done', { runner, steps: [step({ backend, sessionId: 'sess-1' })], cliResumeCommand: expected })
     expect(resumeHint(mixed)).toBe(expected)

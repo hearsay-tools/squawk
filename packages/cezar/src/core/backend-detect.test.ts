@@ -59,7 +59,7 @@ describe('probeOmp', () => {
 // hearsay-tools/cezarion#1042: codex and opencode were the only agent probes that still spawned
 // their real CLI under CEZ_DRY_RUN=1, delaying every dry-run cockpit's banner by the slower of the two.
 describe('detectEnvironment: codex and opencode probes', () => {
-  const keys = ['CEZ_DRY_RUN', 'CEZ_CODEX_BIN', 'CEZ_OPENCODE_BIN', 'CEZ_CLAUDE_BIN', 'CEZ_PI_BIN', 'CEZ_CURSOR_BIN', 'CEZ_OMP_BIN', 'PATH'] as const;
+  const keys = ['CEZ_DRY_RUN', 'CEZ_CODEX_BIN', 'CEZ_OPENCODE_BIN', 'CEZ_CLAUDE_BIN', 'CEZ_PI_BIN', 'CEZ_OMP_BIN', 'PATH'] as const;
   const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
   let root: string;
 
@@ -78,7 +78,7 @@ describe('detectEnvironment: codex and opencode probes', () => {
     process.env.CEZ_CODEX_BIN = fakeCli('codex', 'codex-cli 9.9.9');
     process.env.CEZ_OPENCODE_BIN = fakeCli('opencode', '8.8.8');
     // Keep the other agent probes off the host's real CLIs.
-    for (const key of ['CEZ_CLAUDE_BIN', 'CEZ_PI_BIN', 'CEZ_CURSOR_BIN', 'CEZ_OMP_BIN'] as const) {
+    for (const key of ['CEZ_CLAUDE_BIN', 'CEZ_PI_BIN', 'CEZ_OMP_BIN'] as const) {
       process.env[key] = join(root, 'absent');
     }
   });

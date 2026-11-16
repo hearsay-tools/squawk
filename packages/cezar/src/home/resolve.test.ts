@@ -87,7 +87,7 @@ describe('legacy Home layout (the migration source)', () => {
   it('keeps agent home and tilde paths independent of CEZ_HOME', () => {
     expect(slashPaths({ ...agentHomePaths({ CEZ_HOME: '/srv/cockpit' }) })).toEqual({
       claude: '/home/operator/.claude', codex: '/home/operator/.codex', opencodeConfig: '/home/operator/.config/opencode',
-      pi: '/home/operator/.pi/agent', cursor: '/home/operator/.cursor', omp: '/home/operator/.omp/agent',
+      pi: '/home/operator/.pi/agent', omp: '/home/operator/.omp/agent',
     });
     expect(expandTilde('~/projects').replaceAll('\\', '/')).toBe('/home/operator/projects');
     expect(ompProfilesDir({ CEZ_HOME: '/srv/cockpit' }).replaceAll('\\', '/')).toBe('/home/operator/.omp/profiles');

@@ -60,8 +60,7 @@ export function createSessionEventHandler(context: RunModuleContext, host: Sessi
     if (turn.sessionError || state.inputState.agentInputError) return;
     if (event.type === 'session') {
       // Codex/OpenCode mint their own session id: persist it so resume works.
-      context.store.updateStep(runId, stepId, { sessionId: event.sessionId, backend,
-        ...(event.sessionTransport ? { sessionTransport: event.sessionTransport } : {}) });
+      context.store.updateStep(runId, stepId, { sessionId: event.sessionId, backend });
     }
     if (event.type === 'token-usage') context.store.updateStep(runId, stepId, { tokensUsed: tokenBase + event.tokensUsed });
     const wakeDelay = nativeTimerDelay(event, backend);

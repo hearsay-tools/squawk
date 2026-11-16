@@ -6,7 +6,7 @@
  * own native mock through `driveSeam`, and read the runner's declared facts (`inputDelivery`,
  * `systemPromptOnResume`, `turnStart`) instead of runner ids:
  *
- * - S36: agent input is acknowledged at the declared point (`write`, `response`, `model-work`), and
+ * - S36: agent input is acknowledged at the declared point (`write`, `response`), and
  *   consumption is reported only after that acknowledgement, never at it.
  * - S37: a follow-up turn emits normalized `turn.started` before its content and its turn end, and
  *   before `sendMessage` returns exactly when the runner declares `turnStart: 'on-write'`.
@@ -352,8 +352,7 @@ function assertAcknowledgement({ delivery, timeline, at, read }: ContractObserva
     const ackAt = at.get(`ack:${id}`);
     expect(ackAt, `${id} acknowledged${trace}`).toBeDefined();
     const between = timeline.slice(sentAt + 1, ackAt);
-    if (delivery.acknowledgement === 'model-work') expect(between.some(isStart), `${id} acknowledged at model work${trace}`).toBe(true);
-    else expect(between.filter(isModelWork), `${id} acknowledged before model work${trace}`).toEqual([]);
+    expect(between.filter(isModelWork), `${id} acknowledged before model work${trace}`).toEqual([]);
     const consumedAt = at.get(`consumed:${id}`);
     if (delivery.consumption === 'unobservable') expect(consumedAt, `${id} consumption is unobservable${trace}`).toBeUndefined();
     // An observable runner reports every input it accepted: read, or unread.
@@ -572,7 +571,7 @@ async function observeProcesses(backend: RunnerId): Promise<ContractObservation>
         // As Squawk reads it: right after startSession returns (workflows/run/input-receipts.ts).
         report(session.pid);
         await waitFor(() => turnEnds(rec) >= 1);
-        // A follow-up turn: a runner that starts a process per turn (Cursor print) starts another.
+        // A follow-up turn: a runner that starts a process per turn starts another.
         rec.sendHuman(session, `${FOLLOW_UP} mock:agent-echo`);
         await waitFor(() => carrierSettled(rec) && turnEnds(rec) >= 2);
         last = session.pid;
@@ -592,7 +591,7 @@ function assertProcesses({ processes, timeline }: ContractObservation): void {
   const pids = new Set(reported.map(entry => entry.pid));
   for (const pid of started) expect(pids.has(pid), `native process ${pid} reported${trace}`).toBe(true);
   for (const entry of reported) expect(entry.alive, `process ${entry.pid} ran when it was reported${trace}`).toBe(true);
-  // Between turns a runner that starts a process per turn (Cursor print) runs none, so `pid` is unset.
+  // Between turns a runner that starts a process per turn runs none, so `pid` is unset.
   if (last !== undefined) expect(last, `pid names the last reported process${trace}`).toBe(reported.at(-1)?.pid);
 }
 

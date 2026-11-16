@@ -31,7 +31,6 @@ const CASES: Record<RunnerId, { fixture: string; calls: number; latest: Omit<Act
   // A pending → running update replaces the title.
   opencode: { fixture: 'opencode/tool-lifecycle', calls: 2, latest: { title: 'Fetch https://example.com/docs', toolKind: 'fetch', status: TOOL_STATUS.failed } },
   pi: { fixture: 'pi/rpc-lifecycle', calls: 4, latest: { title: 'Ran npm test', toolKind: 'execute', status: TOOL_STATUS.failed } },
-  cursor: { fixture: 'cursor/print-tools', calls: 3, latest: { title: 'Task: Survey tests', toolKind: 'task', status: TOOL_STATUS.completed } },
   // Two edits take their final title only at completion.
   omp: { fixture: 'omp/rpc-edit-todo', calls: 7, latest: { title: 'Update plan', toolKind: 'plan', status: TOOL_STATUS.completed } },
 };

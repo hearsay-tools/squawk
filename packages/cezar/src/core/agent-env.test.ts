@@ -8,7 +8,7 @@ import { RUNNER_IDS } from './agent-runner.ts';
  * auth + gh + Squawk's `CEZ_*` — and nothing else.
  */
 describe('buildChildEnv — delegation session isolation', () => {
-  for (const backend of ['claude', 'claude-cli', 'codex', 'opencode', 'pi', 'omp'] as const) {
+  for (const backend of [...RUNNER_IDS, 'claude-cli'] as const) {
     for (const full of ['0', '1']) {
       it(`${backend} strips inherited delegation authority with CEZ_AGENT_ENV_FULL=${full}, even when passed through`, () => {
         const source = {

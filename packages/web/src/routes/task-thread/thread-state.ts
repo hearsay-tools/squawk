@@ -123,7 +123,7 @@ export type ThreadPermission = Omit<UiPermissionRequestedEvent, 'type'> & {
 export interface ThreadProviderAuthRequired {
   kind: 'provider-auth-required'
   id: string
-  provider: 'claude' | 'codex' | 'opencode' | 'pi' | 'cursor' | 'omp'
+  provider: 'claude' | 'codex' | 'opencode' | 'pi' | 'omp'
   authFailureId: string
 }
 

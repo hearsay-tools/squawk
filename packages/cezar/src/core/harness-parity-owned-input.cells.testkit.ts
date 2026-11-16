@@ -85,8 +85,8 @@ export const OWNED_INPUT_GROUPS = {
         }, 60_000);
 
         // hearsay-tools/squawk#2444: the open human wait holds input from the moment cezar_ask
-        // registers it, so no session callback at the turn end (Cursor print's ready signal from
-        // `discardQueuedMessages`) delivers the input before the card is answered.
+        // registers it, so no session callback at the turn end delivers the input before the
+        // card is answered.
         it(`${backend} R131 input queued after cezar_ask in the same turn reaches the agent only after the answer`, async () => {
           await withOwnedInputRun(backend, 'cezar-ask', async ({ store, manager, runId, parentRunId, answer }) => {
             const held = agentInput(parentRunId, 'mock:agent-echo held behind the question');

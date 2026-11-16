@@ -120,7 +120,7 @@ function* silentSteps(prompt, context) {
     if (lateStart) yield { kind: 'release', fallbackMs: silent.LATE_TURN_START_HOLD_MS, suffix: '.content' };
     if (kind === 'slow-done') {
       yield text(silent.SLOW_DONE_PREFIX);
-      yield context.runner === 'cursor' ? { kind: 'release', fallbackMs: silent.SLOW_DONE_TAIL_MS } : { kind: 'sleep', ms: silent.SLOW_DONE_TAIL_MS };
+      yield { kind: 'sleep', ms: silent.SLOW_DONE_TAIL_MS };
     }
     yield text(() => silent.finalNudgeText(kind === 'slow-done' ? 'done' : kind, context.lifecycle));
     yield end();
@@ -282,7 +282,7 @@ function trailingScenario(prompt, context) {
   if (matches('hold-cezar-done')) return scenario('hold-cezar-done', held(done(context, 'parity hold-done: content after the pause')));
   if (matches('hold-cezar-ask')) return scenario('hold-cezar-ask', held(ask(context)));
   if (matches('cezar-done') || !context.unsupported?.includes('cezar-done') && context.session.resumeAfterAsk && prompt.trim() === 'Library: Vitest') {
-    return scenario('cezar-done', [effect(() => { context.session.resumeAfterAsk = false; }), open(), text(done(context, context.runner === 'cursor' ? 'Done.' : 'parity done: the task is complete')), end()]);
+    return scenario('cezar-done', [effect(() => { context.session.resumeAfterAsk = false; }), open(), text(done(context, 'parity done: the task is complete')), end()]);
   }
   if (matches('cezar-ask')) {
     return scenario('cezar-ask', [effect(() => { context.session.resumeAfterAsk = matches('resume-cezar-done'); }), open(), text(ask(context, QUESTIONS)), end()]);

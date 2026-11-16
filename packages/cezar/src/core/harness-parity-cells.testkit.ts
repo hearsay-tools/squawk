@@ -264,7 +264,6 @@ function matrixGuards(r: HarnessRegistrar): void {
           codex: ['item/tool/requestUserInput'],
           opencode: ['question.asked'],
           pi: ['cezar_ask'],
-          cursor: ['cezar_ask'],
           omp: ['cezar_ask'],
         };
         for (const backend of RUNNER_IDS) {

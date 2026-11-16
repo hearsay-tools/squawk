@@ -238,34 +238,14 @@ describe('no-wait nudge parity — #544, hearsay-tools/cezarion#1234', () => {
       if (row.id === 'F10') {
         it(`${backend} ${row.id} ${row.name}`, async () => {
           const semaphore = new WorkspaceSemaphore({ home: testHome() });
-          const gateRoot = backend === 'cursor' ? mkdtempSync(join(tmpdir(), 'cez-nudge-content-')) : undefined;
-          try { await withOwnedInputRun(backend, 'silent-tail-slow-done', async ({ store, manager, runId }) => {
+          await withOwnedInputRun(backend, 'silent-tail-slow-done', async ({ store, manager, runId }) => {
             const startSeq = store.readEvents(runId).length;
-            if (gateRoot) {
-              // Cursor starts a new print process for the nudge. Its startup must not
-              // consume F10's 300 ms content budget (hearsay-tools/cezarion#1511).
-              // Freeze only that budget: process-drain and other timers keep real time.
-              const clock = replyObservationClock();
-              try {
-                manager.enqueueOwnedRun(runId);
-                await waitForNativeContent(() => store.readEvents(runId).slice(startSeq).some(e =>
-                  e.type === 'text' && String(e.text).includes('Working on the wrap-up.')));
-                expect(clock.captured).toBe(1);
-                // The native mock holds DONE until this test crosses the reply bound.
-                await clock.advance(300);
-                expect(store.getRun(runId)?.status).toBe('running');
-                expect(semaphore.busy()).toBe(1);
-                expect(noReplyNotes(store.readEvents(runId).slice(startSeq))).toHaveLength(0);
-                expect(clock.pending).toBe(0);
-              } finally { clock.restore(); }
-              writeFileSync(join(gateRoot, 'done'), 'go');
-            } else manager.enqueueOwnedRun(runId);
+            manager.enqueueOwnedRun(runId);
             await waitFor(() => store.getRun(runId)?.status === 'done' || store.getRun(runId)?.status === 'waiting');
             expect(store.getRun(runId)?.status).toBe('done');
             expect(nudgeNotes(store.readEvents(runId).slice(startSeq))).toHaveLength(1);
             expect(noReplyNotes(store.readEvents(runId).slice(startSeq))).toHaveLength(0);
-          }, { semaphore, noWaitNudgeReplyMs: 300, ...(gateRoot ? { env: { CEZ_MOCK_RELEASE_FILE: join(gateRoot, 'done') } } : {}) });
-          } finally { if (gateRoot) rmSync(gateRoot, { recursive: true, force: true }); }
+          }, { semaphore, noWaitNudgeReplyMs: 300 });
         }, 30_000);
       }
     }

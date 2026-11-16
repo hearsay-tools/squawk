@@ -17,9 +17,8 @@ import { lineAt, repoRoot, type SourceRule } from './source-rule.ts';
  * The ids come from `RUNNER_IDS` in `core/agent-runner.ts`, plus the legacy ids. A literal may
  * sit under parentheses, `as`, `satisfies` or `!`, or be a template with no substitution.
  *
- * The rule tracks no value and knows no type, so it over-approximates: `'pi'` and `'cursor'`
- * are also plain words. The plain form matched 45 sites, and one was no runner id: the preview
- * pane's `cursor` frame, a `switch (message.t)`. So the rule leaves out
+ * The rule tracks no value and knows no type, so it over-approximates: `'pi'` is also a plain
+ * word, and a message tag can spell a runner id. So the rule leaves out
  * - a comparison or a switch whose other operand is `t` or `type`, or ends in `.t` or `.type`:
  *   the tag of a message or an event;
  * - a comparison of two literals;

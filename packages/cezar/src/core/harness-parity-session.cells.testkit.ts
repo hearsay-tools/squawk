@@ -185,10 +185,6 @@ export const SPEC_FIELD_PROBES: Readonly<Record<AgentRunSpecField, SpecFieldProb
 };
 
 const variantKey = (spec: Partial<AgentRunSpec>): string => JSON.stringify(spec);
-const fieldVariants = (backend: RunnerId, field: AgentRunSpecField, probe: Extract<SpecFieldProbe, { kind: 'boundary' }>) =>
-  backend === 'cursor' && field === 'sessionId'
-    ? { kind: 'boundary' as const, without: {}, with: probe.with }
-    : probe;
 
 export const SESSION_GROUPS = {
   seam(r: HarnessRegistrar) {
@@ -492,8 +488,8 @@ export const SESSION_GROUPS = {
           beforeAll(async () => {
             dir = mkdtempSync(join(tmpdir(), `cez-spec-support-${backend}-`));
             const variants = new Map<string, Partial<AgentRunSpec>>();
-            for (const [field, entry] of Object.entries(SPEC_FIELD_PROBES) as [AgentRunSpecField, SpecFieldProbe][]) {
-              const probe = entry.kind === 'boundary' ? fieldVariants(backend, field, entry) : entry;
+            for (const [_field, entry] of Object.entries(SPEC_FIELD_PROBES) as [AgentRunSpecField, SpecFieldProbe][]) {
+              const probe = entry;
               if (probe.kind !== 'boundary') continue;
               variants.set(variantKey(probe.without), probe.without);
               variants.set(variantKey(probe.with), probe.with);
@@ -539,7 +535,7 @@ export const SESSION_GROUPS = {
               const probe = SPEC_FIELD_PROBES[field];
               let observed: boolean;
               if (probe.kind === 'boundary') {
-                const variants = fieldVariants(backend, field, probe);
+                const variants = probe;
                 const without = recordings.get(variantKey(variants.without));
                 const withField = recordings.get(variantKey(variants.with));
                 expect(without?.length ?? 0).toBeGreaterThan(0);
@@ -565,9 +561,9 @@ export const SESSION_GROUPS = {
   },
 
   // #781: the `squawkTools` cell, live. One shared Squawk tool list feeds every
-  // runner's own wire (Claude's MCP config and generated allow-list entry, Codex
-  // and Cursor forwarded env, OpenCode's runtime config, Pi's extension and tool
-  // admission), and each mock lists the tools through the real bundled adapter.
+  // runner's own wire (Claude's MCP config and generated allow-list entry, Codex's
+  // forwarded env, OpenCode's runtime config, Pi's extension and tool admission),
+  // and each mock lists the tools through the real bundled adapter.
   // `cezar_preview_serve` and `cezar_preview_stop` are listed under `CEZ_PREVIEW=1` exactly, and
   // `cezar_schedule_task` and `cezar_scheduled_tasks` unless `CEZ_AUTOMATIONS=0` (hearsay-tools/cezarion#1465).
   // Exercise the default and both explicit automation states on every native wire.

@@ -9,7 +9,7 @@ processes to decide anything about a worker.
 ## The scope
 
 Every process Squawk starts for a worker starts inside its scope: worktree setup, every runner
-session (and each Cursor turn, each OpenCode or OMP respawn), `check` steps, and what those
+session (and each OpenCode or OMP respawn), `check` steps, and what those
 processes start in turn. Shared controller work (Git helpers, the cockpit) stays outside. The
 scope lives from the worker's first spawn to its destroy, across Continue; a settled run does not
 require an empty scope, so a worker's Squeal daemon or test server may keep running in it.

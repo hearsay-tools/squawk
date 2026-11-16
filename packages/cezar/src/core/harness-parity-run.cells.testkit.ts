@@ -289,30 +289,25 @@ export const RUN_GROUPS = {
         'call cezar_wait with kind "pr" for a pull request\'s checks or its merge, or kind "timer" to re-check later, then end your turn.',
       ];
       type Wire = {
-        userText?: string; method?: string; url?: string; prompt?: string;
-        params?: { input?: { text?: string }[]; prompt?: { text?: string }[] };
+        userText?: string; method?: string; url?: string;
+        params?: { input?: { text?: string }[] };
         body?: { parts?: { text?: string }[] };
       };
       const records = (path: string) => readMockRecords<Wire | string[]>(path);
-      // Print carries its combined prompt on stdin; Claude/Pi/OMP keep the system prompt in argv.
+      // Claude/Pi/OMP carry the prompt on stdin and keep the system prompt in argv.
       const stdinWire = (backend: RunnerId) => backend === 'claude' || backend === 'pi' || backend === 'omp';
       const stdinRowText = (row: Wire): string[] => row.userText === undefined ? [] : [row.userText];
-      const cursorCombinedRowText = (backend: RunnerId, row: string[]): string[] =>
-        backend === 'cursor' && row.at(-1)?.includes('\n\n---\n\n') ? [row.at(-1)!] : [];
-      // The per-backend prompt carrier: Codex turn input, Cursor session prompts, OpenCode body parts.
+      // The per-backend prompt carrier: Codex turn input, OpenCode body parts.
       const providerRowParts = (backend: RunnerId, row: Wire) =>
         backend === 'codex' && row.method === 'turn/start' ? row.params?.input
-          : backend === 'cursor' && row.method === 'session/prompt' ? row.params?.prompt
           : backend === 'opencode' && /\/(message|prompt_async)$/.test(row.url ?? '') ? row.body?.parts : undefined;
       const joinRowParts = (parts: { text?: string }[]): string => parts.map(part => part.text ?? '').join('\n');
       const messages = (backend: RunnerId, dir: string): string[] => {
         const channel = stdinWire(backend) ? 'stdin' : 'args';
-        const wire = backend === 'cursor' ? [...records(join(dir, 'args')), ...records(join(dir, 'stdin'))]
-          : records(join(dir, channel));
+        const wire = records(join(dir, channel));
         return wire.flatMap(row => {
-          if (Array.isArray(row)) return cursorCombinedRowText(backend, row);
+          if (Array.isArray(row)) return [];
           if (stdinWire(backend)) return stdinRowText(row);
-          if (backend === 'cursor' && row.method === 'cursor-print/stdin' && row.prompt !== undefined) return [row.prompt];
           const parts = providerRowParts(backend, row);
           return parts ? [joinRowParts(parts)] : [];
         });

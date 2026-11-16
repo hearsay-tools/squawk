@@ -26,7 +26,6 @@ import { RUNNER_IDS } from './agent-runner.ts';
 import type { RunnerId } from './agent-runner.ts';
 import { claudeTurnStarted, createClaudeUiState, mapClaudeMessage } from './claude-ui-mapper.ts';
 import { createCodexUiState, mapCodexNotification } from './codex-ui-mapper.ts';
-import { createCursorPrintUiState, mapCursorPrintMessage } from './cursor-print-ui-mapper.ts';
 import { createOmpUiState, mapOmpRpcMessage, ompTurnStarted } from './omp-ui-mapper.ts';
 import {
   createOpencodeUiState,
@@ -60,7 +59,6 @@ const MAPPERS: Record<RunnerId, Mapper> = {
     mapOpencodeEvent,
   ),
   pi: mapper(() => piTurnStarted(createPiUiState()).state, mapPiRpcMessage),
-  cursor: mapper(createCursorPrintUiState, mapCursorPrintMessage),
   omp: mapper(() => ompTurnStarted(createOmpUiState(), 'p').state, mapOmpRpcMessage),
 };
 

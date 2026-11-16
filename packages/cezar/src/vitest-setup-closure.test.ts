@@ -14,6 +14,8 @@ const repo = join(import.meta.dirname, '../../..');
 const CONTRACT = '@open-mercato/cezar-contract';
 
 const LOCAL_MODULES = [
+  // The runner roster, a leaf: the setup hides each runner's host CLI (hearsay-tools/squawk#3715).
+  'packages/cezar/src/core/agent-runner.ts',
   'packages/cezar/src/home/test-home-selector.testkit.ts',
   'packages/cezar/src/runs/run-exits.ts',
   'packages/cezar/src/test-launch-guard.testkit.ts',

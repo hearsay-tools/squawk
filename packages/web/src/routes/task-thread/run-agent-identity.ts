@@ -1,6 +1,7 @@
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import type { AgentProfile } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import type { ApiRun, Runner } from '@open-mercato/cezar-api-client'
+import { removedRunnerLabel } from '@open-mercato/cezar-api-client/contract/runner'
 
 import { hasAccountChoice, useAgentAccounts } from '@/api/agent-accounts'
 import type { RunnerAccountChoice } from '@/components/picker-pill'
@@ -108,7 +109,8 @@ export function useAgentIdentity(run: ApiRun): AgentIdentity {
   // one this header may invent.
   const identity = run.modelIdentity && run.modelIdentity !== model ? run.modelIdentity : undefined
   return {
-    runner,
+    // A task saved on a runner Squawk no longer ships names it, marked removed (hearsay-tools/squawk#3715).
+    runner: run.removedRunner !== undefined ? removedRunnerLabel(run.removedRunner) : runner,
     ...(account ? { account } : {}),
     model,
     effort,

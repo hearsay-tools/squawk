@@ -101,8 +101,7 @@ async function assertNudgeAdmitted({ store, runId }: Fixture, start: Start, cell
 
 /** Drive A13 (fresh) or A14 (`continuation`) on `backend`. `refuses` is false on an exempt wire.
  *  `heldAck` is false on a wire whose held acknowledgement cannot leave a turn end behind it:
- *  Claude's stdin write is the acknowledgement, and Cursor print's is the follow-up's first model
- *  work, so holding it holds the turn itself. */
+ *  Claude's stdin write is the acknowledgement, so holding it holds the turn itself. */
 export async function refusedNudgeIdleClose(backend: RunnerId, continuation: boolean, { refuses, heldAck }: { refuses: boolean; heldAck: boolean }): Promise<void> {
   const semaphore = new WorkspaceSemaphore({ home: testHome() });
   const releaseFile = join(tmpdir(), `cez-a13-release-${randomUUID()}`);

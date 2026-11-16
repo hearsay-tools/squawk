@@ -192,7 +192,7 @@ describe('immediate conversation delivery (#505)', { timeout: 45_000 }, () => {
   // hearsay-tools/squawk#3508: a clean close that aborts an acknowledgement in flight is a
   // retryable closed-session delivery failure, not a step failure.
   // Claude acknowledges with its own pipe write, which no harness can hold.
-  it.each(['opencode', 'codex', 'pi', 'omp', 'cursor'] as const)('%s requeues a message whose acknowledgement a clean close aborts, and counts one failed wake delivery', async runner => {
+  it.each(['opencode', 'codex', 'pi', 'omp'] as const)('%s requeues a message whose acknowledgement a clean close aborts, and counts one failed wake delivery', async runner => {
     await withHeldAck(runner, async () => {
       const sessionOf = captureSessions();
       const retry = wakeRetryClock();

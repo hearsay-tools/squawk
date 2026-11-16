@@ -25,7 +25,7 @@ ignores:
 # type position (an `as` cast, a type argument) it is reported, so write `import type` there.
 utils:
   runner-class-name:
-    regex: '^(ClaudeCliRunner|CodexAppServerRunner|CursorPrintRunner|CursorRunner|OmpRunner|OpencodeServerRunner|PiRunner)$'
+    regex: '^(ClaudeCliRunner|CodexAppServerRunner|OmpRunner|OpencodeServerRunner|PiRunner)$'
   runner-module:
     all:
       - kind: string

@@ -169,7 +169,7 @@ export function closedCells(runners: RunnerId[], it: typeof registerTest = regis
     // hearsay-tools/cezarion#1301: a refusal is known by its persisted input, so both bounds that
     // hold it, the nudge's reply bound and the delivery retry of sessions that close before it, last
     // past a run that failed at the delivery bound (U22k: Continue delivers it) and a restart (U22r).
-    // The silent harness is not constructible on Cursor print (U22s's exemption).
+    // The silent variant skips a runner U22s exempts.
     for (const variant of ['silent', 'closing'] as const) {
       const how = variant === 'silent' ? 'as the nudge: a harness that never answers parks at the reply bound'
         : 'with the delivery retry: a session that closes before it counts a failure, and one copy is delivered';

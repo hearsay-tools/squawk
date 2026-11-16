@@ -460,6 +460,12 @@ describe('Usage & agent — which agent ran (#416, #52, #411)', () => {
     expect(agentDetails()).toEqual({ Runner: 'codex', Model: 'gpt-5.2-codex', Effort: 'high' })
   })
 
+  it('names a runner Squawk no longer ships as removed (hearsay-tools/squawk#3715)', () => {
+    stubFetch()
+    renderCard(run('done', { id: freshId(), runner: undefined, removedRunner: 'cursor', model: 'auto' }))
+    expect(agentDetails()).toMatchObject({ Runner: 'Cursor (removed)' })
+  })
+
   it('reads model and effort auto when the run pinned neither', () => {
     stubFetch()
     renderCard(run('done', { id: freshId(), runner: 'opencode' }))

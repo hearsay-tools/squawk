@@ -404,7 +404,7 @@ async function removeUnlisted(dir: string, keep: Set<string>, prefix = ''): Prom
 }
 
 /** Where `materializeSkillDir` puts a worktree copy: `<dir>/skills/<name>/`, in this order. */
-export const TEAM_SKILL_AGENT_DIRS = ['.claude', '.agents', '.cursor'] as const;
+export const TEAM_SKILL_AGENT_DIRS = ['.claude', '.agents'] as const;
 
 /**
  * Copy a directory skill and its companion files into TEAM_SKILL_AGENT_DIRS under `repoRoot`,

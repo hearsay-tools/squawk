@@ -2,7 +2,7 @@
  * hearsay-tools/cezarion#1112: a follow-up whose native turn starts late. A mock that sees
  * the token in a follow-up holds that turn's native start past the 250 ms held-input
  * recheck (HELD_HUMAN_INPUT_RECHECK_MS in workflows/run.ts), the window a loaded host
- * opened between a Cursor print process spawning and its init frame.
+ * opens between a process spawning and its first turn frame.
  *
  * Callers test for the token inline before a dynamic import, so a mock without it keeps
  * its exact event-loop ordering (an unconditional `await` would yield on every turn), and

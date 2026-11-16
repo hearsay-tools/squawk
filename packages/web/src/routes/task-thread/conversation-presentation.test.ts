@@ -80,13 +80,13 @@ describe('conversation presentation titles', () => {
 describe('recipient backend for queued guidance', () => {
   it('uses the active step backend before the run default, and keeps absent data unknown', () => {
     const parent = run({ id: 'parent', title: 'Parent', runner: 'codex' })
-    const cursor = run({ id: 'cursor', title: 'Cursor worker', runner: 'codex', currentStepId: 'task', steps: [
-      { id: 'task', name: 'Task', kind: STEP_KIND.agent, status: STEP_STATUS.running, iterations: 1, tokensUsed: 0, backend: 'cursor' },
+    const worker = run({ id: 'worker', title: 'Pi worker', runner: 'codex', currentStepId: 'task', steps: [
+      { id: 'task', name: 'Task', kind: STEP_KIND.agent, status: STEP_STATUS.running, iterations: 1, tokensUsed: 0, backend: 'pi' },
     ] })
     const unknown = run({ id: 'unknown', title: 'Old worker' })
-    const backends = recipientBackendsFromRuns(parent, [summaryOf(cursor), summaryOf(unknown)])
+    const backends = recipientBackendsFromRuns(parent, [summaryOf(worker), summaryOf(unknown)])
     expect(backends.parent).toBe('codex')
-    expect(backends.cursor).toBe('cursor')
+    expect(backends.worker).toBe('pi')
     expect(backends.unknown).toBeUndefined()
   })
 })
@@ -107,11 +107,10 @@ describe('worker question outcome labels (#505)', () => {
 
 describe('conversation delivery explanations (hearsay-tools/cezarion#1992)', () => {
   it('prefers the server instruction over every derived text', () => {
-    expect(conversationDeliveryExplanation({ instruction: 'Not delivered: task is done.', delivery: 'queued', state: 'accepted' }, 'cursor')).toBe('Not delivered: task is done.')
+    expect(conversationDeliveryExplanation({ instruction: 'Not delivered: task is done.', delivery: 'queued', state: 'accepted' }, 'pi')).toBe('Not delivered: task is done.')
   })
 
   it.each([
-    ['cursor', 'If Cursor is in a turn, delivery waits for that turn to end.'],
     ['claude', 'This agent can receive messages during its current turn.'],
     [undefined, 'Timing depends on the recipient agent.'],
   ] as const)('explains a queued message by its recipient backend (%s)', (backend, text) => {
@@ -183,6 +182,6 @@ describe('complete conversation vocabulary', () => {
     expect(titlesFromRuns(current, [summaryOf(run({ id: 'a', title: 'Stale' }))])).toEqual({ a: 'Current' })
     expect(recipientBackendsFromRuns(current, undefined)).toEqual({ a: 'claude' })
     const other = summaryOf(run({ id: 'b', title: 'Other', runner: 'codex' }))
-    expect(recipientBackendsFromRuns(current, [{ ...other, currentStepBackend: 'cursor' }])).toEqual({ a: 'claude', b: 'cursor' })
+    expect(recipientBackendsFromRuns(current, [{ ...other, currentStepBackend: 'pi' }])).toEqual({ a: 'claude', b: 'pi' })
   })
 })

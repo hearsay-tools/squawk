@@ -123,7 +123,7 @@ export class TurnSettler {
     const nudgedLastTurn = state.boundary.noWaitNudged === state.liveSession.session;
     transitionTurnBoundary(state, { kind: 'turn-end', phase: 'reset-nudges', session: state.liveSession.session });
     // The question is pending before the discard: a runner may signal input readiness from inside
-    // it (Cursor print), and that input must wait for the answer (hearsay-tools/squawk#2444).
+    // it, and that input must wait for the answer (hearsay-tools/squawk#2444).
     this.prepareTurnAsk(runId, state, humanWait, read);
     discardQueuedMessagesOnAsk(state.liveSession.session, read);
     // Native subagents still running: Squawk waits on them, instead of a timer (hearsay-tools/cezarion#2431).
