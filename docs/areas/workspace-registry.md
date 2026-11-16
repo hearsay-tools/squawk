@@ -241,14 +241,14 @@ Home returned by `prepareOperatorHome`, as CLI boot does.
 | Finished staged retry, including a prior failed marker | Pending target, read-only, for the group's health checks |
 | Committed target, including a prior failed marker | Target; normal boot |
 | Committed target whose recorded source differs from the env's legacy home (a launch with only `HSQ_HOME`) | Target; the recorded source stays the legacy home and canary |
-| Desktop, incomplete install or dry-run server, with or without a failed marker | Existing boot migration to the target |
+| Local home with no server install, incomplete install or dry-run server, with or without a failed marker | Existing boot migration to the target |
 | Boot migration fails with `EROFS`, `EACCES` or `EPERM` before the commit | Legacy home; one warning; the next boot retries |
 | A step after the commit fails with `EROFS`, `EACCES` or `EPERM` | Target; one warning |
 
 The shared capability check requires migrate, rollback, stop and start methods. Both
 `ubuntu-vps` and `macosx-ngrok` (hearsay-tools/cezarion#3234) pass it, so a home that records
 either install migrates only through `hsq server-migrate`. A platform without these methods
-would keep the desktop boot migration. The macOS path is checked by unit tests with a fake `launchctl` only, not on a real Mac.
+would keep the local boot migration. The macOS path is checked by unit tests with a fake `launchctl` only, not on a real Mac.
 
 An explicit `hsq migrate` or successful `hsq server-migrate` recopies the current
 legacy data and commits the target, which clears the boot skip. The failed marker

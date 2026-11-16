@@ -100,7 +100,7 @@ export interface StopServeOptions {
 }
 
 /**
- * The one teardown every exit from `serve` runs: a signal or the desktop shell closing stdin. The server's own shutdown stops dev servers, delegation, the listener
+ * The one teardown every exit from `serve` runs on a signal. The server's own shutdown stops dev servers, delegation, the listener
  * and the store, waited for at most `boundMs`. Whatever happened there, the store is closed and
  * the signal goes to every agent session group: agents lead their own process groups
  * (hearsay-tools/cezarion#890), so nothing above reaches them. The signal goes last: with the store

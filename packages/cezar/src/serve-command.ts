@@ -21,7 +21,6 @@ import { createRunner } from './core/runner-factory.ts';
 import { startServer } from './server/start-server.ts';
 import { cockpitOriginFor, WorkspaceEventBus } from './server/server.ts';
 import { ProviderRuntimeAuthObserver } from './server/provider-auth-runtime.ts';
-import { watchSupervisor } from './desktop-supervisor.ts';
 import { checkForUpdate } from './update-check.ts';
 import { WorkspaceSemaphore } from './workspace/semaphore.ts';
 import { openUrl } from './open-url.ts';
@@ -43,7 +42,7 @@ export const defaultServeDeps = {
   cockpitOriginFor, ToolActivityTracker, RunManager, createRunner, sweepMergedBranches, DelegationController,
   ProviderAuthService, createHostDiscovery, WorkspaceEventBus, ProviderRuntimeAuthObserver, detectEnvironment,
   getRepoInfo, reconcileServeWorktrees, recoverServeProject, checkForUpdate, warnServeBind, startServer, once, printServeBanner, stopServe, onTerminal, ignoreHangupOffTerminal,
-  watchSupervisor, waitForHealth, openUrl, process, console,
+  waitForHealth, openUrl, process, console,
 };
 
 export type ServeDeps = typeof defaultServeDeps & {

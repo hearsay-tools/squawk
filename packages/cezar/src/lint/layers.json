@@ -67,7 +67,6 @@
     "feature:artifacts": ["artifacts/"],
     "feature:automations": ["automations/"],
     "feature:autosave": ["autosave-*"],
-    "feature:desktop-supervisor": ["desktop-supervisor.ts"],
     "feature:discovery": ["discovery/"],
     "feature:forge": [
       "server/forge/",

@@ -51,7 +51,7 @@ It does not install updates. Install the newer release the way you installed thi
 then restart the cockpit.
 
 Upgrading from Cezarion? Read the [migration guide](docs/migration.md) before
-moving a desktop, server or custom-home install. User paths such as `<config>`
+moving a server or custom-home install. User paths such as `<config>`
 and `<state>` below refer to its [platform roots](docs/migration.md#home-directories).
 A cockpit moves each idle project's state from `.ai/cezar/` to `.ai/squawk/` at start
 ([project folders](docs/migration.md#project-folders)). Release operators use the [publishing runbook](docs/publishing.md).
@@ -440,10 +440,6 @@ See [How it runs agents](docs/areas/runners.md).
 ## Coding agent backends
 
 See [Coding agent backends](docs/areas/runners.md).
-
-## Desktop app
-
-See [Desktop app](docs/desktop.md).
 
 ## Remote access (host Squawk on a server)
 
