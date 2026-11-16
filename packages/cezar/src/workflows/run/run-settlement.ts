@@ -480,7 +480,7 @@ export class RunSettlement {
       await this.settleIdleClosedWorker(runId);
       return;
     }
-    if (!run || !state.boundary.autonomousNudgePending || run.waits?.length || hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id))) return;
+    if (!run || state.boundary.nudge?.state !== 'refused' || run.waits?.length || hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id))) return;
     for (const step of run.steps) {
       if (step.status === 'running') this.context.store.updateStep(runId, step.id, { status: 'waiting' });
     }

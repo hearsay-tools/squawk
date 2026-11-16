@@ -167,7 +167,7 @@ describe('autonomous nudge priority and lifecycle guards', () => {
   function pendingBoundary(): void {
     state.liveSession.selectStep('task');
     transitionTurnBoundary(state, { kind: 'turn-end', phase: 'ui-completed', session: session });
-    transitionTurnBoundary(state, { kind: 'input-ready', phase: 'retain-nudge', session: session });
+    transitionTurnBoundary(state, { kind: 'nudge-fact', phase: 'record', session: session, nudge: { cause: 'autonomous', state: 'refused' } });
     active.set(id, state);
   }
 
@@ -191,7 +191,7 @@ describe('autonomous nudge priority and lifecycle guards', () => {
         case 'replaced-session': state.liveSession.attachSession({ ...session }); break;
         case 'new-boundary': transitionTurnBoundary(state, { kind: 'turn-started', phase: 'clear-boundary', session: state.liveSession.session }); break;
         case 'done': transitionTurnBoundary(state, { kind: 'turn-end', phase: 'retain-done', session: session }); break;
-        case 'no-pending': transitionTurnBoundary(state, { kind: 'input-ready', phase: 'clear-nudge', session: state.liveSession.session }); break;
+        case 'no-pending': transitionTurnBoundary(state, { kind: 'nudge-fact', phase: 'retire', session: state.liveSession.session }); break;
         case 'closed-by-idle': transitionTurnBoundary(state, { kind: 'idle-expired', phase: 'close', session: state.liveSession.session }); break;
         case 'session-error': state.liveSession.recordSessionError('provider failed'); break;
       }
@@ -214,7 +214,7 @@ describe('autonomous nudge priority and lifecycle guards', () => {
     }), 60_000, 40, 'Wait for workers.', 3600);
     expect(settler.settleTurn(id, state, 'ack', { stepId: 'task', humanGate: false, ask: null, done: false, monitoring: false, nudgedLastTurn: false })).toBe(true);
     expect(outcomes).toHaveBeenCalledWith(id, 'ack', { kind: 'readiness' });
-    expect(state.boundary.autonomousNudgePending).toBe(session);
+    expect(state.boundary.nudge).toEqual({ session, cause: 'autonomous', state: 'refused' });
     expect(session.sendAgentMessage).not.toHaveBeenCalled();
     expect(session.sendMessage).not.toHaveBeenCalled();
     expect(store.readEvents(id).some(e => e.type === 'note' && String(e.message).startsWith(NO_WAIT_NUDGE_NOTE))).toBe(false);

@@ -1,5 +1,6 @@
 import { productEnv } from '../../core/product-env.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
+import { retireNudge } from './turn-nudges.ts';
 import { randomUUID } from 'node:crypto';
 import { askPayloadOf, askRequestOf } from '@open-mercato/cezar-contract/pending-ask';
 import type { RunRecord, RunStore } from '../../runs/store.ts';
@@ -281,7 +282,10 @@ export function handleRunnerUiEvent(context: RunModuleContext, host: SessionHelp
   host.trackSubagentEvent(runId, state, event);
   host.noteNoWaitNudgeContent(runId, state, event);
   if (isRunnerActivity(event)) {
-    if (state.boundary.autonomousNudgePending) { transitionTurnBoundary(state, { kind: 'turn-started', phase: 'clear-nudge', session: state.liveSession.session }); clearIdleTimer(state); }
+    // Activity answers the nudge. A refused one's bound was the idle timer.
+    const refused = state.boundary.nudge?.state === 'refused';
+    if (state.boundary.nudge) retireNudge(state);
+    if (refused) clearIdleTimer(state);
     clearHeldHumanInputTimer(state);
     transitionTurnBoundary(state, { kind: 'turn-started', phase: 'clear-boundary', session: state.liveSession.session });
   }

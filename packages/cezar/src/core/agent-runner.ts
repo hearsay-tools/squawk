@@ -6,6 +6,7 @@
 import type { UiEvent } from './ui-events.ts';
 import type { SessionTransport } from '@open-mercato/cezar-contract';
 import type { RunnerTimings } from './runner-runtime.ts';
+import type { SpawnScope } from '../worker-scope/scope.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 
 /**
@@ -40,6 +41,9 @@ export function runnerIdOf(backend: string | undefined): RunnerId {
 export interface AgentRunSpec {
   /** Internal deadline overrides; never persisted or sent to the native wire. */
   timings?: Partial<RunnerTimings> | undefined;
+  /** A worker's scope: every process the runner starts for this session starts inside it (ADR 0032).
+   *  Internal; never persisted or sent to the native wire. */
+  scope?: SpawnScope | undefined;
   /** Appended to the CLI's default system prompt (`--append-system-prompt`). */
   systemPrompt?: string;
   /** Private bundled tool server; capability values belong only in env. */
@@ -99,6 +103,7 @@ export interface AgentRunSpec {
  */
 const AGENT_RUN_SPEC_FIELD_SET: Readonly<Record<keyof AgentRunSpec, true>> = {
   timings: true,
+  scope: true,
   systemPrompt: true,
   squawkTools: true,
   userPrompt: true,
@@ -173,6 +178,13 @@ export type SpecFieldSupport =
  * what the backend actually receives, not what the adapter meant to send.
  */
 export type AgentRunSpecSupport = Readonly<Record<AgentRunSpecField, SpecFieldSupport>>;
+
+/** The spec fields every runner honors the same way: Squawk-side settings that never reach a
+ *  native wire. Each runner spreads these into its `specSupport`. */
+export const SQUAWK_SIDE_SPEC_SUPPORT = {
+  timings: { honored: true, via: 'internal runner deadlines; omitted fields retain production defaults' },
+  scope: { honored: true, via: 'every session process starts inside the worker scope (ADR 0032)' },
+} as const satisfies Partial<AgentRunSpecSupport>;
 
 /**
  * Backends without a dedicated system-prompt channel (codex app-server,

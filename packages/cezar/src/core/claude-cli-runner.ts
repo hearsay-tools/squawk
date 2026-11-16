@@ -23,7 +23,7 @@ import { productName } from '../home/display.ts';
 
 // Re-exported for backends and the run manager that still import them from here.
 export type { AgentSession, SessionOptions } from './agent-runner.ts';
-import { isSignalTerminationExit, trackChildExit, unknownToolGrant } from './agent-runner.ts';
+import { isSignalTerminationExit, trackChildExit, unknownToolGrant, SQUAWK_SIDE_SPEC_SUPPORT } from './agent-runner.ts';
 import { signalSession, spawnSessionLeader, waitForEofExit } from './session-process.ts';
 import { buildChildEnv } from './agent-env.ts';
 import { squawkToolEnvNames, squawkToolNames } from '../ci-wait/tool-catalog.ts';
@@ -75,7 +75,7 @@ export interface ClaudeCliRunnerOptions {
  */
 export const CLAUDE_SPEC_SUPPORT: AgentRunSpecSupport = {
   squawkTools: { honored: true, via: '--mcp-config and generated --allowedTools name' },
-  timings: { honored: true, via: 'internal runner deadlines; omitted fields retain production defaults' },
+  ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: '--append-system-prompt' },
   userPrompt: { honored: true, via: 'text block of the first stream-json user message on stdin' },
   images: { honored: true, via: 'image blocks ahead of the text in the first stdin message' },
@@ -128,6 +128,7 @@ export class ClaudeCliRunner implements AgentRunner {
       child = spawnSessionLeader(this.bin, args, {
         cwd: spec.cwd,
         timings: spec.timings,
+        scope: spec.scope,
         env: buildChildEnv({ backend: this.backend, extraEnv: spec.env }),
       });
     } catch (err) {

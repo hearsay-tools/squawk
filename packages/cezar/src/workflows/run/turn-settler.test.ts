@@ -125,14 +125,14 @@ describe('turn settler entry orders', () => {
 
   it('ready calls the gate before clearing the pending nudge and dispatching the carrier', () => {
     const f = fixture();
-    transitionTurnBoundary(f.state, { kind: 'input-ready', phase: 'retain-nudge', session: f.session });
+    transitionTurnBoundary(f.state, { kind: 'nudge-fact', phase: 'record', session: f.session, nudge: { cause: 'autonomous', state: 'refused' } });
     f.log.length = 0;
     transitionTurnBoundary(f.state, { kind: 'turn-end', phase: 'save-ack', session: f.state.liveSession.session, boundary: { session: f.session, monitoring: false, humanGate: true, nudgedLastTurn: true } });
     f.log.length = 0;
     const decision = decide({ kind: 'park' });
     f.settler.settleTurn('run', f.state, 'ready', f.settler.boundaryTurn('run', f.state, f.session, true));
     expect(decision).toHaveBeenCalledWith(expect.objectContaining({ done: true, question: true, noWaitNudgedLastTurn: true }));
-    order(f, ['gate', 'boundary:input-ready/clear-nudge', 'parkWaits', 'outcome']);
+    order(f, ['gate', 'boundary:nudge-fact/retire', 'parkWaits', 'outcome']);
   });
 
   it('gate uses the supplied refusal without calling the gate again, and records only through the outcome seam', () => {

@@ -1,6 +1,7 @@
 import { finished } from 'node:stream/promises';
 import { afterExitDrain, CRASH_EXIT_DRAIN_MS, isCrashExit, DEFAULT_RUNNER_TIMINGS, type RunnerTimings } from './runner-runtime.ts';
 import { signalExitedSession, signalSession, spawnSessionLeader } from './session-process.ts';
+import type { SpawnScope } from '../worker-scope/scope.ts';
 
 export interface CursorPrintProcessOptions {
   bin: string;
@@ -9,6 +10,8 @@ export interface CursorPrintProcessOptions {
   env: NodeJS.ProcessEnv;
   /** Test overrides; production uses the shared runner deadlines. */
   timings?: Partial<RunnerTimings> | undefined;
+  /** The worker's scope, when the session belongs to one (ADR 0032). */
+  scope?: SpawnScope | undefined;
   drainMs?: number;
   termGraceMs?: number;
   killGraceMs?: number;
@@ -37,7 +40,7 @@ export function startCursorPrintProcess(
   const args = isNodeScript ? [options.bin, ...options.args] : [...options.args];
   // A registered session leader (hearsay-tools/cezarion#1286): Squawk's own SIGINT/SIGTERM and the
   // worker ledger reach its group, and every signal after its exit keeps the reuse guard.
-  const child = spawnSessionLeader(command, args, { cwd: options.cwd, env: options.env, timings: options.timings });
+  const child = spawnSessionLeader(command, args, { cwd: options.cwd, env: options.env, timings: options.timings, scope: options.scope });
   const pid = child.pid;
   let closed = false;
   let inputClosed = false;

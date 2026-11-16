@@ -133,11 +133,13 @@ the worktree, and names each one by its pid and executable name, never its argum
 ```
 
 The key has the shape, the limits and the environment of `worktreeSetup`. The commands run
-only in a worktree whose ownership destroy has proven, before it looks for holders. A failed
-command or a timeout is recorded in the worker's events, and destroy goes on: a process that
-still holds the worktree is named in the refusal and never signalled, and the next retry runs
-the teardown again. The key is edited in the config file only; Settings does not show it.
-Without the key nothing runs, exactly as before.
+only in a worktree whose ownership destroy has proven, before destroy stops the worker's
+process scope. A failed command or a timeout is recorded in the worker's events, and destroy
+goes on: stopping the scope ends what the worker started (on macOS, and on Linux without
+cgroup delegation, a process that left the worker's process groups can survive; see
+[ADR 0032](adr/0032-prove-process-and-workspace-ownership-before-cleanup.md)). A process that
+is not the worker's is never signalled and does not block the removal. The key is edited in
+the config file only; Settings does not show it. Without the key nothing runs, exactly as before.
 
 ### Editing the agents' own config (Settings → Agent config)
 

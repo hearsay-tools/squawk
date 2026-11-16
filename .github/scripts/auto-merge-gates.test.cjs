@@ -79,6 +79,7 @@ const BOT_WORKFLOWS = {
   'transcript-facts-responsiveness.yml': 'measures transcript lag',
   'e2e-spec-map.yml': 'maps browser specs to the source they cover',
   'test-env-windows.yml': 'probes the Windows test environment',
+  'worker-scope-native.yml': 'probes worker process scopes in a delegated cgroup',
 };
 
 // Each entry stops the scan: it records the file and does not follow what it loads.

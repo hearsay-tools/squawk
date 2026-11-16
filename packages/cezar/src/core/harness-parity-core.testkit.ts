@@ -238,6 +238,8 @@ export const AUTONOMOUS_CRITERIA = [
   { id: 'A10', scenario: 'cezar-ask', name: 'never continues past a persisted unanswered question' },
   { id: 'A11', scenario: 'autonomous-cezar-ask-cap', name: 'continues after a refused cezar_ask and delayed readiness' },
   { id: 'A12', scenario: 'autonomous-cezar-ask-cap', name: 'continues a resumed refused cezar_ask after delayed readiness' },
+  { id: 'A13', scenario: 'hold-gated', name: 'keeps a refused nudge running until the idle bound, then settles waiting' },
+  { id: 'A14', scenario: 'hold-gated', name: 'keeps a refused nudge on a Continue running until the idle bound, then settles waiting' },
 ] as const;
 
 /** #544: workflow-final-message-cells.testkit.ts, the no-wait nudge's reply bound on every native wire. */
@@ -743,6 +745,13 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
   })); }),
   ...exemptWhere('H2', 'capability-absent', facts => facts.inputDelivery.humanInputAtTurnEnd !== 'always-held', () =>
     'This wire writes or steers a mid-turn human follow-up immediately; discardQueuedMessages cannot unwrite it. A runner that holds every mid-turn human message until the turn ends queues and drops it (H2 live rows).'),
+  // hearsay-tools/squawk#2452: the live rows run where a prompt acknowledgement can be outstanding
+  // at a turn end with no human input held (OpenCode, Pi, OMP). The cell drives the same turns here.
+  ...(['A13', 'A14'] as const).flatMap(criterion => ([
+    ['claude', 'Claude acknowledges input with its own stdin write, so no prompt acknowledgement is outstanding at a turn end, and it refuses agent input only while its own agent write is pending.'],
+    ['codex', 'Codex refuses agent input only while a human prompt is still on its way to the wire, and that prompt is held human input: the turn end takes it before any nudge.'],
+    ['cursor', 'Cursor print acknowledges a follow-up with its first model work, so the follow-up\'s turn cannot end before its acknowledgement. It refuses agent input only while a turn runs or a follow-up is queued, and a queued follow-up is held human input: the turn end takes it before any nudge.'],
+  ] as const).map(([backend, reason]) => ({ criterion, backend, kind: 'capability-absent' as const, reason }))),
   ...exemptWhere('F7', 'scenario-unconstructible', facts => facts.transport === 'stdio', () =>
     'This wire has no separate HTTP ACK retained after turn completion. Turn frames and the transport ACK share one stream, so a silent-tail turn cannot end while its agent-input ACK is still pending.'),
   ...(['F8', 'F9'] as const).map(criterion => ({

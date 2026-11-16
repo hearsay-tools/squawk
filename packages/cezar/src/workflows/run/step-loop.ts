@@ -223,6 +223,7 @@ export class StepLoop {
         env: worktreeSetupEnv({ projectRoot: this.context.repoRoot, runId, tmpEnv }),
         setInterrupt: (stop) => { state.liveSession.installInterrupt(stop); },
         isCancelled: () => state.liveSession.cancelled,
+        scope: this.context.store.spawnScope(runId),
         onCommandResult: (result) => emit({
           type: 'check-output',
           command: result.command,
@@ -355,7 +356,7 @@ export class StepLoop {
         continue;
       }
 
-      const { ok, output } = await this.runCheckStep(state, step, emit);
+      const { ok, output } = await this.runCheckStep(runId, state, step, emit);
       if (state.liveSession.cancelled || preserveRunAfterDisposal(this.context.store, this.context.disposed, runId, state)) break;
       const nextIndex = this.settleCheckStep(execution, i, record, { ok, output }, loop);
       if (nextIndex === undefined) break;
@@ -504,6 +505,7 @@ export class StepLoop {
   }
 
   async runCheckStep(
+    runId: string,
     state: ActiveRun,
     step: WorkflowStepDef,
     emit: (event: { type: string; stepId?: string; [k: string]: unknown }) => void,
@@ -519,6 +521,7 @@ export class StepLoop {
       setInterrupt: (stop) => { state.liveSession.installInterrupt(stop); },
       keep: 'head',
       cap: CHECK_OUTPUT_CAP,
+      scope: this.context.store.spawnScope(runId),
     });
     emit({ type: 'check-output', stepId: step.id, command, text: result.output, exitCode: result.exitCode ?? -1 });
     return { ok: result.exitCode === 0, output: result.output };

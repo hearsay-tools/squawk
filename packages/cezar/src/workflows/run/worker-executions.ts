@@ -35,7 +35,11 @@ export class WorkerExecutions {
     if (this.host.maintenance(runId)) throw new WorkerAdmissionRefusal('Worker resources are being cleaned up', 'retry the same command after the cleanup ends');
     // #469: one site for Continue, --resume, parent replies and queued revival after a crash.
     // Fresh: admission is one-shot, so a cached "alive" must not refuse an orphan that has since died.
-    if (!this.executions.has(runId)) this.host.settleOrphanedWorkerExecution(runId, { admitting: true, fresh: true });
+    // A crashed controller's leftovers end here, so Continue starts in a scope nothing old runs in.
+    if (!this.executions.has(runId)) {
+      this.orphans.stopCrashedGeneration(runId);
+      this.host.settleOrphanedWorkerExecution(runId, { admitting: true, fresh: true });
+    }
     const refusal = this.executions.has(runId) ? undefined : this.orphans.orphanAdmissionRefusal(runId);
     if (refusal) throw refusal;
     const existing = this.executions.get(runId);
@@ -100,12 +104,13 @@ export class WorkerExecutions {
     } catch { /* Finalized in this process; preserve exact generation for an explicit retry. */ }
   }
 
-  /** Best effort: a failed write leaves the working-directory scan as this process's evidence. */
+  /** Best effort: the session's scope holds it either way (ADR 0032); the record lets a restarted
+   *  controller tell whether a crashed generation's session still runs. */
   recordWorkerProcess(runId: string, pid: number): void {
     const generation = this.executions.get(runId)?.generation;
     if (!generation) return;
-    try { if (!this.context.store.appendWorkerProcess(runId, generation, pid, sessionGroupOf(pid))) console.warn(`${logPrefix()} worker ${runId} process record unavailable; relying on the working-directory scan`); }
-    catch { console.warn(`${logPrefix()} worker ${runId} process record write failed; relying on the working-directory scan`); }
+    try { if (!this.context.store.appendWorkerProcess(runId, generation, pid, sessionGroupOf(pid))) console.warn(`${logPrefix()} worker ${runId} process record unavailable; its scope still holds the process`); }
+    catch { console.warn(`${logPrefix()} worker ${runId} process record write failed; its scope still holds the process`); }
   }
 
   async proveRunTermination(runId: string, timeoutMs: number, opts: { reapOrphans?: boolean }): Promise<boolean> {

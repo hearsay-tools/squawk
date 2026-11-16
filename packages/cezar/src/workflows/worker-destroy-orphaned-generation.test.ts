@@ -8,14 +8,12 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { nonDumpableHolder } from '../delegation/non-dumpable.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
-import fs from 'node:fs';
-import { existsSync, mkdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { syncBuiltinESMExports } from 'node:module';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, sep } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore, type RunRecord } from '../runs/store.ts';
-import { agentTmpDirLocations, resolveAgentTmpDir } from '../runs/agent-tmpdir.ts';
+import { resolveAgentTmpDir } from '../runs/agent-tmpdir.ts';
 import { ensureOwnedWorkspace } from '../delegation/workspace.ts';
 import * as runners from '../core/runner-factory.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
@@ -27,9 +25,13 @@ import { until, root, store, manager, parent, releases, worker, workspace, useWo
 import { createRunner } from '../core/runner-factory.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
+import { setHostScope } from '../worker-scope/worker-scopes.ts';
 
 describe('worker termination barrier', { timeout: 30_000 }, () => {
   useWorkerDestroyFixture();
+  // Ownership is the worker's recorded process groups on every host (ADR 0032).
+  beforeEach(() => { setHostScope({ backend: 'groups', reason: 'test' }); });
+  afterEach(() => { setHostScope(undefined); });
   describe('orphaned generation after a controller crash (#469)', () => {
     const TERM_IGNORING = "process.on('SIGTERM',()=>{}); console.log('ready'); setInterval(()=>{},1000)";
     const spawnReady = async (cwd: string, script = TERM_IGNORING) => {
@@ -53,7 +55,8 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         run: async () => { throw Error('unused'); }, startSession: () => {
           if (++launches > 1) return { result: Promise.resolve({ text: 'resumed', toolCalls: [], tokensUsed: 0 }), open: false,
             sendMessage: () => false, sendAgentMessage: () => false, discardQueuedMessages: () => {}, holdsHumanInput: () => false, interrupt() {}, end() {} };
-          const proc = spawn(process.execPath, ['-e', TERM_IGNORING], { cwd: workspace(w).path, stdio: ['ignore', 'pipe', 'ignore'] });
+          // Its own group leader, as a runner's session is, so a test can put it in the worker's scope.
+          const proc = spawn(process.execPath, ['-e', TERM_IGNORING], { cwd: workspace(w).path, detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
           releases.push(() => proc.kill('SIGKILL'));
           const exited = new Promise<void>(resolve => proc.once('exit', () => resolve()));
           first = { proc, exited }; proc.stdout!.once('data', () => ready());
@@ -98,10 +101,11 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       } finally { other.dispose(); reopened.flush(); }
     });
 
-    it('destroy reaps a recorded child that ignores SIGTERM, then completes', async () => {
+    it("destroy ends a crashed generation's owned child that ignores SIGTERM, then completes", async () => {
       const { w, child, prior, reopened, other, service } = await crashed('failed');
-      // A leader spawned outside spawnSessionLeader records no group (hearsay-tools/cezarion#890): pid-only reaping.
+      // The mock spawns outside spawnSessionLeader, so the record has no group; the worker's scope owns it.
       expect(readRecord(w.id).processes.map(entry => 'pgid' in entry)).toEqual([false]);
+      reopened.scopes.spawnScope(w.id).started(child.proc.pid!);
       try {
         expect(await service.destroyForHuman('reopened', w.id)).toMatchObject({ state: 'complete', remaining: [] });
         await child.exited;
@@ -109,131 +113,6 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         expect(reopened.readWorkerExecution(w.id)).toMatchObject({ ...prior, phase: 'complete' });
         expect(existsSync(workspace(w).path)).toBe(false); expect(branchExists(workspace(w).branch)).toBe(false);
       } finally { other.dispose(); reopened.flush(); }
-    });
-
-    it('scan-only survivors are reported exactly, never signalled, and keep the worktree', async () => {
-      const w = await worker();
-      // Finish every Git operation before the scan. No original manager owns a live execution,
-      // so the fixture cannot launch an autosave while destroy probes the orphan.
-      await ensureOwnedWorkspace(root, w);
-      store.commitWorkerExecutionStart(w.id);
-      setRunStatus(store, w.id, RUN_STATUS.failed); store.flush();
-      manager.dispose();
-      const signalSensitive = "process.on('SIGTERM',()=>process.exit(42)); console.log('ready'); setInterval(()=>{},1000)";
-      const worktreeHolder = await spawnReady(workspace(w).path, signalSensitive);
-      const scratch = resolveAgentTmpDir(join(root, '.ai/cezar'), w.id); mkdirSync(scratch, { recursive: true });
-      const scratchHolder = await spawnReady(scratch, signalSensitive);
-      const expectedPids = [worktreeHolder.proc.pid!, scratchHolder.proc.pid!].sort((a, b) => a - b);
-      const processKills = vi.spyOn(process, 'kill');
-      const worktreeKills = vi.spyOn(worktreeHolder.proc, 'kill');
-      const scratchKills = vi.spyOn(scratchHolder.proc, 'kill');
-      const mutatingSignals = () => [
-        ...processKills.mock.calls.filter(([pid, signal]) => expectedPids.includes(pid) && signal !== 0),
-        ...worktreeKills.mock.calls.filter(([signal]) => signal !== 0),
-        ...scratchKills.mock.calls.filter(([signal]) => signal !== 0),
-      ];
-      // A missing record makes these two real cwd holders scan-only evidence.
-      rmSync(recordPath(w.id));
-      const prior = store.readWorkerExecution(w.id);
-      store.close(); const reopened = RunStore.open(join(root, '.ai/cezar'), { keepLive: true });
-      const other = new RunManager(reopened, root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() });
-      // Neither holder exits on its own, so each destroy waits out its deadline (hearsay-tools/cezarion#469).
-      const service = new DelegationService(workerCleanups({ terminationTimeoutMs: 1_500 })); service.registerProject({ home: testHome(), id: 'reopened', root, store: reopened, manager: other });
-      type ScanRead = { cwd?: string | undefined; readlinkError?: string | undefined };
-      const scanReads = new Map<number, ScanRead>();
-      const observed = (pid: number) => {
-        let entry = scanReads.get(pid);
-        if (!entry) { entry = {}; scanReads.set(pid, entry); }
-        return entry;
-      };
-      // Pass through the exact fs calls the Linux scanner makes. A second /proc read after
-      // destroy can see a process that has exited or changed dumpability.
-      const realReadlink = fs.readlinkSync;
-      vi.spyOn(fs, 'readlinkSync').mockImplementation(((...args: unknown[]) => {
-        const pid = /^\/proc\/(\d+)\/cwd$/.exec(String(args[0]))?.[1];
-        // Each cwd read starts a fresh probe for this PID.
-        if (pid) scanReads.set(Number(pid), {});
-        try {
-          const result = Reflect.apply(realReadlink, fs, args);
-          if (pid) { const entry = observed(Number(pid)); entry.cwd = String(result); entry.readlinkError = undefined; }
-          return result;
-        } catch (error) {
-          if (pid) { const entry = observed(Number(pid)); entry.cwd = undefined; entry.readlinkError = (error as NodeJS.ErrnoException).code; }
-          throw error;
-        }
-      }) as typeof fs.readlinkSync);
-      syncBuiltinESMExports();
-      try {
-        const describePid = (pid: number) => {
-          const file = `/proc/${pid}`;
-          const read = (path: string) => { try { return readFileSync(path, 'utf8').trim().slice(0, 160); } catch (error) { return (error as NodeJS.ErrnoException).code; } };
-          let cwd: string | undefined;
-          try { cwd = readlinkSync(`${file}/cwd`); } catch (error) { cwd = `readlink:${(error as NodeJS.ErrnoException).code}`; }
-          const stat = read(`${file}/stat`);
-          const ppid = stat?.includes(')') ? stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/)[1] : undefined;
-          let uid: number | undefined;
-          try { uid = statSync(file).uid; } catch { /* The PID may have exited since the scan. */ }
-          return { pid, ppid, cwd, comm: read(`${file}/comm`), startToken: processStartToken(pid), uid };
-        };
-        // Snapshot the returned blocker immediately, before a transient PID can disappear.
-        let blockerDiagnostics: ReturnType<typeof describePid>[] = [];
-        let blockerPids: number[] = [];
-        let blockerReads = new Map<number, ScanRead>();
-        const takeBlocker = other.takeWorkerTerminationBlocker.bind(other);
-        vi.spyOn(other, 'takeWorkerTerminationBlocker').mockImplementation(runId => {
-          const taken = takeBlocker(runId);
-          if (taken?.blocker.kind === 'processes') {
-            blockerPids = [...taken.blocker.pids];
-            blockerReads = new Map(blockerPids.map(pid => [pid, { ...scanReads.get(pid) }]));
-            blockerDiagnostics = blockerPids.map(describePid);
-          }
-          return taken;
-        });
-        await other.recover();
-        expect(mutatingSignals()).toEqual([]);
-        expect(reopened.readWorkerExecution(w.id)).toEqual(prior);
-        scanReads.clear();
-        const blocked = await service.destroyForHuman('reopened', w.id);
-        expect(blocked).toMatchObject({ state: 'incomplete', remaining: ['process', 'worktree', 'branch'] });
-        const assertReported = (error: string | undefined) => {
-          const reason = /^Worker termination is not proven: (processes .+ still hold the worker's worktree or scratch); retry cleanup later$/.exec(error ?? '')?.[1];
-          expect(reason).toBeDefined();
-          // Each holder is its pid, then its command in parentheses (hearsay-tools/squawk#914).
-          const reported = [...reason!.matchAll(/(?:processes |, )(\d+)(?= \(|,| still)/g)].map(match => Number(match[1])).sort((a, b) => a - b);
-          const boundedDiagnostics = blockerDiagnostics.slice(0, 8).map(entry => ({ ...entry, cwd: entry.cwd?.slice(0, 160) }));
-          expect(reported, JSON.stringify(boundedDiagnostics)).toEqual([...blockerPids].sort((a, b) => a - b));
-          for (const pid of expectedPids) expect(reported).toContain(pid);
-          // Every reported PID must have been observed by the real scan as a readable cwd holder:
-          // an unreadable cwd is no evidence (hearsay-tools/cezarion#889).
-          if (process.platform === 'linux') {
-            const targets = [workspace(w).path, ...agentTmpDirLocations(join(root, '.ai/cezar'), w.id)]
-              .map(path => { try { return realpathSync(path); } catch { return path; } });
-            for (const entry of blockerDiagnostics) {
-              const scan = blockerReads.get(entry.pid);
-              expect(scan, JSON.stringify({ ...entry, cwd: entry.cwd?.slice(0, 160) })).toBeDefined();
-              const cwd = scan?.cwd?.replace(/ \(deleted\)$/, '');
-              expect(cwd !== undefined && targets.some(target => cwd === target || cwd.startsWith(target + sep)),
-                JSON.stringify({ pid: entry.pid, ...scan, cwd: cwd?.slice(0, 160) })).toBe(true);
-            }
-          }
-          return reason!;
-        };
-        const reason = assertReported(blocked.error);
-        expect(mutatingSignals()).toEqual([]);
-        scanReads.clear();
-        const retried = await service.destroyForHuman('reopened', w.id);
-        expect(retried).toMatchObject({ state: 'incomplete', remaining: ['process', 'worktree', 'branch'] });
-        const retryReason = assertReported(retried.error);
-        expect(mutatingSignals()).toEqual([]);
-        // An unchanged blocker set appends no second event; a changed set is reported exactly.
-        expect(reopened.readEvents(w.id).filter(event => event.type === 'lifecycle' && String(event.message).startsWith('destroy blocked:'))).toEqual([
-          expect.objectContaining({ message: `destroy blocked: ${reason}` }),
-          ...(retryReason === reason ? [] : [expect.objectContaining({ message: `destroy blocked: ${retryReason}` })])]);
-        expect(existsSync(workspace(w).path)).toBe(true);
-        expect(worktreeHolder.proc.exitCode).toBeNull(); expect(worktreeHolder.proc.signalCode).toBeNull();
-        expect(scratchHolder.proc.exitCode).toBeNull(); expect(scratchHolder.proc.signalCode).toBeNull();
-        expect(reopened.readWorkerExecution(w.id)).toEqual(prior);
-      } finally { other.dispose(); reopened.flush(); vi.restoreAllMocks(); syncBuiltinESMExports(); }
     });
 
     it('a live foreign controller keeps the generation: nothing is finalized or signalled', async () => {
@@ -301,16 +180,18 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       } finally { other.dispose(); reopened.flush(); }
     });
 
-    it('a process working in the run scratch keeps the generation alive', async () => {
-      const { w, child, prior, reopened, other } = await crashed('failed');
+    it("a process outside the worker's scope working in its scratch neither keeps a dead generation alive nor is signalled", async () => {
+      const { w, child, reopened, other } = await crashed('failed');
       const scratch = resolveAgentTmpDir(join(root, '.ai/cezar'), w.id); mkdirSync(scratch, { recursive: true });
       const holder = await spawnReady(scratch);
+      const kills = vi.spyOn(process, 'kill'); const own = vi.spyOn(holder.proc, 'kill');
       try {
         child.proc.kill('SIGKILL'); await child.exited;
         await other.recover();
-        expect(reopened.readWorkerExecution(w.id)).toEqual(prior);
-        expect(existsSync(scratch)).toBe(true);
-        expect(holder.proc.exitCode).toBeNull();
+        expect(reopened.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete' });
+        expect(holder.proc.exitCode).toBeNull(); expect(holder.proc.signalCode).toBeNull();
+        expect(kills.mock.calls.filter(([pid, signal]) => Math.abs(pid) === holder.proc.pid && signal !== 0)).toEqual([]);
+        expect(own.mock.calls).toEqual([]);
       } finally { other.dispose(); reopened.flush(); }
     });
 
@@ -338,36 +219,33 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       } finally { vi.useRealTimers(); other.dispose(); reopened.flush(); }
     });
 
-    it('scan-only survivors share one /proc scan per reprobe tick, and the reprobe backs off (hearsay-tools/cezarion#879)', async () => {
+    it('a recorded survivor is re-probed on the backoff cadence until it dies (hearsay-tools/cezarion#879)', async () => {
       const ids: string[] = []; const holders: Awaited<ReturnType<typeof spawnReady>>[] = [];
       for (let i = 0; i < 2; i++) {
-        const w = await worker(); store.commitWorkerExecutionStart(w.id);
-        const created = await ensureOwnedWorkspace(root, store.getRun(w.id)!);
-        setRunStatus(store, w.id, RUN_STATUS.failed, { worktreePath: created.path, branch: created.branch });
-        rmSync(recordPath(w.id), { force: true }); // legacy: the cwd scan is the only evidence
-        holders.push(await spawnReady(created.path)); ids.push(w.id);
+        const w = await worker(); const generation = store.commitWorkerExecutionStart(w.id);
+        setRunStatus(store, w.id, RUN_STATUS.failed);
+        const holder = await spawnReady(tmpdir());
+        expect(store.appendWorkerProcess(w.id, generation, holder.proc.pid!)).toBe(true);
+        setController(w.id, { pid: await deadPid(), startToken: '1' });
+        holders.push(holder); ids.push(w.id);
       }
-      // This case owns one small module: only its batched scan and retry cadence matter.
+      // This case owns one small module: only its retry cadence matters.
       const cadence = new WorkerOrphans({ createRunner: noRunners, home: testHome(), store, repoRoot: root, dataDir: join(root, '.ai/cezar'),
         semaphore: new WorkspaceSemaphore({ home: testHome() }), work: fixtureWork(root), disposed: () => false }, {
         holds: () => false, reapTerminalScratch: () => {},
         settleOrphanedWorkerExecution: (id, options) => cadence.settleOrphanedWorkerExecution(id, options),
       });
       cadence.orphanBackoff = { fastMs: 400, fastCount: 2, capMs: 1_600 };
-      const listings = () => vi.mocked(fs.readdirSync).mock.calls.filter(([path]) => path === '/proc').length;
       // The clock is fake too, so arming the two orphans one after the other cannot drift them apart
       // under load: recovery arms its orphans in one synchronous pass.
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
       try {
         for (const id of ids) cadence.armOrphanReprobe(id);
-        const before = listings();
         await vi.advanceTimersByTimeAsync(400);
-        expect(listings() - before).toBe(1);
         expect(ids.map(id => store.readWorkerExecution(id)?.phase)).toEqual(['starting', 'starting']);
         expect(ids.map(id => cadence.orphanDue.get(id)?.attempts)).toEqual([1, 1]);
         // Then 400, 800 and 1,600 ms: past the fast window it doubles to the cap.
         await vi.advanceTimersByTimeAsync(400 + 800 + 1_600);
-        expect(listings() - before).toBe(4);
         expect(ids.map(id => cadence.orphanDue.get(id)?.attempts)).toEqual([4, 4]);
         expect(cadence.orphanDue.get(ids[0]!)!.at - Date.now()).toBeGreaterThan(1_500);
         for (const holder of holders) { holder.proc.kill('SIGKILL'); await holder.exited; }
@@ -375,20 +253,6 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         expect(ids.map(id => store.readWorkerExecution(id)?.phase)).toEqual(['complete', 'complete']);
         expect(cadence.orphanDue.size).toBe(0);
       } finally { cadence.dispose(); vi.useRealTimers(); }
-    });
-
-    it('destroy waits out a scan-only survivor of a legacy generation instead of returning at once', async () => {
-      const { w, child, reopened, other, service } = await crashed('failed');
-      try {
-        rmSync(recordPath(w.id));
-        await other.recover();
-        expect(reopened.readWorkerExecution(w.id)).toMatchObject({ phase: 'starting' });
-        // The survivor exits on its own well inside destroy's deadline; nothing signals it.
-        const exit = setTimeout(() => child.proc.kill('SIGKILL'), 1_000);
-        try { expect(await service.destroyForHuman('reopened', w.id)).toMatchObject({ state: 'complete', remaining: [] }); }
-        finally { clearTimeout(exit); }
-        expect(existsSync(workspace(w).path)).toBe(false); expect(branchExists(workspace(w).branch)).toBe(false);
-      } finally { other.dispose(); reopened.flush(); }
     });
 
     it.runIf(process.platform === 'linux')('an unreadable process in the worktree is no evidence: destroy finalizes a legacy generation without signalling it (hearsay-tools/cezarion#889)', async () => {

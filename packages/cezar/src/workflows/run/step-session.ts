@@ -219,6 +219,7 @@ export class StepSession {
       session = startManagedSession(runner,
         {
           timings: this.context.timings,
+          scope: this.context.store.spawnScope(runId),
           // Skill body, then the run's extra prompt (POST override or config
           // default), then the handoff contract — every agent step.
           systemPrompt: composeSystemPrompt(launch.skillPrompt, sessionEvents.launchSystemTail(this.context, this.sharedHost, {

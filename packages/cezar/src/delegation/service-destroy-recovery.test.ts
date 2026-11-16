@@ -20,7 +20,7 @@ function serializedAfter(service: DelegationService, key: string): Promise<void>
   return serialized.call(service, key, async () => {});
 }
 
-describe('destroy backoff recovery', { timeout: 30_000 }, () => {
+describe('destroy backoff recovery', { timeout: 90_000 }, () => {
   useDestroyBackoffFixture();
 
   it.runIf(linux)("an explicit destroy cut off by project replacement leaves the replacement's retry armed", async () => {
@@ -31,7 +31,8 @@ describe('destroy backoff recovery', { timeout: 30_000 }, () => {
     const terminating = vi.spyOn(f.manager, 'awaitRunTermination').mockReturnValue(gate);
     const explicit = f.service.destroy(f.caller, { workerId });
     // The explicit attempt waits at the termination gate, after its worktree teardown.
-    await vi.waitFor(() => expect(terminating).toHaveBeenCalled(), { timeout: 10_000 });
+    // bound: every scheduled attempt runs in full (Git and evidence), so attempts are slow under host load; this only ends a hang.
+    await vi.waitFor(() => expect(terminating).toHaveBeenCalled(), { timeout: 30_000 });
     const replacementManager = createFixtureManager(f.store, f.root);
     const detachReplacement = f.service.registerProject({ home: testHome(), id: 'project', root: f.root, store: f.store, manager: replacementManager });
     const armed = () => [...workerCleanupInternals(f.service)].some(cleanup => cleanup.destroyRetryTimers.get('project')?.has(workerId));
@@ -51,7 +52,8 @@ describe('destroy backoff recovery', { timeout: 30_000 }, () => {
     await expect(f.service.destroy(f.caller, { workerId })).rejects.toThrow('transcript unreadable');
     expect(destroyOf(workerId)).toMatchObject({ phase: 'incomplete', remaining: ['worktree', 'branch'], error: 'transcript unreadable' });
     // Nothing a tick can observe explains a throw, so it is never skipped: the next tick completes.
-    await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 10_000 });
+    // bound: every scheduled attempt runs in full (Git and evidence), so attempts are slow under host load; this only ends a hang.
+    await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 30_000 });
   });
 
   it('a restart resumes the backoff from the persisted next attempt (guard)', async () => {
@@ -83,7 +85,8 @@ describe('destroy backoff recovery', { timeout: 30_000 }, () => {
     await cadence();
     const a = await settled(), b = await settled();
     for (const { workerId } of [a, b]) await f.service.destroy(f.caller, { workerId });
-    await vi.waitFor(() => { for (const { workerId } of [a, b]) expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(3); }, { timeout: 10_000 });
+    // bound: every scheduled attempt runs in full (Git and evidence), so attempts are slow under host load; this only ends a hang.
+    await vi.waitFor(() => { for (const { workerId } of [a, b]) expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(3); }, { timeout: 30_000 });
     const parent = f.store.getRun(f.parent.id)!;
     if (parent.delegation?.role !== 'root') throw Error('root');
     expect(parent.delegation.results?.map(entry => entry.workerId).sort()).toEqual([a.workerId, b.workerId].sort());
@@ -94,7 +97,8 @@ describe('destroy backoff recovery', { timeout: 30_000 }, () => {
     await cadence();
     const { workerId } = await settled();
     await f.service.destroy(f.caller, { workerId });
-    await vi.waitFor(() => expect(f.store.getRun(workerId)?.destroyRetry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
+    // bound: every scheduled attempt runs in full (Git and evidence), so attempts are slow under host load; this only ends a hang.
+    await vi.waitFor(() => expect(f.store.getRun(workerId)?.destroyRetry?.attempts).toBeGreaterThanOrEqual(2), { timeout: 30_000 });
     const run = f.store.getRun(workerId)!;
     if (run.delegation?.role !== 'worker') throw Error('worker');
     // The pre-hearsay-tools/cezarion#879 destroy keys exactly: a strict reader that has never heard of retries still parses it.
@@ -105,14 +109,14 @@ describe('destroy backoff recovery', { timeout: 30_000 }, () => {
 
   it.runIf(linux)('a tick cut off by project replacement writes nothing afterwards (guard)', async () => {
     await cadence();
-    const { workerId, holder } = await settled();
+    const { workerId } = await settled();
     await f.service.destroy(f.caller, { workerId });
     let release!: (value: boolean) => void;
     const gate = new Promise<boolean>(resolve => { release = resolve; });
     const termination = vi.spyOn(f.manager, 'awaitRunTermination').mockReturnValue(gate);
-    // The holder exits, so the next tick makes a full attempt; hold it inside termination.
-    await holder!.close();
-    await vi.waitFor(() => expect(termination).toHaveBeenCalled(), { timeout: 10_000 });
+    // The next tick makes a full attempt; hold it inside termination.
+    // bound: every scheduled attempt runs in full (Git and evidence), so attempts are slow under host load; this only ends a hang.
+    await vi.waitFor(() => expect(termination).toHaveBeenCalled(), { timeout: 30_000 });
     const before = structuredClone(destroyOf(workerId));
     const replacementManager = createFixtureManager(f.store, f.root);
     const detachReplacement = f.service.registerProject({ home: testHome(), id: 'project', root: f.root, store: f.store, manager: replacementManager });

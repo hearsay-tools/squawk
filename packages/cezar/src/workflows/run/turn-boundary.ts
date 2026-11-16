@@ -7,6 +7,10 @@ export type DoneRequest = Readonly<{ session: AgentSession; summary?: string }>;
 export type NextStep = Readonly<{ session: AgentSession; label: string }>;
 export type DoneClose = Readonly<{ via: 'cezar_done'; summary?: string }>;
 export type AckBoundary = Readonly<{ session: AgentSession; monitoring: boolean; humanGate?: boolean; nudgedLastTurn?: boolean; scheduleWakeup?: number | null | undefined }>;
+/** The last nudge Squawk sent or tried at a turn end of `session`, and how far it got
+ *  (hearsay-tools/squawk#2452). `turn-nudges.ts` records and retires it. `acknowledged` is the state
+ *  the nudge's acknowledgement bound records (hearsay-tools/squawk#2443). */
+export type Nudge = Readonly<{ session: AgentSession; cause: 'autonomous' | 'no-wait' | 'completion'; state: 'refused' | 'submitted' | 'acknowledged' }>;
 
 type Generation = { session: AgentSession | undefined };
 type TurnEndEvent =
@@ -32,11 +36,12 @@ type IdleExpiredEvent =
 /** Each phase stays at the write's old position. The captured generation is data, not a new gate. */
 type BoundaryMutationEvent = Generation & (
   | SessionOpenEvent | TurnEndEvent | InputSubmittedEvent | ReplyExpiredEvent | IdleExpiredEvent
-  | { kind: 'turn-started'; phase: 'clear-nudge' | 'clear-boundary' }
+  | { kind: 'turn-started'; phase: 'clear-boundary' }
   | { kind: 'done-request'; summary?: string }
   | { kind: 'done-step-consumed'; phase: 'completed' | 'consumed'; stepId?: string | undefined }
   | { kind: 'input-ack'; phase: 'wake-turn' }
-  | { kind: 'input-ready'; phase: 'clear-nudge' | 'retain-nudge' }
+  | { kind: 'nudge-fact'; phase: 'record'; nudge: Omit<Nudge, 'session'> }
+  | { kind: 'nudge-fact'; phase: 'retire' }
   | { kind: 'input-error'; phase: 'interrupt' }
   | { kind: 'held-input-expired'; phase: 'expire' }
   | { kind: 'unread-expired'; phase: 'restore-boundary' | 'restore-ack' }
@@ -96,7 +101,7 @@ export class BoundaryGroup {
   #idleClosed: boolean | undefined;
   #monitoringCapNoted: boolean | undefined;
   #autonomous: boolean | undefined;
-  #autonomousNudgePending: AgentSession | undefined;
+  #nudge: Nudge | undefined;
   #noWaitNudged: AgentSession | undefined;
   #incomingRequestRefused: boolean | undefined;
   #sentRequestRefused: boolean | undefined;
@@ -124,7 +129,7 @@ export class BoundaryGroup {
   get idleClosed(): boolean | undefined { return this.#idleClosed; }
   get monitoringCapNoted(): boolean | undefined { return this.#monitoringCapNoted; }
   get autonomous(): boolean | undefined { return this.#autonomous; }
-  get autonomousNudgePending(): AgentSession | undefined { return this.#autonomousNudgePending; }
+  get nudge(): Nudge | undefined { return this.#nudge; }
   get noWaitNudged(): AgentSession | undefined { return this.#noWaitNudged; }
   get incomingRequestRefused(): boolean | undefined { return this.#incomingRequestRefused; }
   get sentRequestRefused(): boolean | undefined { return this.#sentRequestRefused; }
@@ -173,7 +178,7 @@ export class BoundaryGroup {
   #inputSubmitted(event: Generation & InputSubmittedEvent): void {
     switch (event.phase) {
       case 'nudge-delivered': this.#noWaitNudged = event.session; return;
-      case 'resume': this.#autonomousNudgePending = undefined; this.#clearBoundary(); return;
+      case 'resume': this.#clearBoundary(); return;
       case 'human-delivered':
         this.#doneRequested = undefined;
         this.#noWaitNudged = undefined;
@@ -240,20 +245,19 @@ export class BoundaryGroup {
     this.#doneRequested = Object.freeze({ session: event.session!, ...(event.summary === undefined ? {} : { summary: event.summary }) });
   }
   #humanWaitOpened(event: Extract<BoundaryMutationEvent, { kind: 'human-wait-opened' }>): void {
-    if (event.phase === 'prepare') { this.#autonomousNudgePending = undefined; this.#pendingHumanAsk = true; }
+    if (event.phase === 'prepare') this.#pendingHumanAsk = true;
     else this.#pendingHumanAsk = event.pending;
   }
   #applyTurn(event: Exclude<BoundaryMutationEvent, SetupEvent>, effects: TurnBoundaryEffects): void {
     switch (event.kind) {
-      case 'turn-started':
-        if (event.phase === 'clear-nudge') this.#autonomousNudgePending = undefined;
-        else this.#clearBoundary();
-        return;
+      case 'turn-started': this.#clearBoundary(); return;
       case 'turn-end': this.#turnEnd(event); return;
       case 'done-request': this.#requestDone(event); return;
       case 'done-step-consumed': this.#completedStepId = event.phase === 'completed' ? event.stepId : undefined; return;
       case 'input-ack': this.#waitWakeTurn = event.session; return;
-      case 'input-ready': this.#autonomousNudgePending = event.phase === 'retain-nudge' ? event.session : undefined; return;
+      case 'nudge-fact':
+        this.#nudge = event.phase === 'record' && event.session ? Object.freeze({ session: event.session, ...event.nudge }) : undefined;
+        return;
       case 'input-error': effects.interruptSession!(event.session!); return;
       case 'held-input-expired': effects.expireHeldInput!(); return;
       case 'unread-expired':

@@ -62,7 +62,6 @@ import { type WorkerAccountBinding } from '../../delegation/execution-identity.t
 import type { DelegationProvisioner } from '../../delegation/provision.ts';
 import { replaceRunProcess } from '../../core/process-usage.ts';
 import { WorkerScratchCleanup } from '../../delegation/scratch-cleanup.ts';
-import { type CwdSource } from '../../delegation/process-liveness.ts';
 import type { RunnerId } from '../../core/agent-runner.ts';
 import { type PastedContent, type PersistedAttachment } from '../pasted-content.ts';
 import type { ContentBlock } from '../../core/agent-runner.ts';
@@ -151,7 +150,7 @@ export interface FacadeHost {
   agentEnvForStep(runId: string, backend: RunnerId, options?: { recordedProfileId?: string | undefined; stepId?: string | undefined; phase?: 'step-open' | 'continue' }): Promise<{ env: Record<string, string>; profileId: string; accountBinding?: WorkerAccountBinding | undefined }>;
   cockpit?: { origin: string; projectId: string } | undefined;
   settledTurnOutcome(runId: string, entry: 'turn-end' | 'ack' | 'ready' | 'gate' | 'reply-timer', outcome: TurnEndOutcome): TurnEndOutcome | undefined;
-  settleOrphanedWorkerExecution(runId: string, opts?: { admitting?: boolean; fresh?: boolean; cwds?: CwdSource }): boolean;
+  settleOrphanedWorkerExecution(runId: string, opts?: { admitting?: boolean; fresh?: boolean }): boolean;
   sendMessage(runId: string, content: PastedContent[], messageId?: string): boolean;
   canClaimInboxInput(runId: string, id: string): boolean;
   builtinSkills(): Skill[];

@@ -38,7 +38,7 @@ it('fresh and continued completion preserve receipt-before-boundary order at the
 function activityFixture() {
   const f = boundaryOrderFixture();
   transitionTurnBoundary(f.state, { kind: 'turn-end', phase: 'ui-completed', session: f.wire });
-  transitionTurnBoundary(f.state, { kind: 'input-ready', phase: 'retain-nudge', session: f.wire });
+  transitionTurnBoundary(f.state, { kind: 'nudge-fact', phase: 'record', session: f.wire, nudge: { cause: 'autonomous', state: 'refused' } });
   const host = unused<SessionHelperHost>('session host', {
     line: f.line,
     trackSubagentEvent: () => {
@@ -63,9 +63,9 @@ it('parent activity invalidates boundary after persisted UI and child tracking',
   const f = activityFixture();
   handleRunnerUiEvent(f.context, f.host, f.run.id, f.state, f.sink, { type: 'turn.started', turnId: 'turn' });
   expect(f.log).toEqual(['usage', 'persist-ui', 'children', 'reply-content',
-    'boundary:turn-started/clear-nudge', 'boundary:turn-started/clear-boundary']);
+    'boundary:nudge-fact/retire', 'boundary:turn-started/clear-boundary']);
   expect(f.state.boundary.atTurnBoundary).toBeUndefined();
-  expect(f.state.boundary.autonomousNudgePending).toBeUndefined();
+  expect(f.state.boundary.nudge).toBeUndefined();
 });
 
 it('child-only content persists and tracks the child without invalidating the parent boundary', () => {
@@ -74,5 +74,5 @@ it('child-only content persists and tracks the child without invalidating the pa
   handleRunnerUiEvent(f.context, f.host, f.run.id, f.state, f.sink, event);
   expect(f.log).toEqual(['usage', 'persist-ui', 'children', 'reply-content']);
   expect(f.state.boundary.atTurnBoundary).toBe(f.wire);
-  expect(f.state.boundary.autonomousNudgePending).toBe(f.wire);
+  expect(f.state.boundary.nudge).toEqual({ session: f.wire, cause: 'autonomous', state: 'refused' });
 });

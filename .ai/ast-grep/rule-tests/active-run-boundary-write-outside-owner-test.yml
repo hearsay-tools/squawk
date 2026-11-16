@@ -41,4 +41,7 @@ invalid:
   - 'const request = state.boundary.doneRequested; request.summary = "forged";'
   - 'function f(view: DoneRequest) { view.summary = "forged"; }'
   - 'state.boundary["parkAfterAck"].monitoring = true;'
+  - 'state.boundary.nudge = undefined;'
+  - 'const nudge = state.boundary.nudge; nudge.state = "refused";'
+  - 'function f(view: Nudge) { view.cause = "autonomous"; }'
   - 'function f(state: ActiveRun) { const { boundary: view } = state; Object.defineProperty(view, "pendingHumanAsk", { value: true }); }'
