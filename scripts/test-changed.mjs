@@ -78,7 +78,7 @@ const full = (reason, files = []) => ({ mode: 'full', reason, files, args: ['tes
 function rules(inputs, cwd) {
   let rule;
   try { rule = classify(inputs, cwd); }
-  catch (error) { return full(`Cannot read the declared test inputs: ${error.message}`); }
+  catch (error) { return full(`Cannot classify the changed paths: ${error.message}`); }
   if (rule.full) return full(rule.full);
   const tests = existingTests(cwd, rule.tests);
   if (!rule.sources.length && !tests.length) return { mode: 'skip', reason: 'No Vitest test reads the changed inputs', args: [] };

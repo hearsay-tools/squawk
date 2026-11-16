@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, matchesGlob } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { NO_VITEST_READER, VITEST_TEST, classify, configurationClosure, existingTests, readInputs } from './test-inputs.mjs';
+import { NO_VITEST_READER, VITEST_TEST, classify, configurationClosure, existingTests, importersOfDeleted, readInputs } from './test-inputs.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
@@ -52,6 +52,19 @@ test('source selects the import graph plus every scanner that reads it, deleted 
   // packages/cezar/src/gone.ts does not exist: a deletion is classified like any other path.
   assert.deepEqual(classify(['packages/cezar/src/gone.ts', 'packages/cezar/src/home.ts'], repo(t)),
     { sources: ['packages/cezar/src/gone.ts', 'packages/cezar/src/home.ts'], tests: [scanner] });
+});
+
+test('a deleted source selects the unchanged tests that still import or mock it', t => {
+  const cwd = fixture(t, {
+    'packages/cezar/src/a.test.ts': "import { gone } from './gone.js'\n",
+    'packages/web/src/b.test.tsx': "vi.mock('../../cezar/src/gone')\n",
+    'packages/cezar/src/c.test.ts': "import { gonezo } from './gonezo.js'\n",
+  });
+  execFileSync('git', ['init', '-q'], { cwd });
+  execFileSync('git', ['add', '.'], { cwd });
+  assert.deepEqual(importersOfDeleted(cwd, ['packages/cezar/src/gone.ts']), ['packages/cezar/src/a.test.ts', 'packages/web/src/b.test.tsx']);
+  assert.deepEqual(importersOfDeleted(cwd, []), []);
+  assert.deepEqual(classify(['packages/cezar/src/gone.ts'], cwd), { sources: ['packages/cezar/src/gone.ts'], tests: ['packages/cezar/src/a.test.ts', 'packages/web/src/b.test.tsx'] });
 });
 
 test('a snapshot selects its test and a lint baseline selects its declared readers', t => {

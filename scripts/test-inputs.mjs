@@ -3,6 +3,7 @@
 // snapshot (its test), an input a declared test reads (that test), an input no
 // Vitest test reads (nothing), or unmapped (full suite). Declared readers come
 // from squeal.config.json `inputs`, the table Squeal's own selection uses.
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, matchesGlob, posix } from 'node:path';
 
@@ -101,8 +102,27 @@ function classifyPath(path, { inputs, configuration }) {
   return { full: 'Unmapped input' };
 }
 
+// Vitest tests that still name a deleted module, as `/<name>.` or `/<name>'` in an
+// import or vi.mock path. Vitest's import graph has no node for a deleted file, so
+// its unchanged importers would otherwise drop out of the selection.
+export function importersOfDeleted(cwd, deleted) {
+  const patterns = deleted.flatMap(path => {
+    const name = posix.basename(path).replace(/\.[^.]+$/, '');
+    return ['.', "'", '"'].flatMap(end => ['-e', `/${name}${end}`]);
+  });
+  if (!patterns.length) return [];
+  try {
+    return execFileSync('git', ['grep', '-l', '-F', ...patterns, '--', 'packages/*/src/*.test.ts', 'packages/*/src/*.test.tsx'],
+      { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(Boolean);
+  } catch (error) {
+    if (error.status === 1) return [];
+    throw error;
+  }
+}
+
 // Classifies changed, non-docs paths. A path may be deleted: deleted source
-// still selects through its importers, which the same change must update.
+// selects its changed importers through the import graph and its unchanged ones
+// through importersOfDeleted.
 export function classify(paths, cwd) {
   const context = { inputs: readInputs(cwd), configuration: configurationClosure(cwd) };
   const sources = [];
@@ -115,6 +135,7 @@ export function classify(paths, cwd) {
     for (const test of rule.tests ?? []) tests.add(test);
   }
   if (full.length) return { full: describeFull(full) };
+  for (const test of importersOfDeleted(cwd, sources.filter(path => !existsSync(join(cwd, path))))) tests.add(test);
   return { sources, tests: [...tests].sort() };
 }
 
