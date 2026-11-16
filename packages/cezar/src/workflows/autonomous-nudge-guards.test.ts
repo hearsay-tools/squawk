@@ -316,6 +316,10 @@ describe('nudge bounds through a live runner', () => {
     expect(f.store.getRun(id)).toMatchObject({ status: RUN_STATUS.running, automaticWakes: 40 });
     expect(readPersistedRuns(join(f.repoRoot, '.ai/cezar')).find(record => record.id === id)?.automaticWakes).toBe(40);
     expect(session.sendMessage).not.toHaveBeenCalled();
+    // The retried nudge's turn starts, so its answer bound ends (hearsay-tools/squawk#3741); the
+    // refused nudge's idle bound must be gone too.
+    await vi.advanceTimersByTimeAsync(0);
+    emitUi({ type: 'turn.started', turnId: randomUUID() });
     await vi.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS + 1);
     expect(session.open).toBe(true);
     expect(session.end).not.toHaveBeenCalled();

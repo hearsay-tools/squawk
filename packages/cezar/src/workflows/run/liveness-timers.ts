@@ -15,6 +15,8 @@ export const LIVENESS_BOUNDS = {
   'nudge-reply': { scope: 'execution' },
   /** An autonomous nudge the harness never acknowledges closes through the idle path (`TurnNudges.armAutonomousNudgeBound`, hearsay-tools/squawk#2443). */
   'acknowledgement': { scope: 'execution' },
+  /** An acknowledged autonomous nudge that gets no turn or reply closes through the idle path (`TurnNudges.armAutonomousNudgeAnswerBound`, hearsay-tools/squawk#3741). Heartbeats do not move it. */
+  'nudge-answer': { scope: 'execution' },
   /** Accepted input the harness never reads (`InputDelivery.armUnreadInputTimer`, hearsay-tools/cezarion#505). */
   'unread-input': { scope: 'execution' },
   /** A turn end deferred on a held human follow-up (`InputDelivery.armHeldHumanInputTimer`, hearsay-tools/cezarion#486). */
