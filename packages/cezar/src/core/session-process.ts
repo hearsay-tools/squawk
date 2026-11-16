@@ -161,7 +161,12 @@ export function processGroupOf(pid: number): number | undefined {
   return identity(pid)?.pgrp;
 }
 
-/** Every live process in group `pgid`, by incarnation. Empty when the platform cannot enumerate. */
+/** Every live process in group `pgid`, by incarnation: zombies are not members (a zombie has no
+ * identity). Empty when the platform cannot enumerate. */
+export function processGroupMembers(pgid: number): Member[] {
+  return groupMembers(pgid);
+}
+
 function groupMembers(pgid: number): Member[] {
   if (process.platform === 'linux') {
     let names: string[];
