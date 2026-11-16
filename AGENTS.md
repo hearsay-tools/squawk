@@ -102,7 +102,9 @@ unless `worktreeSetup` already did.
 - Squeal runs the unit tests after each edit and the parity and worker tests at turn end.
   Read its verdicts; never run Vitest to learn a result. For a verdict now:
   `squeal run tests|run-loop <paths> --wait 60000`. A brief or parent that says "run the
-  focused tests" means this. Use `npm test -- <args>` (the pinned Vitest) only for a
+  focused tests" means this. For a failure's diff, stack and console output:
+  `squeal why '<check>' --include-logs` (names from `squeal failures <file>`).
+  Use `npm test -- <args>` (the pinned Vitest) only for a
   [red proof](docs/sdlc/regression-proof.md), debug output or with no daemon. Follow the
   [wait bound](docs/sdlc/ci.md#squeal-wait-bound).
 - CI owns the final gate and full-suite runs.
