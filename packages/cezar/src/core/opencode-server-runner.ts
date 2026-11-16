@@ -814,7 +814,7 @@ class OpencodeSession implements AgentSession {
     // path) releases them into the `serverOpen` check below.
     while (this.turnActive || this.followOn) await (this.turnActive ? this.turnFinished : this.followOn);
     if (origin === 'human' && generation === this.queuedPromptGeneration) this.humanPromptWaiters = Math.max(0, this.humanPromptWaiters - 1);
-    if (generation !== this.queuedPromptGeneration) return;
+    if (generation !== this.queuedPromptGeneration || this.closingAfterDone) return;
     // A queued prompt may have started waiting before the preceding idle armed
     // auto-end. Cancel at actual delivery time, not only at sendMessage time.
     this.cancelAutoEnd();

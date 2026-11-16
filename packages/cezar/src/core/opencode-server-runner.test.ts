@@ -2355,6 +2355,23 @@ describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 },
       });
     });
 
+    it('drops a human prompt queued behind the turn whose done closes the session', async () => {
+      let closeOnDone: (() => void) | undefined;
+      const onUiEvent = (event: UiEvent) => { if (event.type === 'turn.completed') closeOnDone?.(); };
+      await withSession({ onUiEvent }, async ({ child, events, mock, session }) => {
+        await waitFor(() => mock.promptPosts.length === 1);
+        expect(session.sendMessage([{ type: 'text', text: 'queued behind the turn' }])).toBe(true);
+        closeOnDone = () => session.endWhenQuiet!();
+        vi.useFakeTimers();
+        mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+        // bound: wait for the idle frame to end this turn before crossing the quiet close.
+        await vi.waitFor(() => expect(count(events, 'turn-end')).toBe(1), { timeout: 10_000 });
+        await vi.advanceTimersByTimeAsync(AUTO_END_DELAY_MS);
+        expect(child.killed).toBe(true);
+        expect(mock.promptPosts).toHaveLength(1);
+      });
+    });
+
     it('shows a request that arrives inside the delay, takes its answer, and ends after the turn it reopened', async () => {
       await withSession(configured, async ({ child, events, uiEvents, mock, session }) => {
         await idleTurnEnd(mock, events);
