@@ -24,7 +24,7 @@ describe('session provisioning', () => {
     session.revoke(); expect(f.credentials.authenticate(session.env.CEZ_DELEGATION_TOKEN!)).toBeUndefined();
   });
   it('rotates session identity, revokes on teardown, and never includes a token in instructions/events', () => {
-    expect(provision()!.instructions).toContain('--runner <claude|codex|opencode|pi|cursor|omp>');
+    expect(provision()!.instructions).toContain('--runner <claude|codex|opencode|pi|omp>');
     const first = provision()!; const old = f.credentials.authenticate(first.env.CEZ_DELEGATION_TOKEN!)!;
     expect(first.instructions).toContain('worker spawn'); expect(first.instructions).toContain('--effort'); expect(first.instructions).toContain('wait --request'); expect(first.instructions).not.toContain(first.env.CEZ_DELEGATION_TOKEN!);
     const second = provision()!;

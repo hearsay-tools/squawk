@@ -95,6 +95,9 @@ export function deriveAccountHolds(
   const deadline = new Set<string>();
   const inFlight = new Set<string>();
   for (const run of records) {
+    // A run saved on a removed runner holds no live account: its limit was that runner's
+    // (hearsay-tools/squawk#3715).
+    if (run.removedRunner !== undefined) continue;
     // A holding run always carries the runner it actually ran on, so the fallback is unused
     // here — it is spelled out rather than `!` so a future record shape degrades, not throws.
     const key = () => runAccountKey(withExecutionAccount(run), run.runner ?? 'claude');
