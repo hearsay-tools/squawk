@@ -334,6 +334,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     releaseSlot: () => modules.line.releaseSlot(),
     routeWorkerQuestion: id => modules.workerQuestions.routeWorkerQuestion(id),
     holdNativeAsk: (id, state) => modules.turnSettler.holdNativeAsk(id, state),
+    endParkHold: (id, state) => modules.subagentWaits.endParkHold(id, state),
   };
   modules.turnNudges = new TurnNudges(context, modules.humanWaits, modules.line, modules.completionGateHost, {
     active: host.active, move: (id, exit, patch) => host.move(id, exit, patch),
@@ -557,6 +558,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     workerExecutionStopped: id => host.workerExecutionStopped(id), executionBlockedByRootFinish: run => host.executionBlockedByRootFinish(run),
     hasUnansweredHumanAsk: id => host.hasUnansweredHumanAsk(id), countAutomaticWakes: (id, budget) => modules.wakeAdmission.automaticWakes(id, budget),
     recoveringRun: id => modules.recovery.recoveringRun(id), continueRun: (id, opts, defer) => host.continueRun(id, opts, defer),
+    endParkHold: (id, state) => modules.subagentWaits.endParkHold(id, state),
     parkForUser: (id, state, step) => modules.turnSettler.parkForUser(id, state, step), settleTurn: (id, state, entry, turn) => modules.turnSettler.settleTurn(id, state, entry, turn),
     boundaryTurn: (id, state, session, done) => modules.turnSettler.boundaryTurn(id, state, session, done),
     canAutoContinue: (id, state) => modules.turnNudges.canAutoContinue(id, state), armNoWaitNudgeReplyTimer: (id, state) => modules.turnNudges.armNoWaitNudgeReplyTimer(id, state),

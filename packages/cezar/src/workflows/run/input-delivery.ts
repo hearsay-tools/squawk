@@ -223,6 +223,8 @@ interface InputDeliveryHost {
   reparkWithoutWaits(id: string, state: ActiveRun): void; holdPeerWakesAtCap(id: string): void;
   reconcileWorkerWaits(): void; unreadInputGraceMs(): number;
   submitAgentInput(id: string, state: ActiveRun, content: ContentBlock[], inputs?: readonly string[], budget?: HumanAnswerBudget): boolean;
+  /** `SubagentWaits.endParkHold`: a park's hold for native subagents ends when the run leaves it. */
+  endParkHold(id: string, state: ActiveRun): void;
 }
 
 function unreadInputUnconfirmedNote(count: number): string {
@@ -688,6 +690,7 @@ export class InputDelivery {
     clearHeldHumanInputTimer(state);
     transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'resume', session: state.liveSession.session });
     clearIdleTimer(state);
+    this.host.endParkHold(runId, state);
     // A wake command can emit activity before its transport ACK. Keep its park
     // until the durable delivery checkpoint; admission already reserves capacity.
     const owing = this.context.store.getRun(runId);
