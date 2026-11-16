@@ -333,7 +333,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     supersedeOnRunnerResume: id => modules.subagentWaits.supersedeOnRunnerResume(id),
     releaseSlot: () => modules.line.releaseSlot(),
     routeWorkerQuestion: id => modules.workerQuestions.routeWorkerQuestion(id),
-    holdChildrenOrArmIdle: (id, state) => modules.turnSettler.holdChildrenOrArmIdle(id, state),
+    holdNativeAsk: (id, state) => modules.turnSettler.holdNativeAsk(id, state),
   };
   modules.turnNudges = new TurnNudges(context, modules.humanWaits, modules.line, modules.completionGateHost, {
     active: host.active, move: (id, exit, patch) => host.move(id, exit, patch),

@@ -112,6 +112,10 @@ export class SubagentWaits {
     // A child that runs again voids the grace: the next time none runs, a full grace starts.
     const live = liveSubagents(state);
     if (live) this.clearGrace(runId);
+    if (this.timers.has('subagent-ask-hold', runId)) {
+      if (live) this.boundNativeAskHold(runId, state);
+      else { this.clearAskHold(runId); this.releaseHeldPark(runId, state); }
+    }
     const wait = openSubagentWaitOf(this.context.store.getRun(runId));
     if (!wait) { if (!live) this.releaseHeldPark(runId, state); return; }
     // A grace starts only from a saved snapshot, so the settled wait names every child's end.
@@ -140,6 +144,26 @@ export class SubagentWaits {
   holdsLiveSubagents(runId: string): boolean {
     const state = this.host.active.get(runId);
     return !!state && liveSubagents(state) > 0;
+  }
+
+  /**
+   * A native ask holds its turn open beside running children (hearsay-tools/squawk#2701), so no turn
+   * end opens a subagent wait for them. The hold ends at the same deadline instead, which each
+   * child event moves: the park gives its slot back and arms its idle close.
+   */
+  boundNativeAskHold(runId: string, state: ActiveRun): void {
+    this.clearAskHold(runId);
+    const session = state.liveSession.session;
+    if (!state.boundary.heldForSubagents || !session) return;
+    this.timers.arm({ kind: 'subagent-ask-hold', runId, delayMs: this.deadlineMs, session: { armed: session, current: () => state.liveSession.session } }, () => {
+      // A later park at a turn end holds for its own children under its own subagent wait.
+      if (state.boundary.atTurnBoundary === session) return;
+      this.releaseHeldPark(runId, state);
+    });
+  }
+
+  private clearAskHold(runId: string): void {
+    this.timers.clear('subagent-ask-hold', runId);
   }
 
   /** The last child of a park for the user that held its slot for them ended, with no subagent wait
@@ -221,6 +245,7 @@ export class SubagentWaits {
    *  (a park held beside a question), the children still end in the transcript. */
   afterSessionGone(runId: string, state?: ActiveRun): void {
     this.clearGrace(runId);
+    this.clearAskHold(runId);
     if (this.context.disposed()) return;
     const wait = openSubagentWaitOf(this.context.store.getRun(runId));
     if (wait) this.interrupt(runId, wait.id);
@@ -284,5 +309,6 @@ export class SubagentWaits {
   dispose(): void {
     this.timers.clearKind('subagent-grace');
     this.timers.clearKind('subagent-retry');
+    this.timers.clearKind('subagent-ask-hold');
   }
 }
