@@ -1,1 +1,1 @@
-export const captures: Readonly<Record<string, unknown>>;
+export declare const captures: Readonly<Record<string, unknown>>;
