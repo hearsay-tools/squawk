@@ -1467,12 +1467,14 @@ jobs:
           persist-credentials: false
           fetch-depth: 100
 
-      # The selector reads the PR's own changes from this base (hearsay-tools/squawk#3728).
+      # The selector reads the PR's own changes from the base branch's current tip
+      # (hearsay-tools/squawk#3728). The event's base.sha can be older than the tested merge's
+      # base parent, and then main's later commits would count as PR changes.
       - name: Fetch PR selection base
         if: github.event_name == 'pull_request_target'
         env:
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-        run: git fetch --no-tags --depth=100 origin "$PR_BASE" || echo "Selection base unavailable; the selector runs every spec."
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: git fetch --no-tags --depth=100 origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF" || echo "Selection base unavailable; the selector runs every spec."
 
       - name: Set up pnpm
         if: (hashFiles('pnpm-lock.yaml') != '')
@@ -1511,10 +1513,10 @@ jobs:
         if: github.event_name == 'pull_request_target'
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -o pipefail
-          node scripts/e2e-affected.mjs --ci --base="$PR_BASE" --allow-skip --shard=${{ matrix.shard }}/8 2>&1 | tee "$RUNNER_TEMP/e2e.log"
+          node scripts/e2e-affected.mjs --ci --base="origin/$BASE_REF" --allow-skip --shard=${{ matrix.shard }}/8 2>&1 | tee "$RUNNER_TEMP/e2e.log"
           node .github/scripts/require-e2e-passed.cjs < "$RUNNER_TEMP/e2e.log"
 
       - name: Run cockpit browser E2E

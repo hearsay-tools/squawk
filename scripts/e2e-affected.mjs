@@ -288,17 +288,27 @@ export function classify(file, { map, graph, changes }) {
 /**
  * The specs a change selects, with the reason. A spec the map lists as incomplete runs whenever a
  * bundled source changed, because its evidence may be missing the file.
+ *
+ * `drift` holds the files main changed between the map's commit and the branch's fork point. Main
+ * may have added a call or an import that makes another spec run a file the branch edits, so when
+ * the branch touches mapped code, every drift file the map answers adds its specs. A drift file
+ * the map cannot answer adds nothing: a new path into the branch's code passes through an edit
+ * the map does answer.
  */
-export function selectSpecs({ files, map, graph, specFiles, changes }) {
+export function selectSpecs({ files, map, graph, specFiles, changes, drift }) {
   const lines = files.map(file => ({ file, ...classify(file, { map, graph, changes }) }));
   const full = lines.find(line => line.specs === null);
   if (full) return { lines, all: true, specs: specFiles, reason: `${full.file} needs every spec (${full.reason})` };
-  const chosen = new Set(lines.flatMap(line => line.specs));
-  if (lines.some(line => line.mapped)) for (const spec of map.incomplete) chosen.add(spec);
+  const mapped = lines.some(line => line.mapped);
+  const driftLines = mapped ? (drift?.files ?? []).filter(file => !files.includes(file))
+    .map(file => ({ file, ...classify(file, { map, graph, changes: drift.changes }) }))
+    .filter(line => line.mapped && line.specs !== null) : [];
+  const chosen = new Set([...lines, ...driftLines].flatMap(line => line.specs));
+  if (mapped) for (const spec of map.incomplete) chosen.add(spec);
   const specs = specFiles.filter(spec => chosen.has(spec));
   const reason = specs.length > 0 ? 'the specs the changed files reach'
     : files.length > 0 ? 'no changed file reaches a browser spec' : 'the branch changes no file';
-  return { lines, all: false, specs, reason };
+  return { lines, drift: driftLines, all: false, specs, reason };
 }
 
 // The command ----------------------------------------------------------------------------------
@@ -358,9 +368,10 @@ function minutes(root, specs) {
 
 function report(root, loaded, selection, specFiles) {
   if (loaded.map) console.log(`${LOG} Spec map: ${loaded.file}, commit ${loaded.map.commit.slice(0, 8)}, built ${loaded.map.createdAt}.`);
-  for (const { file, specs, reason } of selection.lines ?? []) {
-    const count = specs === null ? 'every spec' : `${specs.length} spec${specs.length === 1 ? '' : 's'}`;
-    console.log(`  ${file}: ${count} (${reason})`);
+  const count = specs => specs === null ? 'every spec' : `${specs.length} spec${specs.length === 1 ? '' : 's'}`;
+  for (const { file, specs, reason } of selection.lines ?? []) console.log(`  ${file}: ${count(specs)} (${reason})`);
+  for (const { file, specs, reason } of selection.drift ?? []) {
+    console.log(`  ${file}, changed on main after the map: ${count(specs)} (${reason})`);
   }
   if (selection.empty) {
     console.log(`${LOG} Selected 0 of ${specFiles.length} specs: ${selection.reason}.`);
@@ -381,14 +392,20 @@ function chooseSpecs(root, run, loaded, specFiles, base) {
   }
   const fork = forkPoint(run, base);
   if (!fork) return full(`HEAD has no merge-base with ${base ?? 'origin/main or main'}`);
+  const { map } = loaded;
   const files = changedFiles(run, fork);
-  const changes = new Map();
-  for (const file of files.filter(file => loaded.map.functions?.[file])) {
-    try {
-      changes.set(file, changedLines(run('git', ['diff', '--no-ext-diff', '--no-renames', '--unified=0', loaded.map.commit, '--', file])));
-    } catch { /* Missing line evidence selects every spec. */ }
-  }
-  return selectSpecs({ files, map: loaded.map, graph: referenceGraph(root, specFiles), specFiles, changes });
+  const lineChanges = (paths, target) => {
+    const changes = new Map();
+    for (const file of paths.filter(file => map.functions?.[file])) {
+      try {
+        changes.set(file, changedLines(run('git', ['diff', '--no-ext-diff', '--no-renames', '--unified=0', map.commit, ...target, '--', file])));
+      } catch { /* Missing line evidence selects every spec. */ }
+    }
+    return changes;
+  };
+  const driftFiles = run('git', ['diff', '--no-renames', '--name-only', '-z', map.commit, fork, '--']).split('\0').filter(Boolean);
+  const drift = { files: driftFiles, changes: lineChanges(driftFiles, [fork]) };
+  return selectSpecs({ files, map, graph: referenceGraph(root, specFiles), specFiles, changes: lineChanges(files, []), drift });
 }
 
 /** PR CI runs every spec for an empty selection until hearsay-tools/squawk#3727 decides otherwise. */

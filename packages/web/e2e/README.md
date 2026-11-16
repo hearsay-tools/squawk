@@ -348,7 +348,7 @@ under the new values. The watcher logs why it stopped a server to `.ai/qa/test-e
 
 ## Choosing specs for a change
 
-PR CI uses `scripts/e2e-affected.mjs --ci --base=<PR base SHA>` with `--shard=N/8`. It resolves the
+PR CI uses `scripts/e2e-affected.mjs --ci --base=origin/<PR base branch>` with `--shard=N/8`, after it fetches that branch's current tip. It resolves the
 complete selection before sharding and prints each changed file with its spec count and reason.
 A missing map, a missing merge-base or a selector error runs every spec. An empty selection
 reaches PR CI as empty, with its reason; PR CI still runs every spec for it
@@ -381,7 +381,10 @@ The selector downloads the newest successful map from `main` with `gh` into
 runs every spec. The changed files are the branch's own: the diff from its merge-base with `--base`
 (default `origin/main`, then `main`) to the working tree, untracked files included. Merges on `main`
 after the map's commit do not count (hearsay-tools/squawk#3728). Changed lines in mapped
-functions are diffed against the map's commit, where the map's line numbers hold.
+functions are diffed against the map's commit, where the map's line numbers hold. When the branch
+touches mapped code, the mapped files `main` changed between the map's commit and the fork point
+add their specs too: `main` may have added a call or import that runs the branch's code from
+another spec. The log lists them as `changed on main after the map`.
 
 | Change | Specs |
 | --- | --- |

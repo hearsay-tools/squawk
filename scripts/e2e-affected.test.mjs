@@ -237,6 +237,20 @@ test('selection: every spec when one file needs it, and incomplete specs wheneve
   assert.match(all.reason, /^packages\/cezar\/src\/index\.ts needs every spec \(server or CLI code/);
 });
 
+test('when the branch touches mapped code, mapped files main changed after the map add their specs', () => {
+  // hearsay-tools/squawk#3733 review: main adds new-util.ts after the map and imports it from App.tsx.
+  const map = sampleMap({ sources: { ...sampleMap().sources, 'packages/web/src/App.tsx': [2] } });
+  const drift = { files: ['packages/web/src/App.tsx', 'packages/web/src/lib/new-util.ts', 'packages/cezar/src/index.ts'], changes: new Map() };
+  const pick = files => selectSpecs({ files, map, graph, specFiles: map.specs, drift });
+  const result = pick(['packages/web/src/lib/new-util.ts', 'packages/web/src/routes/task-thread/markdown.tsx']);
+  assert.equal(result.all, false);
+  assert.deepEqual(result.specs, map.specs);
+  // The branch's own file is not drift; a drift file that needs every spec adds nothing.
+  assert.deepEqual(result.drift.map(line => line.file), ['packages/web/src/App.tsx']);
+  // Main's changes add nothing to a branch that touches no mapped code.
+  assert.deepEqual(pick(['.ai/ast-grep/rules/x.yml']).specs, []);
+});
+
 test('an empty selection stays empty and carries its reason', () => {
   const specFiles = sampleMap().specs;
   const pick = files => selectSpecs({ files, map: sampleMap(), graph, specFiles });
@@ -330,6 +344,25 @@ test('the branch’s own changes decide, whatever merged after the map’s commi
   assert.match(affected(dir, '--plan', mapFlag).stdout, /Selected 2 of 3 specs/);
 });
 
+test('a synthetic merge selects from the PR alone when --base is the base branch’s current tip', t => {
+  const { dir, put, map } = repository(t);
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
+  const mapFlag = map();
+  const oldBase = git('rev-parse', 'HEAD');
+  git('switch', '-qc', 'feature');
+  put('packages/web/src/routes/task-thread/markdown.tsx', 'export function Markdown() { return 1 }\n');
+  git('commit', '-qam', 'own change');
+  git('switch', '-q', 'main');
+  put('packages/cezar/src/server/server.ts', 'export const port = 1;\n');
+  git('add', '.'); git('commit', '-qm', 'later merge');
+  // GitHub's merge ref: base tip first, PR head second.
+  git('switch', '-q', '--detach', 'main');
+  git('merge', '-q', '--no-ff', '--no-edit', 'feature');
+  assert.match(affected(dir, '--plan', '--base=main', mapFlag).stdout, /Selected 2 of 3 specs/);
+  // The event's base SHA can be older than the merge's base parent: main's changes count again.
+  assert.match(affected(dir, '--plan', `--base=${oldBase}`, mapFlag).stdout, /server\.ts needs every spec/);
+});
+
 test('a base the branch shares no history with selects every spec, with the reason', t => {
   const { dir, map } = repository(t);
   const result = affected(dir, '--plan', '--base=no-such-ref', map());
@@ -408,10 +441,11 @@ exec "$REAL_NODE" "$MARKER_SCRIPT" "$@"
   chmodSync(join(temp.dir, 'node'), 0o755);
   const workflow = yaml.parse(readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8'));
   const run = workflow.jobs['cockpit-browser'].steps.find(step => step.id === 'e2e-pr').run;
-  assert.match(run, /--base="\$PR_BASE"/);
+  assert.match(run, /--base="origin\/\$BASE_REF"/);
+  execFileSync('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'], { cwd: dir });
   const result = spawnSync('bash', ['-eu', '-c', run.replace('${{ matrix.shard }}', '1')], {
     cwd: dir, encoding: 'utf8', env: { ...process.env, PATH: `${temp.dir}:${process.env.PATH}`,
-      RUNNER_TEMP: temp.dir, PR_BASE: 'main', REAL_NODE: process.execPath, SELECTOR_SCRIPT: script, MAP_FILE: mapFile,
+      RUNNER_TEMP: temp.dir, BASE_REF: 'main', REAL_NODE: process.execPath, SELECTOR_SCRIPT: script, MAP_FILE: mapFile,
       MARKER_SCRIPT: fileURLToPath(new URL('../.github/scripts/require-e2e-passed.cjs', import.meta.url)) },
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
