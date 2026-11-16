@@ -147,8 +147,9 @@ until the turn ends, except on pi (D6).
 "The runner's list" here is the list as the running session sees it. Only Codex shows a skill
 that was added after the session started. A pi process, an omp session and an OpenCode server
 keep the list they started with, and Claude adds a skill only when its skills folder already
-existed. On those four a fresh list would name a skill that the session does not know, and the
-trigger would reach the model as plain text with no error. So Squawk keeps the list it read
+existed. On those four a fresh list would name a skill that the session does not know. On
+Claude, pi and omp the trigger would then reach the model as plain text with no error; on
+OpenCode the command request would fail with HTTP 500. So Squawk keeps the list it read
 when the session's runner process started, and checks a later trigger against that list. On
 Codex it reads the list again. A name that only a fresh list holds is not triggered: Squawk
 passes the text and adds a note that the skill is available after the next Continue.
