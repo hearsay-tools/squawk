@@ -83,13 +83,58 @@ test('a failed run that turns successful during the final read is a changed sour
   h.state.onRead = () => { if (++reads === 2) h.state.run.conclusion = 'success'; };
   assert.deepEqual(await queueCiProof(h.options), { verified: false, reason: 'source-changed' });
 });
-test('pending queue completion gets a bounded wait and then full fallback', async () => {
-  const h = fixture(); h.state.run.status = 'in_progress'; h.state.run.conclusion = null;
+// A queue run still running, as GitHub reads it after verify passed: the Squeal jobs run on.
+function running(state) {
+  Object.assign(state.run, { status: 'in_progress', conclusion: null });
+  state.jobs.push({ id: 900, name: 'Export Squeal shared results', status: 'completed', conclusion: 'success' },
+    { id: 901, name: 'Publish Squeal shared results', status: 'in_progress', conclusion: null });
+}
+const gateJob = (state, name) => state.jobs.find(job => job.name === name);
+test('a running queue run whose gate passed is proof while jobs outside the gate still run', async () => {
+  const h = fixture(); running(h.state);
+  const proof = await queueCiProof(h.options);
+  assert.equal(proof.verified, true); assert.equal(proof.runId, 20); assert.equal(proof.suites, 'ran');
+  assert.equal(h.state.now, 0, 'no wait for the Squeal jobs');
+});
+test('a running queue run whose gate is still running gets a bounded wait and then full fallback', async () => {
+  const h = fixture(); running(h.state);
+  Object.assign(gateJob(h.state, 'Unit, build, E2E, and package'), { status: 'in_progress', conclusion: null });
   assert.deepEqual(await queueCiProof(h.options), { verified: false, reason: 'source-pending' }); assert.equal(h.state.now, 60000);
 });
+for (const [label, change] of Object.entries({
+  'a failed gate job': s => { gateJob(s, 'Vitest shard 3/8').conclusion = 'failure'; },
+  'a missing gate job': s => { s.jobs = s.jobs.filter(j => j.name !== 'Validate reviewed queue entry'); },
+  'a set conclusion': s => { s.run.conclusion = 'failure'; },
+})) test(`a running queue run with ${label} is never proof`, async () => {
+  const h = fixture(); running(h.state); change(h.state);
+  assert.deepEqual(await queueCiProof(h.options), { verified: false, reason: 'source-pending' });
+});
+test('a running queue run whose gate passes during the bounded wait is proof', async () => {
+  const h = fixture(); running(h.state); const verify = gateJob(h.state, 'Unit, build, E2E, and package');
+  Object.assign(verify, { status: 'in_progress', conclusion: null });
+  h.state.onSleep = () => Object.assign(verify, { status: 'completed', conclusion: 'success' });
+  const proof = await queueCiProof(h.options);
+  assert.equal(proof.verified, true); assert.equal(h.state.now, 10000);
+});
+test('a new attempt of a running queue run during the final read invalidates its proof', async () => {
+  const h = fixture(); running(h.state); let reads = 0;
+  h.state.onRead = () => { if (++reads === 2) h.state.run.run_attempt++; };
+  assert.deepEqual(await queueCiProof(h.options), { verified: false, reason: 'source-changed' });
+});
+for (const [conclusion, verified] of [['success', true], ['failure', true], ['cancelled', false]]) {
+  test(`a running queue run that completes as ${conclusion} during the final read ${verified ? 'stays' : 'is not'} proof`, async () => {
+    const h = fixture(); running(h.state); let reads = 0;
+    h.state.onRead = () => { if (++reads === 2) Object.assign(h.state.run, { status: 'completed', conclusion }); };
+    assert.equal((await queueCiProof(h.options)).verified, verified);
+  });
+}
 test('completion during the short metadata wait is accepted', async () => {
   const h = fixture(); h.state.run.status = 'in_progress'; h.state.run.conclusion = null;
-  h.state.onSleep = () => Object.assign(h.state.run, { status: 'completed', conclusion: 'success' });
+  Object.assign(gateJob(h.state, 'Typecheck'), { status: 'in_progress', conclusion: null });
+  h.state.onSleep = () => {
+    Object.assign(h.state.run, { status: 'completed', conclusion: 'success' });
+    Object.assign(gateJob(h.state, 'Typecheck'), { status: 'completed', conclusion: 'success' });
+  };
   assert.equal((await queueCiProof(h.options)).verified, true);
 });
 test('a new attempt while jobs are read invalidates old proof', async () => {

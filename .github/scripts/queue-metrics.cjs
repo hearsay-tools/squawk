@@ -378,10 +378,15 @@ function proofReason(push) {
   if (proof.conclusion !== 'success') return `proof-job-${proof.conclusion}`;
   const { queueJobs } = push.evidence ?? {};
   if (!push.evidence?.queueRun) return 'no-exact-queue-run';
-  const queueRun = attemptAt(push.evidence.queueRun, push.evidence.attempts, Date.parse(proof.completed_at));
-  if (queueRun.status !== 'completed' || Date.parse(queueRun.updated_at) > Date.parse(proof.completed_at)) return 'source-pending';
-  if (!PROOF_CONCLUSIONS.includes(queueRun.conclusion)) return 'source-not-successful';
+  const at = Date.parse(proof.completed_at);
+  const queueRun = attemptAt(push.evidence.queueRun, push.evidence.attempts, at);
   const attempt = queueJobs.filter(job => job.run_attempt === queueRun.run_attempt);
+  // A run still running at proof time is proof once its gate is complete.
+  if (queueRun.status !== 'completed' || Date.parse(queueRun.updated_at) > at) {
+    const doneBy = attempt.filter(job => Date.parse(job.completed_at) <= at);
+    return successfulJobs(doneBy, rosterOf(attempt)) ? 'unexplained' : 'source-pending';
+  }
+  if (!PROOF_CONCLUSIONS.includes(queueRun.conclusion)) return 'source-not-successful';
   if (!successfulJobs(attempt, rosterOf(attempt))) return 'incomplete-gate';
   return 'unexplained';
 }

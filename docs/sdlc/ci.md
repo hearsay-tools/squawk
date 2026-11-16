@@ -1209,6 +1209,16 @@ Each must appear once and succeed. The run's conclusion may be `success` or
 `failure`: a failed job outside this list, such as `Export Squeal shared results`,
 does not cost `main` a full run (hearsay-tools/squawk#3701). A `cancelled` or other
 conclusion is not proof.
+The queue run does not have to be complete. The merge, and so the `main` push run,
+starts when `Unit, build, E2E, and package` passes, but `Export Squeal shared results`
+and `Publish Squeal shared results` end 1.5 to 2.5 minutes later. While the run is
+still running (no conclusion yet), the probe reads its jobs on each poll and reuses it
+as soon as every job in the list above has succeeded (hearsay-tools/squawk#3754). It does not wait
+for jobs outside the list. A failed, missing or running gate job keeps the probe
+polling until its 60 seconds end, and then `main` runs its full verification. The
+final reread requires the same run and the same attempt: a new attempt invalidates the
+proof. A run that completes between the reads stays proof only with a `success` or
+`failure` conclusion.
 A queue run of a docs-only entry lists each skipped suite once, under its unexpanded
 name (`Vitest shard ${{ matrix.shard }}/8`). The probe accepts those two skipped jobs in
 place of the sixteen shards only when the pushed commit is docs-only or infra-only by
