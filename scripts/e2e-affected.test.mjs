@@ -316,8 +316,14 @@ test('CI runs a shorter selection with shard flags and runs nothing for every sp
   put('packages/web/vite.config.ts', 'export default {}\n');
   const every = affected(dir, '--ci', '--shard=2/8', mapFlag);
   git('clean', '-qf', 'packages/web/vite.config.ts');
+  // A mapped source that every spec ran selects the full list without the every-spec flag.
+  put('packages/api-client/src/client.ts', 'export const client = 1\n');
+  const mappedEvery = affected(dir, '--ci', '--shard=2/8', mapFlag);
+  git('clean', '-qf', 'packages/api-client');
+  assert.match(mappedEvery.stdout, /client\.ts: 3 specs/);
   for (const [result, reason] of [...cases.map(([flag, reason]) => [affected(dir, '--ci', '--shard=2/8', flag), reason]),
-    [every, /Selected 3 of 3 specs[^]*PR CI runs no browser spec: the selector chose every spec\./]]) {
+    [every, /Selected 3 of 3 specs[^]*PR CI runs no browser spec: the selector chose every spec\./],
+    [mappedEvery, /Selected 3 of 3 specs[^]*PR CI runs no browser spec: the selector chose every spec\./]]) {
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stdout, reason);
     assert.match(result.stdout, /^TEST_E2E_STATUS=not-selected$/m);

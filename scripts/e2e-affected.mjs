@@ -375,7 +375,7 @@ function runLocal(root, options, chosen, loaded, specFiles) {
 
 // PR CI: a shorter selection runs; every other answer runs nothing and passes with its reason.
 function runCi(root, options, select, specFiles, loaded) {
-  const { chosen, skip } = browserFiles(select);
+  const { chosen, skip } = browserFiles(select, specFiles.length);
   if (chosen) report(root, loaded() ?? {}, chosen, specFiles, true);
   if (skip) {
     console.log(`${LOG} PR CI runs no browser spec: ${skip}.`);

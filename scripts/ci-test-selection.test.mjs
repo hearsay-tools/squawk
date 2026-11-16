@@ -27,11 +27,13 @@ test('shared input, missing base and an unexpected skip select full without an i
 });
 
 test('CI browser selection runs only a shorter list and gives the reason for every other answer', () => {
-  assert.deepEqual(browserFiles(() => { throw new Error('missing base'); }), { skip: 'the selector failed: missing base' });
-  const all = { all: true, specs: ['a'] };
-  assert.deepEqual(browserFiles(() => all), { chosen: all, skip: 'the selector chose every spec' });
+  assert.deepEqual(browserFiles(() => { throw new Error('missing base'); }, 2), { skip: 'the selector failed: missing base' });
+  const all = { all: true, specs: ['a', 'b'] };
+  assert.deepEqual(browserFiles(() => all, 2), { chosen: all, skip: 'the selector chose every spec' });
+  const mappedAll = { all: false, specs: ['a', 'b'] };
+  assert.deepEqual(browserFiles(() => mappedAll, 2), { chosen: mappedAll, skip: 'the selector chose every spec' });
   const none = { all: false, specs: [] };
-  assert.deepEqual(browserFiles(() => none), { chosen: none, skip: 'the selector chose no spec' });
+  assert.deepEqual(browserFiles(() => none, 2), { chosen: none, skip: 'the selector chose no spec' });
   const short = { all: false, specs: ['packages/web/e2e/smoke.e2e.ts'] };
-  assert.deepEqual(browserFiles(() => short), { chosen: short });
+  assert.deepEqual(browserFiles(() => short, 2), { chosen: short });
 });
