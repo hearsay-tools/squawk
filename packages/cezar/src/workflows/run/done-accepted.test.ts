@@ -1,16 +1,22 @@
 import { randomUUID } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { AgentInput, Wait } from '@open-mercato/cezar-contract';
 import { agentInputSchema, workerOutcomeSchema } from '@open-mercato/cezar-contract/delegation';
-import { makeHumanWait, makePeerWait, makePrWait, makeProcessWait, makeRunEvent, makeRunRecord, makeSubagentWait, makeTimerWait, makeWorkerRequestWait, makeWorkerWait, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { makeHumanWait, makePeerWait, makePrWait, makeProcessWait, makeRunEvent, makeRunRecord, makeSubagentWait, makeTimerWait, makeWorkerRequestWait, makeWorkerWait, RUN_STATUS, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentSession } from '../../core/agent-runner.ts';
 import { createActiveRun } from '../active-run.ts';
-import { acceptedDoneDelivery, owedAtDone, reconsideredBy } from './done-accepted.ts';
+import { decodeRunRow } from '../../runs/store.ts';
+import { acceptedDoneDelivery, factsAtDone, owedAtDone, reconsideredBy } from './done-accepted.ts';
 import { acceptedDoneHolds } from './turn-settler.ts';
 import { InputFlight } from './input-delivery.ts';
+import { boundaryInputFixture } from './boundary-input-order.testkit.ts';
+import { transitionTurnBoundary } from './turn-boundary.ts';
 
 const resolved = <W extends Wait>(wait: W): W => ({ ...wait, phase: WAIT_PHASE.resolved, resolvedAt: new Date().toISOString() });
 const input = (over: Partial<AgentInput> = {}): AgentInput => ({ id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId: randomUUID(), text: 'input', createdAt: new Date().toISOString(), ...over });
+const timerAt = makeTimerWait({ registeredAt: '2026-11-16T10:00:00.000Z' });
+const prAt = makePrWait({ registeredAt: '2026-11-16T10:00:00.000Z' });
+const askedAt = makeHumanWait({ registeredAt: '2026-11-16T10:00:00.000Z' });
 const conversation = (kind: 'request' | 'progress' | 'follow-up' | 'reply', relationship?: 'peer') =>
   ({ senderRunId: randomUUID(), recipientRunId: randomUUID(), kind, ...(relationship ? { relationship } : {}) });
 
@@ -94,7 +100,7 @@ describe('input owed at cezar_done (hearsay-tools/squawk#2587)', () => {
     const opener = input({ deliveredAt: new Date().toISOString(), awaitingRead: true });
     const state = live('observable');
     state.inputState.recordUnreadInput(opener.id);
-    state.inputState.openTurnWith([opener.id]);
+    state.inputState.markTurnOpeners([opener.id], true);
     expect(owedAtDone(makeRunRecord({ agentInputs: [opener] }), state)).toEqual([]);
   });
 
@@ -121,32 +127,51 @@ describe('input owed at cezar_done (hearsay-tools/squawk#2587)', () => {
 });
 
 describe('whether an accepted done still holds at the turn end (hearsay-tools/squawk#2587)', () => {
-  const at = '2026-11-16T10:00:00.000Z', before = '2026-11-16T09:59:59.000Z', after = '2026-11-16T10:00:01.000Z';
-  const done = { session: 'generation', at, seq: 10 };
-  const holds = (over: Partial<Parameters<typeof makeRunRecord>[0]> = {}, events = [makeRunEvent({ type: 'user-message', seq: 9 })], turn = {}) =>
-    acceptedDoneHolds(makeRunRecord({ doneAccepted: done, ...over }), events, turn);
+  // Every fact is ordered by identity against what the run held at acceptance, never by clock
+  // time: these cases put everything in the done's own millisecond.
+  const at = '2026-11-16T10:00:00.000Z';
+  type Row = Partial<Parameters<typeof makeRunRecord>[0]>;
+  /** The run at the turn end, after `then` was the run when the done was accepted. */
+  const decide = (then: Row, now: Row, events = [makeRunEvent({ type: 'user-message', seq: 9 })], turn = {}) => {
+    const done = { session: 'generation', at, seq: 10, ...factsAtDone(makeRunRecord(then)) };
+    return acceptedDoneHolds(makeRunRecord({ ...then, ...now, doneAccepted: done }), events, turn);
+  };
+  const holds = (now: Row = {}, events?: ReturnType<typeof makeRunEvent>[], turn = {}) => decide({}, now, events, turn);
   const kept = { holds: true };
   const withdrawn = (reason: string) => ({ holds: false, reason, byInput: expect.any(Boolean) });
+  const earlier = input({ createdAt: at, deliveredAt: at, consumedAt: at });
+  const pr = (outcome: 'failed' | 'passed') => ({ outcome, headSha: 'a'.repeat(40), observedAt: at, checks: [], totalChecks: 1, truncated: false });
 
-  it.each<[string, Partial<Parameters<typeof makeRunRecord>[0]>, { holds: boolean; reason?: string }]>([
-    ['nothing after the done keeps it', {}, kept],
-    ['a progress note after the done keeps it', { agentInputs: [input({ createdAt: after, conversation: conversation('progress', 'peer') })] }, kept],
+  it.each<[string, Row, Row, { holds: boolean; reason?: string }]>([
+    ['nothing after the done keeps it', {}, {}, kept],
+    ['a progress note after the done keeps it', { agentInputs: [earlier] }, { agentInputs: [earlier, input({ createdAt: at, conversation: conversation('progress', 'peer') })] }, kept],
     // B2: a peer follow-up the message inbox acknowledged.
-    ['a peer follow-up read through the inbox withdraws it', { agentInputs: [input({ createdAt: after, deliveredAt: after, conversation: conversation('follow-up', 'peer') })] }, withdrawn('a new peer request')],
+    ['a peer follow-up read through the inbox withdraws it', { agentInputs: [earlier] }, { agentInputs: [earlier, input({ createdAt: at, deliveredAt: at, conversation: conversation('follow-up', 'peer') })] }, withdrawn('a new peer request')],
     // B3: the opening input of a continuation that resumes a stopped worker.
-    ['an agent request that opens a continuation withdraws it', { agentInputs: [input({ createdAt: after, conversation: conversation('request') })] }, withdrawn('a new agent request')],
-    ['the parent\'s steer withdraws it', { agentInputs: [input({ createdAt: after })] }, withdrawn('a new instruction from the parent')],
-    ['an instruction from before the done keeps it', { agentInputs: [input({ createdAt: before, deliveredAt: before, consumedAt: before })] }, kept],
+    ['an agent request that opens a continuation withdraws it', {}, { agentInputs: [input({ createdAt: at, conversation: conversation('request') })] }, withdrawn('a new agent request')],
+    ['the parent\'s steer in the done\'s millisecond withdraws it', { agentInputs: [earlier] }, { agentInputs: [earlier, input({ createdAt: at })] }, withdrawn('a new instruction from the parent')],
+    ['an instruction from before the done keeps it', { agentInputs: [{ ...earlier, conversation: conversation('request') }] }, {}, kept],
     // B4: a peer wait from `hsq message wait --peer`, outside the tool.
-    ['a peer wait registered through the CLI withdraws it', { waits: [makePeerWait({ registeredAt: after, via: WAIT_VIA['cez-message-wait'] })] }, withdrawn('the agent registered a wait')],
+    ['a peer wait registered through the CLI withdraws it', {}, { waits: [makePeerWait({ registeredAt: at, via: WAIT_VIA['cez-message-wait'] })] }, withdrawn('the agent registered a wait')],
+    // Round 2, B2: a wait registered in the done's own millisecond.
+    ['a wait registered in the done\'s millisecond withdraws it', {}, { waits: [makeTimerWait({ registeredAt: at, via: WAIT_VIA.cezar_wait })] }, withdrawn('the agent registered a wait')],
     // D2: a replayed registration registers nothing new.
-    ['a wait registered before the done keeps it', { waits: [makeTimerWait({ registeredAt: before })] }, kept],
-    ['the completion wait keeps it', { waits: [makeWorkerWait({ registeredAt: after, source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion })] }, kept],
-    ['a question asked after the done withdraws it', { waits: [makeHumanWait({ registeredAt: after })] }, withdrawn('the agent asked the user')],
-    ['a failed result after the done withdraws it', { waits: [resolved({ ...makePrWait({ registeredAt: before }), resolvedAt: after, result: { outcome: 'failed', headSha: 'a'.repeat(40), observedAt: after, checks: [], totalChecks: 1, truncated: false } })] }, withdrawn('a failed pr wait result')],
-    ['a passed result after the done keeps it', { waits: [resolved({ ...makePrWait({ registeredAt: before }), resolvedAt: after, result: { outcome: 'passed', headSha: 'a'.repeat(40), observedAt: after, checks: [], totalChecks: 1, truncated: false } })] }, kept],
-  ])('%s', (_name, over, expected) => {
-    expect(holds(over)).toEqual(expected);
+    ['a wait registered before the done keeps it, also in its millisecond', { waits: [timerAt] }, { waits: [timerAt] }, kept],
+    ['the completion wait keeps it', {}, { waits: [makeWorkerWait({ registeredAt: at, source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion })] }, kept],
+    ['a question asked after the done withdraws it', {}, { waits: [makeHumanWait({ registeredAt: at })] }, withdrawn('the agent asked the user')],
+    ['a failed result of a wait open at the done withdraws it', { waits: [prAt] }, { waits: [{ ...resolved({ ...prAt, result: pr('failed') }), resolvedAt: at }] }, withdrawn('a failed pr wait result')],
+    ['a passed result after the done keeps it', { waits: [prAt] }, { waits: [{ ...resolved({ ...prAt, result: pr('passed') }), resolvedAt: at }] }, kept],
+    // The question this turn's opening answered is settled at its turn end, after the done.
+    ['an answered question settled after the done keeps it', { waits: [askedAt] }, { waits: [], lastWaits: [{ ...askedAt, phase: WAIT_PHASE.delivered, deliveredAt: at }] }, kept],
+    ['a failed result settled before the done keeps it', { lastWaits: [{ ...prAt, phase: WAIT_PHASE.delivered, resolvedAt: at, result: pr('failed') }] }, {}, kept],
+  ])('%s', (_name, then, now, expected) => {
+    expect(decide(then, now)).toEqual(expected);
+  });
+
+  // The review's probe: a wait registered in the done's own millisecond is still after it.
+  it('a wait registered in the same millisecond as the done, unknown to it, withdraws it', () => {
+    const done = { session: 'generation', at, seq: 10, openWaits: [], settledWaits: [] };
+    expect(acceptedDoneHolds(makeRunRecord({ doneAccepted: done, waits: [makeTimerWait({ registeredAt: at, via: WAIT_VIA.cezar_wait })] }), [])).toEqual(withdrawn('the agent registered a wait'));
   });
 
   it('a human message recorded after the done withdraws it; one before keeps it', () => {
@@ -164,10 +189,57 @@ describe('whether an accepted done still holds at the turn end (hearsay-tools/sq
 
   // B5: the done's free delivery turn is granted once; later deliveries charge as wakes do.
   it('grants one free delivery turn per accepted done', () => {
-    const result = resolved(makeTimerWait({ registeredAt: before }));
+    const result = resolved(timerAt);
+    const done = { session: 'generation', at, seq: 10, ...factsAtDone(makeRunRecord({ waits: [timerAt] })) };
     const run = makeRunRecord({ doneAccepted: done, waits: [result] });
     expect(acceptedDoneDelivery(run, [], [result.id])).toBe('free');
     expect(acceptedDoneDelivery({ ...run, doneAccepted: { ...done, freeTurn: true } }, [], [result.id])).toBe('kept');
     expect(acceptedDoneDelivery(makeRunRecord({ waits: [result] }), [], [result.id])).toBeUndefined();
+  });
+});
+
+describe('the input that opened this turn (hearsay-tools/squawk#2587)', () => {
+  // Round 2, B1: only a submission the transport accepted at a boundary opens the turn after it.
+  // A refused one, and one retried after another turn started, is not this turn's own.
+  it('owes an input refused at a boundary and retried mid-turn after a human turn started', async () => {
+    const f = boundaryInputFixture();
+    f.state.inputState.declareDelivery({ mode: 'steer', consumption: 'observable', acknowledgement: 'response', humanInputAtTurnEnd: 'never-held', via: 'steer' });
+    f.state.inputState.resetUnreadInputs();
+    f.state.inputState.resetEarlyConsumption();
+    const retried = input({ parentRunId: f.run.id });
+    f.store.commitAgentInputs(f.run.id, [retried]);
+    transitionTurnBoundary(f.state, { kind: 'turn-end', phase: 'ui-completed', session: f.wire });
+    vi.mocked(f.wire.sendAgentMessage).mockReturnValueOnce(false);
+    expect(f.delivery.submitAgentInput(f.run.id, f.state, [{ type: 'text', text: 'retried' }], [retried.id])).toBe(false);
+    expect(f.delivery.sendMessage(f.run.id, [{ type: 'text', text: 'A human turn' }])).toBe(true);
+    transitionTurnBoundary(f.state, { kind: 'turn-started', phase: 'clear-boundary', session: f.wire });
+    expect(f.delivery.submitAgentInput(f.run.id, f.state, [{ type: 'text', text: 'retried' }], [retried.id])).toBe(true);
+    await f.state.inputState.agentInputFlight?.settled;
+    expect(owedAtDone(f.store.getRun(f.run.id)!, f.state)).toEqual([{ kind: 'unread', input_id: retried.id }]);
+  });
+});
+
+describe('a done saved before its identity facts (hearsay-tools/squawk#2587)', () => {
+  // hearsay-tools/squawk#3708 saved `{ session, at, seq, summary? }`. The upgrade reads what the run
+  // held at `at`, as that build decided, so the done survives and still holds.
+  const at = '2026-11-16T10:00:00.000Z', before = '2026-11-16T09:59:59.000Z', after = '2026-11-16T10:00:01.000Z';
+  const known = makePrWait({ registeredAt: before });
+  const earlier = input({ createdAt: before, deliveredAt: before, consumedAt: before });
+  const saved = (over: Partial<Parameters<typeof makeRunRecord>[0]> = {}) => decodeRunRow(JSON.stringify({
+    ...makeRunRecord({ status: RUN_STATUS.waiting, waits: [known], agentInputs: [earlier], ...over }),
+    doneAccepted: { session: 'generation', at, seq: 10, summary: 'shipped' },
+  }))!.run;
+
+  it('reads the waits and the last input it held at the done, and the done still holds', () => {
+    const run = saved();
+    expect(run.doneAccepted).toEqual({ session: 'generation', at, seq: 10, summary: 'shipped', openWaits: [known.id], settledWaits: [], lastInput: earlier.id });
+    expect(acceptedDoneHolds(run, [])).toEqual({ holds: true });
+  });
+
+  it('reads a wait registered after the done as new to it', () => {
+    const later = makePrWait({ registeredAt: after, via: WAIT_VIA.cezar_wait });
+    const run = saved({ waits: [known, later] });
+    expect(run.doneAccepted?.openWaits).toEqual([known.id]);
+    expect(acceptedDoneHolds(run, [])).toEqual({ holds: false, reason: 'the agent registered a wait', byInput: false });
   });
 });

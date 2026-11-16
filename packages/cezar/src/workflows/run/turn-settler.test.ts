@@ -85,7 +85,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 describe('turn settler entry orders', () => {
   it('turn-end consumes done before resetting nudges, saves boundary before settlement, then clears resume attempts', () => {
     const f = fixture();
-    f.run.doneAccepted = { session: 'generation', at: new Date().toISOString(), seq: 0 };
+    f.run.doneAccepted = { session: 'generation', at: new Date().toISOString(), seq: 0, openWaits: [], settledWaits: [] };
     transitionTurnBoundary(f.state, { kind: 'input-submitted', phase: 'nudge-delivered', session: f.session });
     transitionTurnBoundary(f.state, { kind: 'completion-refusal', phase: 'nudge-delivered', session: f.session });
     decide({ kind: 'park' });

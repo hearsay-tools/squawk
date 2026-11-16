@@ -49,7 +49,7 @@ export type RunOutcome =
   | { kind: 'counted'; waitDeliveryFailures: number | undefined }
   /** An accepted `cezar_done` (ADR 0064, hearsay-tools/squawk#2587): only `recordDoneAccepted` in
    *  `workflows/run/run-finish.ts` stages it. It replaces an earlier record. */
-  | { kind: 'done-accepted'; session: string; at: string; seq: number; summary?: string | undefined; freeTurn?: true | undefined }
+  | { kind: 'done-accepted'; done: NonNullable<RunRecord['doneAccepted']> }
   /** The accepted done's one free delivery turn is spent: later deliveries charge as wakes do.
    *  Only `spendDoneFreeTurn` in `workflows/run/turn-settler.ts` stages it. */
   | { kind: 'done-free-turn' }
@@ -207,8 +207,7 @@ const APPLY: { [K in RunOutcome['kind']]: Handler<K> } = {
       : { run: { ...run, waitDeliveryFailures: outcome.waitDeliveryFailures }, changed: true };
   },
   'done-accepted'(run, outcome) {
-    return { run: { ...run, doneAccepted: { session: outcome.session, at: outcome.at, seq: outcome.seq,
-      ...(outcome.summary === undefined ? {} : { summary: outcome.summary }), ...(outcome.freeTurn ? { freeTurn: true as const } : {}) } }, changed: true };
+    return { run: { ...run, doneAccepted: { ...outcome.done } }, changed: true };
   },
   'done-free-turn'(run) {
     if (!run.doneAccepted || run.doneAccepted.freeTurn) return unchanged(run);

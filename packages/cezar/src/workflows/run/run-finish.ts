@@ -15,7 +15,7 @@ import * as completionGateReads from './completion-gate.ts';
 import type { RunModuleContext, PendingContinuation } from './types.ts';
 import type { RunSettlement } from './run-settlement.ts';
 import { retireDoneAccepted, type TurnSettler } from './turn-settler.ts';
-import { owedAtDone } from './done-accepted.ts';
+import { factsAtDone, owedAtDone } from './done-accepted.ts';
 import type { TurnNudges } from './turn-nudges.ts';
 import type { RunLine } from './run-line.ts';
 
@@ -241,12 +241,14 @@ export class RunFinish {
 }
 
 /** The only writer of `doneAccepted` (ADR 0064): an accepted `cezar_done`, committed before the
- *  tool answers, so a restart still finishes the run on it. `seq` is the last event then: what is
- *  recorded after it is new to the done. A done that replaces one still on record keeps its spent
+ *  tool answers, so a restart still finishes the run on it. The last event, the waits and the last
+ *  agent input then (`factsAtDone`) order what is new to the done. A done that replaces one still on record keeps its spent
  *  free turn, so calling done again earns no second free delivery. */
 function recordDoneAccepted(store: Pick<RunStore, 'commitOutcome' | 'getRun' | 'transcriptFacts'>, runId: string, done: { session: string; at: string; summary?: string | undefined }): void {
-  const spent = store.getRun(runId)?.doneAccepted?.freeTurn;
-  store.commitOutcome(runId, { kind: 'done-accepted', ...done, seq: store.transcriptFacts(runId).lastSeq, ...(spent ? { freeTurn: true as const } : {}) });
+  const run = store.getRun(runId);
+  if (!run) return;
+  store.commitOutcome(runId, { kind: 'done-accepted', done: { session: done.session, at: done.at, seq: store.transcriptFacts(runId).lastSeq, ...factsAtDone(run),
+    ...(done.summary === undefined ? {} : { summary: done.summary }), ...(run.doneAccepted?.freeTurn ? { freeTurn: true as const } : {}) } });
 }
 
 /** An agent question registered in this turn: open, and not yet shown (no `askSeq`). */

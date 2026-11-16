@@ -73,11 +73,33 @@ function notReadYet(state: ActiveRun): (id: string) => boolean {
   return id => !thisTurn.has(id);
 }
 
-/** Recorded after the accepted done (strictly later than `at`): the first instruction among the
- *  agent inputs, on any path (a steer, an inbox read, a continuation's opening input). */
-export function instructionAfter(run: RunRecord, at: string): string | undefined {
-  for (const entry of run.agentInputs ?? []) {
-    const reason = entry.createdAt > at ? instruction(entry) : undefined;
+type DoneAccepted = NonNullable<RunRecord['doneAccepted']>;
+
+/** What the run held when the done was accepted, by identity (hearsay-tools/squawk#2587): the
+ *  waits open then, the waits settled then, and its last agent input. "After the done" is read
+ *  against these, never against clock time, which cannot order two facts of one millisecond. */
+export function factsAtDone(run: RunRecord): Pick<DoneAccepted, 'openWaits' | 'settledWaits' | 'lastInput'> {
+  const waits = [...run.waits ?? [], ...run.lastWaits ?? []];
+  const last = run.agentInputs?.at(-1)?.id;
+  return {
+    openWaits: waits.filter(wait => wait.phase === 'open').map(wait => wait.id).slice(-32),
+    settledWaits: waits.filter(wait => wait.phase !== 'open').map(wait => wait.id).slice(-32),
+    ...(last === undefined ? {} : { lastInput: last }),
+  };
+}
+
+/** The agent inputs added after the done: those after its last input then. An input then is
+ *  never removed (the call refused undelivered input, and only undelivered input is withdrawn). */
+function inputsAfter(run: RunRecord, done: DoneAccepted): AgentInput[] {
+  const inputs = run.agentInputs ?? [];
+  return done.lastInput === undefined ? inputs : inputs.slice(inputs.findIndex(entry => entry.id === done.lastInput) + 1);
+}
+
+/** The first instruction among the agent inputs added after the done, on any path (a steer, an
+ *  inbox read, a continuation's opening input). */
+export function instructionAfter(run: RunRecord, done: DoneAccepted): string | undefined {
+  for (const entry of inputsAfter(run, done)) {
+    const reason = instruction(entry);
     if (reason) return reason;
   }
   return undefined;
@@ -88,17 +110,18 @@ function liveAndSettledWaits(run: RunRecord) {
   return [...run.waits ?? [], ...run.lastWaits ?? []].filter(wait => wait.phase !== 'cancelled');
 }
 
-/** A wait result that failed and resolved after the done. */
-export function failedResultAfter(run: RunRecord, at: string): string | undefined {
-  const failed = liveAndSettledWaits(run).find(wait => (wait.resolvedAt ?? '') > at && WAIT_KINDS[wait.kind].failedResult(wait));
+/** A wait result that failed and was not settled when the done was accepted. */
+export function failedResultAfter(run: RunRecord, done: DoneAccepted): string | undefined {
+  const failed = liveAndSettledWaits(run).find(wait => wait.phase !== 'open' && !done.settledWaits.includes(wait.id) && WAIT_KINDS[wait.kind].failedResult(wait));
   return failed && `a failed ${failed.kind} wait result`;
 }
 
 /** A wait or a question the agent registered after the done, by any path: the tool, the CLI, a
- *  native ask. A replayed registration keeps its first time, and Squawk's own waits and its
- *  live-workers timer are not the agent's. */
-export function registeredAfter(run: RunRecord, at: string): string | undefined {
-  const wait = liveAndSettledWaits(run).find(entry => entry.registeredAt > at && entry.source === 'agent' && entry.via !== 'monitoring-line');
+ *  native ask; one the done did not know. A replayed registration keeps its wait, and Squawk's own
+ *  waits and its live-workers timer are not the agent's. */
+export function registeredAfter(run: RunRecord, done: DoneAccepted): string | undefined {
+  const known = new Set([...done.openWaits, ...done.settledWaits]);
+  const wait = liveAndSettledWaits(run).find(entry => !known.has(entry.id) && entry.source === 'agent' && entry.via !== 'monitoring-line');
   if (!wait) return undefined;
   return WAIT_KINDS[wait.kind].userAnswers ? 'the agent asked the user' : 'the agent registered a wait';
 }

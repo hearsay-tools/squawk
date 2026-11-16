@@ -7,6 +7,7 @@ import { upgradeLegacyWaits } from './legacy-waits.ts';
 export function upgradeLegacyRunRow(row: Record<string, unknown>): void {
   upgradeLegacyWaits(row);
   upgradeLegacyWorkflowCursor(row);
+  upgradeLegacyDoneAccepted(row);
   upgradeRemovedRunner(row);
 }
 
@@ -77,6 +78,33 @@ export function upgradeLegacyWorkflowCursor(row: Record<string, unknown>): void 
   const stepId = row.workflowResumeStepId;
   delete row.workflowResumeStepId;
   if (typeof stepId === 'string' && row.workflowCursor === undefined) row.workflowCursor = { stepId, mode: 'resume' };
+}
+
+type RowEntry = { id?: unknown; phase?: unknown; registeredAt?: unknown; resolvedAt?: unknown; deliveredAt?: unknown; cancelledAt?: unknown; createdAt?: unknown };
+
+/** A time a row entry recorded at or before `at`. */
+function recordedBy(value: unknown, at: string): boolean {
+  return typeof value === 'string' && value <= at;
+}
+
+/**
+ * A `doneAccepted` saved before its identity facts (hearsay-tools/squawk#3708 saved `session`,
+ * `at`, `seq` and `summary`) gets them from the row's own times, as that build ordered them: the
+ * waits registered by `at`, of those the ones settled by `at`, and the last agent input created by
+ * `at`. The next write of the row stores them.
+ */
+export function upgradeLegacyDoneAccepted(row: Record<string, unknown>): void {
+  const done = row.doneAccepted as Record<string, unknown> | undefined;
+  if (!done || typeof done !== 'object' || Array.isArray(done.openWaits) || typeof done.at !== 'string') return;
+  const at = done.at;
+  const entries = (value: unknown): RowEntry[] => Array.isArray(value) ? value.filter((entry): entry is RowEntry => !!entry && typeof entry === 'object') : [];
+  const waits = [...entries(row.waits), ...entries(row.lastWaits)].filter(wait => typeof wait.id === 'string' && recordedBy(wait.registeredAt, at));
+  const settled = (wait: RowEntry) => [wait.resolvedAt, wait.deliveredAt, wait.cancelledAt].some(time => recordedBy(time, at));
+  const last = entries(row.agentInputs).filter(input => typeof input.id === 'string' && recordedBy(input.createdAt, at)).at(-1)?.id;
+  row.doneAccepted = { ...done,
+    openWaits: waits.filter(wait => !settled(wait)).map(wait => wait.id as string).slice(-32),
+    settledWaits: waits.filter(settled).map(wait => wait.id as string).slice(-32),
+    ...(typeof last === 'string' ? { lastInput: last } : {}) };
 }
 
 /** `runs.json`'s records as rows, and how many of its entries were left out. Each row's `data` is

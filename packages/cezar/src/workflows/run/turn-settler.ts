@@ -558,9 +558,9 @@ export type DoneTurnSignals = { scheduledWake?: boolean | undefined; nativeAsk?:
 export function acceptedDoneHolds(run: RunRecord, events: readonly RunEvent[], turn: DoneTurnSignals = {}): { holds: true } | { holds: false; reason: string; byInput: boolean } {
   const done = run.doneAccepted;
   if (!done) return { holds: false, reason: 'no done on record', byInput: false };
-  const input = humanMessageAfter(events, done.seq) ?? instructionAfter(run, done.at) ?? failedResultAfter(run, done.at);
+  const input = humanMessageAfter(events, done.seq) ?? instructionAfter(run, done) ?? failedResultAfter(run, done);
   if (input) return { holds: false, reason: input, byInput: true };
-  const agent = registeredAfter(run, done.at) ?? (turn.nativeAsk ? 'the agent asked the user' : undefined)
+  const agent = registeredAfter(run, done) ?? (turn.nativeAsk ? 'the agent asked the user' : undefined)
     ?? (turn.scheduledWake && laterTurn(events, done.seq) ? 'the agent scheduled a wake-up' : undefined);
   return agent === undefined ? { holds: true } : { holds: false, reason: agent, byInput: false };
 }
