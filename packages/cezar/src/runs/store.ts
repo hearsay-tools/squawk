@@ -1808,7 +1808,7 @@ export class RunStore extends EventEmitter {
   }
 
   /** Accepted execution revision is public lifecycle identity, separate from process generations. */
-  commitWorkerContinuation(id: string, exit: RunExitId, patch: Omit<RunPatch, 'delegation'> = {}, step?: Pick<StepState, 'id' | 'name' | 'kind' | 'synthetic'>,
+  commitWorkerContinuation(id: string, exit: RunExitId, patch: Omit<RunPatch, 'delegation'> = {}, step?: Pick<StepState, 'id' | 'name' | 'kind' | 'synthetic' | 'continuesStepId'>,
     conversation?: { rootId: string; state: ConversationState; input: AgentInput }): void {
     const run = this.peek(id);
     if (run?.delegation?.role !== 'worker') throw new Error('missing worker continuation target');
@@ -2102,7 +2102,7 @@ export class RunStore extends EventEmitter {
   }
 
   /** Append a step to an existing run (used by "Continue" — spec 003). */
-  addStep(runId: string, step: Pick<StepState, 'id' | 'name' | 'kind' | 'synthetic'>): void {
+  addStep(runId: string, step: Pick<StepState, 'id' | 'name' | 'kind' | 'synthetic' | 'continuesStepId'>): void {
     const run = this.record(runId);
     if (!run || run.steps.some((s) => s.id === step.id)) return;
     run.steps.push({ ...step, status: 'pending', iterations: 0, tokensUsed: 0 });

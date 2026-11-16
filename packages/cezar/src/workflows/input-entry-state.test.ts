@@ -4,7 +4,7 @@ import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { randomUUID } from 'node:crypto';
 import type { AgentEvent } from '../core/agent-runner.ts';
 import type { AgentRunResult } from '../core/agent-runner.ts';
-import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS, STEP_KIND, STEP_STATUS, makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { createActiveRun } from './active-run.ts';
 import type { InputGroup } from './run/input-delivery.ts';
@@ -314,4 +314,34 @@ it('acknowledges claimed inbox input without leaving a provider delivery or an o
   expect(group.agentInputFlight).toBeUndefined();
   expect(group.unreadInputIds?.size).toBe(0);
   expect(f.manager.canClaimInboxInput(record.id, message.id)).toBe(false);
+});
+
+// hearsay-tools/squawk#1289: a clean close charges every attempted input it requeues unread, not
+// only the session's latest attempt.
+it('counts a failed wake delivery when a clean close requeues an earlier acknowledged batch the agent never read', async () => {
+  const { record, group, input } = await openInputRun();
+  f.store.commitWait(record.id, makeTimerWait());
+  const deliver = async (text: string) => {
+    const entry = input(text);
+    f.store.commitAgentInputs(record.id, [...(f.store.getRun(record.id)?.agentInputs ?? []), entry]);
+    f.manager.deliverConversationInput(record.id);
+    const flight = group.agentInputFlight!;
+    expect(flight.inputIds).toEqual([entry.id]);
+    await flight.settled;
+    return entry;
+  };
+  const first = await deliver('first batch, never read');
+  const second = await deliver('second batch, read');
+  reportConsumed([second.id]);
+  expect([...group.unreadInputIds!]).toEqual([first.id]);
+  // Without a charge the owed batch reopens the run at once, and its delivery clears any count.
+  let charged = 0;
+  const watch = () => { charged = Math.max(charged, f.store.getRun(record.id)?.waitDeliveryFailures ?? 0); };
+  f.store.on('run', watch);
+  try {
+    closeWire();
+    await waitForProduct(f.manager, f.store, () => charged > 0 || openedGroups.length > 1);
+  } finally { f.store.off('run', watch); }
+  expect(charged).toBe(1);
+  expect(f.store.getRun(record.id)?.agentInputs?.find(entry => entry.id === first.id)?.deliveredAt).toBeUndefined();
 });

@@ -103,12 +103,12 @@ describe('turn settler entry orders', () => {
     order(f, ['boundary:turn-end/consume-done', 'boundary:turn-end/reset-nudges', 'subagentsAtTurnEnd', 'boundary:turn-end/save-ack', 'parkWaits', 'outcome', 'update:autoResumeAttempts']);
   });
 
-  it('turn-end discards queued input for a human wait card before preparing it and storing its boundary', () => {
+  it('turn-end prepares a human wait card before discarding queued input and storing its boundary', () => {
     const f = fixture();
     decide({ kind: 'park' });
     f.host.humanWaits.turnEndHumanWait.mockImplementation(() => { f.log.push('humanWait'); return { kind: WAIT_KIND.human, ...ask }; });
     f.settler.endTurn('run', f.state, { handle: () => undefined } as unknown as UiEventSink, { stepId: 'step', scheduleWakeup: undefined });
-    order(f, ['humanWait', 'discard', 'boundary:turn-end/reset-nudges', 'prepareAsk', 'boundary:turn-end/save-ack']);
+    order(f, ['humanWait', 'boundary:turn-end/reset-nudges', 'prepareAsk', 'discard', 'boundary:turn-end/save-ack']);
   });
 
   // hearsay-tools/cezarion#2431: native subagents still running replace the monitoring timer.

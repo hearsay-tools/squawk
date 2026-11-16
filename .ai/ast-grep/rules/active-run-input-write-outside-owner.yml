@@ -9,7 +9,7 @@ utils:
   group-type:
     kind: type_annotation
     any:
-      - { regex: \b(InputGroup|InputFlight|ReadonlySetView)\b }
+      - { regex: \b(InputGroup|InputFlight|DeliveryAttempt|ReadonlySetView)\b }
       - all:
           - { has: { stopBy: end, kind: type_identifier, pattern: $IMPORTED_GROUP_TYPE } }
           - inside:
@@ -18,7 +18,7 @@ utils:
               has:
                 stopBy: end
                 kind: import_specifier
-                has: { field: name, regex: ^(InputGroup|InputFlight|ReadonlySetView)$ }
+                has: { field: name, regex: ^(InputGroup|InputFlight|DeliveryAttempt|ReadonlySetView)$ }
                 all: [ { has: { field: alias, pattern: $IMPORTED_GROUP_TYPE } } ]
   container-type:
     kind: type_annotation
@@ -37,7 +37,7 @@ utils:
   typed-group-reference:
     all:
       - { kind: identifier }
-      - { inside: { kind: program, stopBy: end, regex: \b(InputGroup|InputFlight|ReadonlySetView)\b } }
+      - inside: { kind: program, stopBy: end, regex: \b(InputGroup|InputFlight|DeliveryAttempt|ReadonlySetView)\b }
       - { pattern: $TYPED_GROUP_REF }
       - inside:
           stopBy:
@@ -152,7 +152,7 @@ utils:
                   - has: { field: function, kind: member_expression, has: { field: property, regex: ^(get|entries|values)$ } }
           - { not: { has: { stopBy: end, kind: private_property_identifier } } }
           - { has: { stopBy: end, any: [ { matches: getter-reference }, { matches: typed-group-reference } ] } }
-      - { all: [ { kind: new_expression }, { regex: ^new (InputGroup|InputFlight|ReadonlySetView)\b } ] }
+      - all: [ { kind: new_expression }, { regex: ^new (InputGroup|InputFlight|DeliveryAttempt|ReadonlySetView)\b } ]
       - { all: [ { kind: call_expression }, { has: { field: function, regex: ^createInputGroup$ } } ] }
   group-bound-reference:
     all:
@@ -160,7 +160,7 @@ utils:
       - inside:
           kind: program
           stopBy: end
-          regex: \.(inputState|inputState)\b|\[\s*["'](inputState|inputState)["']|\b(InputGroup|InputFlight|ReadonlySetView|createInputGroup|inputState)\b|[,{]\s*inputState\b
+          regex: \.(inputState|inputState)\b|\[\s*["'](inputState|inputState)["']|\b(InputGroup|InputFlight|DeliveryAttempt|ReadonlySetView|createInputGroup|inputState)\b|[,{]\s*inputState\b
       - { pattern: $GROUP_BOUND_REF }
       - inside:
           stopBy: { any: [ { kind: statement_block }, { kind: program } ] }
@@ -176,7 +176,7 @@ utils:
       - inside:
           kind: program
           stopBy: end
-          regex: \.(inputState|inputState)\b|\[\s*["'](inputState|inputState)["']|\b(InputGroup|InputFlight|ReadonlySetView|createInputGroup|inputState)\b|[,{]\s*inputState\b
+          regex: \.(inputState|inputState)\b|\[\s*["'](inputState|inputState)["']|\b(InputGroup|InputFlight|DeliveryAttempt|ReadonlySetView|createInputGroup|inputState)\b|[,{]\s*inputState\b
       - { pattern: $DESTRUCTURED_REF }
       - inside:
           stopBy: { any: [ { kind: statement_block }, { kind: program } ] }
@@ -225,11 +225,11 @@ utils:
           - kind: member_expression
             has:
               field: property
-              regex: ^(inputState|agentInputError|agentInputFlight|inputDelivery|unreadInputIds|consumedBeforeAck|bundledInputIds|retiredInFlight|unreadInputTimer|unreadRetried|heldHumanInputTimer|heldHumanInputSince|heldHumanInputExpired|openingAnswerAskSeq|openingAgentInputId|writingInput|session|inputIds|settled|wakeReserved|admittedWake|mode|consumption|via|length|size)$
+              regex: ^(inputState|agentInputError|agentInputFlight|inputDelivery|unreadInputIds|consumedBeforeAck|bundledInputIds|retiredInFlight|unreadInputTimer|unreadRetried|heldHumanInputTimer|heldHumanInputSince|heldHumanInputExpired|openingAnswerAskSeq|openingAgentInputId|writingInput|deliveryAttempt|session|inputIds|outcome|settled|wakeReserved|admittedWake|mode|consumption|via|length|size)$
           - kind: subscript_expression
             has:
               field: index
-              regex: ^["'](inputState|agentInputError|agentInputFlight|inputDelivery|unreadInputIds|consumedBeforeAck|bundledInputIds|retiredInFlight|unreadInputTimer|unreadRetried|heldHumanInputTimer|heldHumanInputSince|heldHumanInputExpired|openingAnswerAskSeq|openingAgentInputId|writingInput|session|inputIds|settled|wakeReserved|admittedWake|mode|consumption|via|length|size)["']$
+              regex: ^["'](inputState|agentInputError|agentInputFlight|inputDelivery|unreadInputIds|consumedBeforeAck|bundledInputIds|retiredInFlight|unreadInputTimer|unreadRetried|heldHumanInputTimer|heldHumanInputSince|heldHumanInputExpired|openingAnswerAskSeq|openingAgentInputId|writingInput|deliveryAttempt|session|inputIds|outcome|settled|wakeReserved|admittedWake|mode|consumption|via|length|size)["']$
       - { not: { has: { field: property, kind: private_property_identifier } } }
       - { not: { has: { stopBy: end, kind: private_property_identifier } } }
       - any:
@@ -285,4 +285,6 @@ rule:
         - { not: { has: { field: name, kind: private_property_identifier } } }
         - inside:
             kind: class_body
-            inside: { kind: class_declaration, has: { field: name, regex: ^(InputGroup|InputFlight|ReadonlySetView)$ } }
+            inside:
+              kind: class_declaration
+              has: { field: name, regex: ^(InputGroup|InputFlight|DeliveryAttempt|ReadonlySetView)$ }

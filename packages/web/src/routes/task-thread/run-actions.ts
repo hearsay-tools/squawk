@@ -1,5 +1,5 @@
 import type { ApiRun, RunRecord, RunStatus, Runner } from '@open-mercato/cezar-api-client'
-import { engineOwnsRun } from '@open-mercato/cezar-api-client/contract/run-predicates'
+import { engineOwnsRun, latestSession } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { isUsageLimitHold } from '@open-mercato/cezar-api-client/contract/waits'
 import { cliTargetRunner } from '@/components/open-in-menu'
 import { deriveAttention } from '@/lib/attention'
@@ -18,12 +18,12 @@ export { cliTargetRunner }
 
 /** The latest agent session across steps — what Continue/Terminal resume. */
 export function lastSessionId(run: RunRecord): string | undefined {
-  return [...run.steps].reverse().find((step) => step.sessionId)?.sessionId
+  return latestSession(run).sessionId
 }
 
 /** The backend owning the latest session; old records fall back to the run default. */
 export function lastSessionBackend(run: RunRecord): Runner {
-  return [...run.steps].reverse().find(step => step.sessionId)?.backend ?? run.runner ?? 'claude'
+  return latestSession(run).backend
 }
 
 /** The copyable "take over interactively" line under the header — only once the engine has

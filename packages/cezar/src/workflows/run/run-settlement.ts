@@ -44,7 +44,7 @@ interface RunSettlementHost {
   settleSuccess(id: string, durableRootFinish?: boolean, keepStepId?: string): Promise<void>;
   deferParentCompletion(id: string): boolean;
   closingWakeDecision(id: string, holds: boolean, cancelled: boolean, error: string | undefined): 'park' | 'settle' | 'capped';
-  owesDelivery(id: string): boolean;
+  cleanCloseFailsDelivery(id: string, state: ActiveRun): boolean;
   preserveRunAfterDisposal(id: string, state: ActiveRun): boolean;
   isDisposedDelegatedRun(id: string): boolean;
   queueWaitWake(id: string): void;
@@ -207,8 +207,8 @@ export class RunSettlement {
    *  failed. */
   settleClosingWakes(runId: string, state: ActiveRun, stepId: string, sink: UiEventSink): void {
     sink.sessionEnded('end_turn');
-    // A clean close that leaves results undelivered is a failed delivery too.
-    const delivery = this.host.closingWakeDecision(runId, true, false, this.host.owesDelivery(runId) ? this.wakeSessionClosedError : undefined);
+    // A clean close after a delivery attempt that leaves results undelivered is a failed delivery too.
+    const delivery = this.host.closingWakeDecision(runId, true, false, this.host.cleanCloseFailsDelivery(runId, state) ? this.wakeSessionClosedError : undefined);
     if (delivery === 'park') {
       // No turn end will show a human wait this session registered (hearsay-tools/cezarion#1234).
       this.humanWaits.surfaceHumanWait(runId, state);

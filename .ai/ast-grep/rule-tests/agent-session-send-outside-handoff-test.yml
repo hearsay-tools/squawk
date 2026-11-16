@@ -1,0 +1,16 @@
+id: agent-session-send-outside-handoff
+valid:
+  - 'handToTransport(state, session, ids, wire => wire.sendAgentMessage(content, ids));'
+  - 'handToTransport(state, session, [], wire => wire.sendMessage(content));'
+  - 'manager.sendMessage(id, content);'
+  - 'this.host.sendMessage(runId, entry.content, entry.messageId);'
+  - 'host.sendMessage(id, content, messageId);'
+  - 'this.sendMessage(runId, content);'
+  - 'this.#modules.inputDelivery.sendMessage(runId, content, messageId);'
+invalid:
+  - 'session.sendMessage(content);'
+  - 'state.liveSession.session.sendMessage(content);'
+  - 'session.sendAgentMessage(content, ids);'
+  - 'state.inputState.writeInput(() => session.sendAgentMessage(content, ids));'
+  - 'wire.sendMessage(content);'
+  - 'this.manager.sendAgentMessage(content, ids);'

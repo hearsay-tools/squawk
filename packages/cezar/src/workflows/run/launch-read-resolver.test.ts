@@ -204,6 +204,16 @@ it('holds the failing workflow step, not an earlier one a retry already recovere
   // A later Continue's failure, after the recovered workflow finished, is no workflow step's.
   expect(atContinue.heldStep(heldRun({ build: STEP_STATUS.failed, review: STEP_STATUS.done, 'continue-2': STEP_STATUS.failed }, 'continue-2'))).toBeUndefined();
 });
+// hearsay-tools/squawk#3024: `continuesStepId` names the step a Continue runs as, never the workflow
+// position. The cursor and the status rules alone decide that (ADR 0064).
+it('reads no workflow position from the step a continuation continues', () => {
+  const position = (run: ReturnType<typeof makeRunRecord>) => atContinue.waitingWorkflowStepIndex(run, atContinue.isSyntheticContinuation, atContinue.ciWorkflowResumeStepIndex);
+  const continuation = makeStepState({ id: 'continue-2', name: 'Continue', kind: STEP_KIND.agent, status: STEP_STATUS.running, synthetic: 'continuation', continuesStepId: 'build' });
+  const held = heldRun({ build: STEP_STATUS.failed, review: STEP_STATUS.pending }, continuation.id);
+  const run = { ...held, steps: [...held.steps.map(step => step.id === 'build' ? { ...step, error: 'boom' } : step), continuation] };
+  expect(position(run)).toBe(-1);
+  expect(position({ ...run, workflowCursor: { stepId: 'build', mode: 'resume' as const } })).toBe(0);
+});
 it('gives a fresh retry the held step\'s own prompt', () => {
   const run = { ...heldRun({ build: STEP_STATUS.done, review: STEP_STATUS.failed }, 'review'), workflowCursor: { stepId: 'review', mode: 'resume' as const } };
   expect(atContinue.task(run)).toBe('Review this change: add the parser. Do not edit files.');

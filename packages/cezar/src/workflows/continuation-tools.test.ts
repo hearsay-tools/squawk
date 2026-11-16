@@ -341,6 +341,51 @@ describe('a resumed session keeps its workflow step tools', () => {
     await settled(id);
   });
 
+  it('a Continue after a crashed fresh-session continue-N runs as the step that continue-N continued (hearsay-tools/squawk#3024)', async () => {
+    // Codex mints its own id: the first Continue of `implement` opens a fresh session as
+    // `continue-1`, which records its own id and then dies with the process. The next Continue
+    // resumes that session as `implement`, not as the chain's last agent step `review`.
+    const def: WorkflowDef = {
+      name: 'tooled-effort-chain',
+      source: 'file',
+      steps: [
+        { id: 'implement', name: 'Implement', prompt: '{{task}}', allowedTools: TOOLS, bashAllowlist: BASH, effort: 'high' },
+        { id: 'review', name: 'Review', prompt: 'review {{task}}', allowedTools: TAIL_TOOLS, effort: 'low' },
+      ],
+    };
+    const id = terminalRun({ def, steps: [{ id: 'implement', sessionId: 'launch-uuid', backend: 'codex' }], status: RUN_STATUS.failed, error: 'boom' });
+    store.appendEvent(id, { type: 'step-start', stepId: 'implement', name: 'Implement', kind: STEP_KIND.agent, iteration: 1 });
+    expect(manager!.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
+    expect((await specAt(0)).resume).toBe(false);
+    await settled(id);
+    expect(store.getRun(id)?.steps.find(step => step.id === 'continue-1')).toMatchObject({ synthetic: 'continuation', continuesStepId: 'implement' });
+
+    store.appendEvent(id, { type: 'session', stepId: 'continue-1', sessionId: 'continue-thread' });
+    store.updateStep(id, 'continue-1', { status: STEP_STATUS.failed, sessionId: 'continue-thread', backend: 'codex', error: 'interrupted — cezar process exited during the run' });
+    setRunStatus(store, id, RUN_STATUS.failed, { finishedAt: new Date().toISOString(), error: 'interrupted — cezar process exited during the run' });
+
+    expect(manager!.continueRun(id, { text: 'and again' })).toEqual({ ok: true });
+    const spec = await specAt(1);
+    expect(spec.sessionId).toBe('continue-thread');
+    expect(spec.toolGrant).toEqual({ kind: 'explicit', tools: TOOLS, bashAllowlist: BASH });
+    expect(spec.effort).toBe('high');
+    expect(store.getRun(id)?.steps.find(step => step.id === 'continue-2')).toMatchObject({ synthetic: 'continuation', continuesStepId: 'implement' });
+    await settled(id);
+  });
+
+  it('a saved continue-N without the step it continues keeps the chain-tail rule', async () => {
+    // A synthetic step saved before `continuesStepId` existed resolves as before: the
+    // definition's last agent step.
+    const id = terminalRun({ def: CHAIN_DEF, steps: [{ id: 'implement', sessionId: 'sess-1', backend: 'claude' }] });
+    store.addStep(id, { id: 'continue-1', name: 'Continue', kind: STEP_KIND.agent, synthetic: 'continuation' });
+    store.updateStep(id, 'continue-1', { status: STEP_STATUS.done, sessionId: 'sess-2', backend: 'claude' });
+    expect(manager!.continueRun(id, { text: 'and again' })).toEqual({ ok: true });
+    const spec = await specAt(0);
+    expect(spec.sessionId).toBe('sess-2');
+    expect(spec.toolGrant).toEqual({ kind: 'explicit', tools: TAIL_TOOLS });
+    await settled(id);
+  });
+
   it('the usage-limit auto-resume keeps the step tools too', async () => {
     // The headline scenario: nobody is at the keyboard when the window reopens, so a tool
     // set silently narrowed here (and a Bash silently widened) is the least visible of all.

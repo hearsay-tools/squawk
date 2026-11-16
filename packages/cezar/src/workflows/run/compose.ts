@@ -199,6 +199,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
   };
   modules.inputReceiptHost = {
     reconcileWorkerWaits: () => host.reconcileWorkerWaits(),
+    openDeliveryScope: (id, state, session) => modules.inputDelivery.openDeliveryScope(id, state, session),
     flushAgentInputs: id => modules.inputDelivery.flushAgentInputs(id),
     isCurrentState: (id, state) => host.active.get(id) === state,
   };
@@ -484,7 +485,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
       settleSuccess: (id, durable, keep) => modules.runSettlement.settleSuccess(id, durable, keep),
       deferParentCompletion: id => modules.runFinish.deferParentCompletion(id),
       closingWakeDecision: (id, holds, cancelled, error) => modules.wakeAdmission.closingWakeDecision(id, holds, cancelled, error),
-      owesDelivery: id => modules.wakeAdmission.owesDelivery(id), preserveRunAfterDisposal: (id, state) => preserveRunAfterDisposal(context.store, () => context.disposed(), id, state),
+      cleanCloseFailsDelivery: (id, state) => modules.wakeAdmission.cleanCloseFailsDelivery(id, state), preserveRunAfterDisposal: (id, state) => preserveRunAfterDisposal(context.store, () => context.disposed(), id, state),
       isDisposedDelegatedRun: id => isDisposedDelegatedRun(context.store, () => context.disposed(), id), queueWaitWake: id => modules.wakeAdmission.queueWaitWake(id),
       reconcileWorkerWaits: id => host.reconcileWorkerWaits(id), releaseSlot: () => modules.line.releaseSlot(),
       workerScratchCleanup: modules.workerScratchCleanup, hasClaim: id => modules.claims.has(id),
@@ -513,7 +514,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     waitEngine: modules.waitEngine,
     active: host.active, move: (id, exit, patch, call) => host.move(id, exit, patch, call), dropActive: id => host.dropActive(id),
     closingWakeDecision: (id, holds, cancelled, error) => modules.wakeAdmission.closingWakeDecision(id, holds, cancelled, error),
-    owesDelivery: id => modules.wakeAdmission.owesDelivery(id),
+    cleanCloseFailsDelivery: (id, state) => modules.wakeAdmission.cleanCloseFailsDelivery(id, state),
     workerExecutionStopped: id => host.workerExecutionStopped(id),
     executionBlockedByRootFinish: run => host.executionBlockedByRootFinish(run),
   }, modules.line, modules.worktreeAutosave, modules.humanWaits, modules.runSettlement, modules.stepSession,
@@ -569,6 +570,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     awaitCompletionNudgeReply: (id, state, session) => modules.turnNudges.awaitCompletionNudgeReply(id, state, session),
     acknowledgeNudge: (id, state, session) => modules.turnNudges.acknowledgeNudge(id, state, session),
     queueWaitWake: id => modules.wakeAdmission.queueWaitWake(id), owesWake: (run, budget) => modules.wakeAdmission.owesWake(run, budget),
+    owedWakeInputIds: run => modules.wakeAdmission.owedWakeInputIds(run),
     pendingConversationWakes: (run, budget) => modules.wakeAdmission.pendingConversationWakes(run, budget), routedAnswer: id => modules.wakeAdmission.routedAnswer(id),
     spendWakeAdmission: (id, state, owed) => modules.wakeAdmission.spendWakeAdmission(id, state, owed), cancelAutomaticAtCap: (id, waits) => modules.wakeAdmission.cancelAutomaticAtCap(id, waits),
     reparkWithoutWaits: (id, state) => modules.wakeAdmission.reparkWithoutWaits(id, state), holdPeerWakesAtCap: id => modules.wakeAdmission.holdPeerWakesAtCap(id),

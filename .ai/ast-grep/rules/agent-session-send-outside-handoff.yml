@@ -1,0 +1,34 @@
+id: agent-session-send-outside-handoff
+language: typescript
+severity: warning
+message: >-
+  Hand input to a live agent session only through handToTransport in
+  packages/cezar/src/workflows/run/input-delivery.ts. It records the session's delivery attempt,
+  which a clean close reads before it counts a failed wake delivery (hearsay-tools/squawk#1289,
+  ADR 0064).
+files:
+  - packages/cezar/src/**/*.ts
+ignores:
+  - packages/cezar/src/**/*.test.ts
+  - packages/cezar/src/**/*.testkit.ts
+  - packages/cezar/src/core/** # The runners: the transport itself, which passes a send to the session it wraps.
+# Syntax only: a `sendAgentMessage(...)` call on any receiver, or a `sendMessage(...)` call on any
+# receiver but the manager and module API (`this`, `manager`, `host`, `this.host`, and a receiver
+# ending in `inputDelivery`), outside the arguments of a `handToTransport(...)` call. The rule
+# knows no type: it leaves out a send through a destructured or renamed method.
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    any:
+      - has: { field: property, regex: '^sendAgentMessage$' }
+      - all:
+          - has: { field: property, regex: '^sendMessage$' }
+          - not:
+              has: { field: object, regex: '^(this|manager|host|this\.host|.*\.inputDelivery)$' }
+  not:
+    inside:
+      kind: call_expression
+      stopBy: end
+      has: { field: function, regex: '^handToTransport$' }

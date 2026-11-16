@@ -89,6 +89,8 @@ export const CONTROL_CRITERIA = [
   { id: 'R45', scenario: 'skill-warning' },
   { id: 'R46', scenario: 'provider-error' },
   { id: 'R6', scenario: 'ask' },
+  // hearsay-tools/squawk#2444: the open human wait holds input queued after cezar_ask.
+  { id: 'R131', scenario: 'cezar-ask' },
   { id: 'R7', scenario: 'ask' },
   { id: 'R8', scenario: 'hold' },
   { id: 'R9', scenario: 'ask-reply-late' },

@@ -34,7 +34,7 @@ import type { RunLine } from './run-line.ts';
 import type { WorkerExecutions } from './worker-executions.ts';
 import type { RunSkills } from './run-skills.ts';
 import type { AttachmentWriter } from './attachment-writer.ts';
-import type { HumanWaits } from './human-waits.ts';
+import { answeringAskSeq, isQuestionPending, type HumanWaits } from './human-waits.ts';
 import type { QuestionAnswerSource, WorkerQuestions } from './worker-questions.ts';
 import { cancelLivenessTimer, LivenessTimers } from './liveness-timers.ts';
 
@@ -72,6 +72,23 @@ export class InputFlight {
   }
 }
 
+/** Owed input handed to the transport in one session (ADR 0064). `inputIds` holds every input
+ *  the session's attempts carried; `outcome` is the latest attempt's. A clean close of that session
+ *  counts a failed wake delivery only when an attempt did not reach the agent
+ *  (hearsay-tools/squawk#1289). */
+export interface DeliveryAttempt {
+  readonly session: AgentSession;
+  readonly inputIds: readonly string[];
+  readonly outcome?: 'acknowledged' | 'closed' | 'failed';
+}
+
+// Only this module records a delivery attempt and its outcome; readers receive the frozen fact.
+let attemptWrites: {
+  open(group: InputGroup, attempt: DeliveryAttempt | undefined): void;
+  record(group: InputGroup, attempt: DeliveryAttempt): void;
+  acknowledge(group: InputGroup, session: AgentSession, inputIds: readonly string[]): void;
+};
+
 /** Input transport, receipt and liveness state. All mutation commands live in this module. */
 export class InputGroup {
   #agentInputError: string | undefined;
@@ -93,6 +110,7 @@ export class InputGroup {
   #openingAnswerAskSeq: number | undefined;
   #openingAgentInputId: string | undefined;
   #writingInput: boolean | undefined;
+  #deliveryAttempt: DeliveryAttempt | undefined;
   constructor() { Object.freeze(this); }
   get agentInputError(): string | undefined { return this.#agentInputError; }
   get agentInputFlight(): InputFlight | undefined { return this.#agentInputFlight; }
@@ -115,6 +133,8 @@ export class InputGroup {
   get openingAgentInputId(): string | undefined { return this.#openingAgentInputId; }
   /** A turn started synchronously inside Squawk's write belongs to that write. */
   get writingInput(): boolean | undefined { return this.#writingInput; }
+  /** The delivery this session attempted last, if any. */
+  get deliveryAttempt(): DeliveryAttempt | undefined { return this.#deliveryAttempt; }
 
   recordInputError(message: string): void { this.#agentInputError = message; }
   attachFlight(flight: InputFlight): void { this.#agentInputFlight = flight; }
@@ -176,6 +196,24 @@ export class InputGroup {
     try { return write(); }
     finally { this.#writingInput = previous; }
   }
+  static {
+    attemptWrites = {
+      // A new session starts its own record.
+      open(group, attempt) {
+        group.#deliveryAttempt = attempt && Object.freeze({ ...attempt, inputIds: Object.freeze([...attempt.inputIds]) });
+      },
+      // A later attempt keeps the inputs the session's earlier attempts carried: a close may still
+      // requeue one of them unread.
+      record(group, attempt) {
+        const earlier = group.#deliveryAttempt?.session === attempt.session ? group.#deliveryAttempt.inputIds : [];
+        group.#deliveryAttempt = Object.freeze({ ...attempt, inputIds: Object.freeze([...new Set([...earlier, ...attempt.inputIds])]) });
+      },
+      acknowledge(group, session, inputIds) {
+        const attempt = group.#deliveryAttempt;
+        if (attempt?.session === session && inputIds.every(id => attempt.inputIds.includes(id))) group.#deliveryAttempt = Object.freeze({ ...attempt, outcome: 'acknowledged' });
+      },
+    };
+  }
 }
 
 for (const type of [InputGroup, InputFlight]) {
@@ -183,6 +221,16 @@ for (const type of [InputGroup, InputFlight]) {
   Object.freeze(type);
 }
 export function createInputGroup(): InputGroup { return new InputGroup(); }
+
+/** The one way input reaches a live session's transport: every send records the owed input it
+ *  carries as this session's delivery attempt (hearsay-tools/squawk#1289). A session's opening
+ *  prompt is the only other way, and `openDeliveryScope` records it. The
+ *  `agent-session-send-outside-handoff` lint rule refuses a send anywhere else. */
+function handToTransport<T>(state: ActiveRun, session: AgentSession, inputIds: readonly string[], send: (session: AgentSession) => T): T {
+  const sent = state.inputState.writeInput(() => send(session));
+  if (sent && inputIds.length) attemptWrites.record(state.inputState, { session, inputIds });
+  return sent;
+}
 
 /** The budget a human answer resets, as its flush saw it before the answer. `atTurnBoundary` is
  *  the turn boundary before Squawk wrote the answer: a runner may report the answer's turn inside
@@ -218,7 +266,7 @@ interface InputDeliveryHost {
   boundaryTurn(id: string, state: ActiveRun, session: AgentSession, done: boolean): SettledTurn;
   canAutoContinue(id: string, state: ActiveRun): boolean; armNoWaitNudgeReplyTimer(id: string, state: ActiveRun): void;
   awaitCompletionNudgeReply(id: string, state: ActiveRun, session: AgentSession): void;
-  queueWaitWake(id: string): void; owesWake(run: RunRecord, budget?: HumanAnswerBudget): boolean;
+  queueWaitWake(id: string): void; owesWake(run: RunRecord, budget?: HumanAnswerBudget): boolean; owedWakeInputIds(run: RunRecord): string[];
   pendingConversationWakes(run: RunRecord, budget?: HumanAnswerBudget): AgentInput[]; routedAnswer(id: string): AgentInput | undefined;
   spendWakeAdmission(id: string, state: ActiveRun, owed: boolean): void; cancelAutomaticAtCap(id: string, waits: readonly Wait[]): void;
   reparkWithoutWaits(id: string, state: ActiveRun): void; holdPeerWakesAtCap(id: string): void;
@@ -346,7 +394,8 @@ export class InputDelivery {
     }
     const bundle = state.boundary.atTurnBoundary === state.liveSession.session ? pendingConversationBatch(this.context.store.getRun(runId), state, input => formatAgentInput(input, id => this.context.store.getRun(id)), reply.id) : undefined;
     const session = state.liveSession.session;
-    if (!state.inputState.writeInput(() => session.sendMessage([{ type: 'text', text }, ...(bundle ? [{ type: 'text' as const, text: bundle.text }] : [])]))) return;
+    const content = [{ type: 'text' as const, text }, ...(bundle ? [{ type: 'text' as const, text: bundle.text }] : [])];
+    if (!handToTransport(state, session, [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])], wire => wire.sendMessage(content))) return;
     this.context.store.appendEvent(runId, { type: 'human-input-delivered', askSeq, source });
     inputReceipts.commitRoutedAnswer(this.context, runId, state, { askSeq, delivered: [reply.id, ...(bundle?.inputs.map(input => input.id) ?? [])] }, fallback, this.maxAutoContinues);
     // Spend the answer's admission now so later messages can steer before its turn ends.
@@ -499,6 +548,16 @@ export class InputDelivery {
     if (idle) this.settleIdleBoundary(runId, state, session);
   }
 
+  /** A session opens with its opening prompt as its only delivery attempt: the opening input a
+   *  continuation carries, and, when an admitted wake reopened it, everything that wake owes
+   *  (hearsay-tools/squawk#1289). Any other session opens with none. */
+  openDeliveryScope(runId: string, state: ActiveRun, session: AgentSession): void {
+    const opening = state.inputState.openingAgentInputId;
+    const run = this.host.line.isAdmitted(runId) ? this.context.store.getRun(runId) : undefined;
+    const owed = run ? this.host.owedWakeInputIds(run) : [];
+    attemptWrites.open(state.inputState, run || opening ? { session, inputIds: [...new Set([...(opening ? [opening] : []), ...owed])] } : undefined);
+  }
+
   /** Reservation is synchronous; only an acknowledged transport may checkpoint delivery. */
   submitAgentInput(runId: string, state: ActiveRun, content: ContentBlock[], inputIds: readonly string[] = [], beforeHumanReset?: HumanAnswerBudget): boolean {
     const session = state.liveSession.session;
@@ -532,8 +591,8 @@ export class InputDelivery {
 
   private admitsAgentInput(runId: string, state: ActiveRun, session: NonNullable<ActiveRun['liveSession']['session']>, inputIds: readonly string[], beforeHumanReset?: HumanAnswerBudget): boolean {
     // A pending question admits only a wake made of resolved-wait results and messages, at a turn boundary: it stays answerable, and nothing else is delivered until it is answered (hearsay-tools/cezarion#1233, #1235).
-    if (state.boundary.pendingHumanAsk) {
-      const run = this.context.store.getRun(runId);
+    const run = this.context.store.getRun(runId);
+    if (this.questionPending(runId, state, run)) {
       const owed = new Set(run ? [...resolvedWaits(run).map(waitInputId), ...this.host.pendingConversationWakes(run, beforeHumanReset).map(input => input.id)] : []);
       if (state.boundary.atTurnBoundary !== session || !inputIds.length || !inputIds.every(id => owed.has(id))) return false;
     }
@@ -552,7 +611,7 @@ export class InputDelivery {
     };
     let acknowledgement: false | Promise<void>;
     // A wake beside a pending question (`admitsAgentInput`) is not its answer: the question stays Squawk's and its card stays answerable, because only a human delivery settles it. The provider's acknowledgement is still the checkpoint, and a rejected one fails the session like any other, leaving the waits resolved for a continuation.
-    try { acknowledgement = state.inputState.writeInput(() => session.sendAgentMessage(content, inputIds)); }
+    try { acknowledgement = handToTransport(state, session, inputIds, wire => wire.sendAgentMessage(content, inputIds)); }
     catch (error) { refund(); fail(error, false); state.inputState.clearFlight(); return false; }
     // A refused submission drops its flight, and its reservation with it.
     if (!acknowledgement) { state.inputState.clearFlight(); return false; }
@@ -568,6 +627,7 @@ export class InputDelivery {
           // One commit (hearsay-tools/cezarion#1805): the messages, then each wait's delivery (a message a wait carries keeps its read receipt), the charge, the early reads, the cleared failure count and the resume (hearsay-tools/cezarion#1235).
           this.context.store.commitOutcome(runId, withFailuresCleared(this.context.store, runId, acknowledgedBatch({ accepted, resolvedIds, early, spent, observable, at }), accepted, resolvedIds.length > 0),
             resumes ? { exit: 'resume', resumeStepId: resolvedIds.length ? state.liveSession.currentStepId : undefined } : {});
+          attemptWrites.acknowledge(state.inputState, session, inputIds);
           this.applyAcknowledgedInput(runId, state, flight, batch, refusal);
         } else this.host.acknowledgeNudge(runId, state, session);
       } catch (error) { fail(error, true); }
@@ -628,10 +688,18 @@ export class InputDelivery {
     run = this.supersedeFallbackBeforeFlush(runId, state, run, beforeHumanReset);
     // A question pending at a turn boundary still takes an admitted wake of resolved-wait results
     // and messages; one pending mid-turn (a native ask) takes nothing until its turn ends.
-    const askPending = state.boundary.pendingHumanAsk || this.host.hasUnansweredHumanAsk(runId);
+    const askPending = this.questionPending(runId, state, run);
     if (askPending && state.boundary.atTurnBoundary !== state.liveSession.session) return false;
     run = this.cancelCappedTimersBeforeFlush(runId, state, run, beforeHumanReset);
     return this.flushAgentInputBatch(runId, state, run, askPending, beforeHumanReset);
+  }
+
+  /** A question waits for its answer (hearsay-tools/squawk#2444): an open human wait the agent
+   *  raised, from the moment it registers, other than the one whose answer is in flight; or the
+   *  question this live session shows or the transcript records. A runner callback inside the turn
+   *  end therefore finds it pending before the turn end prepares its card. */
+  private questionPending(runId: string, state: ActiveRun, run: RunRecord | undefined): boolean {
+    return isQuestionPending(run, answeringAskSeq(state)) || state.boundary.pendingHumanAsk || this.host.hasUnansweredHumanAsk(runId);
   }
 
   private supersedeFallbackBeforeFlush(runId: string, state: ActiveRun, run: RunRecord, beforeHumanReset?: HumanAnswerBudget): RunRecord {
@@ -735,7 +803,7 @@ export class InputDelivery {
     const { blocks, expanded, deliverable } = prepared;
     const session = state.liveSession.session;
     const atTurnBoundary = state.boundary.atTurnBoundary === session;
-    const delivered = state.inputState.writeInput(() => session.sendMessage(deliverable));
+    const delivered = handToTransport(state, session, prepared.bundle?.inputs.map(input => input.id) ?? [], wire => wire.sendMessage(deliverable));
     if (delivered && expanded !== blocks) this.host.runSkills.provisionLiveSlashSkill(runId, state, blocks);
     if (delivered) this.applyHumanMessageDelivery(runId, state, prepared, messageId, atTurnBoundary);
     return delivered;

@@ -15,6 +15,7 @@ import { runsAwaitingPeer } from '../wait-scope.ts';
 import type { RunExitId, ExitCall, RunPatch } from '../../runs/run-exits.ts';
 import type { ContinueRunOptions } from '../continuation-admission.ts';
 import type { ActiveRun } from '../active-run.ts';
+import type { DeliveryAttempt } from './input-delivery.ts';
 import { liveSubagents } from './subagent-waits.ts';
 import { clearIdleTimer } from './input-timers.ts';
 import { canProceedWithRun } from './run-guards.ts';
@@ -42,6 +43,16 @@ interface WakeAdmissionHost {
   answerRoutedQuestion(id: string, flush: boolean): void; queueWaitWake(id: string): void;
   retryWaitAdmission(id: string): void; countAutomaticWakes(id: string, budget?: HumanAnswerBudget): number;
   workerExecutionStopped(id: string): boolean; executionBlockedByRootFinish(run: RunRecord): boolean;
+}
+
+/** A clean close fails a wake delivery only when its session attempted one that did not reach the
+ *  agent, and something is still owed. Input the scheduler has not admitted yet costs no retry
+ *  (hearsay-tools/squawk#1289). An attempt reached the agent when no input any attempt of the
+ *  session carried is owed again (`received`); an attempt that named no input carried nothing to
+ *  fail. */
+export function cleanCloseFailsDelivery(attempt: DeliveryAttempt | undefined, received: (inputIds: readonly string[]) => boolean, owesDelivery: () => boolean): boolean {
+  if (!attempt || received(attempt.inputIds)) return false;
+  return owesDelivery();
 }
 
 /** A cancelled last wait reparks only a run already parked at its session boundary. */
@@ -111,6 +122,16 @@ export class WakeAdmission {
 
   owesDelivery(runId: string): boolean {
     return wakeLedger.owesDelivery(this.context.store, runId, run => this.owesWake(run));
+  }
+
+  /** Both clean-close paths ask this before they count a failed wake delivery. */
+  cleanCloseFailsDelivery(runId: string, state: ActiveRun): boolean {
+    const received = (ids: readonly string[]) => {
+      const run = this.context.store.getRun(runId);
+      const owed = new Set([...resolvedWaits(run ?? {}).map(waitInputId), ...(run?.agentInputs ?? []).filter(input => !input.deliveredAt).map(input => input.id)]);
+      return !ids.some(id => owed.has(id));
+    };
+    return cleanCloseFailsDelivery(state.inputState.deliveryAttempt, received, () => this.owesDelivery(runId));
   }
 
   /** Apply the pure closing-wake decision without moving delivery counters or timers. */
@@ -315,7 +336,16 @@ export class WakeAdmission {
   }
 
   owesWake(run: RunRecord, beforeHumanReset?: HumanAnswerBudget): boolean {
-    return wakeLedger.owesWake(run, { routedAnswer: id => this.routedAnswer(id), pendingConversationWakes: (record, budget) => this.pendingConversationWakes(record, budget) }, beforeHumanReset);
+    return wakeLedger.owesWake(run, this.wakeReads(), beforeHumanReset);
+  }
+
+  /** What `owesWake` counts, by input id. */
+  owedWakeInputIds(run: RunRecord): string[] {
+    return wakeLedger.owedWakeInputIds(run, this.wakeReads());
+  }
+
+  private wakeReads() {
+    return { routedAnswer: (id: string) => this.routedAnswer(id), pendingConversationWakes: (record: RunRecord, budget?: HumanAnswerBudget) => this.pendingConversationWakes(record, budget) };
   }
 
   takesWake(runId: string, state: ActiveRun): boolean {

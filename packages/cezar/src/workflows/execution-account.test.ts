@@ -62,6 +62,15 @@ describe('executionAccount', () => {
       .toEqual({ runner: 'claude', agentProfile: 'second' });
   });
 
+  it('reads a newer session step saved without a backend as the run runner\'s, on that step\'s account', () => {
+    // A step from before backend affinity belongs to the run's runner, as `latestSession` reads it.
+    const codex = { ...step('codex', 'old'), startedAt: '2026-11-16T00:00:01Z' };
+    const legacy = { id: 's-legacy', name: 's', kind: STEP_KIND.agent, status: STEP_STATUS.failed, iterations: 1, tokensUsed: 0,
+      sessionId: 'sess-legacy', profileId: 'legacy-account', startedAt: '2026-11-16T00:00:02Z' };
+    expect(executionAccount({ runner: 'claude', agentProfile: 'work', steps: [codex, legacy] }))
+      .toEqual({ runner: 'claude', agentProfile: 'legacy-account' });
+  });
+
   it('falls back to the record before any session exists', () => {
     expect(executionAccount({ runner: 'codex', agentProfile: 'work', steps: [] })).toEqual({ runner: 'codex', agentProfile: 'work' });
   });

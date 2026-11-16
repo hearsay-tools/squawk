@@ -1,15 +1,15 @@
-import { waitPartDescribers, settled, inputsFor, parentWithWorker, sessionOf, prompted, workerWake, conversingParent, parentTurn, parkedOn, workerWaits, observeAdmissionRetries, retryAtOnce, delivered, retryClock, expectAdmissionRetryCleared } from './waits-parity-fixture.testkit.ts';
+import { waitPartDescribers, settled, inputsFor, parentWithWorker, sessionOf, prompted, workerWake, conversingParent, parentTurn, parkedOn, workerWaits, observeAdmissionRetries, retryAtOnce, delivered, retryClock, expectAdmissionRetryCleared, idleClock } from './waits-parity-fixture.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
 import { WAKE_RETRY_BACKOFF } from '../delegation/retry-backoff.ts';
 import { MAX_WAKE_DELIVERY_ATTEMPTS, WAKE_DELIVERY_CAP_NOTE } from './run.ts';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { it as registerTest, expect } from 'vitest';
+import { it as registerTest, expect, vi } from 'vitest';
 import { WAIT_KIND, RUN_STATUS, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { WorkerWaitEntry } from '@open-mercato/cezar-contract';
 import type { RunnerId } from '../core/agent-runner.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
-import { root, manager, store, until, worker, toolGenerationOf, fixtureUpdateRun, restart, terminal } from './worker-wait-core.testkit.ts';
+import { root, manager, store, until, worker, toolGenerationOf, fixtureUpdateRun, restart, terminal, semaphore } from './worker-wait-core.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { recordCommits } from '../runs/outcome-crash.testkit.ts';
@@ -118,6 +118,29 @@ export function recoveryCells(runners: RunnerId[], it: typeof registerTest = reg
         'a received message and its cleared failure count');
       await until(() => store.getRun(f.p.id)?.status === 'waiting');
       expect(store.getRun(f.p.id)?.waitDeliveryFailures).toBeUndefined();
+    });
+
+    it(`${runner} U14i an idle close while a message waits for admission charges no failed delivery, and the next admission delivers it`, async () => {
+      const f = await conversingParent(runner);
+      await parentTurn(f.p.id, toolCall('cezar_wait', { kind: WAIT_KIND.worker, worker_ids: [f.w.id], timeout_seconds: 600 }), () => parkedOn(f.p.id, workerWaits(f.p.id)[0]));
+      expect(manager.isActive(f.p.id)).toBe(true);
+      // Every slot is taken: the scheduler refuses the message's wake admission.
+      const capacity = vi.spyOn(semaphore, 'maxParallel').mockReturnValue(0);
+      const id = await f.progress('Worker progress u14i');
+      await until(() => capacity.mock.calls.length > 0);
+      expect(delivered(f.p.id, id)).toBe(false);
+      idleClock.fire(idleClock.captured - 1);
+      // The close settles either way: a charge, or the wake waiting for a slot as a queued continuation.
+      await until(() => store.getRun(f.p.id)?.status === 'queued' || store.getRun(f.p.id)?.waitDeliveryFailures !== undefined);
+      // No delivery was attempted in the closed session, so its close charges none.
+      expect(store.getRun(f.p.id)?.waitDeliveryFailures).toBeUndefined();
+      expect(store.getRun(f.p.id)?.status).toBe('queued');
+      expect(prompted(runner, 'Worker progress u14i')).toEqual([]);
+      capacity.mockRestore();
+      await semaphore.release();
+      await until(() => delivered(f.p.id, id) && prompted(runner, 'Worker progress u14i').length > 0);
+      expect(store.getRun(f.p.id)?.waitDeliveryFailures).toBeUndefined();
+      await until(() => store.getRun(f.p.id)?.status === 'waiting');
     });
 
     /** A parent on `runner`'s wire parked on a worker wait, written back to disk as an older build

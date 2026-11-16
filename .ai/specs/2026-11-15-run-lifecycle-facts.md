@@ -54,7 +54,7 @@ Accepted at the design gate on 2026-11-15:
 | Fact | Shape | Lives in | Owner | Readers |
 | --- | --- | --- | --- | --- |
 | `workflowCursor` | `{ stepId: string; mode: 'resume' \| 'start' }` | run row (`contract/src/runs.ts`) | exit `fields()` in `runs/run-exits.ts` | `waitingWorkflowStepIndex`, `queuedStartAt`, `heldWorkflowStepId`, continuation settlement |
-| `continuesStepId` | `string`, on a step with `synthetic: 'continuation'` | step record | `workflows/continuation-admission.ts` | `continuationDefStep`, `waitingWorkflowStepIndex` |
+| `continuesStepId` | `string`, on a step with `synthetic: 'continuation'` | step record | `workflows/continuation-admission.ts` | `continuationDefStep` (identity only; `workflowCursor` and the status rules decide the position) |
 | `parkReason` | `'turn' \| 'hold' \| 'closing-wakes'` | run row | exit `fields()` in `runs/run-exits.ts` | `parkedBeforeFinishing` |
 | `doneAccepted` | `{ session: string; at: string; summary?: string }`, retired as `completed` or `reconsidered` with a reason | run row, through `commitOutcome` | `run-finish.ts` writes, `turn-settler.ts` retires | `decideWithoutDone`, the budget human wait, `acceptDone` |
 | human wait `askSeq` | the existing wait-row field, now binding | wait row | `human-waits.ts` | `openHumanAlias`, the `answered` outcome, the input flush gate |

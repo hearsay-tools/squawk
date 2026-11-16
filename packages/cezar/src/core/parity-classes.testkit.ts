@@ -114,6 +114,7 @@ export const PARITY_FAMILIES = {
   }),
   'harness:owned': shared('owned input is delivered by run.ts; R8 differs only by steer or boundary delivery', {
     R6: NATIVE_ASK_SCENARIO, R7: NATIVE_ASK_SCENARIO, R9: NATIVE_ASK_SCENARIO,
+    R131: 'each runner\'s own discardQueuedMessages decides whether it signals input readiness inside the turn end (Cursor print does)',
   }),
   ...Object.fromEntries(['continue', 'restart', 'adopt', 'stop', 'cleanup', 'multi-continue', 'superseded', 'disposal']
     .map(group => [`harness:${group}`, shared(SETTLEMENT_RULES)])),
@@ -125,6 +126,7 @@ export const PARITY_FAMILIES = {
     U7b: 'the answer\'s own write reports its turn start on some runners and not others (turnStart)',
     U8l: 'asserts an opencode-only session state',
     U14m: 'the wake fails through Claude\'s own unread exit on Claude, and no failing opening turn may read the steered message; S44 holds neither',
+    U14i: 'the idle close ends each runner\'s own session, and no runner may receive a message the scheduler did not admit',
     U22k: 'reads the U22s exemption', U22r: 'reads the U22s exemption and holds the acknowledgement on opencode only',
   }),
   'waits-subagents': everyRunner('reads the nativeSubagents fact'),

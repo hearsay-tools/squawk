@@ -1,3 +1,4 @@
+import { latestSessionStep, sessionRunner } from '@open-mercato/cezar-contract/run-predicates';
 import type { Home } from '../home/home.ts';
 import type { RunnerId } from '../core/agent-runner.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
@@ -101,7 +102,7 @@ export function sessionAffinity(run: RunRecord, opts: ContinueRunOptions, identi
   const originalRunner = identity?.account.provider ?? opts.retryRunner ?? run.runner ?? (untouched ? opts.originalRunner : undefined) ?? 'claude';
   const targetRunner = opts.runner ?? originalRunner;
   // Legacy sessions without explicit affinity belong to the run's current runner/account.
-  const sessionBackend = sessionStep?.backend ?? run.runner ?? 'claude';
+  const sessionBackend = sessionRunner(sessionStep, run);
   const sessionAccount = sessionStep?.profileId ?? DEFAULT_AGENT_ACCOUNT_ID;
   // A provider retry keeps the held step's account, as it keeps its runner (hearsay-tools/squawk#3337).
   const accountSwitched = (opts.agentProfile ?? identity?.account.profileId ?? (opts.retryRunner ? undefined : run.agentProfile) ?? sessionAccount) !== sessionAccount;
@@ -151,10 +152,13 @@ export function previousFailure(run: RunRecord) {
     : run.error ? { error: run.error } : undefined;
 }
 
-export function nextStep(run: RunRecord) {
+/** The synthetic step a Continue runs as. It records the workflow step it continues (ADR 0064),
+ *  once, here: a later Continue of this step's session runs as that step (hearsay-tools/squawk#3024). */
+export function nextStep(run: RunRecord, continuedStep: string | undefined) {
   let continuationNumber = 1;
   while (run.steps.some(step => step.id === `continue-${continuationNumber}`)) continuationNumber++;
-  return { id: `continue-${continuationNumber}`, name: 'Continue', kind: 'agent' as const, synthetic: 'continuation' as const };
+  return { id: `continue-${continuationNumber}`, name: 'Continue', kind: 'agent' as const, synthetic: 'continuation' as const,
+    ...(continuedStep === undefined ? {} : { continuesStepId: continuedStep }) };
 }
 
 /** Generated restart text becomes evidence; identical human text stays verbatim. */
@@ -188,6 +192,8 @@ export interface AdmissionReads {
   historyDeletionPending(): boolean;
   parentStatus(parentId: string): RunRecord['status'] | undefined;
   identity(run: RunRecord, session: string | undefined): WorkerStepIdentity | undefined;
+  /** The workflow step the run's latest session continues, when the run names one. */
+  continuedStep(run: RunRecord, session: string | undefined): string | undefined;
   beforeFinalStep(run: RunRecord): boolean;
   waitingStepIndex(run: RunRecord): number;
   pendingFallback(): boolean;
@@ -215,6 +221,7 @@ export class ContinuationChecks {
     if (ownership) return ownership;
     const identity = this.checkIdentity(run);
     if (!identity.ok) return identity;
+    const { continuedStep } = identity;
     const workflow = this.workflowRefusal(run);
     if (workflow) return workflow;
     // Treat a fallback as gone, but close it only after the continuation commits.
@@ -226,7 +233,7 @@ export class ContinuationChecks {
     if (status) return status;
     const session = this.checkSession(run, identity.value);
     if (!session.ok) return session;
-    return { ok: true as const, run, supersedes, identity: identity.value, ...session.value };
+    return { ok: true as const, run, supersedes, identity: identity.value, continuedStep, ...session.value };
   }
 
   private availabilityRefusal(): ContinuationRefusal | undefined {
@@ -269,9 +276,9 @@ export class ContinuationChecks {
 
   private checkIdentity(run: RunRecord) {
     try {
-      const session = [...run.steps].reverse().find(s => s.sessionId)?.sessionId;
+      const session = latestSessionStep(run.steps)?.sessionId;
       const value = this.reads.identity(run, session);
-      return identityRefusal(value, this.opts) ?? { ok: true as const, value };
+      return identityRefusal(value, this.opts) ?? { ok: true as const, value, continuedStep: this.reads.continuedStep(run, session) };
     } catch (error) {
       if (error instanceof WorkerIdentityError) return { ok: false as const, error: error.message };
       throw error;
@@ -329,7 +336,7 @@ export class ContinuationChecks {
   }
 
   private checkSession(run: RunRecord, identity: WorkerStepIdentity | undefined) {
-    const sessionStep = [...run.steps].reverse().find(s => s.sessionId);
+    const sessionStep = latestSessionStep(run.steps);
     // Command/check steps may have changed the repo; only an untouched workflow can restart.
     const untouched = this.reads.untouched(run);
     const absent = sessionRefusal(sessionStep, untouched, (run.delegation?.role === 'worker' && !!this.conversation) || this.opts.freshSession === true);
