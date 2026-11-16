@@ -28,7 +28,7 @@ Behavior at shipped defaults. "Contained" is the `cgroup` backend; "scoped" is `
 | Case | What stops it | Behavior |
 | --- | --- | --- |
 | Normal destroy, live leader | `scopes.stop` after teardown and termination | Contained and scoped: every process in the scope ends; the cgroup is removed |
-| Leader exited first, member left in its group | `scopes.stop` | Contained: ended. Scoped: the group is still Squawk's (its id is not reused while it has members) and is killed |
+| Leader exited first, member left in its group | the session reap at leader exit while the controller runs; else `scopes.stop` | Contained: ended. Scoped: reaped at leader exit by the controller that started it; after a crash, killed by destroy on Linux when its token is from this boot, left alone on another boot or on macOS |
 | Detached descendant (`setsid`, Node `detached`) | `scopes.stop` | Contained: ended. Scoped: survives (accepted limit); `worktreeTeardown` is the way to stop such a service |
 | Controller SIGINT/SIGTERM | session groups get the signal (`forwardToSessionGroups`) | Unchanged; the scope stays recorded for the next destroy or Continue |
 | Controller SIGKILL before a cgroup is created | — | The record names the cgroup first; `stop` treats a missing cgroup as empty |
@@ -37,10 +37,14 @@ Behavior at shipped defaults. "Contained" is the `cgroup` backend; "scoped" is `
 | Destroy races a launch | destroy intent, then `stop` | From the persisted intent `spawnScope` throws; a process that placed itself before the intent but after the kill makes `rmdir` fail with EBUSY and is killed in the next round; a removed cgroup accepts no member |
 | Continue with worker services still alive | — | The scope is reused; services keep running |
 | Continue after a controller crash, old processes alive | `stopCrashedGeneration` → `scopes.kill` | Old processes end, the old generation settles, the new one starts (decision 6) |
+| Recovery settled the crashed generation first (sessions gone, a service still in the scope) | the checkpoint's `interrupted` mark, then `scopes.kill` on Continue | The service ends before the new execution starts |
+| Normal finish, service left running, then Continue | — | The service keeps running in the reused scope |
+| Retention or family end reclaims a settled worker's worktree while its scope holds a service | — | Refused until the scope is empty; destroy stops it |
+| More live groups than the record cap (64) | the spawn site | The new start is refused and its process ended; no recorded live group is dropped |
 | Another live Squawk controls the worker | — | Continue and destroy refuse; nothing is signalled |
 | Scope record absent | — | Treated as empty; a worker from before scopes still has its execution record's groups |
 | Scope record unreadable, oversized, wrong mode or another worker's | — | Spawn refuses; destroy stays incomplete with `process` remaining; nothing is signalled |
-| Recorded group whose leader pid now belongs to another incarnation | — | Not signalled |
+| Recorded group whose leader pid now belongs to another incarnation, or whose leader is gone and whose token is not from this boot | — | Not signalled |
 | Outside process with its cwd in the worktree | — | Never signalled; the worktree is removed (POSIX). It keeps a deleted cwd |
 | Scratch with a process still in the scope | scratch cleanup | Retained until the scope is empty |
 | cgroup does not empty before the timeout | — | Destroy incomplete, `process` remaining, the cgroup stays recorded for the retry |

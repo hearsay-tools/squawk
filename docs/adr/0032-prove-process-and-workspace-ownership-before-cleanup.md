@@ -32,16 +32,27 @@ kinds, so a worker continued by a controller that runs elsewhere is stopped whol
 before scopes has its session groups only in its execution record (`<run>.processes.json`); the
 scope reads them from there, so destroy has no separate path for it.
 
-A recorded group is signalled only while it is still the one Squawk started: its leader is the
-recorded incarnation, or its leader is gone and the group still has members (the kernel does not
-reuse a pid while a group of that id exists). A live process at that pid with another start token
-means the number was reused, and the group is left alone.
+A recorded group is signalled while its leader is alive and is the recorded incarnation. A group
+whose leader is gone keeps its number while it has members, and the kernel does not reuse a pid
+while a group of that number exists; reuse needs the group to empty first. So a leaderless group
+counts only where the record proves the current boot: on Linux the start token carries the boot
+id, and a token from another boot is refused. The residual is a pid space that wraps within one
+boot while the worker lives. On macOS (no boot id, a small pid space) a leaderless group is never
+signalled; while the controller runs, a session group is reaped when its leader exits
+(`core/session-process.ts`), and what a leaderless group keeps after a crash is outside the
+`scoped` guarantee. A start that would
+exceed the recorded-group cap is refused; a live group is never forgotten to make room.
 
 ## Lifecycle
 
 - **Admission and Continue** refuse while another live Squawk controls the worker. A crashed
   controller's leftovers do not refuse: Continue SIGKILLs everything in the scope, waits briefly
   for the recorded session processes to end, settles the old generation and starts the new one.
+  Recovery can settle a crashed generation first, once its recorded sessions are gone; it marks
+  the checkpoint `interrupted`, so the next Continue still stops what the crash left in the scope.
+  A generation that finished normally keeps its services across Continue.
+- **Reclaim and history deletion** (retention, family end, `deleteRun`) need an empty scope as
+  well as dead recorded processes: a service the worker left running still uses its worktree.
 - **Destroy** runs one path, and every scheduled retry runs it in full:
   1. persist the destroy intent; from here the scope starts nothing new;
   2. stop the run and run the project's optional `worktreeTeardown` commands in the worktree
@@ -58,6 +69,8 @@ means the number was reused, and the group is left alone.
   6. persist completion.
 - **Scratch** (the agent's temp directory) is removed once the generation completed, its
   recorded processes are gone and its scope holds no process.
+- **Workers from before scopes** have no scope record; their session groups in the execution
+  record are the scope, under the same rules.
 
 ## Workspace checks
 

@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { pidExists, processStartToken, type RecordedProcess } from '../core/process-stat.ts';
 import { probeCgroups } from './cgroup.ts';
-import type { ScopeRecord } from './scope.ts';
+import { SCOPE_GROUP_CAP, type ScopeRecord } from './scope.ts';
+import * as groupsModule from './groups.ts';
 import type { RunRecord } from '@open-mercato/cezar-contract';
 import { WorkerScopes, type HostScope, type ScopeStore } from './worker-scopes.ts';
 
@@ -29,6 +30,7 @@ function memoryStore(init: Partial<{ record: ScopeRecord | 'unknown'; legacy: Re
 
 const started: number[] = [];
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const pid of started.splice(0)) { try { process.kill(-pid, 'SIGKILL'); } catch { /* gone */ } try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
 });
 
@@ -61,18 +63,45 @@ describe('WorkerScopes', () => {
     expect(new WorkerScopes(memoryStore().store, () => ({ backend: 'cgroup', base: '/sys/fs/cgroup/x' })).describe()).toEqual({ backend: 'cgroup', guarantee: 'contained' });
   });
 
-  it.runIf(posix)('groups: records each started group and stop ends a member whose leader already exited', async () => {
+  it.runIf(posix)('groups: records each started group and stop ends its leader and members', async () => {
     const workerId = randomUUID();
     const { store, state } = memoryStore();
     const scopes = new WorkerScopes(store, () => ({ backend: 'groups', reason: 'test' }));
-    // The leader prints a background child's pid and exits; the child stays in the leader's group.
-    const { leader, printed } = await launch(scopes, workerId, 'sleep 30 & echo $!');
+    // The leader prints a background child's pid and stays; the child is in the leader's group.
+    const { leader, printed } = await launch(scopes, workerId, 'sleep 30 & echo $!; wait');
     expect(state.record).toMatchObject({ workerId, cgroups: [], groups: [{ pid: leader, pgid: leader }] });
-    await vi.waitFor(() => expect(pidExists(leader)).toBe(false), { timeout: HANG_GUARD_MS });
-    expect(pidExists(printed)).toBe(true);
     expect(await scopes.stop(workerId, HANG_GUARD_MS)).toEqual({ stopped: true });
     expect(pidExists(printed)).toBe(false);
+    expect(pidExists(leader)).toBe(false);
     expect(state.record).toEqual({ workerId, cgroups: [], groups: [] });
+  });
+
+  it.runIf(process.platform === 'linux')('groups: a leaderless group counts only with a token from this boot', async () => {
+    const workerId = randomUUID();
+    const { store, state } = memoryStore();
+    const scopes = new WorkerScopes(store, () => ({ backend: 'groups', reason: 'test' }));
+    const { leader, printed } = await launch(scopes, workerId, 'sleep 30 & echo $!');
+    await vi.waitFor(() => expect(pidExists(leader)).toBe(false), { timeout: HANG_GUARD_MS });
+    const record = state.record as ScopeRecord;
+    // The same group recorded at another boot proves nothing: never signalled.
+    state.record = { ...record, groups: record.groups.map(group => ({ ...group, startToken: `00000000-0000-4000-8000-000000000000:${group.startToken!.split(':')[1]}` })) };
+    expect(await scopes.stop(workerId, HANG_GUARD_MS)).toEqual({ stopped: true });
+    expect(pidExists(printed)).toBe(true);
+    // Recorded at this boot: the member is ended.
+    state.record = record;
+    expect(await scopes.stop(workerId, HANG_GUARD_MS)).toEqual({ stopped: true });
+    expect(pidExists(printed)).toBe(false);
+  });
+
+  it.runIf(posix)('groups: refuses a start past the cap instead of forgetting a live group', async () => {
+    const workerId = randomUUID();
+    const { store, state } = memoryStore();
+    const scopes = new WorkerScopes(store, () => ({ backend: 'groups', reason: 'test' }));
+    const live = { pid: process.pid, pgid: process.pid, startToken: 'live' };
+    state.record = { workerId, cgroups: [], groups: Array.from({ length: SCOPE_GROUP_CAP }, () => live) };
+    vi.spyOn(groupsModule, 'liveGroups').mockImplementation(entries => [...entries]);
+    expect(() => scopes.spawnScope(workerId).started(process.pid)).toThrow(/already owns/);
+    expect((state.record as ScopeRecord).groups).toHaveLength(SCOPE_GROUP_CAP);
   });
 
   it.runIf(posix)('groups: a descendant that left the group survives stop (the documented limit)', async () => {

@@ -69,7 +69,7 @@ export class WorkerOrphans {
     if (probe.liveness !== 'gone') { this.orphanProbes.set(runId, { generation: orphan.generation, probe }); return false; }
     this.orphanProbes.delete(runId);
     try {
-      if (!this.context.store.commitWorkerExecutionComplete(runId, orphan.generation)) return false;
+      if (!this.context.store.commitWorkerExecutionComplete(runId, orphan.generation, { interrupted: true })) return false;
     } catch { return false; }
     this.orphanBlockers.delete(runId); this.reportedOrphanBlockers.delete(runId); this.orphanDue.delete(runId);
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: "the interrupted worker's processes are gone; its execution was finalized" });
@@ -154,18 +154,22 @@ export class WorkerOrphans {
   }
 
   /** Continue after a controller crash: end everything the worker's scope holds, then wait (up to
-   * `waitMs`, synchronously: admission is synchronous) for the recorded processes to be gone. Does
-   * nothing while another live controller owns the generation. */
+   * `waitMs`, synchronously: admission is synchronous) for the recorded processes to be gone. The
+   * crashed generation may still be `starting`, or already settled as `interrupted` by recovery;
+   * a generation that finished normally keeps its services. Does nothing while another live
+   * controller owns the generation. */
   stopCrashedGeneration(runId: string, waitMs = 2_000): void {
     const orphan = this.orphanedWorkerGeneration(runId, true);
-    if (!orphan?.record) return;
-    const probe = probeOrphan(orphan.record);
-    if (probe.liveness !== 'alive' || probe.controller !== undefined) return;
+    const probe = orphan ? probeOrphan(orphan.record) : undefined;
+    if (probe?.liveness === 'alive' && probe.controller !== undefined) return;
+    const proof = orphan ? undefined : this.context.store.readWorkerExecution(runId);
+    if (!orphan && !(proof?.phase === 'complete' && proof.interrupted)) return;
+    if (probe?.liveness !== 'alive' && this.context.store.scopes.empty(runId)) return;
     this.context.store.scopes.kill(runId);
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: "Continue stopped the processes the interrupted worker's previous execution left running" });
     const deadline = Date.now() + waitMs;
     const pause = new Int32Array(new SharedArrayBuffer(4));
-    while (probeOrphan(orphan.record).liveness !== 'gone' && Date.now() < deadline) Atomics.wait(pause, 0, 0, 5);
+    while (orphan && probeOrphan(orphan.record).liveness !== 'gone' && Date.now() < deadline) Atomics.wait(pause, 0, 0, 5);
   }
 
   /** Destroy only (#469): end everything the worker's scope holds, then finalize once the recorded

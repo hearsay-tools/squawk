@@ -70,7 +70,12 @@ export class WorkerScopes {
       },
       started: pid => {
         if (this.hostOf().backend !== 'groups' || process.platform === 'win32') return;
-        this.update(workerId, record => ({ ...record, groups: [...liveGroups(record.groups), groupEntry(pid)].slice(-SCOPE_GROUP_CAP) }));
+        this.update(workerId, record => {
+          const live = liveGroups(record.groups);
+          // Never forget a live group to make room: refuse the start instead (the caller ends it).
+          if (live.length >= SCOPE_GROUP_CAP) throw new Error(`worker ${workerId} already owns ${SCOPE_GROUP_CAP} live process groups`);
+          return { ...record, groups: [...live, groupEntry(pid)] };
+        });
       },
     };
   }

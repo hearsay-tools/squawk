@@ -226,20 +226,20 @@ describe('durable conversations', () => {
     expect(await f.service.send(f.caller, request)).toMatchObject({ effect: 'unchanged', message: { id: sent.message.id, resumed: true } });
   });
   // hearsay-tools/squawk#867: the refusal names what holds the worker and the command that gets past it.
-  it.runIf(process.platform !== 'win32')('refuses --resume while a process holds the worker worktree, naming it; the exact retry is accepted after it ends', async () => {
+  // ADR 0032: a process outside the worker's scope that works in its worktree is not the worker's.
+  it.runIf(process.platform !== 'win32')('resumes while an outside process works in the worker worktree, and leaves that process alone', async () => {
     const w = await completedWorker('done');
     await ensureOwnedWorkspace(f.root, f.store.getRun(w.id)!);
     const delegation = f.store.getRun(w.id)!.delegation;
     if (delegation?.role !== 'worker') throw new Error('expected a worker');
-    const holder = spawn('sleep', ['60'], { cwd: delegation.workspace.path, stdio: 'ignore' });
-    const exited = once(holder, 'exit');
+    const outsider = spawn('sleep', ['60'], { cwd: delegation.workspace.path, stdio: 'ignore' });
+    const exited = once(outsider, 'exit');
     try {
       const request = { id: randomUUID(), recipientRunId: w.id, kind: 'request' as const, text: 'Finish the parser change', timeoutSeconds: 600, resume: true };
-      await expect(f.service.send(f.caller, request)).rejects.toMatchObject({ code: 'incompatible_state',
-        message: `Worker was not resumed: processes ${holder.pid} (sleep) still hold the worker's worktree or scratch. No message was accepted; end them, then retry the same command` });
-      holder.kill(); await exited;
       expect(await f.service.send(f.caller, request)).toMatchObject({ message: { state: 'accepted', resumed: true } });
-    } finally { holder.kill(); }
+      expect(outsider.exitCode).toBeNull();
+      expect(outsider.signalCode).toBeNull();
+    } finally { outsider.kill(); await exited; }
   });
   // hearsay-tools/squawk#867: each store refusal carries its own cause and next step.
   const spawnNext = 'spawn a new worker with the instruction';

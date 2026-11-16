@@ -143,23 +143,27 @@ export class DevServer extends EventEmitter {
     // stdin is closed: nobody can answer a prompt from the cockpit, so one fails fast into `exited` with its log.
     // The command is the agent's and runs outside its sandbox: it gets the curated env, never Squawk's secrets (#427).
     const env = buildCommandEnv();
-    let child: ChildProcess;
-    try {
-      if (process.platform === 'win32') child = spawn(this.server.command, { cwd, env, shell: true, windowsHide: true, stdio: ['ignore', logFd, logFd] });
-      else {
-        const [file, args] = this.scope ? this.scope.command('/bin/sh', ['-c', this.server.command]) : ['/bin/sh', ['-c', this.server.command]];
-        child = spawnDetached(file, args, { cwd, env, stdio: ['ignore', logFd, logFd] });
-        const pid = child.pid;
-        if (pid !== undefined) {
-          try { this.scope?.started(pid); } catch (error) { child.on('error', () => undefined); try { process.kill(-pid, 'SIGKILL'); } catch { /* gone */ } throw error; }
-        }
-      }
-    } catch (error) {
-      // The worker's scope refused (its destroy has begun) or could not record the process.
+    // A worker's server starts in its scope; a scope that refuses (its destroy has begun) or cannot
+    // record the process starts nothing (ADR 0032).
+    const refuse = (error: unknown) => {
       try { appendFileSync(this.logPath, `${productName('cezar')} could not start the command: ${(error as Error).message}\n`); } catch { /* log is best effort */ }
       closeSync(logFd);
       this.finish('exited');
-      return;
+    };
+    let argv: [string, string[]] = ['/bin/sh', ['-c', this.server.command]];
+    if (process.platform !== 'win32' && this.scope) {
+      try { argv = this.scope.command(argv[0], argv[1]); } catch (error) { refuse(error); return; }
+    }
+    const child = process.platform === 'win32'
+      ? spawn(this.server.command, { cwd, env, shell: true, windowsHide: true, stdio: ['ignore', logFd, logFd] })
+      : spawnDetached(argv[0], argv[1], { cwd, env, stdio: ['ignore', logFd, logFd] });
+    const pid = child.pid;
+    if (process.platform !== 'win32' && this.scope && pid !== undefined) {
+      try { this.scope.started(pid); } catch (error) {
+        child.on('error', () => undefined);
+        try { process.kill(-pid, 'SIGKILL'); } catch { /* gone */ }
+        refuse(error); return;
+      }
     }
     closeSync(logFd);
     this.child = child;

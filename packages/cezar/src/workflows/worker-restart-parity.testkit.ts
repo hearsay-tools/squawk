@@ -26,7 +26,7 @@ import { workerCleanups } from '../delegation/worker-cleanup.ts';
 // Native wires, tokens, process groups, cancellation, persistence, Git locking, collection and
 // parent Finish are real. Worker ownership comes from the scope and the process ledger (ADR 0032).
 export const RESTART_GROUPS = {
- 'starting-proof': ['starting-proof', 'continue-after-crash'],
+ 'starting-proof': ['starting-proof', 'continue-after-crash', 'continue-after-recovered-crash'],
  'destroy-absent-ledger': ['destroy-absent'],
  'destroy-incomplete-ledger': ['destroy-incomplete'],
  'same-boot-crash-lock': ['same-boot-crash-lock'],
@@ -135,6 +135,40 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
         await outside.write();
         manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
       } finally { await survivor.close(); await outside.close(); }
+    });
+    it.each(RESTART_RUNNERS.r47)('%s Continue after a crash that recovery already settled still stops what the crash left in the scope', async runner => {
+      process.env.CEZ_DRY_RUN = '0';
+      const adapter = HARNESS_ADAPTERS[runner]; process.env[adapter.binEnv] = adapter.mockBin;
+      const p = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
+      setRunStatus(store, p.id, RUN_STATUS.waiting, { delegation: { role: 'root', permissions: ['spawn', 'inspect'], receipts: [] } });
+      const w = await worker(p.id, adapter.scenarios.baseline!);
+      store.updateRun(w.id, { runner }); manager.enqueueOwnedRun(w.id);
+      await until(() => store.getRun(w.id)?.status === 'waiting');
+      const proof = store.readWorkerExecution(w.id)!;
+      const recorded = store.readWorkerProcesses(w.id, proof.generation);
+      if (typeof recorded === 'string') throw Error('missing native process ledger');
+      manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
+      await Promise.all(executions.splice(0)); await Promise.all(bookkeeping.splice(0)); manager.dispose();
+      const files = join(root, '.ai/cezar/runs');
+      writeFileSync(join(files, `${w.id}.execution.json`), JSON.stringify(proof));
+      // The crash left a service the worker's setup started, in its scope only; its sessions are gone.
+      const service = await groupHolder(root);
+      store.scopes.spawnScope(w.id).started(service.pid);
+      const boot = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim();
+      writeFileSync(join(files, `${w.id}.processes.json`), JSON.stringify({ ...recorded,
+        controller: { pid: ABSENT_PROCESS_PID, startToken: `${boot}:100` } }));
+      store.flush(); reopenRuntime();
+      try {
+        // Recovery settles the generation first, and marks it interrupted.
+        await manager.recover();
+        expect(store.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', generation: proof.generation, interrupted: true });
+        expect(service.running).toBe(true);
+        expect(manager.continueRun(w.id)).toMatchObject({ ok: true });
+        await until(() => !service.running);
+        expect(store.readWorkerExecution(w.id)?.generation).not.toBe(proof.generation);
+        await until(() => store.getRun(w.id)?.status === 'waiting');
+        manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
+      } finally { await service.close(); }
     });
   }
   if (group === 'destroy-absent-ledger' || group === 'destroy-incomplete-ledger') {

@@ -7,5 +7,5 @@ it('runs each complete native-runner restart family in exactly one file', () => 
   .filter(name => name.startsWith('worker-restart-') && name.endsWith('-parity.test.ts'))
   .flatMap(name => { return [...readFileSync(new URL(name, import.meta.url), 'utf8').matchAll(/registerRestartGroup\('([^']+)'\)/g)].map(match => match[1]); });
  expect(registrations.sort()).toEqual(Object.keys(RESTART_GROUPS).sort());
- expect(Object.values(RESTART_GROUPS).flat().sort()).toEqual(['continue-after-crash', 'destroy-absent', 'destroy-incomplete', 'same-boot-crash-lock', 'starting-proof']);
+ expect(Object.values(RESTART_GROUPS).flat().sort()).toEqual(['continue-after-crash', 'continue-after-recovered-crash', 'destroy-absent', 'destroy-incomplete', 'same-boot-crash-lock', 'starting-proof']);
 });

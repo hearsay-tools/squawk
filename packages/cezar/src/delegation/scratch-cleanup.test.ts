@@ -275,6 +275,18 @@ describe('durable scratch cleanup evidence', () => {
     } finally { await outsider.close(); }
   });
 
+  it.runIf(process.platform !== 'win32')('reclaim needs an empty scope; admission does not (ADR 0032)', async () => {
+    const { run, generation, scratch } = await completed();
+    if (run.delegation?.role !== 'worker') throw Error('missing worker');
+    const service = await groupHolder(scratch);
+    own(run.id, service.pid);
+    try {
+      expect(store.workerResourcesSafe(run.id, generation, run.delegation.workspace.resourceId)).toBe(false);
+      expect(store.workerResourceHolders(run.id, generation, run.delegation.workspace.resourceId)).toBe('safe');
+    } finally { await service.close(); }
+    expect(store.workerResourcesSafe(run.id, generation, run.delegation.workspace.resourceId)).toBe(true);
+  });
+
   it.each(['execution', 'processes'])('reconstructs and keeps retrying while the private %s evidence is unreadable', async sidecar => {
     const { run, dataDir, scratch } = await completed();
     const path = join(dataDir, 'runs', `${run.id}.${sidecar}.json`), evidence = readFileSync(path);

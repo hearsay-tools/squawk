@@ -2742,7 +2742,8 @@ export class RunStore extends EventEmitter {
   /** Complete execution is not permission to reuse/delete persistent resources (#738).
    * Synchronous, fresh and generation/resource fenced; callers hold admission off across awaits. */
   workerResourcesSafe(id: string, generation: string, resourceId: string): boolean {
-    return this.workerResourceHolders(id, generation, resourceId) === 'safe';
+    // Reclaim and history deletion also need an empty scope; admission does not (ADR 0032).
+    return this.workerResourceHolders(id, generation, resourceId) === 'safe' && this.scopes.empty(id);
   }
 
   /** `workerResourcesSafe` with the refusal's live PIDs (empty when no PID explains it). */
@@ -2754,8 +2755,7 @@ export class RunStore extends EventEmitter {
     if (!workerResourceAuthorized(run, proof, id, generation, resourceId, opts.admittingQueued)) return [];
     const record = this.readWorkerProcesses(id, generation);
     if (record === 'unknown' || !agentTmpDirOwnershipProven(this.dataDir, id)) return [];
-    // Only the generation's own recorded processes count; a process outside the worker's scope
-    // that works in its paths is not the worker's and blocks nothing (ADR 0032).
+    // Only the generation's recorded processes count; an outside process blocks nothing (ADR 0032).
     return recordedHolders(record);
   }
 
@@ -2769,8 +2769,7 @@ export class RunStore extends EventEmitter {
     this.writeWorkerExecution(id, { ...proof, scratchCleanup: { resourceId, path } });
   }
 
-  /** Cleanup can outlive its index row, but never its generation or terminal task intent.
-   * `cwds` is the scratch reprobe tick's shared `/proc` snapshot (hearsay-tools/cezarion#879). */
+  /** Cleanup can outlive its index row, but never its generation or terminal task intent. */
   workerScratchResourcesSafe(id: string, generation: string, resourceId: string): boolean {
     if (autosaveCleanupBlocker(this.dataDir, id)) return false;
     const run = this.peek(id), proof = this.readWorkerExecution(id);
@@ -2849,7 +2848,7 @@ export class RunStore extends EventEmitter {
     return true;
   }
 
-  commitWorkerExecutionComplete(id: string, generation: string): boolean {
+  commitWorkerExecutionComplete(id: string, generation: string, opts: { interrupted?: boolean } = {}): boolean {
     const proof = this.readWorkerExecution(id);
     if (!proof || proof.generation !== generation) return false;
     if (proof.phase === 'queued' && this.peek(id)?.status !== 'cancelled') return false;
@@ -2861,6 +2860,7 @@ export class RunStore extends EventEmitter {
       this.writeWorkerExecution(id, { generation, phase: 'complete',
         // Nothing abandons an execution any more (hearsay-tools/cezarion#889); keep a checkpoint that already was.
         ...(proof.abandoned ? { abandoned: true as const } : {}),
+        ...(opts.interrupted && proof.phase === 'starting' ? { interrupted: true as const } : {}),
         ...(proof.phase === 'queued' || proof.neverMaterialized ? { neverMaterialized: true as const } : {}),
         ...(!['queued', 'running', 'waiting'].includes(run.status) ? { scratchCleanup: {
           resourceId: run.delegation.workspace.resourceId, path: run.delegation.workspace.path } } : {}) });
