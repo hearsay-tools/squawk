@@ -34,7 +34,8 @@ Selection rules:
      through Vitest's import graph. Eligible extensions: ts, tsx, js, jsx, mjs.
   2. Manifests, the lockfile, tsconfig, Vitest configuration and the files the
      Vitest configuration imports fall back to full Vitest.
-  3. A snapshot selects its test.
+  3. A snapshot selects its test; a *.baseline.json selects the tests that
+     declare its exact path.
   4. Any other path under packages/, including packages/contract, falls back
      to full Vitest.
   5. A path that squeal.config.json inputs declares selects its reader tests.

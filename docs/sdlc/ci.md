@@ -131,7 +131,7 @@ deleted and renamed paths take the same rules:
 | TS/JS source in `packages/{cezar,web,api-client}/src` | Vitest's import graph. A deleted file selects through its importers, which the same change must edit |
 | Manifests, the lockfile, `tsconfig*.json`, Vitest configuration and setup files, and the local files they import | Full Vitest |
 | A `__snapshots__/*.snap` file | Its test |
-| A `*.baseline.json` with a declared reader | The declared lint tests |
+| A `*.baseline.json` that a test declares by its exact path | The tests that declare it |
 | Any other path under `packages/`, `packages/contract` included | Full Vitest |
 | A path that `squeal.config.json` `inputs` declares for a Vitest test | That test |
 | `.github/{mutants,workflows,scripts}/**`, `.github/cockpit-test-durations.json`, `.ai/skills/**`, `scripts/*.test.mjs` | Nothing: no Vitest test reads them |
