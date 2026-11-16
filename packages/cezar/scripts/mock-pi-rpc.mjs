@@ -81,6 +81,7 @@ function replaySteer(text, failure) {
   write({ type: 'message_end', message });
   if (failure) write(failure);
   else {
+    const trigger = slashTrigger(text);
     sendText([trigger && knownSkill('pi', trigger) ? SKILL_TOKEN : text]);
     write({ type: 'message_end', message: { role: 'assistant', usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, cost: { total: 0 } } } });
   }
