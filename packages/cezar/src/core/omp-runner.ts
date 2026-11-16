@@ -1,3 +1,4 @@
+import { openingContent, skillOf, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { dirname, resolve as resolvePath } from 'node:path';
@@ -95,6 +96,7 @@ export const OMP_SPEC_SUPPORT: AgentRunSpecSupport = {
   squawkTools: { honored: true, via: `explicit CI --extension; the ${productName('Cezar')} tools admitted when --tools is set` },
   ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: '--append-system-prompt' },
+  skill: { honored: true, via: 'RPC prompt /skill:id args' },
   userPrompt: { honored: true, via: 'RPC prompt.message' },
   images: { honored: true, via: "RPC prompt.images ({type:'image', data, mimeType})" },
   cwd: { honored: true, via: 'spawn cwd' },
@@ -403,7 +405,8 @@ export class OmpRunner implements AgentRunner {
       for (const [id, held] of humanHeld) if (held.acked) humanHeld.delete(id);
     }
     const sendMessage = (content: ContentBlock[], requestId?: string, inputIds: readonly string[] = []): boolean => {
-      if (!open) return false;
+      if (!open || !validSkillMessage(content)) return false;
+      if (skillOf(content) && !this.facts.skillTriggerMidTurn && ompUi.turnId) return false;
       // A steer joins the running turn; only an idle prompt opens one (#505).
       const opensTurn = !ompUi.turnId;
       rpcInput.beginPrompt();
@@ -470,7 +473,7 @@ export class OmpRunner implements AgentRunner {
       write({ id: 'cezar-subagents', type: 'set_subagent_subscription', level: 'events' });
       // Drops the per-delta `partial` snapshot; the coalescer and the mapper read deltas only.
       write({ id: 'cezar-event-filter', type: 'set_event_filter', events: null, messageUpdates: 'delta' });
-      sendMessage([...(spec.images ?? []), { type: 'text', text: spec.userPrompt }]);
+      sendMessage(openingContent(spec));
     };
     startup();
 
@@ -510,8 +513,10 @@ export class OmpRunner implements AgentRunner {
       onEvent?.({ type: 'token-usage', tokensUsed });
       if (usageReport.costUsd !== undefined) onEvent?.({ type: 'cost', usd: usageReport.costUsd });
     };
+    let sessionReported = false;
     const adoptState = (value: Record<string, unknown>, data: Record<string, unknown>): void => {
-      adoptRpcSessionId(data, sessionId, (id) => { sessionId = id; }, onEvent);
+      adoptRpcSessionId(data, (id) => { sessionId = id; }, Boolean(spec.resume && spec.sessionId === data.sessionId), sessionReported ? undefined : onEvent);
+      sessionReported ||= typeof data.sessionId === 'string' && data.sessionId.length > 0;
       // OMP v18.6.1 still has no fresh persistent-session flag. Its autoResume
       // setting can restore history without --resume (hearsay-tools/cezarion#832).
       // Only the startup query is evidence: later reads include our own messages.

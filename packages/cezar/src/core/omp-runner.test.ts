@@ -319,7 +319,7 @@ describe('OmpRunner session over the mock', () => {
   it('streams text, tools and one turn-end for the baseline turn', async () => {
     const { events, ui, result } = await runSession(spec('inspect the working tree'));
     expect(events.filter(event => event.type !== 'token-usage' && event.type !== 'cost')).toEqual([
-      { type: 'session', sessionId: '019a0000-0000-7000-8000-0000000000aa' },
+      { type: 'session', sessionId: '019a0000-0000-7000-8000-0000000000aa', resumed: false },
       { type: 'text', text: 'Investigating: inspect the working tree' },
       { type: 'tool-call', id: 'tool-1', tool: 'read', input: { path: 'README.md' } },
       { type: 'tool-result', toolCallId: 'tool-1', result: 'mock file', isError: false },
@@ -1340,9 +1340,10 @@ await import(${JSON.stringify(MOCK)});
 
   it('discovered session id is emitted once and reused with --resume on the next session', async () => {
     const first = await runSession(spec('inspect the working tree'));
-    expect(first.events.filter(event => event.type === 'session')).toEqual([{ type: 'session', sessionId: '019a0000-0000-7000-8000-0000000000aa' }]);
+    expect(first.events.filter(event => event.type === 'session')).toEqual([{ type: 'session', sessionId: '019a0000-0000-7000-8000-0000000000aa', resumed: false }]);
     const second = await runSession(spec('continue', { sessionId: first.result.sessionId, resume: true }));
-    expect(second.events.filter(event => event.type === 'session')).toEqual([]);
+    // Every adapter start reports whether it resumed, even when the id is unchanged.
+    expect(second.events.filter(event => event.type === 'session')).toEqual([{ type: 'session', sessionId: first.result.sessionId, resumed: true }]);
     expect(second.result.sessionId).toBe('019a0000-0000-7000-8000-0000000000aa');
     const [firstArgs, secondArgs] = lines('args.ndjson') as unknown as string[][];
     expect(firstArgs).not.toContain('--resume');

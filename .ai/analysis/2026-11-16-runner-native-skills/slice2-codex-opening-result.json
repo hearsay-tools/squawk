@@ -1,0 +1,20 @@
+{
+  "runner": "codex",
+  "model": "gpt-5.6-luna",
+  "elapsedMs": 4497,
+  "tokenReturned": true,
+  "tools": 0,
+  "sentMid": false,
+  "midAccepted": false,
+  "boundaries": 1,
+  "expansionFrames": 1,
+  "session": [
+    {
+      "type": "session",
+      "sessionId": "01a1e643-bb67-73c2-861d-72bcb2b3aa72",
+      "resumed": false
+    }
+  ],
+  "errors": [],
+  "userItems": []
+}

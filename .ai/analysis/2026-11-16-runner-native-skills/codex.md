@@ -231,3 +231,12 @@ Implemented adapter output (364 ms, 39 skills, trimmed):
 
 Real native response excerpt: `core/__fixtures__/codex/skill-list.json` under the service
 workspace. It also records one invalid skill: `errors:[{path,message:"missing YAML frontmatter delimited by ---"}]`.
+
+## Slice 2 trigger checks (2026-11-16)
+
+Codex 0.164.0, `gpt-5.6-luna`. One real turn returned the random fixture token in
+4497 ms with zero tool calls. The native `item/completed` userMessage contains a structured
+skill item with its listed path and the text arguments. The adapter refuses a skill while a
+turn is active or another start is pending; it never sends such an item on `turn/steer`.
+
+See [slice 2 evidence](slice2-evidence.md) for commands, captures and offline checks.

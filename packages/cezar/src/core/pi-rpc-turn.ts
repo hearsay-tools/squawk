@@ -2,7 +2,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentEvent, AgentRunResult, AgentToolCallRecord, ContentBlock, SessionOptions } from './agent-runner.js';
 import { isSignalTerminationExit } from './agent-runner.js';
 import { InputSubmissions } from './input-submissions.ts';
-import { contentText, emitImages, isRecord, piMessageText, string } from './pi-rpc-wire.ts';
+import { contentText, emitImages, isRecord, piMessageText, ompSkillPrompt, string } from './pi-rpc-wire.ts';
 import { AUTO_END_DELAY_MS } from './runner-runtime.js';
 import { signalSession } from './session-process.js';
 import type { UiEvent } from './ui-events.js';
@@ -213,7 +213,7 @@ export class PiRpcInput {
    *  An agent submission with its text is read and reported; otherwise the text is returned, so
    *  the runner can settle the human prompt it holds. */
   readUserMessage(message: Record<string, unknown>): string | undefined {
-    const text = piMessageText(message);
+    const text = ompSkillPrompt(message) ?? piMessageText(message);
     const ids = this.submissions.consumeOldestByText(text);
     if (!ids.length) return text;
     this.host.opts.onAgentInputConsumed?.(ids);
@@ -317,17 +317,17 @@ export function armEndWatchdog(
   return { clear: () => clearTimeout(timer) };
 }
 
-/** A `get_state` response's session id: a new one is adopted, then reported as a `session` event. */
+/** A `get_state` response adopts the native id. Each adapter reports it once per start. */
 export function adoptRpcSessionId(
   data: Record<string, unknown>,
-  current: string | undefined,
   adopt: (sessionId: string) => void,
+  resumed: boolean,
   onEvent?: (event: AgentEvent) => void,
 ): void {
   const discovered = string(data.sessionId);
-  if (discovered && discovered !== current) {
+  if (discovered) {
     adopt(discovered);
-    onEvent?.({ type: 'session', sessionId: discovered });
+    onEvent?.({ type: 'session', sessionId: discovered, resumed });
   }
 }
 
@@ -367,7 +367,7 @@ export function dispatchPiTurnMessage(value: Record<string, unknown>, turn: PiTu
       break;
     case 'agent_start': turn.input.startTurn(); break;
     case 'message_start':
-      if (isRecord(value.message) && value.message.role === 'user') {
+      if (isRecord(value.message) && (value.message.role === 'user' || ompSkillPrompt(value.message) !== undefined)) {
         const text = turn.input.readUserMessage(value.message);
         if (text !== undefined) turn.humanPromptRead(text);
       }

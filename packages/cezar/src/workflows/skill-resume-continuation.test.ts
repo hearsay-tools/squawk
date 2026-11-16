@@ -126,7 +126,7 @@ describe('skill resume continuation follow-ups (#790 review)', { timeout: 20_000
           end: () => finish(''),
         };
         sessions.push({ spec, finish });
-        queueMicrotask(() => onEvent?.({ type: 'session', sessionId: `sess-${launches.length}` }));
+        queueMicrotask(() => onEvent?.({ type: 'session', sessionId: `sess-${launches.length}`, resumed: false }));
         return session;
       },
     }));

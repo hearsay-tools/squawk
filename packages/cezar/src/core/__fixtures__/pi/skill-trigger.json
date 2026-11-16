@@ -1,0 +1,15 @@
+[
+  {
+    "type": "message_start",
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<skill name=\"probe-project\" location=\"/probe/repo/.pi/skills/probe-project/SKILL.md\">\nReferences are relative to /probe/repo/.pi/skills/probe-project.\n\nReply with exactly TRIGGER-FIXTURE. Do not use any tool.\n</skill>\n\nfixture arguments\n\nOpening context: this is a native skill probe."
+        }
+      ],
+      "timestamp": 1794864645778
+    }
+  }
+]

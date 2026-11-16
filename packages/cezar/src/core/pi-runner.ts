@@ -1,3 +1,4 @@
+import { openingContent, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -69,6 +70,7 @@ export const PI_SPEC_SUPPORT: AgentRunSpecSupport = {
   squawkTools: { honored: true, via: 'explicit CI --extension and selected tool admission' },
   ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: '--append-system-prompt' },
+  skill: { honored: true, via: 'RPC prompt /skill:id args with context after arguments' },
   userPrompt: { honored: true, via: 'RPC prompt message' },
   images: { honored: true, via: 'RPC prompt images' },
   cwd: { honored: true, via: 'spawn cwd' },
@@ -207,7 +209,7 @@ export class PiRunner implements AgentRunner {
     };
     child.stdin.on('error', failInput);
     const sendMessage = (content: ContentBlock[], requestId?: string, inputIds: readonly string[] = []): boolean => {
-      if (!open) return false;
+      if (!open || !validSkillMessage(content)) return false;
       // A steer joins the running turn; only an idle prompt opens one (#505).
       const opensTurn = !piUi.turnId;
       rpcInput.beginPrompt();
@@ -269,13 +271,7 @@ export class PiRunner implements AgentRunner {
     // accepted steer at the next model call. get_state cannot tell that default
     // from an explicit user setting, so we always set all rather than guess.
     write({ type: 'set_steering_mode', mode: 'all' });
-    sendMessage([
-      ...(spec.images ?? []),
-      {
-        type: 'text',
-        text: spec.userPrompt,
-      },
-    ]);
+    sendMessage(openingContent(spec));
 
     const limitMs = spec.timeoutMs ?? this.timeoutMs ?? spec.timings?.runTimeoutMs ?? DEFAULT_RUNNER_TIMINGS.runTimeoutMs;
     const deadline =
@@ -358,9 +354,11 @@ export class PiRunner implements AgentRunner {
       rpcInput.readyAfterAck();
     };
     // A failed get_state has no branch of its own: it is reported like any other failed command.
+    let sessionReported = false;
     const handleResponse = (value: Record<string, unknown>): void => {
       if (value.command === 'get_state' && value.success === true && isRecord(value.data)) {
-        adoptRpcSessionId(value.data, sessionId, (id) => { sessionId = id; }, onEvent);
+        adoptRpcSessionId(value.data, (id) => { sessionId = id; }, Boolean(spec.resume && spec.sessionId === value.data.sessionId), sessionReported ? undefined : onEvent);
+        sessionReported ||= typeof value.data.sessionId === 'string' && value.data.sessionId.length > 0;
       } else if (value.command === 'set_steering_mode') {
         if (value.success !== true) {
           onEvent?.({ type: 'note', message: `pi: set_steering_mode failed: ${rpcError(value)}` });

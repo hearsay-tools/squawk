@@ -85,7 +85,7 @@ beforeEach(() => {
       closeWire = close;
       emitAgentEvent = event => onEvent?.(event);
       reportConsumed = ids => options?.onAgentInputConsumed?.(ids);
-      queueMicrotask(() => { onEvent?.({ type: 'session', sessionId: 'input-entry-session' }); opened.resolve(); });
+      queueMicrotask(() => { onEvent?.({ type: 'session', sessionId: 'input-entry-session', resumed: false }); opened.resolve(); });
       return { get open() { return open; }, result: result.promise, sendMessage: () => true,
         sendAgentMessage: () => sendAck, discardQueuedMessages: () => {}, holdsHumanInput: () => holdsInput,
         end: close, interrupt: close };

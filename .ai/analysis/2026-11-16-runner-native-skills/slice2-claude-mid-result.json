@@ -1,0 +1,20 @@
+{
+  "runner": "claude",
+  "model": "haiku",
+  "elapsedMs": 6582,
+  "tokenReturned": true,
+  "tools": 0,
+  "sentMid": true,
+  "midAccepted": true,
+  "boundaries": 2,
+  "expansionFrames": 0,
+  "session": [
+    {
+      "type": "session",
+      "sessionId": "68998c74-4f45-4421-8ecb-cb826b7def82",
+      "resumed": false
+    }
+  ],
+  "errors": [],
+  "userItems": []
+}

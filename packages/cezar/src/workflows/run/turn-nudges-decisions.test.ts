@@ -274,7 +274,7 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
         });
         session = { get open() { return open; }, result, sendMessage: vi.fn(() => true), sendAgentMessage,
           end: vi.fn(close), interrupt: vi.fn(close), discardQueuedMessages: vi.fn(), holdsHumanInput: () => false };
-        queueMicrotask(() => emit({ type: 'session', sessionId: 'ack-bound-session' }));
+        queueMicrotask(() => emit({ type: 'session', sessionId: 'ack-bound-session', resumed: false }));
         return session;
       },
     };
@@ -483,7 +483,7 @@ describe('the no-wait nudge reply bound across workflow steps', () => {
           end: vi.fn(close), interrupt: vi.fn(close), discardQueuedMessages: vi.fn(), holdsHumanInput: () => false };
         const emit = (event: AgentEvent) => onEvent?.(event);
         wires.push({ session, emit, emitUi: event => options?.onUiEvent?.(event), close });
-        queueMicrotask(() => emit({ type: 'session', sessionId: `step-${wires.length}` }));
+        queueMicrotask(() => emit({ type: 'session', sessionId: `step-${wires.length}`, resumed: false }));
         return session;
       },
     };

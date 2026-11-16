@@ -584,3 +584,10 @@ describe('omp ui mapper (golden fixtures)', () => {
     expect(ompProviderErrorMessage({ errorMessage: 'x' })).toBe('omp: provider request failed: x');
   });
 });
+
+
+it('maps a real skill expansion once across message_start, message_end and agent_end', () => {
+  const [start] = JSON.parse(readFileSync(join(FIXTURES, 'skill-trigger.json'), 'utf8'));
+  const values = [start, { ...start, type: 'message_end' }, { type: 'agent_end', messages: [start.message], yielded: true }, { type: 'session_settled' }];
+  expect(fold(values).events).toEqual(expected('skill-trigger'));
+});

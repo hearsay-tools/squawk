@@ -70,7 +70,7 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
       { id: 'implement', backend: 'codex', profileId: 'default' }, { id: 'review', backend: 'claude', profileId: 'account-a' },
     ]);
     if (mode !== 'continue') return;
-    sessions[2]!.emit({ type: 'session', sessionId: 'review-session' }); sessions[2]!.finish('reviewed');
+    sessions[2]!.emit({ type: 'session', sessionId: 'review-session', resumed: false }); sessions[2]!.finish('reviewed');
     expect(await f.manager.awaitRunTermination(worker.id, 15000)).toBe(true);
     // A Continue extends the LAST agent step, so it resumes under that step's identity, not the run-level codex one.
     expect(f.manager.continueRun(worker.id, { text: 'again', runner: 'codex' })).toMatchObject({ ok: false, error: expect.stringContaining('identity') });
@@ -122,7 +122,7 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
     expect(f.manager.continueRun(workerId, { text: 'again' })).toEqual({ ok: true });
     await until(() => sessions.length === 3);
-    sessions[2]!.emit({ type: 'session', sessionId: 'continue-thread' });
+    sessions[2]!.emit({ type: 'session', sessionId: 'continue-thread', resumed: false });
     await until(() => f.store.getRun(workerId)?.steps.find(step => step.id === 'continue-1')?.sessionId === 'continue-thread');
     expect(f.store.getRun(workerId)?.steps.find(step => step.id === 'continue-1')).toMatchObject({ synthetic: 'continuation', continuesStepId: 'implement' });
     // continue-1's process ends before `review` starts. The next Continue resumes its session.
@@ -154,12 +154,12 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
     expect(f.manager.continueRun(workerId, { text: 'again' })).toEqual({ ok: true });
     await until(() => sessions.length === 3);
-    sessions[2]!.emit({ type: 'session', sessionId: 'continue-thread' });
+    sessions[2]!.emit({ type: 'session', sessionId: 'continue-thread', resumed: false });
     await until(() => f.store.getRun(workerId)?.steps.find(step => step.id === 'continue-1')?.sessionId === 'continue-thread');
     doneTurn(sessions[2]!, 'implemented');
     await until(() => sessions.length === 4);
     expect(sessions[3]!.spec.userPrompt).toContain('Review: child');
-    sessions[3]!.emit({ type: 'session', sessionId: 'review-session' });
+    sessions[3]!.emit({ type: 'session', sessionId: 'review-session', resumed: false });
     await until(() => f.store.getRun(workerId)?.steps.find(step => step.id === 'review')?.sessionId === 'review-session');
     sessions[3]!.finish('reviewed');
     expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
@@ -182,7 +182,7 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     const a = await acceptIdentityWorker(undefined, undefined, { workflow: 'checked' });
     const workerId = a.child.workerId;
     await launchAccepted(a, 'queued'); await until(() => sessions.length === 2);
-    sessions[1]!.emit({ type: 'session', sessionId: 'implement-session' });
+    sessions[1]!.emit({ type: 'session', sessionId: 'implement-session', resumed: false });
     await until(() => f.store.getRun(workerId)?.steps.find(step => step.id === 'implement')?.sessionId === 'implement-session');
     doneTurn(sessions[1]!, 'implemented');
     expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
@@ -211,7 +211,7 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     const a = await acceptIdentityWorker(undefined, undefined, { workflow: 'single' });
     const workerId = a.child.workerId;
     await launchAccepted(a, 'queued'); await until(() => sessions.length === 2);
-    sessions[1]!.emit({ type: 'session', sessionId: 'implement-session' });
+    sessions[1]!.emit({ type: 'session', sessionId: 'implement-session', resumed: false });
     await until(() => f.store.getRun(workerId)?.steps.find(step => step.id === 'implement')?.sessionId === 'implement-session');
     doneTurn(sessions[1]!, 'implemented');
     expect(await f.manager.awaitRunTermination(workerId, 15000)).toBe(true);
@@ -260,7 +260,7 @@ describe('per-step worker identity across mixed-runner chains', { timeout: 15_00
     const a = await acceptIdentityWorker(undefined, undefined, { workflow: 'mixed' });
     await launchAccepted(a, 'queued'); await until(() => sessions.length === 2);
     doneTurn(sessions[1]!, 'implemented'); await until(() => sessions.length === 3);
-    sessions[2]!.emit({ type: 'session', sessionId: 'review-session' }); sessions[2]!.finish('reviewed');
+    sessions[2]!.emit({ type: 'session', sessionId: 'review-session', resumed: false }); sessions[2]!.finish('reviewed');
     expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
     rmSync(codexHome, { recursive: true, force: true });
     return { a, codexHome };

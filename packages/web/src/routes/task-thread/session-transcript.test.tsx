@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApiRun, RunEvent, UiToolItem } from '@open-mercato/cezar-api-client'
 
 import claudeSubagent from '../../../../cezar/src/core/__fixtures__/claude/subagent-task.expected.json'
+import ompSkillTrigger from '../../../../cezar/src/core/__fixtures__/omp/skill-trigger.expected.json'
 import codexReview from '../../../../cezar/src/core/__fixtures__/codex/review-mode.expected.json'
 import opencodeSubtask from '../../../../cezar/src/core/__fixtures__/opencode/subtask-nested.expected.json'
 
@@ -901,4 +902,15 @@ it.each(['agent', 'lifecycle'] as const)('keeps published references in %s notes
   expect(screen.getByText(source === 'agent' ? /Agent input from parent parent-task/ : /Worker lifecycle context for parent parent-task/)).toBeTruthy()
   expect(document.querySelector('[data-slot="note-line"]')?.textContent).toContain(publication)
   expect(document.querySelector('[data-slot="report-card"]')).toBeNull()
+})
+
+
+it('shows one omp skill start from the persisted native expansion', () => {
+  const thread = reduceThread(asRunEvents(ompSkillTrigger))
+  const messages = thread.turns.flatMap(turn => turn.items).filter(item => item.kind === 'message')
+  expect(messages).toHaveLength(1)
+  expect(messages[0]).toMatchObject({ role: 'user', text: '/skill:probe-project fixture arguments' })
+  const sections = mainTranscriptSections(run({ task: '' }), thread)
+  render(<MemoryRouter><SessionTranscript runId="r1" viewId="main" mode="document" sections={sections} /></MemoryRouter>)
+  expect(screen.getAllByText('/skill:probe-project fixture arguments')).toHaveLength(1)
 })

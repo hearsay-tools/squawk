@@ -1,3 +1,4 @@
+import { skillOf, slashSkillPrompt } from './skill-trigger.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentEvent, ContentBlock } from './agent-runner.js';
 
@@ -25,9 +26,11 @@ export function toPiPrompt(content: ContentBlock[]): {
   const images: Array<{ type: 'image'; data: string; mimeType: string }> = [];
   for (const block of content) {
     if (block.type === 'text') text.push(block.text);
-    else images.push({ type: 'image', data: block.source.data, mimeType: block.source.media_type });
+    else if (block.type === 'image') images.push({ type: 'image', data: block.source.data, mimeType: block.source.media_type });
   }
-  return { message: text.join('\n'), images };
+  const skill = skillOf(content);
+  const context = text.join('\n');
+  return { message: skill ? slashSkillPrompt(skill, context) : context, images };
 }
 
 export function emitImages(value: unknown, onEvent?: (event: AgentEvent) => void): void {
@@ -93,4 +96,10 @@ export function string(value: unknown): string | undefined {
 
 export function number(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/** OMP reports native expansion as a custom message rather than a user message. */
+export function ompSkillPrompt(message: Record<string, unknown>): string | undefined {
+  if (message.role !== 'custom' || message.customType !== 'skill-prompt' || !isRecord(message.details)) return undefined;
+  return string(message.details.prompt);
 }

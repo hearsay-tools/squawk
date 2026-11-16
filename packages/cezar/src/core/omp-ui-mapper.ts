@@ -25,7 +25,7 @@ import type {
   UiToolItem,
 } from './ui-events.js';
 import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
-import { contentText, isRecord, number, ompRpcError as rpcError, string } from './pi-rpc-wire.ts';
+import { contentText, isRecord, number, ompSkillPrompt, ompRpcError as rpcError, string } from './pi-rpc-wire.ts';
 import { childScope, lifecycleStatus, ompToolPlan, singleFormSubagent, startSubagentEntry, withSubagent } from './omp-subagent-rows.ts';
 
 /** One stream of text/reasoning blocks: the parent turn's, or one sub-agent's. */
@@ -251,6 +251,8 @@ export function mapOmpRpcMessage(value: unknown, state: OmpUiMapperState): OmpUi
   if (value.type === 'response') return mapResponse(value, state);
 
   switch (value.type) {
+    case 'message_start':
+      return mapSkillPrompt(value, state);
     case 'message_update':
     case 'message_end':
     case 'tool_execution_start':
@@ -970,5 +972,21 @@ function usageEvent(value: unknown): Extract<UiEvent, { type: 'usage.updated' }>
       ...(cacheWrite !== undefined ? { cacheWrite } : {}),
     },
     ...(cost !== undefined && cost >= 0 ? { costUsd: cost } : {}),
+  };
+}
+
+/** Only message_start creates the user item; message_end/agent_end repeat the same message. */
+function mapSkillPrompt(value: Record<string, unknown>, state: OmpUiMapperState): OmpUiMapping {
+  if (!isRecord(value.message)) return { events: [], state };
+  const text = ompSkillPrompt(value.message);
+  if (text === undefined || !state.turnId) return { events: [], state };
+  const id = `${state.turnId}/skill-${state.textBlock}`;
+  const item: UiMessageItem = { kind: 'message', id, role: 'user', text };
+  return {
+    events: [
+      { type: 'item.started', item },
+      { type: 'item.completed', item },
+    ],
+    state: { ...state, textBlock: state.textBlock + 1 },
   };
 }

@@ -1,3 +1,4 @@
+import { openingContent, skillOf, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { uiAskQuestions } from './ask.ts';
 import { opencodeSkillWarning, sessionErrorDetail, sessionErrorText } from './opencode-session-error.ts';
@@ -140,6 +141,7 @@ export const OPENCODE_SPEC_SUPPORT: AgentRunSpecSupport = {
   squawkTools: { honored: true, via: 'merged OPENCODE_CONFIG_CONTENT local mcp entry' },
   ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: 'prepended to the opening prompt_async text through prependSystemPrompt' },
+  skill: { honored: true, via: 'POST session command; acknowledgement on SSE' },
   userPrompt: { honored: true, via: 'prompt_async text part' },
   images: { honored: false, reason: 'the adapter posts text parts only; image blocks are dropped' },
   cwd: { honored: true, via: 'opencode serve spawn cwd; the session is bound to it' },
@@ -419,7 +421,14 @@ class OpencodeSession implements AgentSession {
     return this.serve.child.pid;
   }
 
+  private skillCommand: { resolve(): void; reject(error: Error): void; controller: AbortController } | undefined;
+
+  private refusesSkill(content: ContentBlock[]): boolean {
+    return !validSkillMessage(content) || Boolean(skillOf(content) && (!this.sessionId || this.turnActive || this.pendingPromptRequests || this.skillCommand));
+  }
+
   sendAgentMessage(content: ContentBlock[], inputIds: readonly string[] = []): false | Promise<void> {
+    if (this.refusesSkill(content)) return false;
     // #505: a busy session is steered with prompt_async; only a pending native question or
     // permission ask, a queued human prompt or an in-flight agent POST refuses.
     // Nothing may run ahead of the task: refuse until the opening prompt has started,
@@ -438,7 +447,7 @@ class OpencodeSession implements AgentSession {
     const steering = this.turnActive;
     this.submissions.accept(submissionId, inputIds, text);
     if (!steering && inputIds.length) this.turnOpeners.add(submissionId);
-    const post = steering ? this.steerPrompt(text, request.signal) : this.prompt(text, 'agent', request.signal);
+    const post = steering ? this.steerPrompt(text, request.signal) : this.prompt(text, 'agent', request.signal, this.queuedPromptGeneration, skillOf(content));
     const acknowledgement = post.catch((err: unknown) => {
       this.submissions.consume(submissionId); this.turnOpeners.delete(submissionId);
       throw this.endedAgentRequest === request && isAbortError(err) ? new SessionEndedBeforeAcknowledgement() : err;
@@ -456,11 +465,12 @@ class OpencodeSession implements AgentSession {
   }
 
   sendMessage(content: ContentBlock[]): boolean {
+    if (this.refusesSkill(content)) return false;
     this.agentInputReady = false;
     if (!this.open) return false;
     this.cancelAutoEnd();
     const text = textOf(content);
-    if (!text) return true;
+    if (!text && !skillOf(content)) return true;
     if (this.questionReply) {
       this.queuedQuestionMessages.push(text);
       return true;
@@ -479,7 +489,7 @@ class OpencodeSession implements AgentSession {
     // `prompt` already emitted the note and closed the turn before rethrowing,
     // and a rejected `ready` already failed the session on the result path —
     // there is nothing left to report here.
-    this.deliverPrompt(text);
+    this.deliverPrompt(text, skillOf(content));
     return true;
   }
 
@@ -496,13 +506,13 @@ class OpencodeSession implements AgentSession {
     return this.humanPromptWaiters + this.queuedQuestionMessages.length;
   }
 
-  private deliverPrompt(text: string): void {
+  private deliverPrompt(text: string, skill?: AgentRunSpec['skill']): void {
     this.pendingPromptRequests += 1;
     // Held from admission, not from `ready`; a start that fails releases it (hearsay-tools/cezarion#2991).
     const generation = this.queuedPromptGeneration;
     this.humanPromptWaiters += 1;
     let posting = false;
-    void this.ready.then(() => { posting = true; return this.prompt(text, 'human', undefined, generation); }).then(() => {
+    void this.ready.then(() => { posting = true; return this.prompt(text, 'human', undefined, generation, skill); }).then(() => {
       this.pendingPromptRequests -= 1;
       this.notifyAgentInputReady();
     }, () => {
@@ -553,6 +563,7 @@ class OpencodeSession implements AgentSession {
   end(): void {
     if (!this.serverOpen) return;
     this.serverOpen = false;
+    this.settleSkillCommand(new SessionEndedBeforeAcknowledgement());
     this.clearLostWakeTimer();
     this.endedAgentRequest = this.agentRequest;
     this.agentRequest?.abort();
@@ -563,6 +574,7 @@ class OpencodeSession implements AgentSession {
 
   interrupt(): void {
     this.serverOpen = false;
+    this.settleSkillCommand(new SessionEndedBeforeAcknowledgement());
     this.clearLostWakeTimer();
     this.agentRequest?.abort();
     this.expirePermissions('session ended');
@@ -634,7 +646,7 @@ class OpencodeSession implements AgentSession {
       finished(stream, { cleanup: true }).catch(() => undefined),
     ));
     const exited = new Promise<void>((resolve) => {
-      child.once('exit', () => resolve());
+      child.once('exit', () => { this.settleSkillCommand(new SessionEndedBeforeAcknowledgement()); resolve(); });
       child.once('close', () => resolve());
     });
     const serve: ServeProcess = {
@@ -749,9 +761,9 @@ class OpencodeSession implements AgentSession {
     }
   }
 
-  private attachSession(id: string): void {
+  private attachSession(id: string, resumed: boolean): void {
     this.sessionId = id;
-    this.emit({ type: 'session', sessionId: id });
+    this.emit({ type: 'session', sessionId: id, resumed });
     this.emitUi((state) => opencodeSessionStarted(id, state));
   }
 
@@ -768,7 +780,7 @@ class OpencodeSession implements AgentSession {
       } else {
         // A `task` deny an older Squawk added stays on the session: OpenCode appends permission
         // rules and has no remove (hearsay-tools/cezarion#2279).
-        this.attachSession(stringField(existing, 'id') ?? requested);
+        this.attachSession(stringField(existing, 'id') ?? requested, true);
         resumed = true;
       }
     }
@@ -779,7 +791,7 @@ class OpencodeSession implements AgentSession {
       });
       const sessionId = stringField(created, 'id');
       if (!sessionId) throw new Error('opencode did not return a session id');
-      this.attachSession(sessionId);
+      this.attachSession(sessionId, false);
     }
 
     // The SSE subscription must be LIVE before the first prompt posts —
@@ -793,8 +805,8 @@ class OpencodeSession implements AgentSession {
     const systemPrompt = !resumed && requested
       ? (this.spec.resumeFallbackSystemPrompt ?? this.spec.systemPrompt)
       : this.spec.systemPrompt;
-    const first = prependSystemPrompt(systemPrompt, this.spec.userPrompt);
-    await this.prompt(first, 'opening');
+    const first = prependSystemPrompt(systemPrompt, textOf(openingContent(this.spec)));
+    await this.prompt(first, 'opening', undefined, this.queuedPromptGeneration, this.spec.skill);
     if (this.refusedBeforeOpening) queueMicrotask(() => {
       this.refusedBeforeOpening = false;
       if (this.serverOpen && !this.pendingQuestion && !this.questionReply && this.pendingPermissions.size === 0 && !this.agentRequest) {
@@ -803,7 +815,7 @@ class OpencodeSession implements AgentSession {
     });
   }
 
-  private async prompt(text: string, origin: PromptOrigin = 'human', signal?: AbortSignal, generation = this.queuedPromptGeneration): Promise<void> {
+  private async prompt(text: string, origin: PromptOrigin = 'human', signal?: AbortSignal, generation = this.queuedPromptGeneration, skill?: AgentRunSpec['skill']): Promise<void> {
     // One turn at a time. `prompt_async` acknowledges before the turn runs,
     // so `ready` no longer serializes prompts the way the long-poll did — a
     // follow-up posted mid-turn would share the turnActive/turnEnded pair
@@ -828,6 +840,7 @@ class OpencodeSession implements AgentSession {
     // and undici's default 300s headers timeout ended it as `prompt failed:
     // fetch failed` (#4, upstream #897); `prompt_async` returns immediately.
     this.emitUi(opencodeTurnStarted);
+    if (skill) { await this.command(skill, text, signal); return; }
     const body = this.promptBody(text);
     try {
       await this.http('POST', `/session/${this.sessionId}/prompt_async`, body, signal);
@@ -836,6 +849,44 @@ class OpencodeSession implements AgentSession {
       throw err;
     }
   }
+  /** The command response long-polls the whole turn. SSE user text acknowledges expansion.
+   * Read HTTP errors, but a disconnected request (including fetch's 300s limit) leaves SSE in charge. */
+  private command(skill: NonNullable<AgentRunSpec['skill']>, context: string, signal?: AbortSignal): Promise<void> {
+    const controller = new AbortController();
+    let resolve!: () => void;
+    let reject!: (error: Error) => void;
+    const acknowledged = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
+    const command = { controller, resolve, reject };
+    const abort = () => { reject(new SessionEndedBeforeAcknowledgement()); controller.abort(); };
+    signal?.addEventListener('abort', abort, { once: true });
+    void acknowledged.finally(() => signal?.removeEventListener('abort', abort)).catch(() => undefined);
+    this.skillCommand = command;
+    const body = {
+      command: skill.id,
+      arguments: [skill.args, context].filter(Boolean).join('\n\n'),
+      ...(this.spec.model ? { model: this.spec.model } : {}),
+      ...(parseEffort(this.spec.effort) ? { variant: parseEffort(this.spec.effort) } : {}),
+    };
+    void fetch(`${this.baseUrl}/session/${this.sessionId}/command`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body), signal: controller.signal,
+    }).then(async response => {
+      if (!response.ok && this.skillCommand === command) {
+        const detail = await response.text().catch(() => '');
+        if (this.skillCommand !== command) return;
+        this.turnErrored = true;
+        const message = `opencode: command failed: HTTP ${response.status} ${detail.slice(0, 200)}`;
+        command.reject(new Error(message));
+        this.emit({ type: 'error', message });
+        this.emitUi(state => mapOpencodeEvent({ type: 'session.error', properties: { sessionID: this.sessionId, error: { message } } }, state));
+        this.finishTurn();
+      } else {
+        await response.body?.cancel();
+      }
+    }).catch(() => { /* A dropped command request does not stop its native turn. */ });
+    return acknowledged;
+  }
+
   private reportPromptFailure(origin: PromptOrigin, err: unknown): void {
     // No turn started server-side, so no `session.idle` will ever close it —
     // surface the failure and end the turn here instead of parking the run.
@@ -926,10 +977,21 @@ class OpencodeSession implements AgentSession {
     queueMicrotask(() => this.notifyAgentInputReady());
   }
 
+  private settleSkillCommand(error?: Error): void {
+    const command = this.skillCommand;
+    this.skillCommand = undefined;
+    if (error) command?.reject(error);
+    else command?.resolve();
+    command?.controller.abort();
+  }
+
   private finishTurn(): void {
     if (!this.turnActive || this.turnEnded) return;
     this.turnEnded = true;
     this.turnActive = false;
+    const wasSkill = this.skillCommand !== undefined;
+    this.settleSkillCommand();
+    if (wasSkill && this.uiState.currentTurnId !== null) this.emitUi(state => mapOpencodeEvent({ type: 'session.idle', properties: { sessionID: this.sessionId } }, state));
     this.questionCapture = undefined;
     // SSE idle can beat the independent reply HTTP response. The active reply
     // owns pending-question cleanup; without one, the pending ask is stale.
@@ -1069,6 +1131,8 @@ class OpencodeSession implements AgentSession {
       const failure = { message: this.sessionErrorMessage(evt.properties?.error), reported: false };
       this.providerErrorPending = failure;
       const request = this.agentRequest;
+      // A command has no separate HTTP ACK: the error can be its first SSE frame.
+      this.skillCommand?.reject(new Error(failure.message));
       const timer = setTimeout(() => request.abort(), KILL_GRACE_MS);
       try {
         await this.agentAcknowledgement?.catch(() => undefined);
@@ -1156,6 +1220,7 @@ class OpencodeSession implements AgentSession {
     if (sid === undefined || sid === this.sessionId) {
       this.turnErrored = true;
       this.emit({ type: 'error', message: this.sessionErrorMessage(props.error) });
+      if (this.skillCommand) this.finishTurn();
     }
   }
   private handlePart(part: Record<string, unknown>): void {
@@ -1193,6 +1258,7 @@ class OpencodeSession implements AgentSession {
     if (messageID && this.msgRole.get(messageID) !== 'assistant') {
       // A user message carrying submitted agent text: remember which submission it is.
       if (this.msgRole.get(messageID) === 'user' && stringField(part, 'type') === 'text' && !this.userMessageSubmission.has(messageID)) {
+        this.skillCommand?.resolve();
         const submission = this.submissions.findByText(stringField(part, 'text') ?? '');
         if (submission && ![...this.userMessageSubmission.values()].includes(submission)) this.userMessageSubmission.set(messageID, submission);
       }

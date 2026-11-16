@@ -155,7 +155,7 @@ describe('successful run settlement (#473)', () => {
         sendMessage: () => true, sendAgentMessage: () => false, discardQueuedMessages: () => {}, holdsHumanInput: () => false,
         end: () => finish({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: () => finish({ text: '', toolCalls: [], tokensUsed: 0 }) };
       started = true;
-      queueMicrotask(() => onEvent?.({ type: 'session', sessionId: 'limited' }));
+      queueMicrotask(() => onEvent?.({ type: 'session', sessionId: 'limited', resumed: false }));
       return session;
     });
     runnerHook.runner = { backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
