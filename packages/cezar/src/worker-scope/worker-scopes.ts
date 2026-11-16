@@ -40,6 +40,8 @@ export class WorkerScopeUnreadable extends Error {
   constructor() { super("the worker's scope record is unreadable; its processes cannot be found"); }
 }
 
+const capacityError = (workerId: string) => new Error(`worker ${workerId} already owns ${SCOPE_GROUP_CAP} live process groups`);
+
 export type ScopeStop = { stopped: true } | { stopped: false; error: string };
 const STOP_POLL_MS = 10;
 
@@ -59,6 +61,8 @@ export class WorkerScopes {
         const run = this.store.getRun(workerId);
         if (run?.delegation?.role === 'worker' && run.delegation.destroy) throw new Error('Worker destruction has begun; nothing new starts in its scope');
         const host = this.hostOf();
+        // Refused before anything runs: a full group record never has to end a started process.
+        if (host.backend === 'groups' && liveGroups(this.read(workerId).groups).length >= SCOPE_GROUP_CAP) throw capacityError(workerId);
         if (host.backend !== 'cgroup') return [file, [...args]];
         const path = workerCgroupPath(host.base, workerId);
         this.update(workerId, record => {
@@ -73,7 +77,7 @@ export class WorkerScopes {
         this.update(workerId, record => {
           const live = liveGroups(record.groups);
           // Never forget a live group to make room: refuse the start instead (the caller ends it).
-          if (live.length >= SCOPE_GROUP_CAP) throw new Error(`worker ${workerId} already owns ${SCOPE_GROUP_CAP} live process groups`);
+          if (live.length >= SCOPE_GROUP_CAP) throw capacityError(workerId);
           return { ...record, groups: [...live, groupEntry(pid)] };
         });
       },

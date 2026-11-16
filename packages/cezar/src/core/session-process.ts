@@ -250,7 +250,11 @@ export function spawnSessionLeader(
   const pid = child.pid;
   // A process the scope could not record is not owned: end it before anything relies on it.
   if (pid !== undefined && child instanceof ChildProcess) {
-    try { options.scope?.started(pid); } catch (error) { child.kill('SIGKILL'); throw error; }
+    // Its whole group: a descendant forked before the refusal must not escape.
+    try { options.scope?.started(pid); } catch (error) {
+      try { if (grouped) process.kill(-pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch { /* already gone */ }
+      throw error;
+    }
   }
   if (!grouped || !(child instanceof ChildProcess) || pid === undefined || !groupId(pid)) return child;
   prune();

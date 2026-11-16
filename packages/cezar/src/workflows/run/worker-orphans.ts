@@ -167,9 +167,12 @@ export class WorkerOrphans {
     if (probe?.liveness !== 'alive' && this.context.store.scopes.empty(runId)) return;
     this.context.store.scopes.kill(runId);
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: "Continue stopped the processes the interrupted worker's previous execution left running" });
+    // Nothing new starts until the old processes are gone, so none keeps a port or a file.
     const deadline = Date.now() + waitMs;
     const pause = new Int32Array(new SharedArrayBuffer(4));
-    while (orphan && probeOrphan(orphan.record).liveness !== 'gone' && Date.now() < deadline) Atomics.wait(pause, 0, 0, 5);
+    const stopped = () => (!orphan || probeOrphan(orphan.record).liveness === 'gone') && this.context.store.scopes.empty(runId);
+    while (!stopped() && Date.now() < deadline) Atomics.wait(pause, 0, 0, 5);
+    if (!stopped()) throw new WorkerAdmissionRefusal("the processes the interrupted execution left are still stopping", 'retry the same command in a few seconds');
   }
 
   /** Destroy only (#469): end everything the worker's scope holds, then finalize once the recorded

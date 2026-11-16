@@ -11,7 +11,7 @@ import { parityRunners } from '../core/parity-classes.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
 import { CredentialRegistry } from '../delegation/credentials.ts';
 import { DelegationService } from '../delegation/service.ts';
-import { groupHolder, nonDumpableHolder, readableHolder } from '../delegation/non-dumpable.testkit.ts';
+import { groupHolder, orphanedGroupHolder, nonDumpableHolder, readableHolder } from '../delegation/non-dumpable.testkit.ts';
 import { setHostScope } from '../worker-scope/worker-scopes.ts';
 import { processStartToken } from '../delegation/process-liveness.ts';
 import * as worktreeLock from '../git-worktree-lock.ts';
@@ -111,7 +111,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       writeFileSync(join(files, `${w.id}.execution.json`), JSON.stringify(proof));
       // The crashed controller left a recorded group leader running; another process works in the
       // worktree outside the worker's scope.
-      const survivor = await groupHolder(root);
+      const survivor = await orphanedGroupHolder(root);
       const outside = await readableHolder(workspace.path);
       const boot = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim();
       writeFileSync(join(files, `${w.id}.processes.json`), JSON.stringify({ ...recorded,
@@ -152,7 +152,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       const files = join(root, '.ai/cezar/runs');
       writeFileSync(join(files, `${w.id}.execution.json`), JSON.stringify(proof));
       // The crash left a service the worker's setup started, in its scope only; its sessions are gone.
-      const service = await groupHolder(root);
+      const service = await orphanedGroupHolder(root);
       store.scopes.spawnScope(w.id).started(service.pid);
       const boot = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim();
       writeFileSync(join(files, `${w.id}.processes.json`), JSON.stringify({ ...recorded,
@@ -164,6 +164,8 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
         expect(store.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', generation: proof.generation, interrupted: true });
         expect(service.running).toBe(true);
         expect(manager.continueRun(w.id)).toMatchObject({ ok: true });
+        // Admission waited for the scope to empty: nothing old runs beside the new execution.
+        expect(store.scopes.empty(w.id)).toBe(true);
         await until(() => !service.running);
         expect(store.readWorkerExecution(w.id)?.generation).not.toBe(proof.generation);
         await until(() => store.getRun(w.id)?.status === 'waiting');

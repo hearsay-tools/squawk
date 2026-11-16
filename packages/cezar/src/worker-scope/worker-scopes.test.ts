@@ -100,6 +100,8 @@ describe('WorkerScopes', () => {
     const live = { pid: process.pid, pgid: process.pid, startToken: 'live' };
     state.record = { workerId, cgroups: [], groups: Array.from({ length: SCOPE_GROUP_CAP }, () => live) };
     vi.spyOn(groupsModule, 'liveGroups').mockImplementation(entries => [...entries]);
+    // Refused before the command runs, and again if a start races past that check.
+    expect(() => scopes.spawnScope(workerId).command('true', [])).toThrow(/already owns/);
     expect(() => scopes.spawnScope(workerId).started(process.pid)).toThrow(/already owns/);
     expect((state.record as ScopeRecord).groups).toHaveLength(SCOPE_GROUP_CAP);
   });
