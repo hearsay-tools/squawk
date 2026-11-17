@@ -22,6 +22,7 @@ interface NativeSkillInputHost {
   runSkills: RunSkills;
   line: RunLine;
   canProceedWithRun(id: string, run: RunRecord | undefined): boolean;
+  questionPending(id: string, state: ActiveRun): boolean;
   parkForUser(id: string, state: ActiveRun, step: string | undefined): void;
   authorizeHumanMessage(id: string): boolean;
   recordHumanMessage(id: string, state: ActiveRun, content: PastedContent[], persisted: PersistedAttachment[]): void;
@@ -110,6 +111,8 @@ export class NativeSkillInputQueue {
     const pending = this.memory.read(runId, 'nativeSkillInputs');
     const entry = pending?.[0];
     if (!entry || !this.nativeInputCurrent(runId, state, entry) || state.inputState.agentInputError || state.liveSession.agentSessionError) return false;
+    // Surface the turn's question before starting any held follow-up.
+    if (this.host.questionPending(runId, state)) return false;
     if (this.memory.read(runId, 'nativeSkillRead') || this.holdsNativeSkill(state, entry.content)) return true;
     const read = { state, entry, ready: false };
     this.memory.write(runId, 'nativeSkillRead', read);
@@ -133,6 +136,7 @@ export class NativeSkillInputQueue {
     const blocks = await this.host.runSkills.nativeInput(runId, state, contentBlocksOf(entry.content));
     if (!this.nativeInputCurrent(runId, state, entry)) return 'stale';
     // A live-list runner may discover a name that was absent at enqueue time.
+    if (this.host.questionPending(runId, state)) return 'held';
     if (blocks[0]?.type === 'skill' && this.nativeTriggerBusy(state)) return 'held';
     return this.host.deliverMessage(runId, entry.content, entry.messageId, blocks, entry.persisted) ? 'sent' : 'refused';
   }

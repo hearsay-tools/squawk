@@ -1,9 +1,10 @@
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { join } from 'node:path';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it as registerTest, vi } from 'vitest';
 import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
 import { familyCells } from '../core/parity-classes.testkit.ts';
+import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity.testkit.ts';
 import { setRunStatus, readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { ciNativeMessages } from './waits-parity.testkit.ts';
@@ -25,6 +26,30 @@ function native(runner: RunnerId) {
     const at = text.lastIndexOf(separator);
     return at < 0 ? text : text.slice(at + separator.length);
   });
+}
+
+/** The native skill input, including its context; plain prompts cannot satisfy this read. */
+function skillOpening(runner: RunnerId): string | undefined {
+  const file = join(root, runner === 'codex' || runner === 'opencode' ? 'args' : 'stdin');
+  if (!existsSync(file)) return undefined;
+  const rows = readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line) as SkillOpeningRow);
+  return rows.map(row => skillOpeningRow(runner, row)).find(text => text !== undefined);
+}
+
+type SkillOpeningRow = { userText?: string; blocks?: Array<{ text?: string }>; method?: string;
+  params?: { input?: Array<{ type?: string; text?: string; name?: string }> };
+  url?: string; body?: { command?: string; arguments?: string } };
+
+function skillOpeningRow(runner: RunnerId, row: SkillOpeningRow): string | undefined {
+  if (runner === 'claude' && row.blocks?.at(-1)?.text?.startsWith('/probe-project')) {
+    return row.blocks.map(part => part.text ?? '').join('\n');
+  }
+  if (runner === 'codex' && row.method === 'turn/start' && row.params?.input?.some(part => part.type === 'skill' && part.name === 'probe-project')) {
+    return row.params.input.map(part => part.text ?? '').join('\n');
+  }
+  if (runner === 'opencode' && row.url?.endsWith('/command') && row.body?.command === 'probe-project') return row.body.arguments;
+  if ((runner === 'pi' || runner === 'omp') && row.userText?.startsWith('/skill:probe-project ')) return row.userText;
+  return undefined;
 }
 
 async function start(runner: RunnerId, scenario: 'provider-error' | 'cezar-done') {
@@ -65,20 +90,20 @@ function failureContext(runner: RunnerId, it: typeof registerTest = registerTest
     }, 60_000);
 
     it(`${runner} R89 keeps multiline errors on one line without hiding a slash skill or changing human history`, async () => {
-      const messages = native(runner);
-      const skills = join(root, '.ai/cezar/skills');
-      mkdirSync(skills, { recursive: true });
-      writeFileSync(join(skills, 'resume-check.md'), '---\nname: resume-check\ndescription: Resume check\n---\nRESUME-SKILL-1380\n');
+      native(runner);
+      manager.setSkillCatalog(fixedSkillCatalog([{ id: 'probe-project', name: 'Probe', scope: 'repo', path: join(root, 'SKILL.md') }]));
       const id = await start(runner, 'provider-error');
       const error = 'Provider unavailable\nTry later\r\nNo retry was made.';
       store.updateStep(id, 'task', { error });
-      const before = messages().length;
-      expect(manager.continueRun(id, { text: '/resume-check' })).toEqual({ ok: true });
-      await until(() => messages().length > before);
-      const prompt = messages()[before]!;
-      expect(prompt.split('\n')[0]).toContain('Provider unavailable Try later No retry was made.');
-      expect(prompt).toContain('RESUME-SKILL-1380');
-      expect(store.readEvents(id).filter(event => event.type === 'user-message').at(-1)?.text).toBe('/resume-check');
+      expect(manager.continueRun(id, { text: '/probe-project' })).toEqual({ ok: true });
+      await until(() => skillOpening(runner) !== undefined);
+      const prompt = skillOpening(runner)!;
+      expect(prompt).toContain('Provider unavailable Try later No retry was made.');
+      expect(prompt).not.toContain(error);
+      expect(prompt).toContain('verify their state before restarting');
+      expect(prompt).not.toContain('Selected skill:');
+      await until(() => store.readEvents(id).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE')));
+      expect(store.readEvents(id).filter(event => event.type === 'user-message').at(-1)?.text).toBe('/probe-project');
     }, 30_000);
 }
 

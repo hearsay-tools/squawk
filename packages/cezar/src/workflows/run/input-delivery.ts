@@ -307,6 +307,7 @@ export class InputDelivery {
       get active() { return host.active; }, get attachments() { return host.attachments; },
       get runSkills() { return host.runSkills; }, get line() { return host.line; },
       canProceedWithRun: (id, run) => host.canProceedWithRun(id, run),
+      questionPending: (id, state) => this.questionPending(id, state, this.context.store.getRun(id)),
       parkForUser: (id, state, step) => host.parkForUser(id, state, step),
       authorizeHumanMessage: id => this.authorizeHumanMessage(id),
       recordHumanMessage: (id, state, content, persisted) => this.recordHumanMessage(id, state, content, persisted),
@@ -336,6 +337,9 @@ export class InputDelivery {
   }
 
   sendMessage(runId: string, content: PastedContent[], messageId?: string): boolean {
+    const state = this.host.active.get(runId);
+    // An answer unblocks this turn; a held skill starts only after that turn ends.
+    if (state && this.questionPending(runId, state, this.context.store.getRun(runId))) return this.deliverMessage(runId, content, messageId);
     if (this.nativeInputs.handles(runId, content)) return this.nativeInputs.enqueue(runId, content, messageId);
     return this.deliverMessage(runId, content, messageId);
   }

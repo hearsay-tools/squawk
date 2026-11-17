@@ -19,7 +19,7 @@ export function resolveRunnerSkill(skills: readonly RunnerSkill[], reference: { 
     const close = skills.filter(skill => skill.id.includes(reference.id) || reference.id.includes(skill.id)).slice(0, 10);
     return { error: `${identity} is missing from this worktree's list. Close ids: ${close.map(skill => `${skill.id} (${skill.path ?? 'path not reported'})`).join(', ') || '(none)'}. Listed paths: ${skills.map(skill => skill.path).filter(Boolean).join(', ') || '(none)'}` };
   }
-  if (copies.length === 1 && copies[0]!.scope !== 'other') return { skill: copies[0]! };
+  if (copies.length === 1) return { skill: copies[0]! };
   const rank = { repo: 0, user: 1, system: 2 };
   const unknown = copies.some(skill => !skill.scope || skill.scope === 'other');
   const best = Math.min(...copies.map(skill => skill.scope && skill.scope !== 'other' ? rank[skill.scope] : Infinity));

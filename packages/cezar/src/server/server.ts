@@ -2582,10 +2582,10 @@ export function createApp(deps: ServerDeps) {
         return c.json(result.body);
       },
     );
-
   // ---- chained family: skills (project-scoped) ----
   const skillsRoutes = new Hono<ProjectApiEnv>()
     .get('/runner-skills', queryZodValidator(runnerSkillsQuerySchema), async c => {
+      if (c.req.valid('query').account !== undefined && !capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
       const result = await readRunnerSkills(c.req.valid('query'), c.get('project').root, deps.home, skillCatalog, resolveWorkspaceProfile);
       if ('error' in result) return c.json(result, 400);
       return c.json(result);

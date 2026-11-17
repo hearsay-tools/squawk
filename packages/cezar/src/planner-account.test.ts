@@ -68,4 +68,17 @@ describe('planChain under an account Squawk refuses to spawn (#1283)', () => {
 
     expect(run).toHaveBeenCalledWith(expect.objectContaining({ env: { OMP_PROFILE: 'work' } }));
   });
+  it('omits ambiguous skill ids from the prompt and strips them from the returned plan', async () => {
+    const catalog = fixedSkillCatalog([
+      { id: 'duplicate', name: 'Duplicate', description: 'AMBIGUOUS-CATALOG-ENTRY', scope: 'repo', path: '/one/SKILL.md' },
+      { id: 'duplicate', name: 'Duplicate', description: 'AMBIGUOUS-CATALOG-ENTRY', scope: 'repo', path: '/two/SKILL.md' },
+      { id: 'unique', name: 'Unique', description: 'UNIQUE-CATALOG-ENTRY', scope: 'repo', path: '/unique/SKILL.md' },
+    ]);
+    run.mockResolvedValueOnce({ text: JSON.stringify({ title: 'Plan', steps: [{ skill: 'duplicate', name: 'Inspect', prompt: 'Inspect the code' }], rationale: 'Inspect first' }) });
+    const plan = await planChain(repoRoot, 'do it', catalog, testHome(), runners);
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ userPrompt: expect.stringContaining('UNIQUE-CATALOG-ENTRY') }));
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ userPrompt: expect.not.stringContaining('AMBIGUOUS-CATALOG-ENTRY') }));
+    expect(plan.steps[0]?.skill).toBeUndefined();
+  });
+
 });

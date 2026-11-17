@@ -74,7 +74,7 @@ export class StepSession {
     /** Worktree setup's paragraph for the agent (#917) — appended to the opening message. */
     openingNote?: string,
   ): Promise<string | null> {
-    const opening = await this.stepOpening(runId, state, step, input, emit, { checkFailure, images, chainNote, attachments, openingNote });
+    const opening = { userPrompt: atStepOpen.prompt(step, input) };
 
     const sessionId = randomUUID();
     const backend = atStepOpen.runner(step, taskBackend);
@@ -105,6 +105,9 @@ export class StepSession {
     let skill: import('../../core/agent-runner.ts').SkillTrigger | undefined;
     try { skill = await this.openingSkill(runId, state, step, opening); }
     catch (error) { return error instanceof Error ? error.message : String(error); }
+    const composed = this.stepOpening(step.id, skill?.args ?? opening.userPrompt, emit, { checkFailure, images, chainNote, attachments, openingNote });
+    if (skill) skill.args = composed.userPrompt;
+    else opening.userPrompt = composed.userPrompt;
     const beforeSpawn = this.context.store.getRun(runId);
     if (state.liveSession.cancelled || (beforeSpawn && this.host.executionBlockedByRootFinish(beforeSpawn))) return null;
     this.context.store.updateStep(runId, step.id, { profileId: stepProfile.profileId });
@@ -156,11 +159,9 @@ export class StepSession {
   }
 
   /** A fresh step's arguments, before the open-waits footer and session context. */
-  private async stepOpening(
-    runId: string,
-    state: ActiveRun,
-    step: WorkflowStepDef,
-    input: LaunchSource,
+  private stepOpening(
+    stepId: string,
+    userPrompt: string,
     emit: ExecutionEmit,
     parts: {
       checkFailure: string | null;
@@ -169,8 +170,7 @@ export class StepSession {
       attachments: PersistedAttachment[];
       openingNote: string | undefined;
     },
-  ): Promise<{ userPrompt: string }> {
-    let userPrompt = atStepOpen.prompt(step, input);
+  ): { userPrompt: string } {
     if (parts.chainNote) userPrompt = `${parts.chainNote}\n\n---\n\n${userPrompt}`;
     if (parts.checkFailure) {
       userPrompt += `\n\nA verification command failed after the previous attempt. Fix the cause. Failing output:\n\n${parts.checkFailure}`;
@@ -178,7 +178,7 @@ export class StepSession {
     if (parts.images?.length) {
       emit({
         type: 'note',
-        stepId: step.id,
+        stepId,
         message: `${parts.images.length} screenshot${parts.images.length > 1 ? 's' : ''} attached to the task`,
       });
     }

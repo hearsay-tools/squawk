@@ -14,7 +14,7 @@ import { HARNESS_ADAPTERS } from './harness-parity-core.testkit.ts';
 import { plannedWorkflow, skillTaskSteps } from '../workflows/types.ts';
 
 const PARTS = {
-  'start-and-stop': ['claude R92', 'codex R92', 'opencode R92', 'pi R92', 'omp R92', 'claude R96', ...RUNNER_IDS.map(runner => `${runner} relative project skillPath starts in a task worktree`)],
+  'start-and-stop': ['claude unconverted opening command keeps character zero on the native wire', 'claude typed opening skill carries session context on the native wire', 'claude R92', 'codex R92', 'opencode R92', 'pi R92', 'omp R92', 'claude R96', ...RUNNER_IDS.map(runner => `${runner} relative project skillPath starts in a task worktree`)],
   continue: ['claude R93'], recovery: ['claude R94'],
   'slash-install': ['claude R95', 'codex R95', 'opencode R95', 'pi R95', 'omp R95'],
 };
@@ -47,6 +47,35 @@ export function describeSkillProvisionParity(part: ParityPart, collect?: ParityC
   const { describe, it } = partitionParity(part, PARTS, collect, 'skill-provision');
   describe('native skill selection through the run path', () => {
     expect(SKILL_PROVISION_CRITERIA.map(row => row.id)).toEqual(['R92', 'R93', 'R94', 'R95', 'R96']);
+    it('claude unconverted opening command keeps character zero on the native wire', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'native-opening-command-'));
+      const wireFile = join(dir, 'wire.ndjson');
+      try {
+        const result = await driveRun('claude', { prompt: '/compact' }, run => run?.status === 'waiting', 30_000, undefined, {
+          env: { CEZ_MOCK_STDIN_FILE: wireFile },
+          beforeStart: ({ manager }) => manager.setSkillCatalog(fixedSkillCatalog()),
+        });
+        const first = JSON.parse(read(wireFile).trim().split('\n')[0]!);
+        expect(first.userText).toBe('/compact');
+        expect(result.events.some(event => event.type === 'lifecycle' && String(event.message).includes('slash command, which must stay at its start'))).toBe(true);
+      } finally { rmSync(dir, { recursive: true, force: true }); }
+    });
+
+    it('claude typed opening skill carries session context on the native wire', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'native-opening-skill-'));
+      const wireFile = join(dir, 'wire.ndjson');
+      try {
+        const result = await driveRun('claude', { prompt: '/probe-project typed arguments' }, run => run?.status === 'waiting', 30_000, undefined, {
+          env: { CEZ_MOCK_STDIN_FILE: wireFile },
+          beforeStart: ({ manager }) => manager.setSkillCatalog(fixedSkillCatalog([{ id: 'probe-project', name: 'Probe', scope: 'repo' }])),
+        });
+        const first = JSON.parse(read(wireFile).trim().split('\n')[0]!);
+        expect(first.blocks.at(-1)).toEqual({ type: 'text', text: '/probe-project typed arguments' });
+        expect(first.blocks.slice(0, -1).map((part: { text: string }) => part.text).join('\n')).toContain('<cezar-context id="handoff"');
+        expect(result.events.some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE'))).toBe(true);
+      } finally { rmSync(dir, { recursive: true, force: true }); }
+    });
+
     for (const runner of RUNNER_IDS) {
       it(`${runner} R92 starts the selected skill natively with opening context and no injected body`, async () => {
         const dir = mkdtempSync(join(tmpdir(), 'native-step-wire-'));
@@ -100,10 +129,11 @@ export function describeSkillProvisionParity(part: ParityPart, collect?: ParityC
         expect(result.events.some(event => event.type === 'session')).toBe(false);
         const other = await driveRun(runner, { prompt: 'do it' }, run => run?.status === 'failed', 30_000, undefined, {
           workflowDef: plannedWorkflow(skillTaskSteps('other')),
-          beforeStart: ({ manager }) => manager.setSkillCatalog(fixedSkillCatalog([{ id: 'other', name: 'Other', path: '/admin/SKILL.md', scope: 'other' }])),
+          beforeStart: ({ manager }) => manager.setSkillCatalog(fixedSkillCatalog([{ id: 'other', name: 'Other', path: '/admin/SKILL.md', scope: 'other' }, { id: 'other', name: 'Other', path: '/repo/SKILL.md', scope: 'repo' }])),
         });
         expect(other.record?.error).toContain('ambiguous');
         expect(other.record?.error).toContain('/admin/SKILL.md');
+        expect(other.record?.error).toContain('/repo/SKILL.md');
         expect(other.events.some(event => event.type === 'session')).toBe(false);
       }, 60_000); // bound: both ambiguity cases must settle before any session opens.
 

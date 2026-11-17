@@ -18,12 +18,15 @@ describe('native skill references', () => {
   it.each([
     [skill('/one'), skill('/two')],
     [skill('/one'), skill('/admin', 'other')],
-    [skill('/admin', 'other')],
   ])('names every path for ambiguous references', (...entries) => {
     const result = resolveRunnerSkill(entries, { id: 'review' }, context);
     expect(result.error).toContain('codex account "work"');
     expect(result.error).toContain('ambiguous');
     for (const entry of entries) expect(result.error).toContain(entry.path);
+  });
+  it.each([undefined, '/plugins/known'])('resolves a unique other-scope copy with path %s', path => {
+    const entry: RunnerSkill = { id: 'plugin:known', name: 'Plugin skill', scope: 'other', ...(path ? { path } : {}) };
+    expect(resolveRunnerSkill([entry], { id: entry.id }, context)).toEqual({ skill: entry });
   });
   it('never substitutes a copy for a missing selected path', () => {
     expect(resolveRunnerSkill([skill('/task/new')], { id: 'review', path: 'old' }, context).error).toContain('/task/old');

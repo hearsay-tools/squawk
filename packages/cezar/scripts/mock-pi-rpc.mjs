@@ -413,10 +413,6 @@ async function handlePromptCommand(command) {
   }
   recordPrompt(command);
   command.message = answerNudge(command.message);
-  const scenario = scenarioFor(command.message, { ...scenarioContext, unsupported: [...scenarioContext.unsupported, ...(early?.early ? [early.name] : [])] });
-  if (scenario?.beforeFailure) return play(scenario, scenarioEncoder(command, scenario));
-  if (failureControl && (await failureControl.failureFor(command.message)) === 'provider') return respondProviderError(command);
-  if (scenario) return play(scenario, scenarioEncoder(command, scenario));
   const trigger = slashTrigger(command.message);
   if (trigger) {
     send({ id: command.id, type: 'response', command: 'prompt', success: true });
@@ -426,6 +422,10 @@ async function handlePromptCommand(command) {
     send({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text }], stopReason: 'stop' } });
     send({ type: 'agent_settled' }); return;
   }
+  const scenario = scenarioFor(command.message, { ...scenarioContext, unsupported: [...scenarioContext.unsupported, ...(early?.early ? [early.name] : [])] });
+  if (scenario?.beforeFailure) return play(scenario, scenarioEncoder(command, scenario));
+  if (failureControl && (await failureControl.failureFor(command.message)) === 'provider') return respondProviderError(command);
+  if (scenario) return play(scenario, scenarioEncoder(command, scenario));
   return respondDefault(command);
 }
 

@@ -6,6 +6,7 @@ import type { RunnerFactory } from './core/agent-runner.ts';
 import { RUNNER_FACTS } from './core/runner-facts.ts';
 import { loadConfig } from './config.ts';
 import type { RunnerSkill } from '@open-mercato/cezar-contract/runner-skills';
+import { resolveRunnerSkill } from './core/runner-skill-reference.ts';
 import { RunnerSkillCatalog } from './core/runner-skill-catalog.ts';
 import { resolveProfileEnvForRoot } from './workspace/agent-profiles.ts';
 import { workflowStepSchema, type WorkflowStepDef } from './workflows/types.ts';
@@ -75,8 +76,11 @@ export async function planChain(repoRoot: string, task: string, catalog: RunnerS
   // same reason.
   const account = await resolveProfileEnvForRoot(repoRoot, config.defaultRunner, undefined, process.env, home).catch(() => null);
   const profileEnv = account?.env ?? {};
-  const skills = account === null ? [] : (await catalog.get({ runner: config.defaultRunner, cwd: repoRoot,
+  const listed = account === null ? [] : (await catalog.get({ runner: config.defaultRunner, cwd: repoRoot,
     accountHome: account.profile.isDefault ? undefined : account.profile.path })).skills;
+  const skills = listed.filter(skill => resolveRunnerSkill(listed, { id: skill.id }, {
+    runner: config.defaultRunner, account: account?.profile.id ?? 'default', cwd: repoRoot,
+  }).skill === skill);
   const skillNames = new Set(skills.map(skill => skill.id));
   const userPrompt = buildPlannerPrompt(task, skills, verifyCommands);
   // One retry on an unparseable answer; a runner error goes straight to fallback.

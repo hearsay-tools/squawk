@@ -65,7 +65,8 @@ const OWNER_GROUPS: Record<string, OwnerGroup> = {
     owner: "run-skills.ts",
     factory: "createSkillsGroup",
     types: ["SkillsGroup"],
-    getters: ["catalog", "query", "account", "unavailableReason"],
+    getters: ["catalog", "unavailableReason"],
+    bindings: ["catalog", "query", "account", "unavailableReason"],
     fields: ["skills", "catalog", "query", "account", "unavailableReason", "id", "name", "description", "scope", "plugin", "path", "runner", "cwd", "accountHome", "length"],
   },
   children: {

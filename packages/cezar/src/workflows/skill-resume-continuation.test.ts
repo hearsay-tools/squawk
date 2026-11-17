@@ -221,6 +221,17 @@ describe('skill resume continuation follow-ups (#790 review)', { timeout: 20_000
     }, { timeout: LAUNCH_WAIT_MS });
   });
 
+  it('Continue resolves a unique other-scope plugin skill without a reported path', async () => {
+    manager.setSkillCatalog(fixedSkillCatalog([{ id: 'plugin:known', name: 'Plugin skill', scope: 'other' }]));
+    const id = terminalSkillRun('plugin:known');
+    expect(manager.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
+    // bound: startSession captures the native fallback before any mock model turn.
+    await vi.waitFor(() => expect(launches).toHaveLength(1), { timeout: LAUNCH_WAIT_MS });
+    expect(launches[0]!.spec.resumeFallbackSkill).toMatchObject({ id: 'plugin:known' });
+    expect(launches[0]!.spec.resumeFallbackSkill).not.toHaveProperty('path');
+    sessions[0]!.finish();
+  });
+
   it('an unknown Continue command uses only the opening snapshot and adds no next-Continue note', async () => {
     const record = store.createRun({ title: 'plain', task: 'plain', workflow: 'quick-task', runner: 'claude',
       steps: [{ id: 'task', name: 'Task', kind: STEP_KIND.agent }] });

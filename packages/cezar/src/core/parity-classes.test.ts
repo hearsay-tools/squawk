@@ -38,10 +38,11 @@ describe('the scenario runner and the fact-value unit tests (docs/adr/0063-one-s
   it('fails a missing value, a stale value, the scenario runner\'s own value and a bad file', () => {
     const tests = { ...FACT_VALUE_TESTS, 'inputDelivery.acknowledgement': {} };
     expect(factValueProblems(tests, RUNNER_FACTS)).toEqual(['inputDelivery.acknowledgement response: no unit test is named']);
-    // Without opencode, no runner declares always-held: its entry goes stale.
+    // Without opencode, neither always-held nor unknown-skill error is declared.
     const { opencode: _opencode, ...withoutOpencode } = RUNNER_FACTS;
     expect(factValueProblems(FACT_VALUE_TESTS, withoutOpencode)).toEqual([
       'inputDelivery.humanInputAtTurnEnd always-held: no runner declares it',
+      'skillUnknownName error: no runner declares it',
     ]);
     const stale = { ...FACT_VALUE_TESTS, 'inputDelivery.consumption': { ...FACT_VALUE_TESTS['inputDelivery.consumption'], gone: ['workflows/turn-path-fact-values.test.ts'] } };
     expect(factValueProblems(stale, RUNNER_FACTS)).toEqual(['inputDelivery.consumption gone: no runner declares it']);

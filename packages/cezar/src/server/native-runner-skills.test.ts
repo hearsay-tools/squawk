@@ -89,6 +89,18 @@ describe('runner-native skills API', () => {
     expect(calls.at(-1)).toEqual({ runner: 'claude', cwd: root, accountHome: undefined });
   });
 
+  it('refuses explicit accounts in hosted mode before probing and keeps project-default listing', async () => {
+    await addAccount();
+    vi.stubEnv('CEZ_REMOTE', '1');
+    for (const account of ['work', 'missing', 'default']) {
+      const response = await request(`runner=claude&account=${account}`);
+      expect(response.status).toBe(409);
+    }
+    expect(calls).toEqual([]);
+    await list('runner=claude');
+    expect(calls).toHaveLength(1);
+  });
+
   it('serves the cached list and refresh=1 probes that runner/account again', async () => {
     await addAccount();
     expect((await list('runner=claude&account=work')).source).toBe('live');

@@ -1,3 +1,4 @@
+import { leadingSlashSkillName } from './prompts.ts';
 import { productEnvEntries } from '../../core/product-env.ts';
 import { atStepOpen, atContinue } from './launch-read-resolver.ts';
 import type { DelegationProvisioner } from '../../delegation/provision.ts';
@@ -84,12 +85,16 @@ export async function agentWebhooksPart({ repoRoot, home }: LaunchContext, cockp
  * and `runContinuation` — come here; a live message never does. The prefix goes into the
  * opening message only, never the system prompt a worker inherits (#778).
  */
-export function sessionContextFor({ store, repoRoot, dataDir }: LaunchContext, runId: string, state: ActiveRun, stepId: string, _openingPrompt: string): SessionContext {
+export function sessionContextFor({ store, repoRoot, dataDir }: LaunchContext, runId: string, state: ActiveRun, stepId: string, openingPrompt: string): SessionContext {
   const run = store.getRun(runId);
   const role = run?.delegation?.role === 'worker' ? 'worker' : 'parent';
   const handoff = handoffPath(dataDir, runId);
   refreshHandoffRecords(store, dataDir, runId);
-  const context: SessionContext = buildSessionContext({
+  // A structured skill has already consumed its slash text. Unconverted native commands
+  // still need character zero, so they keep the handoff read instruction instead of a prefix.
+  const context: SessionContext = leadingSlashSkillName(openingPrompt)
+    ? { prefix: '', handoffInjected: false, reports: [{ id: 'session-context', status: 'skipped', sources: [], reason: 'the opening message is a slash command, which must stay at its start' }] }
+    : buildSessionContext({
       projectRoot: repoRoot,
       cwd: state.liveSession.cwd,
       role,

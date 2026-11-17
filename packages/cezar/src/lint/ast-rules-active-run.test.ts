@@ -336,6 +336,7 @@ ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-usage-write
 ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-skills-write-outside-owner')!, {
   "file": "packages/cezar/src/workflows/run/example.ts",
   "valid": [
+    "request.query.cache.clear(); foo.account.set(key, value);",
     "const shared: Skill = entry; shared.team = { repo: \"other\", ref: \"main\", path: \"demo\", dir: false };",
     "const view = state.skills.catalog; view[0];",
     "const { catalog: skills } = state.skills; [...skills];",
@@ -345,6 +346,8 @@ ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-skills-writ
     "function createActiveRun() { Object.defineProperty(state, \"skills\", { writable: false, configurable: false }); }"
   ],
   "invalid": [
+    "function f(view: SkillsGroup) { view.query.accountHome = other; }",
+    "const { query } = state.skills; Object.assign(query, { cwd: other });",
     "function f(state: ActiveRun) { state.skills = other.skills; }",
     "function f(state: ActiveRun) { delete state[\"skills\"]; }",
     "state.skills.catalog.push(value)",
