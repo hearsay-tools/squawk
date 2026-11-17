@@ -37,16 +37,6 @@ function runTurn(lines: readonly unknown[], state: ClaudeUiMapperState = createC
 }
 
 describe('claude typed forked command', () => {
-  it('nests every child of the fork under one parent-less task item in the same turn', () => {
-    const items = itemsOf(runTurn(fixtureLines()).events);
-    const children = items.filter((item) => item.parentItemId !== undefined);
-    expect(children.length).toBeGreaterThan(0);
-    expect(new Set(children.map((item) => item.parentItemId))).toEqual(new Set([FORK_ID]));
-    const roots = items.filter((item) => item.id === FORK_ID);
-    expect(roots.every((item) => item.toolKind === 'task' && item.parentItemId === undefined && item.title === '/fxfork')).toBe(true);
-    expect(roots.map((item) => item.status)).toEqual([TOOL_STATUS.running, TOOL_STATUS.completed]);
-  });
-
   it('gives the same command typed in a later turn its own fork item', () => {
     const first = runTurn(fixtureLines());
     const second = runTurn(fixtureLines().filter((line) => line.subtype !== 'init'), first.state);

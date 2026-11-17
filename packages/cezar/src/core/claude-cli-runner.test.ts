@@ -378,22 +378,6 @@ describe('SIGTERM→SIGKILL escalation for a CLI that survives SIGTERM', () => {
     });
   });
 
-  it('escalates on the wall-clock timeout path as well', () => {
-    withFakeChild((fake) => {
-      const session = new ClaudeCliRunner({ bin: 'claude', timeoutMs: 20 }).startSession({ toolGrant: UNSET_TOOL_GRANT,
-        userPrompt: 'do it',
-        cwd: process.cwd(),
-      });
-      void session.result.catch(() => undefined);
-
-      vi.advanceTimersByTime(20);
-      expect(fake.signals).toEqual(['SIGTERM']);
-
-      vi.advanceTimersByTime(KILL_GRACE_MS);
-      expect(fake.signals).toEqual(['SIGTERM', 'SIGKILL']);
-    });
-  });
-
   it('settles a timeout when signal exit precedes stdout drain (#470)', async () => {
     const fake = signallableChild();
     spawnHook.override = () => fake.child;

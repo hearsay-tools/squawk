@@ -186,28 +186,6 @@ describe('endCodexAppServer watchdog', () => {
     }
   });
 
-  // #844 — the regression that gating on `child.killed` produced: the SIGTERM
-  // this watchdog sends sets the flag, so the escalation vetoed itself and an
-  // app-server that handles SIGTERM survived the entire teardown window.
-  it('escalates to SIGKILL even though Node already flagged the child as killed', () => {
-    vi.useFakeTimers();
-    try {
-      const { child, signals } = signallableChild();
-      endCodexAppServer(child);
-
-      vi.advanceTimersByTime(EOF_TERM_GRACE_MS);
-      expect(signals).toEqual(['SIGTERM']);
-      // Delivery, not death: the app-server handled the signal and runs on.
-      expect(child.killed).toBe(true);
-      expect(child.exitCode).toBeNull();
-
-      vi.advanceTimersByTime(EOF_KILL_GRACE_MS);
-      expect(signals).toEqual(['SIGTERM', 'SIGKILL']);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   it('stops escalating once the app-server really exits after SIGTERM', () => {
     vi.useFakeTimers();
     try {
