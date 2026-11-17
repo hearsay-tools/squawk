@@ -36,7 +36,7 @@ export function SkillsRoute() {
     finally { setRefreshing(false) }
   }
   return (
-    <div data-route="skills" className="grid min-h-full content-start gap-6 p-[clamp(1rem,3vw,2.25rem)]">
+    <div data-route="skills" className="grid min-h-full content-start gap-6 p-[clamp(1rem,3vw,2.25rem)] max-md:[padding-block-end:5rem]">
       <h1 className="text-2xl">Skills</h1>
       <div className="flex flex-wrap items-center gap-3">
         <label className="grid gap-1">Runner

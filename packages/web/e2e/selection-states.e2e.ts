@@ -260,7 +260,8 @@ describe('selection and control states (#171)', () => {
       focus(`${row} summary`)
       expect((colorSample(contrastSampleExpression(`${row} summary`)) as ContrastSample).ratio).toBeGreaterThanOrEqual(4.5)
       browser.screenshot(`${artifacts}/states-skills-${variant.id}.png`, { viewport: true })
-      browser.click('[data-slot="skill-row"][data-skill="ship"] summary')
+      // The expanded inline inventory puts the next row below the phone fold.
+      clickInView(browser, '[data-slot="skill-row"][data-skill="ship"] summary')
       browser.waitForFunction(`document.querySelector('[data-slot="skill-row"][data-skill="ship"]')?.open === true`)
       browser.waitForFunction(`document.querySelector('[data-slot="skill-row"][data-skill="ship"] [data-slot="skill-detail"]')?.textContent.includes('ship')`)
     })

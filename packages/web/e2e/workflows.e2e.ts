@@ -3,7 +3,7 @@ import { projectPaths } from '../../cezar/src/project-paths.ts'
 import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { waitForSettledSample } from './visual-ready'
+import { clickInView, waitForSettledSample } from './visual-ready'
 import { parse } from 'yaml'
 
 import { AgentBrowser, readTestEnv, servedRoot } from './agent-browser'
@@ -72,7 +72,7 @@ function prepareWorkflow(skills: string[], saved = false): void {
   openEmptyWorkflow()
   for (const skill of skills) browser.click(addButton(skill))
   browser.waitForFunction(`${stepIdsJs} === '${skills.join(',')}'`)
-  browser.click('[data-slot="wb-yaml-toggle"]')
+  clickInView(browser, '[data-slot="wb-yaml-toggle"]')
   if (!saved) return
   rmSync(savedFlowPath, { force: true })
   browser.fill('[data-slot="wb-name"]', FLOW)
@@ -94,7 +94,7 @@ function importWorkflow(): void {
     '      max: 2',
   ].join('\n')
   openEmptyWorkflow()
-  browser.click('[data-slot="wb-yaml-toggle"]')
+  clickInView(browser, '[data-slot="wb-yaml-toggle"]')
   browser.click('[data-slot="wb-import"]')
   browser.fill('[data-slot="wb-import-text"]', pasted)
   // The expanded import card can place its actions below the nested page viewport.
@@ -118,7 +118,7 @@ describe('workflow builder against the live dry-run server', () => {
     browser.waitForFunction(`${stepIdsJs} === '${ALPHA},${BETA}'`)
     expect(browser.text('[data-slot="wb-count"]')).toBe('2 skills')
 
-    browser.click('[data-slot="wb-yaml-toggle"]') // The portable source is disclosed on demand.
+    clickInView(browser, '[data-slot="wb-yaml-toggle"]') // The portable source is disclosed on demand.
 
     // The preview speaks the portable compact form for a pure skill stack (spec 012).
     const yaml = browser.text('[data-slot="wb-yaml"]')

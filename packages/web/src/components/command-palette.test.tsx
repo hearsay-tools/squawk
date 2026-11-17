@@ -1396,3 +1396,31 @@ describe('server search past the window', () => {
     await waitFor(() => expect(document.querySelector('[data-slot="palette-task"][data-run-id="by-url"]')).not.toBeNull())
   })
 })
+
+it('offers no unchecked skill while its list is pending or live', async () => {
+  renderPalette()
+  const fallback = fetchMock.getMockImplementation()!
+  let resolveList!: (response: Response) => void
+  const list = new Promise<Response>(resolve => { resolveList = resolve })
+  fetchMock.mockImplementation((input, init) => String(input).includes('/runner-skills?') ? list : fallback(input, init))
+  openWith({ metaKey: true })
+  fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'unmatched' } })
+  await waitFor(() => expect(fetchMock.mock.calls.some(call => String(call[0]).includes('/runner-skills?'))).toBe(true))
+  expect(screen.queryByText(/Use skill id/)).toBeNull()
+  await act(async () => resolveList(new Response(JSON.stringify({ runner: 'claude', skills: [{ id: 'known', name: 'Known skill' }], problems: [], source: 'live' }), { headers: { 'content-type': 'application/json' } })))
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } })
+  await screen.findByText('Known skill')
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'unmatched' } })
+  expect(screen.queryByText(/Use skill id/)).toBeNull()
+})
+
+it.each(['unavailable', 'failed'])('offers a typed skill id only when the list is %s', async (state) => {
+  renderPalette({ extraRoutes: { '/api/v1/runner-skills?runner=claude': { runner: 'claude', skills: [], problems: [], source: 'unavailable' } } })
+  if (state === 'failed') {
+    const fallback = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((input, init) => String(input).includes('/runner-skills?') ? Promise.reject(new Error('offline')) : fallback(input, init))
+  }
+  openWith({ metaKey: true })
+  fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'unmatched' } })
+  await screen.findByText('Use skill id “unmatched” (unchecked)')
+})

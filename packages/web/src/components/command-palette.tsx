@@ -793,7 +793,7 @@ function PaletteContent({ close }: { close: () => void }) {
     close,
   })
 
-  if (skills.unchecked && searching) {
+  if ((skills.isError || skills.list?.source === 'unavailable') && searching) {
     groups.push({
       rows: [{ value: search.trim() }],
       node: <CommandGroup key="unchecked-skill" heading="Skills"><CommandItem value={search.trim()} onSelect={() => go(newTaskPrefillHref({ skill: search.trim(), runner: skills.runner }))}>Use skill id “{search.trim()}” (unchecked)</CommandItem></CommandGroup>,
