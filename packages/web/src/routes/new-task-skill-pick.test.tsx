@@ -19,6 +19,7 @@ it('shows both copies of a recent plugin id, sends its chosen path and persists 
   await pillReady()
   fireEvent.click(screen.getByRole('button', { name: 'Choose a skill or workflow' }))
   await screen.findByText('Repo copy')
+  fireEvent.change(screen.getByPlaceholderText('search skills & workflows…'), { target: { value: 'plugin:check' } })
   const choices = document.querySelectorAll('[data-source-kind="skill"][data-slot="source-option"]')
   expect(choices).toHaveLength(2)
   expect(choices[0]?.textContent).toContain('.agents/check/SKILL.md')
@@ -32,6 +33,22 @@ it('shows both copies of a recent plugin id, sends its chosen path and persists 
   const saved = requests.find((request) => request.method === 'PUT' && request.url === '/api/v1/ui-state')?.body
   expect(saved).toMatchObject({ lastTask: { source: 'skill', ref: 'plugin:check' }, recentSources: [{ source: 'skill', ref: 'plugin:check' }] })
   expect(JSON.stringify(saved)).not.toContain('SKILL.md')
+})
+
+it.each(['claude', 'codex'] as const)('uses a palette link identity instead of a saved %s runner and non-default account', async (runner) => {
+  serve({ providerStatus: PROVIDERS_MULTI, skills: [
+    { id: 'plugin:check', name: 'Check', description: 'Default checks', path: 'repo/SKILL.md' },
+  ], agentProfiles: { profiles: [{ provider: runner, id: 'work', label: 'Work' }], selections: {} } })
+  writeDraft({ ...readDraft(), runner, agentProfile: 'work', model: 'remembered-model', effort: 'high' })
+  renderNewTask('/new?skill=plugin%3Acheck&skillPath=repo%2FSKILL.md&runner=claude')
+  await pillReady('Check')
+  expect(readDraft()).toMatchObject({ runner: 'claude', agentProfile: null,
+    source: { source: 'skill', ref: 'plugin:check', path: 'repo/SKILL.md' } })
+  if (runner === 'codex') expect(readDraft()).toMatchObject({ model: null, effort: null })
+  fireEvent.change(textarea(), { target: { value: 'Check changes' } })
+  await startTask()
+  expect(postedBody()).toMatchObject({ runner: 'claude', steps: [{ skill: 'plugin:check', skillPath: 'repo/SKILL.md' }] })
+  expect(postedBody()).not.toHaveProperty('agentProfile')
 })
 
 it('waits for account discovery before checking a deep link against the drafted runner', async () => {

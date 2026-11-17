@@ -264,6 +264,16 @@ describe('#484: an (almost-)exact match sorts to the top', () => {
 })
 
 describe('searchSkills / searchWorkflows (#484: the pickers rank in JS, not via cmdk)', () => {
+  it('matches a native id absent from the display text and keeps both paths', () => {
+    const copies = [
+      skill({ id: 'plugin:check', name: 'Check', description: 'Review changes', path: 'repo/SKILL.md', scope: 'repo' }),
+      skill({ id: 'plugin:check', name: 'Check', description: 'Review changes', path: '/user/SKILL.md', scope: 'user' }),
+    ]
+    expect(searchSkills(copies, 'plugin:check')).toEqual(copies)
+    expect(filterSkills(copies, 'plugin:check')).toEqual(copies)
+    expect(searchSkillsForDisplay(copies, 'plugin:check').ranked).toEqual(copies)
+    expect(searchSkills(copies, 'plugin:check changes')).toEqual(copies)
+  })
   const skills = [
     skill({ id: 'om-auto-fix-issue', name: 'om-auto-fix-issue', scope: 'repo', description: 'Fix an issue; runs om-fix internally' }),
     skill({ id: 'om-fix', name: 'om-fix', scope: 'repo', description: 'Apply the minimal fix' }),

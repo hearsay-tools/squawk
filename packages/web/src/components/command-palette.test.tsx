@@ -1075,7 +1075,7 @@ describe('Skills group', () => {
 
     fireEvent.click(document.querySelector('[data-skill="project-review"]') as HTMLElement)
 
-    expect(location()).toBe('/new?skill=project-review&skillPath='+encodeURIComponent('/skills/repo/project-review.md'))
+    expect(location()).toBe('/new?skill=project-review&skillPath='+encodeURIComponent('/skills/repo/project-review.md')+'&runner=claude')
     await waitFor(() => expect(dialog()).toBeNull())
   })
 })

@@ -1223,7 +1223,7 @@ export function useRunnerSkills(runner?: Runner, account?: string | null, enable
     enabled: enabled && (runner !== undefined || !config.isPending),
     retry: false,
   })
-  return { ...query, data: query.data?.skills, list: query.data,
+  return { ...query, runner: selected, data: query.data?.skills, list: query.data,
     unchecked: query.isError || !query.data || query.data.source === 'unavailable' }
 }
 

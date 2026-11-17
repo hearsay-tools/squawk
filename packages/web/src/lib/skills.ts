@@ -271,7 +271,9 @@ function rankByQuery<T extends { id?: string; name: string; description?: string
   if (query.trim() === '') return [...items]
   return items
     .map((item, index) => {
-      const score = queryScore(item.name, item.description, query)
+      // Native ids can contain a plugin prefix absent from the display name. Keep
+      // name ranking first, while allowing each word to match the id or description.
+      const score = queryScore(item.name, [item.id, item.description].filter(Boolean).join(' '), query)
       const count = usageCount(usage, item.id ?? item.name)
       return { item, index, count, nameScore: nameQueryScore(item.name, query), score }
     })

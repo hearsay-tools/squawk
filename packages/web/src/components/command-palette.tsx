@@ -1,4 +1,6 @@
 import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
+import type { Runner } from '@open-mercato/cezar-api-client'
+import { newTaskPrefillHref } from '@/routes/new-task-params'
 import { defined } from '@open-mercato/cezar-api-client/contract/defined'
 import { CheckIcon, FolderOpenIcon, LayersIcon, PlusIcon } from '@/components/design-icons'
 import { SunMoonIcon } from '@/components/design-icons'
@@ -432,7 +434,7 @@ function paletteViews({ multiProject, health }: { multiProject: boolean; health:
  *  group's row. */
 function paletteGroups({
   views, go, goGlobal, orderedProjects, activeProjectId, goProject, otherTasks, searching,
-  taskProjectName, showProjectOnTasks, now, selectTask, orderedSkills, theme, nextTheme, setTheme, close,
+  taskProjectName, showProjectOnTasks, now, selectTask, orderedSkills, skillRunner, theme, nextTheme, setTheme, close,
 }: {
   views: PaletteView[]
   go: (to: string) => void
@@ -447,6 +449,7 @@ function paletteGroups({
   now: number
   selectTask: (task: PaletteTask) => void
   orderedSkills: RunnerSkill[]
+  skillRunner: Runner
   theme: ReturnType<typeof useTheme>['theme']
   nextTheme: ReturnType<typeof useTheme>['theme']
   setTheme: ReturnType<typeof useTheme>['setTheme']
@@ -565,7 +568,7 @@ function paletteGroups({
               {...skillMatch(skill)}
               data-slot="palette-skill"
               data-skill={skill.id}
-              onSelect={() => go(`/new?skill=${encodeURIComponent(skill.id)}${skill.path !== undefined ? `&skillPath=${encodeURIComponent(skill.path)}` : ''}`)}
+              onSelect={() => go(newTaskPrefillHref({ skill: skill.id, skillPath: skill.path, runner: skillRunner }))}
             >
               <span className="shrink-0 font-medium">{skill.name}</span>
               {skill.path ? <span className="min-w-0 truncate text-xs">{skill.path}</span> : null}
@@ -783,6 +786,7 @@ function PaletteContent({ close }: { close: () => void }) {
     now,
     selectTask,
     orderedSkills,
+    skillRunner: skills.runner,
     theme,
     nextTheme,
     setTheme,
@@ -792,7 +796,7 @@ function PaletteContent({ close }: { close: () => void }) {
   if (skills.unchecked && searching) {
     groups.push({
       rows: [{ value: search.trim() }],
-      node: <CommandGroup key="unchecked-skill" heading="Skills"><CommandItem value={search.trim()} onSelect={() => go(`/new?skill=${encodeURIComponent(search.trim())}`)}>Use skill id “{search.trim()}” (unchecked)</CommandItem></CommandGroup>,
+      node: <CommandGroup key="unchecked-skill" heading="Skills"><CommandItem value={search.trim()} onSelect={() => go(newTaskPrefillHref({ skill: search.trim(), runner: skills.runner }))}>Use skill id “{search.trim()}” (unchecked)</CommandItem></CommandGroup>,
     })
   }
 

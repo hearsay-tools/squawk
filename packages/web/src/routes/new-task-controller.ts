@@ -73,6 +73,11 @@ function initialDraft(draftProjectId: string | null, deepLink: NewTaskParams): N
   const stored = readDraft(draftProjectId)
   return {
     ...stored,
+    // A picker with its own runner must not inherit a different draft identity.
+    ...(deepLink.runner !== undefined
+      ? { runner: deepLink.runner, agentProfile: deepLink.account || null,
+        ...(deepLink.runner !== stored.runner ? { model: null, effort: null } : {}) }
+      : {}),
     ...(deepLink.ref !== '' ? { text: deepLink.ref } : {}),
     ...(deepLink.skill !== ''
       ? { source: { source: 'skill', ref: deepLink.skill, ...(deepLink.skillPath !== undefined ? { path: deepLink.skillPath } : {}) } as TaskSource }
