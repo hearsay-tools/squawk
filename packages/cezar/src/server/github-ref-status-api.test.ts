@@ -71,22 +71,14 @@ describe('the github ref-status API', () => {
     expect(issuesOnly.prs).toEqual({});
   });
 
-  it('400s when neither list names anything', async () => {
-    expect((await apiRequest(app, '/api/v1/github/ref-status')).status).toBe(400);
-    expect((await apiRequest(app, '/api/v1/github/ref-status?prs=')).status).toBe(400);
-    expect((await apiRequest(app, '/api/v1/github/ref-status?prs=&issues=')).status).toBe(400);
-  });
-
-  it('400s on a malformed entry in either list', async () => {
-    expect((await apiRequest(app, '/api/v1/github/ref-status?prs=12,abc')).status).toBe(400);
-    expect((await apiRequest(app, '/api/v1/github/ref-status?issues=1.5')).status).toBe(400);
-    expect((await apiRequest(app, '/api/v1/github/ref-status?prs=0')).status).toBe(400);
-    expect((await apiRequest(app, '/api/v1/github/ref-status?prs=-3')).status).toBe(400);
-  });
-
-  it('400s past 100 numbers in one list', async () => {
+  it('rejects empty, malformed and over-limit reference lists', async () => {
     const many = Array.from({ length: 101 }, (_, i) => i + 1).join(',');
-    expect((await apiRequest(app, `/api/v1/github/ref-status?prs=${many}`)).status).toBe(400);
-    expect((await apiRequest(app, `/api/v1/github/ref-status?issues=${many}`)).status).toBe(400);
+    for (const query of [
+      '', '?prs=', '?prs=&issues=', '?prs=12,abc', '?issues=1.5', '?prs=0', '?prs=-3',
+      `?prs=${many}`, `?issues=${many}`,
+    ]) {
+      const res = await apiRequest(app, `/api/v1/github/ref-status${query}`);
+      expect(res.status, query).toBe(400);
+    }
   });
 });

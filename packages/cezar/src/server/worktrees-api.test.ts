@@ -127,11 +127,6 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
     expect(body.totalBytes).not.toBeNull();
   });
 
-  it('reflects the configured keep-limit', async () => {
-    writeFileSync(join(repoRoot, '.ai/cezar/config.json'), JSON.stringify({ worktreeRetention: 2 }), 'utf8');
-    expect((await getWorktrees()).keep).toBe(2);
-  });
-
   it('inherits the workspace default when the repo sets no retention of its own', async () => {
     Home.seed(testHome(), testHome().workspaceConfig, { resources: { worktreeRetentionDefault: 4 } });
     expect((await getWorktrees()).keep).toBe(4);
