@@ -5,7 +5,7 @@ export interface ReaderProbe { id: string; code: string }
 export function historyProbes(): ReaderProbe[] {
   const probes: ReaderProbe[] = [];
   const kinds = ['', 'get ', 'set ', 'async ', '*', 'async *'];
-  const classKinds = [...kinds, ...kinds.map(kind => 'static ' + kind), ...kinds.map(kind => 'private ' + kind)];
+  const classKinds = [...kinds, ...kinds.map(kind => 'static ' + kind), ...kinds.map(kind => 'private ' + kind), ...kinds.map(kind => 'private static ' + kind)];
   for (const name of ['historyPaths', 'eventsPath']) for (const container of ['object', 'class']) {
     const keys = [name, `'${name}'`, `"${name}"`, `['${name}']`, `[${name}]`, `[(${name})]`, '[`' + name + '`]'];
     if (container === 'class') keys.push('#' + name);
@@ -36,7 +36,10 @@ const wrappers: Record<string, (value: string) => string> = {
 
 /** Wrappers cross both join directions, operators, comparison orders and expression positions. */
 export function factProbes(): ReaderProbe[] {
-  const probes: ReaderProbe[] = [];
+  const probes: ReaderProbe[] = [
+    { id: 'issue/as-wrapped-negation', code: '!((run.status === "waiting") as boolean) || !run.autoResumeAt;' },
+    { id: 'issue/call-argument', code: "Boolean(run.status === 'waiting') && run.autoResumeAt;" },
+  ];
   for (const [comparison, wait] of Object.entries({ forward: "run.status === 'waiting'", reverse: "'waiting' !== run.status" })) {
     for (const [outerName, outer] of Object.entries(wrappers)) for (const [innerName, inner] of Object.entries(wrappers)) {
       for (const operator of ['&&', '||']) for (const direction of ['forward', 'reverse']) {

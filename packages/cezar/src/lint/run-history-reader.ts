@@ -84,18 +84,15 @@ export const runHistoryReader: AstRule = {
     const path = (node: EsNode, value: string | undefined) => {
       if (value !== undefined && /(?:^|[^A-Za-z0-9_-])[.]ndjson/.test(value)) sites.push({ node, kind: 'dynamic-path' });
     };
-    const named = (node: EsNode, name: string | undefined, declaration = false) => {
+    const named = (node: EsNode, name: string | undefined, declaration = false, declarationKind?: HistoryAccess) => {
       if (name !== 'eventsPath' && !aliases.has(name ?? '')) return;
-      let kind: HistoryAccess = name === 'eventsPath' ? 'eventsPath' : 'historyPaths';
-      if (kind === 'eventsPath') {
-        if (declaration && node.accessibility === 'private') kind = 'eventsPath-declaration';
-        else if (!declaration) {
-          const callee = unwrap(child(node, 'callee'));
-          const parent = node.parent;
-          if (callee?.type === 'MemberExpression' && child(callee, 'object')?.type === 'ThisExpression'
-            && parent?.type === 'CallExpression' && propertyName(child(parent, 'callee')) === 'appendFileSync'
-            && children(parent, 'arguments')[0] === node) kind = 'eventsPath-append';
-        }
+      let kind: HistoryAccess = declarationKind ?? (name === 'eventsPath' ? 'eventsPath' : 'historyPaths');
+      if (kind === 'eventsPath' && !declaration) {
+        const callee = unwrap(child(node, 'callee'));
+        const parent = node.parent;
+        if (callee?.type === 'MemberExpression' && child(callee, 'object')?.type === 'ThisExpression'
+          && parent?.type === 'CallExpression' && propertyName(child(parent, 'callee')) === 'appendFileSync'
+          && children(parent, 'arguments')[0] === node) kind = 'eventsPath-append';
       }
       sites.push({ node: helperNode(node, declaration), kind });
     };
@@ -110,10 +107,19 @@ export const runHistoryReader: AstRule = {
         if (callee?.type === 'MemberExpression' && callee.computed) return;
         named(node, propertyName(callee));
       },
-      MethodDefinition(node) { named(node, propertyName(child(node, 'key')), true); },
+      MethodDefinition(node) {
+        const key = child(node, 'key');
+        if (node.computed || !key || !['Identifier', 'PrivateIdentifier'].includes(key.type)) return;
+        const value = child(node, 'value')!;
+        // Only an ordinary `private eventsPath` matched the old declaration exception.
+        // Accessors, static methods, generators and private identifiers kept the general kind.
+        const privateDeclaration = nameOf(key) === 'eventsPath' && key.type === 'Identifier'
+          && node.accessibility === 'private' && node.kind === 'method' && !node.static && !value.async && !value.generator;
+        named(node, nameOf(key), true, privateDeclaration ? 'eventsPath-declaration' : undefined);
+      },
       Property(node) {
         const key = child(node, 'key');
-        if (node.method && !node.computed && key?.type === 'Identifier') named(node, nameOf(key), true);
+        if ((node.method || node.kind === 'get' || node.kind === 'set') && !node.computed && key?.type === 'Identifier') named(node, nameOf(key), true);
       },
       FunctionDeclaration(node) { named(node, nameOf(child(node, 'id')), true); },
       Literal(node) { path(node, stringOf(node)); },

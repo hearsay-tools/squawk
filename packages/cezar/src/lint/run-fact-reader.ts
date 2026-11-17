@@ -121,7 +121,7 @@ const HOLD_BOUNDARIES = new Set([
 interface ResumeAccess { start: number; end: number }
 interface HoldSummary { resumes: ResumeAccess[]; waits: EsNode[]; barriers: number[] }
 
-/** A comparison can join a hold through logical, optional-chain and unary nodes. */
+/** Identify waiting comparisons; their parents may be casts, calls or other expressions. */
 function waitingStatus(node: EsNode): EsNode | undefined {
   if (node.type !== 'BinaryExpression' || !['===', '!=='].includes(String(node.operator))) return undefined;
   const left = child(node, 'left')!, right = child(node, 'right')!;
@@ -165,7 +165,9 @@ function holdSummary(node: EsNode, cache: WeakMap<EsNode, HoldSummary>): HoldSum
     const property = child(node, 'property')!;
     resumes.push({ start: offset(property) - (node.optional ? 2 : 1), end: (property.range as [number, number])[1] });
   }
-  const waits = waitingStatus(node) ? [node] : ['LogicalExpression', 'ChainExpression', 'UnaryExpression'].includes(node.type) ? parts.flatMap(part => part.waits) : [];
+  // The old lookaround crossed expression wrappers and call arguments. Block boundaries above
+  // still stop it; every other child can carry a comparison to a surrounding logical join.
+  const waits = waitingStatus(node) ? [node] : parts.flatMap(part => part.waits);
   const summary = {
     resumes: [...new Set(resumes)].filter(access => nearEdge(access.start) || nearEdge(access.end)),
     waits: waits.filter(wait => { const bounds = waitingBounds(wait); return nearEdge(bounds.start) || nearEdge(bounds.end); }),

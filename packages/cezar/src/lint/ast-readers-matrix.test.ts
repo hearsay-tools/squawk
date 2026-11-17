@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { checkRule } from './ast-rule.testkit.ts';
@@ -13,13 +14,15 @@ describe('run reader generated parity matrices', () => {
     { rule: runFactReader, probes: factProbes },
   ])('$rule.name matches all old scanner cells', ({ rule, probes }) => {
     const expected = JSON.parse(readFileSync(new URL(`./reader-matrix/${rule.name}.json`, import.meta.url), 'utf8')) as {
-      revision: string; cells: Array<{ id: string; code: string; findings: string[] }>;
+      revision: string; digest: string; findings: string[][];
     };
     expect(expected.revision).toBe('9f43ee092');
     const generated = probes();
-    expect(generated).toEqual(expected.cells.map(({ id, code }) => ({ id, code })));
+    expect(createHash('sha256').update(JSON.stringify(generated)).digest('hex')).toBe(expected.digest);
+    expect(generated).toHaveLength(expected.findings.length);
     expect(new Set(generated.map(cell => cell.id)).size).toBe(generated.length);
-    const differences = expected.cells.flatMap(({ id, code, findings }) => {
+    const differences = generated.flatMap(({ id, code }, index) => {
+      const findings = expected.findings[index]!;
       const actual = checkRule(rule, 'packages/cezar/src/reader-matrix-probe.ts', code)
         .map(finding => finding.message.split(':')[0]!).sort();
       return JSON.stringify(actual) === JSON.stringify(findings) ? [] : [{ id, code, expected: findings, actual }];
