@@ -59,7 +59,7 @@ export function SkillsRoute() {
       {query.list?.problems.map((problem, index) => <p role="alert" key={index}>{problem.message}{problem.path ? ` · ${problem.path}` : ''}</p>)}
       <div data-slot="skills-list" className="grid gap-3">
         {searchSkills(query.data ?? [], search).map((skill) => (
-          <details key={skillKey(skill)} data-slot="skill-row" data-skill={skill.id} name="skill-details"
+          <details key={skillKey(skill)} data-slot="skill-row" data-skill={skill.id} data-skill-path={skill.path} name="skill-details"
             open={params.get('skill') === skill.id || undefined} className="rounded-lg border border-border bg-card p-3">
             <summary className="min-h-11 cursor-pointer break-words focus-visible:outline-2 active:bg-accent-strong/10">
               <span className="font-semibold">{skill.name}</span>
