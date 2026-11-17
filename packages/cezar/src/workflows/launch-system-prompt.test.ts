@@ -19,7 +19,8 @@ import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
 import { registerProject } from '../workspace/projects.ts';
 import { registryEntry } from '../workspace/registry-entry.ts';
 import { agentWebhooks } from '../workspace/webhooks.ts';
-import { skillSystemPrompt, type RunManager } from './run.ts';
+import type { RunManager } from './run.ts';
+import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import type { WorkflowDef } from './types.ts';
 
 const run = promisify(execFile);
@@ -61,7 +62,7 @@ const WORKFLOW: WorkflowDef = { name: 'pinned', source: 'built-in', steps: [{ id
 
 /**
  * hearsay-tools/cezarion#1632: the whole system prompt, byte for byte, at both launch sites, with
- * every part present: the skill playbook, the run's extra prompt, the delegation instructions,
+ * every system part present: the run's extra prompt, the delegation instructions,
  * automations, project webhooks, the artifact contract and the handoff contract, in that order.
  * The expected text joins the parts directly, so it does not depend on how the sites compose them.
  */
@@ -93,7 +94,10 @@ describe('launch system prompt at both sites (#1632)', () => {
       }];
     }, testHome());
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
-    manager = createFixtureManager(store, repoRoot);
+    manager = createFixtureManager(store, repoRoot, { skillCatalog: fixedSkillCatalog([{
+      id: SKILL.name, name: SKILL.name, description: SKILL.description, scope: 'repo',
+      path: join(repoRoot, '.ai/skills', SKILL.name, 'SKILL.md'),
+    }]) });
     manager.setCockpitAddress({ origin: 'http://127.0.0.1:5555', projectId });
     manager.setDelegationProvisioner(() => ({ env: {}, instructions: DELEGATION, restrictCrossSessionMessaging: true, revoke: () => {} }));
   });
@@ -143,7 +147,7 @@ describe('launch system prompt at both sites (#1632)', () => {
     return [opening, continued];
   }
 
-  /** The parts after the playbook, as the spec's own environment and tools make them. */
+  /** The system parts, as the spec's own environment and tools make them. */
   async function tail(spec: AgentRunSpec): Promise<string[]> {
     const webhooks = agentWebhooksPrompt(webhookCliCommand(), agentWebhooks(await registryEntry(projectId, repoRoot, testHome())));
     return [
@@ -152,20 +156,25 @@ describe('launch system prompt at both sites (#1632)', () => {
     ];
   }
 
-  const playbook = () => skillSystemPrompt({ ...SKILL, path: join(repoRoot, '.ai/skills', SKILL.name, 'SKILL.md'), source: 'ai' });
-
-  it('a fresh step and a Continue that resends the playbook compose every part in order', async () => {
+  it('a fresh step and a Continue compose every system part in order', async () => {
     const [opening, continued] = await startAndContinue();
     for (const part of await tail(opening)) expect(part.trim()).not.toBe('');
-    expect(opening.systemPrompt).toBe([playbook(), ...await tail(opening)].join(DIVIDER));
-    expect(continued.systemPrompt).toBe([playbook(), ...await tail(continued)].join(DIVIDER));
+    expect(opening.systemPrompt).toBe((await tail(opening)).join(DIVIDER));
+    expect(continued.systemPrompt).toBe((await tail(continued)).join(DIVIDER));
+    expect(opening.skill).toMatchObject({ id: SKILL.name, args: 'do it' });
+    expect(continued.skill).toBeUndefined();
+    expect(continued.resumeFallbackSkill).toMatchObject({ id: SKILL.name, args: '' });
     expect(continued.resumeFallbackSystemPrompt).toBeUndefined();
+    expect(opening.systemPrompt).not.toContain(SKILL.body);
   });
 
-  it('an in-thread Continue leaves the playbook to its fallback system prompt', async () => {
+  it('an in-thread Continue carries the native trigger only as a fresh-session fallback', async () => {
     launched.resume = 'in-thread';
     const [, continued] = await startAndContinue();
     expect(continued.systemPrompt).toBe((await tail(continued)).join(DIVIDER));
-    expect(continued.resumeFallbackSystemPrompt).toBe([playbook(), ...await tail(continued)].join(DIVIDER));
+    expect(continued.resumeFallbackSystemPrompt).toBeUndefined();
+    expect(continued.skill).toBeUndefined();
+    expect(continued.resumeFallbackSkill).toMatchObject({ id: SKILL.name, args: '' });
+    expect(continued.userPrompt).toContain('keep going');
   });
 });

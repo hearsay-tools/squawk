@@ -29,6 +29,7 @@ import { plannedWorkflow, skillTaskSteps, stepKind, type WorkflowDef } from '../
 import type { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { RunnerId } from './agent-runner.ts';
 import { profileEnv } from './agent-profiles.ts';
+import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
 import { HARNESS_ADAPTERS, promptFor, waitFor, type ScenarioName } from './harness-parity-core.testkit.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 
@@ -77,6 +78,7 @@ export async function driveRun(
   afterSettled?: (context: { store: RunStore; manager: RunManager; runId: string }) => Promise<void>,
   options: {
     autonomous?: boolean;
+    skillPaths?: Record<string, string>;
     semaphore?: WorkspaceSemaphore;
     workflowDef?: WorkflowDef;
     /** Called with the fresh store and manager before the run starts (to observe either), and
@@ -468,15 +470,14 @@ export async function withSkillParentRun(
     writeFileSync(join(repoRoot, 'a.txt'), 'one\n');
     await execFileAsync('git', ['add', '-A'], { cwd: repoRoot });
     await execFileAsync('git', [...GIT_IDENTITY, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
-    const skillsDir = join(repoRoot, '.ai/cezar/skills');
-    mkdirSync(skillsDir, { recursive: true });
-    writeFileSync(join(skillsDir, 'parent-skill.md'), 'PARENT SKILL BODY 778');
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
-    manager = createFixtureManager(store, repoRoot);
+    manager = createFixtureManager(store, repoRoot, { skillCatalog: fixedSkillCatalog([{
+      id: 'probe-project', name: 'probe-project', scope: 'repo', path: join(repoRoot, '.agents/skills/probe-project/SKILL.md'),
+    }]) });
     drainBookkeeping = trackTurnBookkeeping(manager);
     controller = await DelegationController.start();
     controller.attachProject({ home: testHome(), id: 'project', root: repoRoot, store, manager });
-    const parent = manager.startRun(plannedWorkflow(skillTaskSteps('parent-skill')), {
+    const parent = manager.startRun(plannedWorkflow(skillTaskSteps('probe-project')), {
       task: promptFor(backend, 'baseline'), runner: backend, worktree: false, systemPrompt: 'parent extra',
     });
     await waitFor(() => store!.getRun(parent.id)?.status === 'waiting', 30_000);

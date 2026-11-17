@@ -154,6 +154,7 @@ export const SPEC_FIELD_PROBES: Readonly<Record<AgentRunSpecField, SpecFieldProb
   systemPrompt: { kind: 'boundary', without: {}, with: { systemPrompt: 'parity probe system prompt' } },
   // Markerless on purpose, so every mock still answers with its default turn.
   skill: { kind: 'boundary', without: {}, with: { skill: { id: 'probe-project', path: '/tmp/probe-project/SKILL.md', args: 'native skill probe' } } },
+  resumeFallbackSkill: { kind: 'boundary', without: {}, with: { resumeFallbackSkill: { id: 'probe-project', path: '/tmp/probe-project/SKILL.md', args: 'fallback skill probe' } } },
   userPrompt: { kind: 'boundary', without: {}, with: { userPrompt: 'inspect the working tree, then report' } },
   images: { kind: 'boundary', without: {}, with: { images: [PROBE_IMAGE] } },
   cwd: { kind: SPEC_FIELD_PROBE_KINDS[1] },

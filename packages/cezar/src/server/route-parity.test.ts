@@ -15,6 +15,7 @@ import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp, projectRouteManifest, type ProjectRouteInfo } from './server.ts';
 import { setRunStatus, seedRuns } from '../runs/run-store.testkit.ts';
 import { createRunner } from '../core/runner-factory.ts';
+import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { createRunManager } from './run-manager.testkit.ts';
 
 /**
@@ -84,6 +85,7 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
       manager: { isActive: () => false, finishBlockedReason: () => 'no open session' } as unknown as RunManager,
       version: '0.0.0-test',
       contexts,
+      skillCatalog: fixedSkillCatalog(),
     });
   });
 
@@ -175,6 +177,7 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
       'POST /runs/archive-finished',
       'PUT /ui-state',
       'PUT /config',
+      'GET /runner-skills',
       'GET /agent-config',
       'GET /agent-config/:id',
       'PUT /agent-config/:id',
@@ -211,7 +214,11 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
     const gets = manifest.filter((r: ProjectRouteInfo) => r.method === 'GET' && !r.path.endsWith('/events'));
     expect(gets.length).toBeGreaterThanOrEqual(20);
     for (const route of gets) {
-      await expectParity(fillParams(route.path));
+      if (route.path === '/runner-skills') {
+        // Warm the shared cache so all three spellings report the same source.
+        await answer('/api/v1/runner-skills?runner=claude');
+        await expectParity('/runner-skills?runner=claude');
+      } else await expectParity(fillParams(route.path));
     }
   });
 

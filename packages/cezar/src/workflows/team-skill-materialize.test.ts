@@ -1,544 +1,113 @@
-import { Home } from '../home/home.ts';
-import { testHome, useTestHome } from '../home/test-home.testkit.ts';
-/**
- * #1024: a team directory skill must never be copied into the main checkout. A
- * run without its own task worktree gets a per-commit copy under the cache, and
- * the copy a worktree-off run used to leave in `<repoRoot>/.agents/skills` (which
- * `discoverSkills` reads as a LOCAL skill) no longer shadows the team skill.
- */
-import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
-import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentRunResult, AgentRunSpec, AgentSession } from '../core/agent-runner.ts';
+import type { AgentRunResult, AgentRunSpec } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import * as runners from '../core/runner-factory.ts';
-import { scopeFixtureProcesses } from '../delegation/process-scope.testkit.ts';
 import { RunStore } from '../runs/store.ts';
-import { discoverSkills } from '../skills.ts';
-import { bareDirFor, refreshTeamSkills } from '../skills-remote.ts';
-import { seedTeamDirSkillClone, writeSkillsReposConfig } from '../skills-remote.testkit.ts';
-import { RunManager } from './run.ts';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
-import type { SquawkToolHandlers } from '../ci-wait/controller.ts';
+import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
+import type { RunManager } from './run.ts';
 import { plannedWorkflow, skillTaskSteps, type WorkflowDef } from './types.ts';
 
-const LAUNCH_WAIT_MS = 15_000;
-const execFileAsync = promisify(execFile);
+const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
-const TEAM_SKILL = 'team-dir-playbook';
-const V1_BODY = 'TEAM-DIR-PLAYBOOK-V1-1024';
-const V2_BODY = 'TEAM-DIR-PLAYBOOK-V2-1024';
-const NOTES = 'companion notes 1024\n';
-const AGENT_SKILL_DIRS = ['.claude', '.agents'];
+const BODY = 'OLD-SQUAWK-ONLY-PLAYBOOK';
+const NATIVE = 'native-playbook';
+const LEGACY = 'squawk-only-playbook';
+const SINGLE_STEP: WorkflowDef = plannedWorkflow([{ id: 'task', prompt: '{{task}}' }]);
 
-describe('team directory skills never land in the main checkout (#1024)', { timeout: 30_000 }, () => {
+/** Native skill selection does not stage Squawk's catalog, its companions or its bodies. */
+describe('native skills do not materialize Squawk copies', () => {
   let repoRoot: string;
-  let home: string;
   let store: RunStore;
   let manager: RunManager;
   let launches: AgentRunSpec[];
-  let tools: Map<string, SquawkToolHandlers>;
-  let sessions: Array<(done?: boolean) => Promise<void>>;
-  let sent: string[];
-  let cleanup: string[];
+  let finish: (() => void)[];
 
   beforeEach(async () => {
-    scopeFixtureProcesses();
-    vi.stubEnv('CEZ_DRY_RUN', '1');
-    vi.stubEnv('CEZ_AUTONAME', '0');
-    launches = [];
-    sessions = [];
-    sent = [];
-    cleanup = [];
-    home = mkdtempSync(join(tmpdir(), 'cez-team-dir-home-'));
-    cleanup.push(home);
-    vi.stubEnv('HOME', home);
-    useTestHome(Home.sandbox(home));
-    repoRoot = mkdtempSync(join(tmpdir(), 'cez-team-dir-root-'));
-    await execFileAsync('git', ['init', '-q', '-b', 'main'], { cwd: repoRoot });
-    await execFileAsync('git', ['config', 'gc.auto', '0'], { cwd: repoRoot });
-    await execFileAsync('git', ['config', 'maintenance.auto', 'false'], { cwd: repoRoot });
-    writeFileSync(join(repoRoot, 'a.txt'), 'one\n');
-    await execFileAsync('git', ['add', '-A'], { cwd: repoRoot });
-    await execFileAsync('git', [...GIT_ID, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
-    store = RunStore.open(join(repoRoot, '.ai/cezar'), { keepLive: true });
-    manager = createFixtureManager(store, repoRoot);
-    tools = new Map();
-    const handlers = manager.squawkToolHandlers.bind(manager);
-    vi.spyOn(manager, 'squawkToolHandlers').mockImplementation((id, generation) => {
-      const value = handlers(id, generation); tools.set(id, value); return value;
-    });
-    vi.spyOn(runners, 'createRunner').mockImplementation((backend) => ({
-      backend: backend ?? 'claude',
-      specSupport: CLAUDE_SPEC_SUPPORT,
-      systemPromptOnResume: 'resent',
-      interrupt: async () => undefined,
-      run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }),
-      startSession: (spec: AgentRunSpec, onEvent) => {
+    repoRoot = mkdtempSync(join(tmpdir(), 'cez-native-no-copy-'));
+    await run('git', ['init', '-q', '-b', 'main'], { cwd: repoRoot });
+    await run('git', ['config', 'gc.auto', '0'], { cwd: repoRoot });
+    await run('git', ['config', 'maintenance.auto', 'false'], { cwd: repoRoot });
+    mkdirSync(join(repoRoot, '.ai/cezar/skills'), { recursive: true });
+    writeFileSync(join(repoRoot, '.ai/cezar/skills', `${LEGACY}.md`), BODY);
+    await run('git', ['add', '-A'], { cwd: repoRoot });
+    await run('git', [...GIT_ID, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
+    store = RunStore.open(join(repoRoot, '.ai/cezar'));
+    manager = createFixtureManager(store, repoRoot, { skillCatalog: fixedSkillCatalog([{
+      id: NATIVE, name: NATIVE, scope: 'user', path: join(repoRoot, 'account-skills', NATIVE, 'SKILL.md'),
+    }]) });
+    launches = []; finish = [];
+    vi.spyOn(runners, 'createRunner').mockImplementation(backend => ({
+      backend: backend ?? 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
+      run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: async () => {},
+      startSession: spec => {
         launches.push(spec);
-        let resolveResult!: (value: AgentRunResult) => void;
+        let end!: () => void;
         let open = true;
-        const result = new Promise<AgentRunResult>((resolve) => { resolveResult = resolve; });
-        const finish = () => {
-          open = false;
-          resolveResult({ text: 'ok', toolCalls: [], tokensUsed: 0 });
-        };
-        const session: AgentSession = {
-          result,
-          get open() { return open; },
-          sendMessage: (content) => {
-            sent.push(content.map((block) => (block.type === 'text' ? block.text : '')).join('\n'));
-            return open;
-          },
-          sendAgentMessage: () => open ? Promise.resolve() : false,
-          discardQueuedMessages: () => undefined,
-          holdsHumanInput: () => false,
-          interrupt: finish,
-          end: finish,
-        };
-        // A turn that calls cezar_done, then the close: an agent step completes only on a done
-        // (hearsay-tools/cezarion#1620, hearsay-tools/cezarion#2397). Teardown only closes.
-        sessions.push(async (done = true) => {
-          try {
-            const runId = spec.env?.CEZ_TASK_ID;
-            const tool = runId === undefined ? undefined : tools.get(runId);
-            if (open && done && runId !== undefined && tool !== undefined) {
-              await tool.finishTurn({}, new AbortController().signal);
-              onEvent?.({ type: 'text', text: 'ok' });
-              onEvent?.({ type: 'turn-end' });
-            }
-          } finally { finish(); }
-        });
-        queueMicrotask(() => onEvent?.({ type: 'session', sessionId: `sess-${launches.length}`, resumed: false }));
-        return session;
+        const result = new Promise<AgentRunResult>(resolve => { end = () => { open = false; resolve({ text: 'ok', toolCalls: [], tokensUsed: 0 }); }; });
+        finish.push(end);
+        return { result, get open() { return open; }, sendMessage: () => open,
+          sendAgentMessage: () => false, discardQueuedMessages: () => {}, holdsHumanInput: () => false,
+          interrupt: end, end };
       },
     }));
   });
 
   afterEach(async () => {
-    for (const finish of sessions) await finish(false);
+    for (const end of finish) end();
     await drainFixtureManagers(repoRoot);
-    manager.dispose();
     store.flush();
     vi.restoreAllMocks();
-    vi.unstubAllEnvs();
     rmSync(repoRoot, { recursive: true, force: true });
-    for (const dir of cleanup) rmSync(dir, { recursive: true, force: true });
   });
 
-  // A trailing check after the agent step: the step's done starts it, and the run then ends.
-  const workflow: WorkflowDef = plannedWorkflow([...skillTaskSteps(TEAM_SKILL), { id: 'verify', command: 'true' }]);
-
-  async function runToEnd(worktree: boolean | undefined): Promise<{ id: string; spec: AgentRunSpec }> {
-    const before = launches.length;
-    const record = manager.startRun(workflow, { task: 'use the playbook', ...(worktree === undefined ? {} : { worktree }) });
-    await vi.waitFor(() => expect(launches.length).toBe(before + 1), { timeout: LAUNCH_WAIT_MS });
-    sessions[before]!();
-    await vi.waitFor(() => {
-      expect(manager.isActive(record.id)).toBe(false);
-      expect(['done', 'review']).toContain(store.getRun(record.id)?.status);
-    }, { timeout: LAUNCH_WAIT_MS });
-    return { id: record.id, spec: launches[before]! };
+  async function launch(task: string, worktree: boolean, skill?: string): Promise<AgentRunSpec> {
+    manager.startRun(skill ? plannedWorkflow(skillTaskSteps(skill)) : SINGLE_STEP, { task, worktree, runner: 'claude' });
+    // bound: startSession is the observed launch signal; git workspace setup may take seconds.
+    await vi.waitFor(() => expect(launches).toHaveLength(1), { timeout: 15_000 });
+    return launches[0]!;
   }
 
-  async function seedTeamSource() {
-    const repo = `org-${randomUUID().slice(0, 8)}/skills`;
-    writeSkillsReposConfig(repoRoot, [repo]);
-    const source = await seedTeamDirSkillClone(repo, TEAM_SKILL, {
-      'SKILL.md': `---\ndescription: team dir playbook\n---\n${V1_BODY}\n`,
-      'references/notes.md': NOTES,
-    });
-    cleanup.push(source.sourceDir);
-    await refreshTeamSkills(repoRoot, testHome());
-    return { repo, source };
+  function noCopies(cwd: string): void {
+    for (const directory of ['.agents', '.claude']) expect(existsSync(join(cwd, directory, 'skills'))).toBe(false);
   }
 
-  it('a worktree-off run reads the skill files from the cache, not the main checkout (AC1)', async () => {
-    const { repo, source } = await seedTeamSource();
-
-    const offRun = await runToEnd(false);
-    const filesDir = join(testHome().cache, 'skill-files', basename(bareDirFor(repo, testHome())), source.commit, TEAM_SKILL);
-    expect(offRun.spec.cwd).toBe(repoRoot);
-    expect(offRun.spec.systemPrompt).toContain(V1_BODY);
-    expect(offRun.spec.systemPrompt).toContain(`Skill files are installed on disk at: ${filesDir}`);
-    expect(readFileSync(join(filesDir, 'references', 'notes.md'), 'utf8')).toBe(NOTES);
-    for (const agentDir of AGENT_SKILL_DIRS) {
-      expect(existsSync(join(repoRoot, agentDir, 'skills', TEAM_SKILL)), `${agentDir}/skills/${TEAM_SKILL}`).toBe(false);
-    }
-    const exclude = existsSync(join(repoRoot, '.git/info/exclude')) ? readFileSync(join(repoRoot, '.git/info/exclude'), 'utf8') : '';
-    expect(exclude).not.toContain(`skills/${TEAM_SKILL}/`);
-    expect(store.readEvents(offRun.id).some((event) => event.type === 'note' &&
-      event.message === `team skill "${TEAM_SKILL}" materialized to ${filesDir}`)).toBe(true);
+  it.each([true, false])('selected native skill carries no body and writes no copies (worktree=%s)', async worktree => {
+    const spec = await launch('do the work', worktree, NATIVE);
+    expect(spec.skill).toMatchObject({ id: NATIVE, args: 'do the work' });
+    expect(spec.systemPrompt).not.toContain(BODY);
+    expect(spec.systemPrompt).not.toContain('Selected skill:');
+    noCopies(spec.cwd); noCopies(repoRoot);
   });
 
-  it('after a worktree-off run, a worktree run gets the moved team repo, not a leftover copy (AC2)', async () => {
-    const { source } = await seedTeamSource();
-    await runToEnd(false);
-
-    await source.update({ 'SKILL.md': `---\ndescription: team dir playbook\n---\n${V2_BODY}\n` });
-    await refreshTeamSkills(repoRoot, testHome());
-    expect((await discoverSkills(repoRoot, undefined, testHome())).find((skill) => skill.name === TEAM_SKILL)?.source).toBe('team');
-
-    const worktreeRun = await runToEnd(undefined);
-    expect(worktreeRun.spec.cwd).not.toBe(repoRoot);
-    expect(worktreeRun.spec.systemPrompt).toContain(V2_BODY);
-    expect(worktreeRun.spec.systemPrompt).not.toContain(V1_BODY);
-    // A worktree run keeps its in-worktree copies and today's note.
-    for (const agentDir of AGENT_SKILL_DIRS) {
-      expect(readFileSync(join(worktreeRun.spec.cwd, agentDir, 'skills', TEAM_SKILL, 'SKILL.md'), 'utf8')).toContain(V2_BODY);
-    }
-    expect(store.readEvents(worktreeRun.id).some((event) => event.type === 'note' &&
-      String(event.message).startsWith(`team skill "${TEAM_SKILL}" materialized to .claude/skills/${TEAM_SKILL}/`))).toBe(true);
+  it('a known leading name starts natively without expanding its body', async () => {
+    const spec = await launch(`/${NATIVE} inspect the diff`, false);
+    expect(spec.skill).toMatchObject({ id: NATIVE, args: 'inspect the diff' });
+    expect(spec.userPrompt).not.toContain(BODY);
+    noCopies(spec.cwd);
   });
 
-  it('a worktree whose agent dirs all link out of it gets the cache copy instead', async () => {
-    const { repo, source } = await seedTeamSource();
-    const outside = mkdtempSync(join(tmpdir(), 'cez-team-dir-outside-'));
-    cleanup.push(outside);
-    for (const agentDir of AGENT_SKILL_DIRS) {
-      mkdirSync(join(outside, agentDir));
-      symlinkSync(join(outside, agentDir), join(repoRoot, agentDir));
-    }
-    await execFileAsync('git', ['add', '-A'], { cwd: repoRoot });
-    await execFileAsync('git', [...GIT_ID, 'commit', '-q', '-m', 'linked agent dirs'], { cwd: repoRoot });
-
-    const worktreeRun = await runToEnd(undefined);
-    const filesDir = join(testHome().cache, 'skill-files', basename(bareDirFor(repo, testHome())), source.commit, TEAM_SKILL);
-    expect(worktreeRun.spec.cwd).not.toBe(repoRoot);
-    expect(lstatSync(join(worktreeRun.spec.cwd, '.claude')).isSymbolicLink()).toBe(true);
-    for (const agentDir of AGENT_SKILL_DIRS) {
-      expect(existsSync(join(outside, agentDir, 'skills')), `${agentDir} outside the worktree`).toBe(false);
-    }
-    expect(worktreeRun.spec.systemPrompt).toContain(`Skill files are installed on disk at: ${filesDir}`);
-    expect(readFileSync(join(filesDir, 'references', 'notes.md'), 'utf8')).toBe(NOTES);
-    expect(store.readEvents(worktreeRun.id).some((event) => event.type === 'note' &&
-      event.message === `team skill "${TEAM_SKILL}" materialized to ${filesDir}`)).toBe(true);
+  it.each([`/${LEGACY} inspect`, `Fix it, then run /${LEGACY}.`, '/compact now'])('passes text through without installing Squawk catalog entries: %s', async task => {
+    const spec = await launch(task, false);
+    expect(spec.skill).toBeUndefined();
+    expect(spec.userPrompt).toContain(task);
+    expect(spec.userPrompt).not.toContain(BODY);
+    noCopies(spec.cwd);
   });
 
-  /** The step-start notes of a run that name where a team skill was materialized. */
-  function materializedNotes(runId: string): string[] {
-    return store.readEvents(runId)
-      .filter((event) => event.type === 'note' && String(event.message).startsWith(`team skill "${TEAM_SKILL}" materialized to`))
-      .map((event) => String(event.message));
-  }
-
-  it('a worktree whose .claude links out of it names a copy that did land in the prompt', async () => {
-    await seedTeamSource();
-    const outside = mkdtempSync(join(tmpdir(), 'cez-team-dir-outside-'));
-    cleanup.push(outside);
-    symlinkSync(outside, join(repoRoot, '.claude'));
-    mkdirSync(join(repoRoot, '.agents'));
-    writeFileSync(join(repoRoot, '.agents', '.keep'), '');
-    await execFileAsync('git', ['add', '-A'], { cwd: repoRoot });
-    await execFileAsync('git', [...GIT_ID, 'commit', '-q', '-m', 'linked .claude'], { cwd: repoRoot });
-
-    const worktreeRun = await runToEnd(undefined);
-    const filesDir = join(worktreeRun.spec.cwd, '.agents', 'skills', TEAM_SKILL);
-    expect(worktreeRun.spec.cwd).not.toBe(repoRoot);
-    expect(lstatSync(join(worktreeRun.spec.cwd, '.claude')).isSymbolicLink()).toBe(true);
-    expect(existsSync(join(outside, 'skills')), '.claude outside the worktree').toBe(false);
-    // Every runner reads the named copy, whichever agent dir it would scan itself.
-    expect(worktreeRun.spec.systemPrompt).toContain(`Skill files are installed on disk at: ${filesDir}`);
-    expect(readFileSync(join(filesDir, 'references', 'notes.md'), 'utf8')).toBe(NOTES);
-    expect(materializedNotes(worktreeRun.id)).toEqual([
-      `team skill "${TEAM_SKILL}" materialized to .agents/skills/${TEAM_SKILL}/`,
-    ]);
-  });
-
-  it('a worktree that takes both copies keeps the note and names no path', async () => {
-    await seedTeamSource();
-
-    const worktreeRun = await runToEnd(undefined);
-    expect(worktreeRun.spec.cwd).not.toBe(repoRoot);
-    expect(worktreeRun.spec.systemPrompt).toContain(V1_BODY);
-    expect(worktreeRun.spec.systemPrompt).not.toContain('Skill files are installed on disk at:');
-    expect(materializedNotes(worktreeRun.id)).toEqual([
-      `team skill "${TEAM_SKILL}" materialized to .claude/skills/${TEAM_SKILL}/ and .agents/skills/${TEAM_SKILL}/`,
-    ]);
-  });
-
-  // hearsay-tools/cezarion#1408: the selected skill's companions, and a `/name` team directory skill.
-  const promptWorkflow: WorkflowDef = plannedWorkflow([{ id: 'task', name: 'task', prompt: '{{task}}' }, { id: 'verify', command: 'true' }]);
-
-  function writeLocalSkill(name: string, body: string): void {
-    mkdirSync(join(repoRoot, '.ai/skills', name), { recursive: true });
-    writeFileSync(join(repoRoot, '.ai/skills', name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name} skill\n---\n${body}\n`);
-  }
-
-  /** Start a run and hold its first session open, so its worktree is still there to inspect. */
-  async function launch(def: WorkflowDef, task: string, worktree?: boolean): Promise<{ id: string; spec: AgentRunSpec; finish(): Promise<void> }> {
-    const before = launches.length;
-    const record = manager.startRun(def, { task, ...(worktree === undefined ? {} : { worktree }) });
-    await vi.waitFor(() => expect(launches.length).toBe(before + 1), { timeout: LAUNCH_WAIT_MS });
-    return {
-      id: record.id,
-      spec: launches[before]!,
-      finish: async () => {
-        sessions[before]!();
-        await vi.waitFor(() => expect(manager.isActive(record.id)).toBe(false), { timeout: LAUNCH_WAIT_MS });
-      },
-    };
-  }
-
-  const notesOf = (runId: string): string[] => store.readEvents(runId)
-    .filter((event) => event.type === 'note').map((event) => String(event.message));
-
-  const fileText = (path: string): string => existsSync(path) ? readFileSync(path, 'utf8') : '';
-
-  it("a selected skill's companion lands in the task worktree (#1408)", async () => {
-    writeLocalSkill('lead-1408', 'then run helper-1408');
-    writeLocalSkill('helper-1408', 'HELPER-1408');
-    const run = await launch(plannedWorkflow([...skillTaskSteps('lead-1408'), { id: 'verify', command: 'true' }]), 'go');
-    expect(run.spec.cwd).not.toBe(repoRoot);
-    for (const agentDir of AGENT_SKILL_DIRS) {
-      expect(readFileSync(join(run.spec.cwd, agentDir, 'skills', 'helper-1408', 'SKILL.md'), 'utf8')).toContain('HELPER-1408');
-    }
-    expect(notesOf(run.id)).toContain("skills installed in the task's workspace: lead-1408, helper-1408");
-    await run.finish();
-  });
-
-  it('a /name opening prompt materializes a team directory skill in the worktree (#1118)', async () => {
-    await seedTeamSource();
-    const run = await launch(promptWorkflow, `/${TEAM_SKILL} please`);
-    expect(run.spec.cwd).not.toBe(repoRoot);
-    expect(readFileSync(join(run.spec.cwd, '.agents', 'skills', TEAM_SKILL, 'references', 'notes.md'), 'utf8')).toBe(NOTES);
-    expect(run.spec.userPrompt).toContain(V1_BODY);
-    expect(run.spec.userPrompt).not.toContain('Skill files are installed on disk at:');
-    await run.finish();
-  });
-
-  it('a worktree-off /name opening prompt names the cache copy (#1118)', async () => {
-    const { repo, source } = await seedTeamSource();
-    const run = await launch(promptWorkflow, `/${TEAM_SKILL} please`, false);
-    const filesDir = join(testHome().cache, 'skill-files', basename(bareDirFor(repo, testHome())), source.commit, TEAM_SKILL);
-    expect(run.spec.userPrompt).toContain(`Skill files are installed on disk at: ${filesDir}`);
-    expect(readFileSync(join(filesDir, 'references', 'notes.md'), 'utf8')).toBe(NOTES);
-    await run.finish();
-  });
-
-  it('the step note reports a capped closure (#1408)', async () => {
-    for (let i = 0; i < 26; i++) writeLocalSkill(`chain-${i}`, i < 25 ? `next chain-${i + 1}` : 'end');
-    const run = await launch(plannedWorkflow([...skillTaskSteps('chain-0'), { id: 'verify', command: 'true' }]), 'go');
-    const note = notesOf(run.id).find((message) => message.startsWith("skills installed in the task's workspace:"));
-    expect(note).toMatch(/; closure capped at 24, skipped chain-24 and later$/);
-    expect(existsSync(join(run.spec.cwd, '.agents', 'skills', 'chain-24'))).toBe(false);
-    await run.finish();
-  });
-
-  // hearsay-tools/cezarion#1672: a skill the step's prompt names as `/name` is a root too, after the
-  // selected skill, so a capped closure never leaves it out.
-  it('a skill the prompt names as /name lands in the worktree past a capped closure (#1672)', async () => {
-    for (let i = 0; i < 26; i++) writeLocalSkill(`chain-${i}`, i < 25 ? `next chain-${i + 1}` : 'end');
-    writeLocalSkill('named-1672', 'NAMED-1672');
-    const run = await launch(plannedWorkflow([...skillTaskSteps('chain-0'), { id: 'verify', command: 'true' }]),
-      'Fix it. When done, run the /named-1672 skill.');
-    for (const agentDir of AGENT_SKILL_DIRS) {
-      expect(fileText(join(run.spec.cwd, agentDir, 'skills', 'named-1672', 'SKILL.md')), agentDir).toContain('NAMED-1672');
-    }
-    const note = notesOf(run.id).find((message) => message.startsWith("skills installed in the task's workspace:"));
-    expect(note).toMatch(/; closure capped at 24, skipped chain-23 and later$/);
-    expect(existsSync(join(run.spec.cwd, '.agents', 'skills', 'chain-23'))).toBe(false);
-    await run.finish();
-  });
-
-  it('a team directory skill the prompt names mid-text lands in the worktree (#1672)', async () => {
-    await seedTeamSource();
-    const run = await launch(promptWorkflow, `Fix it, then run /${TEAM_SKILL}.`);
-    for (const agentDir of AGENT_SKILL_DIRS) {
-      expect(fileText(join(run.spec.cwd, agentDir, 'skills', TEAM_SKILL, 'references', 'notes.md')), agentDir).toBe(NOTES);
-    }
-    // Only a leading `/name` is expanded, and only the selected skill or a leading `/name` gets the team note.
-    expect(run.spec.userPrompt).not.toContain(V1_BODY);
-    expect(materializedNotes(run.id)).toEqual([]);
-    expect(notesOf(run.id)).toContain(`skills installed in the task's workspace: ${TEAM_SKILL}`);
-    await run.finish();
-  });
-
-  it('a switched-off team skill the prompt names is not installed (#1672, #1494)', async () => {
-    const { repo } = await seedTeamSource();
-    switchOff(repo);
-    const run = await launch(promptWorkflow, `Fix it, then run /${TEAM_SKILL}.`);
-    for (const agentDir of AGENT_SKILL_DIRS) {
-      expect(existsSync(join(run.spec.cwd, agentDir, 'skills', TEAM_SKILL)), agentDir).toBe(false);
-    }
-    await run.finish();
-  });
-
-  const lead1494 = () => plannedWorkflow([...skillTaskSteps('lead-1494'), { id: 'verify', command: 'true' }]);
-  const switchOff = (repo: string) => {
-    mkdirSync(join(repoRoot, '.ai/cezar'), { recursive: true });
-    writeFileSync(join(repoRoot, '.ai/cezar/ui-state.json'), JSON.stringify({ disabledTeamSkills: [{ repo, name: TEAM_SKILL }] }));
-  };
-
-  it('a switched-off team skill is not installed as a companion (#1494)', async () => {
-    const { repo } = await seedTeamSource();
-    writeLocalSkill('lead-1494', `then run ${TEAM_SKILL}`);
-    switchOff(repo);
-    const run = await launch(lead1494(), 'go');
-    for (const agentDir of AGENT_SKILL_DIRS) {
-      expect(existsSync(join(run.spec.cwd, agentDir, 'skills', TEAM_SKILL)), agentDir).toBe(false);
-    }
-    expect(notesOf(run.id)).toContain("skills installed in the task's workspace: lead-1494");
-    await run.finish();
-  });
-
-  it('the same companion is installed while its team skill is switched on (#1494 guard)', async () => {
-    await seedTeamSource();
-    writeLocalSkill('lead-1494', `then run ${TEAM_SKILL}`);
-    const run = await launch(lead1494(), 'go');
-    for (const agentDir of AGENT_SKILL_DIRS) {
-      expect(existsSync(join(run.spec.cwd, agentDir, 'skills', TEAM_SKILL, 'SKILL.md')), agentDir).toBe(true);
-    }
-    await run.finish();
-  });
-
-  it('a companion switched off after the run started is not installed on Continue (#1494)', async () => {
-    const { repo } = await seedTeamSource();
-    writeLocalSkill('lead-1494', `then run ${TEAM_SKILL}`);
-    const run = await launch(lead1494(), 'go');
-    await run.finish();
-    for (const agentDir of AGENT_SKILL_DIRS) rmSync(join(run.spec.cwd, agentDir, 'skills', TEAM_SKILL), { recursive: true, force: true });
-    switchOff(repo);
-    const before = launches.length;
-    expect(manager.continueRun(run.id, { text: 'keep going' })).toEqual({ ok: true });
-    await vi.waitFor(() => expect(launches.length).toBeGreaterThan(before), { timeout: LAUNCH_WAIT_MS });
-    for (const agentDir of AGENT_SKILL_DIRS) {
-      expect(existsSync(join(run.spec.cwd, agentDir, 'skills', TEAM_SKILL)), agentDir).toBe(false);
-    }
-    sessions[before]!();
-  });
-
-  it('a companion switched off during a live run is not installed by a later live /name (#1494)', async () => {
-    const { repo } = await seedTeamSource();
-    writeLocalSkill('lead-1494', `then run ${TEAM_SKILL}`);
-    // The run's saved registry holds the team skill: it was on when the run started.
-    const run = await launch(promptWorkflow, 'go');
-    switchOff(repo);
-    expect(manager.sendMessage(run.id, [{ type: 'text', text: '/lead-1494 now' }])).toBe(true);
-    // The durable install notification follows the whole provisioning pass.
-    // bound: the real git/cache install must finish before checking the companion's absence.
-    await vi.waitFor(() => expect(store.readEvents(run.id).some((event) =>
-      event.type === 'agent-input' && agentInputSchema.parse(event.input).text.includes('Skills installed for /lead-1494:'))).toBe(true),
-    { timeout: LAUNCH_WAIT_MS });
-    for (const agentDir of AGENT_SKILL_DIRS) {
-      expect(existsSync(join(run.spec.cwd, agentDir, 'skills', 'lead-1494')), `${agentDir} lead`).toBe(true);
-      expect(existsSync(join(run.spec.cwd, agentDir, 'skills', TEAM_SKILL)), `${agentDir} team`).toBe(false);
-    }
-    await run.finish();
-  });
-
-  it('a live /name of a team skill switched off during the run is not expanded (#1494)', async () => {
-    const { repo } = await seedTeamSource();
-    // The run's saved registry holds the team skill: it was on when the run started.
-    const run = await launch(promptWorkflow, 'go');
-    switchOff(repo);
-    expect(manager.sendMessage(run.id, [{ type: 'text', text: `/${TEAM_SKILL} now` }])).toBe(true);
-    await vi.waitFor(() => expect(sent.length).toBeGreaterThan(0), { timeout: LAUNCH_WAIT_MS });
-    expect(sent.join('\n')).not.toContain(V1_BODY);
-    expect(sent.join('\n')).toContain(`/${TEAM_SKILL} now`);
-    await run.finish();
-  });
-
-  it('the same live /name is expanded while its team skill is switched on (#1494 guard)', async () => {
-    await seedTeamSource();
-    const run = await launch(promptWorkflow, 'go');
-    expect(manager.sendMessage(run.id, [{ type: 'text', text: `/${TEAM_SKILL} now` }])).toBe(true);
-    await vi.waitFor(() => expect(sent.join('\n')).toContain(V1_BODY), { timeout: LAUNCH_WAIT_MS });
-    await run.finish();
-  });
-
-  it('a later step does not run a skill switched off while an earlier step ran (#1494)', async () => {
-    const { repo } = await seedTeamSource();
-    const twoSteps = plannedWorkflow([
-      { id: 'first', name: 'first', prompt: '{{task}}' },
-      ...skillTaskSteps(TEAM_SKILL),
-      { id: 'verify', command: 'true' },
-    ]);
-    const before = launches.length;
-    const record = manager.startRun(twoSteps, { task: 'go' });
-    await vi.waitFor(() => expect(launches.length).toBe(before + 1), { timeout: LAUNCH_WAIT_MS });
-    switchOff(repo);
-    sessions[before]!();
-    await vi.waitFor(() => expect(launches.length).toBe(before + 2), { timeout: LAUNCH_WAIT_MS });
-    expect(launches[before + 1]!.systemPrompt ?? '').not.toContain(V1_BODY);
-    sessions[before + 1]!();
-    await vi.waitFor(() => expect(manager.isActive(record.id)).toBe(false), { timeout: LAUNCH_WAIT_MS });
-  });
-
-  // Guard: Continue rediscovers the registry, so it held before #1494's prompt-side filter too.
-  it("Continue does not re-send the step skill's instructions after it was switched off (#1494 guard)", async () => {
-    const { repo } = await seedTeamSource();
-    const run = await runToEnd(undefined);
-    expect(run.spec.systemPrompt).toContain(V1_BODY);
-    switchOff(repo);
-    const before = launches.length;
-    expect(manager.continueRun(run.id, { text: `/${TEAM_SKILL} keep going` })).toEqual({ ok: true });
-    await vi.waitFor(() => expect(launches.length).toBeGreaterThan(before), { timeout: LAUNCH_WAIT_MS });
-    expect(launches[before]!.systemPrompt ?? '').not.toContain(V1_BODY);
-    expect(launches[before]!.userPrompt).not.toContain(V1_BODY);
-    sessions[before]!();
-  });
-
-  it('Continue leaves copies installed before a switch-off in place: nothing is removed mid-task (#1494)', async () => {
-    const { repo } = await seedTeamSource();
-    const run = await runToEnd(undefined);
-    for (const agentDir of AGENT_SKILL_DIRS) {
-      expect(existsSync(join(run.spec.cwd, agentDir, 'skills', TEAM_SKILL, 'SKILL.md')), agentDir).toBe(true);
-    }
-    switchOff(repo);
-    const before = launches.length;
-    expect(manager.continueRun(run.id, { text: 'keep going' })).toEqual({ ok: true });
-    await vi.waitFor(() => expect(launches.length).toBeGreaterThan(before), { timeout: LAUNCH_WAIT_MS });
-    for (const agentDir of AGENT_SKILL_DIRS) {
-      expect(existsSync(join(run.spec.cwd, agentDir, 'skills', TEAM_SKILL, 'SKILL.md')), agentDir).toBe(true);
-    }
-    sessions[before]!();
-  });
-
-  describe('guards', () => {
-    it('an in-place run writes no skill entry in the checkout', async () => {
-      writeLocalSkill('lead-1408', 'then run helper-1408');
-      writeLocalSkill('helper-1408', 'HELPER-1408');
-      const run = await launch(plannedWorkflow([...skillTaskSteps('lead-1408'), { id: 'verify', command: 'true' }]), 'go', false);
-      expect(run.spec.cwd).toBe(repoRoot);
-      for (const agentDir of AGENT_SKILL_DIRS) expect(existsSync(join(repoRoot, agentDir)), agentDir).toBe(false);
-      await run.finish();
-    });
-
-    it('a catalog skill the prompt does not name as /name stays out of the worktree (#1672)', async () => {
-      writeLocalSkill('lead-1672', 'LEAD-1672');
-      writeLocalSkill('bystander-1672', 'BYSTANDER-1672');
-      writeLocalSkill('worded-1672', 'WORDED-1672');
-      const run = await launch(plannedWorkflow([...skillTaskSteps('lead-1672'), { id: 'verify', command: 'true' }]),
-        'Fix the worded-1672 label; see .ai/skills/worded-1672/SKILL.md.');
-      for (const agentDir of AGENT_SKILL_DIRS) {
-        expect(existsSync(join(run.spec.cwd, agentDir, 'skills', 'lead-1672', 'SKILL.md')), `${agentDir} lead`).toBe(true);
-        expect(existsSync(join(run.spec.cwd, agentDir, 'skills', 'bystander-1672')), `${agentDir} bystander`).toBe(false);
-        expect(existsSync(join(run.spec.cwd, agentDir, 'skills', 'worded-1672')), `${agentDir} worded`).toBe(false);
-      }
-      await run.finish();
-    });
-
-    it('an in-place run whose prompt names skills writes no skill entry and no cache copy (#1672)', async () => {
-      await seedTeamSource();
-      writeLocalSkill('named-1672', 'NAMED-1672');
-      const run = await launch(promptWorkflow, `Fix it, then run /named-1672 and /${TEAM_SKILL}.`, false);
-      expect(run.spec.cwd).toBe(repoRoot);
-      for (const agentDir of AGENT_SKILL_DIRS) expect(existsSync(join(repoRoot, agentDir)), agentDir).toBe(false);
-      expect(existsSync(join(testHome().cache, 'skill-files'))).toBe(false);
-      await run.finish();
-    });
-
-    it('an unknown /command passes through unchanged', async () => {
-      const run = await launch(promptWorkflow, '/compact now');
-      expect(run.spec.userPrompt.startsWith('/compact now')).toBe(true);
-      for (const agentDir of AGENT_SKILL_DIRS) expect(existsSync(join(run.spec.cwd, agentDir, 'skills', 'compact')), agentDir).toBe(false);
-      await run.finish();
-    });
+  it('a selected Squawk-only entry fails before a native session starts', async () => {
+    const record = manager.startRun(plannedWorkflow(skillTaskSteps(LEGACY)), { task: 'go', worktree: false, runner: 'claude' });
+    // bound: the step's failed state is the resolver's completion signal.
+    await vi.waitFor(() => expect(store.getRun(record.id)?.status).toBe('failed'), { timeout: 15_000 });
+    expect(launches).toEqual([]);
+    expect(store.getRun(record.id)?.error).toContain(LEGACY);
+    expect(store.getRun(record.id)?.error).toContain('claude');
+    expect(store.getRun(record.id)?.error).toContain('default');
+    noCopies(repoRoot);
   });
 });

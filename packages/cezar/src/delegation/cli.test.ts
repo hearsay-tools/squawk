@@ -16,6 +16,7 @@ import { fixture, seedWorkerWait } from './service.testkit.ts';
 import { createDelegationRoutes } from './routes.ts';
 import { createDelegationApp, startDelegationTransport } from './transport.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 
 // Every test spawns real worker worktrees through git. Alone at load 91 they take 0.25-1.2 s
 // (the transport round trips, with `wait`'s ~1 s, are the slowest); the Node 24.15 floor shard
@@ -329,8 +330,7 @@ describe('bundled worker CLI', { timeout: 20_000 }, () => {
     expect(String(output.mock.calls.at(-1)?.[0])).toContain('--workflow');
   });
   it('sends an explicit skill through the spawn transport', async () => {
-    const dir = join(f.root, '.ai/cezar/skills'); mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'worker-skill.md'), '# Worker skill\nInspect the task.');
+    f.manager.setSkillCatalog(fixedSkillCatalog([{ id: 'worker-skill', name: 'Worker skill', scope: 'repo', path: join(f.root, '.agents/skills/worker-skill/SKILL.md') }]));
     const spawn = vi.spyOn(f.service, 'spawn');
     expect(await runWorkerCommand(['spawn', '--baseline', 'parent-head', '--request-id', randomUUID(), '--skill', 'worker-skill', 'work'], env)).toBe(0);
     expect(spawn.mock.calls[0]?.[1]).toMatchObject({ skill: 'worker-skill' });

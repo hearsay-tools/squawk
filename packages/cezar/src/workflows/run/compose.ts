@@ -405,14 +405,11 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
       releaseSlot: () => modules.line.releaseSlot() },
   );
   modules.turnBookkeeper = new TurnBookkeeper(context,
-    { isDisposedDelegatedRun: id => isDisposedDelegatedRun(context.store, () => context.disposed(), id), discoverSkills: () => modules.runSkills.discoverSkills(),
+    { isDisposedDelegatedRun: id => isDisposedDelegatedRun(context.store, () => context.disposed(), id), sessionSkills: id => { const state = host.active.get(id); return state ? modules.runSkills.enabledSkills(state) : []; },
       reviveWorkflow: run => queuedRevival.reviveWorkflow(context, modules.queuedRevivalHost, run), trackTurn: (id, task) => modules.workerExecutions.trackTurn(id, task) },
     modules.memory,
   );
-  modules.runSkills = new RunSkills(context,
-    { builtinSkills: () => host.builtinSkills(), workerExecutionStopped: id => host.workerExecutionStopped(id),
-      isCurrentState: (id, state) => host.active.get(id) === state, flushAgentInputs: id => modules.inputDelivery.flushAgentInputs(id) },
-  );
+  modules.runSkills = new RunSkills(context);
   modules.stepSession = new StepSession(context, {
     workerExecutionStopped: id => host.workerExecutionStopped(id),
     executionBlockedByRootFinish: run => host.executionBlockedByRootFinish(run),
@@ -541,7 +538,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     armAutonomousNudgeBound: (id, state) => modules.turnNudges.armAutonomousNudgeBound(id, state),
     noticeParkedWorker: id => modules.workerQuestions.noticeParkedWorker(id), routeWorkerQuestion: id => modules.workerQuestions.routeWorkerQuestion(id),
     settledTurnOutcome: (id, entry, outcome) => host.settledTurnOutcome(id, entry, outcome),
-  }, IDLE_TIMEOUT_MS, MAX_AUTO_CONTINUES, COMPLETION_WILL_WAIT, SCHEDULE_WAKEUP_MAX_SECONDS, modules.liveness);
+  }, IDLE_TIMEOUT_MS, MAX_AUTO_CONTINUES, COMPLETION_WILL_WAIT, SCHEDULE_WAKEUP_MAX_SECONDS, modules.liveness, (id, state) => modules.inputDelivery.releaseNativeInputs(id, state));
   modules.runFinish = new RunFinish(context, modules.completionGateHost, modules.runSettlement, modules.turnSettler, modules.turnNudges, modules.line, {
     move: (...args) => host.move(...args), dropActive: id => host.dropActive(id),
     get waitEngine() { return modules.waitEngine; }, reconcileWorkerWaits: id => host.reconcileWorkerWaits(id),
@@ -575,7 +572,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     reparkWithoutWaits: (id, state) => modules.wakeAdmission.reparkWithoutWaits(id, state), holdPeerWakesAtCap: id => modules.wakeAdmission.holdPeerWakesAtCap(id),
     reconcileWorkerWaits: () => host.reconcileWorkerWaits(), unreadInputGraceMs: () => host.unreadInputGraceMs(),
     submitAgentInput: (id, state, content, inputs, budget) => modules.inputDelivery.submitAgentInput(id, state, content, inputs, budget),
-  }, MAX_AUTO_CONTINUES, ROUTED_QUESTION_REFUSAL, modules.liveness);
+  }, MAX_AUTO_CONTINUES, ROUTED_QUESTION_REFUSAL, modules.liveness, modules.memory);
   modules.squawkToolsHost = { store: context.store,
     registerWait: (...args) => host.registerWait(...args), registerAsk: (...args) => modules.waitRegistry.registerAsk(...args),
     cancelWait: (...args) => host.cancelWait(...args), acceptDone: (...args) => host.acceptDone(...args),

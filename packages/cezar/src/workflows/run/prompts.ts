@@ -142,7 +142,7 @@ export function expandRegistrySlashSkillText(
 
 /** The `name` of a prompt's leading `/name` slash command, else undefined. */
 export function leadingSlashSkillName(text: string): string | undefined {
-  return /^\/([A-Za-z0-9][A-Za-z0-9._-]*)(?=\s|$)/.exec(text)?.[1];
+  return /^\/([A-Za-z0-9][A-Za-z0-9:._-]*)(?=\s|$)/.exec(text)?.[1];
 }
 
 /**

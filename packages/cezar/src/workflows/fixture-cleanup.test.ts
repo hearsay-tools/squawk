@@ -251,7 +251,7 @@ const ownedOperations: Array<{ label: string; invoke(context: RunModuleContext, 
   { label: 'rescueStalledQueue', invoke: context => new RunLine(new RunMemory(), { ...context, disposed: () => true }).rescueStalledQueue() },
   { label: 'finishWorkerExecution', invoke: (context, id) => new WorkerExecutions(context, unused('WorkerCleanup'), unused('WorkerExecutions.host'), new RunMemory()).finishWorkerExecution(id) },
   { label: 'recordTurnEnd', invoke: (context, id) => new TurnBookkeeper(context, unused('TurnBookkeeper.host', {
-    isDisposedDelegatedRun: () => true, discoverSkills: async () => [], reviveWorkflow: async () => null, trackTurn() {},
+    isDisposedDelegatedRun: () => true, sessionSkills: () => [], reviveWorkflow: async () => null, trackTurn() {},
   }), new RunMemory()).recordTurnEnd(id, 'hello') },
   { label: 'autoNameRun', invoke: (context, id) => new TurnBookkeeper(context, unused('TurnBookkeeper.host'), new RunMemory()).autoNameRun(id, undefined, 'hello') },
   { label: 'saveWorktree', invoke: (context, id) => new WorktreeAutosave(context, unused('WorktreeAutosave.host')).saveWorktree(id, createActiveRun({ cwd: context.repoRoot, pendingHumanAsk: false, autonomous: false }), 'turn end') },

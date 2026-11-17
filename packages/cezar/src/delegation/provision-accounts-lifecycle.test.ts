@@ -20,6 +20,7 @@ import { readPersistedText } from '../runs/run-store.testkit.ts';
 import { provisionWorkflowFixture, delegationToken, until, PROVISION_ROWS } from './provision-workflows.testkit.ts';
 import { createRunner } from '../core/runner-factory.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
+import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 
 // Git worktrees + a live RunManager contend under full-suite workers. until() is already 15s;
 // the default 5s testTimeout / 10s hookTimeout cannot finish those waits. Teardown still cancels
@@ -133,13 +134,13 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
   // continuation is the parent's next session, where a human Continue used to be.
   const owesRefusal = (runId: string) => f.store.getRun(runId)?.agentInputs?.some(input => input.source === 'lifecycle' && !input.deliveredAt) === true;
   async function startSkillParent() {
-    const dir = join(f.root, '.ai/cezar/skills'); mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'parent-skill.md'), 'PARENT SKILL BODY 778');
+    f.manager.setSkillCatalog(fixedSkillCatalog([{ id: 'parent-skill', name: 'Parent skill', scope: 'repo', path: join(f.root, '.agents/skills/parent-skill/SKILL.md') }]));
     const workflow = { ...QUICK_TASK_WORKFLOW, steps: [{ id: 'task', skill: 'parent-skill', prompt: '{{task}}' }] };
     const parent = f.manager.startRun(workflow, { task: 'parent', runner: 'claude', worktree: false, systemPrompt: 'parent extra' });
     await until(() => sessions.length === 1);
-    // Provision guidance is appended; pin the selected skill without depending on that copy.
-    expect(sessions[0]!.spec.systemPrompt).toContain('PARENT SKILL BODY 778');
+    expect(sessions[0]!.spec.skill).toMatchObject({ id: 'parent-skill', args: 'parent' });
+    expect(sessions[0]!.spec.systemPrompt).not.toContain('Selected skill:');
+    expect(sessions[0]!.spec.systemPrompt).not.toContain('PARENT SKILL BODY 778');
     expect(sessions[0]!.spec.systemPrompt).toContain('parent extra');
     const caller = controller.credentials.authenticate(delegationToken(sessions[0]!.spec))!;
     const admission = vi.spyOn(WorkspaceSemaphore.prototype, 'maxParallel').mockReturnValue(0);

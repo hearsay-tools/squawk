@@ -13,7 +13,7 @@ import { pastedAttachmentsText, type PastedContent, type PersistedAttachment } f
 import type { AutosaveReason } from '../../autosave-commit.ts';
 import { continuationOpening } from './opening.ts';
 import { createSessionEventHandler, launchPreamble, type SessionEventHandler } from './session-events.ts';
-import { agentDirectories, composeSystemPrompt, expandRegistrySlashSkillText } from './prompts.ts';
+import { agentDirectories, composeSystemPrompt } from './prompts.ts';
 import { continuationRunner } from './launch-settings.ts';
 import { preserveRunAfterDisposal } from './run-guards.ts';
 import { stepScope } from './steps.ts';
@@ -31,11 +31,8 @@ import type { ActiveRun } from '../active-run.ts';
 import { openWaits } from '../waits.ts';
 import type { RunOutcome } from '../../runs/outcome-commit.ts';
 import type { UiEventSink } from '../../runs/ui-event-sink.ts';
-import { toolGrantLists, type WorkflowStepDef } from '../types.ts';
-import type { Skill } from '../../skills.ts';
-import { waitForCachedTeamSkills, waitForTeamSkills } from '../../skills-remote.ts';
+import { toolGrantLists } from '../types.ts';
 import { continuationModel, continuationEffort } from './launch-settings.ts';
-import { leadingSlashSkillName, skillSystemPrompt } from './prompts.ts';
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
 import { clearAutosaveTimer } from './input-timers.ts';
 import { REPOSITORY_ROOT_LOCK_DISABLED_NOTE } from './run-workspace.ts';
@@ -335,89 +332,10 @@ export class ContinuationSession {
     backend: RunnerId,
     settings: ContinuationSettings,
   ): void {
-    this.context.store.updateStep(runId, stepId, { profileId: settings.profile.profileId });
+    this.context.store.updateStep(runId, stepId, { profileId: settings.profile.profileId, ...(settings.owningStep?.skillPath ? { skillPath: settings.owningStep.skillPath } : {}) });
     state.liveSession.captureDelegationSettings({ cwd: state.liveSession.cwd, runner: backend, model: settings.backendModel,
       effort: settings.effort, agentProfile: settings.profile.profileId, accountBinding: settings.profile.accountBinding,
       systemPrompt: settings.extraSystemPrompt, ...toolGrantLists(settings.toolGrant) });
-  }
-
-  /** The continued step's skill files and playbook, when the step names a skill or the prompt
-   *  starts with a `/name`. Returns undefined otherwise, so that path does not yield. */
-  private continuationSkills(
-    runId: string,
-    state: ActiveRun,
-    prompt: string,
-    toolsStep: WorkflowStepDef | undefined,
-    skipSkillOnResume: boolean,
-  ): Promise<ContinuationSkills> | undefined {
-    const continuedSkillName = atContinue.skill(toolsStep);
-    // The continued step's skill and a leading `/name` in this prompt both get their companions;
-    // upstream rebuilt only the slash name, so an ordinary Continue lost the step skill's (#1408).
-    const continuationSlash = leadingSlashSkillName(prompt);
-    if (!continuedSkillName && !continuationSlash) return undefined;
-    return this.provisionContinuationSkills(runId, state, continuedSkillName, continuationSlash, skipSkillOnResume);
-  }
-
-  /** Reinstall the continued step's skill and a leading `/name`'s, and build the playbook. */
-  private async provisionContinuationSkills(
-    runId: string,
-    state: ActiveRun,
-    continuedSkillName: string | undefined,
-    continuationSlash: string | undefined,
-    skipSkillOnResume: boolean,
-  ): Promise<ContinuationSkills> {
-    let skillPrompt: string | undefined;
-    let fallbackSkillPrompt: string | undefined;
-    let files = new Map<string, string>();
-    if (continuedSkillName) {
-      let skill = this.runSkills.enabledSkills(state, undefined, 'continue').find((candidate) => candidate.name === continuedSkillName);
-      if (!skill) skill = await this.awaitContinuedSkill(state, continuedSkillName);
-      if (skill) {
-        // Reinstall the skill and its companions — into a #483 rematerialized
-        // worktree, or a team skill's cache copy when the worktree is gone — before
-        // the playbook, which names a cache copy's directory (#1024, #1408). No note on Continue.
-        files = (await this.runSkills.provisionRunSkills(runId, state, { stepSkill: skill.name, slash: continuationSlash }, 'continue')).filesDir;
-        const playbook = skillSystemPrompt(skill, files.get(skill.name));
-        if (skipSkillOnResume) fallbackSkillPrompt = playbook;
-        else skillPrompt = playbook;
-      } else if (!skipSkillOnResume) {
-        this.context.store.appendEvent(runId, {
-          type: 'lifecycle',
-          message: `skill /${continuedSkillName} is not in the skill registry — its instructions were not re-sent to the continued session`,
-        });
-      }
-    }
-    if (!continuedSkillName || !this.runSkills.enabledSkills(state, undefined, 'continue').some((candidate) => candidate.name === continuedSkillName)) {
-      if (continuationSlash) files = (await this.runSkills.provisionRunSkills(runId, state, { slash: continuationSlash }, 'continue')).filesDir;
-    }
-    return { skillPrompt, fallbackSkillPrompt, files };
-  }
-
-  /** The continued step's skill when the registry did not list it yet. */
-  private async awaitContinuedSkill(state: ActiveRun, continuedSkillName: string): Promise<Skill | undefined> {
-    // Boot recovery can outrun the async team-skills cache (`getTeamSkillsCached`
-    // returns [] until `initialTeamSkillsLoad` resolves). Wait briefly, then
-    // re-discover; never hang Continue on the network. The on-disk clone's
-    // list arrives before the passive fetch (#859), so stop as soon as it
-    // names this skill instead of waiting out a slow first fetch of the day.
-    try {
-      await new Promise<void>((resolve) => {
-        // A local awaited pause of this Continue, not a liveness bound of the run.
-        // oxlint-disable-next-line cez/liveness-timer-outside-owner -- A local awaited pause, not a run liveness bound.
-        const timeout = setTimeout(resolve, 1_500);
-        timeout.unref?.();
-        const settle = () => { clearTimeout(timeout); resolve(); };
-        waitForTeamSkills(this.context.repoRoot, this.context.home).then(settle, settle);
-        waitForCachedTeamSkills(this.context.repoRoot, this.context.home).then((cached) => {
-          if (cached.some((candidate) => candidate.name === continuedSkillName)) settle();
-        }, () => undefined);
-      });
-      await this.runSkills.loadRunSkills(state, 'ignore');
-      return this.runSkills.enabledSkills(state, undefined, 'continue').find((candidate) => candidate.name === continuedSkillName);
-    } catch {
-      // Best-effort — a slow or failing team-skills load must not fail Continue.
-      return undefined;
-    }
   }
 
   /** A Stop before the Continue's session spawned: cancel the step and the run. */
@@ -464,13 +382,19 @@ export class ContinuationSession {
     if (lease && !(await lease)) return;
     const setupNote = await this.prepareContinuationWorktree(runId, state, record, rematerialized);
     // A Stop during setup settles below, at the prelaunch cancellation check before any spawn.
-    // Registry snapshot for `/skill` expansion. A continuation builds its OWN ActiveRun, and without
-    // this the resumed session expanded against an empty registry and leaked `/om-...` verbatim to
-    // the backend, which answered "Unknown skill" (open-mercato/cezar#811). Best-effort — discovery must never
-    // break Continue.
-    await this.runSkills.loadRunSkills(state, 'ignore');
+    // Each new runner process reads its own native skill list.
 
     this.startContinuationStep(runId, stepId, record, sessionId, backend);
+    const turn: SessionTurn = { text: '', scheduleWakeup: undefined, sessionError: undefined };
+    const sink = this.host.makeUiSink(runId, stepId);
+    const settings = await this.continuationLaunchSettings(runId, stepId, state, record, sessionId, backend, sink);
+    if (!settings) return;
+    if (state.liveSession.cancelled) { this.settleContinuationPrelaunchCancel(runId, stepId, state); return; }
+    if (this.host.holdContinuationForRootFinish(runId, { stepId, sessionId, backend, prompt, images, lineJoinedAt: Date.now() }, state)) return;
+    this.applyContinuationSettings(runId, stepId, state, backend, settings);
+    const { runner } = continuationRunner(backend, sessionId, settings.owningStep, this.context.createRunner);
+    await this.runSkills.loadRunSkills(state, backend, settings.profile);
+    if (state.liveSession.cancelled) { this.settleContinuationPrelaunchCancel(runId, stepId, state); return; }
     const opening = continuationOpening(this.context.store, {
       answerSource: (id, input) => this.workerQuestions.answerSource(id, input),
       readPersistedAttachments: (...args) => this.queuedInput.readPersistedAttachments(...args),
@@ -479,39 +403,19 @@ export class ContinuationSession {
     const answer = this.openingAnswer(runId, state, opening);
     transitionTurnBoundary(state, { kind: 'session-open', phase: 'restore-question', session: state.liveSession.session, pending: answer.askSeq === undefined && hasPendingHumanAsk(runId, id => pendingHumanAskSeq(this.context.store, id)) });
 
-    const turn: SessionTurn = { text: '', scheduleWakeup: undefined, sessionError: undefined };
-    const sink = this.host.makeUiSink(runId, stepId);
     const onEvent = createSessionEventHandler(this.context, this.sessionEventHost, {
       runId, state, turn, stepId, backend, sink, tokenBase: 0,
       emit: event => this.context.store.appendEvent(runId, event),
       acknowledge: () => this.acknowledgeOpeningTurn(runId, state, answer),
     });
 
-    const settings = await this.continuationLaunchSettings(runId, stepId, state, record, sessionId, backend, sink);
-    if (!settings) return;
-    if (state.liveSession.cancelled) { this.settleContinuationPrelaunchCancel(runId, stepId, state); return; }
-    if (this.host.holdContinuationForRootFinish(runId, { stepId, sessionId, backend, prompt, images, lineJoinedAt: Date.now() }, state)) return;
-    this.applyContinuationSettings(runId, stepId, state, backend, settings);
-    const { runner, skipSkillOnResume } = continuationRunner(backend, sessionId, settings.owningStep, this.context.createRunner);
-    // Re-expand the continued step's skill from the current registry (#790) BEFORE
-    // provisionSession. Materializing the skill used to sit after the pre-launch
-    // revalidation, so Stop during that await still launched with revoked tools.
-    // `record.systemPrompt` is only the extra prompt; the opening session put
-    // `skillSystemPrompt(skill)` in front. Skip that prefix only when this
-    // session resumes into its own thread on an in-thread runner — those
-    // already carry the playbook in history. A missing skill degrades to
-    // today's extra-only prompt with one lifecycle warning; in-thread skips
-    // do not warn. Workers still inherit only the extra prompt (#778).
-    const pendingSkills = this.continuationSkills(runId, state, prompt, settings.toolsStep, skipSkillOnResume);
-    const skills = pendingSkills
-      ? await pendingSkills
-      : { skillPrompt: undefined, fallbackSkillPrompt: undefined, files: new Map<string, string>() };
+    const skills: ContinuationSkills = { fallback: this.runSkills.selectedSkill(state, settings.toolsStep?.skill,
+      settings.owningStep?.skillPath, '') };
+    const native = await this.runSkills.nativeInput(runId, state, [{ type: 'text', text: prompt }]);
+    if (native[0]?.type === 'skill') { skills.trigger = native[0]; prompt = ''; }
     state.liveSession.selectStep(stepId);
     this.host.beginUsageInvocation(runId, state, stepId);
-    // A continuation's opening message becomes the session's `userPrompt` and never passes
-    // through `deliverMessage`, so it needs the SAME delivery-only `/skill` rewrite the
-    // live path applies (#811). Delivery-only: the `user-message` event above already
-    // persisted the user's original text, and the transcript must keep showing that.
+    // The transcript retains the user's text. Only the runner receives the native trigger.
     state.liveSession.recordSessionError(undefined);
     if (this.sharedHost.workerExecutionStopped(runId)) { state.liveSession.cancel(); throw new Error('Worker stopped before launch'); }
     const launch = await launchPreamble(this.launchPreambleHost, runId, state);
@@ -531,7 +435,7 @@ export class ContinuationSession {
     }
     state.inputState.declareDelivery(inputDeliveryOf(runner)); state.inputState.resetUnreadInputs(); state.inputState.resetEarlyConsumption();
     const session = this.startContinuationSession(runId, state, runner, {
-      stepId, sessionId, prompt, setupNote, opening, skills, skipSkillOnResume, settings, delegation, webhooksPart, ciTools,
+      stepId, sessionId, prompt, setupNote, opening, skills, settings, delegation, webhooksPart, ciTools,
     }, onEvent, turn, sink);
     return this.awaitContinuationSession(runId, state, session, { stepId, sink, turn, delegation, ciTools });
   }
@@ -550,9 +454,9 @@ export class ContinuationSession {
     const { delegation, ciTools, opening, skills, settings } = launch;
     let session: AgentSession | undefined;
     try {
-      // Provisioning determines the actual capability, including a fresh session after recovery.
+      // The adapter selects the fallback only when it opens a fresh session.
       const resumed = sessionEvents.launchOpening(this.context, this.sharedHost, runId, state, launch.stepId, {
-        body: expandRegistrySlashSkillText(launch.prompt, this.runSkills.enabledSkills(state, undefined, 'continue'), skills.files) +
+        body: launch.prompt +
           (launch.setupNote ? `\n\n${launch.setupNote}` : ''),
         ciTools,
         checkpoint: opening.checkpoint,
@@ -565,15 +469,10 @@ export class ContinuationSession {
         {
           timings: this.context.timings,
           scope: this.context.store.spawnScope(runId),
-          // Skill body (when resent), then the run's extra system prompt, then
-          // the handoff contract — the same order as the opening session (#790).
-          // In-thread resume omits the skill from systemPrompt; OpenCode's 404
-          // fallback uses resumeFallbackSystemPrompt so the fresh session still
-          // gets the playbook.
-          systemPrompt: composeSystemPrompt(skills.skillPrompt, continuationTail),
-          ...(launch.skipSkillOnResume ? {
-            resumeFallbackSystemPrompt: composeSystemPrompt(skills.fallbackSkillPrompt, continuationTail),
-          } : {}),
+          // The system prompt holds the shared tail. Skill text stays with the runner.
+          systemPrompt: composeSystemPrompt(undefined, continuationTail),
+          ...(skills.fallback ? { resumeFallbackSkill: skills.fallback } : {}),
+          ...(skills.trigger ? { skill: skills.trigger } : {}),
           userPrompt: opening.attachments.length
             ? `${resumed.userPrompt}\n\n${pastedAttachmentsText(opening.attachments)}`
             : resumed.userPrompt,

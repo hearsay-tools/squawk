@@ -1,11 +1,12 @@
 import { setRunStatus, crashStore } from '../runs/run-store.testkit.ts';
 import { runnerHook, run, GIT_ID, waitForProduct, setupMonitoringFixture, FINISHED_RUN_STATUSES } from './run-fixture.testkit.ts';
 import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type AgentRunResult, type AgentRunSpec } from '../core/agent-runner.ts';
+import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { RunStore, type RunRecord } from '../runs/store.ts';
 import { RunManager } from './run.ts';
@@ -510,7 +511,7 @@ describe('RunManager check retry recovery', () => {
   }, 30_000);
 });
 
-describe('registry /skill expansion survives a continuation (#811)', () => {
+describe('native /skill triggers survive a continuation (#811)', () => {
   let repoRoot: string;
   let store: RunStore;
   let manager: RunManager;
@@ -532,13 +533,11 @@ describe('registry /skill expansion survives a continuation (#811)', () => {
     writeFileSync(join(repoRoot, 'a.txt'), 'one\n');
     await run('git', ['add', '-A'], { cwd: repoRoot });
     await run('git', [...GIT_ID, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
-    mkdirSync(join(repoRoot, '.ai/cezar/skills'), { recursive: true });
-    writeFileSync(
-      join(repoRoot, '.ai/cezar/skills/demo-review.md'),
-      '---\nname: demo-review\ndescription: Review a diff.\n---\n\nRun the demo review playbook.\n',
-    );
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
-    manager = createFixtureManager(store, repoRoot);
+    manager = createFixtureManager(store, repoRoot, { skillCatalog: fixedSkillCatalog([{
+      id: 'probe-project', name: 'probe-project', scope: 'repo',
+      path: join(repoRoot, '.agents/skills/probe-project/SKILL.md'),
+    }]) });
     runId = undefined;
   });
 
@@ -572,37 +571,35 @@ describe('registry /skill expansion survives a continuation (#811)', () => {
     return record.id;
   };
 
-  it("expands the continuation's OPENING prompt before it becomes the session userPrompt", async () => {
+  it("triggers a native skill in the continuation's opening turn", async () => {
     const id = await finishedRun();
-    expect(manager.continueRun(id, { text: '/demo-review look at the diff' })).toEqual({ ok: true });
+    expect(manager.continueRun(id, { text: '/probe-project look at the diff' })).toEqual({ ok: true });
     await waitFor(() =>
-      eventsOf(id).some((e) => e.stepId === 'continue-1' && e.type === 'text' && e.text?.includes('looking into')),
+      eventsOf(id).some((e) => e.stepId === 'continue-1' && e.type === 'text' && e.text?.includes('TRIGGER-FIXTURE')),
     );
 
     const echoed = eventsOf(id).find(
-      (e) => e.stepId === 'continue-1' && e.type === 'text' && e.text?.includes('looking into'),
+      (e) => e.stepId === 'continue-1' && e.type === 'text' && e.text?.includes('TRIGGER-FIXTURE'),
     );
-    // The backend saw the expanded skill prompt, NOT a bare slash command it would
-    // reject as an unknown skill.
-    expect(echoed?.text).toContain('Selected skill: /demo-review');
-    expect(echoed?.text).not.toContain('/demo-review look at the diff');
+    expect(echoed?.text).toBe('TRIGGER-FIXTURE');
+    expect(echoed?.text).not.toContain('/probe-project look at the diff');
 
     // Delivery-only: the transcript still shows what the user actually typed.
     const typed = eventsOf(id).find((e) => e.type === 'user-message' && e.stepId === 'continue-1');
-    expect(typed?.text).toBe('/demo-review look at the diff');
+    expect(typed?.text).toBe('/probe-project look at the diff');
   }, 40_000);
 
-  it('expands a FOLLOW-UP delivered into the reopened continuation session', async () => {
+  it('triggers a native skill in a follow-up to the reopened session', async () => {
     const id = await finishedRun();
     expect(manager.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
     await waitFor(() => store.getRun(id)?.status === 'waiting');
 
-    expect(manager.sendMessage(id, [{ type: 'text', text: '/demo-review now review it' }])).toBe(true);
+    expect(manager.sendMessage(id, [{ type: 'text', text: '/probe-project now review it' }])).toBe(true);
     await waitFor(() =>
-      eventsOf(id).filter((e) => e.type === 'text' && e.text?.includes('Selected skill: /demo-review')).length > 0,
+      eventsOf(id).filter((e) => e.type === 'text' && e.text?.includes('TRIGGER-FIXTURE')).length > 0,
     );
     expect(
-      eventsOf(id).some((e) => e.type === 'text' && e.text?.includes('Selected skill: /demo-review')),
+      eventsOf(id).some((e) => e.type === 'text' && e.text?.includes('TRIGGER-FIXTURE')),
     ).toBe(true);
   }, 40_000);
 
@@ -619,7 +616,7 @@ describe('registry /skill expansion survives a continuation (#811)', () => {
   }, 40_000);
 });
 
-describe("registry /skill expansion on a fresh run's opening prompt (#87)", () => {
+describe("native /skill triggers on a fresh run's opening prompt (#87)", () => {
   let repoRoot: string;
   let store: RunStore;
   let manager: RunManager;
@@ -641,13 +638,11 @@ describe("registry /skill expansion on a fresh run's opening prompt (#87)", () =
     writeFileSync(join(repoRoot, 'a.txt'), 'one\n');
     await run('git', ['add', '-A'], { cwd: repoRoot });
     await run('git', [...GIT_ID, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
-    mkdirSync(join(repoRoot, '.ai/cezar/skills'), { recursive: true });
-    writeFileSync(
-      join(repoRoot, '.ai/cezar/skills/demo-review.md'),
-      '---\nname: demo-review\ndescription: Review a diff.\n---\n\nRun the demo review playbook.\n',
-    );
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
-    manager = createFixtureManager(store, repoRoot);
+    manager = createFixtureManager(store, repoRoot, { skillCatalog: fixedSkillCatalog([{
+      id: 'probe-project', name: 'probe-project', scope: 'repo',
+      path: join(repoRoot, '.agents/skills/probe-project/SKILL.md'),
+    }]) });
     runId = undefined;
   });
 
@@ -676,33 +671,31 @@ describe("registry /skill expansion on a fresh run's opening prompt (#87)", () =
 
   const waitFor = (predicate: () => boolean, ms = 20_000) => waitForProduct(manager, store, predicate, ms);
 
-  it('expands the opening prompt before it reaches the backend', async () => {
+  it('triggers the native skill in the opening turn', async () => {
     const record = manager.startRun(SINGLE_STEP, {
-      task: '/demo-review look at the diff',
+      task: '/probe-project look at the diff',
       worktree: false,
     });
     runId = record.id;
     await waitFor(() =>
       eventsOf(record.id).some(
-        (e) => e.stepId === 'task' && e.type === 'text' && e.text?.includes('looking into'),
+        (e) => e.stepId === 'task' && e.type === 'text' && e.text?.includes('TRIGGER-FIXTURE'),
       ),
     );
 
     const echoed = eventsOf(record.id).find(
-      (e) => e.stepId === 'task' && e.type === 'text' && e.text?.includes('looking into'),
+      (e) => e.stepId === 'task' && e.type === 'text' && e.text?.includes('TRIGGER-FIXTURE'),
     );
-    // The backend saw the expanded skill prompt, NOT the bare slash command it would
-    // reject as an unknown command.
-    expect(echoed?.text).toContain('Selected skill: /demo-review');
-    expect(echoed?.text).not.toContain('/demo-review look at the diff');
-    expect(store.getRun(record.id)?.task).toBe('/demo-review look at the diff');
+    expect(echoed?.text).toBe('TRIGGER-FIXTURE');
+    expect(echoed?.text).not.toContain('/probe-project look at the diff');
+    expect(store.getRun(record.id)?.task).toBe('/probe-project look at the diff');
   }, 40_000);
 
   it.each([
     { task: '/compact please', registry: true },
-    { task: '/demo-review look at the diff', registry: false },
+    { task: '/probe-project look at the diff', registry: false },
   ])('passes through $task with registry=$registry', async ({ task, registry }) => {
-    if (!registry) rmSync(join(repoRoot, '.ai/cezar/skills'), { recursive: true });
+    if (!registry) manager.setSkillCatalog(fixedSkillCatalog());
     const record = manager.startRun(SINGLE_STEP, { task, worktree: false });
     runId = record.id;
     await waitFor(() =>

@@ -55,8 +55,6 @@ export const completionActionSchema = z.object({
   phase: z.enum(['pending', 'blocked', 'complete']),
   message: z.string().optional(),
 });
-
-
 const usageCounterSchema = z.number().finite().nonnegative();
 
 /** One step of a run's chain. */
@@ -90,8 +88,7 @@ export const stepStateSchema = z.object({
    *  that created it, so resume and Continue read this rather than the project's current
    *  selection. Absent on records written before accounts existed. */
   profileId: z.string().optional(),
-  /** Host-local selected copy, relative to the step's working folder for project skills. */
-  skillPath: z.string().min(1).optional(),
+  skillPath: z.string().min(1).optional(), // Host-local copy; project skills are relative to the step's working folder.
   costUsd: z.number().optional(),
   /** Explicit provenance for engine-generated continuation steps. */
   synthetic: z.literal('continuation').optional(),

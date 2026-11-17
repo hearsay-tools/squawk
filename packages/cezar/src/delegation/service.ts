@@ -72,7 +72,7 @@ import { workerDestroyView, workerOutcome } from '../runs/delegation-state.ts';
 import type { RunManager } from '../workflows/run.ts';
 import type { DelegationExecutionSettings } from '../workflows/run/types.ts';
 import { QUICK_TASK_WORKFLOW, skillTaskSteps, plannedWorkflow, allowedToolsForStep, stepKind, type WorkflowDef, type WorkflowStepDef } from '../workflows/types.ts';
-import { discoverSkills } from '../skills.ts';
+import { resolveRunnerSkill } from '../core/runner-skill-reference.ts';
 import { findWorkflow } from '../workflows/load.ts';
 import type { RunnerId } from '../core/agent-runner.ts';
 import type { Caller } from './credentials.ts';
@@ -87,7 +87,7 @@ export type DelegationManager = Pick<RunManager,
   | 'cancelPeerWait' | 'cancelWorkerWait' | 'claimWorkerCleanup' | 'continueRun'
   | 'deliverConversationInput' | 'enqueueOwnedRun' | 'isActive' | 'pauseWorkerCleanup'
   | 'previewHost' | 'reconcileWorkerWaits' | 'recoverWorkerCleanup' | 'registerPeerWait'
-  | 'registerRequestWait' | 'registerWorkerWait' | 'releaseInbox' | 'requestWorkerStop'
+  | 'runnerSkills' | 'registerRequestWait' | 'registerWorkerWait' | 'releaseInbox' | 'requestWorkerStop'
   | 'reserveInboxInputs' | 'selectDelegationExecutionSettings' | 'settleOrphanedWorkerExecution'
   | 'steerWorker' | 'takeWorkerTerminationBlocker'>;
 
@@ -111,8 +111,6 @@ export type WorkerCleanupFactory = (project: DelegationProject, isAttached: () =
 async function resolveSpawnWorkflow(project: Pick<DelegationProject, 'root' | 'manager' | 'home'>, request: WorkerSpawnRequest): Promise<WorkflowDef> {
   const root = project.root;
   if (request.skill !== undefined) {
-    const skills = await discoverSkills(root, { builtin: project.manager.builtinSkills?.() ?? [] }, project.home);
-    if (!skills.some(skill => skill.name === request.skill)) throw new DelegationPolicyError('invalid_input', `Unknown skill "${request.skill}"; available: ${skills.map(skill => skill.name).join(', ')}`);
     return plannedWorkflow(skillTaskSteps(request.skill));
   }
   if (request.workflow === undefined) return QUICK_TASK_WORKFLOW;
@@ -652,6 +650,12 @@ export class DelegationService {
       authorizeSpawn(caller, parent, project.id, id => project.store.getRun(id));
       const catalog = await resolveSpawnWorkflow(project, request);
       const resolvedSteps = await resolveSpawnSteps(project.manager, parent.id, request, catalog, (step, settings) => this.validateModels(request, [{ step, settings }]));
+      if (request.skill !== undefined) {
+        const worker = resolvedSteps[0]!.settings;
+        const list = await project.manager.runnerSkills({ runner: worker.runner, cwd: project.root, accountHome: worker.accountBinding?.homePath });
+        const resolved = resolveRunnerSkill(list.skills, { id: request.skill }, { runner: worker.runner, account: worker.agentProfile, cwd: project.root });
+        if (resolved.error !== undefined) throw new DelegationPolicyError('invalid_input', resolved.error);
+      }
       // Run-level fields hold the first agent step (cockpit columns, pre-#452 evidence readers);
       // the per-step list is what each launch binds.
       const first = resolvedSteps[0]!;

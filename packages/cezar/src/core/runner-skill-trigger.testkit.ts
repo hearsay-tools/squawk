@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
@@ -10,7 +10,7 @@ import { RUNNER_FACTS } from './runner-facts.ts';
 const TOKEN = 'TRIGGER-FIXTURE';
 const ARGS = 'native arguments';
 const CONTEXT = 'opening context sentinel';
-export const SKILL_TRIGGER_ROWS = ['first', 'context', 'later', 'resume', 'unknown', 'position', 'plain'] as const;
+export const SKILL_TRIGGER_ROWS = ['first', 'context', 'later', 'resume', 'fallback-fresh', 'fallback-resume', 'unknown', 'position', 'plain'] as const;
 
 function assertTriggerWire(runner: RunnerId, wire: string, context = ''): void {
   const rows = wire.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
@@ -52,6 +52,26 @@ export function describeNativeSkillTriggers(runner: RunnerId): void {
       const skill = { id: row === 'unknown' ? 'probe-missing' : 'probe-project', path: join(dir, 'SKILL.md'), args: ARGS };
       const base: Partial<AgentRunSpec> = { cwd: dir, userPrompt: '', env: { CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: argsFile, CEZ_MOCK_STDIN_FILE: stdinFile } };
       try {
+        if (row === 'fallback-fresh') {
+          const obs = await driveSeam(runner, 'baseline', { spec: { ...base, userPrompt: CONTEXT, resumeFallbackSkill: skill } });
+          assertSuccess(obs);
+          assertTriggerWire(runner, wire(), CONTEXT);
+          expect(obs.v1.filter(event => event.type === 'session')).toEqual([{ type: 'session', sessionId: obs.result.sessionId, resumed: false }]);
+          return;
+        }
+        if (row === 'fallback-resume') {
+          const first = await driveSeam(runner, 'baseline', { spec: { ...base, skill } });
+          assertSuccess(first);
+          for (const file of [argsFile, stdinFile]) writeFileSync(file, '');
+          const resumed = await driveSeam(runner, 'baseline', { spec: { ...base, userPrompt: CONTEXT, resumeFallbackSkill: skill, sessionId: first.result.sessionId, resume: true } });
+          expect(resumed.failure).toBeUndefined();
+          expect(resumed.v1.filter(event => event.type === 'error')).toEqual([]);
+          expect(resumed.result.text).not.toContain(TOKEN);
+          expect(wire()).not.toContain('probe-project');
+          expect(wire()).toContain(CONTEXT);
+          expect(resumed.v1.filter(event => event.type === 'session')).toEqual([{ type: 'session', sessionId: first.result.sessionId, resumed: true }]);
+          return;
+        }
         if (row === 'plain') {
           const prompt = '  opening code\n\n  last line \n';
           const obs = await driveSeam(runner, 'baseline', { spec: { ...base, userPrompt: prompt } });

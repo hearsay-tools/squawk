@@ -108,6 +108,16 @@ const record = (value) => {
   if (!process.env.CEZ_MOCK_STDIN_FILE) return;
   try { appendFileSync(process.env.CEZ_MOCK_STDIN_FILE, `${JSON.stringify(value)}\n`); } catch { /* best effort */ }
 };
+/** OMP expands a skill token anywhere; text around the token becomes its arguments (T3 probe). */
+function ompTrigger(text) {
+  const leading = slashTrigger(text);
+  if (leading) return leading;
+  if (text.startsWith('/') || text.startsWith('!') || text.startsWith('$ ')) return;
+  const match = /(?:^|\s)(\/skill:(probe-[^\s]+))(?=\s|$)/.exec(text);
+  if (!match) return;
+  const at = match.index + match[0].length - match[1].length;
+  return { id: match[2], args: `${text.slice(0, at)}${text.slice(at + match[1].length)}`.trim() };
+}
 const fail = (command, error) => write({ ...(command.id ? { id: command.id } : {}), type: 'response', command: command.type, success: false, error });
 /** `RpcPromptResults.fail`/`completeLocal`: a prompt finished without the agent (v18.4.11). */
 const localResult = (command, status, error) => write({ type: 'prompt_result', ...(command.id ? { id: command.id } : {}), agentInvoked: false, status, ...(error ? { error } : {}), sessionSettled: false });
@@ -156,8 +166,12 @@ function messageUpdate(messageId, event) {
 
 function userMessage(text) {
   const messageId = `msg-${++messageSeq}`;
-  const trigger = slashTrigger(text);
+  const trigger = ompTrigger(text);
   const message = trigger && knownSkill('omp', trigger) ? skillFrames('omp', trigger)[0].message : { role: 'user', content: [{ type: 'text', text }] };
+  if (message.customType === 'skill-prompt' && !text.startsWith('/skill:')) {
+    message.details.prompt = text;
+    message.details.__queueChipText = text;
+  }
   write({ type: 'message_start', messageId, message });
   write({ type: 'message_end', messageId, message });
 }
@@ -223,7 +237,7 @@ function endTurn({ status = 'completed', error, kind, settle = true } = {}) {
   for (const steer of readNow) {
     userMessage(steer.message);
     if (status === 'error') providerFailure(kind);
-    else assistantText([slashTrigger(steer.message) && knownSkill('omp', slashTrigger(steer.message)) ? SKILL_TOKEN : steer.message], { usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { total: 0 } } });
+    else assistantText([ompTrigger(steer.message) && knownSkill('omp', ompTrigger(steer.message)) ? SKILL_TOKEN : steer.message], { usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { total: 0 } } });
   }
   write({ type: 'turn_end' });
   write({ type: 'agent_end', messages: [], isTerminal: true, yielded: true });
@@ -492,7 +506,7 @@ function scenarioEncoder(command, ack, state = { acknowledged: false, opened: fa
 
 async function prompt(command, sent = command.message) {
   const message = command.message;
-  const trigger = slashTrigger(message);
+  const trigger = ompTrigger(message);
   if (trigger) {
     respond(command); beginTurn(command);
     assistantText([knownSkill('omp', trigger) ? SKILL_TOKEN : message]);

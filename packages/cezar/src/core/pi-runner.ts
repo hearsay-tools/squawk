@@ -71,6 +71,7 @@ export const PI_SPEC_SUPPORT: AgentRunSpecSupport = {
   ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: '--append-system-prompt' },
   skill: { honored: true, via: 'RPC prompt /skill:id args with context after arguments' },
+  resumeFallbackSkill: { honored: true, via: 'native opening trigger only when bootstrap opens a fresh session' },
   userPrompt: { honored: true, via: 'RPC prompt message' },
   images: { honored: true, via: 'RPC prompt images' },
   cwd: { honored: true, via: 'spawn cwd' },

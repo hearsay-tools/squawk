@@ -9,10 +9,14 @@ export function skillOf(content: readonly ContentBlock[]): SkillTrigger | undefi
   return content[0]?.type === 'skill' ? content[0] : undefined;
 }
 
-/** Only adapters use this; shared workflow code does not send triggers yet. */
+/** The adapter knows whether native bootstrap actually resumed. */
+export function openingSkill(spec: AgentRunSpec, resumed = !!(spec.resume && spec.sessionId)): SkillTrigger | undefined {
+  return spec.skill ?? (resumed ? undefined : spec.resumeFallbackSkill);
+}
 export function openingContent(spec: AgentRunSpec): ContentBlock[] {
+  const skill = openingSkill(spec);
   return [
-    ...(spec.skill ? [{ type: 'skill' as const, ...spec.skill }] : []),
+    ...(skill ? [{ type: 'skill' as const, ...skill }] : []),
     ...(spec.images ?? []),
     { type: 'text', text: spec.userPrompt },
   ];

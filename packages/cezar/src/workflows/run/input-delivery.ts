@@ -12,7 +12,7 @@ import type { AgentSession } from '../../core/claude-cli-runner.ts';
 import type { RunRecord } from '../../runs/store.ts';
 import type { ContinueRunOptions } from '../continuation-admission.ts';
 import type { ActiveRun } from '../active-run.ts';
-import type { PastedContent } from '../pasted-content.ts';
+import type { PastedContent, PersistedAttachment } from '../pasted-content.ts';
 import { contentBlocksOf, pastedAttachmentsNote } from '../pasted-content.ts';
 import { startCompletionCycle } from '../completion-policy.ts';
 import { chargesBudget, hasPrWait, openWaitsFooter, resolvedWaits, waitInputId } from '../waits.ts';
@@ -27,7 +27,8 @@ import { clearUnreadInputTimer, clearHeldHumanInputTimer, harnessOwesInput, harn
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
 import { canProceedWithRun, historyDeletionPending } from './run-guards.ts';
 import { withFailuresCleared } from './wake-ledger.ts';
-import { expandRegistrySlashSkill } from './prompts.ts';
+import { NativeSkillInputQueue } from './native-skill-input-queue.ts';
+import { RunMemory } from './run-memory.ts';
 import { resolvedWaitInputBatch } from './resolved-wait-input-batch.ts';
 import * as inputReceipts from './input-receipts.ts';
 import type { RunModuleContext, SettledTurn } from './types.ts';
@@ -298,8 +299,25 @@ function unreadInputUnconfirmedNote(count: number): string {
 }
 
 export class InputDelivery {
+  private readonly nativeInputs: NativeSkillInputQueue;
+
   constructor(private readonly context: RunModuleContext, private readonly host: InputDeliveryHost, private readonly maxAutoContinues: number, private readonly routedQuestionRefusal: string,
-    private readonly timers = new LivenessTimers()) {}
+    private readonly timers = new LivenessTimers(), memory = new RunMemory()) {
+    this.nativeInputs = new NativeSkillInputQueue(context, {
+      active: host.active, attachments: host.attachments, runSkills: host.runSkills, line: host.line,
+      canProceedWithRun: (id, run) => host.canProceedWithRun(id, run),
+      parkForUser: (id, state, step) => host.parkForUser(id, state, step),
+      authorizeHumanMessage: id => this.authorizeHumanMessage(id),
+      recordHumanMessage: (id, state, content, persisted) => this.recordHumanMessage(id, state, content, persisted),
+      latchAgentInputError: (id, state, session, message) => this.latchAgentInputError(id, state, session, message),
+      deliverMessage: (id, content, messageId, blocks, persisted) => this.deliverMessage(id, content, messageId, blocks, persisted),
+      handleAgentInputReady: (id, state, session) => this.handleAgentInputReady(id, state, session),
+    }, memory);
+  }
+
+  /** Returning true keeps turn settlement behind accepted human input. */
+  releaseNativeInputs(runId: string, state: ActiveRun): boolean { return this.nativeInputs.release(runId, state); }
+  clearNativeInputs(runId: string): void { this.nativeInputs.clear(runId); }
 
   steerWorker(runId: string, input: AgentInput): 'queued' | 'delivered' {
     const run = this.context.store.getRun(runId);
@@ -317,12 +335,8 @@ export class InputDelivery {
   }
 
   sendMessage(runId: string, content: PastedContent[], messageId?: string): boolean {
-    const delivered = this.deliverMessage(runId, content, messageId);
-    if (delivered) {
-      const state = this.host.active.get(runId);
-      if (state) transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'monitoring-reset', session: state.liveSession.session });
-    }
-    return delivered;
+    if (this.nativeInputs.handles(runId, content)) return this.nativeInputs.enqueue(runId, content, messageId);
+    return this.deliverMessage(runId, content, messageId);
   }
 
   respondPermission(runId: string, requestId: string, optionId: string): boolean {
@@ -546,6 +560,8 @@ export class InputDelivery {
   /** A callback from an old/replaced/disposed session carries no authority. */
   handleAgentInputReady(runId: string, state: ActiveRun, session: AgentSession | undefined): void {
     if (!this.inputReadyAuthorized(runId, state, session)) return;
+    if (this.nativeInputs.markReady(runId, state, session)) return;
+    if (this.releaseNativeInputs(runId, state)) return;
     // Durable input always gets the first opportunity. Only the same refused,
     // completed boundary may retry; ordinary/native question parks are not wakes.
     if (this.flushAgentInputs(runId)) return;
@@ -835,21 +851,14 @@ export class InputDelivery {
   }
 
   /** A human message into the live session. */
-  private deliverMessage(runId: string, content: PastedContent[], messageId?: string): boolean {
+  private deliverMessage(runId: string, content: PastedContent[], messageId?: string, nativeBlocks?: ContentBlock[], saved?: PersistedAttachment[]): boolean {
     const state = this.host.active.get(runId);
     if (!state?.liveSession.session?.open || state.liveSession.cancelled || state.liveSession.pendingPermissions?.size) return false;
     const run = this.context.store.getRun(runId);
     if (!canProceedWithRun(run, () => this.host.workerExecutionStopped(runId), run => this.host.executionBlockedByRootFinish(run))) return false;
 
-    // Squawk's fallback question on a worker never holds what the plain park it replaced let
-    // through: a human message supersedes it, as a Continue does (hearsay-tools/cezarion#2410). A
-    // question the worker asked itself belongs to its parent, and a human message is refused.
-    this.host.workerQuestions.supersedeWorkerFallback(runId);
-    if (this.host.workerQuestions.answeredElsewhere(runId)) {
-      this.context.store.appendEvent(runId, { type: 'note', tone: 'warning', message: this.routedQuestionRefusal });
-      return false;
-    }
-    const prepared = this.prepareMessageContent(runId, state, content);
+    if (!this.authorizeHumanMessage(runId)) return false;
+    const prepared = this.prepareMessageContent(runId, state, content, nativeBlocks, saved);
     const { blocks, expanded, deliverable } = prepared;
     const session = state.liveSession.session;
     const atTurnBoundary = state.boundary.atTurnBoundary === session;
@@ -858,30 +867,30 @@ export class InputDelivery {
     const bundled = prepared.bundle?.inputs.map(input => input.id) ?? [];
     const delivered = handToTransport(state, session, bundled, wire => wire.sendMessage(sent));
     if (delivered) state.inputState.markTurnOpeners(bundled, atTurnBoundary);
-    if (delivered && expanded !== blocks) this.host.runSkills.provisionLiveSlashSkill(runId, state, blocks);
-    if (delivered) this.applyHumanMessageDelivery(runId, state, prepared, messageId, atTurnBoundary);
+    if (delivered) {
+      this.applyHumanMessageDelivery(runId, state, prepared, messageId, atTurnBoundary);
+      transitionTurnBoundary(state, { kind: 'input-submitted', phase: 'monitoring-reset', session: state.liveSession.session });
+    }
     return delivered;
   }
 
-  private prepareMessageContent(runId: string, state: ActiveRun, content: PastedContent[]) {
-    const text = content
-      .filter((b): b is Extract<ContentBlock, { type: 'text' }> => b.type === 'text')
-      .map((b) => b.text)
-      .join('\n');
+  private authorizeHumanMessage(runId: string): boolean {
+    // A human may supersede Squawk's fallback question. The worker's own question belongs to
+    // its parent, so refuse it before accepting a held message as well as before delivery.
+    this.host.workerQuestions.supersedeWorkerFallback(runId);
+    if (!this.host.workerQuestions.answeredElsewhere(runId)) return true;
+    this.context.store.appendEvent(runId, { type: 'note', tone: 'warning', message: this.routedQuestionRefusal });
+    return false;
+  }
+
+  private prepareMessageContent(runId: string, state: ActiveRun, content: PastedContent[], nativeBlocks?: ContentBlock[], saved?: PersistedAttachment[]) {
     // Persist human attachments before the user-message event so the thread can render them.
-    const persisted = this.host.attachments.persistPastedAttachments(runId, content);
-    const images = persisted.map((saved) => saved.url);
-    this.context.store.appendEvent(runId, {
-      type: 'user-message',
-      stepId: state.liveSession.currentStepId,
-      text,
-      imageCount: content.filter((b) => b.type === 'image').length,
-      images,
-    });
+    const persisted = saved ?? this.host.attachments.persistPastedAttachments(runId, content);
+    if (nativeBlocks === undefined) this.recordHumanMessage(runId, state, content, persisted);
 
     // Send paths beside image blocks: backends that drop images still receive usable files.
     const blocks = contentBlocksOf(content);
-    const expanded = expandRegistrySlashSkill(blocks, this.host.runSkills.enabledSkills(state, undefined, 'live-input'));
+    const expanded = nativeBlocks ?? blocks;
     const attached: ContentBlock[] = persisted.length
       ? [...expanded, pastedAttachmentsNote(persisted)]
       : expanded.length ? expanded : [{ type: 'text', text: 'The user attached a document, but it could not be saved. Ask them to attach it again before discussing its contents.' }];
@@ -894,6 +903,15 @@ export class InputDelivery {
     const deliverable = [...attached, ...(bundle ? [{ type: 'text' as const, text: bundle.text }] : []),
       ...(footer ? [{ type: 'text' as const, text: `\n\n${footer}` }] : [])];
     return { blocks, expanded, deliverable, answeringAskSeq, bundle };
+  }
+
+  private recordHumanMessage(runId: string, state: ActiveRun, content: PastedContent[], persisted: PersistedAttachment[]): void {
+    this.context.store.appendEvent(runId, {
+      type: 'user-message', stepId: state.liveSession.currentStepId,
+      text: content.filter(block => block.type === 'text').map(block => block.text).join('\n'),
+      imageCount: content.filter(block => block.type === 'image').length,
+      images: persisted.map(saved => saved.url),
+    });
   }
 
   private applyHumanMessageDelivery(runId: string, state: ActiveRun, prepared: ReturnType<InputDelivery['prepareMessageContent']>, messageId: string | undefined, atTurnBoundary: boolean): void {

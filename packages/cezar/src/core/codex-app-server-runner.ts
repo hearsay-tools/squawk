@@ -1,6 +1,6 @@
 import { codexTurnStartExtras } from './codex-turn-config.ts';
 export { reasoningSummary, codexTurnStartExtras } from './codex-turn-config.ts';
-import { skillOf, validSkillMessage } from './skill-trigger.ts';
+import { openingSkill, skillOf, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { uiAskQuestions } from './ask.ts';
 import { summarizeRunnerStderr } from './runner-stderr.ts';
@@ -84,6 +84,7 @@ export const CODEX_SPEC_SUPPORT: AgentRunSpecSupport = {
   ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: 'prepended to the opening turn/start input through prependSystemPrompt' },
   skill: { honored: true, via: 'turn/start structured skill item with listed path and text arguments' },
+  resumeFallbackSkill: { honored: true, via: 'native opening trigger only when bootstrap opens a fresh session' },
   userPrompt: { honored: true, via: 'turn/start input text' },
   images: { honored: false, reason: 'the adapter sends text input items only; image blocks are dropped' },
   cwd: { honored: true, via: 'spawn cwd, and the thread/start / thread/resume cwd' },
@@ -674,12 +675,10 @@ class CodexSession implements AgentSession {
       this.emitUi((state) => codexSessionStarted(threadId, state));
     }
 
-    // Seed the first turn. The system prompt (skill body + handoff contract)
-    // has no dedicated app-server field, so it rides along as a leading block
-    // of the opening message.
+    // Codex receives system instructions at the start of the opening message.
     const first = prependSystemPrompt(this.spec.systemPrompt, this.spec.userPrompt);
     this.startupWaitingFor('turn/start');
-    await this.startOrSteerTurn(first, undefined, this.spec.skill);
+    await this.startOrSteerTurn(first, undefined, openingSkill(this.spec));
     this.assertOpen();
     this.openingAcknowledged = true;
     this.checkStartupComplete();

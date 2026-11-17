@@ -1,3 +1,4 @@
+import { fixedSkillCatalog } from './core/runner-skill-fixture.testkit.ts';
 import { Home } from './home/home.ts';
 import { testHome, useTestHome } from './home/test-home.testkit.ts';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -46,7 +47,7 @@ describe('planner and namer model presets per default runner', () => {
 
   it.each(RUNNER_IDS)('plans on %s with its preset model or none', async (runner) => {
     useDefaultRunner(runner);
-    await planChain(repoRoot, 'do it', undefined, testHome(), runners);
+    await planChain(repoRoot, 'do it', fixedSkillCatalog(), testHome(), runners);
     expect(run).toHaveBeenCalled();
     for (const [spec] of run.mock.calls as unknown as Array<[{ model?: string }]>) expect(spec.model).toBe(EXPECTED[runner].planner);
   });

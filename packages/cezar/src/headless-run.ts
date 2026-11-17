@@ -1,4 +1,6 @@
 import { commandText } from './home/command.ts';
+import { RunnerSkillCatalog } from './core/runner-skill-catalog.ts';
+import { hostSkillCatalogAdapters } from './core/host-skill-catalog.ts';
 import { createHostDiscovery } from './discovery/catalog.ts';
 import { DelegationController } from './delegation/provision.ts';
 import type { WorkerCleanupFactory } from './delegation/service.ts';
@@ -112,7 +114,7 @@ export async function runHeadless(
     // 2.5) — one refreshed semaphore, even with just one manager in play.
     const semaphore = new deps.WorkspaceSemaphore({ home });
     await semaphore.refresh();
-    const manager = new deps.RunManager(store, repoRoot, { home, createRunner: deps.createRunner, semaphore, acquireCiResources });
+    const manager = new deps.RunManager(store, repoRoot, { skillCatalog: new RunnerSkillCatalog({ adapters: hostSkillCatalogAdapters() }), home, createRunner: deps.createRunner, semaphore, acquireCiResources });
     delegation.attachProject({ id: 'headless', root: repoRoot, store, manager, home });
 
     store.on('event', ({ event }) => printHeadlessEvent(event, deps.console));

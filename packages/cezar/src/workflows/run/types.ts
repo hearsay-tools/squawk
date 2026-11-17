@@ -25,6 +25,7 @@ type ReadonlyValue<T> = T extends object ? { readonly [K in keyof T]: ReadonlyVa
 export type DelegationExecutionSettings = ReadonlyValue<{ cwd: string; runner: RunnerId; model?: string | undefined; modelIdentity?: string | undefined; effort?: string | undefined; agentProfile: string; accountBinding?: WorkerAccountBinding | undefined; systemPrompt?: string | undefined; allowedTools?: string[] | undefined; bashAllowlist?: string[] | undefined }>;
 
 export interface StartRunInput {
+  skillPaths?: Record<string, string> | undefined;
   task: string;
   model?: string | undefined;
   /** Reasoning-effort pin (#45). Canonical `low`/`medium`/`high`/`xhigh`/`max`.
@@ -142,7 +143,7 @@ export type StepSessionLaunch = {
   sessionId: string;
   images: ContentBlock[] | undefined;
   opening: LaunchOpening;
-  skillPrompt: string | undefined;
+  skill: import('../../core/agent-runner.ts').SkillTrigger | undefined;
   extraSystemPrompt: string | undefined;
   toolGrant: ToolGrant;
   profile: StepProfile;
@@ -185,7 +186,7 @@ export type ContinuationSettings = {
 
 /** The continued step's skill playbook, for the system prompt or for the fallback system prompt of
  *  an in-thread resume, and the skill files the opening message names. */
-export type ContinuationSkills = { skillPrompt: string | undefined; fallbackSkillPrompt: string | undefined; files: Map<string, string> };
+export type ContinuationSkills = { fallback: import('../../core/agent-runner.ts').SkillTrigger | undefined; trigger?: import('../../core/agent-runner.ts').SkillTrigger };
 
 /** What `runContinuation` resolved before it starts the Continue's session. */
 export type ContinuationSessionLaunch = {
@@ -195,7 +196,6 @@ export type ContinuationSessionLaunch = {
   setupNote: string | undefined;
   opening: ContinuationOpening;
   skills: ContinuationSkills;
-  skipSkillOnResume: boolean;
   settings: ContinuationSettings;
   delegation: LaunchDelegation;
   webhooksPart: string | undefined;
@@ -217,6 +217,7 @@ export type AutomationToolService = {
 
 /** Shared dependencies for state-owning run modules. */
 export interface RunModuleContext {
+  skillCatalog?: import('../../core/runner-skill-catalog.ts').RunnerSkillCatalog | undefined;
   home: Home;
   readonly work: TrackedWork;
   store: import('../../runs/store.ts').RunStore;

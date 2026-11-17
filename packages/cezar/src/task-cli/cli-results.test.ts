@@ -1,6 +1,6 @@
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readdirSync, readlinkSync, writeFileSync } from 'node:fs';
+import { readdirSync, readlinkSync, writeFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import { join, resolve } from 'node:path';
 import { makeHumanWait, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -173,22 +173,23 @@ describe('cez task', () => {
       { status: 200, catalog: {} },
       { status: 503, catalog: [] },
     ])('warns when the catalog is invalid or refused: $status', async ({ status, catalog }) => {
-      const spy = respond('/skills?wait=1', catalog, status);
+      const spy = respond('/runner-skills?runner=claude', catalog, status);
       try {
         expect(await run(['start', 'task', '--skill', 'wanted'])).toBe(0);
         expect(last()).toMatchObject({
-          warning: 'could not check whether skill "wanted" is available; the run may use the plain prompt', created: true,
+          warning: 'could not check whether skill "wanted" is available; a missing id fails the step', created: true,
         });
         expect(ctx.store.getRun(last().id as string)?.task).toBe('task');
       } finally { spy.mockRestore(); }
     });
 
     it('does not mistake a different catalog entry for the requested skill', async () => {
-      const dir = join(ctx.harness.repoRoot, '.ai/skills');
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, 'other-skill.md'), '# Other skill\n');
-      expect(await run(['start', 'task', '--skill', 'wanted'])).toBe(0);
-      expect(last()).toMatchObject({ warning: 'skill "wanted" is not currently available; the run may use the plain prompt' });
+      const spy = respond('/runner-skills?runner=codex', { runner: 'codex', source: 'live', skills: [{ id: 'other', name: 'Other' }], problems: [] });
+      try {
+        expect(await run(['start', 'task', '--skill', 'wanted', '--runner', 'codex'])).toBe(0);
+        expect(last()).toMatchObject({ warning: 'skill "wanted" is not currently available; a missing id fails the step' });
+        expect(spy.mock.calls.some(([url]) => String(url).endsWith('/runner-skills?runner=codex'))).toBe(true);
+      } finally { spy.mockRestore(); }
     });
 
     it.each([[], ['--full']])('filters and sorts mixed statuses before limiting with %j', async (...flags) => {

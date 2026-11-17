@@ -1,3 +1,4 @@
+import { portableRunnerSkillList } from '../../core/runner-skill-reference.ts';
 import type { LaunchSource } from './launch-read-resolver.ts';
 import { runDataDir } from '../../legacy-runs.ts';
 import { atStepOpen } from './launch-read-resolver.ts';
@@ -14,7 +15,7 @@ import type { UiEventSink } from '../../runs/ui-event-sink.ts';
 import type { ActiveRun } from '../active-run.ts';
 import { pastedAttachmentsText, type PersistedAttachment } from '../pasted-content.ts';
 import { toolGrantLists, type WorkflowStepDef } from '../types.ts';
-import { agentDirectories, composeSystemPrompt, expandRegistrySlashSkillText, leadingSlashSkillName, skillSystemPrompt } from './prompts.ts';
+import { agentDirectories, composeSystemPrompt } from './prompts.ts';
 import { stepModel } from './launch-settings.ts';
 import { stepScope } from './steps.ts';
 import { isDisposedDelegatedRun } from './run-guards.ts';
@@ -100,6 +101,10 @@ export class StepSession {
     // reads the wrong account's config dir finds no session and silently starts a fresh one.
     const stepProfile = await sessionEvents.stepProfileFor(this.context, this.sharedHost, runId, stepBackend, { stepId: step.id });
     if (typeof stepProfile === 'string') return stepProfile;
+    await this.runSkills.loadRunSkills(state, stepBackend, stepProfile);
+    let skill: import('../../core/agent-runner.ts').SkillTrigger | undefined;
+    try { skill = await this.openingSkill(runId, state, step, opening); }
+    catch (error) { return error instanceof Error ? error.message : String(error); }
     const beforeSpawn = this.context.store.getRun(runId);
     if (state.liveSession.cancelled || (beforeSpawn && this.host.executionBlockedByRootFinish(beforeSpawn))) return null;
     this.context.store.updateStep(runId, step.id, { profileId: stepProfile.profileId });
@@ -129,15 +134,28 @@ export class StepSession {
     state.inputState.declareDelivery(inputDeliveryOf(runner)); state.inputState.resetUnreadInputs(); state.inputState.resetEarlyConsumption();
     const launchOpening = sessionEvents.launchOpening(this.context, this.sharedHost, runId, state, step.id, { body: opening.userPrompt, ciTools });
     const session = this.startStepSession(runId, state, runner, atStepOpen.sessionPayload(step, {
-      sessionId, images, opening: launchOpening, skillPrompt: opening.skillPrompt, extraSystemPrompt,
+      sessionId, images, opening: launchOpening, skill, extraSystemPrompt,
       toolGrant, profile: stepProfile, model, delegation, webhooksPart, ciTools,
     }), onEvent, turn, sink);
     if (typeof session === 'string') return session;
     return this.awaitStepSession(runId, state, session, atStepOpen.sessionWaitPayload(step.id, nextStep, { sink, turn, startTokens, delegation, ciTools }));
   }
 
-  /** A fresh step's opening message, before the open-waits footer and the session-start context,
-   *  and the selected skill's playbook for its system prompt. */
+  private async openingSkill(runId: string, state: ActiveRun, step: WorkflowStepDef, opening: { userPrompt: string }) {
+    const path = this.context.store.getRun(runId)?.steps.find(s => s.id === step.id)?.skillPath;
+    const skill = this.runSkills.selectedSkill(state, atStepOpen.skill(step), path, opening.userPrompt);
+    if (skill) {
+      const selectedPath = portableRunnerSkillList({ runner: state.skills.query!.runner, skills: [{ ...skill, name: skill.id }], problems: [], source: 'live' }, state.liveSession.cwd).skills[0]?.path;
+      if (selectedPath) this.context.store.updateStep(runId, step.id, { skillPath: selectedPath });
+      opening.userPrompt = ''; return skill;
+    }
+    const native = await this.runSkills.nativeInput(runId, state, [{ type: 'text', text: opening.userPrompt }]);
+    if (native[0]?.type !== 'skill') return undefined;
+    opening.userPrompt = '';
+    return native[0];
+  }
+
+  /** A fresh step's arguments, before the open-waits footer and session context. */
   private async stepOpening(
     runId: string,
     state: ActiveRun,
@@ -151,36 +169,8 @@ export class StepSession {
       attachments: PersistedAttachment[];
       openingNote: string | undefined;
     },
-  ): Promise<{ userPrompt: string; skillPrompt: string | undefined }> {
-    let skillPrompt: string | undefined;
-    const rawPrompt = atStepOpen.prompt(step, input);
-    // The selected skill, a leading `/name`, every skill the prompt names as `/name`, and their
-    // companions go where the agent looks (#1408, #1672).
-    const provisioned = await this.runSkills.provisionRunSkills(runId, state, {
-      stepSkill: atStepOpen.skill(step), slash: leadingSlashSkillName(rawPrompt), prompt: rawPrompt,
-    });
-    for (const message of provisioned.notes) emit({ type: 'note', stepId: step.id, message });
-    if (atStepOpen.skill(step)) {
-      const skill = this.runSkills.enabledSkills(state).find((s) => s.name === atStepOpen.skill(step));
-      if (skill) {
-        // The body alone often does not identify the selected skill. Keep its
-        // name and catalog description in the normalized runner payload so a
-        // numeric task such as "432" still gives the model enough context to
-        // describe the work — and therefore derive a useful title (#432).
-        // A directory team skill outside the worktree names its cache copy (#1024).
-        skillPrompt = skillSystemPrompt(skill, provisioned.filesDir.get(skill.name));
-      } else {
-        emit({
-          type: 'note',
-          stepId: step.id,
-          message: `skill "${atStepOpen.skill(step)}" not found in .ai/cezar/skills, .ai/skills or the team skills repo — running with the plain prompt`,
-        });
-      }
-    }
-
-    // Opening prompts bypass deliverMessage. Expand before workflow and attachment
-    // context so a leading registry skill matches, without changing the stored task.
-    let userPrompt = expandRegistrySlashSkillText(rawPrompt, this.runSkills.enabledSkills(state), provisioned.filesDir);
+  ): Promise<{ userPrompt: string }> {
+    let userPrompt = atStepOpen.prompt(step, input);
     if (parts.chainNote) userPrompt = `${parts.chainNote}\n\n---\n\n${userPrompt}`;
     if (parts.checkFailure) {
       userPrompt += `\n\nA verification command failed after the previous attempt. Fix the cause. Failing output:\n\n${parts.checkFailure}`;
@@ -200,7 +190,7 @@ export class StepSession {
     // location of.
     if (parts.attachments.length) userPrompt += `\n\n${pastedAttachmentsText(parts.attachments)}`;
     if (parts.openingNote) userPrompt += `\n\n${parts.openingNote}`;
-    return { userPrompt, skillPrompt };
+    return { userPrompt };
   }
 
   /** Start a fresh step's session. A throw revokes the tools this launch was given and returns its
@@ -221,13 +211,13 @@ export class StepSession {
         {
           timings: this.context.timings,
           scope: this.context.store.spawnScope(runId),
-          // Skill body, then the run's extra prompt (POST override or config
-          // default), then the handoff contract — every agent step.
-          systemPrompt: composeSystemPrompt(launch.skillPrompt, sessionEvents.launchSystemTail(this.context, this.sharedHost, {
+          // Each step receives the extra prompt and handoff contract.
+          systemPrompt: composeSystemPrompt(undefined, sessionEvents.launchSystemTail(this.context, this.sharedHost, {
             extraSystemPrompt: launch.extraSystemPrompt, delegation, webhooksPart: launch.webhooksPart,
             env: profile.env, ciTools, handoffInjected: launch.opening.handoffInjected, runner: state.liveSession.delegationSettings?.runner,
           })),
           userPrompt: launch.opening.userPrompt,
+          ...(launch.skill ? { skill: launch.skill } : {}),
           images: launch.images,
           cwd: state.liveSession.cwd,
           toolGrant: launch.toolGrant,

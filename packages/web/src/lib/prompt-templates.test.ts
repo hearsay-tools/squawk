@@ -407,16 +407,16 @@ describe('resolveAutoApply', () => {
 describe('the Create an automation template (#774)', () => {
   const template = DEFAULT_PROMPT_TEMPLATES.find((entry) => entry.id === 'create-automation')
 
-  it('ships as a default assigned to the built-in skill, asking for the trigger and the task', () => {
-    expect(template).toMatchObject({ id: 'create-automation', label: 'Create an automation', skills: ['create-cezarion-automation'] })
+  it('ships as a default asking for the trigger and the task', () => {
+    expect(template).toMatchObject({ id: 'create-automation', label: 'Create an automation' })
     expect(template?.text).toMatch(/trigger/i)
     expect(template?.text).toMatch(/schedule/i)
     expect(template?.text).toMatch(/GitHub/)
     expect(template?.text).toMatch(/task/i)
   })
 
-  it('auto-applies when its skill is picked', () => {
-    expect(autoApplyText(DEFAULT_PROMPT_TEMPLATES, ['create-cezarion-automation'])).toBe(template?.text)
+  it('has no removed built-in skill binding', () => {
+    expect(autoApplyText(DEFAULT_PROMPT_TEMPLATES, ['create-cezarion-automation'])).toBe('')
   })
 
   it('is dropped when the cockpit has automations off, kept when on', () => {

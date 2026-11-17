@@ -7,14 +7,12 @@ import { agentTmpEnv } from '../../runs/agent-tmpdir.ts';
 import type { WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import { automationsEnabled } from '../../automations/enabled.ts';
 import { automationCliCommand, automationsPrompt } from '../../automations/prompts.ts';
-import { createAutomationSkill } from '../../automations/builtin-skill.ts';
 import { registryEntry } from '../../workspace/registry-entry.ts';
 import { agentWebhooksPrompt, webhookCliCommand } from '../../webhooks/prompt.ts';
 import { agentWebhooks } from '../../workspace/webhooks.ts';
 import type { Skill } from '../../skills.ts';
 import { buildSessionContext, formatSessionContextReport, type SessionContext } from '../../session-context.ts';
 import type { ActiveRun } from '../active-run.ts';
-import { leadingSlashSkillName } from './prompts.ts';
 import type { RunModuleContext } from './types.ts';
 
 type LaunchContext = Pick<RunModuleContext, 'store' | 'repoRoot' | 'dataDir' | 'home'>;
@@ -61,8 +59,8 @@ export function automationsReachable(cockpit: CockpitAddress): boolean {
 }
 
 /** The built-in skills this manager may offer now; empty unless automations are reachable. */
-export function builtinSkills(cockpit: CockpitAddress): Skill[] {
-  return automationsReachable(cockpit) ? [createAutomationSkill(automationCliCommand())] : [];
+export function builtinSkills(_cockpit: CockpitAddress): Skill[] {
+  return [];
 }
 
 /** The automations part of every session's system prompt, or nothing. */
@@ -86,16 +84,12 @@ export async function agentWebhooksPart({ repoRoot, home }: LaunchContext, cockp
  * and `runContinuation` — come here; a live message never does. The prefix goes into the
  * opening message only, never the system prompt a worker inherits (#778).
  */
-export function sessionContextFor({ store, repoRoot, dataDir }: LaunchContext, runId: string, state: ActiveRun, stepId: string, openingPrompt: string): SessionContext {
+export function sessionContextFor({ store, repoRoot, dataDir }: LaunchContext, runId: string, state: ActiveRun, stepId: string, _openingPrompt: string): SessionContext {
   const run = store.getRun(runId);
   const role = run?.delegation?.role === 'worker' ? 'worker' : 'parent';
   const handoff = handoffPath(dataDir, runId);
   refreshHandoffRecords(store, dataDir, runId);
-  // A backend's own slash command only works at character zero (#676); a prefix would turn
-  // it into plain text, so such a launch gets no context and keeps the read instruction.
-  const context: SessionContext = leadingSlashSkillName(openingPrompt)
-    ? { prefix: '', handoffInjected: false, reports: [{ id: 'session-context', status: 'skipped', sources: [], reason: 'the opening message is a slash command, which must stay at its start' }] }
-    : buildSessionContext({
+  const context: SessionContext = buildSessionContext({
       projectRoot: repoRoot,
       cwd: state.liveSession.cwd,
       role,

@@ -66,6 +66,8 @@ export interface AgentRunSpec {
   userPrompt: string;
   /** Native trigger. userPrompt remains opening context; args belongs to the skill. */
   skill?: SkillTrigger;
+  /** Continue sends this trigger only when the adapter opens a fresh native session. */
+  resumeFallbackSkill?: SkillTrigger;
   /** Image blocks delivered with the first user message — screenshots pasted
    *  into the new-task form (spec 002's paste path, at task start). */
   images?: ContentBlock[] | undefined;
@@ -125,6 +127,7 @@ const AGENT_RUN_SPEC_FIELD_SET: Readonly<Record<keyof AgentRunSpec, true>> = {
   squawkTools: true,
   userPrompt: true,
   skill: true,
+  resumeFallbackSkill: true,
   images: true,
   cwd: true,
   toolGrant: true,

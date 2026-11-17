@@ -1,4 +1,4 @@
-import type { InferResponseType } from 'hono/client';
+import type { InferRequestType, InferResponseType } from 'hono/client';
 import { hc } from 'hono/client';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
@@ -20,6 +20,7 @@ import type {
 } from '@open-mercato/cezar-contract';
 import { workflowStepDefSchema } from '@open-mercato/cezar-contract/workflows';
 import type { AppType } from './app-type.ts';
+import type { runnerSkillListSchema, runnerSkillsQuerySchema } from '@open-mercato/cezar-contract/runner-skills';
 import { workflowStepSchema } from '../workflows/types.ts';
 
 /**
@@ -45,6 +46,9 @@ describe('src/contract workflows/skills/agent-config schemas match the routes ex
   type Plan200 = InferResponseType<typeof client.api.v1.plan.$post, 200>;
 
   // ---- skills / todos --------------------------------------------------------------------
+  type NativeSkills = (typeof client.api.v1)['runner-skills']['$get'];
+  type NativeSkillsQuery = InferRequestType<NativeSkills>['query'];
+  type NativeSkills200 = InferResponseType<NativeSkills, 200>;
   type Skills200 = InferResponseType<typeof client.api.v1.skills.$get, 200>;
   type SkillsRefresh200 = InferResponseType<typeof client.api.v1.skills.refresh.$post, 200>;
   type Importable200 = InferResponseType<typeof client.api.v1.skills.importable.$get, 200>;
@@ -67,6 +71,8 @@ describe('src/contract workflows/skills/agent-config schemas match the routes ex
     Assert<Exact<z.infer<typeof deleteWorkflowResponseSchema>, DeleteWorkflow200>>,
     Assert<Exact<z.infer<typeof parsedWorkflowSchema>, ParseWorkflow200>>,
     Assert<Exact<z.infer<typeof planResponseSchema>, Plan200>>,
+    Assert<Exact<z.input<typeof runnerSkillsQuerySchema>, NativeSkillsQuery>>,
+    Assert<Exact<z.infer<typeof runnerSkillListSchema>, NativeSkills200>>,
     Assert<Exact<z.infer<typeof skillSchema>[], Skills200>>,
     Assert<Exact<z.infer<typeof skillSchema>[], SkillsRefresh200>>,
     Assert<Exact<z.infer<typeof importableSkillSchema>[], Importable200>>,

@@ -49,7 +49,8 @@ export class TurnSettler {
   constructor(private readonly context: RunModuleContext, private readonly host: TurnSettlerHost,
     private readonly idleTimeoutMs: number, private readonly maxAutoContinues: number,
     private readonly completionWillWait: string, private readonly scheduleWakeupMaxSeconds: number,
-    private readonly timers = new LivenessTimers()) {}
+    private readonly timers = new LivenessTimers(),
+    private readonly releaseNativeInputs: (runId: string, state: ActiveRun) => boolean = () => false) {}
 
   /** The done this turn end takes to the completion gate: the run's accepted done
    *  (`doneAccepted`, hearsay-tools/squawk#2587) while it still holds (`heldDone`), or this
@@ -176,6 +177,7 @@ export class TurnSettler {
    */
   settleTurn(runId: string, state: ActiveRun, entry: 'turn-end' | 'ack' | 'ready' | 'gate', settled: SettledTurn,
     refusal?: CompletionRefusal): boolean {
+    if (this.releaseNativeInputs(runId, state)) return false;
     const turn = entry === 'turn-end' ? settled : this.recheckBoundaryDone(runId, state, settled);
     const session = state.liveSession.session;
     const stepId = turn.stepId;

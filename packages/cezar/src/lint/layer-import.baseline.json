@@ -380,18 +380,6 @@
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
     {
-      "file": "packages/cezar/src/workflows/run/continuation-session.ts",
-      "target": "packages/cezar/src/skills-remote.ts",
-      "count": 1,
-      "reason": "feature:skills: the run engine provisions skills directly. The planned skills redesign removes most of this code"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/continuation-session.ts",
-      "target": "packages/cezar/src/skills.ts",
-      "count": 1,
-      "reason": "feature:skills: the run engine provisions skills directly. The planned skills redesign removes most of this code"
-    },
-    {
       "file": "packages/cezar/src/workflows/run/family-reconciler.ts",
       "target": "packages/cezar/src/delegation/conversations.ts",
       "count": 1,
@@ -438,12 +426,6 @@
       "target": "packages/cezar/src/artifacts/lifecycle.ts",
       "count": 1,
       "reason": "feature:artifacts: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/launch-context.ts",
-      "target": "packages/cezar/src/automations/builtin-skill.ts",
-      "count": 1,
-      "reason": "feature:automations: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
     },
     {
       "file": "packages/cezar/src/workflows/run/launch-context.ts",
@@ -504,18 +486,6 @@
       "target": "packages/cezar/src/delegation/policy.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/launch-read-resolver.ts",
-      "target": "packages/cezar/src/skills-remote.ts",
-      "count": 1,
-      "reason": "feature:skills: the run engine provisions skills directly. The planned skills redesign removes most of this code"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/launch-read-resolver.ts",
-      "target": "packages/cezar/src/skills.ts",
-      "count": 1,
-      "reason": "feature:skills: the run engine provisions skills directly. The planned skills redesign removes most of this code"
     },
     {
       "file": "packages/cezar/src/workflows/run/prompts.ts",
@@ -584,30 +554,6 @@
       "reason": "feature:preview: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
     },
     {
-      "file": "packages/cezar/src/workflows/run/run-skills.ts",
-      "target": "packages/cezar/src/delegation/input.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/run-skills.ts",
-      "target": "packages/cezar/src/skills-provision.ts",
-      "count": 1,
-      "reason": "feature:skills: the run engine provisions skills directly. The planned skills redesign removes most of this code"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/run-skills.ts",
-      "target": "packages/cezar/src/skills-remote.ts",
-      "count": 1,
-      "reason": "feature:skills: the run engine provisions skills directly. The planned skills redesign removes most of this code"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/run-skills.ts",
-      "target": "packages/cezar/src/skills.ts",
-      "count": 1,
-      "reason": "feature:skills: the run engine provisions skills directly. The planned skills redesign removes most of this code"
-    },
-    {
       "file": "packages/cezar/src/workflows/run/run-start.ts",
       "target": "packages/cezar/src/delegation/policy.ts",
       "count": 1,
@@ -666,12 +612,6 @@
       "target": "packages/cezar/src/core/claude-cli-runner.ts",
       "count": 1,
       "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/turn-bookkeeping.ts",
-      "target": "packages/cezar/src/skills.ts",
-      "count": 1,
-      "reason": "feature:skills: the run engine provisions skills directly. The planned skills redesign removes most of this code"
     },
     {
       "file": "packages/cezar/src/workflows/run/turn-markers.ts",

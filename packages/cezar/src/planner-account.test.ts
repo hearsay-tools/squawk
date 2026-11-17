@@ -1,3 +1,4 @@
+import { fixedSkillCatalog } from './core/runner-skill-fixture.testkit.ts';
 import { Home } from './home/home.ts';
 import { useTestHome } from './home/test-home.testkit.ts';
 import { testHome } from './home/test-home.testkit.ts';
@@ -49,7 +50,7 @@ describe('planChain under an account Squawk refuses to spawn (#1283)', () => {
     // `OMP_PROFILE=work` would now open `~/.omp-alt/profiles/work`.
     vi.stubEnv('PI_CONFIG_DIR', '.omp-alt');
 
-    const plan = await planChain(repoRoot, 'do it', undefined, testHome(), runners);
+    const plan = await planChain(repoRoot, 'do it', fixedSkillCatalog(), testHome(), runners);
 
     expect(plan.fallback).toBe(true);
     expect(run).not.toHaveBeenCalled();
@@ -63,7 +64,7 @@ describe('planChain under an account Squawk refuses to spawn (#1283)', () => {
       store.selections[repoRoot] = { omp: 'work' };
     }, testHome());
 
-    await planChain(repoRoot, 'do it', undefined, testHome(), runners);
+    await planChain(repoRoot, 'do it', fixedSkillCatalog(), testHome(), runners);
 
     expect(run).toHaveBeenCalledWith(expect.objectContaining({ env: { OMP_PROFILE: 'work' } }));
   });

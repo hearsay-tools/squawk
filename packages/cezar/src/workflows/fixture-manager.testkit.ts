@@ -1,3 +1,4 @@
+import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { rmSync } from 'node:fs';
 import type { AgentSession, RunnerFactory } from '../core/agent-runner.ts';
@@ -35,7 +36,7 @@ export function createFixtureManager(...args: [store: RunStore, root: string, op
   const [store, root, options] = args;
   const group = fixtures.get(root) ?? { work: options?.work ?? new TrackedWork(), managers: [] };
   const manager = new FixtureManager(store, root, {
-    home: testHome(), createRunner: backend => runnersUnderTest()(backend), acquireCiResources: acquireInertCiResources,
+    skillCatalog: fixedSkillCatalog(), home: testHome(), createRunner: backend => runnersUnderTest()(backend), acquireCiResources: acquireInertCiResources,
     ...options, work: group.work,
   });
   managerWork.set(manager, group.work);

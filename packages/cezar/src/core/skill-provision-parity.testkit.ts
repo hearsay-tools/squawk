@@ -1,284 +1,153 @@
-import { observationClock } from './observation-clock.testkit.ts';
-import { IDLE_TIMEOUT_MS } from '../workflows/run/constants.ts';
 import { partitionParity, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
-/**
- * hearsay-tools/cezarion#1408 (port of upstream open-mercato/cezar#1429): a task's selected skill and the
- * companions its body names are installed in the run's own task worktree on Start, Continue and
- * restart recovery, a live `/name` gets its companions and one agent input naming them, and Stop
- * during that preparation launches nothing — on every runner's own native mock wire.
- */
-import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
-import { setImmediate as nextMacrotask } from 'node:timers/promises';
-import { afterEach, expect, vi } from 'vitest';
+import { expect } from 'vitest';
 import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
-import { HARNESS_ADAPTERS, SKILL_PROVISION_CRITERIA, promptFor, waitFor } from './harness-parity.testkit.ts';
-import { readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
-import { RunStore } from '../runs/store.ts';
-import * as provision from '../skills-provision.ts';
-import { createFixtureManager, drainFixtureManagers } from '../workflows/fixture-cleanup.testkit.ts';
-import type { RunManager } from '../workflows/run.ts';
+import { SKILL_PROVISION_CRITERIA, waitFor } from './harness-parity-core.testkit.ts';
+import { driveRun } from './workflow-parity-core.testkit.ts';
+import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
+import { hostSkillCatalogAdapters } from './host-skill-catalog.ts';
+import { RunnerSkillCatalog } from './runner-skill-catalog.ts';
+import { HARNESS_ADAPTERS } from './harness-parity-core.testkit.ts';
 import { plannedWorkflow, skillTaskSteps } from '../workflows/types.ts';
 
-const observedProvisioning = vi.hoisted(() => ({
-  promises: Array<ReturnType<typeof import('../skills-provision.ts').provisionSkills>>(),
-}));
-vi.mock('../skills-provision.ts', async original => {
-  const actual = await original<typeof import('../skills-provision.ts')>();
-  return { ...actual, provisionSkills: (...args: Parameters<typeof actual.provisionSkills>) => {
-    const result = actual.provisionSkills(...args);
-    observedProvisioning.promises.push(result); return result;
-  } };
-});
+const PARTS = {
+  'start-and-stop': ['claude R92', 'codex R92', 'opencode R92', 'pi R92', 'omp R92', 'claude R96', ...RUNNER_IDS.map(runner => `${runner} relative project skillPath starts in a task worktree`)],
+  continue: ['claude R93'], recovery: ['claude R94'],
+  'slash-install': ['claude R95', 'codex R95', 'opencode R95', 'pi R95', 'omp R95'],
+};
+const read = (file: string) => existsSync(file) ? readFileSync(file, 'utf8') : '';
 
-const execFileAsync = promisify(execFile);
-const GIT_IDENTITY = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
-const AGENT_DIRS = ['.claude', '.agents'];
-const LEAD = 'lead-1408';
-const HELPER = 'helper-1408';
-const LIVE = 'live-1408';
-const EXTRA = 'extra-1408';
-const LIVE_NOTE = `Skills installed for /${LIVE}: ${LIVE}, ${EXTRA}.`;
-
-afterEach(() => { observedProvisioning.promises.length = 0; vi.restoreAllMocks(); });
-
-const fileText = (path: string) => existsSync(path) ? readFileSync(path, 'utf8') : '';
-
-function writeSkill(repoRoot: string, name: string, body: string): void {
-  mkdirSync(join(repoRoot, '.ai/cezar/skills', name), { recursive: true });
-  writeFileSync(join(repoRoot, '.ai/cezar/skills', name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name}\n---\n${body}\n`);
-}
-
-function installed(worktree: string, name: string): boolean {
-  return AGENT_DIRS.every((dir) => fileText(join(worktree, dir, 'skills', name, 'SKILL.md')).includes(name));
-}
-
-function removeInstalled(worktree: string, name: string): void {
-  for (const dir of AGENT_DIRS) rmSync(join(worktree, dir, 'skills', name), { recursive: true, force: true });
-}
-
-interface Fixture {
-  repoRoot: string;
-  runId: string;
-  worktree: string;
-  readonly store: RunStore;
-  readonly manager: RunManager;
-  wire(): string;
-  restart(): Promise<void>;
-  closeIdle(): Promise<void>;
-}
-
-async function withProvisionRun(
-  backend: RunnerId,
-  body: (fixture: Fixture) => Promise<void>,
-  opts: { waitForPark?: boolean } = {},
-): Promise<void> {
-  const adapter = HARNESS_ADAPTERS[backend];
-  const saved: Array<[string, string | undefined]> = [];
-  const remember = (name: string, value: string | undefined) => {
-    saved.push([name, process.env[name]]);
-    if (value === undefined) delete process.env[name];
-    else process.env[name] = value;
-  };
-  const repoRoot = mkdtempSync(join(tmpdir(), `cez-skill-provision-${backend}-`));
-  const argsFile = join(repoRoot, 'wire.args.ndjson');
-  const stdinFile = join(repoRoot, 'wire.stdin.ndjson');
-  remember(adapter.binEnv, adapter.mockBin);
-  remember('CEZ_AUTONAME', '0');
-  remember('CEZ_MOCK_ARGS_FILE', argsFile);
-  remember('CEZ_MOCK_STDIN_FILE', stdinFile);
-  remember('CEZ_DRY_RUN', undefined);
-  const clock = observationClock(delay => delay === IDLE_TIMEOUT_MS);
-  let store: RunStore | undefined;
-  let manager: RunManager | undefined;
+/** A native gate proves the trigger stays above the seam until the running turn ends. */
+async function heldTrigger(runner: RunnerId): Promise<void> {
+  const dir = mkdtempSync(join(tmpdir(), 'held-native-trigger-'));
+  const wire = join(dir, 'stdin.ndjson');
+  const release = join(dir, 'release');
   try {
-    await execFileAsync('git', ['init', '-q', '-b', 'main'], { cwd: repoRoot });
-    await execFileAsync('git', ['config', 'gc.auto', '0'], { cwd: repoRoot });
-    await execFileAsync('git', ['config', 'maintenance.auto', 'false'], { cwd: repoRoot });
-    writeFileSync(join(repoRoot, 'a.txt'), 'one\n');
-    writeFileSync(join(repoRoot, '.gitignore'), 'wire.*\n');
-    await execFileAsync('git', ['add', '-A'], { cwd: repoRoot });
-    await execFileAsync('git', [...GIT_IDENTITY, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
-    // Untracked in the main checkout, so a fresh task worktree has none of them.
-    writeSkill(repoRoot, LEAD, `then run ${HELPER}`);
-    writeSkill(repoRoot, HELPER, 'HELPER-BODY-1408');
-    writeSkill(repoRoot, LIVE, `then run ${EXTRA}`);
-    writeSkill(repoRoot, EXTRA, 'EXTRA-BODY-1408');
-    store = RunStore.open(join(repoRoot, '.ai/cezar'));
-    manager = createFixtureManager(store, repoRoot);
-    const started = manager.startRun(plannedWorkflow(skillTaskSteps(LEAD)), {
-      task: promptFor(backend, 'baseline'),
-      runner: backend,
-      worktree: true,
-    });
-    if (opts.waitForPark !== false) await waitFor(() => store!.getRun(started.id)?.status === 'waiting', 30_000);
-    const restart = async () => {
-      store!.flush();
-      const dataDir = join(repoRoot, '.ai/cezar');
-      const checkpoint = readPersistedRuns(dataDir);
-      await drainFixtureManagers(repoRoot);
-      store!.close();
-      seedRuns(dataDir, checkpoint);
-      store = RunStore.open(dataDir, { keepLive: true });
-      manager = createFixtureManager(store, repoRoot);
-      await manager.recover();
-    };
-    await body({
-      repoRoot,
-      runId: started.id,
-      get worktree() { return store!.getRun(started.id)?.worktreePath ?? ''; },
-      get store() { return store!; },
-      get manager() { return manager!; },
-      wire: () => fileText(argsFile) + fileText(stdinFile),
-      restart,
-      closeIdle: async () => {
-        await waitFor(() => clock.captured > 0);
-        await clock.advance(IDLE_TIMEOUT_MS);
-        await waitFor(() => !manager!.isActive(started.id));
+    await driveRun(runner, 'hold-gated', run => run?.status === 'waiting', 30_000, undefined, {
+      env: { CEZ_MOCK_STDIN_FILE: wire, CEZ_MOCK_RELEASE_FILE: release },
+      beforeStart: ({ manager }) => manager.setSkillCatalog(fixedSkillCatalog([{ id: 'probe-project', name: 'Probe', path: '/listed/SKILL.md', scope: 'repo' }])),
+      during: async ({ store, manager, runId }) => {
+        await waitFor(() => store.readEvents(runId).some(event => event.type === 'turn.started'));
+        expect(manager.sendMessage(runId, [{ type: 'text', text: '/probe-project held arguments' }])).toBe(true);
+        expect(store.getRun(runId)?.queuedMessages?.[0]?.text).toBe('/probe-project held arguments');
+        expect(read(wire)).not.toContain('probe-project'); // The gate holds the turn; no time-based absence wait.
+        writeFileSync(release, 'baseline');
+        await waitFor(() => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE')));
+        expect(read(wire)).toContain('probe-project');
       },
     });
-  } finally {
-    await drainFixtureManagers(repoRoot);
-    store?.close();
-    clock.restore();
-    for (const [name, value] of saved.reverse()) {
-      if (value === undefined) delete process.env[name];
-      else process.env[name] = value;
-    }
-    rmSync(repoRoot, { recursive: true, force: true });
-  }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
-const parked = (fixture: Fixture) => fixture.store.getRun(fixture.runId)?.status === 'waiting' && fixture.manager.isActive(fixture.runId);
-
-async function liveProvisioning(after: number): Promise<void> {
-  await waitFor(() => observedProvisioning.promises.length > after);
-  await observedProvisioning.promises[after];
-  // The owning closure resumes after this dependency. Its no-install path then
-  // returns without a durable notification; let that continuation finish too.
-  await nextMacrotask();
-}
-
-const PARTS: Readonly<Record<string, readonly string[]>> = {
-  "start-and-stop": [
-    "claude R92",
-    "claude R96"
-  ],
-  "continue": [
-    "claude R93"
-  ],
-  "slash-install": [
-    "claude R95",
-    "codex R95",
-    "omp R95",
-    "opencode R95",
-    "pi R95"
-  ],
-  "recovery": [
-    "claude R94"
-  ]
-};
-
+/** These rows replace the removed injection/provisioning mechanism with native selection. */
 export function describeSkillProvisionParity(part: ParityPart, collect?: ParityCollector): void {
   const { describe, it } = partitionParity(part, PARTS, collect, 'skill-provision');
-describe('harness parity — skill provisioning (#1408)', () => {
-  expect(SKILL_PROVISION_CRITERIA.map((row) => row.id)).toEqual(['R92', 'R93', 'R94', 'R95', 'R96']);
+  describe('native skill selection through the run path', () => {
+    expect(SKILL_PROVISION_CRITERIA.map(row => row.id)).toEqual(['R92', 'R93', 'R94', 'R95', 'R96']);
+    for (const runner of RUNNER_IDS) {
+      it(`${runner} R92 starts the selected skill natively with opening context and no injected body`, async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'native-step-wire-'));
+        const wireFile = join(dir, 'wire.ndjson');
+        try {
+          const result = await driveRun(runner, { prompt: 'native step arguments' }, run => run?.status === 'waiting', 30_000, undefined, {
+            workflowDef: plannedWorkflow(skillTaskSteps('probe-project')),
+            env: { CEZ_MOCK_STDIN_FILE: wireFile },
+            beforeStart: ({ manager }) => manager.setSkillCatalog(new RunnerSkillCatalog({ adapters: hostSkillCatalogAdapters({ [runner]: HARNESS_ADAPTERS[runner].mockBin }) })),
+          });
+          expect(result.events.some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE'))).toBe(true);
+          const wire = read(wireFile);
+          expect(wire).toContain('probe-project');
+          expect(wire).toContain('native step arguments');
+          expect(wire).toContain('cezar-context');
+          expect(wire).not.toContain('Selected skill:');
+        } finally { rmSync(dir, { recursive: true, force: true }); }
+      }, 45_000); // bound: native list, session and cleanup each own a bounded process.
 
-  for (const backend of RUNNER_IDS) {
-    it(`${backend} R92 provisions the selected skill and its companions on Start`, async () => {
-      await withProvisionRun(backend, async (fixture) => {
-        expect(fixture.worktree).not.toBe('');
-        expect(installed(fixture.worktree, LEAD)).toBe(true);
-        expect(installed(fixture.worktree, HELPER)).toBe(true);
-        // Mock runners may leave files of their own; nothing under a skills dir shows.
-        const status = await execFileAsync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: fixture.worktree });
-        expect(status.stdout.split('\n').filter((line) => line.includes('skills/'))).toEqual([]);
+      it(`${runner} R93 refuses a missing selected id before a model call`, async () => {
+        const result = await driveRun(runner, { prompt: 'do it' }, run => run?.status === 'failed', 30_000, undefined, {
+          workflowDef: plannedWorkflow(skillTaskSteps('missing')),
+          beforeStart: ({ manager }) => manager.setSkillCatalog(fixedSkillCatalog([{ id: 'missing-close', name: 'Close', path: '/listed/close', scope: 'repo' }])),
+        });
+        expect(result.record?.error).toContain(`${runner} account "default"`);
+        expect(result.record?.error).toContain('missing-close');
+        expect(result.events.some(event => event.type === 'session')).toBe(false);
+        const stale = await driveRun(runner, { prompt: 'do it' }, run => run?.status === 'failed', 30_000, undefined, {
+          workflowDef: plannedWorkflow(skillTaskSteps('listed')), skillPaths: { task: '/old/SKILL.md' },
+          beforeStart: ({ manager }) => manager.setSkillCatalog(fixedSkillCatalog([{ id: 'listed', name: 'Listed', path: '/new/SKILL.md', scope: 'repo' }])),
+        });
+        expect(stale.record?.error).toContain('selected path /old/SKILL.md');
+        expect(stale.record?.error).toContain('/new/SKILL.md');
+        expect(stale.events.some(event => event.type === 'session')).toBe(false);
       });
-    }, 60_000);
 
-    it(`${backend} R93 provisions the selected skill's companions on an ordinary Continue`, async () => {
-      await withProvisionRun(backend, async (fixture) => {
-        await fixture.closeIdle();
-        removeInstalled(fixture.worktree, HELPER);
-        expect(fixture.manager.continueRun(fixture.runId, { text: promptFor(backend, 'baseline') }).ok).toBe(true);
-        await waitFor(() => parked(fixture), 30_000);
-        expect(installed(fixture.worktree, HELPER)).toBe(true);
+      it(`${runner} R94 refuses an ambiguous selected id and names every listed path`, async () => {
+        const result = await driveRun(runner, { prompt: 'do it' }, run => run?.status === 'failed', 30_000, undefined, {
+          workflowDef: plannedWorkflow(skillTaskSteps('duplicate')),
+          beforeStart: ({ manager }) => manager.setSkillCatalog(fixedSkillCatalog(['/one', '/two'].map(path => ({ id: 'duplicate', name: 'Duplicate', path, scope: 'repo' })))),
+        });
+        expect(result.record?.error).toContain('ambiguous');
+        expect(result.record?.error).toContain('/one'); expect(result.record?.error).toContain('/two');
+        expect(result.events.some(event => event.type === 'session')).toBe(false);
+        const other = await driveRun(runner, { prompt: 'do it' }, run => run?.status === 'failed', 30_000, undefined, {
+          workflowDef: plannedWorkflow(skillTaskSteps('other')),
+          beforeStart: ({ manager }) => manager.setSkillCatalog(fixedSkillCatalog([{ id: 'other', name: 'Other', path: '/admin/SKILL.md', scope: 'other' }])),
+        });
+        expect(other.record?.error).toContain('ambiguous');
+        expect(other.record?.error).toContain('/admin/SKILL.md');
+        expect(other.events.some(event => event.type === 'session')).toBe(false);
+      }, 60_000); // bound: both ambiguity cases must settle before any session opens.
+
+      it(`${runner} relative project skillPath starts in a task worktree`, async () => {
+        const result = await driveRun(runner, { prompt: 'worktree arguments' }, run => run?.status === 'waiting', 30_000, undefined, {
+          workflowDef: plannedWorkflow(skillTaskSteps('probe-project')), worktree: true, skillPaths: { task: '.agents/skills/probe-project/SKILL.md' },
+          beforeStart: ({ manager }) => manager.setSkillCatalog(new RunnerSkillCatalog({ adapters: { [runner]: {
+            discover: async query => ({ skills: [{ id: 'probe-project', name: 'Probe', scope: 'repo', path: join(query.cwd, '.agents/skills/probe-project/SKILL.md') }], problems: [] }),
+          } } })),
+        });
+        expect(result.record?.error).toBeUndefined();
+        expect(result.record?.worktreePath).toBeTruthy();
+        expect(result.record?.steps[0]?.skillPath).toBe('.agents/skills/probe-project/SKILL.md');
+        expect(result.events.some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE'))).toBe(true);
+      }, 45_000); // bound: one worktree setup, native turn and teardown.
+
+      it(`${runner} R95 turns a typed name into a native trigger without provisioning files`, async () => {
+        await driveRun(runner, 'baseline', run => run?.status === 'waiting', 30_000, async ({ store, manager, runId }) => {
+          expect(manager.sendMessage(runId, [{ type: 'text', text: '/probe-project typed arguments' }])).toBe(true);
+          await waitFor(() => store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE')));
+          const cwd = manager.delegationExecutionSettings(runId)?.cwd;
+          if (!cwd) throw new Error('expected live session cwd');
+          expect(existsSync(join(cwd, '.claude/skills'))).toBe(false);
+          expect(existsSync(join(cwd, '.agents/skills'))).toBe(false);
+          const run = store.getRun(runId)!;
+          expect(run.queuedMessages ?? []).toEqual([]);
+          expect(store.readEvents(runId).some(event => event.type === 'user-message' && event.text === '/probe-project typed arguments')).toBe(true);
+        }, {
+          beforeStart: ({ manager, repoRoot }) => {
+            manager.setSkillCatalog(fixedSkillCatalog([{ id: 'probe-project', name: 'Probe', scope: 'repo', path: join(repoRoot, 'SKILL.md') }]));
+            expect(existsSync(join(repoRoot, '.claude/skills'))).toBe(false);
+            expect(existsSync(join(repoRoot, '.agents/skills'))).toBe(false);
+          },
+        });
+        if (runner === 'claude') await heldTrigger(runner);
+      }, 60_000); // bound: the typed trigger must acknowledge and complete on the native wire.
+
+      it(`${runner} R96 Stop during native list discovery launches no session`, async () => {
+        let release!: () => void;
+        const held = new Promise<void>(resolve => { release = resolve; });
+        let readStarted = false;
+        try {
+          const result = await driveRun(runner, { prompt: 'do it' }, run => run?.status === 'cancelled', 30_000, undefined, {
+            workflowDef: plannedWorkflow(skillTaskSteps('probe-project')),
+            beforeStart: ({ manager }) => manager.setSkillCatalog(new RunnerSkillCatalog({ adapters: { [runner]: {
+              discover: async () => { readStarted = true; await held; return { skills: [], problems: [] }; },
+            } } })),
+            during: async ({ manager, runId }) => { await waitFor(() => readStarted); manager.cancel(runId); release(); },
+          });
+          expect(result.events.some(event => event.type === 'session')).toBe(false);
+        } finally { release?.(); }
       });
-    }, 60_000);
-
-    it(`${backend} R94 provisions them when recover() resumes a continuation with no live session`, async () => {
-      await withProvisionRun(backend, async (fixture) => {
-        await fixture.closeIdle();
-        removeInstalled(fixture.worktree, HELPER);
-        expect(fixture.manager.continueRun(fixture.runId, { text: promptFor(backend, 'baseline') }).ok).toBe(true);
-        expect(fixture.store.getRun(fixture.runId)?.continuationMessage).toBeDefined();
-        await fixture.restart();
-        await waitFor(() => parked(fixture), 30_000);
-        expect(installed(fixture.worktree, HELPER)).toBe(true);
-      });
-    }, 90_000);
-
-    it(`${backend} R95 delivers a live /name, then one input naming what was installed`, async () => {
-      await withProvisionRun(backend, async (fixture) => {
-        const firstPass = observedProvisioning.promises.length;
-        expect(fixture.manager.sendMessage(fixture.runId, [{ type: 'text', text: `/${LIVE} go${backend === 'codex' ? ' mock:steer-race' : ''}` }])).toBe(true);
-        await liveProvisioning(firstPass);
-        expect(installed(fixture.worktree, EXTRA)).toBe(true);
-        // A fast mock turn can park on a new question first; the input then waits for its answer,
-        // which this second message is. Nothing new installs for it, so no second input follows.
-        const secondPass = observedProvisioning.promises.length;
-        expect(fixture.manager.sendMessage(fixture.runId, [{ type: 'text', text: `/${LIVE} again` }])).toBe(true);
-        await liveProvisioning(secondPass);
-        await waitFor(() => fixture.wire().includes(LIVE_NOTE) && fixture.wire().includes('again'), 30_000);
-        await waitFor(() => parked(fixture), 30_000);
-        // Wire capture and parking can precede the runner's delivery acknowledgement.
-        // bound: wait for the matching input's delivery and, on Codex, consumption receipts.
-        await waitFor(() => fixture.store.getRun(fixture.runId)?.agentInputs
-          ?.some(input => input.text === LIVE_NOTE && input.deliveredAt !== undefined
-            && (backend !== 'codex' || input.consumedAt !== undefined)) === true, 30_000);
-        const notes = fixture.store.getRun(fixture.runId)?.agentInputs?.filter(input => input.text === LIVE_NOTE);
-        expect(notes).toHaveLength(1);
-        expect(notes![0]!.deliveredAt).toBeDefined();
-        if (backend === 'codex') {
-          // A refused steer is retried as turn/start with the SAME client id. Counting RPC
-          // text counts that unread attempt twice. Keep one durable input and one wire identity
-          // (hearsay-tools/cezarion#2071).
-          const requests = fixture.wire().trim().split('\n').map(line => JSON.parse(line))
-            .filter(request => request.params?.input?.some((part: { text?: string }) => part.text === LIVE_NOTE));
-          expect(requests[0].params.clientUserMessageId).toBeTruthy();
-          expect(new Set(requests.map(request => request.params.clientUserMessageId)).size).toBe(1);
-          expect(notes![0]!.consumedAt).toBeDefined();
-        } else {
-          expect(fixture.wire().split(LIVE_NOTE).length - 1).toBe(1);
-        }
-      });
-    }, 90_000);
-
-    it(`${backend} R96 Stop during skill preparation launches nothing`, async () => {
-      let release!: () => void;
-      const held = new Promise<void>((resolve) => { release = resolve; });
-      const real = provision.provisionSkills;
-      const spy = vi.spyOn(provision, 'provisionSkills').mockImplementation(async (...args) => {
-        await held;
-        return real(...args);
-      });
-      await withProvisionRun(backend, async (fixture) => {
-        await waitFor(() => spy.mock.calls.length > 0, 30_000);
-        expect(fixture.manager.cancel(fixture.runId)).toBe(true);
-        release();
-        await waitFor(() => !fixture.manager.isActive(fixture.runId), 30_000);
-        expect(fixture.store.getRun(fixture.runId)?.status).toBe('cancelled');
-        expect(fixture.wire()).toBe('');
-        // The held preparation resumed after Stop: it wrote nothing either.
-        expect(fixture.worktree).not.toBe('');
-        expect(existsSync(fixture.worktree)).toBe(true);
-        expect(installed(fixture.worktree, LEAD)).toBe(false);
-      }, { waitForPark: false });
-    }, 60_000);
-  }
-});
-
+    }
+  });
 }

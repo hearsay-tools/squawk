@@ -98,6 +98,7 @@ export const OMP_SPEC_SUPPORT: AgentRunSpecSupport = {
   ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: '--append-system-prompt' },
   skill: { honored: true, via: 'RPC prompt /skill:id args' },
+  resumeFallbackSkill: { honored: true, via: 'native opening trigger only when bootstrap opens a fresh session' },
   userPrompt: { honored: true, via: 'RPC prompt.message' },
   images: { honored: true, via: "RPC prompt.images ({type:'image', data, mimeType})" },
   cwd: { honored: true, via: 'spawn cwd' },

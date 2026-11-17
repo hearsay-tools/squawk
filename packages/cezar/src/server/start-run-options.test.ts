@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { WorkspaceProject } from '../workspace/config.ts';
-import { agentProfileRefusal, notifyRefusal, NO_WEBHOOK_ERROR } from './start-run-options.ts';
+import { resolveStartWorkflow, startRunInput, agentProfileRefusal, notifyRefusal, NO_WEBHOOK_ERROR } from './start-run-options.ts';
 
 /**
  * The helpers behind `POST /runs` that answer without a route (hearsay-tools/cezarion#1635):
@@ -58,4 +58,13 @@ describe('agentProfileRefusal', () => {
   it('lets a resolved account through', async () => {
     expect(await agentProfileRefusal(async () => ({ profile: {} }), 'claude', 'work')).toBeUndefined();
   });
+});
+
+
+it('separates inline selected paths from the portable workflow', async () => {
+  const body = { task: 'work', steps: [{ id: 'task', skill: 'review', prompt: '{{task}}', skillPath: '.agents/skills/review/SKILL.md' }] };
+  expect(startRunInput(body).skillPaths).toEqual({ task: '.agents/skills/review/SKILL.md' });
+  const result = await resolveStartWorkflow('/unused', body);
+  if ('error' in result) throw new Error(result.error);
+  expect(result.workflow.steps[0]).not.toHaveProperty('skillPath');
 });
