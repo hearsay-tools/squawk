@@ -75,6 +75,7 @@ appropriate boundary or checker explicitly.
 | `cez/home-boundary` | `cezarHomeDir` references, `resolveHome` outside `home/` and CLI dispatch, unlisted `homedir()` calls in non-test `packages/cezar/src/`, and test-side CEZ_HOME writes/stubs/deletes | `home-readers.baseline.json`: reasoned OS-user readers with exact call counts, shrink-only; shared `vitest.setup.ts` selects test homes |
 | `cez/test-home-write` | Guarded home names in calls, destructuring, runtime import/export specifiers and member references in test code | Same-line `// test-home-read: <reason>` for a deliberate use; use an explicit sandbox path for writes (hearsay-tools/cezarion#2813) |
 | `cez/layer-import` | A `core` file that imports a `feature:<name>` file, type-only imports included, or a `core` file other than `core/runner-factory.ts` that imports a `runner` file. `npm run lint` also fails a source file with no layer in `layers.json` (ADR 0065, hearsay-tools/squawk#3706) | `layer-import.baseline.json`: each importing file and imported file with its count and a reason that starts with the imported layer; shrink-only, stale entries fail. See [Layer import](#layer-import) |
+| `cez/launch-read-outside-resolver` | Production launch source fields, captures and selectors outside their resolver (hearsay-tools/cezarion#2744, hearsay-tools/squawk#3774) | Resolver, test and testkit files; lifecycle observations. See [Launch-read ownership](#launch-read-ownership) |
 | `cez/native-mock-source` | A test that reads, splices or swaps native mock source (hearsay-tools/cezarion#1479) | None |
 | `cez/parity-runner-subset` | An array literal in a parity file that lists two or more runner ids but not all of them. A parity test selects runners from their declared facts: `runnersWhere()` over `RUNNER_FACTS`, or `exemptWhere()` (hearsay-tools/squawk#3642) | None; a protocol quirk of one runner names that one runner |
 | `cez/raw-query-setter` | A raw `useSearchParams` setter in the cockpit (hearsay-tools/cezarion#1649) | `packages/web/src/test/search-params-discipline.baseline.json`, shrink-only and reasoned |
@@ -526,3 +527,25 @@ including for old CEZ-only service files awaiting their next deploy.
   dynamic paths through unrecognized objects, reflection and `eval` are not followed.
 
 These limits need code review. They do not permit new baseline allowances.
+
+## Launch-read ownership
+
+Static scope: `packages/cezar/src/workflows/run.ts` and `workflows/run/**/*.ts`,
+except `run/launch-read-resolver.ts`, tests and testkits. The single AST rule
+`cez/launch-read-outside-resolver` replaces the eleven launch-read ast-grep rules.
+It preserves their diagnostic message and has no baseline or ignored source site.
+
+The rule checks launch fields through member access, static or dynamic computed access,
+and destructuring; raw source capture in assignments, object members, copies and typed
+patterns; root source type aliases; and source selector imports, exports and calls.
+It resolves the nearest lexical value and type declarations, hoisted `var`, imported type
+names, supported type views and transparent expression wrappers. One structural member
+is supported, including class fields and constructor parameter properties. Lifecycle
+observations of setup status, continuation origin/input id, queued-message length and
+workflow presence keep their original exceptions.
+
+This is bounded syntax analysis. It does not follow arbitrary aliases of `getRun()`
+results or infer source types through nested structural paths of two or more member
+accesses. The matrix keeps all 3456 documented-limit cells. It also keeps the generated
+invalid cells and unrelated controls. `lint/launch-read/cases.json` preserves every
+curated YAML case, and `ast-rules-launch-read.test.ts` runs them through RuleTester.

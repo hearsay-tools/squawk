@@ -140,7 +140,8 @@
     "unicorn/prefer-set-size": "error",
     "unicorn/prefer-string-starts-ends-with": "error",
     "use-isnan": "error",
-    "valid-typeof": "error"
+    "valid-typeof": "error",
+    "cez/launch-read-outside-resolver": "error"
   },
   "ignorePatterns": [
     "**/node_modules/**",

@@ -621,7 +621,7 @@ already takes effect; do not make a pin live merely to satisfy a held-head asser
 #### Read rule, regions and proof
 
 P6 adds `launch-read-outside-resolver` with no baseline and no exceptions. It is a read rule,
-not an ActiveRun write rule. Its YAML covers `workflows/run.ts` and `workflows/run/**`; only
+not an ActiveRun write rule. Its `cez/launch-read-outside-resolver` AST rule covers `workflows/run.ts` and `workflows/run/**`; only
 `run/launch-read-resolver.ts` may import/call launch source selection APIs or unpack raw launch
 source fields. Move relevant source adapters into that owner. Callers receive resolved values,
 not the raw source record; owner-only wrappers keep source selection out of handlers.
@@ -633,7 +633,7 @@ bindings, helper parameters and computed keys found in the read ledger. Each fix
 to a ledger form. The rule must distinguish a raw source read from reading an already-resolved
 value. Narrow capability interfaces keep raw inputs inside the resolver; methods return the
 chosen value at the old point. The class/adapter boundary must make an alias unable to expose
-a raw source. Do not claim ast-grep can resolve arbitrary helper data flow. If the prototype
+a raw source. Do not claim the AST rule resolves arbitrary helper data flow. If the prototype
 cannot close a found form without exceptions, stop and route the concrete gap before landing.
 
 Add both positive fixtures for resolver operations at each phase and negative fixtures for
