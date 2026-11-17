@@ -1,4 +1,5 @@
-import type { Skill, WorkflowDef } from '@open-mercato/cezar-api-client'
+import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
+import type { WorkflowDef } from '@open-mercato/cezar-api-client'
 
 /**
  * The shared skill presentation rules (#377/#380): the ⌘K palette, the composer's `/`
@@ -6,25 +7,24 @@ import type { Skill, WorkflowDef } from '@open-mercato/cezar-api-client'
  * and how a typed query narrows the list — so the rules live here, not in any one surface.
  */
 
-/** Project-oriented skills first, user-global after — the #377/#555 ordering rule. Team skills
- *  are configured and cached per project even though their files live in a shared remote repo,
- *  so they belong with project skills. Only `global` comes from the user's home catalog. */
-const PROJECT_SKILL_SOURCES: ReadonlySet<Skill['source']> = new Set([
-  'ai',
-  'cezar',
-  'agents',
-  'team',
-])
+/** Scope is reported by the runner; absent metadata remains absent. */
+export function isProjectSkill(skill: Pick<RunnerSkill, 'scope'>): boolean {
+  return skill.scope === 'repo'
+}
 
-/** Project skills render emphasized (bold) wherever skills are listed. Accepts anything
- *  carrying a `source` so tag components need not conjure a whole Skill. */
-export function isProjectSkill(skill: Pick<Skill, 'source'>): boolean {
-  return PROJECT_SKILL_SOURCES.has(skill.source)
+/** Identity includes the optional path so duplicate ids remain separate entries. */
+export function skillKey(skill: Pick<RunnerSkill, 'id' | 'path'>): string {
+  return JSON.stringify([skill.id, skill.path ?? null])
+}
+
+export type PickedSkill = Pick<RunnerSkill, 'id' | 'path'>
+export function pickSkill(skill: PickedSkill): PickedSkill {
+  return { id: skill.id, ...(skill.path !== undefined ? { path: skill.path } : {}) }
 }
 
 /** The sort is stable, so within each half the server's own order (alphabetical —
  *  `src/skills.ts` sorts the merged catalog by name) is preserved. */
-export function orderSkills(skills: readonly Skill[]): Skill[] {
+export function orderSkills(skills: readonly RunnerSkill[]): RunnerSkill[] {
   return [...skills].sort((a, b) => Number(!isProjectSkill(a)) - Number(!isProjectSkill(b)))
 }
 
@@ -34,11 +34,11 @@ const MOST_USED_LIMIT = 5
 /** The three display tiers every skill picker renders, in this order (#519). */
 export interface SkillTiers {
   /** Skills actually picked before (`skillUsage` count > 0), frequency descending, capped. */
-  mostUsed: Skill[]
+  mostUsed: RunnerSkill[]
   /** Remaining project skills (#377 locality), in the incoming (server-alphabetical) order. */
-  project: Skill[]
+  project: RunnerSkill[]
   /** Remaining user-global skills, in the incoming order. */
-  global: Skill[]
+  global: RunnerSkill[]
 }
 
 /**
@@ -52,12 +52,12 @@ export interface SkillTiers {
  * through `orderSkillsByUsage`.
  */
 export function partitionSkillsForDisplay(
-  skills: readonly Skill[],
+  skills: readonly RunnerSkill[],
   usage: Readonly<Record<string, number>> | undefined,
   { mostUsedLimit = MOST_USED_LIMIT }: { mostUsedLimit?: number } = {},
 ): SkillTiers {
   const mostUsed = skills
-    .map((skill, index) => ({ skill, index, count: usageCount(usage, skill.name) }))
+    .map((skill, index) => ({ skill, index, count: usageCount(usage, skill.id) }))
     .filter((entry) => entry.count > 0)
     .sort(
       (a, b) =>
@@ -83,9 +83,9 @@ export function partitionSkillsForDisplay(
  * agree with the grouped pickers. With no usage data this is exactly `orderSkills`.
  */
 export function orderSkillsByUsage(
-  skills: readonly Skill[],
+  skills: readonly RunnerSkill[],
   usage: Readonly<Record<string, number>> | undefined,
-): Skill[] {
+): RunnerSkill[] {
   const tiers = partitionSkillsForDisplay(skills, usage)
   return [...tiers.mostUsed, ...tiers.project, ...tiers.global]
 }
@@ -263,7 +263,7 @@ function nameQueryScore(name: string, query: string): number {
  *  built-in score-sort, which does not reliably re-order the list in this app (React
  *  re-renders reset cmdk's imperative DOM ordering), so before #484 an (almost-)exact match
  *  could sit below weaker ones. */
-function rankByQuery<T extends { name: string; description?: string | null | undefined }>(
+function rankByQuery<T extends { id?: string; name: string; description?: string | null | undefined }>(
   items: readonly T[],
   query: string,
   usage?: Readonly<Record<string, number>>,
@@ -272,7 +272,7 @@ function rankByQuery<T extends { name: string; description?: string | null | und
   return items
     .map((item, index) => {
       const score = queryScore(item.name, item.description, query)
-      const count = usageCount(usage, item.name)
+      const count = usageCount(usage, item.id ?? item.name)
       return { item, index, count, nameScore: nameQueryScore(item.name, query), score }
     })
     .filter((entry) => entry.score > 0)
@@ -288,7 +288,7 @@ function rankByQuery<T extends { name: string; description?: string | null | und
  *  tie-break when `usage` is given. Grouped pickers go through `searchSkillsForDisplay`
  *  so a typed query is not re-tiered. Accepts any name/description row so the workflow
  *  Add-step picker and the skills import panel share this ranker. */
-export function searchSkills<T extends { name: string; description?: string | null | undefined }>(
+export function searchSkills<T extends { id?: string; name: string; description?: string | null | undefined }>(
   skills: readonly T[],
   query: string,
   usage?: Readonly<Record<string, number>>,
@@ -297,7 +297,7 @@ export function searchSkills<T extends { name: string; description?: string | nu
 }
 
 export interface SkillPickerDisplay extends SkillTiers {
-  ranked: Skill[] | null
+  ranked: RunnerSkill[] | null
 }
 
 /** Grouped-picker contract (#668/#255): empty query keeps #519 Most used → project →
@@ -306,7 +306,7 @@ export interface SkillPickerDisplay extends SkillTiers {
  *  filtered results are not re-tiered. The ranked input is project-first so equal name
  *  matches keep locality order without blocking a stronger global match. */
 export function searchSkillsForDisplay(
-  skills: readonly Skill[],
+  skills: readonly RunnerSkill[],
   query: string,
   usage?: Readonly<Record<string, number>>,
 ): SkillPickerDisplay {
@@ -335,9 +335,9 @@ export function searchWorkflows(workflows: readonly WorkflowDef[], query: string
  *  equally-good matches still render most-used skills first, then project before global/team.
  *  Without `usage` this is exactly the pre-#519 project-first behavior. */
 export function filterSkills(
-  skills: readonly Skill[],
+  skills: readonly RunnerSkill[],
   query: string,
   usage?: Readonly<Record<string, number>>,
-): Skill[] {
+): RunnerSkill[] {
   return rankByQuery(orderSkillsByUsage(skills, usage), query, usage)
 }

@@ -1,3 +1,4 @@
+import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 
@@ -9,12 +10,13 @@ import {
   useProviderStatus,
   useProjects,
   useRunnerModels,
-  useSkills,
+  useRunnerSkills,
+  useAgentProfiles,
   useUiState,
   useWorkflows,
   useWorkspaceConfig,
 } from '@/api/queries'
-import type { AttachmentInput, Runner, Skill } from '@open-mercato/cezar-api-client'
+import type { AttachmentInput, Runner } from '@open-mercato/cezar-api-client'
 import { toast } from '@/components/ui/toaster'
 import {
   autoApplyText,
@@ -48,7 +50,7 @@ import {
   resolveRunner,
   resolveSource,
   startedRunPath,
-  type TaskSource,
+  type DraftTaskSource as TaskSource,
 } from './new-task-form'
 import type { NewTaskParams } from './new-task-params'
 import { buildPlannedRunBody, pendingPlanOf, type PendingPlan } from './new-task-plan'
@@ -73,7 +75,7 @@ function initialDraft(draftProjectId: string | null, deepLink: NewTaskParams): N
     ...stored,
     ...(deepLink.ref !== '' ? { text: deepLink.ref } : {}),
     ...(deepLink.skill !== ''
-      ? { source: { source: 'skill', ref: deepLink.skill } as TaskSource }
+      ? { source: { source: 'skill', ref: deepLink.skill, ...(deepLink.skillPath !== undefined ? { path: deepLink.skillPath } : {}) } as TaskSource }
       : {}),
   }
 }
@@ -113,9 +115,9 @@ export function useNewTaskDraft(draftProjectId: string | null, deepLink: NewTask
 }
 
 /** The skill/workflow picker's catalog and the draft's resolved pick. */
-export function useSourceSelection(draftSource: TaskSource | null, uiState: UiStateQuery) {
+export function useSourceSelection(draftSource: TaskSource | null, uiState: UiStateQuery, runner: Runner, account: string | null) {
   const workflows = useWorkflows()
-  const skills = useSkills()
+  const skills = useRunnerSkills(runner, account)
   // Memoized so the picker gets a STABLE array identity across renders that don't actually
   // change the catalog or the usage stats (#408 — a raw `orderSkillsByUsage(...)` call here
   // would create a new array on EVERY render, including ones unrelated to skills/usage).
@@ -127,14 +129,14 @@ export function useSourceSelection(draftSource: TaskSource | null, uiState: UiSt
   )
   const workflowList = workflows.data?.workflows ?? []
   const sourcesReady =
-    skills.data !== undefined && workflows.data !== undefined && !uiState.isPending
+    workflows.data !== undefined && !uiState.isPending
   // The draft's pick alone — a fresh `/new` selects nothing (see `resolveSource` for what the
   // persisted `lastTask` preselection was load-bearing for, and why it is gone).
-  const source = resolveSource(draftSource, skillList, workflowList)
-  const selectedSkill: Skill | undefined = source?.source === 'skill'
-    ? skillList.find((skill) => skill.name === source.ref)
+  const source = resolveSource(draftSource, skillList, workflowList, skills.unchecked)
+  const selectedSkill: RunnerSkill | undefined = source?.source === 'skill'
+    ? skillList.find((skill) => skill.id === source.ref && (source.path === undefined || skill.path === source.path))
     : undefined
-  return { skillList, skillUsage, workflowList, sourcesReady, source, selectedSkill }
+  return { skillList, skillUsage, workflowList, sourcesReady, source, selectedSkill, skillsSettled: !skills.isPending, listUnchecked: skills.unchecked, unchecked: skills.unchecked || (source?.source === 'skill' && !selectedSkill) }
 }
 
 /**
@@ -218,13 +220,14 @@ export function useEngineSelection(draft: NewTaskDraft, config: ConfigQuery) {
  * a single row, which is why a host with no extra accounts sees the list it always saw.
  */
 export function useAccountSelection(displayRunner: Runner, draftAgentProfile: string | null) {
+  const profiles = useAgentProfiles()
   const { accounts: accountChoices, repoAccount } = useAgentAccounts()
   // A draft account belonging to ANOTHER runner is ignored rather than sent: switching runner must
   // not silently carry a foreign account along.
   const owned = accountChoices.some(
     (choice) => choice.provider === displayRunner && choice.id === draftAgentProfile,
   )
-  return { accountChoices, repoAccount, agentProfile: owned ? draftAgentProfile : null }
+  return { accountChoices, repoAccount, accountsSettled: !profiles.isPending, agentProfile: owned ? draftAgentProfile : null }
 }
 
 /**
@@ -254,7 +257,7 @@ export function useProviderReadyFocus(providersReady: boolean) {
 export function routeRunMode(input: {
   hasGit: boolean
   draft: NewTaskDraft
-  selectedSkill: Skill | undefined
+  selectedSkill: RunnerSkill | undefined
   workspaceConfig: WorkspaceConfigQuery
   source: TaskSource | null
 }) {
@@ -264,7 +267,6 @@ export function routeRunMode(input: {
     planFirst: input.draft.planFirst,
     explicitAutonomous: input.draft.autonomous,
     explicitWorktree: input.draft.worktree,
-    interactive: input.selectedSkill?.interactive,
     configuredAutonomous: defaults?.autonomous ?? defaults?.inheritedAutonomous ?? 'source-dependent',
     configuredWorktree: defaults?.worktree ?? defaults?.inheritedWorktree ?? true,
     // Nothing picked runs the plain built-in workflow, and the 'source-dependent' autonomy
@@ -321,14 +323,15 @@ export function useCompactAgentOptions(groupRef: RefObject<HTMLDivElement | null
 export function useNewTaskDeepLink(input: {
   deepLink: NewTaskParams
   search: URLSearchParams
+  listUnchecked?: boolean
   sourcesReady: boolean
-  skillList: readonly Skill[]
+  skillList: readonly RunnerSkill[]
   update: DraftUpdate
 }) {
   const navigate = useNavigate()
   const [pending, setPending] = useState(() => input.deepLink.ref !== '')
   useDeepLinkUrlCleanup(input.search, navigate)
-  usePrefillNotice({ pending, setPending, deepLink: input.deepLink, sourcesReady: input.sourcesReady, skillList: input.skillList, update: input.update })
+  usePrefillNotice({ pending, setPending, deepLink: input.deepLink, sourcesReady: input.sourcesReady, listUnchecked: input.listUnchecked, skillList: input.skillList, update: input.update })
 }
 
 /**
@@ -354,9 +357,10 @@ function useDeepLinkUrlCleanup(search: URLSearchParams, navigate: Navigate) {
 function usePrefillNotice(input: {
   pending: boolean
   setPending: (pending: boolean) => void
+  listUnchecked?: boolean | undefined
   deepLink: NewTaskParams
   sourcesReady: boolean
-  skillList: readonly Skill[]
+  skillList: readonly RunnerSkill[]
   update: DraftUpdate
 }) {
   const { pending, sourcesReady, deepLink } = input
@@ -364,7 +368,7 @@ function usePrefillNotice(input: {
     if (!pending || !sourcesReady) return
     input.setPending(false)
     const unknownSkill =
-      deepLink.skill !== '' && !input.skillList.some((s) => s.name === deepLink.skill)
+      !input.listUnchecked && deepLink.skill !== '' && !input.skillList.some((s) => s.id === deepLink.skill)
         ? deepLink.skill
         : ''
     if (unknownSkill !== '') {
@@ -398,10 +402,10 @@ function recordStartedSource(source: TaskSource | null, uiState: UiStateQuery, q
   void putUiState({
     // `null` when nothing was picked — an honest record of a plain run, and the value that
     // stops an older cockpit (which still preselects `lastTask`) restoring a stale skill.
-    lastTask: source,
+    lastTask: source ? { source: source.source, ref: source.ref } : null,
     // Recency is a list of PICKS: a task that chose nothing did not pick quick-task, and
     // filling the list with the default would push real choices out of it.
-    ...(source ? { recentSources: pushRecentSource(uiState.data?.recentSources, source) } : {}),
+    ...(source ? { recentSources: pushRecentSource(uiState.data?.recentSources, { source: source.source, ref: source.ref }) } : {}),
     // Frequency sort (#408): only a SKILL pick counts — the map is keyed by skill name, and a
     // workflow choice here doesn't select one directly. Gated on the CURRENT map being known:
     // the PUT merge is shallow, so bumping off an errored ui-state query (`sourcesReady` only

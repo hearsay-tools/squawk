@@ -697,8 +697,12 @@ function ThreadComposer({
   providerBlocked, providerReason, sessionOpen,
 }: ThreadComposerProps) {
   const workersLive = useWorkersLive(run)
+  const step = run.steps.find((entry) => entry.id === run.currentStepId)
+  const stepDef = run.workflowDef?.steps.find((entry) => entry.id === run.currentStepId)
   return (
     <Composer
+      skillRunner={continuable ? continueAction.skillRunner : step?.backend ?? stepDef?.runner ?? run.runner}
+      skillAccount={continuable ? continueAction.skillAccount : step?.profileId ?? stepDef?.agentProfile ?? run.agentProfile}
       onStop={runActionFlags(run, workersLive).cancel ? stopAction.stop : undefined}
       onFinish={
         offersComposerFinish(run)

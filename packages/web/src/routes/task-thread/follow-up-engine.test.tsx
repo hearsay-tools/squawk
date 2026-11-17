@@ -171,6 +171,7 @@ function Harness({ run, draft = '' }: { run: ApiRun; draft?: string }) {
   return (
     <>
       {action.pills}
+      <output data-slot="skill-context">{action.skillRunner}/{action.skillAccount}</output>
       {action.startsNewConversation ? <p>Starts a new agent conversation.</p> : null}
       <button type="button" onClick={() => void action.continueWith(draft, [])}>
         Continue
@@ -688,6 +689,7 @@ describe('the follow-up runner pill carries the account', () => {
     serveAccounts({ ...ACCOUNTS, selections: { '/repo': { claude: 'klaudiusz' } } })
     renderAction(makeRun({ steps: [step({ sessionId: 'sess-1', profileId: 'default' })] }))
     await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Default'))
+    expect(document.querySelector('[data-slot="skill-context"]')?.textContent).toBe('claude/default')
 
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
     // Untouched, the Continue says nothing about the account — the run keeps the one it is on.
@@ -698,6 +700,7 @@ describe('the follow-up runner pill carries the account', () => {
     serveAccounts()
     renderAction(makeRun({ steps: [step({ sessionId: 'sess-1', profileId: 'klaudiusz' })] }))
     await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Klaudiusz'))
+    expect(document.querySelector('[data-slot="skill-context"]')?.textContent).toBe('claude/klaudiusz')
   })
 
   it('sends the picked account through to /continue', async () => {
@@ -707,6 +710,7 @@ describe('the follow-up runner pill carries the account', () => {
 
     await pickFrom(runnerPill()!, 'Klaudiusz')
     await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Klaudiusz'))
+    expect(document.querySelector('[data-slot="skill-context"]')?.textContent).toBe('claude/klaudiusz')
     expect(screen.getByText('Starts a new agent conversation.')).toBeTruthy()
     expect(continueBody()).toBeUndefined()
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))

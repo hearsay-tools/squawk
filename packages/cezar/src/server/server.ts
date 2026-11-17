@@ -17,7 +17,7 @@ import { providerConnectSchema, createAgentProfileSchema, openAgentAccountFileSc
 import { planSchema, parseWorkflowSchema } from '@open-mercato/cezar-contract/workflow-requests';
 import { uiStateBody } from '@open-mercato/cezar-contract/ui-state-requests';
 import { queuedMessagePatchSchema, continueSchema, archiveSchema, openInSchema } from '@open-mercato/cezar-contract/run-requests';
-import { refreshQuery, waitQuery, modelDiscoveryQuerySchema, strictRefreshQuerySchema, browseQuerySchema, worktreeFilesQuerySchema } from '@open-mercato/cezar-contract/query-requests';
+import { refreshQuery, modelDiscoveryQuerySchema, strictRefreshQuerySchema, browseQuerySchema, worktreeFilesQuerySchema } from '@open-mercato/cezar-contract/query-requests';
 import { mergeNumberParams, prChangesParams, prChangesQuery, mergeBodySchema } from '@open-mercato/cezar-contract/github-requests';
 import { gitCommitSchema, reclaimBodySchema, repoBranchSchema } from '@open-mercato/cezar-contract/repo-requests';
 import { setConfigSchema, setAgentConfigSchema } from '@open-mercato/cezar-contract/config-requests';
@@ -155,8 +155,6 @@ import {
   workflowFileSchema,
 } from '../workflows/types.ts';
 import { planChain, slugify } from '../planner.ts';
-import { discoverSkills } from '../skills.ts';
-import { getTeamSkillsCached, refreshTeamSkills, waitForTeamSkills } from '../skills-remote.ts';
 import { skillSourcesRoutes } from './skill-sources.ts';
 import { readHandoff, renderHandoffRecords } from '../handoff.ts';
 import { ARCHIVED_WINDOW, type RepoHandle, type RunRecord, type RunStatus, type RunStore } from '../runs/store.ts';
@@ -2589,21 +2587,6 @@ export function createApp(deps: ServerDeps) {
       const result = await readRunnerSkills(c.req.valid('query'), c.get('project').root, deps.home, skillCatalog, resolveWorkspaceProfile);
       if ('error' in result) return c.json(result, 400);
       return c.json(result);
-    })
-    .get('/skills', queryZodValidator(waitQuery), async (c) => {
-      const repoRoot = c.get('project').root;
-      if (c.req.valid('query').wait === '1') await waitForTeamSkills(repoRoot, deps.home);
-      return c.json(await discoverSkills(repoRoot, {}, deps.home));
-    })
-    .get('/skills/importable', queryZodValidator(waitQuery), async (c) => {
-      const repoRoot = c.get('project').root;
-      if (c.req.valid('query').wait === '1') await waitForTeamSkills(repoRoot, deps.home);
-      return c.json(getTeamSkillsCached(repoRoot, deps.home));
-    })
-    .post('/skills/refresh', async (c) => {
-      const { root: repoRoot } = c.get('project');
-      await refreshTeamSkills(repoRoot, deps.home);
-      return c.json(await discoverSkills(repoRoot, {}, deps.home));
     });
 
   // ---- chained family: GUI prefs / ui-state (project-scoped) ----

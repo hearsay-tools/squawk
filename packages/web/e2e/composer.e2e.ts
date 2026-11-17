@@ -1,5 +1,6 @@
+import { writeMockSkills } from './runner-skills-fixture'
 import { execFileSync, type ChildProcess } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -15,7 +16,7 @@ import { waitForStatus } from './poll'
  * fixture: a real `cezar` (CEZ_DRY_RUN=1) on a real tmp git repo runs a real task through the
  * mock claude, whose reply makes no cezar_done call, so the run parks at `waiting` — the
  * exact state the composer exists for. What this spec proves is the full loop: type a reply
- * (with a `/` skill completion from this repo's own `.ai/skills`), send, and watch the
+ * (with a `/` skill completion from the mock runner's list), send, and watch the
  * transcript grow over SSE because the server accepted and persisted the message.
  *
  * Dictation: Chrome ships `webkitSpeechRecognition` natively, but driving the REAL recognizer
@@ -42,17 +43,12 @@ beforeAll(async () => {
   git('config', 'user.email', 'e2e@cezar.test')
   git('config', 'user.name', 'cezar e2e')
   writeFileSync(join(dataRoot, 'README.md'), '# composer e2e fixture repo\n', 'utf8')
+  writeMockSkills(dataRoot, [{ name: 'lint-fix', description: 'Fix lint findings in the changed files', scope: 'repo' }])
   git('add', '.')
   git('commit', '-qm', 'init')
 
   // One PROJECT skill — the `/` menu must list it first and bold, ahead of any skill the
   // machine happens to have globally (~/.claude/skills etc., which we cannot control here).
-  mkdirSync(join(dataRoot, '.ai/skills'), { recursive: true })
-  writeFileSync(
-    join(dataRoot, '.ai/skills/lint-fix.md'),
-    '---\ndescription: Fix lint findings in the changed files\n---\n\nRun the linter and fix everything it reports.\n',
-    'utf8',
-  )
 
   server = spawnFixtureServer([squawkCli, 'serve', '--repo', dataRoot, '--port', '0', '--no-open'],
     { env: fixtureServeEnv(dataRoot), stdio: 'ignore' },

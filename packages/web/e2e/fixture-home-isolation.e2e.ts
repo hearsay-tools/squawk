@@ -19,8 +19,7 @@ it('excludes invoking HOME skills from a real fixture server while keeping proje
       mkdirSync(skillDir, { recursive: true })
       writeFileSync(join(skillDir, 'SKILL.md'), '# Host-only skill\nMust never reach this server.\n')
     }
-    mkdirSync(join(repo, '.ai/skills'), { recursive: true })
-    writeFileSync(join(repo, '.ai/skills/project-sentinel.md'), '# Project skill\nMust remain discoverable.\n')
+    mkdirSync(repo, { recursive: true })
     // Simulate the invoking account, then restore it before any browser or tool runs.
     process.env.HOME = invokingHome
     const env = fixtureServeEnv(repo, { USERPROFILE: invokingHome })
@@ -30,11 +29,14 @@ it('excludes invoking HOME skills from a real fixture server while keeping proje
     server = spawnFixtureServer([squawkCli, 'serve', '--repo', repo, '--port', '0', '--no-open'], { env })
     const origin = await waitForFixtureServer(server)
     const project = await bootProjectId(origin)
-    const response = await fetch(`${origin}/api/v1/p/${project}/skills`)
+    const response = await fetch(`${origin}/api/v1/p/${project}/runner-skills?runner=codex`)
     expect(response.ok).toBe(true)
-    const skills = await response.json() as Array<{ name: string }>
+    const { skills } = await response.json() as { skills: Array<{ id: string; name: string; path?: string }> }
     const names = skills.map(skill => skill.name)
-    expect(names).toContain('project-sentinel')
+    expect(names).toContain('probe-project')
+    expect(skills.find(skill => skill.id === 'probe-project')?.path).toBe('.agents/skills/probe-project/SKILL.md')
+    expect(skills.find(skill => skill.id === 'capture')?.path).toContain(join(repo, '.server-home'))
+    expect(skills.every(skill => !skill.path?.startsWith(invokingHome))).toBe(true)
     expect(names).not.toContain('host-agents-sentinel')
     expect(names).not.toContain('host-claude-sentinel')
   } finally {

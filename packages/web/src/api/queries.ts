@@ -80,12 +80,9 @@ import {
   getRunsIndex,
   getArchivedRuns,
   searchRuns,
-  getImportableSkills,
-  getImportableSkillsWhenReady,
-  getSkills,
-  getSkillsWhenReady,
   getUiState,
   getWorkflows,
+  getRunnerSkills,
   getWorkspaceConfig,
   getWorkspaceUiState,
   getWorktrees,
@@ -181,20 +178,7 @@ export const queryKeys = {
   get workflows() {
     return [queryScope(), 'workflows'] as const
   },
-  get skills() {
-    return [queryScope(), 'skills'] as const
-  },
-  get skillsReady() {
-    return [queryScope(), 'skills', 'ready'] as const
-  },
-  /** Children of `skills`: every team skill, on or off, each with a switch. Sharing the `skills`
-   *  prefix means a refresh that invalidates the catalog re-reads the importable list too. */
-  get importableSkills() {
-    return [queryScope(), 'skills', 'importable'] as const
-  },
-  get importableSkillsReady() {
-    return [queryScope(), 'skills', 'importable', 'ready'] as const
-  },
+  runnerSkills: (runner: Runner, account?: string | null) => [queryScope(), 'runner-skills', runner, account ?? null] as const,
   get repo() {
     return [queryScope(), 'repo'] as const
   },
@@ -683,6 +667,7 @@ function useAgentProfileMutation<TVariables>(
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.agentProfiles }),
         queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.projects }),
+        queryClient.invalidateQueries({ predicate: ({ queryKey }) => queryKey[1] === 'runner-skills' }),
       ])
     },
   })
@@ -1228,61 +1213,19 @@ export function useWorkflows() {
   })
 }
 
-/** `enabled` gates the fetch for surfaces that need skills only once interacted with — the
- *  composer's `/` autocomplete fetches on first trigger, never on every thread visit. (The
- *  palette gets the same laziness structurally: its content mounts only while open.) */
-export function useSkills(enabled = true) {
-  const queryClient = useQueryClient()
-  const skillsKey = queryKeys.skills
-  const skillsScope = skillsKey[0]
-  const skills = useQuery({
-    queryKey: skillsKey,
-    queryFn: ({ signal }) => getSkills({ signal }),
-    enabled,
-  })
-  const ready = useQuery({
-    queryKey: queryKeys.skillsReady,
-    queryFn: ({ signal }) => getSkillsWhenReady({ signal }),
-    enabled: enabled && skills.isSuccess,
-    staleTime: Infinity,
+/** A runner/account list. An omitted account follows the project's selection on the server. */
+export function useRunnerSkills(runner?: Runner, account?: string | null, enabled = true) {
+  const config = useConfig()
+  const selected = runner ?? config.data?.defaultRunner ?? 'claude'
+  const scope = queryScope()
+  const query = useQuery({
+    queryKey: queryKeys.runnerSkills(selected, account),
+    queryFn: ({ signal }) => getRunnerSkills(selected, account, { signal, projectId: scope }),
+    enabled: enabled && (runner !== undefined || !config.isPending),
     retry: false,
   })
-
-  useEffect(() => {
-    // Treat the follow-up as best-effort. The fast catalog remains authoritative
-    // if an older server/proxy answers this additive request unexpectedly.
-    if (Array.isArray(ready.data)) queryClient.setQueryData([skillsScope, 'skills'], ready.data)
-  }, [queryClient, ready.data, skillsScope])
-
-  return skills
-}
-
-/** Every team skill the configured sources offer, on or off, as full definitions so the Skills
- *  catalog can preview one before it is switched on. Same fast-then-`wait=1` convergence as
- *  `useSkills`: the catalog renders whatever the cache holds, then the cold-clone wait fills it in. */
-export function useImportableSkills(enabled = true) {
-  const queryClient = useQueryClient()
-  const importableKey = queryKeys.importableSkills
-  const scope = importableKey[0]
-  const importable = useQuery({
-    queryKey: importableKey,
-    queryFn: ({ signal }) => getImportableSkills({ signal }),
-    enabled,
-  })
-  const ready = useQuery({
-    queryKey: queryKeys.importableSkillsReady,
-    queryFn: ({ signal }) => getImportableSkillsWhenReady({ signal }),
-    enabled: enabled && importable.isSuccess,
-    staleTime: Infinity,
-    retry: false,
-  })
-
-  useEffect(() => {
-    // Best-effort, like useSkills: seed the fast list from the converged one.
-    if (Array.isArray(ready.data)) queryClient.setQueryData([scope, 'skills', 'importable'], ready.data)
-  }, [queryClient, ready.data, scope])
-
-  return importable
+  return { ...query, data: query.data?.skills, list: query.data,
+    unchecked: query.isError || !query.data || query.data.source === 'unavailable' }
 }
 
 export function useRepo() {

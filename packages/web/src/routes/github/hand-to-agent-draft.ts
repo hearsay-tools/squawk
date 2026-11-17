@@ -1,3 +1,4 @@
+import type { PickedSkill } from '@/lib/skills'
 /**
  * Follow-up composer persistence (#408), localStorage-backed like `new-task-draft.ts` — the
  * same store-per-file convention, just two stores instead of one because the two pieces of
@@ -18,7 +19,7 @@
 
 export interface FollowupSelection {
   workflow: string | null
-  skills: string[]
+  skills: PickedSkill[]
 }
 
 const EMPTY_SELECTION: FollowupSelection = { workflow: null, skills: [] }
@@ -29,7 +30,11 @@ function normalizeSelection(raw: unknown): FollowupSelection {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   return {
     workflow: typeof obj.workflow === 'string' ? obj.workflow : null,
-    skills: Array.isArray(obj.skills) ? obj.skills.filter((s): s is string => typeof s === 'string') : [],
+    skills: Array.isArray(obj.skills) ? obj.skills.flatMap((s): PickedSkill[] => {
+      if (typeof s === 'string') return [{ id: s }]
+      if (!s || typeof s !== 'object' || typeof s.id !== 'string') return []
+      return [{ id: s.id, ...(typeof s.path === 'string' ? { path: s.path } : {}) }]
+    }) : [],
   }
 }
 

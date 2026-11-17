@@ -1,11 +1,11 @@
+import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckIcon, ChevronDownIcon, NotebookPenIcon, PlusIcon, SparklesIcon, XIcon } from '@/components/design-icons'
 
 import { useRef, useState, type ReactNode } from 'react'
 
 import { putUiState } from '@/api/client'
-import { queryKeys, useSkills, useUiState } from '@/api/queries'
-import type { Skill } from '@open-mercato/cezar-api-client'
+import { queryKeys, useRunnerSkills, useUiState } from '@/api/queries'
 import { CenteredState } from '@/components/centered-state'
 import { Button } from '@/components/ui/button'
 import {
@@ -69,7 +69,7 @@ export function PromptTemplatesSection() {
 
 function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
   const queryClient = useQueryClient()
-  const skills = useSkills()
+  const skills = useRunnerSkills()
   // Already cached by the section gate above; read again here for the picker's #519 tiers.
   const uiState = useUiState()
   const [templates, setTemplates] = useState<PromptTemplate[]>(initial)
@@ -297,7 +297,7 @@ function TemplateSkillsPicker({
   onToggle,
 }: {
   label: string
-  skills: readonly Skill[]
+  skills: readonly RunnerSkill[]
   skillUsage: Readonly<Record<string, number>> | undefined
   selected: readonly string[]
   onToggle: (name: string) => void
@@ -307,18 +307,18 @@ function TemplateSkillsPicker({
   const listRef = useRef<HTMLDivElement>(null)
   const { mostUsed, project, global, ranked } = searchSkillsForDisplay(skills, search, skillUsage)
 
-  const skillItem = (skill: Skill, emphasized: boolean) => {
-    const isSelected = selected.includes(skill.name)
+  const skillItem = (skill: RunnerSkill, emphasized: boolean) => {
+    const isSelected = selected.includes(skill.id)
     return (
       <CommandItem
-        key={skill.path}
+        key={JSON.stringify([skill.id, skill.path])}
         // The path suffix keeps values unique when a project skill shadows a global one.
         value={`skill ${skill.name} ${skill.path}`}
         keywords={skillKeywords(skill.name, skill.description)}
         data-slot="prompt-template-skill-option"
-        data-skill={skill.name}
+        data-skill={skill.id}
         data-selected={isSelected ? 'true' : undefined}
-        onSelect={() => onToggle(skill.name)}
+        onSelect={() => onToggle(skill.id)}
       >
         <span className={cn('shrink-0 font-mono text-xs', emphasized && 'font-semibold')}>
           {skill.name}
@@ -349,14 +349,13 @@ function TemplateSkillsPicker({
           data-slot="prompt-template-skills-trigger"
           aria-label={`Apply ${label || 'this template'} automatically with a skill`}
           title="Pick the skills this template applies itself to"
-          disabled={skills.length === 0}
           className={cn(
             'inline-flex h-[26px] items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
             selected.length > 0 && 'border-foreground/60 font-semibold text-foreground',
           )}
         >
           <SparklesIcon aria-hidden="true" className="size-3 shrink-0 text-accent-icon" />
-          {skills.length === 0 ? 'no skills found' : 'apply with…'}
+          apply with…
           <ChevronDownIcon aria-hidden="true" className="size-2.5 shrink-0 text-soft-foreground" />
         </button>
       </PopoverTrigger>
@@ -373,6 +372,7 @@ function TemplateSkillsPicker({
             data-slot="prompt-template-skill-menu"
             className="max-h-[min(16rem,calc(var(--radix-popover-content-available-height)-3rem))]"
           >
+            {search.trim() && !skills.some((skill) => skill.id === search.trim()) ? <CommandGroup><CommandItem value="typed-skill" onSelect={() => onToggle(search.trim())}>Use skill id “{search.trim()}” (unchecked)</CommandItem></CommandGroup> : null}
             {(ranked ? ranked.length === 0 : mostUsed.length === 0 && project.length === 0 && global.length === 0) ? (
               <CommandEmpty>Nothing matches.</CommandEmpty>
             ) : null}

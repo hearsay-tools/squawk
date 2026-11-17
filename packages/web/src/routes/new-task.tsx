@@ -1,3 +1,4 @@
+import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { EyeIcon } from 'lucide-react'
 import { CheckIcon, CircleSlashIcon, FolderOpenIcon, SparklesIcon, WorkflowIcon, XIcon } from '@/components/design-icons'
 import { useRef, useState, type ReactNode } from 'react'
@@ -7,7 +8,7 @@ import { Link, useNavigate } from '@/lib/project-router'
 
 import { useProjectScope } from '@/api/project-scope-context'
 import { useConfig, useRepo, useUiState, useWorkspaceConfig } from '@/api/queries'
-import type { ProjectListEntry, Skill, WorkflowDef } from '@open-mercato/cezar-api-client'
+import type { ProjectListEntry, WorkflowDef } from '@open-mercato/cezar-api-client'
 import { Composer, type ComposerHandle } from '@/components/composer/composer'
 import { chevron, chipClass } from '@/components/picker-pill'
 import { PromptTemplateMenu } from '@/components/prompt-template-menu'
@@ -49,7 +50,7 @@ import {
   useSourceSelection,
 } from './new-task-controller'
 import { composerRunModeNote } from './new-task-draft'
-import { QUICK_TASK, type TaskSource } from './new-task-form'
+import { QUICK_TASK, type DraftTaskSource as TaskSource } from './new-task-form'
 import { parseNewTaskParams } from './new-task-params'
 import {
   AgentOptions,
@@ -117,12 +118,12 @@ export function NewTaskRoute() {
   const workspaceConfig = useWorkspaceConfig()
 
   const { draft, update, clearStarted, submissionPending, mounted } = useNewTaskDraft(draftProjectId, deepLink)
-  const sources = useSourceSelection(draft.source, uiState)
+  const engine = useEngineSelection(draft, config)
+  const accounts = useAccountSelection(engine.displayRunner, draft.agentProfile)
+  const sources = useSourceSelection(draft.source, uiState, engine.displayRunner, accounts.agentProfile)
   const { source, sourcesReady, skillList } = sources
   const webhook = useNotifyWebhook(urlProjectId)
   const templates = usePromptTemplates({ uiState, source, sourcesReady, draftText: draft.text, submissionPending, update })
-  const engine = useEngineSelection(draft, config)
-  const accounts = useAccountSelection(engine.displayRunner, draft.agentProfile)
   useProviderReadyFocus(engine.providersReady)
 
   const hasGit = repo.data === undefined || repo.data.info !== null
@@ -140,7 +141,7 @@ export function NewTaskRoute() {
     mounted,
     clearStarted,
   })
-  useNewTaskDeepLink({ deepLink, search, sourcesReady, skillList, update })
+  useNewTaskDeepLink({ deepLink, search, sourcesReady: sourcesReady && sources.skillsSettled && !engine.providers.isPending && accounts.accountsSettled, listUnchecked: sources.listUnchecked, skillList, update })
   const compactAgentOptions = useCompactAgentOptions(agentOptionsRef)
 
   const { providers, providersReady } = engine
@@ -181,6 +182,8 @@ export function NewTaskRoute() {
           disabled={!providersReady || starting}
           disabledReason={unavailableReason}
           autocompleteSkills
+          skillRunner={engine.displayRunner}
+          skillAccount={accounts.agentProfile}
           footerStart={
             <ComposerFooterStart
               projects={webhook.projectList}
@@ -210,7 +213,7 @@ export function NewTaskRoute() {
               hasGit={hasGit}
               runMode={runMode}
               webhook={{ targets: webhook.webhookTargets, on: webhook.notifyOn, onChange: webhook.setNotifyChoice }}
-              interactiveSkill={sources.selectedSkill?.interactive === true}
+              interactiveSkill={false}
               completionDisabled={starting || planning}
             />
           }
@@ -289,6 +292,7 @@ function ComposerFooterStart({
       <PromptTemplateMenu label="Template" templates={templates} onInsert={onInsertTemplate} />
       <SourcePill
         source={sources.source}
+        unchecked={sources.unchecked}
         ready={sources.sourcesReady}
         skills={sources.skillList}
         skillUsage={sources.skillUsage}
@@ -334,7 +338,7 @@ function matchProjects(
  * Picking a project NAVIGATES to that project's composer rather than swapping local state:
  * `/p/<id>/new` is the single place the scope is decided (the step-3.2 route gate), and every
  * part of this screen that must re-resolve already keys off it — the skill/workflow picker and
- * `/`-autocomplete (`/api/p/<id>/skills`), the runner and model probes, the base-branch pill,
+ * `/`-autocomplete (`/api/p/<id>/runner-skills`), the runner and model probes, the base-branch pill,
  * the per-project draft, and the `POST /api/p/<id>/runs` submit target. Doing it any other way
  * would mean a second, parallel notion of "the active project" living in this component.
  *
@@ -435,10 +439,10 @@ function ProjectPill({
 
 /** True when no row — the none-row, every skill tier, every workflow — misses the query. */
 function nothingMatchesOf(noneMatches: boolean, groups: {
-  ranked: Skill[] | null
-  mostUsed: readonly Skill[]
-  project: readonly Skill[]
-  global: readonly Skill[]
+  ranked: RunnerSkill[] | null
+  mostUsed: readonly RunnerSkill[]
+  project: readonly RunnerSkill[]
+  global: readonly RunnerSkill[]
 }, matchedWorkflows: readonly WorkflowDef[]): boolean {
   return (
     !noneMatches
@@ -454,7 +458,8 @@ function noneMatchesFor(quickTask: WorkflowDef | undefined, search: string): boo
 
 /** The pill's trigger button: icon, honest label, token-clear keys, and the disabled ink.
  *  A plain element, not a component: `PopoverTrigger asChild` merges its props into it. */
-function triggerFor({ source, ready, offersWorkflows, onPick }: {
+function triggerFor({ source, ready, offersWorkflows, onPick, skillLabel }: {
+  skillLabel?: string | undefined
   source: TaskSource | null
   ready: boolean
   offersWorkflows: boolean
@@ -493,7 +498,7 @@ function triggerFor({ source, ready, offersWorkflows, onPick }: {
         aria-hidden="true"
         className={cn('size-3 shrink-0', source === null ? 'text-muted-foreground' : 'text-accent-icon')}
       />
-      <span className="max-w-44 truncate">{!ready ? '…' : (source?.ref ?? (offersWorkflows ? 'Skill or workflow' : 'Skill'))}</span>
+      <span className="max-w-44 truncate">{!ready ? '…' : (skillLabel ?? source?.ref ?? (offersWorkflows ? 'Skill or workflow' : 'Skill'))}</span>
       {chevron}
     </button>
   )
@@ -529,10 +534,10 @@ function NoneGroup({ source, quickTask, onPick }: {
 
 /** The skill rows: one ranked flat list under a query, or Most used then Project skills. */
 function SkillGroups({ ranked, mostUsed, project, skillItem }: {
-  ranked: Skill[] | null
-  mostUsed: readonly Skill[]
-  project: readonly Skill[]
-  skillItem: (skill: Skill, emphasized: boolean) => ReactNode
+  ranked: RunnerSkill[] | null
+  mostUsed: readonly RunnerSkill[]
+  project: readonly RunnerSkill[]
+  skillItem: (skill: RunnerSkill, emphasized: boolean) => ReactNode
 }) {
   return (
     <>
@@ -598,8 +603,8 @@ function WorkflowGroup({ source, matchedWorkflows, toggle }: {
 
 /** The global skills tail group. */
 function GlobalGroup({ global, skillItem }: {
-  global: readonly Skill[]
-  skillItem: (skill: Skill, emphasized: boolean) => ReactNode
+  global: readonly RunnerSkill[]
+  skillItem: (skill: RunnerSkill, emphasized: boolean) => ReactNode
 }) {
   return global.length > 0 ? (
     <CommandGroup heading="Global">{global.map((skill) => skillItem(skill, false))}</CommandGroup>
@@ -628,6 +633,7 @@ function GlobalGroup({ global, skillItem }: {
  */
 function SourcePill({
   source,
+  unchecked,
   ready,
   skills,
   skillUsage,
@@ -636,14 +642,15 @@ function SourcePill({
 }: {
   source: TaskSource | null
   ready: boolean
-  skills: readonly Skill[]
+  unchecked?: boolean
+  skills: readonly RunnerSkill[]
   skillUsage: Readonly<Record<string, number>> | undefined
   workflows: readonly WorkflowDef[]
   onPick: (source: TaskSource | null) => void
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [preview, setPreview] = useState<Skill | null>(null)
+  const [preview, setPreview] = useState<RunnerSkill | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const { mostUsed, project, global, ranked } = searchSkillsForDisplay(skills, search, skillUsage)
   const quickTask = workflows.find((workflow) => workflow.name === QUICK_TASK)
@@ -664,20 +671,20 @@ function SourcePill({
   /** Picking what is already picked CLEARS it — the gesture every other toggle in the cockpit
    *  answers to, and the one the report asked for by name. */
   const toggle = (next: TaskSource) =>
-    pick(source?.source === next.source && source.ref === next.ref ? null : next)
+    pick(source?.source === next.source && source.ref === next.ref && (source.source !== 'skill' || next.source !== 'skill' || source.path === next.path) ? null : next)
 
-  const skillItem = (skill: Skill, emphasized: boolean) => {
-    const selected = source?.source === 'skill' && source.ref === skill.name
+  const skillItem = (skill: RunnerSkill, emphasized: boolean) => {
+    const selected = source?.source === 'skill' && source.ref === skill.id && source.path === skill.path
     return (
       <CommandItem
-        key={skill.path}
+        key={JSON.stringify([skill.id, skill.path])}
         // The path suffix keeps values unique when a project skill shadows a global one.
         value={`skill ${skill.name} ${skill.path}`}
         keywords={skillKeywords(skill.name, skill.description)}
         data-slot="source-option"
         data-source-kind="skill"
-        data-source-ref={skill.name}
-        onSelect={() => toggle({ source: 'skill', ref: skill.name })}
+        data-source-ref={skill.id}
+        onSelect={() => toggle({ source: 'skill', ref: skill.id, ...(skill.path !== undefined ? { path: skill.path } : {}) })}
       >
         <span className={cn('shrink-0 font-mono text-xs', emphasized && 'font-semibold')}>
           {skill.name}
@@ -687,6 +694,7 @@ function SourcePill({
             {skill.description}
           </span>
         ) : null}
+        {skill.path ? <span className="min-w-0 truncate text-xs text-soft-foreground">{skill.path}</span> : null}
         {/* Read-only "View skill" (spec §Skills) — the Settings catalog's detail component
             as a dialog. stopPropagation: viewing must not pick the source. */}
         <button
@@ -710,7 +718,7 @@ function SourcePill({
 
   // The generic label distinguishes an empty choice. Keep its enabled boundary and ink
   // consistent with the other selectors; dashed boundaries mark disabled pills (#171).
-  const trigger = triggerFor({ source, ready, offersWorkflows, onPick })
+  const trigger = triggerFor({ source, ready, offersWorkflows, onPick, skillLabel: source?.source === 'skill' ? skills.find((skill) => skill.id === source.ref && (source.path === undefined || source.path === skill.path))?.name : undefined })
 
   return (
     <>
@@ -726,6 +734,7 @@ function SourcePill({
             the clear, and the seam between them is the ✕'s left border. */}
         <span className="inline-flex items-center">
           <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+          {source?.source === 'skill' && unchecked ? <span role="status">Unchecked</span> : null}
           {source !== null && ready ? (
             <button
               type="button"
@@ -761,6 +770,11 @@ function SourcePill({
               data-slot="source-menu"
               className="max-h-[min(18rem,calc(var(--radix-popover-content-available-height)-3rem))]"
             >
+              {search.trim() && !skills.some((skill) => skill.id === search.trim()) ? (
+                <CommandGroup><CommandItem value="typed-skill" onSelect={() => pick({ source: 'skill', ref: search.trim(), typed: true })}>
+                  Use skill id “{search.trim()}” (unchecked)
+                </CommandItem></CommandGroup>
+              ) : null}
               {nothingMatches ? <CommandEmpty>Nothing matches.</CommandEmpty> : null}
               {/* Heading-less and first: "run it plain" is not a kind of skill, and the way out
                   of a selection has to be the thing you see when the list opens. */}

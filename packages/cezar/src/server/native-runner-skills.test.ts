@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Hono } from 'hono';
@@ -128,15 +128,9 @@ describe('runner-native skills API', () => {
     expect(calls).toEqual([]);
   });
 
-  it('keeps legacy skill routes while removing the automation built-in entry', async () => {
-    mkdirSync(join(root, '.ai/cezar/skills'), { recursive: true });
-    writeFileSync(join(root, '.ai/cezar/skills/local.md'), '---\nname: local\n---\nLocal body.');
+  it('removes the three legacy skill routes', async () => {
     for (const [path, method] of [['/skills', 'GET'], ['/skills/refresh', 'POST'], ['/skills/importable', 'GET']] as const) {
-      const response = await apiRequest(app, `/api/v1${path}`, { method });
-      expect(response.status).toBe(200);
-      const skills = await response.json() as Array<{ name: string }>;
-      expect(skills.some(skill => skill.name === 'create-cezarion-automation')).toBe(false);
-      if (path !== '/skills/importable') expect(skills.some(skill => skill.name === 'local')).toBe(true);
+      expect((await apiRequest(app, `/api/v1${path}`, { method })).status).toBe(404);
     }
     expect(calls).toEqual([]);
   });

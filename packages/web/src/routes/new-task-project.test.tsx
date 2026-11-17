@@ -1,3 +1,4 @@
+import type { RunnerSkill as Skill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router'
@@ -9,7 +10,6 @@ import type {
   ProjectsResponse,
   ProviderStatusResponse,
   RepoResponse,
-  Skill,
   WorkflowsResponse,
 } from '@open-mercato/cezar-api-client'
 import { resetToasts, Toaster } from '@/components/ui/toaster'
@@ -115,10 +115,10 @@ const PROVIDERS: ProviderStatusResponse = {
 
 /** Each project ships its OWN skills — the pill's whole promise. */
 const BOOT_SKILLS: Skill[] = [
-  { name: 'om-fix', description: 'Fix an issue end to end', body: '', path: '/p/om-fix.md', source: 'ai' },
+  { id: 'om-fix', name: 'om-fix', description: 'Fix an issue end to end', path: '/p/om-fix.md', scope: 'repo' },
 ]
 const OTHER_SKILLS: Skill[] = [
-  { name: 'ship-storefront', description: 'Deploy the storefront', body: '', path: '/p/ship.md', source: 'ai' },
+  { id: 'ship-storefront', name: 'ship-storefront', description: 'Deploy the storefront', path: '/p/ship.md', scope: 'repo' },
 ]
 
 const BOOT_WORKFLOWS: WorkflowsResponse = {
@@ -189,7 +189,7 @@ function serve({
 
       const project: Record<string, unknown> = {
         'GET /api/v1/health': health,
-        'GET /api/v1/skills': pick(BOOT_SKILLS, OTHER_SKILLS),
+        'GET /api/v1/runner-skills?runner=claude': { runner: 'claude', skills: pick(BOOT_SKILLS, OTHER_SKILLS), problems: [], source: 'live' },
         'GET /api/v1/workflows': pick(BOOT_WORKFLOWS, OTHER_WORKFLOWS),
         'GET /api/v1/repo': pick(REPO, OTHER_REPO),
         'GET /api/v1/ui-state': {},
@@ -301,7 +301,7 @@ describe('switching project', () => {
     await composerReady()
 
     // … and the second project reads its own, through the `/api/v1/p/<id>` prefix.
-    for (const path of ['/skills', '/workflows', '/config', '/repo']) {
+    for (const path of ['/runner-skills?runner=claude', '/workflows', '/config', '/repo']) {
       expect(requests.some((r) => r.url === `/api/v1/p/${OTHER}${path}`)).toBe(true)
     }
     fireEvent.click(sourcePill())

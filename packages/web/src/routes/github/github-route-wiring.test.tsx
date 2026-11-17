@@ -131,7 +131,7 @@ function stubServer(kind: 'issue' | 'pr') {
       if (path.startsWith('/api/v1/models?')) return json({ runner: 'claude', models: [], source: 'unavailable', stale: false })
       if (path === '/api/v1/run-summaries') return json([])
       if (path.startsWith('/api/v1/run-summaries/archived')) return json({ runs: [], nextCursor: null, total: 0 })
-      if (path === '/api/v1/skills') return json([])
+      if (path === '/api/v1/runner-skills?runner=claude') return json({ runner: 'claude', skills: [], problems: [], source: 'live' })
       if (path === '/api/v1/workflows') return json({ workflows: [] })
       return json({})
     }),

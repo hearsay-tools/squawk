@@ -1,3 +1,4 @@
+import type { RunnerSkill as Skill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { githubItemSchema } from '@open-mercato/cezar-api-client/contract/github'
 import { RUN_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -5,7 +6,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { expect, vi } from 'vitest'
 import { createQueryClient } from '@/api/query-client'
-import type { GithubComment, GithubCommentsData, GithubData, GithubItem, HealthResponse, ProviderStatusResponse, Runner, Skill, WorkflowsResponse } from '@open-mercato/cezar-api-client'
+import type { GithubComment, GithubCommentsData, GithubData, GithubItem, HealthResponse, ProviderStatusResponse, Runner, WorkflowsResponse } from '@open-mercato/cezar-api-client'
 import { Toaster } from '@/components/ui/toaster'
 import { githubTaskRef } from '@/lib/github-task'
 import { GithubRoute } from './github'
@@ -98,9 +99,9 @@ export const WORKFLOWS: WorkflowsResponse = {
 }
 
 export const SKILLS: Skill[] = [
-  { name: 'g-review', description: 'global review', body: '', path: '/g/g-review.md', source: 'global' },
-  { name: 'om-fix', description: 'project fixer', body: '', path: '/p/om-fix.md', source: 'ai' },
-  { name: 'team-x', description: 'team skill', body: '', path: '/t/team-x.md', source: 'team' },
+  { id: 'g-review', name: 'g-review', description: 'global review', path: '/g/g-review.md', scope: 'user' },
+  { id: 'om-fix', name: 'om-fix', description: 'project fixer', path: '/p/om-fix.md', scope: 'repo' },
+  { id: 'team-x', name: 'team-x', description: 'team skill', path: '/t/team-x.md', scope: 'repo' },
 ]
 
 export const PROVIDERS_CONNECTED: ProviderStatusResponse = {
@@ -195,7 +196,7 @@ export function stubFetch(
       const summariesResponse = runSummariesResponse(method, path)
       if (summariesResponse) return summariesResponse
       if (method === 'GET' && path === '/api/v1/workflows') return jsonResponse(WORKFLOWS)
-      if (method === 'GET' && path === '/api/v1/skills') return jsonResponse(SKILLS)
+      if (method === 'GET' && path === '/api/v1/runner-skills?runner=claude') return jsonResponse({ runner: 'claude', skills: SKILLS, problems: [], source: 'live' })
       if (method === 'GET' && path === '/api/v1/providers/status') {
         return jsonResponse(PROVIDERS_CONNECTED)
       }

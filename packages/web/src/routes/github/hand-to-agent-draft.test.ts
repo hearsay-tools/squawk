@@ -20,14 +20,14 @@ describe('the follow-up "remembered last selection" store (#408 item 3)', () => 
   })
 
   it('round-trips a workflow + skills pick', () => {
-    writeFollowupSelection({ workflow: 'ship-it', skills: ['om-fix', 'om-review'] })
-    expect(readFollowupSelection()).toEqual({ workflow: 'ship-it', skills: ['om-fix', 'om-review'] })
+    writeFollowupSelection({ workflow: 'ship-it', skills: [{ id: 'om-fix' }, { id: 'om-review' }] })
+    expect(readFollowupSelection()).toEqual({ workflow: 'ship-it', skills: [{ id: 'om-fix' }, { id: 'om-review' }] })
   })
 
   it('survives a cold read (page reload) via localStorage, not just an in-memory cache', () => {
-    writeFollowupSelection({ workflow: null, skills: ['om-fix'] })
+    writeFollowupSelection({ workflow: null, skills: [{ id: 'om-fix' }] })
     const raw = localStorage.getItem('cez-followup-selection') as string
-    expect(JSON.parse(raw)).toEqual({ workflow: null, skills: ['om-fix'] })
+    expect(JSON.parse(raw)).toEqual({ workflow: null, skills: [{ id: 'om-fix' }] })
   })
 
   it('normalizes a malformed/older stored value instead of throwing', () => {
@@ -35,7 +35,7 @@ describe('the follow-up "remembered last selection" store (#408 item 3)', () => 
     expect(readFollowupSelection()).toEqual({ workflow: null, skills: [] })
 
     localStorage.setItem('cez-followup-selection', '{"workflow":7,"skills":["a",2,"b"]}')
-    expect(readFollowupSelection()).toEqual({ workflow: null, skills: ['a', 'b'] })
+    expect(readFollowupSelection()).toEqual({ workflow: null, skills: [{ id: 'a' }, { id: 'b' }] })
   })
 })
 

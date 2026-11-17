@@ -9,7 +9,6 @@ import type { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { workspaceUiStatePath } from '../paths.ts';
 import { RunStore } from '../runs/store.ts';
-import * as remote from '../skills-remote.ts';
 import * as uiState from '../ui-state.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { createApp } from './server.ts';
@@ -127,25 +126,6 @@ describe('the ui-state API — skillUsage (#408)', () => {
 
   it('refuses a disabledTeamSkills entry with an extra key (strict)', async () => {
     expect((await put({ disabledTeamSkills: [{ repo: 'a', name: 'x', ref: 'main' }] })).status).toBe(400);
-  });
-
-  it('GET /skills/importable returns every team skill, switched-off ones and every source copy included', async () => {
-    const skills = [['x', 'acme/skills'], ['y', 'acme/skills'], ['x', 'other/skills']].map(([name, repo]) => ({
-      name: name!,
-      body: name!,
-      path: `${repo}@main:${name}.md`,
-      source: 'team' as const,
-      team: { repo: repo!, ref: 'main', path: `${name}.md`, dir: false },
-    }));
-    vi.spyOn(remote, 'getTeamSkillsCached').mockReturnValue(skills);
-    await put({ disabledTeamSkills: [{ repo: 'acme/skills', name: 'x' }] });
-    const res = await apiRequest(app, '/api/v1/skills/importable');
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(skills);
-  });
-
-  it('GET /skills/importable is empty without skillsRepos', async () => {
-    expect(await (await apiRequest(app, '/api/v1/skills/importable')).json()).toEqual([]);
   });
 
   it('PUT skillUsage persists and round-trips through GET', async () => {

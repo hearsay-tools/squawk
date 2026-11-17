@@ -51,7 +51,8 @@ beforeAll(async () => {
       const json = value => new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } });
       if (method === 'PATCH') { record = { ...record, ...body }; window.setRun?.(record); return json(record); }
       if (method !== 'GET') return json(path.endsWith('/runs') ? { id: 'created' } : { automation: { id: 'saved', revision: 2 } });
-      if (path.endsWith('/run-summaries') || path.endsWith('/skills')) return json([]);
+      if (path.endsWith('/run-summaries')) return json([]);
+      if (path.endsWith('/runner-skills')) return json({ runner: 'claude', skills: [], problems: [], source: 'live' });
       if (path.endsWith('/health')) return json({ version: 'test', projects: [], bootProject: 'default', repoRoot: '/repo',
         repo: { root: '/repo', branch: 'main' }, defaultRunner: 'claude', checks: [{ name: 'claude', available: true }, { name: 'git', available: true }],
         capabilities: { followups: false, preview: false, localHandoff: false, automations: true } });

@@ -532,8 +532,8 @@ describe('picker data flows', () => {
   it('typing an exact skill name ranks that skill first even when a weaker hit is Most used (#255)', async () => {
     serve({
       skills: [
-        { name: 'om-code-review', description: 'Review a PR', body: '', path: '/p/om-code-review.md', source: 'ai' },
-        { name: 'review', description: 'The review skill', body: '', path: '/g/review.md', source: 'global' },
+        { id: 'om-code-review', name: 'om-code-review', description: 'Review a PR', path: '/p/om-code-review.md', scope: 'repo' },
+        { id: 'review', name: 'review', description: 'The review skill', path: '/g/review.md', scope: 'user' },
       ],
       uiState: { skillUsage: { 'om-code-review': 999 } },
     })

@@ -60,9 +60,8 @@ export const DEFAULT_PROMPT_TEMPLATES: readonly PromptTemplate[] = [
     label: 'Double-check edge cases',
     text: 'Double-check edge cases and error handling before finishing.',
   },
-  // #774: picking the built-in `create-cezarion-automation` skill pre-fills the two things it
-  // needs from the user. Only meaningful on a cockpit with automations on — the skill is not
-  // listed otherwise — so `templatesForCapabilities` keeps it out of the composers there.
+  // The automation tool asks for the trigger and prompt, then creates a paused automation.
+  // Only offer this template when the cockpit supports automations.
   {
     id: 'create-automation',
     label: 'Create an automation',

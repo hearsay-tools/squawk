@@ -1,3 +1,5 @@
+import { pickSkill, skillKey, type PickedSkill } from '@/lib/skills'
+import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import './github-layout.css'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { EyeIcon, PlayIcon,  } from 'lucide-react'
@@ -6,8 +8,8 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Link } from '@/lib/project-router'
 
 import { createRun, putUiState } from '@/api/client'
-import { queryKeys, useUiState } from '@/api/queries'
-import type { GithubItem, Skill, WorkflowDef } from '@open-mercato/cezar-api-client'
+import { useRunnerSkills, queryKeys, useUiState } from '@/api/queries'
+import type { GithubItem, WorkflowDef } from '@open-mercato/cezar-api-client'
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
 import { EnginePills, engineRunBody, useResolvedEngine, type EnginePick, type ResolvedEngine } from '@/components/engine-pills'
 import { PickerPill, chipClass } from '@/components/picker-pill'
@@ -85,11 +87,11 @@ export function HandToAgent({
 }: {
   item: GithubItem
   workflows: readonly WorkflowDef[]
-  skills: readonly Skill[]
+  skills: readonly RunnerSkill[]
   workflow: string | null
   onWorkflowChange: (workflow: string | null) => void
-  selectedSkills: readonly string[]
-  onSkillsChange: (skills: readonly string[]) => void
+  selectedSkills: readonly PickedSkill[]
+  onSkillsChange: (skills: readonly PickedSkill[]) => void
   /** Which backend runs it (#401) — route state, like the pickers above. */
   engine: EnginePick
   onEngineChange: (engine: EnginePick) => void
@@ -102,7 +104,10 @@ export function HandToAgent({
   const automationsOn = useAutomationsAvailable()
   const kindLabel = item.kind === 'pr' ? 'PR' : 'issue'
   // A skill deleted since it was toggled must not reach the server (legacy rule).
-  const validSkills = selectedSkills.filter((name) => skills.some((skill) => skill.name === name))
+  const resolved = useResolvedEngine(engine)
+  const listed = useRunnerSkills(resolved.runner, resolved.account)
+  const validSkills = selectedSkills.filter((entry) => listed.unchecked || entry.path === undefined || skills.some((skill) => skill.id === entry.id && (entry.path === undefined || skill.path === entry.path)))
+  // Step open validates every selected id, including typed ids from an unavailable list.
   // The box is PRE-FILLED with the item's reference (#524) rather than starting empty: what you
   // see is what the agent gets, and it is editable — the previous "empty means the default
   // prompt" contract made the composed text invisible, so a user typing their own instruction
@@ -119,7 +124,6 @@ export function HandToAgent({
   // state (#408) — restores whatever was typed for THIS item, so switching away and back (or a
   // page refresh) never loses it. No draft stored → the pre-fill.
   const [prompt, setPrompt] = useState(() => readFollowupPrompt(item.url) || base)
-  const resolved = useResolvedEngine(engine)
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const caretRef = useRef<number | null>(null)
   useEffect(() => {
@@ -158,7 +162,7 @@ export function HandToAgent({
   // it — but only while the box is untouched, per `resolveAutoApply`. Deselecting takes the
   // auto-applied text back out again, so the box always reflects the current selection until the
   // moment the user types, after which it is theirs.
-  const autoText = autoApplyText(templates, validSkills)
+  const autoText = autoApplyText(templates, validSkills.map((skill) => skill.id))
   const promptRefValue = useRef(prompt)
   promptRefValue.current = prompt
   const autoAppliedRef = useRef('')
@@ -202,7 +206,7 @@ export function HandToAgent({
       // costs one count; sending it would cost the whole history. Fire-and-forget either way.
       if (validSkills.length > 0 && uiState.data !== undefined) {
         const nextUsage = validSkills.reduce(
-          (usage, name) => bumpSkillUsage(usage, name),
+          (usage, skill) => bumpSkillUsage(usage, skill.id),
           uiState.data.skillUsage,
         )
         void putUiState({ skillUsage: nextUsage })
@@ -237,12 +241,10 @@ export function HandToAgent({
     if (!start.isPending && resolved.canRun) start.mutate()
   }
 
-  const toggleSkill = (name: string) =>
-    onSkillsChange(
-      selectedSkills.includes(name)
-        ? selectedSkills.filter((existing) => existing !== name)
-        : [...selectedSkills, name],
-    )
+  const toggleSkill = (skill: PickedSkill) =>
+    onSkillsChange(selectedSkills.some((entry) => skillKey(entry) === skillKey(skill))
+      ? selectedSkills.filter((entry) => skillKey(entry) !== skillKey(skill))
+      : [...selectedSkills, pickSkill(skill)])
 
   return (
     <>
@@ -282,17 +284,18 @@ export function HandToAgent({
           will not use. What the composer shows and what it sends are the same list. */}
       {validSkills.length > 0 ? (
         <div data-slot="gh-skill-chips" className="mt-2.5 flex flex-wrap gap-1.5">
-          {validSkills.map((name) => (
+          {validSkills.map((skill) => (
             <button
-              key={name}
+              key={skillKey(skill)}
               type="button"
               data-slot="gh-skill-chip"
-              data-skill={name}
-              onClick={() => toggleSkill(name)}
+              data-skill={skill.id}
+              onClick={() => toggleSkill(skill)}
               title="Remove this skill"
               className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-danger/10 hover:text-danger"
             >
-              {name}
+              {skills.find((entry) => entry.id === skill.id && (skill.path === undefined || entry.path === skill.path))?.name ?? skill.id}
+              {!skills.some((entry) => entry.id === skill.id) ? ' (unchecked)' : ''}
               <XIcon size={16} aria-hidden="true" className="size-3" />
             </button>
           ))}
@@ -508,31 +511,32 @@ function SkillsPicker({
   selected,
   onToggle,
 }: {
-  skills: readonly Skill[]
+  skills: readonly RunnerSkill[]
   skillUsage: Readonly<Record<string, number>> | undefined
-  selected: readonly string[]
-  onToggle: (name: string) => void
+  selected: readonly PickedSkill[]
+  onToggle: (skill: PickedSkill) => void
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [preview, setPreview] = useState<Skill | null>(null)
+  const [preview, setPreview] = useState<RunnerSkill | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const { mostUsed, project, global, ranked } = searchSkillsForDisplay(skills, search, skillUsage)
 
-  const skillItem = (skill: Skill, emphasized: boolean) => {
-    const isSelected = selected.includes(skill.name)
+  const skillItem = (skill: RunnerSkill, emphasized: boolean) => {
+    const isSelected = selected.some((entry) => skillKey(entry) === skillKey(skill))
     return (
       <CommandItem
-        key={skill.path}
+        key={skillKey(skill)}
         // The path suffix keeps values unique when a project skill shadows a global one.
         value={`skill ${skill.name} ${skill.path}`}
         keywords={skillKeywords(skill.name, skill.description)}
         data-slot="gh-skill-option"
-        data-skill={skill.name}
+        data-skill={skill.id}
         data-selected={isSelected ? 'true' : undefined}
-        onSelect={() => onToggle(skill.name)}
+        onSelect={() => onToggle(pickSkill(skill))}
       >
         <span className={cn('shrink-0 font-mono text-xs', emphasized && 'font-semibold')}>{skill.name}</span>
+        {skill.path ? <span className="min-w-0 truncate text-xs">{skill.path}</span> : null}
         {skill.description ? (
           <span className="min-w-0 flex-1 truncate text-xs text-soft-foreground">{skill.description}</span>
         ) : null}
@@ -588,6 +592,7 @@ function SkillsPicker({
               onInput={() => listRef.current?.scrollTo(0, 0)}
             />
             <CommandList ref={listRef} data-slot="gh-skill-menu" className="max-h-[min(16rem,calc(var(--radix-popover-content-available-height)-3rem))]">
+              {search.trim() && !skills.some((skill) => skill.id === search.trim()) ? <CommandGroup><CommandItem value="typed-skill" onSelect={() => onToggle({ id: search.trim() })}>Use skill id “{search.trim()}” (unchecked)</CommandItem></CommandGroup> : null}
               {(ranked ? ranked.length === 0 : mostUsed.length === 0 && project.length === 0 && global.length === 0) ? (
                 <CommandEmpty>Nothing matches.</CommandEmpty>
               ) : null}

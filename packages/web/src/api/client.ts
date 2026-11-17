@@ -1,3 +1,4 @@
+import type { RunnerSkillList } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { productName } from '@/lib/product-name'
 import type { ProjectAddress, RunAddress } from './run-address'
 import { defined } from '@open-mercato/cezar-api-client/contract/defined'
@@ -124,8 +125,6 @@ import type {
   SetAgentConfigInput,
   SetWorkspaceConfigInput,
   SetWorkspaceUiStateInput,
-  ImportableSkill,
-  Skill,
   UiState,
   WorkflowsResponse,
   WorkspaceConfigResponse,
@@ -613,60 +612,19 @@ export async function getWorkflows(opts?: ReadOptions): Promise<WorkflowsRespons
   )
 }
 
-export async function getSkills(opts?: ReadOptions): Promise<Skill[]> {
+export async function getRunnerSkills(
+  runner: Runner,
+  account?: string | null,
+  opts?: ReadOptions & { refresh?: boolean },
+): Promise<RunnerSkillList> {
   return unwrap(
-    await cez.api.v1.p[':projectId'].skills.$get(
-      // `query` is required once the route declares one, even when every key in it is optional
-      // — `hc` drops the empty search string, so the URL is the one this call always sent.
-      { param: { projectId: queryScope() }, query: {} },
+    await cez.api.v1.p[':projectId']['runner-skills'].$get(
+      { param: { projectId: opts?.projectId ?? queryScope() }, query: {
+        runner, ...(account ? { account } : {}), ...(opts?.refresh ? { refresh: '1' as const } : {}),
+      } },
       init(opts),
     ),
-    '/skills',
-  )
-}
-
-/** Wait for the server's already-started team-skill load. Used only after the fast catalog
- * read has rendered, so a cold clone never delays opening a skill picker. */
-export async function getSkillsWhenReady(opts?: ReadOptions): Promise<Skill[]> {
-  return unwrap(
-    await cez.api.v1.p[':projectId'].skills.$get(
-      { param: { projectId: queryScope() }, query: { wait: '1' } },
-      init(opts),
-    ),
-    '/skills',
-  )
-}
-
-/** Refresh the team skills repos (spec 005: clone/fetch, degrade quietly offline) and answer
- *  the merged catalog — the Settings → Skills "Refresh" button. */
-export async function refreshSkills(): Promise<Skill[]> {
-  return unwrap(
-    await cez.api.v1.p[':projectId'].skills.refresh.$post({ param: { projectId: queryScope() } }),
-    '/skills/refresh',
-  )
-}
-
-/** Every team skill the configured `skillsRepos` offer, including those this project switched
- *  off. Empty without `skillsRepos`. */
-export async function getImportableSkills(opts?: ReadOptions): Promise<ImportableSkill[]> {
-  return unwrap(
-    await cez.api.v1.p[':projectId'].skills.importable.$get(
-      { param: { projectId: queryScope() }, query: {} },
-      init(opts),
-    ),
-    '/skills/importable',
-  )
-}
-
-/** Wait for the server's already-started team-skill load before listing importable skills —
- *  the same cold-cache convergence as `getSkillsWhenReady`, off the panel's first render. */
-export async function getImportableSkillsWhenReady(opts?: ReadOptions): Promise<ImportableSkill[]> {
-  return unwrap(
-    await cez.api.v1.p[':projectId'].skills.importable.$get(
-      { param: { projectId: queryScope() }, query: { wait: '1' } },
-      init(opts),
-    ),
-    '/skills/importable',
+    '/runner-skills',
   )
 }
 

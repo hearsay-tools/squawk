@@ -53,10 +53,5 @@ export function SkillEmptyHint() {
 /** Compact copy — the workflow builder's skill palette, where space is tighter and there is no
  *  Refresh action on the surface itself. */
 export function SkillEmptyHintCompact() {
-  return (
-    <>
-      No skills yet — drop Markdown files into <ProjectDirList /> (or a global/team-repo skill
-      source).
-    </>
-  )
+  return <>No skills reported by this runner and account. You can type a skill id in Add step.</>
 }

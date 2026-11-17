@@ -36,7 +36,8 @@ import {
   useProjectRuns,
   useRuns,
   useArchivedRuns,
-  useSkills,
+  useRunnerSkills,
+  useSelectAgentProfile,
   workspaceQueryKeys,
 } from './queries'
 
@@ -581,8 +582,7 @@ describe('queryKeys', () => {
     try {
       expect(queryKeys.runs.list()).toEqual(['proj-a', 'runs', 'list'])
       expect(queryKeys.health).toEqual(['proj-a', 'health'])
-      expect(queryKeys.skills).toEqual(['proj-a', 'skills'])
-      expect(queryKeys.skillsReady).toEqual(['proj-a', 'skills', 'ready'])
+      expect(queryKeys.runnerSkills('codex', 'work')).toEqual(['proj-a', 'runner-skills', 'codex', 'work'])
       expect(queryKeys.agentConfig).toEqual(['proj-a', 'agent-config'])
       expect(queryKeys.agentConfigFile('claude.project.settings')).toEqual([
         'proj-a',
@@ -601,36 +601,21 @@ describe('queryKeys', () => {
   })
 })
 
-describe('useSkills', () => {
-  it('renders the fast catalog, then converges when the cold team cache is ready', async () => {
-    let resolveReady!: (response: Response) => void
+describe('useRunnerSkills', () => {
+  it('keys requests by runner and account and exposes unavailable lists as unchecked', async () => {
     fetchMock.mockImplementation(async (input) => {
-      if (String(input).replace('?archived=recent', '') === '/api/v1/skills') {
-        return json([{ name: 'local', source: 'ai', body: '', path: '/repo/local.md' }])
-      }
-      if (String(input).replace('?archived=recent', '') === '/api/v1/skills?wait=1') {
-        return new Promise<Response>((resolve) => {
-          resolveReady = resolve
-        })
-      }
-      return new Response(null, { status: 404 })
+      const url = String(input)
+      const runner = new URL(url, 'http://localhost').searchParams.get('runner')
+      return json({ runner, skills: [], problems: [], source: 'unavailable', reason: 'offline' })
     })
-
-    const { result } = renderHook(() => useSkills(), { wrapper: wrapper() })
-    await waitFor(() => expect(result.current.data?.map((skill) => skill.name)).toEqual(['local']))
-    await waitFor(() => expect(resolveReady).toBeTypeOf('function'))
-
-    resolveReady(
-      json([
-        { name: 'local', source: 'ai', body: '', path: '/repo/local.md' },
-        { name: 'om-fix', source: 'team', body: '', path: 'skills/om-fix/SKILL.md' },
-      ]),
-    )
-
-    await waitFor(() =>
-      expect(result.current.data?.map((skill) => skill.name)).toEqual(['local', 'om-fix']),
-    )
-    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual(['/api/v1/skills', '/api/v1/skills?wait=1'])
+    const { result, rerender } = renderHook(({ runner, account }: { runner: 'claude' | 'codex'; account: string }) => useRunnerSkills(runner, account), {
+      wrapper: wrapper(), initialProps: { runner: 'claude', account: 'work' },
+    })
+    await waitFor(() => expect(result.current.list?.runner).toBe('claude'))
+    expect(result.current.unchecked).toBe(true)
+    rerender({ runner: 'codex', account: 'personal' })
+    await waitFor(() => expect(result.current.list?.runner).toBe('codex'))
+    expect(fetchMock.mock.calls.map(([path]) => path)).toContain('/api/v1/runner-skills?runner=codex&account=personal')
   })
 })
 
@@ -1515,4 +1500,14 @@ describe('useArchivedRuns', () => {
     expect(result.current.isPlaceholderData).toBe(true)
     expect(result.current.data?.pages[0]?.runs[0]?.id).toBe('first')
   })
+})
+
+it('invalidates cached runner lists after changing the project account', async () => {
+  fetchMock.mockResolvedValue(json({}))
+  const client = createQueryClient()
+  const key = queryKeys.runnerSkills('codex')
+  client.setQueryData(key, { runner: 'codex', skills: [], problems: [], source: 'live' })
+  const { result } = renderHook(useSelectAgentProfile, { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> })
+  await act(async () => { await result.current.mutateAsync({ projectId: 'default', provider: 'codex', profileId: 'work' }) })
+  expect(client.getQueryState(key)?.isInvalidated).toBe(true)
 })

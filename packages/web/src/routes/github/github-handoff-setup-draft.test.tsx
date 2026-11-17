@@ -833,17 +833,17 @@ describe('a remembered pick the catalog no longer has (open-mercato/cezar#408)',
       .toMatchObject({ workflow: 'ship-it' })
   })
 
-  it('a deleted skill is dropped from the chips, the counter AND the POST — never shown but unsent', async () => {
-    writeFollowupSelection({ workflow: null, skills: ['om-fix', 'deleted-skill'] })
+  it('an unlisted id stays unchecked in the chips and the POST', async () => {
+    writeFollowupSelection({ workflow: null, skills: [{ id: 'om-fix' }, { id: 'deleted-skill' }] })
     const sent = stubFetch()
     await openDetail()
 
-    await waitFor(() => expect(document.querySelectorAll('[data-slot="gh-skill-chip"]')).toHaveLength(1))
+    await waitFor(() => expect(document.querySelectorAll('[data-slot="gh-skill-chip"]')).toHaveLength(2))
     expect(
       [...document.querySelectorAll<HTMLElement>('[data-slot="gh-skill-chip"]')].map((chip) => chip.dataset.skill),
-    ).toEqual(['om-fix'])
-    // The counter must agree with the chips and the POST — not report the phantom.
-    expect(document.querySelector('[data-slot="gh-skills-trigger"]')?.textContent).toContain('· 1')
+    ).toEqual(['om-fix', 'deleted-skill'])
+    expect(screen.getByText(/deleted-skill \(unchecked\)/)).toBeTruthy()
+    expect(document.querySelector('[data-slot="gh-skills-trigger"]')?.textContent).toContain('· 2')
 
     fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
     await waitFor(() =>
@@ -852,7 +852,7 @@ describe('a remembered pick the catalog no longer has (open-mercato/cezar#408)',
     const body = sent.find((request) => request.method === 'POST' && request.path === '/api/v1/runs')?.body as {
       steps?: Array<{ skill: string }>
     }
-    expect(body.steps?.map((step) => step.skill)).toEqual(['om-fix'])
+    expect(body.steps?.map((step) => step.skill)).toEqual(['om-fix', 'deleted-skill'])
   })
 })
 

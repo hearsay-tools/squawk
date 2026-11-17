@@ -2,6 +2,7 @@
  *  Parsing lives apart from the component so it stays table-testable. */
 export interface NewTaskParams {
   skill: string
+  skillPath?: string
   ref: string
 }
 
@@ -9,6 +10,7 @@ export function parseNewTaskParams(search: string | URLSearchParams): NewTaskPar
   const params = typeof search === 'string' ? new URLSearchParams(search) : search
   return {
     skill: (params.get('skill') ?? '').trim(),
+    ...(params.has('skillPath') ? { skillPath: params.get('skillPath')! } : {}),
     ref: (params.get('ref') ?? params.get('task') ?? '').trim(),
   }
 }

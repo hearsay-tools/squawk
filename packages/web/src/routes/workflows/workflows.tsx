@@ -1,3 +1,4 @@
+import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import '../skills-workflows.css'
 import {
   DndContext,
@@ -23,8 +24,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 
 import { ApiError, createWorkflow, deleteWorkflow, parseWorkflow, postPlan } from '@/api/client'
-import { queryKeys, useSkills, useUiState, useWorkflows } from '@/api/queries'
-import type { Skill, WorkflowDef, WorkflowStepDef } from '@open-mercato/cezar-api-client'
+import { queryKeys, useRunnerSkills, useUiState, useWorkflows } from '@/api/queries'
+import type { WorkflowDef, WorkflowStepDef } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
@@ -105,7 +106,7 @@ export function WorkflowsRoute() {
 
 function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
   const workflowsQuery = useWorkflows()
-  const skillsQuery = useSkills()
+  const skillsQuery = useRunnerSkills()
   const uiStateQuery = useUiState()
   const queryClient = useQueryClient()
 
@@ -470,7 +471,7 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
 
         {/* What the pointer carries mid-drag: a copy of the pill/card, per dnd-kit. */}
         <DragOverlay>
-          <WbDragPreview dragging={dragging} steps={steps} skills={skills} />
+          <RunnerDragPreview dragging={dragging} steps={steps} skills={skills} />
         </DragOverlay>
       </DndContext>
 
@@ -516,7 +517,7 @@ function Canvas({
   onMove,
 }: {
   steps: WorkflowStepDef[]
-  skills: readonly Skill[]
+  skills: readonly RunnerSkill[]
   /** A drag (palette or step) is in flight — reveals the between-card insert affordances. */
   dragging: boolean
   /** The step id (or CANVAS_ID) under the pointer, for the insert line. */
@@ -585,7 +586,6 @@ function Canvas({
 function StepCard({
   step,
   index,
-  skills,
   insertBefore,
   onRemove,
   onMoveUp,
@@ -593,7 +593,7 @@ function StepCard({
 }: {
   step: WorkflowStepDef
   index: number
-  skills: readonly Skill[]
+  skills: readonly RunnerSkill[]
   /** A drag is in flight — hide the rest connector so it doesn't compete with the insert line. */
   dragging: boolean
   /** The drop indicator sits in the gap above this card. */
@@ -602,6 +602,7 @@ function StepCard({
   onMoveUp?: (() => void) | undefined
   onMoveDown?: (() => void) | undefined
 }) {
+  const stepSkills = useRunnerSkills(step.runner, step.agentProfile)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: step.id,
     data: { type: 'step', step } satisfies DragItem,
@@ -623,7 +624,7 @@ function StepCard({
       <StepCardBody
         step={step}
         index={index}
-        skills={skills}
+        skills={stepSkills.data ?? []}
         onRemove={onRemove}
         onMoveUp={onMoveUp}
         onMoveDown={onMoveDown}
@@ -634,3 +635,10 @@ function StepCard({
 }
 
 
+
+/** A dragged step reads the same runner/account list as its card. */
+function RunnerDragPreview(props: Parameters<typeof WbDragPreview>[0]) {
+  const step = props.dragging?.type === 'step' ? props.dragging.step : undefined
+  const listed = useRunnerSkills(step?.runner, step?.agentProfile, !!step)
+  return <WbDragPreview {...props} skills={step ? listed.data ?? [] : props.skills} />
+}

@@ -1,3 +1,4 @@
+import { writeMockSkills } from '../../packages/cezar/scripts/mock-skill-fixtures.mjs';
 // The browser harness owns these catalogs; checkout catalogs never seed the server.
 import { execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -16,16 +17,25 @@ export function replaceProjectCatalogs(root) {
   if (tracked.length) execFileSync('git', ['-C', root, 'update-index', '--skip-worktree', '-z', '--stdin'], { input: tracked });
   const ownerPath = join(root, '.git/cezar-e2e-lane.json');
   const owner = JSON.parse(readFileSync(ownerPath, 'utf8'));
+  const exclude = join(root, '.git/info/exclude');
+  mkdirSync(dirname(exclude), { recursive: true });
+  writeFileSync(exclude, '', { flag: 'a' });
+  const fixtureIgnore = '/.mock-runner-skills.json';
+  if (!readFileSync(exclude, 'utf8').split(/\r?\n/).includes(fixtureIgnore)) {
+    writeFileSync(exclude, `\n${fixtureIgnore}\n`, { flag: 'a' });
+  }
   if (!owner.fixedCatalogs) {
     // These are fixture inputs, not project changes. Keep HEAD, log, index blobs and
     // non-catalog source edits intact so git UI specs see the original repository.
-    const exclude = join(root, '.git/info/exclude');
-    mkdirSync(dirname(exclude), { recursive: true });
     writeFileSync(exclude, `\n${PROJECT_CATALOGS.map(path => `/${path}/`).join('\n')}\n`, { flag: 'a' });
     writeFileSync(ownerPath, JSON.stringify({ ...owner, fixedCatalogs: true }));
   }
   for (const relative of PROJECT_CATALOGS) rmSync(join(root, relative), { recursive: true, force: true });
-  for (const [source, relative] of [['skills', '.ai/skills'], ['workflows', '.ai/cezar/workflows']]) {
+  writeMockSkills(root, [
+    { name: 'lint-fix', description: 'Fix lint findings in the changed files', scope: 'repo' },
+    { name: 'spec-writer', description: 'Write a feature specification', scope: 'repo' },
+  ]);
+  for (const [source, relative] of [['workflows', '.ai/cezar/workflows']]) {
     const target = join(root, relative);
     mkdirSync(dirname(target), { recursive: true });
     cpSync(join(fixtures, source), target, { recursive: true });

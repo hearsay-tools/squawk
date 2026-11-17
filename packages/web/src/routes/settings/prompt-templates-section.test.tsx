@@ -18,8 +18,8 @@ let requests: Array<{ method: string; url: string; body?: unknown }> = []
 
 /** Two skills, deliberately global-first, so the project-first grouping rule (#377) is visible. */
 const SKILLS = [
-  { name: 'g-review', description: 'Global review', body: '', path: '/g/g-review', source: 'global' },
-  { name: 'om-fix', description: 'Fix an issue', body: '', path: '/p/om-fix', source: 'ai' },
+  { id: 'g-review', name: 'g-review', description: 'Global review', path: '/g/g-review', scope: 'user' },
+  { id: 'om-fix', name: 'om-fix', description: 'Fix an issue', path: '/p/om-fix', scope: 'repo' },
 ]
 
 function serve(uiState: Record<string, unknown> = {}, skills: unknown[] = SKILLS) {
@@ -44,10 +44,11 @@ function serve(uiState: Record<string, unknown> = {}, skills: unknown[] = SKILLS
       const method = init?.method ?? 'GET'
       const body = init?.body ? (JSON.parse(String(init.body)) as unknown) : undefined
       requests.push({ method, url, body })
+      if (url === '/api/v1/config') return new Response(JSON.stringify({ defaultRunner: 'claude' }), { headers: { 'content-type': 'application/json' } })
       if (url === '/api/v1/ui-state' && method === 'GET') return json(uiState)
       if (url === '/api/v1/ui-state' && method === 'PUT')
         return json({ ...uiState, ...(body as Record<string, unknown>) })
-      if (url.startsWith('/api/v1/skills')) return json(skills)
+      if (url.startsWith('/api/v1/runner-skills?runner=claude')) return json({ runner: 'claude', skills, problems: [], source: 'live' })
       return new Promise<never>(() => {})
     }),
   )
@@ -184,7 +185,8 @@ describe('the prompt templates section', () => {
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input)
         const method = init?.method ?? 'GET'
-        if (url === '/api/v1/ui-state' && method === 'GET')
+        if (url === '/api/v1/config') return new Response(JSON.stringify({ defaultRunner: 'claude' }), { headers: { 'content-type': 'application/json' } })
+      if (url === '/api/v1/ui-state' && method === 'GET')
           return new Response(JSON.stringify({}), { status: 200, headers: { 'content-type': 'application/json' } })
         if (url === '/api/v1/ui-state' && method === 'PUT')
           return new Response(JSON.stringify({ error: 'disk full' }), {
@@ -211,7 +213,7 @@ describe('assigning a template to a skill', () => {
   const option = (name: string) =>
     document.querySelector<HTMLElement>(`[data-slot="prompt-template-skill-option"][data-skill="${name}"]`)
 
-  /** Open the picker. The trigger is disabled until /api/v1/skills answers, so wait it out first —
+  /** Open the picker. The trigger is disabled until /api/v1/runner-skills?runner=claude answers, so wait it out first —
    *  a click on a disabled button is silently a no-op. */
   const openPicker = async (row: HTMLElement) => {
     await waitFor(() => expect(trigger(row).disabled).toBe(false))
@@ -338,12 +340,15 @@ describe('assigning a template to a skill', () => {
     expect(putBody()?.promptTemplates?.[0]).toMatchObject({ skills: ['om-fix', 'g-review'] })
   })
 
-  it('says so, rather than rendering nothing, when there are no skills to assign', async () => {
+  it('keeps typed skill ids available when the runner lists no skills', async () => {
     serve({}, [])
     renderSection()
     await waitFor(() => expect(rows()).toHaveLength(DEFAULT_PROMPT_TEMPLATES.length))
 
-    await waitFor(() => expect(trigger(rows()[0]!).disabled).toBe(true))
-    expect(trigger(rows()[0]!).textContent).toContain('no skills found')
+    expect(trigger(rows()[0]!).disabled).toBe(false)
+    fireEvent.click(trigger(rows()[0]!))
+    fireEvent.change(screen.getByPlaceholderText('search skills…'), { target: { value: 'unknown-id' } })
+    fireEvent.click(await screen.findByText('Use skill id “unknown-id” (unchecked)'))
+    expect(rows()[0]!.textContent).toContain('unknown-id')
   })
 })

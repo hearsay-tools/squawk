@@ -5,8 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readProductIdentity, type DisplayIdentity } from '../../product-identity'
 import { conversationDeliveryExplanation } from '@/routes/task-thread/conversation-presentation'
 import { createQueryClient } from '@/api/query-client'
-import { skillSourcesKey } from '@/api/skill-sources-client'
-import { TeamSourcesPanel } from '@/components/team-sources-panel'
 import { CopyAsCliCard } from '@/routes/automations/copy-as-cli-card'
 import { fromDefinition } from '@/routes/automations/editor-draft'
 import { cliOf } from './automation-cli'
@@ -51,17 +49,14 @@ describe('browser command hints', () => {
     // Queries stay pending; seeded sources expose the remote hint without a network dependency.
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})))
     const client = createQueryClient()
-    client.setQueryData(skillSourcesKey(), { sources: [], editable: false, configIssue: null })
     render(
       <QueryClientProvider client={client}>
         <MemoryRouter initialEntries={['/p/sample/settings']}>
           <CopyAsCliCard draft={draft} />
-          <TeamSourcesPanel />
         </MemoryRouter>
       </QueryClientProvider>,
     )
     expect(screen.getByText(`${state.identity.command} automation schema`)).toBeTruthy()
-    expect(screen.getByText(`${state.identity.command} remote-settings enable`)).toBeTruthy()
     expect(screen.getAllByText((text) => text.includes(`${state.identity!.command} automation add`)).length).toBeGreaterThan(0)
   })
 })

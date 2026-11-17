@@ -33,6 +33,8 @@ export interface ContinueAction {
   /** True while provider status is still loading. */
   providerPending: boolean
   startsNewConversation: boolean
+  skillRunner: Runner
+  skillAccount: string | null
   /** The runner, model and effort pills for the reopened session. */
   pills: ReactNode
   /**
@@ -230,6 +232,8 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   })
 
   return {
+    skillRunner: runner,
+    skillAccount: account ?? accountDefaults?.[runner] ?? DEFAULT_AGENT_ACCOUNT_ID,
     available,
     canContinue,
     startsNewConversation: continueStartsNewConversation(run, sessionStep, runner, account),

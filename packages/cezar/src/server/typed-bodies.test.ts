@@ -138,8 +138,6 @@ describe('every mutating route carries a typed body into AppType', () => {
     // for keys a validator declares, so a route that reverted to `c.req.query('x')` would fail
     // here — and would otherwise fail nowhere, since the handler keeps working either way.
     Assert<HasTypedInput<'/api/v1/fs/browse', '$get', 'query'>>,
-    Assert<HasTypedInput<'/api/v1/skills', '$get', 'query'>>,
-    Assert<HasTypedInput<'/api/v1/skills/importable', '$get', 'query'>>,
     Assert<HasTypedInput<'/api/v1/runs/:id/files', '$get', 'query'>>,
     Assert<HasTypedInput<'/api/v1/github', '$get', 'query'>>,
     Assert<HasTypedInput<'/api/v1/github/projects', '$get', 'query'>>,
