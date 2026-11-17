@@ -15,7 +15,7 @@ export interface RuleCases {
   /** Snippets the rule must leave alone. */
   valid: string[];
   /** Snippets the rule must report exactly once. */
-  invalid: string[];
+  invalid: (string | { code: string; errors: number })[];
 }
 
 RuleTester.describe = describe;
@@ -29,7 +29,7 @@ export function ruleCases(rule: AstRule, { file, valid, invalid }: RuleCases): v
   const asOxlintRule = oxlintAstRule(rule) as unknown as Parameters<RuleTester['run']>[1];
   new RuleTester({ cwd: repoRoot }).run(rule.name, asOxlintRule, {
     valid: valid.map((code) => ({ code, filename })),
-    invalid: invalid.map((code) => ({ code, filename, errors: 1 })),
+    invalid: invalid.map((entry) => typeof entry === 'string' ? { code: entry, filename, errors: 1 } : { ...entry, filename }),
   });
 }
 

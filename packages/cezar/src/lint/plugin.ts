@@ -16,6 +16,8 @@ import { runnerIdBranch } from './runner-id-branch.ts';
 import { runnerRosterLiteral } from './runner-roster-literal.ts';
 import { parityRunnerSubset } from './parity-runner-subset.ts';
 import { oxlintAstRule, type AstRule } from './ast-rule.ts';
+import { activeRunWriteRules } from './active-run-write.ts';
+import { activeRunLiteral, activeRunMapWrite } from './active-run.ts';
 import { launchReadOutsideResolver } from './launch-read-outside-resolver.ts';
 import { childKilledRead } from './child-killed-read.ts';
 import { runStoreTestkitImport } from './run-store-testkit-import.ts';
@@ -30,6 +32,7 @@ export const AST_RULES: AstRule[] = [
   parityRunnerSubset, rawQuerySetter, runFactReader, runHistoryReader, runnerFactCombination,
   runnerIdBranch, runnerRosterLiteral, testWaitDiscipline, undocumentedEnvName, unitWaitDiscipline,
   childKilledRead, runStoreTestkitImport, launchReadOutsideResolver,
+  activeRunLiteral, activeRunMapWrite, ...activeRunWriteRules,
 ];
 
 /** Every repository rule. `.oxlintrc.json` turns each one on as `cez/<name>`. */
