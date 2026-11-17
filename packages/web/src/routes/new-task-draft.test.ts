@@ -105,7 +105,7 @@ describe('the new-task draft store', () => {
       agentProfile: null,
       model: 'gpt-5-codex',
       effort: 'high',
-      planFirst: false,
+      planFirst: true,
       worktree: false,
       autonomous: null,
       archiveWhenDone: false,
@@ -122,7 +122,7 @@ describe('the new-task draft store', () => {
     resetDraft()
     localStorage.setItem('cez-new-task-draft', stored)
     expect(readDraft()).toMatchObject({ text: 'fix it', source: { source: 'skill', ref: 'om-fix' },
-      runner: 'codex', model: 'gpt-5-codex', effort: 'high', worktree: false, planFirst: false,
+      runner: 'codex', model: 'gpt-5-codex', effort: 'high', worktree: false, planFirst: true,
       autonomous: null, archiveWhenDone: false, autoMergePr: false, allowWorkers: true, allowMessaging: true })
   })
 
