@@ -253,9 +253,8 @@ describe('the full-screen /new against a live dry-run server', () => {
     const skillRefs = browser.evaluate(
       `[...document.querySelectorAll('[data-slot="source-option"][data-source-kind="skill"]')].map(o => o.dataset.sourceRef)`,
     ) as string[]
-    // The fixture's own two skills, in #377 order. Asserted by their relative order rather than
-    // by being the first two rows: a machine whose shared team-skill cache is populated
-    // (`getTeamSkillsCached`, global and unrelated to this repo) lists those here too, and they
+    // Keep the fixture's two skills in their expected relative order. The source menu can
+    // also include other entries from the selected runner's native list; those entries
     // must not decide an assertion about the fixture's grouping.
     expect(skillRefs.filter((ref) => ref === 'lint-fix' || ref === 'spec-writer')).toEqual([
       'lint-fix',

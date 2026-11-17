@@ -148,7 +148,7 @@ and an orchestrator keeps a whole queue of them moving.
   meetings, while the agents keep grinding through the backlog back on the server.
 - ⚡ **Setup tax.** No wizard, no env vars, no schema. Skills are Markdown, workflows
   are short YAML, and everything degrades: no `gh` → works without PRs, no network
-  → local skills still load, no `.ai/skills` → the bare prompt still runs.
+  → installed local skills still load, no selected skill → the plain prompt still runs.
 
 ---
 
@@ -161,8 +161,8 @@ and an orchestrator keeps a whole queue of them moving.
   and review a diff before it lands.
 - **Anyone with a backlog** who'd rather queue three tasks into isolated worktrees
   and pick the winners than babysit one terminal.
-- **Teams with shared conventions** who want their playbooks (skills) pulled from
-  a git repo, applied consistently, with zero per-project setup.
+- **Teams with shared conventions** who share playbooks through their runner’s
+  project configuration or tracked native skill folders.
 
 ---
 
@@ -311,13 +311,13 @@ Three words, no jargon — **task**, **skill**, **chain**:
   screenshots, PDFs, `.txt` or `.md` files to the task (paperclip, ⌘V or drag-drop;
   the agent gets each one as a real file on disk), or send follow-up messages into
   the live session while it works.
-- 📖 **Skills** are Markdown playbooks. Drop them in `.ai/skills/` or
-  `.ai/cezar/skills/`, or pull them from a shared **team skills repo** you name
-  in `skillsRepos` (a bare git clone cached globally in `<cache>/`). There is no
-  default team repo. Add, remove, enable and disable team repos on the **Skills** page,
-  which writes `skillsRepos` for you, and each team skill has its own on/off switch per project. A workflow step references one by
-  `skill: <name>` and its body becomes the agent's extra system prompt — so you
-  shape *how* the agent reasons without touching code.
+- 📖 **Skills** are playbooks your selected runner already has. Squawk lists that
+  runner's skills for the selected account and starts a pick through its native
+  trigger. Use the runner's own tools or tracked native skill folders to share
+  playbooks. The **Skills** page shows a read-only inventory with metadata,
+  paths when reported, problems and a Re-read button. A workflow step selects a
+  runner skill id with `skill: <id>`; a missing or ambiguous selection fails
+  before a model call. See [Skills](docs/areas/skills.md).
 - 🔗 **Chains (workflows)** stitch steps into a pipeline: agent steps plus shell
   checks, with bounded `onFail` retry loops. Write the YAML yourself, build one by
   drag-ordering skills in the **Workflows** tab, or press **Plan first** and let the
@@ -380,7 +380,7 @@ Task and project views share one browser window and live updates over Server-Sen
 | **Activity** | What each active task and worker does or waits for right now, and the open requests between tasks as lines. Live without a reload. **All projects** shows one panel per project. |
 | **Git** | In **More**. Branch, working-tree status, diff vs HEAD, recent commits (click one for its inline patch + GitHub link), and the configurable base branch that worktrees fork from and PRs target. |
 | **GitHub** | Open issues and PRs of the repo's origin, read through your logged-in `gh`. Hand an issue straight to the agent — pick a workflow and skills, one click runs it. |
-| **Skills** | Local skills plus any team skills repos you configured, each team skill with a per-project switch, and a rendered body + prompt preview. Refresh pulls the latest from the remote. |
+| **Skills** | Read-only skills reported by one runner and account, with native metadata, paths, problems and Re-read. |
 | **Workflows** | Build a chain by drag-ordering skills, save it as portable YAML, import/export, or delete. Built-ins always come back. |
 | **Settings** | Appearance (dark/light theme, accent, density), agent backends, notifications, and the skills catalog. |
 

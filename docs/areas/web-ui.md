@@ -8,9 +8,8 @@
 
 ## Project-directory reads before P5
 
-Skill grouping and empty-state path lists include `.ai/squawk/skills/` after the
-legacy project directory. Missing-worktree previews recognize both managed tree
-names. Runtime reads use the server's winning run source; client API shapes and
+Skills use the target runner and account inventory; see [Skills](skills.md).
+Missing-worktree previews recognize both managed tree names. Runtime reads use the server's winning run source; client API shapes and
 tracked `.ai/skills/`, `.ai/qa/` and `.ai/specs/` paths stay unchanged.
 
 ## Rules

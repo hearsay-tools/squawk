@@ -91,6 +91,28 @@ never a wire gap.
 
 §6 covers what a mapper emits. §7 covers what a runner does. A backend satisfies both.
 
+### Native skills
+
+`core/host-skill-catalog.ts` registers each runner's list adapter. Its
+`discover({ runner, cwd, accountHome }, signal)` call returns `{ skills, problems }`
+without a model turn: Claude `get_skills_dialog`, Codex `skills/list`, OpenCode
+`GET /skill`, pi RPC `get_commands`, omp `omp skill list --json`.
+`AgentRunSpec.skill = { id, path?, args }` opens a native skill turn; later input uses
+one `skill` content block in first position. `resumeFallbackSkill` triggers only on a
+fresh-session fallback, never on an actual resume. The adapter reports `session.resumed`.
+
+| Runner | Native trigger | `skillTriggerMidTurn` | `skillUnknownName` | `skillsSeenBySession` |
+| --- | --- | --- | --- | --- |
+| Claude | Last text block `/id args`; opening context in an earlier block | `false` | `silent` | `at-start` |
+| Codex | Structured skill item with the listed path plus text args on `turn/start`; never on steer or an active turn | `false` | `silent` | `live` |
+| OpenCode | `POST /session/{id}/command`; read the response in the background, SSE owns progress | `false` | `error` | `at-start` |
+| pi | Leading `/skill:id args`, with an argument on the same line; context after args | `true` | `silent` | `at-start` |
+| omp | `/skill:id args`; map the custom `skill-prompt` message once | `true` | `silent` | `at-start` |
+
+`core/runner-facts.ts` owns these facts. Shared code uses them to hold busy-turn
+triggers and choose the session's opening list or a live read. Selected-skill resolution
+and typed-name rules live in [Skills](docs/areas/skills.md).
+
 <a id="waits"></a>
 <a id="ci-wait-tool-contract-474"></a>
 
