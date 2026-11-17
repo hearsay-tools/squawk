@@ -4,6 +4,7 @@
  * discriminant narrowing, and drift guards.
  */
 import { describe, expect, it } from 'vitest';
+import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from './codex-ui-mapper.ts';
 
 import type { RunnerId } from './agent-runner.ts';
 import type {
@@ -161,7 +162,7 @@ describe('UiEvent vocabulary (compile-time contract)', () => {
       name: 'Bash',
       toolKind: 'execute',
       title: 'Ran npm test',
-      status: 'running',
+      status: CODEX_TOOL_STATUS_MAP.inProgress,
     };
     expect(label(tool)).toBe('Ran npm test');
     expect(label({ kind: 'message', id: 'i2', role: 'assistant', text: 'hi' })).toBe('hi');
