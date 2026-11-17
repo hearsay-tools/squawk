@@ -1,9 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from '@babel/parser';
+import { children, type AstRule } from './ast-rule.ts';
+import { literal } from './ast-syntax.ts';
 import { visit } from './home-boundary.ts';
 import { declaredRunnerIds, literalText, parserPlugins } from './runner-id-branch.ts';
-import { lineAt, repoRoot, type SourceRule } from './source-rule.ts';
+import { repoRoot } from './source-rule.ts';
 
 /**
  * `RUNNER_IDS` in `core/agent-runner.ts` is the one roster of runners. A second list written by
@@ -72,12 +74,18 @@ export function staleRunnerRosters(root = repoRoot): string[] {
   });
 }
 
-export const runnerRosterLiteral: SourceRule = {
+export const runnerRosterLiteral: AstRule = {
   name: 'runner-roster-literal',
   description: 'RUNNER_IDS is the one roster of runners; no other array literal lists every runner id (open-mercato/cezar#387).',
   applies,
-  check: (file, source) => scanRunnerRosters(file, source).map(offset => ({
-    line: lineAt(source, offset),
-    message: 'This array lists every runner id by hand, so a new runner would be missing here. Use RUNNER_IDS or isRunnerId() from packages/cezar/src/core/agent-runner.ts; a Node-free package derives from runnerSchema.options in packages/contract/src/runner.ts (open-mercato/cezar#387).',
-  })),
+  create(report, { file }) {
+    const ids = declared ??= declaredRunnerIds();
+    let remaining = (listed ??= readRunnerRosterExceptions()).find(entry => entry.file === file)?.count ?? 0;
+    return {
+      ArrayExpression(node) {
+        const named = new Set(children(node, 'elements').map(element => literal(element)));
+        if (ids.every(id => named.has(id)) && remaining-- <= 0) report(node, "This array lists every runner id by hand, so a new runner would be missing here. Use RUNNER_IDS or isRunnerId() from packages/cezar/src/core/agent-runner.ts; a Node-free package derives from runnerSchema.options in packages/contract/src/runner.ts (open-mercato/cezar#387).");
+      },
+    };
+  },
 };
