@@ -57,4 +57,4 @@ Implementation: [2026-11-15-run-lifecycle-facts.md](../../.ai/specs/2026-11-15-r
 epic hearsay-tools/squawk#3643.
 
 Coverage: each slice in the spec names its tests; the rules are covered by
-[ast-grep-rules.test.ts](../../packages/cezar/src/ast-grep-rules.test.ts).
+[owner rule cases](../../packages/cezar/src/lint/ast-rules-owners.test.ts).

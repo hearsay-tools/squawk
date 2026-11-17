@@ -1,6 +1,7 @@
+/* oxlint-disable cez/active-run-autosave-write-outside-owner -- Compile proof deliberately attempts writes that TypeScript must reject. */
 /** Getter/alias/helper compile proof; runtime reflection is checked by the encapsulation tests. */
-import type { ActiveRun } from '../../../packages/cezar/src/workflows/active-run.ts';
-import type { AutosaveGroup } from '../../../packages/cezar/src/workflows/run/worktree-autosave.ts';
+import type { ActiveRun } from '../../workflows/active-run.ts';
+import type { AutosaveGroup } from '../../workflows/run/worktree-autosave.ts';
 declare const state: ActiveRun;
 declare const other: ActiveRun;
 // @ts-expect-error The migrated slot cannot be replaced.

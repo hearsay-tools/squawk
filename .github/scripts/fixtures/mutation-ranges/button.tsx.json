@@ -1,0 +1,20 @@
+{
+  "origin": "4ad12fae576fb4610d146254de098cefc8c58106:packages/web/src/components/ui/button.tsx",
+  "file": "packages/web/src/components/ui/button.tsx",
+  "source": "import * as React from \"react\"\nimport { cva, type VariantProps } from \"class-variance-authority\"\nimport { Slot } from \"radix-ui\"\n\nimport { cn } from \"@/lib/utils\"\n\n/* Variant vocabulary comes from the Squawk masters, not stock shadcn:\n * `primary` (gold) and `contrast` (inverse surface) are the two CTAs, `danger-ghost` is the\n * destructive affordance. There is deliberately no `secondary`/`link` — the design system doesn't use them.\n */\nconst buttonVariants = cva(\n  \"inline-flex shrink-0 items-center justify-center gap-[7px] rounded-md font-semibold whitespace-nowrap transition-[background-color,border-color,opacity,filter] outline-hidden focus-visible:ring-[3px] focus-visible:ring-ring/50 enabled:active:brightness-90 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4\",\n  {\n    variants: {\n      variant: {\n        primary: \"bg-action text-action-foreground pointer-hover:brightness-[0.96]\",\n        contrast: \"bg-contrast text-contrast-foreground pointer-hover:brightness-[0.96]\",\n        outline: \"border border-border bg-card text-foreground pointer-hover:bg-muted\",\n        ghost: \"text-muted-foreground pointer-hover:bg-muted pointer-hover:text-foreground\",\n        \"danger-ghost\": \"text-danger pointer-hover:bg-danger/10\",\n      },\n      size: {\n        default: \"h-11 px-3.5 text-[13px]\",\n        sm: \"h-[30px] rounded-sm px-2.5 text-[13px]\",\n        icon: \"size-9\",\n        \"icon-sm\": \"size-[30px] rounded-sm\",\n      },\n    },\n    defaultVariants: {\n      variant: \"primary\",\n      size: \"default\",\n    },\n  }\n)\n\nfunction Button({\n  className,\n  variant = \"primary\",\n  size = \"default\",\n  asChild = false,\n  ...props\n}: React.ComponentProps<\"button\"> &\n  VariantProps<typeof buttonVariants> & {\n    asChild?: boolean\n  }) {\n  const Comp = asChild ? Slot.Root : \"button\"\n\n  return (\n    <Comp\n      data-slot=\"button\"\n      data-variant={variant}\n      data-size={size}\n      className={cn(buttonVariants({ variant, size, className }))}\n      {...props}\n    />\n  )\n}\n\nexport { Button, buttonVariants }\n",
+  "ranges": [
+    {
+      "name": "Button",
+      "range": {
+        "start": {
+          "line": 35,
+          "column": 0
+        },
+        "end": {
+          "line": 56,
+          "column": 1
+        }
+      }
+    }
+  ]
+}

@@ -1,12 +1,13 @@
 'use strict';
-// Shared ast-grep function identities for the PR report and whole-file mutation command.
+// Shared AST function identities for the PR report and whole-file mutation command.
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { readFileSync } = require('node:fs');
+const { parse } = require('@babel/parser');
 
 const position = p => p.line * 1e7 + p.column;
 const contains = (range, point) => position(range.start) <= position(point) && position(point) < position(range.end);
 
-/** sg supplies syntax ranges; only names are read from each matched node's header. */
+/** The parser supplies syntax ranges; only names are read from each matched node's header. */
 function namedRanges(nodes) {
   const classes = nodes.filter(n => /^class\s/.test(n.text)).map(n => ({ ...n, name: /^class\s+([\w$]+)/.exec(n.text)?.[1] }));
   return nodes.flatMap(n => {
@@ -21,13 +22,42 @@ function namedRanges(nodes) {
   });
 }
 
+// Keep the former parser's syntax scope, including its excluded wrapped initializers.
+function rangeNode(node) {
+  if (node.type === 'VariableDeclarator') {
+    return ['ArrowFunctionExpression', 'FunctionExpression'].includes(node.init?.type)
+      && !node.init.generator && !node.init.extra?.parenthesized;
+  }
+  return (node.type === 'FunctionDeclaration' && !node.generator)
+    || (node.type === 'ClassDeclaration' && !node.abstract)
+    || ['ClassMethod', 'ClassPrivateMethod', 'ObjectMethod'].includes(node.type);
+}
+
 function functionRanges(file, cwd = process.cwd()) {
-  const rule = { id: 'mutation-functions', language: file.endsWith('.tsx') ? 'Tsx' : 'TypeScript', rule: { any: [
-    { kind: 'function_declaration' }, { kind: 'method_definition' }, { kind: 'class_declaration' },
-    { kind: 'variable_declarator', has: { field: 'value', any: [{ kind: 'arrow_function' }, { kind: 'function_expression' }] } },
-  ] } };
-  const output = execFileSync(path.join(cwd, 'node_modules/.bin/sg'), ['scan', '--inline-rules', JSON.stringify(rule), '--json=compact', file], { cwd, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
-  return namedRanges(JSON.parse(output));
+  const source = readFileSync(path.resolve(cwd, file), 'utf8');
+  const ast = parse(source, {
+    sourceType: 'unambiguous', tokens: true,
+    plugins: ['typescript', 'decorators', ...(file.endsWith('.tsx') ? ['jsx'] : [])],
+  });
+  const lines = source.split('\n');
+  const point = loc => ({ line: loc.line - 1, column: [...lines[loc.line - 1].slice(0, loc.column)].length });
+  const nodes = [];
+  function visit(node) {
+    if (!node || typeof node.type !== 'string') return;
+    if (rangeNode(node)) {
+      // Method decorators are outside the syntax range; class decorators are inside it.
+      const decorator = node.type.endsWith('Method') && node.decorators?.at(-1);
+      const start = decorator ? ast.tokens.find(token => token.start >= decorator.end && typeof token.type === 'object') : node;
+      nodes.push({ text: source.slice(start.start, node.end), range: { start: point(start.loc.start), end: point(node.loc.end) } });
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (['loc', 'tokens', 'comments'].includes(key)) continue;
+      if (Array.isArray(value)) value.forEach(visit);
+      else visit(value);
+    }
+  }
+  visit(ast.program);
+  return namedRanges(nodes);
 }
 
 function functionOf(location, ranges) {

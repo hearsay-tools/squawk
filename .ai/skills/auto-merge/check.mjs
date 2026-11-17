@@ -35,19 +35,18 @@ export const NEVER = [
     'squeal.config.json',
     'scripts/{test-changed,test-inputs,test-git-env,prepr,check-typecheck-coverage,test-home-env,test-browser-home-env,test-home-setup,test-install-marker,test-sandbox,test-package,e2e-affected,ci-test-selection,check-workspace-resolution}.mjs',
     '.ai/scripts/**', '**/tsconfig*.json',
-    'packages/cezar/src/{ast-grep-rules,test-outbound-guard,test-launch-guard,home/test-home-selector}.testkit.ts',
+    'packages/cezar/src/{test-outbound-guard,test-launch-guard,home/test-home-selector}.testkit.ts',
   ] },
   { why: 'gate or test harness', source: true, globs: ['packages/web/e2e/*.{ts,mjs}', 'packages/web/e2e/spec-map/**'] },
   { why: 'lint gate', source: true, except: [LINT_CASES], globs: [
-    'packages/cezar/src/lint/**', '.oxlintrc.json', 'sgconfig.yml',
-    '.ai/ast-grep/*', '.ai/ast-grep/{rules,utils,launch-read-normalization}/**',
+    'packages/cezar/src/lint/**', '.oxlintrc.json',
     'packages/cezar/src/{file-length,test-wait-discipline,test-wait-discipline-polls}.baseline.json',
     'packages/web/src/test/{card-2-contrast,search-params-discipline,unit-wait-discipline}.baseline.json',
   ] },
   { why: 'guard test change', unless: 'adds', globs: [
     'packages/cezar/src/server/{contract-parity*,route-parity,versioned-surface,bc-route-inventory,typed-bodies,api-types,origin-guard,host-guard}.test.ts',
     'packages/cezar/src/{contract-import-boundaries,contract-subpaths,test-wait-discipline,pack-check}.test.ts',
-    'packages/cezar/src/lint/**/*.{test,testkit}.ts', LINT_CASES, '.ai/ast-grep/{rule-tests,fixtures}/**',
+    'packages/cezar/src/lint/**/*.{test,testkit}.ts', LINT_CASES,
     'packages/cezar/test/e2e/inline-contract.test.ts',
 
     'packages/web/src/test/{api-client-subpaths,e2e-wait-discipline}.test.ts', 'packages/web/src/design-guardian.test.ts',

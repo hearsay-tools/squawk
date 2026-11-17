@@ -51,7 +51,6 @@ for (const [relative, why] of [
   ['scripts/check-typecheck-coverage.mjs', 'gate or test harness'],
   ['scripts/test-home-env.mjs', 'gate or test harness'],
   ['scripts/test-package.mjs', 'gate or test harness'],
-  ['packages/cezar/src/ast-grep-rules.testkit.ts', 'gate or test harness'],
   ['packages/cezar/src/lint/run.ts', 'lint gate'],
   ['packages/cezar/src/lint/home-readers.baseline.json', 'lint gate'],
   ['packages/cezar/src/file-length.baseline.json', 'lint gate'],
@@ -63,12 +62,6 @@ for (const [relative, why] of [
   ['scripts/test-browser-home-env.mjs', 'gate or test harness'],
   ['packages/web/product-identity.ts', 'build or release source'],
   ['.oxlintrc.json', 'lint gate'],
-  ['sgconfig.yml', 'lint gate'],
-  ['.ai/ast-grep/rules/some-rule.yml', 'lint gate'],
-  ['.ai/ast-grep/utils/some-util.yml', 'lint gate'],
-  ['.ai/ast-grep/launch-read-normalization.yml', 'lint gate'],
-  ['.ai/ast-grep/rule-tests/some-rule-test.yml', 'guard test change'],
-  ['.ai/ast-grep/fixtures/some-case.compile.ts', 'guard test change'],
   ['packages/cezar/src/lint/plugin.test.ts', 'guard test change'],
 ]) test(`changing ${relative} requires owner review`, t => {
   const [before, after] = relative.endsWith('.json') ? ['{ "first": 1 }\n', '{ "first": 2 }\n'] : ['first: 1\nsecond: 2\n', 'first: 1\nsecond: 3\n'];
@@ -79,8 +72,6 @@ for (const [relative, why] of [
 
 for (const relative of [
   'packages/web/e2e/new-flow.e2e.ts',
-  '.ai/ast-grep/rule-tests/some-rule-test.yml',
-  '.ai/ast-grep/fixtures/some-case.compile.ts',
   'packages/cezar/src/lint/plugin.test.ts',
 ]) test(`adding cases to ${relative} qualifies`, t => {
   const added = checkChange(t, relative, 'first: 1\n', 'first: 1\nsecond: 2\n');
@@ -94,8 +85,6 @@ test('path rules name each guarded file, file mode change and new baseline', asy
   const file = (relative, change = {}) => ({ path: relative, status: 'M', oldMode: '100644', newMode: '100644', adds: ['new'], dels: ['old'], ...change });
   assert.deepEqual(pathReasons({ files: [
     file('.oxlintrc.json'),
-    file('.ai/ast-grep/rule-tests/added-test.yml', { dels: [] }),
-    file('.ai/ast-grep/rule-tests/edited-test.yml'),
     file('packages/cezar/src/lint/run.test.ts', { dels: [] }),
     file('packages/cezar/src/lint/new-rule.baseline.json', { status: 'A', dels: [] }),
     file('docs/run.sh', { newMode: '100755' }),
@@ -103,7 +92,6 @@ test('path rules name each guarded file, file mode change and new baseline', asy
     file('README.md'),
   ] }), [
     'lint gate: .oxlintrc.json',
-    'guard test change: .ai/ast-grep/rule-tests/edited-test.yml',
     'new ratchet baseline: packages/cezar/src/lint/new-rule.baseline.json',
     'lint gate: packages/cezar/src/lint/new-rule.baseline.json',
     'changes the file mode: docs/run.sh',

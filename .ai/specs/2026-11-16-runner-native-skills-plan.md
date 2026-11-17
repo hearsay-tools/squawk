@@ -363,7 +363,7 @@ runner, and an enable without the explicit argument is refused.
   `cez/skills-write-outside-load-run-skills`. The AST rule
   `cez/active-run-skills-write-outside-owner` stays: slice 3a changes what the `ActiveRun` skills
   group holds and updates its metadata in `packages/cezar/src/lint/active-run-write.ts`. Check the
-  rules' current form first: hearsay-tools/squawk#3775 started porting ast-grep rules to oxlint.
+  rules' current form first: hearsay-tools/squawk#3775 started porting YAML rules to oxlint.
 - Move first, then delete: `agent-config/seed.ts` uses `excludeFromGit` and
   `worktree-manifest.ts` uses `landsInside`, both from `skills-remote.ts`. Move the two
   helpers to a module that stays.

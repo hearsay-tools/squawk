@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // One local gate before a PR opens (spec: .ai/specs/2026-11-11-one-full-run-delivery-pipeline.md,
 // § Before the PR). It reads Squeal's results for the changed files and for lint, and runs
-// what Squeal does not cover: typecheck, citations, clones and GitHub's per-file patch limits. CI runs everything else.
+// what Squeal does not cover: repository lint checks, typecheck, citations, clones and GitHub's per-file patch limits. CI runs everything else.
 import { spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -186,6 +186,7 @@ export async function prepr({ base = 'origin/main', waitMs = SQUEAL_WAIT_MS, io 
   const files = changedFiles(base, io);
   const docsOnly = files.every(isDocsPath);
   const direct = [
+    ['repository lint', 'node', ['packages/cezar/src/lint/run.ts', '--repository-only']],
     ...(docsOnly ? [] : [['typecheck', 'npm', ['run', '--silent', 'typecheck']]]),
     ['citations', 'node', ['.github/scripts/check-citations.cjs', '--base', base]],
     ['clones', 'node', ['.github/scripts/check-clones.cjs', '--base', base, '--head', 'HEAD']],

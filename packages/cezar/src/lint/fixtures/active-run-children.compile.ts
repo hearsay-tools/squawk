@@ -1,6 +1,7 @@
+/* oxlint-disable cez/active-run-children-write-outside-owner -- Compile proof deliberately attempts writes that TypeScript must reject. */
 /** Compile with the same pinned tsc flags as active-run-usage.compile.ts. */
-import type { ActiveRun } from '../../../packages/cezar/src/workflows/active-run.ts';
-import type { ChildrenGroup } from '../../../packages/cezar/src/workflows/run/subagent-waits.ts';
+import type { ActiveRun } from '../../workflows/active-run.ts';
+import type { ChildrenGroup } from '../../workflows/run/subagent-waits.ts';
 declare const state: ActiveRun;
 declare const other: ActiveRun;
 // @ts-expect-error A migrated slot cannot be replaced through bracket access.

@@ -3,7 +3,7 @@ import { ruleCases } from './ast-rule.testkit.ts';
 import { activeRunWriteRules } from './active-run-write.ts';
 import { activeRunLiteral, activeRunMapWrite } from './active-run.ts';
 
-/** Every former ast-grep case, unchanged (hearsay-tools/squawk#3774). */
+/** Every former YAML case, unchanged (hearsay-tools/squawk#3774). */
 
 ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-boundary-write-outside-owner')!, {
   "file": "packages/cezar/src/workflows/run/example.ts",
@@ -611,7 +611,7 @@ ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-usage-write
 });
 
 
-// Counts measured against the deleted 9f43ee092 YAML with ast-grep --inline-rules --stdin.
+// Counts measured against the deleted 9f43ee092 YAML with the former parser on stdin.
 // Keep the JSON table readable by .ai/qa/3774/compare-owner-expressions.mjs.
 const OWNER_EXPRESSION_SHAPES = [
   {"name": "member", "expression": "GROUP.value", "bare": 1, "wrapped": 1},

@@ -194,8 +194,6 @@ test('each kind of changed file selects its specs, none, or every spec', () => {
     ['pnpm-lock.yaml', null],
     ['something/new.txt', null],
     // hearsay-tools/squawk#3728: reviewed paths no browser spec reads.
-    ['.ai/ast-grep/rules/no-bare-citation.yml', []],
-    ['sgconfig.yml', []],
     ['.oxlintrc.json', []],
     ['packages/cezar/src/lint/undocumented-env-name.ts', []],
     ['.ai/skills/dev-flow/SKILL.md', []],
@@ -248,7 +246,7 @@ test('when the branch touches mapped code, mapped files main changed after the m
   // The branch's own file is not drift; a drift file that needs every spec adds nothing.
   assert.deepEqual(result.drift.map(line => line.file), ['packages/web/src/App.tsx']);
   // Main's changes add nothing to a branch that touches no mapped code.
-  assert.deepEqual(pick(['.ai/ast-grep/rules/x.yml']).specs, []);
+  assert.deepEqual(pick(['.oxlintrc.json']).specs, []);
 });
 
 test('a mapped caller main changed keeps its evidenced specs when other drift lines have none', () => {
@@ -284,7 +282,7 @@ test('specs added or changed on main after the map run when the branch touches m
 test('an empty selection stays empty and carries its reason', () => {
   const specFiles = sampleMap().specs;
   const pick = files => selectSpecs({ files, map: sampleMap(), graph, specFiles });
-  const empty = pick(['.ai/ast-grep/rules/x.yml', 'docs/x.md']);
+  const empty = pick(['.oxlintrc.json', 'docs/x.md']);
   assert.equal(empty.all, false);
   assert.deepEqual(empty.specs, []);
   assert.equal(empty.reason, 'no changed file reaches a browser spec');
@@ -402,11 +400,11 @@ test('a base the branch shares no history with selects every spec, with the reas
 
 test('--ci reports each changed file and runs no spec for an empty selection, with its reason', t => {
   const { dir, put, map } = repository(t);
-  put('.ai/ast-grep/rules/x.yml', 'id: x\n');
+  put('.oxlintrc.json', '{}\n');
   put('.ai/skills/x/SKILL.md', '# x\n');
   const result = affected(dir, '--ci', '--plan', map());
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, / {2}\.ai\/ast-grep\/rules\/x\.yml: 0 specs \(lint rules/);
+  assert.match(result.stdout, / {2}\.oxlintrc\.json: 0 specs \(a lint configuration/);
   assert.match(result.stdout, / {2}\.ai\/skills\/x\/SKILL\.md: 0 specs \(repository skills/);
   assert.match(result.stdout, /Selected 0 of 3 specs: no changed file reaches a browser spec\./);
   assert.match(result.stdout, /PR CI runs no browser spec: the selector chose no spec: no changed file reaches a browser spec\./);

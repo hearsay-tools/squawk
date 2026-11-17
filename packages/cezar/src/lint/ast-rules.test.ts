@@ -3,7 +3,7 @@ import { ruleCases } from './ast-rule.testkit.ts';
 import { childKilledRead } from './child-killed-read.ts';
 import { runStoreTestkitImport } from './run-store-testkit-import.ts';
 
-/** Each AST rule's cases, carried over from its ast-grep rule-tests file (hearsay-tools/squawk#3774). */
+/** Each AST rule's cases, carried over from its former YAML rule-tests file (hearsay-tools/squawk#3774). */
 
 ruleCases(childKilledRead, {
   file: 'packages/cezar/src/core/watchdog.ts',

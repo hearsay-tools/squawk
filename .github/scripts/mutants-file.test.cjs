@@ -32,7 +32,7 @@ test('kind precedence and every mutator family, including unlisted Value mutator
   for (const name of ['ObjectLiteral', 'ArrayDeclaration', 'Regex', 'UnaryOperator', 'UpdateOperator', 'AssignmentOperator', 'ArithmeticOperator']) checkKind(name, 'x', 'y', 'Value');
 });
 
-test('ast-grep assigns nested names, methods, anonymous callbacks, and module code', t => {
+test('the parser assigns nested names, methods, anonymous callbacks, and module code', t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mutants-functions-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = path.join(dir, 'sample.ts');

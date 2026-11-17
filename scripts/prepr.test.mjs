@@ -378,3 +378,21 @@ for (const change of ['removed', 'modified', 'readded', 'renamed', 'deletion-onl
     assert.equal(lines.every(line => line.ok), change === 'removed', lines.map(line => line.text).join('\n'));
   });
 }
+
+
+test('prepr fails on runner-only lint even when Squeal oxlint is clean', async () => {
+  const io = fakeIo({ responses: {
+    squeal: ok(live([], doneLint)),
+    'node packages/cezar/src/lint/run.ts --repository-only': { code: 1, out: '', err: 'stale file-length pin' },
+  } });
+  const result = await prepr({ io, waitMs: 1000 });
+  assert.equal(result.failed, true);
+  assert.match(result.report, /FAIL: repository lint\nstale file-length pin/);
+});
+
+test('prepr runs repository lint for docs-only changes too', async () => {
+  const io = fakeIo({ files: 'docs/x.md\0', responses: { squeal: ok(live([], doneLint)) } });
+  const result = await prepr({ io, waitMs: 1000 });
+  assert.equal(result.failed, false);
+  assert.ok(io.calls.some(call => call[0] === 'node' && call[1] === 'packages/cezar/src/lint/run.ts' && call[2] === '--repository-only'));
+});

@@ -1,5 +1,5 @@
 /** Generated syntax probes for the twin-rule port (hearsay-tools/squawk#3774).
- * Old counts live as data beside this generator; tests never invoke ast-grep. */
+ * Old counts live as data beside this generator; tests never invoke the former parser. */
 export interface TwinProbe { ext: 'ts' | 'tsx'; code: string }
 const wrappers = [
   (x: string) => x,

@@ -62,7 +62,8 @@ Two facts decide the shape:
 
 1. One command, `npm run prepr`, prints one verdict and the evidence block for the PR body.
    It reads Squeal's results for the changed files and for lint. It runs only what Squeal
-   does not cover: typecheck, citations, clones and GitHub's per-file patch limits
+   does not cover: repository lint checks (file length, design CSS, wait discipline and
+   stale entries), typecheck, citations, clones and GitHub's per-file patch limits
    (hearsay-tools/cezarion#3338).
 2. The Squeal wait bound in this command is 2 minutes. When the bound expires with no
    failure, the command names the missing results and passes. CI runs them within minutes.

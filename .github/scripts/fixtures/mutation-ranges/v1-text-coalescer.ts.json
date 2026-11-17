@@ -1,0 +1,59 @@
+{
+  "origin": "4ad12fae576fb4610d146254de098cefc8c58106:packages/cezar/src/core/v1-text-coalescer.ts",
+  "file": "packages/cezar/src/core/v1-text-coalescer.ts",
+  "source": "/**\n * Per-item coalescing of streamed assistant text into whole v1 `text` events.\n *\n * The v1 `AgentEvent` contract treats `text` as a complete assistant block —\n * that is what claude emits, what the RunManager persists one NDJSON line per\n * event, and what every consumer renders as one paragraph (cockpit thread,\n * headless CLI). Codex and opencode stream deltas, so emitting each delta as\n * its own `text` event persisted one line per token: transcripts rendered one\n * paragraph per token, and turn-end markers split across deltas (`CE`+`Z`+\n * `:D`+`ONE`) slipped past the server's per-event marker stripping.\n *\n * Streaming display does not go through v1 at all — protocol v2's\n * `item.delta` (coalesced by `UiEventSink`) carries it — so v1 can afford\n * whole-block granularity.\n */\nexport class V1TextCoalescer {\n  /** Accumulated deltas per open item. Deltas with no item id share the ''\n   *  bucket (at most one anonymous item streams at a time). */\n  private readonly pending = new Map<string, string>();\n  /** Items already emitted — a late snapshot/delta must not double-emit. */\n  private readonly done = new Set<string>();\n\n  constructor(private readonly emitText: (text: string) => void) {}\n\n  /** Buffer one streamed delta of an item. */\n  append(itemId: string | undefined, delta: string): void {\n    if (delta === '') return;\n    const key = itemId ?? '';\n    if (this.done.has(key)) return;\n    this.pending.set(key, (this.pending.get(key) ?? '') + delta);\n  }\n\n  /**\n   * The item is final: emit its text exactly once — the wire snapshot when the\n   * backend sent one (authoritative full text), else the accumulated deltas.\n   */\n  complete(itemId: string | undefined, snapshotText?: string): void {\n    const key = itemId ?? '';\n    if (this.done.has(key)) return;\n    // The anonymous bucket is never latched: without an identity, \"already\n    // emitted\" can't be told apart from \"the next id-less item\".\n    if (key !== '') this.done.add(key);\n    let buffered = this.pending.get(key);\n    this.pending.delete(key);\n    if (buffered === undefined && key !== '') {\n      // Deltas that arrived without an item id belong to the only in-flight item.\n      buffered = this.pending.get('');\n      this.pending.delete('');\n    }\n    const text = snapshotText !== undefined && snapshotText !== '' ? snapshotText : (buffered ?? '');\n    if (text !== '') this.emitText(text);\n  }\n\n  /** Turn/session boundary: emit whatever never saw its item complete, in\n   *  arrival order, so interrupted turns still surface their partial prose.\n   *  The `done` latch survives on purpose — item/part ids are unique per\n   *  session, and a re-sent snapshot after the boundary must not re-emit. */\n  flush(): void {\n    for (const [key, text] of this.pending) {\n      if (text !== '') this.emitText(text);\n      if (key !== '') this.done.add(key);\n    }\n    this.pending.clear();\n  }\n}\n",
+  "ranges": [
+    {
+      "name": "V1TextCoalescer.constructor",
+      "range": {
+        "start": {
+          "line": 22,
+          "column": 2
+        },
+        "end": {
+          "line": 22,
+          "column": 67
+        }
+      }
+    },
+    {
+      "name": "V1TextCoalescer.append",
+      "range": {
+        "start": {
+          "line": 25,
+          "column": 2
+        },
+        "end": {
+          "line": 30,
+          "column": 3
+        }
+      }
+    },
+    {
+      "name": "V1TextCoalescer.complete",
+      "range": {
+        "start": {
+          "line": 36,
+          "column": 2
+        },
+        "end": {
+          "line": 51,
+          "column": 3
+        }
+      }
+    },
+    {
+      "name": "V1TextCoalescer.flush",
+      "range": {
+        "start": {
+          "line": 57,
+          "column": 2
+        },
+        "end": {
+          "line": 63,
+          "column": 3
+        }
+      }
+    }
+  ]
+}
