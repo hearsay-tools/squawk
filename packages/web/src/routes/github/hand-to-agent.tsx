@@ -560,7 +560,6 @@ function SkillsPicker({
     )
   }
 
-  if (skills.length === 0) return null
   return (
     <>
       <SkillPreviewDialog skill={preview} onClose={() => setPreview(null)} />

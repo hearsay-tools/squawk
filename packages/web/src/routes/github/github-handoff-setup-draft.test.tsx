@@ -988,3 +988,18 @@ describe('⌘/Ctrl+Enter submits the follow-up composer (open-mercato/cezar#408 
   })
 })
 
+
+it.each(['unavailable', 'failed'])('keeps typed ids usable in handoff when the runner list is %s', async (source) => {
+  const sent = stubFetch({
+    'GET /api/v1/runner-skills?runner=claude': () => jsonResponse({ runner: 'claude', skills: [], problems: [], source: 'unavailable' }, source === 'failed' ? 500 : 200),
+  })
+  await openDetail()
+  fireEvent.click(await screen.findByRole('button', { name: 'Choose skills' }))
+  fireEvent.change(screen.getByPlaceholderText('search skills…'), { target: { value: 'plugin:unchecked' } })
+  fireEvent.click(await screen.findByText('Use skill id “plugin:unchecked” (unchecked)'))
+  expect(document.querySelector('[data-slot="gh-skill-chips"]')?.textContent).toContain('plugin:unchecked (unchecked)')
+  fireEvent.keyDown(screen.getByPlaceholderText('search skills…'), { key: 'Escape' })
+  await waitForAgentRunEnabled()
+  fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
+  await waitFor(() => expect(postedRun(sent)).toMatchObject({ steps: [{ skill: 'plugin:unchecked' }] }))
+})
