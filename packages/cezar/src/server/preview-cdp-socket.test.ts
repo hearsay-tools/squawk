@@ -21,7 +21,7 @@ afterEach(async () => {
 });
 
 /** A host whose one grant is `good`; a connection echoes each command as a reply and records it. */
-function fakeHost(opts: { refuse?: string } = {}) {
+function fakeHost(opts: { refuse?: string; ready?: Promise<void> } = {}) {
   const received: string[] = [];
   const clients: AgentClient[] = [];
   let closes = 0;
@@ -30,6 +30,7 @@ function fakeHost(opts: { refuse?: string } = {}) {
     connectAgent: async (_token, client) => {
       if (opts.refuse) return { refused: opts.refuse };
       clients.push(client);
+      await opts.ready;
       return {
         fromClient: (text: string) => {
           received.push(text);
@@ -90,7 +91,9 @@ describe('the agent CDP proxy socket (hearsay-tools/cezarion#784)', () => {
   });
 
   it('forwards commands sent before the browser was ready, in order, and replies on the socket', async () => {
-    const fake = fakeHost();
+    let releaseReady!: () => void;
+    const ready = new Promise<void>(resolve => { releaseReady = resolve; });
+    const fake = fakeHost({ ready });
     const port = await listen(fake.host);
     const ws = new WebSocket(`ws://127.0.0.1:${port}/api/v1/preview/cdp/good`);
     const replies: unknown[] = [];
@@ -98,6 +101,11 @@ describe('the agent CDP proxy socket (hearsay-tools/cezarion#784)', () => {
     await new Promise(resolve => ws.once('open', resolve));
     ws.send(JSON.stringify({ id: 1, method: 'Target.getTargets' }));
     ws.send(JSON.stringify({ id: 2, method: 'Target.attachToTarget' }));
+    // A protocol pong follows both commands on the wire, while the browser link stays pending.
+    const received = new Promise<void>(resolve => ws.once('pong', () => resolve()));
+    ws.ping();
+    await received;
+    releaseReady();
     await vi.waitFor(() => expect(replies).toEqual([{ id: 1, result: {} }, { id: 2, result: {} }]), { timeout: HANG_GUARD_MS });
     expect(fake.received.map(text => JSON.parse(text).id)).toEqual([1, 2]);
     ws.close();

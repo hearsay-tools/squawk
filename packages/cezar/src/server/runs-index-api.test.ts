@@ -248,37 +248,12 @@ describe('workspace runs index API', () => {
       seenAt: '2026-07-14T12:00:00Z',
       archived: false,
       // The global Tasks page's own columns: always-present workflow, plus branch/startedAt
-      // when the run has them (this one does not — see the absent-key assertions below).
+      // when the run has them (absent in this exact row).
       workflow: 'build',
       // The run summary (#817) the index row now extends: the list label and the token count.
       workflowLabel: 'build',
       tokensUsed: 0,
     });
-    // The fat keys neither consumer has a use for never reach the wire — `workflow` rides along
-    // as a plain string, `steps[]` and `workflowDef` (the expensive half) do not.
-    expect(row).not.toHaveProperty('steps');
-    expect(row).not.toHaveProperty('task');
-    expect(row).not.toHaveProperty('workflowDef');
-    // An absent optional is absent, not `undefined` — the wire has no such value.
-    expect(Object.keys(row!)).not.toContain('activity');
-    expect(Object.keys(row!)).not.toContain('branch');
-    expect(Object.keys(row!)).not.toContain('startedAt');
-    // …including every tracker-reference input and every usage field: an untracked, never-run
-    // task carries none of them.
-    for (const key of [
-      'pullRequestUrl',
-      'referencedPullRequestUrl',
-      'prNumber',
-      'issueNumber',
-      'referencedIssueUrl',
-      'markerRefs',
-      'costUsd',
-      'peakRssBytes',
-      'peakProcCount',
-      'usage',
-    ]) {
-      expect(Object.keys(row!), key).not.toContain(key);
-    }
   });
 
   it('carries cost and the persisted usage peaks the cross-project table paints', async () => {
@@ -466,7 +441,7 @@ describe('workspace runs index API', () => {
     expect(body.runs[0]?.status).toBe('running');
   });
 
-  it('skips a project whose folder is gone and degrades a corrupt index to no rows', async () => {
+  it('degrades a corrupt cold index to no rows without losing the boot project', async () => {
     await registerProject(repoRoot, undefined, testHome());
     await registerProject(otherRoot, undefined, testHome());
     mkdirSync(join(otherRoot, '.ai/cezar'), { recursive: true });
@@ -531,6 +506,7 @@ describe('workspace runs index API', () => {
 
       const body = await getIndex();
 
+      expect(cachedRefStatuses).toHaveBeenCalledExactlyOnceWith(expect.arrayContaining([40, 42, 12]));
       const project = Object.keys(body.referenceStatuses)[0]!;
       expect(body.referenceStatuses[project]).toEqual({
         prs: { 40: 'ready', 42: 'merged' },

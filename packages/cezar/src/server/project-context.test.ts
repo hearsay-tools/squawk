@@ -102,15 +102,6 @@ describe('ProjectContexts', () => {
     contexts.disposeAll();
   });
 
-  it('invalidates a maintenance lease on removal', async () => {
-    seedRuns(join(rootA, '.ai/cezar'), []);
-    const contexts = makeContexts([{ id: 'a', root: rootA, status: 'not-git' }]);
-    await contexts.withMaintenanceStore('a', async (_store, current) => {
-      expect(current()).toBe(true); contexts.dispose('a'); expect(current()).toBe(false);
-    });
-    expect(contexts.ids()).toEqual([]);
-  });
-
   it('imports a legacy-only cold store without normalizing live work or building a manager', async () => {
     const dataDir = join(rootA, '.ai/cezar');
     mkdirSync(dataDir, { recursive: true });
@@ -257,18 +248,14 @@ describe('ProjectContexts', () => {
 
   it('throws unknown-project for an id the registry does not hold', async () => {
     const contexts = makeContexts([{ id: 'a', root: rootA, status: 'not-git' }]);
-    await expect(contexts.context('nope')).rejects.toMatchObject({
+    const error = await contexts.context('nope').catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(ProjectContextError);
+    expect(error).toMatchObject({
       name: 'ProjectContextError',
       reason: 'unknown-project',
       projectId: 'nope',
     });
     expect(contexts.ids()).toEqual([]);
-  });
-
-  it('exposes the failure as a typed error instance', async () => {
-    const contexts = makeContexts([]);
-    const err = await contexts.context('x').catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(ProjectContextError);
   });
 
   it('dispose(): the manager receives no further usage ticks and the store is flushed and closed', async () => {

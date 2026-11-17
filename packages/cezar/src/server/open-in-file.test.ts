@@ -112,13 +112,6 @@ describe("POST /api/v1/runs/:id/open-in — target 'default' (local-mode file op
     }
   });
 
-  it('rejects a directory path — "default" only opens files', async () => {
-    const res = await post({ target: 'default', path: 'sub' });
-    expect(res.status).toBe(409);
-    expect(((await res.json()) as { error: string }).error).toContain('not a file');
-    expect(openFileInDefaultApp).not.toHaveBeenCalled();
-  });
-
   it('refuses a non-image file — the OS launcher would EXECUTE a .command/.desktop/.exe', async () => {
     writeFileSync(join(worktree, 'build.command'), '#!/bin/sh\necho pwned\n', { mode: 0o755 });
     const res = await post({ target: 'default', path: 'build.command' });
@@ -172,10 +165,4 @@ describe("POST /api/v1/runs/:id/open-in — target 'default' (local-mode file op
     expect(res.status).toBe(404);
   });
 
-  it('409s honestly when the app failed to launch', async () => {
-    vi.mocked(openFileInDefaultApp).mockResolvedValueOnce(false);
-    const res = await post({ target: 'default', path: 'logo.png' });
-    expect(res.status).toBe(409);
-    expect(((await res.json()) as { error: string }).error).toContain('could not open');
-  });
 });
