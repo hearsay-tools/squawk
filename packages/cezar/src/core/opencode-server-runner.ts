@@ -1,5 +1,5 @@
 import { opencodeHttp } from './opencode-http.ts';
-import { skillOf, validSkillMessage } from './skill-trigger.ts';
+import { openingInput, skillOf, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { uiAskQuestions } from './ask.ts';
 import { opencodeSkillWarning, sessionErrorDetail, sessionErrorText } from './opencode-session-error.ts';
@@ -144,6 +144,7 @@ export const OPENCODE_SPEC_SUPPORT: AgentRunSpecSupport = {
   ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: 'prepended to the opening prompt_async text through prependSystemPrompt' },
   skill: { honored: true, via: 'POST session command; acknowledgement on SSE' },
+  resumeFallbackSkill: { honored: true, via: 'native opening trigger only when bootstrap opens a fresh session' },
   userPrompt: { honored: true, via: 'prompt_async text part' },
   images: { honored: false, reason: 'the adapter posts text parts only; image blocks are dropped' },
   cwd: { honored: true, via: 'opencode serve spawn cwd; the session is bound to it' },
@@ -801,14 +802,13 @@ class OpencodeSession implements AgentSession {
     // lost (a race this await closes; the bundled mock made it visible).
     await this.consumeEvents();
 
-    // Lost-session fallback uses the full skill-inclusive prompt Continue
-    // stashed in resumeFallbackSystemPrompt; a true resume re-prepends only
-    // extra+handoff (the skill already lives in the thread).
+    // A lost session can use the fallback system prompt supplied by its caller.
+    const opening = openingInput(this.spec, resumed);
     const systemPrompt = !resumed && requested
       ? (this.spec.resumeFallbackSystemPrompt ?? this.spec.systemPrompt)
       : this.spec.systemPrompt;
-    const first = prependSystemPrompt(systemPrompt, this.spec.userPrompt);
-    await this.prompt(first, 'opening', undefined, this.queuedPromptGeneration, this.spec.skill);
+    const first = prependSystemPrompt(systemPrompt, opening.userPrompt);
+    await this.prompt(first, 'opening', undefined, this.queuedPromptGeneration, opening.skill);
     if (this.refusedBeforeOpening) queueMicrotask(() => {
       this.refusedBeforeOpening = false;
       if (this.serverOpen && !this.pendingQuestion && !this.questionReply && this.pendingPermissions.size === 0 && !this.agentRequest) {

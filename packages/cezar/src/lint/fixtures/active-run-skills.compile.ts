@@ -10,10 +10,10 @@ const { catalog } = state.skills;
 catalog!.push(catalog![0]!);
 // @ts-expect-error Numeric array slots cannot be replaced.
 catalog![0] = other.skills.catalog![0]!;
-// @ts-expect-error Skill properties are getter-only.
-catalog![0]!.body = 'forged';
-// @ts-expect-error Nested team records are getter-only.
-catalog![0]!.team!.repo = 'forged';
+// @ts-expect-error Listed skill properties are read-only.
+catalog![0]!.path = 'forged';
+// @ts-expect-error The session query is read-only.
+state.skills.query!.accountHome = 'forged';
 declare const group: Parameters<(group: SkillsGroup) => void>[0];
-// @ts-expect-error A helper cannot replace the provisioning handle.
-group.liveSkillProvisioning = Promise.resolve();
+// @ts-expect-error A helper cannot replace the session query.
+group.query = undefined;

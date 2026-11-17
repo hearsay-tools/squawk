@@ -1515,7 +1515,7 @@ export class RunStore extends EventEmitter {
      *  a crash before a later write must still let reconciliation find the receipt's task. */
     automation?: RunRecord['automation'];
     automationTrigger?: RunRecord['automationTrigger'];
-    steps: Array<Pick<StepState, 'id' | 'name' | 'kind'>>;
+    steps: Array<Pick<StepState, 'id' | 'name' | 'kind' | 'skillPath'>>;
   }): RunRecord {
     if (this.openFailure) throw this.openFailure;
     const run = this.buildRun(input, randomUUID());

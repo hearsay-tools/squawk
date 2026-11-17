@@ -66,7 +66,6 @@ export const DEFAULT_PROMPT_TEMPLATES: readonly PromptTemplate[] = [
   {
     id: 'create-automation',
     label: 'Create an automation',
-    skills: ['create-cezarion-automation'],
     text:
       'Create an automation for this repository.\n'
       + 'Trigger: <a GitHub event or a schedule, e.g. every new pull request; every issue labelled `needs-agent`; every day at 04:00; weekdays at 07:30; every 6 hours>.\n'

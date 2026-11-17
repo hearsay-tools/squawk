@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
@@ -10,6 +10,24 @@ import { describeNativeSkillTriggers } from './runner-skill-trigger.testkit.ts';
 
 useRunners(onlyRunner('omp', () => new OmpRunner()));
 describeNativeSkillTriggers('omp');
+
+it('passes an omp mid-message skill token unchanged for native expansion', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'omp-mid-message-skill-'));
+  const stdinFile = join(dir, 'stdin.ndjson');
+  const prompt = 'Say hi, then run /skill:probe-project';
+  try {
+    const obs = await driveSeam('omp', 'baseline', {
+      spec: { cwd: dir, userPrompt: prompt, env: { CEZ_HANDOFF_FILE: '', CEZ_MOCK_STDIN_FILE: stdinFile } },
+    });
+    expect(obs.failure).toBeUndefined();
+    expect(obs.v1.filter(event => event.type === 'error')).toEqual([]);
+    expect(obs.result.text).toContain('TRIGGER-FIXTURE');
+    const input = readFileSync(stdinFile, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    expect(input.filter(row => row.userText)).toEqual([{ userText: prompt, imageCount: 0 }]);
+    expect(obs.v2.filter(event => event.type === 'item.completed' && event.item.kind === 'message' && event.item.role === 'user'))
+      .toMatchObject([{ item: { text: prompt } }]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 it.each(['human', 'agent'] as const)('correlates an omp expanded mid-turn %s trigger before its reply', async origin => {
   const dir = mkdtempSync(join(tmpdir(), 'omp-skill-consumption-'));

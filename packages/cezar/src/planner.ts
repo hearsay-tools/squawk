@@ -5,7 +5,9 @@ import { z } from 'zod';
 import type { RunnerFactory } from './core/agent-runner.ts';
 import { RUNNER_FACTS } from './core/runner-facts.ts';
 import { loadConfig } from './config.ts';
-import { discoverSkills, type Skill } from './skills.ts';
+import type { RunnerSkill } from '@open-mercato/cezar-contract/runner-skills';
+import { resolveRunnerSkill } from './core/runner-skill-reference.ts';
+import { RunnerSkillCatalog } from './core/runner-skill-catalog.ts';
 import { resolveProfileEnvForRoot } from './workspace/agent-profiles.ts';
 import { workflowStepSchema, type WorkflowStepDef } from './workflows/types.ts';
 import { parseStructured } from './core/structured-output.ts';
@@ -56,14 +58,11 @@ export interface PlanResult {
   fallback: boolean;
 }
 
-export async function planChain(repoRoot: string, task: string, builtin: readonly Skill[] = [], home: Home, createRunner: RunnerFactory): Promise<PlanResult> {
-  const [skills, config, verifyCommands] = await Promise.all([
-    discoverSkills(repoRoot, { builtin }, home),
+export async function planChain(repoRoot: string, task: string, catalog: RunnerSkillCatalog, home: Home, createRunner: RunnerFactory): Promise<PlanResult> {
+  const [config, verifyCommands] = await Promise.all([
     loadConfig(repoRoot, home),
     detectVerifyCommands(repoRoot),
   ]);
-  const skillNames = new Set(skills.map((s) => s.name));
-  const userPrompt = buildPlannerPrompt(task, skills, verifyCommands);
 
   // Plan with the configured default runner. `plannerModel` ("sonnet") is a
   // Claude alias, so only a runner that takes those gets it; another picks its
@@ -77,6 +76,13 @@ export async function planChain(repoRoot: string, task: string, builtin: readonl
   // same reason.
   const account = await resolveProfileEnvForRoot(repoRoot, config.defaultRunner, undefined, process.env, home).catch(() => null);
   const profileEnv = account?.env ?? {};
+  const listed = account === null ? [] : (await catalog.get({ runner: config.defaultRunner, cwd: repoRoot,
+    accountHome: account.profile.isDefault ? undefined : account.profile.path })).skills;
+  const skills = listed.filter(skill => resolveRunnerSkill(listed, { id: skill.id }, {
+    runner: config.defaultRunner, account: account?.profile.id ?? 'default', cwd: repoRoot,
+  }).skill === skill);
+  const skillNames = new Set(skills.map(skill => skill.id));
+  const userPrompt = buildPlannerPrompt(task, skills, verifyCommands);
   // One retry on an unparseable answer; a runner error goes straight to fallback.
   for (let attempt = 0; account !== null && attempt < 2; attempt++) {
     let text: string;
@@ -110,9 +116,9 @@ export async function planChain(repoRoot: string, task: string, builtin: readonl
 }
 
 /** The `[cez-planner]` marker lets the CEZ_DRY_RUN mock recognize a planning call. */
-function buildPlannerPrompt(task: string, skills: Skill[], verifyCommands: string[]): string {
+function buildPlannerPrompt(task: string, skills: RunnerSkill[], verifyCommands: string[]): string {
   const catalog = skills.length
-    ? skills.map((s) => `- ${s.name} — ${s.description ?? ''}`).join('\n')
+    ? skills.map((s) => `- ${s.id} — ${s.description ?? ''}`).join('\n')
     : '(no skills available)';
   const verify = verifyCommands.length
     ? verifyCommands.map((c) => `- ${c}`).join('\n')

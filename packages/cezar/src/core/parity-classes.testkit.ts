@@ -32,6 +32,9 @@ export const TURN_PATH_FACTS = {
   'inputDelivery.acknowledgement': facts => facts.inputDelivery.acknowledgement,
   'inputDelivery.humanInputAtTurnEnd': facts => facts.inputDelivery.humanInputAtTurnEnd,
   systemPromptOnResume: facts => facts.systemPromptOnResume,
+  skillTriggerMidTurn: facts => String(facts.skillTriggerMidTurn),
+  skillUnknownName: facts => facts.skillUnknownName,
+  skillsSeenBySession: facts => facts.skillsSeenBySession,
 } as const satisfies Record<string, (facts: RunnerFacts) => string>;
 
 export type TurnPathFact = keyof typeof TURN_PATH_FACTS;
@@ -69,6 +72,9 @@ export const FACT_VALUE_TESTS: Readonly<Record<TurnPathFact, Readonly<Record<str
   'inputDelivery.acknowledgement': { response: [FACT_VALUES] },
   'inputDelivery.humanInputAtTurnEnd': { 'never-held': [FACT_VALUES], 'always-held': [FACT_VALUES] },
   systemPromptOnResume: { 'in-thread': ['workflows/launch-system-prompt.test.ts'] },
+  skillTriggerMidTurn: { true: ['workflows/native-skill-input.test.ts'] },
+  skillUnknownName: { error: ['workflows/native-skill-input.test.ts'] },
+  skillsSeenBySession: { live: ['workflows/native-skill-input.test.ts'] },
 };
 
 export type ParityClass = 'every-runner' | 'shared' | 'no-session';
@@ -163,12 +169,12 @@ export const PARITY_FAMILIES = {
     T4: 'each runner\'s own default deadline, on its seam',
     T7: 'the seam row: each runner applies a set spec.timeoutMs in place of its default',
   }),
-  'skill-resume': shared('the skill system prompt on Continue is composed in Squawk', {
-    R53: 'the resumed skill prompt on each runner\'s wire', R54: 'the resumed skill prompt on each runner\'s wire',
-    R55: 'the resumed skill prompt on each runner\'s wire', R56: 'the resumed skill prompt on each runner\'s wire',
+  'skill-resume': shared('Continue selects a native trigger only for a fresh session', {
+    R53: 'the native resume trigger on each runner\'s wire', R54: 'the native resume trigger on each runner\'s wire',
+    R55: 'the native resume trigger on each runner\'s wire', R56: 'the native resume trigger on each runner\'s wire',
     R57: 'the recorded session on each runner\'s wire', R59: 'reuses each runner\'s recorded session',
   }),
-  'skill-provision': shared('skill installs go to every agent directory', { R95: 'branches on codex' }),
+  'skill-provision': shared('native reference resolution and cancellation live above the runner seam', { R92: 'selected native trigger on every runner wire', R95: 'typed native trigger on every runner wire' }),
   'automation-tools': everyRunner('creates and previews through each runner’s native tool transport on fresh, Continue and recovery paths'),
   'worktree-setup': shared('Cezar appends the setup note to the prompt'),
   'model-refusal': everyRunner('each runner maps its own model refusal'),

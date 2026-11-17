@@ -1,3 +1,4 @@
+import { RunnerSkillCatalog } from '../core/runner-skill-catalog.ts';
 import { fallbackProjectWriteError, projectPaths } from '../project-paths.ts';
 import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 import { assertProjectAdmitted, projectAdmissionRefusal } from '../server/cockpit-ownership.ts';
@@ -169,7 +170,7 @@ export class RunManager {
   constructor(
     store: RunStore,
     repoRoot: string,
-    options: { home: Home; createRunner: RunnerFactory; timings?: Partial<import('../core/runner-runtime.ts').RunnerTimings>; work?: TrackedWork; semaphore?: WorkspaceSemaphore; unreadInputGraceMs?: number; noWaitNudgeReplyMs?: number; subagentGraceMs?: number; subagentDeadlineMs?: number; preview?: PreviewHostLike | undefined; squawkPort?: (() => number | undefined) | undefined; cockpit?: { origin: string; projectId: string } | undefined; sweepBranches?: ((keep: number) => void) | undefined; toolActivity?: ToolActivityTracker | undefined; acquireCiResources: (workspace: object) => CiResources; memory?: RunMemory | undefined },
+    options: { skillCatalog?: RunnerSkillCatalog; home: Home; createRunner: RunnerFactory; timings?: Partial<import('../core/runner-runtime.ts').RunnerTimings>; work?: TrackedWork; semaphore?: WorkspaceSemaphore; unreadInputGraceMs?: number; noWaitNudgeReplyMs?: number; subagentGraceMs?: number; subagentDeadlineMs?: number; preview?: PreviewHostLike | undefined; squawkPort?: (() => number | undefined) | undefined; cockpit?: { origin: string; projectId: string } | undefined; sweepBranches?: ((keep: number) => void) | undefined; toolActivity?: ToolActivityTracker | undefined; acquireCiResources: (workspace: object) => CiResources; memory?: RunMemory | undefined },
   ) {
     this.#store = store;
     this.#repoRoot = repoRoot;
@@ -180,7 +181,7 @@ export class RunManager {
     const unreadInputGraceMs = options.unreadInputGraceMs ?? UNREAD_INPUT_GRACE_MS;
     this.#semaphore = options.semaphore ?? new WorkspaceSemaphore({ home: options.home });
     this.#toolActivity = options.toolActivity?.attach(store);
-    this.#context = { home: options.home, createRunner: options.createRunner, timings: options.timings, store, repoRoot, dataDir: this.#dataDir, semaphore: this.#semaphore, disposed: () => this.#disposed, work: options.work ?? new TrackedWork(), sweepBranches: options.sweepBranches, toolActivity: this.#toolActivity };
+    this.#context = { skillCatalog: options.skillCatalog, home: options.home, createRunner: options.createRunner, timings: options.timings, store, repoRoot, dataDir: this.#dataDir, semaphore: this.#semaphore, disposed: () => this.#disposed, work: options.work ?? new TrackedWork(), sweepBranches: options.sweepBranches, toolActivity: this.#toolActivity };
     const facade = this;
     this.#modules = composeRunModules(this.#context, {
       unreadInputGraceMs: () => unreadInputGraceMs,
@@ -349,6 +350,16 @@ export class RunManager {
    */
   setAutomationTools(tools: AutomationToolService | undefined): void { this.#modules.automationToolsSlot.setAutomationTools(tools); }
 
+  setSkillCatalog(catalog: RunnerSkillCatalog): void { this.#context.skillCatalog = catalog; }
+  runnerSkills(query: import('../core/runner-skill-catalog.ts').SkillCatalogQuery) {
+    this.#context.skillCatalog ??= new RunnerSkillCatalog({ adapters: {} });
+    return this.#context.skillCatalog.get(query);
+  }
+  sessionSkills(runId: string) {
+    const state = this.#active.get(runId);
+    return state ? this.#modules.runSkills.enabledSkills(state) : [];
+  }
+
   builtinSkills(): Skill[] { return launchContext.builtinSkills(this.#cockpit); }
 
   #delegationProvisioner: DelegationProvisioner | undefined;
@@ -446,6 +457,7 @@ export class RunManager {
 
   /** Remove a run from the live registries — keeps `waiting ⊆ active`. */
   #dropActive(runId: string): void {
+    this.#modules.inputDelivery.clearNativeInputs(runId);
     const state = this.#active.get(runId);
     releaseActiveResources(this.#store, runId, state);
     if (state) {
@@ -740,7 +752,7 @@ export class RunManager {
 
     // Every entry path loads the registry — `runContinuation` loads its own, and the one that
     // skipped this leaked raw `/skill` text to the backend (open-mercato/cezar#811). A failed discovery fails the run.
-    await this.#modules.runSkills.loadRunSkills(state, 'throw');
+
     const loop = await this.#modules.stepLoop.runWorkflowSteps(execution, launch, { ...openingInputs(this.#store, this.#dataDir, execution), setupNote });
     if (loop) await this.#modules.runSettlement.settleExecution(runId, state, loop);
   }

@@ -18,7 +18,7 @@ import { loadWorkflows } from '../workflows/load.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { toPastedContent } from '../workflows/pasted-content.ts';
 import type { StartRunInput } from '../workflows/run/types.ts';
-import { plannedWorkflow, stepsIssue, type WorkflowDef, type WorkflowStepDef } from '../workflows/types.ts';
+import { plannedWorkflow, workflowStepSchema, stepsIssue, type WorkflowDef, type WorkflowStepDef } from '../workflows/types.ts';
 import type { WorkspaceProject } from '../workspace/config.ts';
 import { taskWebhooks } from '../workspace/webhooks.ts';
 import { providersRequiredByWorkflow } from './provider-action-gate.ts';
@@ -52,6 +52,7 @@ type RegistryLookup = (projectId: string) => Promise<WorkspaceProject | undefine
 /** The options of a start request that become the run's input. */
 type StartRunOptions = Omit<StartRunInput, 'images' | 'stackedImages' | 'automation' | 'automationTrigger'> & {
   images?: Parameters<typeof toPastedContent>[0][] | undefined;
+  steps?: Array<WorkflowStepDef & { skillPath?: string | undefined }> | undefined;
 };
 
 /** The request id and payload hash of an idempotent start; none when the body carries no id. */
@@ -92,7 +93,7 @@ export async function resolveStartWorkflow(
   if (choice.steps) {
     // Inline chain: an approved plan runs as an ad-hoc workflow.
     const issue = stepsIssue(choice.steps);
-    return issue ? { error: issue, status: 400 } : { workflow: plannedWorkflow(choice.steps) };
+    return issue ? { error: issue, status: 400 } : { workflow: plannedWorkflow(choice.steps.map(step => workflowStepSchema.parse(step))) };
   }
   const { workflows } = await loadWorkflows(repoRoot);
   const workflow = workflows.find((w) => w.name === choice.workflow);
@@ -144,6 +145,9 @@ export function startRunInput(body: StartRunOptions): StartRunInput {
   const images = body.images?.map(toPastedContent);
   return {
     task: body.task,
+    ...(body.steps?.some(step => step.skillPath !== undefined) ? {
+      skillPaths: Object.fromEntries(body.steps.filter(step => step.skillPath !== undefined).map(step => [step.id, step.skillPath!])),
+    } : {}),
     notify: body.notify,
     model: body.model,
     effort: body.effort,

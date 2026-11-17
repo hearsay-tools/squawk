@@ -22,7 +22,8 @@ import { changesPayloadSchema } from '@open-mercato/cezar-contract/repo';
 import { pendingAskOf, type PendingAsk } from '@open-mercato/cezar-contract/pending-ask';
 import { asksQuestion } from '@open-mercato/cezar-contract/waits';
 import { runHistoryContextSchema } from '@open-mercato/cezar-contract/events';
-import { skillSchema } from '@open-mercato/cezar-contract/skills';
+import { runnerSkillListSchema } from '@open-mercato/cezar-contract/runner-skills';
+import { runnerSchema } from '@open-mercato/cezar-contract/runner';
 import { openUrl } from '../open-url.ts';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { runnerFlag, skillFlagIssue, skillTaskSteps } from '../workflows/types.ts';
@@ -491,6 +492,32 @@ function startToggles(values: Values) {
 }
 type Printer = (value: unknown) => void;
 
+async function skillWarning(cockpit: Cockpit, skill: string, runner: string | undefined): Promise<string | undefined> {
+  let warning: string | undefined;
+    // Discovery is advisory: the catalog can change before a queued run executes. The server
+    // fails a step with a missing skill, and idempotent retries still go to POST /runs.
+    const unverified = `could not check whether skill "${skill}" is available; a missing id fails the step`;
+    try {
+      const config = runner ? undefined : await request(cockpit, '/config');
+      const defaultRunner = config?.status === 200 && config.data && typeof config.data === 'object' ? runnerSchema.safeParse(Reflect.get(config.data, 'defaultRunner')) : undefined;
+      const selectedRunner = runner ?? (defaultRunner?.success ? defaultRunner.data : undefined);
+      const catalog = selectedRunner ? await request(cockpit, `/runner-skills?runner=${encodeURIComponent(selectedRunner)}`) : undefined;
+      if (catalog?.status === 200) {
+        const skills = runnerSkillListSchema.safeParse(catalog.data);
+        warning = skills.success
+          ? skills.data.skills.some((entry) => entry.id === skill)
+            ? undefined
+            : `skill "${skill}" is not currently available; a missing id fails the step`
+          : unverified;
+      } else {
+        warning = unverified;
+      }
+    } catch {
+      warning = unverified;
+    }
+  return warning;
+}
+
 async function start(cockpit: Cockpit, io: TaskIo, values: Values, task: string, print: Printer): Promise<number> {
   const waitMs = values.wait ? timeoutMs(values) : undefined;
   const requestId = (values['request-id'] as string | undefined) ?? randomUUID();
@@ -499,27 +526,7 @@ async function start(cockpit: Cockpit, io: TaskIo, values: Values, task: string,
   // The webhook is opt-in: only `--notify` subscribes the task, and the server refuses it on a
   // project with no webhook (400 with a hint). `--no-notify` stays accepted for older scripts.
   const notify = values['no-notify'] ? false : values.notify ? true : undefined;
-  let warning: string | undefined;
-  if (skill !== undefined) {
-    // Discovery is advisory: the catalog can change before a queued run executes. The server
-    // handles missing skills with a plain prompt, and idempotent retries still go to POST /runs.
-    const unverified = `could not check whether skill "${skill}" is available; the run may use the plain prompt`;
-    try {
-      const catalog = await request(cockpit, '/skills?wait=1');
-      if (catalog.status === 200) {
-        const skills = skillSchema.array().safeParse(catalog.data);
-        warning = skills.success
-          ? skills.data.some((entry) => entry.name === skill)
-            ? undefined
-            : `skill "${skill}" is not currently available; the run may use the plain prompt`
-          : unverified;
-      } else {
-        warning = unverified;
-      }
-    } catch {
-      warning = unverified;
-    }
-  }
+  const warning = skill === undefined ? undefined : await skillWarning(cockpit, skill, runner);
   const result = await request(cockpit, '/runs', {
     body: {
       task,

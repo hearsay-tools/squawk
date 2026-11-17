@@ -228,7 +228,7 @@ export const OWNER_POLICIES: Record<string, OwnerPolicy> = {
       "packages/cezar/src/workflows/run.ts",
       "packages/cezar/src/workflows/run/**"
     ],
-    "ignores": []
+    "ignores": ["packages/cezar/src/workflows/run/launch-read-resolver.ts"]
   },
   "skills-write-outside-load-run-skills": {
     "name": "skills-write-outside-load-run-skills",

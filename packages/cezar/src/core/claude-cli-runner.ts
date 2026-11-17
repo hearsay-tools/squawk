@@ -64,10 +64,8 @@ export interface ClaudeCliRunnerOptions {
  * repo `cwd`; `Bash` is narrowed to `Bash(<prefix>:*)` patterns only when the
  * grant carries a `bashAllowlist` — the zero-config default has none, so `Bash`
  * is unrestricted shell access (#430).
- *
- * Session mechanics (multi-turn stdin, EOF watchdog, reopen window) follow
- * github-janitor's `claudeRunner.ts`; the original single-turn adaptation
- * came from @cezar/core's `ClaudeCodeCliRunner`.
+ * Session mechanics follow github-janitor's `claudeRunner.ts`; the single-turn
+ * adaptation came from @cezar/core's `ClaudeCodeCliRunner`.
  */
 /**
  * What the claude CLI receives from each `AgentRunSpec` field (#284). Every
@@ -80,6 +78,7 @@ export const CLAUDE_SPEC_SUPPORT: AgentRunSpecSupport = {
   ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: '--append-system-prompt' },
   skill: { honored: true, via: 'last text block /id args; context in earlier blocks' },
+  resumeFallbackSkill: { honored: true, via: 'native opening trigger only when bootstrap opens a fresh session' },
   userPrompt: { honored: true, via: 'text block of the first stream-json user message on stdin' },
   images: { honored: true, via: 'image blocks ahead of the text in the first stdin message' },
   cwd: { honored: true, via: 'spawn cwd' },
@@ -312,7 +311,8 @@ export class ClaudeCliRunner implements AgentRunner {
       killTimer.unref?.();
     };
 
-    sendMessage(openingContent(spec));
+    // Claude refuses a missing --resume id before any turn; this adapter never starts a replacement.
+    sendMessage(openingContent(spec, Boolean(spec.resume && spec.sessionId)));
 
     const toolCalls: AgentToolCallRecord[] = [];
     let tokensUsed = 0;

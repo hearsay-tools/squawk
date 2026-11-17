@@ -1,3 +1,4 @@
+import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { AttachmentWriter } from './run/attachment-writer.ts';
 import { QueuedInput } from './run/queued-input.ts';
@@ -481,7 +482,7 @@ describe('a chain of 2 selected skills runs BOTH steps, in order (#410)', () => 
     await run('git', ['add', '-A'], { cwd: repoRoot });
     await run('git', [...GIT_ID, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
-    manager = createFixtureManager(store, repoRoot);
+    manager = createFixtureManager(store, repoRoot, { skillCatalog: fixedSkillCatalog(['om-auto-review-pr', 'om-auto-verify-pr-ui'].map(id => ({ id, name: id, scope: 'repo' }))) });
   });
 
   afterAll(async () => {
@@ -537,7 +538,9 @@ describe('a chain of 2 selected skills runs BOTH steps, in order (#410)', () => 
     // full text is pinned in `test/unit/workflow-types.test.ts`.
     const notes = readFileSync(join(repoRoot, 'notes.md'), 'utf8').trim().split('\n');
     expect(notes.length).toBe(2);
+    expect(notes[0]).toContain('/om-auto-review-pr');
     expect(notes[0]).toContain('you are running step 1 of 2');
+    expect(notes[1]).toContain('/om-auto-verify-pr-ui');
     expect(notes[1]).toContain('you are running step 2 of 2');
   }, 30_000);
 });
@@ -559,7 +562,7 @@ describe('a single agent step plus a check step gets NO chain note (#410)', () =
     await run('git', ['add', '-A'], { cwd: repoRoot });
     await run('git', [...GIT_ID, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
-    manager = createFixtureManager(store, repoRoot);
+    manager = createFixtureManager(store, repoRoot, { skillCatalog: fixedSkillCatalog(['project-conventions'].map(id => ({ id, name: id, scope: 'repo' }))) });
   });
 
   afterAll(async () => {
@@ -600,7 +603,7 @@ describe('a single agent step plus a check step gets NO chain note (#410)', () =
     expect(notes[0]).toContain('mock:cezar-done fix the login bug');
     expect(notes[0]).not.toContain('chain of');
     expect(notes[0]).not.toContain('earlier step');
-    expect(notes[0]).not.toContain('project-conventions');
+    expect(notes[0]).toContain('/project-conventions');
   }, 30_000);
 });
 

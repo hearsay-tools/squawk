@@ -1,3 +1,4 @@
+import { expect, it } from 'vitest';
 /* oxlint-disable cez/run-internals -- The retired name and module path are rule fixtures. */
 import { AST_RULES } from './plugin.ts';
 import { ruleCases } from './ast-rule.testkit.ts';
@@ -455,4 +456,12 @@ ruleCases(AST_RULES.find(rule => rule.name === 'run-memory-field-outside-owner')
     'class A { static accessor byRun = new Set() }',
     'class A { accessor #byRun = new WeakMap() }',
   ],
+});
+
+
+it('exempts only the launch read resolver from the skill reader rule', () => {
+  const rule = AST_RULES.find(rule => rule.name === 'skills-read-outside-enabled-skills')!;
+  expect(rule.applies('packages/cezar/src/workflows/run/launch-read-resolver.ts')).toBe(false);
+  expect(rule.applies('packages/cezar/src/workflows/run/skills-reader.ts')).toBe(true);
+  expect(rule.applies('packages/cezar/src/workflows/run.ts')).toBe(true);
 });

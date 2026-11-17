@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { buildPiArgs } from './pi-runner.ts';
+import { piBaseArgs } from './pi-args.ts';
 import type { SkillCatalog } from './runner-skill-catalog.ts';
 import { skillLines, skillProbe, type SkillDiscoveryOptions } from './skill-probe.ts';
 import { skillPathScope } from './skill-path-scope.ts';
@@ -19,7 +19,7 @@ export function parsePiSkills(value: unknown, cwd: string, userHome = ''): Skill
   }), problems: [] };
 }
 export function discoverPiSkills(options: SkillDiscoveryOptions): Promise<SkillCatalog> {
-  const args = buildPiArgs({ cwd: options.cwd, userPrompt: '', toolGrant: { kind: 'unset' } });
+  const args = piBaseArgs();
   return skillProbe('pi', [...args, '--no-session'], options, async (child, _signal, env) => {
     child.stdin.write('{"id":"skills","type":"get_commands"}\n');
     for await (const line of skillLines(child)) {

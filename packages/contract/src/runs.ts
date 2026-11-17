@@ -55,8 +55,6 @@ export const completionActionSchema = z.object({
   phase: z.enum(['pending', 'blocked', 'complete']),
   message: z.string().optional(),
 });
-
-
 const usageCounterSchema = z.number().finite().nonnegative();
 
 /** One step of a run's chain. */
@@ -90,6 +88,7 @@ export const stepStateSchema = z.object({
    *  that created it, so resume and Continue read this rather than the project's current
    *  selection. Absent on records written before accounts existed. */
   profileId: z.string().optional(),
+  skillPath: z.string().min(1).optional(), // Host-local copy; project skills are relative to the step's working folder.
   costUsd: z.number().optional(),
   /** Explicit provenance for engine-generated continuation steps. */
   synthetic: z.literal('continuation').optional(),
@@ -117,6 +116,7 @@ export type DiffStat = z.infer<typeof diffStatSchema>;
 
 /** One prompt message stacked onto a run while it waits for a free agent slot (#472). */
 export const queuedMessageSchema = z.object({
+  replayAfterOpen: z.literal(true).optional(), // NativeSkillInputQueue sets; launch hydration excludes; QueuedInput replays after open.
   id: z.string(),
   text: z.string(),
   /** `/api/v1/runs/:id/images/…` URLs — attachments are persisted, never inlined. Images and
@@ -941,6 +941,7 @@ export const createRunInputBaseSchema = z
  */
 export const createRunInputSchema = createRunInputBaseSchema
   .extend({
+    steps: z.array(workflowStepDefSchema.safeExtend({ skillPath: z.string().min(1).optional() })).min(1).max(8).optional(),
     /** Idempotent start (#504): a retry with the same id and payload answers `200` with the run
      *  the first request created; a different payload answers `409`. Scoped to the project. Not
      *  on the base schema, so an automation's task definition cannot carry one. */

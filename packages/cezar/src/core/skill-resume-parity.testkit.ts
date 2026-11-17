@@ -1,10 +1,9 @@
+import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
 import { partitionParity, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
-import { skillSchema } from '@open-mercato/cezar-contract/skills';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 /**
- * #790: a skill-driven task must keep `skillSystemPrompt` on Continue and
- * restart recovery for every runner that resends the system prompt, and must
- * not duplicate it into an in-thread resume.
+ * hearsay-tools/squawk#3751: Continue and recovery keep native skill/session behavior without
+ * injecting skill text or retriggering a skill in a resumed conversation.
  */
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -28,35 +27,23 @@ import {
 import { setRunStatus, readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 import { RunStore } from '../runs/store.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWork } from '../workflows/fixture-cleanup.testkit.ts';
-import { RunManager, skillSystemPrompt } from '../workflows/run.ts';
+import { RunManager } from '../workflows/run.ts';
 import { plannedWorkflow, skillTaskSteps } from '../workflows/types.ts';
 
 const execFileAsync = promisify(execFile);
 const GIT_IDENTITY = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
 
-const SKILL_NAME = 'resume-playbook';
+const SKILL_NAME = 'probe-project';
 const SKILL_DESCRIPTION = 'Playbook for continued skill-driven tasks.';
 const SKILL_BODY = 'PLAYBOOK-BODY-790-SENTINEL';
 const EXTRA_PROMPT = 'EXTRA-PROMPT-790';
-const MISSING_SKILL_LIFECYCLE = `skill /${SKILL_NAME} is not in the skill registry — its instructions were not re-sent to the continued session`;
 
-const RESENT = new Set(runnersWhere(facts => facts.systemPromptOnResume === 'resent'));
 const IN_THREAD = new Set(runnersWhere(facts => facts.systemPromptOnResume === 'in-thread'));
 const LOST_OPENCODE_SESSION =
   'OpenCode session ses_mock_1 no longer exists; the continuation runs in a fresh session without the earlier conversation.';
 
 function skillMarkdown(): string {
   return `---\nname: ${SKILL_NAME}\ndescription: ${SKILL_DESCRIPTION}\n---\n${SKILL_BODY}\n`;
-}
-
-function expectedSkillPrompt(repoRoot: string): string {
-  return skillSystemPrompt({
-    name: SKILL_NAME,
-    description: SKILL_DESCRIPTION,
-    body: SKILL_BODY,
-    path: join(repoRoot, '.ai/cezar/skills', SKILL_NAME, 'SKILL.md'),
-    source: skillSchema.shape.source.enum.cezar,
-  });
 }
 
 function parsedLines(recording: string): unknown[] {
@@ -146,6 +133,7 @@ function recordedSystemPrompt(backend: RunnerId, rec: Record<string, unknown>): 
     const text = input?.[0]?.text;
     if (typeof text === 'string') return systemFromPrepended(text);
   }
+  if (backend === 'opencode' && typeof rec.url === 'string' && rec.url.endsWith('/command')) return (rec.body as { arguments?: string }).arguments;
   if (backend === 'opencode' && typeof rec.url === 'string' && rec.url.includes('prompt_async')) {
     const parts = (rec.body as { parts?: Array<{ type?: string; text?: string }> } | undefined)?.parts;
     const text = parts?.[0]?.text;
@@ -184,10 +172,24 @@ function markWire(argsFile: string, stdinFile: string): { args: number; stdin: n
   return { args: fileText(argsFile).length, stdin: fileText(stdinFile).length };
 }
 
-function skillInPrompt(prompt: string, repoRoot: string): boolean {
-  const skill = expectedSkillPrompt(repoRoot);
-  return prompt.startsWith(skill) && prompt.includes(EXTRA_PROMPT)
-    && prompt.indexOf(skill) < prompt.indexOf(EXTRA_PROMPT);
+function skillInPrompt(prompt: string, _repoRoot: string): boolean {
+  return !prompt.includes(SKILL_BODY) && !prompt.includes('Selected skill:') && prompt.includes(EXTRA_PROMPT);
+}
+function hasNativeTrigger(backend: RunnerId, recording: string): boolean {
+  return parsedLines(recording).some(row => {
+    const rec = asRecord(row);
+    if (!rec) return false;
+    if (backend === 'codex') {
+      const input = asRecord(rec.params)?.input;
+      return rec.method === 'turn/start' && Array.isArray(input) && input.some(block => asRecord(block)?.type === 'skill');
+    }
+    if (backend === 'opencode') return typeof rec.url === 'string' && rec.url.endsWith('/command') && asRecord(rec.body)?.command === SKILL_NAME;
+    if (backend === 'claude') return Array.isArray(rec.blocks) && rec.blocks.some(block => {
+      const text = asRecord(block)?.text;
+      return typeof text === 'string' && text.startsWith(`/${SKILL_NAME} `);
+    });
+    return typeof rec.userText === 'string' && rec.userText.startsWith(`/skill:${SKILL_NAME} `);
+  });
 }
 
 const idleOwners = new WeakMap<RunManager, {
@@ -289,7 +291,7 @@ async function withSkillResumeRun(
     mkdirSync(join(repoRoot, '.ai/cezar/skills', SKILL_NAME), { recursive: true });
     writeFileSync(join(repoRoot, '.ai/cezar/skills', SKILL_NAME, 'SKILL.md'), skillMarkdown());
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
-    manager = createFixtureManager(store, repoRoot);
+    manager = createFixtureManager(store, repoRoot, { skillCatalog: fixedSkillCatalog([{ id: SKILL_NAME, name: SKILL_NAME, path: join(repoRoot, 'SKILL.md'), scope: 'repo' }]) });
     releaseIdle = observeIdle(manager, store);
     const started = manager.startRun(plannedWorkflow(skillTaskSteps(SKILL_NAME)), {
       task: promptFor(backend, 'baseline'),
@@ -310,7 +312,7 @@ async function withSkillResumeRun(
       releaseIdle!();
       seedRuns(dataDir, checkpoint);
       store = RunStore.open(dataDir, { keepLive: true });
-      manager = createFixtureManager(store, repoRoot);
+      manager = createFixtureManager(store, repoRoot, { skillCatalog: fixedSkillCatalog([{ id: SKILL_NAME, name: SKILL_NAME, path: join(repoRoot, 'SKILL.md'), scope: 'repo' }]) });
       releaseIdle = observeIdle(manager, store);
       await manager.recover();
     };
@@ -342,27 +344,24 @@ function assertLaunchKeepsSkill(backend: RunnerId, repoRoot: string, recording: 
   const prompts = systemPromptsFrom(backend, recording);
   expect(prompts.length, `${backend} launch recorded a system prompt`).toBeGreaterThan(0);
   const launch = prompts[0]!;
-  expect(skillInPrompt(launch, repoRoot), `${backend} launch includes skill before extra`).toBe(true);
+  expect(skillInPrompt(launch, repoRoot), `${backend} launch has extra context without skill text`).toBe(true);
+  expect(hasNativeTrigger(backend, recording)).toBe(true);
   return launch;
 }
 
 function assertContinuationSkill(
   backend: RunnerId,
   repoRoot: string,
-  launchPrompt: string,
+  _launchPrompt: string,
   continuationRecording: string,
 ): void {
   const prompts = systemPromptsFrom(backend, continuationRecording);
   expect(prompts.length, `${backend} continuation recorded a system prompt`).toBeGreaterThan(0);
   const continued = prompts[prompts.length - 1]!;
-  if (RESENT.has(backend)) {
-    expect(skillInPrompt(continued, repoRoot), `${backend} Continue resends the skill`).toBe(true);
-    expect(continued.startsWith(expectedSkillPrompt(repoRoot))).toBe(true);
-    expect(continued.slice(0, launchPrompt.length)).toBe(launchPrompt);
-  } else {
-    expect(continued.includes(SKILL_BODY), `${backend} in-thread resume must not resend the skill`).toBe(false);
-    expect(continued.includes(`Selected skill: /${SKILL_NAME}`)).toBe(false);
-  }
+  if (!IN_THREAD.has(backend)) expect(skillInPrompt(continued, repoRoot)).toBe(true);
+  expect(continued).not.toContain(SKILL_BODY);
+  expect(continued).not.toContain('Selected skill:');
+  expect(hasNativeTrigger(backend, continuationRecording)).toBe(false);
 }
 
 const PARTS: Readonly<Record<string, readonly string[]>> = {
@@ -422,11 +421,11 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
 
 export function describeSkillResumeParity(part: ParityPart, collect?: ParityCollector): void {
   const { describe, it } = partitionParity(part, PARTS, collect, 'skill-resume');
-describe('harness parity — skill system prompt on Continue (#790)', () => {
+describe('harness parity — native skill on Continue (#790)', () => {
   expect(SKILL_RESUME_CRITERIA.map((row) => row.id)).toEqual(['R53', 'R54', 'R55', 'R56', 'R57', 'R59']);
 
   for (const backend of RUNNER_IDS) {
-    it(`${backend} R53 keeps the skill system prompt on a live Continue`, async () => {
+    it(`${backend} R53 does not retrigger a skill on a resumed Continue`, async () => {
       await withSkillResumeRun(backend, async (fixture) => {
         const launchPrompt = assertLaunchKeepsSkill(backend, fixture.repoRoot, fixture.snapshotWire());
         await idleClose(fixture.manager, fixture.runId);
@@ -436,7 +435,7 @@ describe('harness parity — skill system prompt on Continue (#790)', () => {
       });
     }, 60_000);
 
-    it(`${backend} R54 keeps the skill system prompt when recover() resumes a persisted continuation`, async () => {
+    it(`${backend} R54 does not retrigger a skill when recover() resumes a persisted continuation`, async () => {
       await withSkillResumeRun(backend, async (fixture) => {
         const launchPrompt = assertLaunchKeepsSkill(backend, fixture.repoRoot, fixture.snapshotWire());
         await idleClose(fixture.manager, fixture.runId);
@@ -498,26 +497,15 @@ describe('harness parity — skill system prompt on Continue (#790)', () => {
       });
     }, 90_000);
 
-    it(`${backend} R55 ${RESENT.has(backend) ? 'warns once when the continued skill is gone' : 'skips the missing-skill warning on an in-thread resume'}`, async () => {
-      await withSkillResumeRun(backend, async (fixture) => {
-        assertLaunchKeepsSkill(backend, fixture.repoRoot, fixture.snapshotWire());
+    it(`${backend} R55 fails before a model call when the selected skill is gone`, async () => {
+      await withSkillResumeRun(backend, async fixture => {
         await idleClose(fixture.manager, fixture.runId);
-        rmSync(join(fixture.repoRoot, '.ai/cezar/skills', SKILL_NAME), { recursive: true, force: true });
-        const before = fixture.store.readEvents(fixture.runId).filter((event) => event.type === 'lifecycle' && String(event.message).includes('is not in the skill registry'));
-        expect(before).toEqual([]);
+        fixture.manager.setSkillCatalog(fixedSkillCatalog());
         const marked = fixture.markWire();
-        const continuedWire = await continueAndPark(fixture, { text: promptFor(backend, 'baseline') }, marked);
-        const warnings = fixture.store.readEvents(fixture.runId).filter((event) => event.type === 'lifecycle' && String(event.message).includes('is not in the skill registry'));
-        const continued = systemPromptsFrom(backend, continuedWire);
-        // The continuation's opening prompt; its turn end's nudge follows (hearsay-tools/cezarion#1234).
-        const last = continued[0] ?? '';
-        expect(last.includes(SKILL_BODY)).toBe(false);
-        expect(last.includes(`Selected skill: /${SKILL_NAME}`)).toBe(false);
-        if (RESENT.has(backend)) {
-          expect(warnings).toEqual([expect.objectContaining({ type: 'lifecycle', message: MISSING_SKILL_LIFECYCLE })]);
-        } else {
-          expect(warnings).toEqual([]);
-        }
+        expect(fixture.manager.continueRun(fixture.runId, { text: promptFor(backend, 'baseline') }).ok).toBe(true);
+        await waitFor(() => fixture.store.getRun(fixture.runId)?.status === 'failed');
+        expect(fixture.store.getRun(fixture.runId)?.error).toContain(`${backend} account "default"`);
+        expect(hasNativeTrigger(backend, fixture.wireSince(marked))).toBe(false);
       });
     }, 60_000);
   }
@@ -543,8 +531,8 @@ describe('harness parity — skill system prompt on Continue (#790)', () => {
           // The continuation's opening prompt; its turn end's nudge follows (hearsay-tools/cezarion#1234).
           const last = continued[0]!;
           expect(skillInPrompt(last, fixture.repoRoot)).toBe(true);
-          expect(last.startsWith(expectedSkillPrompt(fixture.repoRoot))).toBe(true);
-          expect(launchPrompt.startsWith(expectedSkillPrompt(fixture.repoRoot))).toBe(true);
+          expect(hasNativeTrigger(backend, continuedWire)).toBe(true);
+          expect(launchPrompt).not.toContain(SKILL_BODY);
         });
       } finally {
         if (savedClaude === undefined) delete process.env.CEZ_CLAUDE_BIN;
@@ -644,8 +632,8 @@ describe('opencode lost-session fallback (#790)', () => {
       const prompts = systemPromptsFrom('opencode', continued);
       expect(prompts.length).toBeGreaterThan(0);
       expect(skillInPrompt(prompts[0]!, fixture.repoRoot)).toBe(true);
-      expect(prompts[0]!.startsWith(expectedSkillPrompt(fixture.repoRoot))).toBe(true);
-      expect(launchPrompt.startsWith(expectedSkillPrompt(fixture.repoRoot))).toBe(true);
+      expect(hasNativeTrigger('opencode', continued)).toBe(true);
+      expect(launchPrompt).not.toContain(SKILL_BODY);
       const events = fixture.store.readEvents(fixture.runId);
       const notices = events.filter((event) => String(event.message).includes('no longer exists'));
       expect(notices).toHaveLength(1);

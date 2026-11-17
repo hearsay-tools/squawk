@@ -22,7 +22,7 @@ import * as configuration from '../config.ts';
 import * as profiles from '../workspace/agent-profiles.ts';
 import * as teamSkills from '../skills-remote.ts';
 import type { Skill } from '../skills.ts';
-import * as skillSource from '../skills.ts';
+import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { RunStore } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
@@ -40,6 +40,8 @@ const opened: AgentRunSpec[] = [];
 const sessions: AgentSession[] = [];
 const events: Array<((event: AgentEvent) => void) | undefined> = [];
 const delivered: Array<string | ContentBlock[]> = [];
+const agentDelivered: ContentBlock[][] = [];
+const transportTrace: Array<'agent' | 'human'> = [];
 const acceptedWorkflow: WorkflowDef = { name: 'accepted', source: 'built-in', steps: [{ id: 'work', prompt: 'ACCEPTED {{task}}' }] };
 const config = (values: object) => writeFileSync(join(root, '.ai/cezar/config.json'), JSON.stringify(values));
 
@@ -53,6 +55,8 @@ beforeEach(() => {
   sessions.length = 0;
   events.length = 0;
   delivered.length = 0;
+  agentDelivered.length = 0;
+  transportTrace.length = 0;
   runnerHook.runner = {
     backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
     run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: async () => {},
@@ -61,7 +65,7 @@ beforeEach(() => {
       let finish!: (result: AgentRunResult) => void;
       const result = new Promise<AgentRunResult>(resolve => { finish = resolve; });
       const end = () => { open = false; finish({ text: '', toolCalls: [], tokensUsed: 0 }); };
-      const session: AgentSession = { get open() { return open; }, result, end, interrupt: end, sendMessage: content => { delivered.push(content); return true; }, sendAgentMessage: async () => {}, discardQueuedMessages() {}, holdsHumanInput: () => false };
+      const session: AgentSession = { get open() { return open; }, result, end, interrupt: end, sendMessage: content => { transportTrace.push('human'); delivered.push(content); return true; }, sendAgentMessage: async content => { transportTrace.push('agent'); agentDelivered.push(content); }, discardQueuedMessages() {}, holdsHumanInput: () => false };
       opened.push(spec);
       sessions.push(session);
       events.push(onEvent);
@@ -295,10 +299,14 @@ async function finishInitial(id: string): Promise<void> {
   await waitForProduct(manager, store, () => !manager.isActive(id));
   expect(store.getRun(id)?.status).toBe('done');
 }
-function localSkill(body: string): void {
-  const dir = join(root, '.ai/skills/playbook');
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'SKILL.md'), `---\nname: playbook\ndescription: launch playbook\n---\n${body}\n`);
+function offerNativeSkill(id: string, path = join(root, '.claude/skills', id, 'SKILL.md')): void {
+  manager.setSkillCatalog(fixedSkillCatalog([{ id, name: id, scope: 'repo', path }]));
+}
+async function waitForSkillFailure(id: string, openedCount: number): Promise<void> {
+  // bound: the durable failure proves the selected native reference was refused before spawn.
+  await waitForProduct(manager, store, () => store.getRun(id)?.status === 'failed');
+  expect(store.getRun(id)?.error).toContain('claude account "default" skill');
+  expect(opened).toHaveLength(openedCount);
 }
 
 it('P6-03 P6-07 P6-11 P6-19 P6-23 P6-31 queued Continue keeps owning recipe and reads amended text and effort', async () => {
@@ -421,15 +429,15 @@ it('P6-27 queued Continue reads the native provider changed before reopening', a
   expect(store.getRun(target.id)?.modelIdentity).toBe('gateway/claude-sonnet-4-6');
 });
 
-it('P6-37 held task discovers the edited skill body after admission', async () => {
-  localSkill('OLD-SKILL-BODY');
+it('P6-37 held task resolves the native skill list after admission', async () => {
   const head = await heldHead();
   const workflow: WorkflowDef = { name: 'skill', source: 'built-in', steps: [{ id: 'work', prompt: '{{task}}', skill: 'playbook' }] };
   manager.startRun(workflow, { task: 'target', worktree: false });
-  localSkill('CURRENT-SKILL-BODY');
+  const path = join(root, '.claude/skills/current-playbook/SKILL.md');
+  offerNativeSkill('playbook', path);
   const launched = await releaseHead(head);
-  expect(launched.systemPrompt).toContain('CURRENT-SKILL-BODY');
-  expect(launched.systemPrompt).not.toContain('OLD-SKILL-BODY');
+  expect(launched.skill).toEqual({ id: 'playbook', path, args: 'target' });
+  expect(launched.systemPrompt).not.toContain('Selected skill:');
 });
 
 async function account(id: string): Promise<void> {
@@ -495,42 +503,83 @@ function disableTeamSkill(kind: 'skill' | 'source'): void {
   else config({ skillsRepos: [{ repo: 'fixture/launch-skills', ref: 'main', enabled: false }] });
 }
 
-it.each(['skill', 'source'] as const)('P6-38 later step excludes a team %s disabled after its registry was discovered', async kind => {
+it('P6-38 later step reads a replaced native skill list', async () => {
+  const firstPath = join(root, '.claude/skills/first-copy/SKILL.md');
+  const secondPath = join(root, '.claude/skills/second-copy/SKILL.md');
+  offerNativeSkill('playbook', firstPath);
+  const workflow: WorkflowDef = { name: 'skills', source: 'built-in', steps: [
+    { id: 'first', prompt: '{{task}}', skill: 'playbook' }, { id: 'second', prompt: '{{task}}', skill: 'playbook' },
+  ] };
+  const target = manager.startRun(workflow, { task: 'target', worktree: false });
+  expect((await waitForOpen(target.id, 1)).skill?.path).toBe(firstPath);
+  offerNativeSkill('playbook', secondPath);
+  await completeStep(0);
+  expect((await waitForOpen(target.id, 2)).skill?.path).toBe(secondPath);
+});
+
+it.each(['skill', 'source'] as const)('P6-38 later step still selects a native copy after the team %s is disabled', async kind => {
   offerTeamSkill();
+  offerNativeSkill('team-playbook');
   const workflow: WorkflowDef = { name: 'skills', source: 'built-in', steps: [
     { id: 'first', prompt: '{{task}}', skill: 'team-playbook' }, { id: 'second', prompt: '{{task}}', skill: 'team-playbook' },
   ] };
   const target = manager.startRun(workflow, { task: 'target', worktree: false });
   const first = await waitForOpen(target.id, 1);
-  expect(first.systemPrompt).toContain('TEAM-LIVE-BODY');
+  expect(first.skill?.id).toBe('team-playbook');
+  expect(first.systemPrompt).not.toContain('TEAM-LIVE-BODY');
   disableTeamSkill(kind);
   await completeStep(0);
   const second = await waitForOpen(target.id, 2);
+  expect(second.skill?.id).toBe('team-playbook');
   expect(second.systemPrompt).not.toContain('TEAM-LIVE-BODY');
 });
 
-it.each(['skill', 'source'] as const)('P6-39 Continue excludes a team %s disabled since its original session', async kind => {
+it.each(['skill', 'source'] as const)('P6-39 Continue retains the native fallback after the team %s is disabled', async kind => {
   offerTeamSkill();
+  offerNativeSkill('team-playbook');
   const workflow: WorkflowDef = { name: 'skill', source: 'built-in', steps: [{ id: 'work', prompt: '{{task}}', skill: 'team-playbook' }] };
   const target = manager.startRun(workflow, { task: 'target', worktree: false });
   const first = await waitForOpen(target.id, 1);
-  expect(first.systemPrompt).toContain('TEAM-LIVE-BODY');
+  expect(first.skill?.id).toBe('team-playbook');
+  expect(first.systemPrompt).not.toContain('TEAM-LIVE-BODY');
   await finishInitial(target.id);
   disableTeamSkill(kind);
   expect(manager.continueRun(target.id, { text: 'Continue' })).toEqual({ ok: true });
   const continued = await waitForOpen(target.id, 2);
+  expect(continued.skill).toBeUndefined();
+  expect(continued.resumeFallbackSkill?.id).toBe('team-playbook');
   expect(continued.systemPrompt).not.toContain('TEAM-LIVE-BODY');
 });
 
-it.each(['skill', 'source'] as const)('P6-40 live slash excludes a team %s disabled after the session opened', async kind => {
+it.each(['skill', 'source'] as const)('P6-40 live slash keeps the native session list after the team %s is disabled', async kind => {
+  await liveSlashAtBoundary(kind, 'after');
+});
+it.each(['skill', 'source'] as const)('P6-40 live slash accepted before turn-end keeps priority after the team %s is disabled', async kind => {
+  await liveSlashAtBoundary(kind, 'before');
+});
+async function liveSlashAtBoundary(kind: 'skill' | 'source', order: 'before' | 'after'): Promise<void> {
   offerTeamSkill();
+  offerNativeSkill('team-playbook');
   const target = manager.startRun(acceptedWorkflow, { task: 'target', worktree: false });
   await waitForOpen(target.id, 1);
   disableTeamSkill(kind);
+  if (order === 'after') {
+    events[0]!({ type: 'turn-end' });
+    await new Promise<void>(resolve => setImmediate(resolve)); // A human HTTP message arrives in a later task.
+    expect(transportTrace).toEqual(['agent']); // Main also sends its no-wait nudge before this human message exists.
+  }
   expect(manager.sendMessage(target.id, [{ type: 'text', text: '/team-playbook current input' }])).toBe(true);
-  expect(delivered).toEqual([[{ type: 'text', text: '/team-playbook current input' }]]);
+  expect(delivered).toEqual([]); // Claude holds this trigger behind the running turn (D6).
+  expect(transportTrace).toEqual(order === 'after' ? ['agent'] : []);
+  events[0]!({ type: 'turn-end' }); // The original turn, or the nudge's turn, now releases the trigger.
+  // bound: native reference resolution completes asynchronously before transport delivery.
+  await waitForProduct(manager, store, () => delivered.length === 1 &&
+    ![...fixtureWork(manager).pending.values()].some(label => label === 'nativeSkillInput'));
+  expect(delivered).toEqual([[{ type: 'skill', id: 'team-playbook', path: join(root, '.claude/skills/team-playbook/SKILL.md'), args: 'current input' }]]);
   expect(opened).toHaveLength(1);
-});
+  expect(transportTrace).toEqual(order === 'after' ? ['agent', 'human'] : ['human']);
+  expect(agentDelivered).toHaveLength(order === 'after' ? 1 : 0); // No Squawk input between human acceptance and delivery.
+}
 
 const pastedImage = (body: string) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/png', data: Buffer.from(body).toString('base64') } });
 function removeImage(id: string, url: string): void {
@@ -553,7 +602,7 @@ it('P6-15 queued Continue omits an image deleted before task-head hydration', as
   expect(store.readEvents(target.id).some(event => event.type === 'note' && String(event.message).startsWith('queued attachment ') && String(event.message).endsWith(' could not be read — starting without it'))).toBe(true);
 });
 
-it('P6-ATT-C-OPEN Continue reads checkpoint files after registry discovery and retains live image precedence', async () => {
+it('P6-ATT-C-OPEN Continue reads checkpoint files after native list discovery and retains live image precedence', async () => {
   const target = manager.startRun(acceptedWorkflow, { task: 'target', worktree: false });
   await waitForOpen(target.id, 1);
   await finishInitial(target.id);
@@ -563,9 +612,11 @@ it('P6-ATT-C-OPEN Continue reads checkpoint files after registry discovery and r
   let release!: () => void;
   const discovered = new Promise<void>(resolve => { entered = resolve; });
   const gate = new Promise<void>(resolve => { release = resolve; });
-  const discover = skillSource.discoverSkills;
-  vi.spyOn(skillSource, 'discoverSkills').mockImplementation(async (...args) => {
-    const result = await discover(...args);
+  const catalog = fixedSkillCatalog();
+  manager.setSkillCatalog(catalog);
+  const discover = catalog.get.bind(catalog);
+  vi.spyOn(catalog, 'get').mockImplementation(async query => {
+    const result = await discover(query);
     entered();
     await gate;
     return result;
@@ -646,23 +697,23 @@ it('P6-14 P6-34 a fresh retry selects the current project account and sends no o
   expect(store.getRun(target.id)?.steps[0]?.iterations).toBe(2);
 });
 
-it.each(['skill', 'source'] as const)('P6-37 held task excludes a team %s disabled before discovery', async kind => {
+it.each(['skill', 'source'] as const)('P6-37 held task fails a team-only selection with its team %s disabled', async kind => {
   offerTeamSkill();
   const head = await heldHead();
   const workflow: WorkflowDef = { name: 'skill', source: 'built-in', steps: [{ id: 'work', prompt: '{{task}}', skill: 'team-playbook' }] };
-  manager.startRun(workflow, { task: 'target', worktree: false });
+  const target = manager.startRun(workflow, { task: 'target', worktree: false });
   disableTeamSkill(kind);
-  const launched = await releaseHead(head);
-  expect(launched.systemPrompt).not.toContain('TEAM-LIVE-BODY');
+  manager.cancel(head);
+  await waitForSkillFailure(target.id, 1);
 });
 
-it('P6-37 held task omits a skill source removed before discovery', async () => {
-  localSkill('REMOVED-SKILL-BODY');
+it('P6-37 held task fails a native skill removed before discovery', async () => {
+  offerNativeSkill('playbook');
   const head = await heldHead();
-  manager.startRun({ name: 'skill', source: 'built-in', steps: [{ id: 'work', prompt: '{{task}}', skill: 'playbook' }] }, { task: 'target', worktree: false });
-  rmSync(join(root, '.ai/skills/playbook'), { recursive: true });
-  const launched = await releaseHead(head);
-  expect(launched.systemPrompt).not.toContain('REMOVED-SKILL-BODY');
+  const target = manager.startRun({ name: 'skill', source: 'built-in', steps: [{ id: 'work', prompt: '{{task}}', skill: 'playbook' }] }, { task: 'target', worktree: false });
+  manager.setSkillCatalog(fixedSkillCatalog());
+  manager.cancel(head);
+  await waitForSkillFailure(target.id, 1);
 });
 
 it('P6-17 P6-33 pump keeps a runnerless recovered task behind the current default account hold', async () => {

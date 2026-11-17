@@ -43,6 +43,7 @@ function buildEditedQueuedMessage(current: QueuedMessage, msgId: string, text: s
     text: replacementText.trim() ? replacementText : uploaded?.text || replacementText,
     ...(replacementImages?.length ? { images: replacementImages } : {}),
     createdAt: current.createdAt,
+    ...(current.replayAfterOpen ? { replayAfterOpen: true as const } : {}),
   };
 }
 
@@ -251,6 +252,12 @@ export class QueuedInput {
 
   /** Deliver anything `deferMessage` buffered, once the session is live. */
   flushDeferred(runId: string): void {
+    // These accepted live messages never joined the opening. Their IDs keep delivery durable
+    // across restart and Continue; the native queue restores attachments and resolves the new list.
+    const queued = atLiveInput.queuedMessages(this.context.store.getRun(runId)) ?? [];
+    for (const message of queued.filter(entry => entry.replayAfterOpen)) {
+      this.host.sendMessage(runId, [{ type: 'text', text: message.text }], message.id);
+    }
     const pending = this.memory.read(runId, 'deferredMessages');
     if (!pending?.length) return;
     // Re-buffer whatever the session refused rather than dropping it. `sendMessage`
@@ -259,6 +266,7 @@ export class QueuedInput {
     // left over is retried by the next session that opens before the run ends.
     const unsent = [];
     for (const entry of pending) {
+      if (entry.messageId && !atLiveInput.queuedMessages(this.context.store.getRun(runId))?.some(message => message.id === entry.messageId)) continue;
       const state = this.host.activeGet(runId);
       // A queue entry the delivery's checkpoint left in place stays buffered (`deliverMessage`).
       if (state?.inputState.agentInputError || !this.host.sendMessage(runId, entry.content, entry.messageId) ||

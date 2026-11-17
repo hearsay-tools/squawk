@@ -77,14 +77,16 @@ describe('cez task', () => {
       expect(ctx.store.getRun(first.id as string)).toMatchObject({ archiveWhenDone: true, autoMergePr: true });
     });
 
-    it('starts a run with the selected discovered skill as its agent step', async () => {
-      const dir = join(ctx.harness.repoRoot, '.ai/skills');
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, 'cli-sample-skill.md'), '# CLI sample skill\n');
-      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    it('starts a run with the selected runner-listed skill as its agent step', async () => {
+      const originalFetch = globalThis.fetch;
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((url, init) =>
+        String(url) === `${ctx.cockpit.api}/runner-skills?runner=claude`
+          ? Promise.resolve(Response.json({ runner: 'claude', source: 'live', problems: [],
+            skills: [{ id: 'cli-sample-skill', name: 'CLI sample skill', scope: 'repo' }] }))
+          : originalFetch(url, init));
       try {
         expect(await run(['start', 'do the thing', '--skill', 'cli-sample-skill'])).toBe(0);
-        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/skills?wait=1`, `${ctx.cockpit.api}/runs`]);
+        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
         expect(last()).not.toHaveProperty('warning');
       } finally { fetchSpy.mockRestore(); }
       const record = ctx.store.getRun(last().id as string);
@@ -118,11 +120,11 @@ describe('cez task', () => {
       const fetchSpy = vi.spyOn(globalThis, 'fetch');
       try {
         expect(await run(args)).toBe(0);
-        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/skills?wait=1`, `${ctx.cockpit.api}/runs`]);
+        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
       } finally { fetchSpy.mockRestore(); }
       expect(last()).toMatchObject({
         id: first.id, created: false,
-        warning: 'skill "cli-sample-skill" is not currently available; the run may use the plain prompt',
+        warning: 'skill "cli-sample-skill" is not currently available; a missing id fails the step',
       });
       expect(ctx.store.listRuns()).toHaveLength(1);
     });
@@ -131,11 +133,11 @@ describe('cez task', () => {
       const fetchSpy = vi.spyOn(globalThis, 'fetch');
       try {
         expect(await run(['start', 'x', '--skill', 'not-a-real-cli-skill', '--request-id', '2b7e1c9a-5d4f-4a3b-8c2d-1e0f9a8b7c6d'])).toBe(0);
-        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/skills?wait=1`, `${ctx.cockpit.api}/runs`]);
+        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
       } finally { fetchSpy.mockRestore(); }
       expect(last()).toMatchObject({
         created: true,
-        warning: 'skill "not-a-real-cli-skill" is not currently available; the run may use the plain prompt',
+        warning: 'skill "not-a-real-cli-skill" is not currently available; a missing id fails the step',
       });
       expect(ctx.store.getRun(last().id as string)?.workflowDef?.steps).toEqual([
         { id: 'task', name: 'not-a-real-cli-skill', skill: 'not-a-real-cli-skill', prompt: '{{task}}' },
@@ -146,16 +148,16 @@ describe('cez task', () => {
     it('warns and still starts when the skill catalog is unavailable', async () => {
       const originalFetch = globalThis.fetch;
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((url, init) =>
-        String(url) === `${ctx.cockpit.api}/skills?wait=1`
+        String(url) === `${ctx.cockpit.api}/runner-skills?runner=claude`
           ? Promise.resolve(new Response(JSON.stringify({ error: 'catalog unavailable' }), { status: 503, headers: { 'content-type': 'application/json' } }))
           : originalFetch(url, init));
       try {
         expect(await run(['start', 'x', '--skill', 'maybe-there'])).toBe(0);
-        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/skills?wait=1`, `${ctx.cockpit.api}/runs`]);
+        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
       } finally { fetchSpy.mockRestore(); }
       expect(last()).toMatchObject({
         created: true,
-        warning: 'could not check whether skill "maybe-there" is available; the run may use the plain prompt',
+        warning: 'could not check whether skill "maybe-there" is available; a missing id fails the step',
       });
       expect(ctx.store.listRuns()).toHaveLength(1);
     });
@@ -163,16 +165,16 @@ describe('cez task', () => {
     it('warns and still starts when the catalog request fails', async () => {
       const originalFetch = globalThis.fetch;
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((url, init) =>
-        String(url) === `${ctx.cockpit.api}/skills?wait=1`
+        String(url) === `${ctx.cockpit.api}/runner-skills?runner=claude`
           ? Promise.reject(new TypeError('catalog offline'))
           : originalFetch(url, init));
       try {
         expect(await run(['start', 'x', '--skill', 'maybe-there'])).toBe(0);
-        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/skills?wait=1`, `${ctx.cockpit.api}/runs`]);
+        expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([`${ctx.cockpit.api}/config`, `${ctx.cockpit.api}/runner-skills?runner=claude`, `${ctx.cockpit.api}/runs`]);
       } finally { fetchSpy.mockRestore(); }
       expect(last()).toMatchObject({
         created: true,
-        warning: 'could not check whether skill "maybe-there" is available; the run may use the plain prompt',
+        warning: 'could not check whether skill "maybe-there" is available; a missing id fails the step',
       });
       expect(ctx.store.listRuns()).toHaveLength(1);
     });

@@ -1,3 +1,5 @@
+import { RunnerSkillCatalog } from './core/runner-skill-catalog.ts';
+import { hostSkillCatalogAdapters } from './core/host-skill-catalog.ts';
 import { projectPaths } from './project-paths.ts';
 import { productName } from './home/display.ts';
 import { npmPackageIdentity, scopedNpxCommand } from './home/identity.ts';
@@ -127,8 +129,9 @@ async function bootServe(
   // ONE tool activity tracker for the whole process (live activity view): run ids are unique
   // across projects, and the activity route reads every project's runs from it.
   const toolActivity = new deps.ToolActivityTracker();
+  const skillCatalog = new RunnerSkillCatalog({ adapters: hostSkillCatalogAdapters() });
   const manager: RunManager = new deps.RunManager(store, repoRoot, {
-    home, createRunner: deps.createRunner, semaphore, preview: previewHost, squawkPort, cockpit, toolActivity, acquireCiResources,
+    skillCatalog, home, createRunner: deps.createRunner, semaphore, preview: previewHost, squawkPort, cockpit, toolActivity, acquireCiResources,
     sweepBranches: (keep) => void deps.sweepMergedBranches({ root: repoRoot, store, manager, home }, { keep, minIntervalMs: SWEEP_MIN_INTERVAL_MS }),
   });
   const delegation = await deps.DelegationController.start(deps.workerCleanup);
@@ -167,7 +170,8 @@ async function bootServe(
   deps.warnServeBind(bindHost, port);
   const server = deps.startServer({
     home,
-    createManager: (store, root, options) => new deps.RunManager(store, root, { ...options, acquireCiResources }),
+    skillCatalog,
+    createManager: (store, root, options) => new deps.RunManager(store, root, { ...options, skillCatalog, acquireCiResources }),
     ownership,
     delegation,
     repoRoot,

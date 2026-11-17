@@ -2,6 +2,11 @@ import { z } from 'zod';
 import { runnerSchema } from './health.ts';
 
 export const runnerSkillScopeSchema = z.enum(['repo', 'user', 'system', 'other']);
+export const runnerSkillsQuerySchema = z.object({
+  runner: runnerSchema,
+  account: z.string().min(1).max(64).optional(),
+  refresh: z.literal('1').optional(),
+});
 export const runnerSkillSchema = z.object({
   id: z.string(),
   name: z.string(),

@@ -2,7 +2,7 @@ import { testHome } from '../home/test-home.testkit.ts';
 import { TurnBookkeeper } from './run/turn-bookkeeping.ts';
 import { TrackedWork } from './run/tracked-work.ts';
 import type { RunModuleContext } from './run/types.ts';
-import { discoverSkills } from '../skills.ts';
+import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { createFixtureManager, drainFixtureManagers, fixtureWorkSettled, removeFixtureRepo } from './fixture-cleanup.testkit.ts';
 import { execFile } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -21,7 +21,6 @@ import {
   composeSystemPrompt,
   makeRunTitle,
   resolveExtraSystemPrompt,
-  skillSystemPrompt,
 } from './run.ts';
 import { createRunner } from '../core/runner-factory.ts';
 import { RunMemory } from './run/run-memory.ts';
@@ -180,6 +179,7 @@ describe('systemPrompt end-to-end (dry run)', () => {
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
     // Cap 1 (workspace-level since step 2.5) serializes the suite's runs.
     manager = createFixtureManager(store, repoRoot, { home: testHome(),
+      skillCatalog: fixedSkillCatalog([{ id: 'om-auto-review-pr', name: 'Review PR', description: SKILL_DESCRIPTION, path: join(repoRoot, '.ai/skills/om-auto-review-pr/SKILL.md'), scope: 'repo' }]),
       semaphore: new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 1 } }),
     });
   });
@@ -279,7 +279,7 @@ describe('systemPrompt end-to-end (dry run)', () => {
       const context: RunModuleContext = { createRunner, home: testHome(), store: seamStore, repoRoot: seamRoot, dataDir: join(seamRoot, '.ai/cezar'),
         semaphore: new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 0 } }), work: seamWork, disposed: () => false };
       bookkeeper = new TurnBookkeeper(context, { isDisposedDelegatedRun: () => false,
-        discoverSkills: () => discoverSkills(seamRoot, undefined, testHome()), reviveWorkflow: async () => skillWorkflow,
+        sessionSkills: () => [], reviveWorkflow: async () => skillWorkflow,
         trackTurn: (_id, task) => { seamWork.track('turn', task); } }, seamMemory);
     });
 
@@ -424,7 +424,7 @@ describe('systemPrompt end-to-end (dry run)', () => {
     expect(prompt).not.toContain(CONFIG_PROMPT);
   }, 30_000);
 
-  it('sends skill identity, description, instructions, and numeric task context to the runner', async () => {
+  it('sends a native skill trigger with numeric task context and no skill body', async () => {
     const id = await runToEnd({ task: '432' }, skillWorkflow);
     const record = store.getRun(id);
 
@@ -437,19 +437,8 @@ describe('systemPrompt end-to-end (dry run)', () => {
     expect(named?.titleSummary).toBe('432: implementing cr fixes');
     expect(named?.titleOrigin).toBe('auto');
 
-    const skillPrompt = skillSystemPrompt({
-      name: 'om-auto-review-pr',
-      description: SKILL_DESCRIPTION,
-      body: SKILL_BODY,
-      // The runner passes the full discovered skill, so the prompt carries the
-      // absolute path of the installed copy (read from the MAIN repo even in a
-      // worktree). Mirror that here so the expected prompt matches.
-      path: join(repoRoot, '.ai/skills/om-auto-review-pr/SKILL.md'),
-      source: 'ai',
-    });
-    expect(capturedSystemPrompt()).toBe(
-      composeSystemPrompt(skillPrompt, CONFIG_PROMPT, SESSION_HANDOFF),
-    );
+    expect(capturedSystemPrompt()).toBe(composeSystemPrompt(CONFIG_PROMPT, SESSION_HANDOFF));
+    expect(capturedSystemPrompt()).not.toContain(SKILL_BODY);
 
     // The mock writes the actual first user message it received into the run
     // worktree, proving the argument is still the runner's user prompt rather
@@ -457,7 +446,7 @@ describe('systemPrompt end-to-end (dry run)', () => {
     const worktreePath = record?.worktreePath;
     if (!worktreePath) throw new Error('run did not create its worktree');
     // The step's prompt adds `mock:cezar-done` after the task, so the step signals done.
-    expect(readFileSync(join(worktreePath, 'notes.md'), 'utf8')).toContain(': 432 mock:cezar-done\n');
+    expect(readFileSync(join(worktreePath, 'notes.md'), 'utf8')).toContain('/om-auto-review-pr 432 mock:cezar-done');
   }, 30_000);
 
 });

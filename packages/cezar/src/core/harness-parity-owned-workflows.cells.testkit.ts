@@ -1,5 +1,6 @@
+import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
 import { STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect } from 'vitest';
@@ -45,8 +46,8 @@ export const OWNED_WORKFLOWS_GROUPS = {
           const name = 'skill-inheritance';
           await withSkillParentRun(backend, probeEnv(name), async ({ store, manager, repoRoot, runId }) => {
             const parentRecording = readRecording(repoRoot, name).join('\n');
-            expect(parentRecording).toContain('Selected skill: /parent-skill');
-            expect(parentRecording).toContain('PARENT SKILL BODY 778');
+            expect(parentRecording).toContain('probe-project');
+            expect(parentRecording).not.toContain('PARENT SKILL BODY 778');
             expect(parentRecording).toContain('parent extra');
             await waitFor(() => !manager.isActive(runId), 30_000);
             const worker = store.getRun(runId)!;
@@ -55,23 +56,25 @@ export const OWNED_WORKFLOWS_GROUPS = {
             if (worker.delegation?.role !== 'worker') throw new Error('expected worker');
             const childRecording = readRecording(worker.delegation.workspace.path, name).join('\n');
             expect(childRecording).toContain('parent extra');
-            expect(childRecording).not.toContain('Selected skill: /parent-skill');
+            expect(childRecording).not.toContain('probe-project');
             expect(childRecording).not.toContain('PARENT SKILL BODY 778');
             expect(worker.systemPrompt).toBe('parent extra');
           });
         }, 60_000);
 
-        it(`${backend} R41 runs a --skill worker with the skill in its system prompt and no parent skill (#778)`, async () => {
-          const workflowDef = plannedWorkflow(skillTaskSteps('worker-skill').map(step => ({ ...step, runner: backend })));
+        it(`${backend} R41 runs a --skill worker with its native trigger and no parent skill (#778)`, async () => {
+          const workflowDef = plannedWorkflow(skillTaskSteps('probe-project').map(step => ({ ...step, runner: backend })));
           const identity: WorkerExecutionIdentity = { kind: 'internal', workflowHash: workerWorkflowHash(workflowDef) };
           const name = 'worker-skill';
-          await withOwnedInputRun(backend, 'cezar-done', async ({ store, manager, repoRoot, runId, parentRunId }) => {
-            const skillsDir = join(repoRoot, '.ai/cezar/skills');
-            mkdirSync(skillsDir, { recursive: true });
-            writeFileSync(join(skillsDir, 'worker-skill.md'), 'WORKER SKILL BODY');
+          await withOwnedInputRun(backend, 'baseline', async ({ store, manager, repoRoot, runId, parentRunId, answer }) => {
+            manager.setSkillCatalog(fixedSkillCatalog([{ id: 'probe-project', name: 'Worker', scope: 'repo', path: join(repoRoot, 'SKILL.md') }]));
             store.updateRun(parentRunId, { systemPrompt: 'Selected skill: /parent-skill\nPARENT SKILL BODY\nparent extra' });
             store.updateRun(runId, { systemPrompt: 'parent extra' });
             manager.enqueueOwnedRun(runId);
+            // The native probe skill returns text without tools. Its parent then asks it to finish.
+            await waitFor(() => store.getRun(runId)?.status === 'waiting', 30_000);
+            expect(store.readEvents(runId).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE'))).toBe(true);
+            await answer(promptFor(backend, 'cezar-done'));
             await waitFor(() => !manager.isActive(runId), 30_000);
             const run = store.getRun(runId)!;
             expect(run.error).toBeUndefined();
@@ -80,7 +83,8 @@ export const OWNED_WORKFLOWS_GROUPS = {
             // Read the backend mock's argv/requests and stdin in the worker's own cwd.
             // Normalized events cannot prove that the skill reached the provider.
             const recording = readRecording(run.delegation.workspace.path, name).join('\n');
-            expect(recording).toContain('WORKER SKILL BODY');
+            expect(recording).toContain('probe-project');
+            expect(recording).not.toContain('WORKER SKILL BODY');
             expect(recording).toContain('parent extra');
             expect(recording).not.toContain('Selected skill: /parent-skill');
           }, { workflowDef, identity, env: probeEnv(name) });

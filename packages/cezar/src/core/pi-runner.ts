@@ -1,3 +1,4 @@
+import { piBaseArgs } from './pi-args.ts';
 import { openingContent, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { dirname, resolve as resolvePath } from 'node:path';
@@ -71,6 +72,7 @@ export const PI_SPEC_SUPPORT: AgentRunSpecSupport = {
   ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: '--append-system-prompt' },
   skill: { honored: true, via: 'RPC prompt /skill:id args with context after arguments' },
+  resumeFallbackSkill: { honored: true, via: 'native opening trigger only when bootstrap opens a fresh session' },
   userPrompt: { honored: true, via: 'RPC prompt message' },
   images: { honored: true, via: 'RPC prompt images' },
   cwd: { honored: true, via: 'spawn cwd' },
@@ -267,13 +269,14 @@ export class PiRunner implements AgentRunner {
       interruptKillTimer.unref?.();
     };
 
+    let fallbackOpeningPending = !spec.skill && !!spec.resumeFallbackSkill;
     write({ id: 'cezar-state', type: 'get_state' });
     // #551: Pi defaults steeringMode to one-at-a-time (one steer per completed
     // assistant turn). This session is Squawk's, and sendAgentMessage requires every
     // accepted steer at the next model call. get_state cannot tell that default
     // from an explicit user setting, so we always set all rather than guess.
     write({ type: 'set_steering_mode', mode: 'all' });
-    sendMessage(openingContent(spec));
+    if (!fallbackOpeningPending) sendMessage(openingContent(spec, false));
 
     const limitMs = spec.timeoutMs ?? this.timeoutMs ?? spec.timings?.runTimeoutMs ?? DEFAULT_RUNNER_TIMINGS.runTimeoutMs;
     const deadline =
@@ -357,12 +360,24 @@ export class PiRunner implements AgentRunner {
       }
       rpcInput.readyAfterAck();
     };
-    // A failed get_state has no branch of its own: it is reported like any other failed command.
+    const rejectUnknownStartup = (value: Record<string, unknown>): boolean => {
+      if (!fallbackOpeningPending || value.id !== 'cezar-state') return false;
+      if (value.command === 'get_state' && value.success === true && isRecord(value.data) && string(value.data.sessionId)) return false;
+      fallbackOpeningPending = false;
+      failInput(new Error('startup session identity unavailable'));
+      return true;
+    };
     let sessionReported = false;
     const handleResponse = (value: Record<string, unknown>): void => {
+      if (rejectUnknownStartup(value)) return;
       if (value.command === 'get_state' && value.success === true && isRecord(value.data)) {
-        adoptRpcSessionId(value.data, (id) => { sessionId = id; }, Boolean(spec.resume && spec.sessionId === value.data.sessionId), sessionReported ? undefined : onEvent);
+        const resumed = Boolean(spec.resume && spec.sessionId === value.data.sessionId);
+        adoptRpcSessionId(value.data, (id) => { sessionId = id; }, resumed, sessionReported ? undefined : onEvent);
         sessionReported ||= typeof value.data.sessionId === 'string' && value.data.sessionId.length > 0;
+        if (fallbackOpeningPending && value.id === 'cezar-state') {
+          fallbackOpeningPending = false;
+          sendMessage(openingContent(spec, resumed));
+        }
       } else if (value.command === 'set_steering_mode') {
         if (value.success !== true) {
           onEvent?.({ type: 'note', message: `pi: set_steering_mode failed: ${rpcError(value)}` });
@@ -482,7 +497,7 @@ export class PiRunner implements AgentRunner {
 export function buildPiArgs(spec: AgentRunSpec): string[] {
   // pi loads a repo's .pi/skills and .agents/skills only for a trusted folder; the project-skills
   // extension offers them to an untrusted one without trusting it (hearsay-tools/cezarion#1295).
-  const args = ['--mode', 'rpc', '--extension', piDegradedServiceRetryExtensionPath(), '--extension', piProjectSkillsExtensionPath()];
+  const args = piBaseArgs();
   if (spec.squawkTools) args.push('--extension', fileURLToPath(new URL('../../scripts/pi-ci-wait.mjs', import.meta.url)));
   if (spec.sessionId) args.push(spec.resume ? '--session' : '--session-id', spec.sessionId);
   if (spec.systemPrompt) args.push('--append-system-prompt', spec.systemPrompt);
@@ -531,14 +546,6 @@ function piToolArgs(spec: AgentRunSpec, allowedTools: readonly string[], bashAll
   }
   if (spec.squawkTools) tools.push(...squawkToolNames(spec.env ?? {}));
   return tools.length > 0 ? ['--tools', tools.join(',')] : ['--no-tools'];
-}
-
-function piDegradedServiceRetryExtensionPath(): string {
-  return fileURLToPath(new URL('../../scripts/pi-retry-degraded-service.mjs', import.meta.url));
-}
-
-function piProjectSkillsExtensionPath(): string {
-  return fileURLToPath(new URL('../../scripts/pi-project-skills.mjs', import.meta.url));
 }
 
 function piDefaultToolsExtensionPath(): string {

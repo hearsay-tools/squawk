@@ -1,242 +1,103 @@
-import { randomUUID } from 'node:crypto';
-import { realpathSync } from 'node:fs';
-import { relative } from 'node:path';
-import type { AgentInput } from '@open-mercato/cezar-contract/delegation';
-import type { ContentBlock } from '../../core/agent-runner.ts';
-import { enqueueAgentInput } from '../../delegation/input.ts';
-import type { Skill } from '../../skills.ts';
-import { materializeSkillToCache, TEAM_SKILL_AGENT_DIRS } from '../../skills-remote.ts';
-import { MAX_SKILL_CLOSURE, namesSkillCommand, provisionSkills } from '../../skills-provision.ts';
-import { atStepOpen, atTaskHead, atContinue, atLiveInput } from './launch-read-resolver.ts';
+import type { RunnerSkill } from '@open-mercato/cezar-contract/runner-skills';
+import type { ContentBlock, RunnerId, SkillTrigger } from '../../core/agent-runner.ts';
+import { RunnerSkillCatalog, type SkillCatalogQuery } from '../../core/runner-skill-catalog.ts';
+import { RUNNER_FACTS } from '../../core/runner-facts.ts';
+import { resolveRunnerSkill } from '../../core/runner-skill-reference.ts';
 import type { ActiveRun } from '../active-run.ts';
+import { atStepOpen } from './launch-read-resolver.ts';
 import { leadingSlashSkillName } from './prompts.ts';
-import type { RunModuleContext } from './types.ts';
+import type { RunModuleContext, StepProfile } from './types.ts';
 
-/** A live team record view. Shared catalog records remain owned by discovery. */
-export class SkillTeamView {
-  #skill: Skill;
-  constructor(skill: Skill) { this.#skill = skill; Object.freeze(this); }
-  get repo(): string { return this.#skill.team!.repo; }
-  get ref(): string { return this.#skill.team!.ref; }
-  get path(): string { return this.#skill.team!.path; }
-  get dir(): boolean { return this.#skill.team!.dir; }
-  get commit(): string | undefined { return this.#skill.team!.commit; }
-}
-
-/** Each getter reads the shared entry, without granting writes to that entry. */
-export class SkillView {
-  #skill: Skill;
-  #team: SkillTeamView;
-  constructor(skill: Skill) {
-    this.#skill = skill; this.#team = new SkillTeamView(skill);
-    Object.freeze(this);
-  }
-  get name(): string { return this.#skill.name; }
-  get description(): string | undefined { return this.#skill.description; }
-  get interactive(): true | undefined { return this.#skill.interactive; }
-  get body(): string { return this.#skill.body; }
-  get path(): string { return this.#skill.path; }
-  get source(): Skill['source'] { return this.#skill.source; }
-  get team(): SkillTeamView | undefined { return this.#skill.team ? this.#team : undefined; }
-}
-
-let skillsWrites: {
-  catalog(group: SkillsGroup, catalog: Skill[]): void;
-  provisioning(group: SkillsGroup, pending: Promise<void>): void;
-};
+let skillsWrites: { catalog(group: SkillsGroup, catalog: readonly RunnerSkill[], query: SkillCatalogQuery, account: string, unavailableReason: string | undefined): void };
+/** The exact list this runner process saw when it opened. Only RunSkills writes it. */
 export class SkillsGroup {
-  #catalog: readonly SkillView[] | undefined;
-  #liveSkillProvisioning: Promise<void> | undefined;
+  #catalog: readonly Readonly<RunnerSkill>[] = Object.freeze([]);
+  #query: Readonly<SkillCatalogQuery> | undefined;
+  #account = 'default';
+  #unavailableReason: string | undefined;
   constructor() { Object.freeze(this); }
-  /** Registry snapshot used to expand `/skill` follow-ups before a backend can
-   *  mistake them for its own slash commands (hearsay-tools/cezarion#676). Only `RunSkills.loadRunSkills` writes it,
-   *  and only `RunSkills.enabledSkills` reads it. */
-  get catalog(): readonly SkillView[] | undefined { return this.#catalog; }
-  /** The install a live `/name` started after its message went out (hearsay-tools/cezarion#1408); tests await it. */
-  get liveSkillProvisioning(): Promise<void> | undefined { return this.#liveSkillProvisioning; }
+  get catalog(): readonly Readonly<RunnerSkill>[] { return this.#catalog; }
+  get query(): Readonly<SkillCatalogQuery> | undefined { return this.#query; }
+  get account(): string { return this.#account; }
+  get unavailableReason(): string | undefined { return this.#unavailableReason; }
   static {
-    skillsWrites = {
-      catalog(group, catalog) { group.#catalog = Object.freeze(catalog.map((skill) => new SkillView(skill))); },
-      provisioning(group, pending) { group.#liveSkillProvisioning = pending; },
-    };
+    skillsWrites = { catalog(group, catalog, query, account, unavailableReason) {
+      group.#catalog = Object.freeze(catalog.map(skill => Object.freeze({ ...skill })));
+      group.#query = Object.freeze({ ...query }); group.#account = account;
+      group.#unavailableReason = unavailableReason;
+    } };
   }
 }
-for (const type of [SkillTeamView, SkillView, SkillsGroup]) {
-  Object.freeze(type.prototype);
-  Object.freeze(type);
-}
+Object.freeze(SkillsGroup.prototype); Object.freeze(SkillsGroup);
 export function createSkillsGroup(): SkillsGroup { return new SkillsGroup(); }
 
-export type SkillReadPhase = 'step-open' | 'continue' | 'live-input';
-const skillReads = (phase: SkillReadPhase) => phase === 'continue' ? atContinue : phase === 'live-input' ? atLiveInput : atStepOpen;
-
-interface RunSkillsHost {
-  builtinSkills(): Skill[];
-  workerExecutionStopped(runId: string): boolean;
-  isCurrentState(runId: string, state: ActiveRun): boolean;
-  flushAgentInputs(runId: string): void;
-}
-
 export class RunSkills {
-  constructor(private readonly context: RunModuleContext, private readonly host: RunSkillsHost) {}
+  constructor(private readonly context: RunModuleContext) {}
 
-  /** Every skill lookup in this manager goes through here, so the built-ins reach all of them. */
-  discoverSkills(phase: 'task-head' | 'continue' = 'task-head'): Promise<Skill[]> {
-    return (phase === 'continue' ? atContinue : atTaskHead).registry(this.context.repoRoot, this.host.builtinSkills(), this.context.home);
-  }
-
-  /**
-   * Load the run's skill registry: the ONLY writer of `state.skills.catalog` (hearsay-tools/cezarion#1806).
-   * `execute` and `runContinuation` both call it, once the run is registered and after the awaits
-   * that precede its first prompt. `'throw'` lets a failed discovery fail the run, as a fresh run
-   * always did; `'ignore'` keeps the registry the run already has, or none, because discovery must
-   * never break a Continue (open-mercato/cezar#811). An empty registry expands no `/skill` (it is not an error).
-   */
-  async loadRunSkills(state: ActiveRun, onFailure: 'throw' | 'ignore'): Promise<void> {
-    // Only a rejected discovery is a failure to ignore; a synchronous throw escaped the old
-    // `.catch` too, and still fails the caller.
-    const discovery = this.discoverSkills(onFailure === 'ignore' ? 'continue' : 'task-head');
-    try {
-      skillsWrites.catalog(state.skills, await discovery);
-    } catch (error) {
-      if (onFailure === 'throw') throw error;
-    }
-  }
-  /**
-   * The run's skill registry minus the project's off-list as it is now (hearsay-tools/cezarion#1494): the ONLY reader of
-   * `state.skills.catalog`. The registry is discovered when the run starts or continues, so a team skill
-   * switched off since then is still in `state.skills.catalog`; every prompt a step, a Continue or a live
-   * `/name` builds reads this instead. A caller that already read the off-list passes it as
-   * `disabled`, so that both see one list. A team source disabled since then
-   * (hearsay-tools/cezarion#279) drops its skills here too.
-   */
-  enabledSkills(
-    state: ActiveRun,
-    disabled?: ReturnType<typeof atStepOpen.disabledSkills>,
-    phase: SkillReadPhase = 'step-open',
-  ): Skill[] {
-    const reads = skillReads(phase);
-    const off = disabled === undefined ? reads.disabledSkills(reads.projectUiStateSync(this.context.repoRoot)) : disabled;
-    return reads.enabledSkills(state, this.context.repoRoot, off);
-  }
-  /**
-   * A live `/name` message already carries the skill's body, and `sendMessage` answers
-   * synchronously, so its files and companions install after the message went out (hearsay-tools/cezarion#1408).
-   * When anything new landed, or a team skill's files went to a cache copy the message could not
-   * name, one durable agent input says what and where. Whether a runner's native lookup sees a skill
-   * added mid-session is not relied on: that input is the delivery for every runner. Nothing
-   * new: no input. A run that stopped, or moved to another session, gets none.
-   */
-  provisionLiveSlashSkill(runId: string, state: ActiveRun, blocks: ContentBlock[]): void {
-    const first = blocks.find((block) => block.type === 'text');
-    const name = first?.type === 'text' ? leadingSlashSkillName(first.text) : undefined;
-    if (!name) return;
-    const session = state.liveSession.session;
-    skillsWrites.provisioning(state.skills, (async () => {
-      const { filesDir, installed } = await this.provisionRunSkills(runId, state, { slash: name }, 'live-input');
-      const dir = filesDir.get(name);
-      if (installed.length === 0 && !dir) return;
-      if (state.liveSession.cancelled || !this.host.isCurrentState(runId, state) || state.liveSession.session !== session) return;
-      const text = [
-        ...(installed.length ? [`Skills installed for /${name}: ${installed.join(', ')}.`] : []),
-        ...(dir ? [`Skill files for /${name} are at ${dir}.`] : []),
-      ].join(' ');
-      // The durable queue delivers it at the runner's next opportunity: several runners refuse
-      // agent input while the human message is in flight, and a restart replays it.
-      const input: AgentInput = { id: randomUUID(), parentRunId: runId, source: 'lifecycle', text, createdAt: new Date().toISOString() };
-      this.context.store.commitAgentInputs(runId, enqueueAgentInput(this.context.store.getRun(runId)!, input));
-      this.context.store.appendEvent(runId, { type: 'agent-input', input });
-      this.host.flushAgentInputs(runId);
-    })().catch(() => undefined));
+  private catalog(): RunnerSkillCatalog {
+    return this.context.skillCatalog ??= new RunnerSkillCatalog({ adapters: {} });
   }
 
-  /**
-   * Provision the step skill and leading registry slash skill for start, Continue, recovery and
-   * live input, and at a step's start every registry skill its prompt names as a typed `/name`
-   * (hearsay-tools/cezarion#1672). Native slashes that are not registry skills install nothing.
-   *
-   * The run's OWN task worktree gets every root and the companions their bodies name
-   * (`provisionSkills`): links to local and global skills, generated `SKILL.md` files, and marked
-   * team copies, in `.claude/skills` and `.agents/skills`, recorded in the
-   * worktree's git dir and kept out of git by a worktree-local `.gitignore`. The project's
-   * off-list (`disabledTeamSkills`) is read fresh on every pass and applied to the saved
-   * registry, the roots and the team list alike: a team skill switched off for the project is
-   * never installed, not even for a skill that runs it, and a switch-off made after the run
-   * started holds for the next step, a live `/name` and Continue. Copies a pass installed before
-   * the switch stay in the worktree until the task ends: Squawk removes nothing mid-task.
-   *
-   * Any other cwd — worktree off, a non-git project, a Continue whose worktree is gone — is the
-   * main checkout or unknown, where those directories are LOCAL skills to `discoverSkills` that
-   * would shadow the team source for every later run. A selected or leading-slash directory team
-   * root gets a per-commit cache copy there instead, and nothing else is installed: a skill only
-   * the prompt names gets nothing there, like a companion. So does a worktree where no copy of
-   * it landed, such as one whose agent dirs both link out of it; one that took only some
-   * copies names the first that landed, since the runner's own dir may be the one skipped.
-   * Returns the step-start notes and, per team root, the directory its prompt must name.
-   */
-  async provisionRunSkills(
-    runId: string,
-    state: ActiveRun,
-    wanted: { stepSkill?: string | undefined; slash?: string | undefined; prompt?: string },
-    phase: SkillReadPhase = 'step-open',
-  ): Promise<{ notes: string[]; filesDir: Map<string, string>; installed: string[] }> {
-    const notes: string[] = [];
-    const filesDir = new Map<string, string>();
-    const wantedNames = [...new Set([wanted.stepSkill, wanted.slash].filter((name): name is string => Boolean(name)))];
-    // Stop can land during an earlier await (Continue's team-cache wait): a stopped run writes
-    // nothing, here or between the pass's own steps.
-    const stopped = () => Boolean(state.liveSession.cancelled) || this.host.workerExecutionStopped(runId);
-    // The off-list as it is now, applied to every input: the saved registry predates a switch
-    // made during the run, so it is filtered as well as the fresh team list.
-    const reads = skillReads(phase);
-    const disabled = reads.disabledSkills(await reads.projectUiState(this.context.repoRoot));
-    const registry = this.enabledSkills(state, disabled, phase);
-    // A skill the prompt names as `/name` is a root after the selected ones, so a capped closure
-    // never leaves it out (hearsay-tools/cezarion#1672). It installs only in the task worktree, like a companion.
-    const named = registry.filter((skill) => namesSkillCommand(wanted.prompt ?? '', skill.name)).map((skill) => skill.name);
-    const roots = [...new Set([...wantedNames, ...named])]
-      .flatMap((name) => registry.filter((skill) => skill.name === name).slice(0, 1));
-    if (roots.length === 0 || stopped()) return { notes, filesDir, installed: [] };
-    const teamRoots = roots.filter((skill) => wantedNames.includes(skill.name) && skill.source === 'team' && skill.team?.dir);
-    const cacheCopy = async (skill: Skill): Promise<void> => {
-      const dir = await materializeSkillToCache(skill, this.context.home).catch(() => null);
-      if (!dir) return;
-      notes.push(`team skill "${skill.name}" materialized to ${dir}`);
-      filesDir.set(skill.name, dir);
-    };
-    if (!this.isOwnTaskWorktree(runId, state.liveSession.cwd)) {
-      for (const skill of teamRoots) await cacheCopy(skill);
-      return { notes, filesDir, installed: [] };
-    }
-    const team = reads.teamSkills(this.context.repoRoot, this.context.home);
-    const catalog = [...registry, ...reads.filterSkills(team, disabled)];
-    const result = await provisionSkills(state.liveSession.cwd, roots, catalog, { cancelled: stopped, home: this.context.home });
-    if (stopped()) return { notes, filesDir, installed: [] };
-    for (const skill of teamRoots) {
-      const written = result.teamCopies[skill.name] ?? [];
-      if (written.length === TEAM_SKILL_AGENT_DIRS.length) {
-        notes.push(`team skill "${skill.name}" materialized to .claude/skills/${skill.name}/ and .agents/skills/${skill.name}/`);
-      } else if (written.length > 0) {
-        notes.push(`team skill "${skill.name}" materialized to ${written.map((dir) => `${relative(state.liveSession.cwd, dir)}/`).join(' and ')}`);
-        filesDir.set(skill.name, written[0]!);
-      } else {
-        await cacheCopy(skill);
-      }
-    }
-    const others = result.installed.filter((name) => !teamRoots.some((skill) => skill.name === name));
-    if (others.length > 0 || result.truncated) {
-      notes.push(`skills installed in the task's workspace: ${others.join(', ') || 'none new'}` +
-        (result.truncated ? `; closure capped at ${MAX_SKILL_CLOSURE}, skipped ${result.truncated} and later` : ''));
-    }
-    return { notes, filesDir, installed: result.installed };
-  }
-  /** `cwd` is the run's recorded task worktree, and not the project root. Unresolvable means no. */
-  private isOwnTaskWorktree(runId: string, cwd: string): boolean {
-    const worktreePath = this.context.store.getRun(runId)?.worktreePath;
-    if (!worktreePath) return false;
-    const real = (path: string): string | undefined => { try { return realpathSync(path); } catch { return undefined; } };
-    const dir = real(cwd);
-    return dir !== undefined && dir === real(worktreePath) && dir !== real(this.context.repoRoot);
+  async loadRunSkills(state: ActiveRun, runner: RunnerId, profile: StepProfile): Promise<void> {
+    const query = atStepOpen.skillQuery(state, runner, profile);
+    const list = await this.catalog().get(query);
+    skillsWrites.catalog(state.skills, list.skills, query, atStepOpen.skillAccount(profile), list.source === 'unavailable' ? list.reason ?? `${runner} skill discovery is temporarily unavailable` : undefined);
   }
 
+  enabledSkills(state: ActiveRun): readonly RunnerSkill[] { return atStepOpen.sessionSkills(state); }
+
+  selectedSkill(state: ActiveRun, id: string | undefined, path: string | undefined, args: string): SkillTrigger | undefined {
+    if (!id) return undefined;
+    const query = state.skills.query;
+    if (!query) throw new Error('Runner skill list has not been read');
+    if (state.skills.unavailableReason) throw new Error(`${query.runner} account "${state.skills.account}" skill "${id}": runner skill list is unavailable: ${state.skills.unavailableReason}. Selected path: ${path ?? '(name only)'}. Listed paths: (unavailable)`);
+    const result = resolveRunnerSkill(this.enabledSkills(state), { id, path }, { ...query, account: state.skills.account });
+    if (result.error !== undefined) throw new Error(result.error);
+    return { id: result.skill.id, ...(result.skill.path ? { path: result.skill.path } : {}), args };
+  }
+
+  /** The list is re-read only for a live reader; other sessions retain their opening list. */
+  private async inputSkills(state: ActiveRun): Promise<readonly RunnerSkill[]> {
+    const query = state.skills.query;
+    if (!query) return this.enabledSkills(state);
+    if (RUNNER_FACTS[query.runner].skillsSeenBySession !== 'live') return this.enabledSkills(state);
+    this.catalog().invalidate(query);
+    return (await this.catalog().get(query)).skills;
+  }
+
+  /** Resolve at transport release, including for messages held during a turn. */
+  async nativeInput(runId: string, state: ActiveRun, blocks: ContentBlock[]): Promise<ContentBlock[]> {
+    return this.resolveInput(runId, state, blocks, true);
+  }
+
+  /** Opening commands use the list this process just read, without a second probe. */
+  openingInput(runId: string, state: ActiveRun, blocks: ContentBlock[]): Promise<ContentBlock[]> {
+    return this.resolveInput(runId, state, blocks, false);
+  }
+
+  private async resolveInput(runId: string, state: ActiveRun, blocks: ContentBlock[], live: boolean): Promise<ContentBlock[]> {
+    const index = blocks.findIndex(block => block.type === 'text');
+    const first = blocks[index];
+    const id = first?.type === 'text' ? leadingSlashSkillName(first.text) : undefined;
+    if (!id || first?.type !== 'text' || !state.skills.query) return blocks;
+    const skills = live ? await this.inputSkills(state) : this.enabledSkills(state);
+    if (!skills.some(skill => skill.id === id)) {
+      if (live) await this.noteNewSkill(runId, state, id);
+      return blocks;
+    }
+    const result = resolveRunnerSkill(skills, { id }, { ...state.skills.query, account: state.skills.account });
+    if (result.error !== undefined) { this.note(runId, result.error); return blocks; }
+    const args = first.text.replace(/^\/[\w:.-]+(?:[ \t]+)?/, '');
+    return [{ type: 'skill', id: result.skill.id, ...(result.skill.path ? { path: result.skill.path } : {}), args }, ...blocks.filter((_, at) => at !== index)];
+  }
+
+  private async noteNewSkill(runId: string, state: ActiveRun, id: string): Promise<void> {
+    const query = state.skills.query;
+    if (!query || RUNNER_FACTS[query.runner].skillsSeenBySession === 'live') return;
+    this.catalog().invalidate(query);
+    const fresh = await this.catalog().get(query);
+    if (fresh.skills.some(skill => skill.id === id)) this.note(runId, `Skill "${id}" is available after the next Continue.`);
+  }
+
+  private note(runId: string, message: string): void { this.context.store.appendEvent(runId, { type: 'note', message }); }
 }

@@ -1,3 +1,6 @@
+import { runnerSkillsQuerySchema } from '@open-mercato/cezar-contract/runner-skills';
+import type { RunnerSkillCatalog } from '../core/runner-skill-catalog.ts';
+import { readRunnerSkills } from './runner-skills.ts';
 import { runCheckout, preparePublishCheckout, reclaimCheckoutError } from './run-checkout.ts';
 import { adoptFallbackControl, protectFallbackRun, runArtifactDirectory } from './project-run-files.ts';
 import { deleteSavedWorkflow } from './workflow-files.ts';
@@ -152,7 +155,7 @@ import {
   workflowFileSchema,
 } from '../workflows/types.ts';
 import { planChain, slugify } from '../planner.ts';
-import { discoverSkills, type Skill } from '../skills.ts';
+import { discoverSkills } from '../skills.ts';
 import { getTeamSkillsCached, refreshTeamSkills, waitForTeamSkills } from '../skills-remote.ts';
 import { skillSourcesRoutes } from './skill-sources.ts';
 import { readHandoff, renderHandoffRecords } from '../handoff.ts';
@@ -368,6 +371,7 @@ export interface ServerDeps extends ActivityServerDeps {
   branchForge?: BranchForge;
   /** Host-wide model discovery service. Tests inject a deterministic adapter. */
   modelCatalog?: RunnerModelCatalog;
+  skillCatalog?: RunnerSkillCatalog;
   /** Host-wide provider authentication discovery. Tests inject deterministic probes. */
   providerAuth?: ProviderAuthService;
   detectEnvironment?: typeof detectEnvironment; // Host CLI detection behind health's availability checks. Tests inject a fake.
@@ -672,7 +676,7 @@ export function createApp(deps: ServerDeps) {
   const bootRoot = deps.repoRoot;
   const bootDataDir = projectPaths(bootRoot).write;
   // The host-wide services and the provider closures built on them live in `./server-deps.ts`.
-  const { modelCatalog, providerAuth, workspaceConfig, openTerminal, openFile, openApp, detectEnvironment } = resolveServerDeps(deps, bootRoot);
+  const { skillCatalog, modelCatalog, providerAuth, workspaceConfig, openTerminal, openFile, openApp, detectEnvironment } = resolveServerDeps(deps, bootRoot);
   const { providerStatus, providerActionError, invalidateHostModels } =
     createProviderStatus({ modelCatalog, providerAuth, workspaceConfig });
 
@@ -744,9 +748,14 @@ export function createApp(deps: ServerDeps) {
     ?? new ProviderRuntimeAuthObserver(providerAuth, (status) => {
       workspaceEvents.emit('provider-status', status);
     }, undefined, deps.home);
-
+  const attachSkillCatalog = (project: ProjectContext) => project.manager?.setSkillCatalog?.(skillCatalog);
+  attachSkillCatalog(bootContext);
+  for (const id of contexts.ids()) {
+    const project = contexts.peek(id);
+    if (project) attachSkillCatalog(project);
+  }
+  contexts.onContextBuilt(attachSkillCatalog);
   watchProviderRuntimeAuth(providerRuntimeAuth, bootContext, contexts);
-
   attachProjectWebhooks(taskWebhooks, contexts);
   // #667: recovery ran inside the build, before any workspace stream attached to this project's
   // store, so the runs it resumed sent no `run` event. Until a cockpit refetches, its cross-project
@@ -2573,35 +2582,28 @@ export function createApp(deps: ServerDeps) {
         return c.json(result.body);
       },
     );
-
   // ---- chained family: skills (project-scoped) ----
   const skillsRoutes = new Hono<ProjectApiEnv>()
+    .get('/runner-skills', queryZodValidator(runnerSkillsQuerySchema), async c => {
+      if (c.req.valid('query').account !== undefined && !capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
+      const result = await readRunnerSkills(c.req.valid('query'), c.get('project').root, deps.home, skillCatalog, resolveWorkspaceProfile);
+      if ('error' in result) return c.json(result, 400);
+      return c.json(result);
+    })
     .get('/skills', queryZodValidator(waitQuery), async (c) => {
       const repoRoot = c.get('project').root;
-      // The default read stays fast and starts the team load in the background.
-      // The cockpit follows it with `wait=1`, off the render path, so a cold
-      // cache converges without polling or a manual reload (spec 005 / #555).
       if (c.req.valid('query').wait === '1') await waitForTeamSkills(repoRoot, deps.home);
-      return c.json(await discoverSkills(repoRoot, { builtin: builtinSkillsOf(c.get('project').manager) }, deps.home));
+      return c.json(await discoverSkills(repoRoot, {}, deps.home));
     })
-
-    // Every team skill the configured sources offer, including those this project switched
-    // off, so the Skills catalog can show each with its toggle: one entry per source copy, so a
-    // name two sources offer comes twice (#1494). Empty without `skillsRepos`.
-    // `wait=1` lets the panel wait out a cold team-skill cache, same as `GET /skills` (spec 005).
     .get('/skills/importable', queryZodValidator(waitQuery), async (c) => {
       const repoRoot = c.get('project').root;
       if (c.req.valid('query').wait === '1') await waitForTeamSkills(repoRoot, deps.home);
       return c.json(getTeamSkillsCached(repoRoot, deps.home));
     })
-
-    // Refresh team skills (spec 005): clone/fetch the configured skills repos,
-    // then return the merged catalog. Degrades quietly — offline just means the
-    // team entries stay as they were (or absent).
     .post('/skills/refresh', async (c) => {
       const { root: repoRoot } = c.get('project');
       await refreshTeamSkills(repoRoot, deps.home);
-      return c.json(await discoverSkills(repoRoot, { builtin: builtinSkillsOf(c.get('project').manager) }, deps.home));
+      return c.json(await discoverSkills(repoRoot, {}, deps.home));
     });
 
   // ---- chained family: GUI prefs / ui-state (project-scoped) ----
@@ -2703,7 +2705,7 @@ export function createApp(deps: ServerDeps) {
       const parsed = { data: c.req.valid('json') };
       const blocked = await providerActionError([(await loadConfig(repoRoot, deps.home)).defaultRunner]);
       if (blocked) return c.json({ error: blocked }, 409);
-      return c.json(await planChain(repoRoot, parsed.data.task, builtinSkillsOf(manager), deps.home, manager.createRunner));
+      return c.json(await planChain(repoRoot, parsed.data.task, skillCatalog, deps.home, manager.createRunner));
     });
 
   // ---- GitHub automations --------------------------------------------------
@@ -4831,9 +4833,7 @@ export function createApp(deps: ServerDeps) {
 
 /** The host a thread link names (#589): the bound one, or loopback for a wildcard bind. */
 /** The built-in skills a project's manager offers (#774). Test apps inject partial managers. */
-function builtinSkillsOf(manager: Partial<Pick<RunManager, 'builtinSkills'>>): Skill[] {
-  return manager.builtinSkills?.() ?? [];
-}
+
 
 export { cockpitOriginFor } from './server-deps.ts';
 

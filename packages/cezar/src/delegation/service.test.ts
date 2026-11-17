@@ -23,6 +23,7 @@ import { fixture, seedWorkerWait, workerCleanupInternals } from "./service.testk
 import { ensureOwnedWorkspace } from "./workspace.ts";
 import { DelegationService } from './service.ts';
 import { workerCleanups } from './worker-cleanup.ts';
+import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 
 describe('delegation service durable authority', () => {
   let f: ReturnType<typeof fixture>;
@@ -97,8 +98,7 @@ describe('delegation service durable authority', () => {
   });
   describe('explicit skill on spawn (#778)', () => {
     beforeEach(() => {
-      const dir = join(f.root, '.ai/cezar/skills'); mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, 'worker-skill.md'), '# Worker skill\nInspect the assigned task.');
+      f.manager.setSkillCatalog(fixedSkillCatalog([{ id: 'worker-skill', name: 'Worker skill', scope: 'repo', path: join(f.root, '.agents/skills/worker-skill/SKILL.md') }]));
     });
     it('spawns a worker on a named skill', async () => {
       const { workerId } = await f.service.spawn(f.caller, { ...input(), skill: 'worker-skill' });
@@ -112,8 +112,22 @@ describe('delegation service durable authority', () => {
     it('rejects an unknown skill at spawn before creating a worker', async () => {
       const rejection = f.service.spawn(f.caller, { ...input(), skill: 'missing' });
       await expect(rejection).rejects.toBeInstanceOf(DelegationPolicyError);
-      await expect(rejection).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringMatching(/Unknown skill "missing"; available: .*worker-skill/) });
+      await expect(rejection).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('claude account "default" skill "missing" is missing') });
+      await expect(rejection).rejects.toMatchObject({ message: expect.stringContaining(join(f.root, '.agents/skills/worker-skill/SKILL.md')) });
       expect(f.store.listRuns()).toHaveLength(1);
+    });
+    it('checks the selected worker runner and account list before creating a worker', async () => {
+      const workerHome = join(f.root, 'worker-codex-home'); mkdirSync(workerHome);
+      vi.stubEnv('CODEX_HOME', workerHome);
+      const query = vi.spyOn(f.manager, 'runnerSkills').mockImplementation(async selected => {
+        expect(f.store.listRuns()).toHaveLength(1);
+        expect(selected).toEqual({ runner: 'codex', cwd: f.root, accountHome: workerHome });
+        return { runner: 'codex', source: 'live', problems: [], skills: [{ id: 'worker-skill', name: 'Worker skill', scope: 'user', path: join(workerHome, 'skills/worker-skill/SKILL.md') }] };
+      });
+      const { workerId } = await f.service.spawn(f.caller, { ...input(), backend: 'codex', skill: 'worker-skill' });
+      expect(query).toHaveBeenCalledOnce();
+      expect(f.store.getRun(workerId)).toMatchObject({ runner: 'codex', agentProfile: 'default' });
+      expect(f.store.readWorkerIdentity(workerId)).toMatchObject({ account: { provider: 'codex', homePath: workerHome } });
     });
     it('rejects skill with workflow in the spawn contract', () => {
       const result = workerSpawnRequestSchema.safeParse({ ...input(), skill: 'worker-skill', workflow: 'review' });

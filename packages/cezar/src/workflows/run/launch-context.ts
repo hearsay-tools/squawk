@@ -1,3 +1,4 @@
+import { leadingSlashSkillName } from './prompts.ts';
 import { productEnvEntries } from '../../core/product-env.ts';
 import { atStepOpen, atContinue } from './launch-read-resolver.ts';
 import type { DelegationProvisioner } from '../../delegation/provision.ts';
@@ -7,14 +8,12 @@ import { agentTmpEnv } from '../../runs/agent-tmpdir.ts';
 import type { WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import { automationsEnabled } from '../../automations/enabled.ts';
 import { automationCliCommand, automationsPrompt } from '../../automations/prompts.ts';
-import { createAutomationSkill } from '../../automations/builtin-skill.ts';
 import { registryEntry } from '../../workspace/registry-entry.ts';
 import { agentWebhooksPrompt, webhookCliCommand } from '../../webhooks/prompt.ts';
 import { agentWebhooks } from '../../workspace/webhooks.ts';
 import type { Skill } from '../../skills.ts';
 import { buildSessionContext, formatSessionContextReport, type SessionContext } from '../../session-context.ts';
 import type { ActiveRun } from '../active-run.ts';
-import { leadingSlashSkillName } from './prompts.ts';
 import type { RunModuleContext } from './types.ts';
 
 type LaunchContext = Pick<RunModuleContext, 'store' | 'repoRoot' | 'dataDir' | 'home'>;
@@ -61,8 +60,8 @@ export function automationsReachable(cockpit: CockpitAddress): boolean {
 }
 
 /** The built-in skills this manager may offer now; empty unless automations are reachable. */
-export function builtinSkills(cockpit: CockpitAddress): Skill[] {
-  return automationsReachable(cockpit) ? [createAutomationSkill(automationCliCommand())] : [];
+export function builtinSkills(_cockpit: CockpitAddress): Skill[] {
+  return [];
 }
 
 /** The automations part of every session's system prompt, or nothing. */
@@ -91,8 +90,8 @@ export function sessionContextFor({ store, repoRoot, dataDir }: LaunchContext, r
   const role = run?.delegation?.role === 'worker' ? 'worker' : 'parent';
   const handoff = handoffPath(dataDir, runId);
   refreshHandoffRecords(store, dataDir, runId);
-  // A backend's own slash command only works at character zero (#676); a prefix would turn
-  // it into plain text, so such a launch gets no context and keeps the read instruction.
+  // A structured skill has already consumed its slash text. Unconverted native commands
+  // still need character zero, so they keep the handoff read instruction instead of a prefix.
   const context: SessionContext = leadingSlashSkillName(openingPrompt)
     ? { prefix: '', handoffInjected: false, reports: [{ id: 'session-context', status: 'skipped', sources: [], reason: 'the opening message is a slash command, which must stay at its start' }] }
     : buildSessionContext({

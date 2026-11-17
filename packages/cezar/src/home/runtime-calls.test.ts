@@ -1,3 +1,4 @@
+import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { runtimeHomes } from './runtime-isolation.testkit.ts';
@@ -16,7 +17,7 @@ it('uses the selected config and account for planner calls', async () => {
   const { root, selected } = runtimeHomes();
   Home.seed(selected, selected.workspaceConfig, { agentDefaults: { runner: 'claude' } });
   run.mockResolvedValue({ text: JSON.stringify({ title: 'test-plan', steps: [{ prompt: '{{task}}', name: 'Task' }] }) });
-  expect((await planChain(root, 'Plan a task', [], selected, createRunner)).fallback).toBe(false);
+  expect((await planChain(root, 'Plan a task', fixedSkillCatalog(), selected, createRunner)).fallback).toBe(false);
   expect(run).toHaveBeenCalledWith(expect.objectContaining({ env: { CLAUDE_CONFIG_DIR: join(root, 'selected-account') } }));
 });
 
@@ -31,7 +32,7 @@ it('uses the selected config and account for task naming', async () => {
 it('chooses the selected machine runner for planner and namer', async () => {
   const { root, selected } = runtimeHomes();
   run.mockResolvedValue({ text: '{"title":"testing home isolation"}' });
-  await planChain(root, 'Test home isolation', [], selected, createRunner);
+  await planChain(root, 'Test home isolation', fixedSkillCatalog(), selected, createRunner);
   await generateRunName(root, { task: 'Test home isolation' }, selected, createRunner);
   expect(createRunner).toHaveBeenCalledTimes(2);
   expect(createRunner).toHaveBeenNthCalledWith(1, 'codex');

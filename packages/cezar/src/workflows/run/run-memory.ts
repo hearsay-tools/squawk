@@ -1,5 +1,6 @@
 import type { RunRecord } from '../../runs/store.ts';
 import type { PastedContent } from '../pasted-content.ts';
+import type { NativeInput, NativeInputRead } from './native-skill-input-queue.ts';
 import { LivenessTimers } from './liveness-timers.ts';
 
 /** A message `deferMessage` buffered before the session opened. `messageId` names its durable
@@ -22,10 +23,14 @@ export interface RunSlot {
   namerKey?: string;
   /** A forced start that bypasses the spawn-time gate, owned by `RunLine`. */
   forceStarted?: true;
+  /** Accepted human input awaiting native skill resolution, owned by `NativeSkillInputQueue`. */
+  nativeSkillInputs?: NativeInput[];
+  /** The current native skill read, owned by `NativeSkillInputQueue`. */
+  nativeSkillRead?: NativeInputRead;
 }
 
 /** The fields an execution owns: `dropActive` forgets them, as each owner did before. */
-const EXECUTION_FIELDS = ['memoryPausing', 'namerKey', 'forceStarted'] as const satisfies ReadonlyArray<keyof RunSlot>;
+const EXECUTION_FIELDS = ['memoryPausing', 'namerKey', 'forceStarted', 'nativeSkillInputs', 'nativeSkillRead'] as const satisfies ReadonlyArray<keyof RunSlot>;
 
 /** The statuses a run ends at. `review` is not one: a settled turn rests there and takes feedback. */
 const FINAL_STATUSES: ReadonlySet<RunRecord['status']> = new Set(['done', 'failed', 'cancelled']);

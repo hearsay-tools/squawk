@@ -5,14 +5,14 @@ import { autoNamingActive, generateRunName, liveTitleUpdatesEnabled, postValidat
 import { extractTaskRefs } from '../../runs/task-refs.ts';
 import { parseTaskMarkers } from '../../runs/task-markers.ts';
 import type { RunRecord } from '../../runs/store.ts';
-import type { Skill } from '../../skills.ts';
+import type { RunnerSkill } from '@open-mercato/cezar-contract/runner-skills';
 import type { WorkflowDef } from '../types.ts';
 import type { RunModuleContext } from './types.ts';
 import type { RunMemory } from './run-memory.ts';
 
 interface TurnBookkeeperHost {
   isDisposedDelegatedRun(runId: string): boolean;
-  discoverSkills(): Promise<Skill[]>;
+  sessionSkills(runId: string): readonly RunnerSkill[];
   reviveWorkflow(run: RunRecord): Promise<WorkflowDef | null>;
   trackTurn(runId: string, task: Promise<void>): void;
 }
@@ -50,8 +50,8 @@ export class TurnBookkeeper {
     try {
       let skillDescription: string | undefined;
       if (skillName) {
-        const skills = await this.host.discoverSkills().catch(() => [] as Skill[]);
-        skillDescription = skills.find((s) => s.name === skillName)?.description;
+        const skills = this.host.sessionSkills(runId);
+        skillDescription = skills.find((s) => s.id === skillName)?.description;
       }
       const result = await generateRunName(this.context.repoRoot, { task, skillName, skillDescription, ...live }, this.context.home, this.context.createRunner);
       if (!result || this.host.isDisposedDelegatedRun(runId)) return;

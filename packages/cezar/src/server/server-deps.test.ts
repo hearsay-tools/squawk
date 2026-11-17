@@ -254,8 +254,8 @@ describe('context listeners', () => {
       });
       // `createApp` attaches the webhooks to the boot context before it watches the boot store.
       expect(events).toEqual(['attach default', 'watch boot']);
-      // The first three `onContextBuilt` registrations are the ones under test; later ones belong to routes.
-      for (const listener of listeners.slice(0, 3)) listener(contextOf('built'));
+      // The first four `onContextBuilt` registrations are the ones under test; later ones belong to routes.
+      for (const listener of listeners.slice(0, 4)) listener(contextOf('built'));
       expect(events).toEqual(['attach default', 'watch boot', 'watch built', 'attach built', 'project-ready']);
     });
   });

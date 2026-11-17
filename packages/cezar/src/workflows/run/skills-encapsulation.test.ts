@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { discoverSkills, type Skill } from '../../skills.ts';
+import type { RunnerSkill } from '@open-mercato/cezar-contract/runner-skills';
+import { fixedSkillCatalog } from '../../core/runner-skill-fixture.testkit.ts';
 import { RunStore } from '../../runs/store.ts';
 import { WorkspaceSemaphore } from '../../workspace/semaphore.ts';
 import { createActiveRun } from '../active-run.ts';
@@ -11,85 +12,63 @@ import { RunSkills } from './run-skills.ts';
 import { TrackedWork } from './tracked-work.ts';
 import { noRunners } from '../../core/runners-under-test.testkit.ts';
 
-vi.mock('../../skills.ts', async (original) => ({
-  ...await original<typeof import('../../skills.ts')>(), discoverSkills: vi.fn(),
-}));
-const unused = (): never => { throw new Error('unused skills collaborator'); };
 let root: string;
 let store: RunStore;
 let owner: RunSkills;
+const entry: RunnerSkill = { id: 'demo', name: 'Demo', scope: 'repo', path: '/skills/demo/SKILL.md' };
+let catalog: ReturnType<typeof fixedSkillCatalog>;
+const profile = { env: {}, profileId: 'work', accountBinding: { provider: 'codex' as const, profileId: 'work', homePath: '/account' } };
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'cez-skill-owner-'));
   store = RunStore.open(root);
-  owner = new RunSkills({ createRunner: noRunners, home: testHome(), store, repoRoot: root, dataDir: root, semaphore: new WorkspaceSemaphore({ home: testHome() }),
-    work: new TrackedWork(), disposed: () => false }, {
-    builtinSkills: () => [], workerExecutionStopped: unused, isCurrentState: unused, flushAgentInputs: unused,
-  });
+  catalog = fixedSkillCatalog([entry]);
+  owner = new RunSkills({ skillCatalog: catalog, createRunner: noRunners, home: testHome(), store, repoRoot: root, dataDir: root,
+    semaphore: new WorkspaceSemaphore({ home: testHome() }), work: new TrackedWork(), disposed: () => false });
 });
-afterEach(() => { vi.mocked(discoverSkills).mockReset(); store.flush(); rmSync(root, { recursive: true, force: true }); });
+afterEach(() => { vi.restoreAllMocks(); store.close(); rmSync(root, { recursive: true, force: true }); });
 const state = () => createActiveRun({ cwd: root, pendingHumanAsk: false, autonomous: false });
-const entry = (): Skill => ({ name: 'demo', body: 'first body', path: '/skills/demo', source: 'team',
-  team: { repo: 'org/skills', ref: 'main', path: 'demo', dir: true, commit: 'first' } });
 
-it('keeps stable catalog and nested views while shared skill values change', async () => {
-  const shared = entry();
-  vi.mocked(discoverSkills).mockResolvedValue([shared]);
-  const run = state();
-  await owner.loadRunSkills(run, 'throw');
-  const catalog = run.skills.catalog!;
-  const view = catalog[0]!;
-  const team = view.team!;
-  expect(owner.enabledSkills(run)[0]).toBe(view);
-  expect(Object.isFrozen(shared)).toBe(false);
-  expect(Object.isFrozen(shared.team)).toBe(false);
-  shared.body = 'new body'; shared.path = '/files/current'; shared.source = 'builtin';
-  shared.description = 'current'; shared.interactive = true;
-  shared.team = { repo: 'new/repo', ref: 'next', path: 'new/path', dir: false, commit: 'next' };
-  expect(run.skills.catalog).toBe(catalog);
-  expect(catalog[0]).toBe(view);
-  expect(view.team).toBe(team);
-  expect(view.body).toBe('new body');
-  expect(view.path).toBe('/files/current');
-  expect(view.source).toBe('builtin');
-  expect(view.description).toBe('current');
-  expect(view.interactive).toBe(true);
-  expect([team.repo, team.ref, team.path, team.dir, team.commit]).toEqual(['new/repo', 'next', 'new/path', false, 'next']);
+it('reads the selected runner, account home and session working folder', async () => {
+  const read = vi.spyOn(catalog, 'get');
+  const active = state();
+  await owner.loadRunSkills(active, 'codex', profile);
+  expect(read).toHaveBeenCalledWith({ runner: 'codex', accountHome: '/account', cwd: root });
+  expect(active.skills.account).toBe('work');
+  expect(owner.enabledSkills(active)).toEqual([entry]);
 });
 
-it('refuses catalog, skill, team and slot writes while owner replacement still works', async () => {
-  vi.mocked(discoverSkills).mockResolvedValue([entry()]);
-  const run = state();
-  await owner.loadRunSkills(run, 'throw');
-  const catalog = run.skills.catalog!;
-  for (const value of [run.skills, catalog, catalog[0]!, catalog[0]!.team!]) {
+it('refuses catalog, row and query writes; a new process replaces its snapshot', async () => {
+  const active = state();
+  await owner.loadRunSkills(active, 'codex', profile);
+  const snapshot = owner.enabledSkills(active);
+  for (const value of [active.skills, snapshot, snapshot[0]!, active.skills.query!]) {
     expect(Object.isFrozen(value)).toBe(true);
     expect(Reflect.defineProperty(value, 'forged', { value: true })).toBe(false);
   }
-  expect(Object.isFrozen(Object.getPrototypeOf(run.skills))).toBe(true);
-  const assign = (target: object, key: string, value: unknown) => Object.assign(target, { [key]: value });
-  expect(() => assign(run, 'skills', state().skills)).toThrow(TypeError);
-  expect(() => assign(catalog[0]!, 'body', 'forged')).toThrow(TypeError);
-  expect(() => assign(catalog[0]!.team!, 'repo', 'forged')).toThrow(TypeError);
-  expect(() => Array.prototype.push.call(catalog, entry())).toThrow(TypeError);
-  expect(() => Array.prototype.splice.call(catalog, 0, 1)).toThrow(TypeError);
-  vi.mocked(discoverSkills).mockResolvedValue([{ ...entry(), body: 'replacement' }]);
-  await owner.loadRunSkills(run, 'throw');
-  expect(run.skills.catalog).not.toBe(catalog);
-  expect(run.skills.catalog![0]!.body).toBe('replacement');
-  expect(catalog[0]!.body).toBe('first body');
-  expect(state().skills.catalog).toBeUndefined();
+  expect(() => Object.assign(active, { skills: state().skills })).toThrow(TypeError);
+  expect(() => Object.assign(snapshot[0]!, { description: '/forged' })).toThrow(TypeError);
+  expect(() => Array.prototype.push.call(snapshot, entry)).toThrow(TypeError);
+  await owner.loadRunSkills(active, 'codex', profile);
+  expect(owner.enabledSkills(active)).not.toBe(snapshot);
+  expect(snapshot).toEqual([entry]);
+  expect(state().skills.catalog).toEqual([]);
 });
 
-it('keeps discovery failure policy and synchronous throw behavior', async () => {
-  const run = state();
-  vi.mocked(discoverSkills).mockResolvedValue([entry()]);
-  await owner.loadRunSkills(run, 'throw');
-  const catalog = run.skills.catalog;
-  vi.mocked(discoverSkills).mockRejectedValue(new Error('discovery'));
-  await owner.loadRunSkills(run, 'ignore');
-  expect(run.skills.catalog).toBe(catalog);
-  await expect(owner.loadRunSkills(run, 'throw')).rejects.toThrow('discovery');
-  vi.mocked(discoverSkills).mockImplementation(() => { throw new Error('synchronous'); });
-  await expect(owner.loadRunSkills(run, 'ignore')).rejects.toThrow('synchronous');
-  expect(run.skills.catalog).toBe(catalog);
+it('an unavailable list fails a selected skill with runner and account diagnostics', async () => {
+  vi.spyOn(catalog, 'get').mockResolvedValue({ runner: 'codex', skills: [], problems: [], source: 'unavailable', reason: 'probe refused sentinel' });
+  const active = state();
+  await owner.loadRunSkills(active, 'codex', profile);
+  expect(owner.selectedSkill(active, undefined, undefined, 'task')).toBeUndefined();
+  expect(() => owner.selectedSkill(active, 'demo', undefined, 'task')).toThrow('codex account "work"');
+  expect(() => owner.selectedSkill(active, 'demo', undefined, 'task')).toThrow('runner skill list is unavailable: probe refused sentinel');
+});
+
+
+it.each(['claude', 'codex'] as const)('opening an unknown command on %s reads only the opening snapshot', async runner => {
+  const active = state();
+  const read = vi.spyOn(catalog, 'get');
+  await owner.loadRunSkills(active, runner, profile);
+  const command = [{ type: 'text' as const, text: '/unknown arguments' }];
+  expect(await owner.openingInput('opening', active, command)).toBe(command);
+  expect(read).toHaveBeenCalledOnce();
 });

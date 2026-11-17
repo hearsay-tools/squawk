@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { isImageAttachmentName } from '@open-mercato/cezar-contract/attachments';
 import { delegationStateSchema } from '@open-mercato/cezar-contract/delegation';
 import { readAgentModelProvider } from '../../agent-config/models.ts';
-import { loadConfig, readDisabledSkillsReposSync, type CezConfig } from '../../config.ts';
+import { loadConfig, type CezConfig } from '../../config.ts';
 import { buildChildEnv } from '../../core/agent-env.ts';
 import type { AgentRunner, ContentBlock, RunnerFactory, RunnerId } from '../../core/agent-runner.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../../core/agent-model-policy.ts';
@@ -16,8 +16,6 @@ import { boundWorkerAccountEnv, captureWorkerAccount, continuationDefStep, conti
 import { DelegationPolicyError } from '../../delegation/policy.ts';
 import type { QueuedMessage, RunRecord, RunStore, StepState } from '../../runs/store.ts';
 import { makeRunTitle } from '../../runs/run-title.ts';
-import { discoverSkills, filterDisabledTeamSkills, filterDisabledTeamSources, readDisabledTeamSkills, type Skill } from '../../skills.ts';
-import { getTeamSkillsCached } from '../../skills-remote.ts';
 import { readProjectUiState, readProjectUiStateSync } from '../../ui-state.ts';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '../../workspace/agent-accounts.ts';
 import { resolveProfileEnvForRoot } from '../../workspace/agent-profiles.ts';
@@ -34,7 +32,7 @@ import type { OpeningHost } from './opening.ts';
 import { applyTemplate, resolveExtraSystemPrompt } from './prompts.ts';
 import type { PendingJob } from './run-line.ts';
 import type { QueuedRevivalHost } from './queued-revival.ts';
-import type { ContinuationOpening, Execution, PendingContinuation, RunModuleContext, StartRunInput, StepModel } from './types.ts';
+import type { ContinuationOpening, Execution, PendingContinuation, RunModuleContext, StartRunInput, StepModel, StepProfile } from './types.ts';
 
 // This view adds no promise continuation before the caller's original post-config gate.
 function readLaunchConfig(repoRoot: string, home: Home): Promise<LaunchConfig> {
@@ -127,9 +125,9 @@ function continuationRunner(
   sessionId: string | undefined,
   owningStep: RunRecord['steps'][number] | undefined,
   factory: RunnerFactory,
-): { runner: AgentRunner; skipSkillOnResume: boolean } {
+): { runner: AgentRunner } {
   const runner = factory(backend);
-  return { runner, skipSkillOnResume: sessionId !== undefined && runner.systemPromptOnResume === 'in-thread' };
+  return { runner };
 }
 
 /**
@@ -213,23 +211,15 @@ function stepEffort(
     : stepIdentity ? stepIdentity.effort : authoredStepEffort ? stepEffort : store.getRun(runId)?.effort ?? input.effort;
 }
 
-// The method name also preserves P1's catalog-reader guard. Registry storage stays in RunSkills.
-const skillSourceReads = {
-  enabledSkills(state: ActiveRun, repoRoot: string, disabled: ReturnType<typeof readDisabledTeamSkills>): Skill[] {
-    const sources = filterDisabledTeamSources(state.skills.catalog ?? [], readDisabledSkillsReposSync(repoRoot));
-    return filterDisabledTeamSkills(sources, disabled);
-  },
-};
-
-export const atTaskHead = { executionPayload, queuedPayload, resumedPayload, acceptedWorkflowFields, recordedRunner, defaultRunner, runnerless, heldFor, accountFor, workerStep, executionInput, executionWorkflow, requeueJob, baseBranch, worktreeSetup: continuationWorktreeSetup, jobInput, jobWorkflow, resumedJob, storedWorkflow, interruptedIndex, interruptedDefinition, heldAccount, worktree: inputWorktree, workflowName, images: acceptedImages, task: acceptedTask, skillHint: acceptedSkillHint, ownedJob, verifyIdentity: verifyWorkerIdentity, autonomous: inputAutonomous, reviveWorkflow, queuedResumeSession, recoveryInput: queuedRecoveryInput, registry: discoverRunSkills, acceptedRunFields, acceptInput, modelIdentity: taskModelIdentity, config: readLaunchConfig, runner: taskRunner, systemPrompt: taskSystemPrompt, hydrateQueuedInput, attachments: readPersistedAttachments };
-export const atStepOpen = { afterStepPayload, sessionPayload, sessionWaitPayload, retryIndex, workflowLength, workflowStep, workflowSlice, workflowChainNote, runner: stepRunner, prompt: stepPrompt, skill: stepSkill, toolGrant: continuationToolGrant, enabledSkills: skillSourceReads.enabledSkills, disabledSkills: readDisabledTeamSkills, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, teamSkills, filterSkills: filterDisabledTeamSkills, contextVariables, model: stepModel, effort: stepEffort, openingInputs, agentEnvForStep, workerStep };
-export const atLiveInput = { disabledSkills: readDisabledTeamSkills, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, teamSkills, filterSkills: filterDisabledTeamSkills, queuedMessages: queuedMessageSource, taskAttachmentUrls, enabledSkills: skillSourceReads.enabledSkills };
-export const atContinue = { task: retriedTask, heldStep: heldWorkflowStepId, heldRunner: heldStepRunner, resumedStep, storedWorkflow, workflowStep, workflowLength, agentEnvForStep, workerStep, registry: discoverRunSkills, enabledSkills: skillSourceReads.enabledSkills, disabledSkills: readDisabledTeamSkills, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, teamSkills, filterSkills: filterDisabledTeamSkills, skill: continuedSkill, checkpoint: continuedCheckpoint, prompt: continuedPrompt, rejoinLine: rejoinContinuationLine, verifyIdentity: verifyWorkerIdentity, waitingBeforeFinalWorkflowStep, waitingWorkflowStepIndex, continuationNextStep, ciWorkflowResumeStepIndex, workflowStartIndex, resumableSessionId, continuedSessionId, isSyntheticContinuation, owningStep: continuationOwningStep, definitionStep: continuationDefStep, continuedStep: continuedStepId, toolGrant: continuationToolGrant, extraSystemPrompt: continuedSystemPrompt, recordedProfile: continuedProfileId, definitionId: continuationStepId, model: continuationModel, effort: continuationEffort, runner: continuationRunner, hydrateQueuedContinuation, config: readLaunchConfig, worktreeSetup: continuationWorktreeSetup, opening: continuationOpening, openingImages: continuationImages };
+export const atTaskHead = { executionPayload, queuedPayload, resumedPayload, acceptedWorkflowFields, recordedRunner, defaultRunner, runnerless, heldFor, accountFor, workerStep, executionInput, executionWorkflow, requeueJob, baseBranch, worktreeSetup: continuationWorktreeSetup, jobInput, jobWorkflow, resumedJob, storedWorkflow, interruptedIndex, interruptedDefinition, heldAccount, worktree: inputWorktree, workflowName, images: acceptedImages, task: acceptedTask, skillHint: acceptedSkillHint, ownedJob, verifyIdentity: verifyWorkerIdentity, autonomous: inputAutonomous, reviveWorkflow, queuedResumeSession, recoveryInput: queuedRecoveryInput, acceptedRunFields, acceptInput, modelIdentity: taskModelIdentity, config: readLaunchConfig, runner: taskRunner, systemPrompt: taskSystemPrompt, hydrateQueuedInput, attachments: readPersistedAttachments };
+export const atStepOpen = { afterStepPayload, sessionPayload, sessionWaitPayload, retryIndex, workflowLength, workflowStep, workflowSlice, workflowChainNote, skillQuery: runSkillQuery, skillAccount, sessionSkills, runner: stepRunner, prompt: stepPrompt, skill: stepSkill, toolGrant: continuationToolGrant, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, contextVariables, model: stepModel, effort: stepEffort, openingInputs, agentEnvForStep, workerStep };
+export const atLiveInput = { projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, queuedMessages: queuedMessageSource, attachments: readPersistedAttachments, taskAttachmentUrls, };
+export const atContinue = { skillQuery: runSkillQuery, task: retriedTask, heldStep: heldWorkflowStepId, heldRunner: heldStepRunner, resumedStep, storedWorkflow, workflowStep, workflowLength, agentEnvForStep, workerStep, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, skill: continuedSkill, checkpoint: continuedCheckpoint, prompt: continuedPrompt, rejoinLine: rejoinContinuationLine, verifyIdentity: verifyWorkerIdentity, waitingBeforeFinalWorkflowStep, waitingWorkflowStepIndex, continuationNextStep, ciWorkflowResumeStepIndex, workflowStartIndex, resumableSessionId, continuedSessionId, isSyntheticContinuation, owningStep: continuationOwningStep, definitionStep: continuationDefStep, continuedStep: continuedStepId, toolGrant: continuationToolGrant, extraSystemPrompt: continuedSystemPrompt, recordedProfile: continuedProfileId, definitionId: continuationStepId, model: continuationModel, effort: continuationEffort, runner: continuationRunner, hydrateQueuedContinuation, config: readLaunchConfig, worktreeSetup: continuationWorktreeSetup, opening: continuationOpening, openingImages: continuationImages };
 
 function hydrateQueuedInput(context: RunModuleContext, readAttachments: AttachmentReader, runId: string, input: StartRunInput): StartRunInput {
     const run = context.store.getRun(runId);
     if (!run) return input;
-    const stack = run.queuedMessages ?? [];
+    const stack = (run.queuedMessages ?? []).filter(message => !message.replayAfterOpen);
 
     const task = foldQueuedTask(run.task, stack);
 
@@ -264,7 +254,7 @@ function hydrateQueuedContinuation(context: RunModuleContext, readAttachments: A
     if (!run) {
       return { ...continuation, persistedImages: [], persistedAttachments: [] };
     }
-    const stack = run.queuedMessages ?? [];
+    const stack = (run.queuedMessages ?? []).filter(message => !message.replayAfterOpen);
     const amendedTask = foldQueuedTask(run.task, stack);
     const openingPrompt = run.continuationMessage?.text ?? continuation.prompt;
     const prompt = queuedContinuationPrompt(openingPrompt, amendedTask);
@@ -405,7 +395,7 @@ function openingInputs(store: RunStore, dataDir: string, execution: Execution): 
   );
   const attachments: PersistedAttachment[] = openingAlreadyDelivered ? [] : [
     ...(startRecord?.taskImages ?? []),
-    ...(startRecord?.queuedMessages ?? []).flatMap((m) => m.images ?? []),
+    ...(startRecord?.queuedMessages ?? []).filter(message => !message.replayAfterOpen).flatMap((m) => m.images ?? []),
   ]
     .map((url): PersistedAttachment | null => {
       const name = url.split('/').pop();
@@ -540,7 +530,7 @@ function acceptedRunFields(input: StartRunInput, workflow: WorkflowDef, effectiv
       clientRequestHash: clientRequest?.hash,
       automation: input.automation,
       automationTrigger: input.automationTrigger,
-      steps: workflow.steps.map((s) => ({ id: s.id, name: s.name ?? s.id, kind: stepKind(s) })),
+      steps: workflow.steps.map((s) => ({ id: s.id, name: s.name ?? s.id, kind: stepKind(s), ...(input.skillPaths?.[s.id] ? { skillPath: input.skillPaths[s.id] } : {}) })),
     };
 }
 
@@ -548,12 +538,8 @@ function acceptInput(repoRoot: string, input: StartRunInput, home: Home): StartR
   return agentModelsLocked(repoRoot, process.env, home) ? { ...input, model: undefined, effort: undefined } : input;
 }
 
-function discoverRunSkills(repoRoot: string, builtin: Skill[], home: Home): Promise<Skill[]> {
-  return discoverSkills(repoRoot, { builtin }, home);
-}
-function teamSkills(repoRoot: string, home: Home): Skill[] {
-  return filterDisabledTeamSources(getTeamSkillsCached(repoRoot, home), readDisabledSkillsReposSync(repoRoot));
-}
+
+
 
 function continuationOwningStep(record: RunRecord | undefined, sessionId: string | undefined): RunRecord['steps'][number] | undefined {
   return sessionId === undefined ? undefined : record?.steps.find(candidate => candidate.sessionId === sessionId);
@@ -827,3 +813,11 @@ function defaultRunner(config: LaunchConfig): RunnerId { return configValue(conf
 function runnerless(store: Pick<RunStore, 'getRun'>, id: string): boolean { return store.getRun(id)?.runner === undefined; }
 function heldFor(...args: Parameters<typeof accountHeldFor>): boolean { return accountHeldFor(...args); }
 function accountFor(...args: Parameters<typeof executionAccount>): ReturnType<typeof executionAccount> { return executionAccount(...args); }
+
+/** The native list reads the account and working folder selected for this process. */
+function runSkillQuery(state: ActiveRun, runner: RunnerId, profile: StepProfile) {
+  return { runner, cwd: state.liveSession.cwd, accountHome: profile.accountBinding?.homePath };
+}
+
+function skillAccount(profile: StepProfile): string { return profile.profileId; }
+function sessionSkills(state: ActiveRun) { return state.skills.catalog; }
