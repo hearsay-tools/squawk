@@ -48,11 +48,6 @@ export function durableRun(root: string, workspace: WorkerWorkspace) {
   }, 'a'.repeat(64));
   return { run, store };
 }
-/** A removal report that records each call in order, as destroy's retry policy reads them. */
-export function recordingReport() {
-  const calls: Array<['held', number[]] | ['unexplained']> = [];
-  return { calls, report: { held: (pids: readonly number[]) => { calls.push(['held', [...pids]]); }, unexplained: () => { calls.push(['unexplained']); } } };
-}
 export function receiptPath(root: string, workspace: WorkerWorkspace) {
   return join(root, '.git', 'cezar-owned-workspaces', `${workspace.resourceId}.json`);
 }

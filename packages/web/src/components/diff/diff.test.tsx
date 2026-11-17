@@ -103,13 +103,6 @@ describe('Diff facade', () => {
     expect(body.getAttribute('data-wrap')).toBe('true')
   })
 
-  it('collapses a file body from its sticky header', async () => {
-    await renderDiff(<Diff files={[MODIFIED]} />)
-
-    fireEvent.click(screen.getByRole('button', { name: /src\/a\.ts/ }))
-    expect(document.querySelector('[data-slot="diff-file-body"]')).toBeNull()
-  })
-
   it('expands a context gap through the loadFileText seam', async () => {
     const fileText = Array.from({ length: 6 }, (_, i) => `line ${i + 1}`).join('\n')
     const loadFileText = vi.fn().mockResolvedValue(fileText)

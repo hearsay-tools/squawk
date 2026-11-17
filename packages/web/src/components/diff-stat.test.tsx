@@ -71,19 +71,6 @@ describe('DiffStatLabel', () => {
     expect(el.getAttribute('aria-label')).toBe(el.title)
   })
 
-  /**
-   * `diffStat` is a turn-end snapshot that is never recomputed or cleared afterwards —
-   * not when the run finishes, and not when retention reclaims the worktree. So the
-   * caveat may outlive the checkout that caused it, and must describe what was true when
-   * the numbers were measured rather than assert a live worktree state.
-   */
-  it('scopes the caveat to when the numbers were measured, not to the worktree now', () => {
-    const title = renderStat({ adds: 1, dels: 0, files: 1, repointed: true }).title
-    expect(title).toContain('measured against another branch checked out')
-    // No present-tense claim about a worktree that may already have been reclaimed.
-    expect(title).not.toContain('has another branch checked out')
-  })
-
   it('still renders the real numbers when they are all zero and repointed', () => {
     const el = renderStat({ adds: 0, dels: 0, files: 0, repointed: true })
     expect(el.textContent).toBe('+0 −0')

@@ -16,7 +16,10 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     const claims = join(root, '.git/cezar-worktree-mutations');
     await rm(claims, { recursive: true });
     await writeFile(claims, 'coordination unavailable');
-    expect(await removeOwnedWorkspace(root, workspace)).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
+    let calls = 0;
+    expect(await removeOwnedWorkspace(root, workspace, undefined, async () => { calls += 1; }))
+      .toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
+    expect(calls).toBe(0);
     expect(existsSync(workspace.path)).toBe(true);
     expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
     await rm(claims);
@@ -30,19 +33,6 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     expect(await removeOwnedWorkspace(root, workspace, undefined, async () => { seen.push(existsSync(workspace.path)); }))
       .toMatchObject({ state: 'complete', remaining: [] });
     expect(seen).toEqual([true]);
-  });
-
-  it('never runs beforeRemove when the cleanup declines', async () => {
-    const { root, first } = await fixture();
-    const workspace = await createOwnedWorkspace(root, randomUUID(), first);
-    const claims = join(root, '.git/cezar-worktree-mutations');
-    await rm(claims, { recursive: true });
-    await writeFile(claims, 'coordination unavailable');
-    let calls = 0;
-    expect(await removeOwnedWorkspace(root, workspace, undefined, async () => { calls += 1; }))
-      .toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
-    expect(calls).toBe(0);
-    await rm(claims);
   });
 
   it('preserves owned resources when cleanup authority is revoked during preflight', async () => {

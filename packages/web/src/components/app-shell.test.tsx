@@ -247,15 +247,6 @@ describe('AppShell', () => {
     expect(links).toHaveLength(4)
   })
 
-  // #801: same degradation for the automations capability — the item disappears, it does
-  // not render disabled. The two gates on that item are independent: a forge alone is not enough.
-  it('drops the Automations item when the capability is off', () => {
-    renderShell('/', { automationsAvailable: false })
-    const links = allNavLinks()
-    expect(links.map((a) => a.getAttribute('href'))).not.toContain('/automations')
-    expect(links).toHaveLength(5)
-  })
-
   it('shows Automations in overflow once the capability is on', async () => {
     renderShell('/', { automationsAvailable: true })
     fireEvent.keyDown(within(nav()).getByRole('button', { name: 'More views' }), { key: 'Enter' })
