@@ -3,11 +3,20 @@ import { child, children, nameOf, stringOf, type AstRule, type EsNode, type Repo
 
 /** Shared syntax and file scopes for the owner rules (hearsay-tools/squawk#3774). */
 export interface OwnerPolicy { name: string; message: string; files: string[]; ignores: string[] }
+const globResults = new Map<string, boolean>();
+let globFile: string | undefined;
+/** The owner rules share many globs; each is matched once per file. */
+function matches(file: string, pattern: string): boolean {
+  if (file !== globFile) { globFile = file; globResults.clear(); }
+  let result = globResults.get(pattern);
+  if (result === undefined) { result = matchesGlob(file, pattern); globResults.set(pattern, result); }
+  return result;
+}
 export function ownerRule(policy: OwnerPolicy, create: (report: (node: EsNode) => void) => Visitors): AstRule {
   return {
     name: policy.name,
     description: policy.message,
-    applies: file => file.endsWith('.ts') && policy.files.some(pattern => matchesGlob(file, pattern)) && !policy.ignores.some(pattern => matchesGlob(file, pattern)),
+    applies: file => file.endsWith('.ts') && policy.files.some(pattern => matches(file, pattern)) && !policy.ignores.some(pattern => matches(file, pattern)),
     create: (report: Report) => create(node => report(node, policy.message)),
   };
 }

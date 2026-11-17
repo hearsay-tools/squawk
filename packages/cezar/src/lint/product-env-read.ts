@@ -6,7 +6,7 @@ import { property, unwrapped, visit } from './home-boundary.ts';
 import { repoRoot } from './source-rule.ts';
 import type { AstRule } from './ast-rule.ts';
 import { deferredAstView, originalAt } from './ast-node-view.ts';
-import { productEnvCalls, scannedEnvFile } from './undocumented-env-name.ts';
+import { addProductEnvHelper, productEnvCall, scannedEnvFile } from './undocumented-env-name.ts';
 
 export const productEnvBaselineFile = 'packages/cezar/src/lint/product-env-read.baseline.json';
 const ACCESSOR = 'packages/cezar/src/core/product-env.ts';
@@ -147,15 +147,10 @@ function markWriteTarget(node: Node | null, targets: Set<Node>): void {
 }
 
 /** Only assignment without a read and delete are exempt. += and ++ read the old value. */
-function writeTargets(ast: Node): Set<Node> {
-  const targets = new Set<Node>();
-  const mark = (node: Node) => markWriteTarget(node, targets);
-  visit(ast, node => {
-    if (node.type === 'AssignmentExpression' && node.operator === '=') mark(node.left);
-    if (node.type === 'UnaryExpression' && node.operator === 'delete') mark(node.argument);
-    if (node.type === 'ForOfStatement' || node.type === 'ForInStatement') mark(node.left);
-  });
-  return targets;
+function addWriteTargets(node: Node, targets: Set<Node>): void {
+  if (node.type === 'AssignmentExpression' && node.operator === '=') markWriteTarget(node.left, targets);
+  if (node.type === 'UnaryExpression' && node.operator === 'delete') markWriteTarget(node.argument, targets);
+  if (node.type === 'ForOfStatement' || node.type === 'ForInStatement') markWriteTarget(node.left, targets);
 }
 
 function memberRead(node: Node, aliases: EnvBindings, writes: Set<Node>, source: string, staticNames: Map<string, string>): EnvRead[] {
@@ -175,25 +170,31 @@ function literalEnvKey(node: Node, bindings: Map<string, Node>, seen = new Set<s
   return bound ? literalEnvKey(bound, bindings, new Set(seen).add(target.name)) : undefined;
 }
 
-/** Duplicate or shadowed bindings stay unknown rather than borrowing an outer value. */
-function staticEnvNames(ast: Node): Map<string, string> {
-  const constants = new Map<string, Node>();
-  const counts = new Map<string, number>();
-  const count = (pattern: Node) => visit(pattern, node => {
-    if (node.type === 'Identifier') counts.set(node.name, (counts.get(node.name) ?? 0) + 1);
+interface StaticBindings { constants: Map<string, Node>; counts: Map<string, number> }
+
+function countNames(pattern: Node, counts: Map<string, number>): void {
+  visit(pattern, part => {
+    if (part.type === 'Identifier') counts.set(part.name, (counts.get(part.name) ?? 0) + 1);
   });
-  visit(ast, node => {
-    if (node.type === 'VariableDeclaration') {
-      for (const declaration of node.declarations) {
-        count(declaration.id);
-        if (node.kind === 'const' && declaration.id.type === 'Identifier' && declaration.init) constants.set(declaration.id.name, declaration.init);
-      }
+}
+
+/** Each declared name and each `const` initializer, so a name declared twice can be left out. */
+function addStaticBinding(node: Node, { constants, counts }: StaticBindings): void {
+  const count = (pattern: Node) => countNames(pattern, counts);
+  if (node.type === 'VariableDeclaration') {
+    for (const declaration of node.declarations) {
+      count(declaration.id);
+      if (node.kind === 'const' && declaration.id.type === 'Identifier' && declaration.init) constants.set(declaration.id.name, declaration.init);
     }
-    if ('params' in node && Array.isArray(node.params)) node.params.forEach(count);
-    if (node.type === 'CatchClause' && node.param) count(node.param);
-    if (node.type === 'ImportSpecifier' || node.type === 'ImportDefaultSpecifier' || node.type === 'ImportNamespaceSpecifier') count(node.local);
-    if ((node.type === 'FunctionDeclaration' || node.type === 'ClassDeclaration' || node.type === 'FunctionExpression') && node.id) count(node.id);
-  });
+  }
+  if ('params' in node && Array.isArray(node.params)) for (const param of node.params) count(param);
+  if (node.type === 'CatchClause' && node.param) count(node.param);
+  if (node.type === 'ImportSpecifier' || node.type === 'ImportDefaultSpecifier' || node.type === 'ImportNamespaceSpecifier') count(node.local);
+  if ((node.type === 'FunctionDeclaration' || node.type === 'ClassDeclaration' || node.type === 'FunctionExpression') && node.id) count(node.id);
+}
+
+/** Duplicate or shadowed bindings stay unknown rather than borrowing an outer value. */
+function staticEnvNames({ constants, counts }: StaticBindings): Map<string, string> {
   for (const [name, total] of counts) if (total !== 1) constants.delete(name);
   const names = new Map<string, string>();
   for (const [name, value] of constants) {
@@ -209,22 +210,32 @@ export function productEnvReads(source: string, file = 'file.ts'): EnvRead[] {
   return productEnvReadsFromAst(ast, source);
 }
 
+/**
+ * Three passes: the facts each node gives alone, then the env aliases, which need every type
+ * alias, then the reads, which need every alias, write target, constant and helper name.
+ */
 function productEnvReadsFromAst(ast: Node, source: string): EnvRead[] {
   const types: TypeAliases = new Map();
+  const bindings: StaticBindings = { constants: new Map(), counts: new Map() };
+  const writes = new Set<Node>();
+  const helpers = new Set(['productEnv']);
   visit(ast, node => {
     if (node.type === 'TSTypeAliasDeclaration') types.set(node.id.name, node);
+    addStaticBinding(node, bindings);
+    addWriteTargets(node, writes);
+    addProductEnvHelper(node, helpers);
   });
-  const staticNames = staticEnvNames(ast);
+  const staticNames = staticEnvNames(bindings);
   const aliases = envBindings(ast, types);
-  const writes = writeTargets(ast);
   const reads: EnvRead[] = [];
+  const dynamicCalls: EnvRead[] = [];
   visit(ast, node => {
     reads.push(...memberRead(node, aliases, writes, source, staticNames));
     reads.push(...bindingReads(node, aliases, types));
+    const call = productEnvCall(node, helpers);
+    if (call && call.suffix === undefined) dynamicCalls.push({ form: 'helper-dynamic', name: '*', offset: call.offset });
   });
-  for (const call of productEnvCalls(ast)) {
-    if (call.suffix === undefined) reads.push({ form: 'helper-dynamic', name: '*', offset: call.offset });
-  }
+  reads.push(...dynamicCalls);
   return reads.sort((a, b) => a.offset - b.offset);
 }
 

@@ -60,26 +60,33 @@ export const e2eRawRunSeed = ownerRule(OWNER_POLICIES['e2e-raw-run-seed']!, repo
   };
 });
 
-/** File-level promisify bindings scope the cez/exec* owner rules to one program. */
+/**
+ * File-level promisify bindings scope the cez/exec* owner rules to one program. A binding may
+ * follow its call, so a `'git'` call through a plain name waits for the whole file's bindings.
+ */
 export const gitSpawn = ownerRule(OWNER_POLICIES['git-spawn-outside-helper']!, report => {
   const launchers = new Set<string>();
+  const calls: Array<{ node: EsNode; name?: string }> = [];
   return {
-    Program(node) {
-      walk(node, part => {
-        if (part.type !== 'VariableDeclarator' || !isPromisify(child(part, 'init'))) return;
-        const name = nameOf(child(part, 'id'));
-        if (name) launchers.add(name);
-      });
+    VariableDeclarator(part) {
+      if (!isPromisify(child(part, 'init'))) return;
+      const name = nameOf(child(part, 'id'));
+      if (name) launchers.add(name);
     },
     CallExpression(node) {
       const fn = child(node, 'callee');
       const name = callee(node) ?? '';
       const first = children(node, 'arguments')[0];
-      if ((fileLaunchers.test(name) || isPromisify(fn) || launchers.has(nameOf(fn) ?? '')) && stringOf(first) === 'git') report(node);
-      else if (shellLaunchers.test(name)) {
+      if (stringOf(first) === 'git') {
+        if (fileLaunchers.test(name) || isPromisify(fn)) calls.push({ node });
+        else calls.push({ node, name: nameOf(fn) ?? '' });
+      } else if (shellLaunchers.test(name)) {
         const prefix = first?.type === 'TemplateLiteral' ? fragment(children(first, 'quasis')[0]!) : stringOf(first);
-        if (/^git\s/.test(prefix ?? '')) report(node);
+        if (/^git\s/.test(prefix ?? '')) calls.push({ node });
       }
+    },
+    'Program:exit'() {
+      for (const { node, name } of calls) if (name === undefined || launchers.has(name)) report(node);
     },
   };
 });

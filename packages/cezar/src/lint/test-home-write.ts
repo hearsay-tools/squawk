@@ -22,13 +22,18 @@ function guarded(node: Node | null | undefined): boolean {
     : node?.type === 'StringLiteral' && SOURCES.has(node.value);
 }
 
+const TYPE_FIELDS = new Set(['typeAnnotation', 'typeParameters', 'typeArguments']);
+const isSyntax = (value: unknown): value is Node => !!value && typeof value === 'object' && typeof (value as { type?: unknown }).type === 'string';
+
 function children(node: Node): Node[] {
-  return Object.entries(node).flatMap(([key, value]) => {
-    if (['typeAnnotation', 'typeParameters', 'typeArguments'].includes(key)) return [];
-    return (Array.isArray(value) ? value : [value]).filter((child): child is Node => {
-      return child && typeof child === 'object' && typeof child.type === 'string';
-    });
-  });
+  const found: Node[] = [];
+  for (const key of Object.keys(node)) {
+    if (TYPE_FIELDS.has(key)) continue;
+    const value = (node as unknown as Record<string, unknown>)[key];
+    if (Array.isArray(value)) { for (const item of value) if (isSyntax(item)) found.push(item); }
+    else if (isSyntax(value)) found.push(value);
+  }
+  return found;
 }
 
 /** Type syntax cannot import or invoke a runtime home source. */
