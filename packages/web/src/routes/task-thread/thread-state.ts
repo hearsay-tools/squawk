@@ -1,3 +1,4 @@
+import { isSkillInputEcho } from './thread-skill-input'
 import type {
   RunEvent,
   RunStatus,
@@ -349,6 +350,12 @@ function dropTwinnedV1Messages(draft: DraftTurn): void {
   dropLegacyDeltaRuns(draft)
 }
 
+/** The adapter identifies which submission expanded. Display text can include context,
+ * attachment notes or native trimming, so it must never decide whether an input is an echo. */
+function dropHumanInputEchoes(draft: DraftTurn): void {
+  if (draft.userMessage) draft.entries = draft.entries.filter(({ entry }) => !isSkillInputEcho(entry, 'human'))
+}
+
 /**
  * Only a request the engine actually enqueued can still settle: `delegation/service.ts`
  * enqueues when the recipient is neither destroyed nor resumable, and gives only those
@@ -397,6 +404,7 @@ export function reduceThread(events: RunEvent[], options: ThreadReduceOptions = 
   for (const event of events) applyThreadEvent(fold, event)
   for (const draft of fold.turns) {
     if (draft.v2Items) dropTwinnedV1Messages(draft)
+    dropHumanInputEchoes(draft)
   }
   markPendingRequests(fold)
   const lastIndex = fold.turns.length - 1

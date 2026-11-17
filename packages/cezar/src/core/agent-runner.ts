@@ -64,6 +64,8 @@ export interface AgentRunSpec {
   /** Private bundled tool server; capability values belong only in env. */
   squawkTools?: { name: string; command: string; args: string[] };
   userPrompt: string;
+  /** Native trigger. userPrompt remains opening context; args belongs to the skill. */
+  skill?: SkillTrigger;
   /** Image blocks delivered with the first user message — screenshots pasted
    *  into the new-task form (spec 002's paste path, at task start). */
   images?: ContentBlock[] | undefined;
@@ -122,6 +124,7 @@ const AGENT_RUN_SPEC_FIELD_SET: Readonly<Record<keyof AgentRunSpec, true>> = {
   systemPrompt: true,
   squawkTools: true,
   userPrompt: true,
+  skill: true,
   images: true,
   cwd: true,
   toolGrant: true,
@@ -256,7 +259,15 @@ export function trackChildExit(child: TrackableChild): () => boolean {
 
 /** One content block of a user message — mirrors the Anthropic wire format
  *  so it can be written to the claude CLI's stdin verbatim. */
+export interface SkillTrigger {
+  id: string;
+  path?: string;
+  args: string;
+}
+
 export type ContentBlock =
+  /** A native trigger, valid only as the first block. Other blocks carry context/images. */
+  | ({ type: 'skill' } & SkillTrigger)
   | { type: 'text'; text: string }
   | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } };
 
@@ -273,7 +284,7 @@ export type AgentEvent =
   /** The backend's real session id, once known — codex threads and opencode
    *  sessions mint their own id, so the run manager persists this to enable
    *  resume ("Continue") and "open in CLI". Claude's equals `spec.sessionId`. */
-  | { type: 'session'; sessionId: string }
+  | { type: 'session'; sessionId: string; resumed: boolean }
   /** `unconsumedInputIds`: agent input accepted in this turn that the model never
    *  read before the turn ended idle (#505). */
   | { type: 'turn-end'; unconsumedInputIds?: readonly string[] }

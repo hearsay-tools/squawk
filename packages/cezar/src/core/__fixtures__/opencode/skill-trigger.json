@@ -1,0 +1,62 @@
+[
+  {
+    "id": "evt_1e644647c001JBwTUFa85HuwXe",
+    "type": "message.updated",
+    "properties": {
+      "sessionID": "ses_e19bb9f24ffeDLvpKOwIDRYASe",
+      "info": {
+        "id": "msg_1e6446472001QbxAqCh8Ka3c05",
+        "role": "user",
+        "sessionID": "ses_e19bb9f24ffeDLvpKOwIDRYASe",
+        "time": {
+          "created": 1794864604274
+        },
+        "agent": "build",
+        "model": {
+          "providerID": "zai-coding-plan",
+          "modelID": "glm-5.3-flash",
+          "variant": "low"
+        }
+      }
+    }
+  },
+  {
+    "id": "evt_1e644647f001kxHleStwdpUoJf",
+    "type": "message.part.updated",
+    "properties": {
+      "sessionID": "ses_e19bb9f24ffeDLvpKOwIDRYASe",
+      "part": {
+        "type": "text",
+        "text": "Reply with exactly TRIGGER-FIXTURE. Do not use any tool.\n\n\nBase directory for this skill: /probe/repo/.agents/skills/probe-project\nRelative paths in this skill (e.g., scripts/, references/) are relative to this base directory.\n\nfixture arguments\n\nOpening context: this is a native skill probe.",
+        "messageID": "msg_1e6446472001QbxAqCh8Ka3c05",
+        "sessionID": "ses_e19bb9f24ffeDLvpKOwIDRYASe",
+        "id": "prt_1e644647a001VORV1UrikmnbBw"
+      },
+      "time": 1794864604287
+    }
+  },
+  {
+    "id": "evt_1e644650a001T722fN64VA9xFq",
+    "type": "message.updated",
+    "properties": {
+      "sessionID": "ses_e19bb9f24ffeDLvpKOwIDRYASe",
+      "info": {
+        "role": "user",
+        "time": {
+          "created": 1794864604274
+        },
+        "agent": "build",
+        "model": {
+          "providerID": "zai-coding-plan",
+          "modelID": "glm-5.3-flash",
+          "variant": "low"
+        },
+        "id": "msg_1e6446472001QbxAqCh8Ka3c05",
+        "sessionID": "ses_e19bb9f24ffeDLvpKOwIDRYASe",
+        "summary": {
+          "diffs": []
+        }
+      }
+    }
+  }
+]

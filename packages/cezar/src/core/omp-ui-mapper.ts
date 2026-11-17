@@ -21,11 +21,12 @@ import type {
   TokenUsage,
   UiEvent,
   UiMessageItem,
+  SkillInputIdentity,
   UiReasoningItem,
   UiToolItem,
 } from './ui-events.js';
 import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
-import { contentText, isRecord, number, ompRpcError as rpcError, string } from './pi-rpc-wire.ts';
+import { contentText, isRecord, number, ompSkillPrompt, ompRpcError as rpcError, string } from './pi-rpc-wire.ts';
 import { childScope, lifecycleStatus, ompToolPlan, singleFormSubagent, startSubagentEntry, withSubagent } from './omp-subagent-rows.ts';
 
 /** One stream of text/reasoning blocks: the parent turn's, or one sub-agent's. */
@@ -245,12 +246,14 @@ function mapOmpNotice(value: Record<string, unknown>, state: OmpUiMapperState): 
   return { events: [{ type: 'session.error', message, fatal: false }], state };
 }
 
-export function mapOmpRpcMessage(value: unknown, state: OmpUiMapperState): OmpUiMapping {
+export function mapOmpRpcMessage(value: unknown, state: OmpUiMapperState, skillInput?: SkillInputIdentity): OmpUiMapping {
   if (!isRecord(value) || typeof value.type !== 'string') return { events: [], state };
 
   if (value.type === 'response') return mapResponse(value, state);
 
   switch (value.type) {
+    case 'message_start':
+      return mapSkillPrompt(value, state, skillInput);
     case 'message_update':
     case 'message_end':
     case 'tool_execution_start':
@@ -970,5 +973,21 @@ function usageEvent(value: unknown): Extract<UiEvent, { type: 'usage.updated' }>
       ...(cacheWrite !== undefined ? { cacheWrite } : {}),
     },
     ...(cost !== undefined && cost >= 0 ? { costUsd: cost } : {}),
+  };
+}
+
+/** Only message_start creates the user item; message_end/agent_end repeat the same message. */
+function mapSkillPrompt(value: Record<string, unknown>, state: OmpUiMapperState, skillInput?: SkillInputIdentity): OmpUiMapping {
+  if (!isRecord(value.message)) return { events: [], state };
+  const text = ompSkillPrompt(value.message);
+  if (text === undefined || !state.turnId) return { events: [], state };
+  const id = `${state.turnId}/skill-${state.textBlock}`;
+  const item: UiMessageItem = { kind: 'message', id, role: 'user', text, ...(skillInput ? { skillInput } : {}) };
+  return {
+    events: [
+      { type: 'item.started', item },
+      { type: 'item.completed', item },
+    ],
+    state: { ...state, textBlock: state.textBlock + 1 },
   };
 }

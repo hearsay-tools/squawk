@@ -111,6 +111,12 @@ export type PermissionOption = ContractPermissionOption;
 /* Items — ONE id-keyed stream for text, reasoning and tools           */
 /* ------------------------------------------------------------------ */
 
+/** Adapter-local identity of a submitted skill prompt; absent in old saved events. */
+export interface SkillInputIdentity {
+  id: string;
+  source: 'opening' | 'human' | 'agent';
+}
+
 /**
  * A chat message.
  * claude: `assistant` `text` blocks (whole-block, or true deltas via
@@ -122,6 +128,8 @@ export interface UiMessageItem {
   id: string;
   role: 'assistant' | 'user';
   text: string;
+  /** The expansion echoes this submitted input; its display text is not its identity. */
+  skillInput?: SkillInputIdentity;
   phase?: 'commentary' | 'final';
   parentItemId?: string;
 }

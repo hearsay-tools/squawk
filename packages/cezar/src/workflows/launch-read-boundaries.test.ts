@@ -65,7 +65,7 @@ beforeEach(() => {
       opened.push(spec);
       sessions.push(session);
       events.push(onEvent);
-      queueMicrotask(() => onEvent?.({ type: 'session', sessionId: `launch-${opened.length}` }));
+      queueMicrotask(() => onEvent?.({ type: 'session', sessionId: `launch-${opened.length}`, resumed: false }));
       return session;
     },
   };

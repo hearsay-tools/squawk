@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { slashTrigger, skillUserMessage, knownSkill, SKILL_TOKEN } from './mock-skill-trigger.mjs';
 import { PI_FAILURES } from './mock-provider-failures.mjs';
 import { loadControls } from './mock-controls.mjs';
 import { scenarioFor, play } from './mock-scenario.mjs';
@@ -48,7 +49,7 @@ const sendNow = (value) => {
     activeTurn = { steers: [], late: false };
     write(value);
     if (currentPrompt !== undefined && process.env.CEZ_MOCK_PI_NO_USER_START !== '1') {
-      const message = { role: 'user', content: [{ type: 'text', text: currentPrompt }] };
+      const message = skillUserMessage('pi', currentPrompt);
       currentPrompt = undefined;
       write({ type: 'message_start', message });
       write({ type: 'message_end', message });
@@ -75,11 +76,13 @@ function replaySteer(text, failure) {
     write({ type: 'agent_start' });
     write({ type: 'turn_start' });
   }
-  write({ type: 'message_start', message: { role: 'user', content: [{ type: 'text', text }] } });
-  write({ type: 'message_end', message: { role: 'user', content: [{ type: 'text', text }] } });
+  const message = skillUserMessage('pi', text);
+  write({ type: 'message_start', message });
+  write({ type: 'message_end', message });
   if (failure) write(failure);
   else {
-    sendText([text]);
+    const trigger = slashTrigger(text);
+    sendText([trigger && knownSkill('pi', trigger) ? SKILL_TOKEN : text]);
     write({ type: 'message_end', message: { role: 'assistant', usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, cost: { total: 0 } } } });
   }
 }
@@ -414,6 +417,15 @@ async function handlePromptCommand(command) {
   if (scenario?.beforeFailure) return play(scenario, scenarioEncoder(command, scenario));
   if (failureControl && (await failureControl.failureFor(command.message)) === 'provider') return respondProviderError(command);
   if (scenario) return play(scenario, scenarioEncoder(command, scenario));
+  const trigger = slashTrigger(command.message);
+  if (trigger) {
+    send({ id: command.id, type: 'response', command: 'prompt', success: true });
+    send({ type: 'agent_start' }); send({ type: 'turn_start' });
+    const text = knownSkill('pi', trigger) ? SKILL_TOKEN : command.message;
+    send({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: text } });
+    send({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text }], stopReason: 'stop' } });
+    send({ type: 'agent_settled' }); return;
+  }
   return respondDefault(command);
 }
 

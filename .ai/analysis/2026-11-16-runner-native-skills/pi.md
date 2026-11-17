@@ -193,3 +193,15 @@ Which copy wins depends on whether pi treats the folder as trusted. The list and
 - A logged-in second pi account: the scratch home had no login, and copying or linking credentials was forbidden.
 - A user skill in the real `~/.pi/agent/skills`: that folder does not exist here and user homes are read-only;
   the scratch home stood in for it.
+
+## Slice 2 trigger checks (2026-11-16)
+
+pi 1.4.0, `zai/glm-5.3-flash`. The recorded turn returned the random fixture token in
+2239 ms with zero tool calls. A first real turn also returned the token but the selector missed
+the XML skill marker. The corrected selector captured native `message_start` on the second
+turn. Two real turns total. The trigger has arguments on the same line; opening context follows.
+The adapter correlates the expanded wrapper with its registered trigger to release a human
+hold and report agent-input consumption. It compares the full argument suffix, including
+literal XML, with the native trim rule (`agent-session.js` `_expandSkillCommand`).
+
+See [slice 2 evidence](slice2-evidence.md) for commands, captures and offline checks.

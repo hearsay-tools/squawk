@@ -1,0 +1,38 @@
+[
+  {
+    "type": "user",
+    "message": {
+      "role": "user",
+      "content": "<command-message>probe-project</command-message>\n<command-name>/probe-project</command-name>\n<command-args>fixture arguments</command-args>"
+    }
+  },
+  {
+    "type": "user",
+    "isMeta": true,
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Opening context: this is a native skill probe."
+        },
+        {
+          "type": "text",
+          "text": "Base directory for this skill: /probe/repo/.claude/skills/probe-project\n\nReply with exactly TRIGGER-FIXTURE. Do not use any tool.\n\n\nARGUMENTS: fixture arguments"
+        }
+      ]
+    }
+  },
+  {
+    "type": "assistant",
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "TRIGGER-FIXTURE"
+        }
+      ]
+    }
+  }
+]

@@ -43,14 +43,14 @@ it('dry-run OpenCode Continue in the same cwd resumes without CEZ_MOCK_ARGS_FILE
     const first = await driveSeam('opencode', 'baseline', { spec: { cwd: dir } });
     expect(first.v1.filter(event => event.type === 'error')).toEqual([]);
     const session = first.v1.find(event => event.type === 'session');
-    expect(session).toEqual(expect.objectContaining({ type: 'session', sessionId: expect.stringMatching(/^ses_mock_/) }));
+    expect(session).toEqual(expect.objectContaining({ type: 'session', sessionId: expect.stringMatching(/^ses_mock_/), resumed: false }));
     const sessionId = (session as { sessionId: string }).sessionId;
     const second = await driveSeam('opencode', 'baseline', {
       spec: { cwd: dir, resume: true, sessionId },
     });
     expect(second.v1.filter(event => event.type === 'error')).toEqual([]);
     expect(second.v1.filter(event => event.type === 'note' && String(event.message).includes('no longer exists'))).toEqual([]);
-    expect(second.v1.find(event => event.type === 'session')).toEqual(expect.objectContaining({ sessionId }));
+    expect(second.v1.find(event => event.type === 'session')).toEqual(expect.objectContaining({ sessionId, resumed: true }));
   } finally {
     rmSync(dir, { recursive: true, force: true });
     rmSync(store, { force: true });

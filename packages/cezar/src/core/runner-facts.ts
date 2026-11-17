@@ -9,6 +9,12 @@ import { RUNNER_IDS, type InputDelivery, type RunnerId, type SystemPromptOnResum
  * id. A test that must not load the runner classes reads the same row here.
  */
 export interface RunnerFacts {
+  /** A native skill can be triggered while a turn is running. */
+  readonly skillTriggerMidTurn: boolean;
+  /** What the native trigger does with an unknown id. */
+  readonly skillUnknownName: 'error' | 'silent';
+  /** Whether an existing session sees later skill additions. */
+  readonly skillsSeenBySession: 'live' | 'at-start';
   /** How the runner admits input while a turn runs (`InputDelivery`, hearsay-tools/cezarion#505). */
   readonly inputDelivery: InputDelivery;
   /** How the runner carries `spec.systemPrompt` onto a resumed session (hearsay-tools/cezarion#790). */
@@ -82,6 +88,7 @@ export interface RunnerFacts {
 
 export const RUNNER_FACTS = {
   claude: {
+    skillTriggerMidTurn: false, skillUnknownName: 'silent', skillsSeenBySession: 'at-start',
     // childWork: a subagent's stream-json messages carry parent_tool_use_id (claude-ui-mapper.ts).
     // hookEvents: --include-hook-events streams each hook run (claude-cli-runner.ts).
     // nativePermission: print mode settles every permission inside Claude under its headless
@@ -102,6 +109,7 @@ export const RUNNER_FACTS = {
     turnStart: 'on-write',
   },
   codex: {
+    skillTriggerMidTurn: false, skillUnknownName: 'silent', skillsSeenBySession: 'live',
     // childWork: a child thread's items nest under its spawnAgent item through collabParentItemId
     // (codex-hook-mapper.ts).
     // hookEvents: app-server sends hook/started and hook/completed (codex-hook-mapper.ts).
@@ -125,6 +133,7 @@ export const RUNNER_FACTS = {
     turnStart: 'on-wire',
   },
   opencode: {
+    skillTriggerMidTurn: false, skillUnknownName: 'error', skillsSeenBySession: 'at-start',
     // childWork: a subtask's child-session parts nest under the subtask part (opencode-ui-mapper.ts).
     // hookEvents: OpenCode 1.18.35 runs plugin hooks in-process; its SSE wire carries no hook event.
     // nativePermission: a main-session permission.asked after session.idle means the server started
@@ -145,6 +154,7 @@ export const RUNNER_FACTS = {
     turnStart: 'on-wire',
   },
   pi: {
+    skillTriggerMidTurn: true, skillUnknownName: 'silent', skillsSeenBySession: 'at-start',
     // childWork: Pi RPC has no child session; a task tool is a plain tool call on the parent
     // session (__fixtures__/pi/rpc-lifecycle.expected.json).
     // hookEvents: Pi 1.0.4 runs extensions in-process; its RPC wire reports only extension_error.
@@ -164,6 +174,7 @@ export const RUNNER_FACTS = {
     turnStart: 'on-write',
   },
   omp: {
+    skillTriggerMidTurn: true, skillUnknownName: 'silent', skillsSeenBySession: 'at-start',
     // childWork: subagent_event frames carry subagent_lifecycle.parentToolCallId of their task call
     // (omp-subagent-rows.ts).
     // hookEvents: OMP 18.8.0 shares Pi's RPC wire: extensions run in-process and report only

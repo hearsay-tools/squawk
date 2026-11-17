@@ -1,0 +1,20 @@
+{
+  "runner": "pi",
+  "model": "zai/glm-5.3-flash",
+  "elapsedMs": 2239,
+  "tokenReturned": true,
+  "tools": 0,
+  "sentMid": false,
+  "midAccepted": false,
+  "boundaries": 1,
+  "expansionFrames": 1,
+  "session": [
+    {
+      "type": "session",
+      "sessionId": "b3762406-ce23-4f19-a441-05dca2575682",
+      "resumed": false
+    }
+  ],
+  "errors": [],
+  "userItems": []
+}

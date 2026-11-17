@@ -29,7 +29,7 @@ describe('CI wait delivery', { timeout: 30_000 }, () => {
         let finish!: (result: AgentRunResult) => void;
         const result = new Promise<AgentRunResult>(resolve => { finish = resolve; });
         const close = () => { open = false; finish({ text: '', toolCalls: [], tokensUsed: 0 }); };
-        queueMicrotask(() => emit({ type: 'session', sessionId: 'lost-boundary' }));
+        queueMicrotask(() => emit({ type: 'session', sessionId: 'lost-boundary', resumed: false }));
         return { get open() { return open; }, result, end: close, interrupt: close,
           sendMessage: () => true,
           sendAgentMessage: send,

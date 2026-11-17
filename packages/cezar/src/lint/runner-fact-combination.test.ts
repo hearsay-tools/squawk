@@ -119,7 +119,7 @@ describe('runner-fact-combination (hearsay-tools/cezarion#2991)', () => {
   it('reads the fact keys from the declared types, so a new fact joins the rule', () => {
     expect([...declaredFactKeys()].sort()).toEqual(['acknowledgement', 'childWork', 'claudeModelAliases', 'consumption', 'costReport',
       'hookEvents', 'humanInputAtTurnEnd', 'humanPromptHold', 'mode', 'nativeAsk', 'nativePermission', 'nativeSubagents',
-      'nativeTimerTool', 'sessionIdSource', 'systemPromptOnResume', 'transport', 'turnStart']);
+      'nativeTimerTool', 'sessionIdSource', 'skillTriggerMidTurn', 'skillUnknownName', 'skillsSeenBySession', 'systemPromptOnResume', 'transport', 'turnStart']);
     const grown = declaredFactKeys(path => {
       const text = readFileSync(join(repoRoot, path), 'utf8');
       return path.endsWith('runner-facts.ts') ? text.replace('export interface RunnerFacts {', 'export interface RunnerFacts {\n  readonly nativeVoice: boolean;') : text;

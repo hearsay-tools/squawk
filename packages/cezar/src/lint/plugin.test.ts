@@ -84,6 +84,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
   "wait-kind-literal-outside-engine": ["packages/cezar/src/wait-kind-leak.ts", "kind === 'pr';"],
   "worktree-write-outside-manifest": ["packages/cezar/src/skills-provision.ts", "import { writeFile } from 'node:fs/promises';"],
 
+  'launch-read-outside-resolver': ['packages/cezar/src/workflows/run/launch-read-violation.ts', 'input.model;\n'],
   'product-env-read': ['packages/cezar/src/env-reader.ts', 'const flag = process.env.CEZ_DRY_RUN;\n'],
   'test-home-write': ['packages/web/src/ambient-home.test.ts', "writeFileSync(join(cezarHomeDir(), 'config.json'), '{}');\n"],
   'home-boundary': ['packages/cezar/src/ambient-home.ts', 'cezarHomeDir();\n'],

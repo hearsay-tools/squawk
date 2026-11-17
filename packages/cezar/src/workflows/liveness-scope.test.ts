@@ -29,7 +29,7 @@ function openSession() {
       const close = () => { open = false; result.resolve({ text: '', toolCalls: [], tokensUsed: 0 }); };
       wire.emit = event => onEvent?.(event);
       wire.close = close;
-      queueMicrotask(() => { onEvent?.({ type: 'session', sessionId: 'liveness-session' }); ready.resolve(); });
+      queueMicrotask(() => { onEvent?.({ type: 'session', sessionId: 'liveness-session', resumed: false }); ready.resolve(); });
       return { get open() { return open; }, result: result.promise, sendMessage: () => true, sendAgentMessage: () => Promise.resolve(),
         discardQueuedMessages: () => {}, holdsHumanInput: () => false, end: close, interrupt: close };
     },

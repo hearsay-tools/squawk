@@ -1,0 +1,22 @@
+[
+  {
+    "type": "message_start",
+    "message": {
+      "role": "custom",
+      "customType": "skill-prompt",
+      "content": "[IMPORTANT: User invoked the \"probe-project\" skill; follow its instructions. Full skill below.]\n\nReply with exactly TRIGGER-FIXTURE. Do not use any tool.\n\n---\n\n[Skill directory: /probe/repo/.omp/skills/probe-project]\nResolve relative paths in this skill (e.g. `scripts/foo.js`, `templates/config.yaml`) against this absolute directory; read referenced assets and templates; run scripts with the terminal tool when skill instructions call for it.\nUser: fixture arguments",
+      "display": true,
+      "details": {
+        "name": "probe-project",
+        "path": "/probe/repo/.omp/skills/probe-project/SKILL.md",
+        "args": "fixture arguments",
+        "prompt": "/skill:probe-project fixture arguments",
+        "lineCount": 1,
+        "__queueChipText": "/skill:probe-project fixture arguments"
+      },
+      "attribution": "user",
+      "timestamp": 1794864791306
+    },
+    "messageId": "msg-3"
+  }
+]

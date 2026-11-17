@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { knownSkill, skillFrames, SKILL_TOKEN } from './mock-skill-trigger.mjs';
 import { loadControls } from './mock-controls.mjs';
 import { waitForRelease } from './mock-lifecycle.mjs';
 import { scenarioFor, play, PROVIDER_HOLD_SCENARIOS } from './mock-scenario.mjs';
@@ -235,6 +236,7 @@ const questions = questionReplies({ send, info, finishText, sessionId: () => SES
 let autonomousTurn = 0;
 let autonomousCap = false;
 const bodyRoutes = [
+  [(req, url) => req.method === 'POST' && /^\/session\/[^/]+\/command$/.test(url), handleSkillCommand],
   [(req, url) => req.method === 'POST' && /^\/question\/[^/]+\/(reply|reject)$/.test(url), questions.replyToQuestion],
   [(req, url) => req.method === 'POST' && /^\/permission\/([^/]+)\/reply$/.test(url), replyToPermission],
   [(req, url) => req.method === 'GET' && /^\/session\/([^/]+)$/.test(url), replyWithSession],
@@ -940,3 +942,38 @@ server.listen(0, hostname, () => {
 process.stdin.on('end', () => process.exit(0));
 process.stdin.resume();
 process.on('SIGTERM', () => process.exit(0));
+
+/** Command route captured on OpenCode 1.19.4: user expansion first, HTTP result at turn end. */
+async function handleSkillCommand(req, res, url, raw) {
+  SESSION_ID = url.split('/')[2];
+  const body = JSON.parse(raw);
+  const trigger = { id: body.command, args: body.arguments };
+  if (body.arguments.includes('mock:skill-sse-error')) {
+    send({ type: 'session.error', properties: {
+      sessionID: SESSION_ID, error: { name: 'UnknownError', data: { message: 'skill rejected before expansion' } },
+    } });
+    return; // The HTTP response never arrives; only SSE can settle this command.
+  }
+  if (!knownSkill('opencode', trigger)) {
+    if (!body.arguments.includes('mock:http-error-only')) send({ type: 'session.error', properties: {
+      sessionID: SESSION_ID, error: { name: 'UnknownError', data: { message: `Command not found: "${body.command}"` } },
+    } });
+    res.writeHead(500, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'Command not found' })); return;
+  }
+  if (body.arguments.includes('mock:skill-no-ack')) return;
+  turnActive = true;
+  for (const frame of skillFrames('opencode', trigger)) {
+    const props = frame.properties;
+    props.sessionID = SESSION_ID;
+    if (props.info) { props.info.sessionID = SESSION_ID; currentUserId = props.info.id; }
+    if (props.part) props.part.sessionID = SESSION_ID;
+    send(frame);
+  }
+  if (body.arguments.includes('mock:skill-drop')) res.destroy();
+  const gate = /mock:skill-gated (\S+)/.exec(body.arguments)?.[1];
+  if (gate) await waitForMockFile(gate);
+  send({ type: 'message.updated', properties: { info: info({}) } });
+  textPart(`skill_reply_${++echoSerial}`, SKILL_TOKEN);
+  send({ type: 'session.idle', properties: { sessionID: SESSION_ID } });
+  if (!res.destroyed) { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}'); }
+}

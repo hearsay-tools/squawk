@@ -1113,7 +1113,9 @@ describe('Claude output loop side-effect order (hearsay-tools/cezarion#1954)', (
     });
     expect(log).toEqual([
       { type: 'note', message: 'claude: skipped unparseable stream line: not json' },
-      { callback: 'activity' }, { ui: 'session.started' }, { ui: 'turn.started' },
+      { callback: 'activity' },
+      { type: 'session', sessionId: 'order-session', resumed: false },
+      { ui: 'session.started' }, { ui: 'turn.started' },
       { callback: 'activity' },
       { type: 'note', message: 'claude: skipped malformed event (assistant): msg.message.content is not iterable' },
       { callback: 'activity' }, { ui: 'item.started' }, { ui: 'item.completed' }, { ui: 'item.started' },

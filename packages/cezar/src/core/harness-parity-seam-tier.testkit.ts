@@ -218,15 +218,12 @@ const SEAM_CELLS: Cells<typeof SEAM_ROWS, SeamCriterion> = {
     },
   },
   S3: {
-    // Group 7 — `resumeCommand()` and "open in CLI" need a session id after
-    // every run. The two wires differ and both are legitimate: codex, opencode
-    // cursor and pi mint their own and echo a v1 `session` event, while claude pins
-    // the id Squawk supplied (`--session-id`, claude-cli-runner.ts:385) and
-    // returns it on the result. What must never happen is neither — that is a
-    // run nobody can resume.
+    // A single session report per adapter start carries the native resume outcome.
     assert: ({ v1, result }) => {
-      const reported = sessionEvents(v1)[0]?.sessionId ?? result.sessionId;
-      expect(reported ?? '').not.toBe('');
+      const sessions = sessionEvents(v1);
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0]).toMatchObject({ sessionId: result.sessionId, resumed: false });
+      expect(sessions[0]?.sessionId).toBeTruthy();
     },
   },
   S4: {

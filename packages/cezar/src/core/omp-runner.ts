@@ -1,3 +1,4 @@
+import { openingContent, skillOf, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { dirname, resolve as resolvePath } from 'node:path';
@@ -12,6 +13,7 @@ import {
   PiRpcInput,
   PiTextBlocks,
   type PiTurnMessages,
+  type PiSkillSubmission,
   settlePiFamilyExit,
 } from './pi-rpc-turn.ts';
 import type {
@@ -33,7 +35,7 @@ import { ompRequestedTools } from './runner-tool-grants.ts';
 import { ownLookup } from './own-lookup.ts';
 import { signalSession, spawnSessionLeader } from './session-process.js';
 import { buildChildEnv } from './agent-env.js';
-import type { UiEvent } from './ui-events.js';
+import type { SkillInputIdentity, UiEvent } from './ui-events.js';
 import { squawkToolNames } from '../ci-wait/tool-catalog.js';
 import { readNdjson } from './ndjson.js';
 import {
@@ -95,6 +97,7 @@ export const OMP_SPEC_SUPPORT: AgentRunSpecSupport = {
   squawkTools: { honored: true, via: `explicit CI --extension; the ${productName('Cezar')} tools admitted when --tools is set` },
   ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: '--append-system-prompt' },
+  skill: { honored: true, via: 'RPC prompt /skill:id args' },
   userPrompt: { honored: true, via: 'RPC prompt.message' },
   images: { honored: true, via: "RPC prompt.images ({type:'image', data, mimeType})" },
   cwd: { honored: true, via: 'spawn cwd' },
@@ -322,8 +325,8 @@ export class OmpRunner implements AgentRunner {
     let startupStateChecked = false;
     let tokensUsed = 0;
 
-    const emitUi = (value: unknown): void => {
-      const mapped = mapOmpRpcMessage(value, ompUi);
+    const emitUi = (value: unknown, skillInput?: SkillInputIdentity): void => {
+      const mapped = mapOmpRpcMessage(value, ompUi, skillInput);
       ompUi = mapped.state;
       for (const event of mapped.events) {
         emitUiEvent(event);
@@ -403,7 +406,8 @@ export class OmpRunner implements AgentRunner {
       for (const [id, held] of humanHeld) if (held.acked) humanHeld.delete(id);
     }
     const sendMessage = (content: ContentBlock[], requestId?: string, inputIds: readonly string[] = []): boolean => {
-      if (!open) return false;
+      if (!open || !validSkillMessage(content)) return false;
+      if (skillOf(content) && !this.facts.skillTriggerMidTurn && ompUi.turnId) return false;
       // A steer joins the running turn; only an idle prompt opens one (#505).
       const opensTurn = !ompUi.turnId;
       rpcInput.beginPrompt();
@@ -421,7 +425,7 @@ export class OmpRunner implements AgentRunner {
       ) {
         return false;
       }
-      if (requestId) rpcInput.submissions.accept(requestId, inputIds, message);
+      rpcInput.recordPrompt(content, message, id, requestId ? inputIds : undefined);
       if (!ompUi.turnId) {
         const mapped = ompTurnStarted(ompUi, id);
         ompUi = mapped.state;
@@ -470,7 +474,7 @@ export class OmpRunner implements AgentRunner {
       write({ id: 'cezar-subagents', type: 'set_subagent_subscription', level: 'events' });
       // Drops the per-delta `partial` snapshot; the coalescer and the mapper read deltas only.
       write({ id: 'cezar-event-filter', type: 'set_event_filter', events: null, messageUpdates: 'delta' });
-      sendMessage([...(spec.images ?? []), { type: 'text', text: spec.userPrompt }]);
+      sendMessage(openingContent(spec));
     };
     startup();
 
@@ -510,8 +514,10 @@ export class OmpRunner implements AgentRunner {
       onEvent?.({ type: 'token-usage', tokensUsed });
       if (usageReport.costUsd !== undefined) onEvent?.({ type: 'cost', usd: usageReport.costUsd });
     };
+    let sessionReported = false;
     const adoptState = (value: Record<string, unknown>, data: Record<string, unknown>): void => {
-      adoptRpcSessionId(data, sessionId, (id) => { sessionId = id; }, onEvent);
+      adoptRpcSessionId(data, (id) => { sessionId = id; }, Boolean(spec.resume && spec.sessionId === data.sessionId), sessionReported ? undefined : onEvent);
+      sessionReported ||= typeof data.sessionId === 'string' && data.sessionId.length > 0;
       // OMP v18.6.1 still has no fresh persistent-session flag. Its autoResume
       // setting can restore history without --resume (hearsay-tools/cezarion#832).
       // Only the startup query is evidence: later reads include our own messages.
@@ -549,6 +555,7 @@ export class OmpRunner implements AgentRunner {
       // failure leaves the turn running: both are only a note.
       if (value.success === false) reportPromptFailure(`omp: prompt failed: ${rpcError(value)}`, endsTurn);
       const id = string(value.id);
+      if (id && (value.success === false || isRecord(value.data) && value.data.agentInvoked === false)) rpcInput.forgetSkillPrompt(id);
       const pending = rpcInput.takeAgentAck(id);
       if (pending) {
         if (value.success === true) rpcInput.acceptAgentAck(pending);
@@ -580,9 +587,9 @@ export class OmpRunner implements AgentRunner {
       const error = isRecord(value.error) ? value.error : {};
       reportPromptFailure(ompProviderErrorMessage({ provider: error.provider, model: error.model, errorMessage: error.message }), endsTurn);
     };
-    const settleHumanPromptRead = (text: string): void => {
+    const settleHumanPromptRead = (text: string, submissionId?: string): void => {
       for (const [id, held] of humanHeld) {
-        if (held.text !== text) continue;
+        if (submissionId ? id !== submissionId : held.text !== text) continue;
         // Read with no normalized turn open: held until that turn.started (as pi-runner.ts).
         if (ompUi.turnId) humanHeld.delete(id);
         else held.acked = true;
@@ -600,7 +607,7 @@ export class OmpRunner implements AgentRunner {
     };
     // Each type has one case. A message its handler's guard refuses ends there, as it did
     // when this was one if/else chain: no later case reads the same type.
-    const dispatchNative = (value: Record<string, unknown>, endsTurn: boolean): void => {
+    const dispatchNative = (value: Record<string, unknown>, endsTurn: boolean, skill?: PiSkillSubmission): void => {
       switch (value.type) {
         case 'response': handleResponse(value, endsTurn); break;
         case 'prompt_result': handlePromptResult(value, endsTurn); break;
@@ -612,7 +619,7 @@ export class OmpRunner implements AgentRunner {
           if (message) onEvent?.({ type: 'note', message: `omp: ${message}` });
           break;
         }
-        default: dispatchPiTurnMessage(value, turnMessages);
+        default: dispatchPiTurnMessage(value, turnMessages, skill);
       }
     };
     const handleOutputLine = (line: string): void => {
@@ -629,13 +636,19 @@ export class OmpRunner implements AgentRunner {
       // A boundary only ends a turn that is open: OMP never settles an idle session, and a
       // second boundary for the same prompt must not end the next one.
       const turnOpen = ompUi.turnId !== null;
-      emitUi(value);
+      const skill = isRecord(value) && value.type === 'message_start' && isRecord(value.message)
+        ? rpcInput.takeSkillPrompt(value.message) : undefined;
+      emitUi(value, skill?.input);
       reportUsage(value);
       // The mapper closed its turn on this frame: v1 ends the turn with it.
       const endsTurn = turnOpen && ompUi.turnId === null;
       if (!isRecord(value)) return;
-      if (value.type === 'prompt_result') humanHeld.delete(string(value.id) ?? '');
-      dispatchNative(value, endsTurn);
+      if (value.type === 'prompt_result') {
+        const id = string(value.id) ?? '';
+        humanHeld.delete(id);
+        rpcInput.forgetSkillPrompt(id);
+      }
+      dispatchNative(value, endsTurn, skill);
       if (endsTurn) rpcInput.settleTurn();
     };
 
@@ -752,7 +765,10 @@ export class OmpRunner implements AgentRunner {
       sendAgentMessage: (content, inputIds = []) =>
         rpcInput.sendAgentMessage(content, inputIds, sendMessage, () => false),
       // A written prompt cannot be unwritten; only stop reporting an acknowledged one as held.
-      discardQueuedMessages: () => { humanHeld.clear(); },
+      discardQueuedMessages: () => {
+        for (const id of humanHeld.keys()) rpcInput.forgetSkillPrompt(id);
+        humanHeld.clear();
+      },
       holdsHumanInput: () => humanHeld.size > 0,
       heldHumanInputCount: () => humanHeld.size,
       end,

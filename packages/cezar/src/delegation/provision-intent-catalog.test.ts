@@ -130,7 +130,7 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
   });
   it('refuses a failed continuation checkpoint without advancing revision or opening another session', async () => {
     const a = await acceptIdentityWorker(); await launchAccepted(a, 'queued'); await until(() => sessions.length === 2);
-    sessions[1]!.emit({ type: 'session', sessionId: 'worker-session' }); sessions[1]!.finish();
+    sessions[1]!.emit({ type: 'session', sessionId: 'worker-session', resumed: false }); sessions[1]!.finish();
     expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
     const run = f.store.getRun(a.child.workerId)!; const steps = structuredClone(run.steps);
     const failure = vi.spyOn(runPersistence(f.store), 'persist').mockImplementation(() => { throw Error('disk failure'); });
@@ -142,7 +142,7 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
   });
   it('persists result-only assistant evidence on initial execution and authorized Continue', async () => {
     const a = await acceptIdentityWorker(); await launchAccepted(a, 'queued'); await until(() => sessions.length === 2);
-    sessions[1]!.emit({ type: 'session', sessionId: 'worker-session' });
+    sessions[1]!.emit({ type: 'session', sessionId: 'worker-session', resumed: false });
     sessions[1]!.finish('Initial result-only summary');
     expect(await f.manager.awaitRunTermination(a.child.workerId, 15000)).toBe(true);
     expect(await controller.service.collect(a.caller, { workerId: a.child.workerId })).toMatchObject({ revision: 0, settled: true, summary: { state: 'available', text: 'Initial result-only summary' } });
