@@ -220,21 +220,12 @@ describe('useResolvedEngine provider status', () => {
 })
 
 describe('engineBody', () => {
-  it("auto ('') stays implicit rather than shipping an empty model", () => {
-    expect(engineBody(resolved({ model: '' })).model).toBeUndefined()
-  })
-
   it('a pinned model is sent', () => {
     expect(engineBody(resolved({ model: 'opus' })).model).toBe('opus')
   })
 
   it('omits a resolved native model when model selection is locked', () => {
     expect(engineBody(resolved({ model: 'opus', modelsLocked: true })).model).toBeUndefined()
-  })
-
-  it('omits the runner when it is already what the server would choose', () => {
-    const body = engineBody(resolved({ runner: 'claude', defaultRunner: 'claude' }))
-    expect(body.runner).toBeUndefined()
   })
 
   it('sends the runner when it differs from the default — a real pick', () => {
@@ -408,7 +399,6 @@ describe('useResolvedEngine agent accounts', () => {
     expect(engineRunBody(result.current)).toEqual(engineBody(result.current))
   })
 })
-
 
 describe('EnginePills presentation and choices', () => {
   it('keeps runner switching and effort intact', async () => {

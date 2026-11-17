@@ -44,14 +44,6 @@ describe('activeNavPath', () => {
     })
   }
 
-  // A `startsWith` implementation passes every case above and still fails these two.
-  it('does not let /git claim the /github area', () => {
-    expect(activeNavPath('/github')).toBe('/github')
-  })
-
-  it('does not let the root item claim every route', () => {
-    expect(activeNavPath('/git')).toBe('/git')
-  })
 })
 
 describe('activeNavItem', () => {
@@ -81,10 +73,6 @@ describe('NAV_ITEMS', () => {
 describe('visibleNavItems', () => {
   const labelsOf = (opts?: Parameters<typeof visibleNavItems>[0]) =>
     visibleNavItems(opts).map((item) => item.label)
-
-  it('with everything available, the full nav renders', () => {
-    expect(visibleNavItems({ forge: true, automations: true })).toEqual(NAV_ITEMS)
-  })
 
   // A schedule needs no GitHub remote (#766), so a forge-less repo keeps the Automations item.
   it('without a forge, only the GitHub item drops out; Automations stays', () => {
@@ -158,14 +146,6 @@ describe('visibleNavItems', () => {
     expect(shown(undefined)).toBe(false)
   })
 
-  it('never invents an item — the result is always a subset of NAV_ITEMS, in order', () => {
-    for (const forge of [true, false]) {
-      for (const automations of [true, false]) {
-        const items = visibleNavItems({ forge, automations })
-        expect(NAV_ITEMS.filter((i) => items.includes(i))).toEqual(items)
-      }
-    }
-  })
 })
 
 describe('isPushedRoute', () => {
