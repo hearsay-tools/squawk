@@ -342,9 +342,7 @@ describe('useRunHistory', () => {
     const { result } = renderHook(() => useRunHistory('run-1'), { wrapper })
     await waitFor(() => expect(result.current.currentComplete).toBe(true))
 
-    let jumped = false
-    await act(async () => { await result.current.jumpToLatest(); jumped = true })
-    expect(jumped).toBe(true)
+    await act(() => result.current.jumpToLatest())
     // The context refresh still started after the page reset.
     expect(mockContext).toHaveBeenCalledTimes(2)
     mockContext.mockReset()

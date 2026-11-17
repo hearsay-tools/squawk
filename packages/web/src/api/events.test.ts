@@ -177,7 +177,8 @@ describe('applyRunSummary', () => {
 
   it('updates title, status, references, tokens and archive in place — one run stays one row', () => {
     const list: RunSummary[] = [summary('r1', { status: RUN_STATUS.queued }), summary('r2')]
-    const next = applyRunSummary(list, summary('r1', {
+    const running = applyRunSummary(list, summary('r1', { status: RUN_STATUS.running }))
+    const next = applyRunSummary(running, summary('r1', {
       status: RUN_STATUS.done, tokensUsed: 99, titleSummary: 'Renamed', prNumber: 12, issueNumber: 7, archived: true,
     }))
 
