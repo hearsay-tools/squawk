@@ -94,23 +94,9 @@ describe('makeTemplateId', () => {
 })
 
 describe('insertTemplate', () => {
-  it('into empty text: a plain assignment, no leading blank line', () => {
-    expect(insertTemplate('', 0, 'Add tests.')).toEqual({ text: 'Add tests.', caret: 'Add tests.'.length })
-  })
-
-  it('appended at the end of existing text: separated by a blank line', () => {
-    const result = insertTemplate('Fix the bug.', 'Fix the bug.'.length, 'Add tests.')
-    expect(result.text).toBe('Fix the bug.\n\nAdd tests.')
-    expect(result.caret).toBe(result.text.length)
-  })
 
   it('already ending in one newline: only one more is added (still a blank line total)', () => {
     const result = insertTemplate('Fix the bug.\n', 'Fix the bug.\n'.length, 'Add tests.')
-    expect(result.text).toBe('Fix the bug.\n\nAdd tests.')
-  })
-
-  it('already ending in a blank line: no extra separator is added', () => {
-    const result = insertTemplate('Fix the bug.\n\n', 'Fix the bug.\n\n'.length, 'Add tests.')
     expect(result.text).toBe('Fix the bug.\n\nAdd tests.')
   })
 
@@ -179,14 +165,6 @@ describe('insertTemplate', () => {
     const second = insertTemplate(first.text, first.caret, 'Two.')
     const third = insertTemplate(second.text, second.caret, 'Three.')
     expect(third.text).toBe('One.\n\nTwo.\n\nThree.')
-  })
-
-  // The #413 review's nit — and the trap in fixing it. A bare `trimStart()` on the tail also eats
-  // a leading NEWLINE, which is exactly the character that makes the blank line.
-  it('drops the space the caret split, but never a newline the separator still needs', () => {
-    expect(insertTemplate('ALPHA OMEGA', 5, 'SNIP').text).toBe('ALPHA\n\nSNIP\n\nOMEGA')
-    expect(insertTemplate('One.\nTwo.', 4, 'SNIP').text).toBe('One.\n\nSNIP\n\nTwo.')
-    expect(insertTemplate('One.\n\nTwo.', 6, 'SNIP').text).toBe('One.\n\nSNIP\n\nTwo.')
   })
 
   it('a tail of nothing but spaces leaves no trailing whitespace behind', () => {

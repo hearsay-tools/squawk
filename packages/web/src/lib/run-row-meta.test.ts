@@ -180,18 +180,16 @@ describe('runRowMeta (#617, #729: what the meta line is made of)', () => {
   })
 
   describe('the key that tells the line its content changed', () => {
-    it('joins age, state word, references and the hand-off flag', () => {
-      const keyed = run({ status: RUN_STATUS.failed, createdAt: ago(5 * 60_000), finishedAt: ago(5 * 60_000), prNumber: 594, notify: true })
-      expect(meta({ run: keyed }).key).toBe('5m|failed|PR-594-undefined|1')
-    })
-
-    it('has empty fields where the row has no state word, no reference and no hand-off', () => {
-      expect(meta({ run: run({ finishedAt: ago(60_000) }) }).key).toBe('1m|||0')
-    })
-
-    it('lists every reference, in order', () => {
-      const both = run({ finishedAt: ago(60_000), prNumber: 594, issueNumber: 12 })
-      expect(meta({ run: both }).key).toBe('1m||PR-594-undefined,Issue-12-undefined|0')
+    it.each([
+      ['age', {}, { finishedAt: ago(5 * 60_000) }],
+      ['pull request', {}, { prNumber: 594 }],
+      ['pull request number', { prNumber: 594 }, { prNumber: 595 }],
+      ['issue number', { issueNumber: 12 }, { issueNumber: 13 }],
+      ['issue beside a pull request', { prNumber: 594 }, { prNumber: 594, issueNumber: 12 }],
+      ['reference URL', { prNumber: 594 }, { prNumber: 594, pullRequestUrl: 'https://github.com/acme/repo/pull/594' }],
+      ['hand-off', {}, { notify: true }],
+    ] satisfies Array<[string, Partial<RunSummary>, Partial<RunSummary>]>)('changes when the %s changes', (_name, before, after) => {
+      expect(meta({ run: run(after) }).key).not.toBe(meta({ run: run(before) }).key)
     })
 
     it('changes with the state word', () => {

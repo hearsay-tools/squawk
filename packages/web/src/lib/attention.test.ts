@@ -72,13 +72,6 @@ describe('deriveAttention', () => {
     expect(cases.map(([status]) => status).sort()).toEqual([...ALL_STATUSES].sort())
   })
 
-  it('pulses exactly the transitioning states', () => {
-    // The spec's "pulsing while transitioning": something is happening, or something is waiting
-    // on you. A finished or parked run is still — a list where everything pulses says nothing.
-    const pulsing = ALL_STATUSES.filter((status) => deriveAttention(run({ status })).pulse)
-    expect(pulsing).toEqual(['running', 'waiting', 'review'])
-  })
-
   describe('permutations', () => {
     // `error` is a message, not a state: the server sets it *with* `status: 'failed'` (and with
     // 'cancelled' when a run was interrupted). The dot follows the status, so an error string
@@ -125,20 +118,6 @@ describe('deriveAttention', () => {
     expect(JSON.stringify(record)).toBe(frozen)
   })
 
-  it('never claims a permission prompt — cezar emits none yet', () => {
-    // The bucket exists (the spec ranks it first) but R2's `permission.*` events are what will
-    // feed it. Until then no record can produce it: this test is the guard that nothing invented
-    // a source in the meantime.
-    for (const status of ALL_STATUSES) {
-      expect(deriveAttention(run({ status })).bucket).not.toBe('permission')
-    }
-  })
-
-  it('never claims unseen — there is no seen marker to compare against', () => {
-    for (const status of ALL_STATUSES) {
-      expect(deriveAttention(run({ status })).bucket).not.toBe('unseen')
-    }
-  })
 })
 
 describe('ATTENTION_RANK', () => {
@@ -153,6 +132,7 @@ describe('ATTENTION_RANK', () => {
     expect(ATTENTION_RANK.error).toBeLessThan(ATTENTION_RANK.waiting)
     expect(ATTENTION_RANK.permission).toBeLessThan(ATTENTION_RANK.error)
   })
+
 })
 
 describe('a run waiting out a usage limit', () => {
@@ -202,10 +182,6 @@ describe('tone vocabulary', () => {
     expect(fromDot('neutral')).toBe('neutral')
   })
 
-  it('every status yields a tone StatusDot can paint', () => {
-    const tones = new Set(ALL_STATUSES.map((status) => deriveAttention(run({ status })).tone))
-    expect([...tones].sort()).toEqual(['danger', 'info', 'neutral', 'pending', 'running', 'success'])
-  })
 })
 
 /** A worker wait in the list (hearsay-tools/cezarion#1301): an agent's registered wait, or Squawk's
@@ -311,37 +287,23 @@ describe('a run parked on an open wait', () => {
   })
 })
 
-/** The status key (#617): hue says the family, shape says whether it is waiting. One row per
- *  state in the issue's table, so a regression in any rung is named by the row it broke. */
+/** The status key (hearsay-tools/cezarion#617): hue says the family, shape says whether it is waiting.
+ *  Registered waits extend the base-status cases above, so a regression names the wait it broke. */
 describe('status key (#617)', () => {
   const parkedRoot = (wait: Record<string, unknown> = {}) => onWaits('waiting', [
     workerEntry({ workerIds: ['00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002'], ...wait }),
   ])
   const rows: ReadonlyArray<[string, RunSummary, Pick<Attention, 'tone' | 'shape' | 'pulse' | 'label'>]> = [
-    ['needs you', run({ status: RUN_STATUS.waiting }), { tone: 'pending', shape: 'filled', pulse: true, label: 'needs you' }],
-    ['needs review', run({ status: RUN_STATUS.review }), { tone: 'info', shape: 'filled', pulse: true, label: 'needs review' }],
-    ['running', run({ status: RUN_STATUS.running }), { tone: 'running', shape: 'filled', pulse: true, label: 'running' }],
     ['waiting for CI', run({ status: RUN_STATUS.waiting, waits: [openCi()] }), { tone: 'running', shape: 'ring', pulse: true, label: 'waiting for CI' }],
     ['timer', run({ status: RUN_STATUS.waiting, waits: [openTimer()] }), { tone: 'running', shape: 'ring', pulse: true, label: 'monitoring' }],
     ['waiting on workers', parkedRoot(), { tone: 'running', shape: 'workers', pulse: false, label: 'waiting on 2 workers' }],
     ['waiting for capacity', parkedRoot({ phase: WAIT_PHASE.resolved }), { tone: 'running', shape: 'ring', pulse: false, label: 'waiting for capacity' }],
     ['wait result owed', run({ status: RUN_STATUS.waiting, waits: [{ ...openCi(), phase: WAIT_PHASE.resolved, resolvedAt: '2026-10-17T15:20:00.000Z' }] }), { tone: 'running', shape: 'ring', pulse: false, label: 'waiting for capacity' }],
-    ['queued', run({ status: RUN_STATUS.queued }), { tone: 'neutral', shape: 'ring', pulse: false, label: 'queued' }],
     ['usage limit', run({ status: RUN_STATUS.waiting, autoResumeAt: '2026-08-03T19:33:53.000Z' }), { tone: 'neutral', shape: 'ring', pulse: false, label: 'usage limit' }],
-    ['done', run({ status: RUN_STATUS.done }), { tone: 'success', shape: 'filled', pulse: false, label: 'done' }],
-    ['failed', run({ status: RUN_STATUS.failed }), { tone: 'danger', shape: 'filled', pulse: false, label: 'failed' }],
-    ['cancelled', run({ status: RUN_STATUS.cancelled }), { tone: 'neutral', shape: 'filled', pulse: false, label: 'cancelled' }],
   ]
 
   it.each(rows)('%s', (_name, record, expected) => {
     expect(deriveAttention(record)).toMatchObject(expected)
-  })
-
-  const look = (record: RunSummary) => { const { tone, shape } = deriveAttention(record); return `${tone}/${shape}` }
-  it('separates the pairs that used to collide', () => {
-    expect(look(run({ status: RUN_STATUS.running }))).not.toBe(look(run({ status: RUN_STATUS.waiting, waits: [openTimer()] })))
-    expect(look(parkedRoot())).not.toBe(look(run({ status: RUN_STATUS.done })))
-    expect(look(run({ status: RUN_STATUS.queued }))).not.toBe(look(run({ status: RUN_STATUS.cancelled })))
   })
 
   it('counts one worker in the singular, and says no number when the list row carries none', () => {

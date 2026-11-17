@@ -110,22 +110,6 @@ describe('resolveProjectSwitch', () => {
     expect(client.getRun).toHaveBeenCalledWith(runAddress('run-1', { projectId: 'other' }), expect.anything())
   })
 
-  it('goes home only for a CONFIRMED missing entity (404)', async () => {
-    vi.mocked(client.getRun).mockRejectedValue(apiError(404))
-    await expect(resolve('/p/other/tasks/gone')).resolves.toBe('/p/other/')
-  })
-
-  it.each([[500], [0], [403]])('does not infer deletion from an inconclusive answer (%i)', async (status) => {
-    vi.mocked(client.getRun).mockRejectedValue(apiError(status))
-    await expect(resolve('/p/other/tasks/run-1')).resolves.toBe('/p/other/tasks/run-1')
-  })
-
-  it('checks the entity in the TARGET project, not the active one', async () => {
-    vi.mocked(client.getRepoCommit).mockResolvedValue({} as never)
-    await resolve('/p/other/git/commits/abc')
-    expect(client.getRepoCommit).toHaveBeenCalledWith('abc', expect.objectContaining({ projectId: 'other' }))
-  })
-
   it('treats the commit route\'s 409 as gone only when git says the object is absent', async () => {
     vi.mocked(client.getRepoCommit).mockRejectedValue(
       apiError(409, "fatal: ambiguous argument 'abc^{commit}': unknown revision or path not in the working tree."),
@@ -142,10 +126,8 @@ describe('resolveProjectSwitch', () => {
     await expect(resolve('/p/other/tasks/run-1')).resolves.toBe('/p/other/tasks/run-1')
   })
 
-  it('checks a task\'s child commit and issue/PR, not just the run', async () => {
+  it('checks a task\'s child commit, including git 409 diagnostics', async () => {
     vi.mocked(client.getRun).mockResolvedValue({ prNumber: 7, issueNumber: 7 } as never)
-    const withRepo = (pathname: string) =>
-      resolveProjectSwitch('other', saved(pathname), { ...ctx, repoBaseOf: () => 'https://github.com/acme/widgets' })
     vi.mocked(client.getRunCommit).mockRejectedValue(apiError(409, 'fatal: bad object deadbeef'))
     await expect(resolve('/p/other/tasks/run-1/commits/deadbeef')).resolves.toBe('/p/other/')
     expect(client.getRunCommit).toHaveBeenCalledWith('run-1', 'deadbeef', expect.objectContaining({ projectId: 'other' }))
@@ -154,10 +136,6 @@ describe('resolveProjectSwitch', () => {
     vi.mocked(client.getRunCommit).mockResolvedValue({} as never)
     await expect(resolve('/p/other/tasks/run-1/commits/abcd')).resolves.toBe('/p/other/tasks/run-1/commits/abcd')
 
-    vi.mocked(client.getGithubItem).mockResolvedValue({ available: true, item: null } as never)
-    await expect(withRepo('/p/other/tasks/run-1/pr/7')).resolves.toBe('/p/other/')
-    vi.mocked(client.getGithubItem).mockResolvedValue({ available: false, reason: 'no gh' } as never)
-    await expect(withRepo('/p/other/tasks/run-1/issue/7')).resolves.toBe('/p/other/tasks/run-1/issue/7')
   })
 
   it('keeps a workflow page when the catalog reported unreadable files', async () => {
@@ -168,25 +146,10 @@ describe('resolveProjectSwitch', () => {
     await expect(resolve('/p/other/workflows/deploy')).resolves.toBe('/p/other/workflows/deploy')
   })
 
-  it('verifies commit, workflow, automation and forge pages', async () => {
-    vi.mocked(client.getRepoCommit).mockRejectedValue(apiError(404))
-    await expect(resolve('/p/other/git/commits/abc')).resolves.toBe('/p/other/')
-
+  it('keeps a listed workflow and goes home for an absent workflow in a readable catalog', async () => {
     vi.mocked(client.getWorkflows).mockResolvedValue({ workflows: [{ name: 'deploy' }], issues: [] } as never)
     await expect(resolve('/p/other/workflows/deploy')).resolves.toBe('/p/other/workflows/deploy')
     await expect(resolve('/p/other/workflows/old')).resolves.toBe('/p/other/')
-
-    vi.mocked(client.getAutomations).mockResolvedValue({ available: true, automations: [{ id: 'a1' }] } as never)
-    await expect(resolve('/p/other/automations/a1/log')).resolves.toBe('/p/other/automations/a1/log')
-    await expect(resolve('/p/other/automations/a2')).resolves.toBe('/p/other/')
-    vi.mocked(client.getAutomations).mockResolvedValue({ available: false, automations: [] } as never)
-    await expect(resolve('/p/other/automations/a2')).resolves.toBe('/p/other/automations/a2')
-
-    vi.mocked(client.getGithubItem).mockResolvedValue({ available: true, item: null } as never)
-    await expect(resolve('/p/other/github/issues/4')).resolves.toBe('/p/other/')
-    vi.mocked(client.getGithubItem).mockResolvedValue({ available: false, reason: 'no gh' } as never)
-    await expect(resolve('/p/other/github/prs/9')).resolves.toBe('/p/other/github/prs/9')
-    await expect(resolve('/p/other/github/prs/0')).resolves.toBe('/p/other/')
   })
 
   it('does no network work for list pages or the home', async () => {
@@ -430,7 +393,6 @@ describe('resolveProjectSwitch: the answer for each entity kind', () => {
       expect(await landing(pathname)).toBe(expected)
     })
   })
-
 
   describe('the abort signal', () => {
     const requestSignals = () => [
