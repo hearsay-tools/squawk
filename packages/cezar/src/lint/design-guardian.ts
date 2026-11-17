@@ -314,12 +314,12 @@ export const designGuardian: AstRule = {
       if (node.type === 'Literal' && typeof node.value !== 'string' && !node.regex) return;
       const value = context.sourceCode.getText(node);
       fixtureToken(node, value);
-      let lines: string[] | undefined;
-      for (const rule of active) {
-        if (rule === fixtureRule || !matchesAnywhere(rule, value)) continue;
+      const matching = active.filter(rule => rule !== fixtureRule && matchesAnywhere(rule, value));
+      const lines = matching.length ? value.split('\n') : [];
+      for (const rule of matching) {
         // Each regex reads one literal, never the file or a containing source subtree.
         let offset = 0;
-        for (const line of lines ??= value.split('\n')) {
+        for (const line of lines) {
           for (const match of line.matchAll(rule.pattern)) emit(rule, node, match[0], offset + match.index);
           offset += line.length + 1;
         }
