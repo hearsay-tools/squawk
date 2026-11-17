@@ -15,11 +15,11 @@ export const curated = require('./lint/launch-read/cases.json') as Array<{ id: s
 /** Compare detection, as the former family-union matrix did, while the production rule keeps every location. */
 export const detectionRule: AstRule = {
   ...launchReadOutsideResolver,
-  create(report) {
+  create(report, context) {
     let reported = false;
     return launchReadOutsideResolver.create((node, message) => {
       if (!reported) { reported = true; report(node, message); }
-    });
+    }, context);
   },
 };
 
