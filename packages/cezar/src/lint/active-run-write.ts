@@ -1,4 +1,4 @@
-import { child, children, nameOf, type AstContext, type AstRule, type EsNode } from './ast-rule.ts';
+import { child, children, nameOf, type AstContext, type AstRule, type EsNode, type Visitors } from './ast-rule.ts';
 
 /** Group ownership metadata for the cez/active-run-*-write-outside-owner rules (hearsay-tools/squawk#3774). */
 interface OwnerGroup {
@@ -151,12 +151,12 @@ function parenthesized(node: EsNode, tokens: NodeTokens): boolean {
 }
 
 type ScopeIndex = Map<string, EsNode[]>;
-const isSyntax = (value: unknown): value is EsNode => typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string';
-interface ScopeFacts { types: Map<EsNode, ScopeIndex>; bindings: Map<EsNode, ScopeIndex>; patterns: Map<EsNode, EsNode[]>; reached: Set<EsNode>; imports: EsNode[] }
+interface ScopeFacts { types: Map<EsNode, ScopeIndex>; bindings: Map<EsNode, ScopeIndex>; patterns: Map<EsNode, EsNode[]>; imports: EsNode[] }
 
-function addEntry(index: Map<EsNode, ScopeIndex>, scopes: EsNode[], name: string | undefined, value: EsNode | undefined): void {
+function addEntry(index: Map<EsNode, ScopeIndex>, node: EsNode, scopes: Set<string>, name: string | undefined, value: EsNode | undefined): void {
   if (!name || !value) return;
-  for (const scope of scopes) {
+  for (let scope = node.parent; scope; scope = scope.parent) {
+    if (!scopes.has(scope.type)) continue;
     let entries = index.get(scope);
     if (!entries) { entries = new Map(); index.set(scope, entries); }
     const list = entries.get(name);
@@ -166,56 +166,41 @@ function addEntry(index: Map<EsNode, ScopeIndex>, scopes: EsNode[], name: string
 }
 
 /**
- * One pre-order walk of the file in the order `nodes()` uses. Each function scope gets the typed
- * names of its descendants, each block scope its bindings and object-pattern declarators, so a
- * check never walks a scope again.
+ * Scope facts collected as oxlint walks the file, with no walk of our own: each function scope gets
+ * the typed names of its descendants, each block scope its bindings and object-pattern declarators.
+ * The owners decide at `Program:exit`, once every fact of the file is in.
  */
-function scopeFacts(program: EsNode, tokens: NodeTokens): ScopeFacts {
-  // Plain maps: they live as long as the file's Program, and oxlint's WeakMap wrapper costs more.
-  const facts: ScopeFacts = { types: new Map(), bindings: new Map(), patterns: new Map(), reached: new Set(), imports: [] };
-  const functions: EsNode[] = [];
-  const blocks: EsNode[] = [];
-  function visit(node: EsNode) {
-    const isFunction = FUNCTION_SCOPES.has(node.type);
-    const isBlock = BLOCK_SCOPES.has(node.type);
-    if (isFunction) functions.push(node);
-    if (isBlock) blocks.push(node);
-    if (isFunction || isBlock) facts.reached.add(node);
-    record(facts, node, functions, blocks);
-    for (const key of tokens.visitorKeys[node.type] ?? []) {
-      const value = node[key];
-      if (Array.isArray(value)) { for (const item of value) if (isSyntax(item)) visit(item); }
-      else if (isSyntax(value)) visit(value);
-    }
-    if (isFunction) functions.pop();
-    if (isBlock) blocks.pop();
-  }
-  visit(program);
-  return facts;
-}
-
-/** The entries one node adds to its enclosing scopes. Only an identifier has both a name and a type annotation. */
-function record(facts: ScopeFacts, node: EsNode, functions: EsNode[], blocks: EsNode[]): void {
-  if (node.type === 'Identifier' || node.type === 'PrivateIdentifier') addEntry(facts.types, functions, nameOf(node), child(node, 'typeAnnotation'));
-  else if (node.type === 'VariableDeclarator') {
-    addEntry(facts.bindings, blocks, nameOf(child(node, 'id')), child(node, 'init'));
-    if (child(node, 'id')?.type === 'ObjectPattern') for (const scope of blocks) {
-      const list = facts.patterns.get(scope);
-      if (list) list.push(node);
-      else facts.patterns.set(scope, [node]);
-    }
-  } else if (node.type === 'ImportSpecifier') facts.imports.push(node);
+function factVisitors(facts: ScopeFacts): Visitors {
+  return {
+    TSTypeAnnotation(node) {
+      const owner = node.parent;
+      // Only an identifier has both a name and a type annotation.
+      if ((owner?.type === 'Identifier' || owner?.type === 'PrivateIdentifier') && child(owner, 'typeAnnotation') === node) {
+        addEntry(facts.types, owner, FUNCTION_SCOPES, nameOf(owner), node);
+      }
+    },
+    VariableDeclarator(node) {
+      const id = child(node, 'id');
+      addEntry(facts.bindings, node, BLOCK_SCOPES, nameOf(id), child(node, 'init'));
+      if (id?.type !== 'ObjectPattern') return;
+      for (let scope = node.parent; scope; scope = scope.parent) {
+        if (!BLOCK_SCOPES.has(scope.type)) continue;
+        const list = facts.patterns.get(scope);
+        if (list) list.push(node);
+        else facts.patterns.set(scope, [node]);
+      }
+    },
+    ImportSpecifier(node) { facts.imports.push(node); },
+  };
 }
 
 const NO_ENTRIES: ScopeIndex = new Map();
 
 /** Structural facts shared by the eight owners, with no owner-dependent reference results. */
-function syntaxIndex(program: EsNode, tokens: NodeTokens) {
+function syntaxIndex(tokens: NodeTokens) {
+  const facts: ScopeFacts = { types: new Map(), bindings: new Map(), patterns: new Map(), imports: [] };
   const descendants = new Map<EsNode, EsNode[]>();
-  const annotations = new Map<EsNode, Map<string, EsNode[]>>();
-  const declarations = new Map<EsNode, Map<string, EsNode[]>>();
   const parentheses = new Map<EsNode, boolean>();
-  let facts: ScopeFacts | undefined;
   function nodes(scope: EsNode): EsNode[] {
     const known = descendants.get(scope);
     if (known) return known;
@@ -233,52 +218,31 @@ function syntaxIndex(program: EsNode, tokens: NodeTokens) {
     descendants.set(scope, result);
     return result;
   }
-  /** The scope's entries from the file walk; a scope it did not reach is walked on its own. */
-  function scanned(scope: EsNode): ScopeFacts | undefined {
-    facts ??= scopeFacts(program, tokens);
-    return facts.reached.has(scope) ? facts : undefined;
-  }
   function index(scope: EsNode, kind: 'type' | 'binding'): Map<string, EsNode[]> {
-    const known = scanned(scope);
-    if (known) return (kind === 'type' ? known.types : known.bindings).get(scope) ?? NO_ENTRIES;
-    const cache = kind === 'type' ? annotations : declarations;
-    const cached = cache.get(scope);
-    if (cached) return cached;
-    const result = new Map<string, EsNode[]>();
-    for (const part of nodes(scope)) {
-      const name = kind === 'type' ? nameOf(part) : part.type === 'VariableDeclarator' ? nameOf(child(part, 'id')) : undefined;
-      const value = child(part, kind === 'type' ? 'typeAnnotation' : 'init');
-      if (!name || !value) continue;
-      const entries = result.get(name) ?? [];
-      entries.push(value);
-      result.set(name, entries);
-    }
-    cache.set(scope, result);
-    return result;
+    return (kind === 'type' ? facts.types : facts.bindings).get(scope) ?? NO_ENTRIES;
   }
   /** The scope's variable declarators with an object pattern, in source order. */
   function patterns(scope: EsNode): EsNode[] {
-    const known = scanned(scope);
-    if (known) return known.patterns.get(scope) ?? [];
-    return nodes(scope).filter(node => node.type === 'VariableDeclarator' && child(node, 'id')?.type === 'ObjectPattern');
+    return facts.patterns.get(scope) ?? [];
   }
   function isParenthesized(node: EsNode): boolean {
     let result = parentheses.get(node);
     if (result === undefined) { result = parenthesized(node, tokens); parentheses.set(node, result); }
     return result;
   }
-  function importSpecifiers(): EsNode[] {
-    return (facts ??= scopeFacts(program, tokens)).imports;
-  }
-  return { nodes, index, patterns, isParenthesized, importSpecifiers };
+  return { nodes, index, patterns, isParenthesized, importSpecifiers: () => facts.imports, visitors: factVisitors(facts) };
 }
 
-// sourceCode is a singleton in oxlint. Only the Program identity is a per-file cache key.
-const syntaxByProgram = new WeakMap<EsNode, ReturnType<typeof syntaxIndex>>();
-function programSyntax(program: EsNode, tokens: NodeTokens) {
-  let syntax = syntaxByProgram.get(program);
-  if (!syntax) { syntax = syntaxIndex(program, tokens); syntaxByProgram.set(program, syntax); }
-  return syntax;
+/**
+ * The file being linted and its shared facts. oxlint reuses one sourceCode object across files, so
+ * only the Program identity marks a new file. The first owner to see a Program collects its facts
+ * for all eight; the others read them.
+ */
+let shared: { program: EsNode; syntax: ReturnType<typeof syntaxIndex> } | undefined;
+function programSyntax(program: EsNode, tokens: NodeTokens): { syntax: ReturnType<typeof syntaxIndex>; collects: boolean } {
+  if (shared?.program === program) return { syntax: shared.syntax, collects: false };
+  shared = { program, syntax: syntaxIndex(tokens) };
+  return { syntax: shared.syntax, collects: true };
 }
 
 /**
@@ -291,7 +255,6 @@ function references(group: OwnerGroup, sourceCode: AstContext['sourceCode']) {
   const groupTypes = new Set(group.types);
   const containerTypes = new Set(['ActiveRun']);
   let syntax: ReturnType<typeof syntaxIndex>;
-  let program: EsNode;
   let imported = false;
   const memo = new Map<string, Map<EsNode, boolean>>();
   const nodes = (node: EsNode) => syntax.nodes(node);
@@ -396,11 +359,13 @@ function references(group: OwnerGroup, sourceCode: AstContext['sourceCode']) {
       if (imported === 'ActiveRun') containerTypes.add(local);
     }
   }
-  function imports(node: EsNode) {
-    program = node;
-    syntax = programSyntax(program, tokens);
+  /** Starts a file: true when this owner collects the file's facts for all eight. */
+  function start(program: EsNode): boolean {
+    const file = programSyntax(program, tokens);
+    syntax = file.syntax;
+    return file.collects;
   }
-  return { container, getter, reference, imports, nodes };
+  return { container, getter, reference, start, nodes, facts: () => syntax.visitors };
 }
 
 function ownerRule(groupName: string, metadata: OwnerGroup): AstRule {
@@ -411,7 +376,7 @@ function ownerRule(groupName: string, metadata: OwnerGroup): AstRule {
     description: message,
     applies: file => file.startsWith('packages/cezar/src/') && file.endsWith('.ts'),
     create(report, context) {
-      const { container, getter, reference, imports, nodes } = references(group, context.sourceCode);
+      const { container, getter, reference, start, nodes, facts } = references(group, context.sourceCode);
       function protectedMember(node: EsNode | undefined): boolean {
         if (node?.type !== 'MemberExpression') return false;
         if (node.computed === true && reference(child(node, 'object'))) return true;
@@ -441,22 +406,37 @@ function ownerRule(groupName: string, metadata: OwnerGroup): AstRule {
         const [target] = children(node, 'arguments');
         if ((reference(target) || container(target)) && !installsSlot(node)) report(node, message);
       }
+      // A check needs every scope fact of the file, so candidates wait for Program:exit.
+      let pending: (() => void)[] = [];
+      let collect: Visitors = {};
+      const later = (check: () => void) => { pending.push(check); };
       return {
-        AssignmentExpression: node => write(node, 'left'),
-        UpdateExpression: node => write(node, 'argument'),
-        UnaryExpression: node => { if (node.operator === 'delete') write(node, 'argument'); },
-        CallExpression: call,
-        TSAsExpression: cast,
+        Program(node) {
+          pending = [];
+          collect = start(node) ? facts() : {};
+        },
+        TSTypeAnnotation: node => collect.TSTypeAnnotation?.(node),
+        VariableDeclarator: node => collect.VariableDeclarator?.(node),
+        ImportSpecifier: node => collect.ImportSpecifier?.(node),
+        AssignmentExpression: node => later(() => write(node, 'left')),
+        UpdateExpression: node => later(() => write(node, 'argument')),
+        UnaryExpression: node => { if (node.operator === 'delete') later(() => write(node, 'argument')); },
+        CallExpression: node => { if (child(node, 'callee')?.type === 'MemberExpression') later(() => call(node)); },
+        TSAsExpression: node => later(() => cast(node)),
         TSTypeAssertion(node) {
           const expression = child(node, 'expression');
-          if (expression && nodes(expression).some(reference)) report(node, message);
+          if (expression) later(() => { if (nodes(expression).some(reference)) report(node, message); });
         },
         PropertyDefinition(node) {
           if (child(node, 'key')?.type === 'PrivateIdentifier') return;
           const owner = node.parent?.parent;
           if (owner?.type === 'ClassDeclaration' && group.types.includes(nameOf(child(owner, 'id')) ?? '')) report(node, message);
         },
-        Program: imports,
+        'Program:exit'() {
+          const checks = pending;
+          pending = [];
+          for (const check of checks) check();
+        },
       };
     },
   };
