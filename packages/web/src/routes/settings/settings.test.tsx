@@ -76,6 +76,8 @@ const AGENTS_CONFIG = {
   reviewGate: null,
   worktreeSetup: null,
   worktreeSetupIssue: null,
+  worktreeTeardown: null,
+  worktreeTeardownIssue: null,
 }
 
 /** Seeds the step-3.2 route gates — boot id (legacy redirect) + registry (known-check) — so a

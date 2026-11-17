@@ -43,6 +43,17 @@ export function resolveWorktreeSetup(raw: unknown): WorktreeSetupPlan {
   };
 }
 
+/** `GET /config`'s report of one command list (`worktreeSetup` or `worktreeTeardown`): the
+ *  commands with the timeout filled in, or null with the reason when the value is invalid. */
+export function reportWorktreeCommands(raw: unknown): {
+  value: { commands: string[]; timeoutSeconds: number } | null;
+  issue: string | null;
+} {
+  const plan = resolveWorktreeSetup(raw);
+  if (plan.kind === 'invalid') return { value: null, issue: plan.issue };
+  return { value: plan.kind === 'commands' ? { commands: plan.commands, timeoutSeconds: plan.timeoutSeconds } : null, issue: null };
+}
+
 /** Output kept per command: the tail, because an install reports its error at the end. */
 const OUTPUT_CAP = 20_000;
 /** How much of a failed command's output the agent is shown. */

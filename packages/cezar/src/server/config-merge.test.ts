@@ -16,6 +16,8 @@ describe('mergeConfig', () => {
     [{ worktreeSetup: { commands: ['npm ci'] } }, { worktreeSetup: { commands: ['npm ci'] } }],
     [{ worktreeSetup: { commands: ['npm ci'], timeoutSeconds: 60 } },
       { worktreeSetup: { commands: ['npm ci'], timeoutSeconds: 60 } }],
+    [{ worktreeTeardown: { commands: ['make stop'], timeoutSeconds: 120 } },
+      { worktreeTeardown: { commands: ['make stop'], timeoutSeconds: 120 } }],
     [{ defaultModels: { codex: 'preset' } }, { defaultModels: { codex: 'preset' } }],
   ])('stores supplied fields (case %#)', (body, expected) => {
     expect(mergeConfig({ untouched: true }, body)).toEqual({ untouched: true, ...expected });
@@ -26,6 +28,7 @@ describe('mergeConfig', () => {
     { worktreeRetention: null }, { liveTitleUpdates: null }, { archiveOnMerge: null },
     { reviewGate: null }, { memoryLimitMb: null }, { memoryLimitMb: 0 },
     { worktreeSetup: null }, { worktreeSetup: { commands: [] } },
+    { worktreeTeardown: null }, { worktreeTeardown: { commands: [] } },
     { defaultModels: { codex: null } }, { defaultModels: { codex: '' } },
   ])('clears supplied fields (case %#)', (body) => {
     const key = Object.keys(body)[0]!;

@@ -198,7 +198,7 @@ import {
   readWorktreePath,
 } from './git-changes.ts';
 import { healthConfig, loadConfig, resolveWorktreeRetention, type CezConfig } from '../config.ts';
-import { resolveWorktreeSetup } from '../worktree-setup.ts';
+import { reportWorktreeCommands } from '../worktree-setup.ts';
 import { readConfigFile, statConfigPath, writeConfigFile } from '../agent-config/files.ts';
 import { readAgentModelDefaults } from '../agent-config/models.ts';
 import { listAgentConfig } from '../agent-config/service.ts';
@@ -4421,15 +4421,16 @@ export function createApp(deps: ServerDeps) {
       }
     });
 
-  /** #917: setup commands run on the host before every task, so only a local cockpit edits them. */
-  const WORKTREE_SETUP_HOSTED_ERROR = `Worktree setup commands are read-only on this remote cockpit. To allow remote edits, run \`${productIdentity().command} remote-settings enable\` on the machine running ${productName('cezar')}.`;
+  /** #917, hearsay-tools/squawk#914: setup and teardown commands run on the host. */
+  const WORKTREE_COMMANDS_HOSTED_ERROR = `Worktree setup and teardown commands are read-only on this remote cockpit. To allow remote edits, run \`${productIdentity().command} remote-settings enable\` on the machine running ${productName('cezar')}.`;
 
   // The Settings → Agents knobs in one read (R6 Step 1.5) — an ADDITIVE
   // sibling of PUT /api/config below; /api/health keeps its protected shape.
   const configAnswer = async (repoRoot: string, config: CezConfig) => {
     const archive = resolveArchiveOnMerge(config, await loadWorkspaceConfig(deps.home.workspaceConfig));
     const nativeModels = await readAgentModelDefaults(repoRoot);
-    const setup = resolveWorktreeSetup(config.worktreeSetup);
+    const setup = reportWorktreeCommands(config.worktreeSetup);
+    const teardown = reportWorktreeCommands(config.worktreeTeardown);
     const modelsLocked = agentModelsLocked(repoRoot, process.env, deps.home);
     return {
       archiveOnMerge: config.archiveOnMerge ?? null,
@@ -4455,9 +4456,9 @@ export function createApp(deps: ServerDeps) {
       // Optional review gate (#489): tri-state — null means "no config key, the
       // CEZ_REVIEW_GATE env default (OFF) decides".
       reviewGate: config.reviewGate ?? null,
-      // Worktree setup (#917): an invalid value is reported, never shown as "no setup".
-      worktreeSetup: setup.kind === 'commands' ? { commands: setup.commands, timeoutSeconds: setup.timeoutSeconds } : null,
-      worktreeSetupIssue: setup.kind === 'invalid' ? setup.issue : null,
+      // Worktree setup (#917) and teardown (hearsay-tools/squawk#914): an invalid value is reported.
+      worktreeSetup: setup.value, worktreeSetupIssue: setup.issue,
+      worktreeTeardown: teardown.value, worktreeTeardownIssue: teardown.issue,
     };
   };
   // ---- chained family: per-repo config (project-scoped) ----
@@ -4473,10 +4474,9 @@ export function createApp(deps: ServerDeps) {
       if (agentModelsLocked(repoRoot, process.env, deps.home) && parsed.data.defaultModels !== undefined) {
         return c.json({ error: AGENT_MODELS_LOCKED_ERROR }, 409);
       }
-      // Setup commands run on the host (#917): settings administration, like Agent config writes
-      // (hearsay-tools/cezarion#2428). Checked before any write, so a refusal changes nothing.
-      if (parsed.data.worktreeSetup !== undefined && !capabilities().settingsAdmin) {
-        return c.json({ error: WORKTREE_SETUP_HOSTED_ERROR }, 409);
+      // Host commands need settings administration (hearsay-tools/cezarion#2428), checked before any write.
+      if ([parsed.data.worktreeSetup, parsed.data.worktreeTeardown].some((v) => v !== undefined) && !capabilities().settingsAdmin) {
+        return c.json({ error: WORKTREE_COMMANDS_HOSTED_ERROR }, 409);
       }
       const refused = await writeMergedConfig(dataDir, parsed.data).catch((err: unknown) => ({ failed: err instanceof Error ? err.message : String(err) }));
       if (typeof refused === 'object') return c.json({ error: refused.failed }, 500);
