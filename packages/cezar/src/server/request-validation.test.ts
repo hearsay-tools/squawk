@@ -375,9 +375,9 @@ describe('request validation bounds (#429)', () => {
    * `validator('json')`, so that `hc` can typecheck request bodies. Hono's validator is stricter
    * than the old code in two ways that reach the wire: it answers a PLAIN-TEXT 400 for malformed
    * JSON, and it ignores a body sent without a JSON content-type. `jsonBody` exists to paper over
-   * exactly that — the first two cases below fail against a bare `validator('json')`. The other
-   * two pin the `absent` fallback, which a bare validator happens to satisfy today only because
-   * Hono's stand-in `{}` agrees with these two schemas; they are here so a change to either one
+   * exactly that — the first two cases below fail against a bare `validator('json')`. The bodyless create-run case and the archive test above
+   * pin the `absent` fallback, which a bare validator happens to satisfy today only because
+   * Hono's stand-in `{}` agrees with these schemas; they are here so a change to either one
    * is a deliberate act.
    */
   describe('body parsing stays as tolerant as the inline parse it replaced', () => {
@@ -412,10 +412,5 @@ describe('request validation bounds (#429)', () => {
       expect(captured).toBeUndefined();
     });
 
-    it('lets a body-less request through where the route tolerated one (archive)', async () => {
-      const run = store.createRun({ title: 't', workflow: 'w', task: 't', steps: [] });
-      const res = await apiRequest(app, `/api/v1/runs/${run.id}/archive`, { method: 'POST' });
-      expect(res.status).toBe(200);
-    });
   });
 });

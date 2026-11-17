@@ -41,7 +41,6 @@ describe('resolveGetRequest', () => {
     { name: '/nope → the shell, which renders the 404 route', path: '/nope', target: 'dist' },
     // R7 removed the ?legacy=1 escape hatch with the page it pointed at.
     { name: '/new → the shell (the React composer)', path: '/new', target: 'dist' },
-    { name: '/new?legacy=1 has no special meaning — the query is not the path', path: '/new', target: 'dist' },
 
     // Never shadow the API: an unknown /api path must 404 as JSON, not as HTML.
     { name: '/api/v1/runs → passthrough', path: '/api/v1/runs', target: 'passthrough' },

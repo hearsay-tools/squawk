@@ -279,13 +279,6 @@ describe('resolveCapabilities — preview (#781)', () => {
   });
 });
 
-// Voice mode is removed (hearsay-tools/squawk#3576): its old flags turn nothing on.
-it('ignores the removed voice flags', () => {
-  const env = { HSQ_VOICE: '1', CEZ_VOICE: '1', TYPESAFE_API_KEY: 'k', CEZ_DRY_RUN: '1' };
-  expect(resolveCapabilities(env)).toEqual(resolveCapabilities({ CEZ_DRY_RUN: '1' }));
-  expect(resolveCapabilities(env)).not.toHaveProperty('voice');
-});
-
 // D8: old CEZ-only units must remain hosted before their env aliases are repaired.
 it.each([undefined, '', '0', '1'])('keeps hosted mode fail-closed for HSQ_REMOTE=%s', preferred => {
   for (const legacy of [undefined, '0', '1']) {

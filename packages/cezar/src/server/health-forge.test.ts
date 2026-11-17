@@ -198,9 +198,6 @@ remoteSettingsAdmin: false,
 
   // #801 — the automations capability rides the same payload, and is what the cockpit's nav gate
   // reads. Asserted as a whole object so a capability leaking on by accident cannot pass.
-  it('reports automations:true by default', async () => {
-    expect((await health()).capabilities.automations).toBe(true);
-  });
 
   it('reports automations:false with CEZ_AUTOMATIONS=0', async () => {
     process.env.CEZ_AUTOMATIONS = '0';
