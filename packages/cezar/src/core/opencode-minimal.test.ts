@@ -33,7 +33,7 @@ describe('OpenCode minimal session on the wire', () => {
   // A skill turn goes through /command, which takes no tools map: the rule must be on the session.
   it('creates the session with the deny rule', async () => {
     const created = (await recordedWire(true)).find(entry => entry.method === 'POST' && entry.url === '/session');
-    expect((created?.body as Record<string, unknown>).permission).toEqual(OPENCODE_MINIMAL_SESSION_PERMISSION);
+    expect(created?.body).toMatchObject({ permission: OPENCODE_MINIMAL_SESSION_PERMISSION });
   });
 
   it('sends no tools map and no session rule without the field', async () => {
