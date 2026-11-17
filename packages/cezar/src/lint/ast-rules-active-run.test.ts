@@ -564,19 +564,19 @@ ruleCases(activeRunMapWrite, {
 for (const [group, slot, type, field] of [
   ['autosave', 'autosave', 'AutosaveGroup', 'autosaveTimer'],
   ['boundary', 'boundary', 'BoundaryGroup', 'idleTimer'],
-  ['children', 'children', 'ChildrenGroup', 'backgroundChildren'],
+  ['children', 'children', 'ChildrenGroup', 'status'],
   ['input', 'inputState', 'InputGroup', 'writingInput'],
   ['session', 'liveSession', 'SessionGroup', 'cancelled'],
-  ['skills', 'skills', 'SkillsGroup', 'catalog'],
-  ['usage', 'usage', 'UsageGroup', 'usageInvocation'],
+  ['skills', 'skills', 'SkillsGroup', 'body'],
+  ['usage', 'usage', 'UsageGroup', 'observed'],
   ['wait', 'waitIdentity', 'WaitGroup', 'ciTurnId'],
 ]) {
   ruleCases(activeRunWriteRules.find(rule => rule.name === `active-run-${group}-write-outside-owner`)!, {
     file: 'packages/cezar/src/workflows/run/example.ts',
     valid: [
-      `(flag ? unrelated : fallback).${field} = replacement;`,
-      `(identity(unrelated)).${field} = replacement;`,
-      `function f(group: Other) { const alias = (identity(group)); alias.${field} = replacement; }`,
+      `Object.assign((flag ? unrelated : fallback), { ${field}: replacement });`,
+      `Object.assign((identity(unrelated)), { ${field}: replacement });`,
+      `function f(group: Other) { const alias = (identity(group)); Object.assign(alias, { ${field}: replacement }); }`,
     ],
     invalid: [
       `(flag ? state.${slot} : fallback).${field} = replacement;`,
