@@ -62,7 +62,10 @@ function findings(cells: readonly Cell[]): string[][] {
   return lintCells(rule, cells).map(row => [...row].sort((a, b) => byLine(a)[0] - byLine(b)[0] || byLine(a)[1].localeCompare(byLine(b)[1])));
 }
 
-/** The two cases of one profile: its oracle covers today's cells, and the rules report what it recorded. One file per profile keeps each under the file duration cap. */
+/** Cells one oracle case lints. A case that lints a whole profile ran near the 30 s per-test bound in CI (hearsay-tools/squawk#3798). */
+const SLICE = 2500;
+
+/** The cases of one profile: its oracle covers today's cells, and the rules report what it recorded, one slice of cells per case. One file per profile keeps each under the file duration cap. */
 export function matrixSuite(profile: string): void {
   describe(`the wait-rule matrix: ${profile}`, () => {
     const cells = matrixProfile(profile);
@@ -73,12 +76,20 @@ export function matrixSuite(profile: string): void {
       expect(decodeRows(recorded.rows)).toHaveLength(cells.length);
     });
 
-    it(`${profile}: the rules report what the oracle recorded`, () => {
-      const rows = decodeRows(oracle(profile).rows);
-      const linted = findings(cells);
-      const differences = cells.flatMap((cell, index) => {
+    let rows: string[][] | undefined;
+    const slices = Array.from({ length: Math.ceil(cells.length / SLICE) }, (_, index) => {
+      const start = index * SLICE;
+      const end = Math.min(cells.length, start + SLICE);
+      return [`${start}-${end}`, start, end] as const;
+    });
+    it.each(slices)(`${profile}: the rules report what the oracle recorded for cells %s`, (_name, start, end) => {
+      rows ??= decodeRows(oracle(profile).rows);
+      const recorded = rows;
+      const slice = cells.slice(start, end);
+      const linted = findings(slice);
+      const differences = slice.flatMap((cell, index) => {
         const actual = linted[index] ?? [];
-        return actual.join(',') === rows[index]?.join(',') ? [] : [{ id: cell.id, expected: rows[index], actual }];
+        return actual.join(',') === recorded[start + index]?.join(',') ? [] : [{ id: cell.id, expected: recorded[start + index], actual }];
       });
       expect(differences.slice(0, 20)).toEqual([]);
     });
