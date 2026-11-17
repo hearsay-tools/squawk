@@ -97,17 +97,6 @@ function literalString(node: EsNode | undefined): string | undefined {
   return node?.type === 'Literal' && typeof node.value === 'string' ? node.value : undefined;
 }
 
-/** Walk children, never parent links or source text. */
-function* subtree(node: EsNode): Generator<EsNode> {
-  yield node;
-  for (const key of Object.keys(node)) {
-    if (key === 'parent') continue;
-    const single = child(node, key);
-    if (single) yield* subtree(single);
-    else for (const item of children(node, key)) yield* subtree(item);
-  }
-}
-
 const FUNCTION_SCOPES = new Set(['Program', 'FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression']);
 const BLOCK_SCOPES = new Set(['Program', 'BlockStatement']);
 function nearest(node: EsNode, types: Set<string>): EsNode {
@@ -139,6 +128,7 @@ function installsSlot(node: EsNode): boolean {
 
 /** Oxlint's token methods are used only to recover parentheses ESTree omits. */
 interface NodeTokens {
+  readonly visitorKeys: Readonly<Record<string, readonly string[]>>;
   getTokenBefore(node: EsNode): EsNode | null;
   getTokenAfter(node: EsNode): EsNode | null;
 }
@@ -159,19 +149,30 @@ function parenthesized(node: EsNode, tokens: NodeTokens): boolean {
   return true;
 }
 
-/**
- * Syntax-only reference predicates mirroring the old template. Typed names are searched in the
- * nearest function, bindings in the nearest block, including descendants of each scope. Bindings
- * follow only the template's one alias step; they are not a TypeScript binding or value resolver.
- */
-function references(group: OwnerGroup, sourceCode: AstContext['sourceCode']) {
-  const tokens = sourceCode as AstContext['sourceCode'] & NodeTokens;
-  const groupTypes = new Set(group.types);
-  const containerTypes = new Set(['ActiveRun']);
-  const nodesByScope = new WeakMap<EsNode, EsNode[]>();
-  const memo = new Map<string, WeakMap<EsNode, boolean>>();
+/** Structural facts shared by the eight owners, with no owner-dependent reference results. */
+function syntaxIndex(tokens: NodeTokens) {
+  const descendants = new WeakMap<EsNode, EsNode[]>();
   const annotations = new WeakMap<EsNode, Map<string, EsNode[]>>();
   const declarations = new WeakMap<EsNode, Map<string, EsNode[]>>();
+  const parentheses = new WeakMap<EsNode, boolean>();
+  let imports: EsNode[] | undefined;
+  function nodes(scope: EsNode): EsNode[] {
+    const known = descendants.get(scope);
+    if (known) return known;
+    const result: EsNode[] = [];
+    function visit(node: EsNode) {
+      result.push(node);
+      // Skip loc/range and other metadata; oxlint supplies the syntax child keys.
+      for (const key of tokens.visitorKeys[node.type] ?? []) {
+        const value = node[key];
+        if (Array.isArray(value)) { for (const item of children(node, key)) visit(item); }
+        else { const item = child(node, key); if (item) visit(item); }
+      }
+    }
+    visit(scope);
+    descendants.set(scope, result);
+    return result;
+  }
   function index(scope: EsNode, kind: 'type' | 'binding'): Map<string, EsNode[]> {
     const cache = kind === 'type' ? annotations : declarations;
     const known = cache.get(scope);
@@ -188,11 +189,39 @@ function references(group: OwnerGroup, sourceCode: AstContext['sourceCode']) {
     cache.set(scope, result);
     return result;
   }
-  function nodes(scope: EsNode): EsNode[] {
-    let found = nodesByScope.get(scope);
-    if (!found) { found = [...subtree(scope)]; nodesByScope.set(scope, found); }
-    return found;
+  function isParenthesized(node: EsNode): boolean {
+    let result = parentheses.get(node);
+    if (result === undefined) { result = parenthesized(node, tokens); parentheses.set(node, result); }
+    return result;
   }
+  function importSpecifiers(program: EsNode): EsNode[] {
+    return imports ??= nodes(program).filter(node => node.type === 'ImportSpecifier');
+  }
+  return { nodes, index, isParenthesized, importSpecifiers };
+}
+
+// sourceCode is a singleton in oxlint. Only the Program identity is a per-file cache key.
+const syntaxByProgram = new WeakMap<EsNode, ReturnType<typeof syntaxIndex>>();
+function programSyntax(program: EsNode, tokens: NodeTokens) {
+  let syntax = syntaxByProgram.get(program);
+  if (!syntax) { syntax = syntaxIndex(tokens); syntaxByProgram.set(program, syntax); }
+  return syntax;
+}
+
+/**
+ * Syntax-only reference predicates mirroring the old template. Typed names are searched in the
+ * nearest function, bindings in the nearest block, including descendants of each scope. Bindings
+ * follow only the template's one alias step; they are not a TypeScript binding or value resolver.
+ */
+function references(group: OwnerGroup, sourceCode: AstContext['sourceCode']) {
+  const tokens = sourceCode as AstContext['sourceCode'] & NodeTokens;
+  const groupTypes = new Set(group.types);
+  const containerTypes = new Set(['ActiveRun']);
+  let syntax: ReturnType<typeof syntaxIndex>;
+  let program: EsNode;
+  let imported = false;
+  const memo = new Map<string, WeakMap<EsNode, boolean>>();
+  const nodes = (node: EsNode) => syntax.nodes(node);
   function cached(kind: string, node: EsNode | undefined, check: (node: EsNode) => boolean): boolean {
     if (!node) return false;
     let entries = memo.get(kind);
@@ -207,13 +236,14 @@ function references(group: OwnerGroup, sourceCode: AstContext['sourceCode']) {
   function typed(node: EsNode, types: Set<string>): boolean {
     const name = referenceName(node);
     if (!name) return false;
-    const annotations = index(nearest(node, FUNCTION_SCOPES), 'type').get(name) ?? [];
+    importTypes();
+    const annotations = syntax.index(nearest(node, FUNCTION_SCOPES), 'type').get(name) ?? [];
     return annotations.some(annotation => nodes(annotation).some(part => types.has(nameOf(part) ?? '')));
   }
   function bound(node: EsNode, accepts: (value: EsNode | undefined) => boolean): boolean {
     const name = referenceName(node);
     if (!name) return false;
-    const initializers = index(nearest(node, BLOCK_SCOPES), 'binding').get(name) ?? [];
+    const initializers = syntax.index(nearest(node, BLOCK_SCOPES), 'binding').get(name) ?? [];
     return initializers.some(accepts);
   }
   function lookup(node: EsNode): boolean {
@@ -249,7 +279,7 @@ function references(group: OwnerGroup, sourceCode: AstContext['sourceCode']) {
       const callee = child(node, 'callee');
       if (callee?.computed !== true && ['get', 'entries', 'values'].includes(memberName(callee) ?? '')) return true;
     }
-    return parenthesized(node, tokens);
+    return syntax.isParenthesized(node);
   }
   function expandsFrom(node: EsNode, accepts: (value: EsNode) => boolean): boolean {
     if (!expands(node)) return false;
@@ -284,9 +314,10 @@ function references(group: OwnerGroup, sourceCode: AstContext['sourceCode']) {
   function reference(node: EsNode | undefined): boolean {
     return cached('reference', node, value => base(value) || alias(value) || expandsFrom(value, alias));
   }
-  function imports(program: EsNode) {
-    for (const node of subtree(program)) {
-      if (node.type !== 'ImportSpecifier') continue;
+  function importTypes() {
+    if (imported) return;
+    imported = true;
+    for (const node of syntax.importSpecifiers(program)) {
       const imported = nameOf(child(node, 'imported'));
       const local = nameOf(child(node, 'local'));
       if (!imported || !local) continue;
@@ -294,7 +325,11 @@ function references(group: OwnerGroup, sourceCode: AstContext['sourceCode']) {
       if (imported === 'ActiveRun') containerTypes.add(local);
     }
   }
-  return { container, getter, reference, imports };
+  function imports(node: EsNode) {
+    program = node;
+    syntax = programSyntax(program, tokens);
+  }
+  return { container, getter, reference, imports, nodes };
 }
 
 function ownerRule(groupName: string, metadata: OwnerGroup): AstRule {
@@ -305,12 +340,12 @@ function ownerRule(groupName: string, metadata: OwnerGroup): AstRule {
     description: message,
     applies: file => file.startsWith('packages/cezar/src/') && file.endsWith('.ts'),
     create(report, context) {
-      const { container, getter, reference, imports } = references(group, context.sourceCode);
+      const { container, getter, reference, imports, nodes } = references(group, context.sourceCode);
       function protectedMember(node: EsNode | undefined): boolean {
         if (node?.type !== 'MemberExpression') return false;
         if (node.computed === true && reference(child(node, 'object'))) return true;
         if (!group.fields.includes(memberName(node) ?? '')) return false;
-        if ([...subtree(node)].some(part => part.type === 'PrivateIdentifier')) return false;
+        if (nodes(node).some(part => part.type === 'PrivateIdentifier')) return false;
         return getter(node) || reference(child(node, 'object'));
       }
       function write(node: EsNode, field: string) {
@@ -343,7 +378,7 @@ function ownerRule(groupName: string, metadata: OwnerGroup): AstRule {
         TSAsExpression: cast,
         TSTypeAssertion(node) {
           const expression = child(node, 'expression');
-          if (expression && [...subtree(expression)].some(reference)) report(node, message);
+          if (expression && nodes(expression).some(reference)) report(node, message);
         },
         PropertyDefinition(node) {
           if (child(node, 'key')?.type === 'PrivateIdentifier') return;
