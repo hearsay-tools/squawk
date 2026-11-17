@@ -10,6 +10,7 @@ import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { RunStore, type RunRecord } from '../runs/store.ts';
 import { RunManager } from './run.ts';
+import type { ContinueRunOptions } from './continuation-admission.ts';
 import { type WorkflowDef } from './types.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 
@@ -97,41 +98,44 @@ describe('RunManager.continueRun override', () => {
       .toBe(autonomous);
   });
 
-  it('persists a runner + model override as the run current backend', () => {
+  it.each([
+    { name: 'runner and model override', options: { runner: 'codex', model: 'gpt-5.1-codex' }, expected: { runner: 'codex', model: 'gpt-5.1-codex' } },
+    { name: 'omitted backend and model', options: { text: 'keep going' }, expected: { runner: 'claude', model: 'sonnet' } },
+    { name: 'empty effort clears the pin', seed: { effort: 'high' }, options: { effort: '' }, expected: { effort: undefined } },
+    { name: 'runner switch keeps effort', seed: { effort: 'max' }, options: { runner: 'codex' }, expected: { effort: 'max' } },
+    { name: 'empty model clears the pin', options: { model: '' }, expected: { model: undefined, runner: 'claude' } },
+    { name: 'foreign preset is refused', options: { model: 'gpt-5.1-codex' }, error: "model 'gpt-5.1-codex' is not a claude model", expected: { model: 'sonnet', runner: 'claude' } },
+    { name: 'runner switch clears foreign model', options: { runner: 'codex' }, expected: { runner: 'codex', model: undefined } },
+    { name: 'runner switch keeps free-form model', seed: { model: 'my-org/custom-tune' }, options: { runner: 'codex' }, expected: { model: 'my-org/custom-tune' } },
+    { name: 'same runner keeps model', options: { runner: 'claude' }, expected: { model: 'sonnet' } },
+    { name: 'legacy runner refuses foreign preset', seed: { runner: undefined, model: undefined }, options: { model: 'gpt-5.1-codex' }, error: "model 'gpt-5.1-codex' is not a claude model", expected: { model: undefined } },
+    { name: 'free-form model is accepted', options: { model: 'my-custom-alias' }, expected: { model: 'my-custom-alias' } },
+    { name: 'picked account persists independently', options: { agentProfile: 'klaudiusz' }, expected: { agentProfile: 'klaudiusz', runner: 'claude', model: 'sonnet' } },
+    { name: 'omitted account keeps the pin', seed: { agentProfile: 'klaudiusz' }, options: { text: 'keep going' }, expected: { agentProfile: 'klaudiusz' } },
+    { name: 'runner switch clears foreign account', seed: { agentProfile: 'klaudiusz' }, options: { runner: 'codex' }, expected: { agentProfile: undefined } },
+    { name: 'same runner keeps account', seed: { agentProfile: 'klaudiusz' }, options: { runner: 'claude' }, expected: { agentProfile: 'klaudiusz' } },
+  ] satisfies Array<{ name: string; seed?: Partial<RunRecord>; options: ContinueRunOptions; error?: string; expected: Partial<RunRecord> }>)('persists the Continue override patch: $name', ({ seed, options, error, expected }) => {
     const id = resumableRun();
-    expect(manager.continueRun(id, { runner: 'codex', model: 'gpt-5.1-codex' })).toEqual({ ok: true });
+    if (seed) store.updateRun(id, seed);
+    expect(manager.continueRun(id, options)).toEqual(error ? { ok: false, error } : { ok: true });
     const after = store.getRun(id);
-    expect(after?.runner).toBe('codex');
-    expect(after?.model).toBe('gpt-5.1-codex');
+    for (const [key, value] of Object.entries(expected)) expect(after?.[key as keyof RunRecord]).toEqual(value);
   });
 
-  it('starts fresh when Continue switches to a backend that does not own the session', async () => {
+  it.each([
+    { name: 'different backend', step: {}, options: { runner: 'codex' }, resume: false, backend: 'codex' },
+    { name: 'same backend', step: { backend: 'claude' }, options: { runner: 'claude' }, resume: true, backend: 'claude' },
+    { name: 'different account', step: { backend: 'claude', profileId: 'default' }, options: { agentProfile: 'klaudiusz' }, resume: false, backend: 'claude' },
+    { name: 'owning account', step: { backend: 'claude', profileId: 'klaudiusz' }, options: { agentProfile: 'klaudiusz' }, resume: true, backend: 'claude' },
+    { name: 'legacy default account', step: { backend: 'claude' }, options: { agentProfile: 'default' }, resume: true, backend: 'claude' },
+  ] as const)('resumes only on the owning backend and account: $name', async ({ step, options, resume, backend }) => {
     const id = resumableRun();
-
-
-    expect(manager.continueRun(id, { runner: 'codex' })).toEqual({ ok: true });
+    store.updateStep(id, 's1', step);
+    expect(manager.continueRun(id, options)).toEqual({ ok: true });
     await waitForProduct(manager, store, () => launches.length === 1);
-    expect(launches[0]?.resume).not.toBe(true);
-    expect(store.getRun(id)?.steps.at(-1)?.backend).toBe('codex');
-  });
-
-  it('resumes when Continue stays on the backend that owns the session', async () => {
-    const id = resumableRun();
-    store.updateStep(id, 's1', { backend: 'claude' });
-
-
-    expect(manager.continueRun(id, { runner: 'claude' })).toEqual({ ok: true });
-    await waitForProduct(manager, store, () => launches.length === 1);
-    expect(launches[0]).toMatchObject({ resume: true, sessionId: 'sess-1' });
-    expect(store.getRun(id)?.steps.at(-1)?.backend).toBe('claude');
-  });
-
-  it('an omitted override preserves the run current backend/model (backward compat)', () => {
-    const id = resumableRun();
-    expect(manager.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
-    const after = store.getRun(id);
-    expect(after?.runner).toBe('claude');
-    expect(after?.model).toBe('sonnet');
+    if (resume) expect(launches[0]).toMatchObject({ resume: true, sessionId: 'sess-1' });
+    else expect(launches[0]?.resume).not.toBe(true);
+    expect(store.getRun(id)?.steps.at(-1)?.backend).toBe(backend);
   });
 
   it('persists an effort override and keeps it when Continue omits it (#45)', async () => {
@@ -146,13 +150,6 @@ describe('RunManager.continueRun override', () => {
     expect(store.getRun(id)?.effort).toBe('xhigh');
   });
 
-  it('an empty effort clears the pin so the harness keeps its default (#45)', () => {
-    const id = resumableRun();
-    store.updateRun(id, { effort: 'high' });
-    expect(manager.continueRun(id, { effort: '' })).toEqual({ ok: true });
-    expect(store.getRun(id)?.effort).toBeUndefined();
-  });
-
   it('rejects an effort override while modelsLocked (#45)', () => {
     const id = resumableRun();
     writeFileSync(
@@ -164,147 +161,6 @@ describe('RunManager.continueRun override', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/locked/);
     expect(store.getRun(id)?.effort).toBeUndefined();
-  });
-
-  it('a runner-only switch keeps the effort pin — it is shared vocabulary, not per-backend (#45)', () => {
-    const id = resumableRun();
-    store.updateRun(id, { effort: 'max' });
-    expect(manager.continueRun(id, { runner: 'codex' })).toEqual({ ok: true });
-    expect(store.getRun(id)?.effort).toBe('max');
-  });
-
-  it("an empty model clears the pin so the runner picks the model (auto)", () => {
-    const id = resumableRun();
-    manager.continueRun(id, { model: '' });
-    expect(store.getRun(id)?.model).toBeUndefined();
-    // Runner untouched → the run keeps its backend.
-    expect(store.getRun(id)?.runner).toBe('claude');
-  });
-
-  it("rejects a model that is recognizably another runner's preset (no corruption persisted)", () => {
-    const id = resumableRun();
-    // The review's corruption case (#401): a codex preset landing on a claude continuation.
-    const result = manager.continueRun(id, { model: 'gpt-5.1-codex' });
-    expect(result).toEqual({ ok: false, error: "model 'gpt-5.1-codex' is not a claude model" });
-    expect(store.getRun(id)?.model).toBe('sonnet');
-    expect(store.getRun(id)?.runner).toBe('claude');
-  });
-
-  it('a runner-only switch clears the previous backend model pin instead of carrying it over', () => {
-    const id = resumableRun(); // claude/sonnet
-    // The composer sends only `runner` when the user switches backend without touching the
-    // model pill (it displays `auto` at that point). The inherited `sonnet` pin belongs to
-    // claude and must not reach the codex runner via `runContinuation`'s `model: record.model`.
-    expect(manager.continueRun(id, { runner: 'codex' })).toEqual({ ok: true });
-    const after = store.getRun(id);
-    expect(after?.runner).toBe('codex');
-    expect(after?.model).toBeUndefined();
-  });
-
-  it('a runner-only switch keeps a free-form model id — only known foreign presets are cleared', () => {
-    const record = store.createRun({
-      title: 't',
-      workflow: 'quick-task',
-      task: 't',
-      runner: 'claude',
-      model: 'my-org/custom-tune',
-      steps: [{ id: 's1', name: 'Work', kind: STEP_KIND.agent }],
-    });
-    setRunStatus(store, record.id, RUN_STATUS.done, { finishedAt: new Date().toISOString() });
-    store.updateStep(record.id, 's1', { sessionId: 'sess-1' });
-    expect(manager.continueRun(record.id, { runner: 'codex' })).toEqual({ ok: true });
-    expect(store.getRun(record.id)?.model).toBe('my-org/custom-tune');
-  });
-
-  it('a runner-only continue on the SAME backend keeps the pin (no spurious clear)', () => {
-    const id = resumableRun(); // claude/sonnet
-    expect(manager.continueRun(id, { runner: 'claude' })).toEqual({ ok: true });
-    expect(store.getRun(id)?.model).toBe('sonnet');
-  });
-
-  it('guards legacy records too — no persisted runner resolves to claude, like runContinuation', () => {
-    const record = store.createRun({ title: 't', workflow: 'quick-task', task: 't', steps: [{ id: 's1', name: 'Work', kind: STEP_KIND.agent }] });
-    setRunStatus(store, record.id, RUN_STATUS.done, { finishedAt: new Date().toISOString() });
-    store.updateStep(record.id, 's1', { sessionId: 'sess-1' });
-    const result = manager.continueRun(record.id, { model: 'gpt-5.1-codex' });
-    expect(result.ok).toBe(false);
-    expect(store.getRun(record.id)?.model).toBeUndefined();
-  });
-
-  it('keeps free-form model ids working — only cross-runner presets are rejected', () => {
-    const id = resumableRun();
-    expect(manager.continueRun(id, { model: 'my-custom-alias' })).toEqual({ ok: true });
-    expect(store.getRun(id)?.model).toBe('my-custom-alias');
-  });
-
-  /* Agent accounts (spec 2026-07-29-agent-profiles): a follow-up may switch login as well as
-     backend — and a session id only resolves inside the config dir that created it. */
-
-  it('persists the picked account as the run current one', () => {
-    const id = resumableRun();
-    expect(manager.continueRun(id, { agentProfile: 'klaudiusz' })).toEqual({ ok: true });
-    expect(store.getRun(id)?.agentProfile).toBe('klaudiusz');
-    // Nothing else moves: the account is its own axis.
-    expect(store.getRun(id)?.runner).toBe('claude');
-    expect(store.getRun(id)?.model).toBe('sonnet');
-  });
-
-  it('starts fresh when Continue switches to another login of the same agent', async () => {
-    const id = resumableRun();
-    store.updateStep(id, 's1', { backend: 'claude', profileId: 'default' });
-
-
-    expect(manager.continueRun(id, { agentProfile: 'klaudiusz' })).toEqual({ ok: true });
-    // `claude --resume <id>` under another login would find nothing and silently open a fresh
-    // conversation, so the session id is deliberately not passed.
-    await waitForProduct(manager, store, () => launches.length === 1);
-    expect(launches[0]?.resume).not.toBe(true);
-    expect(store.getRun(id)?.steps.at(-1)?.backend).toBe('claude');
-  });
-
-  it('resumes when the picked account is the one that owns the session', async () => {
-    const id = resumableRun();
-    store.updateStep(id, 's1', { backend: 'claude', profileId: 'klaudiusz' });
-
-
-    expect(manager.continueRun(id, { agentProfile: 'klaudiusz' })).toEqual({ ok: true });
-    await waitForProduct(manager, store, () => launches.length === 1);
-    expect(launches[0]).toMatchObject({ resume: true, sessionId: 'sess-1' });
-  });
-
-  it('treats a step that recorded no account as the discovered one', async () => {
-    // Pre-accounts sessions ran under whatever `agentHomePaths()` finds, so re-picking `default`
-    // is not a switch and must still resume.
-    const id = resumableRun();
-    store.updateStep(id, 's1', { backend: 'claude' });
-
-
-    expect(manager.continueRun(id, { agentProfile: 'default' })).toEqual({ ok: true });
-    await waitForProduct(manager, store, () => launches.length === 1);
-    expect(launches[0]).toMatchObject({ resume: true, sessionId: 'sess-1' });
-  });
-
-  it('an omitted account preserves the one the run is on (backward compat)', () => {
-    const id = resumableRun();
-    store.updateRun(id, { agentProfile: 'klaudiusz' });
-    expect(manager.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
-    expect(store.getRun(id)?.agentProfile).toBe('klaudiusz');
-  });
-
-  it('a runner switch drops the previous agent account instead of carrying it over', () => {
-    // An account belongs to ONE agent: a claude login says nothing about which codex account
-    // should run, and leaving it on the record would re-apply it if a later Continue switched back.
-    const id = resumableRun();
-    store.updateRun(id, { agentProfile: 'klaudiusz' });
-    expect(manager.continueRun(id, { runner: 'codex' })).toEqual({ ok: true });
-    expect(store.getRun(id)?.agentProfile).toBeUndefined();
-  });
-
-  it('keeps the account when the continuation stays on the same agent', () => {
-    const id = resumableRun();
-    store.updateRun(id, { agentProfile: 'klaudiusz' });
-    expect(manager.continueRun(id, { runner: 'claude' })).toEqual({ ok: true });
-    expect(store.getRun(id)?.agentProfile).toBe('klaudiusz');
   });
 
   it('refuses to continue a run with no resumable session (no override persisted)', () => {
