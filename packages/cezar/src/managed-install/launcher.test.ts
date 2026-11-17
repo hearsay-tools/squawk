@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, win32 } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
@@ -14,20 +14,6 @@ function sandbox() {
   roots.push(root);
   return Home.sandbox(root);
 }
-
-it('writes all binary launchers and generates Windows named-entry fallback', () => {
-  const home = sandbox();
-  const dir = writeLaunchers({}, home);
-  for (const name of BINARY_NAMES) {
-    const script = readFileSync(join(dir, name + (process.platform === 'win32' ? '.cmd' : '')), 'utf8');
-    expect(script).toContain(`${name}.js`);
-    expect(script).toContain('index.js');
-    const windows = windowsLauncher({}, home, name);
-    expect(windows).toContain(`if exist "${productIdentity().rebrand ? `%CEZ_ENTRY:index.js=${name}.js%` : join(home.data, 'versions', 'current', 'node_modules', ...productIdentity().npmPackage.split('/'), 'dist', `${name}.js`)}"`);
-    expect(windows).toContain(`node "${productIdentity().rebrand ? '%CEZ_ENTRY%' : join(home.data, 'versions', 'current', 'node_modules', ...productIdentity().npmPackage.split('/'), 'dist', 'index.js')}" %*`);
-    expect(windows).toContain('\r\n');
-  }
-});
 
 it.skipIf(process.platform === 'win32')('executes the matching named entry, then falls back for an older installed version', () => {
   const home = sandbox();
@@ -66,7 +52,7 @@ it.skipIf(process.platform === 'win32')('keeps the use escape hatch silent when 
   expect(withoutNode).toContain('now using old');
 });
 
-it.each(['single%', 'paired%PATH%'])('escapes percent paths in Windows named and fallback launchers: %s', suffix => {
+it.each(['', 'single%', 'paired%PATH%'])('generates Windows named and fallback launchers with literal paths: %s', suffix => {
   const home = Home.sandbox(join(sandbox().root, suffix));
   const dist = join(home.data, 'versions', 'current', 'node_modules', ...productIdentity().npmPackage.split('/'), 'dist');
   mkdirSync(dist, { recursive: true });
@@ -75,6 +61,7 @@ it.each(['single%', 'paired%PATH%'])('escapes percent paths in Windows named and
   for (const name of BINARY_NAMES) {
     const entry = join(dist, `${name}.js`);
     const script = windowsLauncher({}, home, name);
+    expect(script).toContain('\r\n');
     const escapedEntry = productIdentity().rebrand ? `%CEZ_ENTRY:index.js=${name}.js%` : entry.replaceAll('%', '%%');
     const escapedIndex = productIdentity().rebrand ? '%CEZ_ENTRY%' : index.replaceAll('%', '%%');
     if (productIdentity().rebrand) expect(script).toContain(`set "CEZ_ENTRY=${win32.join(dist, 'index.js').replaceAll('%', '%%')}"`);

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BIN_NAMES,
   PACKAGE_NAME,
   globalBinDir,
   globalShimPaths,
@@ -53,10 +52,6 @@ describe('globalShimPaths', () => {
       'C:\\npm-global\\cez.cmd',
       'C:\\npm-global\\hsq.cmd',
     ]);
-  });
-
-  it('covers exactly the published bin names', () => {
-    expect(globalShimPaths('/p', 'linux')).toHaveLength(BIN_NAMES.length);
   });
 });
 

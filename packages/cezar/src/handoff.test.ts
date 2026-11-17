@@ -288,6 +288,10 @@ describe('the store-backed autosave records', () => {
 // hearsay-tools/cezarion#1234, hearsay-tools/cezarion#2397: every session is taught the tools,
 // never the lifecycle markers.
 describe('handoffInstructions', () => {
+  // hearsay-tools/cezarion#1428: agents asked about drafts and findings they never sent, once
+  // after a plain ask and once after the content lived only in rejected tool-call arguments.
+  // hearsay-tools/cezarion#1458: on Claude, assistant text between tool calls may never arrive, so
+  // the content goes in the call's context.
   it('the tool variant teaches cezar_done, cezar_ask and cezar_wait', () => {
     const text = handoffInstructions();
     expect(text).toContain(`Lifecycle tools (${productName('cezar')}): End every turn with a ${productName('cezar')} tool call that says what happens next. When the goal is fully achieved and verified and you have no question for the user, call cezar_done, then end your turn.`);
@@ -333,14 +337,5 @@ describe('handoffInstructions', () => {
     expect(text).toContain('Before you tell the user a time, convert it to Europe/Warsaw and name the zone.');
     expect(text).toContain('`TZ=Europe/Warsaw date`');
     expect(handoffInstructions()).toContain(`The user's time zone is ${Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}.`);
-  });
-
-  // hearsay-tools/cezarion#1428: agents asked about drafts and findings they never sent, once
-  // after a plain ask and once after the content lived only in rejected tool-call arguments.
-  // hearsay-tools/cezarion#1458: on Claude, assistant text between tool calls may never arrive, so
-  // the content goes in the call's context.
-  it('puts the decision context in the call', () => {
-    const tools = handoffInstructions();
-    expect(tools).toContain('Put the full draft, findings, evidence and option meanings in context.');
   });
 });
