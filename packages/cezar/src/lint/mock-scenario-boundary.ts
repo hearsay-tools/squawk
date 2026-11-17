@@ -97,7 +97,7 @@ export const mockScenarioBoundary: AstRule = {
       },
       'Program:exit'(node) {
         if (!imported) {
-          if (REQUIRED_MOCKS.has(file)) report(node, 'Runner mocks must import mock-scenario.mjs (hearsay-tools/cezarion#2774).');
+          if (REQUIRED_MOCKS.has(file)) report(node, 'Runner mocks must import mock-scenario.mjs (hearsay-tools/cezarion#2774).', { line: 1, column: 0 });
           return;
         }
         for (const site of sites) report(site, 'Use mock-scenario.mjs for shared scenario selection and scripts (hearsay-tools/cezarion#2769).');

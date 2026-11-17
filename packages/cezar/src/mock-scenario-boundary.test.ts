@@ -112,6 +112,17 @@ describe('shared scenario boundary', () => {
   });
 
   it.each([
+    "// write('./watchdog.pid');\nwrite('ordinary.pid');",
+    "// ignored\nwrite('watchdog.pid');",
+    "/* leading comment */\nconsole.log('ordinary');",
+    "\n// leading comment\nconsole.log('ordinary');",
+  ])('keeps a missing import at line one after leading comments: %s', source => {
+    expect(checkRule(rule, file, source)).toEqual([
+      { line: 1, message: expect.stringContaining('must import mock-scenario.mjs') },
+    ]);
+  });
+
+  it.each([
     "// import './mock-scenario.mjs';",
     "/* import './mock-scenario.mjs'; */",
     'const sample = "from \'./mock-scenario.mjs\'";',
