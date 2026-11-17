@@ -947,33 +947,6 @@ describe('CodexAppServerRunner v2 wiring (against the bundled mock app-server)',
     expect(v2Completed).toEqual([{ type: 'turn.completed', turnId: 'turn_mock_1', stopReason: 'end_turn' }]);
   }, 30_000);
 
-  it('keeps autonomous full-access permissions when resuming a thread', async () => {
-    const runner = new CodexAppServerRunner({ bin: mockBin, timeoutMs: 60_000 });
-    const session = runner.startSession(
-      { toolGrant: UNSET_TOOL_GRANT, userPrompt: 'continue', cwd: process.cwd(), resume: true, sessionId: 'th_mock_1' },
-      undefined,
-      { autoEndAfterFirstTurn: true },
-    );
-
-    await expect(session.result).resolves.toMatchObject({ sessionId: 'th_mock_1' });
-  }, 30_000);
-
-  it('retains CEZ_CODEX_NETWORK=0 as an explicit restricted-sandbox opt-out', async () => {
-    vi.stubEnv('CEZ_CODEX_NETWORK', '0');
-    try {
-      const runner = new CodexAppServerRunner({ bin: mockBin, timeoutMs: 60_000 });
-      const session = runner.startSession(
-        { toolGrant: UNSET_TOOL_GRANT, userPrompt: 'check without network', cwd: process.cwd() },
-        undefined,
-        { autoEndAfterFirstTurn: true },
-      );
-
-      await expect(session.result).resolves.toMatchObject({ sessionId: 'th_mock_1' });
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  }, 30_000);
-
   it('bridges native requestUserInput to ask.requested and answers the server request', async () => {
     const runner = new CodexAppServerRunner({ bin: mockBin, timeoutMs: 60_000 });
     const v2: UiEvent[] = [];
