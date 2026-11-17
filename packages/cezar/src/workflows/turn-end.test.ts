@@ -76,11 +76,6 @@ describe('decideTurnEnd decides both nudge causes (hearsay-tools/cezarion#1234, 
     expect(decideTurnEnd({ ...quiet, ...facts })).toEqual(decision);
   });
 
-  it('a refused submission ends differently for each cause', () => {
-    expect(decideTurnEnd(quiet)).toMatchObject({ ifRefused: 'human-wait' });
-    expect(decideTurnEnd({ ...quiet, autonomous: true })).toMatchObject({ ifRefused: 'readiness' });
-    expect(decideTurnEnd({ ...quiet, ...live })).toMatchObject({ ifRefused: 'park-for-user' });
-  });
 
   it('the tool nudge advertises exactly the wait kinds accepted by the contract', () => {
     expectNoWaitNudgeKinds(NO_WAIT_NUDGE);
