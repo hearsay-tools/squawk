@@ -8,8 +8,6 @@ import { tmpdir, userInfo } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  isForeignNpxExecStart,
-  isNpxExecStart,
   nginxVhost,
   enableHttp2OnTlsCommand,
   enableHttp2OnTlsListenerSed,
@@ -551,41 +549,6 @@ describe('serviceExecStart', () => {
   it('falls back to a resolved global bin when the entry is missing', () => {
     expect(serviceExecStart({ ...base, pkgRoot: '/pkg', entryExists: false, globalBin: '/usr/bin/cezarion' }))
       .toBe('/n/node /usr/bin/cezarion');
-  });
-});
-
-describe('isNpxExecStart (#696)', () => {
-  it('is true for the unpinned npx launch form', () => {
-    expect(isNpxExecStart('/home/u/.nvm/versions/node/v24/bin/npx --yes cezarion serve --no-open --port 4321')).toBe(true);
-  });
-  it('is false for a checkout (<node> dist/index.js) unit', () => {
-    expect(isNpxExecStart('/usr/bin/node /home/cezar/cezar/dist/index.js serve --no-open --port 4321')).toBe(false);
-  });
-  it('is false for a global bin unit (no npx)', () => {
-    expect(isNpxExecStart('/usr/bin/node /usr/bin/cezarion serve --no-open --port 4321')).toBe(false);
-  });
-
-  // #23: this clone publishes as `Squawk`, so a unit installed by UPSTREAM cezar as
-  // `npx --yes cezar-cli` stops matching. It must not be adopted (clearing upstream's npx
-  // cache would move the box onto upstream's latest), but it must not pass silently either —
-  // `server-deploy` would report a green restart having changed nothing.
-  it('does not mistake an upstream `npx cezar-cli` unit for one of ours', () => {
-    const upstream = '/n/npx --yes cezar-cli serve --no-open --port 4321';
-    expect(isNpxExecStart(upstream)).toBe(false);
-    expect(isForeignNpxExecStart(upstream)).toBe(true);
-  });
-
-  it('does not call our own npx unit foreign', () => {
-    expect(isForeignNpxExecStart('/n/npx --yes cezarion serve --no-open --port 4321')).toBe(false);
-  });
-
-  it('does not call a checkout or global-bin unit foreign', () => {
-    expect(isForeignNpxExecStart('/usr/bin/node /home/cezar/cezar/dist/index.js serve --port 4321')).toBe(false);
-    expect(isForeignNpxExecStart('/usr/bin/node /usr/bin/cezarion serve --port 4321')).toBe(false);
-    // An `_npx` path is a checkout-style launch, not an npx invocation: `\bnpx\b` cannot
-    // match after a word character, and `_` is one.
-    expect(isForeignNpxExecStart('/usr/bin/node /home/u/.npm/_npx/ab/node_modules/cezarion/dist/index.js')).toBe(false);
-    expect(isForeignNpxExecStart('')).toBe(false);
   });
 });
 

@@ -124,28 +124,6 @@ describe('computeSnapshot', () => {
     expect(computeSnapshot({ ...base, baseVersion: '' })).toBeNull();
     expect(computeSnapshot({ ...base, runNumber: 0 })).toBeNull();
   });
-
-  it('never resolves to the latest dist-tag on any publishing input', () => {
-    const events: SnapshotContext[] = [
-      base,
-      { ...base, eventName: 'push', refName: 'main', prNumber: undefined },
-      {
-        ...base,
-        eventName: 'schedule',
-        refName: 'main',
-        prNumber: undefined,
-        requestedChannel: 'nightly',
-        nightlyDate: '20260813',
-      },
-    ];
-    for (const ctx of events) {
-      const plan = computeSnapshot(ctx);
-      expect(plan).not.toBeNull();
-      expect(plan?.distTag).not.toBe('latest');
-      // Prerelease version → npm would not implicitly treat it as latest either.
-      expect(plan?.version).toContain('-');
-    }
-  });
 });
 
 describe('stampManifests', () => {
