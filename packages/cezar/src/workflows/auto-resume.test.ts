@@ -808,7 +808,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
 
   // Table B row B7 (.ai/specs/2026-11-03-run-store-owns-exits.md): the Continue that joins the line
   // writes continue-line once. A second write repeated the first.
-  it('writes continue-line once for a human Continue on the hold', async () => {
+  it('treats a human message during the hold as the user: writes continue-line once for a human Continue on the hold', async () => {
     manager = createFixtureManager(store, repoRoot);
     const record = manager.startRun(workflow, { task: 'mock:limit ship it', worktree: false });
     await settle(record.id);
