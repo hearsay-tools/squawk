@@ -505,15 +505,14 @@ describe('a store that cannot be opened is never an empty one', () => {
     RunDatabase.open(join(dataDir, RUNS_DB_FILE)).close();
     const release = blockRunWrites(dataDir);
     let failure: RunStoreOpenError;
-    const started = performance.now();
     try {
       failure = openFailure();
     } finally {
       release();
     }
-    // A lazy project context opens on a live cockpit's event loop: one attempt, never a backoff.
-    expect(performance.now() - started).toBeLessThan(400);
     expect(failure.kind).toBe('busy');
+    // A lazy project context opens on a live cockpit's event loop: one attempt, never a backoff.
+    // A retried open names how long it waited ("for over N s"); this exact message has no wait.
     expect(failure.message).toMatch(new RegExp(`runs\\.db is busy: another ${productName("cezar")} process has held its write lock\\. Wait for it to finish, then restart ${productName("cezar")}\\.$`, ""));
     expect(importMeta()).toBeUndefined();
     expect(readPersistedRuns(dataDir)).toEqual([]);
