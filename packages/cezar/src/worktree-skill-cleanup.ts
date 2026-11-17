@@ -10,7 +10,8 @@ interface SkillCleanupOptions extends WorktreeFilesOptions {
 }
 
 /** Anchor a literal path; Git otherwise treats these characters and trailing spaces as pattern syntax. */
-function literalGitExclude(path: string): string {
+function literalGitExclude(path: string): string | null {
+  if (/[\n\r\0]/.test(path)) return null;
   return '/' + path.replace(/[\\*?[]/g, '\\$&').replace(/ +$/g, spaces => spaces.replace(/ /g, '\\ '));
 }
 
@@ -40,7 +41,8 @@ export function removeProvisionedSkills(worktree: string, options: SkillCleanupO
       // Changed and unverifiable copies stay excluded after their ignore file goes.
       const owner = (await files.inspect(entry.path)).owner;
       if (entry.kind !== 'ignore-file' && (owner === 'kept' || owner === 'theirs')) {
-        if (!(await excludeFromGit(files.worktree, literalGitExclude(entry.path)))) throw new Error(`Could not exclude ${entry.path} from git`);
+        const pattern = literalGitExclude(entry.path);
+        if (pattern === null || !(await excludeFromGit(files.worktree, pattern))) throw new Error(`Could not exclude ${entry.path} from git`);
       }
       else if (await files.remove(entry.path)) continue;
       files.forget(entry.path);

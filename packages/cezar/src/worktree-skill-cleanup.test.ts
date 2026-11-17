@@ -126,6 +126,32 @@ it.each([
   })).toBe(`${path}\0`);
 });
 
+it.each([['LF', '\n'], ['CR', '\r'], ['NUL', '\0']])('retains exclusions and records for an unrepresentable %s path', async (_name, character) => {
+  const { paths, manifest } = await seedOldSkills(worktree);
+  const path = `${paths[0]}${character}`;
+  const saved = JSON.parse(readFileSync(manifest, 'utf8'));
+  const entry = saved.entries.find((entry: { path: string }) => entry.path === paths[0]);
+  entry.path = path;
+  if (character === '\0') entry.kind = 'future-kind'; // A saved unknown kind can hold a path the filesystem cannot represent.
+  else {
+    renameSync(join(worktree, paths[0]!), join(worktree, path));
+    writeFileSync(join(worktree, path, 'SKILL.md'), 'user edit\n');
+  }
+  const records = JSON.stringify(saved);
+  writeFileSync(manifest, records);
+  const exclude = join(worktree, '.git/info/exclude');
+  const exclusions = readFileSync(exclude, 'utf8');
+  const repo = join(worktree, 'main');
+  mkdirSync(repo);
+  const note = vi.fn();
+  await cleanupTaskWorktreeSkills(worktree, worktree, repo, note);
+  expect(readFileSync(exclude, 'utf8')).toBe(exclusions);
+  expect(readFileSync(manifest, 'utf8')).toBe(records);
+  for (const path of paths) expect(existsSync(join(worktree, dirname(path), '.gitignore'))).toBe(true);
+  expect(note).toHaveBeenCalledTimes(1);
+  expect(note.mock.calls[0]![0]).toContain(`Could not exclude ${path} from git`);
+});
+
 it.each([false, true])('retains ignore files and records if exclusion fails (note write fails: %s)', async noteFails => {
   const { paths, manifest } = await seedOldSkills(worktree);
   const saved = readFileSync(manifest, 'utf8');
