@@ -2,9 +2,8 @@ import { relative, resolve } from 'node:path';
 import { blank } from './blank.ts';
 
 /**
- * The repository's own lint rules (hearsay-tools/cezarion#2416). Each rule keeps the source
- * scanner its Vitest guard used, so its fixture cases still pin it, and oxlint runs it on every
- * file in its scope. `docs/sdlc/lint.md` lists the rules and how to add one.
+ * Shared paths and source inventory helpers (hearsay-tools/cezarion#2416). Oxlint rules use
+ * ast-rule.ts; the runner uses the inventory helpers to check saved allowances and CSS.
  */
 
 /** The repository root, for data a rule reads from the repository itself. */
@@ -15,16 +14,6 @@ export interface Finding {
   line: number;
   column?: number;
   message: string;
-}
-
-/** A repository rule: which files it reads, and what it finds in one of them. */
-export interface SourceRule {
-  /** Its id inside the `cez` plugin: `cez/<name>` in `.oxlintrc.json` and in each diagnostic. */
-  name: string;
-  description: string;
-  /** Whether the rule reads `file`, a path relative to the root oxlint runs in. */
-  applies(file: string): boolean;
-  check(file: string, source: string): Finding[];
 }
 
 let lastSource: string | undefined;
@@ -54,26 +43,4 @@ export interface RuleContext {
   filename: string;
   sourceCode: { text: string };
   report(descriptor: { message: string; loc: { start: { line: number; column: number }; end: { line: number; column: number } } }): void;
-}
-
-/**
- * The rule as oxlint runs it. Paths are relative to the directory oxlint runs in: `npm run lint`
- * runs it at the repository root, and a fixture test runs it in a temporary copy.
- */
-export function oxlintRule(rule: SourceRule) {
-  return {
-    meta: { type: 'problem' as const, docs: { description: rule.description } },
-    create(context: RuleContext) {
-      return {
-        Program() {
-          const file = repoPath(context.cwd, context.filename);
-          if (!rule.applies(file)) return;
-          for (const finding of rule.check(file, context.sourceCode.text)) {
-            const at = { line: finding.line, column: finding.column ?? 0 };
-            context.report({ message: finding.message, loc: { start: at, end: at } });
-          }
-        },
-      };
-    },
-  };
 }
