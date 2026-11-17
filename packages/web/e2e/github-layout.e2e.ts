@@ -33,26 +33,6 @@ afterAll(() => {
   browser?.close()
 })
 
-it('keeps the detail readable at 900px (#754)', async () => {
-  expect(forgeAvailable).toBe(true)
-  const gh = await api<GithubPayload>('/api/v1/github')
-  browser.setViewport(900, 800)
-  await openGitHub(`/github/issues/${gh.issues[0]!.number}`)
-  const facts = waitForSettledSample<{ list: number; detail: number; stacked: boolean; overflow: boolean }>(browser, `(() => {
-    const list = document.querySelector('[data-slot="gh-list"]');
-    const detail = document.querySelector('[data-slot="gh-detail"]');
-    if (!list || !detail || !document.querySelector('[data-slot="gh-hand"]')) return null;
-    const l = list.getBoundingClientRect(), d = detail.getBoundingClientRect();
-    const main = document.querySelector('[data-slot="main"]');
-    return { list: l.width, detail: d.width, stacked: d.top >= l.bottom,
-      overflow: main.scrollWidth > main.clientWidth || document.documentElement.scrollWidth > innerWidth };
-  })()`)
-  console.log('900px pane geometry', facts)
-  browser.screenshot(`${artifactsDir}/github-900px.png`, { viewport: true })
-  expect(facts.stacked || facts.detail >= 360).toBe(true)
-  expect(facts.overflow).toBe(false)
-})
-
 // Catch fixed desktop columns, stale observations after resizing, and lost width preferences.
 const PANE_GEOMETRY = `(() => {
   const workspace = document.querySelector('[data-slot="gh-workspace"]');

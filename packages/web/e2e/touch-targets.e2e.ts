@@ -317,15 +317,18 @@ describe('density-independent mobile action targets (#166)', () => {
               return window.touchFetch(...args);
             };
           })()`)
-          tapEdge(toggle, mobile)
-          browser.waitForFunction(`document.querySelector('${toggle}').disabled === true`)
-          const pending = waitForSettledSample(browser, `(() => { const r=document.querySelector('${toggle}').getBoundingClientRect(); return {x:r.x+2,y:r.y+r.height/2,w:r.width,h:r.height}; })()`) as { x: number; y: number; w: number; h: number }
-          if (mobile) {
-            expect(pending.w).toBeGreaterThanOrEqual(44)
-            expect(pending.h).toBeGreaterThanOrEqual(44)
+          try {
+            tapEdge(toggle, mobile)
+            browser.waitForFunction(`document.querySelector('${toggle}').disabled === true`)
+            const pending = waitForSettledSample(browser, `(() => { const r=document.querySelector('${toggle}').getBoundingClientRect(); return {x:r.x+2,y:r.y+r.height/2,w:r.width,h:r.height}; })()`) as { x: number; y: number; w: number; h: number }
+            if (mobile) {
+              expect(pending.w).toBeGreaterThanOrEqual(44)
+              expect(pending.h).toBeGreaterThanOrEqual(44)
+            }
+            browser.tapAt(Math.round(pending.x), Math.round(pending.y))
+          } finally {
+            browser.evaluate('window.fetch = window.touchFetch; window.releaseTouchSave?.()')
           }
-          browser.tapAt(Math.round(pending.x), Math.round(pending.y))
-          browser.evaluate('window.releaseTouchSave(); window.fetch = window.touchFetch')
           browser.waitForFunction(`!document.querySelector('${toggle}').disabled && document.querySelector('${toggle}').getAttribute('aria-checked') !== ${JSON.stringify(before)}`)
           browser.screenshot(`${artifacts}/${width}-${density}-${theme}-settings.png`, { viewport: true })
 

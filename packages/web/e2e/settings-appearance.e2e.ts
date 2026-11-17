@@ -53,14 +53,6 @@ describe('settings → appearance against the live dry-run server', () => {
     // and nothing project-scoped.
     const nav = '[data-slot="settings-nav"][data-scope="global"]'
     expect(browser.evaluate(`[...document.querySelectorAll('${nav} [data-section]')].map(el => el.dataset.section).sort()`)).toEqual(['accounts', 'appearance', 'notifications', 'projects', 'resources', 'tasks'])
-    expect(browser.count(`${nav} [data-section="appearance"]`)).toBe(1)
-    expect(browser.count(`${nav} [data-section="notifications"]`)).toBe(1)
-    expect(browser.count(`${nav} [data-section="resources"]`)).toBe(1)
-    expect(browser.count(`${nav} [data-section="tasks"]`)).toBe(1)
-    expect(browser.count(`${nav} [data-section="projects"]`)).toBe(1)
-    // Project sections live in the OTHER area; hidden registry entries are nowhere at all.
-    expect(browser.count(`${nav} [data-section="agents"]`)).toBe(0)
-    expect(browser.count(`${nav} [data-section="mcp"]`)).toBe(0)
     expect(browser.count(`${nav} [aria-current="page"][data-section="appearance"]`)).toBe(1)
   })
 
