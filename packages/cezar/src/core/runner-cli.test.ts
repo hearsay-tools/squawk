@@ -32,15 +32,6 @@ describe('resume commands — shared golden parity across RUNNER_IDS', () => {
  * ids go through verbatim (correct in every shell), anything else fails closed.
  */
 describe('resumeCommand — session id validation', () => {
-  it('splices a normal session id verbatim, per backend — no quoting in any shell', () => {
-    const id = '9f8e7d6c-1234-4abc-9def-0123456789ab';
-    expect(resumeCommand('claude', id)).toBe(`claude --resume ${id}`);
-    expect(resumeCommand('codex', id)).toBe(`codex resume ${id}`);
-    expect(resumeCommand('opencode', id)).toBe(`opencode --session ${id}`);
-    expect(resumeCommand('pi', id)).toBe(`pi --session ${id}`);
-    expect(resumeCommand('omp', id)).toBe(`omp --resume ${id}`);
-  });
-
   it('never emits a quote character — a POSIX quote would reach cmd.exe literally on win32', () => {
     const cmd = resumeCommand('claude', 'ses_01ABC.def-42');
     expect(cmd).toBe('claude --resume ses_01ABC.def-42');
