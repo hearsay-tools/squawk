@@ -1,0 +1,1949 @@
+{
+  "revision": "9f43ee092",
+  "cells": [
+    {
+      "id": "historyPaths/object/method/historyPaths",
+      "code": "const helpers = { historyPaths() {} };",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/object/method/'historyPaths'",
+      "code": "const helpers = { 'historyPaths'() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/method/\"historyPaths\"",
+      "code": "const helpers = { \"historyPaths\"() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/method/['historyPaths']",
+      "code": "const helpers = { ['historyPaths']() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/method/[historyPaths]",
+      "code": "const helpers = { [historyPaths]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/method/[(historyPaths)]",
+      "code": "const helpers = { [(historyPaths)]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/method/[`historyPaths`]",
+      "code": "const helpers = { [`historyPaths`]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/get /historyPaths",
+      "code": "const helpers = { get historyPaths() {} };",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/object/get /'historyPaths'",
+      "code": "const helpers = { get 'historyPaths'() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/get /\"historyPaths\"",
+      "code": "const helpers = { get \"historyPaths\"() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/get /['historyPaths']",
+      "code": "const helpers = { get ['historyPaths']() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/get /[historyPaths]",
+      "code": "const helpers = { get [historyPaths]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/get /[(historyPaths)]",
+      "code": "const helpers = { get [(historyPaths)]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/get /[`historyPaths`]",
+      "code": "const helpers = { get [`historyPaths`]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/set /historyPaths",
+      "code": "const helpers = { set historyPaths(value) {} };",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/object/set /'historyPaths'",
+      "code": "const helpers = { set 'historyPaths'(value) {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/set /\"historyPaths\"",
+      "code": "const helpers = { set \"historyPaths\"(value) {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/set /['historyPaths']",
+      "code": "const helpers = { set ['historyPaths'](value) {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/set /[historyPaths]",
+      "code": "const helpers = { set [historyPaths](value) {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/set /[(historyPaths)]",
+      "code": "const helpers = { set [(historyPaths)](value) {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/set /[`historyPaths`]",
+      "code": "const helpers = { set [`historyPaths`](value) {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/async /historyPaths",
+      "code": "const helpers = { async historyPaths() {} };",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/object/async /'historyPaths'",
+      "code": "const helpers = { async 'historyPaths'() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/async /\"historyPaths\"",
+      "code": "const helpers = { async \"historyPaths\"() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/async /['historyPaths']",
+      "code": "const helpers = { async ['historyPaths']() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/async /[historyPaths]",
+      "code": "const helpers = { async [historyPaths]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/async /[(historyPaths)]",
+      "code": "const helpers = { async [(historyPaths)]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/async /[`historyPaths`]",
+      "code": "const helpers = { async [`historyPaths`]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/*/historyPaths",
+      "code": "const helpers = { *historyPaths() {} };",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/object/*/'historyPaths'",
+      "code": "const helpers = { *'historyPaths'() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/*/\"historyPaths\"",
+      "code": "const helpers = { *\"historyPaths\"() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/*/['historyPaths']",
+      "code": "const helpers = { *['historyPaths']() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/*/[historyPaths]",
+      "code": "const helpers = { *[historyPaths]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/*/[(historyPaths)]",
+      "code": "const helpers = { *[(historyPaths)]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/*/[`historyPaths`]",
+      "code": "const helpers = { *[`historyPaths`]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/async */historyPaths",
+      "code": "const helpers = { async *historyPaths() {} };",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/object/async */'historyPaths'",
+      "code": "const helpers = { async *'historyPaths'() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/async */\"historyPaths\"",
+      "code": "const helpers = { async *\"historyPaths\"() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/async */['historyPaths']",
+      "code": "const helpers = { async *['historyPaths']() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/async */[historyPaths]",
+      "code": "const helpers = { async *[historyPaths]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/async */[(historyPaths)]",
+      "code": "const helpers = { async *[(historyPaths)]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/object/async */[`historyPaths`]",
+      "code": "const helpers = { async *[`historyPaths`]() {} };",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/method/historyPaths",
+      "code": "class Helpers { historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/method/'historyPaths'",
+      "code": "class Helpers { 'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/method/\"historyPaths\"",
+      "code": "class Helpers { \"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/method/['historyPaths']",
+      "code": "class Helpers { ['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/method/[historyPaths]",
+      "code": "class Helpers { [historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/method/[(historyPaths)]",
+      "code": "class Helpers { [(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/method/[`historyPaths`]",
+      "code": "class Helpers { [`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/method/#historyPaths",
+      "code": "class Helpers { #historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/get /historyPaths",
+      "code": "class Helpers { get historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/get /'historyPaths'",
+      "code": "class Helpers { get 'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/get /\"historyPaths\"",
+      "code": "class Helpers { get \"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/get /['historyPaths']",
+      "code": "class Helpers { get ['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/get /[historyPaths]",
+      "code": "class Helpers { get [historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/get /[(historyPaths)]",
+      "code": "class Helpers { get [(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/get /[`historyPaths`]",
+      "code": "class Helpers { get [`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/get /#historyPaths",
+      "code": "class Helpers { get #historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/set /historyPaths",
+      "code": "class Helpers { set historyPaths(value) {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/set /'historyPaths'",
+      "code": "class Helpers { set 'historyPaths'(value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/set /\"historyPaths\"",
+      "code": "class Helpers { set \"historyPaths\"(value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/set /['historyPaths']",
+      "code": "class Helpers { set ['historyPaths'](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/set /[historyPaths]",
+      "code": "class Helpers { set [historyPaths](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/set /[(historyPaths)]",
+      "code": "class Helpers { set [(historyPaths)](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/set /[`historyPaths`]",
+      "code": "class Helpers { set [`historyPaths`](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/set /#historyPaths",
+      "code": "class Helpers { set #historyPaths(value) {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/async /historyPaths",
+      "code": "class Helpers { async historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/async /'historyPaths'",
+      "code": "class Helpers { async 'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/async /\"historyPaths\"",
+      "code": "class Helpers { async \"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/async /['historyPaths']",
+      "code": "class Helpers { async ['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/async /[historyPaths]",
+      "code": "class Helpers { async [historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/async /[(historyPaths)]",
+      "code": "class Helpers { async [(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/async /[`historyPaths`]",
+      "code": "class Helpers { async [`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/async /#historyPaths",
+      "code": "class Helpers { async #historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/*/historyPaths",
+      "code": "class Helpers { *historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/*/'historyPaths'",
+      "code": "class Helpers { *'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/*/\"historyPaths\"",
+      "code": "class Helpers { *\"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/*/['historyPaths']",
+      "code": "class Helpers { *['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/*/[historyPaths]",
+      "code": "class Helpers { *[historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/*/[(historyPaths)]",
+      "code": "class Helpers { *[(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/*/[`historyPaths`]",
+      "code": "class Helpers { *[`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/*/#historyPaths",
+      "code": "class Helpers { *#historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/async */historyPaths",
+      "code": "class Helpers { async *historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/async */'historyPaths'",
+      "code": "class Helpers { async *'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/async */\"historyPaths\"",
+      "code": "class Helpers { async *\"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/async */['historyPaths']",
+      "code": "class Helpers { async *['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/async */[historyPaths]",
+      "code": "class Helpers { async *[historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/async */[(historyPaths)]",
+      "code": "class Helpers { async *[(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/async */[`historyPaths`]",
+      "code": "class Helpers { async *[`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/async */#historyPaths",
+      "code": "class Helpers { async *#historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/static /historyPaths",
+      "code": "class Helpers { static historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/static /'historyPaths'",
+      "code": "class Helpers { static 'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static /\"historyPaths\"",
+      "code": "class Helpers { static \"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static /['historyPaths']",
+      "code": "class Helpers { static ['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static /[historyPaths]",
+      "code": "class Helpers { static [historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static /[(historyPaths)]",
+      "code": "class Helpers { static [(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static /[`historyPaths`]",
+      "code": "class Helpers { static [`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static /#historyPaths",
+      "code": "class Helpers { static #historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/static get /historyPaths",
+      "code": "class Helpers { static get historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/static get /'historyPaths'",
+      "code": "class Helpers { static get 'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static get /\"historyPaths\"",
+      "code": "class Helpers { static get \"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static get /['historyPaths']",
+      "code": "class Helpers { static get ['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static get /[historyPaths]",
+      "code": "class Helpers { static get [historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static get /[(historyPaths)]",
+      "code": "class Helpers { static get [(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static get /[`historyPaths`]",
+      "code": "class Helpers { static get [`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static get /#historyPaths",
+      "code": "class Helpers { static get #historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/static set /historyPaths",
+      "code": "class Helpers { static set historyPaths(value) {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/static set /'historyPaths'",
+      "code": "class Helpers { static set 'historyPaths'(value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static set /\"historyPaths\"",
+      "code": "class Helpers { static set \"historyPaths\"(value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static set /['historyPaths']",
+      "code": "class Helpers { static set ['historyPaths'](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static set /[historyPaths]",
+      "code": "class Helpers { static set [historyPaths](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static set /[(historyPaths)]",
+      "code": "class Helpers { static set [(historyPaths)](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static set /[`historyPaths`]",
+      "code": "class Helpers { static set [`historyPaths`](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static set /#historyPaths",
+      "code": "class Helpers { static set #historyPaths(value) {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/static async /historyPaths",
+      "code": "class Helpers { static async historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/static async /'historyPaths'",
+      "code": "class Helpers { static async 'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static async /\"historyPaths\"",
+      "code": "class Helpers { static async \"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static async /['historyPaths']",
+      "code": "class Helpers { static async ['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static async /[historyPaths]",
+      "code": "class Helpers { static async [historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static async /[(historyPaths)]",
+      "code": "class Helpers { static async [(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static async /[`historyPaths`]",
+      "code": "class Helpers { static async [`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static async /#historyPaths",
+      "code": "class Helpers { static async #historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/static */historyPaths",
+      "code": "class Helpers { static *historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/static */'historyPaths'",
+      "code": "class Helpers { static *'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static */\"historyPaths\"",
+      "code": "class Helpers { static *\"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static */['historyPaths']",
+      "code": "class Helpers { static *['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static */[historyPaths]",
+      "code": "class Helpers { static *[historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static */[(historyPaths)]",
+      "code": "class Helpers { static *[(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static */[`historyPaths`]",
+      "code": "class Helpers { static *[`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static */#historyPaths",
+      "code": "class Helpers { static *#historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/static async */historyPaths",
+      "code": "class Helpers { static async *historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/static async */'historyPaths'",
+      "code": "class Helpers { static async *'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static async */\"historyPaths\"",
+      "code": "class Helpers { static async *\"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static async */['historyPaths']",
+      "code": "class Helpers { static async *['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static async */[historyPaths]",
+      "code": "class Helpers { static async *[historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static async */[(historyPaths)]",
+      "code": "class Helpers { static async *[(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static async */[`historyPaths`]",
+      "code": "class Helpers { static async *[`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/static async */#historyPaths",
+      "code": "class Helpers { static async *#historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/private /historyPaths",
+      "code": "class Helpers { private historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/private /'historyPaths'",
+      "code": "class Helpers { private 'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private /\"historyPaths\"",
+      "code": "class Helpers { private \"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private /['historyPaths']",
+      "code": "class Helpers { private ['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private /[historyPaths]",
+      "code": "class Helpers { private [historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private /[(historyPaths)]",
+      "code": "class Helpers { private [(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private /[`historyPaths`]",
+      "code": "class Helpers { private [`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private get /historyPaths",
+      "code": "class Helpers { private get historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/private get /'historyPaths'",
+      "code": "class Helpers { private get 'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private get /\"historyPaths\"",
+      "code": "class Helpers { private get \"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private get /['historyPaths']",
+      "code": "class Helpers { private get ['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private get /[historyPaths]",
+      "code": "class Helpers { private get [historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private get /[(historyPaths)]",
+      "code": "class Helpers { private get [(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private get /[`historyPaths`]",
+      "code": "class Helpers { private get [`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private set /historyPaths",
+      "code": "class Helpers { private set historyPaths(value) {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/private set /'historyPaths'",
+      "code": "class Helpers { private set 'historyPaths'(value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private set /\"historyPaths\"",
+      "code": "class Helpers { private set \"historyPaths\"(value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private set /['historyPaths']",
+      "code": "class Helpers { private set ['historyPaths'](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private set /[historyPaths]",
+      "code": "class Helpers { private set [historyPaths](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private set /[(historyPaths)]",
+      "code": "class Helpers { private set [(historyPaths)](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private set /[`historyPaths`]",
+      "code": "class Helpers { private set [`historyPaths`](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private async /historyPaths",
+      "code": "class Helpers { private async historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/private async /'historyPaths'",
+      "code": "class Helpers { private async 'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private async /\"historyPaths\"",
+      "code": "class Helpers { private async \"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private async /['historyPaths']",
+      "code": "class Helpers { private async ['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private async /[historyPaths]",
+      "code": "class Helpers { private async [historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private async /[(historyPaths)]",
+      "code": "class Helpers { private async [(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private async /[`historyPaths`]",
+      "code": "class Helpers { private async [`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private */historyPaths",
+      "code": "class Helpers { private *historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/private */'historyPaths'",
+      "code": "class Helpers { private *'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private */\"historyPaths\"",
+      "code": "class Helpers { private *\"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private */['historyPaths']",
+      "code": "class Helpers { private *['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private */[historyPaths]",
+      "code": "class Helpers { private *[historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private */[(historyPaths)]",
+      "code": "class Helpers { private *[(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private */[`historyPaths`]",
+      "code": "class Helpers { private *[`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private async */historyPaths",
+      "code": "class Helpers { private async *historyPaths() {} }",
+      "findings": [
+        "historyPaths"
+      ]
+    },
+    {
+      "id": "historyPaths/class/private async */'historyPaths'",
+      "code": "class Helpers { private async *'historyPaths'() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private async */\"historyPaths\"",
+      "code": "class Helpers { private async *\"historyPaths\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private async */['historyPaths']",
+      "code": "class Helpers { private async *['historyPaths']() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private async */[historyPaths]",
+      "code": "class Helpers { private async *[historyPaths]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private async */[(historyPaths)]",
+      "code": "class Helpers { private async *[(historyPaths)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "historyPaths/class/private async */[`historyPaths`]",
+      "code": "class Helpers { private async *[`historyPaths`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/method/eventsPath",
+      "code": "const helpers = { eventsPath() {} };",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/object/method/'eventsPath'",
+      "code": "const helpers = { 'eventsPath'() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/method/\"eventsPath\"",
+      "code": "const helpers = { \"eventsPath\"() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/method/['eventsPath']",
+      "code": "const helpers = { ['eventsPath']() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/method/[eventsPath]",
+      "code": "const helpers = { [eventsPath]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/method/[(eventsPath)]",
+      "code": "const helpers = { [(eventsPath)]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/method/[`eventsPath`]",
+      "code": "const helpers = { [`eventsPath`]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/get /eventsPath",
+      "code": "const helpers = { get eventsPath() {} };",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/object/get /'eventsPath'",
+      "code": "const helpers = { get 'eventsPath'() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/get /\"eventsPath\"",
+      "code": "const helpers = { get \"eventsPath\"() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/get /['eventsPath']",
+      "code": "const helpers = { get ['eventsPath']() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/get /[eventsPath]",
+      "code": "const helpers = { get [eventsPath]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/get /[(eventsPath)]",
+      "code": "const helpers = { get [(eventsPath)]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/get /[`eventsPath`]",
+      "code": "const helpers = { get [`eventsPath`]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/set /eventsPath",
+      "code": "const helpers = { set eventsPath(value) {} };",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/object/set /'eventsPath'",
+      "code": "const helpers = { set 'eventsPath'(value) {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/set /\"eventsPath\"",
+      "code": "const helpers = { set \"eventsPath\"(value) {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/set /['eventsPath']",
+      "code": "const helpers = { set ['eventsPath'](value) {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/set /[eventsPath]",
+      "code": "const helpers = { set [eventsPath](value) {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/set /[(eventsPath)]",
+      "code": "const helpers = { set [(eventsPath)](value) {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/set /[`eventsPath`]",
+      "code": "const helpers = { set [`eventsPath`](value) {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/async /eventsPath",
+      "code": "const helpers = { async eventsPath() {} };",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/object/async /'eventsPath'",
+      "code": "const helpers = { async 'eventsPath'() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/async /\"eventsPath\"",
+      "code": "const helpers = { async \"eventsPath\"() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/async /['eventsPath']",
+      "code": "const helpers = { async ['eventsPath']() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/async /[eventsPath]",
+      "code": "const helpers = { async [eventsPath]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/async /[(eventsPath)]",
+      "code": "const helpers = { async [(eventsPath)]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/async /[`eventsPath`]",
+      "code": "const helpers = { async [`eventsPath`]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/*/eventsPath",
+      "code": "const helpers = { *eventsPath() {} };",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/object/*/'eventsPath'",
+      "code": "const helpers = { *'eventsPath'() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/*/\"eventsPath\"",
+      "code": "const helpers = { *\"eventsPath\"() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/*/['eventsPath']",
+      "code": "const helpers = { *['eventsPath']() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/*/[eventsPath]",
+      "code": "const helpers = { *[eventsPath]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/*/[(eventsPath)]",
+      "code": "const helpers = { *[(eventsPath)]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/*/[`eventsPath`]",
+      "code": "const helpers = { *[`eventsPath`]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/async */eventsPath",
+      "code": "const helpers = { async *eventsPath() {} };",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/object/async */'eventsPath'",
+      "code": "const helpers = { async *'eventsPath'() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/async */\"eventsPath\"",
+      "code": "const helpers = { async *\"eventsPath\"() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/async */['eventsPath']",
+      "code": "const helpers = { async *['eventsPath']() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/async */[eventsPath]",
+      "code": "const helpers = { async *[eventsPath]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/async */[(eventsPath)]",
+      "code": "const helpers = { async *[(eventsPath)]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/object/async */[`eventsPath`]",
+      "code": "const helpers = { async *[`eventsPath`]() {} };",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/method/eventsPath",
+      "code": "class Helpers { eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/method/'eventsPath'",
+      "code": "class Helpers { 'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/method/\"eventsPath\"",
+      "code": "class Helpers { \"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/method/['eventsPath']",
+      "code": "class Helpers { ['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/method/[eventsPath]",
+      "code": "class Helpers { [eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/method/[(eventsPath)]",
+      "code": "class Helpers { [(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/method/[`eventsPath`]",
+      "code": "class Helpers { [`eventsPath`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/method/#eventsPath",
+      "code": "class Helpers { #eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/get /eventsPath",
+      "code": "class Helpers { get eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/get /'eventsPath'",
+      "code": "class Helpers { get 'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/get /\"eventsPath\"",
+      "code": "class Helpers { get \"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/get /['eventsPath']",
+      "code": "class Helpers { get ['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/get /[eventsPath]",
+      "code": "class Helpers { get [eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/get /[(eventsPath)]",
+      "code": "class Helpers { get [(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/get /[`eventsPath`]",
+      "code": "class Helpers { get [`eventsPath`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/get /#eventsPath",
+      "code": "class Helpers { get #eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/set /eventsPath",
+      "code": "class Helpers { set eventsPath(value) {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/set /'eventsPath'",
+      "code": "class Helpers { set 'eventsPath'(value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/set /\"eventsPath\"",
+      "code": "class Helpers { set \"eventsPath\"(value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/set /['eventsPath']",
+      "code": "class Helpers { set ['eventsPath'](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/set /[eventsPath]",
+      "code": "class Helpers { set [eventsPath](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/set /[(eventsPath)]",
+      "code": "class Helpers { set [(eventsPath)](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/set /[`eventsPath`]",
+      "code": "class Helpers { set [`eventsPath`](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/set /#eventsPath",
+      "code": "class Helpers { set #eventsPath(value) {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/async /eventsPath",
+      "code": "class Helpers { async eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/async /'eventsPath'",
+      "code": "class Helpers { async 'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/async /\"eventsPath\"",
+      "code": "class Helpers { async \"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/async /['eventsPath']",
+      "code": "class Helpers { async ['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/async /[eventsPath]",
+      "code": "class Helpers { async [eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/async /[(eventsPath)]",
+      "code": "class Helpers { async [(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/async /[`eventsPath`]",
+      "code": "class Helpers { async [`eventsPath`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/async /#eventsPath",
+      "code": "class Helpers { async #eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/*/eventsPath",
+      "code": "class Helpers { *eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/*/'eventsPath'",
+      "code": "class Helpers { *'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/*/\"eventsPath\"",
+      "code": "class Helpers { *\"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/*/['eventsPath']",
+      "code": "class Helpers { *['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/*/[eventsPath]",
+      "code": "class Helpers { *[eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/*/[(eventsPath)]",
+      "code": "class Helpers { *[(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/*/[`eventsPath`]",
+      "code": "class Helpers { *[`eventsPath`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/*/#eventsPath",
+      "code": "class Helpers { *#eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/async */eventsPath",
+      "code": "class Helpers { async *eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/async */'eventsPath'",
+      "code": "class Helpers { async *'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/async */\"eventsPath\"",
+      "code": "class Helpers { async *\"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/async */['eventsPath']",
+      "code": "class Helpers { async *['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/async */[eventsPath]",
+      "code": "class Helpers { async *[eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/async */[(eventsPath)]",
+      "code": "class Helpers { async *[(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/async */[`eventsPath`]",
+      "code": "class Helpers { async *[`eventsPath`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/async */#eventsPath",
+      "code": "class Helpers { async *#eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/static /eventsPath",
+      "code": "class Helpers { static eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/static /'eventsPath'",
+      "code": "class Helpers { static 'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static /\"eventsPath\"",
+      "code": "class Helpers { static \"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static /['eventsPath']",
+      "code": "class Helpers { static ['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static /[eventsPath]",
+      "code": "class Helpers { static [eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static /[(eventsPath)]",
+      "code": "class Helpers { static [(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static /[`eventsPath`]",
+      "code": "class Helpers { static [`eventsPath`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static /#eventsPath",
+      "code": "class Helpers { static #eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/static get /eventsPath",
+      "code": "class Helpers { static get eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/static get /'eventsPath'",
+      "code": "class Helpers { static get 'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static get /\"eventsPath\"",
+      "code": "class Helpers { static get \"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static get /['eventsPath']",
+      "code": "class Helpers { static get ['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static get /[eventsPath]",
+      "code": "class Helpers { static get [eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static get /[(eventsPath)]",
+      "code": "class Helpers { static get [(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static get /[`eventsPath`]",
+      "code": "class Helpers { static get [`eventsPath`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static get /#eventsPath",
+      "code": "class Helpers { static get #eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/static set /eventsPath",
+      "code": "class Helpers { static set eventsPath(value) {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/static set /'eventsPath'",
+      "code": "class Helpers { static set 'eventsPath'(value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static set /\"eventsPath\"",
+      "code": "class Helpers { static set \"eventsPath\"(value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static set /['eventsPath']",
+      "code": "class Helpers { static set ['eventsPath'](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static set /[eventsPath]",
+      "code": "class Helpers { static set [eventsPath](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static set /[(eventsPath)]",
+      "code": "class Helpers { static set [(eventsPath)](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static set /[`eventsPath`]",
+      "code": "class Helpers { static set [`eventsPath`](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static set /#eventsPath",
+      "code": "class Helpers { static set #eventsPath(value) {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/static async /eventsPath",
+      "code": "class Helpers { static async eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/static async /'eventsPath'",
+      "code": "class Helpers { static async 'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static async /\"eventsPath\"",
+      "code": "class Helpers { static async \"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static async /['eventsPath']",
+      "code": "class Helpers { static async ['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static async /[eventsPath]",
+      "code": "class Helpers { static async [eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static async /[(eventsPath)]",
+      "code": "class Helpers { static async [(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static async /[`eventsPath`]",
+      "code": "class Helpers { static async [`eventsPath`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static async /#eventsPath",
+      "code": "class Helpers { static async #eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/static */eventsPath",
+      "code": "class Helpers { static *eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/static */'eventsPath'",
+      "code": "class Helpers { static *'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static */\"eventsPath\"",
+      "code": "class Helpers { static *\"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static */['eventsPath']",
+      "code": "class Helpers { static *['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static */[eventsPath]",
+      "code": "class Helpers { static *[eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static */[(eventsPath)]",
+      "code": "class Helpers { static *[(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static */[`eventsPath`]",
+      "code": "class Helpers { static *[`eventsPath`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static */#eventsPath",
+      "code": "class Helpers { static *#eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/static async */eventsPath",
+      "code": "class Helpers { static async *eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/static async */'eventsPath'",
+      "code": "class Helpers { static async *'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static async */\"eventsPath\"",
+      "code": "class Helpers { static async *\"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static async */['eventsPath']",
+      "code": "class Helpers { static async *['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static async */[eventsPath]",
+      "code": "class Helpers { static async *[eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static async */[(eventsPath)]",
+      "code": "class Helpers { static async *[(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static async */[`eventsPath`]",
+      "code": "class Helpers { static async *[`eventsPath`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/static async */#eventsPath",
+      "code": "class Helpers { static async *#eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/private /eventsPath",
+      "code": "class Helpers { private eventsPath() {} }",
+      "findings": [
+        "eventsPath-declaration"
+      ]
+    },
+    {
+      "id": "eventsPath/class/private /'eventsPath'",
+      "code": "class Helpers { private 'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private /\"eventsPath\"",
+      "code": "class Helpers { private \"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private /['eventsPath']",
+      "code": "class Helpers { private ['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private /[eventsPath]",
+      "code": "class Helpers { private [eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private /[(eventsPath)]",
+      "code": "class Helpers { private [(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private /[`eventsPath`]",
+      "code": "class Helpers { private [`eventsPath`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private get /eventsPath",
+      "code": "class Helpers { private get eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/private get /'eventsPath'",
+      "code": "class Helpers { private get 'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private get /\"eventsPath\"",
+      "code": "class Helpers { private get \"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private get /['eventsPath']",
+      "code": "class Helpers { private get ['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private get /[eventsPath]",
+      "code": "class Helpers { private get [eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private get /[(eventsPath)]",
+      "code": "class Helpers { private get [(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private get /[`eventsPath`]",
+      "code": "class Helpers { private get [`eventsPath`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private set /eventsPath",
+      "code": "class Helpers { private set eventsPath(value) {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/private set /'eventsPath'",
+      "code": "class Helpers { private set 'eventsPath'(value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private set /\"eventsPath\"",
+      "code": "class Helpers { private set \"eventsPath\"(value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private set /['eventsPath']",
+      "code": "class Helpers { private set ['eventsPath'](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private set /[eventsPath]",
+      "code": "class Helpers { private set [eventsPath](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private set /[(eventsPath)]",
+      "code": "class Helpers { private set [(eventsPath)](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private set /[`eventsPath`]",
+      "code": "class Helpers { private set [`eventsPath`](value) {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private async /eventsPath",
+      "code": "class Helpers { private async eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/private async /'eventsPath'",
+      "code": "class Helpers { private async 'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private async /\"eventsPath\"",
+      "code": "class Helpers { private async \"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private async /['eventsPath']",
+      "code": "class Helpers { private async ['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private async /[eventsPath]",
+      "code": "class Helpers { private async [eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private async /[(eventsPath)]",
+      "code": "class Helpers { private async [(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private async /[`eventsPath`]",
+      "code": "class Helpers { private async [`eventsPath`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private */eventsPath",
+      "code": "class Helpers { private *eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/private */'eventsPath'",
+      "code": "class Helpers { private *'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private */\"eventsPath\"",
+      "code": "class Helpers { private *\"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private */['eventsPath']",
+      "code": "class Helpers { private *['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private */[eventsPath]",
+      "code": "class Helpers { private *[eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private */[(eventsPath)]",
+      "code": "class Helpers { private *[(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private */[`eventsPath`]",
+      "code": "class Helpers { private *[`eventsPath`]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private async */eventsPath",
+      "code": "class Helpers { private async *eventsPath() {} }",
+      "findings": [
+        "eventsPath"
+      ]
+    },
+    {
+      "id": "eventsPath/class/private async */'eventsPath'",
+      "code": "class Helpers { private async *'eventsPath'() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private async */\"eventsPath\"",
+      "code": "class Helpers { private async *\"eventsPath\"() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private async */['eventsPath']",
+      "code": "class Helpers { private async *['eventsPath']() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private async */[eventsPath]",
+      "code": "class Helpers { private async *[eventsPath]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private async */[(eventsPath)]",
+      "code": "class Helpers { private async *[(eventsPath)]() {} }",
+      "findings": []
+    },
+    {
+      "id": "eventsPath/class/private async */[`eventsPath`]",
+      "code": "class Helpers { private async *[`eventsPath`]() {} }",
+      "findings": []
+    }
+  ]
+}
