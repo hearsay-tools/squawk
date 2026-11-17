@@ -272,8 +272,14 @@ describe('palette add / remove / the 8-step limit', () => {
   it('an empty runner list keeps typed ids available in Add step', async () => {
     stubFetch({ 'GET /api/v1/runner-skills?runner=claude': [() => jsonResponse({ runner: 'claude', skills: [], problems: [], source: 'live' })] })
     renderAt('/workflows')
-    const hint = await screen.findByText(/No skills reported by this runner and account/)
-    expect(hint.textContent).toContain('type a skill id in Add step')
+    await screen.findByText('This runner reports no skills.')
+    await waitFor(() => expect(stepCards()).toHaveLength(2))
+    fireEvent.click(screen.getByRole('button', { name: 'Add step' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add step' })
+    fireEvent.change(within(dialog).getByLabelText('Filter skills'), { target: { value: 'native-only' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Use skill id “native-only” (unchecked)' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add selected skill' }))
+    expect(stepIds()).toEqual(['om-fix', 'om-review', 'native-only'])
   })
 })
 
