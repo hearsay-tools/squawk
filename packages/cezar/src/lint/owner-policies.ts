@@ -223,7 +223,7 @@ export const OWNER_POLICIES: Record<string, OwnerPolicy> = {
   },
   "skills-read-outside-enabled-skills": {
     "name": "skills-read-outside-enabled-skills",
-    "message": "Read a run's skills through RunSkills.enabledSkills(state) (workflows/run/run-skills.ts), which reads the session's runner skill list. Only RunSkills.loadRunSkills writes `state.skills.catalog` (skills-write-outside-load-run-skills).",
+    "message": "Read a run's skills through RunSkills.enabledSkills(state) (workflows/run/run-skills.ts), which reads the session's runner skill list (hearsay-tools/squawk#3752). Only RunSkills.loadRunSkills writes `state.skills.catalog` (skills-write-outside-load-run-skills).",
     "files": [
       "packages/cezar/src/workflows/run.ts",
       "packages/cezar/src/workflows/run/**"
@@ -232,7 +232,7 @@ export const OWNER_POLICIES: Record<string, OwnerPolicy> = {
   },
   "skills-write-outside-load-run-skills": {
     "name": "skills-write-outside-load-run-skills",
-    "message": "Write the session's runner skill list only in RunSkills.loadRunSkills (workflows/run/run-skills.ts), called at step open and Continue. Read it through RunSkills.enabledSkills.",
+    "message": "Write the session's runner skill list only in RunSkills.loadRunSkills (workflows/run/run-skills.ts), called at step open and Continue. Read it through RunSkills.enabledSkills (hearsay-tools/squawk#3752).",
     "files": [
       "packages/cezar/src/workflows/run.ts",
       "packages/cezar/src/workflows/run/**"
