@@ -44,7 +44,7 @@ export interface ActiveRunInit {
  * `RunManager.activate`. A field added to `ActiveRun` as required fails to compile here until this
  * sets it, and one that differs by entry path becomes a required `ActiveRunInit` field, which
  * fails to compile at both callers. open-mercato/cezar#811 shipped a field set in one of two
- * literals; a second literal is refused by the `active-run-literal` ast-grep rule.
+ * literals; a second literal is refused by the `cez/active-run-literal` AST rule.
  *
  * The skill registry is not built here: it needs I/O after the run is registered, so
  * `RunSkills.loadRunSkills` loads it, from the same two callers.

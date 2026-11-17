@@ -298,7 +298,7 @@ test('every gate file a workflow or npm script runs is on the auto-merge never-l
   const found = await discover();
   for (const gate of ['.github/scripts/check-clones.cjs', 'packages/cezar/src/lint/run.ts', '.github/actions/node-dist/action.yml', 'scripts/test-home-env.mjs', '.oxlintrc.json', 'vitest.config.ts', '.github/scripts/vitest-worker-count.cjs',
     'scripts/test-browser-home-env.mjs', 'packages/web/product-identity.ts', 'packages/web/e2e/wait-support.ts', 'packages/web/e2e/visual-ready.ts',
-    'packages/cezar/src/core/agent-runner.ts', '.ai/ast-grep/rules/active-run-boundary-write-outside-owner.yml', '.ai/scripts/e2e-served-repo.mjs']) {
+    'packages/cezar/src/core/agent-runner.ts', '.ai/ast-grep/rules/outcome-write-outside-commit-outcome.yml', '.ai/scripts/e2e-served-repo.mjs']) {
     assert.ok(found.refs.has(gate), `the scan no longer finds ${gate}`);
   }
   const unguarded = [...found.refs]

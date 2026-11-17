@@ -109,9 +109,9 @@ interval and the manager intervals stay where they are.
 | `liveness-timer-outside-owner` | `setTimeout`/`setInterval` in `workflows/run/**` and `workflows/run.ts` | `liveness-timers.ts`; the wait engine, `worker-orphans.ts`, `worktree-autosave.ts` and local awaited pauses, each with a reason |
 | `run-memory-field-outside-owner` | a class field initialised with `new Map`, `new Set` or `new WeakMap` in the same files | `run-memory.ts`; each kept map's file, with the reason from Owners |
 
-`deliveryAttempt` and `nudge` are `#private` fields of their groups, so the generated
-`active-run-input-write-outside-owner` and `active-run-boundary-write-outside-owner` rules cover
-them once their names join the group metadata in `scripts/active-run-owner-rules.mjs`.
+`deliveryAttempt` and `nudge` are `#private` fields of their groups, so the AST
+`cez/active-run-input-write-outside-owner` and `cez/active-run-boundary-write-outside-owner` rules cover
+them once their names join the group metadata in `packages/cezar/src/lint/active-run-write.ts`.
 
 ### Slices
 
