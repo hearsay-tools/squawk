@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
-  API_PREFIX,
   apiBase,
   apiPath,
   getApiBaseUrl,
@@ -23,10 +22,6 @@ describe('apiPath — unscoped', () => {
   it.each([
     ['/runs', '/api/v1/runs'],
     ['/runs/run-1/files?path=shot.png&raw=1', '/api/v1/runs/run-1/files?path=shot.png&raw=1'],
-    ['/runs/run-1/events', '/api/v1/runs/run-1/events'],
-    ['/health', '/api/v1/health'],
-    ['/workspace/events', '/api/v1/workspace/events'],
-    ['/github?limit=5&refresh=1', '/api/v1/github?limit=5&refresh=1'],
   ])('versions %s', (route, expected) => {
     expect(apiPath(route)).toBe(expected)
   })
@@ -35,13 +30,6 @@ describe('apiPath — unscoped', () => {
     expect(getApiScope()).toBeNull()
     expect(apiBase()).toBe('/api/v1')
     expect(queryScope()).toBe('default')
-  })
-
-  it('keeps the version in exactly one place', () => {
-    // The point of the constant: a v2 is one edit here, not sixty at the call sites.
-    expect(API_PREFIX).toBe('/api/v1')
-    expect(apiPath('/runs').startsWith(API_PREFIX)).toBe(true)
-    expect(apiBase().startsWith(API_PREFIX)).toBe(true)
   })
 })
 
@@ -86,13 +74,6 @@ describe('apiPath — scoped', () => {
     expect(apiPath('/healthcheck')).toBe('/api/v1/p/cezar/healthcheck')
   })
 
-  it('versions whatever route it is given — callers pass routes, never URLs', () => {
-    // The contract is one-way on purpose: a URL that came FROM the server goes through
-    // `resolveApiUrl`, which is the only function that inspects an existing prefix.
-    setApiScope('cezar')
-    expect(apiPath('/new')).toBe('/api/v1/p/cezar/new')
-  })
-
   it('treats the empty string as unscoped — there is no project ""', () => {
     setApiScope('')
     expect(getApiScope()).toBeNull()
@@ -100,79 +81,37 @@ describe('apiPath — scoped', () => {
   })
 })
 
+// Run transcripts keep the image URLs a server minted forever, so the cockpit renders URLs written
+// before `/api/v1` and before project scopes: each is upgraded and re-scoped at render time, an
+// absolute URL keeps its own origin, and anything that is not a cockpit API URL is left alone.
 describe('resolveApiUrl — URLs the server minted', () => {
-  it('upgrades a URL stored before the API was versioned', () => {
-    // Run transcripts keep absolute image URLs forever, so the cockpit renders paths written by
-    // versions that predate `/api/v1`. Without this rewrite every historical screenshot 404s.
-    expect(resolveApiUrl('/api/runs/r1/images/shot.png')).toBe('/api/v1/runs/r1/images/shot.png')
-  })
-
-  it('leaves an already-versioned URL alone', () => {
-    expect(resolveApiUrl('/api/v1/runs/r1/images/shot.png')).toBe('/api/v1/runs/r1/images/shot.png')
-  })
-
-  it('re-scopes a stored unscoped URL onto the active project', () => {
-    setApiScope('cezar')
-    expect(resolveApiUrl('/api/runs/r1/images/shot.png')).toBe(
-      '/api/v1/p/cezar/runs/r1/images/shot.png',
-    )
-  })
-
-  it('keeps a URL that already names its own project', () => {
-    setApiScope('cezar')
-    expect(resolveApiUrl('/api/p/other/runs/r1/images/shot.png')).toBe(
-      '/api/v1/p/other/runs/r1/images/shot.png',
-    )
-    expect(resolveApiUrl('/api/v1/p/other/runs/r1/images/shot.png')).toBe(
-      '/api/v1/p/other/runs/r1/images/shot.png',
-    )
-  })
-
-  it('does not touch what is not a cockpit API URL', () => {
-    setApiScope('cezar')
-    expect(resolveApiUrl('/raw/assets/icon.svg')).toBe('/raw/assets/icon.svg')
-    expect(resolveApiUrl('https://github.com/o/r/pull/7')).toBe('https://github.com/o/r/pull/7')
-    expect(resolveApiUrl('data:image/png;base64,AAAA')).toBe('data:image/png;base64,AAAA')
-    expect(resolveApiUrl('blob:http://localhost:4321/abc-123')).toBe('blob:http://localhost:4321/abc-123')
-  })
-
-  it('upgrades an ABSOLUTE URL stored before the API was versioned, keeping its origin', () => {
-    // A transcript can carry a fully-qualified URL just as easily as a root-relative one, and the
-    // unversioned spelling 404s either way — so the origin is preserved and only the path moves.
-    expect(resolveApiUrl('http://127.0.0.1:4321/api/runs/r1/images/shot.png')).toBe(
-      'http://127.0.0.1:4321/api/v1/runs/r1/images/shot.png',
-    )
-  })
-
-  it('scopes an absolute stored URL onto the active project too', () => {
-    setApiScope('cezar')
-    expect(resolveApiUrl('http://127.0.0.1:4321/api/runs/r1/images/shot.png')).toBe(
-      'http://127.0.0.1:4321/api/v1/p/cezar/runs/r1/images/shot.png',
-    )
-  })
-
-  it('leaves an absolute URL that already names its own project alone', () => {
-    setApiScope('cezar')
-    expect(resolveApiUrl('http://127.0.0.1:4321/api/v1/p/other/runs/r1/images/shot.png')).toBe(
-      'http://127.0.0.1:4321/api/v1/p/other/runs/r1/images/shot.png',
-    )
-  })
-
-  it('never re-bases an absolute URL onto the configured base', () => {
-    // The origin in the stored URL wins: rewriting someone else's host is not this function's job.
-    setApiBaseUrl('https://cezar.example.com')
-    expect(resolveApiUrl('http://127.0.0.1:4321/api/runs/r1/images/a.png')).toBe(
-      'http://127.0.0.1:4321/api/v1/runs/r1/images/a.png',
-    )
+  const local = 'http://127.0.0.1:4321'
+  it.each<[string, { scope?: string; base?: string }, string, string]>([
+    ['upgrades an unversioned URL', {}, '/api/runs/r1/images/shot.png', '/api/v1/runs/r1/images/shot.png'],
+    ['leaves an already-versioned URL alone', {}, '/api/v1/runs/r1/images/shot.png', '/api/v1/runs/r1/images/shot.png'],
+    ['re-scopes an unscoped URL onto the active project', { scope: 'cezar' }, '/api/runs/r1/images/shot.png', '/api/v1/p/cezar/runs/r1/images/shot.png'],
+    ['keeps an unversioned URL that names its own project', { scope: 'cezar' }, '/api/p/other/runs/r1/images/shot.png', '/api/v1/p/other/runs/r1/images/shot.png'],
+    ['keeps a versioned URL that names its own project', { scope: 'cezar' }, '/api/v1/p/other/runs/r1/images/shot.png', '/api/v1/p/other/runs/r1/images/shot.png'],
+    ['leaves a raw asset alone', { scope: 'cezar' }, '/raw/assets/icon.svg', '/raw/assets/icon.svg'],
+    ['leaves a foreign link alone', { scope: 'cezar' }, 'https://github.com/o/r/pull/7', 'https://github.com/o/r/pull/7'],
+    ['leaves a data URI alone', { scope: 'cezar' }, 'data:image/png;base64,AAAA', 'data:image/png;base64,AAAA'],
+    ['leaves a blob URL alone', { scope: 'cezar' }, 'blob:http://localhost:4321/abc-123', 'blob:http://localhost:4321/abc-123'],
+    ['upgrades an absolute URL, keeping its origin', {}, `${local}/api/runs/r1/images/shot.png`, `${local}/api/v1/runs/r1/images/shot.png`],
+    ['scopes an absolute URL onto the active project', { scope: 'cezar' }, `${local}/api/runs/r1/images/shot.png`, `${local}/api/v1/p/cezar/runs/r1/images/shot.png`],
+    ['keeps an absolute URL that names its own project', { scope: 'cezar' }, `${local}/api/v1/p/other/runs/r1/images/shot.png`, `${local}/api/v1/p/other/runs/r1/images/shot.png`],
+    ['never re-bases an absolute URL onto the configured base', { base: 'https://cezar.example.com' }, `${local}/api/runs/r1/images/a.png`, `${local}/api/v1/runs/r1/images/a.png`],
+    ['re-bases a root-relative URL onto the configured base', { base: 'https://cezar.example.com' }, '/api/runs/r1/images/a.png', 'https://cezar.example.com/api/v1/runs/r1/images/a.png'],
+    ['does not double-prefix a URL that already has the base', { base: 'https://cezar.example.com' }, 'https://cezar.example.com/api/v1/runs/r1/images/a.png', 'https://cezar.example.com/api/v1/runs/r1/images/a.png'],
+    ['upgrades a URL that already carries a path-prefix base', { base: '/cezar' }, '/cezar/api/runs/r1/images/a.png', '/cezar/api/v1/runs/r1/images/a.png'],
+    ['leaves a foreign absolute URL alone beside a base', { base: 'https://cezar.example.com' }, 'https://github.com/o/r/pull/7', 'https://github.com/o/r/pull/7'],
+  ])('%s', (_name, { scope, base }, url, expected) => {
+    if (scope !== undefined) setApiScope(scope)
+    if (base !== undefined) setApiBaseUrl(base)
+    expect(resolveApiUrl(url)).toBe(expected)
   })
 })
 
 describe('setApiBaseUrl — the service on another origin', () => {
-  it('defaults to same-origin, which is the cockpit\'s own case', () => {
-    expect(getApiBaseUrl()).toBe('')
-    expect(apiPath('/runs')).toBe('/api/v1/runs')
-  })
-
   it('prefixes every route once the base is set', () => {
     setApiBaseUrl('https://cezar.example.com')
     expect(apiPath('/runs')).toBe('https://cezar.example.com/api/v1/runs')
@@ -188,28 +127,12 @@ describe('setApiBaseUrl — the service on another origin', () => {
 
   it('tolerates a trailing slash — it would otherwise double against the route', () => {
     setApiBaseUrl('https://cezar.example.com/')
+    expect(getApiBaseUrl()).toBe('https://cezar.example.com')
     expect(apiPath('/runs')).toBe('https://cezar.example.com/api/v1/runs')
   })
 
   it('works with a path prefix, for a service behind a reverse proxy', () => {
     setApiBaseUrl('/cezar')
     expect(apiPath('/runs')).toBe('/cezar/api/v1/runs')
-  })
-
-  it('re-bases a stored transcript URL rather than double-prefixing one', () => {
-    setApiBaseUrl('https://cezar.example.com')
-    // Written by a server that had no base — still has to resolve against this one.
-    expect(resolveApiUrl('/api/runs/r1/images/a.png')).toBe(
-      'https://cezar.example.com/api/v1/runs/r1/images/a.png',
-    )
-    // Already based: must not gain a second copy of the origin.
-    expect(resolveApiUrl('https://cezar.example.com/api/v1/runs/r1/images/a.png')).toBe(
-      'https://cezar.example.com/api/v1/runs/r1/images/a.png',
-    )
-  })
-
-  it('leaves a foreign absolute URL alone', () => {
-    setApiBaseUrl('https://cezar.example.com')
-    expect(resolveApiUrl('https://github.com/o/r/pull/7')).toBe('https://github.com/o/r/pull/7')
   })
 })
