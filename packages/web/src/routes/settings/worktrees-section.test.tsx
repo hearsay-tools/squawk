@@ -25,6 +25,21 @@ let requests: Array<{ method: string; url: string; body?: unknown }> = []
 /** What `/api/v1/health` answers; unset, the request never settles and the seeded health stays. */
 let liveHealth: object | undefined
 
+/** What the server stores for a PUT of one command list: the timeout filled in, empty = null. */
+function applyCommandsPut(
+  state: ConfigResponse,
+  body: Record<string, unknown>,
+  key: 'worktreeSetup' | 'worktreeTeardown',
+  issueKey: 'worktreeSetupIssue' | 'worktreeTeardownIssue',
+) {
+  if (!(key in body)) return
+  const sent = body[key] as { commands: string[]; timeoutSeconds?: number } | null
+  state[key] = sent && sent.commands.length > 0
+    ? { commands: sent.commands, timeoutSeconds: sent.timeoutSeconds ?? 900 }
+    : null
+  state[issueKey] = null
+}
+
 function serve(config: Partial<ConfigResponse> = {}) {
   requests = []
   const state: ConfigResponse = {
@@ -62,19 +77,9 @@ function serve(config: Partial<ConfigResponse> = {}) {
         if (body?.worktreeRetention !== undefined) {
           state.worktreeRetention = body.worktreeRetention as number
         }
-        if (body && 'worktreeSetup' in body) {
-          const setup = body.worktreeSetup as { commands: string[]; timeoutSeconds?: number } | null
-          state.worktreeSetup = setup && setup.commands.length > 0
-            ? { commands: setup.commands, timeoutSeconds: setup.timeoutSeconds ?? 900 }
-            : null
-          state.worktreeSetupIssue = null
-        }
-        if (body && 'worktreeTeardown' in body) {
-          const teardown = body.worktreeTeardown as { commands: string[]; timeoutSeconds?: number } | null
-          state.worktreeTeardown = teardown && teardown.commands.length > 0
-            ? { commands: teardown.commands, timeoutSeconds: teardown.timeoutSeconds ?? 900 }
-            : null
-          state.worktreeTeardownIssue = null
+        if (body) {
+          applyCommandsPut(state, body, 'worktreeSetup', 'worktreeSetupIssue')
+          applyCommandsPut(state, body, 'worktreeTeardown', 'worktreeTeardownIssue')
         }
         return json(state)
       }
