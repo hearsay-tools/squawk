@@ -16,7 +16,7 @@ describe('recurring read cadence', () => {
 
 describe('protocol version (hearsay-tools/cezarion#2729)', () => {
   it('is 3 with a matching worker name, and a version-2 worker message does not parse', () => {
-    expect([LIVE_PROTOCOL, LIVE_WORKER_NAME]).toEqual([3, 'cezar-live-v3'])
+    expect(LIVE_WORKER_NAME).toBe(`cezar-live-v${LIVE_PROTOCOL}`)
     expect(ownerOutputSchema.safeParse({ type: 'hello', version: 2 }).success).toBe(false)
     expect(ownerOutputSchema.safeParse({ type: 'hello', version: 3 }).success).toBe(true)
     expect(ownerInputSchema.safeParse({ version: 2, documentId: 'tab', epoch: 1, type: 'sync', entries: [] }).success).toBe(false)

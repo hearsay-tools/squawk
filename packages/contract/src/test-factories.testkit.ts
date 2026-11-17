@@ -1,5 +1,5 @@
 import { workerOutcomeSchema } from './delegation.ts';
-import type { HumanAskClosedEvent, HumanInputDeliveredEvent, RunEvent } from './events.ts';
+import type { RunEvent } from './events.ts';
 import { runStatusSchema, stepKindSchema, stepStatusSchema } from './run-status.ts';
 import type { RunRecord, StepState } from './runs.ts';
 import {
@@ -226,12 +226,3 @@ export function makeRunEvent(over: Pick<RunEvent, 'type'> & Partial<RunEvent>): 
   return { seq: next(), ts: NOW, ...over };
 }
 
-/** A human answer delivered to the ask at `askSeq`. */
-export function makeHumanInputDeliveredEvent(over: Pick<HumanInputDeliveredEvent, 'askSeq'> & Partial<HumanInputDeliveredEvent>): HumanInputDeliveredEvent {
-  return { seq: next(), ts: NOW, type: 'human-input-delivered', ...over };
-}
-
-/** The ask at `askSeq`, retired unanswered. */
-export function makeHumanAskClosedEvent(over: Pick<HumanAskClosedEvent, 'askSeq' | 'reason'> & Partial<HumanAskClosedEvent>): HumanAskClosedEvent {
-  return { seq: next(), ts: NOW, type: 'human-ask-closed', ...over };
-}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { humanAskClosedEventSchema, humanInputDeliveredEventSchema, runEventSchema } from './events.ts';
+import { runEventSchema } from './events.ts';
 import { runRecordSchema, stepStateSchema } from './runs.ts';
 import { waitSchema } from './waits.ts';
 import {
@@ -10,8 +10,6 @@ import {
   WAIT_PHASE,
   WAIT_SOURCE,
   WAIT_VIA,
-  makeHumanAskClosedEvent,
-  makeHumanInputDeliveredEvent,
   makeHumanWait,
   makePrWait,
   makeProcessWait,
@@ -94,23 +92,11 @@ describe('the event factories', () => {
     expect(runEventSchema.parse(event)).toMatchObject({ type: 'ask.requested', requestId: 'q' });
     expect(makeRunEvent({ type: 'x' }).seq).not.toBe(makeRunEvent({ type: 'x' }).seq);
   });
-
-  it('build the typed events the contract names', () => {
-    const delivered = makeHumanInputDeliveredEvent({ askSeq: 3 });
-    expect(humanInputDeliveredEventSchema.parse(delivered)).toMatchObject({ type: 'human-input-delivered', askSeq: 3 });
-    const closed = makeHumanAskClosedEvent({ askSeq: 3, reason: 'finish' });
-    expect(humanAskClosedEventSchema.parse(closed)).toMatchObject({ type: 'human-ask-closed', reason: 'finish' });
-  });
 });
 
 describe('the enum constants', () => {
   // The other constants are their schema's own `.enum`; WAIT_KIND is assembled by hand.
   it('WAIT_KIND names every kind the wait schema holds', () => {
     expect(Object.values(WAIT_KIND).sort()).toEqual(waitSchema.options.map((entry) => entry.shape.kind.value).sort());
-  });
-
-  it('name a via value the way a test reads it', () => {
-    expect(WAIT_VIA.cezar_ask).toBe('cezar_ask');
-    expect(WAIT_VIA['monitoring-line']).toBe('monitoring-line');
   });
 });

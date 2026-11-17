@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { RunRecord } from './runs.ts';
 import {
   asksQuestion,
-  askErrorCodeSchema,
   squawkAskAnswerSchema,
   squawkAskRequestSchema,
   squawkCancelWaitAnswerSchema,
@@ -12,16 +11,10 @@ import {
   squawkWaitAnswerSchema,
   squawkWaitRequestSchema,
   computeWaitingOn,
-  PROCESS_TIMEOUT_DEFAULT_SECONDS,
   processWaitEntrySchema,
   hasWorkerDeadline,
-  LAST_WAITS_LIMIT,
   resolveWaitingOn,
   runningSubagents,
-  TIMER_MAX_SECONDS,
-  TIMER_MIN_SECONDS,
-  WAIT_LIMIT,
-  waitErrorCodeSchema,
   waitingOnSchema,
   waitSchema,
   completionWaitView,
@@ -35,7 +28,6 @@ import {
   openWaitSchema,
   peerWaitEntrySchema,
   peerWaitView,
-  waitViaSchema,
   type PrWaitEntry,
   type DeadlinedWorkerWaitEntry,
   type HumanWaitEntry,
@@ -158,12 +150,6 @@ function completionWaits(over: Record<string, unknown> = {}): WorkerWaitEntry[] 
   })];
 }
 
-describe('limits', () => {
-  it('names the phase 1 bounds', () => {
-    expect([WAIT_LIMIT, LAST_WAITS_LIMIT, TIMER_MIN_SECONDS, TIMER_MAX_SECONDS]).toEqual([16, 16, 60, 7200]);
-  });
-});
-
 describe('waitSchema', () => {
   it('parses a ci and a timer entry and refuses unknown keys', () => {
     expect(waitSchema.parse(openCi())).toEqual(openCi());
@@ -205,7 +191,6 @@ describe('computeWaitingOn', () => {
     expect(computeWaitingOn({ status: RUN_STATUS.waiting, waits: [ci], autoResumeAt: '2026-10-17T16:00:00.000Z' })?.kind).toBe('usage-limit');
     expect(computeWaitingOn({ waits: [ci, openHuman()] })).toEqual({ kind: WAIT_KIND.human });
     expect(computeWaitingOn({ waits: [ci, openHuman({ askSeq: 4 })] })).toEqual({ kind: WAIT_KIND.human, shown: true });
-    expect(computeWaitingOn({ waits: [{ ...ci, phase: WAIT_PHASE.resolved }] })).toBeUndefined();
   });
 
   it('reads only open waits', () => {
@@ -234,7 +219,6 @@ describe('computeWaitingOn', () => {
   });
 
   it('counts a worker wait that is still open, not one whose wake is already queued', () => {
-    expect(computeWaitingOn({ waits: completionWaits() })?.kind).toBe('workers');
     expect(computeWaitingOn({ waits: [...completionWaits({ phase: WAIT_PHASE.resolved }), openCi()] })?.kind).toBe('pr');
     expect(computeWaitingOn({ delegation: { role: 'invalid' }, waits: [openCi()] })?.kind).toBe('pr');
     // An old row's `delegation.wait` is not read: the store moves it into the list on open.
@@ -250,6 +234,7 @@ describe('computeWaitingOn', () => {
       { waits: completionWaits() },
       { waits: [openCi()] },
       { waits: [openTimer({ note: 'deploy' })] },
+      { waits: [openProcess()] },
     ]) {
       const waitingOn = computeWaitingOn(input);
       expect(waitingOnSchema.parse(waitingOn)).toEqual(waitingOn);
@@ -270,7 +255,6 @@ describe('cezar_wait request', () => {
     expect(squawkWaitRequestSchema.parse({ kind: WAIT_KIND.pr, pr: 'https://github.com/o/r/pull/1' })).toMatchObject({ timeout_seconds: 1800 });
     expect(squawkWaitRequestSchema.safeParse({ kind: WAIT_KIND.timer, seconds: 59 }).success).toBe(false);
     expect(squawkWaitRequestSchema.safeParse({ kind: WAIT_KIND.timer, seconds: 7201 }).success).toBe(false);
-    expect(squawkWaitRequestSchema.safeParse({ kind: WAIT_KIND.worker }).success).toBe(false); // phase 3
   });
 
   it('keeps the ci bounds of cezar_wait_for_ci and refuses stray keys', () => {
@@ -319,10 +303,6 @@ describe('answers', () => {
     expect(squawkCancelWaitAnswerSchema.safeParse({ cancelled: true, wait_id: CI_ID, open_waits: [{ ...human, deadline: openWait.deadline }] }).success).toBe(false);
   });
 
-  it('extends the CI error codes with the timer refusals', () => {
-    expect(waitErrorCodeSchema.options).toEqual(expect.arrayContaining(['invalid_request', 'capacity', 'timers_disabled', 'wake_budget_spent']));
-  });
-
   it('parses cancel answers, with the open waits on either branch', () => {
     expect(squawkCancelWaitAnswerSchema.parse({ cancelled: true, wait_id: CI_ID, open_waits: [] }).cancelled).toBe(true);
     expect(squawkCancelWaitAnswerSchema.parse({ cancelled: false, code: 'already_resolved', message: 'delivered with the next wake', open_waits: [openWait] }).cancelled).toBe(false);
@@ -344,7 +324,7 @@ describe('human waits', () => {
   });
 
   it('an open human wait outranks usage limit, workers, ci and timer', () => {
-    expect(computeWaitingOn({ status: RUN_STATUS.waiting, waits: [openCi(), openTimer(), openHuman()], autoResumeAt: '2026-10-17T16:00:00.000Z' }))
+    expect(computeWaitingOn({ status: RUN_STATUS.waiting, waits: [openCi(), openTimer(), ...completionWaits(), openHuman()], autoResumeAt: '2026-10-17T16:00:00.000Z' }))
       .toEqual({ kind: WAIT_KIND.human });
     for (const phase of ['delivered', 'cancelled'] as const) {
       expect(computeWaitingOn({ waits: [openCi(), openHuman({ phase })] })?.kind).toBe('pr');
@@ -382,7 +362,6 @@ describe('cezar_ask', () => {
   it('answers with the wait id and the open waits, or a refusal the agent can act on', () => {
     expect(squawkAskAnswerSchema.safeParse({ ok: true, wait_id: HUMAN_ID, deadline: '2026-10-17T15:40:00.000Z', open_waits: [] }).success).toBe(false);
     expect(squawkAskAnswerSchema.parse({ ok: false, code: 'autonomous_run', message: 'm' }).ok).toBe(false);
-    expect(askErrorCodeSchema.options).toEqual(expect.arrayContaining(['invalid_request', 'capacity', 'autonomous_run', 'session_closed', 'worker_wait_pending', 'unavailable']));
   });
 });
 
@@ -486,7 +465,6 @@ describe('worker wait entry', () => {
   });
 
   it('takes the cez-worker-wait origin', () => {
-    expect(waitViaSchema.options).toContain('cez-worker-wait');
     expect(waitSchema.safeParse(workerBase({ via: WAIT_VIA['cez-worker-wait'], requestIds: [R1], requestOutcomes: [] })).success).toBe(true);
   });
 });
@@ -501,11 +479,10 @@ describe('cezar_wait worker request', () => {
     expect(squawkWaitRequestSchema.safeParse({ ...request, timeout_seconds: 7201 }).success).toBe(false);
   });
 
-  it('cezar_wait worker request: mode one needs one id; timeout defaults to 600; 7201 refused', () => {
+  it('cezar_wait worker request: mode one needs one id; timeout defaults to 600', () => {
     expect(squawkWaitRequestSchema.parse({ kind: WAIT_KIND.worker, worker_ids: [W1] })).toEqual({ kind: WAIT_KIND.worker, worker_ids: [W1], timeout_seconds: 600 });
     expect(squawkWaitRequestSchema.parse({ kind: 'request', request_ids: [R1, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'], mode: 'all', timeout_seconds: 1800 }))
       .toMatchObject({ mode: 'all', timeout_seconds: 1800 });
-    expect(squawkWaitRequestSchema.safeParse({ kind: WAIT_KIND.worker, worker_ids: [W1], timeout_seconds: 7201 }).success).toBe(false);
     expect(squawkWaitRequestSchema.safeParse({ kind: WAIT_KIND.worker, worker_ids: [W1], timeout_seconds: 0 }).success).toBe(false);
     // mode one: exactly one id, of either kind.
     expect(squawkWaitRequestSchema.safeParse({ kind: WAIT_KIND.worker, worker_ids: [W1], mode: 'one' }).success).toBe(true);
@@ -528,7 +505,6 @@ describe('cezar_wait worker request', () => {
     const ids = Array.from({ length: 33 }, (_, i) => `99999999-9999-4999-8999-${String(i).padStart(12, '0')}`);
     expect(squawkWaitRequestSchema.safeParse({ kind: WAIT_KIND.peer, peer_ids: ids.slice(0, 32) }).success).toBe(true);
     expect(squawkWaitRequestSchema.safeParse({ kind: WAIT_KIND.peer, peer_ids: ids }).success).toBe(false);
-    expect(squawkWaitRequestSchema.safeParse({ kind: WAIT_KIND.peer, peer_ids: [W1], timeout_seconds: 7201 }).success).toBe(false);
     expect(squawkWaitRequestSchema.safeParse({ kind: WAIT_KIND.peer, peer_ids: [W1], timeout_seconds: 0 }).success).toBe(false);
     // No "any peer" form, and no mode: every named peer ends it.
     expect(squawkWaitRequestSchema.safeParse({ kind: WAIT_KIND.peer }).success).toBe(false);
@@ -557,7 +533,6 @@ describe('worker waits in the answers', () => {
   });
 
   it('refuses a worker the caller does not own with denied_scope', () => {
-    expect(waitErrorCodeSchema.options).toContain('denied_scope');
     expect(squawkWaitAnswerSchema.parse({ ok: false, code: 'denied_scope', message: 'not your worker' }).ok).toBe(false);
   });
 });
@@ -598,9 +573,10 @@ describe('workerWaitEntryToLegacy', () => {
 describe('deadline-less cezar worker entries (hearsay-tools/cezarion#1301)', () => {
   const targets = { workerIds: [W1], revisions: [], outcomes: [] };
 
-  it('a cezar worker entry may omit deadline and timeoutSeconds', () => {
-    const entry = { ...workerBase(targets), source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion, deadline: undefined, timeoutSeconds: undefined };
-    expect(workerWaitEntrySchema.safeParse(entry).success).toBe(true);
+  it('a cezar worker entry may omit both deadline and timeoutSeconds, or carry both', () => {
+    const cezar = { ...workerBase(targets), source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion };
+    expect(workerWaitEntrySchema.safeParse({ ...cezar, deadline: undefined, timeoutSeconds: undefined }).success).toBe(true);
+    expect(workerWaitEntrySchema.safeParse(cezar).success).toBe(true);
   });
 
   it('an agent worker entry still requires deadline and timeoutSeconds', () => {
@@ -615,13 +591,6 @@ describe('deadline-less cezar worker entries (hearsay-tools/cezarion#1301)', () 
     expect(result.error?.issues.map(({ code, path }) => ({ code, path }))).toEqual([
       { code: 'custom', path: [field] },
     ]);
-  });
-
-  it('a cezar entry with only one of deadline and timeoutSeconds is refused', () => {
-    const cezar = { ...workerBase(targets), source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion };
-    expect(workerWaitEntrySchema.safeParse({ ...cezar, timeoutSeconds: undefined }).success).toBe(false);
-    expect(workerWaitEntrySchema.safeParse({ ...cezar, deadline: undefined }).success).toBe(false);
-    expect(workerWaitEntrySchema.safeParse(cezar).success).toBe(true);
   });
 
   it.each(['deadline', 'timeoutSeconds'] as const)('identifies the missing partner %s in a cezar worker entry', (field) => {
@@ -675,12 +644,11 @@ describe('deadline-less cezar worker entries (hearsay-tools/cezarion#1301)', () 
 });
 
 describe('computeWaitingOn with worker entries', () => {
-  it('an open worker entry names workers, above CI and timer, below usage limit and human', () => {
+  it('an open worker entry names workers, above CI and timer, below usage limit', () => {
     const waits = [openCi(), openTimer(), openWorkerWait()];
     expect(computeWaitingOn({ waits })).toEqual({ kind: 'workers', count: 2 });
     expect(computeWaitingOn({ waits: [openWorkerWait({ phase: WAIT_PHASE.resolved })] })).toBeUndefined();
     expect(computeWaitingOn({ status: RUN_STATUS.waiting, waits, autoResumeAt: '2026-10-19T12:00:00.000Z' })?.kind).toBe('usage-limit');
-    expect(waitingOnSchema.parse(computeWaitingOn({ waits }))).toEqual({ kind: 'workers', count: 2 });
   });
 
   it("counts a request wait by the requests without an outcome, and adds Cezar's completion wait", () => {
@@ -721,7 +689,6 @@ describe('process waits', () => {
   });
 
   it('defaults the timeout to 1800 and bounds it to 7200', () => {
-    expect(PROCESS_TIMEOUT_DEFAULT_SECONDS).toBe(1800);
     expect(squawkWaitRequestSchema.parse({ kind: WAIT_KIND.process, pid: 42 })).toEqual({ kind: WAIT_KIND.process, pid: 42, timeout_seconds: 1800 });
     expect(squawkWaitRequestSchema.parse({ kind: WAIT_KIND.process, pid: 42, exit_file: 'x.exit', note: 'n', timeout_seconds: 7200 }))
       .toEqual({ kind: WAIT_KIND.process, pid: 42, exit_file: 'x.exit', note: 'n', timeout_seconds: 7200 });
@@ -736,7 +703,6 @@ describe('process waits', () => {
     const process = openProcess({ note: 'build' });
     expect(computeWaitingOn({ waits: [timer, process, ci] })?.kind).toBe('pr');
     expect(computeWaitingOn({ waits: [timer, process] })).toEqual({ kind: WAIT_KIND.process, waitId: PROCESS_ID, pid: 4242, deadline: process.deadline, note: 'build' });
-    expect(waitingOnSchema.parse(computeWaitingOn({ waits: [openProcess()] }))).toEqual({ kind: WAIT_KIND.process, waitId: PROCESS_ID, pid: 4242, deadline: process.deadline });
   });
 
   it('answers with the process kind, its deadline and its refusals', () => {

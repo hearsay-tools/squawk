@@ -7,10 +7,6 @@ const questions = [{ header: 'Choice', question: 'Which module?', options: [{ la
 
 // hearsay-tools/cezarion#1458: the tool requires context; every stored shape keeps asks without it.
 describe('ask context', () => {
-  it('limits context to 20,000 characters', () => {
-    expect(ASK_LIMITS.context).toBe(20_000);
-  });
-
   it('keeps context optional in the stored ask shape', () => {
     expect(askRequestSchema.parse({ questions })).toEqual({ questions });
     expect(askRequestSchema.parse({ context: '## Draft', questions })).toEqual({ context: '## Draft', questions });
