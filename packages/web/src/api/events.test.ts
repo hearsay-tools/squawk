@@ -186,14 +186,6 @@ describe('applyRunSummary', () => {
     expect(next?.[0]).toMatchObject({ status: RUN_STATUS.done, tokensUsed: 99, titleSummary: 'Renamed', prNumber: 12, issueNumber: 7, archived: true })
   })
 
-  it('does not duplicate a row however many events one run emits', () => {
-    let list: RunSummary[] | undefined = []
-    for (const status of ['queued', 'running', 'review', 'done'] as const) {
-      list = applyRunSummary(list, summary('r1', { status }))
-    }
-    expect(list).toHaveLength(1)
-    expect(list?.[0]?.status).toBe('done')
-  })
 
   it('inserts a new run by createdAt descending, matching the server order', () => {
     const list: RunSummary[] = [

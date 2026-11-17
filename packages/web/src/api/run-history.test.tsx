@@ -368,7 +368,7 @@ describe('useRunHistory', () => {
       .mockResolvedValue(compactedTail)
     mockContext.mockResolvedValue(context())
     const { wrapper } = harness()
-    const { result } = renderHook(() => useRunHistory('run-1'), { wrapper })
+    const { result, unmount } = renderHook(() => useRunHistory('run-1'), { wrapper })
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
 
     act(() => {
@@ -485,7 +485,6 @@ describe('useRunHistory', () => {
     await act(async () => {
       late.resolve(context())
       await late.promise
-      await new Promise((resolve) => setTimeout(resolve, 0)) // bound: lets the query apply the late answer
     })
     expect(mockContext).toHaveBeenCalledTimes(2)
     expect(result.current.currentComplete).toBe(true)
@@ -501,8 +500,6 @@ describe('useRunHistory', () => {
   it('survives a failed compaction: the live transcript stands and the guard reopens', async () => {
     FakeEventSource.instances = []
     vi.stubGlobal('EventSource', FakeEventSource)
-    const unhandled = vi.fn()
-    process.on('unhandledRejection', unhandled)
     mockHistory
       .mockResolvedValueOnce(page(100))
       .mockRejectedValue(new Error('the cezar server answered /runs/run-1/history with an unexpected body'))
@@ -525,10 +522,10 @@ describe('useRunHistory', () => {
     expect(result.current.visibleEvents.at(-1)?.seq).toBe(300)
     // A failed compaction is not a load failure: the transcript must NOT drop to full replay.
     expect(result.current.fallback).toBe(false)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(unhandled).not.toHaveBeenCalled()
-
-    process.off('unhandledRejection', unhandled)
+    // Leaving the transcript retries compaction. Vitest reports any unhandled rejection.
+    mockHistory.mockResolvedValue(tail(201, 300))
+    unmount()
+    await waitFor(() => expect(mockHistory).toHaveBeenCalledTimes(3))
     vi.unstubAllGlobals()
   })
 })
