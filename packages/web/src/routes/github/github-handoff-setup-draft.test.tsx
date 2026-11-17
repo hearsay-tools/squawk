@@ -544,10 +544,7 @@ describe('the hand-to-agent pickers (#385)', () => {
     // Viewing is read-only: nothing got selected (no chip, no count on the trigger).
     expect(document.querySelectorAll('[data-slot="gh-skill-chip"]')).toHaveLength(0)
     expect(document.querySelector('[data-slot="gh-skills-trigger"]')?.textContent).not.toContain('·')
-    // The escape hatch into the browsable Skills catalog.
-    expect(
-      preview.querySelector('[data-slot="skill-preview-manage"]')?.getAttribute('href'),
-    ).toBe('/skills?skill=om-fix')
+    expect(preview.querySelector('[data-slot="skill-body"]')).toBeNull()
   })
 
   it('multi-keyword search: "fix project" narrows the skills list to matches (#411)', async () => {
@@ -653,8 +650,8 @@ describe('the hand-to-agent run (legacy three-way body)', () => {
       ?.body as { workflow?: string | undefined; steps?: Array<{ id: string; skill: string; prompt: string }> }
     expect(body.workflow).toBeUndefined()
     expect(body.steps).toEqual([
-      { id: 'om-fix', name: 'om-fix', skill: 'om-fix', prompt: '{{task}}' },
-      { id: 'g-review', name: 'g-review', skill: 'g-review', prompt: '{{task}}' },
+      { id: 'om-fix', name: 'om-fix', skill: 'om-fix', skillPath: '/p/om-fix.md', prompt: '{{task}}' },
+      { id: 'g-review', name: 'g-review', skill: 'g-review', skillPath: '/g/g-review.md', prompt: '{{task}}' },
     ])
   })
 

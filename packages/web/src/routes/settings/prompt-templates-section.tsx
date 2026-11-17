@@ -1,3 +1,4 @@
+import { SkillOptionLabel } from '@/components/skill-option-label'
 import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckIcon, ChevronDownIcon, NotebookPenIcon, PlusIcon, SparklesIcon, XIcon } from '@/components/design-icons'
@@ -320,14 +321,7 @@ function TemplateSkillsPicker({
         data-selected={isSelected ? 'true' : undefined}
         onSelect={() => onToggle(skill.id)}
       >
-        <span className={cn('shrink-0 font-mono text-xs', emphasized && 'font-semibold')}>
-          {skill.name}
-        </span>
-        {skill.description ? (
-          <span className="min-w-0 flex-1 truncate text-xs text-soft-foreground">
-            {skill.description}
-          </span>
-        ) : null}
+        <SkillOptionLabel skill={skill} emphasized={emphasized} />
         {isSelected ? (
           <CheckIcon aria-hidden="true" className="ml-auto size-3.5 shrink-0 text-link-foreground" />
         ) : null}

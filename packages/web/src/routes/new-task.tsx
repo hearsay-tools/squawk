@@ -1,3 +1,4 @@
+import { SkillOptionLabel } from '@/components/skill-option-label'
 import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { EyeIcon } from 'lucide-react'
 import { CheckIcon, CircleSlashIcon, FolderOpenIcon, SparklesIcon, WorkflowIcon, XIcon } from '@/components/design-icons'
@@ -686,15 +687,7 @@ function SourcePill({
         data-source-ref={skill.id}
         onSelect={() => toggle({ source: 'skill', ref: skill.id, ...(skill.path !== undefined ? { path: skill.path } : {}) })}
       >
-        <span className={cn('shrink-0 font-mono text-xs', emphasized && 'font-semibold')}>
-          {skill.name}
-        </span>
-        {skill.description ? (
-          <span className="min-w-0 flex-1 truncate text-xs text-soft-foreground">
-            {skill.description}
-          </span>
-        ) : null}
-        {skill.path ? <span className="min-w-0 truncate text-xs text-soft-foreground">{skill.path}</span> : null}
+        <SkillOptionLabel skill={skill} emphasized={emphasized} />
         {/* Read-only "View skill" (spec §Skills) — the Settings catalog's detail component
             as a dialog. stopPropagation: viewing must not pick the source. */}
         <button
