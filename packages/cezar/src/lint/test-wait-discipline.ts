@@ -1,4 +1,5 @@
-import type { SourceRule } from './source-rule.ts';
+import type { AstRule } from './ast-rule.ts';
+import { waitVisitors } from './wait-ast-visitors.ts';
 import { baselines } from './server-wait-baseline.ts';
 import { compareToBaseline, readBaseline, tally } from './wait-baseline.ts';
 import { type ScanError, blankSource } from './blank.ts';
@@ -419,22 +420,21 @@ export const scannedServerFile = (file: string): boolean => file.startsWith('pac
   && !file.split('/').some(part => part === '__fixtures__' || part === 'node_modules')
   && !['test-wait-discipline.test.ts', 'test-wait-discipline.testkit.ts'].includes(file.slice('packages/cezar/src/'.length));
 
-export const testWaitDiscipline: SourceRule = {
+export const testWaitDiscipline: AstRule = {
   name: 'test-wait-discipline',
-  description: 'Wait on the product signal, with a reason for a wall-clock bound.',
+  description: 'Wait on the product signal, with a reason for a wall-clock bound (hearsay-tools/cezarion#2421).',
   applies: scannedServerFile,
-  check(file, source) {
-    const relative = file.slice('packages/cezar/src/'.length);
-    const { sites, errors } = scanFile(relative, source);
-    const findings = baselines.flatMap(baseline => {
-      const mine = sites.filter(site => baseline.rules.includes(site.rule));
-      const { added } = compareToBaseline(tally(mine), readBaseline(baseline.path));
-      return added.flatMap(entry => mine.filter(site => site.rule === entry.rule && site.site === entry.site).map(site => ({
-        line: site.line,
-        message: `[${site.rule}] ${site.site}. ${waitRemedy(site.rule)}. Never add a site to ${baseline.path}`,
-      })));
+  create(report, context) {
+    const file = context.file.slice('packages/cezar/src/'.length);
+    return waitVisitors('server', { ...context, file }, sites => {
+      for (const baseline of baselines) {
+        const mine = sites.filter(site => baseline.rules.includes(site.rule));
+        const { added } = compareToBaseline(tally(mine), readBaseline(baseline.path));
+        for (const entry of added) for (const site of mine.filter(site => site.rule === entry.rule && site.site === entry.site)) {
+          report(site.node, `[${site.rule}] ${site.site}. ${waitRemedy(site.rule)}. Never add a site to ${baseline.path} (hearsay-tools/cezarion#2421)`);
+        }
+      }
     });
-    return [...findings, ...errors.map(error => ({ line: error.line, message: `Unterminated ${error.construct}: ${error.text}. Fix the scan's blanking in packages/cezar/src/lint/blank.ts; everything after this went unread (AGENTS.md § Validation)` }))];
   },
 };
 

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { blank } from './lint/blank.ts';
 import { scanFile, scanSource, SHORT_BOUND_MS, type Site } from './lint/test-wait-discipline.ts';
+import { scanWaitAst } from './lint/wait-ast.testkit.ts';
 import { type Baseline, baselines } from './lint/server-wait-baseline.ts';
 import { compareToBaseline, readBaseline, shrinkBaseline, tally } from './lint/wait-baseline.ts';
 
@@ -18,8 +19,8 @@ import { compareToBaseline, readBaseline, shrinkBaseline, tally } from './lint/w
 const rules = (sites: Site[]) => sites.map((s) => s.rule);
 const lines = (sites: Site[]) => sites.map((s) => s.line);
 /** The `sleep` and `short-bound` sites of a snippet; `polls` below holds the poll loops. */
-const scan = (...src: string[]) => scanSource('x.test.ts', src.join('\n')).filter((s) => s.rule !== 'poll-deadline');
-const polls = (...src: string[]) => scanSource('x.test.ts', src.join('\n')).filter((s) => s.rule === 'poll-deadline');
+const scan = (...src: string[]) => scanWaitAst('server', 'x.test.ts', src.join('\n')).filter((s) => s.rule !== 'poll-deadline');
+const polls = (...src: string[]) => scanWaitAst('server', 'x.test.ts', src.join('\n')).filter((s) => s.rule === 'poll-deadline');
 const errors = (...src: string[]) => scanFile('x.test.ts', src.join('\n')).errors.map(({ line, construct }) => ({ line, construct }));
 
 describe('blanking strings and comments', () => {
@@ -104,7 +105,7 @@ describe('blanking strings and comments', () => {
     expect(errors("const s = 'abc", 'await sleep(50);')).toEqual([{ line: 1, construct: 'string' }]);
     expect(errors('/* never closed', 'await sleep(50);')).toEqual([{ line: 1, construct: 'comment' }]);
     // A string stops at its line end, so the code after it is still read.
-    expect(lines(scan("const s = 'abc", 'await sleep(50);'))).toEqual([2]);
+    expect(lines(scanSource('x.test.ts', "const s = 'abc\nawait sleep(50);"))).toEqual([2]);
     expect(errors("const s = 'a\\", "b';", '`x${`y`}z`;')).toEqual([]);
   });
 });
@@ -154,6 +155,16 @@ describe('rule sleep', () => {
       'const timer = setTimeout(() => controller.abort(), 5_000);',
       "await new Promise((_, reject) => setTimeout(() => reject(new Error('deadline')), 5_000));",
       'await obj.sleep(100);',
+    )).toEqual([]);
+  });
+
+  it('keeps computed timers, non-timers receivers and optional calls outside the server scope', () => {
+    expect(scan(
+      "await timers['setTimeout'](10);",
+      'await timerFactory().setTimeout(10);',
+      'await sleep?.(10);',
+      'await timers?.setTimeout(10);',
+      'await vi?.waitFor(() => ready());',
     )).toEqual([]);
   });
 
@@ -552,8 +563,8 @@ describe('rule poll-deadline', () => {
       'while (Date.now() < soon) await sleep(10);',
     ))).toEqual([2, 4]);
     expect(polls('const ok = Date.now() + 30 * 1000;', 'while (Date.now() < ok) await sleep(10);', 'for (let i = 0; i < 20; i++) await sleep(60000 / 40);')).toEqual([]);
-    expect(scanSource('x.test.ts', 'await vi.waitFor(() => ready(), { timeout: 2 * 1000 });').map((s) => s.rule)).toEqual(['short-bound']);
-    expect(scanSource('x.test.ts', 'await vi.waitFor(() => ready(), { timeout: 3 * 5_000 });')).toEqual([]);
+    expect(scanWaitAst('server', 'x.test.ts', 'await vi.waitFor(() => ready(), { timeout: 2 * 1000 });').map((s) => s.rule)).toEqual(['short-bound']);
+    expect(scanWaitAst('server', 'x.test.ts', 'await vi.waitFor(() => ready(), { timeout: 3 * 5_000 });')).toEqual([]);
   });
 
   it('counts attempts from the start and by the step, up, and reads names for the literals', () => {
@@ -932,7 +943,7 @@ describe('rule poll-deadline', () => {
   });
 
   it('is reported next to the sleep rule: a sleep in a loop is a poll interval, not a bare sleep', () => {
-    const sites = scanSource('x.test.ts', ['await sleep(10);', 'while (!ready()) await sleep(10);'].join('\n'));
+    const sites = scanWaitAst('server', 'x.test.ts', ['await sleep(10);', 'while (!ready()) await sleep(10);'].join('\n'));
     expect(sites.map((s) => [s.rule, s.line])).toEqual([['sleep', 1], ['poll-deadline', 2]]);
   });
 

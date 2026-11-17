@@ -24,10 +24,10 @@ import { undocumentedEnvName } from './undocumented-env-name.ts';
 import { unitWaitDiscipline } from './unit-wait-discipline.ts';
 
 /** The rules that visit oxlint's syntax tree (hearsay-tools/squawk#3774). */
-export const AST_RULES: AstRule[] = [childKilledRead, runStoreTestkitImport, parityRunnerSubset, runnerRosterLiteral, runnerIdBranch, nativeMockSource, mockLifecycleBoundary, mockScenarioBoundary, runHistoryReader, runFactReader, contractRootImport, layerImport, rawQuerySetter, card2Contrast, designGuardian, homeBoundary, productEnvRead, testHomeWrite, undocumentedEnvName, runnerFactCombination];
+export const AST_RULES: AstRule[] = [childKilledRead, runStoreTestkitImport, parityRunnerSubset, runnerRosterLiteral, runnerIdBranch, nativeMockSource, mockLifecycleBoundary, mockScenarioBoundary, runHistoryReader, runFactReader, contractRootImport, layerImport, rawQuerySetter, card2Contrast, designGuardian, homeBoundary, productEnvRead, testHomeWrite, undocumentedEnvName, runnerFactCombination, testWaitDiscipline];
 
 /** The rules that scan a file's text. New rules are AST rules. */
-export const TEXT_RULES: SourceRule[] = [testWaitDiscipline, unitWaitDiscipline];
+export const TEXT_RULES: SourceRule[] = [unitWaitDiscipline];
 
 /** Every repository rule. `.oxlintrc.json` turns each one on as `cez/<name>`. */
 export const RULES: (AstRule | SourceRule)[] = [...TEXT_RULES, ...AST_RULES];
