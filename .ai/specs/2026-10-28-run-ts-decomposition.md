@@ -338,7 +338,7 @@ Each order below is load-bearing: other code reaches a correct state because of 
 
 | Guard | Reads today | Breaks when | Action | Phase |
 |---|---|---|---|---|
-| `skills-read-outside-enabled-skills`, `skills-write-outside-load-run-skills` (`.ai/ast-grep/rules/`) | `files:` names `run.ts` only | Skills code leaves `run.ts`. The rules then pass silently | Add `workflows/run/**`; keep `enabledSkills` and `loadRunSkills` as method definitions, or change the exemption | 0 |
+| `cez/skills-read-outside-enabled-skills`, `cez/skills-write-outside-load-run-skills` (`packages/cezar/src/lint/owner-policies.ts`) | `files:` names `run.ts` only | Skills code leaves `run.ts`. The rules then pass silently | Add `workflows/run/**`; keep `enabledSkills` and `loadRunSkills` as method definitions, or change the exemption | 0 |
 | `workflows/run-states.test.ts` | 91 `via` names and 21 exit literals, in `run.ts` text | A `via` function or an exit writer moves | Also read `workflows/run/*.ts` | 0 |
 | `run-fact-readers.test.ts` | `RESUME_TIME_READERS` names `run.ts` | Auto-resume moves | Add the new file; drop `run.ts` when its entry goes stale | 2 |
 | `workflows/run-active-pin.test.ts` | The literal text of `activate`, `active.set`, `active.delete` and the two `createActiveRun` sites | Those move or their signature text changes | They stay on the facade | — |

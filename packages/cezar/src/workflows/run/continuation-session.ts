@@ -403,7 +403,7 @@ export class ContinuationSession {
     try {
       await new Promise<void>((resolve) => {
         // A local awaited pause of this Continue, not a liveness bound of the run.
-        // ast-grep-ignore: liveness-timer-outside-owner
+        // oxlint-disable-next-line cez/liveness-timer-outside-owner -- A local awaited pause, not a run liveness bound.
         const timeout = setTimeout(resolve, 1_500);
         timeout.unref?.();
         const settle = () => { clearTimeout(timeout); resolve(); };

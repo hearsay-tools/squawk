@@ -202,7 +202,7 @@ path, or removes one copy and sends the message again.
 | Per-skill off-list | `disabledTeamSkills` in `ui-state.json`, `use-skill-selection.ts`, `GET /skills/importable` |
 | Inline body and `/name` expansion | `skillSystemPrompt`, `expandRegistrySlashSkillText` in `prompts.ts` |
 | Squawk-only skill folders | `.ai/cezar/skills`, `.ai/squawk/skills`, `.ai/skills` as sources; `SKILL_DIRS` and the hint that copies it |
-| The run's saved list of full skill records | `state.skills.catalog`, `loadRunSkills`, `enabledSkills` and their two ast-grep rules. The session keeps only the ids and paths it read at its start, to check later triggers |
+| The run's saved list of full skill records | `state.skills.catalog`, `loadRunSkills`, `enabledSkills` and the oxlint AST rules `cez/skills-read-outside-enabled-skills` and `cez/skills-write-outside-load-run-skills`. The session keeps only the ids and paths it read at its start, to check later triggers |
 
 `docs/areas/skills.md` is rewritten. A new ADR supersedes
 [ADR 0023](../../docs/adr/0023-treat-skills-as-shared-content.md).
