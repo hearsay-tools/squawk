@@ -86,11 +86,12 @@ function checkBaselineGrowth({ cwd = process.cwd(), base, head, allowGrowth = fa
   return reasons;
 }
 
-// Called only after the workflow checks out the trusted base. The head is fetched
-// into the object store and is never checked out. Live metadata supplies the label.
-async function checkPullRequest({ github, context, core, cwd = process.cwd() }) {
+// Called only after the workflow checks out the trusted base. The head is fetched into the
+// object store and is never checked out. Returns the live PR, the fetched head and the merge
+// base to measure from, or undefined for an event that has no PR to check.
+async function resolvePullRequest({ github, context, cwd = process.cwd() }) {
   const dispatched = context.eventName === 'workflow_dispatch';
-  if (context.eventName !== 'pull_request_target' && !dispatched) return;
+  if (context.eventName !== 'pull_request_target' && !dispatched) return undefined;
   const number = dispatched ? Number(context.payload.inputs.pr_number) : context.payload.pull_request.number;
   if (!Number.isSafeInteger(number) || number < 1) throw new Error('Invalid PR number');
   const expectedHead = dispatched ? context.sha : context.payload.pull_request.head.sha;
@@ -104,10 +105,18 @@ async function checkPullRequest({ github, context, core, cwd = process.cwd() }) 
   // GitHub never moves the event's base.sha when the base branch advances. Measure from the
   // branch tip this workflow runs from, so commits the head took from that branch stay out.
   const mergeBase = git(cwd, 'merge-base', dispatched ? base : context.sha, fetched).trim();
+  return { pr, head: fetched, mergeBase };
+}
+
+// Live metadata supplies the label.
+async function checkPullRequest({ github, context, core, cwd = process.cwd() }) {
+  const resolved = await resolvePullRequest({ github, context, cwd });
+  if (!resolved) return;
+  const { pr, head, mergeBase } = resolved;
   const allowGrowth = pr.labels.some(label => label.name === 'baseline-growth');
-  const reasons = checkBaselineGrowth({ cwd, base: mergeBase, head: fetched, allowGrowth });
+  const reasons = checkBaselineGrowth({ cwd, base: mergeBase, head, allowGrowth });
   if (reasons.length) core.setFailed(`${reasons.join('\n')}\nFor an owner-approved increase, add the baseline-growth label, then re-run the failed classify-pr job. Deletion readers and invalid JSON must still be fixed.`);
   else core.info(allowGrowth ? 'Baseline growth approved by label; owner merge required.' : 'Baseline ratchets did not grow.');
 }
 
-module.exports = { compareBaseline, checkBaselineGrowth, checkPullRequest };
+module.exports = { compareBaseline, checkBaselineGrowth, resolvePullRequest, checkPullRequest };
