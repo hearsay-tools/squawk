@@ -217,10 +217,10 @@ function references(group: OwnerGroup) {
     return key === group.slot && (['state', 'active'].includes(nameOf(receiver) ?? '') || container(receiver));
   }
   function expands(node: EsNode): boolean {
-    if (node.type === 'MemberExpression' || node.type === 'TSNonNullExpression' || node.type === 'ChainExpression') return true;
-    if (node.type !== 'CallExpression') return false;
-    const callee = child(node, 'callee');
-    return callee?.computed !== true && ['get', 'entries', 'values'].includes(memberName(callee) ?? '');
+    // Tree-sitter retained parentheses around arbitrary expressions; ESTree removes them.
+    // Keep their descendant-reference search for receiver expressions and bound initializers.
+    return ['MemberExpression', 'TSNonNullExpression', 'ChainExpression', 'ConditionalExpression',
+      'LogicalExpression', 'SequenceExpression', 'CallExpression'].includes(node.type);
   }
   function expandsFrom(node: EsNode, accepts: (value: EsNode) => boolean): boolean {
     if (!expands(node)) return false;

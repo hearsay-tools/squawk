@@ -557,3 +557,36 @@ ruleCases(activeRunMapWrite, {
     'class RunManager { [activate]() { this.active.set(id, state); } }',
   ],
 });
+
+
+// Review B1/B2: parenthesized receivers and angle assertions kept a descendant
+// search in tree-sitter. ESTree drops the parentheses, so exercise each owner.
+for (const [group, slot, type, field] of [
+  ['autosave', 'autosave', 'AutosaveGroup', 'autosaveTimer'],
+  ['boundary', 'boundary', 'BoundaryGroup', 'idleTimer'],
+  ['children', 'children', 'ChildrenGroup', 'backgroundChildren'],
+  ['input', 'inputState', 'InputGroup', 'writingInput'],
+  ['session', 'liveSession', 'SessionGroup', 'cancelled'],
+  ['skills', 'skills', 'SkillsGroup', 'catalog'],
+  ['usage', 'usage', 'UsageGroup', 'usageInvocation'],
+  ['wait', 'waitIdentity', 'WaitGroup', 'ciTurnId'],
+]) {
+  ruleCases(activeRunWriteRules.find(rule => rule.name === `active-run-${group}-write-outside-owner`)!, {
+    file: 'packages/cezar/src/workflows/run/example.ts',
+    valid: [
+      `(flag ? unrelated : fallback).${field} = replacement;`,
+      `(identity(unrelated)).${field} = replacement;`,
+      `function f(group: Other) { const alias = (identity(group)); alias.${field} = replacement; }`,
+    ],
+    invalid: [
+      `(flag ? state.${slot} : fallback).${field} = replacement;`,
+      `(identity(state.${slot})).${field} = replacement;`,
+      `function f(group: ${type}) { const alias = (identity(group)); alias.${field} = replacement; }`,
+      `(state.${slot} || fallback).${field} = replacement;`,
+      `(fallback, state.${slot}).${field} = replacement;`,
+      `<Mutable>identity(state.${slot});`,
+      `<Mutable>{ group: state.${slot} };`,
+      `function f(group: ${type}) { group.${field} = replacement; }`,
+    ],
+  });
+}
