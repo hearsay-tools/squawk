@@ -213,7 +213,10 @@ function foldSavedDefaults(home: Home, store: AgentAccountStore): AgentAccountSt
   const chosen = saved.success ? PROVIDER_IDS.flatMap((provider) => saved.data[provider] === undefined ? [] : [[provider, saved.data[provider]] as const]) : [];
   if (chosen.length > 0) {
     for (const { root } of loadWorkspaceConfigSync(home.workspaceConfig).projects) {
-      selections[root] = { ...Object.fromEntries(chosen), ...selections[root] };
+      const selection = { ...selections[root] };
+      // A salvaged key holds undefined, which is no choice: it must not hide the saved default.
+      for (const [provider, id] of chosen) selection[provider] ??= id;
+      selections[root] = selection;
     }
   }
   return { ...rest, selections };

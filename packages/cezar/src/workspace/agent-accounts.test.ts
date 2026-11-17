@@ -298,11 +298,12 @@ describe('agent accounts store', () => {
 
     it('folds a saved machine-wide default into registered projects once, and reads none afterwards', async () => {
       const project = (root: string) => ({ id: root.slice(1), root, name: root, addedAt: '', lastOpenedAt: '', source: 'local' });
-      Home.seedBytes(testHome(), workspaceConfigPath(undefined, testHome()), Buffer.from(JSON.stringify({ schemaVersion: 1, projects: [project('/a'), project('/b')] })));
-      write({ accounts: [account('work'), account('client')], defaults: { claude: 'work' }, selections: { '/b': { claude: 'client' } } });
+      Home.seedBytes(testHome(), workspaceConfigPath(undefined, testHome()), Buffer.from(JSON.stringify({ schemaVersion: 1, projects: [project('/a'), project('/b'), project('/c')] })));
+      write({ accounts: [account('work'), account('client')], defaults: { claude: 'work' }, selections: { '/b': { claude: 'client' }, '/c': { claude: 123 } } });
 
       const store = await loadAgentAccounts(testHome());
-      expect(store.selections).toEqual({ '/a': { claude: 'work' }, '/b': { claude: 'client' } });
+      // '/c' holds a malformed choice, which is no choice: the saved default applies.
+      expect(store.selections).toEqual({ '/a': { claude: 'work' }, '/b': { claude: 'client' }, '/c': { claude: 'work' } });
       expect(selectionFor(store, '/never-registered', 'claude')).toBeUndefined();
       const saved = JSON.parse(readFileSync(agentAccountsPath(testHome()), 'utf8')) as Record<string, unknown>;
       expect(saved).not.toHaveProperty('defaults');
