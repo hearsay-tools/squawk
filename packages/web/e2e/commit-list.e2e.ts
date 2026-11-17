@@ -138,15 +138,13 @@ afterAll(async () => {
 beforeEach(() => { openCommits() })
 
 describe(`the task Commits tab on a ${COMMITS}-commit branch`, () => {
-  it('serves every commit from the API — the list really is unbounded', async () => {
+  it('serves every commit and virtualizes the list with a bounded DOM', async () => {
     const payload = (await (await fetch(`${baseUrl}/api/v1/runs/${RUN_ID}/commits`)).json()) as {
       commits: unknown[]
     }
     // No server-side cap on this route, which is the whole reason the tab needs windowing.
     expect(payload.commits).toHaveLength(COMMITS)
-  }, 60_000)
 
-  it('virtualizes the list and keeps the DOM bounded', () => {
     const view = browser.evaluate(`(() => {
       const list = document.querySelector('[data-slot="task-commits"]')
       return JSON.stringify({
