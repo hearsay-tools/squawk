@@ -1,3 +1,4 @@
+import './every-runner.testkit.ts';
 import { partitionParity, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -51,11 +52,12 @@ export function describeSkillProvisionParity(part: ParityPart, collect?: ParityC
         const dir = mkdtempSync(join(tmpdir(), 'native-step-wire-'));
         const wireFile = join(dir, 'wire.ndjson');
         try {
-          const result = await driveRun(runner, { prompt: 'native step arguments' }, run => run?.status === 'waiting', 30_000, undefined, {
+          const result = await driveRun(runner, { prompt: 'native step arguments' }, run => run?.status === 'waiting' || run?.status === 'failed', 30_000, undefined, {
             workflowDef: plannedWorkflow(skillTaskSteps('probe-project')),
             env: { CEZ_MOCK_STDIN_FILE: wireFile },
             beforeStart: ({ manager }) => manager.setSkillCatalog(new RunnerSkillCatalog({ adapters: hostSkillCatalogAdapters({ [runner]: HARNESS_ADAPTERS[runner].mockBin }) })),
           });
+          expect(result.record?.error).toBeUndefined();
           expect(result.events.some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE'))).toBe(true);
           const wire = read(wireFile);
           expect(wire).toContain('probe-project');
@@ -100,7 +102,7 @@ export function describeSkillProvisionParity(part: ParityPart, collect?: ParityC
       }, 60_000); // bound: both ambiguity cases must settle before any session opens.
 
       it(`${runner} relative project skillPath starts in a task worktree`, async () => {
-        const result = await driveRun(runner, { prompt: 'worktree arguments' }, run => run?.status === 'waiting', 30_000, undefined, {
+        const result = await driveRun(runner, { prompt: 'worktree arguments' }, run => run?.status === 'waiting' || run?.status === 'failed', 30_000, undefined, {
           workflowDef: plannedWorkflow(skillTaskSteps('probe-project')), worktree: true, skillPaths: { task: '.agents/skills/probe-project/SKILL.md' },
           beforeStart: ({ manager }) => manager.setSkillCatalog(new RunnerSkillCatalog({ adapters: { [runner]: {
             discover: async (query: SkillCatalogQuery) => ({ skills: [{ id: 'probe-project', name: 'Probe', scope: 'repo', path: join(query.cwd, '.agents/skills/probe-project/SKILL.md') }], problems: [] }),

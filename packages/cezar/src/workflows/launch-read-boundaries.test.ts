@@ -553,8 +553,8 @@ it.each(['skill', 'source'] as const)('P6-40 live slash keeps the native session
   const target = manager.startRun(acceptedWorkflow, { task: 'target', worktree: false });
   await waitForOpen(target.id, 1);
   disableTeamSkill(kind);
-  events[0]!({ type: 'turn-end' });
   expect(manager.sendMessage(target.id, [{ type: 'text', text: '/team-playbook current input' }])).toBe(true);
+  events[0]!({ type: 'turn-end' });
   // bound: native reference resolution completes asynchronously before transport delivery.
   await waitForProduct(manager, store, () => delivered.length === 1);
   expect(delivered).toEqual([[{ type: 'skill', id: 'team-playbook', path: join(root, '.claude/skills/team-playbook/SKILL.md'), args: 'current input' }]]);
