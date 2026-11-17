@@ -1,5 +1,4 @@
 import { writeMockSkills, refreshMockSkills } from './runner-skills-fixture'
-import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
