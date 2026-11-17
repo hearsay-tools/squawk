@@ -86,9 +86,7 @@ function fakeManager(store: RunStore): RunManager {
 }
 
 describe('automation task templates', () => {
-  it.each(['github', 'schedule', 'once'].flatMap((kind) =>
-    ([1, 2, 3] as const).map((variants) => ({ kind, variants })),
-  ))('copies completion controls to a $kind task and ignores saved variant count $variants', async ({ kind, variants }) => {
+  it.each(['github', 'schedule', 'once'])('copies completion controls to a %s task and ignores a saved variant count greater than one', async (kind) => {
     const root = await mkdtemp(join(tmpdir(), 'cezar-completion-template-'));
     const store = RunStore.open(join(root, '.ai/cezar'));
     const manager = createFixtureManager(store, root, { home: testHome(), semaphore: new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 0 } }) });
@@ -99,7 +97,7 @@ describe('automation task templates', () => {
         { allowWorkers: false }, { allowMessaging: false }];
       for (const [index, completion] of choices.entries()) {
         const receiptId = `completion-${index}`;
-        const task = { variants, ...completion };
+        const task = { variants: 2, ...completion };
         const launch = () => kind === 'github'
           ? launchAutomationRun({ root, manager, store, definition: { ...definition, task: { ...definition.task, ...task } },
             candidate: { ...candidate, number: candidate.number + index, url: `https://github.com/acme/demo/issues/${candidate.number + index}` }, receiptId,

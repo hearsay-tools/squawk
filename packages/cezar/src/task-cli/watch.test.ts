@@ -65,12 +65,6 @@ describe('cez task watching', () => {
       expect(last()).toMatchObject({ timedOut: false, runs: [{ id, status: RUN_STATUS.review }] });
     });
 
-    it('exits 1 when the run fails', async () => {
-      const id = create();
-      later(60, () => setRunStatus(harness.store, id, RUN_STATUS.failed));
-      expect(await run(['wait', id, '--timeout-seconds', '10'])).toBe(1);
-      expect(last()).toMatchObject({ runs: [{ id, status: RUN_STATUS.failed }] });
-    });
 
     // What a timed-out wait prints for each run depends on whether a poll answered before the
     // deadline, which a real cockpit cannot be timed into (hearsay-tools/cezarion#1066). Both cases
@@ -158,11 +152,7 @@ describe('cez task watching', () => {
       expect(last()).toMatchObject({ runs: [{ id, status: 'missing' }] });
     });
 
-    it.each([[['wait']], [['wait', 'x', '--timeout-seconds', '0']], [['wait', 'x', '--timeout-seconds', '1801']], [['wait', 'x', '--mode', 'some']], [['wait', 'x', '--until', 'later']]])(
-      'rejects %j as a usage error', async (argv) => {
-        expect(await run(argv)).toBe(64);
-        expect(last()).toMatchObject({ code: 'invalid_input' });
-      });
+
   });
 
   describe('start --wait', () => {

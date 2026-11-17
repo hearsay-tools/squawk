@@ -424,7 +424,7 @@ describe('ScheduleRunner', () => {
   });
 
   it('the third failure pauses the current on-disk revision when another process edited it during the launch', async () => {
-    const { dir, store, definition, runner, launch, clock } = await setup();
+    const { dir, store, definition, runner, launch, clock, changes } = await setup();
     runner.dueAt(definition);
     store.setState('nightly', (current) => ({ ...current, consecutiveFailures: 2 }));
     launch.mockImplementationOnce(async () => {
@@ -437,10 +437,11 @@ describe('ScheduleRunner', () => {
     const file = JSON.parse(readFileSync(join(dir, 'automations.json'), 'utf8'));
     expect(file.automations).toEqual([expect.objectContaining({ id: 'nightly', name: 'Nightly (edited elsewhere)', task: { prompt: 'Bump deps, then lint' }, enabled: false, revision: 3 })]);
     expect(store.logs({ automationId: 'nightly' })[0]).toMatchObject({ result: 'failed', revision: 3, reason: expect.stringContaining('Paused after 3') });
+    expect(changes.at(-1)).toBe('nightly');
   });
 
   it('the third failure leaves a definition another process paused during the launch alone', async () => {
-    const { dir, store, definition, runner, launch, clock } = await setup();
+    const { dir, store, definition, runner, launch, clock, changes } = await setup();
     runner.dueAt(definition);
     store.setState('nightly', (current) => ({ ...current, consecutiveFailures: 2 }));
     launch.mockImplementationOnce(async () => {
@@ -449,25 +450,12 @@ describe('ScheduleRunner', () => {
       throw new Error('boom');
     });
     clock.set(FIRST_RUN + 1_000);
+    const before = changes.length;
     expect(await runner.fire(definition)).toMatchObject({ result: 'failed' });
     const file = JSON.parse(readFileSync(join(dir, 'automations.json'), 'utf8'));
     expect(file.automations).toEqual([expect.objectContaining({ id: 'nightly', enabled: false, revision: 2 })]);
     expect(store.logs({ automationId: 'nightly' }).some((row) => row.reason?.startsWith('Paused after'))).toBe(false);
-  });
-
-  it('the third failure pauses the current revision when the definition was edited during the launch', async () => {
-    const { store, definition, runner, launch, clock, changes } = await setup();
-    runner.dueAt(definition);
-    store.setState('nightly', (current) => ({ ...current, consecutiveFailures: 2 }));
-    launch.mockImplementationOnce(async () => {
-      store.update('nightly', 1, { name: 'Nightly (edited)', enabled: true, kind: 'schedule', schedule: definition.schedule, task: definition.task });
-      throw new Error('boom');
-    });
-    clock.set(FIRST_RUN + 1_000);
-    expect(await runner.fire(definition)).toMatchObject({ result: 'failed' });
-    expect(store.get('nightly')).toMatchObject({ name: 'Nightly (edited)', enabled: false, revision: 3 });
-    expect(store.logs({ automationId: 'nightly' })[0]).toMatchObject({ result: 'failed', revision: 3, reason: expect.stringContaining('Paused after 3') });
-    expect(changes.at(-1)).toBe('nightly');
+    expect(changes.length).toBeGreaterThan(before);
   });
 
   // An edit during the launch is what the PUT route does: a new revision, then `nextRunAt`
@@ -514,22 +502,6 @@ describe('ScheduleRunner', () => {
     clock.set(FIRST_RUN + 1_000);
     expect(await runner.fire(definition)).toMatchObject({ result: 'launched' });
     expect(store.state('nightly')).toMatchObject({ revision: 2, nextRunAt: iso(FIRST_RUN + DAY), lastRunAt: iso(FIRST_RUN) });
-  });
-
-  it('the third failure skips the pause when the definition was paused elsewhere during the launch', async () => {
-    const { store, definition, runner, launch, clock, changes } = await setup();
-    runner.dueAt(definition);
-    store.setState('nightly', (current) => ({ ...current, consecutiveFailures: 2 }));
-    launch.mockImplementationOnce(async () => {
-      store.update('nightly', 1, { name: 'Nightly', enabled: false, kind: 'schedule', schedule: definition.schedule, task: definition.task });
-      throw new Error('boom');
-    });
-    clock.set(FIRST_RUN + 1_000);
-    const before = changes.length;
-    expect(await runner.fire(definition)).toMatchObject({ result: 'failed' });
-    expect(store.get('nightly')).toMatchObject({ enabled: false, revision: 2 });
-    expect(store.logs({ automationId: 'nightly' }).some((row) => row.reason?.startsWith('Paused after'))).toBe(false);
-    expect(changes.length).toBeGreaterThan(before);
   });
 
   it('retry launches nothing when the receipt is no longer in launch-error', async () => {
