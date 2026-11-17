@@ -211,20 +211,14 @@ afterAll(async () => {
 })
 
 describe('thread virtualization on a 1,000-row transcript', () => {
-  it('force-flat renders every row (the before measurement)', () => {
+  it('auto mode virtualizes past the threshold and keeps the DOM bounded', () => {
     openThread('?thread=flat')
     expect(browser.evaluate(`document.querySelector('[data-slot="thread-rows"]').dataset.virtualized`)).toBe('false')
     const flatRows = rowCount()
-    const flatAssistantWidth = assistantWidth()
-    expect(flatRows).toBe(ROWS) // the generator's own arithmetic, end to end
-    expect(flatAssistantWidth).toBeGreaterThan(200)
-  }, 90_000)
-
-  it('auto mode virtualizes past the threshold and keeps the DOM bounded', () => {
-    openThread('?thread=flat')
-    const flatRows = rowCount()
     const flatDom = domSize()
     const flatAssistantWidth = assistantWidth()
+    expect(flatRows).toBe(ROWS)
+    expect(flatAssistantWidth).toBeGreaterThan(200)
     openThread()
     expect(browser.evaluate(`document.querySelector('[data-slot="thread-rows"]').dataset.virtualized`)).toBe('true')
 

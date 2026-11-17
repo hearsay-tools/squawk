@@ -122,18 +122,11 @@ afterAll(async () => {
 })
 
 describe(`diff virtualization on a generated ${FIXTURE_FILES}-file changeset`, () => {
-  it('force-flat renders every file and every line (the before measurement)', () => {
-    openChanges('flat')
-
-    expect(browser.count('[data-slot="diff-file"]')).toBe(changedFiles)
-    const flatLines = lineCount()
-    // Every line of every file: ~2 rows per changed line (a del and an add).
-    expect(flatLines).toBeGreaterThan(FIXTURE_FILES * LINES_PER_FILE)
-  }, 120_000)
-
   it('force-virtual holds a viewport window instead of the whole changeset', () => {
     openChanges('flat')
+    expect(browser.count('[data-slot="diff-file"]')).toBe(changedFiles)
     const flatLines = lineCount()
+    expect(flatLines).toBeGreaterThan(FIXTURE_FILES * LINES_PER_FILE)
     const flatDom = domSize()
     openChanges('virtual')
 
