@@ -1,6 +1,5 @@
 import type { RunnerId } from '../core/agent-runner.ts';
-import { regexEnd } from './blank.ts';
-import { blankOnce, lineAt, type SourceRule } from './source-rule.ts';
+import { child, stringOf, type AstRule, type EsNode } from './ast-rule.ts';
 
 /** Exhaustive runner keys keep a new backend from bypassing the import guard. */
 export const RUNNER_MOCKS = {
@@ -28,73 +27,6 @@ const FILE_NATIVE_TOKENS: Readonly<Record<string, readonly string[]>> = {
   // OpenCode's native question reply consumes this flag, outside shared scenarios.
   'packages/cezar/scripts/mock-opencode-serve.mjs': ['resume-cezar-done'],
 };
-const IMPORT = /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)(['"])[^'"\n]*mock-scenario\.mjs\1/g;
-
-function importsScenario(source: string, code: string): boolean {
-  return [...source.matchAll(IMPORT)].some(match => code[match.index] === source[match.index]);
-}
-
-interface Literal { offset: number; value: string; regex: boolean }
-
-/** Blanked code retains braces, including nested template substitutions, but no comment braces. */
-function afterSubstitution(code: string, start: number): number {
-  let depth = 1;
-  let i = start;
-  for (; i < code.length && depth; i++) {
-    if (code[i] === '{') depth++;
-    else if (code[i] === '}') depth--;
-  }
-  return i;
-}
-
-function templateParts(source: string, code: string, start: number): { parts: Literal[]; end: number } {
-  const parts: Literal[] = [];
-  let segment = start + 1;
-  let i = segment;
-  for (; i < source.length; i++) {
-    if (source[i] === '\\') { i++; continue; }
-    if (source[i] === '`') break;
-    if (code.slice(i, i + 2) !== '${') continue;
-    parts.push({ offset: segment, value: source.slice(segment, i), regex: false });
-    i = afterSubstitution(code, i + 2);
-    segment = i;
-    i--;
-  }
-  parts.push({ offset: segment, value: source.slice(segment, i), regex: false });
-  return { parts, end: i };
-}
-
-function literalEnd(source: string, start: number, delimiter: string): number {
-  if (delimiter === '/') return regexEnd(source, start);
-  let i = start + 1;
-  for (; i < source.length; i++) {
-    if (source[i] === '\\') i++;
-    else if (source[i] === delimiter || source[i] === '\n') break;
-  }
-  return source[i] === delimiter ? i : -1;
-}
-
-/** Template text and substitution code stay separate; comments in either code scope stay ignored. */
-function literals(source: string, code: string): Literal[] {
-  const found: Literal[] = [];
-  const templateEnds = new Set<number>();
-  for (let i = 0; i < source.length; i++) {
-    const delimiter = source[i]!;
-    if (!['\'', '"', '`', '/'].includes(delimiter) || code[i] !== delimiter || templateEnds.has(i)) continue;
-    if (delimiter === '`') {
-      const template = templateParts(source, code, i);
-      templateEnds.add(template.end);
-      found.push(...template.parts);
-      continue;
-    }
-    const end = literalEnd(source, i, delimiter);
-    if (end < 0) continue;
-    found.push({ offset: i, value: source.slice(i + 1, end), regex: delimiter === '/' });
-    i = end;
-  }
-  return found;
-}
-
 function sharedToken(file: string, token: string): boolean {
   if (NATIVE_TOKENS.has(token) || FILE_NATIVE_TOKENS[file]?.includes(token)) return false;
   return SHARED.some(name => token === name || token.startsWith(`${name}-`));
@@ -137,21 +69,39 @@ function namesShared(file: string, value: string, regex: boolean): boolean {
   return regex && groupedShared(file, value);
 }
 
-export const mockScenarioBoundary: SourceRule = {
+export const mockScenarioBoundary: AstRule = {
   name: 'mock-scenario-boundary',
   description: 'Shared mock scripts belong to mock-scenario.mjs (hearsay-tools/cezarion#2769).',
   applies: file => /^packages\/cezar\/scripts\/mock-[^/]+\.mjs$/.test(file)
     && file !== 'packages/cezar/scripts/mock-scenario.mjs',
-  check: (file, source) => {
-    const code = blankOnce(source);
-    if (!importsScenario(source, code)) {
-      return REQUIRED_MOCKS.has(file)
-        ? [{ line: 1, message: 'Runner mocks must import mock-scenario.mjs (hearsay-tools/cezarion#2774).' }]
-        : [];
-    }
-    return literals(source, code).filter(literal => namesShared(file, literal.value, literal.regex)).map(literal => ({
-      line: lineAt(source, literal.offset),
-      message: 'Use mock-scenario.mjs for shared scenario selection and scripts (hearsay-tools/cezarion#2769).',
-    }));
+  create(report, { file, sourceCode }) {
+    let imported = false;
+    const sites: EsNode[] = [];
+    const scenario = (node: EsNode) => {
+      const value = stringOf(child(node, 'source'));
+      if (value?.endsWith('mock-scenario.mjs')) imported = true;
+    };
+    return {
+      ImportDeclaration: scenario,
+      ExportNamedDeclaration: scenario,
+      ExportAllDeclaration: scenario,
+      ImportExpression: scenario,
+      Literal(node) {
+        const regex = node.regex as { pattern: string } | undefined;
+        const value = regex?.pattern ?? (typeof node.value === 'string' ? sourceCode.getText(node).slice(1, -1) : undefined);
+        if (value !== undefined && namesShared(file, value, regex !== undefined)) sites.push(node);
+      },
+      TemplateElement(node) {
+        const value = node.value as { raw: string };
+        if (namesShared(file, value.raw, false)) sites.push(node);
+      },
+      'Program:exit'(node) {
+        if (!imported) {
+          if (REQUIRED_MOCKS.has(file)) report(node, 'Runner mocks must import mock-scenario.mjs (hearsay-tools/cezarion#2774).');
+          return;
+        }
+        for (const site of sites) report(site, 'Use mock-scenario.mjs for shared scenario selection and scripts (hearsay-tools/cezarion#2769).');
+      },
+    };
   },
 };
