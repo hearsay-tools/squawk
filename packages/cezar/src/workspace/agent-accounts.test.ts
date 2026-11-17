@@ -274,8 +274,8 @@ describe('agent accounts store', () => {
         }, testHome()),
       ]);
       const store = await loadAgentAccounts(testHome());
-      // Last-writer-wins only inside the read→rename window; neither write is lost outright.
-      expect(store.accounts.length + Object.keys(store.selections).length).toBeGreaterThanOrEqual(2);
+      expect(store.accounts.map((entry) => entry.id)).toEqual(['work', 'client']);
+      expect(store.selections['/a']).toEqual({ claude: 'work' });
     });
   });
 

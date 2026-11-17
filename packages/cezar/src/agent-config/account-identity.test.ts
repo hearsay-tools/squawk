@@ -41,7 +41,7 @@ describe('readAccountIdentity', () => {
   };
 
   describe('claude', () => {
-    it('reads the identity out of the account\'s OWN .claude.json', async () => {
+    it('reads only named identity fields from the account\'s OWN .claude.json', async () => {
       const dir = claudeAccount({
         oauthAccount: {
           emailAddress: 'me@example.com',
@@ -49,17 +49,20 @@ describe('readAccountIdentity', () => {
           organizationName: "Me's Organization",
           organizationRole: 'admin',
           seatTier: 'max',
+          accountUuid: 'uuid-should-not-surface',
+          organizationUuid: 'org-uuid-should-not-surface',
         },
+        primaryApiKey: 'sk-should-not-surface',
+        oauthToken: 'token-should-not-surface',
       });
       const identity = await readAccountIdentity('claude', dir);
-      expect(identity.available).toBe(true);
-      expect(identity.fields).toEqual([
+      expect(identity).toEqual({ available: true, fields: [
         { label: 'Email', value: 'me@example.com' },
         { label: 'Name', value: 'Me' },
         { label: 'Organization', value: "Me's Organization" },
         { label: 'Role', value: 'admin' },
         { label: 'Seat', value: 'max' },
-      ]);
+      ] });
     });
 
     it('omits a row the vendor left blank rather than rendering an empty one', async () => {
@@ -77,32 +80,18 @@ describe('readAccountIdentity', () => {
       expect((await readAccountIdentity('claude', dir)).available).toBe(false);
       expect((await readAccountIdentity('claude', dir)).reason).toContain('Not signed in');
     });
-
-    it('passes NOTHING through — only the named identity fields', async () => {
-      const dir = claudeAccount({
-        oauthAccount: {
-          emailAddress: 'me@example.com',
-          accountUuid: 'uuid-should-not-surface',
-          organizationUuid: 'org-uuid-should-not-surface',
-        },
-        // Everything else in the file, including anything credential-shaped.
-        primaryApiKey: 'sk-should-not-surface',
-        oauthToken: 'token-should-not-surface',
-      });
-      const identity = await readAccountIdentity('claude', dir);
-      const rendered = JSON.stringify(identity);
-      expect(rendered).toContain('me@example.com');
-      for (const secret of ['sk-should-not-surface', 'token-should-not-surface', 'uuid-should-not-surface', 'org-uuid-should-not-surface']) {
-        expect(rendered, secret).not.toContain(secret);
-      }
-    });
   });
 
   describe('codex', () => {
-    it('reads the identity out of the id_token claims', async () => {
+    it('reads only named identity fields from the id_token claims', async () => {
       const dir = codexAccount({
+        OPENAI_API_KEY: 'sk-should-not-surface',
         tokens: {
+          access_token: 'access-should-not-surface',
+          refresh_token: 'refresh-should-not-surface',
+          account_id: 'acct-should-not-surface',
           id_token: jwt({
+            sub: 'sub-should-not-surface',
             email: 'me@example.com',
             name: 'Me',
             'https://api.openai.com/auth': { chatgpt_plan_type: 'pro' },
@@ -110,12 +99,11 @@ describe('readAccountIdentity', () => {
         },
       });
       const identity = await readAccountIdentity('codex', dir);
-      expect(identity.available).toBe(true);
-      expect(identity.fields).toEqual([
+      expect(identity).toEqual({ available: true, fields: [
         { label: 'Email', value: 'me@example.com' },
         { label: 'Name', value: 'Me' },
         { label: 'Plan', value: 'pro' },
-      ]);
+      ] });
     });
 
     it('names an API-key login instead of calling it "not signed in"', async () => {
@@ -129,29 +117,6 @@ describe('readAccountIdentity', () => {
     it('degrades on a token that is not a readable JWT', async () => {
       const dir = codexAccount({ tokens: { id_token: 'not-a-jwt' } });
       expect((await readAccountIdentity('codex', dir)).available).toBe(false);
-    });
-
-    it('never surfaces the credentials sitting in the same file', async () => {
-      const dir = codexAccount({
-        OPENAI_API_KEY: 'sk-should-not-surface',
-        tokens: {
-          access_token: 'access-should-not-surface',
-          refresh_token: 'refresh-should-not-surface',
-          account_id: 'acct-should-not-surface',
-          id_token: jwt({ email: 'me@example.com', sub: 'sub-should-not-surface' }),
-        },
-      });
-      const rendered = JSON.stringify(await readAccountIdentity('codex', dir));
-      expect(rendered).toContain('me@example.com');
-      for (const secret of [
-        'sk-should-not-surface',
-        'access-should-not-surface',
-        'refresh-should-not-surface',
-        'acct-should-not-surface',
-        'sub-should-not-surface',
-      ]) {
-        expect(rendered, secret).not.toContain(secret);
-      }
     });
   });
 

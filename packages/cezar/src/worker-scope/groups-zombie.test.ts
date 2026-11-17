@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RunRecord } from '@open-mercato/cezar-contract';
 import type { ScopeRecord } from './scope.ts';
 import { WorkerScopes, type ScopeStore } from './worker-scopes.ts';
@@ -20,6 +20,9 @@ vi.mock('../core/process-stat.ts', async original => ({
 }));
 
 describe.runIf(process.platform === 'linux')('a zombie-only group (hearsay-tools/squawk#3698 review)', () => {
+  beforeEach(() => { vi.useFakeTimers(); signalled.length = 0; members.running = false; });
+  afterEach(() => vi.useRealTimers());
+
   it('stop kills it once and does not wait for it; a scope never stopped still counts it as running', async () => {
     const workerId = randomUUID();
     const group = { pid: 4242, pgid: 4242, startToken: '11111111-1111-4111-8111-111111111111:100' };
@@ -31,9 +34,8 @@ describe.runIf(process.platform === 'linux')('a zombie-only group (hearsay-tools
     };
     const scopes = new WorkerScopes(store, () => ({ backend: 'groups', reason: 'test' }));
     expect(scopes.empty(workerId)).toBe(false);
-    const started = Date.now();
     expect(await scopes.stop(workerId, 5_000)).toEqual({ stopped: true });
-    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(vi.getTimerCount()).toBe(0);
     expect(signalled).toEqual([[4242, 'SIGKILL']]);
     expect(record.groups).toEqual([]);
     record = { workerId, cgroups: [], jobs: [], groups: [group] };
@@ -55,7 +57,9 @@ describe.runIf(process.platform === 'linux')('a zombie-only group (hearsay-tools
     try {
       scopes.kill(workerId);
       expect(scopes.stopped(workerId)).toBe(false);
-      expect(await scopes.stop(workerId, 50)).toMatchObject({ stopped: false });
+      const stopping = scopes.stop(workerId, 50);
+      await vi.advanceTimersByTimeAsync(50);
+      expect(await stopping).toMatchObject({ stopped: false });
       expect(record.groups).toEqual([group]);
     } finally { members.running = false; }
   });

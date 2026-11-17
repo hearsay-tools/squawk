@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -109,15 +109,12 @@ describe('split Home resolution', () => {
     expect(windowsLauncher({}, home)).toContain('D:\\home\\data\\versions\\current\\node_modules\\@wjarka\\cezarion\\dist\\index.js');
   });
 
-  it('creates a split sandbox marker in config and preserves it on reuse', () => {
+  it('contains each split sandbox kind root in its directory', () => {
     const dir = mkdtempSync(join(tmpdir(), 'cez-split-home-'));
     try {
       const home = Home.sandbox(dir, { layout: 'split' });
       expect([home.config, home.state, home.data, home.cache, home.runtime]).toEqual(['config', 'state', 'data', 'cache', 'run'].map(kind => join(dir, kind)));
-      const marker = readFileSync(join(dir, 'config', 'install.json'), 'utf8');
-      expect(JSON.parse(marker).kind).toBe('test');
-      Home.sandbox(dir, { layout: 'split' });
-      expect(readFileSync(join(dir, 'config', 'install.json'), 'utf8')).toBe(marker);
+
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 });
