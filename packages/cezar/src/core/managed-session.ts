@@ -59,6 +59,7 @@ export function startManagedSession(
       onActivity: () => { activity(); opts.onActivity?.(); },
       onUiEvent: event => {
         if (event.type === 'turn.started') begin();
+        // oxlint-disable-next-line cez/ask-requested-read-outside-projection -- Pause the transport on the event type; no payload is read.
         if (event.type === 'ask.requested') pause();
         if (event.type === 'permission.requested') { pendingPermissions.add(event.requestId); pause(); }
         if (event.type === 'permission.resolved' && pendingPermissions.delete(event.requestId) && !pendingPermissions.size) begin();

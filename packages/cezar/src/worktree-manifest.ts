@@ -10,7 +10,7 @@ import { runGit } from './git-command.ts';
 
 /**
  * The record of every path Squawk wrote into a task worktree (hearsay-tools/cezarion#1814), for
- * every module that writes there (`.ai/ast-grep/rules/worktree-write-outside-manifest.yml` names
+ * every module that writes there (`cez/worktree-write-outside-manifest` names
  * them). It lives in the worktree's private git dir, so it dies with the worktree and nothing in
  * the tree (a tool, a diff, autosave) sees it. A writer replaces or removes a path only while the
  * manifest lists it for that writer and the path still is what Squawk left there, so a file the

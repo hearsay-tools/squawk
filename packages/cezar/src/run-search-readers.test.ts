@@ -5,7 +5,7 @@ import { blank } from './lint/blank.ts';
 
 /**
  * Run search has one home in `packages/contract/src/run-search.ts` (hearsay-tools/cezarion#1807).
- * The ast-grep rule `run-search-field-list-outside-contract` refuses a second field list; this
+ * The oxlint AST rule `run-search-field-list-outside-contract` refuses a second field list; this
  * pins the other half: every reader still asks the contract. A reader that swapped the call for its
  * own text test would pass the rule if it listed the fields some other way.
  */
