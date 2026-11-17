@@ -6,11 +6,20 @@ import { child, stringOf, type EsNode, type Visitors } from './ast-rule.ts';
  * Oxlint owns parsing. This translates ESTree field shapes once per node and never reads source
  * text. Parent links stay on the original nodes so recursive engines cannot cycle.
  */
-const views = new WeakMap<EsNode, Node>();
-/** A view's own oxlint node and its structural children. Symbol keys stay out of `Object.keys`. */
+/**
+ * Per-node caches live on the nodes under symbol keys, which `Object.keys` and `for…in` skip:
+ * oxlint wraps `WeakMap`, and a map entry per node cost more than the work it saved.
+ * On an oxlint node: its view, its chain membership and its static text. On a view: its oxlint
+ * node and its structural children.
+ */
+const VIEW = Symbol('view');
+const CHAIN = Symbol('optional chain');
+const TEXT = Symbol('static text');
+const NO_TEXT = Symbol('no static text');
 const ORIGINAL = Symbol('original');
 const CHILDREN = Symbol('children');
 type ViewFields = Record<string | symbol, unknown>;
+const cache = (node: EsNode): ViewFields => node as unknown as ViewFields;
 const originalOf = (node: Node): EsNode | undefined => (node as unknown as ViewFields)[ORIGINAL] as EsNode | undefined;
 const isNode = (value: unknown): value is EsNode => typeof value === 'object' && value !== null
   && typeof (value as { type?: unknown }).type === 'string';
@@ -47,7 +56,6 @@ function literalType(node: EsNode): string {
   return 'NumericLiteral';
 }
 
-const chainMembership = new WeakMap<EsNode, boolean>();
 
 /** Only receiver/callee edges continue a chain; a nested ChainExpression starts a new one. */
 function chainReceiver(node: EsNode): EsNode | undefined {
@@ -59,20 +67,20 @@ function chainReceiver(node: EsNode): EsNode | undefined {
 
 /** Babel's optional node shapes begin at the first optional segment, leaving its base ordinary. */
 function optionalChainNode(node: EsNode): boolean {
-  const known = chainMembership.get(node);
+  const known = cache(node)[CHAIN] as boolean | undefined;
   if (known !== undefined) return known;
-  if (node.optional === true) { chainMembership.set(node, true); return true; }
+  if (node.optional === true) { cache(node)[CHAIN] = true; return true; }
   const pending: EsNode[] = [node];
   let current = chainReceiver(node);
   let optional = false;
   while (current) {
-    const cached = chainMembership.get(current);
+    const cached = cache(current)[CHAIN] as boolean | undefined;
     if (cached !== undefined) { optional = cached; break; }
     pending.push(current);
     if (current.optional === true) { optional = true; break; }
     current = chainReceiver(current);
   }
-  for (const member of pending) chainMembership.set(member, optional);
+  for (const member of pending) cache(member)[CHAIN] = optional;
   return optional;
 }
 
@@ -106,16 +114,16 @@ export function mapShape(out: Record<string, unknown>, node: EsNode, method: boo
 
 /** The same view is returned for every visit; its child views are built with it. */
 export function babelView(node: EsNode): Node {
-  const cached = views.get(node);
+  const cached = cache(node)[VIEW] as Node | undefined;
   if (cached) return cached;
   if (node.type === 'ChainExpression' && isNode(node.expression)) {
     const expression = babelView(node.expression);
-    views.set(node, expression);
+    cache(node)[VIEW] = expression;
     return expression;
   }
   const out = Object.create(VIEW_PROTOTYPE) as ViewFields;
   const view = out as unknown as Node;
-  views.set(node, view);
+  cache(node)[VIEW] = view;
   out[ORIGINAL] = node;
   const method = isMethodDefinition(node) || (node.type === 'Property' && node.method === true);
   if (method && isNode(node.value)) mergeMethodFields(out, node.value);
@@ -153,14 +161,14 @@ export function originalAt(root: Node, offset: number): EsNode {
   return index.get(offset) ?? originalNode(root);
 }
 
-const staticTexts = new WeakMap<EsNode, string | undefined>();
 
 /** Static text is evaluated once per immutable node, including an unknown result. */
 export function staticNodeText(node: EsNode | undefined): string | undefined {
   if (!node) return undefined;
-  if (staticTexts.has(node)) return staticTexts.get(node);
+  const known = cache(node)[TEXT] as string | typeof NO_TEXT | undefined;
+  if (known !== undefined) return known === NO_TEXT ? undefined : known;
   const text = evaluateStaticNodeText(node);
-  staticTexts.set(node, text);
+  cache(node)[TEXT] = text ?? NO_TEXT;
   return text;
 }
 

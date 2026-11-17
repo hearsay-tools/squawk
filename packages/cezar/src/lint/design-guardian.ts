@@ -244,6 +244,16 @@ function dialogToken(node: EsNode): string | undefined {
     ? `${owner}.${method}(` : undefined;
 }
 
+/**
+ * Each rule's pattern without the global flag, to test a whole literal before its lines. No pattern
+ * looks at a newline around a match, so a literal with no match has no line with one.
+ */
+let anywhere: Map<Rule, RegExp> | undefined;
+const matchesAnywhere = (rule: Rule, value: string): boolean => {
+  anywhere ??= new Map(DESIGN_RULES.map(each => [each, new RegExp(each.pattern.source, each.pattern.flags.replace('g', ''))]));
+  return anywhere.get(rule)!.test(value);
+};
+
 /** Source tokens come from syntax nodes; CSS keeps the line scanner in the runner. */
 export const designGuardian: AstRule = {
   name: 'design-guardian',
@@ -287,7 +297,8 @@ export const designGuardian: AstRule = {
       report(node, `${rule.name} — ${rule.why}: ${token.trim()} → hearsay-tools/cezarion#2422`, position);
     };
     const fixtureToken = (node: EsNode, value: string) => {
-      if (!fixtureRule) return;
+      // A line without either name changes nothing.
+      if (!fixtureRule || (!value.includes('CEZ_HOME') && !value.includes('CEZ_DRY_RUN'))) return;
       const firstLine = guardianLocation(node).line;
       let offset = 0;
       value.split('\n').forEach((line, index) => {
@@ -303,11 +314,12 @@ export const designGuardian: AstRule = {
       if (node.type === 'Literal' && typeof node.value !== 'string' && !node.regex) return;
       const value = context.sourceCode.getText(node);
       fixtureToken(node, value);
+      let lines: string[] | undefined;
       for (const rule of active) {
-        if (rule === fixtureRule) continue;
+        if (rule === fixtureRule || !matchesAnywhere(rule, value)) continue;
         // Each regex reads one literal, never the file or a containing source subtree.
         let offset = 0;
-        for (const line of value.split('\n')) {
+        for (const line of lines ??= value.split('\n')) {
           for (const match of line.matchAll(rule.pattern)) emit(rule, node, match[0], offset + match.index);
           offset += line.length + 1;
         }
