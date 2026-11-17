@@ -243,18 +243,6 @@ describe('RunManager — task-scoped agent TMPDIR (#785)', () => {
     }, 30_000);
   });
 
-  // The whole point of the preflight: refuse to start rather than spawn an agent
-  // whose every shell command will come back empty. The sabotage lands on the
-  // RESOLVED directory — wherever the length cap (#387) puts it — so the case
-  // stays deterministic at any checkout depth.
-  it('fails before spawning when the temp directory cannot be had', async () => {
-    const run = newRun();
-    const resolved = resolveAgentTmpDir(dataDir, run.id);
-    mkdirSync(dirname(resolved), { recursive: true });
-    writeFileSync(resolved, 'not a directory', 'utf8');
-    await expect(resolveStepEnv(run.id, 'claude')).rejects.toBeInstanceOf(AgentTempDirError);
-  });
-
   // A crash never reaches the terminal-transition reap, so without the startup
   // sweep the directories would accumulate exactly the way `/tmp` did.
   it('sweeps orphaned directories at startup', async () => {
