@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { daemonAlive, fallbackLines, focusedTests, gitIo, judgeSqueal, patchLimitLines, prepr, SQUEAL_WAIT_MS, squealChecks, squealLines } from './prepr.mjs';
+import { daemonAlive, fallbackLines, focusedTests, gitIo, judgeSqueal, patchLimitLines, prepr, SQUEAL_WAIT_MS, squealChecks, squealLines, testBudgetLines } from './prepr.mjs';
 
 const { GITHUB_PATCH_LIMITS, numstatRows } = createRequire(import.meta.url)('../.github/scripts/missing-patches.cjs');
 
@@ -395,4 +395,19 @@ test('prepr runs repository lint for docs-only changes too', async () => {
   const result = await prepr({ io, waitMs: 1000 });
   assert.equal(result.failed, false);
   assert.ok(io.calls.some(call => call[0] === 'node' && call[1] === 'packages/cezar/src/lint/run.ts' && call[2] === '--repository-only'));
+});
+
+test('the test budget counts as CI counts and reports the requirement without failing', async t => {
+  const small = fixtureRepo(t, cwd => fs.writeFileSync(path.join(cwd, 'a.test.ts'), LINE.repeat(400)));
+  assert.deepEqual(testBudgetLines('main', small), [{ ok: true, text: '- pass: test budget: +400 net test lines (+400/-0) in 1 file(s). At or under +400: no PR-body section or label needed. New test files: a.test.ts.' }]);
+  const large = fixtureRepo(t, cwd => fs.writeFileSync(path.join(cwd, 'b.spec.ts'), LINE.repeat(1001)));
+  const [line] = testBudgetLines('main', large);
+  assert.equal(line.ok, true);
+  assert.match(line.text, /^- note: test budget: \+1001 net test lines .*`## Test budget` section.*`test-budget` label/);
+});
+
+test('prepr prints the test budget line', async () => {
+  const io = fakeIo({ numstat: '500\t0\tsrc/a.test.ts\0', responses: { squeal: ok(live([], doneLint)) } });
+  const r = await prepr({ io, waitMs: 1000 });
+  assert.match(r.report, /- note: test budget: \+500 net test lines/);
 });

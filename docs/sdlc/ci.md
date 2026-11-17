@@ -73,7 +73,8 @@ post-build package check.
 evidence block for the PR body. It reads Squeal's results for the changed files and for
 oxlint, and always runs the lint runner’s repository-only checks (file length, design CSS,
 wait discipline and stale entries). It also runs typecheck (not for a docs-only change), citations, clones and the
-[GitHub patch limits](#github-patch-limits). Run it on the committed head. Its exit code
+[GitHub patch limits](#github-patch-limits). It reports the [test line budget](#test-line-budget)
+and never fails on it. Run it on the committed head. Its exit code
 is non-zero on a failing test, a lint finding, a type error, a bare citation, a new clone,
 or a committed file diff over the per-file patch limit or with a NUL byte.
 
@@ -588,6 +589,59 @@ or a new entry, and the same `baseline-growth` label approves one.
 A PR that edits `ci.yml` does not run its own definition (see § Proving a `ci.yml` change). A bare
 `workflow_dispatch` runs `complexity-gate` on the dispatched branch against `main`, so the
 dispatch proves the job too.
+
+### Test line budget
+
+<a id="test-line-budget"></a>
+
+Each pull request has a budget for the test code it adds (hearsay-tools/squawk#3810). Tests are
+about 61% of this repository's source lines, and a few large pull requests make most of their
+growth. The budget asks for a reason when a pull request adds much test code. It leaves small
+changes alone.
+
+**What counts.** The net change, added minus removed lines, in test code between the merge base
+and the head. Test code is a `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs` or `.cjs` file
+(not `.d.ts`, not under `dist/` or `node_modules/`) that is one of these:
+
+- a unit test or browser spec: `*.test.*`, `*.spec.*` or `*.e2e.*`;
+- test-support code: a file under an `e2e/`, `test/` or `fixtures/` directory, or a file named
+  `mock-*`, `*-harness` or `test-helpers`.
+
+Rename detection is off, so a moved or split file nets to 0. Test lines deleted elsewhere in the
+same pull request offset new ones. JSON baselines and snapshots never count. The count is in raw
+diff lines, the unit `git diff --numstat` prints.
+
+| Net test lines | The pull request needs |
+| --- | --- |
+| At or under +400 | Nothing |
+| +401 to +1,000 | A non-empty `## Test budget` section in its body |
+| Over +1,000 | The section and the owner's `test-budget` label |
+
+The `## Test budget` section names each new test file, the behavior that file protects and why no
+existing test covers it. The section ends at the next `#` or `##` heading; HTML comments do not
+count as content. Instead of a section, a pull request can delete or merge tests elsewhere until it
+is at or under +400. The pre-PR review reads the section: a reason that does not name the behavior,
+or a behavior an existing test already covers, is a finding. An agent never adds the `test-budget`
+label.
+
+**In CI.** The `Check the test line budget` step in `classify-pr` runs right after
+`Reject baseline growth`, on the same events. Like that step, it runs the workflow commit's own
+`.github/scripts/test-budget.cjs` and reads the head from Git objects, so no head code runs and a
+pull request cannot change its own budget. The step summary prints the net count, the threshold
+that applies and each counted file with its added and removed lines. `verify` requires
+`classify-pr`. The body and labels are read live, but an edited body or a new label does not start
+CI: add the section or the label, then re-run the failed `classify-pr` job.
+
+**Locally.** `npm run prepr` prints the same count for the committed branch against `origin/main`.
+It reports and never fails on the budget, because the body and labels do not exist yet. To judge a
+draft body as CI would:
+
+```bash
+node .github/scripts/test-budget.cjs --base origin/main --head HEAD --body-file <body.md> [--label test-budget]
+```
+
+Without `--body-file` the command prints the count only. With it, the command exits 1 when CI
+would fail.
 
 ### Vitest coverage artifact
 

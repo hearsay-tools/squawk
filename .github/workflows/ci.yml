@@ -229,6 +229,23 @@ jobs:
             fs.writeFileSync(gate, execFileSync('git', ['show', `${trusted}:.github/scripts/baseline-growth.cjs`]));
             const { checkPullRequest } = require(gate);
             await checkPullRequest({ github, context, core });
+      # Net test lines against the merge base (docs/sdlc/ci.md § Test line budget). Same trust
+      # rules as the baseline check: the workflow commit's own scripts, the head read as Git data.
+      - name: Check the test line budget
+        if: github.event_name == 'pull_request_target' || steps['resolve-dispatch'].outputs.valid == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const { execFileSync } = require('node:child_process');
+            const trusted = context.eventName === 'pull_request_target' ? context.sha : 'HEAD';
+            // test-budget.cjs requires baseline-growth.cjs from its own directory.
+            for (const name of ['baseline-growth.cjs', 'test-budget.cjs']) {
+              fs.writeFileSync(path.join(process.env.RUNNER_TEMP, name), execFileSync('git', ['show', `${trusted}:.github/scripts/${name}`]));
+            }
+            const { checkPullRequest } = require(path.join(process.env.RUNNER_TEMP, 'test-budget.cjs'));
+            await checkPullRequest({ github, context, core });
       - name: Require GitHub patches for changed text files
         if: github.event_name == 'pull_request_target'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

@@ -742,6 +742,17 @@ test('baseline growth is required through trusted classify-pr with default PR ev
   assert.equal(ci.on.pull_request_target.types, undefined, 'label changes must not cancel and restart CI');
 });
 
+test('the test line budget runs next to the baseline check from the same trusted commit', async () => {
+  const job = workflow().jobs['classify-pr'];
+  const baselineIndex = job.steps.findIndex(step => step.name === 'Reject baseline growth');
+  const check = job.steps[baselineIndex + 1];
+  assert.equal(check.name, 'Check the test line budget');
+  assert.equal(check.if, job.steps[baselineIndex].if);
+  const sources = ['.github/scripts/baseline-growth.cjs', '.github/scripts/test-budget.cjs'];
+  assert.deepEqual(await baselineGateSources(check.with.script, 'pull_request_target'), sources.map(s => `workflow-sha:${s}`));
+  assert.deepEqual(await baselineGateSources(check.with.script, 'workflow_dispatch'), sources.map(s => `HEAD:${s}`));
+});
+
 test('the patch check runs trusted workflow code after the history fetch for every PR base', async () => {
   const job = workflow().jobs['classify-pr'];
   const checkIndex = job.steps.findIndex(step => step.name === 'Require GitHub patches for changed text files');

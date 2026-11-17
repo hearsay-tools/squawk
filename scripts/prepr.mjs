@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // One local gate before a PR opens (spec: .ai/specs/2026-11-11-one-full-run-delivery-pipeline.md,
 // § Before the PR). It reads Squeal's results for the changed files and for lint, and runs
-// what Squeal does not cover: repository lint checks, typecheck, citations, clones and GitHub's per-file patch limits. CI runs everything else.
+// what Squeal does not cover: repository lint checks, typecheck, citations, clones and GitHub's per-file patch limits,
+// and reports the test line budget. CI runs everything else.
 import { spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const { isDocsPath } = require('../.github/scripts/change-surface.cjs');
 const { GITHUB_PATCH_LIMITS, localPatches, patchEnv } = require('../.github/scripts/missing-patches.cjs');
+const { SECTION_LIMIT, countTestLines, requirement } = require('../.github/scripts/test-budget.cjs');
 
 export const SQUEAL_WAIT_MS = 120_000;
 
@@ -175,6 +177,17 @@ export function patchLimitLines(base, io = realIo) {
   return [entry(true, `patch limits: every non-deletion file diff is at most ${limit} bytes with no NUL byte; ${total}`)];
 }
 
+/**
+ * The test line budget on the committed branch, counted as CI counts it. It reports and never fails:
+ * the PR body and labels that decide CI's result do not exist yet (docs/sdlc/ci.md § Test line budget).
+ */
+export function testBudgetLines(base, io = realIo) {
+  const { net, added, removed, files, newFiles } = countTestLines((...a) => io.gitBytes(...a).toString('utf8'), mergeBaseOf(base, io), 'HEAD');
+  const status = net > SECTION_LIMIT ? 'note' : 'pass';
+  const created = newFiles.length ? ` New test files: ${newFiles.join(', ')}.` : '';
+  return [{ ok: true, text: `- ${status}: test budget: ${net > 0 ? '+' : ''}${net} net test lines (+${added}/-${removed}) in ${files.length} file(s). ${requirement(net)}${created}` }];
+}
+
 function changedFiles(base, io) {
   const mergeBase = mergeBaseOf(base, io);
   const tracked = io.git('diff', '--name-only', '--no-renames', '-z', mergeBase);
@@ -194,7 +207,7 @@ export async function prepr({ base = 'origin/main', waitMs = SQUEAL_WAIT_MS, io 
   const directRuns = direct.map(([, cmd, args]) => io.run(cmd, args));
   const squeal = files.length ? await squealChecks(files, waitMs, io) : NO_SQUEAL;
   const entries = squeal.daemon ? squealLines(squeal, waitMs) : await fallbackLines(base, io);
-  entries.push(...patchLimitLines(base, io));
+  entries.push(...patchLimitLines(base, io), ...testBudgetLines(base, io));
   for (const [i, [name]] of direct.entries()) {
     const r = await directRuns[i];
     entries.push(entry(r.code === 0, `${name}${detail(r)}`));
