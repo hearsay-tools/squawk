@@ -366,7 +366,7 @@ describe('useRunHistory', () => {
       .mockResolvedValue(compactedTail)
     mockContext.mockResolvedValue(context())
     const { wrapper } = harness()
-    const { result, unmount } = renderHook(() => useRunHistory('run-1'), { wrapper })
+    const { result } = renderHook(() => useRunHistory('run-1'), { wrapper })
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
 
     act(() => {
@@ -503,7 +503,7 @@ describe('useRunHistory', () => {
       .mockRejectedValue(new Error('the cezar server answered /runs/run-1/history with an unexpected body'))
     mockContext.mockResolvedValue(context())
     const { wrapper } = harness()
-    const { result } = renderHook(() => useRunHistory('run-1'), { wrapper })
+    const { result, unmount } = renderHook(() => useRunHistory('run-1'), { wrapper })
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
 
     act(() => {
