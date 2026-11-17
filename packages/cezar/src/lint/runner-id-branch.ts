@@ -2,8 +2,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from '@babel/parser';
 import type { Node } from '@babel/types';
+import { child, children, nameOf, type AstRule, type EsNode } from './ast-rule.ts';
+import { literal, propertyName, unwrap } from './ast-syntax.ts';
 import { visit } from './home-boundary.ts';
-import { lineAt, repoRoot, type SourceRule } from './source-rule.ts';
+import { repoRoot } from './source-rule.ts';
 
 /**
  * Only `packages/cezar/src/core/` branches on a runner id. Shared code reads what the runner
@@ -150,12 +152,45 @@ export function staleRunnerIdBranches(root = repoRoot): string[] {
   });
 }
 
-export const runnerIdBranch: SourceRule = {
+export const runnerIdBranch: AstRule = {
   name: 'runner-id-branch',
   description: 'Only packages/cezar/src/core/ branches on a runner id; shared code reads RUNNER_FACTS (hearsay-tools/cezarion#2991).',
   applies,
-  check: (file, source) => scanRunnerIdBranches(file, source).map(({ site, offset }) => ({
-    line: lineAt(source, offset),
-    message: `${site}: only packages/cezar/src/core/ branches on a runner id. Read what the runner declares: RUNNER_FACTS in packages/cezar/src/core/runner-facts.ts, or add a fact there (hearsay-tools/cezarion#2991).`,
-  })),
+  create(report, { file, sourceCode }) {
+    const ids = RUNNER_ID_SET();
+    const seen = new Map<string, number>();
+    const text = (node: EsNode) => sourceCode.getText(node).replace(/\s+/g, ' ');
+    const runnerId = (node: EsNode | undefined) => {
+      const value = literal(node);
+      return value !== undefined && ids.has(value) ? value : undefined;
+    };
+    const tag = (node: EsNode) => {
+      const target = unwrap(node)!;
+      return target.type === 'Identifier' ? TAG_NAMES.has(nameOf(target)!)
+        : target.type === 'MemberExpression' && !target.computed && TAG_NAMES.has(propertyName(target)!);
+    };
+    const found = (node: EsNode, site: string) => {
+      const count = (seen.get(site) ?? 0) + 1;
+      seen.set(site, count);
+      if (count <= ((listed ??= readRunnerIdBranchExceptions()).find(entry => entry.file === file && entry.site === site)?.count ?? 0)) return;
+      report(node, `${site}: only packages/cezar/src/core/ branches on a runner id. Read what the runner declares: RUNNER_FACTS in packages/cezar/src/core/runner-facts.ts, or add a fact there (hearsay-tools/cezarion#2991).`);
+    };
+    return {
+      BinaryExpression(node) {
+        if (!OPERATORS.has(String(node.operator))) return;
+        const leftNode = child(node, 'left')!, rightNode = child(node, 'right')!;
+        const left = runnerId(leftNode), right = runnerId(rightNode);
+        if ((left === undefined) === (right === undefined)) return;
+        const other = left === undefined ? leftNode : rightNode;
+        if (literal(other) !== undefined || tag(other)) return;
+        found(node, `${text(other)} ${node.operator} '${left ?? right}'`);
+      },
+      SwitchStatement(node) {
+        const discriminant = child(node, 'discriminant')!;
+        if (tag(discriminant)) return;
+        const labels = children(node, 'cases').flatMap(item => runnerId(child(item, 'test')) ?? []);
+        if (labels.length) found(node, `switch (${text(discriminant)}) case ${labels.map(id => `'${id}'`).join(', ')}`);
+      },
+    };
+  },
 };
