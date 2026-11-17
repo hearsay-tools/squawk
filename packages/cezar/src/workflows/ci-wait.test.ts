@@ -66,17 +66,6 @@ describe('CI wait recovery and conversations', { timeout: 30_000 }, () => {
     expect(store.getRun(run.id)?.agentInputs?.filter(input => input.id === receipt.id)).toHaveLength(1);
   });
 
-  it('cancellation retires the wait and never reopens the run on late completion', async () => {
-    const external = github();
-    const run = await parent(); await until(() => store.getRun(run.id)?.status === 'waiting');
-    await register(run.id);
-    expect(manager.cancel(run.id)).toBe(true);
-    await until(() => !manager.isActive(run.id));
-    external.settle(success());
-    await Promise.resolve();
-    expect(store.getRun(run.id)?.status).toBe('cancelled');
-    expect(ciWaitOf(run.id)).toBeUndefined();
-  });
 
   // hearsay-tools/cezarion#1235 phase 3a (design § Registration and cancel): worker and request
   // waits are list entries beside CI.

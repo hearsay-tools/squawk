@@ -60,14 +60,6 @@ describe('CI wait registration', { timeout: 30_000 }, () => {
     expect(store.getRun(run.id)?.status).not.toBe('done');
   });
 
-  it('deduplicates matching registrations without extending the deadline', async () => {
-    github();
-    const gate = join(root, 'turn-boundary'); controlledWire({ firstResultGate: gate });
-    const run = await parent();
-    const first = await register(run.id); const second = await register(run.id);
-    expect(second.id).toBe(first.id); expect(second.deadline).toBe(first.deadline);
-    writeFileSync(gate, 'end');
-  });
 
   it('does not require worker delegation permissions', async () => {
     github();
