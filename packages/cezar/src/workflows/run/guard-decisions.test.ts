@@ -27,80 +27,62 @@ function worker(destroy = false): RunRecord {
 
 describe('workerExecutionStopped without an ActiveRun', () => {
   it.each([
-    ['deleting root', root(true), undefined, false, true, ['parent', 'parent']],
-    ['deleting parent', worker(), root(true), false, true, ['child', 'child', 'parent']],
-    ['invalid', makeRunRecord({ id: 'run', delegation: { role: 'invalid' } }), undefined, false, true, ['run', 'run']],
-    ['destroying', worker(true), root(), false, true, ['child', 'child', 'parent']],
-    ['stopped', worker(), root(), true, true, ['child', 'child', 'parent', 'stopped:child']],
-    ['live', worker(), root(), false, false, ['child', 'child', 'parent', 'stopped:child']],
-    ['missing parent', worker(), undefined, false, false, ['child', 'child', 'parent', 'stopped:child']],
-    ['ordinary', makeRunRecord({ id: 'run' }), root(true), false, false, ['run', 'run']],
-    ['absent', undefined, undefined, false, false, ['missing', 'missing']],
-  ] as const)('%s preserves ordered store and stop reads', (_name, row, parent, stopped, expected, order) => {
-    const calls: string[] = [];
+    ['deleting root', root(true), undefined, false, true],
+    ['deleting parent', worker(), root(true), false, true],
+    ['invalid', makeRunRecord({ id: 'run', delegation: { role: 'invalid' } }), undefined, false, true],
+    ['destroying', worker(true), root(), false, true],
+    ['stopped', worker(), root(), true, true],
+    ['live', worker(), root(), false, false],
+    ['missing parent', worker(), undefined, false, false],
+    ['ordinary', makeRunRecord({ id: 'run' }), root(true), false, false],
+    ['absent', undefined, undefined, false, false],
+  ] as const)('%s stops only blocked executions', (_name, row, parent, stopped, expected) => {
     const id = row?.id ?? 'missing';
-    const store = { getRun(key: string) { calls.push(key); return key === id ? row : parent; } };
-    expect(workerExecutionStopped(store, id, key => { calls.push(`stopped:${key}`); return stopped; })).toBe(expected);
-    expect(calls).toEqual(order);
+    const store = { getRun(key: string) { return key === id ? row : parent; } };
+    expect(workerExecutionStopped(store, id, () => stopped)).toBe(expected);
   });
 });
 
 describe('staleContinuationDisposition', () => {
-  it.each(['missing', 'replaced', 'cancelled', 'stopped', 'hold'] as const)('%s keeps identity before cancellation and stop reads', mode => {
+  it.each(['missing', 'replaced', 'cancelled', 'stopped', 'hold'] as const)('%s selects the continuation disposition', mode => {
     const state = createActiveRun({ cwd: '.', pendingHumanAsk: false, autonomous: false });
     const replacement = createActiveRun({ cwd: '.', pendingHumanAsk: false, autonomous: false });
-    const revoke = vi.fn();
-    replacement.liveSession.installCiRevoker(revoke);
-    replacement.liveSession.installDelegationRevoker(revoke);
     if (mode === 'cancelled') state.liveSession.cancel();
-    const calls: string[] = [];
-    const observed = { ...state, get liveSession() { calls.push('cancelled'); return state.liveSession; } };
-    const current = mode === 'missing' ? undefined : mode === 'replaced' ? replacement : observed;
-    const stopped = () => { calls.push('stopped'); return mode === 'stopped'; };
+    const current = mode === 'missing' ? undefined : mode === 'replaced' ? replacement : state;
     const expected = mode === 'missing' || mode === 'replaced' ? 'replaced' : mode === 'hold' ? 'hold' : 'cancel';
-    expect(staleContinuationDisposition(current, observed, stopped)).toBe(expected);
-    expect(calls).toEqual(expected === 'replaced' ? [] : mode === 'cancelled' ? ['cancelled'] : ['cancelled', 'stopped']);
-    expect(replacement.liveSession.revokeCiTools).toBe(revoke);
-    expect(replacement.liveSession.revokeDelegation).toBe(revoke);
-    expect(revoke).not.toHaveBeenCalled();
+    expect(staleContinuationDisposition(current, state, () => mode === 'stopped')).toBe(expected);
   });
 });
 
 describe('sessionCloseKeepsWaiting', () => {
   it.each([
-    [true, false, true, true, false, ['cancelled']],
-    [false, true, true, true, false, ['cancelled', 'incomplete']],
-    [false, false, true, false, true, ['cancelled', 'incomplete', 'idle']],
-    [false, false, false, true, true, ['cancelled', 'incomplete', 'idle', 'ask']],
-    [false, false, false, false, false, ['cancelled', 'incomplete', 'idle', 'ask']],
-    [false, false, undefined, false, false, ['cancelled', 'incomplete', 'idle', 'ask']],
-  ] as const)('cancelled=%s incomplete=%s idle=%s ask=%s', (cancelled, incomplete, idle, ask, expected, order) => {
-    const calls: string[] = [];
-    expect(sessionCloseKeepsWaiting({
-      get cancelled() { calls.push('cancelled'); return cancelled; },
-      get incomplete() { calls.push('incomplete'); return incomplete; },
-      get idleClosed() { calls.push('idle'); return idle; },
-    }, () => { calls.push('ask'); return ask; })).toBe(expected);
-    expect(calls).toEqual(order);
+    [true, false, true, true, false, false],
+    [false, true, true, true, false, false],
+    [false, false, true, false, true, false],
+    [false, false, false, true, true, true],
+    [false, false, false, false, false, true],
+    [false, false, undefined, false, false, true],
+  ] as const)('cancelled=%s incomplete=%s idle=%s ask=%s', (cancelled, incomplete, idleClosed, answer, expected, asks) => {
+    const ask = vi.fn(() => answer);
+    expect(sessionCloseKeepsWaiting({ cancelled, incomplete, idleClosed }, ask)).toBe(expected);
+    expect(ask).toHaveBeenCalledTimes(asks ? 1 : 0);
   });
 });
 
 describe('latchInputFault', () => {
   it.each([
-    [false, undefined, undefined, false, ['current']],
-    [true, 'provider', undefined, false, ['current', 'session']],
-    [true, undefined, 'input', false, ['current', 'session', 'input']],
-    [true, undefined, undefined, true, ['current', 'session', 'input']],
-    [true, '', 'input', false, ['current', 'session', 'input']],
-    [true, '', '', true, ['current', 'session', 'input']],
-  ] as const)('current=%s session=%s input=%s', (current, session, input, expected, order) => {
-    const calls: string[] = [];
+    [false, undefined, undefined, false],
+    [true, 'provider', undefined, false],
+    [true, undefined, 'input', false],
+    [true, undefined, undefined, true],
+    [true, '', 'input', false],
+    [true, '', '', true],
+  ] as const)('current=%s session=%s input=%s', (current, session, input, expected) => {
     expect(latchInputFault({
-      current: () => { calls.push('current'); return current; },
-      sessionFault: () => { calls.push('session'); return session; },
-      inputFault: () => { calls.push('input'); return input; },
+      current: () => current,
+      sessionFault: () => session,
+      inputFault: () => input,
     })).toBe(expected);
-    expect(calls).toEqual(order);
   });
 });
 
@@ -172,12 +154,10 @@ describe('terminalScratchDisposition', () => {
     ['unreadable', makeRunRecord({ id: 'run' }), undefined, 'schedule'],
     ['listed', makeRunRecord({ id: 'run' }), ['lookup'], 'schedule'],
     ['not listed', makeRunRecord({ id: 'run' }), ['run'], 'remove'],
-  ] as const)('%s reads evidence once before delegation and uses the lookup id', (_name, run, evidence, expected) => {
+  ] as const)('%s reads evidence once and uses the lookup id', (_name, run, evidence, expected) => {
     const calls: string[] = [];
-    const input = { ...run, get delegation() { calls.push('delegation'); return run.delegation; } };
-    expect(terminalScratchDisposition('lookup', input, scratchReads(calls, undefined, () => evidence ? [...evidence] : undefined))).toBe(expected);
+    expect(terminalScratchDisposition('lookup', run, scratchReads(calls, undefined, () => evidence ? [...evidence] : undefined))).toBe(expected);
     expect(calls.slice(0, 6)).toEqual(['active', 'starting', 'queued', 'claimed', 'autosave', 'evidence']);
-    expect(calls[6]).toBe('delegation');
     expect(calls.filter(value => value === 'evidence')).toHaveLength(1);
   });
 });

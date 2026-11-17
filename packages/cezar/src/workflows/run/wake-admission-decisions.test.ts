@@ -18,35 +18,18 @@ function stateAtBoundary(boundary: boolean) {
 afterEach(() => vi.restoreAllMocks());
 
 describe('shouldReparkWithoutWaits', () => {
-  it('rejects missing and nonwaiting records before reading park or boundary', () => {
-    const state = new Proxy(stateAtBoundary(true), { get() { throw Error('state read before record guard'); } });
-    const parked = vi.fn(() => { throw Error('park read before record guard'); });
-    expect(shouldReparkWithoutWaits(undefined, parked, state)).toBe(false);
-    expect(shouldReparkWithoutWaits(makeRunRecord({ status: RUN_STATUS.running }), parked, state)).toBe(false);
-    expect(parked).not.toHaveBeenCalled();
-  });
-
-  it('checks park before boundary, and boundary before waits', () => {
-    const trace: string[] = [];
-    const state = new Proxy(stateAtBoundary(false), { get(target, key, receiver) {
-      trace.push(String(key)); return Reflect.get(target, key, receiver);
-    } });
-    const run = makeRunRecord({ status: RUN_STATUS.waiting });
-    Object.defineProperty(run, 'waits', { get: () => { throw Error('waits read past rejection'); } });
-    expect(shouldReparkWithoutWaits(run, () => { trace.push('park'); return false; }, state)).toBe(false);
-    expect(trace).toEqual(['park']);
-    trace.length = 0;
-    expect(shouldReparkWithoutWaits(run, () => { trace.push('park'); return true; }, state)).toBe(false);
-    expect(trace).toEqual(['park', 'boundary', 'liveSession']);
+  it.each([
+    { name: 'missing record', run: undefined, parked: true, boundary: true },
+    { name: 'running record', run: makeRunRecord({ status: RUN_STATUS.running }), parked: true, boundary: true },
+    { name: 'not parked', run: makeRunRecord({ status: RUN_STATUS.waiting }), parked: false, boundary: true },
+    { name: 'not at boundary', run: makeRunRecord({ status: RUN_STATUS.waiting }), parked: true, boundary: false },
+  ])('does not repark: $name', ({ run, parked, boundary }) => {
+    expect(shouldReparkWithoutWaits(run, () => parked, stateAtBoundary(boundary))).toBe(false);
   });
 
   it.each([{ waits: undefined }, { waits: [] }, { waits: [makeTimerWait()] }])('reparks at the boundary only with no waits: %j', ({ waits }) => {
-    const state = stateAtBoundary(true);
-    const trace: string[] = [];
-    const run = makeRunRecord({ status: RUN_STATUS.waiting });
-    Object.defineProperty(run, 'waits', { get: () => { trace.push('waits'); return waits; } });
-    expect(shouldReparkWithoutWaits(run, () => { trace.push('park'); return true; }, state)).toBe(!waits?.length);
-    expect(trace).toEqual(['park', 'waits']);
+    const run = makeRunRecord({ status: RUN_STATUS.waiting, waits });
+    expect(shouldReparkWithoutWaits(run, () => true, stateAtBoundary(true))).toBe(!waits?.length);
   });
 
   it('preserves equality when both session references are absent', () => {

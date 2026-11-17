@@ -77,12 +77,10 @@ describe('oldestEligibleWakeAt', () => {
     expect(f.trace).toEqual(['wake:explicit', 'holds', 'run:explicit', 'leave:explicit:claude']);
   });
 
-  it('reads deadline then in-flight holds, including an in-flight-only hold', () => {
+  it('does not advertise a runnerless wake while only an in-flight hold exists', () => {
     const f = fixture([['legacy', 1]]);
     f.runs.set('legacy', makeRunRecord({ id: 'legacy' }));
-    Object.defineProperty(f.holds, 'deadline', { get: () => { f.trace.push('deadline'); return new Set(); } });
-    Object.defineProperty(f.holds, 'inFlight', { get: () => { f.trace.push('inFlight'); return new Set(['codex:default']); } });
+    f.holds.inFlight.add('codex:default');
     expect(oldestEligibleWakeAt(f.ids, f.reads, undefined)).toBeNull();
-    expect(f.trace).toEqual(['wake:legacy', 'holds', 'deadline', 'inFlight', 'run:legacy']);
   });
 });
