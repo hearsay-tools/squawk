@@ -31,6 +31,8 @@
       "task-branch-head.ts",
       "ui-state.ts",
       "worktree-manifest.ts",
+      "worktree-paths.ts",
+      "worktree-skill-cleanup.ts",
       "worktree-setup.ts"
     ],
     "runner": [

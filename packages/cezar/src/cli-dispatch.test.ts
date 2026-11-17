@@ -201,7 +201,6 @@ describe('binary help and notices', () => {
       expect(help).toContain('host Squawk on a server');
       expect(help).toContain('resume Squawk workers');
       expect(help).toContain('scaffold .ai/squawk/');
-      expect(help).toContain('"skillsRepos" in .ai/squawk/config.json');
       expect(help).toContain('workflows in .ai/squawk/workflows/.');
       expect(help).toContain('A project also reads .ai/cezar/');
     }

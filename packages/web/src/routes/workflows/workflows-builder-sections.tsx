@@ -20,7 +20,6 @@ import {
   WandSparklesIcon,
   XIcon,
 } from '@/components/design-icons'
-import { SkillEmptyHintCompact } from '@/components/skill-empty-hint'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -792,7 +791,7 @@ function Palette({
         ))
       ) : (
         <p className="py-1 text-xs leading-relaxed text-soft-foreground">
-          {skills.length > 0 ? 'No skills match.' : <SkillEmptyHintCompact />}
+          {skills.length > 0 ? 'No skills match.' : 'This runner reports no skills.'}
         </p>
       )}
     </div>

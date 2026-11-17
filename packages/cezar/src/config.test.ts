@@ -4,7 +4,7 @@ import { testHome } from './home/test-home.testkit.ts';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { projectPaths } from './project-paths.ts';
 import { loadConfig, readRawConfig, resolveWorktreeRetention, updateConfigFile } from './config.ts';
 
@@ -41,6 +41,15 @@ describe('loadConfig systemPrompt', () => {
     expect(config.maxParallel).toBe(5);
     expect(config.defaultRunner).toBe('codex');
     expect(config.baseBranch).toBe('develop');
+  });
+
+  it('loads config.json with old skillsRepos and drops that key', async () => {
+    write({ skillsRepos: [{ repo: 'acme/team-skills' }], maxParallel: 5, reviewGate: true });
+    const config = await loadConfig(repoRoot, testHome());
+    expect(config).not.toHaveProperty('skillsRepos');
+    expect(config.maxParallel).toBe(5);
+    expect(config.reviewGate).toBe(true);
+    expect(JSON.parse(readFileSync(join(repoRoot, '.ai/cezar/config.json'), 'utf8'))).toHaveProperty('skillsRepos');
   });
 
   it('roundtrips a configured prompt, trimmed', async () => {
@@ -249,72 +258,6 @@ describe('resolveWorktreeRetention', () => {
 });
 
 /**
- * #359: the vendor-default skills source must stay OFF inside the vitest suite. Every
- * configless fixture repoRoot otherwise activates `open-mercato/skills`, and each test
- * file's first catalog read clones/fetches/lists the developer's real `~/.cache/cez`
- * bare cache — ~50 `git show` spawns plus a network `git fetch` per file (18,798 shows
- * and 61 fetches measured over one default-worker `npm test`) — the ambient subprocess
- * load that timed delegation-cleanup and query-parity tests out at the 5s limit. The
- * suppression is env-gated exactly the way `open-in-terminal.ts` refuses to spawn under
- * vitest; a repo (or test) that sets its OWN `skillsRepos` is honored verbatim, and the
- * production zero-config default is untouched.
- */
-describe('loadConfig skillsRepos under the test environment (#359)', () => {
-  let repoRoot: string;
-
-  beforeEach(() => {
-    repoRoot = mkdtempSync(join(tmpdir(), 'cez-skills-default-'));
-    mkdirSync(join(repoRoot, '.ai/cezar'), { recursive: true });
-  });
-
-  afterEach(() => {
-    rmSync(repoRoot, { recursive: true, force: true });
-  });
-
-  const write = (value: unknown) =>
-    writeFileSync(join(repoRoot, '.ai/cezar', 'config.json'), JSON.stringify(value), 'utf8');
-
-  it('defaults to no team skills when no config exists', async () => {
-    expect((await loadConfig(repoRoot, testHome())).skillsRepos).toEqual([]);
-  });
-
-  it('defaults to no team skills when the config omits skillsRepos', async () => {
-    write({ maxParallel: 4 });
-    expect((await loadConfig(repoRoot, testHome())).skillsRepos).toEqual([]);
-  });
-
-  it('degrades a malformed config to no team skills', async () => {
-    writeFileSync(join(repoRoot, '.ai/cezar', 'config.json'), '{ nope', 'utf8');
-    expect((await loadConfig(repoRoot, testHome())).skillsRepos).toEqual([]);
-  });
-
-  it('keeps a repo-configured skillsRepos honored verbatim', async () => {
-    write({ skillsRepos: [{ repo: 'acme/team-skills', ref: 'main' }] });
-    expect((await loadConfig(repoRoot, testHome())).skillsRepos).toEqual([{ repo: 'acme/team-skills', ref: 'main', enabled: true }]);
-  });
-
-  it('drops only a bad skillsRepos entry and a bad key, keeping the rest (hearsay-tools/cezarion#279)', async () => {
-    write({ maxParallel: 99, reviewGate: true, skillsRepos: [{ repo: 'acme/a' }, { repo: '' }, 'junk', { repo: 'acme/b', ref: 'v2' }] });
-    const config = await loadConfig(repoRoot, testHome());
-    expect(config.skillsRepos).toEqual([
-      { repo: 'acme/a', ref: 'main', enabled: true },
-      { repo: 'acme/b', ref: 'v2', enabled: true },
-    ]);
-    expect(config.maxParallel).toBe(2);
-    expect(config.reviewGate).toBe(true);
-  });
-
-  it('defaults to no team skills outside vitest too — the default is not an env seam', async () => {
-    vi.stubEnv('VITEST', '');
-    try {
-      expect((await loadConfig(repoRoot, testHome())).skillsRepos).toEqual([]);
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
-});
-
-/**
  * Machine-wide agent defaults (spec 2026-07-29-agent-profiles): what a repo that has set none of
  * its own runs, so a second login and a model preference are configured once instead of per
  * checkout.
@@ -439,8 +382,8 @@ describe('readRawConfig and updateConfigFile (hearsay-tools/cezarion#279)', () =
     expect(await readRawConfig(dataDir)).toEqual({ ok: true, raw: { mine: 1, skillsRepos: [{ repo: 'a/b' }] } });
   });
 
-  it('reports malformed JSON, a non-object and a skillsRepos value the page cannot show', async () => {
-    for (const text of ['{ nope', '[]', JSON.stringify({ skillsRepos: [{ repo: '' }] })]) {
+  it('reports malformed JSON and a non-object', async () => {
+    for (const text of ['{ nope', '[]']) {
       writeFileSync(path(), text);
       const read = await readRawConfig(dataDir);
       expect(read.ok).toBe(false);

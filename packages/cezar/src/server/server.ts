@@ -155,7 +155,6 @@ import {
   workflowFileSchema,
 } from '../workflows/types.ts';
 import { planChain, slugify } from '../planner.ts';
-import { skillSourcesRoutes } from './skill-sources.ts';
 import { readHandoff, renderHandoffRecords } from '../handoff.ts';
 import { ARCHIVED_WINDOW, type RepoHandle, type RunRecord, type RunStatus, type RunStore } from '../runs/store.ts';
 import {
@@ -4587,7 +4586,6 @@ export function createApp(deps: ServerDeps) {
     .route('/', runsRoutes)
     .route('/', reportsRoutes)
     // Team skill sources (hearsay-tools/cezarion#279): settings administration, read-only remotely.
-    .route('/', skillSourcesRoutes(() => capabilities().settingsAdmin))
     .route('/', openTargetsRoutes)
     .route('/', worktreesRoutes)
     .route('/', sseRoutes)

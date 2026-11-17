@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { relative, sep } from 'node:path';
 import { git } from '../git-command.ts';
 import { agentHomePaths } from '../paths.ts';
-import { excludeFromGit } from '../skills-remote.ts';
+import { excludeFromGit } from '../worktree-paths.ts';
 import { copyIdentity, withWorktreeFiles, type WorktreeFilesOptions } from '../worktree-manifest.ts';
 import { CONFIG_FILES } from './catalog.ts';
 

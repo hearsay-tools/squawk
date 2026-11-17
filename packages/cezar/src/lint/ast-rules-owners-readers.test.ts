@@ -245,7 +245,7 @@ ruleCases(AST_RULES.find(rule => rule.name === "skills-read-outside-enabled-skil
     "this.active.get(runId).skills.catalog = skills",
     "class A { private enabledSkills(state: ActiveRun) { return filter(state.skills.catalog ?? []) } }",
     "this.active.get(runId)!.skills.catalog = skills",
-    "const skills = await this.discoverSkills()",
+    "const skills = await this.runnerSkills()",
     "launch.skills.catalog.files",
     "const { catalog } = launch.skills",
     "const x = this.pending.get(runId)?.skills.catalog",
@@ -272,10 +272,10 @@ ruleCases(AST_RULES.find(rule => rule.name === "skills-write-outside-load-run-sk
   "file": "packages/cezar/src/workflows/run.ts",
   "valid": [
     "class A { async loadRunSkills(state: ActiveRun) { skillsWrites.catalog(state.skills, await discovery); } }",
-    "class A { private async loadRunSkills(state: ActiveRun) { state.skills.catalog = await this.discoverSkills() } }",
+    "class A { private async loadRunSkills(state: ActiveRun) { state.skills.catalog = await this.runnerSkills() } }",
     "const x = state.skills.catalog",
     "launch.skills.catalog = []",
-    "const skills = await this.discoverSkills()",
+    "const skills = await this.runnerSkills()",
     "this.pending.get(runId).skills.catalog = skills",
     "state.session = undefined"
   ],
@@ -290,7 +290,7 @@ ruleCases(AST_RULES.find(rule => rule.name === "skills-write-outside-load-run-sk
     "this.active.get(runId).skills.catalog = skills",
     "this.active.get(runId)!.skills.catalog = skills",
     "class A { other(state: ActiveRun) { state.skills.catalog = [] } }",
-    "class A { async runContinuation(state: ActiveRun) { state.skills.catalog = await this.discoverSkills() } }",
+    "class A { async runContinuation(state: ActiveRun) { state.skills.catalog = await this.runnerSkills() } }",
     "class A { async other(state: ActiveRun) { skillsWrites.catalog(state.skills, await discovery); } }"
   ]
 });
@@ -368,7 +368,7 @@ ruleCases(AST_RULES.find(rule => rule.name === "wait-kind-literal-outside-engine
 });
 
 ruleCases(AST_RULES.find(rule => rule.name === "worktree-write-outside-manifest")!, {
-  "file": "packages/cezar/src/skills-provision.ts",
+  "file": "packages/cezar/src/worktree-skill-cleanup.ts",
   "valid": [
     "import { readFile, lstat } from 'node:fs/promises'",
     "import { existsSync, readFileSync } from 'node:fs'",

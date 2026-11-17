@@ -10,7 +10,7 @@ import { normalizeSidebarLimits, type UiState } from '@open-mercato/cezar-contra
  * `.ai/cezar/ui-state.json` — small GUI preferences the cockpit persists (files, not a DB).
  * The server owns the schema (`PUT /api/ui-state` in `src/server/server.ts`); this module owns
  * the one write path, `mergeWriteProjectUiState`, and the shared read path, so the CLI can honour a preference the cockpit set (for example
- * `disabledTeamSkills`) without a second notion of where the file lives.
+ * unknown saved keys) without a second notion of where the file lives.
  *
  * Same zero-config rule as `src/config.ts`: missing, unreadable or malformed all degrade to
  * `{}` — an absent preference, never a throw, never a blocked startup.

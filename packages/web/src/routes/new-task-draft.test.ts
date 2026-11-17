@@ -34,17 +34,6 @@ describe('resolveComposerRunMode', () => {
     })).toEqual({ autonomous: false, worktree: true })
   })
 
-  it('applies an interactive recommendation only to untouched fields', () => {
-    expect(resolveComposerRunMode({ ...base, interactive: true })).toEqual({
-      autonomous: false,
-      worktree: false,
-    })
-    expect(resolveComposerRunMode({
-      ...base,
-      interactive: true,
-      explicitAutonomous: true,
-    })).toEqual({ autonomous: true, worktree: false })
-  })
 
   it('keeps plan and no-git constraints authoritative', () => {
     expect(resolveComposerRunMode({ ...base, planFirst: true, explicitAutonomous: true }).autonomous).toBe(false)

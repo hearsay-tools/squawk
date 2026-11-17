@@ -1,3 +1,4 @@
+import { cleanupTaskWorktreeSkills } from '../../worktree-skill-cleanup.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
 import { runDataDir } from '../../legacy-runs.ts';
 import { fallbackProjectWriteError } from '../../project-paths.ts';
@@ -393,6 +394,8 @@ export class ContinuationSession {
     if (this.host.holdContinuationForRootFinish(runId, { stepId, sessionId, backend, prompt, images, lineJoinedAt: Date.now() }, state)) return;
     this.applyContinuationSettings(runId, stepId, state, backend, settings);
     const { runner } = continuationRunner(backend, sessionId, settings.owningStep, this.context.createRunner);
+    await cleanupTaskWorktreeSkills(state.liveSession.cwd, this.context.store.getRun(runId)?.worktreePath, this.context.repoRoot,
+      message => this.context.store.appendEvent(runId, { type: 'note', message }));
     await this.runSkills.loadRunSkills(state, backend, settings.profile);
     if (state.liveSession.cancelled) { this.settleContinuationPrelaunchCancel(runId, stepId, state); return; }
     const opening = continuationOpening(this.context.store, {

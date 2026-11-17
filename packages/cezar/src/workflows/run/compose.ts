@@ -65,7 +65,6 @@ import { WorkerScratchCleanup } from '../../delegation/scratch-cleanup.ts';
 import type { RunnerId } from '../../core/agent-runner.ts';
 import { type PastedContent, type PersistedAttachment } from '../pasted-content.ts';
 import type { ContentBlock } from '../../core/agent-runner.ts';
-import { type Skill } from '../../skills.ts';
 import * as queuedRevival from './queued-revival.ts';
 import { type RunRecord, type RunStore, type StepState } from '../../runs/store.ts';
 import { type WorkflowDef } from '../types.ts';
@@ -153,7 +152,6 @@ export interface FacadeHost {
   settleOrphanedWorkerExecution(runId: string, opts?: { admitting?: boolean; fresh?: boolean }): boolean;
   sendMessage(runId: string, content: PastedContent[], messageId?: string): boolean;
   canClaimInboxInput(runId: string, id: string): boolean;
-  builtinSkills(): Skill[];
   continueRun(runId: string, opts?: ContinueRunOptions, deferForCapacity?: boolean, conversation?: Parameters<RunStore['commitWorkerContinuation']>[4]): { ok: boolean; error?: string };
   recover(familyRootId?: string): Promise<void>;
   dropActive(runId: string): void;

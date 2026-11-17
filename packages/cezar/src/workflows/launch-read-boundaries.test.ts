@@ -20,8 +20,6 @@ import * as modelProviders from '../agent-config/models.ts';
 import * as workflows from './load.ts';
 import * as configuration from '../config.ts';
 import * as profiles from '../workspace/agent-profiles.ts';
-import * as teamSkills from '../skills-remote.ts';
-import type { Skill } from '../skills.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { RunStore } from '../runs/store.ts';
@@ -493,11 +491,6 @@ it.each(['changed', 'deleted'] as const)('P6-35 Continue retains recorded-accoun
   expect(store.getRun(target.id)?.steps.at(-1)?.profileId).toBe(change === 'deleted' ? 'default' : 'recorded');
 });
 
-function offerTeamSkill(): void {
-  const entry: Skill = { name: 'team-playbook', description: 'Team playbook', body: 'TEAM-LIVE-BODY', path: 'commands/team-playbook.md', source: 'team',
-    team: { repo: 'fixture/launch-skills', ref: 'main', path: 'commands/team-playbook.md', dir: false, commit: 'fixture' } };
-  vi.spyOn(teamSkills, 'getTeamSkillsCached').mockReturnValue([entry]);
-}
 function disableTeamSkill(kind: 'skill' | 'source'): void {
   if (kind === 'skill') writeFileSync(join(root, '.ai/cezar/ui-state.json'), JSON.stringify({ disabledTeamSkills: [{ repo: 'fixture/launch-skills', name: 'team-playbook' }] }));
   else config({ skillsRepos: [{ repo: 'fixture/launch-skills', ref: 'main', enabled: false }] });
@@ -518,7 +511,6 @@ it('P6-38 later step reads a replaced native skill list', async () => {
 });
 
 it.each(['skill', 'source'] as const)('P6-38 later step still selects a native copy after the team %s is disabled', async kind => {
-  offerTeamSkill();
   offerNativeSkill('team-playbook');
   const workflow: WorkflowDef = { name: 'skills', source: 'built-in', steps: [
     { id: 'first', prompt: '{{task}}', skill: 'team-playbook' }, { id: 'second', prompt: '{{task}}', skill: 'team-playbook' },
@@ -535,7 +527,6 @@ it.each(['skill', 'source'] as const)('P6-38 later step still selects a native c
 });
 
 it.each(['skill', 'source'] as const)('P6-39 Continue retains the native fallback after the team %s is disabled', async kind => {
-  offerTeamSkill();
   offerNativeSkill('team-playbook');
   const workflow: WorkflowDef = { name: 'skill', source: 'built-in', steps: [{ id: 'work', prompt: '{{task}}', skill: 'team-playbook' }] };
   const target = manager.startRun(workflow, { task: 'target', worktree: false });
@@ -558,7 +549,6 @@ it.each(['skill', 'source'] as const)('P6-40 live slash accepted before turn-end
   await liveSlashAtBoundary(kind, 'before');
 });
 async function liveSlashAtBoundary(kind: 'skill' | 'source', order: 'before' | 'after'): Promise<void> {
-  offerTeamSkill();
   offerNativeSkill('team-playbook');
   const target = manager.startRun(acceptedWorkflow, { task: 'target', worktree: false });
   await waitForOpen(target.id, 1);
@@ -698,7 +688,6 @@ it('P6-14 P6-34 a fresh retry selects the current project account and sends no o
 });
 
 it.each(['skill', 'source'] as const)('P6-37 held task fails a team-only selection with its team %s disabled', async kind => {
-  offerTeamSkill();
   const head = await heldHead();
   const workflow: WorkflowDef = { name: 'skill', source: 'built-in', steps: [{ id: 'work', prompt: '{{task}}', skill: 'team-playbook' }] };
   const target = manager.startRun(workflow, { task: 'target', worktree: false });

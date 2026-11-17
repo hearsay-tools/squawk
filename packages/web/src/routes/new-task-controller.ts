@@ -22,12 +22,10 @@ import {
   autoApplyText,
   normalizePromptTemplates,
   resolveAutoApply,
-  templatesForCapabilities,
 } from '@/lib/prompt-templates'
 import { bumpSkillUsage, orderSkillsByUsage } from '@/lib/skills'
 import { usableRunners } from '@/lib/provider-status'
 import { taskWebhooks } from '@/lib/webhook'
-import { useAutomationsAvailable } from '@/lib/capabilities'
 import { useNavigate } from '@/lib/project-router'
 
 import { prefillToast, unknownSkillPrefillText } from './new-task-prefill'
@@ -160,11 +158,10 @@ export function usePromptTemplates(input: {
   update: DraftUpdate
 }) {
   const { uiState, source, sourcesReady, draftText, submissionPending, update } = input
-  const automations = useAutomationsAvailable()
   const promptTemplates = uiState.data?.promptTemplates
   const templates = useMemo(
-    () => templatesForCapabilities(normalizePromptTemplates(promptTemplates), { automations }),
-    [promptTemplates, automations],
+    () => normalizePromptTemplates(promptTemplates),
+    [promptTemplates],
   )
   const autoText = autoApplyText(templates, source?.source === 'skill' ? [source.ref] : [])
   const draftTextRef = useRef(draftText)

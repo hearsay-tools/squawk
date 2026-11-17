@@ -10,7 +10,6 @@ import { apiRequest } from '../server/loopback-request.testkit.ts';
 import { readAccountIdentity } from '../agent-config/account-identity.ts';
 import { createUbuntuVps } from '../server-install/platforms/ubuntu-vps.ts';
 import { previewRefusal } from '../ci-wait/errors.ts';
-import { SKILL_SOURCES_HOSTED_ERROR } from '../server/skill-sources.ts';
 import { listAgentConfig } from '../agent-config/service.ts';
 import { RunStore } from '../runs/store.ts';
 import { createApp } from '../server/server.ts';
@@ -25,7 +24,6 @@ it('names the product in an API refusal, account hint and installer label withou
   const step = createUbuntuVps().steps({ state: {} } as InstallContext).find(step => step.id === 'autostart');
   expect(step?.title).toBe(`Run ${name} as a service (systemd — starts now + on boot)`);
   expect(previewRefusal('headless').message).toBe(`No cockpit is attached to this run (\`${command} run\`).`);
-  expect(SKILL_SOURCES_HOSTED_ERROR).toContain(`run \`${command} remote-settings enable\``);
   const listing = await listAgentConfig('/unused', {}, false);
   expect(listing.files.find(file => file.readOnlyReason)?.readOnlyReason).toContain(`run \`${command} remote-settings enable\``);
   const root = mkdtempSync(join(tmpdir(), 'display-server-'));

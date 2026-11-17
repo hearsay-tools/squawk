@@ -154,7 +154,6 @@ export function ExecutionSettings({
   hasGit,
   runMode,
   webhook,
-  interactiveSkill,
   completionDisabled,
 }: {
   engine: Engine
@@ -164,7 +163,6 @@ export function ExecutionSettings({
   hasGit: boolean
   runMode: { worktree: boolean; autonomous: boolean }
   webhook: { targets: readonly TaskWebhookTarget[]; on: boolean; onChange: (on: boolean) => void }
-  interactiveSkill: boolean
   completionDisabled: boolean
 }) {
   const { displayRunner } = engine
@@ -198,11 +196,6 @@ export function ExecutionSettings({
           />
           {webhook.targets.length > 0 ? (
             <NotifyWebhookToggle on={webhook.on} targets={webhook.targets} onChange={webhook.onChange} />
-          ) : null}
-          {interactiveSkill && (draft.autonomous === null || draft.worktree === null) ? (
-            <p className="basis-full text-xs text-muted-foreground" data-slot="interactive-skill-hint">
-              This skill recommends an interactive run in the current checkout. You can change either setting.
-            </p>
           ) : null}
         </div>
         <CompletionControls embedded archiveWhenDone={draft.archiveWhenDone} autoMergePr={draft.autoMergePr} onChange={update} disabled={completionDisabled} />

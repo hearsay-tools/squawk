@@ -60,31 +60,7 @@ export const DEFAULT_PROMPT_TEMPLATES: readonly PromptTemplate[] = [
     label: 'Double-check edge cases',
     text: 'Double-check edge cases and error handling before finishing.',
   },
-  // The automation tool asks for the trigger and prompt, then creates a paused automation.
-  // Only offer this template when the cockpit supports automations.
-  {
-    id: 'create-automation',
-    label: 'Create an automation',
-    text:
-      'Create an automation for this repository.\n'
-      + 'Trigger: <a GitHub event or a schedule, e.g. every new pull request; every issue labelled `needs-agent`; every day at 04:00; weekdays at 07:30; every 6 hours>.\n'
-      + 'Task for each run: <what the launched task must do, e.g. review the diff, run the tests and post findings as a review comment>.\n'
-      + 'Leave it paused and, for a GitHub trigger, preview its matches so I can check the filter before enabling it.',
-  },
 ]
-
-/** Templates that only make sense when the server has automations on (`capabilities.automations`). */
-const AUTOMATIONS_TEMPLATE_IDS: ReadonlySet<string> = new Set(['create-automation'])
-
-/** The templates a composer may offer on this cockpit. Settings still lists every template, so a
- *  user's list survives a restart with automations off; only the composers hide what cannot work. */
-export function templatesForCapabilities(
-  templates: PromptTemplate[],
-  caps: { automations?: boolean },
-): PromptTemplate[] {
-  if (caps.automations === true) return templates
-  return templates.filter((template) => !AUTOMATIONS_TEMPLATE_IDS.has(template.id))
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object'
@@ -107,6 +83,8 @@ export function normalizePromptTemplates(raw: unknown): PromptTemplate[] {
   for (const entry of raw) {
     if (!isRecord(entry)) continue
     const id = typeof entry.id === 'string' ? entry.id.trim() : ''
+    // The removed built-in must not return through an older saved template list.
+    if (id === 'create-automation') continue
     const label = typeof entry.label === 'string' ? entry.label.trim() : ''
     const text = typeof entry.text === 'string' ? entry.text.trim() : ''
     if (!id || !label || !text || seen.has(id)) continue

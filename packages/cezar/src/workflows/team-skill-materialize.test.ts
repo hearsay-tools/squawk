@@ -1,5 +1,10 @@
+import { request } from 'node:http';
+import { json } from 'node:stream/consumers';
+import { seedOldSkills } from '../worktree-skill-cleanup.testkit.ts';
+import { removeProvisionedSkills } from '../worktree-skill-cleanup.ts';
+import { readManifest } from '../worktree-manifest.testkit.ts';
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -27,6 +32,7 @@ describe('native skills do not materialize Squawk copies', () => {
   let manager: RunManager;
   let launches: AgentRunSpec[];
   let finish: (() => void)[];
+  let turnEnd: (() => void)[];
 
   beforeEach(async () => {
     repoRoot = mkdtempSync(join(tmpdir(), 'cez-native-no-copy-'));
@@ -41,11 +47,12 @@ describe('native skills do not materialize Squawk copies', () => {
     manager = createFixtureManager(store, repoRoot, { skillCatalog: fixedSkillCatalog([{
       id: NATIVE, name: NATIVE, scope: 'user', path: join(repoRoot, 'account-skills', NATIVE, 'SKILL.md'),
     }]) });
-    launches = []; finish = [];
+    launches = []; finish = []; turnEnd = [];
     vi.spyOn(runners, 'createRunner').mockImplementation(backend => ({
       backend: backend ?? 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
       run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: async () => {},
-      startSession: spec => {
+      startSession: (spec, onEvent) => {
+        turnEnd.push(() => onEvent?.({ type: 'turn-end' }));
         launches.push(spec);
         let end!: () => void;
         let open = true;
@@ -110,4 +117,79 @@ describe('native skills do not materialize Squawk copies', () => {
     expect(store.getRun(record.id)?.error).toContain('default');
     noCopies(repoRoot);
   });
+
+  it.each(['unchanged', 'changed', 'interrupted'] as const)('cleans old recorded skills at next step open (%s)', async kind => {
+    const workflow = plannedWorkflow([{ id: 'first', prompt: '{{task}}' }, { id: 'next', prompt: '{{task}}' }]);
+    const record = manager.startRun(workflow, { task: 'go', worktree: true, runner: 'claude' });
+    // bound: the real worktree must reach the first runner before an old-version manifest is seeded.
+    await vi.waitFor(() => expect(launches).toHaveLength(1), { timeout: 15_000 });
+    const cwd = launches[0]!.cwd;
+    const { paths, manifest } = await seedOldSkills(cwd);
+    if (kind === 'changed') writeFileSync(join(cwd, paths[0]!, 'SKILL.md'), 'user edit\n');
+    if (kind === 'interrupted') {
+      const before = readFileSync(manifest, 'utf8');
+      await removeProvisionedSkills(cwd, { faults: boundary => { if (boundary === 'removed') throw new Error('crash between removals'); } });
+      expect(readFileSync(manifest, 'utf8')).toBe(before);
+      expect(existsSync(join(cwd, paths[0]!))).toBe(false);
+      expect(existsSync(join(cwd, paths[1]!))).toBe(true);
+      expect(existsSync(join(cwd, paths[1]!, '../.gitignore'))).toBe(true);
+      expect((await run('git', ['check-ignore', `${paths[1]}/SKILL.md`], { cwd })).stdout.trim()).toBe(`${paths[1]}/SKILL.md`);
+    }
+    const catalog = fixedSkillCatalog();
+    const get = catalog.get.bind(catalog);
+    vi.spyOn(catalog, 'get').mockImplementation(query => {
+      expect(existsSync(join(cwd, paths[1]!))).toBe(false);
+      return get(query);
+    });
+    manager.setSkillCatalog(catalog);
+    // Closing a provider session is not step completion. Use the agent's done boundary.
+    const spec = launches[0]!;
+    const response = await new Promise<import('node:http').IncomingMessage>((resolve, reject) => {
+      const call = request({ socketPath: spec.env!.CEZ_TOOL_SOCKET, path: '/api/v1/tools/done', method: 'POST',
+        headers: { authorization: `Bearer ${spec.env!.CEZ_TOOL_TOKEN}`, 'content-type': 'application/json' } }, resolve);
+      call.on('error', reject);
+      call.end('{}');
+    });
+    expect(await json(response)).toMatchObject({ ok: true });
+    turnEnd[0]!();
+    // bound: the workflow's second startSession is the cleanup completion signal.
+    await vi.waitFor(() => expect(launches).toHaveLength(2), { timeout: 15_000 });
+    expect(store.getRun(record.id)?.error).toBeUndefined();
+    for (const path of paths) {
+      expect(existsSync(join(cwd, path))).toBe(kind === 'changed' && path === paths[0]);
+      expect(existsSync(join(cwd, path, '../.gitignore'))).toBe(false);
+    }
+    if (kind === 'changed') {
+      expect(readFileSync(join(cwd, paths[0]!, 'SKILL.md'), 'utf8')).toBe('user edit\n');
+      expect((await run('git', ['check-ignore', `${paths[0]}/SKILL.md`], { cwd })).stdout.trim()).toBe(`${paths[0]}/SKILL.md`);
+    }
+    expect((await readManifest(cwd))?.entries.some(entry => entry.writer === 'skills') ?? false).toBe(false);
+  });
+
+  it('cleans old recorded skills at Continue before starting the runner', async () => {
+    const record = manager.startRun(SINGLE_STEP, { task: 'go', worktree: true, runner: 'claude' });
+    // bound: startSession publishes the worktree that the old installer would have written into.
+    await vi.waitFor(() => expect(launches).toHaveLength(1), { timeout: 15_000 });
+    const cwd = launches[0]!.cwd;
+    finish[0]!();
+    // bound: Continue must observe the completed initial run, rather than steering its live session.
+    await vi.waitFor(() => expect(manager.isActive(record.id)).toBe(false), { timeout: 15_000 });
+    const { paths } = await seedOldSkills(cwd);
+    const catalog = fixedSkillCatalog();
+    const get = catalog.get.bind(catalog);
+    vi.spyOn(catalog, 'get').mockImplementation(query => {
+      expect(paths.some(path => existsSync(join(cwd, path)))).toBe(false);
+      return get(query);
+    });
+    manager.setSkillCatalog(catalog);
+    expect(manager.continueRun(record.id, { text: 'continue' })).toEqual({ ok: true });
+    // bound: the continued session is the product signal that prelaunch cleanup completed.
+    await vi.waitFor(() => expect(launches).toHaveLength(2), { timeout: 15_000 });
+    for (const path of paths) {
+      expect(existsSync(join(cwd, path))).toBe(false);
+      expect(existsSync(join(cwd, path, '../.gitignore'))).toBe(false);
+    }
+    expect((await readManifest(cwd))?.entries.some(entry => entry.writer === 'skills') ?? false).toBe(false);
+  });
+
 });

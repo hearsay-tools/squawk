@@ -31,7 +31,7 @@ export interface NewTaskDraft {
    *  remembered `lastWorktree` / default (isolated worktree). */
   worktree: boolean | null
   /** Explicit autonomous choice, retained across navigation and successful launches.
-   *  null → interactive-skill hint, then workspace/env policy (skills default on).
+   *  null → workspace/env policy (skills default on).
    *  Plan-first overrides every choice. See resolveComposerRunMode. */
   autonomous: boolean | null
   archiveWhenDone: boolean
@@ -46,14 +46,13 @@ export interface ComposerRunModeInput {
   planFirst: boolean
   explicitAutonomous: boolean | null
   explicitWorktree: boolean | null
-  interactive?: boolean | undefined
   configuredAutonomous: boolean | 'source-dependent'
   configuredWorktree: boolean
   source: TaskSource['source']
 }
 
 /** Resolve run-mode values once, in precedence order: hard constraints, explicit draft
- * choices, an interactive-skill recommendation, then the configured (or source-dependent)
+ * choices, then the configured (or source-dependent)
  * default. Workflows can run in place when the user or workspace policy opts out. `configuredAutonomous`/
  * `configuredWorktree` carry the workspace run defaults; `'source-dependent'` autonomy means
  * skills default on and everything else off. */
@@ -64,13 +63,12 @@ export function resolveComposerRunMode(input: ComposerRunModeInput): {
   const autonomousFallback = input.configuredAutonomous === 'source-dependent'
     ? input.source === 'skill'
     : input.configuredAutonomous
-  const recommended = input.interactive === true ? false : undefined
   const autonomous = input.planFirst
     ? false
-    : (input.explicitAutonomous ?? recommended ?? autonomousFallback)
+    : (input.explicitAutonomous ?? autonomousFallback)
   const worktree = !input.hasGit
     ? false
-    : (input.explicitWorktree ?? recommended ?? input.configuredWorktree)
+    : (input.explicitWorktree ?? input.configuredWorktree)
   return { autonomous, worktree }
 }
 
@@ -85,7 +83,7 @@ export function resolveComposerRunMode(input: ComposerRunModeInput): {
  *
  * Takes the resolved `worktree` rather than the draft so it cannot disagree with the chip:
  * `resolveComposerRunMode` already folds in the explicit opt-out, the
- * interactive-skill recommendation and the workspace default. `hasGit` only distinguishes
+ * workspace default. `hasGit` only distinguishes
  * "opted out" from "there is no repository here", which is the difference between a warning
  * and an explanation.
  */

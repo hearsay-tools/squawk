@@ -6,10 +6,8 @@ import { GITHUB_PLACEHOLDERS, SCHEDULE_PLACEHOLDERS } from './task-template.ts';
 import { automationDefinitionObjectSchema, automationDefinitionSchema, automationEventSchema, automationFiltersSchema, automationTaskSchema } from './types.ts';
 import {
   AUTOMATION_SCHEMA_REFERENCE,
-  CREATE_AUTOMATION_SKILL_NAME,
   automationCliCommand,
   automationsPrompt,
-  createAutomationSkillBody,
 } from './prompts.ts';
 
 /** The storage schema supplies documented keys; retired read-only fields are excluded below. */
@@ -79,11 +77,11 @@ describe('AUTOMATION_SCHEMA_REFERENCE', () => {
   });
 });
 
-describe('automationsPrompt and the skill body', () => {
+describe('automationsPrompt', () => {
   const command = "'/usr/bin/node' '/opt/cezar/dist/index.js' automation";
 
   it('addresses the CLI by the command it is given, never a bare cez on PATH', () => {
-    for (const text of [automationsPrompt(command), createAutomationSkillBody(command)]) {
+    for (const text of [automationsPrompt(command)]) {
       expect(text).toContain(command);
       const withoutCommand = text.replaceAll(command, '<CLI>');
       expect(withoutCommand).not.toMatch(/(^|[\s`"'(])(cez|cezar|cezarion) automation /m);
@@ -101,7 +99,7 @@ describe('automationsPrompt and the skill body', () => {
   });
 
   it('never tells an agent to start a cockpit', () => {
-    for (const text of [automationsPrompt(command), createAutomationSkillBody(command), AUTOMATION_SCHEMA_REFERENCE]) {
+    for (const text of [automationsPrompt(command), AUTOMATION_SCHEMA_REFERENCE]) {
       expect(text).not.toMatch(/start (the|a) cockpit|run `?cez`?\b|\bcez serve\b/i);
     }
   });
@@ -117,25 +115,19 @@ describe('automationsPrompt and the skill body', () => {
   });
 
   it('keeps the automation paused under an autonomy nudge: only the user\'s request enables it', () => {
-    for (const text of [automationsPrompt(command), createAutomationSkillBody(command)]) {
+    for (const text of [automationsPrompt(command)]) {
       expect(text).toContain('A paused automation is the finished state of this task');
       expect(text).toMatch(/continue autonomously, not to ask for confirmation, or to make reasonable assumptions is not that request/);
     }
   });
 
-  it('embeds the full reference in the skill body', () => {
-    expect(createAutomationSkillBody(command)).toContain(AUTOMATION_SCHEMA_REFERENCE);
-    expect(CREATE_AUTOMATION_SKILL_NAME).toBe('create-cezarion-automation');
-  });
-
   it('does not infer completion consent from autonomy or enabling an automation', () => {
     expect(automationsPrompt(command)).toContain('Use task.archiveWhenDone only when the user asks');
-    for (const text of [automationsPrompt(command), createAutomationSkillBody(command)]) {
+    for (const text of [automationsPrompt(command)]) {
       expect(text).toMatch(/only when the user asks|unless the user asks/);
       expect(text).toContain('current-head CI and GitHub rules');
       expect(text).toContain('future tasks only');
     }
-    expect(createAutomationSkillBody(command)).toContain('Autonomy and enabling an automation do not enable either control.');
   });
 
   it('builds the CLI command from this process, quoted for a POSIX shell', () => {

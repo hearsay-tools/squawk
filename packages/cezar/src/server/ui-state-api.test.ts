@@ -70,10 +70,11 @@ describe('the ui-state API — skillUsage (#408)', () => {
     expect(await res.json()).toEqual({});
   });
 
-  it('PUT disabledTeamSkills persists and round-trips through GET', async () => {
-    const res = await put({ disabledTeamSkills: [{ repo: 'acme/skills', name: 'x' }] });
+  it('loads ui-state.json with old disabledTeamSkills as an ignored unknown key', async () => {
+    writeFileSync(uiStatePath(), JSON.stringify({ disabledTeamSkills: [{ repo: 'acme/skills', name: 'x' }] }));
+    const res = await put({ skillUsage: { native: 1 } });
     expect(res.status).toBe(200);
-    expect(await (await get()).json()).toEqual({ disabledTeamSkills: [{ repo: 'acme/skills', name: 'x' }] });
+    expect(await (await get()).json()).toMatchObject({ disabledTeamSkills: [{ repo: 'acme/skills', name: 'x' }] });
     expect(rawFile().disabledTeamSkills).toEqual([{ repo: 'acme/skills', name: 'x' }]);
   });
 
@@ -118,14 +119,6 @@ describe('the ui-state API — skillUsage (#408)', () => {
     expect((await first).status).toBe(200);
     expect((await second).status).toBe(200);
     expect(await (await get()).json()).toEqual({ a: 1, b: 2, shared: 'second' });
-  });
-
-  it('refuses a disabledTeamSkills entry without a name', async () => {
-    expect((await put({ disabledTeamSkills: [{ repo: 'acme/skills' }] })).status).toBe(400);
-  });
-
-  it('refuses a disabledTeamSkills entry with an extra key (strict)', async () => {
-    expect((await put({ disabledTeamSkills: [{ repo: 'a', name: 'x', ref: 'main' }] })).status).toBe(400);
   });
 
   it('PUT skillUsage persists and round-trips through GET', async () => {

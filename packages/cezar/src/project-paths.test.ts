@@ -3,12 +3,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { loadConfig, readRawConfig, readSkillsReposSync, updateConfigFile } from './config.ts';
+import { loadConfig, readRawConfig, updateConfigFile } from './config.ts';
 import { testHome } from './home/test-home.testkit.ts';
 import { dataReadDirs, projectPaths, readProjectPath } from './project-paths.ts';
 import { ensureDataGitignore } from './data-gitignore.ts';
 import { loadWorkflows } from './workflows/load.ts';
-import { discoverSkills } from './skills.ts';
 import { loadSessionContextRules } from './session-context.ts';
 import { mergeWriteProjectUiState, readProjectUiStateSync } from './ui-state.ts';
 
@@ -37,7 +36,6 @@ describe('project directory reads before P5', () => {
     seed(root, 'context.yaml', 'version: 1\nrules: []\n');
     seed(root, 'ui-state.json', '{"disabledTeamSkills":[{"repo":"team/skills","name":"ship"}]}');
     expect((await loadConfig(repo, testHome())).baseBranch).toBe(root);
-    expect(readSkillsReposSync(repo)[0]?.repo).toBe('team/skills');
     expect((await readRawConfig(projectPaths(repo).write)).ok).toBe(true);
     expect(loadSessionContextRules(repo)).toEqual({ rules: [], reports: [] });
     expect(readProjectUiStateSync(repo).disabledTeamSkills).toHaveLength(1);
@@ -68,7 +66,7 @@ describe('project directory reads before P5', () => {
     expect(readProjectUiStateSync(repo)).toEqual({ openFiles: ['a.ts'], focusedFile: 'a.ts' });
   });
 
-  it('unions workflow and skill names with legacy precedence', async () => {
+  it('unions workflow names with legacy precedence', async () => {
     for (const root of ['cezar', 'squawk'] as const) {
       seed(root, 'workflows/shared.yaml', `name: shared\ndescription: ${root}\nsteps:\n  - id: task\n    prompt: test\n`);
       seed(root, `workflows/${root}.yaml`, `name: ${root}\nsteps:\n  - id: task\n    prompt: test\n`);
@@ -78,9 +76,6 @@ describe('project directory reads before P5', () => {
     const workflows = (await loadWorkflows(repo)).workflows;
     expect(workflows.map(w => w.name)).toEqual(['cezar', 'quick-task', 'shared', 'squawk']);
     expect(workflows.find(w => w.name === 'shared')?.description).toBe('cezar');
-    const skills = await discoverSkills(repo, {}, testHome());
-    expect(skills.map(s => s.name)).toEqual(['cezar', 'shared', 'squawk']);
-    expect(skills.find(s => s.name === 'shared')?.body).toBe('cezar');
   });
 
   it('keeps same-directory duplicate workflow names unchanged', async () => {
