@@ -98,7 +98,7 @@ needs to choose between them.
   `/name`) that matches more than one entry is resolved by the scope the runner reports (D8):
   `repo` wins over `user`, and `user` wins over `system`. Squawk then sends the winner's `path`.
   When the best scope holds more than one copy, or a copy has another scope (Codex also reports
-  `admin`), the reference is ambiguous. For a step's selected skill (a workflow's `skill:`,
+  `admin`, which the contract maps to `other`), the reference is ambiguous. For a step's selected skill (a workflow's `skill:`,
   `worker spawn --skill`), the step fails at step open and the error names every path. A typed
   `/name` never fails a step; [the section on typed names](#a-name-typed-by-a-human) says what
   happens to it. Two cases stay
@@ -139,9 +139,10 @@ skill.
 
 A Continue can also start a fresh session, for example when OpenCode no longer has the stored
 session (`bootstrap` in `opencode-server-runner.ts`). A fresh session holds no skill body. The
-adapter reports whether it resumed. When it did not, Squawk opens the fresh session with the
-step's trigger, with the Continue message as its arguments, after the same check as at step
-open. Shared code reads the adapter's report, never a runner id.
+adapter learns whether it resumed only while it opens the session, so Squawk passes the step's
+trigger, checked as at step open, as a fallback with every Continue. The adapter sends it, with
+the Continue message as its arguments, only when it opens a fresh session, and reports in the
+`session` event whether it resumed. Shared code reads no runner id.
 
 The opening context (handoff and `context.yaml` rules) keeps travelling with the opening message.
 Its place differs per runner, as the table above says: an earlier text block on Claude, after
@@ -156,6 +157,9 @@ until the turn ends when `skillTriggerMidTurn` is false: Claude, Codex and OpenC
 pi and omp expand a trigger inside the running turn. Claude queues it to a second turn.
 See the slice 2 checks in [claude.md](../analysis/2026-11-16-runner-native-skills/claude.md)
 and [omp.md](../analysis/2026-11-16-runner-native-skills/omp.md).
+omp also expands `/skill:<known name>` anywhere in a message, not only at its start. Squawk
+reads only a leading `/name`, so it does not intercept such a mid-message trigger on omp; omp
+starts the skill natively.
 
 "The runner's list" here is the list as the running session sees it. Only Codex shows a skill
 that was added after the session started. A pi process, an omp session and an OpenCode server
@@ -264,7 +268,8 @@ the removal then deletes.
    arguments, a later turn and a resume.
 3. **Switch.** Step open, Continue, live input, worker `--skill`, the planner and auto-naming
    read the runner list and send the trigger. The cockpit pages and pickers move to the
-   per-runner list. This slice is the breaking change (`!` in the title).
+   per-runner list. This slice is the breaking change (`!` in the title). It lands in two
+   pull requests: 3a switches the server and run path, 3b the cockpit.
 4. **Automation tool.** The MCP tool that replaces the built-in skill (D7). It can ship at any
    point before slice 5.
 5. **Removal.** Delete the code in [What is removed](#what-is-removed), rewrite the area doc,
