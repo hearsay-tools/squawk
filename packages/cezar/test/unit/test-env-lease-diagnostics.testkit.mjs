@@ -12,6 +12,8 @@ const read = fs.readSync;
 const spawn = childProcess.spawnSync;
 let lease;
 let commands = 0;
+// POSIX /proc probes are cheap on Linux; retain the original allowance for ps/PowerShell.
+const timeoutMs = process.platform === 'linux' ? 2_000 : 10_000;
 try {
   lease = await acquireTestEnvLease(root);
   fs.readSync = (...args) => { commands++; return read(...args); };
@@ -20,9 +22,9 @@ try {
     return spawn(file, args, options);
   };
   syncBuiltinESMExports();
-  await assert.rejects(acquireTestEnvLease(root, { timeoutMs: 10_000, onWait: () => {
+  await assert.rejects(acquireTestEnvLease(root, { timeoutMs, onWait: () => {
     // End the remaining time without changing the holder or querying its process.
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10_100);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, timeoutMs + 100);
   } }), /timed out/);
   assert.equal(commands, 1, 'timeout must reuse the initial command snapshot');
 } finally {

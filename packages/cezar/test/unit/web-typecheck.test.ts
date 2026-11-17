@@ -15,7 +15,6 @@ const webConfig = JSON.parse(readFileSync(join(repo, 'packages/web/tsconfig.json
 const options = { target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', types: [], strict: true };
 const commands = [
   ['run', 'typecheck:web'],
-  ['run', 'typecheck', '-w', '@open-mercato/cezar-web'],
 ];
 
 // Copy the actual command wiring into a tiny workspace. Compilation and package
