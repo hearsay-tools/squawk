@@ -9,7 +9,7 @@ import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { fireCapturedTimer, observeWaitTimers } from './waits.testkit.ts';
 import { QUICK_TASK_WORKFLOW } from './types.ts';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
