@@ -13,7 +13,7 @@ import { pastedAttachmentsText, type PastedContent, type PersistedAttachment } f
 import type { AutosaveReason } from '../../autosave-commit.ts';
 import { continuationOpening } from './opening.ts';
 import { createSessionEventHandler, launchPreamble, type SessionEventHandler } from './session-events.ts';
-import { agentDirectories, composeSystemPrompt } from './prompts.ts';
+import { agentDirectories, composeSystemPrompt, leadingSlashSkillName } from './prompts.ts';
 import { continuationRunner } from './launch-settings.ts';
 import { preserveRunAfterDisposal } from './run-guards.ts';
 import { stepScope } from './steps.ts';
@@ -461,6 +461,11 @@ export class ContinuationSession {
         ciTools,
         checkpoint: opening.checkpoint,
       });
+      // A resumed native command keeps character zero. If bootstrap opens a fresh
+      // session, the fallback trigger consumes that command and must carry its context.
+      const resumeFallbackSkill = skills.fallback && leadingSlashSkillName(resumed.userPrompt)
+        ? { ...skills.fallback, args: this.sharedHost.sessionContextFor(runId, state, launch.stepId, '').prefix }
+        : skills.fallback;
       const continuationTail = sessionEvents.launchSystemTail(this.context, this.sharedHost, {
         extraSystemPrompt: settings.extraSystemPrompt, delegation, webhooksPart: launch.webhooksPart,
         env: settings.profile.env, ciTools, handoffInjected: resumed.handoffInjected, runner: state.liveSession.delegationSettings?.runner,
@@ -471,7 +476,7 @@ export class ContinuationSession {
           scope: this.context.store.spawnScope(runId),
           // The system prompt holds the shared tail. Skill text stays with the runner.
           systemPrompt: composeSystemPrompt(undefined, continuationTail),
-          ...(skills.fallback ? { resumeFallbackSkill: skills.fallback } : {}),
+          ...(resumeFallbackSkill ? { resumeFallbackSkill } : {}),
           ...(skills.trigger ? { skill: skills.trigger } : {}),
           userPrompt: opening.attachments.length
             ? `${resumed.userPrompt}\n\n${pastedAttachmentsText(opening.attachments)}`

@@ -13,6 +13,7 @@ import type { AgentRunResult, AgentRunSpec, AgentSession } from '../core/agent-r
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import * as runners from '../core/runner-factory.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
+import { openingInput } from '../core/skill-trigger.ts';
 import { scopeFixtureProcesses } from '../delegation/process-scope.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
@@ -229,6 +230,30 @@ describe('skill resume continuation follow-ups (#790 review)', { timeout: 20_000
     await vi.waitFor(() => expect(launches).toHaveLength(1), { timeout: LAUNCH_WAIT_MS });
     expect(launches[0]!.spec.resumeFallbackSkill).toMatchObject({ id: 'plugin:known' });
     expect(launches[0]!.spec.resumeFallbackSkill).not.toHaveProperty('path');
+    sessions[0]!.finish();
+  });
+
+  it.each([true, false])('Continue command keeps context only in the fresh fallback (resumed=%s)', async resumed => {
+    manager.setSkillCatalog(fixedSkillCatalog([{ id: TEAM_SKILL, name: TEAM_SKILL, scope: 'repo' }]));
+    writeFileSync(join(repoRoot, '.ai/cezar/context.yaml'), 'version: 1\nrules:\n  - id: fallback-command\n    on: session_start\n    target: both\n    template: FALLBACK-COMMAND-CONTEXT\n');
+    const id = terminalSkillRun(TEAM_SKILL);
+    expect(manager.continueRun(id, { text: '/compact' })).toEqual({ ok: true });
+    // bound: the launch spec is captured before any adapter can send native input.
+    await vi.waitFor(() => expect(launches).toHaveLength(1), { timeout: LAUNCH_WAIT_MS });
+    const spec = launches[0]!.spec;
+    expect(spec.userPrompt).toBe('/compact');
+    expect(spec.skill).toBeUndefined();
+    expect(spec.resumeFallbackSkill?.args).toContain('FALLBACK-COMMAND-CONTEXT');
+    expect(spec.resumeFallbackSkill?.args).toContain('<cezar-context id="handoff"');
+    const input = openingInput(spec, resumed);
+    if (resumed) expect(input).toEqual({ skill: undefined, userPrompt: '/compact' });
+    else {
+      expect(input.userPrompt).toBe('');
+      expect(input.skill?.id).toBe(TEAM_SKILL);
+      expect(input.skill?.args).toContain('FALLBACK-COMMAND-CONTEXT');
+      expect(input.skill?.args).toContain('/compact');
+      expect(input.skill?.args.match(/\/compact/g)).toHaveLength(1);
+    }
     sessions[0]!.finish();
   });
 

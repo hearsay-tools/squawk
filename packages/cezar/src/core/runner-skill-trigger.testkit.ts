@@ -73,12 +73,14 @@ export function describeNativeSkillTriggers(runner: RunnerId): void {
           const first = await driveSeam(runner, 'baseline', { spec: { ...base, skill } });
           assertSuccess(first);
           for (const file of [argsFile, stdinFile]) writeFileSync(file, '');
-          const resumed = await driveSeam(runner, 'baseline', { spec: { ...base, userPrompt: CONTINUE, resumeFallbackSkill: { ...skill, args: '' }, sessionId: first.result.sessionId, resume: true } });
+          const resumed = await driveSeam(runner, 'baseline', { spec: { ...base, userPrompt: '/compact', resumeFallbackSkill: { ...skill, args: CONTEXT }, sessionId: first.result.sessionId, resume: true } });
           expect(resumed.failure).toBeUndefined();
           expect(resumed.v1.filter(event => event.type === 'error')).toEqual([]);
           expect(resumed.result.text).not.toContain(TOKEN);
           expect(wire()).not.toContain('probe-project');
-          expect(wire()).toContain(CONTINUE);
+          expect(wire()).not.toContain(CONTEXT);
+          const rows = wire().trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+          expect(rows.flatMap(row => [row.userText, row.params?.input?.[0]?.text, row.body?.parts?.[0]?.text])).toContain('/compact');
           expect(resumed.v1.filter(event => event.type === 'session')).toEqual([{ type: 'session', sessionId: first.result.sessionId, resumed: true }]);
           return;
         }
@@ -86,12 +88,12 @@ export function describeNativeSkillTriggers(runner: RunnerId): void {
           // Native resume can create a new id: absent pi/OpenCode session, or moved omp session.
           const requestedSession = runner === 'opencode' ? 'ses_missing_skill' : join(dir, 'empty-session.jsonl');
           const obs = await driveSeam(runner, 'baseline', { spec: { ...base, resume: true, sessionId: requestedSession,
-            userPrompt: CONTINUE, resumeFallbackSkill: { ...skill, args: '' },
+            userPrompt: '/compact', resumeFallbackSkill: { ...skill, args: CONTEXT },
             env: { ...base.env, CEZ_MOCK_OMP_RESUME_MOVED: '1' } } });
           assertSuccess(obs);
           expect(obs.v1.filter(event => event.type === 'session')).toEqual([{ type: 'session', sessionId: obs.result.sessionId, resumed: false }]);
           expect(obs.result.sessionId).not.toBe(requestedSession);
-          assertTriggerWire(runner, wire(), '', CONTINUE);
+          assertTriggerWire(runner, wire(), '', `${CONTEXT}\n\n/compact`);
           expect(triggerCount(runner, wire())).toBe(1);
           return;
         }
