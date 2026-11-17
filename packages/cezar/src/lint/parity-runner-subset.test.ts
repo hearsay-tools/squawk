@@ -1,3 +1,4 @@
+import { checkRule } from './ast-rule.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import { parityRunnerSubset, runnerSubsets } from './parity-runner-subset.ts';
@@ -19,7 +20,7 @@ describe('parity-runner-subset (hearsay-tools/squawk#3642)', () => {
     ['one id per line', `const held = [\n  '${first}',\n  '${second}',\n];`],
   ])('refuses %s', (_case, source) => {
     expect(runnerSubsets(file, `\n${source}`)).toHaveLength(1);
-    expect(parityRunnerSubset.check(file, `\n${source}`)).toEqual([
+    expect(checkRule(parityRunnerSubset, file, `\n${source}`)).toEqual([
       { line: 2, message: expect.stringMatching(/runnersWhere\(\).+exemptWhere\(\).+hearsay-tools\/squawk#3642/) },
     ]);
   });
@@ -39,6 +40,7 @@ describe('parity-runner-subset (hearsay-tools/squawk#3642)', () => {
     ['an empty array', 'const none = [];'],
   ])('passes %s', (_case, source) => {
     expect(runnerSubsets(file, source)).toEqual([]);
+    expect(checkRule(parityRunnerSubset, file, source)).toEqual([]);
   });
 
   it('reads JSX and plain JavaScript and refuses malformed source that quotes two ids', () => {
