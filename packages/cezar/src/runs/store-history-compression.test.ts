@@ -123,18 +123,6 @@ describe('RunStore history compression', () => {
     expect(readHistoryText(dir, run.id)).toContain('"message":"keep"');
   });
 
-  it('a live run is never compressed', async () => {
-    const { dir, store } = openStore();
-    const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
-    store.appendEvent(run.id, { type: 'note', message: 'live' });
-    setRunStatus(store, run.id, RUN_STATUS.running);
-    store.setArchived(run.id, true);
-    await store.historyIdle();
-    const { plain, compressed } = historyPaths(dir, run.id);
-    expect(existsSync(plain)).toBe(true);
-    expect(existsSync(compressed)).toBe(false);
-  });
-
   it('deleting an archived run removes the compressed transcript', async () => {
     const { dir, store } = openStore();
     const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });

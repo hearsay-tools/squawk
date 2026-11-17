@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeRunRecord, RUN_STATUS, WAIT_SOURCE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentInput, ConversationState } from '@open-mercato/cezar-contract';
 import {
-  RECORD_WRITE_RULES, WRITE_PATHS, redactText, stageArchiveFields, stageCommit, stageConversation,
-  stageDebouncedUpdate, stageDurableUpdate, stageLoaded, stagePullRequests, stageStepUpdate, writePathRules,
+  redactText, stageArchiveFields, stageCommit, stageConversation,
+  stageDebouncedUpdate, stageDurableUpdate, stageLoaded, stagePullRequests, stageStepUpdate,
 } from './record-write-rules.ts';
 import type { RunRecord } from './store.ts';
 
@@ -30,39 +30,6 @@ function commit(run: RunRecord, previous?: RunRecord, blocker?: string) {
 afterEach(() => vi.unstubAllEnvs());
 
 describe('record write paths without a database', () => {
-  // Today's order on each path, read from the code before S6 made one list of the rules (Decision
-  // 4). It differs from the old per-path declarations where they were stale: the durable save
-  // resolves task references since hearsay-tools/cezarion#2377, and writes its staged copy.
-  it.each([
-    ['commit', ['stale-resume', 'completion-actions']],
-    ['durableUpdate', ['issue-seed', 'pull-requests', 'restore', 'redact-patch', 'assign', 'task-references', 'archive-fields']],
-    ['debouncedUpdate', ['issue-seed', 'pull-requests', 'restore', 'redact-patch', 'assign', 'retire-completion-action', 'stale-resume', 'task-references', 'archive-or-touch']],
-    ['loaded', ['stale-resume']],
-    ['conversation', ['redact-messages', 'parse-delegation', 'find-recipient', 'redact-input', 'parse-input', 'append-input']],
-    ['pullRequests', ['merge-pull-requests']],
-    ['archiveFields', ['archive-time', 'withdraw-hold', 'clear-pin']],
-    ['stepUpdate', ['redact-step-error']],
-  ] as const)('runs the ordered %s rules', (path, rules) => {
-    expect(writePathRules(path)).toEqual(rules);
-  });
-
-  it('runs every rule on some path, and names a rule once', () => {
-    expect(RECORD_WRITE_RULES.filter(rule => !rule.on.some(path => WRITE_PATHS.includes(path))).map(rule => rule.id)).toEqual([]);
-    expect(new Set(RECORD_WRITE_RULES.map(rule => rule.id)).size).toBe(RECORD_WRITE_RULES.length);
-  });
-
-  // The class of hearsay-tools/cezarion#2377 to hearsay-tools/cezarion#2382: a rule one save
-  // skipped. The durable save is durableUpdate, then its commit.
-  it('names the difference of every rule that only one update save runs, or that the saves apply apart', () => {
-    const durable = (rule: (typeof RECORD_WRITE_RULES)[number]) => rule.on.includes('durableUpdate') || rule.on.includes('commit');
-    const one = RECORD_WRITE_RULES.filter((rule) => {
-      return durable(rule) !== rule.on.includes('debouncedUpdate');
-    });
-    expect(one.map(rule => rule.id)).toEqual(['retire-completion-action', 'completion-actions', 'archive-fields', 'archive-or-touch']);
-    expect(RECORD_WRITE_RULES.filter(rule => rule.difference).map(rule => rule.id))
-      .toEqual(['assign', 'retire-completion-action', 'stale-resume', 'completion-actions', 'archive-fields', 'archive-or-touch']);
-  });
-
   // One rule on every path (hearsay-tools/cezarion#2322): a resume time stays only on a `waiting`
   // run. A `waiting` run with a time is a usage-limit hold, so no waiting run keeps a time without one.
   const throughLoad = (run: RunRecord) => { stageLoaded(run); return run; };

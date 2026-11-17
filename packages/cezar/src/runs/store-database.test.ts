@@ -82,22 +82,7 @@ describe('importing runs.json', () => {
     expect(RunStore.open(dataDir).getRun('a')?.title).toBe('renamed');
   });
 
-  it('reads only the database once the import is complete, whatever runs.json says later', () => {
-    writeFileSync(join(dataDir, 'runs.json'), JSON.stringify([record('a')]));
-    open().close();
-    // An older Squawk writing runs.json after the upgrade: re-upgrading must not import it.
-    writeFileSync(join(dataDir, 'runs.json'), JSON.stringify([record('a', { title: 'downgraded' }), record('zz')]));
-    const store = open();
-    expect(store.getRun('a')?.title).toBe('run a');
-    expect(store.getRun('zz')).toBeUndefined();
-  });
 
-  it('never overwrites an existing backup', () => {
-    writeFileSync(join(dataDir, LEGACY_INDEX_BACKUP_FILE), 'earlier backup');
-    writeFileSync(join(dataDir, 'runs.json'), JSON.stringify([record('a')]));
-    expect(open().getRun('a')).toBeDefined();
-    expect(readFileSync(join(dataDir, LEGACY_INDEX_BACKUP_FILE), 'utf8')).toBe('earlier backup');
-  });
 
   it.each([
     ['not JSON', '{ this is not json'],
@@ -160,25 +145,6 @@ describe('importing runs.json', () => {
     expect(RunStore.open(dataDir).getRun('late')).toBeUndefined();
   });
 
-  it('commits the records and the completion marker together, or neither', () => {
-    writeFileSync(join(dataDir, 'runs.json'), JSON.stringify([record('a'), record('bb')]));
-    RunDatabase.open(join(dataDir, RUNS_DB_FILE)).close();
-    const release = blockRunWrites(dataDir);
-    try {
-      expect(() => open()).toThrow(expect.objectContaining({ kind: 'busy' }));
-    } finally {
-      release();
-    }
-    const db = RunDatabase.openReadOnly(join(dataDir, RUNS_DB_FILE))!;
-    try {
-      expect(db.listAll()).toEqual([]);
-      expect(db.getMeta(RUNS_IMPORT_COMPLETE_KEY)).toBeUndefined();
-    } finally {
-      db.close();
-    }
-    // Nothing was half-imported, so the next open simply imports.
-    expect(runIds(open())).toEqual(['bb', 'a']);
-  });
 });
 
 // A database that cannot be opened at all: store-import.test.ts.

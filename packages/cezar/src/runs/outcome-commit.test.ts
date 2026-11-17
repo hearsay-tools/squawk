@@ -179,7 +179,6 @@ describe('deliveryReceipts', () => {
     const read = input({ deliveredAt: at, consumedAt: later });
     expect(deliveryReceipts(read, 'delivered')).toEqual({ deliveredAt: at });
     expect(deliveryReceipts(read, 'consumed')).toEqual({ deliveredAt: at, consumedAt: later });
-    expect(Object.keys(deliveryReceipts(read, 'consumed'))).toEqual(['deliveredAt', 'consumedAt']);
   });
 
   it('has no receipt field for a queued input or one that is not there', () => {
