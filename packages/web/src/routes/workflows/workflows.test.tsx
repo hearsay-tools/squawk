@@ -269,16 +269,11 @@ describe('palette add / remove / the 8-step limit', () => {
     await screen.findByText('A workflow holds at most 8 steps.')
   })
 
-  // #374: the palette's empty state must mention the same discovery dirs as the Skills tab's,
-  // not just `.ai/skills/`.
-  it('an empty skill catalog explains every discovery dir, not just .ai/skills/', async () => {
-    stubFetch({ 'GET /api/v1/runner-skills?runner=claude': [() => jsonResponse([])] })
+  it('an empty runner list keeps typed ids available in Add step', async () => {
+    stubFetch({ 'GET /api/v1/runner-skills?runner=claude': [() => jsonResponse({ runner: 'claude', skills: [], problems: [], source: 'live' })] })
     renderAt('/workflows')
-
-    const hint = await screen.findByText(/No skills yet/)
-    expect(hint.textContent).toContain('.ai/skills/')
-    expect(hint.textContent).toContain('.ai/cezar/skills/')
-    expect(hint.textContent).toContain('.agents/skills/')
+    const hint = await screen.findByText(/No skills reported by this runner and account/)
+    expect(hint.textContent).toContain('type a skill id in Add step')
   })
 })
 

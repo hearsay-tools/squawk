@@ -56,6 +56,6 @@ it('waits for account discovery before checking a deep link against the drafted 
   expect(screen.queryByText(/Unknown skill/)).toBeNull()
   await act(async () => { release(new Response(JSON.stringify({ profiles: [{ provider: 'codex', id: 'work', label: 'Work' }], selections: {} }), { headers: { 'content-type': 'application/json' } })) })
   await waitFor(() => expect(nativeRequests).toContain('/api/v1/runner-skills?runner=codex&account=work'))
-  await screen.findByRole('button', { name: /Check/ })
+  await waitFor(() => expect(document.querySelector('[data-slot="source-pill"]')?.textContent).toContain('Check'))
   expect(readDraft().source).toEqual({ source: 'skill', ref: 'plugin:check' })
 })

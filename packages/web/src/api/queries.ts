@@ -1213,7 +1213,6 @@ export function useWorkflows() {
   })
 }
 
-/** A runner/account list. An omitted account follows the project's selection on the server. */
 export function useRunnerSkills(runner?: Runner, account?: string | null, enabled = true) {
   const config = useConfig()
   const selected = runner ?? config.data?.defaultRunner ?? 'claude'
