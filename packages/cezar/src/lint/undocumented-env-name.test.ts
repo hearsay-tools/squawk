@@ -64,3 +64,8 @@ it('checks literal helper suffixes across comments, whitespace, templates and im
 it('keeps complete environment names in directive literals documented', () => {
   expect(envNames("'CEZ_DOC_DIRECTIVE';")).toEqual(['CEZ_DOC_DIRECTIVE']);
 });
+
+it('ignores literal name prefixes while keeping complete names and identifier spellings', () => {
+  expect(envNames("const prefix = 'CEZ_TOOL_'; const other = `HSQ_TOOL_`; const CEZ_IDENTIFIER_ = 1; env['CEZ_COMPLETE'];"))
+    .toEqual(['CEZ_COMPLETE', 'CEZ_IDENTIFIER_']);
+});

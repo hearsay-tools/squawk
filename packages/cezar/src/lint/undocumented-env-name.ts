@@ -31,10 +31,12 @@ function envSitesFromAst(ast: Node): Map<string, number> {
     if (!names.has(name) || names.get(name)! > at) names.set(name, at);
   };
   visit(ast, node => {
-    const name = node.type === 'Identifier' || node.type === 'JSXIdentifier' ? node.name
+    const identifier = node.type === 'Identifier' || node.type === 'JSXIdentifier';
+    const name = identifier ? node.name
       : node.type === 'StringLiteral' || node.type === 'DirectiveLiteral' ? node.value
       : node.type === 'TemplateLiteral' && node.expressions.length === 0 ? node.quasis[0]?.value.cooked : undefined;
-    if (name && /^(?:CEZ|HSQ)_[A-Z0-9_]+$/.test(name)) add(name, node.start ?? 0);
+    const pattern = identifier ? /^(?:CEZ|HSQ)_[A-Z0-9_]+$/ : /^(?:CEZ|HSQ)_[A-Z0-9_]*[A-Z0-9]$/;
+    if (name && pattern.test(name)) add(name, node.start ?? 0);
   });
   for (const call of productEnvCalls(ast)) {
     if (call.suffix === undefined) continue;
@@ -109,7 +111,7 @@ function envNameVisitors(report: Parameters<AstRule['create']>[0]): Visitors {
   };
   const literal = (node: EsNode) => {
     const name = stringOf(node);
-    if (name && /^(?:CEZ|HSQ)_[A-Z0-9_]+$/.test(name)) add(name, node);
+    if (name && /^(?:CEZ|HSQ)_[A-Z0-9_]*[A-Z0-9]$/.test(name)) add(name, node);
   };
   const identifier = (node: EsNode) => {
     if (typeof node.name === 'string' && /^(?:CEZ|HSQ)_[A-Z0-9_]+$/.test(node.name)) add(node.name, node);

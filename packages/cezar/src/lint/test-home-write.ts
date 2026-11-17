@@ -47,10 +47,8 @@ function bareCall(node: Node): Node[] {
   return callee.type === 'Identifier' && guarded(callee) ? [callee] : [];
 }
 
-function sites(node: Node, parent: Node | undefined): Node[] {
-  if (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') return bareCall(node);
-  if (node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') return guarded(node.property) ? [node.property] : [];
-  if (node.type === 'ObjectProperty' && parent?.type === 'ObjectPattern') return guarded(node.key) ? [node.key] : [];
+/** Runtime import and export names share the same guarded-name check. */
+function specifierSites(node: Node): Node[] {
   if (node.type === 'ImportSpecifier') return [node.imported, node.local].filter(guarded);
   if (node.type === 'ExportSpecifier') return [node.local, node.exported].filter(guarded);
   if (node.type === 'ExportAllDeclaration') {
@@ -60,6 +58,13 @@ function sites(node: Node, parent: Node | undefined): Node[] {
   if (node.type === 'ImportDefaultSpecifier' || node.type === 'ImportNamespaceSpecifier') return guarded(node.local) ? [node.local] : [];
   if (node.type === 'ExportNamespaceSpecifier' || node.type === 'ExportDefaultSpecifier') return guarded(node.exported) ? [node.exported] : [];
   return [];
+}
+
+function sites(node: Node, parent: Node | undefined): Node[] {
+  if (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') return bareCall(node);
+  if (node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') return guarded(node.property) ? [node.property] : [];
+  if (node.type === 'ObjectProperty' && parent?.type === 'ObjectPattern') return guarded(node.key) ? [node.key] : [];
+  return specifierSites(node);
 }
 
 /** Ban guarded syntax instead of attempting open-ended binding or value flow. */

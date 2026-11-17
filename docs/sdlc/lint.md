@@ -118,8 +118,8 @@ remain in force.
 | `cez/runner-fact-combination` | Non-test workflow TS files: functions touching the listed fact sources and at least two declared fact-key names. Import/type aliases and static keys are recognized; receiver values are not tracked. Its source/key forms, over-approximation and excluded helper/dynamic/cross-module flows are listed in the rule table above. |
 | `cez/runner-id-branch` | Non-test TS/TSX source in `packages/cezar/src/` outside `core/`, and in `packages/web/src/`. The ids come from `RUNNER_IDS` in `core/agent-runner.ts`, plus the legacy `claude-cli`. A literal may sit under parentheses, `as`, `satisfies` or `!`, or be a template with no substitution. The rule tracks no value and knows no type, so it over-approximates: `'pi'` is also a plain word. It leaves out an operand named `t` or `type` (a message or event tag), a comparison of two literals, an id held in a variable or constant, an id tested with `includes`, `has`, a map lookup or a regular expression, and an id used as an object key. |
 | `cez/runner-roster-literal` | Every JS/TS file under `packages/`, tests included, except `core/agent-runner.ts`: array literals whose string elements name every id of `RUNNER_IDS`, in any order, with any other element beside them. It leaves out a list that omits a runner, a roster spelled as a union type, as object keys or as separate arguments, and a list built from parts. |
-| `cez/test-wait-discipline` | Server `src/` `.test.ts`/`.testkit.ts` files, excluding fixtures and scanner self-fixtures: source-text patterns for awaited sleeps, recognized wait calls and poll-loop exits, with a 10 s floor. Strings and comments are blanked. The scanner evaluates supported local bound expressions; bounds supplied from outside the file or through parameters are left to callers. It does not prove those bounds are sufficient or cover arbitrary helper/control-flow forms. Reasoned `// bound:` comments and the shrink-only baselines remain the exceptions. |
-| `cez/unit-wait-discipline` | Cockpit `src/` `.test.ts`/`.test.tsx` files: source-text sleep, wait-bound and poll-deadline patterns with a 3 s floor. Strings and comments are blanked. Supported local bound expressions are evaluated; externally supplied bounds are left to callers. It does not prove those bounds are sufficient or analyze arbitrary helper/control-flow forms. Reasoned `// bound:` comments and the shrink-only baseline remain the exceptions. |
+| `cez/test-wait-discipline` | Server `src/` `.test.ts`/`.testkit.ts` files, excluding fixtures and scanner self-fixtures: AST visitors for awaited sleeps, recognized wait calls and poll-loop exits, with a 10 s floor. Parsed comments supply reasoned exceptions. The scanner evaluates supported local bound expressions; bounds supplied from outside the file or through parameters are left to callers. It does not prove those bounds are sufficient or cover arbitrary helper/control-flow forms. Reasoned `// bound:` comments and the shrink-only baselines remain the exceptions. |
+| `cez/unit-wait-discipline` | Cockpit `src/` `.test.ts`/`.test.tsx` files: AST visitors for sleeps, wait bounds and poll deadlines with a 3 s floor. Parsed comments supply reasoned exceptions. Supported local bound expressions are evaluated; externally supplied bounds are left to callers. It does not prove those bounds are sufficient or analyze arbitrary helper/control-flow forms. Reasoned `// bound:` comments and the shrink-only baseline remain the exceptions. |
 | `cez/undocumented-env-name` | Shipped package source and runner scripts, excluding tests and fixtures: literal `CEZ_*`/`HSQ_*` spellings and literal suffixes passed to `productEnv`, including named import aliases. It proves name documentation, not computed-name completeness or default behavior. |
 
 The lists live beside the rules in `packages/cezar/src/lint/`, except the query-setter and card-2 contrast baselines,
@@ -425,14 +425,14 @@ The 15 type-aware TypeScript correctness rules remain off and outside this adopt
 
 ### Design guardian (M09)
 
-**Static scope:** the existing source-text patterns and CSS selector/body patterns in
+**Static scope:** syntax nodes, literal tokens and CSS selector/body patterns in
 the rule table, with their original file predicates and reasoned exceptions. The fixture
 home check is a same-line heuristic; it does not establish a child's environment.
 
 hearsay-tools/cezarion#2422 accounts for all 18 original cases (the issue's count of 17 omitted
-one). The shared table and string-aware comment stripper live in
-`packages/cezar/src/lint/design-guardian.ts`; strings remain visible to these rules. The original
-regexes, applicability, allowed predicates and their reasons remain unchanged.
+one). The shared table lives in `packages/cezar/src/lint/design-guardian.ts`. Source visitors
+check calls and literal tokens. The CSS runner keeps its string-aware comment stripper.
+Applicability, allowed predicates and their reasons remain unchanged.
 
 | Original case | Fate and guarantee |
 | --- | --- |
