@@ -97,7 +97,7 @@ describe('automation task templates', () => {
         { allowWorkers: false }, { allowMessaging: false }];
       for (const [index, completion] of choices.entries()) {
         const receiptId = `completion-${index}`;
-        const task = { variants: 2, ...completion };
+        const task = { variants: 2 as const, ...completion };
         const launch = () => kind === 'github'
           ? launchAutomationRun({ root, manager, store, definition: { ...definition, task: { ...definition.task, ...task } },
             candidate: { ...candidate, number: candidate.number + index, url: `https://github.com/acme/demo/issues/${candidate.number + index}` }, receiptId,
