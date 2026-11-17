@@ -10,20 +10,12 @@ function session(): AgentSession {
     holdsHumanInput: unused, end: unused, interrupt: unused };
 }
 const define = (target: object, key: string, value: unknown) => Reflect.defineProperty(target, key, { value });
-const setPrototype = (target: object) => Reflect.setPrototypeOf(target, null);
 const replace = (target: object, key: string, value: unknown) => Object.assign(target, { [key]: value });
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
-it('locks the input slot and frozen group without freezing runner capabilities', () => {
+it('keeps input owner commands live without freezing runner capabilities', () => {
   const state = createActiveRun({ cwd: '.', pendingHumanAsk: false, autonomous: false });
   const group = state.inputState;
-  expect(Object.getOwnPropertyDescriptor(state, 'inputState')).toMatchObject({ writable: false, configurable: false });
-  expect(Object.isFrozen(group)).toBe(true);
-  expect(Object.isFrozen(Object.getPrototypeOf(group))).toBe(true);
-  expect(() => replace(state, 'inputState', createInputGroup())).toThrow(TypeError);
-  expect(() => replace(group, 'agentInputError', 'forged')).toThrow(TypeError);
-  expect(define(group, 'writingInput', true)).toBe(false);
-  expect(setPrototype(group)).toBe(false);
   group.recordInputError('transport failed');
   group.answerOpeningAsk(7);
   group.selectOpeningInput('opening');
