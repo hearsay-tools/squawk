@@ -190,34 +190,40 @@ function readStoredAccounts(home: Home): AgentAccountStore | 'absent' | 'corrupt
  * One-time upgrade of a saved machine-wide default, which this file no longer carries
  * (hearsay-tools/squawk#3865). Each registered project with no choice of its own for a provider
  * takes the saved one, so no project changes its login. A home that cannot be written keeps the
- * upgraded store in memory.
+ * upgraded store in memory. While the registry lists no project (it may be unreadable), the saved
+ * default stays in the file for a later load.
  */
 function upgradeSavedDefaults(home: Home, store: AgentAccountStore): AgentAccountStore {
+  const roots = loadWorkspaceConfigSync(home.workspaceConfig).projects.map((project) => project.root);
+  if (roots.length === 0 && savedDefaults(store).length > 0) return store;
   try {
     const homeStore = new HomeStore(home);
     return homeStore.transaction(() => {
       const current = readStoredAccounts(home);
-      const next = foldSavedDefaults(home, typeof current === 'string' ? store : current);
+      const next = foldSavedDefaults(typeof current === 'string' ? store : current, roots);
       homeStore.writeJson(home.agentAccounts, next);
       return next;
     }, [home.agentAccounts]);
   } catch {
-    return foldSavedDefaults(home, store);
+    return foldSavedDefaults(store, roots);
   }
 }
 
-function foldSavedDefaults(home: Home, store: AgentAccountStore): AgentAccountStore {
-  const { defaults, ...rest } = store as AgentAccountStore & { defaults?: unknown };
-  const saved = selectionSchema.safeParse(defaults);
+/** The saved machine-wide default as [provider, account id] pairs. */
+function savedDefaults(store: AgentAccountStore) {
+  const saved = selectionSchema.safeParse((store as { defaults?: unknown }).defaults);
+  return saved.success ? PROVIDER_IDS.flatMap((provider) => saved.data[provider] === undefined ? [] : [[provider, saved.data[provider]] as const]) : [];
+}
+
+function foldSavedDefaults(store: AgentAccountStore, roots: readonly string[]): AgentAccountStore {
+  const { defaults: _defaults, ...rest } = store as AgentAccountStore & { defaults?: unknown };
   const selections = { ...rest.selections };
-  const chosen = saved.success ? PROVIDER_IDS.flatMap((provider) => saved.data[provider] === undefined ? [] : [[provider, saved.data[provider]] as const]) : [];
-  if (chosen.length > 0) {
-    for (const { root } of loadWorkspaceConfigSync(home.workspaceConfig).projects) {
-      const selection = { ...selections[root] };
-      // A salvaged key holds undefined, which is no choice: it must not hide the saved default.
-      for (const [provider, id] of chosen) selection[provider] ??= id;
-      selections[root] = selection;
-    }
+  const chosen = savedDefaults(store);
+  for (const root of chosen.length > 0 ? roots : []) {
+    const selection = { ...selections[root] };
+    // A salvaged key holds undefined, which is no choice: it must not hide the saved default.
+    for (const [provider, id] of chosen) selection[provider] ??= id;
+    selections[root] = selection;
   }
   return { ...rest, selections };
 }

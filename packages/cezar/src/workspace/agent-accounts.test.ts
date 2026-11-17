@@ -309,6 +309,13 @@ describe('agent accounts store', () => {
       expect(saved).not.toHaveProperty('defaults');
       expect(saved.selections).toEqual(store.selections);
     });
+
+    it('keeps a saved machine-wide default in the file while the registry lists no project', async () => {
+      write({ accounts: [account('work')], defaults: { claude: 'work' } });
+
+      await mergeWriteAgentAccounts(() => {}, testHome());
+      expect(JSON.parse(readFileSync(agentAccountsPath(testHome()), 'utf8'))).toMatchObject({ defaults: { claude: 'work' } });
+    });
   });
 
   /**
