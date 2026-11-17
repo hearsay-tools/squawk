@@ -75,3 +75,17 @@ ruleCases(launchReadOutsideResolver, {
   valid: ['const source: StartRunInput = read(); class View { static { const source: Display = display(); void source.model; } }'],
   invalid: ['const source: StartRunInput = read(); class View { static { const source: Display = display(); } choose() { return source.model; } }'],
 });
+
+// A signature must also leave its sibling method's type lookup untouched inside the class.
+for (const type of ['StartRunInput', 'Raw']) {
+  const prefix = type === 'Raw' ? "import type { StartRunInput as Raw } from './types.ts';" : '';
+  const siblings = [
+    (body: string) => `abstract class View { abstract noop<${type}>(): void; ${body} }`,
+    (body: string) => `class View { noop<${type}>(): void; noop() {} ${body} }`,
+  ];
+  ruleCases(launchReadOutsideResolver, {
+    file: 'packages/cezar/src/workflows/run/sibling-signatures.ts',
+    valid: siblings.map(enclose => prefix + enclose('choose(source: Display) { return source.model; }')),
+    invalid: siblings.map(enclose => prefix + enclose(`choose(source: ${type}) { return source.model; }`)),
+  });
+}
