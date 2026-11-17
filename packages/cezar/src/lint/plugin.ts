@@ -16,6 +16,7 @@ import { runnerIdBranch } from './runner-id-branch.ts';
 import { runnerRosterLiteral } from './runner-roster-literal.ts';
 import { parityRunnerSubset } from './parity-runner-subset.ts';
 import { oxlintAstRule, type AstRule } from './ast-rule.ts';
+import { launchReadOutsideResolver } from './launch-read-outside-resolver.ts';
 import { childKilledRead } from './child-killed-read.ts';
 import { runStoreTestkitImport } from './run-store-testkit-import.ts';
 import { testWaitDiscipline } from './test-wait-discipline.ts';
@@ -28,7 +29,7 @@ export const AST_RULES: AstRule[] = [
   designGuardian, layerImport, mockLifecycleBoundary, mockScenarioBoundary, nativeMockSource,
   parityRunnerSubset, rawQuerySetter, runFactReader, runHistoryReader, runnerFactCombination,
   runnerIdBranch, runnerRosterLiteral, testWaitDiscipline, undocumentedEnvName, unitWaitDiscipline,
-  childKilledRead, runStoreTestkitImport,
+  childKilledRead, runStoreTestkitImport, launchReadOutsideResolver,
 ];
 
 /** Every repository rule. `.oxlintrc.json` turns each one on as `cez/<name>`. */

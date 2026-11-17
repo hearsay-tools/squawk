@@ -56,7 +56,7 @@ async function closingRoot() {
       close = end;
       const session: AgentSession = { get open() { return open; }, result, end, interrupt: end,
         sendMessage: () => true, sendAgentMessage: async () => {}, discardQueuedMessages: () => {}, holdsHumanInput: () => false };
-      queueMicrotask(() => onEvent?.({ type: 'session', sessionId: 'closed-root' }));
+      queueMicrotask(() => onEvent?.({ type: 'session', sessionId: 'closed-root', resumed: false }));
       return session;
     },
   };

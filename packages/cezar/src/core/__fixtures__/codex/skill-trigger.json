@@ -1,0 +1,28 @@
+[
+  {
+    "method": "item/completed",
+    "params": {
+      "item": {
+        "type": "userMessage",
+        "id": "01a1e643-bfff-7ef0-82eb-ce4be47adf26",
+        "clientId": null,
+        "content": [
+          {
+            "type": "text",
+            "text": "fixture arguments\n\nOpening context: this is a native skill probe.",
+            "text_elements": []
+          },
+          {
+            "type": "skill",
+            "name": "probe-project",
+            "path": "/probe/repo/.agents/skills/probe-project/SKILL.md"
+          }
+        ]
+      },
+      "threadId": "01a1e643-bb67-73c2-861d-72bcb2b3aa72",
+      "turnId": "01a1e643-bbb2-70c2-9cb8-9b4451cb79b7",
+      "completedAtMs": 1794864562177
+    },
+    "emittedAtMs": 1794864562180
+  }
+]

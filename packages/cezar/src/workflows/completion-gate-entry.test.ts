@@ -240,7 +240,7 @@ describe('completion refusal through a live runner', () => {
           discardQueuedMessages: vi.fn(), holdsHumanInput: () => false };
         started = true;
         handlers = tools.mock.results.find(result => result.type === 'return')!.value;
-        queueMicrotask(() => emit({ type: 'session', sessionId: 'gate-session' }));
+        queueMicrotask(() => emit({ type: 'session', sessionId: 'gate-session', resumed: false }));
         return session;
       },
     };

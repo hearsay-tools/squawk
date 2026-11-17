@@ -698,6 +698,43 @@ function assertProviderFailure({ timeline, at }: ContractObservation): void {
   expect(at.get('ended'), `the session ended after the interrupt${trace}`).toBeGreaterThan(at.get('interrupt')!);
 }
 
+async function observeUnknownSkill(backend: RunnerId): Promise<ContractObservation> {
+  return driveContract(backend, {
+    scenario: 'baseline', variant: 'unknown-skill',
+    spec: { userPrompt: '', skill: { id: 'probe-missing', path: '/probe/missing/SKILL.md', args: 'unknown fixture' } },
+    whileOpen: async (_session, recorder) => { await until(recorder, () => turnEnds(recorder) > 0); },
+  });
+}
+
+async function observeMidTurnSkill(backend: RunnerId): Promise<ContractObservation> {
+  return driveContract(backend, {
+    scenario: 'steer-tool', variant: 'mid-turn-skill', steerGate: true,
+    whileOpen: async (session, recorder, mock) => {
+      await until(recorder, () => v1Of(recorder).some(event => event.type === 'tool-call'));
+      recorder.read.acceptedSkill = session.sendMessage([{ type: 'skill', id: 'probe-project', path: '/probe/skill/SKILL.md', args: 'contract skill arguments' }]);
+      if (recorder.read.acceptedSkill) await mock.onWire('contract skill arguments');
+      mock.openGate();
+      await until(recorder, () => turnEnds(recorder) > 0);
+    },
+  });
+}
+
+async function observeSkillVisibility(backend: RunnerId): Promise<ContractObservation> {
+  const dir = mkdtempSync(join(tmpdir(), 'skill-visibility-'));
+  const path = join(dir, 'SKILL.md');
+  try {
+    return await driveContract(backend, {
+      scenario: 'baseline', variant: 'skill-visibility',
+      whileOpen: async (session, recorder) => {
+        await until(recorder, () => turnEnds(recorder) > 0);
+        writeFileSync(path, '---\nname: probe-late\ndescription: Added after start.\n---\nTRIGGER-FIXTURE');
+        expect(session.sendMessage([{ type: 'skill', id: 'probe-late', path, args: 'late skill' }])).toBe(true);
+        await until(recorder, () => turnEnds(recorder) > 1);
+      },
+    });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
+
 export const SEAM_CONTRACT_ROWS: readonly SeamContractRow[] = [
   {
     id: 'S36', scenario: 'hold-gated', observe: observeAcknowledgement, assert: assertAcknowledgement,
@@ -737,4 +774,28 @@ export const SEAM_CONTRACT_ROWS: readonly SeamContractRow[] = [
     observe: (backend: RunnerId) => observeProviderFailure(backend, variant), assert: assertProviderFailure,
     name: `S44 fails a ${variant === 'wake' ? 'wake continuation' : 'running'} turn on a provider error before any turn end, and ends once interrupted`,
   })),
+  {
+    id: 'S45', scenario: 'baseline', observe: observeUnknownSkill,
+    name: 'S45 reports an unknown native skill as skillUnknownName declares',
+    assert: ({ backend, obs }) => {
+      expect(obs.v1.some(event => event.type === 'error')).toBe(RUNNER_FACTS[backend].skillUnknownName === 'error');
+      expect(obs.v1.filter(event => event.type === 'turn-end')).toHaveLength(1);
+    },
+  },
+  {
+    id: 'S46', scenario: 'steer-tool', observe: observeMidTurnSkill,
+    name: 'S46 admits a native skill during a running turn only as skillTriggerMidTurn declares',
+    assert: ({ backend, obs, read }) => {
+      expect(read.acceptedSkill).toBe(RUNNER_FACTS[backend].skillTriggerMidTurn);
+      expect(obs.result.text.includes('TRIGGER-FIXTURE')).toBe(RUNNER_FACTS[backend].skillTriggerMidTurn);
+      expect(obs.v1.filter(event => event.type === 'turn-end')).toHaveLength(1);
+    },
+  },
+  {
+    id: 'S47', scenario: 'baseline', observe: observeSkillVisibility,
+    name: 'S47 sees skills added after start only as skillsSeenBySession declares',
+    assert: ({ backend, obs }) => {
+      expect(obs.result.text.includes('TRIGGER-FIXTURE')).toBe(RUNNER_FACTS[backend].skillsSeenBySession === 'live');
+    },
+  },
 ];

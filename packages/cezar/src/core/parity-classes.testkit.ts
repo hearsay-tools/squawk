@@ -93,6 +93,7 @@ const HARNESS_SEAM = 'drives the runner class itself (seam tier), its wire featu
 
 /** Every parity family and its class. A harness family is one `describeRunners` group, as `harness:<group>`. */
 export const PARITY_FAMILIES = {
+  'runner-skill-trigger': everyRunner('each cell drives native trigger placement, session reporting and unknown-name behavior'),
   'runner-skills': everyRunner('each cell drives its runner list adapter over its native mock wire'),
   // Harness parity: the seam tier and every group whose cells branch on runner code.
   ...Object.fromEntries(['startup', 'provider', 'contract', 'seam', 'session', 'input', 'governed', 'native-message', 'spec',
@@ -181,6 +182,7 @@ export type ParityFamilyName = keyof typeof PARITY_FAMILIES;
 
 /** Parity test files by family; a file may hold several harness groups. */
 export const PARITY_FILES: ReadonlyArray<readonly [RegExp, readonly ParityFamilyName[]]> = [
+  [/^core\/runner-skill-trigger-(?:claude|codex|opencode|pi|omp)-parity\.test\.ts$/, ['runner-skill-trigger']],
   [/^core\/runner-skills-parity\.test\.ts$/, ['runner-skills']],
   [/^workflows\/automation-tools-[a-z]+-parity\.test\.ts$/, ['automation-tools']],
   [/^core\/harness-(?:[a-z]+-[a-z-]+-)?parity(?:-closure)?\.test\.ts$/, Object.keys(PARITY_FAMILIES).filter(name => name.startsWith('harness:')) as ParityFamilyName[]],

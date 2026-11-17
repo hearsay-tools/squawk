@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { slashTrigger, skillFrames, knownSkill, SKILL_TOKEN } from './mock-skill-trigger.mjs';
 import { productEnv } from './product-env.mjs';
 import { OMP_FAILURES } from './mock-provider-failures.mjs';
 import { loadControls } from './mock-controls.mjs';
@@ -155,7 +156,8 @@ function messageUpdate(messageId, event) {
 
 function userMessage(text) {
   const messageId = `msg-${++messageSeq}`;
-  const message = { role: 'user', content: [{ type: 'text', text }] };
+  const trigger = slashTrigger(text);
+  const message = trigger && knownSkill('omp', trigger) ? skillFrames('omp', trigger)[0].message : { role: 'user', content: [{ type: 'text', text }] };
   write({ type: 'message_start', messageId, message });
   write({ type: 'message_end', messageId, message });
 }
@@ -221,7 +223,7 @@ function endTurn({ status = 'completed', error, kind, settle = true } = {}) {
   for (const steer of readNow) {
     userMessage(steer.message);
     if (status === 'error') providerFailure(kind);
-    else assistantText([steer.message], { usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { total: 0 } } });
+    else assistantText([slashTrigger(steer.message) && knownSkill('omp', slashTrigger(steer.message)) ? SKILL_TOKEN : steer.message], { usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { total: 0 } } });
   }
   write({ type: 'turn_end' });
   write({ type: 'agent_end', messages: [], isTerminal: true, yielded: true });
@@ -490,6 +492,12 @@ function scenarioEncoder(command, ack, state = { acknowledged: false, opened: fa
 
 async function prompt(command, sent = command.message) {
   const message = command.message;
+  const trigger = slashTrigger(message);
+  if (trigger) {
+    respond(command); beginTurn(command);
+    assistantText([knownSkill('omp', trigger) ? SKILL_TOKEN : message]);
+    endTurn(); return;
+  }
   // Rejected before admission: OMP's error response only, no prompt_result (rpc-mode.ts).
   if (delivery?.rejects(sent)) { fail(command, 'owned turn rejected'); return; }
   // Every successful admission acknowledges through here, so a configured hold-ack holds it

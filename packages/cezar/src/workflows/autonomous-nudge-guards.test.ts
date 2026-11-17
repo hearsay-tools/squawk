@@ -307,7 +307,7 @@ describe('nudge bounds through a live runner', () => {
         const close = () => { open = false; finish({ text: '', toolCalls: [], tokensUsed: 0 }); };
         session = { get open() { return open; }, result, sendMessage: vi.fn(() => true), sendAgentMessage: vi.fn(async () => {}),
           end: vi.fn(close), interrupt: vi.fn(close), discardQueuedMessages: vi.fn(), holdsHumanInput: () => false };
-        queueMicrotask(() => emit({ type: 'session', sessionId: 'nudge-session' }));
+        queueMicrotask(() => emit({ type: 'session', sessionId: 'nudge-session', resumed: false }));
         return session;
       },
     };

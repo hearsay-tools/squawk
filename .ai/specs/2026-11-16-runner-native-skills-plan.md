@@ -7,7 +7,7 @@ each slice changes. Baseline: `main` at `6674cbeda`, after the Cursor removal
 (hearsay-tools/squawk#3725). The probe reports are in
 [`.ai/analysis/2026-11-16-runner-native-skills/`](../analysis/2026-11-16-runner-native-skills/).
 
-Six slices, one pull request each. Delete this file when slice 5 merges.
+Seven slices, one pull request each. Slice 3 is cut in two (3a and 3b) after the check against `main` at `caf0e3eaa`. Delete this file when slice 5 merges.
 
 ## Order
 
@@ -17,12 +17,13 @@ Six slices, one pull request each. Delete this file when slice 5 merges.
 | 4. Automation tool | now | It touches the tool server, not the runner adapters |
 | R. This repository's skills | now | It changes repository files only |
 | 2. Trigger seam | slice 1 | Both edit the five adapter files and the mock wires |
-| 3. Switch | slices 2 and R | It needs both seams, and it stops reading `.ai/skills/` |
-| 5. Removal | slices 3 and 4 | It deletes what slice 3 stops using and the built-in skill that slice 4 replaces |
+| 3a. Switch the server and run path | slices 2 and R | It needs both seams, and it stops reading `.ai/skills/` |
+| 3b. Switch the cockpit | slice 3a | It reads the route that 3a adds, and removes the old routes |
+| 5. Removal | slices 3b and 4 | It deletes what slice 3 stops using and the built-in skill that slice 4 replaces |
 
 The five adapter files (`packages/cezar/src/core/{claude-cli,codex-app-server,opencode-server,pi,omp}-runner.ts`),
 the mock wires in `packages/cezar/scripts/` and `core/runner-facts.ts` are hot files for slices
-1 and 2. `workflows/run/` is a hot area for slices 3 and 5. Slices do not stack: each one lands
+1 and 2. `workflows/run/` is a hot area for slices 3a and 5; `packages/web/src` for 3b and 5. Slices do not stack: each one lands
 on `main` before the next one that shares a hot file starts.
 
 ## Rules for every slice
@@ -63,7 +64,7 @@ account home, without a model call. Nothing in the product reads the answer yet.
 
   | Runner | Route | Notes from the probe |
   | --- | --- | --- |
-  | Claude | `get_skills_dialog` control request to a short `claude` process with `--settings '{"disableAllHooks":true}'` and `--no-session-persistence` | No path in the answer. `--bare` and `--safe-mode` list nothing |
+  | Claude | `get_skills_dialog` control request to a short `claude` process with `--settings '{"disableAllHooks":true}'` and `--no-session-persistence --strict-mcp-config --mcp-config '{"mcpServers":{}}'` | No path in the answer. `--bare` and `--safe-mode` list nothing |
   | Codex | `skills/list` with `cwds`, after `initialize`, no thread | Reuse `codex-app-server-transport.ts` as `codex-model-catalog.ts` does. Map `errors` to `problems`. One id can come twice |
   | OpenCode | `GET /skill?directory=` | No scope field: derive it from `location`. The server caches its list. Drop entries under a `.trash` folder |
   | pi | RPC `get_commands` to `pi --mode rpc --no-session` | Launch with `pi-project-skills.mjs` exactly as `pi-runner.ts` does, or project skills are missing. Strip the `skill:` prefix from the id |
@@ -116,7 +117,7 @@ process behind.
 - Codex: a trigger never goes through `turn/steer`, and never through a `turn/start` during an
   active turn. The adapter refuses such a send; slice 3 holds the message instead (D6).
 - Facts in `RunnerFacts` and `RUNNER_FACTS` (`core/runner-facts.ts`): `skillTriggerMidTurn`
-  (true for pi only until the open check below says more), `skillUnknownName` (`'error'` for
+  (true for pi and omp after the open check below), `skillUnknownName` (`'error'` for
   OpenCode, `'silent'` for the rest) and `skillsSeenBySession` (`'live'` for Codex,
   `'at-start'` for the rest). Do not add them to `TURN_PATH_FACTS` here:
   `FACT_VALUE_TESTS` is typed over that table, and `parity-classes.test.ts` then demands a
@@ -164,17 +165,40 @@ stops reading that folder (D5).
 ## Slice 3: switch
 
 **Goal:** every reader uses the runner's list and the native trigger. This is the breaking
-change; mark the title with `!`.
+change. It lands as two pull requests, each with `!` in its title:
 
-Server and run path:
+- **3a, server and run path.** Every bullet under "Server and run path" below, the tests
+  except the two e2e rewrites, and the prompt-template fix. It adds `GET /runner-skills` next
+  to the old routes and leaves them in place, because the cockpit still reads them.
+- **3b, cockpit.** Every bullet under "Cockpit" below, the state restore cases, the two e2e
+  rewrites, and the removal of `GET /skills`, `GET /skills/importable` and
+  `POST /skills/refresh`.
+
+`main` stays usable after 3a. This repository's skills are linked natively since slice R, so
+a pick of one of them still starts. A pick of a skill that only Squawk's own catalog held (a
+team source, `.ai/cezar/skills`) fails at step open with an error that names the runner, the
+account and the paths. That is the intended break. Until 3b lands, the cockpit still shows the
+team sources and the switches, and they do nothing; the 3a pull request says so. The reverse
+order does not work: a cockpit that sends ids and paths from the runner's list needs a run
+path that reads that list.
+
+Server and run path (3a):
+
+- `server/server.ts` and the server setup: create one `RunnerSkillCatalog`
+  (`core/runner-skill-catalog.ts`, with `core/host-skill-catalog.ts`) for the server, and map
+  the account to its `accountHome` as a session does. Today no product code creates one. Its
+  cache keeps a list for 300 s; `refresh=1` drops the entry first.
 
 - `workflows/run/step-session.ts`: at step open, read the list for the step's runner, account
   and folder; resolve the reference (`{ id, path? }`, D8 for a duplicate id); fail the step
   before any model call when the id is missing or ambiguous; set `spec.skill`. Send no skill
   body in the system prompt.
-- The chosen copy travels with the task (D8). `workflowStepSchema`
-  (`packages/contract/src/workflows.ts`) gains an optional `skillPath` next to `skill`. The
-  cockpit sets it on the inline step of `POST /runs` when the picked entry has a path. The run
+- The chosen copy travels with the task (D8). Only the inline `steps` of `POST /runs`
+  (`packages/contract/src/runs.ts`) and the stored run step gain an optional `skillPath` next
+  to `skill`. `workflowStepDefSchema` (`packages/contract/src/workflows.ts`) does not: it also
+  feeds the workflow file schema (`workflow-file.ts`), automation storage
+  (`automation-storage.ts`) and the workflow save and parse bodies, and none of those may hold
+  a path. The cockpit (3b) sets it on the inline step when the picked entry has a path. The run
   record keeps the step, so a later step open, a recovery and a fresh-session Continue start
   the same copy.
 - The picker lists the project folder, and the step runs in a task worktree. A skill inside
@@ -192,9 +216,14 @@ Server and run path:
 - `workflows/run/launch-context.ts` (`sessionContextFor`): stop dropping the opening context
   for a slash opening. The adapter now places it.
 - `workflows/run/continuation-session.ts` and `launch-read-resolver.ts`: a Continue that
-  resumed sends no trigger; one whose `session` event says `resumed: false` sends the step's
-  trigger again. `skipSkillOnResume` goes away with the skill prefix.
-- `workflows/active-run.ts` and `run-skills.ts`: the session keeps the ids, paths and scopes
+  resumed sends no trigger; one that opens a fresh session sends the step's trigger again.
+  Shared code cannot wait for the `session` event's `resumed` before it chooses the opening
+  message: OpenCode's `bootstrap` decides, emits the event and posts the opening in one call,
+  and Claude learns it from the CLI's own report after the start. Add a spec field, for example `resumeFallbackSkill`, with a
+  row in each `specSupport`: the adapter sends it only when it opens a fresh session, as
+  OpenCode does with `resumeFallbackSystemPrompt` (`agent-runner.ts`). The `resumed` event
+  stays as the record of what happened. `skipSkillOnResume` goes away with the skill prefix.
+- `workflows/active-run.ts` and `workflows/run/run-skills.ts`: the session keeps the ids, paths and scopes
   it read when its runner process started. Later triggers are checked against that list, or
   against a fresh read when the fact says `live`.
 - `workflows/run/input-delivery.ts`: a leading `/name` that is in the session's list becomes a
@@ -207,24 +236,45 @@ Server and run path:
   step with another runner is checked at step open.
 - `workflows/run/turn-bookkeeping.ts` (`autoNameRun`): take the description from the session's
   list.
-- `server/server.ts`: `GET /runner-skills?runner=&account=` replaces `GET /skills`,
-  `GET /skills/importable` and `POST /skills/refresh`. A `refresh=1` query drops the cache
-  entry first. Mirror it in `packages/api-client/src/contract/`.
+- `workflows/run/compose.ts` also calls `discoverSkills`: move it to the runner's list too.
+- omp expands `/skill:<known name>` anywhere in a message, not only at its start. Squawk's D3
+  handling reads only a leading `/name`, so on omp a `/skill:` inside a message starts the
+  skill natively, without Squawk's list check or a D8 note. Squawk does not intercept it. Add
+  an omp parity row that shows it.
+- The built-in `create-cezarion-automation` skill: no runner lists it, so a pick of it would
+  fail at step open. 3a stops offering and resolving it: drop `builtinSkillsOf(manager)` from
+  the list `GET /skills` answers (`server/server.ts`), stop `launch-context.ts` from returning
+  `createAutomationSkill`, and drop `skills: ['create-cezarion-automation']` from the "Create
+  an automation" template (`packages/web/src/lib/prompt-templates.ts`), whose `skills` field
+  only links the template's text to that pick. The `cezar_automation` tool from slice 4
+  covers the job. Slice 5 deletes `automations/builtin-skill.ts`.
+- Regenerate the ast-grep rule `active-run-skills-write-outside-owner` with
+  `scripts/active-run-owner-rules.mjs` when the `ActiveRun` skills group changes.
+- D8 names Codex's `admin` scope; the contract maps it to `other`
+  (`packages/contract/src/runner-skills.ts`). The resolver treats a copy with scope `other` as
+  ambiguous, as D8 says for `admin`.
+- `server/server.ts`: add `GET /runner-skills?runner=&account=` with a `refresh=1` query. The
+  schema mirror `packages/api-client/src/contract/runner-skills.ts` exists since slice 1; add
+  the route and its query schema. 3b removes `GET /skills`, `GET /skills/importable` and
+  `POST /skills/refresh`.
 
-Cockpit:
+Cockpit (3b):
 
 - `routes/skills.tsx`: a read-only inventory for one runner and account, with the runner's own
   problems and a re-read button. Remove `team-sources-panel.tsx`, the switches
   (`lib/use-skill-selection.ts`) and the shadow mark.
-- A picked skill is `{ id, path? }`: `TaskSource` (`routes/new-task-form.ts`) and the draft
-  store (`routes/new-task-draft.ts`) carry the path, and `buildCreateRunBody` sends it as
+- A picked skill is `{ id, path? }`. `TaskSource` (`routes/new-task-form.ts`) is
+  `UiState['lastTask']` today, so give the draft and the picked value their own type that
+  carries the path, and leave the `ui-state` contract (`contract/src/workspace.ts`) unchanged.
+  The draft store (`routes/new-task-draft.ts`) carries the path, and `buildCreateRunBody` sends it as
   `skillPath`. When the list holds one id twice, the picker shows both entries with their
   paths. `lastTask` and `recentSources` in `ui-state.json` keep names only; a recent name that
   matches two entries shows both.
 - Pickers read the list of the step's runner and account: `components/composer/`,
   `components/command-palette.tsx`, `routes/new-task*.ts(x)`,
-  `routes/workflows/workflows-builder-sections.tsx`, `routes/github/hand-to-agent.tsx` and
-  `routes/settings/prompt-templates-section.tsx`. A list that is
+  `routes/workflows/workflows-builder-sections.tsx` (its list is read in
+  `routes/workflows/workflows.tsx`), `routes/github/hand-to-agent.tsx` (read in
+  `routes/github/use-hand-to-agent-state.ts`) and `routes/settings/prompt-templates-section.tsx`. A list that is
   unavailable still lets the user type an id.
 - `components/skill-detail.tsx` shows what the runner reports. Squawk reads no skill file.
 
@@ -232,7 +282,7 @@ Cockpit:
 together with a `FACT_VALUE_TESTS` entry for each value that the scenario runner does not
 show: `skillTriggerMidTurn` true, `skillUnknownName` `'error'` and `skillsSeenBySession`
 `'live'`. Shared parity rows for step open (known, missing and ambiguous id), a fresh-session
-Continue, a held trigger and a typed name. Rewrite `packages/web/e2e/settings-skills.e2e.ts`
+Continue, a held trigger, a typed name and the omp `/skill:` inside a message (all 3a). 3b: rewrite `packages/web/e2e/settings-skills.e2e.ts`
 and `skill-search-ranking.e2e.ts` against a mock runner's list.
 
 ### State restore cases
@@ -256,8 +306,11 @@ draft's runner and account.
 The form derives the selection from the draft and the current list. It never writes a masked
 value back to the draft.
 
-**Done when** a selected skill starts natively on each runner with no skill text in the system
-prompt, a missing id fails before a model call, and no reader is left on `discoverSkills`.
+**Done when** (3a) a selected skill starts natively on each runner with no skill text in the
+system prompt, a missing id fails before a model call, a fresh-session Continue starts the
+step's skill again, and no run-path reader is left on `discoverSkills` (the old `GET /skills`
+and `POST /skills/refresh` routes still call it until 3b); (3b) every
+cockpit picker and page reads `/runner-skills`, and the three old routes are gone.
 
 ## Slice 4: automation tool
 
@@ -308,8 +361,9 @@ runner, and an enable without the explicit argument is refused.
   the `interactive` hint, `components/skill-empty-hint.tsx` and the two ast-grep rules
   `skills-read-outside-enabled-skills` (with its baseline file) and
   `skills-write-outside-load-run-skills`. The generated rule
-  `active-run-skills-write-outside-owner` stays: slice 3 changes what the `ActiveRun` skills
-  group holds, and regenerates the rule with `scripts/active-run-owner-rules.mjs`.
+  `active-run-skills-write-outside-owner` stays: slice 3a changes what the `ActiveRun` skills
+  group holds and regenerates it. Check the rules' current form first: hearsay-tools/squawk#3775
+  started porting ast-grep rules to oxlint.
 - Move first, then delete: `agent-config/seed.ts` uses `excludeFromGit` and
   `worktree-manifest.ts` uses `landsInside`, both from `skills-remote.ts`. Move the two
   helpers to a module that stays.

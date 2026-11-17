@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { knownSkill, skillFrames, SKILL_TOKEN } from './mock-skill-trigger.mjs';
 import { productEnv } from './product-env.mjs';
 import { CODEX_FAILURES } from './mock-provider-failures.mjs';
 import { loadControls } from './mock-controls.mjs';
@@ -728,6 +729,13 @@ async function handleTurnStart(msg) {
 }
 
 async function dispatchOpenedTurn(msg, prompt, scenarios) {
+  const skill = msg.params?.input?.find(item => item.type === 'skill');
+  if (skill) {
+    nativeText([knownSkill('codex', { id: skill.name, path: skill.path }) ? SKILL_TOKEN : prompt], `skill_reply_${++echoSerial}`);
+    nativeUsage();
+    emit({ method: 'turn/completed', params: { threadId: 'th_mock_1', turn: { id: 'turn_mock_1', status: 'completed' } } });
+    return;
+  }
   const crash = scenarios.get('crash-stderr');
   if (crash && await play(crash, scenarioEncoder(msg, prompt, crash, true)) !== 'continue') return;
   for (const route of turnReplies) {
@@ -763,6 +771,12 @@ function emitOpeningInput(msg, turnText) {
   // The real app-server records the turn's own input as a userMessage item,
   // echoing clientUserMessageId as clientId (probe 0.155.1, #505).
   const opening = { type: 'userMessage', id: `item_user_open_${++steerEchoSerial}`, clientId: msg.params?.clientUserMessageId ?? null, content: [{ type: 'text', text: turnText }] };
+  if (msg.params?.input?.some(item => item.type === 'skill')) {
+    const skill = msg.params.input.find(item => item.type === 'skill');
+    const frame = skillFrames('codex', { id: skill.name, args: turnText })[0];
+    opening.content = [...msg.params.input];
+    opening.type = frame.params.item.type;
+  }
   if (process.env.CEZ_MOCK_CODEX_NO_USER_ITEM !== '1') {
     emit({ method: 'item/started', params: { threadId: 'th_mock_1', turnId: 'turn_mock_1', item: opening } });
     emit({ method: 'item/completed', params: { threadId: 'th_mock_1', turnId: 'turn_mock_1', item: opening } });

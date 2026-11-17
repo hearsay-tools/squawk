@@ -1,0 +1,29 @@
+[
+  {
+    "type": "turn.started",
+    "turnId": "turn_1"
+  },
+  {
+    "type": "item.started",
+    "item": {
+      "kind": "message",
+      "id": "turn_1/skill-0",
+      "role": "user",
+      "text": "/skill:probe-project fixture arguments"
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "kind": "message",
+      "id": "turn_1/skill-0",
+      "role": "user",
+      "text": "/skill:probe-project fixture arguments"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "turnId": "turn_1",
+    "stopReason": "end_turn"
+  }
+]

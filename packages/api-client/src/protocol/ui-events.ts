@@ -62,12 +62,20 @@ export interface ToolLocation {
   line?: number
 }
 
+/** Adapter-local identity of a submitted skill prompt; absent in old saved events. */
+export interface SkillInputIdentity {
+  id: string
+  source: 'opening' | 'human' | 'agent'
+}
+
 /** A chat message. */
 export interface UiMessageItem {
   kind: 'message'
   id: string
   role: 'assistant' | 'user'
   text: string
+  /** The expansion echoes this submitted input; its display text is not its identity. */
+  skillInput?: SkillInputIdentity
   phase?: 'commentary' | 'final'
   parentItemId?: string
 }

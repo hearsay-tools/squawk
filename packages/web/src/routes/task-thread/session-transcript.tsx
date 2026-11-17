@@ -1,3 +1,4 @@
+import { isSkillInputEcho } from './thread-skill-input'
 import { useMemo, type ReactNode } from 'react'
 import { TaskFileScope } from './task-file-scope'
 import { useTranscriptReports } from './transcript-reports'
@@ -188,7 +189,7 @@ export function mainTranscriptSections(
         : {}),
       ...(turn.startedAt !== undefined ? { startedAt: turn.startedAt } : {}),
       ...(turn.completed?.ts !== undefined ? { completedAt: turn.completed.ts } : {}),
-      entries: overlayAgentInputNotes(run, turn.items.map(entry => {
+      entries: overlayAgentInputNotes(run, turn.items.filter(entry => !run.task || !isSkillInputEcho(entry, 'opening')).map(entry => {
         if (entry.kind === 'ask' && answeredAsks.has(entry.id)) return { ...entry, placement: 'origin' as const }
         if (pendingAskId !== undefined && entry.kind === 'ask') return placeAsk(entry, pendingAskId, pinnedAsk)
         if (entry.kind !== 'permission') return entry

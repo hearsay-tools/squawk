@@ -1,7 +1,7 @@
 import { it } from 'vitest';
 import { checkLaunchReadMatrix } from './launch-read-matrix.testkit.ts';
 
-// bound: batched rule scans prove every capture cell; retain the existing 120 s rule-test hang guard.
+// bound: in-process AST cases prove every capture cell; retain the existing 120 s rule-test hang guard.
 it('refuses the generated launch-read capture matrix and preserves documented limits', { timeout: 120_000 }, async () => {
   await checkLaunchReadMatrix('capture');
 });

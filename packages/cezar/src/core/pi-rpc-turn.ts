@@ -1,11 +1,12 @@
+import { skillOf } from './skill-trigger.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentEvent, AgentRunResult, AgentToolCallRecord, ContentBlock, SessionOptions } from './agent-runner.js';
 import { isSignalTerminationExit } from './agent-runner.js';
 import { InputSubmissions } from './input-submissions.ts';
-import { contentText, emitImages, isRecord, piMessageText, string } from './pi-rpc-wire.ts';
+import { contentText, emitImages, isRecord, piMessageText, matchesSkillPrompt, ompSkillPrompt, string } from './pi-rpc-wire.ts';
 import { AUTO_END_DELAY_MS } from './runner-runtime.js';
 import { signalSession } from './session-process.js';
-import type { UiEvent } from './ui-events.js';
+import type { SkillInputIdentity, UiEvent } from './ui-events.js';
 import { V1TextCoalescer } from './v1-text-coalescer.js';
 import { productName } from '../home/display.ts';
 
@@ -92,6 +93,12 @@ export function emitPiToolResult(value: Record<string, unknown>, onEvent?: (even
   emitImages(content, onEvent);
 }
 
+/** One registered submission, retained across native trimming and expansion. */
+export interface PiSkillSubmission {
+  input: SkillInputIdentity;
+  prompt: string;
+}
+
 /** The receipt of one agent prompt, settled by its RPC acknowledgement. */
 export interface PiAgentAck {
   id: string;
@@ -128,8 +135,10 @@ export class PiRpcInput {
   // hint when it lands, even mid-turn: the turn can be steered (hearsay-tools/cezarion#505).
   private refusedForAck = false;
   private promptSerial = 0;
+  private sentOpening = false;
   private agentAck: PiAgentAck | undefined;
   private readonly acked = new Set<string>();
+  private readonly skillPrompts: PiSkillSubmission[] = [];
   // Submissions already queued when a turn began: that turn reads them.
   private carried = new Set<string>();
   private turnFailed = false;
@@ -141,6 +150,25 @@ export class PiRpcInput {
   /** The head of sendMessage: input is no longer ready. */
   beginPrompt(): void {
     this.agentInputReady = false;
+  }
+
+  /** Registration belongs to the submission, before any native expansion is read. */
+  recordPrompt(content: ContentBlock[], prompt: string, id: string, agentInputIds?: readonly string[]): void {
+    const source = agentInputIds ? 'agent' : this.sentOpening ? 'human' : 'opening';
+    this.sentOpening = true;
+    if (agentInputIds) this.submissions.accept(id, agentInputIds, prompt);
+    if (skillOf(content) || prompt.trimStart().startsWith('/skill:')) this.skillPrompts.push({ input: { id, source }, prompt });
+  }
+
+  /** Bind an expansion once. All later delivery and UI work uses the resulting identity. */
+  takeSkillPrompt(message: Record<string, unknown>): PiSkillSubmission | undefined {
+    const at = this.skillPrompts.findIndex(entry => matchesSkillPrompt(message, entry.prompt));
+    return at < 0 ? undefined : this.skillPrompts.splice(at, 1)[0];
+  }
+
+  forgetSkillPrompt(id: string): void {
+    const at = this.skillPrompts.findIndex(entry => entry.input.id === id);
+    if (at >= 0) this.skillPrompts.splice(at, 1);
   }
 
   /** A prompt goes out: the auto-end timer stops and may be scheduled again. */
@@ -185,6 +213,7 @@ export class PiRpcInput {
 
   rejectAgentAck(error = new Error(`${this.host.cli} closed before prompt acknowledgement`)): void {
     const pending = this.agentAck; this.agentAck = undefined;
+    if (pending) this.forgetSkillPrompt(pending.id);
     pending?.reject(error);
   }
 
@@ -212,12 +241,12 @@ export class PiRpcInput {
   /** A user `message_start`: the model received this prompt now (hearsay-tools/cezarion#505).
    *  An agent submission with its text is read and reported; otherwise the text is returned, so
    *  the runner can settle the human prompt it holds. */
-  readUserMessage(message: Record<string, unknown>): string | undefined {
-    const text = piMessageText(message);
-    const ids = this.submissions.consumeOldestByText(text);
-    if (!ids.length) return text;
-    this.host.opts.onAgentInputConsumed?.(ids);
-    return undefined;
+  readUserMessage(message: Record<string, unknown>, skill = this.takeSkillPrompt(message)): { text: string; id?: string } | undefined {
+    const text = skill?.prompt ?? piMessageText(message);
+    const ids = skill ? this.submissions.consume(skill.input.id) : this.submissions.consumeOldestByText(text);
+    if (ids.length) this.host.opts.onAgentInputConsumed?.(ids);
+    if (ids.length || skill?.input.source === 'agent') return undefined;
+    return { text, ...(skill ? { id: skill.input.id } : {}) };
   }
 
   /** An assistant `message_end`. A provider error is latched until the turn ends and cleared by a
@@ -317,17 +346,17 @@ export function armEndWatchdog(
   return { clear: () => clearTimeout(timer) };
 }
 
-/** A `get_state` response's session id: a new one is adopted, then reported as a `session` event. */
+/** A `get_state` response adopts the native id. Each adapter reports it once per start. */
 export function adoptRpcSessionId(
   data: Record<string, unknown>,
-  current: string | undefined,
   adopt: (sessionId: string) => void,
+  resumed: boolean,
   onEvent?: (event: AgentEvent) => void,
 ): void {
   const discovered = string(data.sessionId);
-  if (discovered && discovered !== current) {
+  if (discovered) {
     adopt(discovered);
-    onEvent?.({ type: 'session', sessionId: discovered });
+    onEvent?.({ type: 'session', sessionId: discovered, resumed });
   }
 }
 
@@ -345,7 +374,7 @@ export interface PiTurnMessages {
   providerErrorMessage(message: Record<string, unknown>): string;
   /** A user message whose text matched no agent submission: the runner settles the human prompt
    *  it holds with that text, as its own tracking requires. */
-  humanPromptRead(text: string): void;
+  humanPromptRead(text: string, submissionId?: string): void;
 }
 
 /**
@@ -355,7 +384,7 @@ export interface PiTurnMessages {
  * not a user's) does nothing, as it did when each runner read these in its own chain: no other
  * branch reads the same type.
  */
-export function dispatchPiTurnMessage(value: Record<string, unknown>, turn: PiTurnMessages): void {
+export function dispatchPiTurnMessage(value: Record<string, unknown>, turn: PiTurnMessages, skill?: PiSkillSubmission): void {
   switch (value.type) {
     case 'message_update': if (isRecord(value.assistantMessageEvent)) turn.textBlocks.update(value.assistantMessageEvent); break;
     case 'message_end':
@@ -367,9 +396,9 @@ export function dispatchPiTurnMessage(value: Record<string, unknown>, turn: PiTu
       break;
     case 'agent_start': turn.input.startTurn(); break;
     case 'message_start':
-      if (isRecord(value.message) && value.message.role === 'user') {
-        const text = turn.input.readUserMessage(value.message);
-        if (text !== undefined) turn.humanPromptRead(text);
+      if (isRecord(value.message) && (value.message.role === 'user' || ompSkillPrompt(value.message) !== undefined)) {
+        const read = turn.input.readUserMessage(value.message, skill);
+        if (read) turn.humanPromptRead(read.text, read.id);
       }
       break;
     case 'tool_execution_start': turn.flushText(); recordPiToolCall(value, turn.toolCalls, turn.onEvent); break;

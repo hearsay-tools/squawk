@@ -1,3 +1,4 @@
+import { openingContent, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -69,6 +70,7 @@ export const PI_SPEC_SUPPORT: AgentRunSpecSupport = {
   squawkTools: { honored: true, via: 'explicit CI --extension and selected tool admission' },
   ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: '--append-system-prompt' },
+  skill: { honored: true, via: 'RPC prompt /skill:id args with context after arguments' },
   userPrompt: { honored: true, via: 'RPC prompt message' },
   images: { honored: true, via: 'RPC prompt images' },
   cwd: { honored: true, via: 'spawn cwd' },
@@ -188,7 +190,8 @@ export class PiRunner implements AgentRunner {
     // before the turn that reads the prompt is reported. A steer acked after the turn's last
     // model call is read as pi's next prompt, after agent_settled, so the ack alone never
     // releases it.
-    const humanHeld: Array<{ text: string; acked: boolean; turnId?: string | undefined }> = [];
+    let humanSerial = 0;
+    const humanHeld: Array<{ id: string; text: string; acked: boolean; turnId?: string | undefined }> = [];
     /** A turn.started was just emitted: it reads every human prompt pi acknowledged before it. */
     function releaseHeldIntoTurn(): void {
       for (let at = humanHeld.length - 1; at >= 0; at--) if (humanHeld[at]!.acked) humanHeld.splice(at, 1);
@@ -207,11 +210,12 @@ export class PiRunner implements AgentRunner {
     };
     child.stdin.on('error', failInput);
     const sendMessage = (content: ContentBlock[], requestId?: string, inputIds: readonly string[] = []): boolean => {
-      if (!open) return false;
+      if (!open || !validSkillMessage(content)) return false;
       // A steer joins the running turn; only an idle prompt opens one (#505).
       const opensTurn = !piUi.turnId;
       rpcInput.beginPrompt();
       const { message, images } = toPiPrompt(content);
+      const id = requestId ?? `cezar-prompt-${++humanSerial}`;
       rpcInput.cancelAutoEnd();
       if (
         !write({
@@ -224,7 +228,7 @@ export class PiRunner implements AgentRunner {
       ) {
         return false;
       }
-      if (requestId) rpcInput.submissions.accept(requestId, inputIds, message);
+      rpcInput.recordPrompt(content, message, id, requestId ? inputIds : undefined);
       if (!piUi.turnId) {
         const mapped = piTurnStarted(piUi);
         piUi = mapped.state;
@@ -233,7 +237,7 @@ export class PiRunner implements AgentRunner {
       // An idle prompt names the turn it opened: its ack releases it while that turn is open.
       if (!requestId) {
         humanPromptAcks += 1;
-        humanHeld.push({ text: message, acked: false, ...(opensTurn ? { turnId: piUi.turnId ?? undefined } : {}) });
+        humanHeld.push({ id, text: message, acked: false, ...(opensTurn ? { turnId: piUi.turnId ?? undefined } : {}) });
       }
       return true;
     };
@@ -269,13 +273,7 @@ export class PiRunner implements AgentRunner {
     // accepted steer at the next model call. get_state cannot tell that default
     // from an explicit user setting, so we always set all rather than guess.
     write({ type: 'set_steering_mode', mode: 'all' });
-    sendMessage([
-      ...(spec.images ?? []),
-      {
-        type: 'text',
-        text: spec.userPrompt,
-      },
-    ]);
+    sendMessage(openingContent(spec));
 
     const limitMs = spec.timeoutMs ?? this.timeoutMs ?? spec.timings?.runTimeoutMs ?? DEFAULT_RUNNER_TIMINGS.runTimeoutMs;
     const deadline =
@@ -318,8 +316,8 @@ export class PiRunner implements AgentRunner {
     };
     // A user message pi read with no normalized turn open (a late steer's own run): the run is
     // not reported yet, so the prompt stays held until that turn.started.
-    const settleHumanPromptRead = (text: string): void => {
-      const human = humanHeld.findIndex(entry => entry.text === text);
+    const settleHumanPromptRead = (text: string, submissionId?: string): void => {
+      const human = humanHeld.findIndex(entry => submissionId ? entry.id === submissionId : entry.text === text);
       if (human >= 0 && piUi.turnId) humanHeld.splice(human, 1);
       else if (human >= 0) humanHeld[human]!.acked = true;
     };
@@ -339,6 +337,7 @@ export class PiRunner implements AgentRunner {
     const settleHumanAck = (value: Record<string, unknown>): void => {
       const held = humanPromptAcks > 0 ? humanHeld.find(entry => !entry.acked) : undefined;
       humanPromptAcks = Math.max(0, humanPromptAcks - 1);
+      if (held && value.success === false) rpcInput.forgetSkillPrompt(held.id);
       if (held && value.success === true && (!held.turnId || held.turnId !== piUi.turnId)) held.acked = true;
       else if (held) humanHeld.splice(humanHeld.indexOf(held), 1);
       if (value.success === false) onEvent?.({ type: 'error', message: rpcError(value) });
@@ -348,6 +347,7 @@ export class PiRunner implements AgentRunner {
       if (pending) {
         if (value.success === true) rpcInput.acceptAgentAck(pending);
         else {
+          rpcInput.forgetSkillPrompt(pending.id);
           const message = rpcError(value);
           if (open) onEvent?.({ type: 'error', message });
           pending.reject(new Error(message));
@@ -358,9 +358,11 @@ export class PiRunner implements AgentRunner {
       rpcInput.readyAfterAck();
     };
     // A failed get_state has no branch of its own: it is reported like any other failed command.
+    let sessionReported = false;
     const handleResponse = (value: Record<string, unknown>): void => {
       if (value.command === 'get_state' && value.success === true && isRecord(value.data)) {
-        adoptRpcSessionId(value.data, sessionId, (id) => { sessionId = id; }, onEvent);
+        adoptRpcSessionId(value.data, (id) => { sessionId = id; }, Boolean(spec.resume && spec.sessionId === value.data.sessionId), sessionReported ? undefined : onEvent);
+        sessionReported ||= typeof value.data.sessionId === 'string' && value.data.sessionId.length > 0;
       } else if (value.command === 'set_steering_mode') {
         if (value.success !== true) {
           onEvent?.({ type: 'note', message: `pi: set_steering_mode failed: ${rpcError(value)}` });
@@ -459,7 +461,10 @@ export class PiRunner implements AgentRunner {
       sendAgentMessage: (content, inputIds = []) =>
         rpcInput.sendAgentMessage(content, inputIds, sendMessage, () => Boolean(inputError)),
       // A written prompt cannot be unwritten; only stop reporting an acknowledged one as held.
-      discardQueuedMessages: () => { humanHeld.length = 0; },
+      discardQueuedMessages: () => {
+        for (const held of humanHeld) rpcInput.forgetSkillPrompt(held.id);
+        humanHeld.length = 0;
+      },
       holdsHumanInput: () => humanHeld.length > 0,
       heldHumanInputCount: () => humanHeld.length,
       end,
