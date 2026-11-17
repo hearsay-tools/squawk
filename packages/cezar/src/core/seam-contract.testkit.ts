@@ -702,7 +702,7 @@ async function observeUnknownSkill(backend: RunnerId): Promise<ContractObservati
   return driveContract(backend, {
     scenario: 'baseline', variant: 'unknown-skill',
     spec: { userPrompt: '', skill: { id: 'probe-missing', path: '/probe/missing/SKILL.md', args: 'unknown fixture' } },
-    whileOpen: async (_session, recorder) => { await waitFor(() => turnEnds(recorder) > 0); },
+    whileOpen: async (_session, recorder) => { await until(recorder, () => turnEnds(recorder) > 0); },
   });
 }
 
@@ -710,11 +710,11 @@ async function observeMidTurnSkill(backend: RunnerId): Promise<ContractObservati
   return driveContract(backend, {
     scenario: 'steer-tool', variant: 'mid-turn-skill', steerGate: true,
     whileOpen: async (session, recorder, mock) => {
-      await waitFor(() => v1Of(recorder).some(event => event.type === 'tool-call'));
+      await until(recorder, () => v1Of(recorder).some(event => event.type === 'tool-call'));
       recorder.read.acceptedSkill = session.sendMessage([{ type: 'skill', id: 'probe-project', path: '/probe/skill/SKILL.md', args: 'contract skill arguments' }]);
       if (recorder.read.acceptedSkill) await mock.onWire('contract skill arguments');
       mock.openGate();
-      await waitFor(() => turnEnds(recorder) > 0);
+      await until(recorder, () => turnEnds(recorder) > 0);
     },
   });
 }
@@ -726,10 +726,10 @@ async function observeSkillVisibility(backend: RunnerId): Promise<ContractObserv
     return await driveContract(backend, {
       scenario: 'baseline', variant: 'skill-visibility',
       whileOpen: async (session, recorder) => {
-        await waitFor(() => turnEnds(recorder) > 0);
+        await until(recorder, () => turnEnds(recorder) > 0);
         writeFileSync(path, '---\nname: probe-late\ndescription: Added after start.\n---\nTRIGGER-FIXTURE');
         expect(session.sendMessage([{ type: 'skill', id: 'probe-late', path, args: 'late skill' }])).toBe(true);
-        await waitFor(() => turnEnds(recorder) > 1);
+        await until(recorder, () => turnEnds(recorder) > 1);
       },
     });
   } finally { rmSync(dir, { recursive: true, force: true }); }
