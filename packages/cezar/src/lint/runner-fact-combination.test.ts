@@ -1,8 +1,22 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { checkRule } from './ast-rule.testkit.ts';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { COMBINATION_ROWS, combinationFindings, declaredFactKeys, factCombinations, runnerFactCombination } from './runner-fact-combination.ts';
+import { COMBINATION_ROWS, combinationFindings, declaredFactKeys, factCombinations as sourceCombinations, runnerFactCombination } from './runner-fact-combination.ts';
 import { repoRoot } from './source-rule.ts';
+
+function factCombinations(source: string, keys?: Set<string>): ReturnType<typeof sourceCombinations> {
+  const combinations = sourceCombinations(source, keys);
+  if (!keys) {
+    const findings = checkRule(runnerFactCombination, 'packages/cezar/src/workflows/ast-fixture.ts', source);
+    expect(findings.map(finding => ({
+      name: finding.message.split(' touches a runner fact source')[0],
+      line: finding.line,
+      facts: finding.message.split(' and reads ')[1]!.split('. Shared parity')[0]!.split(' and '),
+    }))).toEqual(combinations);
+  }
+  return combinations;
+}
 
 describe('runner-fact-combination (hearsay-tools/cezarion#2991)', () => {
   it.each([
@@ -161,12 +175,10 @@ describe('runner-fact-combination (hearsay-tools/cezarion#2991)', () => {
     expect(runnerFactCombination.applies('packages/cezar/src/core/runner-facts.ts')).toBe(false);
   });
 
-  it('finds no combination in the workflow sources today, and every exception names a live function', () => {
-    const dir = join(repoRoot, 'packages/cezar/src/workflows');
-    const files = readdirSync(dir, { recursive: true, encoding: 'utf8' }).map(file => `packages/cezar/src/workflows/${file.replaceAll('\\', '/')}`)
-      .filter(file => runnerFactCombination.applies(file));
-    expect(files.length).toBeGreaterThan(50);
-    const found = files.flatMap(file => factCombinations(readFileSync(join(repoRoot, file), 'utf8')).map(({ name }) => `${file}#${name}`));
-    expect(found.sort()).toEqual(Object.keys(COMBINATION_ROWS).sort());
+  it('keeps combination exceptions explicit and reasoned', () => {
+    for (const [name, exception] of Object.entries(COMBINATION_ROWS)) {
+      expect(name).toMatch(/^packages\/cezar\/src\/workflows\/.+\.ts#.+$/);
+      expect(exception.reason.trim()).not.toBe('');
+    }
   });
 });

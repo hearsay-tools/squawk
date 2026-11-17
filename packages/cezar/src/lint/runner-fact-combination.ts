@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from '@babel/parser';
 import type { Node } from '@babel/types';
-import { lineAt, repoRoot, type SourceRule } from './source-rule.ts';
+import { lineAt, repoRoot } from './source-rule.ts';
+import type { AstRule } from './ast-rule.ts';
+import { astChildren, deferredAstView, originalAt } from './ast-node-view.ts';
 
 /**
  * Shared parity rows run on one runner, and unit tests drive every other value of each turn-path
@@ -139,9 +141,7 @@ function typeNames(node: Node): string[] {
   const found: string[] = [];
   const visit = (current: Node) => {
     if (current.type === 'TSTypeReference') found.push(typeRefName(current) ?? '');
-    for (const value of Object.values(current)) for (const child of Array.isArray(value) ? value : [value]) {
-      if (child && typeof child === 'object' && typeof (child as Node).type === 'string') visit(child as Node);
-    }
+    for (const child of astChildren(current)) visit(child);
   };
   visit(node);
   return found;
@@ -204,11 +204,7 @@ function qualifiedName(state: Walk, own: string | undefined): string {
 
 /** The AST nodes directly under a node, in source order. */
 function childNodes(node: Node): Node[] {
-  const out: Node[] = [];
-  for (const value of Object.values(node)) for (const child of Array.isArray(value) ? value : [value]) {
-    if (child && typeof child === 'object' && typeof (child as Node).type === 'string') out.push(child as Node);
-  }
-  return out;
+  return astChildren(node);
 }
 
 /** Open a function scope or a class name segment for a node; neither for any other node. */
@@ -258,15 +254,18 @@ export function factCombinations(source: string, keys: Set<string> = FACT_KEYS()
   // A cheap pre-filter: a fact source is spelled by one of these words, or reached through a module import.
   if (!/RUNNER_FACTS|\bfacts\b|inputDelivery|systemPromptOnResume|RunnerFacts|\bimport\b/i.test(source)) return [];
   const ast = parse(source, { sourceType: 'module', plugins: ['typescript'] });
-  const state: Walk = { scopes: [], roots: [], path: [], seen: new Map(), moduleSource: false, keys, names: sourceNames(ast.program) };
-  walk(ast.program, undefined, state);
-  const found: Scope[] = [];
-  for (const root of state.roots) qualifying(root, state.moduleSource, found);
-  return found
+  return combinationScopes(ast.program, keys)
     .map(scope => ({ name: scope.name, line: lineAt(source, scope.node.start ?? 0), facts: [...scope.facts].sort() }))
     .sort((a, b) => a.line - b.line || a.name.localeCompare(b.name));
 }
 
+function combinationScopes(program: Extract<Node, { type: 'Program' }>, keys: Set<string>): Scope[] {
+  const state: Walk = { scopes: [], roots: [], path: [], seen: new Map(), moduleSource: false, keys, names: sourceNames(program) };
+  walk(program, undefined, state);
+  const found: Scope[] = [];
+  for (const root of state.roots) qualifying(root, state.moduleSource, found);
+  return found;
+}
 /**
  * A reported function the rule lets pass, as `<file>#<function>`. `reason` says why. A real
  * combination also names `row`, `<family> <row>`: a registered parity row that runs the combination
@@ -288,9 +287,16 @@ export function combinationFindings(file: string, source: string, exceptions: Re
   }));
 }
 
-export const runnerFactCombination: SourceRule = {
+export const runnerFactCombination: AstRule = {
   name: 'runner-fact-combination',
   description: 'A function above the runner seam that touches a fact source reads at most one declared runner fact key (hearsay-tools/cezarion#2991).',
   applies: file => /^packages\/cezar\/src\/workflows\/.+\.ts$/.test(file) && !isTest(file),
-  check: (file, source) => combinationFindings(file, source),
+  create: (report, { file }) => deferredAstView(name => SOURCE_KEYS.has(name) || SOURCE_NAMES.has(name) || SOURCE_TYPES.has(name), ast => {
+    if (ast.type !== 'Program') return;
+    for (const scope of combinationScopes(ast, FACT_KEYS())) {
+      if (COMBINATION_ROWS[`${file}#${scope.name}`] !== undefined) continue;
+      report(originalAt(ast, scope.node.start ?? 0), `${scope.name} touches a runner fact source and reads ${[...scope.facts].sort().join(' and ')}. Shared parity rows run on one runner and unit tests drive each other fact value once, not each combination: `
+        + 'split the function so each part reads one fact, or add it to COMBINATION_ROWS with a reason and, for a real combination, a parity row that runs on every runner (hearsay-tools/cezarion#2991).');
+    }
+  }),
 };
