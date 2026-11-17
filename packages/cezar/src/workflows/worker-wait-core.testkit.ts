@@ -191,7 +191,7 @@ log('start');
 const note = (event, text) => { try { log(event, text); } catch {} };
 process.on('exit', code => note('exit', String(code)));
 process.on('SIGTERM', () => { note('signal', 'SIGTERM'); process.exit(143); });
-for (const event of ['uncaughtException', 'unhandledRejection']) process.on(event, error => { console.error(error); note('error', String(error?.message ?? error)); process.exit(1); });
+for (const event of ['uncaughtException', 'unhandledRejection']) process.on(event, error => { note('error', String(error?.message ?? error)); process.stderr.write(String(error?.stack ?? error) + '\n', () => process.exit(1)); });
 const wait = async path => { while (path && !fs.existsSync(path)) await new Promise(resolve => setTimeout(resolve, 5)); };
 const args = process.argv.slice(2); const sessionIndex = args.indexOf('--session-id');
 emit({ type: 'system', subtype: 'init', session_id: sessionIndex >= 0 ? args[sessionIndex + 1] : 'controlled-session' });
