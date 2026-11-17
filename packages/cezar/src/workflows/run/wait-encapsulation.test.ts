@@ -5,6 +5,7 @@ import { createWaitGroup } from './wait-registry.ts';
 const replace = (target: object, key: string, value: unknown) => Object.assign(target, { [key]: value });
 const define = (target: object, key: string, value: unknown) => Reflect.defineProperty(target, key, { value });
 const set = (target: object, key: string, value: unknown) => Reflect.set(target, key, value);
+const remove = (target: object, key: string) => Reflect.deleteProperty(target, key);
 const prototype = (target: object, value: object | null) => Reflect.setPrototypeOf(target, value);
 
 it.each([
@@ -26,7 +27,7 @@ it.each([
   expect(() => replace(group, getter, 'forged')).toThrow(TypeError);
   expect(define(group, getter, 'forged')).toBe(false);
   expect(set(group, getter, 'forged')).toBe(false);
-  expect(Reflect.deleteProperty(state, slot)).toBe(false);
+  expect(remove(state, slot)).toBe(false);
   expect(prototype(group, null)).toBe(false);
   expect(state[slot]).toBe(group);
 });
