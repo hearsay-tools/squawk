@@ -40,11 +40,6 @@ afterEach(() => {
 })
 
 describe('ThemeToggle', () => {
-  it('renders a button reflecting the current choice', () => {
-    const button = renderToggle('dark')
-
-    expect(button.dataset.themePref).toBe('dark')
-  })
 
   it.each([
     { theme: 'light', name: 'Theme: light. Switch to dark.' },

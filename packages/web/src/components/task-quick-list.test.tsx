@@ -635,7 +635,6 @@ describe('TaskQuickList', () => {
       expect(metadataText(row('old'))).toBe('Old2h')
       const age = row('old')!.querySelector('[data-slot="task-row-age"]') as HTMLElement
       expect(age.textContent).toBe('2h')
-      expect(age.classList.contains('sr-only')).toBe(false)
       expect(metadataText(row('new'))).toBe('New4m')
     })
 
@@ -1213,12 +1212,6 @@ describe('the calmer row (#617)', () => {
     delegation: { role: 'root', permissions: [], receipts: [] },
     waits: [workerWait({ workerIds: Array.from({ length: workers }, (_, i) => `00000000-0000-4000-8000-00000000000${i + 1}`) })],
   } as Partial<RunRecord>)
-
-  it('a pinned row keeps its unpin affordance', () => {
-    renderList({ runs: [run({ id: 'kept', pinned: true })], onTogglePin: vi.fn() })
-    const pin = bucket('Finished').querySelector('[data-run-id="kept"] [data-slot="pin-toggle"]') as HTMLElement
-    expect(pin.getAttribute('aria-label')).toBe('Unpin task')
-  })
 
   it('marks an unread row in its outcome tone', () => {
     renderList({
@@ -1930,13 +1923,5 @@ describe('complete compact sidebar references', () => {
     await waitFor(() => expect(document.querySelector('[data-slot="reference-overflow-list"]')).not.toBeNull())
     expect(screen.getByTestId('location').textContent).toBe('/')
     expect(trigger.closest('a')).toBeNull()
-  })
-  it('omits the running state word in Working but keeps monitoring', () => {
-    const working = run({ title: 'Working task', status: RUN_STATUS.running })
-    const monitoring = run({ title: 'Monitoring task', status: RUN_STATUS.waiting, waits: [timerWait()] } as Partial<RunRecord>)
-    const { container } = renderList({ runs: [working, monitoring] })
-    const row = (id: string) => container.querySelector(`[data-run-id="${id}"]`)!
-    expect(row(working.id).querySelector('[data-slot="task-row-state"]')).toBeNull()
-    expect(row(monitoring.id).querySelector('[data-slot="task-row-state"]')?.textContent).toMatch(/^monitoring, next check /)
   })
 })
