@@ -173,7 +173,10 @@ export function useWorkerWaitFixture(options: { processScope?: false; nudgeReply
 /** `replay` echoes each consumed line as the real CLI's `--replay-user-messages` does, so a human
  *  follow-up stops counting as held once its turn reads it. `inputs()` lists when each wire process
  *  started and each stdin line it read, for a wait's explanation: it tells a session that started
- *  late from one that never read its input (hearsay-tools/squawk#2535). */
+ *  late from one that never read its input (hearsay-tools/squawk#2535). It also lists when a held
+ *  human answer was recorded and released, and how the process ended: its exit code, a SIGTERM or
+ *  an uncaught error. A line read but never recorded then shows whether the process died or
+ *  stalled (hearsay-tools/squawk#3797). */
 const MOCK_CI_TOOL = pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'scripts', 'mock-ci-tool.mjs')).href;
 export function controlledWire(options: { firstResultGate?: string; humanAnswerGate?: string; replay?: boolean } = {}) {
   const wire = join(root, 'controlled-claude.cjs'); const received = join(root, 'human-answer-received.ndjson'); const initial = join(root, 'first-input-received');
@@ -184,6 +187,11 @@ const emit = value => console.log(JSON.stringify(value)); let first = true; let 
 const options = ${JSON.stringify(options)}; const received = ${JSON.stringify(received)};
 const log = (event, text = '') => fs.appendFileSync(${JSON.stringify(inputLog)}, JSON.stringify({ at: new Date().toISOString(), pid: process.pid, task: process.env.HSQ_TASK_ID ?? process.env.CEZ_TASK_ID, event, text: text.replace(/\s+/g, ' ').slice(-80) }) + '\n');
 log('start');
+// The process's end, logged even when teardown already removed the log's directory.
+const note = (event, text) => { try { log(event, text); } catch {} };
+process.on('exit', code => note('exit', String(code)));
+process.on('SIGTERM', () => { note('signal', 'SIGTERM'); process.exit(143); });
+for (const event of ['uncaughtException', 'unhandledRejection']) process.on(event, error => { console.error(error); note('error', String(error?.message ?? error)); process.exit(1); });
 const wait = async path => { while (path && !fs.existsSync(path)) await new Promise(resolve => setTimeout(resolve, 5)); };
 const args = process.argv.slice(2); const sessionIndex = args.indexOf('--session-id');
 emit({ type: 'system', subtype: 'init', session_id: sessionIndex >= 0 ? args[sessionIndex + 1] : 'controlled-session' });
@@ -195,7 +203,7 @@ const humanAnswer = text.includes('human answer mock:hold'); log(humanAnswer ? '
 queue = queue.then(async () => {
 if (options.replay && message.uuid) emit({ type: 'user', isReplay: true, uuid: message.uuid, message: message.message });
 if (first) { first = false; fs.writeFileSync(${JSON.stringify(initial)}, 'received'); await wait(options.firstResultGate); }
-if (humanAnswer && options.humanAnswerGate) { fs.appendFileSync(received, JSON.stringify({ text }) + '\n'); await wait(options.humanAnswerGate); }
+if (humanAnswer && options.humanAnswerGate) { fs.appendFileSync(received, JSON.stringify({ text }) + '\n'); log('recorded'); await wait(options.humanAnswerGate); log('released'); }
 // hearsay-tools/cezarion#2397: the lifecycle scenarios call the Squawk tool through the session's
 // MCP config with the native mocks' own client, then end the turn.
 const lifecycle = async (name, toolArgs) => (await import(${JSON.stringify(MOCK_CI_TOOL)})).lifecycleCall('claude', args, name, toolArgs);
