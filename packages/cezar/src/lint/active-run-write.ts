@@ -147,8 +147,9 @@ function parenthesized(node: EsNode, tokens: NodeTokens): boolean {
   const before = tokens.getTokenBefore(node);
   const after = tokens.getTokenAfter(node);
   if (before?.value !== '(' || after?.value !== ')') return false;
-  const parent = node.parent?.type === 'ChainExpression' ? node.parent.parent : node.parent;
-  if (parent && ['CallExpression', 'NewExpression'].includes(parent.type) && children(parent, 'arguments')[0] === node) {
+  const argument = node.parent?.type === 'ChainExpression' ? node.parent : node;
+  const parent = argument.parent;
+  if (parent && ['CallExpression', 'NewExpression'].includes(parent.type) && children(parent, 'arguments')[0] === argument) {
     // A sole argument's call delimiters are not parentheses around the argument itself.
     const head = child(parent, 'typeArguments') ?? child(parent, 'typeParameters') ?? child(parent, 'callee');
     let opening = head && tokens.getTokenAfter(head);

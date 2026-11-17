@@ -654,6 +654,7 @@ for (const [group, slot, type] of [
     const argument = wrapped ? `(${expression})` : expression;
     return [
       `Object.assign(${argument}, {});`,
+      `Object.assign(${argument});`,
       `Object.assign?.(${argument});`,
       `Object.assign?.<Mutable>(${argument});`,
     ].map(call => ({
