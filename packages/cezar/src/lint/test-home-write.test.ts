@@ -1,9 +1,22 @@
+import { checkRule } from './ast-rule.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { externalTestHomeProblems } from './test-home-repository.ts';
-import { testHomeWrite, unsafeHomeWrites } from './test-home-write.ts';
+import { testHomeWrite, unsafeHomeWrites as sourceHomeWrites } from './test-home-write.ts';
+
+function unsafeHomeWrites(source: string, file = 'file.test.ts'): number[] {
+  const offsets = sourceHomeWrites(source, file);
+  if (source === 'let read; ({resolveHome: read} as any) = source') {
+    // The legacy scanner accepts this malformed TypeScript assignment. Oxlint owns parsing now.
+    expect(() => checkRule(testHomeWrite, file, source)).toThrow(/Parsing failed/);
+  } else {
+    expect(checkRule(testHomeWrite, file, source).map(finding => finding.line))
+      .toEqual(offsets.map(offset => source.slice(0, offset).split('\n').length));
+  }
+  return offsets;
+}
 
 describe('test writes use explicit sandbox paths', () => {
   it.each([
@@ -37,13 +50,13 @@ describe('test writes use explicit sandbox paths', () => {
   it.each(['test', 'testkit'].flatMap(kind => ['js', 'jsx', 'ts', 'tsx', 'mjs', 'mjsx', 'mts', 'mtsx', 'cjs', 'cjsx', 'cts', 'ctsx']
     .map(extension => `a.${kind}.${extension}`)))('covers %s repository-wide', file => {
     expect(testHomeWrite.applies(`scripts/${file}`)).toBe(true);
-    expect(testHomeWrite.check(`scripts/${file}`, "writeFileSync(join(cezarHomeDir(), 'config.json'), '{}')")).toHaveLength(1);
+    expect(checkRule(testHomeWrite, `scripts/${file}`, "writeFileSync(join(cezarHomeDir(), 'config.json'), '{}')")).toHaveLength(1);
   });
 
   it('keeps operational tools outside test-source enforcement', () => {
     const source = 'mkdirSync(join(homedir(), ".cache/cez/mutants"))';
     expect(testHomeWrite.applies('.github/scripts/mutants-file.cjs')).toBe(false);
-    expect(testHomeWrite.check('.github/scripts/mutants-file.test.cjs', source)).toHaveLength(1);
+    expect(checkRule(testHomeWrite, '.github/scripts/mutants-file.test.cjs', source)).toHaveLength(1);
   });
 
   it('runs both rules on tests outside packages through the repository gate', () => {
@@ -182,6 +195,7 @@ describe('test writes use explicit sandbox paths', () => {
     "function go({default: {resolveHome: read} = fallback} = source) { read() }",
     "let read; ({homedir: (read as any)} = require('node:os'))",
     "let read; ({resolveHome: read} as any) = source",
+    "let read; ({resolveHome: read} = source as any)",
     "let read; for ({resolveHome: read} of [await import('./resolve.ts')]) read()",
     "for (const {cezarHomeDir: read = fallback} of sources) read()",
     "let read; for ({homedir: read} in sources) read()",
@@ -193,6 +207,8 @@ describe('test writes use explicit sandbox paths', () => {
     "export {homedir as read} from 'node:os'",
     "export {read as resolveHome} from './resolve.ts'",
     "export * as resolveHome from './resolve.ts'",
+    "export * as 'homedir' from 'node:os'",
+    "class Fixture { use({homedir: read}: {homedir: () => string}) { return read(); } }",
     "const read = os.homedir",
     "accept(module.resolveHome)",
     "const read = os?.homedir",
@@ -212,6 +228,10 @@ describe('test writes use explicit sandbox paths', () => {
     "import {type homedir as read} from 'node:os'",
     "export {type resolveHome} from './resolve.ts'",
     "type T = {homedir: string}; const value: typeof os.homedir = safe",
+    "abstract class Fixture { abstract use({homedir: read}: {homedir: () => string}): string; }",
+    "abstract class Fixture { abstract source: typeof os.homedir; }",
+    "class Fixture { use({resolveHome: read}: {resolveHome: () => string}): string; use(value: unknown): string { return ''; } }",
+    "export type * as resolveHome from './resolve.ts'",
     "os['home' + 'dir']()",
     "import {homedir as read} from 'node:os'; // test-home-read: compare the sandbox path\nread()",
   ])('ignores binding identity, data properties and type-only syntax: %s', source => {
@@ -220,7 +240,7 @@ describe('test writes use explicit sandbox paths', () => {
 
   it('reports the source syntax without flagging an unrelated function name', () => {
     const source = "function first() { const {homedir: read = fallback} = source }\nfunction second() { const read = () => dir; rmSync(read()) }";
-    expect(testHomeWrite.check('sample.test.ts', source).map(site => site.line)).toEqual([1]);
+    expect(checkRule(testHomeWrite, 'sample.test.ts', source).map(site => site.line)).toEqual([1]);
   });
 
   it.each([
