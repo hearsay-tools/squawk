@@ -434,19 +434,17 @@ Seeded NDJSON transcripts must go through `seedTranscript` from `seed-transcript
 
 ## Fixed project catalogs
 
-Fresh served clones, reused clones and local lanes replace every project skill
-directory in `SKILL_DIRS` and `.ai/cezar/workflows` with
-`packages/web/e2e/fixtures/catalogs`: two project skills and one workflow.
-Checkout catalog additions, edits and deletions do not change the served catalogs.
-Specs may add entries under `servedRoot()` and remove their entries in `afterAll`.
-Spec-owned servers seed their own fixture repositories. Built-in workflows remain available.
+Fresh served clones, reused clones and local lanes use a recorded runner list in
+`.mock-runner-skills.json` and workflows from `packages/web/e2e/fixtures/catalogs`.
+Checkout skill files do not change the served list. Specs use `writeMockSkills`
+from `runner-skills-fixture.ts` to set runner metadata, then re-read the list.
+The mock CLIs never read `.ai/skills`. Spec-owned servers seed their own fixture
+repositories before the first commit so task worktrees receive the same list.
+Built-in workflows remain available.
 
-Global skills (`~/.agents/skills`, `~/.claude/skills`) and team caches
-(`~/.cache/cez/skills`, `~/.cache/cez/skill-files`) use the server's sandbox HOME.
 The shared server pins `HOME` and `USERPROFILE` to `.ai/qa/server-home`;
 `fixtureServeEnv` pins both to `.server-home` under its fixture root after caller
 overrides. Cold boot starts empty; healthy shared-server reuse preserves that home.
-Tests of global or team discovery seed their own sandbox sources.
 
 ## A plain dry-run reply parks on a "Next step" card
 
@@ -748,3 +746,13 @@ For a smaller full-duration visible-window supplement, use
 `--windows --workload distinct --counts 1,10`. Unlike `--quick`, these selectors
 retain the five-second warmup and 20-second sample. The measured report and raw
 samples live in [`docs/performance/browser-tab-coordination.md`](../../../docs/performance/browser-tab-coordination.md).
+
+### Runner skill fixtures
+
+Skills come from the mock CLIs' recorded native list replies. Use `writeMockSkills` from
+`runner-skills-fixture.ts` to replace their metadata through `.mock-runner-skills.json`.
+The mocks never read `.ai/skills` files. Write the fixture before committing a temporary
+repository when a task worktree needs it. In a shared server, save the returned restore
+callback and call `refreshMockSkills` after writing and restoring a fixture; the server
+caches runner/account lists. The fixed lane catalog supplies `lint-fix` and `spec-writer`
+through this same hook.

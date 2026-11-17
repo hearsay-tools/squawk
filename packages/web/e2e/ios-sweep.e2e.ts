@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { writeMockSkills, refreshMockSkills } from './runner-skills-fixture'
 import { resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -39,7 +39,6 @@ const IPHONE = { width: 390, height: 844 } // iPhone 14/15 CSS pixels
 /** The skills view needs one skill row. This spec seeds it rather than counting on the skills
  *  the host or this checkout happens to have (README.md, "Seed the catalog entries a spec
  *  relies on", hearsay-tools/cezarion#1683). */
-const skillsDir = resolve(servedRoot(), '.ai/skills')
 const SKILL = 'e2e-ios-sweep-skill'
 
 /** The entry point to the project drawer below `md` on list screens (see app-shell.tsx MobileTopBar). */
@@ -51,7 +50,7 @@ const BACK_BUTTON = '[data-slot="mobile-top-bar"] [data-slot="mobile-back"]'
 let browser: AgentBrowser
 let baseUrl: string
 let forgeAvailable = false
-let createdSkillsDir = false
+let restoreSkills: (() => void) | undefined
 /** The task-thread view's subject: a dry run this spec starts and settles. */
 let threadRunId: string
 
@@ -67,13 +66,8 @@ beforeAll(async () => {
   const health = (await api<{ forge: { available: boolean } | null }>('/api/v1/health'))
   forgeAvailable = health.forge?.available === true
 
-  createdSkillsDir = !existsSync(skillsDir)
-  mkdirSync(skillsDir, { recursive: true })
-  writeFileSync(
-    resolve(skillsDir, `${SKILL}.md`),
-    `---\nname: ${SKILL}\ndescription: An e2e-seeded project skill\n---\n\nDo the sweep thing.\n`,
-    'utf8',
-  )
+  restoreSkills = writeMockSkills(servedRoot(), [{ name: SKILL, description: 'An e2e-seeded project skill', scope: 'repo' }])
+  await refreshMockSkills(baseUrl)
 
   // The thread view needs a run. The spec starts its own dry run rather than reading whatever an
   // earlier spec left on the shared server, so the swept thread is the same in every order. It
@@ -98,11 +92,10 @@ beforeAll(async () => {
   browser.setViewport(IPHONE.width, IPHONE.height)
 }, 180_000)
 
-afterAll(() => {
-  // Never leave test skills in a developer's catalog.
-  rmSync(resolve(skillsDir, `${SKILL}.md`), { force: true })
-  if (createdSkillsDir) rmSync(skillsDir, { recursive: true, force: true })
+afterAll(async () => {
   browser?.close()
+  restoreSkills?.()
+  if (baseUrl) await refreshMockSkills(baseUrl)
 })
 
 /** One view's sweep: settle it, then assert the three phone invariants and shoot it.

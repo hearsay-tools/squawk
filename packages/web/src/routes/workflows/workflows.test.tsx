@@ -1,10 +1,11 @@
+import type { RunnerSkill as Skill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, within, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
-import type { Skill, WorkflowDef, WorkflowsResponse } from '@open-mercato/cezar-api-client'
+import type { WorkflowDef, WorkflowsResponse } from '@open-mercato/cezar-api-client'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 
 import { WorkflowsRoute } from './workflows'
@@ -21,13 +22,13 @@ afterEach(() => {
 
 const SKILLS: Skill[] = [
   {
+    id: 'om-fix',
     name: 'om-fix',
     description: 'Fix the thing, verify the regression, and leave a concise review note for the next person.',
-    body: '',
     path: '.ai/skills/om-fix.md',
-    source: 'ai',
+    scope: 'repo',
   },
-  { name: 'om-review', description: 'Review it', body: '', path: '~/.cez/skills/om-review.md', source: 'global' },
+  { id: 'om-review', name: 'om-review', description: 'Review it', path: '~/.cez/skills/om-review.md', scope: 'user' },
 ]
 
 const QUICK: WorkflowDef = {
@@ -91,7 +92,7 @@ function stubFetch(
       if (method === 'GET' && path === '/api/v1/workflows') {
         return jsonResponse({ workflows, issues: [] } satisfies WorkflowsResponse)
       }
-      if (method === 'GET' && path === '/api/v1/skills') return jsonResponse(SKILLS)
+      if (method === 'GET' && path === '/api/v1/runner-skills?runner=claude') return jsonResponse({ runner: 'claude', skills: SKILLS, problems: [], source: 'live' })
       if (method === 'GET' && path === '/api/v1/ui-state') return jsonResponse({})
       return jsonResponse({ error: 'not found' }, 404)
     }),
@@ -268,16 +269,11 @@ describe('palette add / remove / the 8-step limit', () => {
     await screen.findByText('A workflow holds at most 8 steps.')
   })
 
-  // #374: the palette's empty state must mention the same discovery dirs as the Skills tab's,
-  // not just `.ai/skills/`.
-  it('an empty skill catalog explains every discovery dir, not just .ai/skills/', async () => {
-    stubFetch({ 'GET /api/v1/skills': [() => jsonResponse([])] })
+  it('an empty runner list keeps typed ids available in Add step', async () => {
+    stubFetch({ 'GET /api/v1/runner-skills?runner=claude': [() => jsonResponse({ runner: 'claude', skills: [], problems: [], source: 'live' })] })
     renderAt('/workflows')
-
-    const hint = await screen.findByText(/No skills yet/)
-    expect(hint.textContent).toContain('.ai/skills/')
-    expect(hint.textContent).toContain('.ai/cezar/skills/')
-    expect(hint.textContent).toContain('.agents/skills/')
+    const hint = await screen.findByText(/No skills reported by this runner and account/)
+    expect(hint.textContent).toContain('type a skill id in Add step')
   })
 })
 
@@ -871,4 +867,13 @@ describe('workflow drag and drop through real sensors', () => {
     fireEvent.click(screen.getByLabelText('Move step 2 up'))
     expect(stepIds()).toEqual(['om-review', 'om-fix'])
   })
+})
+
+it('reads each saved step from its own runner and account', async () => {
+  const sent = stubFetch({
+    'GET /api/v1/runner-skills?runner=codex&account=work': [() => jsonResponse({ runner: 'codex', skills: [{ id: 'plugin:check', name: 'Check', description: 'Work account checks' }], problems: [], source: 'live' })],
+  }, [{ ...SHIP, steps: [{ id: 'check', skill: 'plugin:check', runner: 'codex', agentProfile: 'work' }] }])
+  renderAt('/workflows')
+  await screen.findByText('Work account checks')
+  expect(sent.some((request) => request.path === '/api/v1/runner-skills?runner=codex&account=work')).toBe(true)
 })

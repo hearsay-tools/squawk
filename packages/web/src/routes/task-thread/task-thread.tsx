@@ -691,6 +691,17 @@ function ThreadFooterDock({
   )
 }
 
+/** The list follows the live step, or the effective continuation identity. */
+function threadSkillContext(run: ApiRun, continuable: boolean, action: ReturnType<typeof useContinueAction>) {
+  if (continuable) return { skillRunner: action.skillRunner, skillAccount: action.skillAccount }
+  const step = run.steps.find((entry) => entry.id === run.currentStepId)
+  const definition = run.workflowDef?.steps.find((entry) => entry.id === run.currentStepId)
+  return {
+    skillRunner: step?.backend ?? definition?.runner ?? run.runner,
+    skillAccount: step?.profileId ?? definition?.agentProfile ?? run.agentProfile,
+  }
+}
+
 function ThreadComposer({
   run, thread, stopAction, finishAction, attention,
   needsAnswer, continuable, continueAction, queued, sendMessage, reply,
@@ -699,6 +710,7 @@ function ThreadComposer({
   const workersLive = useWorkersLive(run)
   return (
     <Composer
+      {...threadSkillContext(run, continuable, continueAction)}
       onStop={runActionFlags(run, workersLive).cancel ? stopAction.stop : undefined}
       onFinish={
         offersComposerFinish(run)

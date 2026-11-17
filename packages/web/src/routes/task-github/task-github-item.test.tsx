@@ -190,7 +190,7 @@ describe('TaskGithubItemRoute', () => {
       const path = String(input)
       if (path.includes('/github?')) return json({ available: true, repo: 'hearsay-tools/cezarion', syncedAt: '', issues: [issue], prs: [] })
       if (path.endsWith('/workflows')) return json({ workflows: [{ name: 'quick-task', steps: [], source: 'built-in' }], issues: [] })
-      if (path.endsWith('/skills')) return json([])
+      if (path.includes('/runner-skills?')) return json({ runner: 'claude', skills: [], problems: [], source: 'live' })
       if (path.endsWith('/ui-state')) return json({})
       return originalFetch(input, init)
     }))
@@ -223,7 +223,7 @@ describe('TaskGithubItemRoute', () => {
       }
       if (path.includes('/github?')) return json({ available: true, repo: 'hearsay-tools/cezarion', syncedAt: '', issues: [issue], prs: [] })
       if (path.endsWith('/workflows')) return json({ workflows: [], issues: [] })
-      if (path.endsWith('/skills')) return json([])
+      if (path.includes('/runner-skills?')) return json({ runner: 'claude', skills: [], problems: [], source: 'live' })
       if (path.endsWith('/ui-state')) return json({})
       if (path.endsWith('/providers/status')) return json({ providers: [{ provider: 'claude', status: 'connected', enabled: true }] })
       if (path.includes('/models?')) return json({ runner: 'claude', models: [], source: 'unavailable', stale: false })

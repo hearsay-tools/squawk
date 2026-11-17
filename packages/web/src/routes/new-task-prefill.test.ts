@@ -6,13 +6,13 @@ import { prefillToast, unknownSkillPrefillText } from './new-task-prefill'
 
 describe('prefillToast', () => {
   it('an unknown skill is called out honestly', () => {
-    expect(prefillToast('ghost')).toEqual({
+    expect(prefillToast('ghost', true)).toEqual({
       message: 'Unknown skill "ghost" — prefilled for quick-task; review and press Start',
       tone: 'danger',
     })
   })
   it('a plain prefill is a quiet nudge', () => {
-    expect(prefillToast('')).toEqual({
+    expect(prefillToast('', true)).toEqual({
       message: 'Prefilled from link — review and press Start',
       tone: 'default',
     })

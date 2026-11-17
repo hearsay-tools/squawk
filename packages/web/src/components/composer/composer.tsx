@@ -1,3 +1,4 @@
+import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   useCallback,
@@ -16,8 +17,8 @@ import {
 } from 'react'
 
 import { putUiState } from '@/api/client'
-import { queryKeys, useSkills, useUiState } from '@/api/queries'
-import type { AttachmentInput, Skill } from '@open-mercato/cezar-api-client'
+import { queryKeys, useRunnerSkills, useUiState } from '@/api/queries'
+import type { AttachmentInput, Runner } from '@open-mercato/cezar-api-client'
 import { toast } from '@/components/ui/toaster'
 import { insertTemplate } from '@/lib/prompt-templates'
 import { isEditableTarget } from '@/lib/use-command-shortcut'
@@ -160,6 +161,8 @@ export interface ComposerProps {
   placeholder?: string
   ariaLabel?: string
   /** `/` opens the project-first skills autocomplete (#380). */
+  skillRunner?: Runner | undefined
+  skillAccount?: string | null | undefined
   autocompleteSkills?: boolean
   /** Alt+A → "Yes, approved." / Alt+C → "Continue." — the legacy quick replies, window-global
    *  while the composer is enabled. */
@@ -239,26 +242,38 @@ function composerInput(props: ComposerProps): Required<Pick<ComposerProps,
   }
 }
 
-// The path suffix keeps values unique when a project skill shadows a global one.
+// Slash completion inserts a typed id. The task picker selects a specific path.
 function composerMenuCandidates(
   trigger: TriggerState | null,
-  skills: readonly Skill[],
+  skills: readonly RunnerSkill[],
   skillUsage: Parameters<typeof filterSkills>[2],
   getMentionCandidates: (() => string[]) | undefined,
 ): ComposerMenuCandidate[] {
   if (trigger === null) return []
   if (trigger.trigger === '/') {
-    return filterSkills(skills, trigger.query, skillUsage).map((skill) => ({
-      value: `${skill.name} ${skill.path}`,
-      insert: skill.name,
+    const seen = new Set<string>()
+    return filterSkills(skills, trigger.query, skillUsage).filter((skill) => {
+      if (seen.has(skill.id)) return false
+      seen.add(skill.id)
+      return true
+    }).map((skill) => ({
+      value: skill.id,
+      insert: skill.id,
       label: skill.name,
-      description: skill.description,
+      description: slashSkillDescription(skill, skills),
       emphasized: isProjectSkill(skill),
     }))
   }
   return (getMentionCandidates?.() ?? [])
     .filter((path) => fuzzyMatch(path, trigger.query))
     .map((path) => ({ value: path, insert: path, label: path, emphasized: false }))
+}
+
+function slashSkillDescription(skill: RunnerSkill, skills: readonly RunnerSkill[]): string {
+  const copies = skills.filter((entry) => entry.id === skill.id)
+  return [skill.description, ...copies.map((entry) => entry.path),
+    copies.length > 1 ? 'Runner scope picks the copy. Use the task skill picker to choose a specific copy.' : undefined,
+  ].filter(Boolean).join(' · ')
 }
 
 function composerActiveValue(candidates: readonly ComposerMenuCandidate[], menuValue: string): string | undefined {
@@ -321,7 +336,7 @@ export function Composer(props: ComposerProps) {
     clearOnSuccess, onPendingChange, value, onValueChange, autoFocus, mobileCollapsible,
     mobileDisclosureKey, footerStart, footerEnd, sessionControls, executionOptions, agentOptions,
     sendAriaLabel, disabled, disabledReason, allowEmptySubmit, placeholder, ariaLabel,
-    autocompleteSkills, quickReplies, getMentionCandidates, ref,
+    autocompleteSkills, skillRunner, skillAccount, quickReplies, getMentionCandidates, ref,
   } = composerInput(props)
   const { text, textRef, setText } = useComposerText(value, onValueChange)
   const [images, setImages] = useState<PendingAttachment[]>([])
@@ -362,7 +377,7 @@ export function Composer(props: ComposerProps) {
 
   // The `/` list orders most-used first (#519) and a pick bumps `skillUsage`, so this — the
   // highest-traffic skill surface — both reads and feeds the same stats as the pickers.
-  const skills = useSkills(autocompleteSkills && skillsWanted)
+  const skills = useRunnerSkills(skillRunner, skillAccount, autocompleteSkills && skillsWanted)
   const uiState = useUiState()
   const queryClient = useQueryClient()
   const disabledRef = useRef(disabled)

@@ -1,10 +1,11 @@
+import type { RunnerSkill as Skill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Suspense, lazy } from 'react'
 import { BrowserRouter, Link, MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { expect, vi } from 'vitest'
 import { createQueryClient } from '@/api/query-client'
-import type { AgentProfilesResponse, ConfigResponse, HealthResponse, ProviderStatusResponse, RepoResponse, Skill, WorkspaceConfigResponse, WorkflowsResponse } from '@open-mercato/cezar-api-client'
+import type { AgentProfilesResponse, ConfigResponse, HealthResponse, ProviderStatusResponse, RepoResponse, WorkspaceConfigResponse, WorkflowsResponse } from '@open-mercato/cezar-api-client'
 import { Toaster } from '@/components/ui/toaster'
 import { answerFixture, answerFromRoutes, jsonResponse, type FetchRoute } from '@/test/fetch-routes'
 import { readDraft, writeDraft } from './new-task-draft'
@@ -76,8 +77,8 @@ export const PROVIDERS_NONE: ProviderStatusResponse = {
 }
 
 export const SKILLS: Skill[] = [
-  { name: 'om-fix', description: 'Fix an issue end to end', body: '', path: '/p/om-fix.md', source: 'ai' },
-  { name: 'deploy', description: 'Deploy from anywhere', body: '', path: '/g/deploy.md', source: 'global' },
+  { id: 'om-fix', name: 'om-fix', description: 'Fix an issue end to end', path: '/p/om-fix.md', scope: 'repo' },
+  { id: 'deploy', name: 'deploy', description: 'Deploy from anywhere', path: '/g/deploy.md', scope: 'user' },
 ]
 
 export const WORKFLOWS: WorkflowsResponse = {
@@ -235,7 +236,7 @@ export function serve(overrides: {
     { path: '/api/v1/providers/status', respond: () => answerFixture(data.providerStatus, data.providerStatusStatus) },
     { path: '/api/v1/models?runner=claude', respond: () => jsonResponse({ runner: 'claude', models: [], source: 'unavailable', stale: false }) },
     { path: '/api/v1/models?runner=codex', respond: () => jsonResponse(data.models) },
-    { path: '/api/v1/skills', respond: () => jsonResponse(data.skills) },
+    { path: /\/api\/v1\/runner-skills\?runner=/, respond: () => jsonResponse({ runner: 'claude', skills: data.skills, problems: [], source: 'live' }) },
     { method: 'GET', path: '/api/v1/workflows', respond: () => jsonResponse(data.workflows) },
     {
       method: 'POST',

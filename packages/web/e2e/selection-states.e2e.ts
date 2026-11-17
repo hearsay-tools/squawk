@@ -1,3 +1,4 @@
+import { writeMockSkills } from './runner-skills-fixture'
 import { Home } from '../../cezar/src/home/home.ts'
 import { HomeStore } from '../../cezar/src/home/store.ts'
 import type { ChildProcess } from 'node:child_process'
@@ -32,8 +33,7 @@ beforeAll(async () => {
   // No Git: model selection stays available.
   root = mkdtempSync(join(tmpdir(), 'cez-states-'))
   mkdirSync(join(root, '.ai/cezar'), { recursive: true })
-  mkdirSync(join(root, '.ai/skills'), { recursive: true })
-  for (const name of ['review', 'ship']) writeFileSync(join(root, `.ai/skills/${name}.md`), `---\ndescription: ${name} the changes\n---\nCheck the work.\n`)
+  writeMockSkills(root, ['review', 'ship'].map(name => ({ name, description: `${name} the changes`, scope: 'repo' })))
   seedRuns(root, [...['one', 'two'].map((id) => ({
     id, title: `Review task ${id}`, task: 'Check the work', workflow: 'default', status: RUN_STATUS.review, tokensUsed: 0,
     createdAt: new Date().toISOString(), finishedAt: new Date().toISOString(), archived: false, steps: [],
@@ -229,7 +229,7 @@ function checkNeedsYouDot(_variant: ContrastQaVariant, { container, open, record
 
 describe('selection and control states (#171)', () => {
   for (const variant of contrastQaVariants) {
-    it(`${variant.id}: task and skill selection have persistent selected states and accessible state`, () => {
+    it(`${variant.id}: task selection and skill disclosures expose their persistent state`, () => {
       variantId = variant.id
       browser.setViewport(variant.viewport.width, variant.viewport.height)
       browser.goto(`${baseUrl}/p/${project}/tasks/one`)
@@ -253,23 +253,17 @@ describe('selection and control states (#171)', () => {
         browser.screenshot(`${artifacts}/states-tasks-${variant.id}.png`, { viewport: true })
       }
 
-      // The grouped table opens no skill by default (hearsay-tools/cezarion#1607), so the URL opens one.
       browser.goto(`${baseUrl}/p/${project}/skills?skill=review`)
-      browser.waitForFunction(`document.querySelector('[data-slot="skill-row"][aria-current="page"]') !== null`)
+      const row = '[data-slot="skill-row"][data-skill="review"][open]'
+      browser.waitForFunction(`document.querySelector('${row}') !== null`)
       applyContrastQaVariant(browser, variant)
-      const skill = '[data-slot="skill-row"][aria-current="page"]'
-      // Source10C/10D uses uniform mobile rows; desktop selection has a filled surface.
-      selectedSurface(skill, variant.viewport.width !== 360)
-      hoverVisiblePoint(browser, skill)
-      // Source10C/10D uses uniform mobile rows; desktop selection has a filled surface.
-      selectedSurface(skill, variant.viewport.width !== 360)
-      focus(skill)
-      expect((colorSample(contrastSampleExpression(`${skill} span span`)) as ContrastSample).ratio).toBeGreaterThanOrEqual(4.5)
+      focus(`${row} summary`)
+      expect((colorSample(contrastSampleExpression(`${row} summary`)) as ContrastSample).ratio).toBeGreaterThanOrEqual(4.5)
       browser.screenshot(`${artifacts}/states-skills-${variant.id}.png`, { viewport: true })
-      browser.click('[data-slot="skill-row"][data-skill="ship"]')
-      browser.waitForFunction(`document.querySelector('[data-slot="skill-row"][data-skill="ship"]')?.getAttribute('aria-current') === 'page'`)
-      expect(browser.url()).toContain('skill=ship')
-      browser.waitForFunction(`document.querySelector('[data-slot="skills-detail"]')?.textContent.includes('ship')`)
+      // The expanded inline inventory puts the next row below the phone fold.
+      clickInView(browser, '[data-slot="skill-row"][data-skill="ship"] summary')
+      browser.waitForFunction(`document.querySelector('[data-slot="skill-row"][data-skill="ship"]')?.open === true`)
+      browser.waitForFunction(`document.querySelector('[data-slot="skill-row"][data-skill="ship"] [data-slot="skill-detail"]')?.textContent.includes('ship')`)
     })
 
     // The calmer sidebar row (#617). Desktop only: the drawer at 360px is the same component,

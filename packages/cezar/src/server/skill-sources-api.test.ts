@@ -9,8 +9,7 @@ import type { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SKILLS_REPO_FORMATS, type TeamSkillSourcesResponse } from '@open-mercato/cezar-contract/skill-sources';
 import { RunStore } from '../runs/store.ts';
-import { __holdFetchForTests, bareDirFor, getTeamSourceStatuses, refreshTeamSources, sourceKey, waitForTeamSkills } from '../skills-remote.ts';
-import type { Skill } from '../skills.ts';
+import { __holdFetchForTests, bareDirFor, getTeamSourceStatuses, refreshTeamSkills, refreshTeamSources, sourceKey, waitForTeamSkills } from '../skills-remote.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
@@ -74,10 +73,6 @@ describe('the team skill sources API', () => {
   const sources = async () => {
     return (await (await send('GET', '/skills/sources')).json()) as TeamSkillSourcesResponse;
   };
-  const teamNames = async (path = '/skills') => {
-    const skills = (await (await send('GET', path)).json()) as Skill[];
-    return skills.filter((skill) => skill.source === 'team').map((skill) => skill.name);
-  };
   // The route answers before its background fetch ends; the team load it started is the signal.
   const add = async (body: { repo: string; ref?: string }) => {
     const res = await send('POST', '/skills/sources', body);
@@ -100,7 +95,6 @@ describe('the team skill sources API', () => {
     await waitForTeamSkills(repoRoot, testHome());
     expect(rawFile()).toEqual({ reviewGate: true, skillsRepos: [{ repo }] });
     expect((await sources()).sources[0]?.status).toEqual({ state: 'ok', skillCount: 1 });
-    expect(await teamNames()).toEqual(['greet']);
   });
 
   it('refuses a source that is already listed and writes nothing', async () => {
@@ -120,11 +114,10 @@ describe('the team skill sources API', () => {
     expect(() => readFileSync(configPath(), 'utf8')).toThrow();
   });
 
-  it('disabling hides the source everywhere and enabling restores its per-skill switches', async () => {
+  it('disabling and enabling a source leaves legacy UI state intact', async () => {
     const repo = sourceRepo('a', 'b');
     await add({ repo });
     writeFileSync(join(repoRoot, '.ai/cezar/ui-state.json'), JSON.stringify({ disabledTeamSkills: [{ repo, name: 'a' }] }));
-    expect(await teamNames()).toEqual(['b']);
 
     const off = await send('PATCH', '/skills/sources', { repo, ref: 'main', enabled: false });
     expect(off.status).toBe(200);
@@ -132,26 +125,23 @@ describe('the team skill sources API', () => {
     expect(((await off.json()) as TeamSkillSourcesResponse).sources).toEqual([
       { repo, ref: 'main', enabled: false, status: { state: 'idle' } },
     ]);
-    expect(await teamNames()).toEqual([]);
-    expect(await teamNames('/skills/importable')).toEqual([]);
 
     expect((await send('PATCH', '/skills/sources', { repo, ref: 'main', enabled: true })).status).toBe(200);
     expect(rawFile()).toEqual({ skillsRepos: [{ repo }] });
-    expect(await teamNames()).toEqual(['b']);
+    expect(JSON.parse(readFileSync(join(repoRoot, '.ai/cezar/ui-state.json'), 'utf8')).disabledTeamSkills).toEqual([{ repo, name: 'a' }]);
   });
 
-  it('removing a source keeps its switches, so adding it again restores them', async () => {
+  it('removing and re-adding a source leaves legacy UI state intact', async () => {
     const repo = sourceRepo('a', 'b');
     await add({ repo });
     writeFileSync(join(repoRoot, '.ai/cezar/ui-state.json'), JSON.stringify({ disabledTeamSkills: [{ repo, name: 'a' }] }));
 
     expect((await send('DELETE', '/skills/sources', { repo, ref: 'main' })).status).toBe(200);
     expect(rawFile()).toEqual({ skillsRepos: [] });
-    expect(await teamNames()).toEqual([]);
     expect((await send('DELETE', '/skills/sources', { repo, ref: 'main' })).status).toBe(404);
 
     await add({ repo });
-    expect(await teamNames()).toEqual(['b']);
+    expect(JSON.parse(readFileSync(join(repoRoot, '.ai/cezar/ui-state.json'), 'utf8')).disabledTeamSkills).toEqual([{ repo, name: 'a' }]);
   });
 
   it('never writes a config.json it cannot read', async () => {
@@ -170,7 +160,6 @@ describe('the team skill sources API', () => {
     expect((await sources()).configIssue).toBeNull();
     expect((await add({ repo })).status).toBe(200);
     expect(rawFile()).toEqual({ maxParallel: 99, skillsRepos: [{ repo }] });
-    expect(await teamNames()).toEqual(['a']);
   });
 
   it('a skillsRepos entry the page cannot show blocks its writes', async () => {
@@ -193,11 +182,10 @@ describe('the team skill sources API', () => {
     const good = sourceRepo('greet');
     const missing = join(homeRoot, 'no-such-repo');
     writeFileSync(configPath(), JSON.stringify({ skillsRepos: [{ repo: good }, { repo: missing }] }));
-    await send('POST', '/skills/refresh');
+    await refreshTeamSkills(repoRoot, testHome());
     const [first, second] = (await sources()).sources;
     expect(first?.status).toEqual({ state: 'ok', skillCount: 1 });
     expect(second?.status).toMatchObject({ state: 'error', cause: 'fetch-failed', skillCount: 0 });
-    expect(await teamNames()).toEqual(['greet']);
 
     const retry = await send('POST', '/skills/sources/retry', { repo: missing, ref: 'main' });
     expect(retry.status).toBe(200);
@@ -214,7 +202,6 @@ describe('the team skill sources API', () => {
       detail: `The ref "nope" was not found in ${repo}.`,
       skillCount: 0,
     });
-    expect(await teamNames()).toEqual([]);
   });
 
   it('the default ref still reads a repo whose default branch is not main', async () => {
@@ -269,13 +256,12 @@ describe('the team skill sources API', () => {
       releaseFetch();
       await load;
     }
-    expect(await teamNames('/skills/importable')).toEqual(['kept']);
     expect((await sources()).sources.map((source) => source.repo)).toEqual([kept]);
   });
 
   it('names a configured source in a refused format', async () => {
     writeFileSync(configPath(), JSON.stringify({ skillsRepos: [{ repo: 'ext::evil' }] }));
-    await send('POST', '/skills/refresh');
+    await refreshTeamSkills(repoRoot, testHome());
     expect((await sources()).sources[0]?.status).toMatchObject({ state: 'error', cause: 'refused-format' });
     expect((await send('DELETE', '/skills/sources', { repo: 'ext::evil', ref: 'main' })).status).toBe(200);
   });

@@ -15,6 +15,12 @@ describe('parseNewTaskParams', () => {
       { skill: 'om-code-review', ref: 'https://github.com/o/r/pull/1' },
     ],
     ['skill only', '?skill=om-fix', { ...empty, skill: 'om-fix' }],
+    ['native skill identity', '?skill=plugin%3Acheck&skillPath=repo%2FSKILL.md&runner=codex&account=work',
+      { ...empty, skill: 'plugin:check', skillPath: 'repo/SKILL.md', runner: 'codex', account: 'work' }],
+    ['invalid runner is ignored', '?runner=unknown', empty],
+    ['empty path is absent', '?skill=check&skillPath=', { ...empty, skill: 'check' }],
+    ['nonempty paths are preserved without trimming', '?skill=check&skillPath=%20repo%2FSKILL.md%20',
+      { ...empty, skill: 'check', skillPath: ' repo/SKILL.md ' }],
     // `task` is the older spelling of `ref`; app.js still accepts it, so must we.
     ['legacy `task` alias for `ref`', '?task=issue-12', { ...empty, ref: 'issue-12' }],
     ['`ref` wins over `task` when both are present', '?ref=a&task=b', { ...empty, ref: 'a' }],
@@ -50,5 +56,10 @@ describe('newTaskPrefillHref', () => {
       skill: 'om-fix',
       ref: 'fix it\nnow',
     })
+  })
+
+  it('round-trips a runner skill pick including its account and path', () => {
+    const pick = { skill: 'plugin:check', skillPath: 'repo/SKILL.md', runner: 'codex' as const, account: 'work' }
+    expect(parseNewTaskParams(newTaskPrefillHref(pick).split('?')[1] ?? '')).toEqual({ ...empty, ...pick })
   })
 })

@@ -1,11 +1,10 @@
-import { skillSchema } from '@open-mercato/cezar-api-client/contract/skills'
+import type { RunnerSkill as Skill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import * as React from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
-import type { Skill } from '@open-mercato/cezar-api-client'
 import { resetToasts, Toaster } from '@/components/ui/toaster'
 
 import { MAX_ATTACHMENT_BYTES } from './composer-attachments'
@@ -35,15 +34,15 @@ afterEach(() => {
 })
 
 const SKILLS: Skill[] = [
-  { name: 'global-deploy', description: 'Deploy from anywhere', body: '', path: '/g/global-deploy.md', source: 'global' },
-  { name: 'om-fix', description: 'Fix an issue', body: '', path: '/p/om-fix.md', source: 'ai' },
-  { name: 'om-review', body: '', path: '/p/om-review.md', source: skillSchema.shape.source.enum.cezar },
+  { id: 'global-deploy', name: 'global-deploy', description: 'Deploy from anywhere', path: '/g/global-deploy.md', scope: 'user' },
+  { id: 'om-fix', name: 'om-fix', description: 'Fix an issue', path: '/p/om-fix.md', scope: 'repo' },
+  { id: 'om-review', name: 'om-review', path: '/p/om-review.md', scope: 'repo' },
 ]
 
-/** The composer fetches `/api/v1/skills` (only once `/` has been typed) and `/api/v1/ui-state`
+/** The composer fetches `/api/v1/runner-skills?runner=claude` (only once `/` has been typed) and `/api/v1/ui-state`
  *  (#519: the autocomplete's usage order + bump). `uiState: null` answers the GET with a 404
  *  (the "ui-state unavailable" case); PUT bodies are recorded in `uiStatePuts`. */
-function stubSkillsFetch(uiState: Record<string, unknown> | null = {}) {
+function stubSkillsFetch(uiState: Record<string, unknown> | null = {}, skills: Skill[] = SKILLS) {
   const uiStatePuts: unknown[] = []
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -55,7 +54,7 @@ function stubSkillsFetch(uiState: Record<string, unknown> | null = {}) {
         new Response(body, { status, headers: { 'content-type': 'application/json' } }),
       )
     }
-    const body = url.includes('/api/v1/skills') ? JSON.stringify(SKILLS) : '[]'
+    const body = url.includes('/api/v1/runner-skills?') ? JSON.stringify({ runner: new URL(url, 'http://localhost').searchParams.get('runner'), skills, problems: [], source: 'live' }) : '[]'
     return Promise.resolve(
       new Response(body, { status: 200, headers: { 'content-type': 'application/json' } }),
     )
@@ -67,8 +66,9 @@ function stubSkillsFetch(uiState: Record<string, unknown> | null = {}) {
 function renderComposer(
   props: Partial<ComposerProps> = {},
   uiState: Record<string, unknown> | null = {},
+  skills: Skill[] = SKILLS,
 ) {
-  const { fetchMock, uiStatePuts } = stubSkillsFetch(uiState)
+  const { fetchMock, uiStatePuts } = stubSkillsFetch(uiState, skills)
   const onSubmit = vi.fn(() => Promise.resolve({}))
   render(
     <QueryClientProvider client={createQueryClient()}>
@@ -427,7 +427,7 @@ describe('/ skills autocomplete (#380)', () => {
   it('accepts a skill with Tab while Shift+Tab leaves the draft unchanged', async () => {
     const { textarea, onSubmit } = renderComposer()
     type(textarea, '/om-fix')
-    await screen.findByText('Fix an issue')
+    await screen.findByText(/Fix an issue/)
     expect(fireEvent.keyDown(textarea, { key: 'Tab', shiftKey: true })).toBe(true)
     expect(textarea.value).toBe('/om-fix')
     expect(fireEvent.keyDown(textarea, { key: 'Tab' })).toBe(false)
@@ -439,7 +439,7 @@ describe('/ skills autocomplete (#380)', () => {
   it('opens at a word boundary, fetches skills lazily, lists project skills first and bold', async () => {
     const { fetchMock, textarea } = renderComposer()
     // No `/` yet — no skills fetch.
-    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/api/v1/skills'))).toHaveLength(0)
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/api/v1/runner-skills?runner=claude'))).toHaveLength(0)
 
     type(textarea, 'please /')
     const items = await screen.findAllByText(/om-fix|om-review|global-deploy/)
@@ -1205,4 +1205,31 @@ describe('session control layout', () => {
     expect(slot).not.toBeNull()
     expect(slot!.textContent).toBe('sonnet')
   })
+})
+
+it('lists the step runner/account and inserts its id while displaying its name', async () => {
+  const { textarea, fetchMock } = renderComposer({ skillRunner: 'codex', skillAccount: 'work' }, {}, [
+    { id: 'plugin:check', name: 'Check', description: 'Check this change', path: '/repo/check/SKILL.md' },
+  ])
+  type(textarea, '/Check')
+  await screen.findByText(/Check this change/)
+  expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/v1/runner-skills?runner=codex&account=work')).toBe(true)
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('/plugin:check ')
+})
+
+it('offers one slash completion per id, explains every duplicate path and inserts the typed id', async () => {
+  const { textarea } = renderComposer({}, {}, [
+    { id: 'plugin:check', name: 'Check', path: '/a/SKILL.md', scope: 'repo' },
+    { id: 'plugin:check', name: 'Check', path: '/b/SKILL.md', scope: 'user' },
+  ])
+  type(textarea, '/plugin:check')
+  await screen.findByText(/Runner scope picks the copy/)
+  const choices = document.querySelectorAll('[data-slot="composer-menu-item"]')
+  expect(choices).toHaveLength(1)
+  expect(choices[0]?.textContent).toContain('/a/SKILL.md')
+  expect(choices[0]?.textContent).toContain('/b/SKILL.md')
+  expect(choices[0]?.textContent).toContain('task skill picker')
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('/plugin:check ')
 })

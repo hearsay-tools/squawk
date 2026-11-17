@@ -1,8 +1,9 @@
+import { writeMockSkills, refreshMockSkills } from './runner-skills-fixture'
 import { projectPaths } from '../../cezar/src/project-paths.ts'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { waitForSettledSample } from './visual-ready'
+import { clickInView, waitForSettledSample } from './visual-ready'
 import { parse } from 'yaml'
 
 import { AgentBrowser, readTestEnv, servedRoot } from './agent-browser'
@@ -12,7 +13,7 @@ import { contrastSampleExpression, focusWithKeyboard, type ContrastSample } from
  * The workflow builder (R6 Step 1.6) end-to-end against the shared dry-run environment.
  *
  * Reachability: fully reachable. The server discovers skills fresh on every GET, so the suite
- * seeds two real project skills into this worktree's `.ai/skills/` (removed in afterAll) and
+ * supplies two skills through the mock runner list and
  * builds a small workflow from them: palette → canvas adds, the YAML preview, Save (a real
  * file lands in `.ai/cezar/workflows/`, read back and parsed here), keyboard reorder through
  * dnd-kit's defaults, Import through the server's `/api/v1/workflows/parse`, and the 8-step
@@ -25,7 +26,6 @@ const sessionId = `e2e-workflows-${process.pid}`
 const DESKTOP = { width: 1440, height: 900 }
 
 const repoRoot = servedRoot()
-const skillsDir = resolve(repoRoot, '.ai/skills')
 const ALPHA = 'e2e-wb-alpha'
 const BETA = 'e2e-wb-beta'
 const FLOW = 'e2e-wb-flow'
@@ -34,34 +34,25 @@ const presentationArtifacts = resolve(artifactsDir, 'workflow-editor-presentatio
 
 let browser: AgentBrowser
 let baseUrl: string
-let createdSkillsDir = false
+let restoreSkills: (() => void) | undefined
 
-beforeAll(() => {
+beforeAll(async () => {
   baseUrl = readTestEnv().baseUrl
   // A crashed earlier run may have left the saved flow behind — Save would then 409.
   rmSync(savedFlowPath, { force: true })
-  createdSkillsDir = !existsSync(skillsDir)
-  mkdirSync(skillsDir, { recursive: true })
   mkdirSync(presentationArtifacts, { recursive: true })
-  writeFileSync(
-    resolve(skillsDir, `${ALPHA}.md`),
-    `---\nname: ${ALPHA}\ndescription: Fix the issue, verify the regression, and leave a concise review note for the next person.\n---\n\nDo the alpha thing.\n`,
-    'utf8',
-  )
-  writeFileSync(
-    resolve(skillsDir, `${BETA}.md`),
-    `---\nname: ${BETA}\ndescription: Second e2e-seeded skill\n---\n\nDo the beta thing.\n`,
-    'utf8',
-  )
+  restoreSkills = writeMockSkills(repoRoot, [
+    { name: ALPHA, description: 'Fix the issue, verify the regression, and leave a concise review note for the next person.', scope: 'repo' },
+    { name: BETA, description: 'Second e2e-seeded skill', scope: 'repo' },
+  ])
+  await refreshMockSkills(baseUrl)
   browser = AgentBrowser.open(sessionId)
   browser.setViewport(DESKTOP.width, DESKTOP.height)
 })
 
-afterAll(() => {
-  // Never leave test skills or test workflow files in a developer's repo.
-  rmSync(resolve(skillsDir, `${ALPHA}.md`), { force: true })
-  rmSync(resolve(skillsDir, `${BETA}.md`), { force: true })
-  if (createdSkillsDir) rmSync(skillsDir, { recursive: true, force: true })
+afterAll(async () => {
+  restoreSkills?.()
+  await refreshMockSkills(baseUrl)
   rmSync(savedFlowPath, { force: true })
   browser?.close()
 })
@@ -81,7 +72,7 @@ function prepareWorkflow(skills: string[], saved = false): void {
   openEmptyWorkflow()
   for (const skill of skills) browser.click(addButton(skill))
   browser.waitForFunction(`${stepIdsJs} === '${skills.join(',')}'`)
-  browser.click('[data-slot="wb-yaml-toggle"]')
+  clickInView(browser, '[data-slot="wb-yaml-toggle"]')
   if (!saved) return
   rmSync(savedFlowPath, { force: true })
   browser.fill('[data-slot="wb-name"]', FLOW)
@@ -103,7 +94,7 @@ function importWorkflow(): void {
     '      max: 2',
   ].join('\n')
   openEmptyWorkflow()
-  browser.click('[data-slot="wb-yaml-toggle"]')
+  clickInView(browser, '[data-slot="wb-yaml-toggle"]')
   browser.click('[data-slot="wb-import"]')
   browser.fill('[data-slot="wb-import-text"]', pasted)
   // The expanded import card can place its actions below the nested page viewport.
@@ -127,7 +118,7 @@ describe('workflow builder against the live dry-run server', () => {
     browser.waitForFunction(`${stepIdsJs} === '${ALPHA},${BETA}'`)
     expect(browser.text('[data-slot="wb-count"]')).toBe('2 skills')
 
-    browser.click('[data-slot="wb-yaml-toggle"]') // The portable source is disclosed on demand.
+    clickInView(browser, '[data-slot="wb-yaml-toggle"]') // The portable source is disclosed on demand.
 
     // The preview speaks the portable compact form for a pure skill stack (spec 012).
     const yaml = browser.text('[data-slot="wb-yaml"]')

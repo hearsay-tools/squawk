@@ -1,5 +1,6 @@
+import { writeMockSkills } from './runner-skills-fixture'
 import { execFileSync, type ChildProcess } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -37,32 +38,12 @@ beforeAll(async () => {
   git('add', '.')
   git('commit', '-qm', 'init')
 
-  // Skills chosen so the SERVER order (`auto-review-pr`, `review`, `ship` — the directory
-  // listing) is the inverse of the desired MATCH order for the query "review": the exact-name
-  // `review` must jump to the top past `auto-review-pr`. An unranked list would leave it last.
-  mkdirSync(join(dataRoot, '.ai/skills'), { recursive: true })
-  writeFileSync(
-    join(dataRoot, '.ai/skills/auto-review-pr.md'),
-    // These tokens match only auto-review-pr among our fixture skills. Global skills
-    // may also fuzzy-match them, so assertions below scope membership to the fixture.
-    '---\ndescription: Open and merge a pull request zebratoken quokkatoken\n---\n\nReview and merge.\n',
-    'utf8',
-  )
-  writeFileSync(
-    join(dataRoot, '.ai/skills/review.md'),
-    '---\ndescription: The exact match target\n---\n\nJust review.\n',
-    'utf8',
-  )
-  writeFileSync(
-    join(dataRoot, '.ai/skills/ship.md'),
-    '---\ndescription: Deploy the build\n---\n\nShip it.\n',
-    'utf8',
-  )
-
-  for (let i = 0; i < 24; i += 1) {
-    const name = `qz163browse-${String(i).padStart(2, '0')}`
-    writeFileSync(join(dataRoot, `.ai/skills/${name}.md`), `---\ndescription: Browse fixture ${i}\n---\n\nTest skill.\n`)
-  }
+  writeMockSkills(dataRoot, [
+    { name: 'auto-review-pr', description: 'Open and merge a pull request zebratoken quokkatoken', scope: 'repo' },
+    { name: 'review', description: 'The exact match target', scope: 'repo' },
+    { name: 'ship', description: 'Deploy the build', scope: 'repo' },
+    ...Array.from({ length: 24 }, (_, i) => ({ name: `qz163browse-${String(i).padStart(2, '0')}`, description: `Browse fixture ${i}`, scope: 'repo' })),
+  ])
 
   server = spawnFixtureServer([squawkCli, 'serve', '--repo', dataRoot, '--port', '0', '--no-open'],
     { env: fixtureServeEnv(dataRoot), stdio: 'ignore' },

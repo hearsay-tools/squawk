@@ -1,3 +1,4 @@
+import type { RunnerSkill as Skill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest'
@@ -5,7 +6,6 @@ import { describe, expect, it } from 'vitest'
 import type {
   BackendCheck,
   RunnerModelCatalogResponse,
-  Skill,
   WorkflowDef,
 } from '@open-mercato/cezar-api-client'
 
@@ -31,11 +31,11 @@ import {
 
 const check = (name: BackendCheck['name'], available: boolean): BackendCheck => ({ name, available })
 
-const skill = (name: string, source: Skill['source'] = 'ai'): Skill => ({
+const skill = (name: string, scope: Skill['scope'] = 'repo'): Skill => ({
+  id: name,
   name,
-  body: '',
   path: `/skills/${name}.md`,
-  source,
+  scope,
 })
 
 const workflow = (name: string): WorkflowDef => ({ name, source: 'built-in', steps: [] })
@@ -273,7 +273,7 @@ describe('effort option resolution (#55)', () => {
 })
 
 describe('resolveSource (the draft pick, validated — no cold default)', () => {
-  const skills = [skill('om-fix'), skill('deploy', 'global')]
+  const skills = [skill('om-fix'), skill('deploy', 'user')]
   const workflows = [workflow('quick-task'), workflow('fix-and-verify')]
 
   it('keeps a pick the catalog still has', () => {

@@ -2,15 +2,15 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 
 import { useProjectScope } from '@/api/project-scope-context'
-import { useSkills, useUiState, useWorkflows } from '@/api/queries'
-import type { EnginePick } from '@/components/engine-pills'
-import { orderSkillsByUsage } from '@/lib/skills'
+import { useRunnerSkills, useUiState, useWorkflows } from '@/api/queries'
+import { useResolvedEngine, type EnginePick } from '@/components/engine-pills'
+import { orderSkillsByUsage, type PickedSkill } from '@/lib/skills'
 
 import { readFollowupSelection, writeFollowupSelection } from './hand-to-agent-draft'
 
 interface HandToAgentState {
   workflow: string | null
-  selectedSkills: readonly string[]
+  selectedSkills: readonly PickedSkill[]
   engine: EnginePick
   queued: ReadonlyMap<string, string>
 }
@@ -55,7 +55,8 @@ export function useHandToAgentState() {
   const { snapshot, subscribe, update } = session
   const state = useSyncExternalStore(subscribe, snapshot, snapshot)
   const workflows = useWorkflows()
-  const skills = useSkills()
+  const resolved = useResolvedEngine(state.engine)
+  const skills = useRunnerSkills(resolved.runner, resolved.account)
   const uiState = useUiState()
   const workflowDefs = workflows.data?.workflows
   useEffect(() => {
@@ -72,8 +73,9 @@ export function useHandToAgentState() {
     ...state,
     workflows,
     skillList,
+    skillsUnchecked: skills.unchecked,
     setWorkflow: (workflow: string | null) => update({ workflow }),
-    setSelectedSkills: (selectedSkills: readonly string[]) => update({ selectedSkills }),
+    setSelectedSkills: (selectedSkills: readonly PickedSkill[]) => update({ selectedSkills }),
     setEngine: (engine: EnginePick) => update({ engine }),
     onQueued: (url: string, runId: string) => update({ queued: new Map(snapshot().queued).set(url, runId) }),
   }

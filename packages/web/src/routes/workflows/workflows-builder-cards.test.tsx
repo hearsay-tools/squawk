@@ -1,12 +1,13 @@
+import type { RunnerSkill as Skill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { Skill, WorkflowStepDef } from '@open-mercato/cezar-api-client'
+import type { WorkflowStepDef } from '@open-mercato/cezar-api-client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { StepCardBody, WbDragPreview } from './workflows-builder-sections'
 
 const skills: Skill[] = [
-  { name: 'other', description: 'Other skill', path: '.ai/skills/other.md', body: '', source: 'ai' },
-  { name: 'check', description: 'Check the result', path: '.ai/skills/check.md', body: '', source: 'ai' },
+  { id: 'other', name: 'other', description: 'Other skill', path: '.ai/skills/other.md', scope: 'repo' },
+  { id: 'check', name: 'check', description: 'Check the result', path: '.ai/skills/check.md', scope: 'repo' },
 ]
 
 afterEach(cleanup)
@@ -30,11 +31,11 @@ describe('workflow step summaries', () => {
     expect(screen.queryByText('unknown')).toBeNull()
   })
 
-  it('marks a missing skill and explains how its plain prompt runs', () => {
+  it('marks an unlisted skill and explains the step-open check', () => {
     render(<StepCardBody step={{ id: 's', skill: 'missing' }} index={0} skills={skills} />)
     expect(screen.getByText('missing')).toBeTruthy()
     expect(screen.getByText('unknown')).toBeTruthy()
-    expect(screen.getByText(/plain prompt/)).toBeTruthy()
+    expect(screen.getByText(/Step open will check the skill id/)).toBeTruthy()
   })
 
   it('leaves an empty prompt step without a summary or unknown badge', () => {

@@ -1,4 +1,4 @@
-import { skillSchema } from '@open-mercato/cezar-api-client/contract/skills'
+import type { RunnerSkill as Skill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import {
   RUN_STATUS,
   WAIT_KIND,
@@ -19,7 +19,6 @@ import type {
   ProjectListEntry,
   RunIndexEntry,
   RunRecord, RunSummary,
-  Skill,
 } from '@open-mercato/cezar-api-client'
 import {
   CommandPalette,
@@ -83,8 +82,8 @@ function run(overrides: Partial<RunRecord> & { id: string; title: string }): Run
   })
 }
 
-function skill(overrides: Partial<Skill> & { name: string; source: Skill['source'] }): Skill {
-  return { body: '', path: `/skills/${overrides.source}/${overrides.name}.md`, ...overrides }
+function skill(overrides: Partial<Skill> & { name: string; scope: Skill['scope'] }): Skill {
+  return { id: overrides.name, path: `/skills/${overrides.scope}/${overrides.name}.md`, ...overrides }
 }
 
 function indexed(
@@ -177,7 +176,7 @@ function renderPalette({
   if (theme) localStorage.setItem(THEME_STORAGE_KEY, theme)
   serve({
     '/api/v1/run-summaries': runs,
-    '/api/v1/skills': skills,
+    '/api/v1/runner-skills?runner=claude': { runner: 'claude', skills, problems: [], source: 'live' },
     '/api/v1/health': health(forge, automations),
     '/api/v1/ui-state': uiState,
     '/api/v1/projects': { projects, bootProject: projects[0]?.id ?? 'default', projectsDir: '/repos' },
@@ -262,9 +261,9 @@ describe('opening and closing', () => {
 
     openWith({ metaKey: true })
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await waitFor(() => expect(fetchMock.mock.calls.map((call) => String(call[0]))).toContain('/api/v1/runner-skills?runner=claude'))
     const paths = fetchMock.mock.calls.map((call) => String(call[0]))
-    expect(paths).toContain('/api/v1/skills')
+    expect(paths).toContain('/api/v1/runner-skills?runner=claude')
   })
 })
 
@@ -830,7 +829,7 @@ describe('searching', () => {
     // so the skill scores higher and its group has to come first.
     renderPalette({
       runs: [run({ id: 'r-plan', title: 'Plan the deploy rollout' })],
-      skills: [skill({ name: 'deploy', source: 'ai' })],
+      skills: [skill({ id: 'deploy', name: 'deploy', scope: 'repo' })],
     })
     openWith({ metaKey: true })
     await screen.findByText('Plan the deploy rollout')
@@ -845,7 +844,7 @@ describe('searching', () => {
   it('keeps the source order of the groups with an empty query', async () => {
     renderPalette({
       runs: [run({ id: 'r-plan', title: 'Plan the deploy rollout' })],
-      skills: [skill({ name: 'deploy', source: 'ai' })],
+      skills: [skill({ id: 'deploy', name: 'deploy', scope: 'repo' })],
     })
     openWith({ metaKey: true })
     await screen.findByText('deploy')
@@ -1023,8 +1022,8 @@ describe('Actions group', () => {
 describe('Skills group', () => {
   it('finds a skill by description when its name does not match', async () => {
     renderPalette({ skills: [
-      skill({ name: 'release', source: 'global', description: 'Publish packages' }),
-      skill({ name: 'review', source: 'agents', description: 'Inspect changes' }),
+      skill({ id: 'release', name: 'release', scope: 'user', description: 'Publish packages' }),
+      skill({ id: 'review', name: 'review', scope: 'repo', description: 'Inspect changes' }),
     ] })
     openWith({ metaKey: true })
     await screen.findByRole('option', { name: /release.*Publish packages/ })
@@ -1036,11 +1035,11 @@ describe('Skills group', () => {
   })
 
   const MIXED: Skill[] = [
-    skill({ name: 'global-deploy', source: 'global', description: 'Deploy from anywhere' }),
-    skill({ name: 'project-review', source: 'agents', description: 'Review the diff' }),
-    skill({ name: 'team-release', source: 'team' }),
-    skill({ name: 'project-fix', source: 'ai' }),
-    skill({ name: 'project-plan', source: skillSchema.shape.source.enum.cezar }),
+    skill({ id: 'global-deploy', name: 'global-deploy', scope: 'user', description: 'Deploy from anywhere' }),
+    skill({ id: 'project-review', name: 'project-review', scope: 'repo', description: 'Review the diff' }),
+    skill({ id: 'team-release', name: 'team-release', scope: 'repo' }),
+    skill({ id: 'project-fix', name: 'project-fix', scope: 'repo' }),
+    skill({ id: 'project-plan', name: 'project-plan', scope: 'repo' }),
   ]
 
   it('orders local and team project skills before global ones, stably (#377/#555)', async () => {
@@ -1076,7 +1075,7 @@ describe('Skills group', () => {
 
     fireEvent.click(document.querySelector('[data-skill="project-review"]') as HTMLElement)
 
-    expect(location()).toBe('/new?skill=project-review')
+    expect(location()).toBe('/new?skill=project-review&skillPath='+encodeURIComponent('/skills/repo/project-review.md')+'&runner=claude')
     await waitFor(() => expect(dialog()).toBeNull())
   })
 })
@@ -1084,13 +1083,13 @@ describe('Skills group', () => {
 describe('the pure ordering helpers', () => {
   it('orderSkills puts every project source before every non-project one', () => {
     const ordered = orderSkills([
-      skill({ name: 'g', source: 'global' }),
-      skill({ name: 't', source: 'team' }),
-      skill({ name: 'a', source: 'agents' }),
-      skill({ name: 'c', source: skillSchema.shape.source.enum.cezar }),
-      skill({ name: 'i', source: 'ai' }),
+      skill({ id: 'g', name: 'g', scope: 'user' }),
+      skill({ id: 't', name: 't', scope: 'repo' }),
+      skill({ id: 'a', name: 'a', scope: 'repo' }),
+      skill({ id: 'c', name: 'c', scope: 'repo' }),
+      skill({ id: 'i', name: 'i', scope: 'repo' }),
     ])
-    expect(ordered.map((entry) => entry.source)).toEqual(['team', 'agents', 'cezar', 'ai', 'global'])
+    expect(ordered.map((entry) => entry.scope)).toEqual(['repo', 'repo', 'repo', 'repo', 'user'])
   })
 
   it('orderRuns sorts newest first without mutating its input', () => {
@@ -1396,4 +1395,32 @@ describe('server search past the window', () => {
     fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'acme-org' } })
     await waitFor(() => expect(document.querySelector('[data-slot="palette-task"][data-run-id="by-url"]')).not.toBeNull())
   })
+})
+
+it('offers no unchecked skill while its list is pending or live', async () => {
+  renderPalette()
+  const fallback = fetchMock.getMockImplementation()!
+  let resolveList!: (response: Response) => void
+  const list = new Promise<Response>(resolve => { resolveList = resolve })
+  fetchMock.mockImplementation((input, init) => String(input).includes('/runner-skills?') ? list : fallback(input, init))
+  openWith({ metaKey: true })
+  fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'unmatched' } })
+  await waitFor(() => expect(fetchMock.mock.calls.some(call => String(call[0]).includes('/runner-skills?'))).toBe(true))
+  expect(screen.queryByText(/Use skill id/)).toBeNull()
+  await act(async () => resolveList(new Response(JSON.stringify({ runner: 'claude', skills: [{ id: 'known', name: 'Known skill' }], problems: [], source: 'live' }), { headers: { 'content-type': 'application/json' } })))
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } })
+  await screen.findByText('Known skill')
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'unmatched' } })
+  expect(screen.queryByText(/Use skill id/)).toBeNull()
+})
+
+it.each(['unavailable', 'failed'])('offers a typed skill id only when the list is %s', async (state) => {
+  renderPalette({ extraRoutes: { '/api/v1/runner-skills?runner=claude': { runner: 'claude', skills: [], problems: [], source: 'unavailable' } } })
+  if (state === 'failed') {
+    const fallback = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((input, init) => String(input).includes('/runner-skills?') ? Promise.reject(new Error('offline')) : fallback(input, init))
+  }
+  openWith({ metaKey: true })
+  fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'unmatched' } })
+  await screen.findByText('Use skill id “unmatched” (unchecked)')
 })

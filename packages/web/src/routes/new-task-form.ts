@@ -1,3 +1,4 @@
+import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { runnerDiscoversModels } from '@open-mercato/cezar-api-client/contract/workspace'
 import { RUNNER_COCKPIT_FACTS, runnerModelListName } from '@open-mercato/cezar-api-client/contract/runner-facts'
 import type {
@@ -7,7 +8,6 @@ import type {
   AttachmentInput,
   Runner,
   RunnerModelCatalogResponse,
-  Skill,
   UiState,
   WorkflowDef,
 } from '@open-mercato/cezar-api-client'
@@ -22,6 +22,11 @@ import type {
 /** What the composer runs: a named workflow or a single skill. The same shape the server's
  *  `ui-state.json` stores as `lastTask`, so persistence needs no mapping. */
 export type TaskSource = NonNullable<UiState['lastTask']>
+
+/** Browser draft only. Server ui-state deliberately stores the id alone. */
+export type DraftTaskSource = { source: 'workflow'; ref: string } | {
+  source: 'skill'; ref: string; path?: string; typed?: true
+}
 
 /** The zero-config built-in: one agent step that runs the prompt. It is what a task with NO
  *  source picked runs as, which is why the composer's picker does not also offer it as a
@@ -251,12 +256,12 @@ export function resolveModel(
 }
 
 export function sourceExists(
-  source: TaskSource,
-  skills: readonly Skill[],
+  source: DraftTaskSource,
+  skills: readonly RunnerSkill[],
   workflows: readonly WorkflowDef[],
 ): boolean {
   return source.source === 'skill'
-    ? skills.some((s) => s.name === source.ref)
+    ? skills.some((s) => s.id === source.ref && (source.path === undefined || s.path === source.path))
     : workflows.some((w) => w.name === source.ref)
 }
 
@@ -279,10 +284,12 @@ export function sourceExists(
  * The existence check stays: a skill deleted since it was drafted must not stay in the pill.
  */
 export function resolveSource(
-  candidate: TaskSource | null | undefined,
-  skills: readonly Skill[],
+  candidate: DraftTaskSource | null | undefined,
+  skills: readonly RunnerSkill[],
   workflows: readonly WorkflowDef[],
-): TaskSource | null {
+  unavailable = false,
+): DraftTaskSource | null {
+  if (candidate?.source === 'skill' && (unavailable || candidate.typed)) return candidate
   return candidate && sourceExists(candidate, skills, workflows) ? candidate : null
 }
 
@@ -302,7 +309,7 @@ export function resolveSource(
 export function buildCreateRunBody(opts: {
   task: string
   /** `null` — nothing picked — runs the built-in `quick-task`. */
-  source: TaskSource | null
+  source: DraftTaskSource | null
   model: string
   /** Native coding-agent settings stay visible, but a locked model is never a request override. */
   modelsLocked?: boolean
@@ -348,7 +355,7 @@ export function buildCreateRunBody(opts: {
   return {
     task,
     ...(source?.source === 'skill'
-      ? { steps: [{ id: 'task', name: source.ref, skill: source.ref, prompt: '{{task}}' }] }
+      ? { steps: [{ id: 'task', name: source.ref, skill: source.ref, ...(source.path !== undefined ? { skillPath: source.path } : {}), prompt: '{{task}}' }] }
       : { workflow: source?.ref ?? QUICK_TASK }),
     model: modelsLocked ? undefined : model || undefined,
     effort: modelsLocked ? undefined : effort || undefined,
@@ -388,7 +395,7 @@ export function buildAutomationTask(
   opts: Parameters<typeof buildCreateRunBody>[0],
 ): Omit<CreateRunInput, 'task' | 'images'> & { prompt: string } {
   const { task, images: _images, ...body } = buildCreateRunBody(opts)
-  return { prompt: task, ...body }
+  return { prompt: task, ...body, ...(body.steps ? { steps: body.steps.map(({ skillPath: _path, ...step }) => step) } : {}) }
 }
 
 /** Open the newly created task. */

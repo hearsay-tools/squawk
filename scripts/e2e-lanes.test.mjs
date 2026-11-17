@@ -137,6 +137,10 @@ test('CLI exits nonzero when the full local suite skips for a missing browser', 
   const { repo } = fixture(t);
   writeFileSync(join(repo, '.ai/scripts/build-e2e.sh'), '#!/bin/sh\nexit 0\n');
   cpSync(new URL('../.ai/scripts/e2e-catalogs.mjs', import.meta.url), join(repo, '.ai/scripts/e2e-catalogs.mjs'));
+  mkdirSync(join(repo, 'packages/cezar/scripts'), { recursive: true });
+  for (const file of ['mock-skill-fixtures.mjs', 'mock-skill-list-data.mjs']) {
+    cpSync(new URL(`../packages/cezar/scripts/${file}`, import.meta.url), join(repo, 'packages/cezar/scripts', file));
+  }
   mkdirSync(join(repo, 'packages/web/e2e/fixtures'), { recursive: true });
   cpSync(new URL('../packages/web/e2e/fixtures/catalogs', import.meta.url), join(repo, 'packages/web/e2e/fixtures/catalogs'), { recursive: true });
   writeFileSync(join(repo, '.ai/scripts/e2e-lanes.mjs'), readFileSync(new URL('../.ai/scripts/e2e-lanes.mjs', import.meta.url)));
@@ -623,8 +627,10 @@ function catalogFiles(root) {
 }
 
 function assertFixedCatalogs(root) {
+  const list = JSON.parse(readFileSync(join(root, '.mock-runner-skills.json'), 'utf8'));
+  assert.deepEqual(list.codex.result.data[0].skills.map(skill => skill.name), ['lint-fix', 'spec-writer']);
   for (const relative of PROJECT_CATALOGS) {
-    const source = relative === '.ai/skills' ? 'skills' : relative === '.ai/cezar/workflows' ? 'workflows' : undefined;
+    const source = relative === '.ai/cezar/workflows' ? 'workflows' : undefined;
     assert.deepEqual(catalogFiles(join(root, relative)), source ? catalogFiles(new URL(source, catalogFixtures).pathname) : {}, relative);
   }
 }
@@ -653,6 +659,7 @@ test('served prepare and sync replace checkout skills and workflows with fixed c
   writeFileSync(join(repo, '.ai/skills/dummy-1.md'), 'edited checkout skill\n');
   writeFileSync(join(repo, '.ai/skills/extra.md'), 'untracked checkout skill\n');
   writeFileSync(join(repo, '.ai/cezar/workflows/extra.yaml'), 'name: extra\nskills: [dummy-1]\n');
+  mkdirSync(join(target, '.ai/skills'), { recursive: true });
   writeFileSync(join(target, '.ai/skills/stale.md'), 'served-only skill\n');
   writeFileSync(join(repo, 'kept.txt'), 'current source edit\n');
   const synced = run('--sync', repo, target);

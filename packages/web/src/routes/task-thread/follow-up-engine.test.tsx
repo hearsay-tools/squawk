@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
+import { useRunnerSkills } from '@/api/queries'
 import { setApiScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 import type {
   AgentProfilesResponse,
@@ -96,6 +97,11 @@ function serve(
   requests = []
   const json = (payload: unknown, status = 200) =>
     new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } })
+  const reads = new Map<string, unknown>([
+    ['/api/v1/health', health],
+    ['/api/v1/run-summaries', []],
+    ['/api/v1/repo', { info: { root: '/repo', branch: 'main' } }],
+  ])
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -103,8 +109,14 @@ function serve(
       const method = init.method ?? 'GET'
       const body = init.body ? (JSON.parse(String(init.body)) as unknown) : undefined
       requests.push({ method, url, body })
-      if (url === '/api/v1/health') return json(health)
+      if (method === 'GET' && reads.has(url)) return json(reads.get(url))
       if (url === '/api/v1/providers/status') return json(providerStatus, providerStatusCode)
+      if (url.includes('/runner-skills?')) {
+        if (!health.capabilities.localHandoff && new URL(url, 'http://localhost').searchParams.has('account')) {
+          return json({ error: 'account selection is unavailable' }, 409)
+        }
+        return json({ runner: 'claude', skills: [{ id: 'check', name: 'Check' }], problems: [], source: 'live' })
+      }
       if (url === '/api/v1/models?runner=claude') return json({ runner: 'claude', models: [], source: 'unavailable', stale: false })
       if (url === '/api/v1/models?runner=codex') {
         return typeof modelCatalog === 'function' ? modelCatalog() : json(modelCatalog)
@@ -119,11 +131,8 @@ function serve(
           maxParallel: 1,
           memoryLimitMb: null,
         })
-      if (url === '/api/v1/run-summaries' && method === 'GET') return json([])
       if (url === '/api/v1/workspace/agent-profiles' && method === 'GET')
         return agentProfiles ? json(agentProfiles) : json({ error: 'not found' }, 404)
-      if (url === '/api/v1/repo' && method === 'GET')
-        return json({ info: { root: '/repo', branch: 'main' } })
       if (url.endsWith('/continue') && method === 'POST') return json({ continued: true })
       return json({}, 200)
     }),
@@ -157,6 +166,7 @@ const makeRun = (extra: Partial<ApiRun> = {}): ApiRun => ({
 /** Stands in for the thread composer: the pills, plus a send that submits `draft`. */
 function Harness({ run, draft = '' }: { run: ApiRun; draft?: string }) {
   const action = useContinueAction(run)
+  const skills = useRunnerSkills(action.skillRunner, action.skillAccount, action.available)
   if (!action.available) return null
   if (!action.canContinue) {
     return (
@@ -171,6 +181,8 @@ function Harness({ run, draft = '' }: { run: ApiRun; draft?: string }) {
   return (
     <>
       {action.pills}
+      <output data-slot="skill-context">{action.skillRunner}/{action.skillAccount}</output>
+      <output data-testid="thread-skills">{skills.data?.map((skill) => skill.name).join(', ')}</output>
       {action.startsNewConversation ? <p>Starts a new agent conversation.</p> : null}
       <button type="button" onClick={() => void action.continueWith(draft, [])}>
         Continue
@@ -192,6 +204,21 @@ function renderAction(record: ApiRun, draft = '', entry = '/') {
 
 const continueBody = () =>
   requests.find((r) => r.url.endsWith('/continue') && r.method === 'POST')?.body
+
+it.each(['default', 'work'])('loads hosted thread skills without an explicit %s account', async (profileId) => {
+  serve({ ...HEALTH_MULTI, capabilities: { ...HEALTH_MULTI.capabilities, localHandoff: false } })
+  renderAction(makeRun({ steps: [step({ sessionId: 'sess-1', profileId })] }))
+  await waitFor(() => expect(screen.getByTestId('thread-skills').textContent).toBe('Check'))
+  const urls = requests.filter((request) => request.url.includes('/runner-skills?')).map((request) => request.url)
+  expect(urls).toEqual(['/api/v1/runner-skills?runner=claude'])
+})
+
+it.each(['default', 'work'])('loads local thread skills with the recorded %s account', async (profileId) => {
+  serve()
+  renderAction(makeRun({ steps: [step({ sessionId: 'sess-1', profileId })] }))
+  await waitFor(() => expect(screen.getByTestId('thread-skills').textContent).toBe('Check'))
+  expect(requests.some((request) => request.url === `/api/v1/runner-skills?runner=claude&account=${profileId}`)).toBe(true)
+})
 
 describe('follow-up ContinueAction runner/model selection (#401)', () => {
   it('defaults the effort pill to the run pin and omits it when untouched (#45)', async () => {
@@ -688,6 +715,7 @@ describe('the follow-up runner pill carries the account', () => {
     serveAccounts({ ...ACCOUNTS, selections: { '/repo': { claude: 'klaudiusz' } } })
     renderAction(makeRun({ steps: [step({ sessionId: 'sess-1', profileId: 'default' })] }))
     await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Default'))
+    expect(document.querySelector('[data-slot="skill-context"]')?.textContent).toBe('claude/default')
 
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
     // Untouched, the Continue says nothing about the account — the run keeps the one it is on.
@@ -698,6 +726,7 @@ describe('the follow-up runner pill carries the account', () => {
     serveAccounts()
     renderAction(makeRun({ steps: [step({ sessionId: 'sess-1', profileId: 'klaudiusz' })] }))
     await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Klaudiusz'))
+    expect(document.querySelector('[data-slot="skill-context"]')?.textContent).toBe('claude/klaudiusz')
   })
 
   it('sends the picked account through to /continue', async () => {
@@ -707,6 +736,7 @@ describe('the follow-up runner pill carries the account', () => {
 
     await pickFrom(runnerPill()!, 'Klaudiusz')
     await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Klaudiusz'))
+    expect(document.querySelector('[data-slot="skill-context"]')?.textContent).toBe('claude/klaudiusz')
     expect(screen.getByText('Starts a new agent conversation.')).toBeTruthy()
     expect(continueBody()).toBeUndefined()
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))

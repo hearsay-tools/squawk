@@ -13,7 +13,7 @@ afterEach(() => { cleanup(); localStorage.clear() })
 it('shares live selections and queued links within a project, retaining separate project sessions', () => {
   const client = createQueryClient()
   client.setQueryData(queryKeys.workflows, { workflows: [], issues: [] })
-  client.setQueryData(queryKeys.skills, [])
+  client.setQueryData(queryKeys.runnerSkills('claude'), { runner: 'claude', skills: [], problems: [], source: 'live' })
   client.setQueryData(queryKeys.uiState, {})
   const wrapper = (projectId: string) => ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>
@@ -27,11 +27,11 @@ it('shares live selections and queued links within a project, retaining separate
   const sameProject = renderHook(useHandToAgentState, { wrapper: wrapper('first') })
   const engine = { runner: 'codex' as const, model: 'model-a', effort: null, account: 'work' }
   act(() => {
-    first.result.current.setSelectedSkills(['review'])
+    first.result.current.setSelectedSkills([{ id: 'review' }])
     first.result.current.setEngine(engine)
     first.result.current.onQueued('https://github.com/o/r/issues/7', 'new-run')
   })
-  expect(sameProject.result.current.selectedSkills).toEqual(['review'])
+  expect(sameProject.result.current.selectedSkills).toEqual([{ id: 'review' }])
   expect(sameProject.result.current.engine).toEqual(engine)
   expect(sameProject.result.current.queued.get('https://github.com/o/r/issues/7')).toBe('new-run')
   expect(second.result.current.selectedSkills).toEqual([])
@@ -41,5 +41,5 @@ it('shares live selections and queued links within a project, retaining separate
   sameProject.unmount()
   const restored = renderHook(useHandToAgentState, { wrapper: wrapper('first') })
   expect(restored.result.current.engine).toEqual(engine)
-  expect(restored.result.current.selectedSkills).toEqual(['review'])
+  expect(restored.result.current.selectedSkills).toEqual([{ id: 'review' }])
 })

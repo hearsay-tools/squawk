@@ -5,7 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { workspaceQueryKeys } from '@/api/queries'
 import type { HealthResponse } from '@open-mercato/cezar-api-client'
 import { resetToasts } from '@/components/ui/toaster'
-import { resetDraft, writeDraft } from './new-task-draft'
+import { readDraft, resetDraft, writeDraft } from './new-task-draft'
 
 beforeAll(() => {
   // cmdk scrolls the selected item into view; jsdom has no scrollIntoView.
@@ -532,8 +532,8 @@ describe('picker data flows', () => {
   it('typing an exact skill name ranks that skill first even when a weaker hit is Most used (#255)', async () => {
     serve({
       skills: [
-        { name: 'om-code-review', description: 'Review a PR', body: '', path: '/p/om-code-review.md', source: 'ai' },
-        { name: 'review', description: 'The review skill', body: '', path: '/g/review.md', source: 'global' },
+        { id: 'om-code-review', name: 'om-code-review', description: 'Review a PR', path: '/p/om-code-review.md', scope: 'repo' },
+        { id: 'review', name: 'review', description: 'The review skill', path: '/g/review.md', scope: 'user' },
       ],
       uiState: { skillUsage: { 'om-code-review': 999 } },
     })
@@ -680,7 +680,7 @@ describe('clearing the picked skill or workflow', () => {
   })
 
   it('picking the SELECTED row again clears it — for a skill and for a workflow', async () => {
-    draftSource({ source: 'skill', ref: 'om-fix' })
+    writeDraft({ ...readDraft(), source: { source: 'skill', ref: 'om-fix', path: '/p/om-fix.md' } })
     serve()
     renderNewTask()
     await pillReady('om-fix')

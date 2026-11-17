@@ -1,4 +1,4 @@
-import { HEALTH, HEALTH_MULTI, PROVIDERS_CONNECTED, PROVIDERS_MULTI, PROVIDERS_NONE, SKILLS, WORKFLOWS, WORKSPACE_CONFIG, PLAN, FALLBACK_PLAN, requests, deferredJson, serve, renderNewTask, textarea, sourcePill, location, draftSource, pillReady, startTask, postedBody, planToggle, startToggle, stepIds, planTask } from './new-task.testkit'
+import { HEALTH, HEALTH_MULTI, PROVIDERS_CONNECTED, PROVIDERS_MULTI, PROVIDERS_NONE, WORKFLOWS, WORKSPACE_CONFIG, PLAN, FALLBACK_PLAN, requests, deferredJson, serve, renderNewTask, textarea, sourcePill, location, draftSource, pillReady, startTask, postedBody, planToggle, startToggle, stepIds, planTask } from './new-task.testkit'
 
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -39,16 +39,16 @@ describe('submit', () => {
     { choice: true, configured: false, interactive: false, expected: true },
     { choice: null, configured: false, interactive: false, expected: false },
     { choice: null, configured: true, interactive: false, expected: true },
-    { choice: null, configured: true, interactive: true, expected: false },
-    { choice: false, configured: null, interactive: true, expected: false },
-    { choice: true, configured: null, interactive: true, expected: true },
+    { choice: null, configured: true, expected: true },
+    { choice: false, configured: null, expected: false },
+    { choice: true, configured: null, expected: true },
   ])('/setup choice=$choice policy=$configured interactive=$interactive agrees with its payload', async ({
     choice, configured, interactive, expected,
   }) => {
     writeDraft({ ...readDraft(), autonomous: choice })
     serve({
-      skills: [{ name: 'setup', description: 'Set up SDLC', body: '', path: '/p/setup.md',
-        source: 'ai', ...(interactive ? { interactive: true as const } : {}) }],
+      skills: [{ id: 'setup', name: 'setup', description: 'Set up SDLC', path: '/p/setup.md',
+        scope: 'repo', ...(interactive ? { interactive: true as const } : {}) }],
       workspaceConfig: { ...WORKSPACE_CONFIG, composerDefaults: {
         ...WORKSPACE_CONFIG.composerDefaults, autonomous: configured,
       } },
@@ -311,26 +311,18 @@ describe('submit', () => {
     expect(postedBody()).toMatchObject({ runner: 'codex' })
   })
 
-  it('applies an interactive skill hint to untouched controls while keeping both overridable', async () => {
-    // The composer opens on no source, so an interactive skill only drives the recommendation
-    // once it is the selected one — here from the draft.
+  it('uses workspace defaults without a skill hint and keeps both controls overridable', async () => {
     draftSource({ source: 'skill', ref: 'om-fix' })
-    serve({ skills: [{ ...SKILLS[0]!, interactive: true }, SKILLS[1]!] })
+    serve()
     renderNewTask()
     await pillReady('om-fix')
-
-    const autonomous = document.querySelector(
-      '[data-slot="autonomous-toggle"]',
-    ) as HTMLButtonElement
-    const worktree = document.querySelector('[data-slot="worktree-toggle"]') as HTMLButtonElement
-    expect(autonomous.getAttribute('aria-checked')).toBe('false')
-    expect(worktree.getAttribute('aria-checked')).toBe('false')
-    expect(screen.getByText(/recommends an interactive run in the current checkout/i)).toBeTruthy()
-
-    fireEvent.click(autonomous)
-    fireEvent.click(worktree)
-    expect(autonomous.getAttribute('aria-checked')).toBe('true')
-    expect(worktree.getAttribute('aria-checked')).toBe('true')
+    for (const slot of ['autonomous-toggle', 'worktree-toggle']) {
+      const control = document.querySelector(`[data-slot="${slot}"]`)!
+      expect(control.getAttribute('aria-checked')).toBe('true')
+      fireEvent.click(control)
+      expect(control.getAttribute('aria-checked')).toBe('false')
+    }
+    expect(screen.queryByText(/recommends an interactive run/i)).toBeNull()
   })
 
   it('lets a multi-step workflow opt out and submits worktree:false', async () => {

@@ -1,3 +1,4 @@
+import type { PickedSkill } from './skills'
 import type { CreateRunInput, GithubItem, WorkflowStepDef } from '@open-mercato/cezar-api-client'
 
 /**
@@ -143,18 +144,18 @@ export function skillChainSteps(names: readonly string[]): WorkflowStepDef[] {
 export function githubRunBody(
   item: GithubItem,
   workflow: string | null,
-  skills: readonly string[],
+  skills: readonly PickedSkill[],
   customPrompt?: string,
   backend: Pick<CreateRunInput, 'model' | 'runner' | 'effort' | 'agentProfile'> = {},
 ): CreateRunInput {
   // A custom prompt EXTENDS the item context rather than replacing it (#524) — see
   // `composeGithubTask`. The workflow/skill routing and the #401 `backend` spread are unchanged;
   // only the task text is.
-  if (workflow) return { ...backend, workflow, task: composeGithubTask(item, skills, customPrompt) }
+  if (workflow) return { ...backend, workflow, task: composeGithubTask(item, skills.map((skill) => skill.id), customPrompt) }
   if (skills.length) {
     return {
       ...backend,
-      steps: skillChainSteps(skills),
+      steps: skillChainSteps(skills.map((skill) => skill.id)).map((step, index) => ({ ...step, ...(skills[index]?.path !== undefined ? { skillPath: skills[index].path } : {}) })),
       task: composeGithubTask(item, [], customPrompt),
     }
   }

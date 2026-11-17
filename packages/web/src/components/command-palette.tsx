@@ -1,12 +1,15 @@
+import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
+import type { Runner } from '@open-mercato/cezar-api-client'
+import { newTaskPrefillHref } from '@/routes/new-task-params'
 import { defined } from '@open-mercato/cezar-api-client/contract/defined'
 import { CheckIcon, FolderOpenIcon, LayersIcon, PlusIcon } from '@/components/design-icons'
 import { SunMoonIcon } from '@/components/design-icons'
 import * as React from 'react'
 import { useNavigate as useRouterNavigate } from 'react-router'
-import { useHealth, useProjects, useRuns, useRunsIndex, useRunsSearch, useSkills, useUiState } from '@/api/queries'
+import { useHealth, useProjects, useRuns, useRunsIndex, useRunsSearch, useRunnerSkills, useUiState } from '@/api/queries'
 import { useProjectSwitch } from '@/components/use-project-switch'
 import { scopeTo, useActiveProjectId, useNavigate } from '@/lib/project-router'
-import type { ProjectListEntry, RunIndexEntry, RunSummary, Skill } from '@open-mercato/cezar-api-client'
+import type { ProjectListEntry, RunIndexEntry, RunSummary } from '@open-mercato/cezar-api-client'
 import { visibleNavItems } from '@/components/nav-items'
 import { automationsAvailable } from '@/lib/capabilities'
 import { StatusDot } from '@/components/status-dot'
@@ -149,8 +152,8 @@ const projectMatch = (project: ProjectListEntry): PaletteMatch => ({
 
 /** The path suffix keeps values unique when a project skill shadows a global one of the same
  *  name — both stay selectable. */
-const skillMatch = (skill: Skill): PaletteMatch => ({
-  value: `skill ${skill.name} ${skill.path}`,
+const skillMatch = (skill: RunnerSkill): PaletteMatch => ({
+  value: `skill ${skill.id} ${skill.name} ${skill.path ?? ''}`,
   ...defined({ keywords: skill.description ? [skill.description] : undefined }),
 })
 
@@ -431,7 +434,7 @@ function paletteViews({ multiProject, health }: { multiProject: boolean; health:
  *  group's row. */
 function paletteGroups({
   views, go, goGlobal, orderedProjects, activeProjectId, goProject, otherTasks, searching,
-  taskProjectName, showProjectOnTasks, now, selectTask, orderedSkills, theme, nextTheme, setTheme, close,
+  taskProjectName, showProjectOnTasks, now, selectTask, orderedSkills, skillRunner, theme, nextTheme, setTheme, close,
 }: {
   views: PaletteView[]
   go: (to: string) => void
@@ -445,7 +448,8 @@ function paletteGroups({
   showProjectOnTasks: boolean
   now: number
   selectTask: (task: PaletteTask) => void
-  orderedSkills: Skill[]
+  orderedSkills: RunnerSkill[]
+  skillRunner: Runner
   theme: ReturnType<typeof useTheme>['theme']
   nextTheme: ReturnType<typeof useTheme>['theme']
   setTheme: ReturnType<typeof useTheme>['setTheme']
@@ -560,13 +564,14 @@ function paletteGroups({
         <CommandGroup key="skills" heading="Skills">
           {orderedSkills.map((skill) => (
             <CommandItem
-              key={skill.path}
+              key={JSON.stringify([skill.id, skill.path])}
               {...skillMatch(skill)}
               data-slot="palette-skill"
-              data-skill={skill.name}
-              onSelect={() => go(`/new?skill=${encodeURIComponent(skill.name)}`)}
+              data-skill={skill.id}
+              onSelect={() => go(newTaskPrefillHref({ skill: skill.id, skillPath: skill.path, runner: skillRunner }))}
             >
               <span className="shrink-0 font-medium">{skill.name}</span>
+              {skill.path ? <span className="min-w-0 truncate text-xs">{skill.path}</span> : null}
               {skill.description ? (
                 <span className="min-w-0 flex-1 truncate text-xs text-soft-foreground">{skill.description}</span>
               ) : null}
@@ -672,7 +677,7 @@ function PaletteContent({ close }: { close: () => void }) {
   const { theme, setTheme } = useTheme()
   // Runs are already cached by the sidebar's quick-list; skills fetch here, on first open.
   const runs = useRuns()
-  const skills = useSkills()
+  const skills = useRunnerSkills()
   // The registry is workspace-scoped (not project-scoped), so this is the ONE list the palette
   // can offer everywhere — including global settings, which has no active project at all. The
   // shell already holds this cache entry; opening the palette costs no extra request.
@@ -781,11 +786,19 @@ function PaletteContent({ close }: { close: () => void }) {
     now,
     selectTask,
     orderedSkills,
+    skillRunner: skills.runner,
     theme,
     nextTheme,
     setTheme,
     close,
   })
+
+  if ((skills.isError || skills.list?.source === 'unavailable') && searching) {
+    groups.push({
+      rows: [{ value: search.trim() }],
+      node: <CommandGroup key="unchecked-skill" heading="Skills"><CommandItem value={search.trim()} onSelect={() => go(newTaskPrefillHref({ skill: search.trim(), runner: skills.runner }))}>Use skill id “{search.trim()}” (unchecked)</CommandItem></CommandGroup>,
+    })
+  }
 
   return (
     <>

@@ -1,5 +1,5 @@
 import type { Runner } from '@open-mercato/cezar-api-client'
-import type { TaskSource } from './new-task-form'
+import type { DraftTaskSource as TaskSource } from './new-task-form'
 
 /**
  * The new-task draft store (spec: "Queued form state survives navigation (draft store)").

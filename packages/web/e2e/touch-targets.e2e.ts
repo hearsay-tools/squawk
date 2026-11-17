@@ -1,3 +1,4 @@
+import { writeMockSkills } from './runner-skills-fixture'
 import { execFileSync, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -33,10 +34,9 @@ beforeAll(async () => {
   git('config', 'user.email', 'test@cezar.test')
   git('config', 'user.name', 'Touch test')
   writeFileSync(join(root, 'README.md'), '# Touch fixture\n')
+  writeMockSkills(root, [{ name: 'touch-check', description: 'Verify touch targets', scope: 'repo' }])
   git('add', '.')
   git('commit', '-qm', 'init')
-  mkdirSync(join(root, '.ai/skills'), { recursive: true })
-  writeFileSync(join(root, '.ai/skills/touch-check.md'), '---\ndescription: Verify touch targets\n---\nCheck the UI.\n')
   mkdirSync(join(root, '.ai/cezar/workflows'), { recursive: true })
   writeFileSync(join(root, '.ai/cezar/workflows/touch-flow.yaml'), 'name: touch-flow\nskills:\n  - touch-check\n')
   seedRuns(root, [({

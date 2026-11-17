@@ -1,12 +1,13 @@
+import type { RunnerSkill as Skill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { Skill, WorkflowDef } from '@open-mercato/cezar-api-client'
+import type { WorkflowDef } from '@open-mercato/cezar-api-client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { WB_MAX_STEPS } from '@/lib/workflow-builder'
 import { WbAddStepDialog, WbAside, WbAutoPanel, WbConfirmDialogs, WbImportDialog, WbMetadata } from './workflows-builder-sections'
 
-const skill: Skill = { name: 'check', description: 'Check the result', path: '.ai/skills/check.md', body: '', source: 'ai' }
+const skill: Skill = { id: 'check', name: 'check', description: 'Check the result', path: '.ai/skills/check.md', scope: 'repo' }
 const saved: WorkflowDef = { name: 'saved', source: 'file', path: '.ai/cezar/workflows/saved.yaml', steps: [{ id: 's', skill: 'check' }] }
 
 afterEach(() => {

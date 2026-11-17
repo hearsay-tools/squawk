@@ -544,10 +544,7 @@ describe('the hand-to-agent pickers (#385)', () => {
     // Viewing is read-only: nothing got selected (no chip, no count on the trigger).
     expect(document.querySelectorAll('[data-slot="gh-skill-chip"]')).toHaveLength(0)
     expect(document.querySelector('[data-slot="gh-skills-trigger"]')?.textContent).not.toContain('·')
-    // The escape hatch into the browsable Skills catalog.
-    expect(
-      preview.querySelector('[data-slot="skill-preview-manage"]')?.getAttribute('href'),
-    ).toBe('/skills?skill=om-fix')
+    expect(preview.querySelector('[data-slot="skill-body"]')).toBeNull()
   })
 
   it('multi-keyword search: "fix project" narrows the skills list to matches (#411)', async () => {
@@ -653,8 +650,8 @@ describe('the hand-to-agent run (legacy three-way body)', () => {
       ?.body as { workflow?: string | undefined; steps?: Array<{ id: string; skill: string; prompt: string }> }
     expect(body.workflow).toBeUndefined()
     expect(body.steps).toEqual([
-      { id: 'om-fix', name: 'om-fix', skill: 'om-fix', prompt: '{{task}}' },
-      { id: 'g-review', name: 'g-review', skill: 'g-review', prompt: '{{task}}' },
+      { id: 'om-fix', name: 'om-fix', skill: 'om-fix', skillPath: '/p/om-fix.md', prompt: '{{task}}' },
+      { id: 'g-review', name: 'g-review', skill: 'g-review', skillPath: '/g/g-review.md', prompt: '{{task}}' },
     ])
   })
 
@@ -833,17 +830,17 @@ describe('a remembered pick the catalog no longer has (open-mercato/cezar#408)',
       .toMatchObject({ workflow: 'ship-it' })
   })
 
-  it('a deleted skill is dropped from the chips, the counter AND the POST — never shown but unsent', async () => {
-    writeFollowupSelection({ workflow: null, skills: ['om-fix', 'deleted-skill'] })
+  it('an unlisted id stays unchecked in the chips and the POST', async () => {
+    writeFollowupSelection({ workflow: null, skills: [{ id: 'om-fix' }, { id: 'deleted-skill' }] })
     const sent = stubFetch()
     await openDetail()
 
-    await waitFor(() => expect(document.querySelectorAll('[data-slot="gh-skill-chip"]')).toHaveLength(1))
+    await waitFor(() => expect(document.querySelectorAll('[data-slot="gh-skill-chip"]')).toHaveLength(2))
     expect(
       [...document.querySelectorAll<HTMLElement>('[data-slot="gh-skill-chip"]')].map((chip) => chip.dataset.skill),
-    ).toEqual(['om-fix'])
-    // The counter must agree with the chips and the POST — not report the phantom.
-    expect(document.querySelector('[data-slot="gh-skills-trigger"]')?.textContent).toContain('· 1')
+    ).toEqual(['om-fix', 'deleted-skill'])
+    expect(screen.getByText(/deleted-skill \(unchecked\)/)).toBeTruthy()
+    expect(document.querySelector('[data-slot="gh-skills-trigger"]')?.textContent).toContain('· 2')
 
     fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
     await waitFor(() =>
@@ -852,7 +849,7 @@ describe('a remembered pick the catalog no longer has (open-mercato/cezar#408)',
     const body = sent.find((request) => request.method === 'POST' && request.path === '/api/v1/runs')?.body as {
       steps?: Array<{ skill: string }>
     }
-    expect(body.steps?.map((step) => step.skill)).toEqual(['om-fix'])
+    expect(body.steps?.map((step) => step.skill)).toEqual(['om-fix', 'deleted-skill'])
   })
 })
 
@@ -991,3 +988,52 @@ describe('⌘/Ctrl+Enter submits the follow-up composer (open-mercato/cezar#408 
   })
 })
 
+
+it.each(['unavailable', 'failed'])('keeps typed ids usable in handoff when the runner list is %s', async (source) => {
+  const sent = stubFetch({
+    'GET /api/v1/runner-skills?runner=claude': () => jsonResponse({ runner: 'claude', skills: [], problems: [], source: 'unavailable' }, source === 'failed' ? 500 : 200),
+  })
+  await openDetail()
+  fireEvent.click(await screen.findByRole('button', { name: 'Choose skills' }))
+  fireEvent.change(screen.getByPlaceholderText('search skills…'), { target: { value: 'plugin:unchecked' } })
+  fireEvent.click(await screen.findByText('Use skill id “plugin:unchecked” (unchecked)'))
+  expect(document.querySelector('[data-slot="gh-skill-chips"]')?.textContent).toContain('plugin:unchecked (unchecked)')
+  fireEvent.keyDown(screen.getByPlaceholderText('search skills…'), { key: 'Escape' })
+  await waitForAgentRunEnabled()
+  fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
+  await waitFor(() => expect(postedRun(sent)).toMatchObject({ steps: [{ skill: 'plugin:unchecked' }] }))
+})
+
+it('keeps a missing remembered path visible and blocks click and shortcut starts until it is removed', async () => {
+  writeFollowupSelection({ workflow: null, skills: [{ id: 'om-fix', path: '/gone/SKILL.md' }] })
+  const sent = stubFetch()
+  await openDetail()
+  await screen.findByRole('alert')
+  const chip = screen.getByRole('button', { name: 'Remove skill om-fix · /gone/SKILL.md' })
+  expect(chip.textContent).toContain('(unavailable)')
+  expect((screen.getByRole('button', { name: /Run agent on this issue/ }) as HTMLButtonElement).disabled).toBe(true)
+  await act(async () => { fireEvent.keyDown(promptField(), { key: 'Enter', ctrlKey: true }) })
+  expect(postedRun(sent)).toBeUndefined()
+  expect(readFollowupSelection().skills).toEqual([{ id: 'om-fix', path: '/gone/SKILL.md' }])
+  fireEvent.click(chip)
+  await waitForAgentRunEnabled()
+})
+
+it('labels duplicate-id chips with their paths and removes only the named copy', async () => {
+  writeFollowupSelection({ workflow: null, skills: [{ id: 'plugin:check', path: '/a/SKILL.md' }, { id: 'plugin:check', path: '/b/SKILL.md' }] })
+  const sent = stubFetch({ 'GET /api/v1/runner-skills?runner=claude': () => jsonResponse({
+    runner: 'claude', skills: [
+      { id: 'plugin:check', name: 'Check', path: '/a/SKILL.md' },
+      { id: 'plugin:check', name: 'Check', path: '/b/SKILL.md' },
+    ], problems: [], source: 'live',
+  }) })
+  await openDetail()
+  const first = await screen.findByRole('button', { name: 'Remove skill Check · /a/SKILL.md' })
+  const second = screen.getByRole('button', { name: 'Remove skill Check · /b/SKILL.md' })
+  expect(first.textContent).toContain('/a/SKILL.md')
+  expect(second.textContent).toContain('/b/SKILL.md')
+  fireEvent.click(first)
+  await waitForAgentRunEnabled()
+  fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
+  await waitFor(() => expect(postedRun(sent)).toMatchObject({ steps: [{ skill: 'plugin:check', skillPath: '/b/SKILL.md' }] }))
+})

@@ -1,7 +1,8 @@
+import type { RunnerSkill } from '@open-mercato/cezar-api-client/contract/runner-skills'
 import { useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { useDraggable } from '@dnd-kit/core'
-import type { Skill, WorkflowDef, WorkflowStepDef } from '@open-mercato/cezar-api-client'
+import type { WorkflowDef, WorkflowStepDef } from '@open-mercato/cezar-api-client'
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -351,7 +352,7 @@ export function WbAside({
   onAdd,
   yaml,
 }: {
-  paletteSkills: Skill[]
+  paletteSkills: RunnerSkill[]
   query: string
   onQueryChange: (query: string) => void
   error: string | null
@@ -414,7 +415,7 @@ export function WbDragPreview({
 }: {
   dragging: DragItem | null
   steps: WorkflowStepDef[]
-  skills: readonly Skill[]
+  skills: readonly RunnerSkill[]
 }) {
   if (dragging?.type === 'palette') {
     return (
@@ -457,7 +458,7 @@ export function WbAddStepDialog({
   onOpenChange: (open: boolean) => void
   query: string
   onQueryChange: (query: string) => void
-  matches: Skill[]
+  matches: RunnerSkill[]
   skillsCount: number
   error: string | null
   selectedSkill: string | null
@@ -478,14 +479,15 @@ export function WbAddStepDialog({
         {error !== null ? <p role="alert" className="text-sm text-danger">Could not load skills: {error}</p> : (
           <div role="radiogroup" aria-label="Available skills" className="grid max-h-80 gap-2 overflow-y-auto">
             {matches.map((skill) => (
-              <label key={skill.name} className="flex cursor-pointer items-start gap-3 rounded-lg py-2 has-[:checked]:bg-accent-strong/10 has-[:focus-visible]:outline-2">
-                <input type="radio" name="workflow-add-skill" className="sr-only" value={skill.name} checked={selectedSkill === skill.name} onChange={() => onSelectSkill(skill.name)} />
-                <span className="min-w-0 break-words text-sm"><span className="block">{skill.name}</span><span className="mt-2 block text-xs text-muted-foreground">{skill.description}</span></span>
+              <label key={JSON.stringify([skill.id, skill.path])} className="flex cursor-pointer items-start gap-3 rounded-lg py-2 has-[:checked]:bg-accent-strong/10 has-[:focus-visible]:outline-2">
+                <input type="radio" name="workflow-add-skill" className="sr-only" value={skill.id} checked={selectedSkill === skill.id} onChange={() => onSelectSkill(skill.id)} />
+                <span className="min-w-0 break-words text-sm"><span className="block">{skill.name}</span><span className="mt-2 block text-xs text-muted-foreground">{skill.description}</span>{skill.path ? <span className="block break-all text-xs">{skill.path}</span> : null}</span>
               </label>
             ))}
             {matches.length === 0 ? <p className="text-sm text-muted-foreground">{skillsCount === 0 ? 'No skills available in this project.' : 'No matching skills.'}</p> : null}
           </div>
         )}
+        {query.trim() && !matches.some((skill) => skill.id === query.trim()) ? <Button onClick={() => onSelectSkill(query.trim())}>Use skill id “{query.trim()}” (unchecked)</Button> : null}
         <div className="flex flex-wrap gap-3">
           <Button variant="outline" onClick={onCancel}>Cancel</Button>
           <Button variant="primary" disabled={!selectedSkill || stepsCount >= WB_MAX_STEPS} onClick={() => { if (selectedSkill) onAdd(selectedSkill) }}>Add selected skill</Button>
@@ -580,23 +582,23 @@ function stepCommandSummary(step: WorkflowStepDef): string {
 }
 
 /** A skill step's summary: its specific prompt, else the skill catalog's description. */
-function stepSkillSummary(step: WorkflowStepDef, known: Skill | undefined): string {
+function stepSkillSummary(step: WorkflowStepDef, known: RunnerSkill | undefined): string {
   return (
     stepSpecificPrompt(step) ||
     known?.description ||
-    'Not in this repo or the team skills — the step runs on its plain prompt.'
+    'Not listed by this runner and account. Step open will check the skill id.'
   )
 }
 
 /** The card's summary line: the command, the skill description, or the raw prompt. */
-function stepDescription(step: WorkflowStepDef, known: Skill | undefined): string {
+function stepDescription(step: WorkflowStepDef, known: RunnerSkill | undefined): string {
   if (step.command) return stepCommandSummary(step)
   if (step.skill) return stepSkillSummary(step, known)
   return step.prompt ?? ''
 }
 
 /** The `unknown` badge for a skill step whose skill the catalog does not know. */
-function stepBadge(step: WorkflowStepDef, known: Skill | undefined): 'unknown' | null {
+function stepBadge(step: WorkflowStepDef, known: RunnerSkill | undefined): 'unknown' | null {
   return step.skill && !known ? 'unknown' : null
 }
 
@@ -718,14 +720,14 @@ export function StepCardBody({
 }: {
   step: WorkflowStepDef
   index: number
-  skills: readonly Skill[]
+  skills: readonly RunnerSkill[]
   onRemove?: (() => void) | undefined
   onMoveUp?: (() => void) | undefined
   onMoveDown?: (() => void) | undefined
   gripProps?: Record<string, unknown>
   overlay?: boolean
 }) {
-  const known = skills.find((skill) => skill.name === step.skill)
+  const known = skills.find((skill) => skill.id === step.skill)
   const title = stepTitle(step)
   const description = stepDescription(step, known)
   const badge = stepBadge(step, known)
@@ -768,7 +770,7 @@ function Palette({
   inFlow,
   onAdd,
 }: {
-  skills: readonly Skill[]
+  skills: readonly RunnerSkill[]
   query: string
   error: string | null
   inFlow: ReadonlySet<string>
@@ -786,7 +788,7 @@ function Palette({
     <div data-slot="wb-palette" className="mt-2.5 flex flex-col gap-1">
       {shown.length > 0 ? (
         shown.map((skill) => (
-          <PaletteSkill key={skill.path} skill={skill} inFlow={inFlow.has(skill.name)} onAdd={onAdd} />
+          <PaletteSkill key={JSON.stringify([skill.id, skill.path])} skill={skill} inFlow={inFlow.has(skill.id)} onAdd={onAdd} />
         ))
       ) : (
         <p className="py-1 text-xs leading-relaxed text-soft-foreground">
@@ -804,19 +806,19 @@ function PaletteSkill({
   inFlow,
   onAdd,
 }: {
-  skill: Skill
+  skill: RunnerSkill
   inFlow: boolean
   onAdd: (skill: string) => void
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `palette:${skill.name}`,
-    data: { type: 'palette', skill: skill.name } satisfies DragItem,
+    id: `palette:${JSON.stringify([skill.id, skill.path])}`,
+    data: { type: 'palette', skill: skill.id } satisfies DragItem,
   })
   return (
     <div
       ref={setNodeRef}
       data-slot="wb-skill"
-      data-skill={skill.name}
+      data-skill={skill.id}
       data-in-flow={inFlow || undefined}
       title={skill.description ?? ''}
       className={cn(
@@ -833,13 +835,14 @@ function PaletteSkill({
         )}
       >
         {skill.name}
+        {skill.path ? <span className="block break-all text-xs text-soft-foreground">{skill.path}</span> : null}
       </span>
       <button
         type="button"
         data-slot="wb-skill-add"
         aria-label={`Add ${skill.name} to the flow`}
         title="Add to the flow"
-        onClick={() => onAdd(skill.name)}
+        onClick={() => onAdd(skill.id)}
         className="inline-flex size-11 shrink-0 items-center justify-center rounded-md text-link-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         <PlusIcon aria-hidden="true" className="size-3.5" />

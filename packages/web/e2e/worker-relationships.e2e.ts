@@ -14,6 +14,7 @@ import { spawnFixtureServer, stopFixtureServer, waitForFixtureServer } from './f
 import { AgentBrowser, bootProjectId, squawkCli, fixtureServeEnv } from './agent-browser'
 import { seedTranscript } from './seed-transcript'
 import { largeThreadEvents } from './fixtures/make-large-thread'
+import { writeMockSkills } from './runner-skills-fixture'
 // fixture-server starts: 1
 
 const artifacts = resolve(import.meta.dirname, '../../../.ai/qa/artifacts_e2e')
@@ -41,6 +42,7 @@ beforeAll(async () => {
   root = mkdtempSync(join(tmpdir(), 'cezar-e2e-relationships-'))
   execFileSync('git', ['init', '-q', '-b', 'main', root])
   mkdirSync(join(root, '.ai/cezar/runs'), { recursive: true })
+  writeMockSkills(root, [])
   const runs = [
     record(parentId, 'Relationship parent with 32 workers', { delegation: rootMetadata(ids), issueNumber: 751, steps: [{ id: 'task', name: 'Do the task', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0 }] }),
     ...ids.map((id, i) => record(id, `Owned worker ${i + 1}`, { archived: i === 31, delegation: worker(id, parentId, i === 0 ? { destroy: { requestedAt: now, phase: 'incomplete', remaining: ['branch'], error: 'Branch is checked out elsewhere' } } : {}) })),
@@ -73,6 +75,7 @@ beforeAll(async () => {
   try { base = await waitForFixtureServer(server) }
   catch (error) { throw new Error(`${String(error)}\n${diagnostic}`, { cause: error }) }
   project = await bootProjectId(base)
+  expect(await (await fetch(`${base}/api/v1/runner-skills?runner=claude`)).json()).toMatchObject({ source: 'live', skills: [] })
   browser = AgentBrowser.open(`e2e-workers-${process.pid}`)
   browser.setViewport(1440, 900)
 }, 120_000)
@@ -348,8 +351,7 @@ it('global Tasks and cross-project palette keep parked-root status without listi
     if (text.includes('Waiting root fixture')) return null
     return { text, tasks: [...list.querySelectorAll('[data-slot="palette-task"]')].map(el => el.getAttribute('data-run-id')) }
   })()`) as { text: string; tasks: (string | null)[] }
-  expect(workerSearch.text).not.toContain('Owned worker 1')
-  expect(workerSearch.text).not.toContain('Worker')
+  // An unchecked skill action can repeat the search text. Only task results represent runs.
   expect(workerSearch.tasks).toEqual([])
   browser.press('Escape')
   observations.push({ globalTasks: 'waiting on 1 worker without worker rows', palette: 'cross-project index omits workers' })

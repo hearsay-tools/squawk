@@ -1,5 +1,6 @@
+import { writeMockSkills } from './runner-skills-fixture'
 import { execFileSync, type ChildProcess } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, expect, it } from 'vitest'
@@ -21,8 +22,7 @@ beforeAll(async () => {
   git('init', '-q', '-b', 'main')
   git('config', 'user.name', 'Focus fixture')
   git('config', 'user.email', 'focus@cezar.test')
-  mkdirSync(join(root, '.ai/skills'), { recursive: true })
-  writeFileSync(join(root, '.ai/skills/focus-fixture.md'), '---\ndescription: Focus fixture\n---\nReview the change.\n')
+  writeMockSkills(root, [{ name: 'focus-fixture', description: 'Focus fixture', scope: 'repo' }])
   git('add', '.')
   git('commit', '-qm', 'Fixture')
   git('branch', 'feature/a-long-branch-name-that-widens-the-base-branch-search-menu')

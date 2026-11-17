@@ -109,6 +109,9 @@ function makeFixture(withSetsid: boolean): { root: string; path: string } {
   cpSync(join(repoRoot, 'packages/web/e2e/fixtures/catalogs'), join(root, 'packages/web/e2e/fixtures/catalogs'), { recursive: true });
   // The real postbuild bundles the contract; here it only records which dist it was handed.
   mkdirSync(join(root, 'packages/cezar/scripts'), { recursive: true });
+  for (const file of ['mock-skill-fixtures.mjs', 'mock-skill-list-data.mjs']) {
+    copyFileSync(join(repoRoot, 'packages/cezar/scripts', file), join(root, 'packages/cezar/scripts', file));
+  }
   writeFileSync(join(root, 'packages/cezar/scripts/inline-contract.mjs'),
     "import { writeFileSync } from 'node:fs';\nwriteFileSync('.ai/inline-contract-dist', process.argv[2] ?? '(default)');\n");
   writeFileSync(join(root, '.ai/browsers/agent-browser.md'), '# test provider\n');

@@ -1,6 +1,7 @@
+import { writeMockSkills } from './runner-skills-fixture'
 import { projectPaths } from '../../cezar/src/project-paths.ts'
 import { execFileSync, type ChildProcess } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -58,14 +59,7 @@ beforeAll(async () => {
   git('config', 'user.email', 'e2e@cezar.test')
   git('config', 'user.name', 'cezar e2e')
   writeFileSync(join(dataRoot, 'README.md'), '# composer defaults fixture\n', 'utf8')
-  mkdirSync(join(dataRoot, '.ai/skills'), { recursive: true })
-  writeFileSync(
-    join(dataRoot, '.ai/skills/interactive-review.md'),
-    '---\ndescription: Review a proposal with the user\ninteractive: true\n---\n\nAsk questions before writing the review.\n',
-    'utf8',
-  )
-  writeFileSync(join(dataRoot, '.ai/skills/setup.md'),
-    '---\ndescription: Set up SDLC\n---\n\nSet up this project.\n', 'utf8')
+  writeMockSkills(dataRoot, [{ name: 'interactive-review', description: 'Review with the user', scope: 'repo' }, { name: 'setup', description: 'Set up', scope: 'repo' }])
   git('add', '.')
   git('commit', '-qm', 'init')
 

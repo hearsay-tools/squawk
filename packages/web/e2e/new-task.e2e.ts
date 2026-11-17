@@ -1,3 +1,4 @@
+import { writeMockSkills } from './runner-skills-fixture'
 import { execFileSync, type ChildProcess } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -43,6 +44,7 @@ beforeAll(async () => {
   git('config', 'user.email', 'e2e@cezar.test')
   git('config', 'user.name', 'cezar e2e')
   writeFileSync(join(dataRoot, 'README.md'), '# new-task e2e fixture repo\n', 'utf8')
+  writeMockSkills(dataRoot, [{ name: 'lint-fix', description: 'Fix lint findings in the changed files', scope: 'repo' }, { name: 'spec-writer', description: 'Write a feature specification', scope: 'repo' }])
   git('add', '.')
   git('commit', '-qm', 'init')
   git('branch', 'feature/searchable-base')
@@ -50,17 +52,6 @@ beforeAll(async () => {
 
   // TWO project skills, so the spec can prove an actual PICK (not just the default): the
   // picker defaults to the first project skill, then we choose the other one.
-  mkdirSync(join(dataRoot, '.ai/skills'), { recursive: true })
-  writeFileSync(
-    join(dataRoot, '.ai/skills/lint-fix.md'),
-    '---\ndescription: Fix lint findings in the changed files\n---\n\nRun the linter and fix everything it reports.\n',
-    'utf8',
-  )
-  writeFileSync(
-    join(dataRoot, '.ai/skills/spec-writer.md'),
-    '---\ndescription: Draft a feature spec from a one-line idea\n---\n\nWrite the spec.\n',
-    'utf8',
-  )
 
   // One real workflow file, so the picker has a Workflows group to render: the built-in
   // `quick-task` is not a row of its own any more (it IS the "No skill" row), and a fixture with

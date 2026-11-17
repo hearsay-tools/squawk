@@ -92,7 +92,7 @@ function githubResponse(path: string, opts: Stub): Response | undefined {
 function cockpitResponse(path: string, opts: Stub): Response | undefined {
   if (path === '/api/v1/ui-state') return json(opts.uiState ?? {})
   if (path === '/api/v1/workflows') return json({ workflows: [] })
-  if (path === '/api/v1/skills') return json([])
+  if (path === '/api/v1/runner-skills?runner=claude') return json({ runner: 'claude', skills: [], problems: [], source: 'live' })
   if (path === '/api/v1/providers/status') return json({ providers: [] })
   if (path === '/api/v1/health') return json(HEALTH)
   if (path.startsWith('/api/v1/models')) return json({ runner: 'claude', models: [], source: 'unavailable', stale: false })

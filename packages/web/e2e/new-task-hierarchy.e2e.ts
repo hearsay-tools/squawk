@@ -1,5 +1,6 @@
+import { writeMockSkills } from './runner-skills-fixture'
 import { execFileSync, type ChildProcess } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -28,11 +29,10 @@ beforeAll(async () => {
   git('config', 'user.email', 'e2e@cezar.test')
   git('config', 'user.name', 'cezar e2e')
   writeFileSync(join(dataRoot, 'README.md'), '# new-task e2e fixture repo\n', 'utf8')
+  writeMockSkills(dataRoot, [{ name: 'lint-fix', description: 'Fix lint findings', scope: 'repo' }])
   git('add', '.')
   git('commit', '-qm', 'init')
 
-  mkdirSync(join(dataRoot, '.ai/skills'), { recursive: true })
-  writeFileSync(join(dataRoot, '.ai/skills/lint-fix.md'), '---\ndescription: Fix lint findings\n---\n\nFix lint findings.\n')
 
   server = spawnFixtureServer([squawkCli, 'serve', '--repo', dataRoot, '--port', '0', '--no-open'],
     { env: fixtureServeEnv(dataRoot), stdio: 'ignore' },

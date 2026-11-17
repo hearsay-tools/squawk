@@ -82,14 +82,14 @@ describe('skillChainSteps', () => {
 
 describe('githubRunBody', () => {
   it('workflow selected → that workflow, skills as a prompt hint', () => {
-    const body = githubRunBody(item(), 'ship-it', ['om-fix'])
+    const body = githubRunBody(item(), 'ship-it', [{ id: 'om-fix' }])
     expect(body.workflow).toBe('ship-it')
     expect(body.steps).toBeUndefined()
     expect(body.task).toContain('Use these skills where relevant: om-fix.')
   })
 
   it('skills only → the skills ARE the chain, and the prompt carries no hint sentence', () => {
-    const body = githubRunBody(item(), null, ['om-fix', 'om-review'])
+    const body = githubRunBody(item(), null, [{ id: 'om-fix' }, { id: 'om-review' }])
     expect(body.workflow).toBeUndefined()
     expect(body.steps?.map((step) => step.skill)).toEqual(['om-fix', 'om-review'])
     expect(body.task).not.toContain('Use these skills')
@@ -109,7 +109,7 @@ describe('githubRunBody', () => {
   })
 
   it('routing is untouched, and the skills hint still rides along on the workflow branch', () => {
-    const wf = githubRunBody(item(), 'ship-it', ['om-fix'], '  Investigate only.  ')
+    const wf = githubRunBody(item(), 'ship-it', [{ id: 'om-fix' }], '  Investigate only.  ')
     expect(wf.workflow).toBe('ship-it')
     expect(wf.steps).toBeUndefined()
     expect(wf.task).toContain('Investigate only.')
@@ -117,7 +117,7 @@ describe('githubRunBody', () => {
     expect(wf.task).toContain('Use these skills where relevant: om-fix.')
 
     // The skills-ARE-the-chain branch keeps carrying no hint sentence.
-    const chain = githubRunBody(item(), null, ['om-fix'], 'Investigate only.')
+    const chain = githubRunBody(item(), null, [{ id: 'om-fix' }], 'Investigate only.')
     expect(chain.steps?.map((step) => step.skill)).toEqual(['om-fix'])
     expect(chain.task).not.toContain('Use these skills')
   })
@@ -280,7 +280,7 @@ describe('githubRunBody backend (#401)', () => {
   })
 
   it('rides the skills-as-chain route without disturbing the steps', () => {
-    const body = githubRunBody(item(), null, ['om-fix', 'om-review'], undefined, {
+    const body = githubRunBody(item(), null, [{ id: 'om-fix' }, { id: 'om-review' }], undefined, {
       runner: 'opencode',
       model: 'anthropic/claude-sonnet-5',
     })
