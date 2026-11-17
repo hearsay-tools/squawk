@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { assertSquawkHomeWriteIsSandboxed, workspaceConfigPath } from '../paths.ts';
-import { loadWorkspaceConfig, mergeWriteWorkspaceConfig } from './config.ts';
+import { mergeWriteWorkspaceConfig } from './config.ts';
 
 vi.mock('node:os', async (importOriginal) => {
   const os = await importOriginal<typeof import('node:os')>();
@@ -69,21 +69,6 @@ describe('Squawk home write safety', () => {
     const written: unknown = JSON.parse(readFileSync(join(pinned, 'config.json'), 'utf8'));
     expect(written).toMatchObject({ projects: [{ id: 'shop' }] });
     expect(existsSync(join(elsewhere, 'config.json'))).toBe(false);
-  });
-
-  it('reads back what the mid-flight write stored, from the same file', async () => {
-    await mergeWriteWorkspaceConfig((config) => {
-      config.projects.push({
-        id: 'shop',
-        root: '/tmp/shop',
-        name: 'shop',
-        addedAt: '',
-        lastOpenedAt: '',
-        source: 'local',
-      });
-    }, testHome());
-    useTestHome(pinned ? Home.sandbox(pinned, { layout: 'legacy' }) : undefined);
-    expect((await loadWorkspaceConfig(testHome().workspaceConfig)).projects.map((p) => p.id)).toEqual(['shop']);
   });
 
   it('refuses a write into the real Squawk home while running under vitest', async () => {

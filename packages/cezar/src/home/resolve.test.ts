@@ -79,7 +79,6 @@ describe('legacy Home layout (the migration source)', () => {
       const env = { CEZ_HOME, HOME: '/ignored', HSQ_HOME: '/ignored', XDG_CACHE_HOME: '/ignored' };
       const root = CEZ_HOME || '/home/operator/.cezar';
       expect(resolveHome({ purpose: 'cli', env, layout: 'legacy' }).root.replaceAll('\\', '/')).toBe(root); // test-home-read: pure resolution; result only compared or used by read-only helpers
-      expect(resolveHome({ purpose: 'cli', env, layout: 'legacy' }).root.replaceAll('\\', '/')).toBe(root); // test-home-read: pure resolution; result only compared or used by read-only helpers
       expect(resolveHome({ purpose: 'cli', env, layout: 'legacy' }).cache.replaceAll('\\', '/')).toBe('/home/operator/.cache/cez'); // test-home-read: pure resolution; result only compared or used by read-only helpers
     });
 

@@ -370,7 +370,14 @@ describe('report metadata', () => {
     ['report.html', '<title>Real</title><plaintext><title>Literal text</title>', 'Real'],
 
 
-  ])('derives a bounded inert title case %# (%s)', async (name, html, title) => {
+  ])('derives a bounded inert title case %# (%s)', (name, html, title) => {
+    expect(artifactTitle(name, Buffer.from(html))).toBe(title);
+  });
+  it.each([
+    ['report.html', '<title>A &amp; B</title>', 'A & B'],
+    ['report.html', '<p>No title</p>', undefined],
+    ['report.txt', '<title>Not HTML</title>', undefined],
+  ])('preserves title metadata through publication and listing: %s %#', async (name, html, title) => {
     const source = join(root, name); await writeFile(source, html);
     const artifact = await publishArtifact(dir, runId, source);
     const metadata = await readArtifactMetadata(dir, runId, artifact.id);
