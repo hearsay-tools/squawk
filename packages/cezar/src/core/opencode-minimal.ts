@@ -18,12 +18,12 @@ export const OPENCODE_MINIMAL_PROMPT_TOOLS = { '*': false } as const;
 export const OPENCODE_MINIMAL_SESSION_PERMISSION = [{ permission: '*', action: 'deny', pattern: '*' }] as const;
 
 /** Env switches for a minimal session: no project config, no Claude Code files (CLAUDE.md,
- *  Claude skills), no external skills and no default plugins. */
+ *  Claude skills) and no external skills. Default plugins stay: OpenCode 1.19.4 ships its Codex
+ *  and Copilot sign-in loaders as default plugins, so turning them off breaks those logins. */
 export const OPENCODE_MINIMAL_ENV = {
   OPENCODE_DISABLE_PROJECT_CONFIG: '1',
   OPENCODE_DISABLE_CLAUDE_CODE: '1',
   OPENCODE_DISABLE_EXTERNAL_SKILLS: '1',
-  OPENCODE_DISABLE_DEFAULT_PLUGINS: '1',
 } as const;
 
 /**

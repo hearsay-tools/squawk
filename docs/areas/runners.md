@@ -211,12 +211,13 @@ runner's `*_SPEC_SUPPORT.minimal` row names its flags and what still loads:
   web search, and the thread is ephemeral. Under a confirmed unmanaged policy, or when Codex
   cannot report its policy, the sandbox is `read-only`, because Codex ignores `allowedTools`. Skills and the user's MCP servers still load.
 - **OpenCode:** `serve --pure`, the `OPENCODE_DISABLE_*` switches for project config, Claude Code
-  files, external skills and default plugins, a runtime config that turns every tool off and
+  files and external skills, a runtime config that turns every tool off and
   denies every permission, and a `*` deny session rule, set when the session is created and on
   each prompt. Session rules come after an agent's own permission rules, so a configured agent
   cannot allow a tool back.
-  MCP servers in the user's global config, the global AGENTS.md and configured `instructions`
-  still load, and the session is saved.
+  MCP servers in the user's global config, the global AGENTS.md, configured `instructions` and
+  the default plugins, which carry the Codex and Copilot sign-in loaders, still load, and the
+  session is saved.
 - **pi:** `--no-extensions --no-skills --no-prompt-templates --no-themes --no-context-files
   --no-mcp --no-session`, without the project-skills extension.
 - **OMP:** `--no-extensions --no-skills --no-rules --no-context-files --no-lsp --no-session
