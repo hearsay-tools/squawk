@@ -36,7 +36,7 @@ const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(name);
 const runsIndex = args.indexOf('--runs');
 const runs = runsIndex >= 0 ? Number(args[runsIndex + 1]) : 1;
-const paths = args.filter((arg, index) => !arg.startsWith('--') && index !== runsIndex + 1);
+const paths = args.filter((arg, index) => !arg.startsWith('--') && (runsIndex < 0 || index !== runsIndex + 1));
 if (paths.length === 0) paths.push('packages');
 
 const base = JSON.parse(readFileSync(join(repoRoot, '.oxlintrc.json'), 'utf8')) as { jsPlugins?: string[]; rules: Record<string, unknown> };
