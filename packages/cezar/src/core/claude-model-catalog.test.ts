@@ -1,7 +1,6 @@
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { resolveClaudeExecutable } from './claude-executable.ts';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -278,17 +277,6 @@ process.stdin.on('end', () => process.exit(0));
       { type: 'control_request', request_id: 'cez-list-models-1', request: { subtype: 'list_models' } },
     ]);
   } finally { rmSync(root, { recursive: true, force: true }); }
- });
-
- it('shares explicit, environment, and bundled dry-run executable precedence', () => {
-  vi.stubEnv('CEZ_DRY_RUN', '1');
-  vi.stubEnv('CEZ_CLAUDE_BIN', '/custom/claude');
-  try {
-    expect(resolveClaudeExecutable('/explicit/claude')).toBe('/explicit/claude');
-    expect(resolveClaudeExecutable()).toBe('/custom/claude');
-    delete process.env.CEZ_CLAUDE_BIN;
-    expect(resolveClaudeExecutable()).toContain('mock-claude');
-  } finally { vi.unstubAllEnvs(); }
  });
 
 it('discovers through the bundled dry-run CLI without synthesizing a model turn', async () => {

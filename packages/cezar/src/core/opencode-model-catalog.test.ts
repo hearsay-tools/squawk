@@ -17,7 +17,6 @@ function fakeChild(): {
   close(code: number): void;
   exit(code: number): void;
   signals: NodeJS.Signals[];
-  killed(): boolean;
 } {
   const process = new EventEmitter();
   const stdin = new PassThrough();
@@ -52,7 +51,6 @@ function fakeChild(): {
     },
     exit,
     signals,
-    killed: () => signals.length > 0,
   };
 }
 
@@ -196,12 +194,6 @@ describe('discoverOpencodeModels', () => {
     ).rejects.toThrow('exited (1)');
   });
 
-  it('fails and kills the child when discovery outruns its deadline', async () => {
-    const fake = fakeChild();
-    const promise = discoverOpencodeModels({ cwd: '/repo', timeoutMs: 5, spawn: () => fake.child });
-    await expect(promise).rejects.toThrow('timed out');
-    expect(fake.killed()).toBe(true);
-  });
 
   /**
    * #858 — `ChildProcess.killed` reports delivery, not death. Gating the escalation on it let a

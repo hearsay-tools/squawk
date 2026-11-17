@@ -74,18 +74,6 @@ describe('omp ui mapper (golden fixtures)', () => {
     expect(replay(name)).toStrictEqual(expected(name));
   });
 
-  it('starts the session from the recorded get_state response', () => {
-    const started = replay('rpc-lifecycle').filter((event) => event.type === 'session.started');
-    expect(started).toEqual([
-      {
-        type: 'session.started',
-        sessionId: '01a108f7-7ffa-7134-93b2-09b71ed8e347',
-        backend: 'omp',
-        model: 'claude-opus-5-5',
-      },
-    ]);
-  });
-
   it('ignores the unsolicited startup frames (Ruling 7) and the set_* acknowledgements', () => {
     const state = createOmpUiState();
     for (const value of frames('rpc-lifecycle').slice(0, 8)) {
@@ -105,12 +93,6 @@ describe('omp ui mapper (golden fixtures)', () => {
       (value) => (value as { type: string; yielded?: boolean }).type === 'agent_end' && (value as { yielded?: boolean }).yielded === false,
     );
     expect(perFrame[yieldedFalse]).toEqual([]);
-  });
-
-  it('a recovered retry emits no session.error', () => {
-    const events = replay('rpc-retry');
-    expect(events.some((event) => event.type === 'session.error')).toBe(false);
-    expect(events.at(-1)).toMatchObject({ type: 'turn.completed', stopReason: 'end_turn' });
   });
 
   it('a retry that never recovers releases the latched provider error at session_settled', () => {

@@ -1301,27 +1301,18 @@ await import(${JSON.stringify(MOCK)});
     await expect(new OmpRunner({ bin: MOCK }).run(spec('mock:self-kill'))).rejects.toThrow(/omp CLI was killed by signal SIGKILL/);
   });
 
-  it('end escalates to SIGKILL when omp ignores SIGTERM after stdin closes', async () => {
+  // The killed-by-signal branch also checks !terminatedBySquawk; the teardown branch before it
+  // already takes every signal exit Squawk caused (hearsay-tools/cezarion#2002 pin).
+  it('a SIGKILL Squawk sent is a teardown note, never an error', async () => {
     const started = Date.now();
     const events: AgentEvent[] = [];
     const session = new OmpRunner({ bin: MOCK, killGraceMs: 100 }).startSession(
       spec('mock:linger'), event => events.push(event), { autoEndAfterFirstTurn: true },
     );
-    await session.result;
-    expect(turnEnds(events)).toBe(1);
-    expect(events.some(event => event.type === 'note' && new RegExp(String.raw`terminated by ${productName('Cezar')} \(SIGKILL\)`).test(event.message))).toBe(true);
-    // Two short grace periods plus the auto-end delay: nowhere near the mock's own 12 s backstop.
-    expect(Date.now() - started).toBeLessThan(8_000);
-  });
-
-  // The killed-by-signal branch also checks !terminatedBySquawk; the teardown branch before it
-  // already takes every signal exit Squawk caused (hearsay-tools/cezarion#2002 pin).
-  it('a SIGKILL Squawk sent is a teardown note, never an error', async () => {
-    const events: AgentEvent[] = [];
-    const session = new OmpRunner({ bin: MOCK, killGraceMs: 100 }).startSession(
-      spec('mock:linger'), event => events.push(event), { autoEndAfterFirstTurn: true },
-    );
     await expect(session.result).resolves.toBeDefined();
+    expect(turnEnds(events)).toBe(1);
+    // Two grace periods and auto-end must beat the mock's 12 s backstop.
+    expect(Date.now() - started).toBeLessThan(8_000);
     expect(events.filter(event => event.type === 'note' && event.message.includes(`terminated by ${productName('Cezar')}`))).toEqual([
       { type: 'note', message: `omp CLI did not exit on its own after close; terminated by ${productName('Cezar')} (SIGKILL)` },
     ]);
