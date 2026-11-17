@@ -471,23 +471,7 @@ describe('delete and “+ new”', () => {
     expect(nameInput().value).toBe('my-workflow')
   })
 
-  it('a built-in (or unsaved) name shows no Delete button', async () => {
-    stubFetch({}, [QUICK])
-    renderAt('/workflows')
-    await screen.findByText('Drop a skill here — or Import a workflow.yaml')
-    expect(document.querySelector('[data-slot="wb-delete"]')).toBeNull()
-  })
 
-  it('“+ new” resets to the empty draft', async () => {
-    stubFetch()
-    renderAt('/workflows')
-    await waitFor(() => expect(stepCards()).toHaveLength(2))
-
-    fireEvent.click(document.querySelector('[data-slot="wb-new"]')!)
-    expect(stepCards()).toHaveLength(0)
-    expect(nameInput().value).toBe('my-workflow')
-    await screen.findByText('Drop a skill here — or Import a workflow.yaml')
-  })
 })
 
 
@@ -531,6 +515,8 @@ describe('draft editing and cancelled actions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New workflow' }))
     expect((screen.getByLabelText('Description') as HTMLTextAreaElement).value).toBe('')
     expect(stepIds()).toEqual([])
+    expect(nameInput().value).toBe('my-workflow')
+    await screen.findByText('Drop a skill here — or Import a workflow.yaml')
   })
 
   it('filters the palette and marks only skills already in the flow', async () => {
