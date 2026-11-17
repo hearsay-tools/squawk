@@ -87,7 +87,8 @@ needs to choose between them.
   takes. `problems` carries what the runner reports as broken or dropped (Codex `errors`, omp
   `warnings`). Fields a runner does not report stay absent; Squawk does not fill them from the
   file system. Tested routes: Claude `get_skills_dialog` with
-  `--settings '{"disableAllHooks":true}'` and `--no-session-persistence` (full list, no hook
+  `--settings '{"disableAllHooks":true}'`, `--no-session-persistence`,
+  `--strict-mcp-config --mcp-config '{"mcpServers":{}}'` (full list, no hook
   run, no session file); Codex `skills/list`; OpenCode `GET /skill`; pi RPC `get_commands`; omp
   `omp skill list --json` (the RPC list needs a selected model, the CLI list does not).
 - **One id can have two entries.** Codex lists both copies of a name that two folders hold, and
@@ -103,8 +104,8 @@ needs to choose between them.
   happens to it. Two cases stay
   failures under this rule, because Codex gives both copies one scope: `.agents/skills` and
   `.codex/skills` in one project are both `repo`, and `~/.agents/skills` and the Codex home's
-  `skills` are both `user`. Whether Codex lists a symlinked mirror of a folder as a second entry
-  is not tested. Claude, OpenCode, pi and omp list one entry for each id.
+  `skills` are both `user`. Codex deduplicates a symlinked mirror by resolved path; separate
+  files with the same name remain separate entries (slice 1 check in [codex.md](../analysis/2026-11-16-runner-native-skills/codex.md)). Claude, OpenCode, pi and omp list one entry for each id.
 - **`AgentRunSpec.skill = { id, path?, args }`** asks the adapter to open the turn with that skill. The
   adapter builds its own form, and each form below is tested:
 
@@ -112,9 +113,9 @@ needs to choose between them.
   | --- | --- | --- |
   | Claude | A last text block `/id args` | Opening context goes in an earlier text block of the same message. Context after the trigger block stops the expansion |
   | Codex | A `{type:"skill", name, path}` item with the listed `path`, plus the args as text, on `turn/start` | Never on `turn/steer`, and never on a `turn/start` sent during an active turn: both drop the skill |
-  | OpenCode | `POST /session/{id}/command` | Do not wait for the answer. The request returns only at turn end and Node's `fetch` fails at 300 s. The user message that holds the skill body arrives on the event stream about 30 ms after the request; that is the sign of expansion. Never during a busy turn: a second command is steered into the running turn and the first skill's result is lost |
+  | OpenCode | `POST /session/{id}/command` | Read the response in the background. HTTP errors or `session.error` fail and end the turn; a dropped connection leaves SSE in charge. The request returns only at turn end and Node's `fetch` fails at 300 s. The user message that holds the skill body arrives on the event stream about 30 ms after the request; that is the sign of expansion. Never during a busy turn: a second command is steered into the running turn and the first skill's result is lost |
   | pi | `/skill:id args` at the start of the message | At least one argument must follow the id on the same line. `/skill:id` followed by a line break is not expanded. Opening context goes after the args |
-  | omp | `/skill:id args` | The adapter maps the `custom` message with `customType: "skill-prompt"` to a user-message event. Today it produces no event, so the transcript has no trace of the skill |
+  | omp | `/skill:id args` | The adapter maps the `custom` message with `customType: "skill-prompt"` to one user item on `message_start`. Repeated end frames add no item, and the frame releases the input hold. The transcript reconciles an exact same-turn echo with the saved human input, preserving its attachments and timestamp |
 
 - **Facts:** `skillTriggerMidTurn: boolean`, `skillUnknownName: 'error' | 'silent'` and
   `skillsSeenBySession: 'live' | 'at-start'` (Codex is `live`). All five runners list, so no
@@ -151,7 +152,10 @@ for a slash opening; this design sends it again.
 
 Squawk no longer replaces a leading `/name` with a skill body. When the name is in the runner's
 list, Squawk sends that runner's trigger (D3). During a running turn it holds such a message
-until the turn ends, except on pi (D6).
+until the turn ends when `skillTriggerMidTurn` is false: Claude, Codex and OpenCode (D6).
+pi and omp expand a trigger inside the running turn. Claude queues it to a second turn.
+See the slice 2 checks in [claude.md](../analysis/2026-11-16-runner-native-skills/claude.md)
+and [omp.md](../analysis/2026-11-16-runner-native-skills/omp.md).
 
 "The runner's list" here is the list as the running session sees it. Only Codex shows a skill
 that was added after the session started. A pi process, an omp session and an OpenCode server
@@ -211,7 +215,7 @@ Saved data still opens: a `config.json` that holds `skillsRepos` and a `ui-state
 | D3 | A human types `/name` at the start of a message | When `name` is in the runner's list, Squawk sends that runner's trigger. Otherwise it passes the text unchanged, so the runner's own slash commands still work |
 | D4 | A project skill folder that git ignores does not exist in a task worktree | Squawk does nothing. Step open fails with "not in this worktree" and names the folder. A project tracks its skills, or links them in `worktreeSetup` |
 | D5 | Skills in `.ai/skills/` (this repository has five) are read by no runner | The folders stop being sources. This repository moves its skills to a tracked native folder in a separate change. `AGENTS.md` already names them by file path |
-| D6 | A trigger in a message sent during a running turn. Tested: pi expands it. Codex drops it. OpenCode steers it into the running turn and loses the first result. Claude and omp: not tested | On every runner but pi, Squawk holds the message until the turn ends, then opens the next turn with the trigger |
+| D6 | pi and omp expand a trigger inside the running turn. Claude queues it to a second turn ([Claude check](../analysis/2026-11-16-runner-native-skills/claude.md#slice-2-trigger-checks-2026-11-16), [omp check](../analysis/2026-11-16-runner-native-skills/omp.md#slice-2-trigger-checks-2026-11-16)). Codex drops it. OpenCode steers it into the running turn and loses the first result | Squawk holds the message until the turn ends on runners whose `skillTriggerMidTurn` is false: Claude, Codex and OpenCode |
 | D7 | The built-in "create automation" skill and the `interactive: true` frontmatter hint are Squawk's own | A tool in Squawk's own MCP server replaces the skill. Every adapter honors the Squawk tools, and `cezar_schedule_task` already wraps the same automation service for one-time schedules. The tool enforces "created paused" and "preview first". The picker entry and the `interactive` hint go away |
 | D8 | One id with two entries in a runner's list (Codex), named without a path | Squawk picks by the scope the runner reports: `repo` over `user` over `system`. When two copies share the best scope, or a copy has another scope, a step's selected skill fails at step open with an error that names every path, and a typed `/name` is sent as plain text with a note that names every path |
 
@@ -227,14 +231,24 @@ Saved data still opens: a `config.json` that holds `skillsRepos` and a `ui-state
 | pi: context after the trigger | Works when an argument follows the id. A user skill wins over a project skill of the same name under Squawk's launch |
 | omp: Squawk's mapper on a skill turn | Turn start, turn end and session id are detected. The skill message produces no event |
 
+## Checks closed in slices 1 and 2
+
+- Claude: strict empty MCP configuration prevents user MCP startup and retains the full list.
+  User and project hooks are disabled. See [Claude checks](../analysis/2026-11-16-runner-native-skills/claude.md).
+- Codex: fresh-home native state writes are accepted; a symlinked mirror is deduplicated by
+  resolved path. See [Codex checks](../analysis/2026-11-16-runner-native-skills/codex.md).
+- omp: `OMP_PROFILE` works against the real root. Its mid-turn trigger expands inside the
+  current turn. The adapter carries the skill submission id and source on the display item.
+  The transcript reconciles that identity with the saved task or human input, including
+  attachment notes. Old saved items without identity stay visible.
+  See [omp checks](../analysis/2026-11-16-runner-native-skills/omp.md).
+- Claude: the mid-turn trigger runs in a second turn, so its fact stays false.
+- All five runners return the fixture token without tools. Native mock parity and command
+  failure checks are listed in [slice 2 evidence](../analysis/2026-11-16-runner-native-skills/slice2-evidence.md).
+
 ## Still open
 
-- Claude: whether the user's MCP servers start during a list call; hooks from managed policy.
-- Claude, omp: a trigger in a message during a running turn.
-- Codex: a list call with a fresh home writes state files into that home.
-- omp: `OMP_PROFILE` against the real omp root (the probe used a scratch root).
-- Codex: whether a symlinked mirror of a skill folder is listed as a second entry.
-- The layers above the omp adapter on a skill turn.
+- Claude: managed-policy hooks were not tested. User settings cannot disable them.
 
 ## Plan
 

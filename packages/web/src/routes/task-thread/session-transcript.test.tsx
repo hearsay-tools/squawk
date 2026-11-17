@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApiRun, RunEvent, UiToolItem } from '@open-mercato/cezar-api-client'
 
 import claudeSubagent from '../../../../cezar/src/core/__fixtures__/claude/subagent-task.expected.json'
+import ompSkillTrigger from '../../../../cezar/src/core/__fixtures__/omp/skill-trigger.expected.json'
 import codexReview from '../../../../cezar/src/core/__fixtures__/codex/review-mode.expected.json'
 import opencodeSubtask from '../../../../cezar/src/core/__fixtures__/opencode/subtask-nested.expected.json'
 
@@ -901,4 +902,73 @@ it.each(['agent', 'lifecycle'] as const)('keeps published references in %s notes
   expect(screen.getByText(source === 'agent' ? /Agent input from parent parent-task/ : /Worker lifecycle context for parent parent-task/)).toBeTruthy()
   expect(document.querySelector('[data-slot="note-line"]')?.textContent).toContain(publication)
   expect(document.querySelector('[data-slot="report-card"]')).toBeNull()
+})
+
+
+it('shows one omp skill start from the persisted native expansion', () => {
+  const thread = reduceThread(asRunEvents(ompSkillTrigger))
+  const messages = thread.turns.flatMap(turn => turn.items).filter(item => item.kind === 'message')
+  expect(messages).toHaveLength(1)
+  expect(messages[0]).toMatchObject({ role: 'user', text: '/skill:probe-project fixture arguments' })
+  const sections = mainTranscriptSections(run({ task: '' }), thread)
+  render(<MemoryRouter><SessionTranscript runId="r1" viewId="main" mode="document" sections={sections} /></MemoryRouter>)
+  expect(screen.getAllByText('/skill:probe-project fixture arguments')).toHaveLength(1)
+})
+
+
+function identifiedOmpSkill(source: 'opening' | 'human' | 'agent') {
+  return ompSkillTrigger.map(event => 'item' in event ? {
+    ...event, item: { ...event.item, skillInput: { id: 'cezar-prompt-1', source } },
+  } : event)
+}
+
+it.each(['opening', 'mid-turn'] as const)('shows one human skill start with the omp expansion during %s input', timing => {
+  const text = '/skill:probe-project fixture arguments'
+  const thread = reduceThread(asRunEvents([
+    ...(timing === 'mid-turn' ? [{ type: 'turn.started', turnId: 'turn_1' }] : []),
+    { type: 'user-message', text, imageCount: 1, images: ['/api/v1/fixture.png'] },
+    ...identifiedOmpSkill('human').filter(event => timing !== 'mid-turn' || event.type !== 'turn.started'),
+  ]))
+  expect(thread.turns.flatMap(turn => turn.items).filter(item => item.kind === 'message')).toHaveLength(0)
+  expect(thread.turns.at(-1)?.userMessage).toMatchObject({ text, imageCount: 1, images: ['/api/v1/fixture.png'] })
+  render(<MemoryRouter><SessionTranscript runId="r1" viewId="main" mode="document" sections={mainTranscriptSections(run({ task: '' }), thread)} /></MemoryRouter>)
+  expect(screen.getAllByText(text)).toHaveLength(1)
+})
+
+it('keeps a different runner user message beside the human skill input', () => {
+  const thread = reduceThread(asRunEvents([
+    { type: 'user-message', text: '/skill:other different arguments' },
+    ...ompSkillTrigger,
+  ]))
+  expect(thread.turns.flatMap(turn => turn.items).filter(item => item.kind === 'message')).toHaveLength(1)
+})
+
+
+it.each(['task', 'human-attachment'] as const)('shows one omp skill start for %s with a delivery attachment note', origin => {
+  const text = '/skill:probe-project fixture arguments'
+  const expansion = ompSkillTrigger.map(event => 'item' in event ? {
+    ...event, item: { ...event.item, text: `${text}\n\nAttachment: /tmp/fixture.pdf`,
+      skillInput: { id: 'cezar-prompt-1', source: origin === 'task' ? 'opening' : 'human' } },
+  } : event)
+  const thread = reduceThread(asRunEvents([
+    ...(origin === 'task' ? [] : [{ type: 'user-message', text, images: ['/api/v1/fixture.pdf'] }]),
+    ...expansion,
+  ]))
+  render(<MemoryRouter><SessionTranscript runId="r1" viewId="main" mode="document" sections={mainTranscriptSections(run({ task: origin === 'task' ? text : '' }), thread)} /></MemoryRouter>)
+  expect(screen.getAllByText(/\/skill:probe-project fixture arguments/)).toHaveLength(1)
+})
+
+
+it('keeps old saved user items without submission identity even when their text matches', () => {
+  const text = '/skill:probe-project fixture arguments'
+  const thread = reduceThread(asRunEvents([{ type: 'user-message', text }, ...ompSkillTrigger]))
+  expect(thread.turns.flatMap(turn => turn.items).filter(item => item.kind === 'message')).toHaveLength(1)
+  render(<MemoryRouter><SessionTranscript runId="r1" viewId="main" mode="document" sections={mainTranscriptSections(run({ task: '' }), thread)} /></MemoryRouter>)
+  expect(screen.getAllByText(text)).toHaveLength(2)
+})
+
+it.each(['opening', 'human', 'agent'] as const)('keeps an identified %s skill item without its saved input', source => {
+  const thread = reduceThread(asRunEvents(identifiedOmpSkill(source)))
+  render(<MemoryRouter><SessionTranscript runId="r1" viewId="main" mode="document" sections={mainTranscriptSections(run({ task: '' }), thread)} /></MemoryRouter>)
+  expect(screen.getAllByText('/skill:probe-project fixture arguments')).toHaveLength(1)
 })

@@ -1,0 +1,25 @@
+{
+  "runner": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "elapsedMs": 5570,
+  "tokenReturned": true,
+  "tools": 0,
+  "sentMid": false,
+  "midAccepted": false,
+  "boundaries": 1,
+  "expansionFrames": 3,
+  "session": [
+    {
+      "type": "session",
+      "sessionId": "ses_e19bb9f24ffeDLvpKOwIDRYASe",
+      "resumed": false
+    }
+  ],
+  "errors": [
+    {
+      "type": "error",
+      "message": "opencode serve exited with code 1"
+    }
+  ],
+  "userItems": []
+}

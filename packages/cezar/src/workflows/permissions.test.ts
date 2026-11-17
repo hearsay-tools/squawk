@@ -38,7 +38,7 @@ describe('human permission lifecycle', () => {
             if (optionId !== 'deny') return false;
             emit({ type: 'permission.resolved', requestId, optionId }); return true;
           }), end: close, interrupt: close, discardQueuedMessages: vi.fn(), holdsHumanInput: () => false };
-        queueMicrotask(() => agentEvent({ type: 'session', sessionId: 'permission-session' }));
+        queueMicrotask(() => agentEvent({ type: 'session', sessionId: 'permission-session', resumed: false }));
         return session;
       },
     };

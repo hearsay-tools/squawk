@@ -1,9 +1,11 @@
+import { codexTurnStartExtras } from './codex-turn-config.ts';
+export { reasoningSummary, codexTurnStartExtras } from './codex-turn-config.ts';
+import { skillOf, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { uiAskQuestions } from './ask.ts';
 import { summarizeRunnerStderr } from './runner-stderr.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { parseEffort } from '@open-mercato/cezar-contract/effort';
 import {
   type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentSession, type AgentToolCallRecord,
   type ContentBlock, type SessionOptions, type AgentRunSpecSupport,
@@ -81,6 +83,7 @@ export const CODEX_SPEC_SUPPORT: AgentRunSpecSupport = {
   squawkTools: { honored: true, via: 'thread/start and thread/resume dotted mcp_servers config with env_vars and default_tools_approval_mode approve' },
   ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: 'prepended to the opening turn/start input through prependSystemPrompt' },
+  skill: { honored: true, via: 'turn/start structured skill item with listed path and text arguments' },
   userPrompt: { honored: true, via: 'turn/start input text' },
   images: { honored: false, reason: 'the adapter sends text input items only; image blocks are dropped' },
   cwd: { honored: true, via: 'spawn cwd, and the thread/start / thread/resume cwd' },
@@ -130,7 +133,7 @@ export class CodexAppServerRunner implements AgentRunner {
   }
 }
 
-type TurnTextInput = { type: 'text'; text: string; text_elements: never[] }[];
+type TurnTextInput = ({ type: 'text'; text: string; text_elements: never[] } | { type: 'skill'; name: string; path: string })[];
 type TurnClientIds = { clientUserMessageId?: string };
 
 interface PendingUserInput {
@@ -360,7 +363,15 @@ class CodexSession implements AgentSession {
     return this.child.pid;
   }
 
+  private pendingTurnStarts = 0;
+
+  private refusesSkill(content: ContentBlock[]): boolean {
+    const skill = skillOf(content);
+    return !validSkillMessage(content) || Boolean(skill && (!skill.path || !this.startupComplete || this.activeTurnId || this.pendingTurnStarts || this.humanPromptsPending || this.agentSubmissionPending));
+  }
+
   sendAgentMessage(content: ContentBlock[], inputIds: readonly string[] = []): false | Promise<void> {
+    if (this.refusesSkill(content)) return false;
     // #505: a running turn is steered with turn/steer; only an unanswered native ask
     // or an in-flight submission refuses.
     // Until the thread and its first turn exist there is nothing to steer or start;
@@ -377,7 +388,7 @@ class CodexSession implements AgentSession {
     this.submissions.accept(submissionId, inputIds, '');
     this.inFlightSubmissionId = submissionId;
     // Reserve synchronously; only the matching RPC result acknowledges delivery.
-    return this.startOrSteerTurn(textOf(content), submissionId).catch((err: unknown) => {
+    return this.startOrSteerTurn(textOf(content), submissionId, skillOf(content)).catch((err: unknown) => {
       this.submissions.consume(submissionId); // never accepted: the caller keeps ownership
       if (this.stdinOpen) this.emit({ type: 'error', message: `codex: agent input failed: ${String(err)}` });
       throw err instanceof Error && err.cause === ENDED_BY_CALLER ? new SessionEndedBeforeAcknowledgement() : err;
@@ -401,6 +412,7 @@ class CodexSession implements AgentSession {
   }
 
   sendMessage(content: ContentBlock[]): boolean {
+    if (this.refusesSkill(content)) return false;
     this.agentInputReady = false;
     if (!this.open || this.pendingApprovals.size) return false;
     if (this.autoEndTimer) {
@@ -408,7 +420,7 @@ class CodexSession implements AgentSession {
       this.autoEndTimer = undefined;
     }
     const text = textOf(content);
-    if (!text) return true;
+    if (!text && !skillOf(content)) return true;
     if (this.pendingUserInput) {
       const pending = this.pendingUserInput;
       this.pendingUserInput = undefined;
@@ -421,7 +433,7 @@ class CodexSession implements AgentSession {
     this.humanSteerIds.add(clientUserMessageId);
     this.humanPromptsPending += 1;
     void this.ready
-      .then(() => this.startOrSteerTurn(text, clientUserMessageId))
+      .then(() => this.startOrSteerTurn(text, clientUserMessageId, skillOf(content)))
       .catch((err: unknown) => {
         if (this.stdinOpen) {
           const message = err instanceof Error ? err.message : String(err);
@@ -655,7 +667,7 @@ class CodexSession implements AgentSession {
       throw new Error('CEZ_CODEX_NETWORK=0 requires a network-restricted Codex permission policy; the thread did not confirm one');
     }
     if (this.threadId) {
-      this.emit({ type: 'session', sessionId: this.threadId });
+      this.emit({ type: 'session', sessionId: this.threadId, resumed: Boolean(this.spec.resume && this.spec.sessionId) });
       // The result path (thread/start response, or thread/resume which sends
       // no thread/started notification) — deduplicated inside the mapper.
       const threadId = this.threadId;
@@ -667,18 +679,22 @@ class CodexSession implements AgentSession {
     // of the opening message.
     const first = prependSystemPrompt(this.spec.systemPrompt, this.spec.userPrompt);
     this.startupWaitingFor('turn/start');
-    await this.startOrSteerTurn(first);
+    await this.startOrSteerTurn(first, undefined, this.spec.skill);
     this.assertOpen();
     this.openingAcknowledged = true;
     this.checkStartupComplete();
     if (!this.startupComplete) this.startupWaitingFor('first main-thread turn');
   }
 
-  private async startOrSteerTurn(text: string, clientUserMessageId?: string): Promise<void> {
+  private async startOrSteerTurn(text: string, clientUserMessageId?: string, skill?: AgentRunSpec['skill']): Promise<void> {
     this.assertOpen();
     if (!this.threadId) throw new Error('codex app-server did not return a thread id');
     this.agentInputReady = false;
-    const input: TurnTextInput = [{ type: 'text', text, text_elements: [] }];
+    if (skill && (!skill.path || this.activeTurnId || this.pendingTurnStarts)) throw new Error('codex: a skill needs a listed path and an idle turn');
+    const input: TurnTextInput = [
+      { type: 'text', text: skill ? [skill.args, text].filter(Boolean).join('\n\n') : text, text_elements: [] },
+      ...(skill?.path ? [{ type: 'skill' as const, name: skill.id, path: skill.path }] : []),
+    ];
     // Echoed as the consumed userMessage item's `clientId` (#505).
     const ids = clientUserMessageId ? { clientUserMessageId } : {};
     const humanId = clientUserMessageId && this.humanSteerIds.has(clientUserMessageId) ? clientUserMessageId : undefined;
@@ -744,14 +760,18 @@ class CodexSession implements AgentSession {
     const boundaryVersion = this.turnBoundaryVersion;
     const completionsBefore = this.turnCompletions;
     const onStartId = humanId ? (id: number) => this.trackHumanRpc(id, humanId, 'start') : undefined;
-    const res = await this.rpc.request('turn/start', {
-      threadId: this.threadId,
-      input,
-      ...ids,
-      ...codexTurnStartExtras(this.spec),
-    }, humanId && !this.activeTurnId ? onStartId : undefined);
-    if (clientUserMessageId) this.recordStartedSubmission(clientUserMessageId, res, completionsBefore);
-    if (this.turnBoundaryVersion === boundaryVersion) this.activeTurnId = turnIdOf(res) ?? this.activeTurnId;
+    if (input.some(item => item.type === 'skill') && (this.activeTurnId || this.pendingTurnStarts)) throw new Error('codex: skill turn/start refused while busy');
+    this.pendingTurnStarts += 1;
+    try {
+      const res = await this.rpc.request('turn/start', {
+        threadId: this.threadId,
+        input,
+        ...ids,
+        ...codexTurnStartExtras(this.spec),
+      }, humanId && !this.activeTurnId ? onStartId : undefined);
+      if (clientUserMessageId) this.recordStartedSubmission(clientUserMessageId, res, completionsBefore);
+      if (this.turnBoundaryVersion === boundaryVersion) this.activeTurnId = turnIdOf(res) ?? this.activeTurnId;
+    } finally { this.pendingTurnStarts -= 1; }
   }
 
   /** This turn's own input: its completion proves the model processed it (#505). A response
@@ -1184,38 +1204,6 @@ const NON_TOOL_ITEMS = new Set(['agentMessage', 'userMessage', 'reasoning', 'pla
 /** Turn-lifecycle notification methods — the only frames whose child-thread copies must be
  *  dropped so a sub-agent turn can't be mistaken for the parent's (#600). */
 const TURN_LIFECYCLE_METHODS = new Set(['turn/started', 'turn/completed', 'turn/failed']);
-
-const REASONING_SUMMARIES = new Set(['auto', 'concise', 'detailed', 'none']);
-
-/**
- * The reasoning-summary override sent on `turn/start` (TurnStartParams.summary).
- * Defaults to `auto` so reasoning is visible out of the box — without it the
- * app-server runs with its own default (no summary) and the reasoning thread
- * stays empty even when the model reasons. `CEZ_CODEX_REASONING` overrides the
- * default (`auto`/`concise`/`detailed`, or `none` to opt out); an unrecognized
- * value falls back to `auto`.
- */
-export function reasoningSummary(env: NodeJS.ProcessEnv = process.env): string {
-  const raw = productEnv('CODEX_REASONING', env)?.trim().toLowerCase();
-  if (!raw) return 'auto';
-  return REASONING_SUMMARIES.has(raw) ? raw : 'auto';
-}
-
-/**
- * Fields sent on `turn/start` besides thread/input. `summary` is the existing
- * `CEZ_CODEX_REASONING` knob (out of scope for #45). `effort` is the per-run
- * pin — omitted when unset so the app-server keeps its default.
- */
-export function codexTurnStartExtras(
-  spec: Pick<AgentRunSpec, 'effort'>,
-  env: NodeJS.ProcessEnv = process.env,
-): { summary: string; effort?: string } {
-  const effort = parseEffort(spec.effort);
-  return {
-    summary: reasoningSummary(env),
-    ...(effort ? { effort } : {}),
-  };
-}
 
 function textOf(content: ContentBlock[]): string {
   return content

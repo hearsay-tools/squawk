@@ -435,3 +435,19 @@ Implemented adapter output (271 ms, 28 skills, trimmed):
 
 Real native response excerpt: `core/__fixtures__/omp/skill-list.json` under the service
 workspace. The adapter keeps native warnings as problems and does not read a skill body.
+
+## Slice 2 trigger checks (2026-11-16)
+
+omp 18.13.1, `cliproxy/gpt-5.6-luna`. The check sent `/skill:probe-project fixture
+arguments` on the first native assistant/stream frame. It returned the random fixture token
+without tools in 24109 ms, within one turn boundary. Two real prompts were used. The native
+`message_start` carries a custom `skill-prompt`; `details.prompt` contains the user trigger.
+`skillTriggerMidTurn` is true.
+
+The mapper emits one user item on `message_start`, ignores repeated end payloads, and the
+RPC turn handler releases the input hold like an ordinary user message. The golden fixture
+`skill-trigger.expected.json` is pinned by `omp-ui-mapper.test.ts`, persisted without duplicate
+items by `runs/ui-event-sink.test.ts`, and rendered once by
+`web/src/routes/task-thread/session-transcript.test.tsx`.
+
+See [slice 2 evidence](slice2-evidence.md) for commands, captures and offline checks.

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { claudeTrigger, skillFrames, knownSkill, SKILL_TOKEN } from './mock-skill-trigger.mjs';
 import { productEnv } from './product-env.mjs';
 import { CLAUDE_FAILURES } from './mock-provider-failures.mjs';
 import { loadControls } from './mock-controls.mjs';
@@ -82,7 +83,8 @@ if (process.env.CEZ_MOCK_ARGS_FILE) {
 }
 
 if (process.env.CEZ_MOCK_CI_PR) { const { probeCiTool } = await import('./mock-ci-tool.mjs'); await probeCiTool('claude', process.argv.slice(2)); }
-emit({ type: 'system', subtype: 'init' });
+const sessionFlag = process.argv.includes('--resume') ? '--resume' : '--session-id';
+emit({ type: 'system', subtype: 'init', session_id: process.argv[process.argv.indexOf(sessionFlag) + 1] ?? 'session_mock' });
 
 let turn = 0;
 const scenarioContext = {
@@ -773,6 +775,8 @@ rl.on('line', (line) => {
   let userText = '(unparseable message)';
   let imageCount = 0;
   let uuid;
+  let trigger;
+  let skillBlocks;
   try {
     const msg = JSON.parse(trimmed);
     if (isSkillListRequest(msg)) {
@@ -797,6 +801,8 @@ rl.on('line', (line) => {
     const blocks = msg?.message?.content ?? [];
     userText = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n') || '(no text)';
     imageCount = blocks.filter((b) => b.type === 'image').length;
+    trigger = claudeTrigger(blocks);
+    skillBlocks = blocks;
   } catch {
     // keep placeholders
   }
@@ -807,7 +813,7 @@ rl.on('line', (line) => {
   // text this hook captures.
   if (process.env.CEZ_MOCK_STDIN_FILE) {
     try {
-      appendFileSync(process.env.CEZ_MOCK_STDIN_FILE, `${JSON.stringify({ userText, imageCount })}\n`);
+      appendFileSync(process.env.CEZ_MOCK_STDIN_FILE, `${JSON.stringify({ userText, imageCount, ...(trigger ? { blocks: skillBlocks } : {}) })}\n`);
     } catch {
       // best effort — never break the mock over the hook
     }
@@ -818,7 +824,16 @@ rl.on('line', (line) => {
   if (drop && userText.includes(drop) && !(process.env.CEZ_MOCK_DROP_ONCE === '1' && droppedOnce)) { droppedOnce = true; return; }
   userText = answerNudge(withoutSessionContext(userText));
   if (steering) { steering.push({ userText, uuid }); return; }
-  queue = queue.then(() => respond(userText, imageCount, uuid));
+  queue = queue.then(() => {
+    if (!trigger) return respond(userText, imageCount, uuid);
+    respondingUuid = uuid;
+    const known = knownSkill('claude', trigger);
+    if (known && replay) emit({ ...skillFrames('claude', trigger)[0], uuid, isReplay: true });
+    else emitReplay(uuid, userText);
+    const text = known ? SKILL_TOKEN : userText;
+    emit({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } });
+    emit({ type: 'result', subtype: 'success', result: text, usage: { input_tokens: 10, output_tokens: 5 } });
+  });
 });
 rl.on('close', () => {
   // EOF = session over; finish any in-flight turn then exit cleanly.

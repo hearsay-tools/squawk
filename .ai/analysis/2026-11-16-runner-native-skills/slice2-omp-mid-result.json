@@ -1,0 +1,22 @@
+{
+  "runner": "omp",
+  "model": "cliproxy/gpt-5.6-luna",
+  "elapsedMs": 24109,
+  "tokenReturned": true,
+  "tools": 0,
+  "sentMid": true,
+  "midAccepted": true,
+  "boundaries": 1,
+  "expansionFrames": 1,
+  "session": [
+    {
+      "type": "session",
+      "sessionId": "01a1e647-33b5-73b3-9f9a-958fa5ef9c55",
+      "resumed": false
+    }
+  ],
+  "errors": [],
+  "userItems": [
+    "/skill:probe-project fixture arguments"
+  ]
+}

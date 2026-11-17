@@ -168,3 +168,31 @@ describe('codex agent input steering (#505)', () => {
     session.end(); await session.result;
   });
 });
+
+
+describe('codex native skill admission', () => {
+  const trigger = [{ type: 'skill' as const, id: 'probe-project', path: '/probe/SKILL.md', args: 'skill argument' }];
+  it('refuses a skill on an active turn without sending turn/steer or turn/start', async () => {
+    const { session, events, requests } = start('mock:steer-tool');
+    try {
+      await waitUntil(() => events.some(event => event.type === 'tool-call'));
+      expect(session.sendMessage(trigger)).toBe(false);
+      expect(session.sendAgentMessage(trigger)).toBe(false);
+      // The calls refuse synchronously; no async submission is scheduled.
+      expect(requests().filter(row => row.method === 'turn/start')).toHaveLength(1);
+      expect(requests().some(row => row.method === 'turn/steer')).toBe(false);
+    } finally { session.end(); await session.result; }
+  });
+  it.each(['plain', 'skill'] as const)('refuses a second skill while an idle %s start is pending', async first => {
+    const { session, events, requests } = start('inspect the tree');
+    try {
+      await waitUntil(() => events.some(event => event.type === 'turn-end'));
+      expect(session.sendMessage(first === 'skill' ? trigger : [{ type: 'text', text: 'next prompt' }])).toBe(true);
+      expect(session.sendMessage(trigger)).toBe(false);
+      expect(session.sendAgentMessage(trigger)).toBe(false);
+      await waitUntil(() => events.filter(event => event.type === 'turn-end').length === 2);
+      expect(requests().filter(row => row.method === 'turn/start')).toHaveLength(2);
+      expect(requests().some(row => row.method === 'turn/steer')).toBe(false);
+    } finally { session.end(); await session.result; }
+  });
+});
