@@ -28,6 +28,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => resetToasts())
   cleanup()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -960,32 +961,19 @@ describe('⌘/Ctrl+Enter submits the follow-up composer (open-mercato/cezar#408 
     )
   })
 
-  it('a bare Enter does NOT submit — it is a multi-line instructions box', async () => {
+  it.each([
+    { name: 'bare Enter', modifiers: {} },
+    { name: 'Shift+Ctrl+Enter', modifiers: { ctrlKey: true, shiftKey: true } },
+  ])('$name does not submit the multiline instructions', async ({ modifiers }) => {
     const sent = stubFetch()
     await openDetail()
-
-    const textarea = screen.getByLabelText('Custom prompt')
-    fireEvent.keyDown(textarea, { key: 'Enter' })
-
-    // Give any (wrongly) scheduled submit a tick to happen before asserting its absence.
-    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
-    expect(sent.some((request) => request.method === 'POST' && request.path === '/api/v1/runs')).toBe(
-      false,
-    )
+    await waitForAgentRunEnabled()
+    vi.useFakeTimers()
+    fireEvent.keyDown(screen.getByLabelText('Custom prompt'), { key: 'Enter', ...modifiers })
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(sent.some((request) => request.method === 'POST' && request.path === '/api/v1/runs')).toBe(false)
   })
 
-  it('Shift+Ctrl+Enter does not submit — Shift wins, same rule as the thread composer', async () => {
-    const sent = stubFetch()
-    await openDetail()
-
-    const textarea = screen.getByLabelText('Custom prompt')
-    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true, shiftKey: true })
-
-    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
-    expect(sent.some((request) => request.method === 'POST' && request.path === '/api/v1/runs')).toBe(
-      false,
-    )
-  })
 })
 
 
