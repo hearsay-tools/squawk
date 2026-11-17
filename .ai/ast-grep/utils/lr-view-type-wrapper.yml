@@ -1,8 +1,0 @@
-id: lr-view-type-wrapper
-language: typescript
-rule:
-  all:
-    - kind: generic_type
-    - has:
-        field: name
-        regex: ^(Pick|Omit|Partial|Required|NonNullable)$
