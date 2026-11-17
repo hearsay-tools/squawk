@@ -57,7 +57,7 @@ export function describeSkillProvisionParity(part: ParityPart, collect?: ParityC
             workflowDef: plannedWorkflow(skillTaskSteps('probe-project')),
             env: { CEZ_MOCK_STDIN_FILE: wireFile, CEZ_MOCK_ARGS_FILE: argsFile },
             beforeStart: ({ manager, repoRoot }) => {
-              writeFileSync(join(repoRoot, '.ai/cezar/context.yaml'), 'version: 1\nrules:\n  - id: native-opening\n    target: both\n    template: CONTEXT-RULE-NATIVE-SENTINEL\n');
+              writeFileSync(join(repoRoot, '.ai/cezar/context.yaml'), 'version: 1\nrules:\n  - id: native-opening\n    on: session_start\n    target: both\n    template: CONTEXT-RULE-NATIVE-SENTINEL\n');
               manager.setSkillCatalog(new RunnerSkillCatalog({ adapters: hostSkillCatalogAdapters({ [runner]: HARNESS_ADAPTERS[runner].mockBin }) }));
             },
           });
