@@ -11,12 +11,12 @@ import type { RunModuleContext, StepProfile } from './types.ts';
 let skillsWrites: { catalog(group: SkillsGroup, catalog: readonly RunnerSkill[], query: SkillCatalogQuery, account: string, unavailableReason: string | undefined): void };
 /** The exact list this runner process saw when it opened. Only RunSkills writes it. */
 export class SkillsGroup {
-  #catalog: readonly RunnerSkill[] = Object.freeze([]);
+  #catalog: readonly Readonly<RunnerSkill>[] = Object.freeze([]);
   #query: Readonly<SkillCatalogQuery> | undefined;
   #account = 'default';
   #unavailableReason: string | undefined;
   constructor() { Object.freeze(this); }
-  get catalog(): readonly RunnerSkill[] { return this.#catalog; }
+  get catalog(): readonly Readonly<RunnerSkill>[] { return this.#catalog; }
   get query(): Readonly<SkillCatalogQuery> | undefined { return this.#query; }
   get account(): string { return this.#account; }
   get unavailableReason(): string | undefined { return this.#unavailableReason; }

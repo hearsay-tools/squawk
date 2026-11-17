@@ -2,9 +2,8 @@ import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
 import { partitionParity, type ParityPart, type ParityCollector } from './parity-partition.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 /**
- * #790: a skill-driven task must keep `skillSystemPrompt` on Continue and
- * restart recovery for every runner that resends the system prompt, and must
- * not duplicate it into an in-thread resume.
+ * hearsay-tools/squawk#3751: Continue and recovery keep native skill/session behavior without
+ * injecting skill text or retriggering a skill in a resumed conversation.
  */
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -176,8 +175,21 @@ function markWire(argsFile: string, stdinFile: string): { args: number; stdin: n
 function skillInPrompt(prompt: string, _repoRoot: string): boolean {
   return !prompt.includes(SKILL_BODY) && !prompt.includes('Selected skill:') && prompt.includes(EXTRA_PROMPT);
 }
-function hasNativeTrigger(recording: string): boolean {
-  return recording.includes('/probe-project') || recording.includes('/skill:probe-project') || recording.includes('"type":"skill"') || recording.includes('"command":"probe-project"');
+function hasNativeTrigger(backend: RunnerId, recording: string): boolean {
+  return parsedLines(recording).some(row => {
+    const rec = asRecord(row);
+    if (!rec) return false;
+    if (backend === 'codex') {
+      const input = asRecord(rec.params)?.input;
+      return rec.method === 'turn/start' && Array.isArray(input) && input.some(block => asRecord(block)?.type === 'skill');
+    }
+    if (backend === 'opencode') return typeof rec.url === 'string' && rec.url.endsWith('/command') && asRecord(rec.body)?.command === SKILL_NAME;
+    if (backend === 'claude') return Array.isArray(rec.blocks) && rec.blocks.some(block => {
+      const text = asRecord(block)?.text;
+      return typeof text === 'string' && text.startsWith(`/${SKILL_NAME} `);
+    });
+    return typeof rec.userText === 'string' && rec.userText.startsWith(`/skill:${SKILL_NAME} `);
+  });
 }
 
 const idleOwners = new WeakMap<RunManager, {
@@ -333,7 +345,7 @@ function assertLaunchKeepsSkill(backend: RunnerId, repoRoot: string, recording: 
   expect(prompts.length, `${backend} launch recorded a system prompt`).toBeGreaterThan(0);
   const launch = prompts[0]!;
   expect(skillInPrompt(launch, repoRoot), `${backend} launch has extra context without skill text`).toBe(true);
-  expect(hasNativeTrigger(recording)).toBe(true);
+  expect(hasNativeTrigger(backend, recording)).toBe(true);
   return launch;
 }
 
@@ -346,8 +358,10 @@ function assertContinuationSkill(
   const prompts = systemPromptsFrom(backend, continuationRecording);
   expect(prompts.length, `${backend} continuation recorded a system prompt`).toBeGreaterThan(0);
   const continued = prompts[prompts.length - 1]!;
-  expect(skillInPrompt(continued, repoRoot)).toBe(true);
-  expect(hasNativeTrigger(continuationRecording)).toBe(false);
+  if (!IN_THREAD.has(backend)) expect(skillInPrompt(continued, repoRoot)).toBe(true);
+  expect(continued).not.toContain(SKILL_BODY);
+  expect(continued).not.toContain('Selected skill:');
+  expect(hasNativeTrigger(backend, continuationRecording)).toBe(false);
 }
 
 const PARTS: Readonly<Record<string, readonly string[]>> = {

@@ -51,15 +51,16 @@ export function describeSkillProvisionParity(part: ParityPart, collect?: ParityC
       it(`${runner} R92 starts the selected skill natively with opening context and no injected body`, async () => {
         const dir = mkdtempSync(join(tmpdir(), 'native-step-wire-'));
         const wireFile = join(dir, 'wire.ndjson');
+        const argsFile = join(dir, 'args.ndjson');
         try {
           const result = await driveRun(runner, { prompt: 'native step arguments' }, run => run?.status === 'waiting' || run?.status === 'failed', 30_000, undefined, {
             workflowDef: plannedWorkflow(skillTaskSteps('probe-project')),
-            env: { CEZ_MOCK_STDIN_FILE: wireFile },
+            env: { CEZ_MOCK_STDIN_FILE: wireFile, CEZ_MOCK_ARGS_FILE: argsFile },
             beforeStart: ({ manager }) => manager.setSkillCatalog(new RunnerSkillCatalog({ adapters: hostSkillCatalogAdapters({ [runner]: HARNESS_ADAPTERS[runner].mockBin }) })),
           });
           expect(result.record?.error).toBeUndefined();
           expect(result.events.some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE'))).toBe(true);
-          const wire = read(wireFile);
+          const wire = [read(argsFile), read(wireFile)].join('\n');
           expect(wire).toContain('probe-project');
           expect(wire).toContain('native step arguments');
           expect(wire).toContain('cezar-context');
