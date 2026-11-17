@@ -48,7 +48,7 @@ function mergeMethodFields(out: Record<string, unknown>, value: EsNode): void {
   Object.defineProperties(out, descriptors);
 }
 
-function literalType(node: EsNode): string {
+export function literalType(node: EsNode): string {
   if (node.regex) return 'RegExpLiteral';
   if (node.bigint !== undefined || typeof node.value === 'bigint') return 'BigIntLiteral';
   if (node.value === null) return 'NullLiteral';
@@ -86,11 +86,11 @@ function optionalChainNode(node: EsNode): boolean {
   return optional;
 }
 
-function isMethodDefinition(node: EsNode): boolean {
+export function isMethodDefinition(node: EsNode): boolean {
   return node.type === 'MethodDefinition' || node.type === 'TSAbstractMethodDefinition';
 }
 
-function methodType(node: EsNode): string {
+export function methodType(node: EsNode): string {
   if (node.type === 'TSAbstractMethodDefinition' || child(node, 'value')?.type === 'TSEmptyBodyFunctionExpression') return 'TSDeclareMethod';
   return child(node, 'key')?.type === 'PrivateIdentifier' ? 'ClassPrivateMethod' : 'ClassMethod';
 }

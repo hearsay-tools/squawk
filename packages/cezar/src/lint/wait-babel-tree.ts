@@ -1,5 +1,6 @@
 import type { Node, Program } from '@babel/types';
 import type { EsNode } from './ast-rule.ts';
+import { isMethodDefinition, literalType, methodType } from './ast-node-view.ts';
 
 /**
  * Oxlint's ESTree program as the plain babel-shaped tree the cockpit wait rule reads
@@ -13,22 +14,6 @@ type Out = Record<string, unknown>;
 const SKIPPED = new Set(['parent', 'tokens', 'comments', 'loc', 'range']);
 
 const isNode = (value: unknown): value is EsNode => typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string';
-
-function literalType(node: EsNode): string {
-  if (node.regex) return 'RegExpLiteral';
-  if (node.bigint !== undefined || typeof node.value === 'bigint') return 'BigIntLiteral';
-  if (node.value === null) return 'NullLiteral';
-  if (typeof node.value === 'string') return 'StringLiteral';
-  if (typeof node.value === 'boolean') return 'BooleanLiteral';
-  return 'NumericLiteral';
-}
-
-const isMethodDefinition = (node: EsNode): boolean => node.type === 'MethodDefinition' || node.type === 'TSAbstractMethodDefinition';
-
-function methodType(node: EsNode): string {
-  if (node.type === 'TSAbstractMethodDefinition' || (node.value as EsNode | undefined)?.type === 'TSEmptyBodyFunctionExpression') return 'TSDeclareMethod';
-  return (node.key as EsNode | undefined)?.type === 'PrivateIdentifier' ? 'ClassPrivateMethod' : 'ClassMethod';
-}
 
 /** The receiver a chain continues through: a member's object, a call's callee, a non-null assertion's expression. */
 function receiverOf(node: EsNode): EsNode | undefined {
