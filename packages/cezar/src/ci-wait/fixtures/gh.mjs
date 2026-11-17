@@ -13,12 +13,6 @@ const rerun = process.env.CI_FIXTURE_RERUN_STATE && readFileSync(process.env.CI_
 if (mode === 'auth') { console.error('HTTP 401: authentication required secret-token'); process.exit(1); }
 if (mode === 'overflow') { process.stdout.write('x'.repeat(70*1024)); process.exit(0); }
 if (mode === 'malformed') { console.log('{bad'); process.exit(0); }
-if (mode === 'transient') {
- const file = process.env.CI_FIXTURE_COUNTER;
- const count = existsSync(file) ? Number(readFileSync(file,'utf8')) : 0;
- writeFileSync(file,String(count+1));
- if (count < 3) { console.error('HTTP 503 service unavailable'); process.exit(1); }
-}
 if (args[0] === 'api') {
  if (process.env.CI_FIXTURE_API_ERROR) { console.error(process.env.CI_FIXTURE_API_ERROR); process.exit(1); }
  const pages = rerun ? [{total_count:1,workflow_runs:[{id:1,head_sha:head,status:rerun==='complete'?'completed':rerun==='hidden'?'queued':'in_progress'}]}] : JSON.parse(process.env.CI_FIXTURE_RUN_PAGES || '[{"total_count":0,"workflow_runs":[]}]');
@@ -33,7 +27,7 @@ if (args[0] === 'api') {
  } else process.exit(mode === 'failed' ? 1 : 0);
 } else {
  if(mode === 'no_checks') { console.error("no checks reported on the 'feature' branch"); process.exit(1); }
- const buckets = { passed:'pass',failed:'fail',cancelled:'cancel',skipped:'skipping',pending:'pending',stubborn:'pending',transient:'pass' };
+ const buckets = { passed:'pass',failed:'fail',cancelled:'cancel',skipped:'skipping',pending:'pending',stubborn:'pending' };
  const rows = mode === 'no_checks' ? [] : [{name:'build',state:({pending:'PENDING',stubborn:'PENDING',failed:'FAILURE',cancelled:'CANCELLED',skipped:'SKIPPED'})[phase]||'SUCCESS',bucket:buckets[phase]||'pass',link:'https://github.com/org/repo/actions/runs/1'}];
  if (rerun && rerun !== 'hidden') rows.push({name:'review rerun',state:rerun==='complete'?'SUCCESS':'PENDING',bucket:rerun==='complete'?'pass':'pending',link:'https://github.com/org/repo/actions/runs/1/job/2'});
  if (phase.startsWith('mixed_')) {

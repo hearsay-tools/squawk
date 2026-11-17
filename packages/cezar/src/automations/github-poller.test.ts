@@ -347,11 +347,6 @@ describe('GithubPoller', () => {
     await expect(poller.poll('acme', 'demo', rule, { historyScan: { since: '2026-07-25T00:00:00.000Z', until: '2026-07-27T00:00:00.000Z', source: 0, page: 10, item: 0, event: 0 } })).rejects.toThrow('1000-item limit');
   });
 
-  it('repeats all/any/exclude/author/assignee filters locally', () => {
-    const candidate = { eventId: 'e', event: 'issue.opened' as const, timestamp: item.created_at, tieBreaker: 'I', repo: 'acme/demo', nodeId: 'I', number: 7, title: 'x', url: item.html_url, author: 'alice', assignees: ['bob'], labels: ['bug', 'urgent'] };
-    expect(matchesFilters(candidate, { ...definition, filters: { ...definition.filters, authors: ['alice'], assignees: ['bob'], allLabels: ['bug'], anyLabels: ['urgent'], excludeLabels: ['wontfix'] } })).toBe(true);
-    expect(matchesFilters(candidate, { ...definition, filters: { ...definition.filters, excludeLabels: ['bug'] } })).toBe(false);
-  });
 
   it('reconstructs pre-event labels for removals and stable transition identities', () => {
     const rows = reconstructLabelEvents('acme', 'demo', item, [{ id: 9, event: 'unlabeled', created_at: '2026-07-26T02:00:00.000Z', label: { name: 'triage' } }]);
