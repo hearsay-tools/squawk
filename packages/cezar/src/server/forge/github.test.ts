@@ -850,7 +850,7 @@ describe('normalizeEvents (#525)', () => {
 
   it('drops `reviewed` so reviews are not rendered twice', () => {
     const { events } = normalizeEvents([
-      { event: 'reviewed', id: 9, submitted_at: '2026-01-01T00:00:00Z', body: 'LGTM' },
+      { event: 'reviewed', id: 9, created_at: '2026-01-01T00:00:00Z', submitted_at: '2026-01-01T00:00:00Z', body: 'LGTM' },
     ]);
     expect(events).toEqual([]);
   });
