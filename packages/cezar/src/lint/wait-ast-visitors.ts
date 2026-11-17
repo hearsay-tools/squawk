@@ -1,10 +1,11 @@
 import type { ArrowFunctionExpression, AwaitExpression, CallExpression, Comment, File, Node } from '@babel/types';
 import { babelView, originalNode } from './ast-node-view.ts';
 import { child, children, nameOf, stringOf, type EsNode, type Visitors } from './ast-rule.ts';
-import { acceptance, awaitedSleep, isFunction, loopAround, report, runsEveryPass, testingLibrary, type Ctx, type Site } from './unit-wait-discipline.ts';
+import { acceptance, awaitedSleep, isFunction, isPollLoop, loopAround, report, runsEveryPass, testingLibrary, type Ctx, type Site, type Where } from './unit-wait-discipline.ts';
 import { calleeOf, placeAt, readerFor, sizeNumber, testingLibraryBound, vitestBound } from './unit-wait-values.ts';
 import { pollDeadline } from './unit-wait-deadlines.ts';
 import { serverNumber, serverRead, serverVitestBound } from './server-wait-ast-values.ts';
+import { serverDeadlineEvaluation } from './server-wait-ast-deadlines.ts';
 
 /** Shared AST site discovery for the two wait disciplines (hearsay-tools/squawk#3774). */
 export interface WaitSource {
@@ -55,20 +56,35 @@ function serverSleep(argument: Node): { delay: Node | undefined } | undefined {
   return call ? serverTimer(call, executor.params[0].name) : undefined;
 }
 
-function inCollection(ancestors: readonly Node[]): boolean {
+function directServerBody(body: Node, sleeping: Node, allowIf: boolean): boolean {
+  let statement = body;
+  while (allowIf && statement.type === 'IfStatement') {
+    const branch = statement.consequent;
+    if ((sleeping.start ?? 0) < (branch.start ?? 0) || (sleeping.end ?? 0) > (branch.end ?? 0)) return false;
+    statement = branch;
+  }
+  return statement.type === 'ExpressionStatement' && statement.start === sleeping.start;
+}
+
+/** The old server scanner follows unbraced bodies only through direct if consequents. */
+function serverLoopAround(ancestors: readonly Node[], sleeping: Node): Where | 'collection' | undefined {
   for (let index = ancestors.length - 1; index >= 0; index -= 1) {
     const node = ancestors[index]!;
-    if (isFunction(node)) return false;
-    if (collection.has(node.type)) return true;
-    if (node.type === 'ForStatement' || node.type === 'WhileStatement' || node.type === 'DoWhileStatement') return false;
+    if (isFunction(node)) return undefined;
+    if (!isPollLoop(node) && !collection.has(node.type)) continue;
+    const body = 'body' in node ? node.body as Node : undefined;
+    if (!body || (sleeping.start ?? 0) < (body.start ?? 0) || (sleeping.end ?? 0) > (body.end ?? 0)) continue;
+    if (body.type !== 'BlockStatement' && !directServerBody(body, sleeping, node.type !== 'DoWhileStatement')) continue;
+    return collection.has(node.type) ? 'collection' : loopAround(ancestors.slice(0, index + 1));
   }
-  return false;
+  return undefined;
 }
 
 function visitSleep(node: AwaitExpression, ancestors: readonly Node[], ctx: Ctx, profile: WaitProfile): void {
   const sleep = profile === 'server' ? serverSleep(node.argument) : awaitedSleep(node.argument);
-  if (!sleep || (profile === 'server' && inCollection(ancestors))) return;
-  const around = loopAround(ancestors);
+  if (!sleep) return;
+  const around = profile === 'server' ? serverLoopAround(ancestors, node) : loopAround(ancestors);
+  if (around === 'collection') return;
   if (!around) {
     const read = profile === 'server' ? () => undefined : readerFor(ancestors, node.start ?? 0);
     const delay = profile === 'server' ? serverNumber(sleep.delay, read) : sizeNumber(sleep.delay, read);
@@ -172,7 +188,7 @@ export function waitVisitors(profile: WaitProfile, source: WaitSource, finish: (
     VariableDeclarator(node) { if (profile === 'server' && helpers.has(nameOf(child(node, 'id')) ?? '') && child(node, 'init')?.type === 'ArrowFunctionExpression') remember(node, (view, ancestors) => visitDefaults(view, ancestors, ctx, floor)); },
     'Program:exit'() {
       for (const [loop, { sleeps, where }] of ctx.loops) {
-        const deadline = pollDeadline(where, sleeps);
+        const deadline = pollDeadline(where, sleeps, profile === 'server' ? serverDeadlineEvaluation : undefined);
         if (deadline !== 'none' && !(typeof deadline === 'number' && !(deadline >= floor && Number.isFinite(deadline)))) continue;
         const before = ctx.sites.length;
         report(ctx, 'poll-deadline', loop);

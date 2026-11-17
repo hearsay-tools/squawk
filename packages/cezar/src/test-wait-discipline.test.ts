@@ -168,6 +168,11 @@ describe('rule sleep', () => {
     )).toEqual([]);
   });
 
+  it('keeps an unbraced loop else-branch sleep in the server bare-sleep scope', () => {
+    const source = 'while (!ready()) if (Date.now() - t0 > 15_000) break; else await sleep(10);';
+    expect(scanWaitAst('server', 'x.test.ts', source)).toEqual([{ file: 'x.test.ts', rule: 'sleep', site: source, line: 1 }]);
+  });
+
   it('leaves a sleep in a loop body alone: it is a poll interval', () => {
     expect(scan(
       'while (!ready()) {',
@@ -392,6 +397,14 @@ describe('rule short-bound', () => {
 });
 
 describe('rule poll-deadline', () => {
+  it('keeps an unknown possible interval from borrowing a known earlier value', () => {
+    expect(polls('let interval = 1000; interval = chooseDelay(); for (let i = 0; i < 20; i++) await sleep(interval);')).toHaveLength(1);
+  });
+
+  it('keeps nested Math delays and bigint clock reads in the server evaluator', () => {
+    expect(polls('for (let i = 0; i < 20; i++) await sleep(Math.max(1, 2) * 1000); const t0 = process.hrtime.bigint(); while (process.hrtime.bigint() - t0 < 20000000000) await sleep(10);')).toEqual([]);
+  });
+
   it('pins the same 10 s threshold as the short-bound rule', () => {
     expect(polls('const deadline = Date.now() + 9_999;', 'while (Date.now() < deadline) await sleep(10);')).toHaveLength(1);
     expect(polls('const deadline = Date.now() + 10_000;', 'while (Date.now() < deadline) await sleep(10);')).toEqual([]);

@@ -57,19 +57,33 @@ function literalType(node: EsNode): string {
   return 'NumericLiteral';
 }
 
-/** Babel marks every call/member on an optional-chain spine, including optional:false tails. */
+const chainMembership = new WeakMap<EsNode, boolean>();
+
+/** Only receiver/callee edges continue a chain; a nested ChainExpression starts a new one. */
+function chainReceiver(node: EsNode): EsNode | undefined {
+  if (node.type === 'MemberExpression') return child(node, 'object');
+  if (node.type === 'CallExpression') return child(node, 'callee');
+  if (node.type === 'TSNonNullExpression') return child(node, 'expression');
+  return undefined;
+}
+
+/** Babel's optional node shapes begin at the first optional segment, leaving its base ordinary. */
 function optionalChainNode(node: EsNode): boolean {
-  if (node.optional === true) return true;
-  let current = node;
-  for (let parent = current.parent; parent; parent = current.parent) {
-    if (parent.type === 'ChainExpression') return true;
-    const continues = (parent.type === 'MemberExpression' && parent.object === current)
-      || (parent.type === 'CallExpression' && parent.callee === current)
-      || (parent.type === 'TSNonNullExpression' && parent.expression === current);
-    if (!continues) return false;
-    current = parent;
+  const known = chainMembership.get(node);
+  if (known !== undefined) return known;
+  if (node.optional === true) { chainMembership.set(node, true); return true; }
+  const pending: EsNode[] = [node];
+  let current = chainReceiver(node);
+  let optional = false;
+  while (current) {
+    const cached = chainMembership.get(current);
+    if (cached !== undefined) { optional = cached; break; }
+    pending.push(current);
+    if (current.optional === true) { optional = true; break; }
+    current = chainReceiver(current);
   }
-  return false;
+  for (const member of pending) chainMembership.set(member, optional);
+  return optional;
 }
 
 function isMethodDefinition(node: EsNode): boolean {

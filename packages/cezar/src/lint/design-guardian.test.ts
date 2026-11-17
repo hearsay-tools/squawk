@@ -33,6 +33,21 @@ describe('design guardian scanner', () => {
     expect(findings[0]?.message).toContain(name === 'no-dark-variant' ? 'dark:' : token);
   });
 
+  it('finds direct native dialog calls through comments before their arguments', () => {
+    for (const source of [
+      "confirm /* explain */ ('Delete?');",
+      "window.alert /* explain */ ('Saved');",
+      "globalThis.prompt /* explain */ ('Name');",
+    ]) {
+      const findings = guardianFindings('packages/web/src/sample.tsx', source);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toContain('no-native-dialogs —');
+    }
+    expect(guardianFindings('packages/web/src/sample.tsx', "confirm // explain\n('Delete?');")).toEqual([]);
+    expect(guardianFindings('packages/web/src/sample.tsx', "confirm?.('Delete?'); other.confirm('Delete?'); window['confirm']('Delete?'); (confirm)('Delete?'); (window).confirm('Delete?'); confirm<string>('Delete?');"))
+      .toEqual([]);
+  });
+
   it('reports tokens on their real lines inside multiline literals', () => {
     const source = 'const classes = `safe\ntext-pending\ntext-pending`;';
     const findings = checkRule(designGuardian, 'packages/web/src/sample.tsx', source);

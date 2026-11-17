@@ -356,6 +356,15 @@ export interface Probe {
   interval: Bound
   /** Whether a name or path read at a use comes from outside the file, so the caller sizes it. */
   outside: (node: Node, use: Use) => boolean
+  /** The server keeps its original numeric and clock semantics; absent for cockpit scans. */
+  evaluation?: DeadlineEvaluation | undefined
+}
+
+export interface DeadlineEvaluation {
+  clock(node: Node): boolean
+  read(view: View, use: Use): Read
+  delay(node: Node, view: Where, use: Use): Bound
+  value(node: Node, view: View, use: Use): number | undefined
 }
 
 /**
@@ -452,6 +461,7 @@ export const readerFor = (ancestors: readonly Node[], at: number): Read => place
  * hold several values gives the smallest it can read, so a long value never hides a short one.
  */
 export function valueOf(node: Node, cx: Probe, use: Use, depth = 0): number | undefined {
+  if (cx.evaluation) return cx.evaluation.value(node, cx.where, use)
   if (depth > 3) return undefined
   if (node.type === 'Identifier' && !namedNumbers.has(node.name)) return smallest(heldBy(cx.where, use, node.name).map(held => valueOf(held.value, cx, held.use, depth + 1)))
   const direct = numberOf(node, nameReader(cx.where, use, depth))

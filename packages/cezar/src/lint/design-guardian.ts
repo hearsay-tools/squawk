@@ -236,7 +236,9 @@ function dialogToken(node: EsNode): string | undefined {
   const name = nameOf(callee);
   if (name && ['confirm', 'alert', 'prompt'].includes(name)) return `${name}(`;
   if (callee?.type !== 'MemberExpression' || callee.computed) return undefined;
-  const owner = nameOf(child(callee, 'object'));
+  const object = child(callee, 'object');
+  if (!object || (callee.range as [number, number])[0] !== (object.range as [number, number])[0]) return undefined;
+  const owner = nameOf(object);
   const method = nameOf(child(callee, 'property'));
   return owner && ['window', 'globalThis'].includes(owner) && method && ['confirm', 'alert', 'prompt'].includes(method)
     ? `${owner}.${method}(` : undefined;
@@ -254,6 +256,27 @@ export const designGuardian: AstRule = {
     const nativeRule = active.find(rule => rule.name === 'no-native-dialogs');
     const fixtureLines = new Map<number, { node: EsNode; offset: number; home: boolean; dry: boolean }>();
     const emitted = new Set<string>();
+    let commentEnds: Map<number, { end: number; multiline: boolean }> | undefined;
+    const sameDialogLine = (callee: EsNode): boolean => {
+      commentEnds ??= new Map(context.sourceCode.getAllComments().map(comment => {
+        const range = comment.range as [number, number];
+        const loc = comment.loc as { start: { line: number }; end: { line: number } };
+        return [range[0], { end: range[1], multiline: loc.start.line !== loc.end.line }];
+      }));
+      let at = (callee.range as [number, number])[1];
+      while (context.sourceCode.text[at] !== '(') {
+        const comment = commentEnds.get(at);
+        if (comment) {
+          if (comment.multiline) return false;
+          at = comment.end;
+        } else {
+          const character = context.sourceCode.text[at];
+          if (character === '\n' || character === '\r' || character === undefined) return false;
+          at++;
+        }
+      }
+      return true;
+    };
     const emit = (rule: Rule, node: EsNode, token: string, offset = 0) => {
       const start = guardianLocation(node);
       const prefix = context.sourceCode.getText(node).slice(0, offset).split('\n');
@@ -298,11 +321,10 @@ export const designGuardian: AstRule = {
       CallExpression(node) {
         const recognized = dialogToken(node);
         if (!nativeRule || !recognized) return;
-        const text = context.sourceCode.getText(node);
-        const open = text.indexOf('(');
-        const token = text.slice(0, open + 1);
-        // Parenthesized and computed callees were outside the original direct-call syntax.
-        if (token.slice(0, -1).trim() === recognized.slice(0, -1)) emit(nativeRule, node, token);
+        // The callee syntax survives comments between its name and the argument list.
+        const callee = child(node, 'callee')!;
+        if (node.optional || callee.optional || child(node, 'typeArguments') || (node.range as [number, number])[0] !== (callee.range as [number, number])[0] || !sameDialogLine(callee)) return;
+        emit(nativeRule, node, recognized);
       },
       Property(node) {
         const key = child(node, 'key');

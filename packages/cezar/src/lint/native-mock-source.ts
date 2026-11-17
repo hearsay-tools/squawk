@@ -12,7 +12,8 @@ function mockArgument(node: EsNode): boolean {
   walk(node, part => {
     const name = nameOf(part);
     if (name === 'mockBin' || (name !== undefined && /^[A-Z][A-Z_]*_MOCK$/.test(name))) found = true;
-    const value = stringOf(part);
+    const value = part.type === 'TemplateElement'
+      ? (part.value as { raw: string }).raw : stringOf(part);
     if (value !== undefined && /\bmockBin\b|\b[A-Z][A-Z_]*_MOCK\b|mock-[\w-]+\.mjs/.test(value)) found = true;
   });
   return found;
