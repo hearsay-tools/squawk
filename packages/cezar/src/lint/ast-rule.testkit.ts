@@ -32,3 +32,33 @@ export function ruleCases(rule: AstRule, { file, valid, invalid }: RuleCases): v
     invalid: invalid.map((code) => ({ code, filename, errors: 1 })),
   });
 }
+
+/** Run one imperative fixture through oxlint's parser and visitors, without a CLI process.
+ * RuleTester executes synchronously; restore its suite hooks before returning to Vitest. */
+export function checkRule(rule: AstRule, file: string, source: string): import('./source-rule.ts').Finding[] {
+  const findings: import('./source-rule.ts').Finding[] = [];
+  const previousDescribe = RuleTester.describe;
+  const previousIt = RuleTester.it;
+  const immediate = (_name: string, run: () => void) => run();
+  try {
+    RuleTester.describe = immediate as typeof RuleTester.describe;
+    RuleTester.it = immediate as typeof RuleTester.it;
+    const inspected: AstRule = {
+      ...rule,
+      create(_report, context) {
+        return rule.create((node, message) => {
+          const loc = node.loc as { start: { line: number } };
+          findings.push({ line: loc.start.line, message });
+        }, context);
+      },
+    };
+    const asOxlintRule = oxlintAstRule(inspected) as unknown as Parameters<RuleTester['run']>[1];
+    new RuleTester({ cwd: repoRoot }).run(rule.name, asOxlintRule, {
+      valid: [{ code: source, filename: join(repoRoot, file) }], invalid: [],
+    });
+  } finally {
+    RuleTester.describe = previousDescribe;
+    RuleTester.it = previousIt;
+  }
+  return findings;
+}

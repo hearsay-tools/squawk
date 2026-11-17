@@ -30,7 +30,17 @@ export interface AstRule {
   /** Whether the rule reads `file`, a path relative to the root oxlint runs in. */
   applies(file: string): boolean;
   /** The visitors for one file. They call `report` for each violation. */
-  create(report: Report): Visitors;
+  create(report: Report, context: AstContext): Visitors;
+}
+
+/** Source metadata for node diagnostics, reason comments and per-file allowances. */
+export interface AstContext {
+  file: string;
+  sourceCode: {
+    readonly text: string;
+    getText(node: EsNode): string;
+    getAllComments(): EsNode[];
+  };
 }
 
 const isNode = (value: unknown): value is EsNode =>
@@ -69,6 +79,7 @@ export function stringOf(node: EsNode | undefined): string | undefined {
 
 /** The subset of oxlint's rule context an AST rule uses. */
 export interface AstRuleContext extends Pick<RuleContext, 'cwd' | 'filename'> {
+  sourceCode: AstContext['sourceCode'];
   report(descriptor: { node: EsNode; message: string }): void;
 }
 
@@ -80,8 +91,9 @@ export function oxlintAstRule(rule: AstRule) {
   return {
     meta: { type: 'problem' as const, docs: { description: rule.description } },
     create(context: AstRuleContext): Visitors {
-      if (!rule.applies(repoPath(context.cwd, context.filename))) return {};
-      return rule.create((node, message) => context.report({ node, message }));
+      const file = repoPath(context.cwd, context.filename);
+      if (!rule.applies(file)) return {};
+      return rule.create((node, message) => context.report({ node, message }), { file, sourceCode: context.sourceCode });
     },
   };
 }
