@@ -25,7 +25,7 @@ export function bindingTarget(node: EsNode | undefined): EsNode | undefined {
 export function parameterOwner(node: EsNode): EsNode | undefined {
   let owner = node.parent;
   while (owner?.type === 'AssignmentPattern' || owner?.type === 'TSParameterProperty') owner = owner.parent;
-  return owner;
+  return owner ?? undefined;
 }
 export function annotation(node: EsNode | undefined): EsNode | undefined {
   if (!node) return undefined;
