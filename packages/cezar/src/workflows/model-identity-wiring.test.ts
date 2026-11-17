@@ -1,10 +1,10 @@
-import { createFixtureManager, removeFixtureRepo } from './fixture-cleanup.testkit.ts';
+import { createFixtureManager, drainFixtureManagers, removeFixtureRepo } from './fixture-cleanup.testkit.ts';
 import { execFile } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import type { WorkflowDef } from './types.ts';
 import type { RunManager } from './run.ts';
@@ -50,7 +50,14 @@ describe('model identity wiring (dry run)', () => {
     mkdirSync(join(repoRoot, '.ai/cezar'), { recursive: true });
     writeFileSync(join(repoRoot, '.ai/cezar', 'config.json'), JSON.stringify({ maxParallel: 1 }), 'utf8');
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
+  });
+
+  beforeEach(() => {
     manager = createFixtureManager(store, repoRoot);
+  });
+
+  afterEach(async () => {
+    await drainFixtureManagers(repoRoot);
   });
 
   afterAll(async () => {
@@ -92,19 +99,10 @@ describe('model identity wiring (dry run)', () => {
     return record.id;
   }
 
-  /** The `--model` value the mock was actually invoked with, or undefined when unset. */
-  function capturedModel(index = 0): string | undefined {
-    const lines = readFileSync(argsFile, 'utf8').trim().split('\n');
-    expect(lines.length).toBeGreaterThan(index);
-    const argv = JSON.parse(lines[index] as string) as string[];
-    const idx = argv.indexOf('--model');
-    return idx < 0 ? undefined : argv[idx + 1];
-  }
-
   it('a bare preset reaches the CLI bare and persists provider-qualified', async () => {
     const id = await runToEnd({ task: 'do the thing', model: 'opus' });
     // The wire form the claude CLI wants is the bare alias …
-    expect(capturedModel()).toBe('opus');
+    expect(capturedFlag('--model')).toBe('opus');
     // … while the record carries the canonical identity (#405's whole point).
     expect(store.getRun(id)?.modelIdentity).toBe('anthropic/opus');
     expect(store.getRun(id)?.model).toBe('opus'); // the free-text surface is untouched
@@ -166,10 +164,10 @@ describe('model identity wiring (dry run)', () => {
     expect(store.getRun(id)?.error).toBe('step "work" failed: Invalid effort');
   }, 30_000);
 
-  it('rejects a per-step effort with the existing models-locked error', async () => {
+  it.each(['high', 'auto'])('rejects authored step effort %s when models are locked', async effort => {
     const lockedEffortWorkflow: WorkflowDef = {
       ...workflow,
-      steps: workflow.steps.map((step) => step.id === 'work' ? { ...step, effort: 'high' } : step),
+      steps: workflow.steps.map((step) => step.id === 'work' ? { ...step, effort } : step),
     };
     writeFileSync(
       join(repoRoot, '.ai/cezar', 'config.json'),
@@ -192,55 +190,17 @@ describe('model identity wiring (dry run)', () => {
     }
   }, 30_000);
 
-  it('rejects an explicit auto per-step effort with the existing models-locked error', async () => {
-    const lockedEffortWorkflow: WorkflowDef = {
-      ...workflow,
-      steps: workflow.steps.map((step) => step.id === 'work' ? { ...step, effort: 'auto' } : step),
-    };
-    writeFileSync(
-      join(repoRoot, '.ai/cezar', 'config.json'),
-      JSON.stringify({ maxParallel: 1, modelsLocked: true }),
-      'utf8',
-    );
-
-    try {
-      const id = await runToEnd({ task: 'do the thing' }, lockedEffortWorkflow);
-      expect(store.getRun(id)?.status).toBe('failed');
-      expect(store.getRun(id)?.error).toContain(
-        'agent models are locked — configure the model in the native coding-agent settings',
-      );
-    } finally {
-      writeFileSync(
-        join(repoRoot, '.ai/cezar', 'config.json'),
-        JSON.stringify({ maxParallel: 1 }),
-        'utf8',
-      );
-    }
-  }, 30_000);
-
-  it('omits --effort when unset so the harness keeps its default (#45)', async () => {
-    await runToEnd({ task: 'do the thing' });
-    expect(capturedFlag('--effort')).toBeUndefined();
-  }, 30_000);
-
-  it('an auto (empty) model persists no identity and pins nothing on the wire', async () => {
+  it('unset model and effort leave the harness defaults and persist no identity', async () => {
     const id = await runToEnd({ task: 'do the thing' });
-    expect(capturedModel()).toBeUndefined();
+    expect(capturedFlag('--model')).toBeUndefined();
+    expect(capturedFlag('--effort')).toBeUndefined();
     expect(store.getRun(id)?.modelIdentity).toBeUndefined();
-  }, 30_000);
-
-  it('a provider-qualified model is normalised to the bare wire form for claude', async () => {
-    // `anthropic/claude-opus-4-1` is deliberately NOT one of opencode's known
-    // presets, so `continueRun`'s foreign-pin guard leaves it on the record and
-    // the continuation below exercises the normaliser rather than a cleared pin.
-    const id = await runToEnd({ task: 'do the thing', model: 'anthropic/claude-opus-4-1' });
-    expect(capturedModel()).toBe('claude-opus-4-1');
-    expect(store.getRun(id)?.modelIdentity).toBe('anthropic/claude-opus-4-1');
   }, 30_000);
 
   it('a continuation normalises the same way as the first spawn (#405 review M1)', async () => {
     const id = await runToEnd({ task: 'do the thing', model: 'anthropic/claude-opus-4-1' });
-    expect(capturedModel(0)).toBe('claude-opus-4-1');
+    expect(capturedFlag('--model', 0)).toBe('claude-opus-4-1');
+    expect(store.getRun(id)?.modelIdentity).toBe('anthropic/claude-opus-4-1');
 
     expect(manager.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
     const deadline = Date.now() + 20_000;
@@ -251,7 +211,7 @@ describe('model identity wiring (dry run)', () => {
     // The continuation reads `model` off the record — the RAW free-text string.
     // Without the normaliser it would hand the CLI `anthropic/claude-opus-4-1`,
     // a wire form the first step already converted away: same run, two models.
-    expect(capturedModel(1)).toBe('claude-opus-4-1');
+    expect(capturedFlag('--model', 1)).toBe('claude-opus-4-1');
     // A resumed session has no wall clock and parks at `waiting`, so this
     // asserts the record directly — the identity is written before the spawn.
     expect(store.getRun(id)?.modelIdentity).toBe('anthropic/claude-opus-4-1');
@@ -269,7 +229,7 @@ describe('model identity wiring (dry run)', () => {
       if (Date.now() > deadline) throw new Error('continuation did not start in time');
       await new Promise((r) => setTimeout(r, 100));
     }
-    expect(capturedModel(1)).toBe('haiku');
+    expect(capturedFlag('--model', 1)).toBe('haiku');
     // The record now asserts what the continuation ran, not what the run started with.
     expect(store.getRun(id)?.modelIdentity).toBe('anthropic/haiku');
   }, 40_000);
@@ -279,7 +239,7 @@ describe('model identity wiring (dry run)', () => {
     const record = store.getRun(id);
     expect(record?.status).toBe('done');
     expect(record?.modelIdentity).toBe('deepseek/deepseek-v4-flash');
-    expect(capturedModel(0)).toBe('deepseek/deepseek-v4-flash');
+    expect(capturedFlag('--model', 0)).toBe('deepseek/deepseek-v4-flash');
   }, 30_000);
 
   it('fails a run when the provider rejects its request instead of parking it as active', async () => {
