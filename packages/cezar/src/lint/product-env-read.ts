@@ -3,7 +3,9 @@ import { join } from 'node:path';
 import { parse } from '@babel/parser';
 import type { Node, TSTypeAliasDeclaration, TSTypeReference } from '@babel/types';
 import { property, unwrapped, visit } from './home-boundary.ts';
-import { lineAt, repoRoot, type SourceRule } from './source-rule.ts';
+import { repoRoot } from './source-rule.ts';
+import type { AstRule } from './ast-rule.ts';
+import { deferredAstView, originalAt } from './ast-node-view.ts';
 import { productEnvCalls, scannedEnvFile } from './undocumented-env-name.ts';
 
 export const productEnvBaselineFile = 'packages/cezar/src/lint/product-env-read.baseline.json';
@@ -204,6 +206,10 @@ function staticEnvNames(ast: Node): Map<string, string> {
 /** AST scanning avoids strings/comments, supports env arguments, brackets, aliases and destructuring. */
 export function productEnvReads(source: string, file = 'file.ts'): EnvRead[] {
   const ast = parse(source, { sourceType: 'unambiguous', plugins: ['typescript', ...(/\.[cm]?[jt]sx$/.test(file) ? ['jsx' as const] : [])] });
+  return productEnvReadsFromAst(ast, source);
+}
+
+function productEnvReadsFromAst(ast: Node, source: string): EnvRead[] {
   const types: TypeAliases = new Map();
   visit(ast, node => {
     if (node.type === 'TSTypeAliasDeclaration') types.set(node.id.name, node);
@@ -252,8 +258,12 @@ const key = (site: Pick<EnvRead, 'form' | 'name'>) => `${site.form}:${site.name}
 let baseline: EnvReadAllowance[] | undefined;
 export function scanProductEnvReads(file: string, source: string, allowances = (baseline ??= readProductEnvBaseline())): EnvRead[] {
   if (!productEnvFile(file)) return [];
+  return unallowedEnvReads(file, productEnvReads(source, file), allowances);
+}
+
+function unallowedEnvReads(file: string, reads: EnvRead[], allowances: EnvReadAllowance[]): EnvRead[] {
   const counts = new Map(allowances.filter(entry => entry.file === file).map(entry => [key(entry), entry.reads]));
-  return productEnvReads(source, file).filter(site => !nonSettingEnvRead(file, site)).filter(site => {
+  return reads.filter(site => !nonSettingEnvRead(file, site)).filter(site => {
     const remaining = counts.get(key(site)) ?? 0;
     counts.set(key(site), remaining - 1);
     return remaining <= 0;
@@ -278,12 +288,14 @@ export function staleProductEnvReads(root = repoRoot): string[] {
   });
 }
 
-export const productEnvRead: SourceRule = {
+export const productEnvRead: AstRule = {
   name: 'product-env-read',
   description: 'Read product settings through core/product-env.ts; remaining shipped reads use a shrink-only inventory.',
   applies: productEnvFile,
-  check: (file, source) => scanProductEnvReads(file, source).map(site => ({
-    line: lineAt(source, site.offset),
-    message: `${site.form} ${site.name}: use productEnv with a literal suffix or the dedicated home accessor. Never add an allowance to product-env-read.baseline.json (hearsay-tools/cezarion#2970).`,
-  })),
+  create: (report, { file, sourceCode }) => deferredAstView(name => productName(name) || /env$/i.test(name), ast => {
+    const sites = productEnvReadsFromAst(ast, sourceCode.text);
+    for (const site of unallowedEnvReads(file, sites, baseline ??= readProductEnvBaseline())) {
+      report(originalAt(ast, site.offset), `${site.form} ${site.name}: use productEnv with a literal suffix or the dedicated home accessor. Never add an allowance to product-env-read.baseline.json (hearsay-tools/cezarion#2970).`);
+    }
+  }),
 };
