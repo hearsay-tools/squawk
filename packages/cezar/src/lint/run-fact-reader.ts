@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { child, children, type AstRule, type EsNode } from './ast-rule.ts';
 import { literal, nodeLine, offset, propertyName, unwrap } from './ast-syntax.ts';
 import { scanned } from './contract-root-import.ts';
+import { blank } from './blank.ts';
 import { blankOnce, repoRoot } from './source-rule.ts';
 
 /**
@@ -121,12 +122,39 @@ const HOLD_BOUNDARIES = new Set([
 interface ResumeAccess { start: number; end: number }
 interface HoldSummary { resumes: ResumeAccess[]; waits: EsNode[]; barriers: number[] }
 
+const firstStatus = new WeakMap<EsNode, EsNode | undefined>();
+const lastStatus = new WeakMap<EsNode, EsNode | undefined>();
+
+/** The old comparison starts or ends at the first/last `.status` inside an operand.
+ * Cache each subtree once per direction; nested operands must not cause repeated walks. */
+function operandStatus(node: EsNode, first: boolean): EsNode | undefined {
+  const cache = first ? firstStatus : lastStatus;
+  if (cache.has(node)) return cache.get(node);
+  const members: EsNode[] = [];
+  if (node.type === 'MemberExpression' && !node.computed && propertyName(node) === 'status') members.push(node);
+  for (const key of Object.keys(node)) {
+    if (key === 'parent') continue;
+    const one = child(node, key);
+    for (const item of one ? [one] : children(node, key)) {
+      const status = operandStatus(item, first);
+      if (status) members.push(status);
+    }
+  }
+  const result = members.reduce<EsNode | undefined>((edge, member) => {
+    if (!edge) return member;
+    const earlier = offset(child(member, 'property')!) < offset(child(edge, 'property')!);
+    return earlier === first ? member : edge;
+  }, undefined);
+  cache.set(node, result);
+  return result;
+}
+
 /** Identify waiting comparisons; their parents may be casts, calls or other expressions. */
 function waitingStatus(node: EsNode): EsNode | undefined {
   if (node.type !== 'BinaryExpression' || !['===', '!=='].includes(String(node.operator))) return undefined;
   const left = child(node, 'left')!, right = child(node, 'right')!;
-  const status = literal(left) === 'waiting' ? unwrap(right) : literal(right) === 'waiting' ? unwrap(left) : undefined;
-  return status?.type === 'MemberExpression' && !status.computed && propertyName(status) === 'status' ? status : undefined;
+  return literal(left) === 'waiting' ? operandStatus(right, true)
+    : literal(right) === 'waiting' ? operandStatus(left, false) : undefined;
 }
 
 /** ESTree erases parentheses and decodes literals. Keep the old scanner's operand spelling.
@@ -140,8 +168,8 @@ function scannerWaitingComparison(node: EsNode, status: EsNode, source: string):
   if (!["'waiting'", '"waiting"'].includes(source.slice(quoteStart, quoteEnd))) return false;
   const property = child(status, 'property')!;
   const [propertyStart, propertyEnd] = property.range as [number, number];
-  if (property.type !== 'Identifier' || source.charAt(propertyStart - 1) !== '.') return false;
-  const gap = blankOnce(reversed ? source.slice(quoteEnd, propertyStart) : source.slice(propertyEnd, quoteStart));
+  if (property.type !== 'Identifier' || source.slice(propertyStart, propertyEnd) !== 'status' || source.charAt(propertyStart - 1) !== '.') return false;
+  const gap = blank(reversed ? source.slice(quoteEnd, propertyStart) : source.slice(propertyEnd, quoteStart));
   return reversed ? /^\s*(?:===|!==)\s*[\w$.?]*\.$/.test(gap) : /^\s*(?:===|!==)\s*$/.test(gap);
 }
 
@@ -151,7 +179,7 @@ function waitingBounds(node: EsNode): { start: number; end: number } {
   const left = child(node, 'left')!, right = child(node, 'right')!;
   const reversed = literal(left) === 'waiting';
   const property = child(status, 'property')!;
-  const end = (reversed ? property : right).range as [number, number];
+  const end = (reversed ? property : unwrap(right)!).range as [number, number];
   return {
     start: reversed ? offset(left) : offset(property) - 1,
     end: end[1],
@@ -229,6 +257,7 @@ export const runFactReader: AstRule = {
       },
       'LogicalExpression:exit'(node) {
         if (file.startsWith(HOME) || isTest(file)) return;
+        if (node.operator === '??') { holdSummary(node, summaries); return; }
         const left = holdSummary(child(node, 'left')!, summaries);
         const right = holdSummary(child(node, 'right')!, summaries);
         const barriers = [...left.barriers, ...right.barriers];

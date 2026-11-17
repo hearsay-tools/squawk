@@ -40,10 +40,11 @@ export function factProbes(): ReaderProbe[] {
     { id: 'issue/as-wrapped-negation', code: '!((run.status === "waiting") as boolean) || !run.autoResumeAt;' },
     { id: 'issue/call-argument', code: "Boolean(run.status === 'waiting') && run.autoResumeAt;" },
     ...factOperandProbes(),
+    ...factWindowProbes(),
   ];
   for (const [comparison, wait] of Object.entries({ forward: "run.status === 'waiting'", reverse: "'waiting' !== run.status" })) {
     for (const [outerName, outer] of Object.entries(wrappers)) for (const [innerName, inner] of Object.entries(wrappers)) {
-      for (const operator of ['&&', '||']) for (const direction of ['forward', 'reverse']) {
+      for (const operator of ['&&', '||', '??']) for (const direction of ['forward', 'reverse']) {
         const comparisonCode = outer(inner(wait));
         const resume = 'run.autoResumeAt';
         const expression = direction === 'forward' ? `${comparisonCode} ${operator} ${resume}` : `${resume} ${operator} ${comparisonCode}`;
@@ -74,9 +75,11 @@ export function factProbes(): ReaderProbe[] {
 export function factOperandProbes(): ReaderProbe[] {
   const probes: ReaderProbe[] = [];
   const statuses = [
-    'run.status', '(run.status)', '((run.status))', '(run.status as string)', 'run.status!',
+    'run.status', 'run.st\\u0061tus', '(run.status)', '((run.status))', '(run.status as string)', 'run.status!',
     '(run).status', '(run as Run).status', 'run?.status', 'owner.run.status', 'runs[0].status',
     "run['status']", 'run. status', 'run./* gap */status',
+    'run.status.toLowerCase()', 'run.status.x', 'run.status()', 'run.status + x',
+    '!run.status', 'typeof run.status', 'x + run.status',
   ];
   const literals = ["'waiting'", '"waiting"', '`waiting`', "('waiting')", "('waiting' as string)", "'waiting'!", "'wa\\u0069ting'"];
   const containers: Record<string, (value: string) => string> = {
@@ -89,14 +92,30 @@ export function factOperandProbes(): ReaderProbe[] {
     calledBlockArrow: value => `(() => { return ${value}; })()`,
     function: value => `(function () { return ${value}; })`,
     calledFunction: value => `(function () { return ${value}; })()`,
+    conditional: value => `(${value} ? 1 : 2)`,
   };
   for (const status of statuses) for (const literal of literals) for (const order of ['forward', 'reverse']) {
     const comparison = order === 'forward' ? `${status} === ${literal}` : `${literal} !== ${status}`;
-    for (const [container, wrap] of Object.entries(containers)) for (const direction of ['forward', 'reverse']) {
+    for (const [container, wrap] of Object.entries(containers)) for (const direction of ['forward', 'reverse']) for (const operator of ['&&', '||', '??']) {
       const value = wrap(comparison);
-      const expression = direction === 'forward' ? `${value} && run.autoResumeAt` : `run.autoResumeAt || ${value}`;
-      probes.push({ id: `operand/${status}/${literal}/${order}/${container}/${direction}`, code: `const hold = ${expression};` });
+      const expression = direction === 'forward' ? `${value} ${operator} run.autoResumeAt` : `run.autoResumeAt ${operator} ${value}`;
+      probes.push({ id: `operand/${status}/${literal}/${order}/${container}/${direction}/${operator}`, code: `const hold = ${expression};` });
     }
+  }
+  return probes;
+}
+
+/** The old window ends at the quoted token or `.status`, before any operand suffix. */
+export function factWindowProbes(): ReaderProbe[] {
+  const probes: ReaderProbe[] = [];
+  for (const comparison of [
+    "run.status === 'waiting'", "run.status === 'waiting'!", "'waiting' !== run.status.x",
+    "'waiting' !== run.status()", "!run.status === 'waiting'",
+  ]) for (let length = 128; length <= 140; length++) for (const direction of ['forward', 'reverse']) {
+    const gap = 'x'.repeat(length);
+    const expression = direction === 'forward' ? `${comparison} && ${gap} && run.autoResumeAt`
+      : `run.autoResumeAt && ${gap} && ${comparison}`;
+    probes.push({ id: `window/${comparison}/${length}/${direction}`, code: `const hold = ${expression};` });
   }
   return probes;
 }

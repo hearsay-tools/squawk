@@ -28,5 +28,6 @@ describe('run reader generated parity matrices', () => {
       return JSON.stringify(actual) === JSON.stringify(findings) ? [] : [{ id, code, expected: findings, actual }];
     });
     expect(differences).toEqual([]);
-  });
+    // bound: a matrix parses up to 19,152 snippets synchronously; only a hung rule should hit this.
+  }, 30_000);
 });
