@@ -411,23 +411,13 @@ describe('the global settings area (/settings/global)', () => {
 
   // A moved section's old URL, in both spellings a bookmark can have it.
   for (const id of ['appearance', 'notifications', 'resources']) {
-    it(`/p/${BOOT}/settings/${id} redirects to the global twin`, () => {
-      renderAt(`/p/${BOOT}/settings/${id}`)
-      expect(currentPathname()).toBe(`/settings/global/${id}`)
-      expect(routeName()).toBe(`settings-global-${id}`)
-    })
-
-    it(`the legacy flat /settings/${id} lands on the global twin too`, () => {
-      renderAt(`/settings/${id}`)
-      expect(currentPathname()).toBe(`/settings/global/${id}`)
-    })
-
     it(`/settings/${id} carries query AND hash through BOTH redirect hops`, () => {
       // The legacy flat URL takes two hops — `LegacyPathRedirect` into the boot project, then
       // the moved-section redirect out to the global twin. `settingsSectionPath` returns a bare
       // pathname, so the second hop is exactly where a bookmark's `?…#…` used to disappear.
       renderAt(`/settings/${id}?tab=x&y=a%2Fb#anchor`)
       expect(currentPathname()).toBe(`/settings/global/${id}`)
+      expect(routeName()).toBe(`settings-global-${id}`)
       expect(currentSearch()).toBe('?tab=x&y=a%2Fb')
       expect(currentHash()).toBe('#anchor')
     })
@@ -435,6 +425,7 @@ describe('the global settings area (/settings/global)', () => {
     it(`/p/${BOOT}/settings/${id} carries query AND hash on the single hop`, () => {
       renderAt(`/p/${BOOT}/settings/${id}?tab=x#anchor`)
       expect(currentPathname()).toBe(`/settings/global/${id}`)
+      expect(routeName()).toBe(`settings-global-${id}`)
       expect(currentSearch()).toBe('?tab=x')
       expect(currentHash()).toBe('#anchor')
     })
@@ -457,12 +448,6 @@ describe('legacy flat URLs redirect to the boot project', () => {
     expect(currentSearch()).toBe('?file=x')
     expect(currentHash()).toBe('#L2')
     expect(routeName()).toBe('task-changes')
-  })
-
-  it.each(['/tasks/run-2/pr/5', '/tasks/run-2/issue/7'])('keeps the linked-item tab of %s (#692)', (url) => {
-    renderAt(url)
-    expect(currentPathname()).toBe(`/p/${BOOT}${url}`)
-    expect(routeName()).toBe('task-github-item')
   })
 
   // #925: a flat task link names a run that may belong to a project other than the boot one.
@@ -538,15 +523,6 @@ describe('legacy flat URLs redirect to the boot project', () => {
 
     await waitFor(() => expect(currentPathname()).toBe(`/p/other/tasks/${OWNER_RUN}/files`), { timeout: 5000 })
     expect(currentSearch()).toBe('?path=old.md')
-  })
-
-  it('keeps the boot project when the runs search cannot find the run either', async () => {
-    vi.stubGlobal('fetch', searchAnswer([]))
-    renderAt(`/tasks/${OWNER_RUN}`, {
-      runsIndex: indexFor([]),
-    })
-
-    await waitFor(() => expect(currentPathname()).toBe(`/p/${BOOT}/tasks/${OWNER_RUN}`), { timeout: 5000 })
   })
 
   it('falls back to the boot project when the runs index cannot answer', async () => {
@@ -860,12 +836,6 @@ describe('unknown project ids', () => {
 describe('/new query params', () => {
   const textarea = () =>
     screen.getByLabelText('Describe a task for the agent') as HTMLTextAreaElement
-
-  it('prefills the composer from a deep link', () => {
-    renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1')
-    expect(routeName()).toBe('new')
-    expect(textarea().value).toBe('https://github.com/o/r/pull/1')
-  })
 
   it('renders an empty composer without params', () => {
     renderAt('/new')

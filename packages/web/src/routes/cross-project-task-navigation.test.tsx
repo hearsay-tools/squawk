@@ -172,20 +172,17 @@ async function expectTheRunWasReadFromItsOwnProject() {
 }
 
 describe('opening another project’s task without a reload', () => {
-  it('reads the run from its own project when the row is clicked on the global Tasks page', async () => {
+  it('reads the run from its own project from global Tasks and a warm project jump', async () => {
     renderAt('/tasks')
-    // Wait for the fetched task row to become an actionable link before navigating.
     fireEvent.click(await screen.findByRole('link', { name: 'Do the thing' }, ROUTE_WAIT))
     await expectTheRunWasReadFromItsOwnProject()
-  }, TEST_TIMEOUT)
 
-  // The regression proper: standing INSIDE a project (the boot one — which mounts unscoped, so a
-  // leaked scope is invisible in the URL) and jumping to another project's task, with the thread
-  // chunk already warm from the case above. Provider and thread mount in the same commit.
-  it('reads the run from its own project when jumping out of the project in view', async () => {
+    // The first navigation warms the lazy thread before the provider and thread mount together.
+    // Both entry points belong to this scenario, so a focused run has the same warm chunk.
+    cleanup()
+    localStorage.clear()
+    paths = []
     renderAt(`/p/${BOOT}/`)
-    // The boot project's scope must be mounted before leaving it; the probe exists even while
-    // the registry gate is loading. The first case has also waited for the thread chunk to mount.
     await screen.findByRole('heading', { name: 'Project tasks' }, ROUTE_WAIT)
     fireEvent.click(screen.getByRole('button', { name: 'Open the other project’s task' }))
     await expectTheRunWasReadFromItsOwnProject()
