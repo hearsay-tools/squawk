@@ -80,7 +80,7 @@ describe('oldestEligibleWakeAt', () => {
   it('does not advertise a runnerless wake while only an in-flight hold exists', () => {
     const f = fixture([['legacy', 1]]);
     f.runs.set('legacy', makeRunRecord({ id: 'legacy' }));
-    f.holds.inFlight.add('codex:default');
+    f.holds.inFlight = new Set(['codex:default']);
     expect(oldestEligibleWakeAt(f.ids, f.reads, undefined)).toBeNull();
   });
 });
