@@ -14,8 +14,17 @@ export interface RuleCases {
   file: string;
   /** Snippets the rule must leave alone. */
   valid: string[];
-  /** Snippets the rule must report exactly once. */
-  invalid: (string | { code: string; errors: number })[];
+  /** Snippets the rule must report exactly once, or `errors` times, or once per expected error. */
+  invalid: (string | { code: string; errors: number | ExpectedError[] })[];
+}
+
+/** One expected finding: its message and its span, as oxlint reports it (1-based lines, 0-based columns). */
+export interface ExpectedError { message: string | RegExp; line: number; column: number; endLine: number; endColumn: number }
+
+/** An expected finding at `span`, written `line:column-endLine:endColumn`. */
+export function spanError(span: string, message: string | RegExp): ExpectedError {
+  const [line, column, endLine, endColumn] = span.split(/[:-]/).map(Number) as [number, number, number, number];
+  return { message, line, column, endLine, endColumn };
 }
 
 RuleTester.describe = describe;

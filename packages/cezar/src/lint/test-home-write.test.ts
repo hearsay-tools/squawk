@@ -1,10 +1,10 @@
-import { checkRule } from './ast-rule.testkit.ts';
+import { checkRule, ruleCases, spanError } from './ast-rule.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { externalTestHomeProblems } from './test-home-repository.ts';
-import { testHomeWrite, unsafeHomeWrites as sourceHomeWrites } from './test-home-write.ts';
+import { testHomeWrite, testHomeWriteMessage, unsafeHomeWrites as sourceHomeWrites } from './test-home-write.ts';
 
 function unsafeHomeWrites(source: string, file = 'file.test.ts'): number[] {
   const offsets = sourceHomeWrites(source, file);
@@ -282,3 +282,27 @@ describe('test writes use explicit sandbox paths', () => {
     expect(unsafeHomeWrites(`fs.promises.${method}(join(cezarHomeDir(), 'x'), '/tmp/b')`)).toHaveLength(1);
   });
 });
+
+// Shapes, report nodes and spans the rule matched with the Babel view (hearsay-tools/squawk#3806).
+// They stay pinned after the rule moved to oxlint's own tree.
+describe('test-home-write keeps its report spans', () => ruleCases(testHomeWrite, {
+  file: 'packages/cezar/src/x.test.ts',
+  valid: [
+    "class K { #homedir() {} }",
+    "x; new (homedir as any)();",
+  ],
+  invalid: [
+    { code: "homedir();", errors: [spanError("1:0-1:10", testHomeWriteMessage)] },
+    { code: "x; os?.homedir?.();", errors: [spanError("1:7-1:14", testHomeWriteMessage)] },
+    { code: "x; (homedir as any)!();", errors: [spanError("1:4-1:18", testHomeWriteMessage)] },
+    { code: "x; const { homedir: h = f } = os;", errors: [spanError("1:11-1:25", testHomeWriteMessage)] },
+    { code: "x; ({ homedir: h } = os);", errors: [spanError("1:6-1:16", testHomeWriteMessage)] },
+    { code: "export { homedir } from 'node:os';", errors: [spanError("1:9-1:16", testHomeWriteMessage)] },
+    { code: "x; import('node:os').then(({ homedir }) => homedir());", errors: [spanError("1:29-1:36", testHomeWriteMessage), spanError("1:43-1:52", testHomeWriteMessage)] },
+    { code: "function f(this: typeof homedir, a = cezarHomeDir()) {}", errors: [spanError("1:37-1:51", testHomeWriteMessage)] },
+    { code: "x; obj?.['resolveHome'];", errors: [spanError("1:9-1:22", testHomeWriteMessage)] },
+    { code: "enum E { A = resolveHome().length }", errors: [spanError("1:13-1:33", testHomeWriteMessage)] },
+    { code: "x; f<typeof homedir>(homedir());", errors: [spanError("1:21-1:30", testHomeWriteMessage)] },
+    { code: "class K { m(): void; m() { homedir(); } }", errors: [spanError("1:27-1:37", testHomeWriteMessage)] },
+  ],
+}));

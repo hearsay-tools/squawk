@@ -1,4 +1,4 @@
-import { checkRule } from './ast-rule.testkit.ts';
+import { checkRule, ruleCases, spanError } from './ast-rule.testkit.ts';
 import { createRequire } from 'node:module';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -222,3 +222,63 @@ describe('shrink-only OS-user reader list', () => {
     expect(compareBaseline(before, { entries: [reader, { ...reader, file: test }] }).length).toBeGreaterThan(0);
   });
 });
+
+// Shapes, report nodes and spans the rule matched with the Babel view (hearsay-tools/squawk#3806).
+// They stay pinned after the rule moved to oxlint's own tree.
+describe('product home sites keep their report spans', () => ruleCases(homeBoundary, {
+  file: product,
+  valid: [
+    "x; (os.homedir satisfies unknown)();",
+    "let h; h = os.homedir; h();",
+    "const a = b; const b = os.homedir; a();",
+    "x; homes[`resolve${x}`]();",
+    "const { homedir: { call } } = os; call();",
+  ],
+  invalid: [
+    { code: "homedir();", errors: [spanError("1:0-1:10", /^homedir:/)] },
+    { code: "x; homedir();", errors: [spanError("1:3-1:13", /^homedir:/)] },
+    { code: "const h = os?.homedir; h?.();", errors: [spanError("1:23-1:29", /^homedir:/)] },
+    { code: "x; os?.homedir?.();", errors: [spanError("1:3-1:19", /^homedir:/)] },
+    { code: "x; (os.homedir as () => string)();", errors: [spanError("1:3-1:34", /^homedir:/)] },
+    { code: "x; os.homedir!();", errors: [spanError("1:3-1:17", /^homedir:/)] },
+    { code: "x; Reflect.apply(os[`homedir`], null, []);", errors: [spanError("1:3-1:42", /^homedir:/)] },
+    { code: "const { homedir: mine } = os; mine();", errors: [spanError("1:30-1:37", /^homedir:/)] },
+    { code: "const { homedir } = os; homedir();", errors: [spanError("1:24-1:34", /^homedir:/)] },
+    { code: "import * as os from 'node:os'; os.homedir();", errors: [spanError("1:31-1:44", /^homedir:/)] },
+    { code: "x; paths?.['cezarHomeDir']?.();", errors: [spanError("1:3-1:31", /^cezarHomeDir:/)] },
+    { code: "function f() { return cezarHomeDir(); }", errors: [spanError("1:22-1:36", /^cezarHomeDir:/)] },
+    { code: "class K { resolveHome() {} }", errors: [spanError("1:10-1:26", /^resolveHome:/)] },
+    { code: "class K { #resolveHome() {} }", errors: [spanError("1:10-1:27", /^resolveHome:/)] },
+    { code: "x; obj.resolveHome;", errors: [spanError("1:7-1:18", /^resolveHome:/)] },
+    { code: "function outer() { return () => os.homedir(); }", errors: [spanError("1:32-1:44", /^homedir:/)] },
+    { code: "h(); const h = os.homedir;", errors: [spanError("1:0-1:26", /^homedir:/)] },
+    { code: "x; (0, os.homedir)();", errors: [spanError("1:3-1:21", /^homedir:/)] },
+    { code: "x; const v = (os.homedir)?.call(null);", errors: [spanError("1:13-1:37", /^homedir:/)] },
+    { code: "export const v = homedir();", errors: [spanError("1:17-1:26", /^homedir:/)] },
+    { code: "x; [cezarHomeDir, resolveHome];", errors: [spanError("1:4-1:16", /^cezarHomeDir:/), spanError("1:18-1:29", /^resolveHome:/)] },
+    { code: "x; os.homedir.bind(null)?.();", errors: [spanError("1:3-1:29", /^homedir:/)] },
+    { code: "x; (os?.homedir as any)!();", errors: [spanError("1:3-1:27", /^homedir:/)] },
+  ],
+}));
+
+describe('test home selections keep their report spans', () => ruleCases(homeBoundary, {
+  file: test,
+  valid: [
+    "x; globalThis.process.env.CEZ_HOME = y;",
+    "function f() { vi.stubEnv(`CEZ_${'HOME'}`, d); }",
+    "x; cezarHomeDir(); homedir();",
+  ],
+  invalid: [
+    { code: "process.env.CEZ_HOME = x;", errors: [spanError("1:0-1:25", /^test-selection:/)] },
+    { code: "x; [process.env.CEZ_HOME] = y;", errors: [spanError("1:3-1:30", /^test-selection:/)] },
+    { code: "x; process.env.CEZ_HOME! = y;", errors: [spanError("1:3-1:29", /^test-selection:/)] },
+    { code: "x; vi?.stubEnv?.('CEZ_HOME', d);", errors: [spanError("1:3-1:32", /^test-selection:/)] },
+    { code: "x; (process.env as any).CEZ_HOME = y;", errors: [spanError("1:3-1:37", /^test-selection:/)] },
+    { code: "x; process.env[`CEZ_HOME`] ??= y;", errors: [spanError("1:3-1:33", /^test-selection:/)] },
+    { code: "x; Object.assign(process.env, { CEZ_HOME: y }, { ['CEZ_HOME']() {} });", errors: [spanError("1:3-1:70", /^test-selection:/)] },
+    { code: "x; Object.assign(process.env, { get CEZ_HOME() { return y } });", errors: [spanError("1:3-1:63", /^test-selection:/)] },
+    { code: "x; Reflect.set(process.env, 'CEZ_' + `HOME`, y);", errors: [spanError("1:3-1:48", /^test-selection:/)] },
+    { code: "x; for (const k of ks) process.env.CEZ_HOME = k;", errors: [spanError("1:23-1:48", /^test-selection:/)] },
+    { code: "x; ({ ...process.env.CEZ_HOME } = s);", errors: [spanError("1:4-1:35", /^test-selection:/)] },
+  ],
+}));
