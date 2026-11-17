@@ -12,7 +12,11 @@ import { keeperWaitBudget, readMutationClaim } from './git-worktree-lock-helper.
 
 const exec = promisify(execFile);
 const roots: string[] = [];
-afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true, maxRetries: 10 }); });
+const originalExecPath = process.execPath;
+afterEach(async () => {
+  process.execPath = originalExecPath;
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true, maxRetries: 10 });
+});
 async function repo() {
   const root = await mkdtemp(join(tmpdir(), 'cezar-worktree-lock-'));
   roots.push(root);

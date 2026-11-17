@@ -82,6 +82,7 @@ test('built cez task drives a dry-run cockpit it discovers from the checkout', {
         if (error) reject(error); else resolveReady();
       };
       // bound: stop a hung server startup; readiness comes from its own listening banner.
+      // e2e-wait: process-deadline — reject a hung startup; the listening banner signals readiness.
       const timer = setTimeout(() => finish(new Error(`cockpit never started: ${startupOutput}`)), 30_000);
       server.stdout.on('data', check);
       server.once('exit', failed);
