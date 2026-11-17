@@ -162,9 +162,19 @@ export function originalAt(root: Node, offset: number): EsNode {
   return index.get(offset) ?? originalNode(root);
 }
 
-/** Static text in the key forms the typed engines already recognize. */
+const staticTexts = new WeakMap<EsNode, string | undefined>();
+
+/** Static text is evaluated once per immutable node, including an unknown result. */
 export function staticNodeText(node: EsNode | undefined): string | undefined {
   if (!node) return undefined;
+  if (staticTexts.has(node)) return staticTexts.get(node);
+  const text = evaluateStaticNodeText(node);
+  staticTexts.set(node, text);
+  return text;
+}
+
+/** Static text in the key forms the typed engines already recognize. */
+function evaluateStaticNodeText(node: EsNode): string | undefined {
   const literal = stringOf(node);
   if (literal !== undefined) return literal;
   if (node.type === 'BinaryExpression' && node.operator === '+') {
