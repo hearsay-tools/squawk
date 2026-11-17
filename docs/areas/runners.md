@@ -201,9 +201,9 @@ Squawk is not married to one vendor. Every agent step runs through a single
 ### Minimal sessions
 
 A bookkeeping call, such as the task namer, sets `AgentRunSpec.minimal`. The runner then
-starts its harness without the user's and the project's hooks, plugins, extensions, skills,
-context files and MCP servers, and saves no session. Auth and model selection stay. Each
-runner's `*_SPEC_SUPPORT.minimal` row names its flags and what still loads:
+turns off as much of the user's and the project's setup as it can: hooks, plugins, extensions,
+skills, context files, MCP servers and session saving. Auth and model selection stay. What each
+runner turns off differs. Its `*_SPEC_SUPPORT.minimal` row names its flags and what still loads:
 
 - **Claude Code:** `--safe-mode --disable-slash-commands --no-session-persistence`. Not
   `--bare`, which accepts only API-key auth.
@@ -212,8 +212,8 @@ runner's `*_SPEC_SUPPORT.minimal` row names its flags and what still loads:
   cannot report its policy, the sandbox is `read-only`, because Codex ignores `allowedTools`. Skills and the user's MCP servers still load.
 - **OpenCode:** `serve --pure`, the `OPENCODE_DISABLE_*` switches for project config, Claude Code
   files and external skills, a runtime config that turns every tool off and
-  denies every permission, and a `*` deny session rule, set when the session is created and on
-  each prompt. Session rules come after an agent's own permission rules, so a configured agent
+  denies every permission, and a `*` deny session rule, set when the session is created or resumed
+  and on each prompt. Session rules come after an agent's own permission rules, so a configured agent
   cannot allow a tool back.
   MCP servers in the user's global config, the global AGENTS.md, configured `instructions` and
   the default plugins, which carry the Codex and Copilot sign-in loaders, still load, and the

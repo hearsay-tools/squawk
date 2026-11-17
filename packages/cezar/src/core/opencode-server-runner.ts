@@ -19,7 +19,7 @@ import {
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { InputSubmissions } from './input-submissions.ts';
 import { signalSession, spawnSessionLeader } from './session-process.ts';
-import { OPENCODE_MINIMAL_PROMPT_TOOLS, opencodeServeLaunch, opencodeSessionBody } from './opencode-minimal.ts';
+import { OPENCODE_MINIMAL_PROMPT_TOOLS, OPENCODE_MINIMAL_SESSION_PERMISSION, opencodeServeLaunch, opencodeSessionBody } from './opencode-minimal.ts';
 import type { AskQuestion } from './ask.ts';
 import { toSquawkQuestions, questionAnswers } from './opencode-questions.ts';
 import { boundOutputDrainAfterExit, AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS } from './runner-runtime.ts';
@@ -146,7 +146,7 @@ export const OPENCODE_SPEC_SUPPORT: AgentRunSpecSupport = {
   images: { honored: false, reason: 'the adapter posts text parts only; image blocks are dropped' },
   cwd: { honored: true, via: 'opencode serve spawn cwd; the session is bound to it' },
   toolGrant: { honored: false, reason: 'OpenCode permission config governs tool access and bash; this runner answers its built-in default asks and routes configured asks to the cockpit, but maps no per-tool allowlist, so no command-prefix restriction either' },
-  minimal: { honored: true, via: 'opencode serve --pure; OPENCODE_DISABLE_PROJECT_CONFIG, OPENCODE_DISABLE_CLAUDE_CODE and OPENCODE_DISABLE_EXTERNAL_SKILLS (default plugins stay: they carry the Codex and Copilot sign-in loaders); OPENCODE_CONFIG_CONTENT tools {"*": false} and permission {"*": "deny"}, and a "*" deny session rule (POST /session permission, and prompt_async tools {"*": false}) that outranks agent permission rules and covers skill command turns, since the runner maps no toolGrant; a resumed session that was not minimal gets the rule only from its next prompt_async. Still loaded: MCP servers in the user\'s global config, the global AGENTS.md and configured instructions; the session is saved' },
+  minimal: { honored: true, via: 'opencode serve --pure; OPENCODE_DISABLE_PROJECT_CONFIG, OPENCODE_DISABLE_CLAUDE_CODE and OPENCODE_DISABLE_EXTERNAL_SKILLS (default plugins stay: they carry the Codex and Copilot sign-in loaders); OPENCODE_CONFIG_CONTENT tools {"*": false} and permission {"*": "deny"}, and a "*" deny session rule (POST /session permission, and prompt_async tools {"*": false}) that outranks agent permission rules and covers skill command turns, since the runner maps no toolGrant; a resumed session gets it through PATCH /session/{id} before its first turn. Still loaded: MCP servers in the user\'s global config, the global AGENTS.md and configured instructions; the session is saved' },
   restrictCrossSessionMessaging: { honored: true, via: 'the opencode-task-scope.mjs plugin appended to the OPENCODE_CONFIG_CONTENT plugin list; its tool.execute.before hook refuses a task call whose task_id names a session outside the caller\'s session tree, and keeps subagents (hearsay-tools/cezarion#2279)' },
   additionalDirectories: { honored: false, reason: 'the server works from cwd; no extra-root mapping' },
   env: { honored: true, via: 'merged over the child env through buildChildEnv' },
@@ -777,8 +777,8 @@ class OpencodeSession implements AgentSession {
           message: `OpenCode session ${requested} no longer exists; the continuation runs in a fresh session without the earlier conversation.`,
         });
       } else {
-        // A `task` deny an older Squawk added stays on the session: OpenCode appends permission
-        // rules and has no remove (hearsay-tools/cezarion#2279).
+        // OpenCode appends permission rules and has no remove: an older `task` deny stays (hearsay-tools/cezarion#2279).
+        if (this.spec.minimal) await this.http('PATCH', `/session/${requested}`, { permission: OPENCODE_MINIMAL_SESSION_PERMISSION });
         this.attachSession(stringField(existing, 'id') ?? requested, true);
         resumed = true;
       }

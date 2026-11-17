@@ -13,8 +13,8 @@ export const OPENCODE_MINIMAL_SERVE_ARGS = ['--pure'] as const;
  *  last matching rule wins, so a configured agent cannot allow a tool back (OpenCode 1.19.4). */
 export const OPENCODE_MINIMAL_PROMPT_TOOLS = { '*': false } as const;
 
-/** The same rule on `POST /session`, so a turn that a skill command opens, which takes no tools
- *  map, is denied too. */
+/** The same rule on `POST /session`, and on `PATCH /session/{id}` (which appends) when a session
+ *  is resumed, so a turn that a skill command opens, which takes no tools map, is denied too. */
 export const OPENCODE_MINIMAL_SESSION_PERMISSION = [{ permission: '*', action: 'deny', pattern: '*' }] as const;
 
 /** Env switches for a minimal session: no project config, no Claude Code files (CLAUDE.md,

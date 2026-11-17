@@ -168,7 +168,7 @@ export async function generateRunName(repoRoot: string, ctx: NamerContext, home:
         userPrompt: buildNamerPrompt(ctx),
         cwd: repoRoot,
         toolGrant: { kind: 'explicit', tools: [] },
-        // A bookkeeping call: no hooks, plugins, context files or MCP servers, and no saved session.
+        // A bookkeeping call: as little of the user's setup as the runner can turn off (its *_SPEC_SUPPORT.minimal row).
         minimal: true,
         model,
         timeoutMs: NAMER_TIMEOUT_MS,

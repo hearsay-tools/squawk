@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { PINNED_SESSION_ID, seedOpencodeMockSession } from './harness-parity-core.testkit.ts';
 import { driveSeam } from './harness-parity.testkit.ts';
 import { OPENCODE_MINIMAL_ENV, OPENCODE_MINIMAL_PROMPT_TOOLS, OPENCODE_MINIMAL_SESSION_PERMISSION, opencodeMinimalEnv } from './opencode-minimal.ts';
 
@@ -34,6 +35,23 @@ describe('OpenCode minimal session on the wire', () => {
   it('creates the session with the deny rule', async () => {
     const created = (await recordedWire(true)).find(entry => entry.method === 'POST' && entry.url === '/session');
     expect(created?.body).toMatchObject({ permission: OPENCODE_MINIMAL_SESSION_PERMISSION });
+  });
+
+  it('adds the deny rule to a resumed session before its first turn', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cez-opencode-minimal-')); directories.push(dir);
+    const record = join(dir, 'wire.ndjson');
+    seedOpencodeMockSession(record);
+    await driveSeam('opencode', 'baseline', {
+      spec: { minimal: true, resume: true, sessionId: PINNED_SESSION_ID, env: { CEZ_MOCK_ARGS_FILE: record } },
+      sessionOptions: { autoEndAfterFirstTurn: true },
+      whileOpen: async session => { await session.result; },
+    });
+    const wire = readFileSync(record, 'utf8').trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
+    const patch = wire.findIndex(entry => entry.method === 'PATCH' && entry.url === `/session/${PINNED_SESSION_ID}`);
+    expect(patch).toBeGreaterThanOrEqual(0);
+    expect(wire[patch]?.body).toEqual({ permission: OPENCODE_MINIMAL_SESSION_PERMISSION });
+    expect(wire.filter(entry => entry.method === 'POST' && entry.url === '/session')).toEqual([]);
+    expect(patch).toBeLessThan(wire.findIndex(entry => String(entry.url).endsWith('/prompt_async')));
   });
 
   it('sends no tools map and no session rule without the field', async () => {
