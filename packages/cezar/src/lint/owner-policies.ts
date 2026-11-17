@@ -223,7 +223,7 @@ export const OWNER_POLICIES: Record<string, OwnerPolicy> = {
   },
   "skills-read-outside-enabled-skills": {
     "name": "skills-read-outside-enabled-skills",
-    "message": "Read a run's skills through RunSkills.enabledSkills(state) (workflows/run/run-skills.ts), which applies the project's off-list (hearsay-tools/cezarion#1494). Only RunSkills.loadRunSkills writes `state.skills.catalog` (skills-write-outside-load-run-skills).",
+    "message": "Read a run's skills through RunSkills.enabledSkills(state) (workflows/run/run-skills.ts), which reads the session's runner skill list. Only RunSkills.loadRunSkills writes `state.skills.catalog` (skills-write-outside-load-run-skills).",
     "files": [
       "packages/cezar/src/workflows/run.ts",
       "packages/cezar/src/workflows/run/**"
@@ -232,7 +232,7 @@ export const OWNER_POLICIES: Record<string, OwnerPolicy> = {
   },
   "skills-write-outside-load-run-skills": {
     "name": "skills-write-outside-load-run-skills",
-    "message": "Write a run's skills only in RunSkills.loadRunSkills (workflows/run/run-skills.ts), which RunManager.execute and RunManager.runContinuation both call. A launch path that loads the registry itself can skip the load, as open-mercato/cezar#811 did; call loadRunSkills there, and read the registry through RunSkills.enabledSkills (hearsay-tools/cezarion#1806).",
+    "message": "Write the session's runner skill list only in RunSkills.loadRunSkills (workflows/run/run-skills.ts), called at step open and Continue. Read it through RunSkills.enabledSkills.",
     "files": [
       "packages/cezar/src/workflows/run.ts",
       "packages/cezar/src/workflows/run/**"
@@ -260,7 +260,7 @@ export const OWNER_POLICIES: Record<string, OwnerPolicy> = {
     "name": "worktree-write-outside-manifest",
     "message": "Write into a task worktree through withWorktreeFiles (packages/cezar/src/worktree-manifest.ts), which records each path Squawk wrote and never replaces or removes one the agent changed (hearsay-tools/cezarion#1814). A module that writes there imports no file-changing node:fs function.",
     "files": [
-      "packages/cezar/src/skills-provision.ts",
+      "packages/cezar/src/worktree-skill-cleanup.ts",
       "packages/cezar/src/agent-config/seed.ts"
     ],
     "ignores": []

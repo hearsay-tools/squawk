@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { perRunnerOptionalStrings } from './per-runner-optional-strings.ts';
 import { effortLevelSchema } from './effort.ts';
 import { type Runner, runnerSchema } from './runner.ts';
-import { teamSkillRefSchema } from './team-skill-ref.ts';
 
 /**
  * The workspace + settings families: `~/.cezar/config.json`'s settings slice, both GUI-pref bags
@@ -183,10 +182,6 @@ export const uiStateSchema = z.looseObject({
   lastWorktree: z.boolean().optional(),
   /** The last autonomous choice — remembered like `lastWorktree`. Absent → off. */
   lastAutonomous: z.boolean().optional(),
-  /** Team skills this project switched off, by source repo and name. Absent or `[]`: every team
-   *  skill shows. Legacy `importedSkills` keys still round-trip through
-   *  the loose object but nothing reads them. */
-  disabledTeamSkills: z.array(teamSkillRefSchema).max(200).optional(),
   /** Skill selection frequency (#408): name → times chosen, across BOTH composers. */
   skillUsage: z.record(z.string(), z.number()).optional(),
   runsView: z.enum(['list', 'table']).optional(),

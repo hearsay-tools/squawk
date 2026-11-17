@@ -4,7 +4,7 @@ import { createHash, randomBytes, type Hash } from 'node:crypto';
 import { copyFile, cp, lstat, mkdir, readdir, readFile, readlink, realpath, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { z } from 'zod';
-import { landsInside } from './skills-remote.ts';
+import { landsInside } from './worktree-paths.ts';
 import { runGit } from './git-command.ts';
 
 

@@ -53,7 +53,6 @@ describe('layer-import (hearsay-tools/squawk#3706)', () => {
     expect(layerOf('core/pi-runner.ts', MAP)).toBe('runner');
     expect(layerOf('server/forge/draft-pr.ts', MAP)).toBe('feature:forge');
     expect(layerOf('server/app.ts', MAP)).toBe('shell');
-    expect(layerOf('skills-remote.ts', MAP)).toBe('feature:skills');
     expect(layerOf('git-worktree.ts', MAP)).toBeUndefined();
   });
 

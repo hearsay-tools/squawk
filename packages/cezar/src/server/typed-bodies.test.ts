@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { archiveFinishedRequestSchema, createRunInputSchema, pinRunInputSchema } from '@open-mercato/cezar-contract/runs';
 import { permissionDecisionSchema } from '@open-mercato/cezar-contract/permissions';
 import { setWorkspaceUiStateInputSchema } from '@open-mercato/cezar-contract/workspace';
-import type { TeamSkillRef } from '@open-mercato/cezar-contract/skills';
 import type { z } from 'zod';
 import type { AppType } from './app-type.ts';
 
@@ -81,10 +80,6 @@ describe('every mutating route carries a typed body into AppType', () => {
     Assert<HasTypedBody<'/api/v1/runs/:id/git/commit', '$post'>>,
     Assert<HasTypedBody<'/api/v1/runs/:id/queued-messages/:msgId', '$patch'>>,
     Assert<HasTypedBody<'/api/v1/ui-state', '$put'>>,
-    Assert<HasTypedBody<'/api/v1/skills/sources', '$post'>>,
-    Assert<HasTypedBody<'/api/v1/skills/sources', '$patch'>>,
-    Assert<HasTypedBody<'/api/v1/skills/sources', '$delete'>>,
-    Assert<HasTypedBody<'/api/v1/skills/sources/retry', '$post'>>,
     Assert<HasTypedBody<'/api/v1/workspace/config', '$put'>>,
     Assert<HasTypedBody<'/api/v1/workspace/ui-state', '$put'>>,
   ];
@@ -94,12 +89,6 @@ describe('every mutating route carries a typed body into AppType', () => {
   type WorkspaceUiStatePutBody = Schema['/api/v1/workspace/ui-state']['$put']['input']['json'];
   type _WorkspaceUiStateInputCheck = Assert<
     Mutual<z.infer<typeof setWorkspaceUiStateInputSchema>, WorkspaceUiStatePutBody>
-  >;
-
-  // PUT /ui-state takes the off-list as `{ repo, name }` refs, not bare names.
-  type UiStatePutBody = Schema['/api/v1/ui-state']['$put']['input']['json'];
-  type _UiStateDisabledTeamSkillsCheck = Assert<
-    Mutual<UiStatePutBody['disabledTeamSkills'], TeamSkillRef[] | undefined>
   >;
 
   type _CreateRunInputChecks = [

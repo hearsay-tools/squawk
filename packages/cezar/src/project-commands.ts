@@ -1,7 +1,6 @@
 import { markFreshProject } from './project-migration/fresh.ts';
 import { noticeLegacyProject, projectPaths } from './project-paths.ts';
 import { fallbackWorkflowPath } from './workflows/load.ts';
-import { fallbackSkillPath } from './skills.ts';
 import { commandText } from './home/command.ts';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,12 +15,11 @@ import { admittedWrite } from './server/cockpit-ownership.ts';
  * first project write.
  */
 
-/** `cez init`: scaffold the starter workflow and skill. */
+/** `cez init`: scaffold the starter workflow. */
 export async function initCommand(repoRoot: string): Promise<void> {
   const workflowsDir = join(projectPaths(repoRoot).write, 'workflows');
-  const skillsDir = join(projectPaths(repoRoot).write, 'skills');
   const dataDir = projectPaths(repoRoot).write;
-  admittedWrite(dataDir, () => { markFreshProject(repoRoot); mkdirSync(workflowsDir, { recursive: true }); mkdirSync(skillsDir, { recursive: true }); });
+  admittedWrite(dataDir, () => { markFreshProject(repoRoot); mkdirSync(workflowsDir, { recursive: true }); });
 
   const examples: Array<{ path: string; fallback: () => Promise<string | undefined>; content: string }> = [
     {
@@ -39,20 +37,6 @@ steps:
     onFail:
       retry: implement
       max: 2
-`,
-    },
-    {
-      path: join(skillsDir, 'project-conventions.md'),
-      fallback: () => fallbackSkillPath(repoRoot, 'project-conventions'),
-      content: `---
-name: project-conventions
-description: House rules the agent should follow in this repo.
----
-
-# Project conventions
-
-- Describe your stack, style and testing conventions here.
-- Reference this skill from a workflow step via \`skill: project-conventions\`.
 `,
     },
   ];

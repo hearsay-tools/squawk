@@ -1,7 +1,6 @@
 import { projectPaths, readDataPath, readProjectPath } from './project-paths.ts';
 import { assertProjectWritable, projectAdmissionRefusal } from './project-fence.ts';
 import type { Home } from './home/home.ts';
-import { readFileSync } from 'node:fs';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
@@ -12,24 +11,8 @@ import { RUNNER_IDS } from './core/agent-runner.ts';
  * Optional advanced config at `.ai/cezar/config.json`. Zero-config rule:
  * a missing file behaves exactly like the default below, an unreadable or
  * invalid file degrades to the default too (never blocks startup); a bad value drops only its
- * own key, or its own `skillsRepos` entry. `skillsRepos`
- * defaults to `[]`: no team skills until a repo lists its own sources.
+ * own key.
  */
-/** The ref a `skillsRepos` entry without one reads. */
-export const DEFAULT_SKILLS_REF = 'main';
-
-const skillsRepoSchema = z.object({
-  /** `owner/name` (GitHub shorthand), a full git URL, or a local/file:// path. */
-  repo: z.string().min(1),
-  ref: z.string().min(1).default(DEFAULT_SKILLS_REF),
-  /** False keeps the source listed on the Skills page but loads none of its skills (hearsay-tools/cezarion#279). */
-  enabled: z.boolean().default(true),
-});
-
-export type SkillsRepoSource = z.infer<typeof skillsRepoSchema>;
-/** A source by identity: what the git and listing helpers need. */
-export type SkillsRepoRef = Pick<SkillsRepoSource, 'repo' | 'ref'>;
-
 /** Last-resort retention when neither the repo nor the workspace says anything. */
 export const DEFAULT_WORKTREE_RETENTION = 10;
 
@@ -39,7 +22,6 @@ export const DEFAULT_WORKTREE_RETENTION = 10;
 const worktreeRetentionSchema = z.number().int().min(0).max(1000);
 
 const configSchema = z.object({
-  skillsRepos: z.array(skillsRepoSchema).default([]),
   /** How many tasks may run at once (spec 006). Non-git dirs always run 1. */
   maxParallel: z.number().int().min(1).max(16).default(2),
   /**
@@ -197,9 +179,7 @@ export async function healthConfig(repoRoot: string, home: Home): Promise<CezCon
 const MAX_REPAIRS = 64;
 
 /**
- * Parse a config object, dropping only what the schema refuses (hearsay-tools/cezarion#279): a bad
- * `skillsRepos` entry drops that entry, and any other bad key drops that key to its default. One
- * mistake no longer discards every team source and setting in the file.
+ * Parse a config object, dropping only the key the schema refuses.
  */
 function parseLeniently(input: unknown): CezConfig {
   let value: unknown = input && typeof input === 'object' && !Array.isArray(input) ? { ...(input as Record<string, unknown>) } : {};
@@ -212,18 +192,14 @@ function parseLeniently(input: unknown): CezConfig {
 }
 
 function withoutRefused(raw: Record<string, unknown>, path: readonly PropertyKey[]): Record<string, unknown> {
-  const [key, index] = path;
+  const [key] = path;
   if (typeof key !== 'string') return {};
   const next = { ...raw };
-  if (key === 'skillsRepos' && typeof index === 'number' && Array.isArray(raw.skillsRepos)) {
-    next.skillsRepos = raw.skillsRepos.filter((_entry, at) => at !== index);
-  } else {
-    delete next[key];
-  }
+  delete next[key];
   return next;
 }
 
-/** Why the project's config file cannot be read, as the Skills page shows it: the file that was read. */
+/** Why the project's config file cannot be read: the file that was read. */
 function configIssue(path: string, error: unknown): string {
   const shown = basename(dirname(dirname(path))) === '.ai' ? `.ai/${basename(dirname(path))}/config.json` : path;
   return `${shown} cannot be read: ${error instanceof Error ? error.message : String(error)}. Fix the file, then reload.`;
@@ -235,7 +211,7 @@ export type RawConfigRead = { ok: true; raw: Record<string, unknown> } | { ok: f
 /**
  * The raw `.ai/cezar/config.json` object, or why it cannot be used. A missing file is `{}`.
  * Malformed JSON or a non-object is an issue: a writer that merged into it would replace the
- * user's file. So is a `skillsRepos` value its schema refuses, which the Skills page cannot show.
+ * user's file.
  */
 export async function readRawConfig(dataDir: string): Promise<RawConfigRead> {
   let text: string;
@@ -253,33 +229,7 @@ export async function readRawConfig(dataDir: string): Promise<RawConfigRead> {
     return { ok: false, issue: configIssue(path, error) };
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, issue: configIssue(path, 'it is not a JSON object') };
-  // The Skills page edits `skillsRepos` as written, so an entry it cannot show blocks its writes.
-  // A bad value in another key is kept as written: `loadConfig` drops only that key.
-  const sources = configSchema.shape.skillsRepos.safeParse((raw as Record<string, unknown>).skillsRepos);
-  if (!sources.success) {
-    const first = sources.error.issues[0];
-    const where = ['skillsRepos', ...(first?.path ?? [])].join('.');
-    return { ok: false, issue: configIssue(path, `${where}: ${first?.message ?? 'invalid'}`), raw: raw as Record<string, unknown> };
-  }
   return { ok: true, raw: raw as Record<string, unknown> };
-}
-
-/**
- * The `skillsRepos` sources switched off with `enabled: false` (hearsay-tools/cezarion#279), read synchronously for the
- * run's skill readers, which apply them as they are now (`enabledSkills`). An unreadable file
- * switches nothing off; `loadConfig` then lists no sources at all. A bad entry is dropped, as there.
- */
-export function readDisabledSkillsReposSync(repoRoot: string): SkillsRepoRef[] {
-  return readSkillsReposSync(repoRoot).filter((src) => !src.enabled).map(({ repo, ref }) => ({ repo, ref }));
-}
-
-/** Every `skillsRepos` entry as the file says now, read synchronously; an unreadable file has none. */
-export function readSkillsReposSync(repoRoot: string): SkillsRepoSource[] {
-  try {
-    return parseLeniently(JSON.parse(readFileSync(readProjectPath(repoRoot, 'config.json'), 'utf8'))).skillsRepos;
-  } catch {
-    return [];
-  }
 }
 
 const configWrites = new Map<string, Promise<unknown>>();

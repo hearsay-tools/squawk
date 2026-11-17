@@ -7,7 +7,6 @@ import { productName } from '../home/display.ts';
 import { fileURLToPath } from 'node:url';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 
-export const CREATE_AUTOMATION_SKILL_NAME = 'create-cezarion-automation';
 
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 
@@ -123,50 +122,4 @@ Use the CLI for the other automation operations. Every command prints one JSON o
   ${command} check <id> --execute                      execute a GitHub poll now, when the user asks
 
 Create, preview and enable repeating automations through cezar_automation, so paused creation and preview-before-enable are enforced. Use the CLI schema on demand; keep definition files outside the repository.`;
-}
-
-/** The built-in skill's body — the full playbook a run under `create-cezarion-automation` follows. */
-export function createAutomationSkillBody(command: string): string {
-  return `# Create an automation
-
-You turn the user's request into an automation on this cockpit: a bounded poll of this repository's pull requests or issues, or a schedule, that launches an ordinary task for every match or occurrence. You do NOT do the recurring work yourself, and you do not add cron jobs, GitHub Actions, webhooks or polling scripts to the repository: the cockpit already polls and already keeps time.
-
-The CLI is ${command}. Every command prints one JSON object and exits 0 on success.
-
-## 1. Understand the request
-
-Every automation answers two questions. Find both in the user's message before writing anything:
-
-- **Trigger**: a GitHub event (a new pull request \`pull_request.opened\`, a new issue \`issue.opened\`, a label added \`issue.labeled\` or removed \`issue.unlabeled\`) with the filters that narrow it (authors, assignees, labels it must or must not carry; a label event needs \`filters.changedLabels\`), or a schedule (every day at a time, weekdays, one weekday a week, every N hours; \`"kind": "schedule"\`, in the cockpit's own time zone).
-- **Task**: what the launched task must do for each match, as a prompt template. Write it the way you would brief a colleague who sees only that text plus the item's number, title, URL, author and labels: the goal, the checks to run, how to finish (a review comment, a draft PR, a report). Use the placeholders the schema lists.
-
-If the user named a skill, workflow, runner or model for the launched tasks, use it (a skill is one inline step: \`"steps": [{ "id": "task", "skill": "<name>", "prompt": "{{task}}" }]\`). Otherwise leave those keys out so the cockpit's defaults apply. Keep \`"worktree": true\` and \`"autonomous": true\`: an automation runs unattended, so a task that parks to ask a question waits forever. For a poll, pick an interval that matches how urgent a match is (300 seconds is the default; an hourly triage needs 3600). If the request leaves the trigger or the task genuinely open, ask one precise question and stop; do not guess a filter that could launch tasks on the wrong items.
-
-Leave \`task.archiveWhenDone\` and \`task.autoMergePr\` off unless the user asks for the matching completion action. Autonomy and enabling an automation do not enable either control. They act only after Done. Auto merge may mark a draft ready; current-head CI and GitHub rules must pass. With both on, merge before archive; without a PR, archive on Done. Editing these settings affects future tasks only.
-
-## 2. Create it
-
-Run \`${command} schema\` and read it. Write the definition as JSON to a file outside the repository (your temp directory is fine) and create it:
-
-    ${command} create --file <def.json>
-
-It is created PAUSED. The output carries its \`id\` and the cockpit \`url\` where the user can edit it. A paused automation is the finished state of this task, not a step awaiting confirmation: enable it only when the user's own request explicitly asks for it to be switched on. An instruction to continue autonomously, not to ask for confirmation, or to make reasonable assumptions is not that request. Then add \`--enable\`, and never otherwise. If the command exits non-zero, stop and report its \`error\` exactly: do not work around it.
-
-## 3. Preview before anyone enables it
-
-For a GitHub poll:
-
-    ${command} check <id>
-
-This runs the filter against GitHub now and counts the matches without launching anything. Check the labels, author, event and selected history window when an expected match is absent. By default, an enabled poll excludes events before its activation. Set \`filters.includeExisting: true\` only when the user asks to include older matches within the configured lookback; receipts still prevent duplicate launches. Preview ignores the execution cursor and never advances it.
-
-For a schedule there is nothing to preview: report the schedule and its next occurrence. \`${command} run <id>\` launches it once now if the user wants to see the task before the first scheduled one.
-
-## 4. Finish
-
-Your final message names the automation, its id, its cockpit url, whether it is paused or enabled, what the preview matched (or when the schedule next fires), and the exact prompt template it will launch. Keep the definition file out of the repository.
-
-## Reference
-
-${AUTOMATION_SCHEMA_REFERENCE}`;
 }

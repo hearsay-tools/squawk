@@ -10,7 +10,6 @@ import { ProviderAuthService } from '../core/provider-auth.ts';
 
 const { run } = vi.hoisted(() => ({ run: vi.fn(async () => ({ text: '' })) }));
 const createRunner = vi.fn((_backend?: string) => ({ run }) as unknown as AgentRunner);
-vi.mock('../skills.ts', () => ({ discoverSkills: async () => [] }));
 afterEach(() => { vi.clearAllMocks(); });
 
 it('uses the selected config and account for planner calls', async () => {

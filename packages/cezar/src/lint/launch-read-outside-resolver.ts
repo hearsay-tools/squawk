@@ -2,7 +2,7 @@ import { child, children, nameOf, stringOf, type AstRule, type EsNode } from './
 import { Resolver, type Family } from './launch-read/resolve.ts';
 import { annotation, functionTypes, keyOf, parameterOwner, unwrap, walk } from './launch-read/syntax.ts';
 
-const rawFields = new Set('workflow workflowDef input runner defaultRunner systemPrompt model effort agentProfile profileId account grants prompt task images taskImages stackedImages queuedMessages continuationMessage sessionTransport skill catalog disabledTeamSkills worktreeSetup'.split(' '));
+const rawFields = new Set('workflow workflowDef input runner defaultRunner systemPrompt model effort agentProfile profileId account grants prompt task images taskImages stackedImages queuedMessages continuationMessage sessionTransport skill catalog worktreeSetup'.split(' '));
 const fieldGroups: [Family, Set<string>][] = [
   ['source', rawFields],
   ['input', new Set('worktree autonomous archiveWhenDone autoMergePr notify automation automationTrigger persistedImages persistedAttachments'.split(' '))],
@@ -10,8 +10,8 @@ const fieldGroups: [Family, Set<string>][] = [
   ['step', new Set(['allowedTools', 'bashAllowlist'])],
   ['config', new Set(['baseBranch', 'worktreeSetup', 'defaultRunner', 'systemPrompt'])],
 ];
-const selectors = new Set('loadWorkflows stepToolGrant loadConfig agentModelsLocked readAgentModelProvider normalizeModelForBackend workerIdentity workerStepIdentity ownedWorkflow continuationDefStep resolveProfileEnvForRoot boundWorkerAccountEnv captureWorkerAccount discoverSkills filterDisabledTeamSkills filterDisabledTeamSources readDisabledTeamSkills readDisabledSkillsReposSync readProjectUiState readProjectUiStateSync getTeamSkillsCached resolveAttachmentPath readPersistedAttachments accountHeldFor executionAccount queuedRecoveryInput'.split(' '));
-const modulePattern = /(?:^|\/)(?:config|skills|skills-remote|agent-model-policy|models|agent-profiles|execution-identity|run-scheduling|execution-account|ui-state|model-identity|attachment-path|load|types)\.(?:ts|js)$/;
+const selectors = new Set('loadWorkflows stepToolGrant loadConfig agentModelsLocked readAgentModelProvider normalizeModelForBackend workerIdentity workerStepIdentity ownedWorkflow continuationDefStep resolveProfileEnvForRoot boundWorkerAccountEnv captureWorkerAccount readProjectUiState readProjectUiStateSync resolveAttachmentPath readPersistedAttachments accountHeldFor executionAccount queuedRecoveryInput'.split(' '));
+const modulePattern = /(?:^|\/)(?:config|agent-model-policy|models|agent-profiles|execution-identity|run-scheduling|execution-account|ui-state|model-identity|attachment-path|load|types)\.(?:ts|js)$/;
 const message = 'Production-source read rule; test and testkit readers observe ownership and error behavior outside production selection. Use narrow phase operations in launch-read-resolver.ts at the original read point. The launch-read-outside-resolver rule family does not follow arbitrary aliases of context.store.getRun() results. The launch-read-outside-resolver rule family does not infer launch-source types through nested structural member paths with two or more property accesses before the launch field or copy operation (class fix: hearsay-tools/cezarion#2744). See packages/cezar/src/workflows/launch-read-resolver.types.testkit.ts for compiled handle and lifecycle-store alias controls (owner decision: option A).';
 
 function lifecycle(node: EsNode): boolean {

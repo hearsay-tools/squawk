@@ -10,7 +10,6 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUNNER_IDS, type AgentRunSpec, type RunnerId } from '../core/agent-runner.ts';
-import { CREATE_AUTOMATION_SKILL_NAME } from '../automations/prompts.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from './run.ts';
@@ -110,7 +109,6 @@ describe('automations prompt part and cockpit address (#774)', () => {
       expect(spec.env?.CEZ_PROJECT_ID).toBeUndefined();
       expect(spec.systemPrompt).not.toContain(PROMPT_HEADING);
     }
-    expect(manager!.builtinSkills()).toEqual([]);
   });
 
   it('an addressed manager with automations off injects the address but composes nothing', async () => {
@@ -122,7 +120,6 @@ describe('automations prompt part and cockpit address (#774)', () => {
       expect(spec.env?.CEZ_PROJECT_ID).toBe(ADDRESS.projectId);
       expect(spec.systemPrompt).not.toContain(PROMPT_HEADING);
     }
-    expect(manager!.builtinSkills()).toEqual([]);
   });
 
   it.each(RUNNER_IDS)('%s: an addressed manager composes the part by default at both sites', async (runner) => {
@@ -135,7 +132,6 @@ describe('automations prompt part and cockpit address (#774)', () => {
       expect(spec.systemPrompt).toContain(PROMPT_HEADING);
       expect(spec.systemPrompt).toContain(' automation schema');
     }
-    expect(manager!.builtinSkills()).toEqual([]);
   });
 
   // Review of #1018: `serve` recovers the boot project before `startServer` runs, so an address
@@ -179,11 +175,11 @@ describe('automations prompt part and cockpit address (#774)', () => {
     const def: WorkflowDef = {
       name: '(planned)',
       source: 'built-in',
-      steps: [{ id: 'task', name: CREATE_AUTOMATION_SKILL_NAME, skill: CREATE_AUTOMATION_SKILL_NAME, prompt: '{{task}}' }],
+      steps: [{ id: 'task', name: 'create-cezarion-automation', skill: 'create-cezarion-automation', prompt: '{{task}}' }],
     };
     const record = manager!.startRun(def, { task: 'whenever a PR is opened, review it', worktree: false });
     await settled(record.id);
-    expect(store.getRun(record.id)?.error).toContain(CREATE_AUTOMATION_SKILL_NAME);
+    expect(store.getRun(record.id)?.error).toContain('create-cezarion-automation');
     expect(store.getRun(record.id)?.error).toContain('missing');
     expect(captured.specs).toEqual([]);
   });
@@ -192,17 +188,17 @@ describe('automations prompt part and cockpit address (#774)', () => {
     process.env.CEZ_AUTOMATIONS = '1';
     manager!.setCockpitAddress(ADDRESS);
     manager!.setSkillCatalog(fixedSkillCatalog([]));
-    const dir = join(repoRoot, '.ai/skills', CREATE_AUTOMATION_SKILL_NAME);
+    const dir = join(repoRoot, '.ai/skills', 'create-cezarion-automation');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'SKILL.md'), `---\nname: ${CREATE_AUTOMATION_SKILL_NAME}\ndescription: repo copy\n---\nREPO PLAYBOOK\n`);
+    writeFileSync(join(dir, 'SKILL.md'), `---\nname: create-cezarion-automation\ndescription: repo copy\n---\nREPO PLAYBOOK\n`);
     const def: WorkflowDef = {
       name: '(planned)',
       source: 'built-in',
-      steps: [{ id: 'task', name: CREATE_AUTOMATION_SKILL_NAME, skill: CREATE_AUTOMATION_SKILL_NAME, prompt: '{{task}}' }],
+      steps: [{ id: 'task', name: 'create-cezarion-automation', skill: 'create-cezarion-automation', prompt: '{{task}}' }],
     };
     const record = manager!.startRun(def, { task: 'x', worktree: false });
     await settled(record.id);
-    expect(store.getRun(record.id)?.error).toContain(CREATE_AUTOMATION_SKILL_NAME);
+    expect(store.getRun(record.id)?.error).toContain('create-cezarion-automation');
     expect(captured.specs).toEqual([]);
   });
 });

@@ -34,21 +34,21 @@ describe('submit', () => {
   // #458: an untouched /setup is allowed to default on; a retained explicit off must
   // survive remount and win over both workspace policy and skill selection.
   it.each([
-    { choice: null, configured: null, interactive: false, expected: true },
-    { choice: false, configured: true, interactive: false, expected: false },
-    { choice: true, configured: false, interactive: false, expected: true },
-    { choice: null, configured: false, interactive: false, expected: false },
-    { choice: null, configured: true, interactive: false, expected: true },
+    { choice: null, configured: null, expected: true },
+    { choice: false, configured: true, expected: false },
+    { choice: true, configured: false, expected: true },
+    { choice: null, configured: false, expected: false },
+    { choice: null, configured: true, expected: true },
     { choice: null, configured: true, expected: true },
     { choice: false, configured: null, expected: false },
     { choice: true, configured: null, expected: true },
-  ])('/setup choice=$choice policy=$configured interactive=$interactive agrees with its payload', async ({
-    choice, configured, interactive, expected,
+  ])('/setup choice=$choice policy=$configured agrees with its payload', async ({
+    choice, configured, expected,
   }) => {
     writeDraft({ ...readDraft(), autonomous: choice })
     serve({
       skills: [{ id: 'setup', name: 'setup', description: 'Set up SDLC', path: '/p/setup.md',
-        scope: 'repo', ...(interactive ? { interactive: true as const } : {}) }],
+        scope: 'repo' }],
       workspaceConfig: { ...WORKSPACE_CONFIG, composerDefaults: {
         ...WORKSPACE_CONFIG.composerDefaults, autonomous: configured,
       } },

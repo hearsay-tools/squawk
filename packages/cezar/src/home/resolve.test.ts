@@ -4,7 +4,6 @@ import { HOME_LOCATING_ENV } from '../core/agent-env.ts';
 import { workspaceConfigPath, workspaceUiStatePath, agentAccountsPath, serverInstancesDir, serverStatePath, serverLockPath, agentHomePaths, expandTilde, ompProfilesDir, claudeStateFilePath } from '../paths.ts';
 import { remoteSettingsPath } from '../remote-settings.ts';
 import { binDir, versionsDir } from '../managed-install/layout.ts';
-import { bareDirFor, skillFilesCacheDirFor } from '../skills-remote.ts';
 import { cezCacheDir, resolveChromium } from '../preview/chromium.ts';
 import { resolveHome } from './resolve.ts'; // test-home-read: import for the annotated sandbox and refusal probes
 
@@ -51,7 +50,7 @@ describe('legacy Home layout (the migration source)', () => {
     const { serverState: _state, serverLock: _lock, rootOverride: _override, ...paths } = home;
     expect(slashPaths({ ...paths, serverState: home.serverState(), namedServerState: home.serverState('example-com'),
       serverLock: home.serverLock(), namedServerLock: home.serverLock('example-com'),
-      bareSkills: bareDirFor('team/skills', home), skillFiles: skillFilesCacheDirFor('team/skills', home),
+      bareSkills: join(home.skillsCache, 'team__skills'), skillFiles: join(home.skillFilesCache, 'team__skills'),
     })).toEqual(expected);
     const readers = {
       root: resolveHome({ purpose: 'cli', env, layout: 'legacy' }).root, workspaceConfig: workspaceConfigPath(env, home), workspaceUiState: workspaceUiStatePath(home), // test-home-read: pure resolution; result only compared or used by read-only helpers
@@ -59,7 +58,7 @@ describe('legacy Home layout (the migration source)', () => {
       versions: versionsDir(env, home), bin: binDir(env, home), cache: cezCacheDir(home),
       serverState: serverStatePath(undefined, home), namedServerState: serverStatePath('example-com', home),
       serverLock: serverLockPath(undefined, home), namedServerLock: serverLockPath('example-com', home),
-      bareSkills: bareDirFor('team/skills', home), skillFiles: skillFilesCacheDirFor('team/skills', home),
+      bareSkills: join(home.skillsCache, 'team__skills'), skillFiles: join(home.skillFilesCache, 'team__skills'),
     };
     for (const [name, value] of Object.entries(slashPaths(readers))) expect(value, name).toBe(expected[name as keyof typeof expected]);
   });

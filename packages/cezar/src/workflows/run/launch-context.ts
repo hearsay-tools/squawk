@@ -11,7 +11,6 @@ import { automationCliCommand, automationsPrompt } from '../../automations/promp
 import { registryEntry } from '../../workspace/registry-entry.ts';
 import { agentWebhooksPrompt, webhookCliCommand } from '../../webhooks/prompt.ts';
 import { agentWebhooks } from '../../workspace/webhooks.ts';
-import type { Skill } from '../../skills.ts';
 import { buildSessionContext, formatSessionContextReport, type SessionContext } from '../../session-context.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { RunModuleContext } from './types.ts';
@@ -54,14 +53,9 @@ export function agentEnvForStep(...args: Parameters<typeof atStepOpen.agentEnvFo
   return reads.agentEnvForStep(...args);
 }
 
-/** Automations on AND a cockpit attached: the one predicate behind the prompt part and the built-in skill. */
+/** Automations on AND a cockpit attached: the one predicate behind the automations prompt part. */
 export function automationsReachable(cockpit: CockpitAddress): boolean {
   return !!cockpit && automationsEnabled();
-}
-
-/** The built-in skills this manager may offer now; empty unless automations are reachable. */
-export function builtinSkills(_cockpit: CockpitAddress): Skill[] {
-  return [];
 }
 
 /** The automations part of every session's system prompt, or nothing. */

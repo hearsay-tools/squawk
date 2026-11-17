@@ -31,7 +31,7 @@ import * as launchContext from './run/launch-context.ts';
 import { openingInputs } from './run/opening.ts';
 import { releaseActiveResources } from './run/drop-active.ts';
 import { delegationExecutionSettings, selectDelegationExecutionSettings } from '../delegation/execution-settings.ts';
-export { agentDirectories, composeSystemPrompt, expandRegistrySlashSkill, expandRegistrySlashSkillText, leadingSlashSkillName, resolveExtraSystemPrompt, skillSystemPrompt } from './run/prompts.ts';
+export { agentDirectories, composeSystemPrompt, leadingSlashSkillName, resolveExtraSystemPrompt } from './run/prompts.ts';
 export { stepLabel } from './run/steps.ts';
 export { makeRunTitle } from '../runs/run-title.ts';
 import { clearHeldHumanInputTimer, clearIdleTimer, clearAutosaveTimer, clearUnreadInputTimer } from './run/input-timers.ts';
@@ -66,7 +66,6 @@ import { type PastedContent, type PersistedAttachment } from './pasted-content.t
 export { contentBlocksOf, highestImageSeq, mediaTypeFor, pastedAttachmentsNote, pastedAttachmentsText, toPastedContent, type FileBlock, type PastedContent, type PersistedAttachment } from './pasted-content.ts';
 import type { ContentBlock } from '../core/agent-runner.ts';
 import type { ToolActivityFeed, ToolActivityTracker } from '../activity/tool-activity.ts';
-import { type Skill } from '../skills.ts';
 import * as queuedRevival from './run/queued-revival.ts';
 import { RUN_IN_USE_ELSEWHERE, type CommitSource, type QueuedMessage, type RunRecord, type RunStore, type StepState } from '../runs/store.ts';
 import { WorkspaceSemaphore, type AccountHolds } from '../workspace/semaphore.ts';
@@ -215,7 +214,6 @@ export class RunManager {
       settleOrphanedWorkerExecution: (...args) => this.settleOrphanedWorkerExecution(...args),
       sendMessage: (...args) => this.sendMessage(...args),
       canClaimInboxInput: (...args) => this.canClaimInboxInput(...args),
-      builtinSkills: (...args) => this.builtinSkills(...args),
       continueRun: (...args) => this.continueRun(...args),
       recover: (...args) => this.recover(...args),
       dropActive: (...args) => this.#dropActive(...args),
@@ -360,7 +358,6 @@ export class RunManager {
     return state ? this.#modules.runSkills.enabledSkills(state) : [];
   }
 
-  builtinSkills(): Skill[] { return launchContext.builtinSkills(this.#cockpit); }
 
   #delegationProvisioner: DelegationProvisioner | undefined;
   setDelegationProvisioner(provisioner: DelegationProvisioner): () => void { return launchContext.setDelegationProvisioner(this.#modules.launchSettingsHost, provisioner); }

@@ -34,7 +34,6 @@ import {
   normalizePromptTemplates,
   resolveAutoApply,
   resolveInsertCaret,
-  templatesForCapabilities,
 } from '@/lib/prompt-templates'
 import {
   bumpSkillUsage,
@@ -45,7 +44,6 @@ import {
 } from '@/lib/skills'
 import { isSubmitShortcut, submitShortcutHint } from '@/lib/use-submit-shortcut'
 import { cn, isHttpUrl } from '@/lib/utils'
-import { useAutomationsAvailable } from '@/lib/capabilities'
 
 import { readFollowupPrompt, writeFollowupPrompt } from './hand-to-agent-draft'
 
@@ -101,7 +99,6 @@ export function HandToAgent({
 }) {
   const queryClient = useQueryClient()
   const uiState = useUiState()
-  const automationsOn = useAutomationsAvailable()
   const kindLabel = item.kind === 'pr' ? 'PR' : 'issue'
   // A missing picked path stays visible and blocks start until the user removes it.
   const resolved = useResolvedEngine(engine)
@@ -136,8 +133,8 @@ export function HandToAgent({
   // Follow-up prompt templates (#413): built-in unless the user has edited them in Settings →
   // Prompt templates (`ui-state.json`'s `promptTemplates`).
   const templates = useMemo(
-    () => templatesForCapabilities(normalizePromptTemplates(uiState.data?.promptTemplates), { automations: automationsOn }),
-    [uiState.data?.promptTemplates, automationsOn],
+    () => normalizePromptTemplates(uiState.data?.promptTemplates),
+    [uiState.data?.promptTemplates],
   )
   const insertPromptTemplate = (snippet: string) => {
     const el = promptRef.current

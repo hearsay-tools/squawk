@@ -5,7 +5,6 @@ import { hc } from 'hono/client';
 import type { JSONParsed, JSONValue } from 'hono/utils/types';
 import { describe, expect, it } from 'vitest';
 import { uiStateSchema as uiStateSchemaValue } from '@open-mercato/cezar-contract/workspace';
-import type { TeamSkillRef } from '@open-mercato/cezar-contract/skills';
 import type { z } from 'zod';
 import type {
   agentAccountDetailsResponseSchema,
@@ -201,9 +200,6 @@ describe('src/contract projects/workspace schemas match the routes exactly', () 
     // the two open GUI-pref bags — GET and the merged answer the PUT sends back
     Assert<ExactOpen<z.infer<typeof uiStateSchema>, UiState200>>,
     Assert<ExactOpen<z.infer<typeof uiStateSchema>, SetUiState200>>,
-    // the off-list field itself, both directions, as the route sends it
-    Assert<Exact<NonNullable<UiState200['disabledTeamSkills']>, TeamSkillRef[]>>,
-    Assert<Exact<NonNullable<SetUiState200['disabledTeamSkills']>, TeamSkillRef[]>>,
     Assert<ExactOpen<z.infer<typeof workspaceUiStateSchema>, WorkspaceUiState200>>,
     Assert<ExactOpen<z.infer<typeof workspaceUiStateSchema>, SetWorkspaceUiState200>>,
     Assert<Exact<z.infer<typeof configResponseSchema>, Config200>>,
@@ -251,8 +247,8 @@ describe('src/contract projects/workspace schemas match the routes exactly', () 
     ]);
   });
 
-  it('declares the off-list', () => {
+  it('does not declare the old team skill off-list', () => {
     const keys = Object.keys(uiStateSchemaValue.shape);
-    expect(keys).toContain('disabledTeamSkills');
+    expect(keys).not.toContain('disabledTeamSkills');
   });
 });

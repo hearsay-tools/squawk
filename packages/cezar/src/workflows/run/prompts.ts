@@ -1,7 +1,4 @@
-import { dirname } from 'node:path';
-import type { ContentBlock } from '../../core/agent-runner.ts';
 import type { RunRecord } from '../../runs/store.ts';
-import type { Skill } from '../../skills.ts';
 import { productName } from '../../home/display.ts';
 
 /**
@@ -61,107 +58,11 @@ export function withResumeContext(prompt: string, message: RunRecord['continuati
   return `${parts.join(' ')}\n${prompt}`;
 }
 
-
 export function applyTemplate(template: string, task: string): string {
   return template.replaceAll('{{task}}', () => task);
-}
-
-/**
- * Skill identity is context, while the Markdown body remains instructions.
- *
- * For an on-disk skill we also hand the agent the ABSOLUTE directory of the
- * installed copy. A run executes in an isolated worktree that has no local
- * `.agents/skills` (gitignored, absent in a fresh checkout), so without this
- * the agent cannot read the skill's companion files (`references/*.md`) — or,
- * worse, reads a stale copy materialized from the team-repo cache. The path
- * resolves against the MAIN project root (`discoverSkills(repoRoot)`), i.e. the
- * current `npx skills`-installed copy, so a worktree agent and the main
- * checkout read the exact same, up-to-date files. A team skill's `path` is not
- * on disk: its files are materialized per run (`RunSkills.provisionRunSkills`).
- * Inside the run's task worktree they need no pointer; a run without one, or
- * whose worktree took no copy, gets a per-commit cache copy, passed here as
- * `teamFilesDir` (#1024). A worktree that took only some of its copies passes
- * the first one it did take.
- */
-export function skillSystemPrompt(
-  skill: Pick<Skill, 'name' | 'description' | 'body'> & Partial<Pick<Skill, 'path' | 'source'>>,
-  teamFilesDir?: string,
-): string {
-  const lines = [
-    `Selected skill: /${skill.name}`,
-    ...(skill.description ? [`Description: ${skill.description}`] : []),
-  ];
-  if (skill.source && skill.source !== 'team' && skill.source !== 'builtin' && skill.path) {
-    const dir = dirname(skill.path);
-    lines.push(
-      '',
-      `Skill files are installed on disk at: ${dir}`,
-      `Read any file this skill references (for example references/*.md) from that absolute directory. ` +
-        `It is the current installed copy — use it even though your working directory is a separate worktree that does not contain the skill.`,
-    );
-  } else if (skill.source === 'team' && teamFilesDir) {
-    lines.push(
-      '',
-      `Skill files are installed on disk at: ${teamFilesDir}`,
-      `Read any file this skill references (for example references/*.md) from that absolute directory. ` +
-        `It is a copy of the skill at the commit this run uses.`,
-    );
-  }
-  lines.push('', 'Skill instructions:', skill.body.trim());
-  return lines.join('\n');
-}
-
-/**
- * Expand a registry-backed slash skill in one prompt string before it reaches a
- * backend. Claude otherwise intercepts an unknown leading slash command, and
- * Codex/OpenCode have no native slash-skill lookup at all (#676).
- *
- * Only a match at character zero counts, and unknown commands pass through
- * byte-for-byte — a backend's OWN slash commands must keep working. The caller
- * persists the original user text before applying this delivery-only rewrite.
- *
- * All delivery seams route through here: live-session messages via
- * `expandRegistrySlashSkill`, and fresh or continuation opening prompts, which
- * become the session's `userPrompt` without passing through `deliverMessage`.
- */
-export function expandRegistrySlashSkillText(
-  text: string,
-  skills: readonly Skill[],
-  /** Per team skill, the cache or partial copy its prompt names (#1118). */
-  teamFilesDir?: ReadonlyMap<string, string>,
-): string {
-  const name = leadingSlashSkillName(text);
-  if (!name) return text;
-  const skill = skills.find((candidate) => candidate.name === name);
-  if (!skill) return text;
-
-  const playbook = skillSystemPrompt(skill, teamFilesDir?.get(skill.name));
-  const request = text.slice(name.length + 1).trim();
-  return request ? `${playbook}\n\nUser request:\n${request}` : playbook;
 }
 
 /** The `name` of a prompt's leading `/name` slash command, else undefined. */
 export function leadingSlashSkillName(text: string): string | undefined {
   return /^\/([A-Za-z0-9][A-Za-z0-9:._-]*)(?=\s|$)/.exec(text)?.[1];
-}
-
-/**
- * `expandRegistrySlashSkillText` over a live chat message: only the first text
- * block is eligible, and an unchanged block returns the caller's array
- * identity untouched.
- */
-export function expandRegistrySlashSkill(
-  content: ContentBlock[],
-  skills: readonly Skill[],
-): ContentBlock[] {
-  const textIndex = content.findIndex((block) => block.type === 'text');
-  if (textIndex < 0) return content;
-  const block = content[textIndex];
-  if (!block || block.type !== 'text') return content;
-  const text = expandRegistrySlashSkillText(block.text, skills);
-  if (text === block.text) return content;
-
-  const expanded = [...content];
-  expanded[textIndex] = { type: 'text', text };
-  return expanded;
 }

@@ -1,5 +1,8 @@
+import { seedOldSkills } from '../worktree-skill-cleanup.testkit.ts';
+import { removeProvisionedSkills } from '../worktree-skill-cleanup.ts';
+import { readManifest } from '../worktree-manifest.testkit.ts';
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -110,4 +113,65 @@ describe('native skills do not materialize Squawk copies', () => {
     expect(store.getRun(record.id)?.error).toContain('default');
     noCopies(repoRoot);
   });
+
+  it.each(['unchanged', 'changed', 'interrupted'] as const)('cleans old recorded skills at next step open (%s)', async kind => {
+    const workflow = plannedWorkflow([{ id: 'first', prompt: '{{task}}' }, { id: 'next', prompt: '{{task}}' }]);
+    const record = manager.startRun(workflow, { task: 'go', worktree: true, runner: 'claude' });
+    // bound: the real worktree must reach the first runner before an old-version manifest is seeded.
+    await vi.waitFor(() => expect(launches).toHaveLength(1), { timeout: 15_000 });
+    const cwd = launches[0]!.cwd;
+    const { paths, manifest } = await seedOldSkills(cwd);
+    if (kind === 'changed') writeFileSync(join(cwd, paths[0]!, 'SKILL.md'), 'user edit\n');
+    if (kind === 'interrupted') {
+      const before = readFileSync(manifest, 'utf8');
+      await removeProvisionedSkills(cwd, { faults: boundary => { if (boundary === 'removed') throw new Error('crash between removals'); } });
+      expect(readFileSync(manifest, 'utf8')).toBe(before);
+      expect(existsSync(join(cwd, paths[0]!))).toBe(false);
+      expect(existsSync(join(cwd, paths[1]!))).toBe(true);
+    }
+    const catalog = fixedSkillCatalog();
+    const get = catalog.get.bind(catalog);
+    vi.spyOn(catalog, 'get').mockImplementation(query => {
+      expect(existsSync(join(cwd, paths[1]!))).toBe(false);
+      return get(query);
+    });
+    manager.setSkillCatalog(catalog);
+    finish[0]!();
+    // bound: the workflow's second startSession is the cleanup completion signal.
+    await vi.waitFor(() => expect(launches).toHaveLength(2), { timeout: 15_000 });
+    expect(store.getRun(record.id)?.error).toBeUndefined();
+    for (const path of paths) {
+      expect(existsSync(join(cwd, path))).toBe(kind === 'changed' && path === paths[0]);
+      expect(existsSync(join(cwd, path, '../.gitignore'))).toBe(false);
+    }
+    if (kind === 'changed') expect(readFileSync(join(cwd, paths[0]!, 'SKILL.md'), 'utf8')).toBe('user edit\n');
+    expect((await readManifest(cwd))?.entries.some(entry => entry.writer === 'skills') ?? false).toBe(false);
+  });
+
+  it('cleans old recorded skills at Continue before starting the runner', async () => {
+    const record = manager.startRun(SINGLE_STEP, { task: 'go', worktree: true, runner: 'claude' });
+    // bound: startSession publishes the worktree that the old installer would have written into.
+    await vi.waitFor(() => expect(launches).toHaveLength(1), { timeout: 15_000 });
+    const cwd = launches[0]!.cwd;
+    finish[0]!();
+    // bound: Continue must observe the completed initial run, rather than steering its live session.
+    await vi.waitFor(() => expect(manager.isActive(record.id)).toBe(false), { timeout: 15_000 });
+    const { paths } = await seedOldSkills(cwd);
+    const catalog = fixedSkillCatalog();
+    const get = catalog.get.bind(catalog);
+    vi.spyOn(catalog, 'get').mockImplementation(query => {
+      expect(paths.some(path => existsSync(join(cwd, path)))).toBe(false);
+      return get(query);
+    });
+    manager.setSkillCatalog(catalog);
+    expect(manager.continueRun(record.id, { text: 'continue' })).toEqual({ ok: true });
+    // bound: the continued session is the product signal that prelaunch cleanup completed.
+    await vi.waitFor(() => expect(launches).toHaveLength(2), { timeout: 15_000 });
+    for (const path of paths) {
+      expect(existsSync(join(cwd, path))).toBe(false);
+      expect(existsSync(join(cwd, path, '../.gitignore'))).toBe(false);
+    }
+    expect((await readManifest(cwd))?.entries.some(entry => entry.writer === 'skills') ?? false).toBe(false);
+  });
+
 });

@@ -296,12 +296,6 @@
       "reason": "feature:preview: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
     },
     {
-      "file": "packages/cezar/src/workflows/run.ts",
-      "target": "packages/cezar/src/skills.ts",
-      "count": 1,
-      "reason": "feature:skills: the run engine provisions skills directly. The planned skills redesign removes most of this code"
-    },
-    {
       "file": "packages/cezar/src/workflows/run/auto-resume.ts",
       "target": "packages/cezar/src/delegation/retry-backoff.ts",
       "count": 1,
@@ -354,12 +348,6 @@
       "target": "packages/cezar/src/preview/run-tools.ts",
       "count": 1,
       "reason": "feature:preview: wiring; becomes registration when features register through the plugin API"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/compose.ts",
-      "target": "packages/cezar/src/skills.ts",
-      "count": 1,
-      "reason": "feature:skills: wiring; becomes registration when features register through the plugin API"
     },
     {
       "file": "packages/cezar/src/workflows/run/continuation-acceptance.ts",
@@ -453,12 +441,6 @@
     },
     {
       "file": "packages/cezar/src/workflows/run/launch-context.ts",
-      "target": "packages/cezar/src/skills.ts",
-      "count": 1,
-      "reason": "feature:skills: the run engine provisions skills directly. The planned skills redesign removes most of this code"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/launch-context.ts",
       "target": "packages/cezar/src/webhooks/prompt.ts",
       "count": 1,
       "reason": "feature:webhooks: the core calls this feature directly. A later step turns the call into a registration (ADR 0065)"
@@ -486,12 +468,6 @@
       "target": "packages/cezar/src/delegation/policy.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/prompts.ts",
-      "target": "packages/cezar/src/skills.ts",
-      "count": 1,
-      "reason": "feature:skills: the run engine provisions skills directly. The planned skills redesign removes most of this code"
     },
     {
       "file": "packages/cezar/src/workflows/run/queued-revival.ts",
@@ -786,12 +762,6 @@
       "target": "packages/cezar/src/server/forge/index.ts",
       "count": 1,
       "reason": "feature:forge: the core reads the PR watcher or GitHub state directly. The pr wait kind and its watcher move to the forge feature"
-    },
-    {
-      "file": "packages/cezar/src/worktree-manifest.ts",
-      "target": "packages/cezar/src/skills-remote.ts",
-      "count": 1,
-      "reason": "feature:skills: the run engine provisions skills directly. The planned skills redesign removes most of this code"
     },
     {
       "file": "packages/cezar/src/worktree-setup.ts",

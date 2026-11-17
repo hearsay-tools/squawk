@@ -83,7 +83,7 @@ import { planOwnedWorkspace, readOwnedDiff, resolveWorkerBaseline, verifyOwnedWo
 import { runGit } from '../git-command.ts';
 
 export type DelegationManager = Pick<RunManager,
-  | 'acknowledgeInbox' | 'awaitRunTermination' | 'builtinSkills' | 'canClaimInboxInput'
+  | 'acknowledgeInbox' | 'awaitRunTermination' | 'canClaimInboxInput'
   | 'cancelPeerWait' | 'cancelWorkerWait' | 'claimWorkerCleanup' | 'continueRun'
   | 'deliverConversationInput' | 'enqueueOwnedRun' | 'isActive' | 'pauseWorkerCleanup'
   | 'previewHost' | 'reconcileWorkerWaits' | 'recoverWorkerCleanup' | 'registerPeerWait'

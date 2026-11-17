@@ -83,7 +83,6 @@ Options:
 
 Zero config: uses your logged-in \`claude\` CLI (and \`gh\` for GitHub bits).
 Skills live in .ai/skills/, .ai/squawk/skills/ and your team skills repos
-(team skills come from "skillsRepos" in .ai/squawk/config.json, which the Skills page edits; none by default);
 workflows in .ai/squawk/workflows/. A project also reads .ai/cezar/, the old folder name.`;
 }
 

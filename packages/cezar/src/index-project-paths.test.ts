@@ -11,7 +11,6 @@ import { runHeadless } from './headless-run.ts';
 import { RUNS_IMPORT_COMPLETE_KEY, RunDatabase } from './runs/run-database.ts';
 import { encodeRunRow } from './runs/run-row.ts';
 import { loadWorkflows } from './workflows/load.ts';
-import { discoverSkills } from './skills.ts';
 import type { Cockpit } from './task-cli/http.ts';
 
 vi.mock('./cli-dispatch.ts', () => ({ defaultCliDeps: {}, main: vi.fn(async () => undefined) }));
@@ -74,7 +73,7 @@ describe('CLI project paths at real entry points', () => {
     await cli.initCommand(repo);
     const example = join(repo, '.ai/cezar/workflows/fix-and-verify.yaml');
     expect(existsSync(example)).toBe(true);
-    expect(existsSync(join(repo, '.ai/cezar/skills/project-conventions.md'))).toBe(true);
+    expect(existsSync(join(repo, '.ai/cezar/skills'))).toBe(false);
     writeFileSync(example, 'authored workflow');
     await cli.initCommand(repo);
     expect(readFileSync(example, 'utf8')).toBe('authored workflow');
@@ -82,7 +81,7 @@ describe('CLI project paths at real entry points', () => {
     expect(log).toHaveBeenCalled();
   });
 
-  it('skips a starter whose name an authored .ai/squawk/ workflow or skill already uses', async () => {
+  it('skips a starter whose name an authored .ai/squawk/ workflow already uses', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     mkdirSync(join(repo, '.ai/squawk/workflows'), { recursive: true });
     mkdirSync(join(repo, '.ai/squawk/skills'), { recursive: true });
@@ -93,8 +92,7 @@ describe('CLI project paths at real entry points', () => {
     expect(existsSync(join(repo, '.ai/cezar/skills/project-conventions.md'))).toBe(false);
     const { workflows } = await loadWorkflows(repo);
     expect(workflows.find(workflow => workflow.name === 'fix-and-verify')?.path).toBe(join(repo, '.ai/squawk/workflows/mine.yaml'));
-    expect((await discoverSkills(repo, { builtin: [] }, testHome())).find(skill => skill.name === 'project-conventions')?.path)
-      .toBe(join(repo, '.ai/squawk/skills/conventions.md'));
+    expect(readFileSync(join(repo, '.ai/squawk/skills/conventions.md'), 'utf8')).toContain('# Mine');
   });
 
   it('serves fallback history without creating an empty legacy runs database', async () => {

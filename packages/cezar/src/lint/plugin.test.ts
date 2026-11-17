@@ -86,7 +86,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
   "skills-read-outside-enabled-skills": ["packages/cezar/src/workflows/run/skills-reader.ts", "const { catalog } = state.skills;"],
   "skills-write-outside-load-run-skills": ["packages/cezar/src/workflows/run/skills-writer.ts", "skillsWrites.catalog(state.skills, []);"],
   "wait-kind-literal-outside-engine": ["packages/cezar/src/wait-kind-leak.ts", "kind === 'pr';"],
-  "worktree-write-outside-manifest": ["packages/cezar/src/skills-provision.ts", "import { writeFile } from 'node:fs/promises';"],
+  "worktree-write-outside-manifest": ["packages/cezar/src/worktree-skill-cleanup.ts", "import { writeFile } from 'node:fs/promises';"],
 
   'active-run-autosave-write-outside-owner': ['packages/cezar/src/owner-autosave.ts', 'state.autosave as any;'],
   'active-run-boundary-write-outside-owner': ['packages/cezar/src/owner-boundary.ts', 'state.boundary as any;'],
