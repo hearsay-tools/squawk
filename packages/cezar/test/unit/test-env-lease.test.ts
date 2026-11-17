@@ -278,7 +278,7 @@ test('Squeal daemon contention includes conditional result guidance in wait and 
   try {
     await once(child.stdout!, 'data');
     const messages: string[] = [];
-    await assert.rejects(acquireTestEnvLease(root, { timeoutMs: 5000, onWait: message => messages.push(message) }), error => {
+    await assert.rejects(acquireTestEnvLease(root, { timeoutMs: process.platform === 'win32' ? 15_000 : process.platform === 'darwin' ? 2000 : 200, onWait: message => messages.push(message) }), error => {
       assert.match((error as Error).message, /squeal\.mjs/);
       assert.match((error as Error).message, /If Squeal covers this spec.*squeal status --wait 60000/);
       return true;

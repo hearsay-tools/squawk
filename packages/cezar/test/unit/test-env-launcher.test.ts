@@ -739,6 +739,9 @@ test('a failed cold boot leaves no descriptor of the env it replaced', () => {
   });
   assert.equal(result.status, 1, result.stderr);
   assert.match(result.stderr, /the app exited during boot/);
+  assert.match(result.stderr, /boot-line-25/);
+  assert.doesNotMatch(result.stderr, /health wait timed out/);
+  assert.equal(result.stdout, '');
   assert.equal(existsSync(join(fixture.root, '.ai/qa/test-env.json')), false);
 });
 
@@ -861,18 +864,6 @@ fi
   assert.match(result.stderr, /health wait timed out after 180s/);
 });
 
-test('health wait still detects an app that exits during boot', () => {
-  const fixture = unhealthyFixture('exited');
-  const result = spawnSync('/bin/sh', [join(fixture.root, '.ai/scripts/test-env-up.sh')], {
-    encoding: 'utf8', env: { ...fixture.env, TEST_ENV_HEALTH_TIMEOUT_SECONDS: '5' }, timeout: 9_000, killSignal: 'SIGKILL',
-  });
-  assert.equal(result.status, 1, result.stderr);
-  assert.match(result.stderr, /the app exited during boot/);
-  assert.match(result.stderr, /boot-line-25/);
-  assert.doesNotMatch(result.stderr, /health wait timed out/);
-  assert.equal(result.stdout, '');
-});
-
 /** Starts a boot of an app that never turns healthy and returns once the app listens: it runs
  * and the boot has written no descriptor naming it yet. */
 async function bootUntilListening() {
@@ -926,9 +917,9 @@ test('cleanup finds the app of a boot whose supervisor was killed before it reco
   assert.ok(left.includes(pid), `the app (pid ${pid}) is not found by its checkout ${root}: ${left.join(' ')}`);
 });
 
-for (const timeout of ['0', '-1', '1.5', 'invalid', '--version', '--help']) {
-  test(`malformed health timeout ${timeout} is rejected before starting the app`, () => {
-    const fixture = makeFixture(false);
+test('malformed health timeouts are rejected before starting the app', () => {
+  const fixture = makeFixture(false);
+  for (const timeout of ['0', '-1', '1.5', 'invalid', '--version', '--help']) {
     // Malformed input must fail before preparation. A failing build also prevents
     // a regressed option parser from leaving a detached app without a descriptor.
     writeFileSync(join(fixture.root, 'bin/npm'), '#!/bin/sh\nexit 99\n', { mode: 0o755 });
@@ -938,9 +929,9 @@ for (const timeout of ['0', '-1', '1.5', 'invalid', '--version', '--help']) {
     });
     assert.equal(result.status, 2, result.stderr);
     assert.match(result.stderr, /TEST_ENV_HEALTH_TIMEOUT_SECONDS.*positive integer/);
-    assert.equal(result.stdout, '');
-  });
-}
+    assert.equal(result.stdout, '', timeout);
+  }
+});
 
 for (const withSetsid of [true, false]) {
   test(
@@ -1393,26 +1384,26 @@ test('test-env-down.sh stopping the server also ends its watcher', async () => {
   assert.doesNotMatch(watchLog(root), /watcher stopping/);
 });
 
-for (const [name, value, rule] of [
-  ['TEST_ENV_IDLE_EXIT_MINUTES', '-1', 'non-negative number'],
-  ['TEST_ENV_IDLE_EXIT_MINUTES', 'abc', 'non-negative number'],
-  ['TEST_ENV_IDLE_EXIT_MINUTES', '1.', 'non-negative number'],
-  ['TEST_ENV_WATCH_INTERVAL_SECONDS', '0', 'number of seconds from 0.1 to 3600'],
-  ['TEST_ENV_WATCH_INTERVAL_SECONDS', '0.01', 'number of seconds from 0.1 to 3600'],
-  ['TEST_ENV_WATCH_INTERVAL_SECONDS', '3000000', 'number of seconds from 0.1 to 3600'],
-  ['TEST_ENV_WATCH_INTERVAL_SECONDS', '1e3', 'number of seconds from 0.1 to 3600'],
-] as const) {
-  test(`malformed ${name}=${JSON.stringify(value)} is refused before boot`, () => {
-    const fixture = makeFixture(false);
-    writeFileSync(join(fixture.root, 'bin/npm'), '#!/bin/sh\nexit 99\n', { mode: 0o755 });
+test('malformed watcher settings are refused before boot', () => {
+  const fixture = makeFixture(false);
+  writeFileSync(join(fixture.root, 'bin/npm'), '#!/bin/sh\nexit 99\n', { mode: 0o755 });
+  for (const [name, value, rule] of [
+    ['TEST_ENV_IDLE_EXIT_MINUTES', '-1', 'non-negative number'],
+    ['TEST_ENV_IDLE_EXIT_MINUTES', 'abc', 'non-negative number'],
+    ['TEST_ENV_IDLE_EXIT_MINUTES', '1.', 'non-negative number'],
+    ['TEST_ENV_WATCH_INTERVAL_SECONDS', '0', 'number of seconds from 0.1 to 3600'],
+    ['TEST_ENV_WATCH_INTERVAL_SECONDS', '0.01', 'number of seconds from 0.1 to 3600'],
+    ['TEST_ENV_WATCH_INTERVAL_SECONDS', '3000000', 'number of seconds from 0.1 to 3600'],
+    ['TEST_ENV_WATCH_INTERVAL_SECONDS', '1e3', 'number of seconds from 0.1 to 3600'],
+  ] as const) {
     const result = spawnSync('/bin/sh', [join(fixture.root, '.ai/scripts/test-env-up.sh')], {
       encoding: 'utf8', env: { ...fixtureEnv, PATH: fixture.path, [name]: value }, timeout: 9_000, killSignal: 'SIGKILL',
     });
     assert.equal(result.status, 2, result.stderr);
     assert.match(result.stderr, new RegExp(`${name} must be a ${rule}`));
-    assert.equal(existsSync(join(fixture.root, '.ai/qa/test-env.json')), false);
-  });
-}
+    assert.equal(existsSync(join(fixture.root, '.ai/qa/test-env.json')), false, `${name}=${value}`);
+  }
+});
 
 // hearsay-tools/cezarion#1699: isolate only the server, preserving tool caches and Git pins.
 test('server HOME is fresh on cold boots, preserved on reuse, and separate from tool HOME', () => {

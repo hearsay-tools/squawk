@@ -20,9 +20,9 @@ try {
     return spawn(file, args, options);
   };
   syncBuiltinESMExports();
-  await assert.rejects(acquireTestEnvLease(root, { timeoutMs: 10_000, onWait: () => {
+  await assert.rejects(acquireTestEnvLease(root, { timeoutMs: 2_000, onWait: () => {
     // End the remaining time without changing the holder or querying its process.
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10_100);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2_100);
   } }), /timed out/);
   assert.equal(commands, 1, 'timeout must reuse the initial command snapshot');
 } finally {
