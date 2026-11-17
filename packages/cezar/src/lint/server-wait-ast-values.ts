@@ -1,5 +1,6 @@
 import type { CallExpression, Node, ObjectExpression } from '@babel/types';
-import { calleeOf, definition, heldBy, keyName, mathFunctions, numberOf, optionObjects, placeFor, sizedOutside, smallest, unwrap, type Place, type Read } from './unit-wait-values.ts';
+import { calleeOf, declaredHere, definition, heldBy, keyName, mathFunctions, numberOf, optionObjects, placeFor, ownNames, rootsOf, smallest, unwrap, type Place, type Read, type Use, type View } from './unit-wait-values.ts';
+import { isPath } from './unit-wait-deadlines.ts';
 import { unescaped } from './test-wait-discipline.ts';
 
 /** The server scanner has always recognized the zero-argument bigint clock too. */
@@ -43,10 +44,20 @@ export function serverRead(place: Place, depth = 0): Read {
   };
 }
 
+/** Server aliases pass through paths, never a clock expression used as an ordinary value. */
+function sizedOutside(node: Node, view: View, use: Use, depth = 0): boolean {
+  return rootsOf(node).some(name => {
+    if (ownNames.has(name)) return false;
+    if (!declaredHere(view, use, name)) return true;
+    const held = depth < 3 ? heldBy(view, use, name) : [];
+    return held.length > 0 && held.every(each => isPath(each.value)) && held.some(each => sizedOutside(each.value, view, each.use, depth + 1));
+  });
+}
+
 function milliseconds(node: Node, place: Place): number | undefined {
   if (node.type === 'Identifier' && node.name === 'undefined') return 1_000;
   if (node.type === 'NullLiteral') return 0;
-  return serverNumber(node, place.read) ?? (sizedOutside(node, place.view, place.use, 0, serverClock) ? undefined : NaN);
+  return serverNumber(node, place.read) ?? (sizedOutside(node, place.view, place.use) ? undefined : NaN);
 }
 
 function serverKey(key: Node, computed: boolean, place: Place, text: (node: Node) => string): string | undefined {
@@ -61,7 +72,7 @@ function optionsBound(object: ObjectExpression, place: Place, text: (node: Node)
   for (const property of object.properties) {
     const name = property.type === 'SpreadElement' ? undefined : serverKey(property.key, property.computed, place, text);
     if (name === 'timeout' && property.type === 'ObjectProperty') bound = milliseconds(property.value, place);
-    else if (name === undefined) bound = sizedOutside(property.type === 'SpreadElement' ? property.argument : property.key, place.view, place.use, 0, serverClock) ? undefined : NaN;
+    else if (name === undefined) bound = sizedOutside(property.type === 'SpreadElement' ? property.argument : property.key, place.view, place.use) ? undefined : NaN;
   }
   return bound;
 }

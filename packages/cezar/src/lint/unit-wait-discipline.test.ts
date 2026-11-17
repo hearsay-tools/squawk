@@ -12,6 +12,13 @@ import {
   type Site,
 } from './unit-wait-discipline.ts'
 import { scanWaitAst } from './wait-ast.testkit.ts'
+import { clockCases, oracleCounts, siteCounts } from './wait-clock-matrix.testkit.ts'
+
+describe('unit clock consumer oracle', () => {
+  it.each(clockCases())('matches the original scanner for $id', ({ id, code }) => {
+    expect(siteCounts(scanWaitAst('unit', 'x.test.tsx', code))).toEqual(oracleCounts('unit', id));
+  });
+});
 
 /**
  * The cockpit unit tests' wait discipline, as a syntax-tree scan (hearsay-tools/cezarion#1203). A Vitest wait

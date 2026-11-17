@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { blank } from './lint/blank.ts';
 import { scanFile, scanSource, SHORT_BOUND_MS, type Site } from './lint/test-wait-discipline.ts';
 import { scanWaitAst } from './lint/wait-ast.testkit.ts';
+import { clockCases, oracleCounts, siteCounts } from './lint/wait-clock-matrix.testkit.ts';
 import { type Baseline, baselines } from './lint/server-wait-baseline.ts';
 import { compareToBaseline, readBaseline, shrinkBaseline, tally } from './lint/wait-baseline.ts';
 
@@ -22,6 +23,12 @@ const lines = (sites: Site[]) => sites.map((s) => s.line);
 const scan = (...src: string[]) => scanWaitAst('server', 'x.test.ts', src.join('\n')).filter((s) => s.rule !== 'poll-deadline');
 const polls = (...src: string[]) => scanWaitAst('server', 'x.test.ts', src.join('\n')).filter((s) => s.rule === 'poll-deadline');
 const errors = (...src: string[]) => scanFile('x.test.ts', src.join('\n')).errors.map(({ line, construct }) => ({ line, construct }));
+
+describe('server clock consumer oracle', () => {
+  it.each(clockCases())('matches the original scanner for $id', ({ id, code }) => {
+    expect(siteCounts(scanWaitAst('server', 'x.test.ts', code))).toEqual(oracleCounts('server', id));
+  });
+});
 
 describe('blanking strings and comments', () => {
   it('keeps line and column positions', () => {

@@ -42,7 +42,10 @@ function nameBound(name: string, view: View, use: Use, deadline: boolean, depth:
   if (depth > 3) return undefined;
   const values = valuesOf(view, declared, name).filter(value => declared.scope !== view.scope || (value.start ?? 0) < use.at);
   if (values.length === 0) return declared.kind === 'param' && !declared.init ? 'unreadable' : undefined;
-  return minimum(values.map(value => serverBound(value, view, use, deadline, depth + 1)));
+  return minimum(values.map(value => {
+    if (deadline && value.type === 'BinaryExpression' && value.operator === '+' && serverClock(value.left)) return serverBound(value.right, view, use, false, depth + 1);
+    return serverBound(value, view, use, false, depth + 1);
+  }));
 }
 
 function reader(view: View, use: Use, depth = 0): Read {
@@ -68,9 +71,17 @@ function pathRoot(node: Node): string | undefined {
   return node.type === 'MemberExpression' ? pathRoot(node.object) : undefined;
 }
 
+/** Only a direct deadline definition or an inline start + limit uses server clock arithmetic. */
+function clockLimit(node: Node, view: View, use: Use): Bound {
+  if (node.type === 'BinaryExpression' && node.operator === '+' && isPath(node.left)) return serverBound(node.right, view, use);
+  return serverBound(node, view, use, true);
+}
+
 /** Per-rule policy: the cockpit retains its original evaluator unchanged. */
 export const serverDeadlineEvaluation: DeadlineEvaluation = {
   clock: serverClock,
+  clockLimit,
+  outside: (node, view, use) => serverBound(node, view, use) === 'unreadable',
   read: reader,
   delay(node, view) {
     // The original server scan reads intervals at the loop head, before its body runs.
@@ -79,12 +90,7 @@ export const serverDeadlineEvaluation: DeadlineEvaluation = {
     return value === undefined && outside(node, view, use) ? 'unreadable' : value;
   },
   value(node, view, use) {
-    const value = serverBound(node, view, use, true);
-    if (isNumber(value)) return value;
-    // A comparison may spell start + limit directly. A named deadline must still
-    // be initialized from a clock call, as the server's original scanner required.
-    const summed = node.type === 'BinaryExpression' && node.operator === '+' && isPath(node.left)
-      ? serverBound(node.right, view, use) : undefined;
-    return isNumber(summed) ? summed : undefined;
+    const value = clockLimit(node, view, use);
+    return isNumber(value) ? value : undefined;
   },
 };

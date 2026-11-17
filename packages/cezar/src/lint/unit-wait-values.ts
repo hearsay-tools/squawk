@@ -165,18 +165,18 @@ export function rootsOf(root: Node): string[] {
 }
 
 /** A value that only passes another on: a name or path, or a read of the clock plus one (`Date.now() + ms`). */
-export const passesOn = (value: Node, clock = clockCall): boolean => isPath(value) || (value.type === 'BinaryExpression' && value.operator === '+' && clock(value.left) && isPath(value.right))
+export const passesOn = (value: Node): boolean => isPath(value) || (value.type === 'BinaryExpression' && value.operator === '+' && clockCall(value.left) && isPath(value.right))
 
 /**
  * Whether the expression reads a name or path that comes from outside the file, so the caller sizes it: a parameter, an import or a
  * global. A name the file declares is the caller's when every value it holds only passes on one that is.
  */
-export function sizedOutside(node: Node, view: View, use: Use, depth = 0, clock = clockCall): boolean {
+export function sizedOutside(node: Node, view: View, use: Use, depth = 0): boolean {
   return rootsOf(node).some(name => {
     if (ownNames.has(name)) return false
     if (!declaredHere(view, use, name)) return true
     const held = depth < 3 ? heldBy(view, use, name) : []
-    return held.length > 0 && held.every(each => passesOn(each.value, clock)) && held.some(each => sizedOutside(each.value, view, each.use, depth + 1, clock))
+    return held.length > 0 && held.every(each => passesOn(each.value)) && held.some(each => sizedOutside(each.value, view, each.use, depth + 1))
   })
 }
 
@@ -362,6 +362,8 @@ export interface Probe {
 
 export interface DeadlineEvaluation {
   clock(node: Node): boolean
+  clockLimit(node: Node, view: View, use: Use): Bound
+  outside(node: Node, view: View, use: Use): boolean
   read(view: View, use: Use): Read
   delay(node: Node, view: Where, use: Use): Bound
   value(node: Node, view: View, use: Use): number | undefined
