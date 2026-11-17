@@ -28,21 +28,18 @@ test('deadline prevents API traffic and metadata errors expose fixed codes only'
  clock=11;await assert.rejects(api.request('GET /any',{}),/time-limit/);
  assert.equal(calls,1);assert.doesNotMatch(JSON.stringify(api.manifest),/private response/);
 });
-test('logs consume shared byte and count budgets and missing logs remain visible',async()=>{
+test('logs consume the shared byte budget',async()=>{
  const api=create({github:{request:async()=>({data:'123456'})},limits:{logBytes:10,logs:5}});
  assert.equal(await api.downloadLog({owner:'o',repo:'r',job_id:1}),'123456');
  assert.equal(await api.downloadLog({owner:'o',repo:'r',job_id:2}),null);
  assert.equal(api.manifest.complete,false);assert.ok(api.manifest.problems.some(p=>p.code==='log-byte-limit'));
- const missing=create({github:{request:async()=>{throw Object.assign(new Error('signed private url'),{status:410});}}});
- assert.equal(await missing.downloadLog({job_id:3}),null);
- assert.ok(missing.manifest.problems.some(p=>p.code==='logs-unavailable' && p.jobId===3));
- assert.doesNotMatch(JSON.stringify(missing.manifest),/private/);
 });
 test('expired job logs are recorded evidence gaps that do not fail the sweep',async()=>{
  const missing=create({github:{request:async()=>{throw Object.assign(new Error('signed private url'),{status:410});}}});
  assert.equal(await missing.downloadLog({job_id:3}),null);
  assert.equal(missing.manifest.complete,true);
  assert.ok(missing.manifest.problems.some(p=>p.code==='logs-unavailable' && p.jobId===3));
+ assert.doesNotMatch(JSON.stringify(missing.manifest),/private/);
 });
 test('signed log fetch streams into cumulative budget without forwarding authorization',async()=>{
  let fetched;
