@@ -84,11 +84,12 @@ export interface AgentRunSpec {
    * ordinary harness settings. Custom tools and unrestricted shell are not
    * hard-isolated. See AGENT_PROTOCOL.md's D1 (hearsay-tools/cezarion#2279). */
   restrictCrossSessionMessaging?: boolean;
-  /** A bookkeeping call, such as the task namer: start the harness without the user's and the
-   *  project's hooks, plugins, extensions, skills, context files (CLAUDE.md, AGENTS.md) and MCP
-   *  servers, keep auth and model selection, and save no session. On a runner that ignores
-   *  `toolGrant`, also restrict what its tools can do. Each runner's `*_SPEC_SUPPORT` row names
-   *  its flags and what still loads. Absent keeps the ordinary harness setup. */
+  /** A bookkeeping call, such as the task namer: start the harness with as little of the user's
+   *  and the project's setup as the runner can turn off (hooks, plugins, extensions, skills,
+   *  context files, MCP servers, session saving), keeping auth and model selection. On a runner
+   *  that ignores `toolGrant`, also restrict what its tools can do. What each runner turns off
+   *  differs; its `*_SPEC_SUPPORT.minimal` row names its flags and what still loads or is saved.
+   *  Absent keeps the ordinary harness setup. */
   minimal?: boolean;
   /** Extra directories the agent may read/write besides `cwd`. */
   additionalDirectories?: string[];

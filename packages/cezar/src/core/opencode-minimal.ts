@@ -3,6 +3,7 @@ import { buildChildEnv } from './agent-env.ts';
 import type { AgentRunSpec } from './agent-runner.ts';
 import { isObject, suppliedOpenCodeConfig } from './opencode-runtime-config.ts';
 import { opencodeTaskScopeEnv } from './opencode-task-scope.ts';
+import { opencodeToolGrantFields } from './runner-tool-grants.ts';
 
 /** `opencode serve` flags for a minimal session (`AgentRunSpec.minimal`): no external plugins. */
 export const OPENCODE_MINIMAL_SERVE_ARGS = ['--pure'] as const;
@@ -11,6 +12,10 @@ export const OPENCODE_MINIMAL_SERVE_ARGS = ['--pure'] as const;
  *  permission rule (`*` deny). Session rules come after an agent's own permission rules, and the
  *  last matching rule wins, so a configured agent cannot allow a tool back (OpenCode 1.19.4). */
 export const OPENCODE_MINIMAL_PROMPT_TOOLS = { '*': false } as const;
+
+/** The same rule on `POST /session`, so a turn that a skill command opens, which takes no tools
+ *  map, is denied too. */
+export const OPENCODE_MINIMAL_SESSION_PERMISSION = [{ permission: '*', action: 'deny', pattern: '*' }] as const;
 
 /** Env switches for a minimal session: no project config, no Claude Code files (CLAUDE.md,
  *  Claude skills), no external skills and no default plugins. */
@@ -49,5 +54,15 @@ export function opencodeServeLaunch(spec: AgentRunSpec, port: number): { args: s
   return {
     args: ['serve', '--hostname', '127.0.0.1', '--port', String(port), ...(spec.minimal ? OPENCODE_MINIMAL_SERVE_ARGS : [])],
     env: buildChildEnv({ backend: 'opencode', extraEnv }),
+  };
+}
+
+/** The `POST /session` body of a new session: its title, its tool grant fields and, for a minimal
+ *  session, the deny rule. */
+export function opencodeSessionBody(spec: AgentRunSpec): Record<string, unknown> {
+  return {
+    title: 'cezar task',
+    ...opencodeToolGrantFields(spec.toolGrant),
+    ...(spec.minimal ? { permission: OPENCODE_MINIMAL_SESSION_PERMISSION } : {}),
   };
 }

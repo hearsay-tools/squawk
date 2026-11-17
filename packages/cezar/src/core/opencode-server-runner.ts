@@ -18,9 +18,8 @@ import {
 } from './agent-runner.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { InputSubmissions } from './input-submissions.ts';
-import { opencodeToolGrantFields } from './runner-tool-grants.ts';
 import { signalSession, spawnSessionLeader } from './session-process.ts';
-import { OPENCODE_MINIMAL_PROMPT_TOOLS, opencodeServeLaunch } from './opencode-minimal.ts';
+import { OPENCODE_MINIMAL_PROMPT_TOOLS, opencodeServeLaunch, opencodeSessionBody } from './opencode-minimal.ts';
 import type { AskQuestion } from './ask.ts';
 import { toSquawkQuestions, questionAnswers } from './opencode-questions.ts';
 import { boundOutputDrainAfterExit, AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS } from './runner-runtime.ts';
@@ -147,7 +146,7 @@ export const OPENCODE_SPEC_SUPPORT: AgentRunSpecSupport = {
   images: { honored: false, reason: 'the adapter posts text parts only; image blocks are dropped' },
   cwd: { honored: true, via: 'opencode serve spawn cwd; the session is bound to it' },
   toolGrant: { honored: false, reason: 'OpenCode permission config governs tool access and bash; this runner answers its built-in default asks and routes configured asks to the cockpit, but maps no per-tool allowlist, so no command-prefix restriction either' },
-  minimal: { honored: true, via: 'opencode serve --pure; OPENCODE_DISABLE_PROJECT_CONFIG, OPENCODE_DISABLE_CLAUDE_CODE, OPENCODE_DISABLE_EXTERNAL_SKILLS and OPENCODE_DISABLE_DEFAULT_PLUGINS; OPENCODE_CONFIG_CONTENT tools {"*": false} and permission {"*": "deny"}, and prompt_async tools {"*": false}, a session rule that outranks agent permission rules, since the runner maps no toolGrant. Still loaded: MCP servers in the user\'s global config, the global AGENTS.md and configured instructions; the session is saved' },
+  minimal: { honored: true, via: 'opencode serve --pure; OPENCODE_DISABLE_PROJECT_CONFIG, OPENCODE_DISABLE_CLAUDE_CODE, OPENCODE_DISABLE_EXTERNAL_SKILLS and OPENCODE_DISABLE_DEFAULT_PLUGINS; OPENCODE_CONFIG_CONTENT tools {"*": false} and permission {"*": "deny"}, and a "*" deny session rule (POST /session permission, and prompt_async tools {"*": false}) that outranks agent permission rules and covers skill command turns, since the runner maps no toolGrant; a resumed session that was not minimal gets the rule only from its next prompt_async. Still loaded: MCP servers in the user\'s global config, the global AGENTS.md and configured instructions; the session is saved' },
   restrictCrossSessionMessaging: { honored: true, via: 'the opencode-task-scope.mjs plugin appended to the OPENCODE_CONFIG_CONTENT plugin list; its tool.execute.before hook refuses a task call whose task_id names a session outside the caller\'s session tree, and keeps subagents (hearsay-tools/cezarion#2279)' },
   additionalDirectories: { honored: false, reason: 'the server works from cwd; no extra-root mapping' },
   env: { honored: true, via: 'merged over the child env through buildChildEnv' },
@@ -785,10 +784,7 @@ class OpencodeSession implements AgentSession {
       }
     }
     if (!resumed) {
-      const created = await this.http('POST', '/session', {
-        title: 'cezar task',
-        ...opencodeToolGrantFields(this.spec.toolGrant),
-      });
+      const created = await this.http('POST', '/session', opencodeSessionBody(this.spec));
       const sessionId = stringField(created, 'id');
       if (!sessionId) throw new Error('opencode did not return a session id');
       this.attachSession(sessionId, false);

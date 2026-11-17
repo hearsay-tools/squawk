@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { driveSeam } from './harness-parity.testkit.ts';
-import { OPENCODE_MINIMAL_ENV, OPENCODE_MINIMAL_PROMPT_TOOLS, opencodeMinimalEnv } from './opencode-minimal.ts';
+import { OPENCODE_MINIMAL_ENV, OPENCODE_MINIMAL_PROMPT_TOOLS, OPENCODE_MINIMAL_SESSION_PERMISSION, opencodeMinimalEnv } from './opencode-minimal.ts';
 
 const directories: string[] = [];
 afterEach(() => { vi.unstubAllEnvs(); for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true }); });
@@ -30,10 +30,18 @@ describe('OpenCode minimal session on the wire', () => {
     expect(wire.find(entry => entry.type === 'runtime-config')?.config).toMatchObject({ tools: { '*': false }, permission: { '*': 'deny' } });
   });
 
-  it('sends no tools map without the field', async () => {
-    const prompts = (await recordedWire(false)).filter(entry => String(entry.url).endsWith('/prompt_async'));
+  // A skill turn goes through /command, which takes no tools map: the rule must be on the session.
+  it('creates the session with the deny rule', async () => {
+    const created = (await recordedWire(true)).find(entry => entry.method === 'POST' && entry.url === '/session');
+    expect((created?.body as Record<string, unknown>).permission).toEqual(OPENCODE_MINIMAL_SESSION_PERMISSION);
+  });
+
+  it('sends no tools map and no session rule without the field', async () => {
+    const wire = await recordedWire(false);
+    const prompts = wire.filter(entry => String(entry.url).endsWith('/prompt_async'));
     expect(prompts.length).toBeGreaterThan(0);
     for (const prompt of prompts) expect(prompt.body).not.toHaveProperty('tools');
+    expect(wire.find(entry => entry.method === 'POST' && entry.url === '/session')?.body).not.toHaveProperty('permission');
   });
 });
 

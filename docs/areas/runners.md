@@ -208,12 +208,13 @@ runner's `*_SPEC_SUPPORT.minimal` row names its flags and what still loads:
 - **Claude Code:** `--safe-mode --disable-slash-commands --no-session-persistence`. Not
   `--bare`, which accepts only API-key auth.
 - **Codex:** thread config turns off hooks, plugins, apps, memories, subagents, AGENTS.md and
-  web search, and the thread is ephemeral. Under a confirmed unmanaged policy the sandbox is
-  `read-only`, because Codex ignores `allowedTools`. Skills and the user's MCP servers still load.
+  web search, and the thread is ephemeral. Under a confirmed unmanaged policy, or when Codex
+  cannot report its policy, the sandbox is `read-only`, because Codex ignores `allowedTools`. Skills and the user's MCP servers still load.
 - **OpenCode:** `serve --pure`, the `OPENCODE_DISABLE_*` switches for project config, Claude Code
   files, external skills and default plugins, a runtime config that turns every tool off and
-  denies every permission, and `tools: {"*": false}` on each prompt. The prompt's session rule
-  comes after an agent's own permission rules, so a configured agent cannot allow a tool back.
+  denies every permission, and a `*` deny session rule, set when the session is created and on
+  each prompt. Session rules come after an agent's own permission rules, so a configured agent
+  cannot allow a tool back.
   MCP servers in the user's global config, the global AGENTS.md and configured `instructions`
   still load, and the session is saved.
 - **pi:** `--no-extensions --no-skills --no-prompt-templates --no-themes --no-context-files
