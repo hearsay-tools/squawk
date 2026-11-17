@@ -202,7 +202,7 @@ path, or removes one copy and sends the message again.
 | Per-skill off-list | `disabledTeamSkills` in `ui-state.json`, `use-skill-selection.ts`, `GET /skills/importable` |
 | Inline body and `/name` expansion | `skillSystemPrompt`, `expandRegistrySlashSkillText` in `prompts.ts` |
 | Squawk-only skill folders | `.ai/cezar/skills`, `.ai/squawk/skills`, `.ai/skills` as sources; `SKILL_DIRS` and the hint that copies it |
-| The run's saved list of full skill records | `state.skills.catalog`, `loadRunSkills`, `enabledSkills` and the oxlint AST rules `cez/skills-read-outside-enabled-skills` and `cez/skills-write-outside-load-run-skills`. The session keeps only the ids and paths it read at its start, to check later triggers |
+| The run's saved list of Squawk's own skill records | `state.skills.catalog`, `loadRunSkills` and `enabledSkills` stay, and now hold the runner's list that the session read at its start, to check later triggers (slice 3a). The oxlint rules `cez/skills-read-outside-enabled-skills` and `cez/skills-write-outside-load-run-skills` stay as its owner and reader guards |
 
 `docs/areas/skills.md` is rewritten. A new ADR supersedes
 [ADR 0023](../../docs/adr/0023-treat-skills-as-shared-content.md).
@@ -273,15 +273,17 @@ the removal then deletes.
 4. **Automation tool.** The MCP tool that replaces the built-in skill (D7). It can ship at any
    point before slice 5.
 5. **Removal.** Delete the code in [What is removed](#what-is-removed), rewrite the area doc,
-   add the ADR, and clean up as the case tables say.
+   add the ADR, and clean up as the case tables say. It lands in two pull requests: 5a removes
+   the code, 5b the docs and the ADR.
 
 ## Case tables
 
 ### Worktree cases
 
-Slice 5 removes files that an older Squawk installed in task worktrees. It calls
-`removeProvisionedSkills` (`skills-provision.ts`), which removes only entries the worktree
-manifest records and that are unchanged.
+Slice 5a removes files that an older Squawk installed in task worktrees. It moves
+`removeProvisionedSkills` out of `skills-provision.ts`, which it deletes, and calls it at step
+open and Continue. It removes only entries the worktree manifest records and that are
+unchanged.
 
 | Case | Files written, kept or removed | Worktree state at the next step, Continue and restart |
 | --- | --- | --- |
