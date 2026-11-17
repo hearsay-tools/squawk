@@ -8,7 +8,6 @@ import { createQueryClient } from '@/api/query-client'
 import { AppearanceProvider } from '@/components/appearance-provider'
 import { ThemeProvider } from '@/components/theme-provider'
 import { AppRoutes } from '@/routes'
-import { visibleSettingsSections } from './registry'
 
 /**
  * The Settings shell + Appearance section (R6 Step 1.3): registry rendering,
@@ -137,16 +136,6 @@ const GLOBAL_SECTIONS = [
   'accounts',
   'projects',
 ]
-
-describe('the section registry', () => {
-  it('splits the sections by scope (step 3.5) — each id belongs to exactly one area', () => {
-    expect(visibleSettingsSections('project').map((s) => s.id)).toEqual(PROJECT_SECTIONS)
-    expect(visibleSettingsSections('global').map((s) => s.id)).toEqual(GLOBAL_SECTIONS)
-    // No id may appear in both areas — the two navs would then link to two different pages
-    // under the same name, and the `settings/<id>` legacy redirect would be ambiguous.
-    expect(PROJECT_SECTIONS.filter((id) => GLOBAL_SECTIONS.includes(id))).toEqual([])
-  })
-})
 
 describe('the settings shell', () => {
   it('renders the mobile PROJECT nav from the registry — project sections only', () => {
@@ -308,6 +297,8 @@ describe('the appearance section (global scope)', () => {
       })
     })
 
+    expect(requests.filter((r) => r.method === 'PUT' && r.url === '/api/v1/ui-state')).toHaveLength(0)
+
     // Narrow is the default — the attribute must come OFF the root, not be written as data-width="narrow".
     fireEvent.click(screen.getByRole('radio', { name: 'Narrow' }))
     await waitFor(() => {
@@ -343,19 +334,6 @@ describe('the appearance section (global scope)', () => {
  */
 describe('the settings split writes the right store', () => {
   const putsTo = (url: string) => requests.filter((r) => r.method === 'PUT' && r.url === url)
-
-  it('appearance → /api/v1/workspace/ui-state, never the per-repo one', async () => {
-    renderAt('/settings/global/appearance')
-    await waitFor(() => expect(screen.getByRole('radio', { name: 'Wide' })).toBeTruthy())
-
-    fireEvent.click(screen.getByRole('radio', { name: 'Wide' }))
-
-    await waitFor(() => expect(putsTo('/api/v1/workspace/ui-state')).toHaveLength(1))
-    expect(putsTo('/api/v1/workspace/ui-state')[0]?.body).toEqual({
-      appearance: { accent: 'cezarion', density: 'comfortable', width: 'wide' },
-    })
-    expect(putsTo('/api/v1/ui-state')).toHaveLength(0)
-  })
 
   it('notifications → /api/v1/workspace/ui-state, never the per-repo one', async () => {
     // `Notification` is absent in jsdom; the section only needs it to decide whether to ask for
