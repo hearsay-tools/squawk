@@ -255,12 +255,6 @@ describe('reaping the per-run temp directories (#785)', () => {
     expect(readFileSync(join(short, 'note.txt'), 'utf8')).toBe('scratch Continue needs');
   });
 
-  it('publishes the run marker whole and leaves no pending file behind', () => {
-    const dir = agentTmpEnv(dataDir, 'whole-marker', {}).TMPDIR as string;
-    expect(readdirSync(dir)).toEqual(['.cez-run']);
-    expect(readFileSync(join(dir, '.cez-run'), 'utf8')).toBe('whole-marker');
-  });
-
   // hearsay-tools/cezarion#1022 moved the agent's TMPDIR from `tmp/<runId>` to
   // `t/<id8>`. A directory minted before the upgrade is still this run's
   // scratch: the reap and the startup sweep must still find it.

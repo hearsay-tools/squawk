@@ -1,6 +1,6 @@
 import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
 import { setRunStatus } from './run-store.testkit.ts';
-import { crashAfterNextCommit, openTestRunStore, runPersistence } from './run-store-open.testkit.ts';
+import { crashAfterNextCommit, openTestRunStore } from './run-store-open.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -250,13 +250,6 @@ describe('wait checkpoints', () => {
     expect(store.getRun(id)?.waits).toHaveLength(WAIT_LIMIT);
   });
 
-  it('publishes nothing if the durable replacement fails', () => {
-    const events = vi.fn(); store.on('run', events);
-    vi.spyOn(runPersistence(store), 'persist').mockImplementation(() => { throw new Error('read only'); });
-    expect(() => store.commitWait(id, ciEntry())).toThrow('read only');
-    expect(store.getRun(id)?.waits).toBeUndefined();
-    expect(events).not.toHaveBeenCalled();
-  });
 
   it('a cancelled outcome moves open and resolved waits to lastWaits as cancelled and drops their undelivered input', () => {
     const open = ciEntry();

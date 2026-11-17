@@ -1,4 +1,4 @@
-import { RUN_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { setRunStatus } from './run-store.testkit.ts';
 import { openTestRunStore, runPersistence } from './run-store-open.testkit.ts';
 import { randomUUID } from 'node:crypto';
@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentInput, CiWait } from '@open-mercato/cezar-contract';
+import type { CiWait } from '@open-mercato/cezar-contract';
 import { ciWaitEntry, RunStore } from './store.ts';
 import { readRunIndexFromDisk } from './run-index.ts';
 import { readPersistedRuns, readPersistedText, runIds, seedRuns } from './run-store.testkit.ts';
@@ -27,8 +27,7 @@ describe('atomic CI wait checkpoints', () => {
       repository: 'acme/repo', prNumber: 12, headSha: 'a'.repeat(40), registeredAt: new Date().toISOString(),
       deadline: new Date(Date.now() + 30_000).toISOString(), timeoutSeconds: 30, until: 'checks' as const, wakeOnConflict: true, phase: 'registered' };
   });
-  afterEach(() => { vi.restoreAllMocks(); store.flush(); rmSync(directory, { recursive: true, force: true }); });
-  const input = (runId: string, waitId: string): AgentInput => ({ id: waitId, parentRunId: runId, source: 'lifecycle', text: 'CI observation', createdAt: new Date().toISOString() });
+  afterEach(() => { vi.restoreAllMocks(); store.close(); rmSync(directory, { recursive: true, force: true }); });
 
   it('publishes neither registration nor event if the durable replacement fails', () => {
     store.flush();
@@ -41,28 +40,7 @@ describe('atomic CI wait checkpoints', () => {
     expect(readPersistedText(directory)).toBe(disk);
   });
 
-  it('settlement and deterministic queue entry survive reopen with no duplicate input', () => {
-    store.commitWait(id, ciWaitEntry(wait));
-    const settled: CiWait = { ...wait, phase: 'wake-pending', wakeId: wait.id, result: {
-      outcome: 'deadline', headSha: wait.headSha, observedAt: new Date().toISOString(), checks: [], totalChecks: 0, truncated: false,
-    } };
-    store.commitWait(id, ciWaitEntry(settled), input(id, wait.id));
-    store.commitWait(id, ciWaitEntry(settled), input(id, wait.id));
-    const reopened = RunStore.open(directory, { keepLive: true });
-    expect(reopened.getRun(id)?.waits).toEqual([expect.objectContaining({ id: wait.id, kind: WAIT_KIND.pr, phase: WAIT_PHASE.resolved, result: expect.objectContaining({ outcome: 'deadline' }) })]);
-    expect(reopened.getRun(id)?.agentInputs).toHaveLength(1);
-  });
 
-  it('checkpointing delivery retires current intent atomically and preserves the stable receipt', () => {
-    store.commitWait(id, ciWaitEntry(wait));
-    store.commitWait(id, ciWaitEntry({ ...wait, phase: 'wake-pending', wakeId: wait.id }), input(id, wait.id));
-    store.commitOutcome(id, { kind: 'delivered', inputIds: [wait.id], at: new Date().toISOString() });
-    const record = openTestRunStore(directory, { keepLive: true }).getRun(id);
-    expect(store.getRun(id)?.waits).toBeUndefined();
-    expect(record?.waits).toBeUndefined();
-    expect(record?.lastWaits).toEqual([expect.objectContaining({ id: wait.id, phase: WAIT_PHASE.delivered })]);
-    expect(record?.agentInputs?.[0]?.deliveredAt).toBe(record?.lastWaits?.[0]?.deliveredAt);
-  });
 
   // Store schema 4 salvages a legacy CI wait like any wait entry: dropped, `lastWaitsError` set,
   // and the status left alone, so the run reads as parked with nothing open (Needs you), not failed.

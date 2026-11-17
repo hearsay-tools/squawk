@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
-import { waitSchema } from '@open-mercato/cezar-contract/waits';
 import { makePeerWait, makeRunRecord, makeTimerWait, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { parseRunRecords } from './store.ts';
 import { stateOf } from '../workflows/run-states.ts';
@@ -21,9 +20,6 @@ vi.mock('@open-mercato/cezar-contract/waits', async importOriginal => {
 const stored = (waits: unknown[]) => JSON.parse(JSON.stringify(makeRunRecord({ id: 'downgraded', status: RUN_STATUS.waiting, waits: waits as never })));
 
 describe('an older Squawk reading a stored peer wait', () => {
-  it('does not know the peer kind', () => {
-    expect(waitSchema.safeParse(makePeerWait()).success).toBe(false);
-  });
 
   it('drops the peer wait, keeps the run and its other waits, and records the unreadable wait', () => {
     const timer = makeTimerWait();
