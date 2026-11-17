@@ -66,6 +66,14 @@ export function scanHistoryReaders(file: string, source: string, readers = (list
   return historyAccesses(source).filter((site) => !readers.some((entry) => entry.file === file && entry.kind === site.kind));
 }
 
+/** The original scanner reports the helper name, including when its receiver starts on an earlier line. */
+function helperNode(node: EsNode, declaration: boolean): EsNode {
+  const callee = unwrap(child(node, 'callee'));
+  const site = declaration ? child(node, 'key') ?? child(node, 'id')
+    : callee?.type === 'MemberExpression' ? child(callee, 'property') : callee;
+  return site ?? node;
+}
+
 export const runHistoryReader: AstRule = {
   name: 'run-history-reader',
   description: 'Keep raw transcript paths in their listed owners (hearsay-tools/cezarion#2420).',
@@ -89,7 +97,7 @@ export const runHistoryReader: AstRule = {
             && children(parent, 'arguments')[0] === node) kind = 'eventsPath-append';
         }
       }
-      sites.push({ node, kind });
+      sites.push({ node: helperNode(node, declaration), kind });
     };
     return {
       Program(node) {
@@ -103,6 +111,10 @@ export const runHistoryReader: AstRule = {
         named(node, propertyName(callee));
       },
       MethodDefinition(node) { named(node, propertyName(child(node, 'key')), true); },
+      Property(node) {
+        const key = child(node, 'key');
+        if (node.method && !node.computed && key?.type === 'Identifier') named(node, nameOf(key), true);
+      },
       FunctionDeclaration(node) { named(node, nameOf(child(node, 'id')), true); },
       Literal(node) { path(node, stringOf(node)); },
       TemplateLiteral(node) {

@@ -226,3 +226,13 @@ it('keeps shadowed literal names unknown in computed reads', () => {
     "const key = 'PATH'; try {} catch (key) { process.env[key]; }",
   ]) expect(productEnvReads(source).map(({form, name}) => [form, name])).toEqual([['computed', '*']]);
 });
+
+it.each([
+  'const { [key]: value } = process;',
+  'const { [key]: value } = globalThis;',
+  'const owner = process; const { [key]: value } = owner;',
+  'function read({ [key]: value }: Process) {}',
+  'function read({ [key]: value }: NodeJS.Process) {}',
+])('keeps computed reads from recognized roots without env names: %s', source => {
+  expect(productEnvReads(source).map(({ form, name }) => [form, name])).toEqual([['computed', '*']]);
+});

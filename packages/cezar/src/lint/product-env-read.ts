@@ -292,7 +292,7 @@ export const productEnvRead: AstRule = {
   name: 'product-env-read',
   description: 'Read product settings through core/product-env.ts; remaining shipped reads use a shrink-only inventory.',
   applies: productEnvFile,
-  create: (report, { file, sourceCode }) => deferredAstView(name => productName(name) || /env$/i.test(name), ast => {
+  create: (report, { file, sourceCode }) => deferredAstView(name => name === 'process' || name === 'globalThis' || name === 'Process' || productName(name) || /env$/i.test(name), ast => {
     const sites = productEnvReadsFromAst(ast, sourceCode.text);
     for (const site of unallowedEnvReads(file, sites, baseline ??= readProductEnvBaseline())) {
       report(originalAt(ast, site.offset), `${site.form} ${site.name}: use productEnv with a literal suffix or the dedicated home accessor. Never add an allowance to product-env-read.baseline.json (hearsay-tools/cezarion#2970).`);

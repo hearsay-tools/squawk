@@ -167,7 +167,7 @@ export const runnerIdBranch: AstRule = {
     const tag = (node: EsNode) => {
       const target = unwrap(node)!;
       return target.type === 'Identifier' ? TAG_NAMES.has(nameOf(target)!)
-        : target.type === 'MemberExpression' && !target.computed && TAG_NAMES.has(propertyName(target)!);
+        : target.type === 'MemberExpression' && !target.computed && child(target, 'property')?.type === 'Identifier' && TAG_NAMES.has(propertyName(target)!);
     };
     const found = (node: EsNode, site: string) => {
       const count = (seen.get(site) ?? 0) + 1;

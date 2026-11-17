@@ -50,6 +50,11 @@ describe('runner-id-branch (hearsay-tools/cezarion#2991)', () => {
     expect(sites("const a = <p>{runner === 'opencode' ? 'a' : 'b'}</p>;", 'packages/web/src/routes/pick.tsx')).toEqual(["runner === 'opencode'"]);
   });
 
+  it.each(['t', 'type'])('does not exempt the private #%s field as a message tag', (name) => {
+    expect(sites(`class Fixture { #${name}; check() { return this.#${name} === 'pi'; } }`)).toEqual([`this.#${name} === 'pi'`]);
+    expect(sites(`class Fixture { #${name}; check() { switch (this.#${name}) { case 'pi': break; } } }`)).toEqual([`switch (this.#${name}) case 'pi'`]);
+  });
+
   it.each([
     "message.t === 'opencode'",
     "switch (message.t) { case 'opencode': break; }",

@@ -59,6 +59,15 @@ describe('run facts are read from the contract (hearsay-tools/cezarion#1496)', (
       expect(rules(source, 'packages/cezar/src/runs/store.ts')).toEqual([]);
     });
 
+    it('keeps parenthesized and repeated unary negations visible to the hold check', () => {
+      expect(rules("!(run.status === 'waiting') || !run.autoResumeAt;"))
+        .toEqual(['restated-hold', 'resume-time-read']);
+      expect(rules("!!(run.status === 'waiting') && run.autoResumeAt;"))
+        .toEqual(['restated-hold', 'resume-time-read']);
+      expect(rules("!(run.status === 'waiting') || items.some(item => { return item.autoResumeAt; });"))
+        .toEqual(['resume-time-read']);
+    });
+
     it('keeps callback bodies and object blocks outside the surrounding hold condition', () => {
       for (const source of [
         "const held = run.status === 'waiting' && items.some(item => { return item.autoResumeAt; });",

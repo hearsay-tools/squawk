@@ -85,6 +85,20 @@ describe('run history ownership', () => {
     expect(historyAccesses('let x = ;')).toEqual([]);
   });
 
+  it.each([
+    ['const raw = store\n .eventsPath(id);', 2, 'eventsPath'],
+    ['const raw = owner\n .historyPaths(dir, id);', 2, 'historyPaths'],
+    ['const helpers = { historyPaths(dir, id) { return []; } };', 1, 'historyPaths'],
+    ['const helpers = {\n eventsPath(id) { return ""; }\n};', 2, 'eventsPath'],
+  ])('reports the helper name at its original line: %s', (source, line, kind) => {
+    const expected = [{ line, message: expect.stringMatching(new RegExp(`^${kind}:`)) }];
+    expect(scanHistoryReaders(other, source).map(site => ({
+      line: source.slice(0, site.offset).split('\n').length,
+      message: `${site.kind}:`,
+    }))).toEqual(expected);
+    expect(checkRule(runHistoryReader, other, source)).toEqual(expected);
+  });
+
   it('refuses malformed source instead of hiding a path', () => {
     expect(() => historyAccesses('const path = `${id}.ndjson`; let x = ;')).toThrow();
   });
