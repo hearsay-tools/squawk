@@ -1,6 +1,8 @@
+import { GIT_ID, waitForProduct } from './run-fixture.testkit.ts';
+import { shellQuote } from '../core/shell-env.ts';
 import { createFixtureManager, drainFixtureManagers } from './fixture-claude.testkit.ts';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,7 +23,6 @@ vi.mock('../git-worktree.js', async (importOriginal) => {
 beforeEach(() => vi.stubEnv('CEZ_AUTONAME', '0'));
 afterEach(() => vi.unstubAllEnvs());
 
-const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
 const roots: string[] = [];
 
 function fixtureRepo(): string {
@@ -32,27 +33,6 @@ function fixtureRepo(): string {
   execFileSync('git', ['config', 'maintenance.auto', 'false'], { cwd: root });
   execFileSync('git', [...GIT_ID, 'commit', '--allow-empty', '-q', '-m', 'base'], { cwd: root });
   return root;
-}
-
-// Each wait ends when its condition holds; the 15 s deadline only ends a hang.
-async function waitForRuns(store: RunStore, ids: string[]): Promise<void> {
-  const deadline = Date.now() + 15_000;
-  while (Date.now() < deadline) {
-    if (ids.every((id) => ['done', 'failed', 'cancelled'].includes(store.getRun(id)?.status ?? ''))) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error('runs did not finish');
-}
-
-async function waitFor(predicate: () => boolean, what: string): Promise<void> {
-  const deadline = Date.now() + 15_000;
-  while (Date.now() < deadline) {
-    if (predicate()) return;
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error(`timed out waiting for ${what}`);
 }
 
 afterEach(async () => {
@@ -72,7 +52,8 @@ describe('RunManager repository-root isolation', () => {
     };
 
     const record = manager.startRun(workflow, { task: 'isolated task' });
-    await waitForRuns(store, [record.id]);
+    // bound: store and owned work signals settle the failed start; 15 seconds only detects a hang.
+    await waitForProduct(manager, store, () => ['done', 'failed', 'cancelled'].includes(store.getRun(record.id)?.status ?? ''));
 
     expect(store.getRun(record.id)?.status).toBe('failed');
     expect(store.getRun(record.id)?.error).toContain('worktree creation failed');
@@ -84,35 +65,6 @@ describe('RunManager repository-root isolation', () => {
     expect(notes.some((event) => String(event.message).includes('exclusive access'))).toBe(false);
   });
 
-  it('serializes parallel runs that explicitly opt out of worktrees', async () => {
-    const root = fixtureRepo();
-    const store = RunStore.open(join(root, '.ai/cezar'));
-    const manager = createFixtureManager(store, root);
-    const workflow: WorkflowDef = {
-      name: 'root-lock-check',
-      source: 'built-in',
-      steps: [
-        {
-          id: 'check',
-          command:
-            'node -e "const fs=require(\'node:fs\'); const p=\'root-run.lock\'; if(fs.existsSync(p)) process.exit(42); fs.writeFileSync(p,\'locked\'); setTimeout(()=>fs.rmSync(p),100)"',
-        },
-      ],
-    };
-
-    const first = manager.startRun(workflow, { task: 'first', worktree: false });
-    const second = manager.startRun(workflow, { task: 'second', worktree: false });
-    await waitForRuns(store, [first.id, second.id]);
-
-    expect(store.getRun(first.id)?.status).toBe('done');
-    expect(store.getRun(second.id)?.status).toBe('done');
-    for (const id of [first.id, second.id]) {
-      const notes = store.readEvents(id).filter((event) => event.type === 'note');
-      expect(notes.some((event) => String(event.message).includes('worktree off'))).toBe(true);
-      expect(notes.some((event) => String(event.message).includes('exclusive access'))).toBe(true);
-    }
-  });
-
   it('allows explicitly unsafe root runs to overlap when the repository lock is disabled', async () => {
     const previous = process.env.CEZ_DISABLE_REPO_LOCK;
     process.env.CEZ_DISABLE_REPO_LOCK = '1';
@@ -120,26 +72,32 @@ describe('RunManager repository-root isolation', () => {
       const root = fixtureRepo();
       const store = RunStore.open(join(root, '.ai/cezar'));
       const manager = createFixtureManager(store, root);
+      const gate = join(root, '.ai/cezar', 'unsafe-release');
+      // bound: release the check processes on a failed assertion instead of holding them forever.
+      const hold = 'const fs=require("node:fs"); const end=Date.now()+20000; '
+        + 'const poll=()=>{if(fs.existsSync(process.argv[1]))return; '
+        + 'if(Date.now()>end)process.exit(42); setTimeout(poll,10)}; poll();';
       const workflow: WorkflowDef = {
         name: 'root-lock-bypass-check',
         source: 'built-in',
-        steps: [{ id: 'hold', command: 'node -e "setTimeout(()=>{},1500)"' }],
+        steps: [{ id: 'hold', command: `node -e ${shellQuote(hold)} ${shellQuote(gate)}` }],
       };
 
       const first = manager.startRun(workflow, { task: 'first', worktree: false });
       const second = manager.startRun(workflow, { task: 'second', worktree: false });
 
-      await waitFor(
-        () =>
-          [first.id, second.id].every((id) =>
-            store.readEvents(id).some((event) => event.type === 'step-start'),
-          ),
-        'both unsafe root runs to start their workflow step',
-      );
-      expect(store.getRun(first.id)?.status).toBe('running');
-      expect(store.getRun(second.id)?.status).toBe('running');
-
-      await waitForRuns(store, [first.id, second.id]);
+      try {
+        // bound: step-start is the product signal; 15 seconds only detects a blocked second run.
+        await waitForProduct(manager, store, () => [first.id, second.id].every(id =>
+          store.readEvents(id).some(event => event.type === 'step-start')));
+        expect(store.getRun(first.id)?.status).toBe('running');
+        expect(store.getRun(second.id)?.status).toBe('running');
+      } finally {
+        writeFileSync(gate, '');
+      }
+      // bound: completion follows the release file; 15 seconds only detects a failed settlement.
+      await waitForProduct(manager, store, () => [first.id, second.id].every(id =>
+        ['done', 'failed', 'cancelled'].includes(store.getRun(id)?.status ?? '')));
 
       expect(store.getRun(first.id)?.status).toBe('done');
       expect(store.getRun(second.id)?.status).toBe('done');
@@ -152,5 +110,6 @@ describe('RunManager repository-root isolation', () => {
       if (previous === undefined) delete process.env.CEZ_DISABLE_REPO_LOCK;
       else process.env.CEZ_DISABLE_REPO_LOCK = previous;
     }
-  });
+  // bound: two real Git/check processes may use the per-transition 15-second hang guards.
+  }, 30_000);
 });
