@@ -1,5 +1,6 @@
-import type { ActiveRun } from '../../../packages/cezar/src/workflows/active-run.ts';
-import type { SkillsGroup } from '../../../packages/cezar/src/workflows/run/run-skills.ts';
+/* oxlint-disable cez/active-run-skills-write-outside-owner -- Compile proof deliberately attempts writes that TypeScript must reject. */
+import type { ActiveRun } from '../../workflows/active-run.ts';
+import type { SkillsGroup } from '../../workflows/run/run-skills.ts';
 declare const state: ActiveRun;
 declare const other: ActiveRun;
 // @ts-expect-error The migrated slot is read-only.

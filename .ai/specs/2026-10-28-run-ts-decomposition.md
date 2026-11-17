@@ -344,7 +344,7 @@ Each order below is load-bearing: other code reaches a correct state because of 
 | `workflows/run-active-pin.test.ts` | The literal text of `activate`, `active.set`, `active.delete` and the two `createActiveRun` sites | Those move or their signature text changes | They stay on the facade | — |
 | `file-length.baseline.json` | `run.ts` pinned at 10,646; limit 1,000 | Every shrink; any new file over 1,000 lines | Lower the pin in each PR | all |
 | `outcome-write-outside-commit-outcome` baseline | Two `run.ts` entries: the fallback literal in `cancelWorkerWait`, a read view kept as a baseline entry on purpose | Those lines move | Re-key both entries to the new file in the same PR; the re-keyed baseline counts as growth, so it needs the owner's `baseline-growth` label | 3 |
-| `// ast-grep-ignore: run-status-write-outside-transition` in `acceptUntouchedContinuation` | The line below it | That line moves | Move the comment with its line | 4 |
+| `// oxlint-disable-next-line cez/run-status-write-outside-transition -- <reason>` in `acceptUntouchedContinuation` | The line below it | That line moves | Move the comment with its line | 4 |
 | CI complexity gate | Pairs a moved function by identical body, or by name and at least half of its lines | A move rewrites the body | Move verbatim | all |
 | AGENTS.md parity trigger and Task routing; `agents-md-budget.test.cjs` | Name `run.ts` | — | Name `run.ts` and `workflows/run/`, with no byte growth | 0 |
 | Docs and comments | AGENT_PROTOCOL.md (18 lines), `docs/areas/` skills, automations, git-worktree, runs-store and handoff-journal, `.ai/skills/auto-merge/SKILL.md`, and 24 shipped files with prose citations | A named member moves | Sweep in the move PR; leave ADRs as records | each PR |

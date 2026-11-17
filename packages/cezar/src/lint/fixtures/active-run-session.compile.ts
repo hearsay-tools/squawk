@@ -1,6 +1,7 @@
+/* oxlint-disable cez/active-run-session-write-outside-owner -- Compile proof deliberately attempts writes that TypeScript must reject. */
 /** Getter/alias/helper compile proof; runtime reflection is checked by session-encapsulation.test.ts. */
-import type { ActiveRun } from '../../../packages/cezar/src/workflows/active-run.ts';
-import type { SessionGroup } from '../../../packages/cezar/src/workflows/run/live-session-state.ts';
+import type { ActiveRun } from '../../workflows/active-run.ts';
+import type { SessionGroup } from '../../workflows/run/live-session-state.ts';
 declare const state: ActiveRun;
 declare const other: ActiveRun;
 // @ts-expect-error The migrated slot cannot be replaced.

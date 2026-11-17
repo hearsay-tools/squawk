@@ -594,7 +594,7 @@ it('maps a real skill expansion once across message_start, message_end and agent
 
 it('keeps a correlated skill submission identity on the mapped item', () => {
   const [start] = JSON.parse(readFileSync(join(FIXTURES, 'skill-trigger.json'), 'utf8'));
-  // ast-grep-ignore: test-enum-literal — skill submission source has no contract enum.
+  // oxlint-disable-next-line cez/test-enum-literal -- skill submission source has no contract enum.
   const skillInput: SkillInputIdentity = { id: 'cezar-agent-7', source: 'agent' };
   const mapped = mapOmpRpcMessage(start, ompTurnStarted(createOmpUiState(), 'opening').state, skillInput);
   expect(mapped.events).toMatchObject([

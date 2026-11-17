@@ -62,6 +62,10 @@ const findingsFor = (file: string): string[] => fixtureFindings.filter(problem =
 const ROSTER = declaredRunnerIds().map(id => `'${id}'`).join(', ');
 
 const VIOLATIONS: Record<string, [string, string]> = {
+  'attention-bucket-compare-outside-owner': ['packages/web/src/attention-violation.tsx', "const x = attention.bucket === 'waiting';\n"],
+  'automations-capability-read-outside-owner': ['packages/web/src/capabilities-violation.tsx', 'const x = health.capabilities.automations;\n'],
+  'subagent-children-outside-dock': ['packages/web/src/children-violation.tsx', 'const x = subagentChildren(turns, id);\n'],
+  'test-enum-literal': ['packages/web/src/enum-violation.test.tsx', "const x = { status: 'done' };\n"],
   "agent-session-send-outside-handoff": ["packages/cezar/src/send-session.ts", "session.sendMessage(content);"],
   "ask-requested-read-outside-projection": ["packages/web/src/ask-reader.ts", "event.type === 'ask.requested';"],
   "detached-spawn-outside-helper": ["packages/cezar/src/detached-options.ts", "const options = { detached: true };"],
@@ -180,11 +184,6 @@ beforeAll(async () => {
 }, OXLINT_TIMEOUT_MS);
 
 describe('the cez rules under oxlint', () => {
-  it('selects the lint bridge when the contrast palette stylesheet changes', () => {
-    const squeal = JSON.parse(readFileSync(join(repoRoot, 'squeal.config.json'), 'utf8')) as { inputs: Record<string, string[]> };
-    expect(squeal.inputs['packages/cezar/src/lint/lint-runner.test.ts']).toContain('packages/web/src/styles/index.css');
-  });
-
   it('turns every cez rule on, and every other entry is a known built-in', () => {
     const cez = Object.entries(config.rules).filter(([rule]) => rule.startsWith('cez/'));
     expect(cez.map(([rule]) => rule).sort()).toEqual(RULES.map((rule) => `cez/${rule.name}`).sort());

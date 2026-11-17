@@ -46,7 +46,7 @@ import { createApp } from '../server.ts';
 describe('a reference Squawk changes itself is forgotten, not waited out', () => {
   let repoRoot: string;
   const seed = (...numbers: number[]) => __seedRefStatusCacheForTests(repoRoot, numbers.map(number => [number, {
-    // ast-grep-ignore: test-enum-literal — forge reference kind, not a durable wait kind.
+    // oxlint-disable-next-line cez/test-enum-literal -- forge reference kind, not a durable wait kind.
     kind: 'pr', status: 'ready',
   }]));
   const primeItem = async () => {

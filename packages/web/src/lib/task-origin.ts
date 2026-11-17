@@ -116,6 +116,7 @@ export function groupTone(label: BucketLabel, members: readonly RunSummary[]): A
     case 'Archived':
       return 'neutral'
     case 'Finished':
+      // oxlint-disable-next-line cez/attention-bucket-compare-outside-owner -- the Finished heading reports a failed member
       return members.some((run) => deriveAttention(run).bucket === 'error') ? 'danger' : 'success'
   }
 }

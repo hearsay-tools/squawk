@@ -1,3 +1,7 @@
+import { attentionBucketCompareOutsideOwner } from './attention-bucket-compare-outside-owner.ts';
+import { automationsCapabilityReadOutsideOwner } from './automations-capability-read-outside-owner.ts';
+import { subagentChildrenOutsideDock } from './subagent-children-outside-dock.ts';
+import { testEnumLiteral } from './test-enum-literal.ts';
 import { PROCESS_OWNER_RULES } from './owner-process-rules.ts';
 import { STATE_OWNER_RULES } from './owner-state-rules.ts';
 import { READER_OWNER_RULES } from './owner-reader-rules.ts';
@@ -36,6 +40,8 @@ export const AST_RULES: AstRule[] = [
   parityRunnerSubset, rawQuerySetter, runFactReader, runHistoryReader, runnerFactCombination,
   runnerIdBranch, runnerRosterLiteral, undocumentedEnvName,
   childKilledRead, runStoreTestkitImport, launchReadOutsideResolver,
+  attentionBucketCompareOutsideOwner, automationsCapabilityReadOutsideOwner,
+  subagentChildrenOutsideDock, testEnumLiteral,
   activeRunLiteral, activeRunMapWrite, ...activeRunWriteRules,
   ...PROCESS_OWNER_RULES, ...STATE_OWNER_RULES, ...READER_OWNER_RULES,
 ];

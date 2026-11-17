@@ -97,7 +97,7 @@ describe('server-migrate under write faults and a concurrent home migration', ()
     writeServerMigrateJournal(f.target, { ...journal, phase: 'committing', instances: journal.instances.map(({ instance, planned, moved }) => instance === 'shop' ? { instance, planned } : { instance, planned, ...(moved ? { moved } : {}) }) });
     const before = { commands: f.host.commands.length, units: JSON.stringify([...f.host.units]), sites: f.host.enabledSites(), ledgers: [unitName(f), unitName(f, 'shop')], journal: real.readFileSync(serverMigrateJournalPath(f.target), 'utf8') };
     const result = await serverMigrate(f);
-    // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
+    // oxlint-disable-next-line cez/test-enum-literal -- a server-migrate result status, not a run status.
     expect(result).toEqual({ status: 'failed', lines: [`${serverMigrateJournalPath(f.target)}: the journal is in its committing phase but has no moved report for ${unmoved}. Restore it or remove it, then re-run server-migrate.`] });
     expect({ commands: f.host.commands.length, units: JSON.stringify([...f.host.units]), sites: f.host.enabledSites(), ledgers: [unitName(f), unitName(f, 'shop')], journal: real.readFileSync(serverMigrateJournalPath(f.target), 'utf8') }).toEqual(before);
   });

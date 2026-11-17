@@ -99,14 +99,14 @@ for (const [path, reason] of [
 
 test('declared readers select their tests and inputs no Vitest test reads skip', t => {
   const { cwd, git, put } = fixture(t);
-  put('squeal.config.json', JSON.stringify({ inputs: { 'packages/cezar/src/ast-grep-rules.test.ts': ['.ai/ast-grep/**'] } }));
-  put('packages/cezar/src/ast-grep-rules.test.ts', '');
+  put('squeal.config.json', JSON.stringify({ inputs: { 'packages/cezar/src/lint/scanner-inputs.test.ts': ['tools/rules/**'] } }));
+  put('packages/cezar/src/lint/scanner-inputs.test.ts', '');
   git('add', '.'); git('commit', '-m', 'declarations'); git('branch', '-f', 'main', 'HEAD');
-  put('.ai/ast-grep/rules/no-x.yml', 'id: no-x\n');
+  put('tools/rules/no-x.yml', 'id: no-x\n');
   const rules = plan(cwd);
   assert.equal(rules.mode, 'changed', JSON.stringify(rules));
-  assert.deepEqual(rules.tests, ['packages/cezar/src/ast-grep-rules.test.ts']);
-  rmSync(join(cwd, '.ai'), { recursive: true });
+  assert.deepEqual(rules.tests, ['packages/cezar/src/lint/scanner-inputs.test.ts']);
+  rmSync(join(cwd, 'tools/rules'), { recursive: true });
   put('.github/workflows/ci.yml', 'on: push\n');
   const workflow = plan(cwd);
   assert.equal(workflow.mode, 'skip');

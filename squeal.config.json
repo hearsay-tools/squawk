@@ -74,49 +74,12 @@
     ]
   },
   "inputs": {
-    "packages/cezar/src/ast-grep-rules.test.ts": [
-      "sgconfig.yml",
-      ".ai/ast-grep/**"
-    ],
     "packages/cezar/src/core/runner-closure.test.ts": [
       "packages/cezar/src/**/*.ts"
     ],
     "packages/cezar/src/contract-import-boundaries.test.ts": [
       "packages/contract/src/**/*.ts",
       "packages/api-client/src/contract/**/*.ts"
-    ],
-    "packages/cezar/src/lint/lint-ast-grep-1.test.ts": [
-      "sgconfig.yml",
-      ".ai/ast-grep/**",
-      "packages/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"
-    ],
-    "packages/cezar/src/lint/lint-ast-grep-2.test.ts": [
-      "sgconfig.yml",
-      ".ai/ast-grep/**",
-      "packages/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"
-    ],
-    "packages/cezar/src/lint/lint-runner.test.ts": [
-      ".env.example",
-      "sgconfig.yml",
-      ".ai/ast-grep/**",
-      "packages/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
-      "**/*.test.{ts,tsx,mjs,cjs}",
-      "**/*.testkit.ts",
-      "packages/*/src/**/*.json",
-      "packages/cezar/src/file-length.baseline.json",
-      "packages/cezar/src/lint/contract-root-import.baseline.json",
-      "packages/cezar/src/lint/home-readers.baseline.json",
-      "packages/cezar/src/lint/layer-import.baseline.json",
-      "packages/cezar/src/lint/product-env-read.baseline.json",
-      "packages/cezar/src/lint/runner-id-branch.baseline.json",
-      "packages/cezar/src/lint/runner-roster-literal.baseline.json",
-      "packages/cezar/src/test-wait-discipline.baseline.json",
-      "packages/cezar/src/test-wait-discipline-polls.baseline.json",
-      "packages/web/src/test/card-2-contrast.baseline.json",
-      "packages/web/src/test/search-params-discipline.baseline.json",
-      "packages/web/src/test/unit-wait-discipline.baseline.json",
-      "packages/web/src/styles/index.css",
-      "packages/web/{src,e2e}/**/*.css"
     ],
     "packages/web/src/test/e2e-wait-discipline.test.ts": [
       "packages/web/src/test/e2e-wait-discipline.baseline.json"

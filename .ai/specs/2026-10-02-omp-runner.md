@@ -178,6 +178,8 @@ Default (step without `allowedTools`): `HARNESS_EXTRA_TOOLS.omp = ['todo', 'lsp'
 `--tools read,edit,write,grep,glob,bash,todo,lsp,ast_edit,task,wait`.
 No web, `eval`, browser, GitHub, memory or checkpoint tools unless a workflow grants them.
 
+`astGrep.enabled` below names the external omp setting; it is unrelated to repository lint.
+
 `find` and `ast_grep` are not in the default (Ruling 1). The real v18.4.11 binary gates them behind the
 settings `find.enabled` and `astGrep.enabled`, both off by default, and a `--tools` list that names
 an unavailable built-in exits 2 with `Built-in tools unavailable in this session: find, ast_grep.`

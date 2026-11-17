@@ -154,7 +154,7 @@ describe('peer conversation cards (hearsay-tools/cezarion#1992)', () => {
         id: replyId, text: 'Wave 2 is merged.', parentRunId: peer, createdAt: peerReply.createdAt,
         conversation: { senderRunId: peer, recipientRunId: self, kind: 'progress', relationship: 'peer' },
         // An `AgentInput` origin, not a wait source.
-        // ast-grep-ignore: test-enum-literal-tsx
+        // oxlint-disable-next-line cez/test-enum-literal -- this object uses its own field meaning, outside the contract enum
         source: 'agent',
       } },
     ])

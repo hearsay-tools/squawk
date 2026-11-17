@@ -10,25 +10,23 @@ command, it fails closed, and it does not depend on which tests a change selects
 
 1. **oxlint** with the `cez` JS plugin (`packages/cezar/src/lint/plugin.ts`) over `packages/`.
    The `AST_RULES` visit oxlint's own syntax tree. The two wait rules retain
-   their text scanners in `TEXT_RULES` until their separate AST port. The ast-grep rules
-   move into these visitors one slice at a time
+   their text scanners in `TEXT_RULES` until their separate AST port. All former YAML rules
+   now run as AST rules
    (hearsay-tools/squawk#3774).
    `.oxlintrc.json` keeps every category off and explicitly enables all `cez` rules and 93
    built-in correctness rules. The `typescript`, `unicorn` and `oxc` plugins are enabled.
-2. **ast-grep** with the rules in `.ai/ast-grep/rules`, each against its shrink-only baseline.
-   [`.ai/ast-grep/README.md`](../../.ai/ast-grep/README.md) says how to write one.
-3. **Stale entries**: an exemption, a reader-list entry or a baseline entry that no longer names
+2. **Stale entries**: an exemption, a reader-list entry or a baseline entry that no longer names
    a match fails, so the lists only shrink to what the code still needs.
 
-4. **File length** (`file-length`, a runner check): every tracked non-test source file over 1,000 lines stays at or below its
+3. **File length** (`file-length`, a runner check): every tracked non-test source file over 1,000 lines stays at or below its
    pin in `packages/cezar/src/file-length.baseline.json`. Unpinned long files, grown pins and
    stale pins fail. `FILE_LENGTH_UPDATE=1 npm run lint` only lowers or drops existing pins.
 
-5. **Design guardian CSS**: the runner applies the same `cez/design-guardian` rule table to
+4. **Design guardian CSS**: the runner applies the same `cez/design-guardian` rule table to
    `packages/web/src/**/*.css` and `packages/web/e2e/**/*.css`, which oxlint cannot read. It also
    refuses stylesheet overrides that hide or restyle status dots or status pills.
 
-6. **Unit wait discipline** (M07): `cez/test-wait-discipline` scans server test and testkit files
+5. **Unit wait discipline** (M07): `cez/test-wait-discipline` scans server test and testkit files
    with a 10 s floor; `cez/unit-wait-discipline` scans cockpit unit tests with a 3 s floor.
    Each rule uses its original scanner. Both use `lint/wait-baseline.ts` for the same shrink-only
    ratchet. The runner checks stale entries in the three baselines,
@@ -47,7 +45,7 @@ never a pass.
 | Where | How |
 | --- | --- |
 | CI | The required `Typecheck` job's `Lint` step. The job runs on every change surface, docs-only included, so no test selection skips lint |
-| Squeal | Edit-time oxlint diagnostics require Squeal 0.1.392 or later; its provider loads `.oxlintrc.json` and the `cez` JS plugin. Older Squeal reports `lint.tools` as unknown and keeps validating through `packages/cezar/src/lint/lint-runner.test.ts` and `lint-ast-grep-{1,2}.test.ts`: runner checks and two disjoint groups of ast-grep rules only. The split keeps each bridge file below the Vitest per-file duration cap; the sorted rule list assigns every new rule to one group. `npm run prepr` reads Squeal's lint result before a PR opens (and runs `npm run lint` without a daemon), and CI’s required Lint step remains the gate (hearsay-tools/cezarion#2426) |
+| Squeal | Edit-time oxlint diagnostics load `.oxlintrc.json` and the `cez` JS plugin. No unit test runs a repository-wide lint scan. `npm run prepr` reads Squeal’s oxlint result and always runs `node packages/cezar/src/lint/run.ts --repository-only` for file length, design CSS, wait discipline and stale entries. Without a daemon it also runs `npm run lint`. CI’s required Lint step remains the gate (hearsay-tools/cezarion#2426) |
 | By hand | `npm run lint` from the repository root, about 5 s on an idle host |
 
 ## New safety guards
@@ -76,6 +74,10 @@ explicit baseline and reader-list inputs. CSS remains a runner check.
 
 | Rule | Refuses | Exceptions |
 | --- | --- | --- |
+| `cez/attention-bucket-compare-outside-owner` | Direct comparisons of `.bucket` with an attention bucket name in service and cockpit source (hearsay-tools/squawk#2275) | Tests and `.testkit.ts` files; reasoned inline suppressions for the composer's copy, Finish action and Finished heading |
+| `cez/automations-capability-read-outside-owner` | A named `capabilities.automations` read in cockpit source (hearsay-tools/squawk#1401) | The availability owner and test/testkit files |
+| `cez/subagent-children-outside-dock` | Direct calls to `subagentChildren` in cockpit source (hearsay-tools/squawk#2463) | The dock owner and tests |
+| `cez/test-enum-literal` | An object property containing a contract enum literal in test and test-support files (hearsay-tools/cezarion#1812) | Reasoned inline suppressions for fields with another meaning |
 | `cez/card-2-contrast` | Unsafe small text on card-2 (hearsay-tools/cezarion#1133, hearsay-tools/cezarion#2423) | `packages/web/src/test/card-2-contrast.baseline.json`, shrink-only |
 | `cez/contract-root-import` | A runtime import of a contract package root (hearsay-tools/cezarion#1237) | `contract-root-import.baseline.json`, shrink-only |
 | `cez/design-guardian` | The ten original cockpit design checks; each finding names its original rule, reason and token (hearsay-tools/cezarion#2422) | Original inline allowed predicates and reason comments; tests keep their original scope and the guardian suite excludes itself |
@@ -138,6 +140,10 @@ remain in force.
 
 | Guard | Static scope |
 | --- | --- |
+| `cez/attention-bucket-compare-outside-owner` | Service and cockpit `src/` TS/TSX, excluding `.test.ts`, `.test.tsx` and `.testkit.ts`: equality operators with a direct public `.bucket` operand and a raw attention-name string, in either order. Optional chains count. Computed/private/escaped keys, escaped strings and parenthesized operands do not. Trailing casts follow the former tree-sitter precedence; left casts and parenthesized operands stay out except angle assertions that the old parser binds inside a non-null member receiver. Explicit matrix cells document probe-only parser widenings in `ast-twins-matrix-data.testkit.ts`. No type or value flow. |
+| `cez/automations-capability-read-outside-owner` | Cockpit `src/` TS/TSX except `lib/capabilities.ts` and test/testkit files: `.automations` on the exact identifier `capabilities` or a public `.capabilities` member, including optional chains. A direct `typeof capabilities.automations` query and JSX member tags count too (both tags of a paired element). Nested qualified type queries stay out, as do computed/private/escaped names, destructuring and wrapped receivers. No type or value flow. |
+| `cez/subagent-children-outside-dock` | Cockpit `src/` TS/TSX except `routes/task-thread/subagent-dock.ts` and tests: a direct `subagentChildren()` call, including optional calls and type arguments (also awaited generic calls), or a plain template tag. Aliases, member calls, escaped names, wrapped callees and generic template tags stay out. Testkit modules stay in scope. |
+| `cez/test-enum-literal` | Package `src/` `.test.ts`/`.test.tsx` and `.testkit.ts` files, cockpit `src/test/` and `e2e/` TS/TSX, and service `test/` TS: object-expression pairs with an exact bare or quoted `status`, `kind`, `phase`, `via` or `source` key and a matching raw string fragment. One direct `as` cast counts. Casts to JSDoc-style nullable/non-nullable types (`!T`, `T!`, `?T`, `T?`, with any parentheses) are out of scope; the rule result there is unspecified. These are invalid TypeScript cast types. Computed/escaped keys, templates, destructuring, parentheses, nested casts and other wrappers stay out. No type or value flow. |
 | `cez/active-run-literal` | All server `src/**/*.ts`, including tests: the first declarator of a `const`/`let` declaration annotated `ActiveRun` with an object initializer, or an object cast/satisfies expression naming `ActiveRun` (including `as unknown as ActiveRun`). Parenthesized literals and generic type arguments are checked too. Return types, unions and type aliases are outside scope. |
 | `cez/active-run-map-write` | Production workflow `.ts` files: direct `.active.set()` and `.active.delete()` calls. Only `this.active` in the nearest owning method of the `RunManager` class is exempt. Nested methods, other classes and other receivers are checked. Computed access and aliases are outside scope. |
 | `cez/active-run-*-write-outside-owner` | All server `src/**/*.ts`, including tests: assignments, updates, delete, collection mutators, casts, spread casts, Object/Reflect writes and public fields on named owner classes. The shared metadata in `lint/active-run-write.ts` names slots, getter names, fields, factories and types. Typed names (including imported aliases) are searched within the nearest function; variable bindings and destructuring within the nearest block. The rules keep the former template's bounded alias steps and descendant checks, including parenthesized conditional, logical, sequence and call receiver expressions. Oxlint token checks recover the parentheses ESTree removes; bare owner-bridge calls such as `usageWrites.costs(state.usage)` stay outside alias tracking. They do not resolve arbitrary binding or value flow. Literal quoted computed names are checked; computed templates and expressions are not followed. Private backing fields are exempt. `Object.defineProperty(target, slot, { writable: false, configurable: false })` inside `createActiveRun` is exempt. |
@@ -387,7 +393,7 @@ through another binding. `cez/run-search-field-list-outside-contract` visits eve
 member under each array, including nested expressions. `cez/run-internals` checks
 each identifier, private name, string literal and fixed template fragment; comments
 and paths assembled from fragments stay outside its scope. Its scan is now limited
-to `packages/`, the existing oxlint `LINT_PATHS`; the former ast-grep rule could also
+to `packages/`, the existing oxlint `LINT_PATHS`; the former YAML rule could also
 check TypeScript files outside that tree. This is an accepted scope change for this
 port. `LINT_PATHS` stays unchanged.
 
@@ -440,10 +446,10 @@ looped case). **Moved** cases now run in `npm run lint`; the scanner's fixture c
 | Card-2 contrast (M10) | `packages/web/src/test/card-2-contrast.test.ts`, now `packages/cezar/src/lint/card-2-contrast.test.ts` | 1: no new unsafe small-text site or stale baseline entry | 20 scanner fixture cases; static classes only, dynamic styling still needs browser evidence |
 | Environment-name documentation (M11) | `packages/cezar/src/env-example.test.ts` | 1: every `CEZ_*` name documented | 4 scanner cases |
 | File-length budget (M12) | `packages/cezar/src/file-length.test.ts` | 1: no unpinned long file, grown pin or stale pin | 6 fixture cases |
-| Existing ast-grep enforcement | `packages/cezar/src/ast-grep-rules.test.ts` | 14: one repository scan per rule | Rule-file checks, the `ast-grep test` cases, the baseline helpers, the update mode helpers, binary resolution |
+| Existing syntax-tree enforcement | `packages/cezar/src/lint/ast-rules*.test.ts` | 14: one repository scan per former rule | Every former YAML case now runs through the oxlint RuleTester; stored parser counts pin parity. The retired scanner, baseline helpers and binary resolver have been removed |
 
 42 cases moved; M04's call-presence case retired. Update modes moved with them:
-`AST_GREP_RULES_UPDATE=1 npm run lint`, `FILE_LENGTH_UPDATE=1 npm run lint`,
+`FILE_LENGTH_UPDATE=1 npm run lint`,
 `TEST_WAIT_DISCIPLINE_UPDATE=1 npm run lint` and `UNIT_WAIT_DISCIPLINE_UPDATE=1 npm run lint`.
 
 
@@ -606,7 +612,7 @@ These limits need code review. They do not permit new baseline allowances.
 
 Static scope: `packages/cezar/src/workflows/run.ts` and `workflows/run/**/*.ts`,
 except `run/launch-read-resolver.ts`, tests and testkits. The single AST rule
-`cez/launch-read-outside-resolver` replaces the eleven launch-read ast-grep rules.
+`cez/launch-read-outside-resolver` replaces the eleven launch-read YAML rules.
 It preserves their diagnostic message and has no baseline or ignored source site.
 
 The rule checks launch fields through member access, static or dynamic computed access,

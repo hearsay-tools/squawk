@@ -6,7 +6,7 @@ const path = require('node:path');
 const m = require('./mutants-functions.cjs');
 const root = path.resolve(__dirname, '../..');
 
-test('ast-grep assigns nested names, methods, anonymous callbacks, and module code', t => {
+test('the parser assigns nested names, methods, anonymous callbacks, and module code', t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mutants-functions-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = path.join(dir, 'sample.ts');
@@ -58,3 +58,19 @@ test('duplicate method and nested function names stay stable and nested classes 
   assert.equal(m.functionOf({ start: { line: 8, column: 35 } }, ranges), 'Inner.method');
   assert.equal(m.functionOf({ start: { line: 11, column: 30 } }, ranges), 'unique');
 });
+
+for (const fixture of [
+  require('./fixtures/mutation-ranges/ast-rule.ts.json'),
+  require('./fixtures/mutation-ranges/button.tsx.json'),
+  require('./fixtures/mutation-ranges/v1-text-coalescer.ts.json'),
+  require('./fixtures/mutation-ranges/syntax.tsx.json'),
+  ...require('./fixtures/mutation-ranges/exports.json').cases,
+]) {
+  test(`function names and ranges match stored parser output: ${fixture.file}`, t => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mutants-range-parity-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, path.basename(fixture.file));
+    fs.writeFileSync(file, fixture.source);
+    assert.deepEqual(m.functionRanges(file, root), fixture.ranges);
+  });
+}

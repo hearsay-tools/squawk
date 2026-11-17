@@ -39,5 +39,4 @@ Three consumers, one definition:
 5. **Test data through `src/test-factories.testkit.ts`.** It builds run records, waits and events
    typed from these schemas and exports a constant per enum value (`RUN_STATUS`, `WAIT_KIND`, …),
    so a renamed field or value stops compiling in every test that uses it. It imports no Node
-   module, and both tsconfigs keep `*.testkit.ts` out of a build. The `test-enum-literal` rule in
-   `.ai/ast-grep/rules` refuses a new enum literal in a test (hearsay-tools/cezarion#1812).
+   module, and both tsconfigs keep `*.testkit.ts` out of a build. The `cez/test-enum-literal` oxlint AST rule refuses a new enum literal in a test (hearsay-tools/cezarion#1812).

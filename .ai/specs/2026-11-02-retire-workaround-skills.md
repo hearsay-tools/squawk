@@ -30,7 +30,7 @@ hold 481 lines. Most of the text exists for one of four reasons:
 | 936 Vitest files, 7,678 s total on CI; 36 files over 60 s, 13 over 120 s; slowest `monitoring-turn.test.ts` 317 s | `.github/test-durations.json` |
 | Parity cells start one real mock runner process per cell, for each runner in `RUNNER_IDS` | `packages/cezar/src/core/harness-parity.testkit.ts` |
 | 36 browser specs write `.ai/cezar/runs.json` as raw JSON | `rg -l runs.json packages/web/e2e/*.e2e.ts` |
-| 1,040 + 216 enum-literal sites in shrink-only baselines | `.ai/ast-grep/rules/test-enum-literal{,-tsx}.baseline.json` |
+| 1,040 + 216 enum-literal sites in shrink-only baselines | Former YAML baselines; migrated to `cez/test-enum-literal` with inline exceptions (hearsay-tools/squawk#3774) |
 | The spec map links cockpit files only; a server, mock or test-env change selects every spec | `scripts/e2e-affected.mjs:7` |
 | The served e2e clone copies this checkout, including `.ai/skills` | `.ai/scripts/test-env-up.sh`, `e2e-served-repo.mjs` |
 | A browser case depends on the scroll position left by the case before | `packages/web/e2e/workflows.e2e.ts:329` |
@@ -38,7 +38,7 @@ hold 481 lines. Most of the text exists for one of four reasons:
 | `ActiveRun` has 59 fields; about 160 field writes in 27 modules outside `active-run.ts` | `rg` over `packages/cezar/src/workflows/` (approximate) |
 | `runInternals(` has 530 call sites in 76 test files | `rg -c 'runInternals\('` |
 | `releaseSlot` (32 calls, 11 files) runs the pump, which reconciles auto-resumes | `packages/cezar/src/workflows/run/` |
-| `outcome-write-outside-commit-outcome` baseline has 4 entries, 2 in `run/run-cancel.ts` | `.ai/ast-grep/rules/` |
+| `outcome-write-outside-commit-outcome` baseline has 4 entries, 2 in `run/run-cancel.ts` | `cez/outcome-write-outside-commit-outcome` with inline exceptions |
 
 ## Rules for every slice
 
@@ -109,7 +109,7 @@ Prerequisite: slices 1.2 and 1.3 merged (they edit `reader-sweep/SKILL.md`).
 | 2.1 | feature | The served clone has no ambient catalogs: `e2e-served-repo.mjs` replaces `.ai/skills`, project workflows and other catalogs in the clone with one fixed fixture set. Coordinate with hearsay-tools/cezarion#1116 (served project registration). | A test that adds five dummy skills to the checkout leaves the workflow and skills specs unchanged. |
 | 2.2 | cleanup | Each browser case starts from a known page: the shared browser helper resets viewport, scroll and route before each case. A weekly CI job runs the e2e project with `sequence.shuffle`. | The shuffled job passes twice in a row; the comment at `workflows.e2e.ts:329` is gone. |
 | 2.3 | cleanup | Typed run fixtures: a `seedRuns(partials)` helper for browser and packaged tests, built on `makeRunRecord`; a lint rule refuses a raw `runs.json` write in a spec. | Renaming a `RunRecord` field fails typecheck in every fixture that sets it. |
-| 2.4 | cleanup | Burn down `test-enum-literal` and `test-enum-literal-tsx` baselines to 0 with a codemod, one directory per PR. | Both baselines are empty. |
+| 2.4 | cleanup | Burn down `test-enum-literal` and `test-enum-literal-tsx` baselines to 0 with a codemod, one directory per PR. | Both baselines were emptied, then removed by the `cez/test-enum-literal` AST port (hearsay-tools/squawk#3774). |
 | 2.5 | feature | The spec map covers the server and the mocks: `e2e-spec-map.yml` also collects V8 coverage from the served server and `mock-*.mjs` processes; `test:e2e:affected` downloads the map when none is local. | An edit to one `mock-*.mjs` scenario selects only the specs that ran it. |
 | 2.6 | feature | Control locations in one table: messages that tell users where a control lives (API errors, CLI output, agent prompts) read one table in the contract package; a cockpit unit test checks each location against the navigation. Every message text stays byte-identical. | Renaming a settings tab without the table fails a test. |
 
@@ -134,7 +134,7 @@ Slices 4.1 and 4.2 each need a design spec with a case table.
 
 | Slice | Type | Change | Done when |
 | --- | --- | --- | --- |
-| 4.1 | cleanup | Group `ActiveRun` fields by owner (turn boundary, waits, queue and slot, usage). One ast-grep "write outside owner" rule per group. The turn-boundary fields go behind one transition function. | Each group has one writing module and a rule with an empty baseline. |
+| 4.1 | cleanup | Group `ActiveRun` fields by owner (turn boundary, waits, queue and slot, usage). One oxlint AST "write outside owner" rule per group. The turn-boundary fields go behind one transition function. | Each group has one writing module and an AST rule with reasoned inline exceptions. |
 | 4.2 | cleanup | Slot release marks the pump due; one drain runs after the current operation. Dispatch only if a case table for every `releaseSlot` caller and the parity suites show no change in the app's observable behavior; otherwise exclude it and keep its skill text. | No `releaseSlot` caller sees a changed timer set before return; the parity suites and every user-visible outcome are unchanged. |
 | 4.3 | cleanup | Convert tests that call `runInternals(` to assert store rows, events and run state, file by file. Add a rule that refuses `runInternals(` only when no call site is left. No baseline. | `runInternals(` has no call sites and the rule is enforced. |
 | 4.4 | cleanup | Move the 4 remaining outcome writes into `RunStore.commitOutcome`. | The baseline is empty. |

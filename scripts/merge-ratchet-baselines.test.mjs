@@ -11,7 +11,7 @@ const root = resolve(import.meta.dirname, '..')
 const setupMergeDriver = existsSync(join(root, 'scripts/setup-merge-drivers.mjs'))
   ? (await import('./setup-merge-drivers.mjs')).setupMergeDriver : undefined
 const lengthPath = 'packages/cezar/src/file-length.baseline.json'
-const astPath = '.ai/ast-grep/rules/example.baseline.json'
+const astPath = 'fixtures/example.baseline.json'
 const length = files => ({ $comment: 'pins', limit: 1000, files })
 const site = (name, count = 2) => ({ file: 'a.ts', rule: 'example', site: name, count })
 const ast = sites => ({ $comment: 'sites', sites })
@@ -40,6 +40,7 @@ function put(cwd, path, value) {
 
 function merge(t, path, base, ours, theirs, install = true) {
   const cwd = fixture(t, install)
+  if (path === astPath) writeFileSync(join(cwd, '.gitattributes'), `${astPath} merge=cezar-ratchet\n`, { flag: 'a' })
   put(cwd, path, base)
   git(cwd, 'add', '.')
   git(cwd, 'commit', '-m', 'base')

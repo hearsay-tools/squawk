@@ -1,6 +1,6 @@
 import { child, children, nameOf, type AstContext, type AstRule, type EsNode } from './ast-rule.ts';
 
-/** Group ownership metadata, formerly the ast-grep generator input (hearsay-tools/squawk#3774). */
+/** Group ownership metadata for the cez/active-run-*-write-outside-owner rules (hearsay-tools/squawk#3774). */
 interface OwnerGroup {
   owner: string;
   factory: string;

@@ -1,6 +1,7 @@
+/* oxlint-disable cez/active-run-input-write-outside-owner -- Compile proof deliberately attempts writes that TypeScript must reject. */
 /** Compile proof for private input storage and live read-only nested values. */
-import type { ActiveRun } from '../../../packages/cezar/src/workflows/active-run.ts';
-import type { InputGroup, InputFlight } from '../../../packages/cezar/src/workflows/run/input-delivery.ts';
+import type { ActiveRun } from '../../workflows/active-run.ts';
+import type { InputGroup, InputFlight } from '../../workflows/run/input-delivery.ts';
 declare const state: ActiveRun;
 declare const other: ActiveRun;
 // @ts-expect-error A migrated group slot cannot be replaced.
