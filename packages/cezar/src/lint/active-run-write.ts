@@ -1,4 +1,4 @@
-import { child, children, nameOf, type AstRule, type EsNode } from './ast-rule.ts';
+import { child, children, nameOf, type AstContext, type AstRule, type EsNode } from './ast-rule.ts';
 
 /** Group ownership metadata, formerly the ast-grep generator input (hearsay-tools/squawk#3774). */
 interface OwnerGroup {
@@ -137,12 +137,33 @@ function installsSlot(node: EsNode): boolean {
   return false;
 }
 
+/** Oxlint's token methods are used only to recover parentheses ESTree omits. */
+interface NodeTokens {
+  getTokenBefore(node: EsNode): EsNode | null;
+  getTokenAfter(node: EsNode): EsNode | null;
+}
+
+function parenthesized(node: EsNode, tokens: NodeTokens): boolean {
+  const before = tokens.getTokenBefore(node);
+  const after = tokens.getTokenAfter(node);
+  if (before?.value !== '(' || after?.value !== ')') return false;
+  const parent = node.parent?.type === 'ChainExpression' ? node.parent.parent : node.parent;
+  if (parent && ['CallExpression', 'NewExpression'].includes(parent.type) && children(parent, 'arguments')[0] === node) {
+    // A sole argument's call delimiters are not parentheses around the argument itself.
+    const head = child(parent, 'typeArguments') ?? child(parent, 'typeParameters') ?? child(parent, 'callee');
+    const opening = head && tokens.getTokenAfter(head);
+    if (opening && (opening.range as number[])[0] === (before.range as number[])[0]) return false;
+  }
+  return true;
+}
+
 /**
  * Syntax-only reference predicates mirroring the old template. Typed names are searched in the
  * nearest function, bindings in the nearest block, including descendants of each scope. Bindings
  * follow only the template's one alias step; they are not a TypeScript binding or value resolver.
  */
-function references(group: OwnerGroup) {
+function references(group: OwnerGroup, sourceCode: AstContext['sourceCode']) {
+  const tokens = sourceCode as AstContext['sourceCode'] & NodeTokens;
   const groupTypes = new Set(group.types);
   const containerTypes = new Set(['ActiveRun']);
   const nodesByScope = new WeakMap<EsNode, EsNode[]>();
@@ -217,10 +238,16 @@ function references(group: OwnerGroup) {
     return key === group.slot && (['state', 'active'].includes(nameOf(receiver) ?? '') || container(receiver));
   }
   function expands(node: EsNode): boolean {
-    // Tree-sitter retained parentheses around arbitrary expressions; ESTree removes them.
-    // Keep their descendant-reference search for receiver expressions and bound initializers.
-    return ['MemberExpression', 'TSNonNullExpression', 'ChainExpression', 'ConditionalExpression',
-      'LogicalExpression', 'SequenceExpression', 'CallExpression'].includes(node.type);
+    if (['MemberExpression', 'TSNonNullExpression'].includes(node.type)) return true;
+    if (node.type === 'ChainExpression') {
+      const expression = child(node, 'expression');
+      return expression !== undefined && expands(expression);
+    }
+    if (node.type === 'CallExpression') {
+      const callee = child(node, 'callee');
+      if (callee?.computed !== true && ['get', 'entries', 'values'].includes(memberName(callee) ?? '')) return true;
+    }
+    return parenthesized(node, tokens);
   }
   function expandsFrom(node: EsNode, accepts: (value: EsNode) => boolean): boolean {
     if (!expands(node)) return false;
@@ -275,8 +302,8 @@ function ownerRule(groupName: string, metadata: OwnerGroup): AstRule {
     name: `active-run-${groupName}-write-outside-owner`,
     description: message,
     applies: file => file.startsWith('packages/cezar/src/') && file.endsWith('.ts'),
-    create(report) {
-      const { container, getter, reference, imports } = references(group);
+    create(report, context) {
+      const { container, getter, reference, imports } = references(group, context.sourceCode);
       function protectedMember(node: EsNode | undefined): boolean {
         if (node?.type !== 'MemberExpression') return false;
         if (node.computed === true && reference(child(node, 'object'))) return true;

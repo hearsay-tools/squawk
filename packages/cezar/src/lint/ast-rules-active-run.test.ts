@@ -583,6 +583,8 @@ for (const [group, slot, type, field] of [
       `(identity(state.${slot})).${field} = replacement;`,
       `function f(group: ${type}) { const alias = (identity(group)); alias.${field} = replacement; }`,
       `(state.${slot} || fallback).${field} = replacement;`,
+      `async function f() { (await state.${slot}).${field} = replacement; }`,
+      `(state.${slot} satisfies ${type}).${field} = replacement;`,
       `(fallback, state.${slot}).${field} = replacement;`,
       `<Mutable>identity(state.${slot});`,
       `<Mutable>{ group: state.${slot} };`,
@@ -590,3 +592,83 @@ for (const [group, slot, type, field] of [
     ],
   });
 }
+
+
+ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-usage-write-outside-owner')!, {
+  file: 'packages/cezar/src/workflows/run/usage-accounting.ts',
+  valid: [
+    'const costs = usageWrites.costs(state.usage); costs.set(sessionKey, Math.max(previous, reportedUsd));',
+    'function f(group: UsageGroup) { Object.assign(identity(group)); }',
+    'function f(group: UsageGroup) { Object.assign<Mutable>(identity(group)); }',
+    'function f(group: UsageGroup) { const alias = flag ? group : fallback; alias.observed = true; }',
+    'function f(group: UsageGroup) { const alias = group || fallback; alias.observed = true; }',
+  ],
+  invalid: [
+    '( /* group */ identity(state.usage) /* view */ ).observed = true;',
+    'function f(group: UsageGroup) { Object.assign((identity(group))); }',
+    'function f(group: UsageGroup) { Object.assign<Mutable>((identity(group))); }',
+  ],
+});
+
+
+// Counts measured against the deleted 9f43ee092 YAML with ast-grep --inline-rules --stdin.
+// Keep the JSON table readable by .ai/qa/3774/compare-owner-expressions.mjs.
+const OWNER_EXPRESSION_SHAPES = [
+  {"name": "member", "expression": "GROUP.value", "bare": 1, "wrapped": 1},
+  {"name": "call", "expression": "identity(GROUP)", "bare": 0, "wrapped": 1},
+  {"name": "new", "expression": "new Holder(GROUP)", "bare": 0, "wrapped": 1},
+  {"name": "await", "expression": "await GROUP", "bare": 0, "wrapped": 1},
+  {"name": "yield", "expression": "yield GROUP", "bare": 0, "wrapped": 1},
+  {"name": "conditional", "expression": "flag ? GROUP : fallback", "bare": 0, "wrapped": 1},
+  {"name": "logical", "expression": "GROUP || fallback", "bare": 0, "wrapped": 1},
+  {"name": "binary", "expression": "GROUP + suffix", "bare": 0, "wrapped": 1},
+  {"name": "unary", "expression": "void GROUP", "bare": 0, "wrapped": 1},
+  {"name": "update", "expression": "GROUP++", "bare": 1, "wrapped": 2},
+  {"name": "assignment", "expression": "unrelated = GROUP", "bare": 0, "wrapped": 1},
+  {"name": "arrow", "expression": "() => GROUP", "bare": 0, "wrapped": 1},
+  {"name": "function", "expression": "function () { return GROUP; }", "bare": 0, "wrapped": 1},
+  {"name": "class", "expression": "class { view = GROUP; }", "bare": 0, "wrapped": 1},
+  {"name": "object", "expression": "{ group: GROUP }", "bare": 0, "wrapped": 1},
+  {"name": "array", "expression": "[GROUP]", "bare": 0, "wrapped": 1},
+  {"name": "sequence", "expression": "fallback, GROUP", "bare": 0, "wrapped": 1},
+  {"name": "template", "expression": "`${GROUP}`", "bare": 0, "wrapped": 1},
+  {"name": "tagged-template", "expression": "identity`${GROUP}`", "bare": 0, "wrapped": 1},
+  {"name": "as", "expression": "GROUP as Mutable", "bare": 1, "wrapped": 2},
+  {"name": "angle-assertion", "expression": "<Mutable>GROUP", "bare": 1, "wrapped": 2},
+  {"name": "satisfies", "expression": "GROUP satisfies TYPE", "bare": 0, "wrapped": 1},
+  {"name": "non-null", "expression": "GROUP!", "bare": 1, "wrapped": 1},
+  {"name": "instantiation", "expression": "GROUP.method<Mutable>", "bare": 0, "wrapped": 1},
+  {"name": "optional-member", "expression": "GROUP?.value", "bare": 1, "wrapped": 1},
+  {"name": "optional-call", "expression": "GROUP?.read()", "bare": 0, "wrapped": 1},
+  {"name": "import", "expression": "import(GROUP)", "bare": 0, "wrapped": 1},
+] as const;
+
+for (const [group, slot, type] of [
+  ['autosave', 'autosave', 'AutosaveGroup'], ['boundary', 'boundary', 'BoundaryGroup'],
+  ['children', 'children', 'ChildrenGroup'], ['input', 'inputState', 'InputGroup'],
+  ['session', 'liveSession', 'SessionGroup'], ['skills', 'skills', 'SkillsGroup'],
+  ['usage', 'usage', 'UsageGroup'], ['wait', 'waitIdentity', 'WaitGroup'],
+]) {
+  const cases = OWNER_EXPRESSION_SHAPES.flatMap(shape => [false, true].map(wrapped => {
+    const expression = shape.expression.replaceAll('GROUP', `state.${slot}`).replaceAll('TYPE', type!);
+    const argument = wrapped ? `(${expression})` : expression;
+    return {
+      code: `async function* probe() { Object.assign(${argument}, {}); }`,
+      errors: wrapped ? shape.wrapped : shape.bare,
+    };
+  }));
+  ruleCases(activeRunWriteRules.find(rule => rule.name === `active-run-${group}-write-outside-owner`)!, {
+    file: 'packages/cezar/src/workflows/run/example.ts',
+    valid: cases.filter(test => test.errors === 0).map(test => test.code),
+    invalid: cases.filter(test => test.errors > 0),
+  });
+}
+
+ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-session-write-outside-owner')!, {
+  file: 'packages/cezar/src/workflows/run/example.ts',
+  valid: [
+    'Array.from(state.liveSession.pendingPermissions).push(permission);',
+    'const copy = Array.from(state.liveSession.pendingPermissions); copy.push(permission);',
+  ],
+  invalid: [],
+});
