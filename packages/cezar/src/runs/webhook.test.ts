@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from './store.ts';
 import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
 import { registerProject } from '../workspace/projects.ts';
+import * as registry from '../workspace/registry-entry.ts';
 import { WEBHOOK_TRIGGERS, type WebhookTrigger } from '@open-mercato/cezar-contract/attention';
 import { sendAgentReport, TaskWebhook, TaskWebhooks, WEBHOOK_ATTEMPTS, type TaskWebhookOptions, type TaskWebhookTarget } from './webhook.ts';
 
@@ -490,6 +491,7 @@ describe('TaskWebhooks', () => {
   });
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
     rmSync(root, { recursive: true, force: true });
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
     else process.env.CEZ_DRY_RUN = savedDryRun;
@@ -500,6 +502,8 @@ describe('TaskWebhooks', () => {
     await mergeWriteWorkspaceConfig((config) => {
       config.projects.find((p) => p.id === entry.id)!.webhook = { url: 'https://bot.example/hook', token: 't' };
     }, testHome());
+    const resolved = await registry.registryEntry('default', root, testHome());
+    const lookup = vi.spyOn(registry, 'registryEntry').mockResolvedValue(resolved);
     const store = RunStore.open(dataDir);
     const { calls, fetchImpl } = recorder();
     const hooks = new TaskWebhooks({ home: testHome(), fetch: fetchImpl });
@@ -510,6 +514,7 @@ describe('TaskWebhooks', () => {
     const run = store.createRun({ title: 't', workflow: 'quick-task', task: 't', notify: true, steps: [] });
     setRunStatus(store, run.id, RUN_STATUS.done);
     await vi.advanceTimersByTimeAsync(20);
+    expect(lookup).not.toHaveBeenCalled();
     expect(calls).toEqual([]);
 
     hooks.setOrigin('http://127.0.0.1:4321');
