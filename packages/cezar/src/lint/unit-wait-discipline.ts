@@ -315,8 +315,13 @@ export const unitBaseline = {
 export const scannedUnitFile = (file: string): boolean => file.startsWith('packages/web/src/')
   && /\.test\.tsx?$/.test(file) && !file.split('/').includes('node_modules');
 
-/** Whether a call can be a wait the rule reads, so a file with none and no `await` costs no scan. */
-const waitCallee = (callee: { type: string; name?: unknown; property?: { name?: unknown } }): boolean => {
+/**
+ * Whether a call can be a wait the rule reads, so a file with none, no `await` and no Testing Library import costs no
+ * scan: a wait's name, or a bracketed member whose key the scan may resolve to one (`vi['waitFor']`). A renamed or
+ * namespaced Testing Library wait is caught by its import.
+ */
+const waitCallee = (callee: { type: string; name?: unknown; computed?: unknown; property?: { name?: unknown } }): boolean => {
+  if (callee.type === 'MemberExpression' && callee.computed === true) return true
   const name = callee.type === 'Identifier' ? callee.name : callee.property?.name
   return typeof name === 'string' && /^(?:waitFor|waitUntil|poll|waitForElementToBeRemoved|find(?:All)?By[A-Z]\w*)$/.test(name)
 }
@@ -330,6 +335,9 @@ export function unitVisitors(file: string, sourceCode: AstContext['sourceCode'],
     },
     CallExpression(node) {
       relevant ||= waitCallee(node.callee as Parameters<typeof waitCallee>[0])
+    },
+    ImportDeclaration(node) {
+      relevant ||= String((node.source as { value?: unknown } | undefined)?.value ?? '').startsWith('@testing-library/')
     },
     'Program:exit'(node) {
       if (!relevant) return

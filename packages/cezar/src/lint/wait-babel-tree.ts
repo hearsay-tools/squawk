@@ -21,10 +21,17 @@ function receiverOf(node: EsNode): EsNode | undefined {
   return isNode(next) ? next : undefined;
 }
 
+/** Each chain link's answer for the program being copied, so a long chain is walked once, not once per link. */
+let chains = new Map<EsNode, boolean>();
+
 /** Babel's optional node shapes begin at the first optional link of a chain; its base stays ordinary. */
 function inOptionalChain(node: EsNode): boolean {
-  for (let at: EsNode | undefined = node; at; at = receiverOf(at)) if (at.optional === true) return true;
-  return false;
+  const known = chains.get(node);
+  if (known !== undefined) return known;
+  const receiver = receiverOf(node);
+  const optional = node.optional === true || (receiver !== undefined && inOptionalChain(receiver));
+  chains.set(node, optional);
+  return optional;
 }
 
 function copyFields(out: Out, node: EsNode, skipValue: boolean): void {
@@ -46,7 +53,14 @@ function convert(node: EsNode): Out {
 }
 
 /** The program as plain babel-shaped nodes, offsets kept. */
-export const babelTree = (program: EsNode): Program => convert(program) as unknown as Program;
+export function babelTree(program: EsNode): Program {
+  chains = new Map();
+  try {
+    return convert(program) as unknown as Program;
+  } finally {
+    chains = new Map();
+  }
+}
 
 /** The child nodes of a plain babel-shaped node, in source order. */
 export function plainChildren(node: Node): Node[] {

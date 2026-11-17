@@ -253,6 +253,18 @@ export const WAITS: Wait[] = [
   { key: 'loop-none', loop: true, lines: ['while (!ready()) {', '  await sleep({X});', '}'] },
   { key: 'loop-param', loop: true, lines: ['async function poll(check: () => boolean, ms = {X}): Promise<void> {', '  const deadline = {K} + ms;', '  while (!check()) {', "    if ({K} > deadline) throw new Error('late');", '    await sleep(10);', '  }', '}'] },
   { key: 'loop-for-of', loop: true, lines: ['for (const item of items) {', '  await sleep({X});', '}'] },
+  // Waits that are not awaited: returned, an arrow's body, chained with `.then`, renamed, namespaced or bracketed.
+  { key: 'vi-arrow-body', lines: ['const settle = () => vi.waitFor(() => ready(), { timeout: {X} });'] },
+  { key: 'vi-returned', lines: ['function settle() {', '  return vi.waitFor(() => ready(), { timeout: {X} });', '}'] },
+  { key: 'vi-then', lines: ['vi.waitFor(() => ready(), { timeout: {X} }).then(done);'] },
+  { key: 'vi-bracket-bare', lines: ["void vi['waitFor'](() => ready(), { timeout: {X} });"] },
+  { key: 'poll-bare', lines: ['void expect.poll(() => count(), { timeout: {X} }).toBe(1);'] },
+  { key: 'tl-alias-bare', lines: ['observe(() => ready(), { timeout: {X} });'], imports: ["import { waitFor as observe } from '@testing-library/react';"] },
+  { key: 'tl-alias-arrow', lines: ['const settle = () => observe(() => ready(), { timeout: {X} });'], imports: ["import { waitFor as observe } from '@testing-library/react';"] },
+  { key: 'tl-namespace-bracket', lines: ["void rtl['waitFor'](() => ready(), { timeout: {X} });"], imports: ["import * as rtl from '@testing-library/react';"] },
+  { key: 'tl-find-then', lines: ["screen.findByText('x', {}, { timeout: {X} }).then(done);"], imports: ["import { screen } from '@testing-library/react';"] },
+  { key: 'helper-bare', lines: ['void until(() => ready(), {X});'] },
+  { key: 'helper-arrow-body', lines: ['const settle = () => waitFor(() => ready(), {X});'] },
 ];
 
 /** The waits crossed with every value and every source. */
