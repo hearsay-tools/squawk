@@ -1,4 +1,5 @@
-import type { SourceRule } from './source-rule.ts';
+import type { AstRule } from './ast-rule.ts';
+import { waitVisitors } from './wait-ast-visitors.ts';
 import { astChildren } from './ast-node-view.ts';
 import { compareToBaseline, tally, readBaseline } from './wait-baseline.ts';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -308,16 +309,17 @@ export const unitBaseline = {
 export const scannedUnitFile = (file: string): boolean => file.startsWith('packages/web/src/')
   && /\.test\.tsx?$/.test(file) && !file.split('/').includes('node_modules');
 
-export const unitWaitDiscipline: SourceRule = {
+export const unitWaitDiscipline: AstRule = {
   name: 'unit-wait-discipline',
-  description: 'Wait on the cockpit product signal, with a reason for a wall-clock bound.',
+  description: 'Wait on the cockpit product signal, with a reason for a wall-clock bound (hearsay-tools/cezarion#2421).',
   applies: scannedUnitFile,
-  check(file, source) {
-    const sites = scanSource(file.slice('packages/web/src/'.length), source);
-    const { added } = compareToBaseline(tally(sites), readBaseline(baselinePath));
-    return added.flatMap(entry => sites.filter(site => site.rule === entry.rule && site.site === entry.site).map(site => ({
-      line: site.line,
-      message: `[${site.rule}] ${site.site}. New wait-discipline sites. Give each a product signal, a bound of at least ${FLOOR_MS} ms, or a "// bound: <reason>" comment, rather than adding it to ${baselinePath} (AGENTS.md § Validation)`,
-    })));
+  create(report, context) {
+    const file = context.file.slice('packages/web/src/'.length);
+    return waitVisitors('unit', { ...context, file }, sites => {
+      const { added } = compareToBaseline(tally(sites), readBaseline(baselinePath));
+      for (const entry of added) for (const site of sites.filter(site => site.rule === entry.rule && site.site === entry.site)) {
+        report(site.node, `[${site.rule}] ${site.site}. New wait-discipline sites. Give each a product signal, a bound of at least ${FLOOR_MS} ms, or a "// bound: <reason>" comment, rather than adding it to ${baselinePath} (AGENTS.md § Validation, hearsay-tools/cezarion#2421)`);
+      }
+    });
   },
 };

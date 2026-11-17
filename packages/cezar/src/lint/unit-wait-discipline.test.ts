@@ -7,11 +7,11 @@ import { describe, expect, it } from 'vitest'
 import {
   unitBaseline,
   FLOOR_MS,
-  scanSource,
   scanTree,
   type BaselineEntry,
   type Site,
 } from './unit-wait-discipline.ts'
+import { scanWaitAst } from './wait-ast.testkit.ts'
 
 /**
  * The cockpit unit tests' wait discipline, as a syntax-tree scan (hearsay-tools/cezarion#1203). A Vitest wait
@@ -20,7 +20,7 @@ import {
  * accepted, and the suite's real sites are pinned in a baseline that can only shrink: the cockpit twin of
  * `packages/cezar/src/test-wait-discipline.test.ts`.
  */
-const scan = (...lines: string[]): Site[] => scanSource('x.test.tsx', lines.join('\n'))
+const scan = (...lines: string[]): Site[] => scanWaitAst('unit', 'x.test.tsx', lines.join('\n'))
 const rules = (...lines: string[]) => scan(...lines).map(site => site.rule)
 const tlImport = `import { waitFor, waitForElementToBeRemoved, screen } from '@testing-library/react'`
 
@@ -130,6 +130,13 @@ describe('rule sleep', () => {
     for (const name of ['sleep', 'delay', 'wait', 'pause']) expect(rules(`await ${name}(10)`)).toEqual(['sleep'])
     expect(rules('await setTimeout(10)')).toEqual(['sleep'])
     expect(rules('await timers.setTimeout(10)')).toEqual(['sleep'])
+  })
+
+  it('keeps computed timer names and optional calls in their existing scopes', () => {
+    expect(rules("await timers['setTimeout'](10)")).toEqual(['sleep'])
+    expect(rules('await timers[`setTimeout`](10)')).toEqual(['sleep'])
+    expect(rules('await timerFactory().setTimeout(10)')).toEqual(['sleep'])
+    expect(rules('await sleep?.(10)', 'await timers?.setTimeout(10)', 'await vi?.waitFor(() => ready())')).toEqual([])
   })
 
   it('flags a sleep whose delay it cannot read, and a sleep inside act()', () => {
