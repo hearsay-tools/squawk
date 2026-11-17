@@ -62,6 +62,15 @@ const findingsFor = (file: string): string[] => fixtureFindings.filter(problem =
 const ROSTER = declaredRunnerIds().map(id => `'${id}'`).join(', ');
 
 const VIOLATIONS: Record<string, [string, string]> = {
+  "agent-session-send-outside-handoff": ["packages/cezar/src/send-session.ts", "session.sendMessage(content);"],
+  "detached-spawn-outside-helper": ["packages/cezar/src/detached-options.ts", "const options = { detached: true };"],
+  "e2e-raw-run-seed": ["packages/web/e2e/raw-seed.e2e.ts", "writeFileSync('runs.json', '[]');"],
+  "git-spawn-outside-helper": ["packages/cezar/src/raw-git.ts", "spawn('git', ['status']);"],
+  "handoff-write-outside-writers": ["packages/cezar/src/handoff.ts", "function other() { writeFileSync(file, text); }"],
+  "handoff-written-outside-handoff-module": ["packages/cezar/src/handoff-leak.ts", "writeFileSync(handoffFile, text);"],
+  "liveness-timer-outside-owner": ["packages/cezar/src/workflows/run/raw-timer.ts", "setTimeout(expire, 1000);"],
+  "worktree-write-outside-manifest": ["packages/cezar/src/skills-provision.ts", "import { writeFile } from 'node:fs/promises';"],
+
   'product-env-read': ['packages/cezar/src/env-reader.ts', 'const flag = process.env.CEZ_DRY_RUN;\n'],
   'test-home-write': ['packages/web/src/ambient-home.test.ts', "writeFileSync(join(cezarHomeDir(), 'config.json'), '{}');\n"],
   'home-boundary': ['packages/cezar/src/ambient-home.ts', 'cezarHomeDir();\n'],

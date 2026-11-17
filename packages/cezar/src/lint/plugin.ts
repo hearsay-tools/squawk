@@ -1,3 +1,4 @@
+import { PROCESS_OWNER_RULES } from './owner-process-rules.ts';
 import { productEnvRead } from './product-env-read.ts';
 import { testHomeWrite } from './test-home-write.ts';
 import { homeBoundary } from './home-boundary.ts';
@@ -24,7 +25,7 @@ import { undocumentedEnvName } from './undocumented-env-name.ts';
 import { unitWaitDiscipline } from './unit-wait-discipline.ts';
 
 /** The rules that visit oxlint's syntax tree (hearsay-tools/squawk#3774). */
-export const AST_RULES: AstRule[] = [childKilledRead, runStoreTestkitImport];
+export const AST_RULES: AstRule[] = [childKilledRead, runStoreTestkitImport, ...PROCESS_OWNER_RULES];
 
 /** The rules that scan a file's text. New rules are AST rules. */
 export const TEXT_RULES: SourceRule[] = [productEnvRead, homeBoundary, testHomeWrite, card2Contrast, contractRootImport, designGuardian, layerImport, mockLifecycleBoundary, mockScenarioBoundary, nativeMockSource, parityRunnerSubset, rawQuerySetter, runFactReader, runHistoryReader, runnerFactCombination, runnerIdBranch, runnerRosterLiteral, testWaitDiscipline, undocumentedEnvName, unitWaitDiscipline];

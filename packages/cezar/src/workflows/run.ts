@@ -246,10 +246,10 @@ export class RunManager {
     // the runs table; piggyback on it to enforce the per-task memory ceiling.
     this.#offUsage = onUsage((snapshot) => void this.#enforceMemoryLimit(snapshot));
     // The manager's own intervals watch every run, not one run's liveness.
-    // ast-grep-ignore: liveness-timer-outside-owner
+    // oxlint-disable-next-line cez/liveness-timer-outside-owner -- The manager interval watches all runs.
     this.#queueWatchdog = setInterval(() => void this.#modules.line.rescueStalledQueue(), QUEUE_WATCHDOG_MS);
     this.#queueWatchdog.unref?.();
-    // ast-grep-ignore: liveness-timer-outside-owner
+    // oxlint-disable-next-line cez/liveness-timer-outside-owner -- The manager interval watches all runs.
     this.#repoRediscovery = setInterval(() => this.#modules.line.rediscoverRepo(), REPO_REDISCOVERY_MS);
     this.#repoRediscovery.unref?.();
     this.#store.on('run', this.#onDelegationRun);

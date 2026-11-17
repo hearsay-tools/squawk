@@ -27,7 +27,7 @@ export class AutomationToolsSlot {
       const done = () => { clearTimeout(timer); signal.removeEventListener('abort', done); this.automationToolsWaiters.delete(done); resolve(); };
       // bound: the CLI's 30 s startup retry; the server attaches the service right after recovery.
       // A local awaited pause of one tool call, not a liveness bound of the run.
-      // ast-grep-ignore: liveness-timer-outside-owner
+      // oxlint-disable-next-line cez/liveness-timer-outside-owner -- A local awaited pause, not a run liveness bound.
       const timer = setTimeout(done, AUTOMATION_TOOLS_READY_MS);
       signal.addEventListener('abort', done, { once: true });
       this.automationToolsWaiters.add(done);
