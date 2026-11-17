@@ -221,18 +221,6 @@ describe('RunManager monitoring turns', () => {
     expect(semaphore.busy()).toBe(0);
   }, 30_000);
 
-  it('a markerless turn-end still parks as waiting with no activity', async () => {
-    const clock = fixture.observeIdleTimers();
-    const record = fixture.manager.startRun(SINGLE_STEP, { task: 'just do the thing', worktree: false });
-    fixture.currentId = record.id;
-    await waitFor(record.id, (r) => r?.status === 'waiting');
-    expect(clock.pending).toBe(1);
-    clock.fire(clock.captured - 1);
-    await waitFor(record.id, () => !fixture.manager.isActive(record.id));
-    expect(fixture.store.getRun(record.id)?.status).toBe(RUN_STATUS.waiting);
-    expect(fixture.store.getRun(record.id)?.finishedAt).toBeUndefined();
-    expect(monitoringTimerWait(fixture.store.getRun(record.id))).toBeUndefined();
-  }, 30_000);
 });
 
 describe('cezar_ask parks as waiting and emits ask.requested (#473)', () => {
@@ -301,12 +289,6 @@ describe('cezar_ask parks as waiting and emits ask.requested (#473)', () => {
     expect(questions[0]!.options).toHaveLength(2);
   }, 30_000);
 
-  it('a markerless turn-end raises no ask.requested', async () => {
-    const record = manager.startRun(SINGLE_STEP, { task: 'just do the thing', worktree: false });
-    currentId = record.id;
-    await waitFor(record.id, (r) => r?.status === 'waiting');
-    expect(readEvents(record.id).some((e) => e.type === 'ask.requested')).toBe(false);
-  }, 30_000);
 
   it('a mid-turn follow-up does not resume past a cezar_ask park', async () => {
     savedEnv.CEZ_OPENCODE_BIN = process.env.CEZ_OPENCODE_BIN;

@@ -1,7 +1,7 @@
 import { testHome } from '../home/test-home.testkit.ts';
 import { setupMonitoringFixture, runnerHook } from './run-fixture.testkit.ts';
 import { createFixtureManager } from './fixture-cleanup.testkit.ts';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
@@ -40,24 +40,6 @@ describe('RunManager monitoring timers', () => {
     expect(monitoringTimerWait(fixture.store.getRun(record.id))).toBeUndefined();
   }, 30_000);
 
-  it('optionally wakes a parked monitor without fabricating a user message', async () => {
-    fixture.manager.dispose();
-    const semaphore = new WorkspaceSemaphore({ home: testHome(), initial: { monitoringWakeIntervalMinutes: 0.001 } });
-    fixture.manager = createFixtureManager(fixture.store, fixture.repoRoot, { home: testHome(), semaphore });
-    const record = fixture.manager.startRun(SINGLE_STEP, { task: 'mock:schedule-wakeup keep going', runner: 'claude', worktree: false });
-    fixture.currentId = record.id;
-    await waitFor(record.id, () => {
-      const path = join(fixture.repoRoot, '.ai/cezar/runs', `${record.id}.ndjson`);
-      if (!existsSync(path)) return false;
-      const ndjson = readFileSync(path, 'utf8');
-      return ndjson.includes('automatic monitoring wake-up (1/40)');
-    });
-    const events = readFileSync(join(fixture.repoRoot, '.ai/cezar/runs', `${record.id}.ndjson`), 'utf8')
-      .trim().split('\n').map((line) => JSON.parse(line) as { type: string; message?: string });
-    expect(events.some((event) => event.type === 'note' && event.message?.includes('(1/40)'))).toBe(true);
-    expect(events.some((event) => event.type === 'user-message')).toBe(false);
-  }, 30_000);
-
   it.each([
     { activity: 'tool', trigger: 'mock:backend-resume', eventNeedle: 'pi-autonomous-edit' },
     { activity: 'message', trigger: 'mock:backend-resume-text', eventNeedle: 'Pi resumed without a prompt' },
@@ -90,9 +72,7 @@ describe('RunManager monitoring timers', () => {
     // what it waits on next.
     expect(fixture.store.getRun(record.id)).toMatchObject({ status: RUN_STATUS.running });
     expect(openTimer(fixture.store.getRun(record.id))).toBeUndefined();
-    expect(openTimer(fixture.store.getRun(record.id))).toBeUndefined();
     expect(fixture.store.getRun(record.id)?.lastWaits?.filter(entry => entry.id === wait.id).map(entry => entry.phase)).toEqual([WAIT_PHASE.cancelled]);
-    expect(fixture.store.getRun(record.id)?.status).toBe('running');
     expect(semaphore.busy()).toBe(0);
     expect(fixture.manager.isActive(record.id)).toBe(true);
 
@@ -101,13 +81,13 @@ describe('RunManager monitoring timers', () => {
     expect(fixture.store.getRun(record.id)?.lastWaits?.some(entry => entry.phase === 'delivered')).not.toBe(true);
     const events = readFileSync(join(fixture.repoRoot, '.ai/cezar/runs', `${record.id}.ndjson`), 'utf8');
     expect(events.includes(eventNeedle)).toBe(true);
-    expect(fixture.manager.isActive(record.id)).toBe(true);
   }, 30_000);
 
   it('a passive backend diagnostic keeps a parked monitor wakeable', async () => {
     fixture.manager.dispose();
     const semaphore = new WorkspaceSemaphore({ home: testHome(), initial: { monitoringWakeIntervalMinutes: 0.01, maxMonitoringSessions: 0 } });
     fixture.manager = createFixtureManager(fixture.store, fixture.repoRoot, { home: testHome(), semaphore });
+    const wakes = fixture.observeWakeTimers();
     const record = fixture.manager.startRun(SINGLE_STEP, { task: 'mock:schedule-wakeup keep going', runner: 'claude', worktree: false });
     fixture.currentId = record.id;
     await waitFor(record.id, (r) => r?.status === 'waiting' && Boolean(monitoringWakeOf(r)));
@@ -117,11 +97,15 @@ describe('RunManager monitoring timers', () => {
 
     expect(fixture.store.getRun(record.id)?.status).toBe('waiting');
     expect(monitoringTimerWait(fixture.store.getRun(record.id))).toEqual(wakeTimer);
-    expect(fixture.store.getRun(record.id)?.status).toBe('waiting');
     expect(semaphore.busy()).toBe(1);
+    expect(wakes.captured).toBe(1);
+    wakes.fire(0);
     await waitFor(record.id, () => {
       const events = readFileSync(join(fixture.repoRoot, '.ai/cezar/runs', `${record.id}.ndjson`), 'utf8');
       return events.includes('automatic monitoring wake-up (1/40)');
     });
+    const events = fixture.store.readEvents(record.id);
+    expect(events.some(event => event.type === 'note' && event.message?.includes('(1/40)'))).toBe(true);
+    expect(events.some(event => event.type === 'user-message')).toBe(false);
   }, 30_000);
 });
