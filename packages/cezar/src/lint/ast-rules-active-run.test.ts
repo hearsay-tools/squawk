@@ -649,13 +649,17 @@ for (const [group, slot, type] of [
   ['session', 'liveSession', 'SessionGroup'], ['skills', 'skills', 'SkillsGroup'],
   ['usage', 'usage', 'UsageGroup'], ['wait', 'waitIdentity', 'WaitGroup'],
 ]) {
-  const cases = OWNER_EXPRESSION_SHAPES.flatMap(shape => [false, true].map(wrapped => {
+  const cases = OWNER_EXPRESSION_SHAPES.flatMap(shape => [false, true].flatMap(wrapped => {
     const expression = shape.expression.replaceAll('GROUP', `state.${slot}`).replaceAll('TYPE', type!);
     const argument = wrapped ? `(${expression})` : expression;
-    return {
-      code: `async function* probe() { Object.assign(${argument}, {}); }`,
+    return [
+      `Object.assign(${argument}, {});`,
+      `Object.assign?.(${argument});`,
+      `Object.assign?.<Mutable>(${argument});`,
+    ].map(call => ({
+      code: `async function* probe() { ${call} }`,
       errors: wrapped ? shape.wrapped : shape.bare,
-    };
+    }));
   }));
   ruleCases(activeRunWriteRules.find(rule => rule.name === `active-run-${group}-write-outside-owner`)!, {
     file: 'packages/cezar/src/workflows/run/example.ts',
@@ -671,4 +675,16 @@ ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-session-wri
     'const copy = Array.from(state.liveSession.pendingPermissions); copy.push(permission);',
   ],
   invalid: [],
+});
+
+ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-usage-write-outside-owner')!, {
+  file: 'packages/cezar/src/workflows/run/example.ts',
+  valid: [
+    'Object.assign?.(new Map(state.usage.cumulativeSessionCost));',
+    'Object.assign?.<Mutable>(new Map(state.usage.cumulativeSessionCost));',
+  ],
+  invalid: [
+    'Object.assign?.((new Map(state.usage.cumulativeSessionCost)));',
+    'Object.assign?.<Mutable>((new Map(state.usage.cumulativeSessionCost)));',
+  ],
 });
