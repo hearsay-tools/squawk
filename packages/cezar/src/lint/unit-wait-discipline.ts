@@ -281,7 +281,7 @@ export function acceptance(source: WaitSource): (line: number) => boolean {
 }
 
 
-/** The sites of one parsed file: `@babel/parser`'s tree, or oxlint's through `babelView`. */
+/** The sites of one parsed file: `@babel/parser`'s tree, or oxlint's through `babelTree`. */
 export function scanProgram(file: string, program: Program, source: WaitSource): Site[] {
   const ctx: Ctx = {
     file, lines: source.lines, lineOf: offset => source.lineOf(offset), ...testingLibrary(program), accepted: acceptance(source),
