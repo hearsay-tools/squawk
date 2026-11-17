@@ -105,7 +105,7 @@ describe('RunManager monitoring timers', () => {
       return events.includes('automatic monitoring wake-up (1/40)');
     });
     const events = fixture.store.readEvents(record.id);
-    expect(events.some(event => event.type === 'note' && event.message?.includes('(1/40)'))).toBe(true);
+    expect(events.some(event => event.type === 'note' && String(event.message).includes('(1/40)'))).toBe(true);
     expect(events.some(event => event.type === 'user-message')).toBe(false);
   }, 30_000);
 });
