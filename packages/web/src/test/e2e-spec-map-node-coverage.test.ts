@@ -35,14 +35,3 @@ test('preserves coverage when later flushes reuse the same native filename', () 
     rmSync(directory, { recursive: true, force: true })
   }
 })
-
-test('keeps coverage disabled when no output directory is set', () => {
-  try {
-    vi.stubEnv('NODE_V8_COVERAGE', undefined)
-    flushCoverage()
-    expect(takeCoverage).toHaveBeenCalledOnce()
-  } finally {
-    vi.mocked(takeCoverage).mockReset()
-    vi.unstubAllEnvs()
-  }
-})

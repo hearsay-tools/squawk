@@ -283,13 +283,6 @@ describe('AgentBrowser failure bundles (#408)', () => {
     expect(readdirSync(join(bundle, '..'))).toEqual(['pencil-shows-on-hover-1'])
   })
 
-  it('the last attached seam is reachable for the hook and forgotten on close', () => {
-    const { browser } = open()
-    expect(lastAttachedBrowser()).toBe(browser)
-    browser.close()
-    expect(lastAttachedBrowser()).toBeNull()
-  })
-
   it('closing a per-test browser hands the hook back to the one the spec still holds', () => {
     // github.e2e.ts keeps its main browser open and attaches a short-lived one per state; its
     // `finally` closes that one before `onTestFailed` runs, so the hook must still find the

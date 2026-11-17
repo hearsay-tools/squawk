@@ -114,9 +114,9 @@ describe('owned fixture server readiness (#795)', () => {
     it.each(['0', '-1', '1.5', 'two', ''].map(value => `// fixture-server starts: ${value}`).concat('//fixture-server starts: 1', '  // fixture-server starts: 1', '// fixture-server  starts: 1', '// fixture-server starts:1', '// fixture-server starts: 1 '))('reports a malformed declaration %j', declaration => reported(`${imports}${declaration}\n${start}`, 'with N a positive integer; replace it with `// fixture-server starts: 1`'))
   })
 
-  it('uses the actual child listener when the requested endpoint belongs to a 404 server', async () => {
+  it.each([404, 200])('uses the actual child listener when the requested endpoint belongs to a %i server', async (status) => {
     let foreignProbes = 0
-    const foreign = createServer((_request, response) => { foreignProbes++; response.writeHead(404).end() })
+    const foreign = createServer((_request, response) => { foreignProbes++; response.writeHead(status).end('foreign') })
     await new Promise<void>(resolve => foreign.listen(0, '127.0.0.1', resolve))
     const address = foreign.address()
     if (!address || typeof address === 'string') throw new Error('foreign listener missing')
@@ -128,20 +128,6 @@ describe('owned fixture server readiness (#795)', () => {
       const actual = await waitForFixtureServer(child, { deadline: Date.now() + 1_500 })
       expect(actual).not.toBe(`http://127.0.0.1:${address.port}`)
       expect((await fetch(`${actual}/api/v1/health`)).status).toBe(200)
-      expect(foreignProbes).toBe(0)
-    } finally { await new Promise<void>(resolve => foreign.close(() => resolve())) }
-  })
-
-  it('never certifies readiness from an unrelated requested endpoint returning 200', async () => {
-    let foreignProbes = 0
-    const foreign = createServer((_request, response) => { foreignProbes++; response.writeHead(200).end('foreign') })
-    await new Promise<void>(resolve => foreign.listen(0, '127.0.0.1', resolve))
-    const address = foreign.address()
-    if (!address || typeof address === 'string') throw new Error('foreign listener missing')
-    try {
-      const child = spawnFixtureServer(['-e', serverScript(), '--', '--port', String(address.port)], { env: process.env })
-      children.push(child)
-      await waitForFixtureServer(child)
       expect(foreignProbes).toBe(0)
     } finally { await new Promise<void>(resolve => foreign.close(() => resolve())) }
   })

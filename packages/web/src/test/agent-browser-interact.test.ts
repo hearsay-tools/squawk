@@ -160,7 +160,7 @@ describe('AgentBrowser auto-wait (#405)', () => {
     expect(commands().filter(args => args[0] === 'set').slice(-2)).toEqual([
       ['set', 'viewport', '1440', '900', '1.5'], ['set', 'media', 'dark', 'reduced-motion'],
     ])
-  })
+  }, 10_000) // bound: 18 synchronous fake-provider Node starts; observed 5627 ms under host load.
 
   it('freezes the resolved scoped route after setup visits bare root', () => {
     const { browser, commands } = open({
@@ -213,30 +213,18 @@ describe('AgentBrowser auto-wait (#405)', () => {
     expect(() => browser.newTab()).toThrow(/tab.*target/i)
   })
 
-  it('click waits for the selector to appear before clicking it', () => {
-    const { browser, commands } = open()
-    browser.click('[aria-label="Tools"]')
-    expect(commands()).toEqual([
-      ['wait', '[aria-label="Tools"]'],
-      ['click', '[aria-label="Tools"]'],
-    ])
-  })
-
-  it('hover waits for the selector before hovering', () => {
-    const { browser, commands } = open()
-    browser.hover('[data-slot="row"]')
-    expect(commands()).toEqual([
-      ['wait', '[data-slot="row"]'],
-      ['hover', '[data-slot="row"]'],
-    ])
-  })
-
-  it('fill waits for the selector before filling', () => {
+  it.each([
+    ['click', '[aria-label="Tools"]', undefined],
+    ['hover', '[data-slot="row"]', undefined],
+    ['fill', '#automation-name', 'nightly'],
+  ] as const)('%s waits for the selector before the provider action', (action, selector, value) => {
     const { browser, commands } = open({ evalResult: '' })
-    browser.fill('#automation-name', 'nightly')
-    expect(commands().filter(([action]) => action !== 'eval')).toEqual([
-      ['wait', '#automation-name'],
-      ['fill', '#automation-name', 'nightly'],
+    if (action === 'fill') browser.fill(selector, value!)
+    else browser[action](selector)
+    const calls = action === 'fill' ? commands().filter(([command]) => command !== 'eval') : commands()
+    expect(calls).toEqual([
+      ['wait', selector],
+      value === undefined ? [action, selector] : [action, selector, value],
     ])
   })
 
