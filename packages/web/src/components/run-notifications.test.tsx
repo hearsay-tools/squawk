@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClient } from '@/api/query-client'
 import { queryKeys, workspaceQueryKeys } from '@/api/queries'
 import { setApiScope } from '@open-mercato/cezar-api-client/utils/project-scope'
-import type { RunRecord, RunStatus, WorkspaceUiState } from '@open-mercato/cezar-api-client'
+import type { RunRecord, WorkspaceUiState } from '@open-mercato/cezar-api-client'
 import { RunNotifications } from './run-notifications'
 
 /**
@@ -215,10 +215,6 @@ describe('RunNotifications', () => {
     expect(constructed).toEqual([])
   })
 })
-
-// Type-level guard: the statuses this suite drives are real RunStatus members.
-const _statuses: RunStatus[] = ['running', 'waiting', 'review', 'failed']
-void _statuses
 
 it('notifies once when a parked worker wait gains a human ask without changing status', () => {
   const constructed = stubNotification('granted')

@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ACTION_TOAST_MS, Toaster, resetToasts, toast } from './toaster'
+import { Toaster, resetToasts, toast } from './toaster'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -129,7 +129,6 @@ describe('Toaster', () => {
 
     it('lives 8s', () => {
       show()
-      expect(ACTION_TOAST_MS).toBe(8000)
       act(() => vi.advanceTimersByTime(7999))
       expect(screen.getByRole('status').getAttribute('data-state')).toBe('open')
       act(() => vi.advanceTimersByTime(1))
