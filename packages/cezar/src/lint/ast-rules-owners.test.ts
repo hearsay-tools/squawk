@@ -1,7 +1,7 @@
 import { AST_RULES } from './plugin.ts';
 import { ruleCases } from './ast-rule.testkit.ts';
 
-// Every former ast-grep case, with its original source and diagnostic count (hearsay-tools/squawk#3774).
+// Every former YAML case, with its original source and diagnostic count (hearsay-tools/squawk#3774).
 
 ruleCases(AST_RULES.find(rule => rule.name === "agent-session-send-outside-handoff")!, {
   "file": "packages/cezar/src/fixture.ts",

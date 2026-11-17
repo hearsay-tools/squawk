@@ -10,24 +10,22 @@ command, it fails closed, and it does not depend on which tests a change selects
 
 1. **oxlint** with the `cez` JS plugin (`packages/cezar/src/lint/plugin.ts`) over `packages/`.
    AST rules (`AST_RULES`) visit oxlint's own syntax tree; text rules (`TEXT_RULES`) scan the
-   file's text. The ast-grep rules move into AST rules one slice at a time
+   file's text. All former YAML rules now run as AST rules
    (hearsay-tools/squawk#3774).
    `.oxlintrc.json` keeps every category off and explicitly enables all `cez` rules and 93
    built-in correctness rules. The `typescript`, `unicorn` and `oxc` plugins are enabled.
-2. **ast-grep** with the rules in `.ai/ast-grep/rules`, each against its shrink-only baseline.
-   [`.ai/ast-grep/README.md`](../../.ai/ast-grep/README.md) says how to write one.
-3. **Stale entries**: an exemption, a reader-list entry or a baseline entry that no longer names
+2. **Stale entries**: an exemption, a reader-list entry or a baseline entry that no longer names
    a match fails, so the lists only shrink to what the code still needs.
 
-4. **File length** (`file-length`, a runner check): every tracked non-test source file over 1,000 lines stays at or below its
+3. **File length** (`file-length`, a runner check): every tracked non-test source file over 1,000 lines stays at or below its
    pin in `packages/cezar/src/file-length.baseline.json`. Unpinned long files, grown pins and
    stale pins fail. `FILE_LENGTH_UPDATE=1 npm run lint` only lowers or drops existing pins.
 
-5. **Design guardian CSS**: the runner applies the same `cez/design-guardian` rule table to
+4. **Design guardian CSS**: the runner applies the same `cez/design-guardian` rule table to
    `packages/web/src/**/*.css` and `packages/web/e2e/**/*.css`, which oxlint cannot read. It also
    refuses stylesheet overrides that hide or restyle status dots or status pills.
 
-6. **Unit wait discipline** (M07): `cez/test-wait-discipline` scans server test and testkit files
+5. **Unit wait discipline** (M07): `cez/test-wait-discipline` scans server test and testkit files
    with a 10 s floor; `cez/unit-wait-discipline` scans cockpit unit tests with a 3 s floor.
    Each rule uses its original scanner. Both use `lint/wait-baseline.ts` for the same shrink-only
    ratchet. The runner checks stale entries in the three baselines,
@@ -46,7 +44,7 @@ never a pass.
 | Where | How |
 | --- | --- |
 | CI | The required `Typecheck` job's `Lint` step. The job runs on every change surface, docs-only included, so no test selection skips lint |
-| Squeal | Edit-time oxlint diagnostics require Squeal 0.1.392 or later; its provider loads `.oxlintrc.json` and the `cez` JS plugin. Older Squeal reports `lint.tools` as unknown and keeps validating through `packages/cezar/src/lint/lint-runner.test.ts` and `lint-ast-grep-{1,2}.test.ts`: runner checks and two disjoint groups of ast-grep rules only. The split keeps each bridge file below the Vitest per-file duration cap; the sorted rule list assigns every new rule to one group. `npm run prepr` reads Squeal's lint result before a PR opens (and runs `npm run lint` without a daemon), and CI’s required Lint step remains the gate (hearsay-tools/cezarion#2426) |
+| Squeal | Edit-time oxlint diagnostics load `.oxlintrc.json` and the `cez` JS plugin. No unit test runs a repository-wide lint scan. `npm run prepr` reads Squeal’s oxlint result and always runs `node packages/cezar/src/lint/run.ts --repository-only` for file length, design CSS, wait discipline and stale entries. Without a daemon it also runs `npm run lint`. CI’s required Lint step remains the gate (hearsay-tools/cezarion#2426) |
 | By hand | `npm run lint` from the repository root, about 5 s on an idle host |
 
 ## New safety guards
@@ -388,7 +386,7 @@ through another binding. `cez/run-search-field-list-outside-contract` visits eve
 member under each array, including nested expressions. `cez/run-internals` checks
 each identifier, private name, string literal and fixed template fragment; comments
 and paths assembled from fragments stay outside its scope. Its scan is now limited
-to `packages/`, the existing oxlint `LINT_PATHS`; the former ast-grep rule could also
+to `packages/`, the existing oxlint `LINT_PATHS`; the former YAML rule could also
 check TypeScript files outside that tree. This is an accepted scope change for this
 port. `LINT_PATHS` stays unchanged.
 
@@ -439,10 +437,10 @@ looped case). **Moved** cases now run in `npm run lint`; the scanner's fixture c
 | Card-2 contrast (M10) | `packages/web/src/test/card-2-contrast.test.ts`, now `packages/cezar/src/lint/card-2-contrast.test.ts` | 1: no new unsafe small-text site or stale baseline entry | 20 scanner fixture cases; static classes only, dynamic styling still needs browser evidence |
 | Environment-name documentation (M11) | `packages/cezar/src/env-example.test.ts` | 1: every `CEZ_*` name documented | 4 scanner cases |
 | File-length budget (M12) | `packages/cezar/src/file-length.test.ts` | 1: no unpinned long file, grown pin or stale pin | 6 fixture cases |
-| Existing ast-grep enforcement | `packages/cezar/src/ast-grep-rules.test.ts` | 14: one repository scan per rule | Rule-file checks, the `ast-grep test` cases, the baseline helpers, the update mode helpers, binary resolution |
+| Existing syntax-tree enforcement | `packages/cezar/src/lint/ast-rules*.test.ts` | 14: one repository scan per former rule | Every former YAML case now runs through the oxlint RuleTester; stored parser counts pin parity. The retired scanner, baseline helpers and binary resolver have been removed |
 
 42 cases moved; M04's call-presence case retired. Update modes moved with them:
-`AST_GREP_RULES_UPDATE=1 npm run lint`, `FILE_LENGTH_UPDATE=1 npm run lint`,
+`FILE_LENGTH_UPDATE=1 npm run lint`,
 `TEST_WAIT_DISCIPLINE_UPDATE=1 npm run lint` and `UNIT_WAIT_DISCIPLINE_UPDATE=1 npm run lint`.
 
 
@@ -605,7 +603,7 @@ These limits need code review. They do not permit new baseline allowances.
 
 Static scope: `packages/cezar/src/workflows/run.ts` and `workflows/run/**/*.ts`,
 except `run/launch-read-resolver.ts`, tests and testkits. The single AST rule
-`cez/launch-read-outside-resolver` replaces the eleven launch-read ast-grep rules.
+`cez/launch-read-outside-resolver` replaces the eleven launch-read YAML rules.
 It preserves their diagnostic message and has no baseline or ignored source site.
 
 The rule checks launch fields through member access, static or dynamic computed access,

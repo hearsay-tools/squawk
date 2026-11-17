@@ -16,8 +16,8 @@ test('CI resolves the complete unit selection before any shard is applied', () =
 });
 
 test('declared readers alone need no inventory', () => {
-  const result = unitFiles({ ...changed, sources: [], tests: ['packages/cezar/src/ast-grep-rules.test.ts'] }, () => assert.fail('must not list tests'));
-  assert.deepEqual(result, { files: ['packages/cezar/src/ast-grep-rules.test.ts'] });
+  const result = unitFiles({ ...changed, sources: [], tests: ['packages/cezar/src/lint/scanner-inputs.test.ts'] }, () => assert.fail('must not list tests'));
+  assert.deepEqual(result, { files: ['packages/cezar/src/lint/scanner-inputs.test.ts'] });
 });
 
 test('an empty, malformed or failed unit inventory names why the full suite runs', () => {

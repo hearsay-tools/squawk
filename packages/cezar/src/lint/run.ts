@@ -8,16 +8,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import {
-  baselinePath as astGrepBaselinePath,
-  compareToBaseline,
-  readBaseline,
-  readRule,
-  ruleIds,
-  scanRepository,
-  tally,
-  updateBaseline,
-} from '../ast-grep-rules.testkit.ts';
 import { readExemptions, scanRootImports } from './contract-root-import.ts';
 import { baselineFile as contrastBaselineFile, readContrastBaseline, scan as scanContrast, paletteSurfaces } from './card-2-contrast.ts';
 import { fileLengthProblems } from './file-length.ts';
@@ -32,8 +22,8 @@ import { repoRoot } from './source-rule.ts';
 
 /**
  * `npm run lint` (hearsay-tools/cezarion#2416): the repository's own rules, as one command that
- * fails closed. It runs oxlint with the `cez` plugin, then the ast-grep rules against their
- * baselines, then the checks that need the whole repository: an exemption, a reader-list entry or
+ * fails closed. It runs oxlint with the `cez` plugin, then the checks that need the whole
+ * repository: an exemption, a reader-list entry or
  * a baseline entry that no longer names a match is stale and must go. Any tool, plugin or parse
  * error is a failure, never a pass. `docs/sdlc/lint.md` describes each rule.
  */
@@ -128,30 +118,6 @@ export async function oxlintProblems(cwd: string, paths: string[], config = '.ox
   return problems;
 }
 
-/**
- * The ast-grep rules against their baselines (hearsay-tools/cezarion#1802). With
- * `AST_GREP_RULES_UPDATE=1`, a rule without a baseline gets its first one and every other baseline
- * is lowered to today's matches; update mode never adds a match to a baseline.
- */
-export async function astGrepProblems(update = process.env.AST_GREP_RULES_UPDATE === '1', rules = ruleIds()): Promise<string[]> {
-  if (rules.length === 0) return [];
-  const filter = `^(${rules.map(rule => rule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$`;
-  const sites = await scanRepository(filter);
-  return rules.flatMap((rule) => {
-    const mine = sites.filter((s) => s.rule === rule);
-    if (update) updateBaseline(rule, tally(mine));
-    const { added, stale } = compareToBaseline(tally(mine), readBaseline(rule));
-    const message = readRule(rule).message.trim().replace(/\s+/g, ' ');
-    return [
-      ...added.map((e) => {
-        const lines = mine.filter((s) => s.file === e.file && s.site === e.site).map((s) => s.line);
-        return `${e.file}:${lines.join(',')} ast-grep/${rule}: ${e.count} more than ${astGrepBaselinePath(rule).slice(repoRoot.length + 1)} records: ${e.site}. ${message} Never add a match to the baseline.`;
-      }),
-      ...stale.map((e) => `${astGrepBaselinePath(rule).slice(repoRoot.length + 1)} ast-grep/${rule}: stale entry ${e.file} ×${e.count}: ${e.site}. Shrink it: AST_GREP_RULES_UPDATE=1 npm run lint`),
-    ];
-  });
-}
-
 const EXEMPTIONS = 'packages/cezar/src/lint/contract-root-import.baseline.json';
 const READERS = 'packages/cezar/src/lint/resume-time-readers.json';
 const SETTERS = 'packages/web/src/test/search-params-discipline.baseline.json';
@@ -211,7 +177,7 @@ export async function lint(): Promise<string[]> {
   return lintProblems(true);
 }
 
-/** Repository checks outside oxlint, retained for Squeal edit-time feedback. */
+/** Repository checks outside oxlint, run by the pre-PR gate even with Squeal active. */
 export async function lintWithoutOxlint(): Promise<string[]> {
   return lintProblems(false);
 }
@@ -225,23 +191,24 @@ export function repositoryProblems(): string[] {
 }
 
 async function lintProblems(withOxlint: boolean): Promise<string[]> {
-  // Start oxlint and ast-grep first: their child processes work while the wait scans run here
+  // Start oxlint first: its child process works while the wait scans run here
   // (hearsay-tools/squawk#2545). The report keeps its order.
-  const children = Promise.all([withOxlint ? oxlintProblems(repoRoot, LINT_PATHS) : [], astGrepProblems()]);
+  const child = withOxlint ? oxlintProblems(repoRoot, LINT_PATHS) : Promise.resolve([]);
   // If a wait scan throws, its error is the one reported; a later child failure must not go unhandled.
-  children.catch(() => {});
+  child.catch(() => {});
   const waits = waitProblems();
-  const [oxlint, astGrep] = await children;
-  return [...waits, ...oxlint, ...astGrep, ...repositoryProblems()];
+  const oxlint = await child;
+  return [...waits, ...oxlint, ...repositoryProblems()];
 }
 
 if (import.meta.main) {
-  const problems = await lint().catch((error: unknown) => [`lint failed: ${error instanceof Error ? error.message : String(error)}`]);
+  const repositoryOnly = process.argv.includes('--repository-only');
+  const problems = await (repositoryOnly ? lintWithoutOxlint() : lint()).catch((error: unknown) => [`lint failed: ${error instanceof Error ? error.message : String(error)}`]);
   for (const problem of problems) console.error(problem);
   if (problems.length > 0) {
     console.error(`\n${problems.length} lint problem(s). Rules and fixes: docs/sdlc/lint.md`);
     process.exitCode = 1;
   } else {
-    console.log(`lint: ${RULES.length} cez rules and ${ruleIds().length} ast-grep rules passed`);
+    console.log(repositoryOnly ? 'lint: repository checks passed' : `lint: ${RULES.length} cez rules passed`);
   }
 }

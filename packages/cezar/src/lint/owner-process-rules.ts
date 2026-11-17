@@ -60,7 +60,7 @@ export const e2eRawRunSeed = ownerRule(OWNER_POLICIES['e2e-raw-run-seed']!, repo
   };
 });
 
-/** File-level promisify bindings mirror the former Program-scoped ast-grep lookup. */
+/** File-level promisify bindings scope the cez/exec* owner rules to one program. */
 export const gitSpawn = ownerRule(OWNER_POLICIES['git-spawn-outside-helper']!, report => {
   const launchers = new Set<string>();
   return {

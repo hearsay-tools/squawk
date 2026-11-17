@@ -214,8 +214,7 @@ const EVERY_SPEC = [
 // Paths no browser spec reads, each with the reason it was reviewed safe (hearsay-tools/squawk#3728).
 // The suite-setup rule and a spec that loads the file both still win.
 export const NO_SPEC = [
-  [/^\.ai\/ast-grep\//, 'lint rules, which only the linter and its tests read'],
-  [/^(?:sgconfig\.yml|\.oxlintrc\.json)$/, 'a lint configuration, which no build or spec reads'],
+  [/^\.oxlintrc\.json$/, 'a lint configuration, which no build or spec reads'],
   [/^packages\/cezar\/src\/lint\//, 'lint code, which only the lint script and unit tests import'],
   [/^(?:\.ai|\.agents|\.claude)\/skills\//, 'repository skills: the served test clone replaces them with fixture catalogs'],
   [/^packages\/cezar\/scripts\/benchmark-/, 'a benchmark, which only the bench scripts run'],

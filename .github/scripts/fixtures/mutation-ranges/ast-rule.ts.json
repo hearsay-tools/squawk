@@ -1,0 +1,98 @@
+{
+  "origin": "4ad12fae576fb4610d146254de098cefc8c58106:packages/cezar/src/lint/ast-rule.ts",
+  "file": "packages/cezar/src/lint/ast-rule.ts",
+  "source": "import { repoPath, type RuleContext } from './source-rule.ts';\n\n/**\n * Repository rules that visit oxlint's own syntax tree (hearsay-tools/squawk#3774). Oxlint parses\n * each file once and calls every rule's visitors on that tree, so an AST rule adds no parse and no\n * text scan. `docs/sdlc/lint.md` says how to add one.\n */\n\n/**\n * One ESTree node as oxlint hands it to a JS rule. The fields differ per `type`; read them through\n * the helpers below, which check the shape before they trust it.\n */\nexport interface EsNode {\n  readonly type: string;\n  readonly parent?: EsNode | null;\n  readonly [field: string]: unknown;\n}\n\n/** Visitor functions by ESTree node type, such as `MemberExpression` or `ImportDeclaration`. */\nexport type Visitors = Record<string, (node: EsNode) => void>;\n\n/** Reports `message` at `node`. */\nexport type Report = (node: EsNode, message: string) => void;\n\n/** A repository rule that visits the syntax tree of each file in its scope. */\nexport interface AstRule {\n  /** Its id inside the `cez` plugin: `cez/<name>` in `.oxlintrc.json` and in each diagnostic. */\n  name: string;\n  description: string;\n  /** Whether the rule reads `file`, a path relative to the root oxlint runs in. */\n  applies(file: string): boolean;\n  /** The visitors for one file. They call `report` for each violation. */\n  create(report: Report, context: AstContext): Visitors;\n}\n\n/** Source metadata for node diagnostics, reason comments and per-file allowances. */\nexport interface AstContext {\n  file: string;\n  sourceCode: {\n    readonly text: string;\n    getText(node: EsNode): string;\n    getAllComments(): EsNode[];\n  };\n}\n\nconst isNode = (value: unknown): value is EsNode =>\n  typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string';\n\n/** The child node in `field`, or `undefined` when the field holds no node. */\nexport function child(node: EsNode, field: string): EsNode | undefined {\n  const value = node[field];\n  return isNode(value) ? value : undefined;\n}\n\n/** The child nodes in the list `field`. Holes, such as `[, b] = list`, are left out. */\nexport function children(node: EsNode, field: string): EsNode[] {\n  const value = node[field];\n  return Array.isArray(value) ? value.filter(isNode) : [];\n}\n\n/** The name of an identifier or a private name, or `undefined` for any other node. */\nexport function nameOf(node: EsNode | undefined): string | undefined {\n  if (!node || (node.type !== 'Identifier' && node.type !== 'PrivateIdentifier')) return undefined;\n  return typeof node.name === 'string' ? node.name : undefined;\n}\n\n/**\n * The text of a string literal, or of a template literal with no substitution. Any other node,\n * such as a template with `${…}`, has no static text and gives `undefined`.\n */\nexport function stringOf(node: EsNode | undefined): string | undefined {\n  if (!node) return undefined;\n  if (node.type === 'Literal') return typeof node.value === 'string' ? node.value : undefined;\n  if (node.type !== 'TemplateLiteral' || children(node, 'expressions').length > 0) return undefined;\n  const [quasi] = children(node, 'quasis');\n  const value = quasi?.value as { cooked?: unknown } | undefined;\n  return typeof value?.cooked === 'string' ? value.cooked : undefined;\n}\n\n/** The subset of oxlint's rule context an AST rule uses. */\nexport interface AstRuleContext extends Pick<RuleContext, 'cwd' | 'filename'> {\n  sourceCode: AstContext['sourceCode'];\n  report(descriptor: { node: EsNode; message: string }): void;\n}\n\n/**\n * The rule as oxlint runs it. Outside the rule's scope it returns no visitor, so oxlint calls\n * nothing of it for that file. Paths are relative to the directory oxlint runs in.\n */\nexport function oxlintAstRule(rule: AstRule) {\n  return {\n    meta: { type: 'problem' as const, docs: { description: rule.description } },\n    create(context: AstRuleContext): Visitors {\n      const file = repoPath(context.cwd, context.filename);\n      if (!rule.applies(file)) return {};\n      return rule.create((node, message) => context.report({ node, message }), { file, sourceCode: context.sourceCode });\n    },\n  };\n}\n",
+  "ranges": [
+    {
+      "name": "isNode",
+      "range": {
+        "start": {
+          "line": 45,
+          "column": 6
+        },
+        "end": {
+          "line": 46,
+          "column": 103
+        }
+      }
+    },
+    {
+      "name": "child",
+      "range": {
+        "start": {
+          "line": 49,
+          "column": 7
+        },
+        "end": {
+          "line": 52,
+          "column": 1
+        }
+      }
+    },
+    {
+      "name": "children",
+      "range": {
+        "start": {
+          "line": 55,
+          "column": 7
+        },
+        "end": {
+          "line": 58,
+          "column": 1
+        }
+      }
+    },
+    {
+      "name": "nameOf",
+      "range": {
+        "start": {
+          "line": 61,
+          "column": 7
+        },
+        "end": {
+          "line": 64,
+          "column": 1
+        }
+      }
+    },
+    {
+      "name": "stringOf",
+      "range": {
+        "start": {
+          "line": 70,
+          "column": 7
+        },
+        "end": {
+          "line": 77,
+          "column": 1
+        }
+      }
+    },
+    {
+      "name": "oxlintAstRule",
+      "range": {
+        "start": {
+          "line": 89,
+          "column": 7
+        },
+        "end": {
+          "line": 98,
+          "column": 1
+        }
+      }
+    },
+    {
+      "name": "create",
+      "range": {
+        "start": {
+          "line": 92,
+          "column": 4
+        },
+        "end": {
+          "line": 96,
+          "column": 5
+        }
+      }
+    }
+  ]
+}

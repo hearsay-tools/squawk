@@ -1,10 +1,11 @@
+/* oxlint-disable cez/active-run-usage-write-outside-owner -- Compile proof deliberately attempts writes that TypeScript must reject. */
 /** Compiler half of the usage encapsulation gate (hearsay-tools/cezarion#2520).
  * Run with the pinned tsc: --noEmit --strict --skipLibCheck --target ES2024
  * --module NodeNext --allowImportingTsExtensions <this file>.
  * Object.assign/reflection remain legal TypeScript; the runtime proof covers them.
  */
-import type { ActiveRun } from '../../../packages/cezar/src/workflows/active-run.ts';
-import type { UsageGroup } from '../../../packages/cezar/src/workflows/run/usage-accounting.ts';
+import type { ActiveRun } from '../../workflows/active-run.ts';
+import type { UsageGroup } from '../../workflows/run/usage-accounting.ts';
 
 declare const state: ActiveRun;
 declare const other: ActiveRun;

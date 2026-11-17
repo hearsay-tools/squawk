@@ -1,0 +1,202 @@
+{
+  "origin": "Captured from the former parser before dependency removal.",
+  "file": "syntax.tsx",
+  "source": "const moduleValue = '×😀'; const arrow = () => 1;\nfunction outer() { const nested = async () => 2; [1].map(() => 3); }\nclass Outer { method() { class Inner { method() { return true; } } } }\nconst expression = function named() { return 5; }, other = () => 6;\nconst wrapped = (() => 1), asserted = (() => 2) as unknown;\nfunction* generator() { yield 1; }\nconst generated = function* () { yield 2; };\nconst a = { shared() { return true; }, ['computed']() {}, 'quoted'() {}, *gen() {} };\nconst b = { shared() { return true; } };\nabstract class Abstract { abstract method(): void; concrete() { return 1; } }\n@deco class Decorated { @deco static async method() { return 1; } }\nclass Example { #private() {} get value() { return 1; } set value(v: number) {} }\nexport default function exported() { return <div/>; }\nconst typed: () => number = () => 7;\nconst multi = (\n () => 8\n);\n",
+  "ranges": [
+    {
+      "name": "arrow",
+      "range": {
+        "start": {
+          "line": 0,
+          "column": 32
+        },
+        "end": {
+          "line": 0,
+          "column": 47
+        }
+      }
+    },
+    {
+      "name": "outer",
+      "range": {
+        "start": {
+          "line": 1,
+          "column": 0
+        },
+        "end": {
+          "line": 1,
+          "column": 68
+        }
+      }
+    },
+    {
+      "name": "nested",
+      "range": {
+        "start": {
+          "line": 1,
+          "column": 25
+        },
+        "end": {
+          "line": 1,
+          "column": 47
+        }
+      }
+    },
+    {
+      "name": "Outer.method",
+      "range": {
+        "start": {
+          "line": 2,
+          "column": 14
+        },
+        "end": {
+          "line": 2,
+          "column": 68
+        }
+      }
+    },
+    {
+      "name": "Inner.method",
+      "range": {
+        "start": {
+          "line": 2,
+          "column": 39
+        },
+        "end": {
+          "line": 2,
+          "column": 64
+        }
+      }
+    },
+    {
+      "name": "expression",
+      "range": {
+        "start": {
+          "line": 3,
+          "column": 6
+        },
+        "end": {
+          "line": 3,
+          "column": 49
+        }
+      }
+    },
+    {
+      "name": "other",
+      "range": {
+        "start": {
+          "line": 3,
+          "column": 51
+        },
+        "end": {
+          "line": 3,
+          "column": 66
+        }
+      }
+    },
+    {
+      "name": "shared",
+      "range": {
+        "start": {
+          "line": 7,
+          "column": 12
+        },
+        "end": {
+          "line": 7,
+          "column": 37
+        }
+      }
+    },
+    {
+      "name": "shared",
+      "range": {
+        "start": {
+          "line": 8,
+          "column": 12
+        },
+        "end": {
+          "line": 8,
+          "column": 37
+        }
+      }
+    },
+    {
+      "name": "concrete",
+      "range": {
+        "start": {
+          "line": 9,
+          "column": 51
+        },
+        "end": {
+          "line": 9,
+          "column": 75
+        }
+      }
+    },
+    {
+      "name": "method",
+      "range": {
+        "start": {
+          "line": 10,
+          "column": 30
+        },
+        "end": {
+          "line": 10,
+          "column": 65
+        }
+      }
+    },
+    {
+      "name": "Example.value",
+      "range": {
+        "start": {
+          "line": 11,
+          "column": 30
+        },
+        "end": {
+          "line": 11,
+          "column": 55
+        }
+      }
+    },
+    {
+      "name": "Example.value",
+      "range": {
+        "start": {
+          "line": 11,
+          "column": 56
+        },
+        "end": {
+          "line": 11,
+          "column": 79
+        }
+      }
+    },
+    {
+      "name": "exported",
+      "range": {
+        "start": {
+          "line": 12,
+          "column": 15
+        },
+        "end": {
+          "line": 12,
+          "column": 53
+        }
+      }
+    },
+    {
+      "name": "typed",
+      "range": {
+        "start": {
+          "line": 13,
+          "column": 6
+        },
+        "end": {
+          "line": 13,
+          "column": 35
+        }
+      }
+    }
+  ]
+}

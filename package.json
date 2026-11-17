@@ -51,7 +51,6 @@
     "lint": "node packages/cezar/src/lint/run.ts"
   },
   "devDependencies": {
-    "@ast-grep/cli": "0.51.0",
     "@babel/parser": "^8.0.7",
     "@stryker-mutator/core": "10.1.1",
     "@stryker-mutator/vitest-runner": "10.1.1",

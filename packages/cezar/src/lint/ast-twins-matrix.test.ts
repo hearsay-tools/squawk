@@ -7,7 +7,7 @@ import { testEnumLiteral } from './test-enum-literal.ts';
 import { attentionProbes, otherTwinProbes } from './ast-twins-matrix.testkit.ts';
 import { MATRIX_BASELINES } from './ast-twins-matrix-data.testkit.ts';
 
-/** Compare the current visitors with old parser counts without invoking ast-grep.
+/** Compare the current visitors with old parser counts without invoking the former parser.
  * Accepted widenings are probe-only syntax cells, with no repository lint site
  * (hearsay-tools/squawk#3774). The four angle-assertion misses must match old counts. */
 describe('twin rule generated parity matrices', () => {

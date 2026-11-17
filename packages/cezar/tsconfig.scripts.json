@@ -17,7 +17,7 @@
   "include": [
     "scripts/**/*.ts",
     "../../.ai/scripts/**/*.ts",
-    "../../.ai/ast-grep/fixtures/**/*.compile.ts",
+    "src/lint/fixtures/**/*.compile.ts",
     "vitest.setup.ts",
     "../../vitest*.ts",
     "../api-client/vitest.config.ts",

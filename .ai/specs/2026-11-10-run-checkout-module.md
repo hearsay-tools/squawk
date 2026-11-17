@@ -124,7 +124,7 @@ and boots no app.
 
 Each slice is one pull request into `main` and changes no behavior, unless its row says so.
 Tests run only through Squeal. Before its first push each slice needs a passing Squeal verdict
-at its head for the test files its *Acceptance check* lists and for lint (file length, ast-grep,
+at its head for the test files its *Acceptance check* lists and for lint (file length, oxlint,
 oxlint) ([AGENTS.md § Validation](../../AGENTS.md#validation)). Squeal does not cover
 `npm run typecheck`, `npm run check:clones` and
 `node .ai/skills/check-code-quality/scripts/complexity-gate.mjs --base origin/main --head HEAD`;

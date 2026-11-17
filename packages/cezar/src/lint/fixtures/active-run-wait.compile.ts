@@ -1,6 +1,7 @@
+/* oxlint-disable cez/active-run-wait-write-outside-owner -- Compile proof deliberately attempts writes that TypeScript must reject. */
 /** Getter/alias/helper compile proof; runtime reflection is checked by the encapsulation tests. */
-import type { ActiveRun } from '../../../packages/cezar/src/workflows/active-run.ts';
-import type { WaitGroup } from '../../../packages/cezar/src/workflows/run/wait-registry.ts';
+import type { ActiveRun } from '../../workflows/active-run.ts';
+import type { WaitGroup } from '../../workflows/run/wait-registry.ts';
 declare const state: ActiveRun;
 declare const other: ActiveRun;
 // @ts-expect-error The migrated slot cannot be replaced.

@@ -1,0 +1,1 @@
+> Historical source: `api.json` preserves selected GitHub Compare API responses at the recorded November 2026 commits. The old lint-baseline path and URLs are verbatim evidence for the missing-patch regression, not live repository inputs.

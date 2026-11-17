@@ -23,8 +23,8 @@ const yaml = require('yaml');
 const root = path.resolve(__dirname, '../..');
 const policy = import(pathToFileURL(path.join(root, '.ai/skills/auto-merge/check.mjs')).href);
 const SCOPE = /^(?:\.github\/|scripts\/|\.ai\/|packages\/[^/]+\/scripts\/|packages\/cezar\/src\/lint\/)/;
-// Configs that Vitest, Vite, tsc, oxlint, ast-grep and Squeal load by default.
-const TOOL_CONFIG = /(?:^|\/)(?:vitest(?:\.[\w-]+)?\.config\.[cm]?[jt]s|vitest\.setup\.ts|vite\.config\.ts|tsconfig[\w.-]*\.json|\.oxlintrc\.json|sgconfig\.yml|squeal\.config\.json)$/;
+// Configs that Vitest, Vite, tsc, oxlint and Squeal load by default.
+const TOOL_CONFIG = /(?:^|\/)(?:vitest(?:\.[\w-]+)?\.config\.[cm]?[jt]s|vitest\.setup\.ts|vite\.config\.ts|tsconfig[\w.-]*\.json|\.oxlintrc\.json|squeal\.config\.json)$/;
 // The tests that hold the policy in place.
 const POLICY_TESTS = ['.github/scripts/auto-merge-gates.test.cjs', '.github/scripts/auto-merge-admission.test.cjs'];
 // A module specifier: static and dynamic import, export from, require and require.resolve.
@@ -328,13 +328,10 @@ test('references read the unquoted paths a shell script runs or sources', () => 
   assert.deepEqual([...references(files, 's/run.sh', text).found].sort(), ['packages/x/scripts/start.ps1', 's/env.sh', 'scripts/tool.mjs']);
 });
 
-test('references follow the files and directories a JSON or YAML tool config loads', () => {
-  const files = new Set(['.oxlintrc.json', 'lint/plugin.ts', 'sgconfig.yml', 'rules/a.yml', 'rules/b.yml', 'utils/u.yml',
-    'tsconfig.json', 'tsconfig.base.json', 'src/app.ts']);
+test('references follow the files and directories a JSON tool config loads', () => {
+  const files = new Set(['.oxlintrc.json', 'lint/plugin.ts', 'tsconfig.json', 'tsconfig.base.json', 'src/app.ts']);
   const oxlint = references(files, '.oxlintrc.json', '{\n  // plugins\n  "jsPlugins": ["./lint/plugin.ts"]\n}\n').found;
   assert.deepEqual([...oxlint], ['lint/plugin.ts']);
-  const sg = references(files, 'sgconfig.yml', 'ruleDirs:\n  - rules\nutilDirs:\n  - utils\n').found;
-  assert.deepEqual([...sg].sort(), ['rules/a.yml', 'rules/b.yml', 'utils/u.yml']);
   const ts = references(files, 'tsconfig.json', '{ "extends": "./tsconfig.base.json", "include": ["src"] }').found;
   assert.deepEqual([...ts], ['tsconfig.base.json']);
 });

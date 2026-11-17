@@ -71,7 +71,8 @@ post-build package check.
 
 `npm run prepr` is the one local gate before a PR opens. It prints one verdict and the
 evidence block for the PR body. It reads Squeal's results for the changed files and for
-lint, and runs typecheck (not for a docs-only change), citations, clones and the
+oxlint, and always runs the lint runner’s repository-only checks (file length, design CSS,
+wait discipline and stale entries). It also runs typecheck (not for a docs-only change), citations, clones and the
 [GitHub patch limits](#github-patch-limits). Run it on the committed head. Its exit code
 is non-zero on a failing test, a lint finding, a type error, a bare citation, a new clone,
 or a committed file diff over the per-file patch limit or with a NUL byte.
@@ -573,8 +574,8 @@ For an owner-approved increase, the owner adds the `baseline-growth` label, then
 CRAP is not part of this gate; CI reports it without failing (§ CRAP report for changed functions).
 
 **File length.** `npm run lint` pins every non-test source file over 1,000 lines in
-`packages/cezar/src/file-length.baseline.json`. The lint bridge lets Squeal re-run the budget
-when any counted source file changes. It fails when a pinned file grows, when another file passes 1,000 lines, and when a pin is
+`packages/cezar/src/file-length.baseline.json`. `npm run prepr` runs the budget even when Squeal supplies oxlint results. No unit test
+runs this repository-wide check. It fails when a pinned file grows, when another file passes 1,000 lines, and when a pin is
 stale. After you cut a file, lower its pin:
 
 ```bash
@@ -1354,9 +1355,7 @@ Git merge driver in repository-local config. Linked worktrees share that config.
 Dependency installation does not register it. Setup refuses to replace a different
 existing definition. Node must be on PATH when Git merges.
 
-The attributes cover `packages/cezar/src/file-length.baseline.json` and
-`.ai/ast-grep/rules/*.baseline.json`. The former shared
-`packages/cezar/src/ast-grep-rules.baseline.json` no longer exists.
+The attributes cover `packages/cezar/src/file-length.baseline.json`.
 The driver takes the lower numeric pin or site count, matching AST sites by
 `(file, rule, site)`. It keeps additions, and preserves a removal against an
 unchanged entry. A removal against a modified entry, conflicting metadata,

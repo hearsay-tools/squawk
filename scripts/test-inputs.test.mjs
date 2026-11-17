@@ -20,10 +20,10 @@ function fixture(t, files) {
 }
 
 const scanner = 'packages/cezar/src/lint/scanner.test.ts';
-const astGrep = 'packages/cezar/src/ast-grep-rules.test.ts';
+const declaredReader = 'packages/cezar/src/lint/scanner-inputs.test.ts';
 const repo = t => fixture(t, {
   'squeal.config.json': JSON.stringify({ inputs: {
-    [astGrep]: ['.ai/ast-grep/**'],
+    [declaredReader]: ['tools/rules/**'],
     [scanner]: ['packages/**/*.ts', 'packages/*/src/**/*.json', 'packages/cezar/src/lint/rule.baseline.json'],
     'packages/cezar/src/protocol.test.ts': ['AGENT_PROTOCOL.md'],
     '.github/scripts/*.test.cjs': ['.github/scripts/**'],
@@ -52,8 +52,8 @@ test('a deleted file that the Vitest configuration imports still runs the full s
     { full: 'Vitest configuration input: .github/scripts/ci-test-sequencer.mjs' });
 });
 
-test('an ast-grep rule selects its declared readers, not the full suite', t => {
-  assert.deepEqual(classify(['.ai/ast-grep/rules/no-x.yml'], repo(t)), { sources: [], tests: [astGrep] });
+test('a declared rule input selects its declared readers, not the full suite', t => {
+  assert.deepEqual(classify(['tools/rules/no-x.yml'], repo(t)), { sources: [], tests: [declaredReader] });
 });
 
 test('source selects the import graph plus every scanner that reads it, deleted source included', t => {
@@ -134,7 +134,7 @@ test('each full-suite rule names its reason and the first path', t => {
     'packages/web/src/ü.ts': 'Unusual path: packages/web/src/ü.ts',
   };
   for (const [path, reason] of Object.entries(cases)) assert.deepEqual(classify([path], cwd), { full: reason }, path);
-  assert.deepEqual(classify(['.ai/ast-grep/a.yml', 'tools/a.sh', 'tools/b.sh'], cwd), { full: 'Unmapped input: tools/a.sh (+1 more)' });
+  assert.deepEqual(classify(['tools/rules/a.yml', 'tools/a.sh', 'tools/b.sh'], cwd), { full: 'Unmapped input: tools/a.sh (+1 more)' });
 });
 
 test('a missing squeal.config.json declares no reader', t => {
