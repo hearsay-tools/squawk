@@ -357,8 +357,8 @@ function useDeepLinkUrlCleanup(search: URLSearchParams, navigate: Navigate) {
 
 /**
  * The prefill toast waits for the pickers' data: whether the skill exists decides the
- * wording, and the unknown-skill case rewrites the draft (intent into the text, quick-task
- * as the source — its planner resolves skills from prose).
+ * wording. An unknown skill with a linked ref puts that intent into the text for quick-task.
+ * Without a ref, the warning leaves the saved draft untouched.
  */
 function usePrefillNotice(input: {
   pending: boolean
@@ -378,11 +378,11 @@ function usePrefillNotice(input: {
         ...(deepLink.skillPath !== undefined ? { path: deepLink.skillPath } : {}) }, input.skillList, [])
         ? deepLink.skill
         : ''
-    if (unknownSkill !== '') {
+    if (unknownSkill !== '' && deepLink.ref !== '') {
       // `null` is the quick-task run, and needs no catalog lookup to say so.
       input.update({ text: unknownSkillPrefillText(deepLink.skill, deepLink.ref), source: null })
     }
-    const { message, tone } = prefillToast(unknownSkill)
+    const { message, tone } = prefillToast(unknownSkill, deepLink.ref !== '')
     toast(message, { tone })
     // Focus the Start button so a bare Enter submits the reviewed form.
     document

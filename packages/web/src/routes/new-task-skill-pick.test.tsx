@@ -28,12 +28,27 @@ it('keeps same-name pathless skill rows distinct for keyboard selection', async 
   await waitFor(() => expect(readDraft().source).toEqual({ source: 'skill', ref: 'second:check' }))
 })
 
-it.each(['', '&ref=Review'])('warns when a deep-linked path is absent even though its id remains%s', async (ref) => {
+it.each(['', 'Saved task text'])('preserves draft text for a stale-path link without a ref: %s', async (text) => {
+  writeDraft({ ...readDraft(), text })
   serve({ skills: [{ id: 'plugin:check', name: 'Check', path: 'current/SKILL.md' }] })
-  renderNewTask(`/new?skill=plugin%3Acheck&skillPath=gone%2FSKILL.md${ref}`)
+  renderNewTask('/new?skill=plugin%3Acheck&skillPath=gone%2FSKILL.md')
   await screen.findByText(/Unknown skill/)
+  await pillReady()
+  expect(textarea().value).toBe(text)
+  expect(readDraft().text).toBe(text)
+  expect(JSON.parse(localStorage.getItem('cez-new-task-draft')!).text).toBe(text)
+  expect(readDraft().source).toEqual({ source: 'skill', ref: 'plugin:check', path: 'gone/SKILL.md' })
+})
+
+it('warns and preserves the linked intent for a stale-path link with a ref', async () => {
+  writeDraft({ ...readDraft(), text: 'Saved task text' })
+  serve({ skills: [{ id: 'plugin:check', name: 'Check', path: 'current/SKILL.md' }] })
+  renderNewTask('/new?skill=plugin%3Acheck&skillPath=gone%2FSKILL.md&ref=Review')
+  await screen.findByText(/Unknown skill/)
+  await pillReady()
   expect(readDraft().source).toBeNull()
-  expect(textarea().value).toContain('Use the "plugin:check" skill on:')
+  expect(textarea().value).toBe('Use the "plugin:check" skill on: Review')
+  expect(readDraft().text).toBe(textarea().value)
 })
 
 it.each([true, false])('waits for account settlement only for explicit account drafts: %s', async (explicit) => {

@@ -5,10 +5,12 @@
 
 /** The one toast a prefilled composer shows. `unknownSkill` is the skill param when it matches
  *  nothing installed here. */
-export function prefillToast(unknownSkill: string): { message: string; tone: 'default' | 'danger' } {
+export function prefillToast(unknownSkill: string, hasRef: boolean): { message: string; tone: 'default' | 'danger' } {
   if (unknownSkill !== '') {
     return {
-      message: `Unknown skill "${unknownSkill}" — prefilled for quick-task; review and press Start`,
+      message: hasRef
+        ? `Unknown skill "${unknownSkill}" — prefilled for quick-task; review and press Start`
+        : `Unknown skill "${unknownSkill}" — no skill selected; review before starting`,
       tone: 'danger',
     }
   }
