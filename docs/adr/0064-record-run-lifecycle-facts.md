@@ -44,7 +44,7 @@ every status write through an exit, and `workflowCursor` and `parkReason` are ex
 store stays their single writer. Wait deadlines stay with the wait engine; `LivenessTimers` holds
 the bounds that are not wait rows.
 
-ast-grep rules refuse a new write outside the owner, as the `cez/active-run-*-write-outside-owner`
+oxlint AST rules refuse a new write outside the owner, as the `cez/active-run-*-write-outside-owner`
 AST rules do: `run-fact-write-outside-owner` for the fact fields, `liveness-timer-outside-owner` for
 timers in `workflows/run/`, and `run-memory-field-outside-owner` for new per-run maps. Each named
 exception carries its reason in the rule's `ignores`.

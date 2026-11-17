@@ -107,6 +107,28 @@ explicit baseline and reader-list inputs. CSS remains a runner check.
 | `cez/active-run-usage-write-outside-owner` | A write or mutable escape of the ActiveRun usage group (hearsay-tools/cezarion#2520) | Private backing fields and immutable slot installation in createActiveRun |
 | `cez/active-run-wait-write-outside-owner` | A write or mutable escape of the ActiveRun wait group (hearsay-tools/cezarion#2520) | Private backing fields and immutable slot installation in createActiveRun |
 
+| `cez/agent-session-send-outside-handoff` | Live-session sends outside handToTransport (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/ask-requested-read-outside-projection` | Raw ask.requested comparisons and case labels (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/detached-spawn-outside-helper` | Literal detached: true options (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/e2e-raw-run-seed` | Browser fixture writes to runs.json, including file-local path bindings (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/git-spawn-outside-helper` | Raw git launches, including file-local promisify bindings (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/handoff-write-outside-writers` | File writes or removals outside the three handoff writer functions (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/handoff-written-outside-handoff-module` | File writes naming a handoff outside handoff.ts (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/json-valid-outside-guard` | SQL json_valid calls in string or template fragments (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/liveness-timer-outside-owner` | Run-module timers outside their owners (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/nudge-fact-write-outside-owner` | Literal nudge-fact events outside turn-nudges.ts (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/outcome-write-outside-commit-outcome` | Outcome field writes outside commitOutcome (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/run-fact-write-outside-owner` | Lifecycle fact writes outside their owners (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/run-internals` | Retired internal names and module path fragments (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/run-memory-field-outside-owner` | Per-run Map, Set or WeakMap class fields outside RunMemory (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/run-search-field-list-outside-contract` | Arrays containing both branch and workflow member reads (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/runner-class-outside-factory` | Runner construction or runtime module loads outside core/ (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/server-declared-validator-schema` | Locally declared validator schemas in server.ts (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/skills-read-outside-enabled-skills` | Run skill catalog reads outside enabledSkills (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/skills-write-outside-load-run-skills` | Run skill catalog writes outside loadRunSkills (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/wait-kind-literal-outside-engine` | Wait-kind comparisons, case labels and kind properties outside the engine boundaries (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+| `cez/worktree-write-outside-manifest` | File-changing fs imports in the two worktree-writing modules (hearsay-tools/squawk#3774) | Original named owners and syntax exceptions in `owner-policies.ts` and the AST visitors; reasoned oxlint annotations for individual sites |
+
 ### Static scope of guards without a separate section
 
 These are source checks, not proofs of the values a program will use. Each rule's
@@ -260,7 +282,7 @@ exception), while CEZ_HOME and XDG overrides use a private marked sandbox.
 
 ### Runner classes (`runner-class-outside-factory`)
 
-The ast-grep rule checks production `.ts` files in `packages/cezar/src` outside `core/`; it
+The oxlint AST rule checks production `.ts` files in `packages/cezar/src` outside `core/`; it
 ignores tests and testkits (hearsay-tools/cezarion#2939). Only `createRunner` in
 `core/runner-factory.ts` constructs a runner class; other code takes a `RunnerFactory`.
 The rule reports `new` of a class that implements `AgentRunner`, on the bare name or as a
@@ -289,7 +311,7 @@ It reports a call of `setTimeout` or `setInterval`, bare or as a member. A run's
 is a row of `LIVENESS_BOUNDS` in `workflows/run/liveness-timers.ts`, armed through
 `LivenessTimers.arm`. The wait engine, `worker-orphans.ts` and `worktree-autosave.ts` are in the
 reasoned allow-list in the rule's `ignores`, kept current by `liveness-timer-rule.test.ts`. A local
-awaited pause or a manager interval takes a line-level `ast-grep-ignore` with its reason. The rule
+awaited pause or a manager interval takes a line-level `oxlint-disable-next-line cez/liveness-timer-outside-owner -- <reason>`. The rule
 does not follow a timer function under another name. It has no baseline.
 
 ### The nudge fact (`nudge-fact-write-outside-owner`)
@@ -314,7 +336,7 @@ a member constructor such as `new globalThis.Map()`, or a map a helper call buil
 
 ### Agent session sends (`agent-session-send-outside-handoff`)
 
-The ast-grep rule checks production `.ts` files in `packages/cezar/src`; it ignores tests,
+The oxlint AST rule checks production `.ts` files in `packages/cezar/src`; it ignores tests,
 testkits and `core/`, where the runners are the transport (hearsay-tools/squawk#1289, ADR 0064).
 It reports a `sendAgentMessage(...)` call on any receiver, and a `sendMessage(...)` call on any
 receiver but the manager and module API (`this`, `manager`, `host`, `this.host` and a receiver
@@ -335,7 +357,7 @@ It has no baseline.
 
 ### Git spawns (`git-spawn-outside-helper`)
 
-The ast-grep rule checks production `.ts` files in `packages/cezar/src`; it ignores tests,
+The oxlint AST rule checks production `.ts` files in `packages/cezar/src`; it ignores tests,
 testkits and `git-command.ts`, the one module that starts git (hearsay-tools/squawk#3207,
 epic hearsay-tools/squawk#3644). It reports a call whose first argument is the literal `git`
 (a string, or a template with no substitution) through `execFile`, `execFileSync`, `spawn` or
@@ -345,6 +367,36 @@ command starts with `git `. Use `git`, `runGit`, `gitSync` or `spawnGit`: each d
 `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` family, so git acts on `cwd`. The rule knows no
 value: it leaves out a command held in a variable (`spawn(cmd, …)`) and a launcher alias imported
 from another module. It has no baseline and no exception.
+
+
+### Owner and reader AST scope
+
+The owner and reader rules ported in hearsay-tools/squawk#3774 retain the original
+file lists and exclusions in `packages/cezar/src/lint/owner-policies.ts`. They visit
+`.ts` files only. In particular, `cez/ask-requested-read-outside-projection` and
+`cez/run-search-field-list-outside-contract` leave `.tsx` out of scope: their former
+YAML listed it, but `language: typescript` did not scan it. This port preserves that
+behavior. All other limits below are syntax limits; these rules resolve no type or
+value from another module.
+
+`cez/e2e-raw-run-seed`, `cez/git-spawn-outside-helper` and
+`cez/server-declared-validator-schema` collect variable declarations in a Program
+pass. They retain the original file-local binding lookup, including declarations
+inside nested functions and declarations after a use. They do not follow aliases
+through another binding. `cez/run-search-field-list-outside-contract` visits every
+member under each array, including nested expressions. `cez/run-internals` checks
+each identifier, private name, string literal and fixed template fragment; comments
+and paths assembled from fragments stay outside its scope. Its scan is now limited
+to `packages/`, the existing oxlint `LINT_PATHS`; the former ast-grep rule could also
+check TypeScript files outside that tree. This is an accepted scope change for this
+port. `LINT_PATHS` stays unchanged.
+
+`cez/json-valid-outside-guard` checks fixed literal fragments, not assembled SQL.
+`cez/ask-requested-read-outside-projection` checks equality comparisons and case
+labels with the event string; emitters and dispatch table keys stay allowed. Its
+one prior baseline site in `core/managed-session.ts` now has a reasoned oxlint
+annotation because it pauses the transport and reads no payload. The three empty
+baselines were deleted. No AST rule adds a baseline mechanism.
 
 ## Add a rule
 

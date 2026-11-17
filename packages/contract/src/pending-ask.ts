@@ -3,7 +3,7 @@
  * Worker routing, `cez task status`, the task webhook and the cockpit card all read the ask from
  * here: a field the ask gains is named in this file and reaches every one of them. Code outside
  * this file and `ask.ts` does not read the payload of an `ask.requested` event
- * (`.ai/ast-grep/rules/ask-requested-read-outside-projection.yml`).
+ * (`cez/ask-requested-read-outside-projection`).
  *
  * The values are the ones the event stored: nothing here re-parses or reorders them, so a reader
  * prints what the transcript holds. `ask.ts` decides which ask is pending (the latest valid one

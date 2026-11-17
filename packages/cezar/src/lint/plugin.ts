@@ -1,3 +1,6 @@
+import { PROCESS_OWNER_RULES } from './owner-process-rules.ts';
+import { STATE_OWNER_RULES } from './owner-state-rules.ts';
+import { READER_OWNER_RULES } from './owner-reader-rules.ts';
 import { productEnvRead } from './product-env-read.ts';
 import { testHomeWrite } from './test-home-write.ts';
 import { homeBoundary } from './home-boundary.ts';
@@ -34,6 +37,7 @@ export const AST_RULES: AstRule[] = [
   runnerIdBranch, runnerRosterLiteral, undocumentedEnvName,
   childKilledRead, runStoreTestkitImport, launchReadOutsideResolver,
   activeRunLiteral, activeRunMapWrite, ...activeRunWriteRules,
+  ...PROCESS_OWNER_RULES, ...STATE_OWNER_RULES, ...READER_OWNER_RULES,
 ];
 
 /** The wait rules retain their text scanners until the next port slice. */
