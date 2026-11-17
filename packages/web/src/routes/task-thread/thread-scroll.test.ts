@@ -22,6 +22,10 @@ import {
 afterEach(() => clearThreadScrollCaches())
 
 describe('isNearBottom — the shared stick rule', () => {
+  it('sticks to an empty box', () => {
+    expect(isNearBottom({ scrollTop: 0, scrollHeight: 0, clientHeight: 0 })).toBe(true)
+  })
+
   const box = (scrollTop: number) => ({ scrollTop, scrollHeight: 1000, clientHeight: 400 })
 
   it.each([
