@@ -39,7 +39,7 @@ describe('workerExecutionStopped without an ActiveRun', () => {
   ] as const)('%s stops only blocked executions', (_name, row, parent, stopped, expected) => {
     const id = row?.id ?? 'missing';
     const store = { getRun(key: string) { return key === id ? row : parent; } };
-    expect(workerExecutionStopped(store, id, () => stopped)).toBe(expected);
+    expect(workerExecutionStopped(store, id, key => key === id && stopped)).toBe(expected);
   });
 });
 
