@@ -62,6 +62,8 @@ const findingsFor = (file: string): string[] => fixtureFindings.filter(problem =
 const ROSTER = declaredRunnerIds().map(id => `'${id}'`).join(', ');
 
 const VIOLATIONS: Record<string, [string, string]> = {
+  'active-run-literal': ['packages/cezar/src/literal.ts', 'const state: ActiveRun = {};'],
+  'active-run-map-write': ['packages/cezar/src/workflows/map.ts', 'host.active.set(id, state);'],
   'product-env-read': ['packages/cezar/src/env-reader.ts', 'const flag = process.env.CEZ_DRY_RUN;\n'],
   'test-home-write': ['packages/web/src/ambient-home.test.ts', "writeFileSync(join(cezarHomeDir(), 'config.json'), '{}');\n"],
   'home-boundary': ['packages/cezar/src/ambient-home.ts', 'cezarHomeDir();\n'],

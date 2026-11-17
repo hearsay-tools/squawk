@@ -89,6 +89,10 @@ appropriate boundary or checker explicitly.
 | `cez/child-killed-read` | A `ChildProcess.killed` read (open-mercato/cezar#844). See [`ChildProcess.killed` reads](#childprocesskilled-reads-child-killed-read) | None |
 | `cez/run-store-testkit-import` | A run-store testkit loaded from production code (hearsay-tools/cezarion#2685) | None |
 
+| `cez/active-run-literal` | An ActiveRun literal outside the factory (open-mercato/cezar#811, hearsay-tools/cezarion#1806) | None |
+
+| `cez/active-run-map-write` | A direct active-map write outside RunManager.activate/dropActive (hearsay-tools/cezarion#2419) | Owning methods in RunManager |
+
 ### Static scope of guards without a separate section
 
 These are source checks, not proofs of the values a program will use. Each scanner's
@@ -98,6 +102,8 @@ remain in force.
 
 | Guard | Static scope |
 | --- | --- |
+| `cez/active-run-map-write` | Production workflow `.ts` files: direct `.active.set()` and `.active.delete()` calls. Only `this.active` in the nearest owning method of the `RunManager` class is exempt. Nested methods, other classes and other receivers are checked. Computed access and aliases are outside scope. |
+| `cez/active-run-literal` | All server `src/**/*.ts`, including tests: the first declarator of a `const`/`let` declaration annotated `ActiveRun` with an object initializer, or an object cast/satisfies expression naming `ActiveRun` (including `as unknown as ActiveRun`). Parenthesized literals and generic type arguments are checked too. Return types, unions and type aliases are outside scope. |
 | `cez/run-store-testkit-import` | Non-test `.ts` files in `packages/cezar/src`: a string literal ending in `run-store.testkit` or `run-store-open.testkit`, with or without `.ts`/`.js`, inside an import, an export, an `import()`, an `import x = require()` or any call. A template literal and a path assembled from pieces are out of scope. |
 | `cez/card-2-contrast` | Cockpit TSX source: JSX text and literal class branches, inherited card surfaces, ink, size and weight. Unknown sizes are conservatively small. Arbitrary runtime class values and computed styles require rendered checks; this is not a browser contrast audit. |
 | `cez/contract-root-import` | Static root specifiers in runtime imports and re-exports in the selected package TS/TSX trees, including literal dynamic imports; `import type` declarations and import queries inside type aliases stay allowed. Inline type specifiers and variable-annotation queries are still reported. It does not resolve computed specifiers or transitive imports. |
@@ -357,7 +363,7 @@ looped case). **Moved** cases now run in `npm run lint`; the scanner's fixture c
 | Contract import boundaries (M01) | `packages/cezar/src/contract-import-boundaries.test.ts` | 2: no root import; each exemption still imports a root | 33 scanner cases; the api-client shim mirror, which compares files rather than scanning shapes |
 | Raw query setters (M02) | `packages/web/src/test/search-params-discipline.test.ts`, now `packages/cezar/src/lint/raw-query-setter.test.ts` | 1: no setter outside the baseline | 8 scanner cases; the exception-policy guard on the baseline |
 | Native mock boundaries (M03) | `packages/cezar/src/mock-source-boundary.test.ts` | 1: no test reads or swaps mock source | 9 scanner cases |
-| Active-run map ownership (M04) | `packages/cezar/src/workflows/run-active-pin.test.ts` (removed) | 2 ownership scans replaced by `active-run-map-write`; call-presence scan retired (hearsay-tools/cezarion#2419) | Harness parity R48 runs execute and Continue, checks active pins and release from memory |
+| Active-run map ownership (M04) | `packages/cezar/src/workflows/run-active-pin.test.ts` (removed) | 2 ownership scans replaced by `cez/active-run-map-write`; call-presence scan retired (hearsay-tools/cezarion#2419) | Harness parity R48 runs execute and Continue, checks active pins and release from memory |
 | Shared run-fact readers (M05) | `packages/cezar/src/run-fact-readers.test.ts` | 2: no finding; every listed reader still reads | 27 scanner cases |
 | Run-history readers (M06) | `packages/cezar/src/runs/history-readers.test.ts` | 1: no raw transcript path outside its owners | The adapted predicate fixture and both compression/reopen behavior cases; new lint fixtures pin helpers, dynamic paths, fixed strings, comments and stale exceptions |
 | Unit wait discipline (M07) | `packages/cezar/src/test-wait-discipline.test.ts`, `packages/web/src/test/unit-wait-discipline.test.ts` | 5: server scope, reads-to-end, two server baseline checks, cockpit baseline check | 91 server fixtures; 79 cockpit fixtures moved to `packages/cezar/src/lint/unit-wait-discipline.test.ts`; host `asyncUtilTimeout` test stays in web |

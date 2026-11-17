@@ -140,7 +140,9 @@
     "unicorn/prefer-set-size": "error",
     "unicorn/prefer-string-starts-ends-with": "error",
     "use-isnan": "error",
-    "valid-typeof": "error"
+    "valid-typeof": "error",
+    "cez/active-run-literal": "error",
+    "cez/active-run-map-write": "error"
   },
   "ignorePatterns": [
     "**/node_modules/**",
