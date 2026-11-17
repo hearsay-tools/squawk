@@ -432,6 +432,7 @@ describe('TasksOverview — the table', () => {
       name: 'Catch AuthError in the login handler',
     })
     expect(link.getAttribute('title')).toBe('Catch AuthError in the login handler')
+    expect(link.getAttribute('href')).toBe('/tasks/sum')
     expect(tableRow('sum')?.textContent).not.toContain('fix the login bug plz')
     expect(
       within(tableRow('raw') as HTMLElement).getByRole('link', { name: 'fix the search crash' })
@@ -461,18 +462,11 @@ describe('TasksOverview — the table', () => {
     expect(location()).toBe('/tasks/pr1')
   })
 
-  it('gives the title a real link, so keyboards and middle-clicks work too', () => {
-    renderOverview({ runs: [run({ id: 'k1', title: 'Keyboard reachable' })] })
-    expect(
-      within(tableRow('k1') as HTMLElement).getByRole('link', { name: 'Keyboard reachable' }).getAttribute('href')
-    ).toBe('/tasks/k1')
-  })
-
   it('shows a queued run its place in the queue, spanning the live columns', () => {
     renderOverview({
       runs: [
-        run({ id: 'q1', status: RUN_STATUS.queued, createdAt: ago(120_000) }),
-        run({ id: 'q2', status: RUN_STATUS.queued, createdAt: ago(60_000) }),
+        run({ id: 'q1', title: 'Alpha', status: RUN_STATUS.queued, createdAt: ago(120_000) }),
+        run({ id: 'q2', title: 'Beta', status: RUN_STATUS.queued, createdAt: ago(60_000) }),
       ],
     })
     const note = tableRow('q2')?.querySelector('[data-slot="queue-note"]')
@@ -481,15 +475,6 @@ describe('TasksOverview — the table', () => {
     // The note replaces the CPU/Mem cells — a queued run has no process to measure.
     expect(tableRow('q2')?.querySelectorAll('[data-usage]')).toHaveLength(0)
     expect(tableRow('q1')?.querySelector('[data-slot="queue-note"]')?.textContent).toBe('#1 in queue')
-  })
-
-  it('keeps queue numbers stable under search — the engine does not care what you typed', () => {
-    renderOverview({
-      runs: [
-        run({ id: 'q1', title: 'Alpha', status: RUN_STATUS.queued, createdAt: ago(120_000) }),
-        run({ id: 'q2', title: 'Beta', status: RUN_STATUS.queued, createdAt: ago(60_000) }),
-      ],
-    })
     fireEvent.change(screen.getByRole('textbox', { name: 'Search tasks' }), { target: { value: 'beta' } })
     expect(tableRow('q1')).toBeNull()
     expect(tableRow('q2')?.querySelector('[data-slot="queue-note"]')?.textContent).toBe('#2 in queue')
