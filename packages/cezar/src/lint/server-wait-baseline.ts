@@ -1,7 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { type Rule, type Site, scanFile } from './test-wait-discipline.ts';
-import { type ScanError } from './blank.ts';
+import { type Rule, type Site, scanFiles } from './test-wait-discipline.ts';
 
 export const srcDir = resolve(import.meta.dirname, '..');
 
@@ -26,15 +25,8 @@ export function scannedFiles(dir = srcDir): string[] {
   return files.sort();
 }
 
-export function scanSuite(dir = srcDir): { sites: Site[]; errors: ScanError[] } {
-  const sites: Site[] = [];
-  const errors: ScanError[] = [];
-  for (const file of scannedFiles(dir)) {
-    const scanned = scanFile(file, readFileSync(join(dir, file), 'utf8'));
-    sites.push(...scanned.sites);
-    errors.push(...scanned.errors);
-  }
-  return { sites, errors };
+export function scanSuite(dir = srcDir, files = scannedFiles(dir)): Site[] {
+  return scanFiles(files.map(file => ({ file, code: readFileSync(join(dir, file), 'utf8') }))).flat();
 }
 
 /** One checked-in baseline: the rules whose sites it holds, and the comment its file opens with. */

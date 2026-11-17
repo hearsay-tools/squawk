@@ -45,14 +45,6 @@ describe('wait discipline runner guarantees on synthetic trees', () => {
     expect(serverWaitProblems(false, root, lists)).toEqual([expect.stringContaining('scan scope changed')]);
   });
 
-  it('reports an unread tail with its file, line, rule and blanking fix', () => {
-    const { root, lists } = fixture();
-    writeFileSync(join(root, 'a.test.ts'), '\nconst text = "never closed');
-    expect(serverWaitProblems(false, root, lists)).toEqual([
-      expect.stringMatching(/a\.test\.ts:2:1 cez\/test-wait-discipline: unterminated string: .+Fix the scan's blanking/),
-    ]);
-  });
-
   it.each([0, 1])('reports stale server baseline %i and only lowers it in update mode', index => {
     const { root, lists } = fixture();
     const rule = index === 0 ? 'sleep' : 'poll-deadline';

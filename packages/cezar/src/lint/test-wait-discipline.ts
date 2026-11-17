@@ -1,12 +1,5 @@
-import type { SourceRule } from './source-rule.ts';
-import { baselines } from './server-wait-baseline.ts';
-import { compareToBaseline, readBaseline, tally } from './wait-baseline.ts';
-import { type ScanError, blankSource } from './blank.ts';
-import { closeOf, type Item, argsOf, numericLiteral, literalMs, VITEST_DEFAULT_MS, isShort, isShortDeadline, type PollLoop, pollLoops, type Entry, track, paramsStart } from './server-wait-syntax.ts';
-import { isNumber, UNREAD, heldValues, declaredHere, valueText, literalBound, type LoopSleep, runsEveryPass, pollDeadline } from './server-wait-deadlines.ts';
-
 /**
- * A source scan of the server unit tests for the three ways a test waits on the wall clock instead
+ * A syntax-tree scan of the server unit tests for the three ways a test waits on the wall clock instead
  * of on the product: a bare awaited sleep standing in for a condition nobody named, a wait
  * bounded under SHORT_BOUND_MS, and a poll loop with no deadline or a deadline under
  * SHORT_BOUND_MS. The last three load flakes under hearsay-tools/cezarion#902 had that one cause
@@ -14,11 +7,12 @@ import { isNumber, UNREAD, heldValues, declaredHere, valueText, literalBound, ty
  * fixed bound on a fixture's own startup, or one bound for a whole sequence of steps, which a
  * loaded host overruns. The rule for authors is in AGENTS.md § Validation.
  *
- * It is a heuristic over source text, not a parser: TypeScript 7 has no JS parser API, and the
- * tests are regular enough that each form fits a pattern. Strings, template literals and
- * comments are blanked first, so the sleeps inside fake-CLI scripts (template literals written
- * to disk as mock binaries) are not this scan's business. A false positive costs one
- * `// bound: <reason>` comment at the site, which is what the rule asks of a real bound anyway.
+ * It reads oxlint's syntax tree (hearsay-tools/squawk#3774), and keeps the forms the source scan it
+ * replaced read: each form below is the shape that scan matched, so a site it accepted or reported
+ * stays accepted or reported. Strings, template literals and comments are not code, so the sleeps
+ * inside fake-CLI scripts (template literals written to disk as mock binaries) are not this rule's
+ * business. A false positive costs one `// bound: <reason>` comment at the site, which is what the
+ * rule asks of a real bound anyway.
  *
  * What `poll-deadline` reads as a deadline is this list and nothing else. Both scans implement it, and both test every line of it.
  * A loop is as long as its earliest exit, and only these exits count:
@@ -59,6 +53,19 @@ import { isNumber, UNREAD, heldValues, declaredHere, valueText, literalBound, ty
  * a baseline of their own, so a change to one list never conflicts with a change to the other.
  */
 
+import type { AstRule, AstContext, Visitors, EsNode } from './ast-rule.ts';
+import { baselines } from './server-wait-baseline.ts';
+import { compareToBaseline, readBaseline, tally } from './wait-baseline.ts';
+import { WaitSource, waitComments, type ParsedComment } from './wait-source.ts';
+import { WaitTree, type N } from './server-wait-tree.ts';
+import { WaitNames } from './server-wait-names.ts';
+import { type WaitFile, VITEST_DEFAULT_MS, isShort, isShortDeadline, numberOf, rawOf } from './server-wait-values.ts';
+import { keyText, leadingObject, optionsBound, waitMs } from './server-wait-options.ts';
+import { loopAround, pollDeadline, runsEveryPass, type LoopSleep, type PollLoop } from './server-wait-loops.ts';
+import { inOxlint } from './wait-oxlint.ts';
+
+export { SHORT_BOUND_MS } from './server-wait-values.ts';
+
 export type Rule = 'sleep' | 'short-bound' | 'poll-deadline';
 
 export interface Site {
@@ -76,44 +83,14 @@ export interface BaselineEntry {
   count: number;
 }
 
-/** A wait bounded by a numeric literal under this is short. Vitest's own default is 1 s. */
-export const SHORT_BOUND_MS = 10_000;
-
 /** Local sleep helpers in this tree go by these names. */
-export const namedSleep = /\bawait\s+(?:delay|sleep|wait|pause)\s*\(/g;
+export const sleepNames = new Set(['delay', 'sleep', 'wait', 'pause']);
 
-/** `node:timers/promises`. */
-export const promisedTimer = /\bawait\s+(?:timers\s*\.\s*)?setTimeout\s*\(/g;
-
-/** `await new Promise(r => setTimeout(r, …))`, with a `globalThis.`/`global.` receiver or a
- *  `realSetTimeout`-style alias, as an expression body or a block that calls or returns it; the
- *  last group is the timer's name. */
-export const promiseSleep =
-  /\bawait\s+new\s+Promise\s*(?:<[^<>()]*>)?\s*\(\s*(?:\(\s*([A-Za-z_$][\w$]*)\s*(?::[^()]*)?\)|([A-Za-z_$][\w$]*))\s*=>\s*(?:\{\s*(?:return\s+)?)?(?:(?:globalThis|global)\s*\.\s*)?([A-Za-z_$][\w$]*)\s*\(/g;
-
-/** Vitest's waits; each defaults to a 1 s bound. */
-export const vitestWait = /\b(?:vi\s*\.\s*(?:waitFor|waitUntil)|expect\s*\.\s*poll)\s*\(/g;
-
-/** The same waits written with a bracketed name, `vi['waitFor'](…)`: the receiver, and the names it takes. */
-export const vitestReceiver = /\b(vi|expect)\s*\[/g;
-
-export const vitestNames: Record<string, ReadonlySet<string>> = { vi: new Set(['waitFor', 'waitUntil']), expect: new Set(['poll']) };
-
-export const helperNames = 'waitFor|waitUntil|until|eventually|waitForCondition';
-
-/** A call to a local wait helper, not a method of something else. */
-export const helperCall = new RegExp(`(?<!\\.\\s*)(?<![\\w$])(?:${helperNames})\\s*\\(`, 'g');
-
-export const helperFunction = new RegExp(`\\bfunction\\s*\\*?\\s*(?:${helperNames})\\s*(?:<[^<>()]*>)?\\s*\\(`, 'g');
-
-export const helperArrow = new RegExp(`\\b(?:const|let|var)\\s+(?:${helperNames})\\s*(?::[^=;]*)?=\\s*(?:async\\s*)?(?:<[^<>()]*>)?\\s*\\(`, 'g');
+/** Local wait helpers in this tree go by these names. */
+export const helperNames = new Set(['waitFor', 'waitUntil', 'until', 'eventually', 'waitForCondition']);
 
 /** A `//` comment that accepts a site: `// bound: <reason>`, with a reason. */
 export const boundComment = /^\/\/\s*bound:\s*\S/;
-
-export function scanSource(file: string, source: string): Site[] {
-  return scanFile(file, source).sites;
-}
 
 /** One rule's hit: the offset of the call (or loop) it is keyed on. */
 export interface Found {
@@ -121,297 +98,289 @@ export interface Found {
   offset: number;
 }
 
-export function scanFile(file: string, source: string): { sites: Site[]; errors: ScanError[] } {
-  const { code, lineComments, unterminated } = blankSource(source);
-  const lines = source.split('\n');
-  const lineStarts = [0];
-  for (let i = 0; i < source.length; i += 1) if (source[i] === '\n') lineStarts.push(i + 1);
-  const lineOf = (offset: number): number => {
-    let lo = 0;
-    let hi = lineStarts.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >> 1;
-      if ((lineStarts[mid] ?? 0) <= offset) lo = mid;
-      else hi = mid - 1;
-    }
-    return lo;
-  };
-  const accepted = boundAccepted(source, lineComments, lineStarts, lineOf);
-
-  const sites: Site[] = [];
-  for (const { rule, offset } of [...sleepSites(code), ...boundSites(code, source)]) {
-    const line = lineOf(offset);
-    if (accepted(line)) continue;
-    sites.push({ file, rule, line: line + 1, site: lines[line]?.trim() ?? '' });
-  }
-  const errors = unterminated.map(({ construct, offset }) => {
-    const line = lineOf(offset);
-    return { file, line: line + 1, construct, text: lines[line]?.trim() ?? '' };
-  });
-  return { sites: sites.sort((a, b) => a.line - b.line || a.rule.localeCompare(b.rule)), errors };
+/** The nodes a site can start from, gathered while oxlint walks the file. */
+interface Starts {
+  awaits: N[];
+  calls: N[];
 }
 
-/** Every awaited timer with any delay but a literal 0 (one event-loop turn), with its delay's text. */
-export function awaitedSleeps(code: string): Array<{ offset: number; delay: string | undefined }> {
-  const sleeps: Array<{ offset: number; delay: string | undefined }> = [];
-  for (const pattern of [namedSleep, promisedTimer]) {
-    for (const match of code.matchAll(pattern)) {
-      const open = match.index + match[0].length - 1;
-      const delay = argsOf(code, open, closeOf(code, open))[0]?.text;
-      sleeps.push({ offset: match.index, delay });
-    }
+/** The nodes an expression's text starts with, outermost first: `sleep(5).then(f)` starts with `sleep(5)` and `sleep`. */
+function leading(node: N): N[] {
+  const chain: N[] = [];
+  for (let at: N | undefined = node; at && at.start === node.start; at = leftOf(at)) chain.push(at);
+  return chain;
+}
+
+function leftOf(node: N): N | undefined {
+  switch (node.type) {
+    case 'CallExpression': return node.callee;
+    case 'MemberExpression': return node.object;
+    case 'ChainExpression': case 'TSAsExpression': case 'TSSatisfiesExpression': case 'TSNonNullExpression': return node.expression;
+    case 'BinaryExpression': case 'LogicalExpression': case 'AssignmentExpression': return node.left;
+    case 'ConditionalExpression': return node.test;
+    case 'SequenceExpression': return node.expressions[0];
+    case 'TaggedTemplateExpression': return node.tag;
+    case 'UpdateExpression': return node.prefix ? undefined : node.argument;
+    default: return undefined;
   }
-  for (const match of code.matchAll(promiseSleep)) {
-    const resolver = match[1] ?? match[2];
-    if (!/(?:setTimeout|SetTimeout)$/.test(match[3] ?? '')) continue;
-    const open = match.index + match[0].length - 1;
-    const [callback, delay] = argsOf(code, open, closeOf(code, open));
-    if (callback?.text === resolver && delay !== undefined) sleeps.push({ offset: match.index, delay: delay.text });
+}
+
+/** Whether `(` follows a callee directly: no type arguments, no optional call. */
+const calledDirectly = (tree: WaitTree, call: N, callee: N): boolean =>
+  !call.optional && !call.typeArguments && tree.text[tree.source.after(callee.end)] === '(';
+
+/** A call whose callee is `name` or `object.name` written at `at`: `sleep(…)`, `timers.setTimeout(…)`. */
+function namedCall(tree: WaitTree, chain: readonly N[], at: number, test: (callee: N) => boolean): N | undefined {
+  return chain.find(node => node.type === 'CallExpression' && node.callee.start === at && test(node.callee) && calledDirectly(tree, node, node.callee));
+}
+
+const isName = (node: N | undefined, names: ReadonlySet<string> | string): boolean =>
+  node?.type === 'Identifier' && (typeof names === 'string' ? node.name === names : names.has(node.name));
+
+const memberOf = (node: N, objects: ReadonlySet<string>, name: string): boolean =>
+  node.type === 'MemberExpression' && !node.computed && !node.optional && isName(node.object, objects) && isName(node.property, name);
+
+const TIMER_OBJECTS = new Set(['timers']);
+const GLOBALS = new Set(['globalThis', 'global']);
+
+/** The delay of an awaited timer (`undefined` inside when it has none), or `undefined` for any other await. */
+export function awaitedSleep(wf: WaitFile, awaited: N): { delay: N | undefined } | undefined {
+  const { tree } = wf;
+  const argument: N = awaited.argument;
+  const end = awaited.start + 'await'.length;
+  if (!argument || tree.source.after(end) !== argument.start || argument.start === end) return undefined;
+  const chain = leading(argument);
+  const call = namedCall(tree, chain, argument.start, callee => isName(callee, sleepNames) || isName(callee, 'setTimeout') || memberOf(callee, TIMER_OBJECTS, 'setTimeout'));
+  if (call) return { delay: call.arguments[0] };
+  const promise = chain.find(node => node.type === 'NewExpression' && isName(node.callee, 'Promise'));
+  return promise ? promisedSleep(wf, promise) : undefined;
+}
+
+/** `new Promise(r => setTimeout(r, 50))` and its block and `globalThis.` forms: the delay, when the timer resolves the promise. */
+function promisedSleep(wf: WaitFile, promise: N): { delay: N | undefined } | undefined {
+  const { tree } = wf;
+  const typed: N | undefined = promise.typeArguments ?? undefined;
+  if (typed && /[<>()]/.test(tree.text.slice(typed.start + 1, typed.end - 1))) return undefined;
+  const open = tree.source.after((typed ?? promise.callee).end);
+  const executor: N | undefined = promise.arguments[0];
+  if (tree.text[open] !== '(' || executor?.type !== 'ArrowFunctionExpression' || executor.async || executor.returnType || executor.params.length !== 1) return undefined;
+  const param: N = executor.params[0];
+  if (param.type !== 'Identifier' || tree.source.before(executor.start) !== open) return undefined;
+  if (param.typeAnnotation && (tree.text[executor.start] !== '(' || /[()]/.test(rawOf(tree, param.typeAnnotation)))) return undefined;
+  const timer = timerCall(wf, executor);
+  if (!timer) return undefined;
+  const [callback, delay] = timer.arguments as N[];
+  const tight = callback !== undefined && tree.source.before(callback.start) === tree.source.after(timer.callee.end) && tree.text[tree.source.after(callback.end)] === ',';
+  return tight && callback.type === 'Identifier' && callback.name === param.name && delay ? { delay } : undefined;
+}
+
+/** The timer an executor calls first: its concise body, or the first statement of its block, `return` allowed. */
+function timerCall(wf: WaitFile, executor: N): N | undefined {
+  const { tree } = wf;
+  let at = tree.source.after(tree.arrowAt(executor) + 2);
+  let first: N | undefined = executor.body;
+  if (executor.body.type === 'BlockStatement') {
+    at = tree.source.after(executor.body.start + 1);
+    if (tree.text.startsWith('return', at) && /\s/.test(tree.text[at + 6] ?? '')) at = tree.source.after(at + 6);
+    const statement: N | undefined = executor.body.body[0];
+    first = statement?.type === 'ExpressionStatement' ? statement.expression : statement?.type === 'ReturnStatement' ? statement.argument ?? undefined : undefined;
   }
-  return sleeps;
+  if (!first) return undefined;
+  const timer = (callee: N): boolean => {
+    const name = callee.type === 'Identifier' ? callee.name : memberOf(callee, GLOBALS, callee.property?.name) ? callee.property.name : '';
+    return /(?:setTimeout|SetTimeout)$/.test(name);
+  };
+  return namedCall(tree, leading(first), at, timer);
 }
 
 /**
- * Rule `sleep`: an awaited timer outside a loop. Rule `poll-deadline`: a sleep in a loop is a poll
- * interval, so the loop is judged by its own deadline instead, once per loop however many sleeps it holds.
+ * Rule `sleep`: an awaited timer outside a loop. Rule `poll-deadline`: a sleep in a loop is a poll interval, so the
+ * loop is judged by its own deadline instead, once per loop however many sleeps it holds.
  */
-export function sleepSites(code: string): Found[] {
-  const sleeps = awaitedSleeps(code);
-  const loops = pollLoops(code, sleeps.map((sleep) => sleep.offset));
+export function sleepSites(wf: WaitFile, awaits: readonly N[]): Found[] {
   const found: Found[] = [];
-  const sleepsOf = new Map<number, { loop: PollLoop; sleeps: LoopSleep[] }>();
-  for (const { offset, delay } of sleeps) {
-    const loop = loops.get(offset);
+  const loops = new Map<number, { loop: PollLoop; sleeps: LoopSleep[] }>();
+  for (const awaited of awaits) {
+    const sleep = awaitedSleep(wf, awaited);
+    if (!sleep) continue;
+    const loop = loopAround(wf, awaited);
     // A zero delay outside a loop only yields to the event loop. In a loop it is the poll interval of a spin.
     if (!loop) {
-      if (literalMs(delay) !== 0) found.push({ rule: 'sleep', offset });
-    } else sleepsOf.set(loop.keyword, { loop, sleeps: [...(sleepsOf.get(loop.keyword)?.sleeps ?? []), { delay, always: runsEveryPass(code, loop, offset) }] });
+      if (!sleep.delay || numberOf(wf.tree, sleep.delay) !== 0) found.push({ rule: 'sleep', offset: awaited.start });
+      continue;
+    }
+    const entry = { delay: sleep.delay, always: runsEveryPass(wf, loop, awaited) };
+    loops.set(loop.keyword, { loop, sleeps: [...(loops.get(loop.keyword)?.sleeps ?? []), entry] });
   }
-  for (const { loop, sleeps: inLoop } of sleepsOf.values()) {
-    const deadline = pollDeadline(code, loop, inLoop);
+  for (const { loop, sleeps } of loops.values()) {
+    const deadline = pollDeadline(wf, loop, sleeps);
     if (deadline === 'none' || (typeof deadline === 'number' && isShortDeadline(deadline))) found.push({ rule: 'poll-deadline', offset: loop.keyword });
   }
   return found;
 }
 
-/** The function the code at `at` sits in, as a place to look names up from: a stand-in for a loop that starts and ends there. */
-export function placeAt(code: string, at: number): PollLoop {
-  const stack: Entry[] = [];
-  for (let i = 0; i < at; i += 1) track(code, stack, i);
-  const frame = stack.reverse().find((entry) => entry.kind === 'function' || entry.kind === 'arrow');
-  return { keyword: at, body: [at, at], scope: frame ? paramsStart(code, frame.open) : 0, wait: true };
+const vitestNames: Record<string, ReadonlySet<string>> = { vi: new Set(['waitFor', 'waitUntil']), expect: new Set(['poll']) };
+
+/** The `vi` or `expect` a call is made on: `vi.waitFor`, or `x.vi.waitFor`, whose text holds `vi.waitFor` too. */
+function receiverOf(callee: N): N | undefined {
+  if (callee.type !== 'MemberExpression' || callee.optional) return undefined;
+  const object: N = callee.object;
+  const receiver = object.type === 'Identifier' ? object : object.type === 'MemberExpression' && !object.computed ? object.property : undefined;
+  return receiver?.type === 'Identifier' && vitestNames[receiver.name] ? receiver : undefined;
 }
 
-/** Names that stand for the same value in every file: JavaScript's own, which a bound may use without declaring. */
-export const ownNames = new Set(['Math', 'Number', 'Date', 'Infinity', 'NaN', 'undefined', 'null', 'true', 'false']);
-
-/** Whether the expression reads a name or path from outside the file: a parameter, an import or a global, so a value the caller sizes. */
-export function sizedOutside(code: string, place: PollLoop, text: string, at: number): boolean {
-  // The `$` of a template's `${` opens a slot; it is no name.
-  const names = text.replace(/\b(?:as|satisfies)\s+[\w$.]+|<[\w$.[\]| ]+>|\$(?=\{)/g, ' ').match(/(?<![\w$.])[A-Za-z_$][\w$]*/g) ?? [];
-  return names.some((name) => !ownNames.has(name) && !declaredHere(code, place, name, at));
+/** A Vitest wait: `vi.waitFor`, `vi.waitUntil` or `expect.poll`, dotted or bracketed. The offset is the receiver's. */
+function vitestWait(wf: WaitFile, call: N): number | undefined {
+  const { tree } = wf;
+  const callee: N = call.callee;
+  const receiver = receiverOf(callee);
+  if (!receiver || !calledDirectly(tree, call, callee)) return undefined;
+  const names = vitestNames[receiver.name]!;
+  if (!callee.computed) return isName(callee.property, names) ? receiver.start : undefined;
+  const bracket = tree.source.after(receiver.end);
+  const name = tree.text[bracket] === '[' ? keyText(wf, callee.property, bracket) : undefined;
+  return name !== undefined && names.has(name) ? receiver.start : undefined;
 }
 
-/**
- * What a wait bound written at `at` stands for: a number, with a name read through the scopes around it. `undefined` is Vitest's
- * default and `null` is none. `undefined` for a value that comes from outside the file, which the caller sizes. Given the file's
- * `source`, the position is a Vitest timeout: a name held an options object is read as one, and an expression made only of what
- * the file declares, which the scan cannot evaluate, is `NaN`: it may be any bound, so it counts as below the floor. A helper's
- * argument is not a bound by its position, so it is read without the source.
- */
-export function waitMs(code: string, at: number, text: string | undefined, source?: string, depth = 0): number | undefined {
-  const trimmed = (text ?? '').trim();
-  if (trimmed === 'undefined') return VITEST_DEFAULT_MS;
-  if (trimmed === 'null') return 0;
-  const place = placeAt(code, at);
-  if (source !== undefined && depth < 3 && /^[A-Za-z_$][\w$]*$/.test(trimmed)) {
-    const objects = heldValues(code, place, trimmed, at).filter((each) => each.value.startsWith('{'));
-    const held = objects.map((each) => optionsBound(code, source, { start: each.at, text: code.slice(each.at, closeOf(code, each.at) + 1) }, depth + 1));
-    if (held.length > 0) return held.includes(undefined) ? undefined : Math.min(...held.filter(isNumber));
+/** What a Vitest wait is given as its bound: its default, its options object's, or its second argument's. */
+function vitestBound(wf: WaitFile, call: N): number | undefined {
+  const bound: N | undefined = call.arguments[1];
+  if (!bound) return VITEST_DEFAULT_MS;
+  const object = leadingObject(wf, bound);
+  if (object) return object === bound ? optionsBound(wf, object) : undefined;
+  return waitMs(wf, bound, bound, true);
+}
+
+const METHODS = new Set(['MethodDefinition', 'TSAbstractMethodDefinition', 'Property']);
+
+/** A call of a local wait helper, or a method of one: its arguments after the condition, and where its name is. */
+function helperArguments(wf: WaitFile, node: N): { args: N[]; offset: number } | undefined {
+  const { tree } = wf;
+  if ((node.type === 'CallExpression' || node.type === 'NewExpression') && isName(node.callee, helperNames) && calledDirectly(tree, node, node.callee)) {
+    return { args: node.arguments.slice(1), offset: node.callee.start };
   }
-  const bound = literalBound(code, place, trimmed, at);
-  if (bound !== undefined) return isNumber(bound) ? bound : undefined;
-  return source !== undefined && !sizedOutside(code, place, trimmed, at) ? NaN : undefined;
-}
-
-/** Every Vitest wait: where its call starts and the `(` that opens its arguments. A bracketed name is read as a property key is. */
-export function vitestWaits(code: string, source: string): Array<{ index: number; open: number }> {
-  const waits = [...code.matchAll(vitestWait)].map((match) => ({ index: match.index, open: match.index + match[0].length - 1 }));
-  for (const match of code.matchAll(vitestReceiver)) {
-    const bracket = match.index + match[0].length - 1;
-    const close = closeOf(code, bracket);
-    const call = /^\s*\(/.exec(code.slice(close + 1));
-    const name = keyText(code, source, source.slice(bracket + 1, close), bracket);
-    if (call && name !== undefined && vitestNames[match[1] ?? '']?.has(name)) waits.push({ index: match.index, open: close + call[0].length });
+  const method = METHODS.has(node.type) && (node.type !== 'Property' || node.method || node.kind !== 'init');
+  if (method && !node.computed && isName(node.key, helperNames) && !node.value?.typeParameters && tree.text[tree.source.after(node.key.end)] === '(') {
+    return { args: (node.value?.params ?? []).slice(1), offset: node.key.start };
   }
-  return waits;
+  return undefined;
 }
 
-/** Rule `short-bound`: a Vitest wait with no bound (1 s), or with a literal one under 10 s, and the local helpers alike. */
-export function boundSites(code: string, source: string): Found[] {
+/** A parameter like `timeoutMs = 5_000` whose default is short. A poll interval is not a bound, so `intervalMs = 25` is not one. */
+function shortDefault(wf: WaitFile, param: N): boolean {
+  if (param.type !== 'AssignmentPattern' || param.left.type !== 'Identifier' || /interval/i.test(param.left.name)) return false;
+  if (param.left.typeAnnotation && /=/.test(rawOf(wf.tree, param.left.typeAnnotation))) return false;
+  return isShort(waitMs(wf, param, param.right, false));
+}
+
+const FUNCTIONS = new Set(['FunctionDeclaration', 'FunctionExpression', 'TSDeclareFunction']);
+
+/** A local wait helper's definition: `function until(…)` or `const until = (…) =>`, keyed on its `function` or `const`. */
+function helperDefinition(wf: WaitFile, node: N): { params: N[]; offset: number } | undefined {
+  const { tree } = wf;
+  const simpleTypes = (typed: N | null | undefined): boolean => !typed || !/[<>()]/.test(tree.text.slice(typed.start + 1, typed.end - 1));
+  if (FUNCTIONS.has(node.type) && isName(node.id, helperNames)) {
+    const keyword = node.async ? tree.source.after(node.start + 'async'.length) : node.start;
+    return simpleTypes(node.typeParameters) && tree.text.startsWith('function', keyword) ? { params: node.params, offset: keyword } : undefined;
+  }
+  const declarator: N | undefined = node.type === 'VariableDeclaration' ? node.declarations[0] : undefined;
+  const init: N | undefined = declarator?.init ?? undefined;
+  if (!declarator || !isName(declarator.id, helperNames) || init?.type !== 'ArrowFunctionExpression' || !simpleTypes(init.typeParameters)) return undefined;
+  if (declarator.id.typeAnnotation && /[=;]/.test(rawOf(tree, declarator.id.typeAnnotation))) return undefined;
+  let open = init.async ? tree.source.after(init.start + 'async'.length) : init.start;
+  if (init.typeParameters) open = tree.source.after(init.typeParameters.end);
+  if (tree.text[tree.source.before(init.start)] !== '=' || tree.text[open] !== '(') return undefined;
+  if (init.returnType && /[;{]/.test(rawOf(tree, init.returnType))) return undefined;
+  return { params: init.params, offset: node.start };
+}
+
+/** Rule `short-bound`: a Vitest wait with no bound (1 s) or one under 10 s, and the local helpers alike. */
+export function boundSites(wf: WaitFile, calls: readonly N[]): Found[] {
   const found: Found[] = [];
-  for (const { index, open } of vitestWaits(code, source)) {
-    const bound = argsOf(code, open, closeOf(code, open))[1];
-    const ms = bound === undefined ? VITEST_DEFAULT_MS : bound.text.startsWith('{') ? optionsBound(code, source, bound) : waitMs(code, bound.start, bound.text, source);
-    if (isShort(ms)) found.push({ rule: 'short-bound', offset: index });
-  }
-  // A local wait helper called with a short literal anywhere after its condition.
-  for (const match of code.matchAll(helperCall)) {
-    if (/\bfunction\s*\*?\s*$/.test(code.slice(Math.max(0, match.index - 12), match.index))) continue;
-    const open = match.index + match[0].length - 1;
-    if (argsOf(code, open, closeOf(code, open)).slice(1).some((arg) => isShort(waitMs(code, arg.start, arg.text)))) {
-      found.push({ rule: 'short-bound', offset: match.index });
-    }
-  }
-  // A local wait helper whose bound parameter defaults to a short literal.
-  for (const pattern of [helperFunction, helperArrow]) {
-    for (const match of code.matchAll(pattern)) {
-      const open = match.index + match[0].length - 1;
-      const close = closeOf(code, open);
-      if (pattern === helperArrow && !/^\s*(?::[^;{]*?)?=>/.test(code.slice(close + 1))) continue;
-      if (argsOf(code, open, close).some((param) => shortDefault(code, param))) found.push({ rule: 'short-bound', offset: match.index });
-    }
+  for (const node of calls) {
+    const vitest = node.type === 'CallExpression' ? vitestWait(wf, node) : undefined;
+    if (vitest !== undefined && isShort(vitestBound(wf, node))) found.push({ rule: 'short-bound', offset: vitest });
+    const helper = helperArguments(wf, node);
+    if (helper?.args.some(arg => arg.type !== 'SpreadElement' && isShort(waitMs(wf, arg, arg, false)))) found.push({ rule: 'short-bound', offset: helper.offset });
+    const definition = helperDefinition(wf, node);
+    if (definition?.params.some(param => shortDefault(wf, param))) found.push({ rule: 'short-bound', offset: definition.offset });
   }
   return found;
 }
 
 /**
- * Whether the line at an index holds a `// bound: <reason>`, or sits under a block of comment lines
- * that does. Acceptance reads only the `//` comments blanking found, so `// bound:` written inside
- * a string or a template accepts nothing.
+ * Whether a line holds a `// bound: <reason>`, or sits under a block of `//` comment lines that does. A
+ * `// bound:` written inside a string or a template accepts nothing.
  */
-export function boundAccepted(
-  source: string,
-  lineComments: number[],
-  lineStarts: number[],
-  lineOf: (offset: number) => number,
-): (index: number) => boolean {
+export function boundAccepted(source: WaitSource): (line: number) => boolean {
   const commentOn = new Map<number, string>();
   const commentOnly = new Set<number>();
-  for (const start of lineComments) {
-    const end = source.indexOf('\n', start);
-    const line = lineOf(start);
-    commentOn.set(line, source.slice(start, end === -1 ? undefined : end));
-    // Only whitespace before the `//` in the original: `/* x */ // y` is not a comment line.
-    if (source.slice(lineStarts[line], start).trim() === '') commentOnly.add(line);
+  for (const comment of source.comments) {
+    if (!comment.line) continue;
+    const line = source.lineOf(comment.start);
+    commentOn.set(line, `//${comment.value}`);
+    if (source.text.slice(source.text.lastIndexOf('\n', comment.start - 1) + 1, comment.start).trim() === '') commentOnly.add(line);
   }
-  return (index) => {
-    if (boundComment.test(commentOn.get(index) ?? '')) return true;
-    for (let j = index - 1; j >= 0 && commentOnly.has(j); j -= 1) if (boundComment.test(commentOn.get(j) ?? '')) return true;
+  return line => {
+    if (boundComment.test(commentOn.get(line) ?? '')) return true;
+    for (let above = line - 1; above >= 1 && commentOnly.has(above); above -= 1) if (boundComment.test(commentOn.get(above) ?? '')) return true;
     return false;
   };
 }
 
-/**
- * The bound an options object literal gives a Vitest wait, read from its own top-level properties
- * in order: Vitest's 1 s default until a `timeout` names one, then that literal. A spread or a
- * computed key may carry any bound, so after one the bound is the caller's (`undefined`) when it reads a name from
- * outside the file and below the floor when the file declares everything it reads, until a later explicit `timeout`.
- * `undefined` is also anything but a plain object literal.
- */
-export function optionsBound(code: string, source: string, arg: Item, depth = 0): number | undefined {
-  const close = arg.start + arg.text.length - 1;
-  if (closeOf(code, arg.start) !== close) return undefined;
-  let bound: number | undefined = VITEST_DEFAULT_MS;
-  for (const property of argsOf(code, arg.start, close)) {
-    const key = propertyKey(code, source, property);
-    if (key === undefined) bound = entryBound(code, property);
-    else if (key.name === 'timeout') bound = waitMs(code, property.start, key.value ?? key.name, source, depth);
+/** The sites of one file, from the nodes oxlint's walk gathered. */
+export function sitesOf(file: string, root: N, source: WaitSource, starts: Starts): Site[] {
+  const tree = new WaitTree(root, source);
+  const wf: WaitFile = { tree, names: new WaitNames(tree) };
+  const accepted = boundAccepted(source);
+  const sites: Site[] = [];
+  for (const { rule, offset } of [...sleepSites(wf, starts.awaits), ...boundSites(wf, starts.calls)]) {
+    const line = source.lineOf(offset);
+    if (!accepted(line)) sites.push({ file, rule, line, site: source.lines[line - 1]?.trim() ?? '' });
   }
-  return bound;
+  return sites.sort((a, b) => a.line - b.line || a.rule.localeCompare(b.rule));
 }
 
-/** What an entry that may set any key (a spread, a computed key, a quoted key with an escape) leaves of the bound: the caller's, or `NaN` when it reads only what the file declares. */
-export function entryBound(code: string, property: Item): number | undefined {
-  const text = property.text.trim();
-  const expression = text.startsWith('...') ? text.slice(3) : /^\[([^\]]*)\]/.exec(text)?.[1] ?? text;
-  return sizedOutside(code, placeAt(code, property.start), expression, property.start) ? undefined : NaN;
-}
-
-/** A quoted key with its `\uXXXX`, `\u{X}` and `\xXX` escapes decoded: `"\u0074imeout"` is `timeout`. `undefined` when another escape is left. */
-export function unescaped(key: string): string | undefined {
-  const decoded = key.replace(/\\u\{([\da-fA-F]+)\}|\\u([\da-fA-F]{4})|\\x([\da-fA-F]{2})/g, (_, braced?: string, four?: string, two?: string) => {
-    const code = Number.parseInt(braced ?? four ?? two ?? '0', 16);
-    return code <= 0x10ffff ? String.fromCodePoint(code) : '\\';
-  });
-  return decoded.includes('\\') ? undefined : decoded;
-}
-
-/**
- * A text without the wrappers that change its type and not its value: parentheses, a trailing `as X`, `satisfies X` or `!`, and a
- * leading `<X>`.
- */
-export function unwrapped(text: string): string {
-  let inner = text.trim();
-  for (;;) {
-    const next = inner
-      .replace(/^\(([\s\S]*)\)$/, '$1')
-      .replace(/\s+(?:as|satisfies)\s+[\w$.]+(?:<[^<>]*>)?$/, '')
-      .replace(/!$/, '')
-      .replace(/^<[\w$.|\s]+>/, '')
-      .trim();
-    if (next === inner) return inner;
-    inner = next;
+/** Whether a node can start a short-bound site: a call of a Vitest wait or a helper, or a helper's definition. */
+function callStart(node: N): boolean {
+  switch (node.type) {
+    case 'CallExpression': case 'NewExpression': return isName(node.callee, helperNames) || receiverOf(node.callee) !== undefined;
+    case 'VariableDeclaration': return isName(node.declarations[0]?.id, helperNames);
+    case 'Property': return (node.method || node.kind !== 'init') && isName(node.key, helperNames);
+    default: return FUNCTIONS.has(node.type) ? isName(node.id, helperNames) : METHODS.has(node.type) && isName(node.key, helperNames);
   }
 }
 
-/** The value of a string literal, or of a template without substitutions, written as `text`; `undefined` for anything else, and for an escape other than `\u` and `\x`. */
-export function stringLiteral(text: string): string | undefined {
-  const quoted = /^(?:'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`((?:[^`\\$]|\\.|\$(?!\{))*)`)$/.exec(unwrapped(text));
-  const body = quoted?.[1] ?? quoted?.[2] ?? quoted?.[3];
-  return body === undefined ? undefined : unescaped(body);
+/** The visitors that gather a file's starts as oxlint walks it, then give its sites. */
+export function waitVisitors(file: string, sourceCode: AstContext['sourceCode'], done: (sites: Site[], program: EsNode) => void): Visitors {
+  const starts: Starts = { awaits: [], calls: [] };
+  const call = (node: EsNode): void => {
+    if (callStart(node as unknown as N)) starts.calls.push(node as unknown as N);
+  };
+  return {
+    AwaitExpression: node => {
+      starts.awaits.push(node as unknown as N);
+    },
+    CallExpression: call, NewExpression: call, VariableDeclaration: call, Property: call,
+    FunctionDeclaration: call, FunctionExpression: call, TSDeclareFunction: call, MethodDefinition: call, TSAbstractMethodDefinition: call,
+    'Program:exit': program => {
+      if (starts.awaits.length === 0 && starts.calls.length === 0) return;
+      const source = new WaitSource(sourceCode.text, waitComments(sourceCode.getAllComments() as unknown as ParsedComment[]));
+      done(sitesOf(file, program as unknown as N, source, starts), program);
+    },
+  };
 }
 
-/**
- * The one reader of a key written between brackets (`{ [key]: 1 }`, `vi[key](…)`), so that no reader of the scan compares a name the
- * others cannot spell. The name is the string of a literal or of a template without substitutions, a number as it is written, or a
- * name that every value the file gives it spells as one string, each with `as`, `satisfies`, `!` and parentheses taken off. The code
- * has its strings blanked, so the text is read from the `source` at the same offsets. Anything else is `undefined`: the scan cannot
- * say which key it is.
- */
-export function keyText(code: string, source: string, text: string, at: number, depth = 0): string | undefined {
-  const literal = stringLiteral(text);
-  if (literal !== undefined) return literal;
-  const inner = unwrapped(text);
-  if (numericLiteral.test(inner)) return inner;
-  if (depth > 3 || !/^[A-Za-z_$][\w$]*$/.test(inner)) return undefined;
-  const names = heldValues(code, placeAt(code, at), inner, at).map((held) =>
-    held.value === UNREAD ? undefined : keyText(code, source, source.slice(held.at, held.at + valueText(held.value).length), held.at, depth + 1));
-  return names.length > 0 && names.every((name) => name !== undefined && name === names[0]) ? names[0] : undefined;
+/** The server sites of files under `packages/cezar/src`, as oxlint parses them: the baseline runner and the rule's tests read this. */
+export function scanFiles(files: ReadonlyArray<{ file: string; code: string }>): Site[][] {
+  const found = new Map<string, Site[]>();
+  inOxlint(files.map(each => ({ file: `packages/cezar/src/${each.file}`, code: each.code })), context => waitVisitors(
+    context.file.slice('packages/cezar/src/'.length), context.sourceCode, sites => found.set(`${context.file}\0${context.sourceCode.text}`, sites)));
+  return files.map(each => found.get(`packages/cezar/src/${each.file}\0${each.code}`) ?? []);
 }
 
-/**
- * A property's key and value text. A quoted key is blanked in the code, so its name is read from the original source at the same
- * offsets: `{ "timeout": 100 }` names `timeout`. A bracketed key is read by `keyText`. A spread, a bracketed key `keyText` cannot
- * resolve or a quoted key with an escape other than `\u` and `\x` is `undefined`; a method or a numeric key gets an empty name.
- */
-export function propertyKey(code: string, source: string, property: Item): { name: string; value?: string } | undefined {
-  const { text, start } = property;
-  if (text.startsWith('...')) return undefined;
-  if (text.startsWith('[')) {
-    const close = closeOf(code, start);
-    const name = keyText(code, source, source.slice(start + 1, close), start);
-    if (name === undefined) return undefined;
-    const colon = /^\s*:/.exec(text.slice(close - start + 1));
-    return colon ? { name, value: text.slice(close - start + 1 + colon[0].length).trim() } : { name: '' };
-  }
-  const quoted = /^(['"])( *)\1\s*:/.exec(text);
-  if (quoted) {
-    const name = unescaped(source.slice(start + 1, start + 1 + (quoted[2] ?? '').length));
-    // Any other escape may name anything, so it reads like a computed key.
-    if (name === undefined) return undefined;
-    return { name, value: text.slice(quoted[0].length).trim() };
-  }
-  const named = /^([A-Za-z_$][\w$]*)\s*(:|$)/.exec(text);
-  if (!named) return { name: '' };
-  return { name: named[1] ?? '', ...(named[2] === ':' ? { value: text.slice(named[0].length).trim() } : {}) };
-}
-
-/** A parameter like `timeoutMs = 5_000`. A poll interval is not a bound, so `intervalMs = 25` is not one. */
-export function shortDefault(code: string, param: Item): boolean {
-  const parsed = /^(?:\.\.\.)?([\w$]+)\s*\??\s*(?::[^=]*)?=([\s\S]*)$/.exec(param.text);
-  return parsed !== null && !/interval/i.test(parsed[1] ?? '') && isShort(waitMs(code, param.start, parsed[2]));
-}
+/** One file's server sites; see `scanFiles`. */
+export const scanSource = (file: string, code: string): Site[] => scanFiles([{ file, code }])[0] ?? [];
 
 /** The server scanner's original traversal scope, expressed for oxlint paths. */
 export const scannedServerFile = (file: string): boolean => file.startsWith('packages/cezar/src/')
@@ -419,25 +388,23 @@ export const scannedServerFile = (file: string): boolean => file.startsWith('pac
   && !file.split('/').some(part => part === '__fixtures__' || part === 'node_modules')
   && !['test-wait-discipline.test.ts', 'test-wait-discipline.testkit.ts'].includes(file.slice('packages/cezar/src/'.length));
 
-export const testWaitDiscipline: SourceRule = {
-  name: 'test-wait-discipline',
-  description: 'Wait on the product signal, with a reason for a wall-clock bound.',
-  applies: scannedServerFile,
-  check(file, source) {
-    const relative = file.slice('packages/cezar/src/'.length);
-    const { sites, errors } = scanFile(relative, source);
-    const findings = baselines.flatMap(baseline => {
-      const mine = sites.filter(site => baseline.rules.includes(site.rule));
-      const { added } = compareToBaseline(tally(mine), readBaseline(baseline.path));
-      return added.flatMap(entry => mine.filter(site => site.rule === entry.rule && site.site === entry.site).map(site => ({
-        line: site.line,
-        message: `[${site.rule}] ${site.site}. ${waitRemedy(site.rule)}. Never add a site to ${baseline.path}`,
-      })));
-    });
-    return [...findings, ...errors.map(error => ({ line: error.line, message: `Unterminated ${error.construct}: ${error.text}. Fix the scan's blanking in packages/cezar/src/lint/blank.ts; everything after this went unread (AGENTS.md § Validation)` }))];
-  },
-};
-
 export const waitRemedy = (rule: Rule): string => rule === 'poll-deadline'
   ? 'A poll loop needs a deadline of 10 s or more, read from the clock in the loop or its function (or attempts x interval with literals). Add one, or state why the loop ends as a `// bound: <reason>` comment on its first line (AGENTS.md § Validation)'
   : "Wait on the product's own signal, or state the bound's reason at the site as a `// bound: <reason>` comment (AGENTS.md § Validation)";
+
+export const testWaitDiscipline: AstRule = {
+  name: 'test-wait-discipline',
+  description: 'Wait on the product signal, with a reason for a wall-clock bound.',
+  applies: scannedServerFile,
+  create: (report, { file, sourceCode }) => waitVisitors(file.slice('packages/cezar/src/'.length), sourceCode, (sites, program) => {
+    for (const baseline of baselines) {
+      const mine = sites.filter(site => baseline.rules.includes(site.rule));
+      const { added } = compareToBaseline(tally(mine), readBaseline(baseline.path));
+      for (const entry of added) {
+        for (const site of mine.filter(each => each.rule === entry.rule && each.site === entry.site)) {
+          report(program, `[${site.rule}] ${site.site}. ${waitRemedy(site.rule)}. Never add a site to ${baseline.path}`, { line: site.line, column: 0 });
+        }
+      }
+    }
+  }),
+};

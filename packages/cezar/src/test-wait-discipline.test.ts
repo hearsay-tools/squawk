@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { blank } from './lint/blank.ts';
-import { scanFile, scanSource, SHORT_BOUND_MS, type Site } from './lint/test-wait-discipline.ts';
+import { scanSource, SHORT_BOUND_MS, type Site } from './lint/test-wait-discipline.ts';
 import { type Baseline, baselines } from './lint/server-wait-baseline.ts';
 import { compareToBaseline, readBaseline, shrinkBaseline, tally } from './lint/wait-baseline.ts';
 
@@ -20,7 +20,6 @@ const lines = (sites: Site[]) => sites.map((s) => s.line);
 /** The `sleep` and `short-bound` sites of a snippet; `polls` below holds the poll loops. */
 const scan = (...src: string[]) => scanSource('x.test.ts', src.join('\n')).filter((s) => s.rule !== 'poll-deadline');
 const polls = (...src: string[]) => scanSource('x.test.ts', src.join('\n')).filter((s) => s.rule === 'poll-deadline');
-const errors = (...src: string[]) => scanFile('x.test.ts', src.join('\n')).errors.map(({ line, construct }) => ({ line, construct }));
 
 describe('blanking strings and comments', () => {
   it('keeps line and column positions', () => {
@@ -76,7 +75,6 @@ describe('blanking strings and comments', () => {
       'await wait(5);',
     ];
     expect(lines(scan(...src))).toEqual([2, 4, 6, 8]);
-    expect(errors(...src)).toEqual([]);
   });
 
   it('reads a head with a comment before its parenthesis, and a call with one after its dot', () => {
@@ -89,24 +87,13 @@ describe('blanking strings and comments', () => {
       'await pause(5);',
     ];
     expect(lines(scan(...src))).toEqual([2, 4, 6]);
-    expect(errors(...src)).toEqual([]);
   });
 
   it('still reads a / after a call or a grouped expression as a division', () => {
     const src = ['const r = f(a) / 2 + "/";', 'await sleep(50);', 'const q = (a + b) / 2 + "/";', 'await sleep(50);'];
     expect(lines(scan(...src))).toEqual([2, 4]);
-    expect(errors(...src)).toEqual([]);
   });
 
-  it('reports an unterminated string, template, substitution or block comment rather than swallowing what follows', () => {
-    expect(errors('const s = `abc', 'await sleep(50);')).toEqual([{ line: 1, construct: 'template' }]);
-    expect(errors('const s = `a ${f(', 'await sleep(50);')).toEqual([{ line: 1, construct: 'substitution' }]);
-    expect(errors("const s = 'abc", 'await sleep(50);')).toEqual([{ line: 1, construct: 'string' }]);
-    expect(errors('/* never closed', 'await sleep(50);')).toEqual([{ line: 1, construct: 'comment' }]);
-    // A string stops at its line end, so the code after it is still read.
-    expect(lines(scan("const s = 'abc", 'await sleep(50);'))).toEqual([2]);
-    expect(errors("const s = 'a\\", "b';", '`x${`y`}z`;')).toEqual([]);
-  });
 });
 
 describe('rule sleep', () => {
