@@ -2,8 +2,8 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { afterEach, beforeEach, expect, it } from 'vitest';
-import { removeProvisionedSkills } from './worktree-skill-cleanup.ts';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { cleanupTaskWorktreeSkills, removeProvisionedSkills } from './worktree-skill-cleanup.ts';
 import { seedOldSkills } from './worktree-skill-cleanup.testkit.ts';
 
 let worktree: string;
@@ -12,6 +12,38 @@ beforeEach(() => {
   execFileSync('git', ['init', '-q', worktree]);
 });
 afterEach(() => rmSync(worktree, { recursive: true, force: true }));
+
+it.each(['main', 'symlink', 'trailing slash', 'parent segment'])('does not clean the main checkout through %s', async kind => {
+  const { paths, manifest } = await seedOldSkills(worktree);
+  mkdirSync(join(worktree, 'child'));
+  const alias = join(worktree, 'alias');
+  symlinkSync(worktree, alias);
+  const cwd = kind === 'symlink' ? alias : kind === 'trailing slash' ? `${worktree}/` : kind === 'parent segment' ? `${worktree}/child/..` : worktree;
+  await cleanupTaskWorktreeSkills(cwd, cwd, worktree, vi.fn());
+  expect(paths.every(path => existsSync(join(worktree, path)))).toBe(true);
+  expect(existsSync(manifest)).toBe(true);
+});
+
+it('cleans the recorded task worktree after comparing realpaths', async () => {
+  const { paths, manifest } = await seedOldSkills(worktree);
+  const repo = join(worktree, 'main');
+  mkdirSync(repo);
+  const alias = join(worktree, 'alias');
+  symlinkSync(worktree, alias);
+  await cleanupTaskWorktreeSkills(alias, worktree, repo, vi.fn());
+  expect(paths.some(path => existsSync(join(worktree, path)))).toBe(false);
+  expect(existsSync(manifest)).toBe(false);
+});
+
+it.each(['different', 'unresolved', 'unrecorded'])('does not clean a task with a %s worktree record', async kind => {
+  const { paths, manifest } = await seedOldSkills(worktree);
+  const repo = join(worktree, 'main');
+  mkdirSync(repo);
+  const recorded = kind === 'unrecorded' ? undefined : kind === 'unresolved' ? join(worktree, 'missing') : repo;
+  await cleanupTaskWorktreeSkills(worktree, recorded, repo, vi.fn());
+  expect(paths.every(path => existsSync(join(worktree, path)))).toBe(true);
+  expect(existsSync(manifest)).toBe(true);
+});
 
 it('removes recorded unchanged copies and owned ignore files, then records', async () => {
   const { paths, manifest } = await seedOldSkills(worktree);
@@ -49,7 +81,13 @@ it('retains ignore files and records if a kept copy cannot be excluded', async (
   const exclude = join(worktree, '.git/info/exclude');
   rmSync(exclude);
   mkdirSync(exclude);
-  await removeProvisionedSkills(worktree);
+  const repo = join(worktree, 'main');
+  mkdirSync(repo);
+  const note = vi.fn();
+  await cleanupTaskWorktreeSkills(worktree, worktree, repo, note);
+  expect(note).toHaveBeenCalledTimes(1);
+  expect(note.mock.calls[0]![0]).toContain(worktree);
+  expect(note.mock.calls[0]![0]).toContain(`Could not exclude ${paths[0]} from git`);
   for (const path of paths) expect(existsSync(join(worktree, dirname(path), '.gitignore'))).toBe(true);
   expect(readFileSync(manifest, 'utf8')).toBe(saved);
   expect(readFileSync(join(worktree, paths[0]!, 'SKILL.md'), 'utf8')).toBe('user edit\n');
@@ -72,9 +110,12 @@ it('keeps ignore files until skills are handled when an old manifest cleanup fai
   const saved = readFileSync(manifest, 'utf8');
   expect(JSON.parse(saved).entries[0].kind).toBe('ignore-file');
   let removed: string | undefined;
+  const onError = vi.fn();
   await removeProvisionedSkills(worktree, { faults: (boundary, path) => {
     if (boundary === 'removed') { removed = path; throw new Error('filesystem interruption'); }
-  } });
+  }, onError });
+  expect(onError).toHaveBeenCalledTimes(1);
+  expect(onError.mock.calls[0]![0]).toEqual(new Error('filesystem interruption'));
   expect(removed).toBe(paths[0]);
   for (const path of paths) expect(existsSync(join(worktree, dirname(path), '.gitignore'))).toBe(true);
   expect(execFileSync('git', ['check-ignore', `${paths[1]}/SKILL.md`], { cwd: worktree, encoding: 'utf8' }).trim())

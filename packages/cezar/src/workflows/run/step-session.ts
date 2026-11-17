@@ -1,4 +1,4 @@
-import { removeProvisionedSkills } from '../../worktree-skill-cleanup.ts';
+import { cleanupTaskWorktreeSkills } from '../../worktree-skill-cleanup.ts';
 import { portableRunnerSkillList } from '../../core/runner-skill-reference.ts';
 import type { LaunchSource } from './launch-read-resolver.ts';
 import { runDataDir } from '../../legacy-runs.ts';
@@ -102,7 +102,8 @@ export class StepSession {
     // reads the wrong account's config dir finds no session and silently starts a fresh one.
     const stepProfile = await sessionEvents.stepProfileFor(this.context, this.sharedHost, runId, stepBackend, { stepId: step.id });
     if (typeof stepProfile === 'string') return stepProfile;
-    if (state.liveSession.cwd !== this.context.repoRoot) await removeProvisionedSkills(state.liveSession.cwd);
+    await cleanupTaskWorktreeSkills(state.liveSession.cwd, this.context.store.getRun(runId)?.worktreePath, this.context.repoRoot,
+      message => this.context.store.appendEvent(runId, { type: 'note', message }));
     await this.runSkills.loadRunSkills(state, stepBackend, stepProfile);
     let skill: import('../../core/agent-runner.ts').SkillTrigger | undefined;
     try { skill = await this.openingSkill(runId, state, step, opening); }

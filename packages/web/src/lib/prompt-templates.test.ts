@@ -34,6 +34,14 @@ describe('normalizePromptTemplates', () => {
     expect(normalizePromptTemplates(raw)).toEqual(raw)
   })
 
+  it('ignores the removed automation template in a saved list and keeps custom templates', () => {
+    const custom = { id: 'tpl-mine', label: 'Mine', text: 'My instructions.' }
+    expect(normalizePromptTemplates([
+      { id: 'create-automation', label: 'Create an automation', text: 'Old built-in instructions.' },
+      custom,
+    ])).toEqual([custom])
+  })
+
   it('skips malformed entries but keeps the valid ones', () => {
     const raw = [
       { id: 'a', label: 'A', text: 'Do A.' },

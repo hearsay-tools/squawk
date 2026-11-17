@@ -83,6 +83,8 @@ export function normalizePromptTemplates(raw: unknown): PromptTemplate[] {
   for (const entry of raw) {
     if (!isRecord(entry)) continue
     const id = typeof entry.id === 'string' ? entry.id.trim() : ''
+    // The removed built-in must not return through an older saved template list.
+    if (id === 'create-automation') continue
     const label = typeof entry.label === 'string' ? entry.label.trim() : ''
     const text = typeof entry.text === 'string' ? entry.text.trim() : ''
     if (!id || !label || !text || seen.has(id)) continue
