@@ -25,7 +25,7 @@ export async function landsInside(root: string, path: string): Promise<boolean> 
   return landing !== null && (landing === root || landing.startsWith(root.endsWith(sep) ? root : root + sep));
 }
 
-export async function excludeFromGit(repoRoot: string, pattern: string): Promise<void> {
+export async function excludeFromGit(repoRoot: string, pattern: string): Promise<boolean> {
   try {
     // Resolve the real exclude file: in a linked worktree (spec 006) `.git`
     // is a file and `info/exclude` lives in the shared common dir — which
@@ -39,10 +39,12 @@ export async function excludeFromGit(repoRoot: string, pattern: string): Promise
     } catch {
       // no exclude file yet
     }
-    if (prev.split('\n').includes(pattern)) return;
+    if (prev.split('\n').includes(pattern)) return true;
     await mkdir(dirname(excludePath), { recursive: true });
     await writeFile(excludePath, prev + (prev && !prev.endsWith('\n') ? '\n' : '') + pattern + '\n', 'utf8');
+    return true;
   } catch {
     // non-fatal — `.git` might be a linked file (worktree) or absent entirely
+    return false;
   }
 }

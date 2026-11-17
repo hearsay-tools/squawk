@@ -37,7 +37,22 @@ it('keeps user-changed entries and ignore files, and other writers records', asy
   await removeProvisionedSkills(worktree);
   expect(readFileSync(join(worktree, paths[0]!, 'SKILL.md'), 'utf8')).toBe('user edit\n');
   expect(readFileSync(ignore, 'utf8')).toBe('# user edit\n');
+  expect(execFileSync('git', ['check-ignore', `${paths[0]}/SKILL.md`], { cwd: worktree, encoding: 'utf8' }).trim())
+    .toBe(`${paths[0]}/SKILL.md`);
   expect(JSON.parse(readFileSync(manifest, 'utf8')).entries).toEqual([seed]);
+});
+
+it('retains ignore files and records if a kept copy cannot be excluded', async () => {
+  const { paths, manifest } = await seedOldSkills(worktree);
+  const saved = readFileSync(manifest, 'utf8');
+  writeFileSync(join(worktree, paths[0]!, 'SKILL.md'), 'user edit\n');
+  const exclude = join(worktree, '.git/info/exclude');
+  rmSync(exclude);
+  mkdirSync(exclude);
+  await removeProvisionedSkills(worktree);
+  for (const path of paths) expect(existsSync(join(worktree, dirname(path), '.gitignore'))).toBe(true);
+  expect(readFileSync(manifest, 'utf8')).toBe(saved);
+  expect(readFileSync(join(worktree, paths[0]!, 'SKILL.md'), 'utf8')).toBe('user edit\n');
 });
 
 it('leaves durable records after a crash between removals and repeats safely', async () => {

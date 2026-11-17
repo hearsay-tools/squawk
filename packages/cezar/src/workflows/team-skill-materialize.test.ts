@@ -132,6 +132,8 @@ describe('native skills do not materialize Squawk copies', () => {
       expect(readFileSync(manifest, 'utf8')).toBe(before);
       expect(existsSync(join(cwd, paths[0]!))).toBe(false);
       expect(existsSync(join(cwd, paths[1]!))).toBe(true);
+      expect(existsSync(join(cwd, paths[1]!, '../.gitignore'))).toBe(true);
+      expect((await run('git', ['check-ignore', `${paths[1]}/SKILL.md`], { cwd })).stdout.trim()).toBe(`${paths[1]}/SKILL.md`);
     }
     const catalog = fixedSkillCatalog();
     const get = catalog.get.bind(catalog);
@@ -157,7 +159,10 @@ describe('native skills do not materialize Squawk copies', () => {
       expect(existsSync(join(cwd, path))).toBe(kind === 'changed' && path === paths[0]);
       expect(existsSync(join(cwd, path, '../.gitignore'))).toBe(false);
     }
-    if (kind === 'changed') expect(readFileSync(join(cwd, paths[0]!, 'SKILL.md'), 'utf8')).toBe('user edit\n');
+    if (kind === 'changed') {
+      expect(readFileSync(join(cwd, paths[0]!, 'SKILL.md'), 'utf8')).toBe('user edit\n');
+      expect((await run('git', ['check-ignore', `${paths[0]}/SKILL.md`], { cwd })).stdout.trim()).toBe(`${paths[0]}/SKILL.md`);
+    }
     expect((await readManifest(cwd))?.entries.some(entry => entry.writer === 'skills') ?? false).toBe(false);
   });
 

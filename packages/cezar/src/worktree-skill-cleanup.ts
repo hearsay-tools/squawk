@@ -13,8 +13,11 @@ export function removeProvisionedSkills(worktree: string, options: WorktreeFiles
       // Old installers recorded ignore files first. Keep exclusions until every skill is handled.
       const entries = files.entries().sort((a, b) => Number(a.kind === 'ignore-file') - Number(b.kind === 'ignore-file'));
       for (const entry of entries) {
-        // An unverifiable old copy stays, including its exclusion after the ignore file goes.
-        if ((await files.inspect(entry.path)).owner === 'kept') await excludeFromGit(files.worktree, `${entry.path}/`);
+        // Changed and unverifiable copies stay excluded after their ignore file goes.
+        const owner = (await files.inspect(entry.path)).owner;
+        if (entry.kind !== 'ignore-file' && (owner === 'kept' || owner === 'theirs')) {
+          if (!(await excludeFromGit(files.worktree, `${entry.path}/`))) return;
+        }
         else if (await files.remove(entry.path)) continue;
         files.forget(entry.path);
       }
