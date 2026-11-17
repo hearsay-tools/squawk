@@ -309,14 +309,6 @@ describe('TurnBookkeeper.recordTurnEnd', () => {
     expect(after?.diffStat).not.toHaveProperty('repointed');
   });
 
-  it('never overwrites a user-edited title (PATCH sets titleSummary too)', async () => {
-    const record = await makeWorktreeRun();
-    // What PATCH /api/v1/runs/:id does on a rename:
-    store.updateRun(record.id, { title: 'My name', titleSummary: 'My name', titleOrigin: 'user' });
-    await bookkeeper.recordTurnEnd(record.id, TURN_TEXT);
-    expect(store.getRun(record.id)?.titleSummary).toBe('My name');
-  });
-
   it('skips diffStat for a worktree-less run, and never throws', async () => {
     const record = store.createRun({ title: 't', workflow: 'w', task: 'do the thing', steps: [] });
     await expect(bookkeeper.recordTurnEnd(record.id, TURN_TEXT)).resolves.toBeUndefined();

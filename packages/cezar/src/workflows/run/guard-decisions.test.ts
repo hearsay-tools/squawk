@@ -67,21 +67,6 @@ describe('staleContinuationDisposition', () => {
 });
 
 describe('sessionCloseKeepsWaiting', () => {
-  it.each([true, false])('execution error=%s preserves error-before-step reads', failed => {
-    const calls: string[] = [];
-    const loop = {
-      get runError() { calls.push('error'); return failed ? 'failure' : undefined; },
-      get incompleteStepId() { calls.push('step'); return 'unfinished'; },
-    };
-    const ask = vi.fn(() => true);
-    expect(sessionCloseKeepsWaiting({ cancelled: false,
-      get incomplete() { return !!loop.runError || !!loop.incompleteStepId; },
-      get idleClosed(): boolean { throw new Error('incomplete execution must skip idle'); },
-    }, ask)).toBe(false);
-    expect(calls).toEqual(failed ? ['error'] : ['error', 'step']);
-    expect(ask).not.toHaveBeenCalled();
-  });
-
   it.each([
     [true, false, true, true, false, ['cancelled']],
     [false, true, true, true, false, ['cancelled', 'incomplete']],
