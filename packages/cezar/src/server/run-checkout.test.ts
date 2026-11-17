@@ -31,16 +31,12 @@ const fallbackGone = join(root, '.ai', 'squawk', 'worktrees', 'gone');
 const stillWorking = { status: 409, body: { error: 'the agent is still working in this worktree' } };
 const autosave = { status: 409, body: { error: 'autosave cleanup pending' } };
 
-// One policy row for each Table A read and mutate route.
-const routes = [
-  { intent: 'read', route: 'diff', directory: 'existing-worktree', column: 'diff' },
-  { intent: 'read', route: 'changes', directory: 'working-directory', column: 'working' },
-  { intent: 'read', route: 'commits', directory: 'working-directory', column: 'working' },
-  { intent: 'read', route: 'commit/:sha', directory: 'working-directory', column: 'working' },
-  { intent: 'read', route: 'files', directory: 'working-directory', column: 'working' },
-  { intent: 'read', route: 'file-link', directory: 'recorded-path-or-root', column: 'fileLink' },
-  { intent: 'mutate', route: 'git/commit', column: 'mutate' },
-  { intent: 'mutate', route: 'git/push', column: 'mutate' },
+// One row per distinct read or mutate policy. HTTP tests guard each route.
+const policies = [
+  { intent: 'read', directory: 'existing-worktree', column: 'diff' },
+  { intent: 'read', directory: 'working-directory', column: 'working' },
+  { intent: 'read', directory: 'recorded-path-or-root', column: 'fileLink' },
+  { intent: 'mutate', column: 'mutate' },
 ] as const;
 type Expected = string | null | typeof notFound;
 interface State {
@@ -92,7 +88,7 @@ function fakeHost({ run, claimHeld, foreignOwner }: State): RunCheckoutHost {
   };
 }
 
-describe.each(routes)('$intent $route', (route) => {
+describe.each(policies)('$intent $column policy', (route) => {
   it.each([...states, ...(['queued', 'waiting'] as const).map(status => ({
     ...states[1]!, name: status, run: { ...baseRun, status, worktreePath: live },
   })), { ...states[14]!, name: 'running with autosave', blocked: true }, {
@@ -135,10 +131,10 @@ const holdPublish = 'run is waiting on a usage-limit hold — choose Don’t res
 const holdRemove = 'run is waiting on a usage-limit hold — choose Don’t resume in the task’s usage-limit hint, then retry';
 const fallbackRefusal = fallbackProjectWriteError(fallback)!;
 const claimedRoutes = [
-  { route: 'pr', intent: 'publish' },
-  { route: 'remove-worktree', intent: 'remove', claim: 'publish', checksActive: true, deletion: 'worktree', nullClaimError: cleanupPending },
-  { route: 'DELETE', intent: 'remove', claim: 'publish', checksActive: true, deletion: 'record', nullClaimError: cleanupPending },
-  { route: 'reclaim', intent: 'remove', claim: 'reclaim', checksActive: false, deletion: 'inline', nullClaimError: reclaimPending },
+  { intent: 'publish' },
+  { intent: 'remove', claim: 'publish', checksActive: true, deletion: 'worktree', nullClaimError: cleanupPending },
+  { intent: 'remove', claim: 'publish', checksActive: true, deletion: 'record', nullClaimError: cleanupPending },
+  { intent: 'remove', claim: 'reclaim', checksActive: false, deletion: 'inline', nullClaimError: reclaimPending },
 ] as const;
 // Each tuple is pr / remove-worktree / DELETE / reclaim. null means admitted.
 const claimedOutcomes: Record<string, readonly (string | null | 404)[]> = {
