@@ -168,6 +168,8 @@ export async function generateRunName(repoRoot: string, ctx: NamerContext, home:
         userPrompt: buildNamerPrompt(ctx),
         cwd: repoRoot,
         toolGrant: { kind: 'explicit', tools: [] },
+        // A bookkeeping call: as little of the user's setup as the runner can turn off (its *_SPEC_SUPPORT.minimal row).
+        minimal: true,
         model,
         timeoutMs: NAMER_TIMEOUT_MS,
         // Shadow the argv-capture hook: dry-run tests capture the AGENT's argv

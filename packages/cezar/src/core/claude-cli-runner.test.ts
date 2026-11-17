@@ -114,6 +114,21 @@ describe('buildClaudeArgs approval gate', () => {
   });
 });
 
+describe('buildClaudeArgs minimal', () => {
+  const spec = { userPrompt: 'name it', cwd: '/tmp', toolGrant: { kind: 'explicit' as const, tools: [] } };
+
+  it('starts in safe mode with no skills and no saved session, and never in bare mode', () => {
+    const args = buildClaudeArgs({ ...spec, minimal: true }, {});
+    expect(args).toEqual(expect.arrayContaining(['--safe-mode', '--disable-slash-commands', '--no-session-persistence']));
+    expect(args).not.toContain('--bare');
+  });
+
+  it('adds nothing when the field is absent', () => {
+    const args = buildClaudeArgs(spec, {});
+    for (const flag of ['--safe-mode', '--disable-slash-commands', '--no-session-persistence']) expect(args).not.toContain(flag);
+  });
+});
+
 describe('buildClaudeArgs governed native messaging', () => {
   const spec = { userPrompt: 'do it', cwd: '/tmp', sessionId: 'governed-session' };
 

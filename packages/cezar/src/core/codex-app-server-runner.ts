@@ -22,9 +22,9 @@ import { V1TextCoalescer } from './v1-text-coalescer.ts';
 import { InputSubmissions } from './input-submissions.ts';
 import { codexStreamError } from './codex-stream-error.ts';
 import { codexTurnOutcome } from './codex-turn-outcome.ts';
-import { codexNetworkIsRestricted, codexPermissionOverrides } from './codex-permissions.ts';
+import { codexNetworkIsRestricted, codexMinimalSandbox, codexPermissionOverrides } from './codex-permissions.ts';
 import { codexApproval, isCodexApprovalRequest, type CodexApproval } from './codex-approvals.ts';
-import { squawkToolEnvNames } from '../ci-wait/tool-catalog.ts';
+import { codexThreadConfig } from './codex-thread-config.ts';
 import {
   CodexAppServerRpc,
   CodexRpcResponseError,
@@ -90,6 +90,7 @@ export const CODEX_SPEC_SUPPORT: AgentRunSpecSupport = {
   cwd: { honored: true, via: 'spawn cwd, and the thread/start / thread/resume cwd' },
   toolGrant: { honored: false, reason: 'no per-tool allowlist on the app-server, so no command-prefix restriction either; managed permissions and approval policy belong to Codex' },
   restrictCrossSessionMessaging: { honored: true, via: 'thread/start and thread/resume config features.agent_message_board=false; multi-agent tools reach only the session\'s own agents and stay as configured (hearsay-tools/cezarion#2279)' },
+  minimal: { honored: true, via: 'thread/start and thread/resume config features.hooks, features.plugins, features.apps, features.memories and features.multi_agent false, project_doc_max_bytes 0 (no AGENTS.md) and web_search disabled; sandbox read-only under a confirmed unmanaged policy or a failed requirements read, since the app-server ignores toolGrant (a discovered managed policy stays Codex\'s); thread/start ephemeral. Codex 0.164.0 has no override that stops skills or the user\'s MCP servers' },
   additionalDirectories: { honored: false, reason: 'no extra-root mapping; managed filesystem permissions belong to Codex' },
   env: { honored: true, via: 'merged over the child env through buildCodexAppServerEnv' },
   model: { honored: true, via: 'thread/start and thread/resume model' },
@@ -634,21 +635,14 @@ class CodexSession implements AgentSession {
     this.assertOpen();
     const restrictNetwork = productEnv('CODEX_NETWORK') === '0';
 
+    const config = codexThreadConfig(this.spec, restrictNetwork);
     const overrides = {
       model: this.spec.model,
       cwd: this.spec.cwd,
       ...codexToolGrantFields(this.spec.toolGrant),
       ...codexPermissionOverrides(requirements, restrictNetwork),
-      // Start and resume accept dotted config overrides; no global config write. Governed sessions
-      // keep multi-agent and lose only the cross-thread message board (hearsay-tools/cezarion#2279).
-      ...((restrictNetwork || this.spec.restrictCrossSessionMessaging || this.spec.squawkTools) ? { config: {
-        ...(restrictNetwork ? { 'sandbox_workspace_write.network_access': false } : {}),
-        ...(this.spec.restrictCrossSessionMessaging ? { 'features.agent_message_board': false } : {}),
-        // hearsay-tools/cezarion#1294: Codex asks before every MCP tool call unless the
-        // server's mode is `approve`, and Squawk's own tools must never wait on that.
-        // approval_policy stays the user's (#381); older Codex ignores the unknown key.
-        ...(this.spec.squawkTools ? { [`mcp_servers.${this.spec.squawkTools.name}`]: { command: this.spec.squawkTools.command, args: this.spec.squawkTools.args, env_vars: squawkToolEnvNames(this.spec.env ?? {}), default_tools_approval_mode: 'approve' } } : {}),
-      } } : {}),
+      ...(this.spec.minimal ? codexMinimalSandbox(requirements) : {}),
+      ...(config ? { config } : {}),
     };
     let threadResponse: Record<string, unknown>, resumed = false;
     if (this.spec.resume && this.spec.sessionId) {
@@ -659,7 +653,7 @@ class CodexSession implements AgentSession {
       resumed = true;
     } else {
       this.startupWaitingFor('thread/start');
-      threadResponse = await this.rpc.request('thread/start', clean(overrides));
+      threadResponse = await this.rpc.request('thread/start', clean({ ...overrides, ...(this.spec.minimal ? { ephemeral: true } : {}) }));
       this.assertOpen();
       this.threadId = threadIdOf(threadResponse) ?? this.spec.sessionId;
     }

@@ -30,7 +30,7 @@ const BUILTIN_TOOLS = ['read', 'bash', 'edit', 'ast_grep', 'ast_edit', 'ask', 'd
 const GATED_TOOLS = new Set(['ast_grep']);
 const DEFAULT_TOOLS = ['read', 'bash', 'edit', 'eval', 'glob', 'grep', 'find', 'task', 'wait', 'todo', 'web_search', 'write'];
 const VALUE_FLAGS = new Set(['--mode', '--extension', '--resume', '--append-system-prompt', '--model', '--thinking', '--add-dir', '--config', '--tools']);
-const BOOLEAN_FLAGS = new Set(['--no-tools']);
+const BOOLEAN_FLAGS = new Set(['--no-tools', '--no-extensions', '--no-skills', '--no-rules', '--no-context-files', '--no-lsp', '--no-session', '--no-title']);
 
 function startupError(code, message) {
   process.stderr.write(`${message}\nRun \`omp --help\` for available flags.\n`);

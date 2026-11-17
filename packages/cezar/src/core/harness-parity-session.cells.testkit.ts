@@ -161,6 +161,7 @@ export const SPEC_FIELD_PROBES: Readonly<Record<AgentRunSpecField, SpecFieldProb
   // `without` is the drive's unset grant; the tool-grant cells pin every kind, bashAllowlist included.
   toolGrant: { kind: 'boundary', without: {}, with: { toolGrant: explicitToolGrant(['Read', 'Grep']) } },
   restrictCrossSessionMessaging: { kind: 'boundary', without: {}, with: { restrictCrossSessionMessaging: true } },
+  minimal: { kind: 'boundary', without: {}, with: { minimal: true } },
   additionalDirectories: { kind: 'boundary', without: {}, with: { additionalDirectories: ['/tmp/parity-probe-extra'] } },
   env: { kind: SPEC_FIELD_PROBE_KINDS[1] },
   model: { kind: 'boundary', without: {}, with: { model: 'parity-probe/model-sentinel' } },

@@ -1,5 +1,6 @@
 import { testHome } from '../home/test-home.testkit.ts';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { AgentRunner, AgentRunSpec } from '../core/agent-runner.ts';
 import {
   autoNamingActive,
   buildNamerPrompt,
@@ -133,6 +134,27 @@ describe('generateRunName (dry run)', () => {
       else process.env.CEZ_DRY_RUN = saved;
     }
   }, 30_000);
+});
+
+describe('generateRunName runner spec', () => {
+  it('asks the runner for a minimal session with no tools', async () => {
+    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { generateRunName } = await import('./auto-name.ts');
+    const root = mkdtempSync(join(tmpdir(), 'cez-namer-spec-'));
+    const specs: AgentRunSpec[] = [];
+    const runner = {
+      run: async (spec: AgentRunSpec) => { specs.push(spec); return { text: '{"title": "naming tasks"}' }; },
+    } as unknown as AgentRunner;
+    try {
+      await expect(generateRunName(root, { task: 'name tasks' }, testHome(), () => runner)).resolves.toEqual({ titleSummary: 'naming tasks' });
+      expect(specs).toHaveLength(1);
+      expect(specs[0]).toMatchObject({ minimal: true, toolGrant: { kind: 'explicit', tools: [] } });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('liveTitleUpdatesEnabled', () => {

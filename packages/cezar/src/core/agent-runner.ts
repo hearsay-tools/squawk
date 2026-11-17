@@ -84,6 +84,13 @@ export interface AgentRunSpec {
    * ordinary harness settings. Custom tools and unrestricted shell are not
    * hard-isolated. See AGENT_PROTOCOL.md's D1 (hearsay-tools/cezarion#2279). */
   restrictCrossSessionMessaging?: boolean;
+  /** A bookkeeping call, such as the task namer: start the harness with as little of the user's
+   *  and the project's setup as the runner can turn off (hooks, plugins, extensions, skills,
+   *  context files, MCP servers, session saving), keeping auth and model selection. On a runner
+   *  that ignores `toolGrant`, also restrict what its tools can do. What each runner turns off
+   *  differs; its `*_SPEC_SUPPORT.minimal` row names its flags and what still loads or is saved.
+   *  Absent keeps the ordinary harness setup. */
+  minimal?: boolean;
   /** Extra directories the agent may read/write besides `cwd`. */
   additionalDirectories?: string[];
   /** Extra env vars for the agent process (merged over `process.env`) —
@@ -132,6 +139,7 @@ const AGENT_RUN_SPEC_FIELD_SET: Readonly<Record<keyof AgentRunSpec, true>> = {
   cwd: true,
   toolGrant: true,
   restrictCrossSessionMessaging: true,
+  minimal: true,
   additionalDirectories: true,
   env: true,
   model: true,

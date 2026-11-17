@@ -89,6 +89,11 @@ const OMP_TOOL_MAP: Readonly<Record<string, string>> = {
   // so mapping a web-only grant onto it would widen the grant. It is dropped (fail closed).
 };
 
+/** OMP's flags for a minimal session (`AgentRunSpec.minimal`): no discovered extensions, skills,
+ *  rules or context files, no LSP, no saved session and no title model call. */
+export const OMP_MINIMAL_ARGS = ['--no-extensions', '--no-skills', '--no-rules', '--no-context-files',
+  '--no-lsp', '--no-session', '--no-title'] as const;
+
 /**
  * What the omp CLI receives from each `AgentRunSpec` field (#284, spec § Spawn and spec
  * support). Held against the mock's recorded argv and RPC by the harness parity matrix.
@@ -107,6 +112,7 @@ export const OMP_SPEC_SUPPORT: AgentRunSpecSupport = {
     honored: false,
     reason: 'OMP 18.13.1 has no cross-session tool in its default set; its irc tool is an in-process bus that reaches only agents inside the same OMP process, so subagent messaging and task stay (hearsay-tools/cezarion#2279)',
   },
+  minimal: { honored: true, via: `${OMP_MINIMAL_ARGS.join(' ')}; explicit --extension paths still load. OMP 18.13.1 has no flag that stops MCP servers, so the user's MCP servers still connect` },
   additionalDirectories: { honored: true, via: '--add-dir per directory; an omp build that rejects --add-dir is respawned once without it, with a v1 note (Ruling 22)' },
   env: { honored: true, via: 'merged over the child env through buildChildEnv' },
   model: { honored: true, via: '--model provider/model' },
@@ -196,6 +202,7 @@ export function buildOmpArgs(
   opts: { omitAddDir?: boolean } = {},
 ): string[] {
   const args = ['--mode', 'rpc'];
+  if (spec.minimal) args.push(...OMP_MINIMAL_ARGS);
   if (spec.squawkTools) args.push('--extension', ompScriptPath('omp-ci-wait.mjs'));
   // OMP has no --session-id: a fresh session mints its id, which get_state reports.
   if (spec.resume && spec.sessionId) args.push('--resume', spec.sessionId);

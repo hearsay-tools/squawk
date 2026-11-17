@@ -26,7 +26,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 import type { AgentEvent, AgentRunSpec, AgentSession } from './agent-runner.js';
 import type { UiEvent } from './ui-events.js';
 import { sessionGroupOf } from './session-process.js';
-import { buildOmpArgs, OMP_BUILTIN_TOOL_NAMES, OMP_SPEC_SUPPORT, OmpRunner, ompTools } from './omp-runner.js';
+import { buildOmpArgs, OMP_MINIMAL_ARGS, OMP_BUILTIN_TOOL_NAMES, OMP_SPEC_SUPPORT, OmpRunner, ompTools } from './omp-runner.js';
 import { ompProviderErrorMessage } from './omp-ui-mapper.js';
 import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.js';
 import { readPids } from '../pid-file.testkit.js';
@@ -180,6 +180,12 @@ describe('buildOmpArgs', () => {
       expect(args).not.toContain('--session-id');
       expect(args).not.toContain('--session');
     }
+  });
+
+  it('a minimal session adds the OMP minimal flags and nothing else', () => {
+    const args = buildOmpArgs({ ...base, minimal: true });
+    expect(args).toEqual(['--mode', 'rpc', ...OMP_MINIMAL_ARGS, ...buildOmpArgs(base).slice(2)]);
+    expect(buildOmpArgs(base)).not.toContain('--no-session');
   });
 
   it('sends the ordinary argv under restrictCrossSessionMessaging', () => {

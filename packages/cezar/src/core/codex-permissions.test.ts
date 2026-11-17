@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { CODEX_MINIMAL_CONFIG } from './codex-thread-config.ts';
 import { driveSeam, waitFor } from './harness-parity.testkit.ts';
 
 const directories: string[] = [];
@@ -33,6 +34,43 @@ async function observe(requirements: unknown, resume: boolean, extraEnv: Record<
   const wire = readFileSync(record, 'utf8').trim().split('\n').map(line => JSON.parse(line));
   return { obs, wire, thread: wire.find(m => m.method === (resume ? 'thread/resume' : 'thread/start')).params };
 }
+
+async function observeMinimal(requirements: unknown, resume: boolean, extraEnv: Record<string, string> = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'cez-permissions-')); directories.push(dir);
+  const record = join(dir, 'wire.ndjson');
+  await driveSeam('codex', 'baseline', {
+    spec: { minimal: true, resume, sessionId: 'th_mock_1', env: { CEZ_MOCK_ARGS_FILE: record, MOCK_CODEX_REQUIREMENTS: JSON.stringify(requirements), ...extraEnv } },
+    sessionOptions: { autoEndAfterFirstTurn: true },
+    whileOpen: async session => { await session.result; },
+  });
+  const wire = readFileSync(record, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  return wire.find(m => m.method === (resume ? 'thread/resume' : 'thread/start')).params;
+}
+
+describe('Codex minimal sessions', () => {
+  it('starts an ephemeral, read-only thread without hooks, plugins, apps, memories, subagents, project docs or web search', async () => {
+    const thread = await observeMinimal(null, false);
+    expect(thread.sandbox).toBe('read-only');
+    expect(thread.ephemeral).toBe(true);
+    expect(thread.config).toMatchObject(CODEX_MINIMAL_CONFIG);
+  });
+  it('resumes with the same config and sandbox, and sends no ephemeral flag', async () => {
+    const thread = await observeMinimal(null, true);
+    expect(thread.sandbox).toBe('read-only');
+    expect(thread).not.toHaveProperty('ephemeral');
+    expect(thread.config).toMatchObject(CODEX_MINIMAL_CONFIG);
+  });
+  // Read-only never widens an unknown policy; Codex refuses it when the policy forbids it.
+  it('runs read-only when the requirements read fails', async () => {
+    const thread = await observeMinimal(null, false, { MOCK_CODEX_REQUIREMENTS_ERROR: '1' });
+    expect(thread.sandbox).toBe('read-only');
+  });
+  it.each(managedCases)('leaves a managed policy to Codex: $name', async ({ requirements }) => {
+    const thread = await observeMinimal(requirements, false);
+    expect(thread).not.toHaveProperty('sandbox');
+    expect(thread.config).toMatchObject(CODEX_MINIMAL_CONFIG);
+  });
+});
 
 describe('Codex managed permissions (#708)', () => {
   for (const { name, requirements } of managedCases) {

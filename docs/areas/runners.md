@@ -198,6 +198,31 @@ Squawk is not married to one vendor. Every agent step runs through a single
 | **pi** _(experimental)_ | [`pi`](https://github.com/badlogic/pi-mono) | Persistent `--mode rpc` over JSONL; models are picked with the `provider/model` convention. | Maps `allowedTools` onto pi tool names. The default list, which adds the harness extras `Subagent`, `SubagentSupervisor` and `SubagentWait`, sends no allowlist: `--no-builtin-tools` plus a bundled extension that activates those built-ins, so MCP servers (`direct`, `codemode` and `deferred` exposure) and other pi extensions' tools stay callable. The six base tools alone, the list a worker inherits from a Claude parent, take the same path. A narrowed `allowedTools`, or one that names any tool outside that default set (an `mcp__` tool, `WebFetch` or a custom tool), uses pi's `--tools` allowlist, so a step that grants named tools reaches only those; a list that maps to nothing becomes `--no-tools` (or only the Squawk tools). A configured `bashAllowlist` disables Bash because pi cannot express command-prefix rules. |
 | **OMP** _(experimental)_ | [`omp`](https://github.com/can1357/oh-my-pi) | Persistent `--mode rpc` over JSONL (Oh My Pi, a pi fork); models use the `provider/model` convention and are discovered from `omp models --json`. | Maps `allowedTools` onto OMP's `--tools` allowlist (`[]` becomes `--no-tools`); default sessions also pass `todo`, `lsp`, `ast_edit`, `task` and `wait`. A configured `bashAllowlist` disables `bash` because OMP cannot express command-prefix rules. `--tools` filters built-in tools only, so MCP and extension tools stay callable under a narrowed list. |
 
+### Minimal sessions
+
+A bookkeeping call, such as the task namer, sets `AgentRunSpec.minimal`. The runner then
+turns off as much of the user's and the project's setup as it can: hooks, plugins, extensions,
+skills, context files, MCP servers and session saving. Auth and model selection stay. What each
+runner turns off differs. Its `*_SPEC_SUPPORT.minimal` row names its flags and what still loads:
+
+- **Claude Code:** `--safe-mode --disable-slash-commands --no-session-persistence`. Not
+  `--bare`, which accepts only API-key auth.
+- **Codex:** thread config turns off hooks, plugins, apps, memories, subagents, AGENTS.md and
+  web search, and the thread is ephemeral. Under a confirmed unmanaged policy, or when Codex
+  cannot report its policy, the sandbox is `read-only`, because Codex ignores `allowedTools`. Skills and the user's MCP servers still load.
+- **OpenCode:** `serve --pure`, the `OPENCODE_DISABLE_*` switches for project config, Claude Code
+  files and external skills, a runtime config that turns every tool off and
+  denies every permission, and a `*` deny session rule, set when the session is created or resumed
+  and on each prompt. Session rules come after an agent's own permission rules, so a configured agent
+  cannot allow a tool back.
+  MCP servers in the user's global config, the global AGENTS.md, configured `instructions` and
+  the default plugins, which carry the Codex and Copilot sign-in loaders, still load, and the
+  session is saved.
+- **pi:** `--no-extensions --no-skills --no-prompt-templates --no-themes --no-context-files
+  --no-mcp --no-session`, without the project-skills extension.
+- **OMP:** `--no-extensions --no-skills --no-rules --no-context-files --no-lsp --no-session
+  --no-title`. The user's MCP servers still connect.
+
 > ⚠️ **OpenCode, pi and OMP support are experimental.** These runners work but are less
 > battle-tested than the Claude Code and Codex backends, and OpenCode ignores
 > `allowedTools` (its own permission config governs what it asks). Treat them as
