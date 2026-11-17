@@ -1,12 +1,11 @@
 import type { AstContext, AstRule, EsNode, Visitors } from './ast-rule.ts';
-import { babelTree } from './wait-babel-tree.ts';
+import { walk, isFunction, isCall, type N } from './unit-wait-tree.ts';
 import { inOxlint } from './wait-oxlint.ts';
 import { compareToBaseline, tally, readBaseline } from './wait-baseline.ts';
 import { WaitSource, waitComments, type ParsedComment } from './wait-source.ts';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import type { BaselineEntry as Entry } from './wait-baseline.ts';
-import type { AwaitExpression, CallExpression, DoWhileStatement, ForStatement, Node, Program, WhileStatement } from '@babel/types';
 import { findQuery, sizeNumber, calleeOf, vitestBound, testingLibraryBound, contains, placeAt, readerFor } from './unit-wait-values.ts';
 import { pollDeadline } from './unit-wait-deadlines.ts';
 
@@ -88,40 +87,17 @@ export const srcDir = resolve(import.meta.dirname, '../../../web/src')
 
 export const baselinePath = resolve(import.meta.dirname, '../../../web/src/test/unit-wait-discipline.baseline.json')
 
-/** Returns `false` to leave a node's children unvisited. */
-export type Visit = (node: Node, ancestors: readonly Node[]) => void | false
+/** A `for`, `while` or `do` loop. */
+export type Loop = N
 
-/** Child nodes in source order, walked in place so no node allocates a child list. Offsets, `extra`, `loc` and comments are not children. */
-export function walk(node: Node, ancestors: Node[], visit: Visit): void {
-  if (visit(node, ancestors) === false) return
-  ancestors.push(node)
-  const fields = node as unknown as Record<string, unknown>
-  for (const key of Object.keys(node)) {
-    if (key === 'start' || key === 'end' || key === 'extra' || key === 'loc' || key.endsWith('Comments')) continue
-    const value = fields[key]
-    if (Array.isArray(value)) {
-      for (const item of value) if (isSyntax(item)) walk(item, ancestors, visit)
-    } else if (isSyntax(value)) walk(value, ancestors, visit)
-  }
-  ancestors.pop()
-}
-
-const isSyntax = (value: unknown): value is Node => typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string'
-
-export const isFunction = (node: Node) =>
-  node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' || node.type === 'ArrowFunctionExpression' ||
-  node.type === 'ObjectMethod' || node.type === 'ClassMethod'
-
-export type Loop = ForStatement | WhileStatement | DoWhileStatement
-
-export const isPollLoop = (node: Node): node is Loop => node.type === 'ForStatement' || node.type === 'WhileStatement' || node.type === 'DoWhileStatement'
+export const isPollLoop = (node: N): node is Loop => node.type === 'ForStatement' || node.type === 'WhileStatement' || node.type === 'DoWhileStatement'
 
 /** The names a write targets: `x = …`, `x++`, `[x, y] = …`, `({ x } = …)`. */
-export function targetNames(target: Node): string[] {
+export function targetNames(target: N): string[] {
   switch (target.type) {
     case 'Identifier': return [target.name]
-    case 'ArrayPattern': return target.elements.flatMap(element => (element ? targetNames(element) : []))
-    case 'ObjectPattern': return target.properties.flatMap(property => targetNames(property.type === 'RestElement' ? property.argument : property.value))
+    case 'ArrayPattern': return target.elements.flatMap((element: N | null) => (element ? targetNames(element) : []))
+    case 'ObjectPattern': return target.properties.flatMap((property: N) => targetNames(property.type === 'RestElement' ? property.argument : property.value))
     case 'AssignmentPattern': return targetNames(target.left)
     case 'RestElement': return targetNames(target.argument)
     case 'MemberExpression': return targetNames(target.object)
@@ -129,15 +105,15 @@ export function targetNames(target: Node): string[] {
   }
 }
 
-export const namesWritten = (node: Node): string[] => (node.type === 'AssignmentExpression' ? targetNames(node.left) : node.type === 'UpdateExpression' ? targetNames(node.argument) : [])
+export const namesWritten = (node: N): string[] => (node.type === 'AssignmentExpression' ? targetNames(node.left) : node.type === 'UpdateExpression' ? targetNames(node.argument) : [])
 
 /** The local names of Testing Library's `waitFor` and `waitForElementToBeRemoved`, and of a namespace import of the library (`rtl` in `rtl.waitFor`). */
-export function testingLibrary(program: Program): { tlWaits: Set<string>; tlNamespaces: Set<string> } {
+export function testingLibrary(program: N): { tlWaits: Set<string>; tlNamespaces: Set<string> } {
   const tlWaits = new Set<string>()
   const tlNamespaces = new Set<string>()
-  for (const node of program.body) {
+  for (const node of program.body as N[]) {
     if (node.type !== 'ImportDeclaration' || !node.source.value.startsWith('@testing-library/')) continue
-    for (const specifier of node.specifiers) {
+    for (const specifier of node.specifiers as N[]) {
       if (specifier.type === 'ImportNamespaceSpecifier') tlNamespaces.add(specifier.local.name)
       const imported = specifier.type === 'ImportSpecifier' && specifier.imported.type === 'Identifier' ? specifier.imported.name : ''
       if (imported === 'waitFor' || imported === 'waitForElementToBeRemoved') tlWaits.add(specifier.local.name)
@@ -155,10 +131,10 @@ export interface Ctx {
   accepted: (line: number) => boolean
   sites: Site[]
   /** Each poll loop with its sleeps (the delay, and whether every pass reaches it), and where it sits. */
-  loops: Map<Node, { sleeps: Sleep[]; where: Where }>
+  loops: Map<N, { sleeps: Sleep[]; where: Where }>
 }
 
-export function report(ctx: Ctx, rule: Rule, node: Node): void {
+export function report(ctx: Ctx, rule: Rule, node: N): void {
   const line = ctx.lineOf(node.start ?? 0)
   if (ctx.accepted(line)) return
   ctx.sites.push({ file: ctx.file, rule, line, site: ctx.lines[line - 1]?.trim() ?? '' })
@@ -170,7 +146,7 @@ export const MAX_TIMER_MS = 2 ** 31 - 1
 /** A wait bound is short unless it is a finite number of at least the floor that a timer keeps: a negative, zero, `NaN`, infinite or overflowing one fires at once. */
 export const isShortBound = (ms: number): boolean => !(ms >= FLOOR_MS && ms <= MAX_TIMER_MS)
 
-export function shortBound(call: CallExpression, ctx: Ctx, ancestors: readonly Node[]): boolean {
+export function shortBound(call: N, ctx: Ctx, ancestors: readonly N[]): boolean {
   const place = placeAt(ancestors, call.start ?? 0)
   const bound = place ? vitestBound(call, place) ?? testingLibraryBound(call, ctx, place) : undefined
   return bound !== undefined && isShortBound(bound)
@@ -179,10 +155,10 @@ export function shortBound(call: CallExpression, ctx: Ctx, ancestors: readonly N
 export const sleepNames = new Set(['delay', 'sleep', 'wait', 'pause'])
 
 /** Whether a function body calls a timer on its resolver: `(resolve) => setTimeout(resolve, 50)`. Returns the delay argument. */
-export function timerDelay(fn: Node, resolver: string): { delay: Node | undefined } | undefined {
-  let found: { delay: Node | undefined } | undefined
+export function timerDelay(fn: N, resolver: string): { delay: N | undefined } | undefined {
+  let found: { delay: N | undefined } | undefined
   walk(fn, [], node => {
-    if (found || node.type !== 'CallExpression') return
+    if (found || !isCall(node)) return
     const callee = calleeOf(node.callee)
     if (!callee || !/(?:setTimeout|SetTimeout)$/.test(callee.name)) return
     const first = node.arguments[0]
@@ -192,8 +168,8 @@ export function timerDelay(fn: Node, resolver: string): { delay: Node | undefine
 }
 
 /** The delay of an awaited timer (`undefined` inside when the delay is not an argument), or undefined for any other await. */
-export function awaitedSleep(argument: Node): { delay: Node | undefined } | undefined {
-  if (argument.type === 'CallExpression') {
+export function awaitedSleep(argument: N): { delay: N | undefined } | undefined {
+  if (isCall(argument)) {
     const callee = calleeOf(argument.callee)
     const timers = callee?.name === 'setTimeout' && (callee.object === undefined || callee.object === 'timers')
     return callee && (timers || (callee.object === undefined && sleepNames.has(callee.name))) ? { delay: argument.arguments[0] } : undefined
@@ -208,13 +184,13 @@ export function awaitedSleep(argument: Node): { delay: Node | undefined } | unde
 /** Where a poll loop sits: the nodes above it, and the function (or program) a name in it is looked up in. */
 export interface Where {
   loop: Loop
-  scope: Node
+  scope: N
   /** Every node above the loop, outermost first. */
-  above: readonly Node[]
+  above: readonly N[]
 }
 
 /** The innermost `for`, `while` or `do` loop around a node, within its own function. */
-export function loopAround(ancestors: readonly Node[]): Where | undefined {
+export function loopAround(ancestors: readonly N[]): Where | undefined {
   let loop: Loop | undefined
   let at = -1
   for (let i = ancestors.length - 1; i >= 0; i -= 1) {
@@ -230,7 +206,7 @@ export function loopAround(ancestors: readonly Node[]): Where | undefined {
 
 /** A sleep in a poll loop: its delay, and whether every pass of the loop reaches it. */
 export interface Sleep {
-  delay: Node | undefined
+  delay: N | undefined
   always: boolean
 }
 
@@ -241,12 +217,12 @@ export const skippable = new Set(['IfStatement', 'ConditionalExpression', 'Logic
  * Whether every pass of the loop reaches the await. Nothing between them skips it (a branch, a short circuit, a `try`, a loop over
  * a collection), and no `continue` comes first. A sleep a pass may skip is not part of the time one pass takes.
  */
-export function runsEveryPass(loop: Loop, sleeping: Node, ancestors: readonly Node[]): boolean {
+export function runsEveryPass(loop: Loop, sleeping: N, ancestors: readonly N[]): boolean {
   if (ancestors.slice(ancestors.indexOf(loop) + 1).some(ancestor => skippable.has(ancestor.type))) return false
   return !contains(loop.body, node => node.type === 'ContinueStatement' && (node.start ?? 0) < (sleeping.start ?? 0))
 }
 
-export function visitAwait(node: AwaitExpression, ancestors: readonly Node[], ctx: Ctx): void {
+export function visitAwait(node: N, ancestors: readonly N[], ctx: Ctx): void {
   const sleep = awaitedSleep(node.argument)
   if (!sleep) return
   const around = loopAround(ancestors)
@@ -261,8 +237,8 @@ export function visitAwait(node: AwaitExpression, ancestors: readonly Node[], ct
   else ctx.loops.set(around.loop, { sleeps: [entry], where: around })
 }
 
-export function visit(node: Node, ancestors: readonly Node[], ctx: Ctx): void {
-  if (node.type === 'CallExpression' && shortBound(node, ctx, ancestors)) report(ctx, 'short-bound', node)
+export function visit(node: N, ancestors: readonly N[], ctx: Ctx): void {
+  if (isCall(node) && shortBound(node, ctx, ancestors)) report(ctx, 'short-bound', node)
   else if (node.type === 'AwaitExpression') visitAwait(node, ancestors, ctx)
 }
 
@@ -281,8 +257,8 @@ export function acceptance(source: WaitSource): (line: number) => boolean {
 }
 
 
-/** The sites of one parsed file: `@babel/parser`'s tree, or oxlint's through `babelView`. */
-export function scanProgram(file: string, program: Program, source: WaitSource): Site[] {
+/** The sites of one file, read from oxlint's syntax tree in place. */
+export function scanProgram(file: string, program: N, source: WaitSource): Site[] {
   const ctx: Ctx = {
     file, lines: source.lines, lineOf: offset => source.lineOf(offset), ...testingLibrary(program), accepted: acceptance(source),
     sites: [], loops: new Map(),
@@ -352,7 +328,7 @@ export function unitVisitors(file: string, sourceCode: AstContext['sourceCode'],
     'Program:exit'(node) {
       if (!relevant) return
       const source = new WaitSource(sourceCode.text, waitComments(sourceCode.getAllComments() as unknown as ParsedComment[]))
-      done(scanProgram(file, babelTree(node), source), node)
+      done(scanProgram(file, node as N, source), node)
     },
   }
 }

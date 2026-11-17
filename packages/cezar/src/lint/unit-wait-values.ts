@@ -1,5 +1,6 @@
-import type { BinaryExpression, CallExpression, MemberExpression, Node, ObjectExpression, UnaryExpression } from '@babel/types';
-import { VITEST_DEFAULT_MS, walk, isFunction, targetNames, namesWritten, type Ctx, type Where } from './unit-wait-discipline.ts';
+import { VITEST_DEFAULT_MS, targetNames, namesWritten, type Ctx, type Where } from './unit-wait-discipline.ts';
+import { walk, isFunction, isCall, isMember, isObjectProperty, paramsOf, type N } from './unit-wait-tree.ts';
+import { isNullLiteral, isNumberLiteral, isStringLiteral } from './server-wait-tree.ts';
 import { type Bound, isPath, isLimit, isNamed } from './unit-wait-deadlines.ts';
 
 /** A name's value where it is read, or undefined when the scan cannot say. */
@@ -22,12 +23,12 @@ export const numberMembers = new Map([
  * `as` / `satisfies` / non-null wrappers, a name `read` knows, and `+ - * / % **` of those. Anything else is undefined: an
  * expression the scan cannot read.
  */
-export function numberOf(node: Node | null | undefined, read: Read): number | undefined {
+export function numberOf(node: N | null | undefined, read: Read): number | undefined {
   if (!node) return undefined
   switch (node.type) {
-    case 'NumericLiteral': return node.value
+    case 'Literal': return isNumberLiteral(node) ? node.value : undefined
     case 'Identifier': return namedNumbers.has(node.name) ? namedNumbers.get(node.name) : read(node.name)
-    case 'MemberExpression': return memberNumber(node)
+    case 'MemberExpression': return isMember(node) ? memberNumber(node) : undefined
     case 'ParenthesizedExpression': case 'TSAsExpression': case 'TSSatisfiesExpression': case 'TSNonNullExpression': case 'TSTypeAssertion':
       return numberOf(node.expression, read)
     case 'UnaryExpression': return unaryNumber(node, read)
@@ -37,12 +38,12 @@ export function numberOf(node: Node | null | undefined, read: Read): number | un
 }
 
 /** `Number.POSITIVE_INFINITY` and the other numbers `Number` holds. */
-export const memberNumber = (node: MemberExpression): number | undefined => {
+export const memberNumber = (node: N): number | undefined => {
   const name = node.object.type === 'Identifier' && node.object.name === 'Number' ? keyName(node.property, node.computed) : undefined
   return name === undefined ? undefined : numberMembers.get(name)
 }
 
-export function unaryNumber(node: UnaryExpression, read: Read): number | undefined {
+export function unaryNumber(node: N, read: Read): number | undefined {
   const value = node.operator === '-' || node.operator === '+' ? numberOf(node.argument, read) : undefined
   return value === undefined ? undefined : node.operator === '-' ? -value : value
 }
@@ -51,15 +52,15 @@ export function unaryNumber(node: UnaryExpression, read: Read): number | undefin
  * The value of a wait bound or a delay: a number `numberOf` reads, or `Math.max`, `min`, `abs`, `floor`, `ceil`, `round` or
  * `trunc` of such numbers. A limit is not read this way: it is a literal sum of products or one name or path.
  */
-export function sizeNumber(node: Node | null | undefined, read: Read): number | undefined {
-  if (node?.type !== 'CallExpression') return numberOf(node, read)
+export function sizeNumber(node: N | null | undefined, read: Read): number | undefined {
+  if (!node || !isCall(node)) return numberOf(node, read)
   const callee = calleeOf(node.callee)
   const fn = callee?.object === 'Math' ? mathFunctions.get(callee.name) : undefined
-  const args = node.arguments.map(argument => numberOf(argument, read))
+  const args = (node.arguments as N[]).map(argument => numberOf(argument, read))
   return fn && args.length > 0 && args.every(isNumber) ? fn(...args) : undefined
 }
 
-export function binaryNumber(node: BinaryExpression, read: Read): number | undefined {
+export function binaryNumber(node: N, read: Read): number | undefined {
   const left = numberOf(node.left, read)
   const right = numberOf(node.right, read)
   if (left === undefined || right === undefined) return undefined
@@ -68,15 +69,15 @@ export function binaryNumber(node: BinaryExpression, read: Read): number | undef
 }
 
 /** A node without the wrappers that change its type and not its value: parentheses, `as`, `satisfies`, `!`. */
-export function unwrap(node: Node): Node {
+export function unwrap(node: N): N {
   const wrapper = node.type === 'ParenthesizedExpression' || node.type === 'TSAsExpression' || node.type === 'TSSatisfiesExpression' || node.type === 'TSNonNullExpression' || node.type === 'TSTypeAssertion'
   return wrapper ? unwrap(node.expression) : node
 }
 
 /** The text of a string literal or of a template without substitutions, else undefined. */
-export function stringOf(node: Node): string | undefined {
+export function stringOf(node: N): string | undefined {
   const inner = unwrap(node)
-  if (inner.type === 'StringLiteral') return inner.value
+  if (isStringLiteral(inner)) return inner.value
   return inner.type === 'TemplateLiteral' && inner.expressions.length === 0 ? inner.quasis[0]?.value.cooked ?? undefined : undefined
 }
 
@@ -87,28 +88,28 @@ export function stringOf(node: Node): string | undefined {
  * string (`[KEY]` after `const KEY = 'timeout'`), each with `as`, `satisfies`, `!` and parentheses taken off. Anything else
  * is undefined: the scan cannot say which key it is.
  */
-export function keyName(key: Node, computed: boolean, place?: Place): string | undefined {
+export function keyName(key: N, computed: boolean, place?: Place): string | undefined {
   if (computed) return expressionName(key, place, 0)
   if (key.type === 'Identifier') return key.name
-  return key.type === 'StringLiteral' ? key.value : key.type === 'NumericLiteral' ? String(key.value) : undefined
+  return isStringLiteral(key) ? key.value : isNumberLiteral(key) ? String(key.value) : undefined
 }
 
 /** The name a bracketed key spells, followed through the names that hold it (`const ALIAS = KEY`) to a depth of three. */
-export function expressionName(node: Node, place: Place | undefined, depth: number): string | undefined {
+export function expressionName(node: N, place: Place | undefined, depth: number): string | undefined {
   const literal = stringOf(node)
   if (literal !== undefined) return literal
   const inner = unwrap(node)
-  if (inner.type === 'NumericLiteral') return String(inner.value)
+  if (isNumberLiteral(inner)) return String(inner.value)
   if (inner.type !== 'Identifier' || !place || depth > 3) return undefined
   const names = heldBy(place.view, place.use, inner.name, true).map(held => expressionName(held.value, placeFor(place.view, held.use), depth + 1))
   return names.length > 0 && names.every(name => name !== undefined && name === names[0]) ? names[0] : undefined
 }
 
 /** The `.name` of a callee, and the identifier it is called on (`vi` in `vi.waitFor`), when there is one. */
-export function calleeOf(node: Node): { object?: string; name: string } | undefined {
+export function calleeOf(node: N): { object?: string; name: string } | undefined {
   if (node.type === 'Identifier') return { name: node.name }
-  const name = node.type === 'MemberExpression' ? keyName(node.property, node.computed) : undefined
-  if (node.type !== 'MemberExpression' || name === undefined) return undefined
+  const name = isMember(node) ? keyName(node.property, node.computed) : undefined
+  if (name === undefined) return undefined
   return node.object.type === 'Identifier' ? { object: node.object.name, name } : { name }
 }
 
@@ -123,7 +124,7 @@ export interface Place {
 export const ownNames = new Set(['Math', 'Number', 'Date', 'Infinity', 'NaN', 'undefined'])
 
 /** Whether the file binds `name` other than by a plain declaration: as a function or class, or as part of a destructuring. */
-export function boundApart(root: Node | undefined, name: string): boolean {
+export function boundApart(root: N | undefined, name: string): boolean {
   let found = false
   if (root) {
     walk(root, [], node => {
@@ -140,26 +141,26 @@ export function declaredHere(view: View, use: Use, name: string): boolean {
   return declared ? declared.kind !== 'param' : boundApart(view.above[0], name)
 }
 
-/** The names an expression reads: a called function's, the start of a path, not a property, a type or a function's own. */
-export function rootsOf(root: Node): string[] {
+/** The names an expression reads: a called function's, the start of a path, a private name, not a property, a type or a function's own. */
+export function rootsOf(root: N): string[] {
   const found: string[] = []
   walk(root, [], (node, ancestors) => {
     if (isFunction(node) || (node.type.startsWith('TS') && !/^TS(?:As|Satisfies|NonNull)Expression$|^TSTypeAssertion$/.test(node.type))) return false
     const parent = ancestors.at(-1)
-    const property = (parent?.type === 'MemberExpression' && parent.property === node && !parent.computed) || (parent?.type === 'ObjectProperty' && parent.key === node && !parent.computed)
-    if (node.type === 'Identifier' && !property) found.push(node.name)
+    const property = (isMember(parent) && parent?.property === node && !parent.computed) || (isObjectProperty(parent) && parent?.key === node && !parent.computed)
+    if ((node.type === 'Identifier' && !property) || node.type === 'PrivateIdentifier') found.push(node.name)
   })
   return found
 }
 
 /** A value that only passes another on: a name or path, or a read of the clock plus one (`Date.now() + ms`). */
-export const passesOn = (value: Node): boolean => isPath(value) || (value.type === 'BinaryExpression' && value.operator === '+' && clockCall(value.left) && isPath(value.right))
+export const passesOn = (value: N): boolean => isPath(value) || (value.type === 'BinaryExpression' && value.operator === '+' && clockCall(value.left) && isPath(value.right))
 
 /**
  * Whether the expression reads a name or path that comes from outside the file, so the caller sizes it: a parameter, an import or a
  * global. A name the file declares is the caller's when every value it holds only passes on one that is.
  */
-export function sizedOutside(node: Node, view: View, use: Use, depth = 0): boolean {
+export function sizedOutside(node: N, view: View, use: Use, depth = 0): boolean {
   return rootsOf(node).some(name => {
     if (ownNames.has(name)) return false
     if (!declaredHere(view, use, name)) return true
@@ -172,18 +173,18 @@ export function sizedOutside(node: Node, view: View, use: Use, depth = 0): boole
  * What a wait bound stands for: a number, `undefined` when the caller sizes it (a parameter, an import), and `NaN` for an expression
  * made only of what the file declares that the scan cannot evaluate. It may be any bound, so it counts as below the floor.
  */
-export const sizeOf = (node: Node, place: Place): number | undefined => sizeNumber(node, place.read) ?? (sizedOutside(node, place.view, place.use) ? undefined : NaN)
+export const sizeOf = (node: N, place: Place): number | undefined => sizeNumber(node, place.read) ?? (sizedOutside(node, place.view, place.use) ? undefined : NaN)
 
 /** What a Vitest wait is given as its bound: `undefined` is its default, `null` is none, and any other value is read. */
-export function vitestMs(node: Node, place: Place): number | undefined {
+export function vitestMs(node: N, place: Place): number | undefined {
   if (node.type === 'Identifier' && node.name === 'undefined') return VITEST_DEFAULT_MS
-  return node.type === 'NullLiteral' ? 0 : sizeOf(node, place)
+  return isNullLiteral(node) ? 0 : sizeOf(node, place)
 }
 
 export const placeFor = (view: View, use: Use): Place => ({ view, use, read: nameReader(view, use, 1, true) })
 
 /** The options objects an argument stands for: the literal itself, or the ones a name holds, each with the place its own names are read from. */
-export function optionObjects(argument: Node, place: Place): Array<{ object: ObjectExpression; place: Place }> {
+export function optionObjects(argument: N, place: Place): Array<{ object: N; place: Place }> {
   const node = unwrap(argument)
   if (node.type === 'ObjectExpression') return [{ object: node, place }]
   if (node.type !== 'Identifier') return []
@@ -194,7 +195,7 @@ export function optionObjects(argument: Node, place: Place): Array<{ object: Obj
 }
 
 /** Vitest's `vi.waitFor`, `vi.waitUntil` and `expect.poll`: the bound in force, or undefined when the caller sizes it. */
-export function vitestBound(call: CallExpression, place: Place): number | undefined {
+export function vitestBound(call: N, place: Place): number | undefined {
   const callee = calleeOf(call.callee)
   const isWait = (callee?.object === 'vi' && (callee.name === 'waitFor' || callee.name === 'waitUntil')) ||
     (callee?.object === 'expect' && callee.name === 'poll')
@@ -207,7 +208,7 @@ export function vitestBound(call: CallExpression, place: Place): number | undefi
 }
 
 /** What a Testing Library wait is given as its `timeout`: `undefined` is its default, which `asyncUtilTimeout` covers. */
-export const testingLibraryMs = (node: Node, place: Place): number | undefined => (node.type === 'Identifier' && node.name === 'undefined' ? undefined : sizeOf(node, place))
+export const testingLibraryMs = (node: N, place: Place): number | undefined => (node.type === 'Identifier' && node.name === 'undefined' ? undefined : sizeOf(node, place))
 
 /**
  * The bound an options object leaves, read in order as the language does, from `before` until a `timeout` names one. Every key
@@ -215,11 +216,11 @@ export const testingLibraryMs = (node: Node, place: Place): number | undefined =
  * caller's (`undefined`) when it reads a name from outside the file, and `NaN` when it reads only what the file declares, until
  * a later explicit `timeout`.
  */
-export function optionsMs(object: ObjectExpression, place: Place, before: number | undefined, boundOf: (node: Node, place: Place) => number | undefined): number | undefined {
+export function optionsMs(object: N, place: Place, before: number | undefined, boundOf: (node: N, place: Place) => number | undefined): number | undefined {
   let bound = before
-  for (const property of object.properties) {
+  for (const property of object.properties as N[]) {
     const name = property.type === 'SpreadElement' ? undefined : keyName(property.key, property.computed, place)
-    if (name === 'timeout' && property.type === 'ObjectProperty') bound = boundOf(property.value, place)
+    if (name === 'timeout' && isObjectProperty(property)) bound = boundOf(property.value, place)
     else if (name === undefined) bound = sizedOutside(property.type === 'SpreadElement' ? property.argument : property.key, place.view, place.use) ? undefined : NaN
   }
   return bound
@@ -229,7 +230,7 @@ export function optionsMs(object: ObjectExpression, place: Place, before: number
 export const findQuery = /^find(?:All)?By[A-Z]/
 
 /** A Testing Library wait whose `timeout` is given: that bound, or undefined when it has none or the caller sizes it. */
-export function testingLibraryBound(call: CallExpression, ctx: Ctx, place: Place): number | undefined {
+export function testingLibraryBound(call: N, ctx: Ctx, place: Place): number | undefined {
   const callee = calleeOf(call.callee)
   if (!callee) return undefined
   const query = findQuery.test(callee.name)
@@ -237,22 +238,22 @@ export function testingLibraryBound(call: CallExpression, ctx: Ctx, place: Place
   if (!query && !wait) return undefined
   // The wait's own options come last (`findBy*(text, queryOptions, waitForOptions)`), so the last `timeout` is the one in force.
   let bound: number | undefined
-  for (const argument of call.arguments) {
+  for (const argument of call.arguments as N[]) {
     const objects = optionObjects(argument, place)
     if (objects.length > 0) bound = smallest(objects.map(({ object, place: at }) => optionsMs(object, at, bound, testingLibraryMs)))
   }
   return bound
 }
 
-export const clockCall = (node: Node): boolean => {
-  if (node.type !== 'CallExpression') return false
+export const clockCall = (node: N): boolean => {
+  if (!isCall(node)) return false
   const callee = calleeOf(node.callee)
   return (callee?.object === 'Date' && callee.name === 'now') || (callee?.object === 'performance' && callee.name === 'now') ||
     (callee?.object === 'process' && callee.name === 'hrtime')
 }
 
 /** Whether any node under `root` passes, leaving out the functions nested in it: what a helper does is not what the loop does. */
-export function contains(root: Node, test: (node: Node) => boolean): boolean {
+export function contains(root: N, test: (node: N) => boolean): boolean {
   let found = false
   walk(root, [], node => {
     found ||= test(node)
@@ -263,27 +264,27 @@ export function contains(root: Node, test: (node: Node) => boolean): boolean {
 
 /** A name declared in a function: its initializer (none for a parameter without a default) and where it is in view. */
 export interface Declaration {
-  init: Node | undefined
+  init: N | undefined
   kind: 'const' | 'let' | 'var' | 'param'
   /** The block, loop or function the name belongs to. */
-  owner: Node
+  owner: N
   /** The function (or the module) the name is declared in. */
-  scope: Node
+  scope: N
   /** The nodes above the declaration, outermost first: where its initializer looks names up. */
-  chain: readonly Node[]
+  chain: readonly N[]
   start: number
 }
 
 export const blockScopes = new Set(['BlockStatement', 'Program', 'StaticBlock', 'ForStatement', 'ForInStatement', 'ForOfStatement'])
 
 /** What `node` declares under `name` in `scope`: a variable, a parameter or a parameter's default. */
-export function declaredAs(node: Node, ancestors: readonly Node[], scope: Node, name: string): Pick<Declaration, 'init' | 'owner' | 'kind'> | undefined {
+export function declaredAs(node: N, ancestors: readonly N[], scope: N, name: string): Pick<Declaration, 'init' | 'owner' | 'kind'> | undefined {
   const parent = ancestors.at(-1)
   if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier' && node.id.name === name && parent?.type === 'VariableDeclaration') {
     const owner = parent.kind === 'var' ? scope : [...ancestors].reverse().find(ancestor => blockScopes.has(ancestor.type)) ?? scope
     return { init: node.init ?? undefined, owner, kind: parent.kind === 'var' || parent.kind === 'let' ? parent.kind : 'const' }
   }
-  const param = 'params' in scope && (scope.params as readonly Node[]).includes(node)
+  const param = paramsOf(scope)?.includes(node) === true
   if (param && node.type === 'Identifier' && node.name === name) return { init: undefined, owner: scope, kind: 'param' }
   if (param && node.type === 'AssignmentPattern' && node.left.type === 'Identifier' && node.left.name === name) return { init: node.right, owner: scope, kind: 'param' }
   return undefined
@@ -291,8 +292,8 @@ export function declaredAs(node: Node, ancestors: readonly Node[], scope: Node, 
 
 /** Where a name is looked up from: the function (or module) around the use, and every node above it, outermost first. */
 export interface View {
-  scope: Node
-  above: readonly Node[]
+  scope: N
+  above: readonly N[]
 }
 
 /**
@@ -314,7 +315,7 @@ export function declarationsOf(view: View, name: string): Declaration[] {
 
 /** Where a name is read: the nodes above the use, outermost first, and its offset. */
 export interface Use {
-  chain: readonly Node[]
+  chain: readonly N[]
   at: number
 }
 
@@ -327,7 +328,7 @@ export interface Probe {
   read: Read
   interval: Bound
   /** Whether a name or path read at a use comes from outside the file, so the caller sizes it. */
-  outside: (node: Node, use: Use) => boolean
+  outside: (node: N, use: Use) => boolean
 }
 
 /**
@@ -348,8 +349,8 @@ export function definition(view: View, use: Use, name: string): Declaration | un
  * What writes a name inside `root`, closures included, since a closure can reassign it: the right-hand sides of `name = …`, and
  * whether anything else writes it (`name += 1`, `name++`, a destructuring target).
  */
-export function writes(root: Node, name: string): { values: Node[]; other: boolean } {
-  const values: Node[] = []
+export function writes(root: N, name: string): { values: N[]; other: boolean } {
+  const values: N[] = []
   let other = false
   walk(root, [], node => {
     if (!namesWritten(node).includes(name)) return
@@ -366,7 +367,7 @@ export function writes(root: Node, name: string): { values: Node[]; other: boole
  * hook or helper ran first. A `strict` read does the same for the use's own function: a wait or a sleep is not a loop, which runs
  * many times and so can take any value the name holds.
  */
-export function valuesOf(view: View, declared: Declaration, name: string, strict = false): Node[] {
+export function valuesOf(view: View, declared: Declaration, name: string, strict = false): N[] {
   const { values, other } = writes(declared.scope, name)
   if (other || ((strict || declared.scope !== view.scope) && declared.kind !== 'const' && values.length > 0)) return []
   return declared.init ? [declared.init, ...values] : values
@@ -375,7 +376,7 @@ export function valuesOf(view: View, declared: Declaration, name: string, strict
 export const isNumber = (value: unknown): value is number => typeof value === 'number'
 
 /** The values a name holds where it is read, each with the place its own names are read from. */
-export function heldBy(view: View, use: Use, name: string, strict = false): Array<{ value: Node; use: Use }> {
+export function heldBy(view: View, use: Use, name: string, strict = false): Array<{ value: N; use: Use }> {
   const declared = definition(view, use, name)
   return declared ? valuesOf(view, declared, name, strict).map(value => ({ value, use: { chain: declared.chain, at: declared.start } })) : []
 }
@@ -393,7 +394,7 @@ export function nameValue(name: string, view: View, use: Use, depth: number, str
 export const nameReader = (view: View, use: Use, depth = 0, strict = false): Read => name => nameValue(name, view, use, depth, strict)
 
 /** Where a bound written at `at` is read: the function around it and the nodes above it. Strict: a wait or a sleep is not a loop, so a name written after its declaration is read as none of its values. */
-export function placeAt(ancestors: readonly Node[], at: number): Place | undefined {
+export function placeAt(ancestors: readonly N[], at: number): Place | undefined {
   const scope = [...ancestors].reverse().find(isFunction) ?? ancestors[0]
   if (!scope) return undefined
   const view = { scope, above: ancestors }
@@ -401,16 +402,20 @@ export function placeAt(ancestors: readonly Node[], at: number): Place | undefin
   return { view, use, read: nameReader(view, use, 0, true) }
 }
 
-export const readerFor = (ancestors: readonly Node[], at: number): Read => placeAt(ancestors, at)?.read ?? (() => undefined)
+export const readerFor = (ancestors: readonly N[], at: number): Read => placeAt(ancestors, at)?.read ?? (() => undefined)
 
 /**
  * The literal an expression stands for where it is read: a number, a name for one, or a sum with a term of those. A name that can
  * hold several values gives the smallest it can read, so a long value never hides a short one.
  */
-export function valueOf(node: Node, cx: Probe, use: Use, depth = 0): number | undefined {
+export function valueOf(node: N, cx: Probe, use: Use, depth = 0): number | undefined {
   if (depth > 3) return undefined
-  if (node.type === 'Identifier' && !namedNumbers.has(node.name)) return smallest(heldBy(cx.where, use, node.name).map(held => valueOf(held.value, cx, held.use, depth + 1)))
+  if (node.type === 'Identifier' && !namedNumbers.has(node.name)) return nameValueIn(node.name, cx, use, depth)
   const direct = numberOf(node, nameReader(cx.where, use, depth))
   if (direct !== undefined) return direct
   return node.type === 'BinaryExpression' && node.operator === '+' && isLimit(node, cx) ? valueOf(node.left, cx, use, depth) ?? valueOf(node.right, cx, use, depth) : undefined
 }
+
+/** The smallest literal a name can stand for where it is read; see `valueOf`. */
+export const nameValueIn = (name: string, cx: Probe, use: Use, depth = 0): number | undefined =>
+  depth > 3 ? undefined : smallest(heldBy(cx.where, use, name).map(held => valueOf(held.value, cx, held.use, depth + 1)))
