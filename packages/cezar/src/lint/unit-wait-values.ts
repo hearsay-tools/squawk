@@ -225,11 +225,14 @@ export function optionsMs(object: ObjectExpression, place: Place, before: number
   return bound
 }
 
+/** Testing Library's `findBy*` and `findAllBy*` queries, which wait: the name's start is the rule, whatever follows it. */
+export const findQuery = /^find(?:All)?By[A-Z]/
+
 /** A Testing Library wait whose `timeout` is given: that bound, or undefined when it has none or the caller sizes it. */
 export function testingLibraryBound(call: CallExpression, ctx: Ctx, place: Place): number | undefined {
   const callee = calleeOf(call.callee)
   if (!callee) return undefined
-  const query = /^find(?:All)?By[A-Z]/.test(callee.name)
+  const query = findQuery.test(callee.name)
   const wait = callee.object === undefined ? ctx.tlWaits.has(callee.name) : ctx.tlNamespaces.has(callee.object) && /^waitFor(?:ElementToBeRemoved)?$/.test(callee.name)
   if (!query && !wait) return undefined
   // The wait's own options come last (`findBy*(text, queryOptions, waitForOptions)`), so the last `timeout` is the one in force.

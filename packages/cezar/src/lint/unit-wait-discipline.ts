@@ -7,7 +7,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import type { BaselineEntry as Entry } from './wait-baseline.ts';
 import type { AwaitExpression, CallExpression, DoWhileStatement, ForStatement, Node, Program, WhileStatement } from '@babel/types';
-import { sizeNumber, calleeOf, vitestBound, testingLibraryBound, contains, placeAt, readerFor } from './unit-wait-values.ts';
+import { findQuery, sizeNumber, calleeOf, vitestBound, testingLibraryBound, contains, placeAt, readerFor } from './unit-wait-values.ts';
 import { pollDeadline } from './unit-wait-deadlines.ts';
 
 /**
@@ -323,7 +323,7 @@ export const scannedUnitFile = (file: string): boolean => file.startsWith('packa
 const waitCallee = (callee: { type: string; name?: unknown; computed?: unknown; property?: { name?: unknown } }): boolean => {
   if (callee.type === 'MemberExpression' && callee.computed === true) return true
   const name = callee.type === 'Identifier' ? callee.name : callee.property?.name
-  return typeof name === 'string' && /^(?:waitFor|waitUntil|poll|waitForElementToBeRemoved|find(?:All)?By[A-Z]\w*)$/.test(name)
+  return typeof name === 'string' && (/^(?:waitFor|waitUntil|poll|waitForElementToBeRemoved)$/.test(name) || findQuery.test(name))
 }
 
 /** The visitors that note whether a file can hold a site as oxlint walks it, then give its sites. */

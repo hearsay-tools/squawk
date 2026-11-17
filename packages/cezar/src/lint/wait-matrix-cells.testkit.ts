@@ -265,6 +265,11 @@ export const WAITS: Wait[] = [
   { key: 'tl-find-then', lines: ["screen.findByText('x', {}, { timeout: {X} }).then(done);"], imports: ["import { screen } from '@testing-library/react';"] },
   { key: 'helper-bare', lines: ['void until(() => ready(), {X});'] },
   { key: 'helper-arrow-body', lines: ['const settle = () => waitFor(() => ready(), {X});'] },
+  // Query names the rule reads by their `findBy`/`findAllBy` start, with no Testing Library import and no `await` in the file.
+  { key: 'find-dollar-bare', lines: ["findByText$('x', {}, { timeout: {X} });"] },
+  { key: 'find-accent-member', lines: ["screen.findByTexté('x', {}, { timeout: {X} }).then(done);"] },
+  { key: 'find-all-accent-arrow', lines: ["const settle = () => screen.findAllByRoleÄ('row', {}, { timeout: {X} });"] },
+  { key: 'find-plain-bare', lines: ["void screen.findAllByRole('row', {}, { timeout: {X} });"] },
 ];
 
 /** The waits crossed with every value and every source. */
