@@ -312,7 +312,10 @@ function ownerRule(groupName: string, metadata: OwnerGroup): AstRule {
         UnaryExpression: node => { if (node.operator === 'delete') write(node, 'argument'); },
         CallExpression: call,
         TSAsExpression: cast,
-        TSTypeAssertion: cast,
+        TSTypeAssertion(node) {
+          const expression = child(node, 'expression');
+          if (expression && [...subtree(expression)].some(reference)) report(node, message);
+        },
         PropertyDefinition(node) {
           if (child(node, 'key')?.type === 'PrivateIdentifier') return;
           const owner = node.parent?.parent;

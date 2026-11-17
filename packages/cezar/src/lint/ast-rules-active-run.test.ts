@@ -276,8 +276,8 @@ ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-usage-write
     "function f(state: ActiveRun) { const alias = state; alias.cancelled = true; alias.pendingPermissions?.add('x'); }",
     "const value = event.usage; event.usage = { input: 1, output: 2 };",
     "const value = event['usage']; event['usage'] = { input: 1, output: 2 };",
-    "function owner(group: UsageGroup) { group.#cost = 1; group.#costs.set('x', 1); }",
-    "function owner(invocation: UsageInvocation) { invocation.#observed = true; invocation.#startedTurns.add('x'); }"
+    "class UsageGroup { #cost; #costs; check() { function owner(group: UsageGroup) { group.#cost = 1; group.#costs.set('x', 1); } } }",
+    "class UsageInvocation { #observed; #startedTurns; check() { function owner(invocation: UsageInvocation) { invocation.#observed = true; invocation.#startedTurns.add('x'); } } }"
   ],
   "invalid": [
     "function f(state: ActiveRun) { state.usage = other.usage; }",
@@ -507,6 +507,7 @@ ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-boundary-wr
     'const view = state.boundary; unrelated.view.idleTimer = value;',
   ],
   invalid: [
+    'const copy = { ...state.boundary } as Mutable;',
     '(state.boundary).idleTimer = value;',
     'state.boundary!.idleTimer = value;',
     'state.boundary["idleTimer"] = value;',
@@ -515,6 +516,7 @@ ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-boundary-wr
     'function f(target: AR) { const { boundary } = target; boundary.idleTimer = value; } import type { ActiveRun as AR } from "./active-run.ts";',
     'function f(group: View) { group.idleTimer = value; } import type { BoundaryGroup as View } from "./turn-boundary.ts";',
     'const group = manager.active.get(id)!; group.boundary.idleTimer = value;',
+    '<Mutable>({ copied: state.boundary });',
     'class BoundaryGroup { field: unknown; }',
     'class BoundaryGroup { readonly field: unknown; }',
   ],
@@ -547,7 +549,11 @@ ruleCases(activeRunMapWrite, {
     'host["active"].set(id, state);',
     'host.active["set"](id, state);',
     'const active = host.active; active.set(id, state);',
+    'class RunManager { #active; execute() { this.#active.set(id, state); } }',
     'class RunManager { activate() { const write = () => this.active.set(id, state); } }',
   ],
-  invalid: ['class RunManager { activate() { return { dropActive() { this.active.delete(id); } }; } }'],
+  invalid: [
+    'class RunManager { activate() { return { dropActive() { this.active.delete(id); } }; } }',
+    'class RunManager { [activate]() { this.active.set(id, state); } }',
+  ],
 });

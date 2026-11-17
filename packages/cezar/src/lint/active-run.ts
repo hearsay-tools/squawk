@@ -36,7 +36,7 @@ export const activeRunLiteral: AstRule = {
 };
 
 function directMember(node: EsNode | undefined, name: string): boolean {
-  return node?.type === 'MemberExpression' && node.computed !== true && nameOf(child(node, 'property')) === name;
+  return node?.type === 'MemberExpression' && node.computed !== true && child(node, 'property')?.type === 'Identifier' && nameOf(child(node, 'property')) === name;
 }
 
 /** Stop at the nearest class or object method, including a method nested in an allowed owner. */
@@ -45,7 +45,7 @@ function ownsMapWrite(node: EsNode, operation: string): boolean {
     if (ancestor.type === 'Property' && ancestor.method === true) return false;
     if (ancestor.type !== 'MethodDefinition') continue;
     const owner = ancestor.parent?.parent;
-    return nameOf(child(ancestor, 'key')) === (operation === 'set' ? 'activate' : 'dropActive') &&
+    return ancestor.computed !== true && child(ancestor, 'key')?.type === 'Identifier' && nameOf(child(ancestor, 'key')) === (operation === 'set' ? 'activate' : 'dropActive') &&
       owner?.type === 'ClassDeclaration' && nameOf(child(owner, 'id')) === 'RunManager';
   }
   return false;
