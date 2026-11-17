@@ -30,7 +30,7 @@ export function item(node: EsNode, key: string, index: number): EsNode | undefin
 }
 
 /** Whether `node` is a method's function: its fields belong to the method, which is reported instead. */
-function methodValue(node: EsNode): boolean {
+export function methodValue(node: EsNode): boolean {
   const owner = node.parent;
   if (!owner || owner.value !== node) return false;
   return owner.type === 'MethodDefinition' || owner.type === 'TSAbstractMethodDefinition' || (owner.type === 'Property' && owner.method === true);
@@ -47,6 +47,58 @@ export function reportNode(node: EsNode): EsNode {
     if (!methodValue(owner)) found = owner;
   }
   return found;
+}
+
+const isMethod = (node: EsNode): boolean => node.type === 'MethodDefinition' || node.type === 'TSAbstractMethodDefinition' || (node.type === 'Property' && node.method === true);
+
+/**
+ * Items in the order the rules saw their nodes before they read oxlint's tree (hearsay-tools/squawk#3806):
+ * a method's own function (type parameters, parameters, body) first, then its decorators and key.
+ * Oxlint visits a method's decorators and key first; everywhere else both orders agree. Rules
+ * whose facts depend on order, such as names numbered by repeat or aliases bound in turn, add
+ * items as oxlint visits and read them back in this order.
+ *
+ * Each method opens a frame when oxlint enters it; items added before oxlint enters the method's
+ * function wait in that frame and follow the function's items when the method ends. `wrap` adds
+ * this to a rule's visitors: the rule sees a method before its frame opens, and a method's
+ * function after the frame closes, so both land where the old walk had them.
+ */
+export function viewOrder<T>(): { wrap(rule: Visitors): Visitors; add(item: T): void; items(): readonly T[] } {
+  const ordered: T[] = [];
+  const frames: { method: EsNode; open: boolean; waiting: T[] }[] = [];
+  const target = (): T[] => {
+    for (let index = frames.length - 1; index >= 0; index--) if (frames[index]!.open) return frames[index]!.waiting;
+    return ordered;
+  };
+  const enter = (node: EsNode) => { if (isMethod(node)) frames.push({ method: node, open: true, waiting: [] }); };
+  const leave = (node: EsNode) => {
+    if (frames.at(-1)?.method !== node) return;
+    const { waiting } = frames.pop()!;
+    target().push(...waiting);
+  };
+  const enterFunction = (node: EsNode) => {
+    const frame = frames.at(-1);
+    if (frame && frame.method === node.parent && methodValue(node)) frame.open = false;
+  };
+  const methods: Visitors = {};
+  for (const type of ['MethodDefinition', 'TSAbstractMethodDefinition', 'Property']) {
+    methods[type] = enter;
+    methods[`${type}:exit`] = leave;
+  }
+  const functions: Visitors = { FunctionExpression: enterFunction, TSEmptyBodyFunctionExpression: enterFunction };
+  return { wrap: rule => mergeVisitors(functions, rule, methods), add: item => target().push(item), items: () => ordered };
+}
+
+/** One visitor set that calls each set's visitor for a node type, in the order the sets are given. */
+function mergeVisitors(...sets: Visitors[]): Visitors {
+  const merged: Visitors = {};
+  for (const set of sets) {
+    for (const [type, visit] of Object.entries(set)) {
+      const before = merged[type];
+      merged[type] = before ? (node: EsNode) => { before(node); visit(node); } : visit;
+    }
+  }
+  return merged;
 }
 
 /** Call `visit` for each child node of `node`, in field order. For short walks of a small subtree only. */
