@@ -202,3 +202,19 @@ ruleCases(AST_RULES.find(rule => rule.name === "nudge-fact-write-outside-owner")
     "const event = { kind: \"nudge-fact\", phase: \"retire\" }"
   ]
 });
+
+// A computed receiver still ends in the module API's inputDelivery member.
+ruleCases(AST_RULES.find(rule => rule.name === 'agent-session-send-outside-handoff')!, {
+  file: 'packages/cezar/src/workflows/run/fixture.ts',
+  valid: [
+    'getModules().inputDelivery.sendMessage(id, text)',
+    'getModules()?.inputDelivery.sendMessage(id, text)',
+    'getModules().inputDelivery?.sendMessage(id, text)',
+    'getModules()?.inputDelivery?.sendMessage?.(id, text)',
+  ],
+  invalid: [
+    'getModules().inputDelivery.sendAgentMessage(text, ids)',
+    'getModules().otherDelivery.sendMessage(id, text)',
+    "getModules()['inputDelivery'].sendMessage(id, text)",
+  ],
+});

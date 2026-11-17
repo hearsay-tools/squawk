@@ -441,3 +441,18 @@ ruleCases(AST_RULES.find(rule => rule.name === "outcome-write-outside-commit-out
     "const x = {kind: `counted`,automaticWakes: 2}"
   ]
 });
+
+// The former public_field_definition grammar also covered class accessors.
+ruleCases(AST_RULES.find(rule => rule.name === 'run-memory-field-outside-owner')!, {
+  file: 'packages/cezar/src/workflows/run/fixture.ts',
+  valid: [
+    'class A { accessor byRun = new WeakSet() }',
+    'abstract class A { abstract byRun: Map<string, string> }',
+    'abstract class A { abstract accessor byRun: Map<string, string> }',
+  ],
+  invalid: [
+    'class A { accessor byRun = new Map() }',
+    'class A { static accessor byRun = new Set() }',
+    'class A { accessor #byRun = new WeakMap() }',
+  ],
+});

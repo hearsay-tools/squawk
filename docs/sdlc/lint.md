@@ -365,7 +365,10 @@ inside nested functions and declarations after a use. They do not follow aliases
 through another binding. `cez/run-search-field-list-outside-contract` visits every
 member under each array, including nested expressions. `cez/run-internals` checks
 each identifier, private name, string literal and fixed template fragment; comments
-and paths assembled from fragments stay outside its scope.
+and paths assembled from fragments stay outside its scope. Its scan is now limited
+to `packages/`, the existing oxlint `LINT_PATHS`; the former ast-grep rule could also
+check TypeScript files outside that tree. This is an accepted scope change for this
+port. `LINT_PATHS` stays unchanged.
 
 `cez/json-valid-outside-guard` checks fixed literal fragments, not assembled SQL.
 `cez/ask-requested-read-outside-projection` checks equality comparisons and case

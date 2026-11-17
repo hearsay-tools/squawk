@@ -66,12 +66,13 @@ export const runFactWrite = ownerRule(OWNER_POLICIES['run-fact-write-outside-own
   return { Property: check, AssignmentExpression: check };
 });
 
-export const runMemoryField = ownerRule(OWNER_POLICIES['run-memory-field-outside-owner']!, report => ({
-  PropertyDefinition(node) {
+export const runMemoryField = ownerRule(OWNER_POLICIES['run-memory-field-outside-owner']!, report => {
+  const check = (node: EsNode) => {
     const value = child(node, 'value');
     if (value?.type === 'NewExpression' && /^(Map|Set|WeakMap)$/.test(nameOf(child(value, 'callee')) ?? '')) report(node);
-  },
-}));
+  };
+  return { PropertyDefinition: check, AccessorProperty: check, TSAbstractPropertyDefinition: check, TSAbstractAccessorProperty: check };
+});
 
 function activeRun(node: EsNode | undefined): boolean {
   node = unwrapAccess(node);

@@ -28,7 +28,7 @@ export const agentSessionSend = ownerRule(OWNER_POLICIES['agent-session-send-out
     const method = member(fn);
     const receiver = fn && child(fn, 'object');
     const receiverName = dotted(receiver);
-    const exempt = receiverName !== undefined && /^(this|manager|host|this\.host|.*\.inputDelivery)$/.test(receiverName);
+    const exempt = member(receiver) === 'inputDelivery' || (receiverName !== undefined && /^(this|manager|host|this\.host)$/.test(receiverName));
     if (method !== 'sendAgentMessage' && !(method === 'sendMessage' && !exempt)) return;
     if (!inside(node, at => at.type === 'CallExpression' && nameOf(child(at, 'callee')) === 'handToTransport')) report(node);
   },
