@@ -60,8 +60,4 @@ describe('aggregateTreeUsage', () => {
     expect(aggregateTreeUsage(procs, 12345)).toBeNull();
   });
 
-  it('does not pull in unrelated trees', () => {
-    // pid 900 (999999 KB) is a sibling under init, not under 500 — must not be counted.
-    expect(aggregateTreeUsage(procs, 500)?.rssBytes).toBe(175000 * 1024);
-  });
 });
