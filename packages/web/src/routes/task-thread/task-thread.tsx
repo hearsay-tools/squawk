@@ -644,7 +644,10 @@ function ThreadFooterDock({
             className="flex items-center gap-2 px-1 text-xs text-muted-foreground"
           >
             <StatusDot tone={attention.tone} shape={attention.shape} pulse={attention.pulse} />
-            {attention.bucket === 'permission' ? 'Choose an approval option above to continue'
+            {
+              // oxlint-disable-next-line cez/attention-bucket-compare-outside-owner -- the composer explains permission approval separately
+              attention.bucket === 'permission' ? 'Choose an approval option above to continue'
+              // oxlint-disable-next-line cez/attention-bucket-compare-outside-owner -- the composer distinguishes a waiting reply
               : attention.bucket === 'waiting' ? 'The agent is paused, waiting for your reply'
                 : `${attention.label.charAt(0).toUpperCase()}${attention.label.slice(1)} — you can send a message to resume`}
           </div>
@@ -750,6 +753,7 @@ function ThreadComposer({
 }
 
 function composerStopsOnEmpty(run: ApiRun, attention: ReturnType<typeof deriveAttention>, needsAnswer: boolean) {
+  // oxlint-disable-next-line cez/attention-bucket-compare-outside-owner -- empty submit stops a wait that asks no person
   return run.status === 'queued' || run.status === 'running' || (run.status === 'waiting' && attention.bucket === 'none' && !needsAnswer)
 }
 

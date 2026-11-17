@@ -69,6 +69,10 @@ appropriate boundary or checker explicitly.
 
 | Rule | Refuses | Exceptions |
 | --- | --- | --- |
+| `cez/attention-bucket-compare-outside-owner` | Direct comparisons of `.bucket` with an attention bucket name in service and cockpit source (hearsay-tools/squawk#2275) | Tests and `.testkit.ts` files; reasoned inline suppressions for the composer's copy, Finish action and Finished heading |
+| `cez/automations-capability-read-outside-owner` | A named `capabilities.automations` read in cockpit source (hearsay-tools/squawk#1401) | The availability owner and test/testkit files |
+| `cez/subagent-children-outside-dock` | Direct calls to `subagentChildren` in cockpit source (hearsay-tools/squawk#2463) | The dock owner and tests |
+| `cez/test-enum-literal` | An object property containing a contract enum literal in test and test-support files (hearsay-tools/cezarion#1812) | Reasoned inline suppressions for fields with another meaning |
 | `cez/card-2-contrast` | Unsafe small text on card-2 (hearsay-tools/cezarion#1133, hearsay-tools/cezarion#2423) | `packages/web/src/test/card-2-contrast.baseline.json`, shrink-only |
 | `cez/contract-root-import` | A runtime import of a contract package root (hearsay-tools/cezarion#1237) | `contract-root-import.baseline.json`, shrink-only |
 | `cez/design-guardian` | The ten original cockpit design checks; each finding names its original rule, reason and token (hearsay-tools/cezarion#2422) | Original inline allowed predicates and reason comments; tests keep their original scope and the guardian suite excludes itself |
@@ -98,6 +102,10 @@ remain in force.
 
 | Guard | Static scope |
 | --- | --- |
+| `cez/attention-bucket-compare-outside-owner` | Service and cockpit `src/` TS/TSX, excluding `.test.ts`, `.test.tsx` and `.testkit.ts`: equality operators with a direct public `.bucket` operand and a raw attention-name string, in either order. Optional chains count. Computed/private/escaped keys, escaped strings and parenthesized operands do not. Trailing casts follow the former tree-sitter precedence; casts on the left or inside parentheses stay out. No type or value flow. |
+| `cez/automations-capability-read-outside-owner` | Cockpit `src/` TS/TSX except `lib/capabilities.ts` and test/testkit files: `.automations` on the exact identifier `capabilities` or a public `.capabilities` member, including optional chains. Computed/private/escaped names, destructuring and wrapped receivers stay out. No type or value flow. |
+| `cez/subagent-children-outside-dock` | Cockpit `src/` TS/TSX except `routes/task-thread/subagent-dock.ts` and tests: a direct `subagentChildren()` call, including optional calls and type arguments, or a plain template tag. Aliases, member calls, escaped names, wrapped callees and generic template tags stay out. Testkit modules stay in scope. |
+| `cez/test-enum-literal` | Package `src/` `.test.ts`/`.test.tsx` and `.testkit.ts` files, cockpit `src/test/` and `e2e/` TS/TSX, and service `test/` TS: object-expression pairs with an exact bare or quoted `status`, `kind`, `phase`, `via` or `source` key and a matching raw string fragment. One direct `as` cast counts. Computed/escaped keys, templates, destructuring, parentheses, nested casts and other wrappers stay out. No type or value flow. |
 | `cez/run-store-testkit-import` | Non-test `.ts` files in `packages/cezar/src`: a string literal ending in `run-store.testkit` or `run-store-open.testkit`, with or without `.ts`/`.js`, inside an import, an export, an `import()`, an `import x = require()` or any call. A template literal and a path assembled from pieces are out of scope. |
 | `cez/card-2-contrast` | Cockpit TSX source: JSX text and literal class branches, inherited card surfaces, ink, size and weight. Unknown sizes are conservatively small. Arbitrary runtime class values and computed styles require rendered checks; this is not a browser contrast audit. |
 | `cez/contract-root-import` | Static root specifiers in runtime imports and re-exports in the selected package TS/TSX trees, including literal dynamic imports; `import type` declarations and import queries inside type aliases stay allowed. Inline type specifiers and variable-annotation queries are still reported. It does not resolve computed specifiers or transitive imports. |

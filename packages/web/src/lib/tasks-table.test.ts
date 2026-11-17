@@ -43,7 +43,7 @@ function run(over: Partial<RunRecord> = {}): RunSummary {
 }
 
 // A task item tab's kind, a cockpit type of its own: not a wait kind, though `pr` is both.
-// ast-grep-ignore: test-enum-literal
+// oxlint-disable-next-line cez/test-enum-literal -- this object uses its own field meaning, outside the contract enum
 const prTab = (number: number) => ({ kind: 'pr' as const, number })
 
 const SAMPLE: ProcessUsage = { cpuPct: 38.4, rssBytes: 612 * 1024 ** 2, procCount: 5 }

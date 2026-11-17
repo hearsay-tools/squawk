@@ -79,8 +79,8 @@ it; editing that line makes the match new. That is deliberate: edit it by moving
 - Every branch of a rule needs a `kind`, a `pattern` or an `any` of those, or the rule fails to load.
 - `ast-grep` counts lines from 0. The scan adds 1.
 - A rule parses `.ts` files with one grammar and `.tsx` files with another, and a `language` takes
-  one. A rule over both is two rule files with the same body: `test-enum-literal.yml` and
-  `test-enum-literal-tsx.yml`, which `test-enum-literal-rule.test.ts` holds equal.
+  one. Rules that need both grammars now use one oxlint AST rule; see
+  [Add a rule](../../docs/sdlc/lint.md#add-a-rule).
 - `// ast-grep-ignore: <rule id>` suppresses a match, but only from the line directly above it. A
   line comment that explains it goes above that one, and the id of a `-tsx` twin is its own.
 

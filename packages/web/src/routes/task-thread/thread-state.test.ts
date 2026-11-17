@@ -1278,7 +1278,7 @@ describe('reduceThread — peer conversation (hearsay-tools/cezarion#1992)', () 
   // An `AgentInput` event. Its `source` is the input's origin, not a wait source.
   const agentInput = (seq: number, id: string, text: string, parentRunId: string, createdAt: string, conversation: object) => line(seq, 'agent-input', { input: {
     id, text, parentRunId, createdAt, conversation,
-    // ast-grep-ignore: test-enum-literal
+    // oxlint-disable-next-line cez/test-enum-literal -- this object uses its own field meaning, outside the contract enum
     source: 'agent',
   } })
 

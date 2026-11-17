@@ -30,7 +30,7 @@ hold 481 lines. Most of the text exists for one of four reasons:
 | 936 Vitest files, 7,678 s total on CI; 36 files over 60 s, 13 over 120 s; slowest `monitoring-turn.test.ts` 317 s | `.github/test-durations.json` |
 | Parity cells start one real mock runner process per cell, for each runner in `RUNNER_IDS` | `packages/cezar/src/core/harness-parity.testkit.ts` |
 | 36 browser specs write `.ai/cezar/runs.json` as raw JSON | `rg -l runs.json packages/web/e2e/*.e2e.ts` |
-| 1,040 + 216 enum-literal sites in shrink-only baselines | `.ai/ast-grep/rules/test-enum-literal{,-tsx}.baseline.json` |
+| 1,040 + 216 enum-literal sites in shrink-only baselines | Former ast-grep baselines; migrated to `cez/test-enum-literal` with inline exceptions (hearsay-tools/squawk#3774) |
 | The spec map links cockpit files only; a server, mock or test-env change selects every spec | `scripts/e2e-affected.mjs:7` |
 | The served e2e clone copies this checkout, including `.ai/skills` | `.ai/scripts/test-env-up.sh`, `e2e-served-repo.mjs` |
 | A browser case depends on the scroll position left by the case before | `packages/web/e2e/workflows.e2e.ts:329` |
@@ -109,7 +109,7 @@ Prerequisite: slices 1.2 and 1.3 merged (they edit `reader-sweep/SKILL.md`).
 | 2.1 | feature | The served clone has no ambient catalogs: `e2e-served-repo.mjs` replaces `.ai/skills`, project workflows and other catalogs in the clone with one fixed fixture set. Coordinate with hearsay-tools/cezarion#1116 (served project registration). | A test that adds five dummy skills to the checkout leaves the workflow and skills specs unchanged. |
 | 2.2 | cleanup | Each browser case starts from a known page: the shared browser helper resets viewport, scroll and route before each case. A weekly CI job runs the e2e project with `sequence.shuffle`. | The shuffled job passes twice in a row; the comment at `workflows.e2e.ts:329` is gone. |
 | 2.3 | cleanup | Typed run fixtures: a `seedRuns(partials)` helper for browser and packaged tests, built on `makeRunRecord`; a lint rule refuses a raw `runs.json` write in a spec. | Renaming a `RunRecord` field fails typecheck in every fixture that sets it. |
-| 2.4 | cleanup | Burn down `test-enum-literal` and `test-enum-literal-tsx` baselines to 0 with a codemod, one directory per PR. | Both baselines are empty. |
+| 2.4 | cleanup | Burn down `test-enum-literal` and `test-enum-literal-tsx` baselines to 0 with a codemod, one directory per PR. | Both baselines were emptied, then removed by the `cez/test-enum-literal` AST port (hearsay-tools/squawk#3774). |
 | 2.5 | feature | The spec map covers the server and the mocks: `e2e-spec-map.yml` also collects V8 coverage from the served server and `mock-*.mjs` processes; `test:e2e:affected` downloads the map when none is local. | An edit to one `mock-*.mjs` scenario selects only the specs that ran it. |
 | 2.6 | feature | Control locations in one table: messages that tell users where a control lives (API errors, CLI output, agent prompts) read one table in the contract package; a cockpit unit test checks each location against the navigation. Every message text stays byte-identical. | Renaming a settings tab without the table fails a test. |
 

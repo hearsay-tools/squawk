@@ -62,6 +62,10 @@ const findingsFor = (file: string): string[] => fixtureFindings.filter(problem =
 const ROSTER = declaredRunnerIds().map(id => `'${id}'`).join(', ');
 
 const VIOLATIONS: Record<string, [string, string]> = {
+  'attention-bucket-compare-outside-owner': ['packages/web/src/attention-violation.tsx', "const x = attention.bucket === 'waiting';\n"],
+  'automations-capability-read-outside-owner': ['packages/web/src/capabilities-violation.tsx', 'const x = health.capabilities.automations;\n'],
+  'subagent-children-outside-dock': ['packages/web/src/children-violation.tsx', 'const x = subagentChildren(turns, id);\n'],
+  'test-enum-literal': ['packages/web/src/enum-violation.test.tsx', "const x = { status: 'done' };\n"],
   'product-env-read': ['packages/cezar/src/env-reader.ts', 'const flag = process.env.CEZ_DRY_RUN;\n'],
   'test-home-write': ['packages/web/src/ambient-home.test.ts', "writeFileSync(join(cezarHomeDir(), 'config.json'), '{}');\n"],
   'home-boundary': ['packages/cezar/src/ambient-home.ts', 'cezarHomeDir();\n'],
