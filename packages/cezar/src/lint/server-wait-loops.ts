@@ -371,16 +371,27 @@ const read = (cx: Probe, node: N): number | undefined => {
   return isNumber(bound) ? bound : undefined;
 };
 
+/** `i < limit` or `i <= limit` with the counter alone on the left and no `&` or `|` in the limit's text. */
+function counterCompared(tree: WaitTree, node: N): boolean {
+  if (node.type !== 'BinaryExpression' || (node.operator !== '<' && node.operator !== '<=') || node.left.type !== 'Identifier' || parenAround(tree, node.left)) return false;
+  return !/[&|]/.test(tree.text.slice(tree.source.after(node.left.end) + node.operator.length, node.end));
+}
+
+/** The counter's start node (`null` when the header holds more than its one declarator), or `undefined` when it is not a counter the loop keeps. */
+function fixedCounter(cx: Probe, node: N, at: number): N | null | undefined {
+  const name = node.left.name;
+  const declared = counterInit(cx, name);
+  if (declared === undefined || cx.file.names.writes(name, true, offset => offset >= cx.loop.body[0] && offset <= cx.loop.body[1])) return undefined;
+  return movesAny(cx, node.right, at, name) || movesAny(cx, cx.clauses?.update ?? undefined, at, name) ? undefined : declared;
+}
+
 /** What a comparison with the counter of a `for (let i = <literal>; i < limit; i++)` header says about how long the loop runs. */
 function counterLeaf(cx: Probe, node: N, at: number): Bound {
   const { file } = cx;
-  const { tree } = file;
-  if (node.type !== 'BinaryExpression' || (node.operator !== '<' && node.operator !== '<=') || node.left.type !== 'Identifier' || parenAround(tree, node.left)) return undefined;
-  if (/[&|]/.test(tree.text.slice(tree.source.after(node.left.end) + node.operator.length, node.end))) return undefined;
+  if (!counterCompared(file.tree, node)) return undefined;
   const name = node.left.name;
-  const declared = counterInit(cx, name);
-  if (declared === undefined || file.names.writes(name, true, at => at >= cx.loop.body[0] && at <= cx.loop.body[1])) return undefined;
-  if (movesAny(cx, node.right, at, name) || movesAny(cx, cx.clauses?.update ?? undefined, at, name)) return undefined;
+  const declared = fixedCounter(cx, node, at);
+  if (declared === undefined) return undefined;
   const limit = node.right;
   const value = read(cx, limit);
   const sized = value ?? (isOutside(file, cx.loop.scope, limit, cx.loop.keyword) ? 'name' : undefined);

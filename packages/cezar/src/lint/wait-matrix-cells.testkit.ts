@@ -333,21 +333,31 @@ export function profileCells(profile: Profile, tiers: { full: boolean }): Cell[]
     const id = [tier, profile.key, wait.key, source.key, value.key, wait.loop ? clock : '-', comment.key, wrapper.key].join('/');
     cells.push({ id, file: profile.file, code: cellCode(wait, source, value, clock, comment, wrapper) });
   };
-  const full = by(WAITS, FULL_WAITS);
-  const rest = WAITS.filter(wait => !FULL_WAITS.includes(wait.key));
-  if (tiers.full) {
-    for (const wait of full) for (const source of SOURCES) for (const value of values) add('full', wait, source, value, 'date');
-  }
-  for (const wait of tiers.full ? rest : WAITS) for (const source of fewSources) for (const value of few) add('few', wait, source, value, 'date');
-  for (const wait of WAITS) for (const source of FIXED_SOURCES) add('fixed', wait, source, values[0]!, 'date');
-  for (const wait of WAITS.filter(each => each.loop)) {
-    for (const clock of Object.keys(CLOCKS).filter(key => key !== 'date')) for (const source of fewSources) for (const value of few) add('clock', wait, source, value, clock);
-  }
-  const commentValues = by(values, ['lit-500', 'lit-15000']);
-  for (const comment of COMMENTS.slice(1)) for (const wait of WAITS) for (const value of commentValues) add('comment', wait, SOURCES[0]!, value, 'date', comment);
-  for (const wrapper of WRAPPERS.slice(1)) for (const wait of WAITS) for (const value of commentValues) add('wrapper', wait, by(SOURCES, ['inline'])[0]!, value, 'date', none, wrapper);
-  for (const wrapper of WRAPPERS.slice(1)) for (const wait of WAITS) add('wrapper', wait, by(SOURCES, ['local-const'])[0]!, commentValues[0]!, 'date', none, wrapper);
+  crossWaits(add, values, few, fewSources, tiers.full);
+  crossAxes(add, values, few, fewSources);
   return cells;
+}
+
+type Add = (tier: string, wait: Wait, source: Source, value: Value, clock: string, comment?: Comment, wrapper?: Wrapper) => void;
+
+/** The full cross of the main waits, then every other wait with a few values and sources, then the sources with fixed values. */
+function crossWaits(add: Add, values: Value[], few: Value[], fewSources: Source[], full: boolean): void {
+  const rest = WAITS.filter(wait => !FULL_WAITS.includes(wait.key));
+  if (full) for (const wait of by(WAITS, FULL_WAITS)) for (const source of SOURCES) for (const value of values) add('full', wait, source, value, 'date');
+  for (const wait of full ? rest : WAITS) for (const source of fewSources) for (const value of few) add('few', wait, source, value, 'date');
+  for (const wait of WAITS) for (const source of FIXED_SOURCES) add('fixed', wait, source, values[0]!, 'date');
+}
+
+/** The other clocks for each loop, then each comment and each wrapper for every wait. */
+function crossAxes(add: Add, values: Value[], few: Value[], fewSources: Source[]): void {
+  const clocks = Object.keys(CLOCKS).filter(key => key !== 'date');
+  for (const wait of WAITS.filter(each => each.loop)) for (const clock of clocks) for (const source of fewSources) for (const value of few) add('clock', wait, source, value, clock);
+  const commentValues = by(values, ['lit-500', 'lit-15000']);
+  const [inline] = by(SOURCES, ['inline']);
+  const [local] = by(SOURCES, ['local-const']);
+  for (const comment of COMMENTS.slice(1)) for (const wait of WAITS) for (const value of commentValues) add('comment', wait, inline!, value, 'date', comment);
+  for (const wrapper of WRAPPERS.slice(1)) for (const wait of WAITS) for (const value of commentValues) add('wrapper', wait, inline!, value, 'date', COMMENTS[0], wrapper);
+  for (const wrapper of WRAPPERS.slice(1)) for (const wait of WAITS) add('wrapper', wait, local!, commentValues[0]!, 'date', COMMENTS[0], wrapper);
 }
 
 /** Every cell, by oracle file: the server and cockpit profiles in full, their second file type with the reduced cross. */

@@ -82,12 +82,13 @@ export class WaitNames {
     const parent = tree.parent(id);
     if (!parent) return undefined;
     const typed = plainType(tree, id.typeAnnotation) && !id.optional;
+    const value = (holds: boolean, node: N | null | undefined): N | undefined => (holds ? node ?? undefined : undefined);
     switch (parent.type) {
-      case 'VariableDeclarator': return parent.id === id && typed ? parent.init ?? undefined : undefined;
-      case 'AssignmentExpression': return parent.left === id && parent.operator === '=' ? parent.right : undefined;
-      case 'AssignmentPattern': return parent.left === id && typed ? parent.right : undefined;
-      case 'PropertyDefinition': return parent.key === id && !parent.computed && plainType(tree, parent.typeAnnotation) ? parent.value ?? undefined : undefined;
-      case 'TSEnumMember': return parent.id === id ? parent.initializer ?? undefined : undefined;
+      case 'VariableDeclarator': return value(parent.id === id && typed, parent.init);
+      case 'AssignmentExpression': return value(parent.left === id && parent.operator === '=', parent.right);
+      case 'AssignmentPattern': return value(parent.left === id && typed, parent.right);
+      case 'PropertyDefinition': return value(parent.key === id && !parent.computed && plainType(tree, parent.typeAnnotation), parent.value);
+      case 'TSEnumMember': return value(parent.id === id, parent.initializer);
       case 'Property': return this.#renamedValue(parent, id);
       default: return undefined;
     }
@@ -98,7 +99,11 @@ export class WaitNames {
     const pattern = this.tree.parent(property);
     if (property.key !== id || property.computed || property.shorthand || pattern?.type !== 'ObjectPattern') return undefined;
     if (property.value.type === 'AssignmentPattern') return property.value.left.type === 'Identifier' && !property.value.left.typeAnnotation ? property.value.right : undefined;
-    if (property.value.type !== 'Identifier' || pattern.properties.at(-1) !== property) return undefined;
+    return property.value.type === 'Identifier' && pattern.properties.at(-1) === property ? this.#patternValue(pattern) : undefined;
+  }
+
+  /** The value a destructuring pattern is assigned: `= value` after it in a declaration, an assignment or a default. */
+  #patternValue(pattern: N): N | undefined {
     const holder = this.tree.parent(pattern);
     if (holder?.type === 'VariableDeclarator' && holder.id === pattern && !pattern.typeAnnotation) return holder.init ?? undefined;
     if (holder?.type === 'AssignmentExpression' && holder.left === pattern && holder.operator === '=') return holder.right;
@@ -236,21 +241,26 @@ function assignedAfter(tree: WaitTree, end: number): boolean {
 /** The writes one node makes, as `[name, offset, plain]`. */
 function writeForms(names: WaitNames, node: N): Array<[string, number, boolean]> {
   switch (node.type) {
-    case 'UpdateExpression': {
-      const path = node.argument.type === 'Identifier' || node.argument.type === 'MemberExpression' ? pathOf(names.tree, node.argument) : undefined;
-      return path === undefined ? [] : [[path, node.argument.start, false]];
-    }
+    case 'UpdateExpression': return updateWrites(names, node);
     case 'AssignmentExpression': return assignmentWrites(names, node);
     case 'AssignmentPattern': return node.left.type === 'Identifier' && !node.left.typeAnnotation ? [[node.left.name, node.left.start, true]] : [];
     case 'VariableDeclarator': return declaratorWrites(names, node);
-    case 'PropertyDefinition': {
-      const key = node.key;
-      return (key.type === 'Identifier' || key.type === 'PrivateIdentifier') && node.value && !node.typeAnnotation && !node.computed ? [[key.name, key.start, true]] : [];
-    }
+    case 'PropertyDefinition': return fieldWrites(node);
     case 'TSEnumMember': return node.id.type === 'Identifier' && node.initializer ? [[node.id.name, node.id.start, true]] : [];
     case 'ArrayPattern': case 'ObjectPattern': case 'TSTypeLiteral': case 'TSTupleType': return bracketWrites(names, node);
     default: return [];
   }
+}
+
+function updateWrites(names: WaitNames, node: N): Array<[string, number, boolean]> {
+  const path = node.argument.type === 'Identifier' || node.argument.type === 'MemberExpression' ? pathOf(names.tree, node.argument) : undefined;
+  return path === undefined ? [] : [[path, node.argument.start, false]];
+}
+
+/** A class field with a value and no type: `name = 5`, `#name = 5`. */
+function fieldWrites(node: N): Array<[string, number, boolean]> {
+  const key = node.key;
+  return (key.type === 'Identifier' || key.type === 'PrivateIdentifier') && node.value && !node.typeAnnotation && !node.computed ? [[key.name, key.start, true]] : [];
 }
 
 function assignmentWrites(names: WaitNames, node: N): Array<[string, number, boolean]> {

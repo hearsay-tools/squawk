@@ -156,9 +156,8 @@ export function awaitedSleep(wf: WaitFile, awaited: N): { delay: N | undefined }
   return promise ? promisedSleep(wf, promise) : undefined;
 }
 
-/** `new Promise(r => setTimeout(r, 50))` and its block and `globalThis.` forms: the delay, when the timer resolves the promise. */
-function promisedSleep(wf: WaitFile, promise: N): { delay: N | undefined } | undefined {
-  const { tree } = wf;
+/** The executor of `new Promise<T>(r => …)` with one plain resolver parameter, written right after the `(`. */
+function resolverExecutor(tree: WaitTree, promise: N): N | undefined {
   const typed: N | undefined = promise.typeArguments ?? undefined;
   if (typed && /[<>()]/.test(tree.text.slice(typed.start + 1, typed.end - 1))) return undefined;
   const open = tree.source.after((typed ?? promise.callee).end);
@@ -166,7 +165,15 @@ function promisedSleep(wf: WaitFile, promise: N): { delay: N | undefined } | und
   if (tree.text[open] !== '(' || executor?.type !== 'ArrowFunctionExpression' || executor.async || executor.returnType || executor.params.length !== 1) return undefined;
   const param: N = executor.params[0];
   if (param.type !== 'Identifier' || tree.source.before(executor.start) !== open) return undefined;
-  if (param.typeAnnotation && (tree.text[executor.start] !== '(' || /[()]/.test(rawOf(tree, param.typeAnnotation)))) return undefined;
+  return param.typeAnnotation && (tree.text[executor.start] !== '(' || /[()]/.test(rawOf(tree, param.typeAnnotation))) ? undefined : executor;
+}
+
+/** `new Promise(r => setTimeout(r, 50))` and its block and `globalThis.` forms: the delay, when the timer resolves the promise. */
+function promisedSleep(wf: WaitFile, promise: N): { delay: N | undefined } | undefined {
+  const { tree } = wf;
+  const executor = resolverExecutor(tree, promise);
+  if (!executor) return undefined;
+  const param: N = executor.params[0];
   const timer = timerCall(wf, executor);
   if (!timer) return undefined;
   const [callback, delay] = timer.arguments as N[];
@@ -278,14 +285,21 @@ const FUNCTIONS = new Set(['FunctionDeclaration', 'FunctionExpression', 'TSDecla
 /** A local wait helper's definition: `function until(…)` or `const until = (…) =>`, keyed on its `function` or `const`. */
 function helperDefinition(wf: WaitFile, node: N): { params: N[]; offset: number } | undefined {
   const { tree } = wf;
-  const simpleTypes = (typed: N | null | undefined): boolean => !typed || !/[<>()]/.test(tree.text.slice(typed.start + 1, typed.end - 1));
   if (FUNCTIONS.has(node.type) && isName(node.id, helperNames)) {
     const keyword = node.async ? tree.source.after(node.start + 'async'.length) : node.start;
-    return simpleTypes(node.typeParameters) && tree.text.startsWith('function', keyword) ? { params: node.params, offset: keyword } : undefined;
+    return simpleTypes(tree, node.typeParameters) && tree.text.startsWith('function', keyword) ? { params: node.params, offset: keyword } : undefined;
   }
+  return helperArrow(tree, node);
+}
+
+/** Type parameters the text reads past: no nested `<>` and no parentheses. */
+const simpleTypes = (tree: WaitTree, typed: N | null | undefined): boolean => !typed || !/[<>()]/.test(tree.text.slice(typed.start + 1, typed.end - 1));
+
+/** `const until = async (…) =>`: a helper written as an arrow with its parameters in parentheses. */
+function helperArrow(tree: WaitTree, node: N): { params: N[]; offset: number } | undefined {
   const declarator: N | undefined = node.type === 'VariableDeclaration' ? node.declarations[0] : undefined;
   const init: N | undefined = declarator?.init ?? undefined;
-  if (!declarator || !isName(declarator.id, helperNames) || init?.type !== 'ArrowFunctionExpression' || !simpleTypes(init.typeParameters)) return undefined;
+  if (!declarator || !isName(declarator.id, helperNames) || init?.type !== 'ArrowFunctionExpression' || !simpleTypes(tree, init.typeParameters)) return undefined;
   if (declarator.id.typeAnnotation && /[=;]/.test(rawOf(tree, declarator.id.typeAnnotation))) return undefined;
   let open = init.async ? tree.source.after(init.start + 'async'.length) : init.start;
   if (init.typeParameters) open = tree.source.after(init.typeParameters.end);

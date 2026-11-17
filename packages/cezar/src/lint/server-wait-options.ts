@@ -49,19 +49,28 @@ function leftChild(node: N): N | undefined {
 export function waitMs(file: WaitFile, at: N, node: N, vitest: boolean, depth = 0): number | undefined {
   const { tree } = file;
   const tight = !parenBefore(tree, node);
-  if (tight && node.type === 'Identifier' && node.name === 'undefined' && !node.typeAnnotation && !node.optional) return VITEST_DEFAULT_MS;
-  if (tight && isNullLiteral(node)) return 0;
+  const fixed = tight ? fixedBound(node) : undefined;
+  if (fixed !== undefined) return fixed;
   const place = waitScope(file, at);
   if (node.type === 'Identifier' && (node.typeAnnotation || node.optional)) return undefined;
   const word = tight ? wordOf(node) : undefined;
-  if (vitest && depth < 3 && word !== undefined) {
-    const objects = file.names.held(place, word, at.start).flatMap(each => (each.value === UNREAD ? [] : [leadingObject(file, each.value)].filter(Boolean) as N[]));
-    const held = objects.map(object => optionsBound(file, object, depth + 1));
-    if (held.length > 0) return held.includes(undefined) ? undefined : Math.min(...held.filter(isNumber));
-  }
+  const held = vitest && depth < 3 && word !== undefined ? heldOptions(file, place, word, at.start, depth) : [];
+  if (held.length > 0) return held.includes(undefined) ? undefined : Math.min(...held.filter(isNumber));
   const bound = literalBound(file, place, node, at.start, tight);
   if (bound !== undefined) return isNumber(bound) ? bound : undefined;
   return vitest && !sizedOutside(file, place, node, at.start) ? NaN : undefined;
+}
+
+/** `undefined`, Vitest's default of 1 s, and `null`, no bound at all, written alone. */
+function fixedBound(node: N): number | undefined {
+  if (node.type === 'Identifier' && node.name === 'undefined' && !node.typeAnnotation && !node.optional) return VITEST_DEFAULT_MS;
+  return isNullLiteral(node) ? 0 : undefined;
+}
+
+/** The bounds of the options objects a name holds where a Vitest wait reads it. */
+function heldOptions(file: WaitFile, place: Scope, word: string, at: number, depth: number): Array<number | undefined> {
+  const objects = file.names.held(place, word, at).flatMap(each => (each.value === UNREAD ? [] : [leadingObject(file, each.value)].filter(Boolean) as N[]));
+  return objects.map(object => optionsBound(file, object, depth + 1));
 }
 
 /**
