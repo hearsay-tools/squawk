@@ -85,9 +85,11 @@ it.each(['numeric', 'string'])('keeps static-text reads linear for %s addition c
     checkRule(measured, 'packages/cezar/src/static-text-fixture.test.ts', `const total = ${operands.join(' + ')};`);
     return reads;
   };
-  const counts = [100, 200, 400, 800].map(readsFor);
-  for (let index = 1; index < counts.length; index++) {
-    expect(counts[index]).toBeGreaterThan(counts[index - 1]);
-    expect(counts[index]).toBeLessThanOrEqual(counts[index - 1] * 2.1);
+  let previous = readsFor(100);
+  for (const length of [200, 400, 800]) {
+    const current = readsFor(length);
+    expect(current).toBeGreaterThan(previous);
+    expect(current).toBeLessThanOrEqual(previous * 2.1);
+    previous = current;
   }
 });
