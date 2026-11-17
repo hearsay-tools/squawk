@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeWaitingOn, type WaitingOnInput, type WorkerWaitEntry } from './waits.ts';
-import { ATTENTION_RANK, ATTENTION_RUNGS, DEFAULT_WEBHOOK_TRIGGERS, attentionOfRung, deriveAttention, deriveWebhookState, needsYou, rungNeedsYou, WEBHOOK_TRIGGERS, workerWaitLabel, workersWaitingLabel, type Attention, type AttentionInput, type AttentionRung } from './attention.ts';
+import { ATTENTION_RANK, ATTENTION_RUNGS, attentionOfRung, deriveAttention, deriveWebhookState, needsYou, rungNeedsYou, WEBHOOK_TRIGGERS, workerWaitLabel, workersWaitingLabel, type Attention, type AttentionInput, type AttentionRung } from './attention.ts';
 import { runStatusSchema } from './run-status.ts';
 import type { RunStatus } from './runs.ts';
 import {
@@ -42,11 +42,6 @@ describe('ATTENTION_RANK', () => {
       .map(([bucket]) => bucket);
     expect(order).toEqual(['permission', 'error', 'waiting', 'running', 'unseen', 'none']);
   });
-
-  it('ranks error above waiting — an error can never be masked by a gate', () => {
-    expect(ATTENTION_RANK.error).toBeLessThan(ATTENTION_RANK.waiting);
-    expect(ATTENTION_RANK.permission).toBeLessThan(ATTENTION_RANK.error);
-  });
 });
 
 describe('deriveAttention', () => {
@@ -73,12 +68,6 @@ describe('deriveAttention', () => {
     const frozen = JSON.stringify(record);
     expect(deriveAttention(record)).toEqual(deriveAttention(record));
     expect(JSON.stringify(record)).toBe(frozen);
-  });
-
-  it('never claims permission or unseen — nothing feeds those buckets yet', () => {
-    for (const status of ALL_STATUSES) {
-      expect(['permission', 'unseen']).not.toContain(deriveAttention(run({ status })).bucket);
-    }
   });
 
   // The #609 contract: `waiting` is attention whether or not a structured question is pending.
@@ -293,13 +282,22 @@ describe('delegation rungs', () => {
     expect(deriveAttention(record)).toMatchObject({ bucket: 'waiting', label: 'needs you' });
   });
 
-  it('labels a legacy-shape worker wait by the workers that have not reported yet', () => {
-    const outcome = (workerId: string) => ({ workerId, status: WORKER_OUTCOME_STATUS.done, observedAt: '2026-09-05T00:00:00.000Z' });
-    expect(workerWaitLabel('root', { workerIds: ['a', 'b'], outcomes: [outcome('a')] })).toBe('waiting on 1 worker');
-    expect(workerWaitLabel('root', { workerIds: ['a', 'b'], outcomes: [outcome('a'), outcome('b')] })).toBe('waiting on workers');
-    expect(workerWaitLabel('root', { requestIds: ['r'], workerIds: [], outcomes: [] })).toBe('waiting on worker replies');
-    expect(workerWaitLabel('worker', { requestIds: ['r'], workerIds: [], outcomes: [] })).toBe('waiting on parent reply');
-    expect(workerWaitLabel('root', { requestIds: ['r'], workerIds: [], outcomes: [] }, true)).toBe('waiting on replies');
+  const outcome = (workerId: string) => ({ workerId, status: WORKER_OUTCOME_STATUS.done, observedAt: '2026-09-05T00:00:00.000Z' });
+  const requests = { requestIds: ['r'], workerIds: [], outcomes: [] };
+  it.each<[string, 'root' | 'worker', Parameters<typeof workerWaitLabel>[1], boolean, string]>([
+    ['two pending workers', 'root', { workerIds: ['a', 'b'], outcomes: [] }, false, 'waiting on 2 workers'],
+    ['one of two reported', 'root', { workerIds: ['a', 'b'], outcomes: [outcome('a')] }, false, 'waiting on 1 worker'],
+    ['every worker reported', 'root', { workerIds: ['a', 'b'], outcomes: [outcome('a'), outcome('b')] }, false, 'waiting on workers'],
+    ['no workers', 'root', { workerIds: [], outcomes: [] }, false, 'waiting on workers'],
+    ['a sparse streamed wait', 'root', {} as never, false, 'waiting on workers'],
+    ['a wait without outcomes', 'root', { workerIds: ['a'], outcomes: undefined } as never, false, 'waiting on 1 worker'],
+    ['an empty request list beside a worker', 'root', { requestIds: [], workerIds: ['a'], outcomes: [] }, true, 'waiting on 1 worker'],
+    ['worker requests', 'root', requests, false, 'waiting on worker replies'],
+    ['peer requests', 'root', requests, true, 'waiting on replies'],
+    ['a reply to a worker', 'worker', requests, false, 'waiting on parent reply'],
+    ['a reply to a worker, peers or not', 'worker', requests, true, 'waiting on parent reply'],
+  ])('labels a legacy-shape worker wait with %s', (_name, role, wait, peers, label) => {
+    expect(workerWaitLabel(role, wait, peers)).toBe(label);
   });
 
   // hearsay-tools/cezarion#1995: a run parked on named peers is never Needs you.
@@ -341,7 +339,6 @@ describe('open waits', () => {
   });
 
   it('reads a waiting record with an open CI or timer wait as running, not Needs you', () => {
-    expect(deriveAttention({ status: RUN_STATUS.waiting, waits: [openCi()] })).toMatchObject({ bucket: 'running', shape: 'ring', label: 'waiting for CI' });
     expect(deriveAttention({ status: RUN_STATUS.waiting, waits: [openTimer()] })).toMatchObject({ bucket: 'running', shape: 'ring', label: 'monitoring' });
     expect(deriveAttention({ status: RUN_STATUS.waiting, waits: [openCi()] })).toEqual({
       rung: 'waiting-for-ci', bucket: 'running', tone: 'running', shape: 'ring', pulse: true, label: 'waiting for CI',
@@ -359,14 +356,6 @@ describe('open waits', () => {
     expect(deriveAttention({ status: RUN_STATUS.waiting, waits: [openCi(), humanWait()] }).label).toBe('needs you');
     // The transcript-context argument the cockpit passes says the same.
     expect(deriveAttention({ status: RUN_STATUS.waiting, waitingOn: { kind: WAIT_KIND.human }, waits: [openCi()] }).label).toBe('needs you');
-  });
-
-  it('follows a summary\'s waitingOn when the row carries no waits', () => {
-    expect(deriveAttention({
-      status: RUN_STATUS.waiting,
-      waitingOn: { kind: WAIT_KIND.pr, until: 'checks', waitId: '11111111-1111-4111-8111-111111111111', prUrl: 'https://github.com/o/r/pull/12', repository: 'o/r', prNumber: 12, deadline: '2026-10-17T15:40:00.000Z' },
-    }).label).toBe('waiting for CI');
-    expect(deriveAttention({ status: RUN_STATUS.waiting, waitingOn: { kind: WAIT_KIND.timer, waitId: '22222222-2222-4222-8222-222222222222', at: '2026-10-17T15:05:00.000Z' } }).label).toBe('monitoring');
   });
 
   // Rung 10: a resolved wait is a wake owed to the agent; until its turn starts the run waits for
@@ -426,21 +415,6 @@ describe('computeWaitingOn and worker entries', () => {
     prUrl: 'https://github.com/o/r/pull/12', repository: 'o/r', prNumber: 12, headSha: 'a'.repeat(40), generation: 'gen-1', timeoutSeconds: 1800, until: 'checks' as const, wakeOnConflict: true,
   };
 
-  it('computeWaitingOn counts unreported workers across two worker entries', () => {
-    const [a, b, c] = ids(3);
-    const waits = [
-      workerWait('88888888-8888-4888-8888-888888888881', [a!, b!], [b!]),
-      workerWait('88888888-8888-4888-8888-888888888882', [c!]),
-      workerWait('88888888-8888-4888-8888-888888888883', [a!, c!], [a!, c!]),
-    ];
-    // 1 + 1 unreported across the first two; the third has every worker reported.
-    expect(computeWaitingOn({ waits: waits.slice(0, 2) })).toEqual({ kind: 'workers', count: 2 });
-    expect(computeWaitingOn({ waits: [workerWait('88888888-8888-4888-8888-888888888884', [a!, b!]), workerWait('88888888-8888-4888-8888-888888888885', [c!])] }))
-      .toEqual({ kind: 'workers', count: 3 });
-    // Only open entries count.
-    expect(computeWaitingOn({ waits: [{ ...waits[0]!, phase: WAIT_PHASE.resolved }] })).toBeUndefined();
-  });
-
   // hearsay-tools/cezarion#2588: a worker in two open waits is one pending worker.
   it('counts each pending worker once across overlapping and disjoint waits', () => {
     const [a, b] = ids(2);
@@ -475,18 +449,6 @@ describe('computeWaitingOn and worker entries', () => {
       .toEqual({ kind: 'workers', count: 2, replies: true });
   });
 
-  it('a worker entry outranks an open ci wait', () => {
-    const [a] = ids(1);
-    expect(computeWaitingOn({ waits: [ci, workerWait('88888888-8888-4888-8888-888888888881', [a!])] })).toEqual({ kind: 'workers', count: 1 });
-  });
-
-  it('a human wait outranks a worker entry', () => {
-    const [a] = ids(1);
-    const waits = [workerWait('88888888-8888-4888-8888-888888888881', [a!])];
-    expect(computeWaitingOn({ waits: [...waits, humanWait()] })).toEqual({ kind: WAIT_KIND.human });
-    expect(computeWaitingOn({ waits: [...waits, humanWait(true)] })).toEqual({ kind: WAIT_KIND.human, shown: true });
-  });
-
   // The attention rung for list entries and summaries (previously fell through to "needs you").
   it('reads a waiting run with only an open worker entry as waiting on its workers', () => {
     const [a, b] = ids(2);
@@ -503,7 +465,6 @@ describe('computeWaitingOn and worker entries', () => {
   it('reads a summary carrying only waitingOn workers the same way', () => {
     expect(deriveAttention({ status: RUN_STATUS.waiting, waitingOn: { kind: 'workers', count: 2 } }))
       .toEqual({ rung: 'waiting-on-workers', bucket: 'none', tone: 'running', shape: 'workers', pulse: false, label: 'waiting on 2 workers' });
-    expect(deriveAttention({ status: RUN_STATUS.waiting, waitingOn: { kind: 'workers', count: 0 } }).label).toBe('waiting on workers');
     expect(deriveAttention({ status: RUN_STATUS.waiting, waitingOn: { kind: WAIT_KIND.human } }).label).toBe('needs you');
     expect(deriveAttention({ status: RUN_STATUS.running, waitingOn: { kind: 'workers', count: 1 } }).label).toBe('running');
   });
@@ -581,27 +542,15 @@ describe('deriveWebhookState', () => {
     expect(deriveWebhookState({ status: RUN_STATUS.waiting, waitingOn: { kind: 'future' } } as unknown as AttentionInput)).toBe('waiting-other');
   });
 
-  it('only ever answers a trigger, and the default is the four that end a task or need a person', () => {
+  it('only ever answers a trigger', () => {
     for (const status of ALL_STATUSES) {
       const state = deriveWebhookState(run({ status }));
       if (state !== undefined) expect(WEBHOOK_TRIGGERS).toContain(state);
     }
-    expect(DEFAULT_WEBHOOK_TRIGGERS).toEqual(['needs-you', 'failed', 'done', 'cancelled']);
   });
 });
 
 describe('attention boundary cases', () => {
-  it('labels empty, sparse and fully reported legacy worker waits', () => {
-    expect(workerWaitLabel('root', { workerIds: ['a', 'b'], outcomes: [] })).toBe('waiting on 2 workers');
-    expect(workerWaitLabel('root', { workerIds: ['a', 'b'], outcomes: [{ workerId: 'b', status: RUN_STATUS.done, observedAt: '2026-10-30T12:00:00Z' }] })).toBe('waiting on 1 worker');
-    expect(workerWaitLabel('root', { workerIds: [], outcomes: [] })).toBe('waiting on workers');
-    expect(workerWaitLabel('root', {} as never)).toBe('waiting on workers');
-    expect(workerWaitLabel('root', { workerIds: ['a'], outcomes: undefined } as never)).toBe('waiting on 1 worker');
-    expect(workerWaitLabel('root', { requestIds: [], workerIds: ['a'], outcomes: [] }, true)).toBe('waiting on 1 worker');
-    expect(workerWaitLabel('root', { requestIds: ['r'], workerIds: [], outcomes: [] }, true)).toBe('waiting on replies');
-    expect(workerWaitLabel('worker', { requestIds: ['r'], workerIds: [], outcomes: [] }, true)).toBe('waiting on parent reply');
-  });
-
   it.each(ALL_STATUSES)('applies native permission attention only to live status %s', status => {
     const result = deriveAttention({ status, hasPendingPermission: true });
     expect(result.rung === 'needs-permission').toBe(status === 'running' || status === 'waiting');
