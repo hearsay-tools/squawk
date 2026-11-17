@@ -64,26 +64,15 @@ describe('the github search API', () => {
     expect(body.items.map((i) => i.number)).toEqual([142]);
   });
 
-  it('400s on a missing or unknown kind', async () => {
-    expect((await apiRequest(app, '/api/v1/github/search?q=128')).status).toBe(400);
-    expect((await apiRequest(app, '/api/v1/github/search?kind=commit&q=128')).status).toBe(400);
-  });
-
-  it('400s on a missing or blank query', async () => {
-    expect((await apiRequest(app, '/api/v1/github/search?kind=pr')).status).toBe(400);
-    expect((await apiRequest(app, '/api/v1/github/search?kind=pr&q=')).status).toBe(400);
-    expect((await apiRequest(app, '/api/v1/github/search?kind=pr&q=%20%20')).status).toBe(400);
-  });
-
-  it('400s on an absurdly long query rather than shelling out with it', async () => {
-    const long = 'a'.repeat(257);
-    expect((await apiRequest(app, `/api/v1/github/search?kind=pr&q=${long}`)).status).toBe(400);
-  });
-
-  it('400s on a malformed limit', async () => {
-    expect((await apiRequest(app, '/api/v1/github/search?kind=pr&q=128&limit=0')).status).toBe(400);
-    expect((await apiRequest(app, '/api/v1/github/search?kind=pr&q=128&limit=abc')).status).toBe(400);
-    expect((await apiRequest(app, '/api/v1/github/search?kind=pr&q=128&limit=9999')).status).toBe(400);
+  it('rejects malformed kind, query and limit values', async () => {
+    for (const query of [
+      'q=128', 'kind=commit&q=128', 'kind=pr', 'kind=pr&q=', 'kind=pr&q=%20%20',
+      `kind=pr&q=${'a'.repeat(257)}`,
+      'kind=pr&q=128&limit=0', 'kind=pr&q=128&limit=abc', 'kind=pr&q=128&limit=9999',
+    ]) {
+      const res = await apiRequest(app, `/api/v1/github/search?${query}`);
+      expect(res.status, query).toBe(400);
+    }
   });
 
   it('answers identically on the project-scoped mirror', async () => {
