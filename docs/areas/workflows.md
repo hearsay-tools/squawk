@@ -29,7 +29,7 @@ steps:
   - id: implement
     name: Implement
     prompt: "{{task}}"
-    skill: project-conventions   # optional — from .ai/skills or .ai/cezar/skills
+    skill: project-conventions   # optional — a skill id reported by this step’s runner
     # model: opus                # optional per-step model override
     # effort: high               # optional per-step effort: low · medium · high · xhigh · max
     # runner: codex              # optional per-step backend: claude · codex · opencode · cursor · pi · omp
@@ -42,6 +42,12 @@ steps:
       retry: implement           # loop back to an earlier step…
       max: 2                     # …at most twice
 ```
+
+`skill:` names a runner skill id, not a file path. Step open lists the selected runner
+for the step's account and working folder and checks the id before a model call.
+Name-only duplicates use the scope rule in [Skills](skills.md#selected-skills-and-paths).
+Workflow files and the `skills:` shorthand carry no `skillPath`; that field belongs only
+to inline run steps and stored run steps.
 
 `{{task}}` is replaced with the task text you typed. When a check fails and loops
 back, its failing output is appended to the retried agent's prompt so the next

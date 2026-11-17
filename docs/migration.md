@@ -94,7 +94,7 @@ in this table. They are path placeholders, not shell variables.
 | config | Registry and settings, accounts, remote grants, tracker connections, install marker | `~/.config/hearsay-squawk` | `~/Library/Application Support/Hearsay Squawk/config` | `%APPDATA%\Hearsay Squawk` |
 | state | UI state, server records, backups, update recovery, window and connection state left by the former desktop app | `~/.local/state/hearsay-squawk` | `~/Library/Application Support/Hearsay Squawk/state` | `%LOCALAPPDATA%\Hearsay Squawk\state` |
 | data | Managed versions and launchers, copied account directories, browser profiles left by the former desktop app on Linux/Windows | `~/.local/share/hearsay-squawk` | `~/Library/Application Support/Hearsay Squawk/data` | `%LOCALAPPDATA%\Hearsay Squawk\data` |
-| cache | Team skills, dry-run caches | `~/.cache/hearsay-squawk` | `~/Library/Caches/Hearsay Squawk` | `%LOCALAPPDATA%\Hearsay Squawk\cache` |
+| cache | Dry-run caches and retained legacy skill clones | `~/.cache/hearsay-squawk` | `~/Library/Caches/Hearsay Squawk` | `%LOCALAPPDATA%\Hearsay Squawk\cache` |
 | runtime | Sockets and temporary runtime files | `$XDG_RUNTIME_DIR/hearsay-squawk`, else `<state>/run` | `$TMPDIR/hearsay-squawk`, else `/tmp/hearsay-squawk` | `%LOCALAPPDATA%\Hearsay Squawk\run` |
 
 Linux honors absolute `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_DATA_HOME` and
@@ -298,3 +298,28 @@ removal in the cleanup release. `CEZ_HOME` keeps its permanent fallback. The
 window ending does not rename `.ai/cezar/`: a project moves at an idle cockpit
 start or with `hsq migrate-project`. Keep the old home until account deferrals
 and recovery notices are resolved.
+
+## Runner-native skills
+
+Skills now come from the selected runner's own list for the task's account and folder.
+Use the runner's own skill tools or track its native project folders. Squawk no longer
+reads its former skill-source folders, fetches team repositories, installs worktree
+copies or injects playbook bodies. See [Skills](areas/skills.md).
+
+Existing `config.json` files with `skillsRepos` still load; that unknown key is ignored.
+Existing `ui-state.json` files with `disabledTeamSkills` also load with that key ignored.
+No replacement setting is required. `lastTask` and `recentSources` retain skill ids only;
+a duplicate id in a restored picker offers both entries. Saved run steps can retain a
+picked `skillPath`, while workflow files and automation definitions carry ids only.
+An old saved reference that is absent or ambiguous in the runner's list fails before a
+model call when its step opens.
+
+At the next step open or Continue, Squawk cleans an old task worktree before listing
+skills. It removes only unchanged entries recorded by its old installer and its owned
+ignore files. Changed, unrecorded or unverifiable content stays. Kept recorded copies
+remain excluded from git. Cleanup saves records last, so a crash leaves a repeatable
+pass. A failure keeps records for retry and reports a nonblocking note. A worktree
+without records is untouched, and the main checkout is never cleaned.
+
+Leftover team-skill clones in the user cache stay on disk. Squawk no longer reads or
+refreshes them. Removing those clones is outside this migration.

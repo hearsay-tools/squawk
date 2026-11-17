@@ -13,7 +13,7 @@ other directory is the fallback. The write root is `.ai/cezar/`, or `.ai/squawk/
 fresh or moved project (a completed migration's marker in the Git common directory,
 hearsay-tools/cezarion#3150). `init`,
 generated task paths, task state and config writes go to the write root; `init` skips a
-starter whose workflow or skill name already exists in the fallback.
+starter workflow whose name already exists in the fallback.
 Singleton config/context files use whole-file presence precedence. Reads never
 create a fallback directory or an empty legacy run store that hides its data.
 Git excludes cover both runtime trees and `.ai/squawk-migration.json`; tracked
@@ -215,10 +215,12 @@ heredoc delimiter. A single-quoted positional argument still works for short tas
 `hsq task start 'Fix the typo'`.
 
 `hsq task start --task-file task.md --skill <name>` names one skill as the task's agent step;
-`--skill` and `--workflow` are mutually exclusive. The CLI checks `GET /skills` first and
+`--skill` and `--workflow` are mutually exclusive. The CLI checks
+`GET /runner-skills?runner=<id>` for the selected runner and project account first and
 includes a `warning` in its JSON result if the skill is missing or the catalog cannot be
-checked; it still starts the run. Like a cockpit skill start, if the skill is missing at
-execution, the agent uses the plain prompt and the run logs a note. CLI starts do not change
+checked; it still starts the run. Step open resolves the id against the runner's list
+in the execution folder. A missing or ambiguous selection fails before a model call.
+CLI starts do not change
 the cockpit composer's recent picks or skill-usage ranking.
 Without either flag, `start` still runs `quick-task`.
 

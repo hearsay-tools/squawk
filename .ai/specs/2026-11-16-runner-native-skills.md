@@ -1,5 +1,5 @@
 # Runner-native skills
-Status: active
+Status: done
 
 Baseline: `main` at `00958e289`. Drafted with the owner on 2026-11-16 in task b99fbdec. The probe
 reports are in [`.ai/analysis/2026-11-16-runner-native-skills/`](../analysis/2026-11-16-runner-native-skills/).
@@ -25,7 +25,7 @@ skills, or puts a skill body into the system prompt.
 
 ## Evidence
 
-### What Squawk does today
+### What Squawk did at the baseline
 
 - `discoverSkills` (`skills.ts`) merges project folders, `~/.agents/skills`, `~/.claude/skills`,
   team repositories (`skillsRepos`, bare clones in `<cache>/skills`) and one built-in into one
@@ -75,12 +75,12 @@ Facts that shape the design:
   (`launch-context.ts`) drops the handoff and context prefix when the opening message is a slash
   command, because the command must stay at character zero (hearsay-tools/cezarion#676).
 
-## Proposed design
+## Design
 
 ### The runner seam
 
-Each runner adapter gains two capabilities, and `RUNNER_FACTS` gains the facts that shared code
-needs to choose between them.
+Each runner has list and trigger adapters. `RUNNER_FACTS` holds the facts that shared code
+needs to choose how to deliver a trigger.
 
 - **`listSkills({ cwd, account })`** returns `{ skills, problems }`. One skill is
   `{ id, name, description?, scope?, plugin?, path? }`. `id` is the exact value the trigger
@@ -146,8 +146,8 @@ the Continue message as its arguments, only when it opens a fresh session, and r
 
 The opening context (handoff and `context.yaml` rules) keeps travelling with the opening message.
 Its place differs per runner, as the table above says: an earlier text block on Claude, after
-the arguments on pi. Each adapter pins its place with a parity row. Today that context is dropped
-for a slash opening; this design sends it again.
+the arguments on pi. Each adapter pins its place with a parity row. The opening context travels with a slash
+opening too.
 
 ### A `/name` typed by a human
 
@@ -254,13 +254,15 @@ Saved data still opens: a `config.json` that holds `skillsRepos` and a `ui-state
 
 - Claude: managed-policy hooks were not tested. User settings cannot disable them.
 
-## Plan
+## Implementation record
 
-Slices in order. Each is one pull request. [The plan](2026-11-16-runner-native-skills-plan.md)
-says what each slice changes. It adds one slice, R, that makes this repository's own skills
-reachable natively before slice 3 (D5).
-Slice 1 starts after hearsay-tools/squawk#3715 merges, so that no slice writes Cursor code that
-the removal then deletes.
+Completed in slices. The implementation plan was deleted at close-out. Slice R exposed this
+repository's skills through tracked native-folder links before slice 3 (D5).
+Evidence: hearsay-tools/squawk#3755 (list), hearsay-tools/squawk#3773 (trigger),
+hearsay-tools/squawk#3753 (repository links), hearsay-tools/squawk#3786 (run path),
+hearsay-tools/squawk#3792 (cockpit), hearsay-tools/squawk#3763 (automation tool),
+hearsay-tools/squawk#3800 (removal), and hearsay-tools/squawk#3790 (docs).
+[ADR 0066](../../docs/adr/0066-use-runner-native-skills.md) records the resulting decision.
 
 1. **List seam.** `listSkills` on five adapters, the contract schema, the facts, and a parity
    family that runs on every runner. No product reader yet.

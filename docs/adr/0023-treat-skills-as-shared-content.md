@@ -1,5 +1,8 @@
 # Treat skills as shared content and provision task-owned copies
 
+**Superseded** by [ADR 0066 — Use runner-native skills](0066-use-runner-native-skills.md).
+This record describes the removed model. Its implementation and coverage paths refer to that historical snapshot.
+
 Skills are playbooks, not account identity. Global discovery follows the user’s shared skill
 library rather than a selected account home. Resolve collisions local-first. Missing sources
 produce a smaller catalog; remote loading runs behind an in-process cache instead of blocking

@@ -4,18 +4,102 @@
 
 ## Read first
 
-`packages/cezar/src/skills.ts`, `packages/cezar/src/skills-remote.ts`, `packages/cezar/src/workflows/run.ts`, `packages/cezar/src/workflows/run/run-skills.ts`, `packages/cezar/src/ui-state.ts`
+`packages/cezar/src/core/runner-skill-catalog.ts`, `core/host-skill-catalog.ts`,
+`core/runner-skill-reference.ts` (all under `packages/cezar/src/`), then
+`packages/cezar/src/server/runner-skills.ts`, `packages/cezar/src/workflows/run/run-skills.ts`
+and `packages/cezar/src/worktree-skill-cleanup.ts`.
+[ADR 0066](../adr/0066-use-runner-native-skills.md) records the decision.
 
-Team caches use the [resolved cache root](../migration.md#home-directories).
+## Lists and accounts
 
-## Two project directories before P5
+A skill is an entry the selected runner reports. Squawk lists metadata and sends native
+triggers. It reads no skill file, injects no skill body and installs no skills.
+The runner owns discovery, including project folders, user skills and plugins.
+Skills follow the step's account home, not a shared Squawk library (D1).
 
-Read project skills from `.ai/cezar/skills/` then `.ai/squawk/skills/`.
-Legacy wins duplicate names. Preserve precedence against `.ai/skills/`, agent
-mirrors, built-ins and team repositories. Team-source configuration uses whole-file
-legacy-first selection. Imports and config edits still write `.ai/cezar/`.
-Neither reads nor ignore maintenance create `.ai/squawk/`.
+`GET /runner-skills?runner=<id>&account=<account>` is project-scoped under
+`/api/v1/p/:projectId` (the boot project's `/api/v1` form also works). An omitted account
+uses the project's session account. The response holds `runner`, `skills`, `problems`,
+`source` (`live`, `cache` or `unavailable`) and an optional `reason`.
+Each entry has `id`, `name` and optional `description`, `scope`, `plugin` and `path`.
+Use `id` for references and triggers; `name` is display text.
+Do not fill missing metadata by reading files.
 
-## Rules
+The server shares one `RunnerSkillCatalog`, keyed by runner, account home and working
+folder. Its default cache lifetime is 300 seconds. Concurrent reads join; each probe has
+a deadline. `refresh=1` invalidates the entry before reading. A failed probe retains the
+last good list with a reason, or answers `unavailable` when none exists.
+A picker with an unavailable list still accepts a typed id; step open checks it.
 
-A skill is a `.md` file with optional YAML frontmatter (`name`, `description`); its body becomes the agent's extra system prompt. Discovery precedence is local-first: `.ai/cezar/skills` → `.ai/squawk/skills` → `.ai/skills` → `.agents/skills` + agent mirrors → global → team repo. Missing dirs are fine; team-skill loading never blocks on the network (background cache in `<cache>/`). Team sources are the `skillsRepos` entries in the project's `config.json` (`.ai/squawk/`, or `.ai/cezar/` before the project moves). The Skills page edits them through `/skills/sources` (`server/skill-sources.ts`), which writes only that key through `updateConfigFile` and refuses a file `readRawConfig` cannot read. A source with `enabled: false` stays listed and loads nothing; `filterDisabledTeamSources` applies that switch to lists loaded before it, in `discoverSkills`, `enabledSkills` and `provisionRunSkills`. Each source's load state (`getTeamSourceStatuses` in `skills-remote.ts`) names why it has no fresh list. Only the default ref, `main`, falls back to the clone's `HEAD`; any other ref the repo lacks is `ref-not-found`. A skill list has two kinds of reader. Fresh discovery goes through `discoverSkills` (`skills.ts`), which applies the project's team-skill off-list (`disabledTeamSkills` in `ui-state.json`) itself. Its callers are the `GET /skills` and `POST /skills/refresh` routes, the planner (`planner.ts`), a worker's `--skill` lookup (`delegation/service.ts`) and auto-naming (`autoNameRun` in `workflows/run/turn-bookkeeping.ts`). `GET /skills/importable` returns the unfiltered team list on purpose, so the Skills catalog can switch a skill back on. The run's saved list, `state.skills.catalog` in `workflows/run/run-skills.ts`, is discovered when the run starts or continues, so it can predate a change made during the run. `loadRunSkills` is the only writer, and `execute` and `runContinuation` both call it. `enabledSkills` is the only reader, and it applies the off-list as it is at that moment; the oxlint AST rules `skills-write-outside-load-run-skills` and `skills-read-outside-enabled-skills` pin both. It feeds live `/name` expansion in `deliverMessage`, a later step's skill lookup and prompt in `runAgentStep`, and the Continue skill lookup and opening prompt in `runContinuation`. `provisionRunSkills` installs the step skill, a leading `/name` and their companions, and reads the registry through it, passing the off-list it read for the team catalog so both see one list. A change to which skills a run may use needs a [reader sweep](../../CODE_REVIEW.md#changing-working-behavior) over every reader listed here, or the spec says why a reader leaves it out (hearsay-tools/cezarion#1494: PR hearsay-tools/cezarion#1541 applied the off-list to provisioning first, and review then found the `state.skills.catalog` readers still sending a switched-off skill). A state file that a synchronous reader reads is written atomically: a temporary file, then a rename, as `writeProjectUiState` (`ui-state.ts`) does. `enabledSkills` reads `ui-state.json` synchronously (`readProjectUiStateSync`), and a write in place lets it see a partial file, which parses as `{}`: an empty off-list.
+## Selected skills and paths
+
+At step open, load the list for the step's runner, account and working folder. Resolve the
+selected `{ id, path? }` before any model call. A missing id, stale path or ambiguous id
+fails the step with the runner, account and listed paths in the error.
+A project skill must exist in the task worktree: track its native folder or arrange its
+links through `worktreeSetup`. Squawk does not copy ignored project skills (D4, D5).
+
+A path selects exactly one listed copy. Without a path, one matching entry wins. For
+multiple entries, apply D8: `repo` wins over `user`, then `system`. Equal best scopes, or
+any missing/`other` scope among the copies, are ambiguous. Codex's `admin` maps to `other`.
+Never choose the first entry just because it arrived first.
+
+Only inline `steps` in `POST /runs` and stored run steps carry `skillPath` alongside `skill`.
+The list response makes paths inside the listed folder relative; external paths stay
+absolute. Resolve a relative path against the step's working folder before matching it
+against that folder's native list. This keeps a project pick valid in a task worktree.
+Workflow files, saved workflow definitions, automations, the task CLI and
+`worker spawn --skill` carry ids only. Do not add paths to these portable references.
+
+The selected skill becomes `AgentRunSpec.skill = { id, path?, args }`; the step prompt is
+its arguments. Each adapter owns the trigger and the placement of opening context
+([AGENT_PROTOCOL.md §6](../../AGENT_PROTOCOL.md#6-backend-parity--the-hard-rule-packagescezarsrccoreui-paritytestts)).
+A resumed Continue sends no trigger. Pass the checked step trigger as `resumeFallbackSkill`
+so an adapter that opens a fresh session triggers it with the Continue message as arguments.
+The `session` event's `resumed` value records what happened.
+
+## Typed names and session visibility
+
+A leading `/name` in the session's list becomes a first-position `skill` content block (D3).
+An unknown name remains unchanged text so native slash commands still work.
+Use the declared facts in `core/runner-facts.ts`, never a runner-id branch:
+
+- `skillsSeenBySession`: keep the opening list for `at-start` sessions; re-read for `live`
+  sessions. If only a fresh list holds the name, send the text and note that the skill is
+  available after the next Continue.
+- `skillTriggerMidTurn`: hold a known trigger during a busy turn when false; resolve it when
+  the held message is released (D6).
+- D8 also applies to typed names. An ambiguous name stays text with a note naming every path.
+  It does not fail the step. The user can pick a specific copy or remove a duplicate.
+
+Squawk handles only a leading `/name`. omp can also expand `/skill:<name>` elsewhere in a
+message; Squawk does not intercept that native form.
+
+`state.skills.catalog` holds the list read for the session. `loadRunSkills` owns its writes;
+`enabledSkills` owns its reads. Preserve the skill ownership lint guards. A change to skill
+availability needs a [reader sweep](../../CODE_REVIEW.md#changing-working-behavior) across
+step open, Continue, input release, workers, planner, compose, auto-naming and the task CLI.
+Worker lookup uses the worker's runner and account. The planner uses the project default
+runner's list; a step that selects another runner is checked at step open.
+
+## Cockpit
+
+Pickers use the target step's runner and account. Show duplicate ids as separate entries
+with their paths. A pick carries `{ id, path? }` through the draft to the inline run step;
+`lastTask` and `recentSources` in `ui-state.json` retain ids only. A recent id that matches
+two entries offers both. Saved workflows retain only the id.
+
+The Skills page is a read-only inventory for one runner and account. Show the runner's
+metadata and problems and offer Re-read. Skill details show metadata, not file contents.
+Installing or editing a runner's skills belongs to the runner's own tools.
+
+## Old task worktrees
+
+Before native listing at step open and Continue, `cleanupTaskWorktreeSkills` checks that
+the working folder resolves to the recorded task worktree and differs from the main checkout.
+The manifest's `skills` writer removes only recorded, unchanged entries and Squawk-owned
+ignore files. Changed, unrecorded and unverifiable content stays; kept recorded copies stay
+excluded from git. Skill entries are handled before ignore files; records are saved last,
+so an interrupted cleanup can repeat. A failure leaves records for retry and emits a best
+effort note without blocking launch. A worktree without records is untouched.
+See [migration](../migration.md#runner-native-skills) for saved settings and leftover caches.
