@@ -20,7 +20,8 @@ export interface EsNode {
 export type Visitors = Record<string, (node: EsNode) => void>;
 
 /** Reports `message` at `node`. */
-export type Report = (node: EsNode, message: string) => void;
+export type Position = { line: number; column: number };
+export type Report = (node: EsNode, message: string, position?: Position) => void;
 
 /** A repository rule that visits the syntax tree of each file in its scope. */
 export interface AstRule {
@@ -80,7 +81,7 @@ export function stringOf(node: EsNode | undefined): string | undefined {
 /** The subset of oxlint's rule context an AST rule uses. */
 export interface AstRuleContext extends Pick<RuleContext, 'cwd' | 'filename'> {
   sourceCode: AstContext['sourceCode'];
-  report(descriptor: { node: EsNode; message: string }): void;
+  report(descriptor: { node: EsNode; message: string; loc?: { start: Position; end: Position } }): void;
 }
 
 /**
@@ -93,7 +94,9 @@ export function oxlintAstRule(rule: AstRule) {
     create(context: AstRuleContext): Visitors {
       const file = repoPath(context.cwd, context.filename);
       if (!rule.applies(file)) return {};
-      return rule.create((node, message) => context.report({ node, message }), { file, sourceCode: context.sourceCode });
+      return rule.create((node, message, position) => context.report({ node, message,
+        ...(position ? { loc: { start: position, end: position } } : {}),
+      }), { file, sourceCode: context.sourceCode });
     },
   };
 }
