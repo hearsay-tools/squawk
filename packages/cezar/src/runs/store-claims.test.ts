@@ -302,21 +302,6 @@ describe('a run changed under this store', () => {
     expect(persisted(a.id)).toBeUndefined();
   });
 
-  it('records a deletion this store meant to make on a row that changed meanwhile', () => {
-    seedRuns(dataDir, [record('old')]);
-    const store = open({ keepLive: true });
-    store.setRead('old');
-    store.flush();
-    store.pin('old', 'cleanup');
-    writeBehindItsBack({ ...persisted('old'), title: 'touched elsewhere' });
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    store.unpin('old', 'cleanup');
-    expect(store.deleteRun('old')).toBe(true);
-    store.flush();
-    expect(conflicts()).toEqual([expect.objectContaining({ runId: 'old', reason: 'changed', localDeleted: true, localData: null })]);
-    expect(persisted('old')).toMatchObject({ title: 'touched elsewhere' });
-  });
-
   it('keeps the history files of a deletion a conflict undid: the row is back, and so are its events', () => {
     seedRuns(dataDir, [record('old')]);
     const files = historyFiles('old');
@@ -329,6 +314,7 @@ describe('a run changed under this store', () => {
     store.unpin('old', 'cleanup');
     expect(store.deleteRun('old')).toBe(true);
     store.flush();
+    expect(conflicts()).toEqual([expect.objectContaining({ runId: 'old', reason: 'changed', localDeleted: true, localData: null })]);
     expect(persisted('old')).toMatchObject({ title: 'touched elsewhere' });
     for (const file of files) expect(existsSync(file), file).toBe(true);
   });

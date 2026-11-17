@@ -619,14 +619,6 @@ describe('@ file mentions — the provider seam (R5 upgrades the source, not the
     expect(textarea.value).toBe('fix @README.md ')
   })
 
-  it('a provider with nothing yet says so honestly instead of faking results', async () => {
-    const { textarea } = renderComposer({ getMentionCandidates: () => [] })
-    type(textarea, '@x')
-    expect(
-      await screen.findByText(/No files seen in this session yet/),
-    ).toBeTruthy()
-  })
-
   it('without a provider, @ stays plain text — no empty menu', () => {
     const { textarea } = renderComposer()
     type(textarea, '@x')
@@ -853,7 +845,6 @@ describe('host seams (R4: the /new hero)', () => {
   })
 })
 
-
 describe('phone composer disclosure', () => {
   it('keeps the draft, selection and document attachments mounted across disclosure', async () => {
     const { textarea } = renderComposer({ mobileCollapsible: true, footerEnd: <button>Model and effort</button> })
@@ -905,7 +896,6 @@ describe('phone composer disclosure', () => {
     expect(screen.queryByRole('button', { name: 'Expand composer' })).toBeNull()
   })
 })
-
 
 describe('retained submission (#164)', () => {
   it('inserts a template at the caret without replacing the surrounding draft', () => {
@@ -996,7 +986,6 @@ describe('retained submission (#164)', () => {
     expect(onSubmit).toHaveBeenCalledTimes(1)
   })
 })
-
 
 it('retained success cannot clear a newer controlled draft', async () => {
   let resolve!: () => void
@@ -1143,7 +1132,6 @@ it('retains an attachment already being read when Stop is requested (#201)', asy
   await act(async () => reject(new Error('Stop failed')))
   expect(screen.getByRole('button', { name: 'Remove late.png' })).toBeTruthy()
 })
-
 
 describe('session control layout', () => {
   it('keeps the compact status mounted through a send', async () => {

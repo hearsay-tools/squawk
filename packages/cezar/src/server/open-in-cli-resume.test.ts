@@ -369,20 +369,6 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
       }, testHome());
     };
 
-    it('resumes under the account recorded on the step', async () => {
-      const dir = join(home, 'claude-klaudiusz');
-      await addAccount('work', 'claude', dir);
-      const run = makeRun('claude', 'sess-1');
-      store.updateStep(run.id, 'work', { profileId: 'work' });
-
-      const res = await openIn(run.id, 'cli:claude');
-
-      expect(res.status).toBe(200);
-      expect(mockOpenInTerminal).toHaveBeenCalledWith(expect.any(String), 'claude --resume sess-1', {
-        CLAUDE_CONFIG_DIR: dir,
-      });
-    });
-
     it('keeps resuming under the recorded account after the PROJECT switched to another one', async () => {
       const work = join(home, 'claude-klaudiusz');
       await addAccount('work', 'claude', work);
@@ -393,7 +379,8 @@ describe('POST /api/v1/runs/:id/open-in — agent CLI resume vs fresh launch', (
       const run = makeRun('claude', 'sess-1');
       store.updateStep(run.id, 'work', { profileId: 'work' });
 
-      await openIn(run.id, 'cli:claude');
+      const res = await openIn(run.id, 'cli:claude');
+      expect(res.status).toBe(200);
 
       expect(mockOpenInTerminal).toHaveBeenCalledWith(expect.any(String), 'claude --resume sess-1', {
         CLAUDE_CONFIG_DIR: work,

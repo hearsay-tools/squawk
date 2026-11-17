@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cgroupCommand, cgroupPopulated, ensureCgroup, killCgroup, ownCgroup, probeCgroups, removeCgroup, workerCgroupPath, type CgroupFs } from './cgroup.ts';
 
 /** An in-memory cgroup tree: directories, `cgroup.events`, and what each kill or removal did. */
@@ -37,6 +37,7 @@ function fakeFs(opts: { self?: string; mkdir?: (path: string) => void; busy?: nu
 }
 
 describe('cgroup backend', () => {
+  afterEach(() => vi.useRealTimers());
   it('reads its own unified cgroup and refuses a path that leaves the hierarchy', () => {
     expect(ownCgroup(fakeFs().fs)).toBe('/sys/fs/cgroup/app.slice/squawk.service');
     expect(ownCgroup(fakeFs({ self: '0::/\n' }).fs)).toBe('/sys/fs/cgroup');
@@ -75,10 +76,13 @@ describe('cgroup backend', () => {
   });
 
   it('kills, waits until empty, and removes; a process that entered after the kill is killed in turn', async () => {
+    vi.useFakeTimers();
     const { fs, dirs, populated, log } = fakeFs({ busy: 2 });
     const path = ensureCgroup('/sys/fs/cgroup/app.slice/squawk.service', 'w1', fs);
     populated.add(path);
-    expect(await removeCgroup(path, Date.now() + 5_000, fs)).toBe(true);
+    const removal = removeCgroup(path, Date.now() + 5_000, fs);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(await removal).toBe(true);
     expect(dirs.has(path)).toBe(false);
     expect(log.filter(line => line.endsWith('cgroup.kill 1'))).toHaveLength(3);
     expect(await removeCgroup(path, Date.now() + 5_000, fs)).toBe(true);
@@ -110,9 +114,12 @@ describe('cgroup backend', () => {
   });
 
   it('gives up at the deadline and keeps the group', async () => {
+    vi.useFakeTimers();
     const { fs, dirs } = fakeFs({ busy: Number.POSITIVE_INFINITY });
     const path = ensureCgroup('/sys/fs/cgroup/app.slice/squawk.service', 'w1', fs);
-    expect(await removeCgroup(path, Date.now() + 30, fs)).toBe(false);
+    const removal = removeCgroup(path, Date.now() + 30, fs);
+    await vi.advanceTimersByTimeAsync(30);
+    expect(await removal).toBe(false);
     expect(dirs.has(path)).toBe(true);
   });
 });

@@ -3,7 +3,7 @@ import { STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import {
   ProviderAuthService,
   type ProviderId,
@@ -746,6 +746,8 @@ describe('watchProviderRuntimeAuthFailures', () => {
       steps: [],
     });
 
+    const report = vi.spyOn(providerAuth, 'reportRuntimeAuthFailure');
+    onTestFinished(() => report.mockRestore());
     observer.watch(store);
     observer.watch(store);
     store.appendEvent(run.id, {
@@ -753,6 +755,7 @@ describe('watchProviderRuntimeAuthFailures', () => {
       message: 'Failed to authenticate. API Error: 401 OAuth access token has been revoked.',
     });
 
+    expect(report).toHaveBeenCalledExactlyOnceWith('claude');
     expect(onInvalidated).toHaveBeenCalledTimes(1);
   });
 

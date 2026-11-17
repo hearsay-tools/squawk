@@ -67,9 +67,10 @@ appropriate boundary or checker explicitly.
 
 AST source rules share oxlint's parse. `ast-rule.ts` passes the repository-relative file,
 node text and parsed comments to visitors. The typed env, home and runner-fact
-engines use one structural view of ESTree nodes (`lint/ast-node-view.ts`), copied once per file
-and cached on the nodes under a symbol key; the view changes node shapes,
-without reparsing source or scanning whole-file text. The cockpit wait engine reads
+engines collect facts in oxlint's visitors and decide at `Program:exit`, without reparsing
+source or scanning whole-file text. `lint/ast-tree.ts` holds their shared helpers, and the scan
+that runs a rule's visitors through oxlint's `RuleTester` for repository checks and tests,
+outside oxlint. The cockpit wait engine reads
 oxlint's nodes in place, with no copy: `lint/unit-wait-tree.ts` walks them and keeps the node
 meanings its checks were written for (a method is one function node, an optional chain link is no
 plain call or member). Runner checks still read their

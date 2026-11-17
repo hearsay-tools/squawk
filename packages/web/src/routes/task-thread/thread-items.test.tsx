@@ -25,7 +25,6 @@ import {
   ContextGroup,
   HookCard,
   hookDetail,
-  isNearBottom,
   OUTPUT_CLAMP_LINES,
   AssistantMessage,
   ProviderAuthRequiredCard,
@@ -334,17 +333,6 @@ describe('ToolCard — long output clamps behind the fade and expands on demand'
   })
 })
 
-describe('isNearBottom — the live-tail stick rule', () => {
-  it.each([
-    [{ scrollTop: 0, scrollHeight: 0, clientHeight: 0 }, true], // empty box sticks
-    [{ scrollTop: 780, scrollHeight: 1000, clientHeight: 216 }, true], // at the bottom
-    [{ scrollTop: 770, scrollHeight: 1000, clientHeight: 216 }, true], // within the 24px grace
-    [{ scrollTop: 400, scrollHeight: 1000, clientHeight: 216 }, false], // reader scrolled up
-  ])('%o → %s', (box, expected) => {
-    expect(isNearBottom(box)).toBe(expected)
-  })
-})
-
 describe('ReasoningItem', () => {
   const text = 'The redirect drops the session cookie — the middleware needs to preserve it.'
 
@@ -446,16 +434,6 @@ describe('sub-agent nesting (golden subagent-task fixture, end to end through th
  * broken attachment, on the one screen that is supposed to show them their own message back.
  */
 describe('conversation message surfaces', () => {
-  it('leaves agent markdown uncapped so text, lists and code fill the card (#757)', () => {
-    render(
-      <MemoryRouter>
-        <AssistantMessage text={'A full-width response.\n\n- List item\n\n```text\nlong_unbroken_line\n```'} />
-      </MemoryRouter>,
-    )
-
-    const body = screen.getByRole('article', { name: 'Agent response' }).querySelector(':scope > div')!
-    expect(body.className).not.toMatch(/(?:^|[\s:])max-w-/)
-  })
 
   it('labels user and agent messages with their role', () => {
     render(

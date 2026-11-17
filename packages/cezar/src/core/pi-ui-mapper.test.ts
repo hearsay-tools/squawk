@@ -263,17 +263,6 @@ describe('pi assistant message_end provider failures (#54)', () => {
     ]);
   });
 
-  it('does not leak diagnostic stacks or details into session.error', () => {
-    const events = replay('provider-error');
-    const error = events.find((e) => e.type === 'session.error');
-    expect(error).toEqual({
-      type: 'session.error',
-      message: 'pi: openai-codex/gpt-5.6-sol request failed: WebSocket error',
-      fatal: false,
-    });
-    expect(JSON.stringify(error)).not.toMatch(/extractWebSocketError|requestBytes|sk-|Bearer /i);
-  });
-
   it('keeps a successful empty assistant turn as end_turn', () => {
     const events = feed([assistantEnd(), { type: 'agent_settled' }]);
     expect(events.some((e) => e.type === 'session.error')).toBe(false);

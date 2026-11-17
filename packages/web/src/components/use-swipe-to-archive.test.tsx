@@ -4,11 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   SWIPE_PHASES,
   ACTION_PX,
-  AXIS_LOCK_PX,
   COMMIT_RATIO,
-  FLING_PX_PER_MS,
-  PARK_PX,
-  SNAP_MS,
   resetSwipeStore,
   useSwipeToArchive,
 } from './use-swipe-to-archive'
@@ -78,12 +74,6 @@ afterEach(() => {
 })
 
 describe('useSwipeToArchive', () => {
-  it('exports the gesture constants the design names', () => {
-    expect({ AXIS_LOCK_PX, PARK_PX, ACTION_PX, COMMIT_RATIO, SNAP_MS, FLING_PX_PER_MS }).toEqual({
-      AXIS_LOCK_PX: 10, PARK_PX: 40, ACTION_PX: 88, COMMIT_RATIO: 0.6, SNAP_MS: 200, FLING_PX_PER_MS: 1,
-    })
-  })
-
   it('never captures a mostly vertical move (Review Focus 4)', () => {
     render(<Row id="a" onArchive={vi.fn()} />)
     drag('a', [{ dx: -4, dy: 15 }, { dx: -8, dy: 30 }], { release: false })

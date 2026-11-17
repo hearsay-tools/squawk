@@ -24,7 +24,6 @@ describe('session provisioning', () => {
     session.revoke(); expect(f.credentials.authenticate(session.env.CEZ_DELEGATION_TOKEN!)).toBeUndefined();
   });
   it('rotates session identity, revokes on teardown, and never includes a token in instructions/events', () => {
-    expect(provision()!.instructions).toContain('--runner <claude|codex|opencode|pi|omp>');
     const first = provision()!; const old = f.credentials.authenticate(first.env.CEZ_DELEGATION_TOKEN!)!;
     expect(first.instructions).toContain('worker spawn'); expect(first.instructions).toContain('--effort'); expect(first.instructions).toContain('wait --request'); expect(first.instructions).not.toContain(first.env.CEZ_DELEGATION_TOKEN!);
     const second = provision()!;
@@ -42,19 +41,19 @@ describe('session provisioning', () => {
   });
   it.each(RUNNER_IDS.flatMap(backend => ['0', '1'].map(full => ({ backend, full }))))('passes only session-specific env to $backend with full-env=$full', ({ backend, full }) => {
     const session = provision()!;
-    expect(session.instructions).toContain('inbox remains a fallback read during an active turn; it acknowledges only the messages it returns');
-    // #505: messages reach a live session mid-turn; nothing promises turn-boundary delivery.
-    expect(session.instructions).toContain('Messages reach the recipient\'s live session as soon as they are accepted, including mid-turn');
-    expect(session.instructions).toContain('receipts report queued, delivered and consumed separately');
-    expect(session.instructions).toContain('conversation <recipient-run-id> [--before <cursor>] for history or investigation; it does not acknowledge messages');
     const env = buildChildEnv({ backend, source: { CEZ_HOME: '/live/home', CEZ_ENV_PASSTHROUGH: 'CEZ_HOME', CEZ_AGENT_ENV_FULL: full, CEZ_DELEGATION_TOKEN: 'parent-token', CEZ_DELEGATION_URL: 'http://evil' }, extraEnv: session.env });
     expect(env.CEZ_HOME).toBeUndefined();
     expect(env.CEZ_DELEGATION_TOKEN).toBe(session.env.CEZ_DELEGATION_TOKEN); expect(env.CEZ_DELEGATION_URL).toBe('http://127.0.0.1:12345/api/v1/delegation');
   });
-  it('teaches --runner in the parent instructions', () => {
+  it('teaches runner selection and live message delivery in the parent instructions', () => {
     const { instructions } = provision()!;
     expect(instructions).toContain(`--runner <${RUNNER_IDS.join('|')}>`);
     expect(instructions).toContain('--request-id <UUID> --runner codex');
+    expect(instructions).toContain('inbox remains a fallback read during an active turn; it acknowledges only the messages it returns');
+    // Messages reach a live session mid-turn; nothing promises turn-boundary delivery.
+    expect(instructions).toContain('Messages reach the recipient\'s live session as soon as they are accepted, including mid-turn');
+    expect(instructions).toContain('receipts report queued, delivered and consumed separately');
+    expect(instructions).toContain('conversation <recipient-run-id> [--before <cursor>] for history or investigation; it does not acknowledge messages');
   });
   // hearsay-tools/cezarion#1149: a parent that never reads --help still learns --attach and its ignored-only rule.
   it('teaches --attach and the parent-file reference in the parent instructions', () => {

@@ -896,7 +896,7 @@ describe('the follow-up prompt draft (open-mercato/cezar#408 item 4)', () => {
     await waitFor(() => expect(promptValue()).toBe('do not lose me'))
   })
 
-  it('a successful run spends that item’s draft', async () => {
+  it('a successful run spends the draft immediately and after remount', async () => {
     stubFetch()
     await openDetail()
     fireEvent.change(promptField(), { target: { value: 'spend me' } })
@@ -904,27 +904,15 @@ describe('the follow-up prompt draft (open-mercato/cezar#408 item 4)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
     await waitFor(() => expect(document.querySelector('[data-slot="gh-queued"]')).not.toBeNull())
+
+    await waitFor(() => expect(promptValue()).toBe(BASE))
+    expect(readFollowupPrompt(ISSUE_142.url)).toBe('')
 
     cleanup()
     stubFetch()
     await openDetail()
     // Spent → back to the untouched pre-fill, not to an empty box.
     expect(promptValue()).toBe(BASE)
-  })
-
-  it('spending the draft clears the textarea THERE AND THEN, not only on the next mount', async () => {
-    stubFetch()
-    await openDetail()
-    fireEvent.change(promptField(), { target: { value: 'spend me' } })
-    await waitFor(() => expect(promptValue()).toBe('spend me'))
-
-    fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
-    await waitFor(() => expect(document.querySelector('[data-slot="gh-queued"]')).not.toBeNull())
-
-    // Storage and UI must agree without a remount: leaving the text on screen while the entry is
-    // gone from storage means it silently vanishes the next time you come back.
-    await waitFor(() => expect(promptValue()).toBe(BASE))
-    expect(readFollowupPrompt(ISSUE_142.url)).toBe('')
   })
 })
 

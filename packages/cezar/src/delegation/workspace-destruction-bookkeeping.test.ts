@@ -18,7 +18,9 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     git(root, 'branch', '-D', workspace.branch);
     expect(existsSync(workspace.path)).toBe(false);
     expect(existsSync(gitDir)).toBe(false);
-    const result = await removeOwnedWorkspace(root, workspace);
+    let calls = 0;
+    const result = await removeOwnedWorkspace(root, workspace, undefined, async () => { calls += 1; });
+    expect(calls).toBe(1);
     expect(result).toMatchObject({ state: 'complete', remaining: [] });
     expect(result).not.toHaveProperty('error');
     expect(existsSync(workspace.path)).toBe(false);
@@ -26,17 +28,6 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     expect(await readFile(receipt, 'utf8')).toBe(receiptBefore);
     expect(existsSync(receipt.replace(/\.json$/, '.cleanup.json'))).toBe(false);
     expect(await removeOwnedWorkspace(root, workspace)).toEqual(result);
-  });
-
-  it('runs beforeRemove when completing bookkeeping for already-gone recorded resources', async () => {
-    const { root, first } = await fixture();
-    const workspace = await createOwnedWorkspace(root, randomUUID(), first);
-    git(root, 'worktree', 'remove', workspace.path);
-    git(root, 'branch', '-D', workspace.branch);
-    let calls = 0;
-    expect(await removeOwnedWorkspace(root, workspace, undefined, async () => { calls += 1; }))
-      .toMatchObject({ state: 'complete', remaining: [] });
-    expect(calls).toBe(1);
   });
 
   it('does not complete if recorded resources reappear during beforeRemove', async () => {

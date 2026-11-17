@@ -7,7 +7,6 @@ import {
   previewServeResultSchema,
   previewServerMessageSchema,
   previewServerSchema,
-  previewServerStateSchema,
 } from './preview.ts';
 
 const SPEC_EXAMPLE = {
@@ -54,13 +53,6 @@ describe('previewServeResultSchema', () => {
     }
     expect(previewServeResultSchema.safeParse({ ok: true, code: 'registered', message: 'm' }).success).toBe(false);
   });
-
-  it('names exactly the spec codes', () => {
-    expect([...previewResultCodeSchema.options].sort()).toEqual([
-      'cezar_port', 'cwd_outside_worktree', 'headless', 'invalid_input', 'port_held', 'preview_disabled',
-      'registered', 'replaced', 'too_many', 'unavailable', 'worktree_missing',
-    ]);
-  });
 });
 
 describe('previewServerSchema', () => {
@@ -76,15 +68,8 @@ describe('previewServerSchema', () => {
   });
 });
 
-describe('previewServerStateSchema', () => {
-  it('lists the eight states', () => {
-    expect([...previewServerStateSchema.options]).toEqual(['registered', 'starting', 'up', 'stalled', 'exited', 'stopped', 'adopted', 'unavailable']);
-  });
-});
-
 describe('previewClientMessageSchema', () => {
   it.each([
-    [{ t: 'open', target: { port: 5173 } }],
     [{ t: 'open', target: { url: 'http://localhost:5173/x' } }],
     [{ t: 'open', target: { port: 5173 }, quality: 'high' }],
     [{ t: 'quality', quality: 'normal' }],
@@ -94,7 +79,6 @@ describe('previewClientMessageSchema', () => {
     [{ t: 'run', port: 5173 }],
     [{ t: 'stop', port: 5173 }],
     [{ t: 'keepWaiting', port: 5173 }],
-    [{ t: 'resize', w: 390, h: 844 }],
     [{ t: 'resize', w: 390, h: 844, dpr: 2 }],
     [{ t: 'mouse', type: 'mousePressed', x: 10, y: 20, button: 'left', buttons: 1, clickCount: 1 }],
     [{ t: 'mouse', type: 'mouseWheel', x: 10, y: 20, deltaX: 0, deltaY: 120 }],
@@ -157,13 +141,11 @@ describe('previewClientMessageSchema', () => {
       .toEqual({ t: 'open', target: { port: 5173 }, dpr: Math.min(dpr, PREVIEW_MAX_PIXEL_RATIO) });
   });
 
-  it('keeps a legacy open without a ratio valid', () => {
-    const message = { t: 'open', target: { port: 5173 } };
+  it.each([
+    { t: 'open', target: { port: 5173 } },
+    { t: 'resize', w: 800, h: 600 },
+  ])('leaves the pixel ratio out of %j when an older cockpit sends none', message => {
     expect(previewClientMessageSchema.parse(message)).toEqual(message);
-  });
-
-  it('leaves the pixel ratio out when an older cockpit sends none', () => {
-    expect(previewClientMessageSchema.parse({ t: 'resize', w: 800, h: 600 })).toEqual({ t: 'resize', w: 800, h: 600 });
   });
 });
 

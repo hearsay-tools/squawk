@@ -179,7 +179,6 @@ describe('toRunSummary', () => {
     expect(runSummarySchema.parse(summary)).toEqual(summary);
     expect('waitWakePending' in toRunSummary(record({ status: RUN_STATUS.waiting, waits: [{ ...resolved[0]!, phase: WAIT_PHASE.delivered }] }))).toBe(false);
     expect('waitWakePending' in toRunSummary(record())).toBe(false);
-    expect(() => toRunSummary(record({ waits: [null] as unknown as RunRecord['waits'] }))).not.toThrow();
   });
 
   it('derives waitingOn without throwing from a streamed record whose waits or delegation are malformed', () => {

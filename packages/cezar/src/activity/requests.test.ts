@@ -148,12 +148,6 @@ describe('the request case table', () => {
     expect(readRequests([sender, recipient]).closed).toEqual([{ requestId: request.id, senderRunId: sender.id, recipientRunId: recipient.id, status: OUTCOME.replied, observedAt: iso(-1_000) }]);
   });
 
-  it('B’s record deleted: closed', () => {
-    const { sender, recipient } = peers();
-    addRequest(sender, sender, recipient, { relationship: 'peer' });
-    expect(openIds([sender])).toEqual([]);
-  });
-
   it('a late reply after a timeout stays closed, with no second entry', () => {
     const { sender, recipient } = peers();
     const request = addRequest(sender, sender, recipient, { relationship: 'peer' });

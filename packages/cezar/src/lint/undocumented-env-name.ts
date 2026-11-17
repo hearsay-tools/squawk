@@ -1,11 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parse } from '@babel/parser';
-import type { Node } from '@babel/types';
-import { property, unwrapped, visit } from './home-boundary.ts';
 import { repoRoot } from './source-rule.ts';
 import { child, nameOf, stringOf, type AstRule, type EsNode, type Visitors } from './ast-rule.ts';
-import { staticNodeText } from './ast-node-view.ts';
+import { scanSource, staticNodeText } from './ast-tree.ts';
 
 /**
  * `.env.example` is the env contract (AGENTS.md § Zero config): every `CEZ_*` or `HSQ_*` name a shipped source
@@ -15,70 +12,23 @@ import { staticNodeText } from './ast-node-view.ts';
 const SCANNED = ['packages/cezar/src/', 'packages/contract/src/', 'packages/api-client/src/', 'packages/web/src/', 'packages/cezar/scripts/'];
 export const envExamplePath = join(repoRoot, '.env.example');
 
+/** A literal `productEnv` suffix: only it proves both accepted full names. Anything else is `undefined`. */
+export function productEnvSuffix(argument: EsNode | undefined): string | undefined {
+  const suffix = stringOf(nativeUnwrapped(argument));
+  return suffix !== undefined && /^[A-Z][A-Z0-9_]*$/.test(suffix) ? suffix : undefined;
+}
+
 /**
- * Each `CEZ_*` or `HSQ_*` name in `source`, with the offset of its first occurrence. A conservative source scan,
- * not data-flow analysis. Match identifier nodes and complete literal values; examples inside
- * longer strings and comments are not environment names.
+ * Each `CEZ_*` or `HSQ_*` name in `source`, sorted. A conservative source scan, not data-flow
+ * analysis: identifiers, complete literal values and literal `productEnv` suffixes. Examples inside
+ * longer strings and comments are not environment names. It runs the rule's own visitors.
  */
-function envSites(source: string, file = 'file.ts'): Map<string, number> {
-  const ast = parse(source, { sourceType: 'unambiguous', plugins: ['typescript', ...(/\.[cm]?[jt]sx$/.test(file) ? ['jsx' as const] : [])] });
-  return envSitesFromAst(ast);
-}
-
-function envSitesFromAst(ast: Node): Map<string, number> {
-  const names = new Map<string, number>();
-  const add = (name: string, at: number) => {
-    if (!names.has(name) || names.get(name)! > at) names.set(name, at);
-  };
-  visit(ast, node => {
-    const identifier = node.type === 'Identifier' || node.type === 'JSXIdentifier';
-    const name = identifier ? node.name
-      : node.type === 'StringLiteral' || node.type === 'DirectiveLiteral' ? node.value
-      : node.type === 'TemplateLiteral' && node.expressions.length === 0 ? node.quasis[0]?.value.cooked : undefined;
-    const pattern = identifier ? /^(?:CEZ|HSQ)_[A-Z0-9_]+$/ : /^(?:CEZ|HSQ)_[A-Z0-9_]*[A-Z0-9]$/;
-    if (name && pattern.test(name)) add(name, node.start ?? 0);
-  });
-  for (const call of productEnvCalls(ast)) {
-    if (call.suffix === undefined) continue;
-    for (const prefix of ['HSQ_', 'CEZ_']) add(`${prefix}${call.suffix}`, call.offset);
-  }
+export function envNames(source: string, file = 'file.ts'): string[] {
+  const scan = envNameSites();
+  let names: string[] = [];
+  scanSource(file, source, () => ({ ...scan.visitors, 'Program:exit'() { names = [...scan.sites().keys()].sort(); } }));
   return names;
 }
-
-/** Named-import aliases retain the same env contract as productEnv. */
-export function addProductEnvHelper(node: Node, names: Set<string>): void {
-  if (node.type === 'ImportSpecifier' && property(node.imported) === 'productEnv') names.add(node.local.name);
-}
-
-function productEnvHelpers(ast: Node): Set<string> {
-  const names = new Set(['productEnv']);
-  visit(ast, node => addProductEnvHelper(node, names));
-  return names;
-}
-
-/** A call to one of `helpers`. Only a literal suffix can prove both accepted full names. */
-export function productEnvCall(node: Node, helpers: Set<string>): { suffix: string | undefined; offset: number } | undefined {
-  if (node.type !== 'CallExpression' && node.type !== 'OptionalCallExpression') return undefined;
-  if (!helpers.has(property(unwrapped(node.callee)) ?? '')) return undefined;
-  const argument = node.arguments[0];
-  const literal = argument && unwrapped(argument);
-  const suffix = literal?.type === 'StringLiteral' ? literal.value
-    : literal?.type === 'TemplateLiteral' && literal.expressions.length === 0 ? literal.quasis[0]?.value.cooked : undefined;
-  return { suffix: suffix != null && /^[A-Z][A-Z0-9_]*$/.test(suffix) ? suffix : undefined, offset: node.start ?? 0 };
-}
-
-/** Only a literal suffix can prove both accepted full names; dynamic calls fail read lint. */
-export function productEnvCalls(ast: Node): { suffix: string | undefined; offset: number }[] {
-  const helpers = productEnvHelpers(ast);
-  const calls: { suffix: string | undefined; offset: number }[] = [];
-  visit(ast, node => {
-    const call = productEnvCall(node, helpers);
-    if (call) calls.push(call);
-  });
-  return calls;
-}
-
-export const envNames = (source: string): string[] => [...envSites(source).keys()].sort();
 
 /** The names `source` uses that `documented` lacks. CEZ_MOCK_* controls offline test fault
  *  injection, not shipped settings, so the whole prefix is exempt. */
@@ -109,7 +59,8 @@ function nativeProperty(node: EsNode | undefined): string | undefined {
   return target.computed ? staticNodeText(key) : nameOf(key);
 }
 
-function envNameVisitors(report: Parameters<AstRule['create']>[0]): Visitors {
+/** The visitors that find environment names in one file, and each name's first site. */
+function envNameSites(): { visitors: Visitors; sites(): Map<string, { node: EsNode; offset: number }> } {
   const sites = new Map<string, { node: EsNode; offset: number }>();
   const helpers = new Set(['productEnv']);
   const calls: { name: string; suffix: string; node: EsNode }[] = [];
@@ -124,7 +75,7 @@ function envNameVisitors(report: Parameters<AstRule['create']>[0]): Visitors {
   const identifier = (node: EsNode) => {
     if (typeof node.name === 'string' && /^(?:CEZ|HSQ)_[A-Z0-9_]+$/.test(node.name)) add(node.name, node);
   };
-  return {
+  const visitors: Visitors = {
     Identifier: identifier,
     JSXIdentifier: identifier,
     PrivateIdentifier: identifier,
@@ -138,17 +89,29 @@ function envNameVisitors(report: Parameters<AstRule['create']>[0]): Visitors {
     CallExpression(node) {
       const name = nativeProperty(child(node, 'callee'));
       if (!name) return;
-      const args = node.arguments as EsNode[];
-      const suffix = stringOf(nativeUnwrapped(args[0]));
-      if (suffix && /^[A-Z][A-Z0-9_]*$/.test(suffix)) calls.push({ name, suffix, node });
+      const suffix = productEnvSuffix((node.arguments as EsNode[])[0]);
+      if (suffix) calls.push({ name, suffix, node });
     },
-    'Program:exit'() {
+  };
+  return {
+    visitors,
+    sites() {
       for (const call of calls) {
         if (!helpers.has(call.name)) continue;
         for (const prefix of ['HSQ_', 'CEZ_']) add(`${prefix}${call.suffix}`, call.node);
       }
+      return sites;
+    },
+  };
+}
+
+function envNameVisitors(report: Parameters<AstRule['create']>[0]): Visitors {
+  const scan = envNameSites();
+  return {
+    ...scan.visitors,
+    'Program:exit'() {
       documented ??= documentedNames();
-      for (const [name, { node }] of sites) {
+      for (const [name, { node }] of scan.sites()) {
         if (name.startsWith('CEZ_MOCK_') || documented.has(name)) continue;
         report(node, `${name} is not in .env.example. Document it there in the same commit (AGENTS.md § Zero config; hearsay-tools/cezarion#2970).`);
       }

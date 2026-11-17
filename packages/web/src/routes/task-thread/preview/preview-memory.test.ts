@@ -47,12 +47,6 @@ describe('preview memory (hearsay-tools/cezarion#2077)', () => {
     expect(readPreviewMemory('a')).toEqual({ open: true })
   })
 
-  it(`keeps at most ${PREVIEW_MEMORY_LIMIT} tasks and drops the oldest first`, () => {
-    for (let index = 0; index <= PREVIEW_MEMORY_LIMIT; index += 1) rememberPreview(`r${index}`, { open: true }, index)
-    expect(Object.keys(stored())).toHaveLength(PREVIEW_MEMORY_LIMIT)
-    expect(readPreviewMemory('r0')).toBeUndefined()
-    expect(readPreviewMemory(`r${PREVIEW_MEMORY_LIMIT}`)).toEqual({ open: true })
-  })
 
   it.each([
     ['not JSON', '{'],
@@ -165,6 +159,8 @@ describe('preview memory validation and eviction', () => {
     expect(readPreviewMemory('r0')).toEqual({ open: false })
     expect(readPreviewMemory('r1')).toBeUndefined()
     expect(readPreviewMemory('r2')).toEqual({ open: true })
+    expect(Object.keys(stored())).toHaveLength(PREVIEW_MEMORY_LIMIT)
+    expect(readPreviewMemory('new')).toEqual({ open: true })
   })
 
   it('evicts invalid entries and entries without numeric ages before dated entries', () => {

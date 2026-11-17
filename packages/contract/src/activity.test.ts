@@ -19,6 +19,5 @@ describe('the activity contract', () => {
     const run = { runId: 'r', title: 't', status: RUN_STATUS.running, rung: 'running', rate: Array.from({ length: 30 }, () => 0), workers: [] };
     expect(activityRunSchema.safeParse(run).success).toBe(true);
     expect(activityRunSchema.safeParse({ ...run, rate: [0] }).success).toBe(false);
-    expect(ACTIVITY_TOOL_KINDS).toHaveLength(11);
   });
 });

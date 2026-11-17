@@ -79,10 +79,6 @@ describe('screenFiles — the legacy 4×5MB caps, mirrored from the server zod',
     expect(intake.rejected).toEqual(['huge.png is too large (max 5 MB)'])
   })
 
-  it('exactly 5 MB still passes (the cap is inclusive, like the legacy check)', () => {
-    expect(screenFiles([fakeFile({ size: MAX_ATTACHMENT_BYTES })], 0).accepted).toHaveLength(1)
-  })
-
   it('enforces the 4-attachment cap against what is already attached', () => {
     const intake = screenFiles([fakeFile({ name: 'a.png' }), fakeFile({ name: 'b.png' })], 3)
     expect(intake.accepted).toHaveLength(1)

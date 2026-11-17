@@ -40,8 +40,8 @@ describe('a repeated query key stays 200 (c.req.query took the first value)', ()
   it.each([
     ['/api/v1/models?runner=codex&runner=codex'],
     ['/api/v1/providers/status?refresh=1&refresh=1'],
-  ])('%s is not a 400', async (url) => {
+  ])('%s returns 200', async (url) => {
     const res = await apiRequest(app, url)
-    expect(res.status).not.toBe(400)
+    expect(res.status).toBe(200)
   })
 })

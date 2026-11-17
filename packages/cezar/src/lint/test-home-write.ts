@@ -1,8 +1,6 @@
-import { parse } from '@babel/parser';
-import type { Node } from '@babel/types';
 import { TEST_FILE } from './home-boundary.ts';
-import type { AstRule } from './ast-rule.ts';
-import { deferredAstView, originalAt } from './ast-node-view.ts';
+import { child, type AstContext, type AstRule, type EsNode, type Visitors } from './ast-rule.ts';
+import { bare, reportNode, scanSource } from './ast-tree.ts';
 
 const SOURCES = new Set(['homedir', 'cezarHomeDir', 'resolveHome']);
 const EXPRESSIONS = new Set(['TSAsExpression', 'TSTypeAssertion', 'TSNonNullExpression', 'TSSatisfiesExpression', 'TSInstantiationExpression']);
@@ -17,79 +15,86 @@ const TYPE_ONLY = new Set([
 ]);
 
 /** Read syntax only. Computed expressions are never evaluated. */
-function guarded(node: Node | null | undefined): boolean {
-  return node?.type === 'Identifier' ? SOURCES.has(node.name)
-    : node?.type === 'StringLiteral' && SOURCES.has(node.value);
+function guarded(node: EsNode | undefined): boolean {
+  return node?.type === 'Identifier' ? SOURCES.has(node.name as string)
+    : node?.type === 'Literal' && typeof node.value === 'string' && SOURCES.has(node.value);
 }
 
 const TYPE_FIELDS = new Set(['typeAnnotation', 'typeParameters', 'typeArguments']);
-const isSyntax = (value: unknown): value is Node => !!value && typeof value === 'object' && typeof (value as { type?: unknown }).type === 'string';
 
-function children(node: Node): Node[] {
-  const found: Node[] = [];
-  for (const key of Object.keys(node)) {
-    if (TYPE_FIELDS.has(key)) continue;
-    const value = (node as unknown as Record<string, unknown>)[key];
-    if (Array.isArray(value)) { for (const item of value) if (isSyntax(item)) found.push(item); }
-    else if (isSyntax(value)) found.push(value);
+/** A method signature with no body: an overload or an abstract method. */
+function declaredMethod(node: EsNode): boolean {
+  return node.type === 'TSAbstractMethodDefinition' || (node.type === 'MethodDefinition' && child(node, 'value')?.type === 'TSEmptyBodyFunctionExpression');
+}
+
+/** Type syntax cannot import or invoke a runtime home source: the rule reads nothing under it. */
+function typeOnly(node: EsNode): boolean {
+  if (TYPE_ONLY.has(node.type) || declaredMethod(node) || node.declare === true) return true;
+  if (node.type === 'TSModuleDeclaration' && child(node, 'id')?.type === 'Literal') return true;
+  return node.importKind === 'type' || node.exportKind === 'type';
+}
+
+/** Whether the rule reads `node`'s own syntax: no type-only node holds it, and no type field. */
+function runtime(node: EsNode): boolean {
+  if (EXPRESSIONS.has(node.type) || typeOnly(node)) return false;
+  for (let current = node, owner = node.parent; owner; current = owner, owner = owner.parent) {
+    if (typeOnly(owner)) return false;
+    if (EXPRESSIONS.has(owner.type) && owner.expression !== current) return false;
+    for (const key of TYPE_FIELDS) if (owner[key] === current) return false;
   }
-  return found;
+  return true;
 }
 
-/** Type syntax cannot import or invoke a runtime home source. */
-function runtimeChildren(node: Node): Node[] | undefined {
-  if (EXPRESSIONS.has(node.type)) return [(node as Node & { expression: Node }).expression];
-  if (TYPE_ONLY.has(node.type) || ('declare' in node && node.declare)) return [];
-  if (node.type === 'TSModuleDeclaration' && node.id.type === 'StringLiteral') return [];
-  if ('importKind' in node && node.importKind === 'type') return [];
-  if ('exportKind' in node && node.exportKind === 'type') return [];
-  return undefined;
+/** The guarded name a bare call invokes, through casts. */
+function bareCall(node: EsNode): EsNode | undefined {
+  let callee = bare(child(node, 'callee'));
+  while (callee && EXPRESSIONS.has(callee.type)) callee = bare(child(callee, 'expression'));
+  return callee?.type === 'Identifier' && guarded(callee) ? callee : undefined;
 }
 
-function bareCall(node: Node): Node[] {
-  let callee = (node as Node & { callee: Node }).callee;
-  while (EXPRESSIONS.has(callee.type)) callee = (callee as Node & { expression: Node }).expression;
-  return callee.type === 'Identifier' && guarded(callee) ? [callee] : [];
+/**
+ * The visitors that find ambient home syntax in one file, and its sites in source order. Each
+ * visitor checks a guarded name first, so it climbs the tree only at a candidate.
+ */
+function homeWriteVisitors(): { visitors: Visitors; sites(sourceCode: AstContext['sourceCode']): EsNode[] } {
+  const found = new Map<number, EsNode>();
+  const add = (site: EsNode | undefined, node: EsNode) => {
+    if (site && guarded(site) && !found.has(site.start as number) && runtime(node)) found.set(site.start as number, site);
+  };
+  const names = (fields: string[]) => (node: EsNode) => { for (const key of fields) add(child(node, key), node); };
+  return {
+    visitors: {
+      CallExpression(node) { add(bareCall(node), node); },
+      MemberExpression(node) { add(child(node, 'property'), node); },
+      Property(node) { if (node.parent?.type === 'ObjectPattern') add(child(node, 'key'), node); },
+      ImportSpecifier: names(['imported', 'local']),
+      ExportSpecifier: names(['local', 'exported']),
+      ExportAllDeclaration: names(['exported']),
+      ImportDefaultSpecifier: names(['local']),
+      ImportNamespaceSpecifier: names(['local']),
+    },
+    sites(sourceCode) {
+      if (found.size === 0) return [];
+      const allowed = allowedLines(sourceCode);
+      return [...found.values()].filter(site => !allowed.has((site.loc as { start: { line: number } }).start.line))
+        .sort((a, b) => (a.start as number) - (b.start as number));
+    },
+  };
 }
 
-/** Runtime import and export names share the same guarded-name check. */
-function specifierSites(node: Node): Node[] {
-  if (node.type === 'ImportSpecifier') return [node.imported, node.local].filter(guarded);
-  if (node.type === 'ExportSpecifier') return [node.local, node.exported].filter(guarded);
-  if (node.type === 'ExportAllDeclaration') {
-    const exported = (node as Node & { exported?: Node }).exported;
-    return exported && guarded(exported) ? [exported] : [];
-  }
-  if (node.type === 'ImportDefaultSpecifier' || node.type === 'ImportNamespaceSpecifier') return guarded(node.local) ? [node.local] : [];
-  if (node.type === 'ExportNamespaceSpecifier' || node.type === 'ExportDefaultSpecifier') return guarded(node.exported) ? [node.exported] : [];
-  return [];
-}
-
-function sites(node: Node, parent: Node | undefined): Node[] {
-  if (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') return bareCall(node);
-  if (node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') return guarded(node.property) ? [node.property] : [];
-  if (node.type === 'ObjectProperty' && parent?.type === 'ObjectPattern') return guarded(node.key) ? [node.key] : [];
-  return specifierSites(node);
+/** Lines with a `// test-home-read: <reason>` comment. */
+function allowedLines(sourceCode: AstContext['sourceCode']): Set<number> {
+  return new Set(sourceCode.getAllComments().filter(comment => comment.type === 'Line'
+    && typeof comment.value === 'string' && /^\s*test-home-read:\s*\S/.test(comment.value))
+    .map(comment => (comment.loc as { start: { line: number } }).start.line));
 }
 
 /** Ban guarded syntax instead of attempting open-ended binding or value flow. */
 export function unsafeHomeWrites(source: string, file = 'file.test.ts'): number[] {
-  const ast = parse(source, { sourceType: 'unambiguous', plugins: ['typescript', 'decorators', ...(/\.[cm]?[jt]sx$/.test(file) ? ['jsx' as const] : [])] });
-  const allowedLines = new Set((ast.comments ?? []).filter(comment => comment.type === 'CommentLine'
-    && /^\s*test-home-read:\s*\S/.test(comment.value)).map(comment => comment.loc?.start.line));
-  return unsafeHomeWritesFromAst(ast, allowedLines);
-}
-
-function unsafeHomeWritesFromAst(ast: Node, allowedLines: Set<number | undefined>): number[] {
-  const offsets = new Set<number>();
-  function scan(node: Node, parent?: Node): void {
-    const selected = runtimeChildren(node);
-    if (selected) { for (const child of selected) scan(child, node); return; }
-    for (const site of sites(node, parent)) if (!allowedLines.has(site.loc?.start.line)) offsets.add(site.start ?? 0);
-    for (const child of children(node)) scan(child, node);
-  }
-  scan(ast);
-  return [...offsets].sort((a, b) => a - b);
+  const scan = homeWriteVisitors();
+  let offsets: number[] = [];
+  scanSource(file, source, sourceCode => ({ ...scan.visitors, 'Program:exit'() { offsets = scan.sites(sourceCode).map(site => site.start as number); } }));
+  return offsets;
 }
 
 export const testHomeWriteMessage = 'Ambient home syntax in a test; use Home.sandbox or add // test-home-read: <reason> on this line (hearsay-tools/cezarion#2813).';
@@ -98,12 +103,13 @@ export const testHomeWrite: AstRule = {
   name: 'test-home-write',
   description: 'Test home syntax requires a reasoned exception (hearsay-tools/cezarion#2813).',
   applies: file => TEST_FILE.test(file),
-  create: (report, { sourceCode }) => deferredAstView(name => SOURCES.has(name), ast => {
-    const allowedLines = new Set(sourceCode.getAllComments().filter(comment => comment.type === 'Line'
-      && typeof comment.value === 'string' && /^\s*test-home-read:\s*\S/.test(comment.value))
-      .map(comment => (comment.loc as { start: { line: number } }).start.line));
-    for (const offset of unsafeHomeWritesFromAst(ast, allowedLines)) {
-      report(originalAt(ast, offset), testHomeWriteMessage);
-    }
-  }),
+  create(report, { sourceCode }) {
+    const scan = homeWriteVisitors();
+    return {
+      ...scan.visitors,
+      'Program:exit'() {
+        for (const site of scan.sites(sourceCode)) report(reportNode(site), testHomeWriteMessage);
+      },
+    };
+  },
 };

@@ -28,6 +28,16 @@ function setup() {
   return { dir, store, created, committed };
 }
 
+// Compile-only guards: none of these calls may accept status alongside the exit.
+void function statusBesideExitIsRejected(store: RunStore, id: string) {
+  // @ts-expect-error The exit writes the status; its extras cannot.
+  store.move(id, 'start', { status: RUN_STATUS.done });
+  // @ts-expect-error commitOutcome takes the status from `exit`, never from its patch.
+  store.commitOutcome(id, [], { patch: { status: RUN_STATUS.done } });
+  // @ts-expect-error commitWorkerContinuation takes the status from its exit argument.
+  store.commitWorkerContinuation(id, 'continue-line', { status: RUN_STATUS.done });
+};
+
 describe('RunStore.move', () => {
   it('writes the exit status and the extras, and returns the held record', () => {
     const { store, created } = setup();
@@ -90,19 +100,6 @@ describe('RunStore.move', () => {
     expect(takeRunExitViolations()).toEqual(['undeclared run transition: exit resume from queued (declare it in runs/run-exits.ts)']);
   });
 
-  it('refuses a status beside an exit, in every write that applies one', () => {
-    const { store, created } = setup();
-    const id = created();
-    const refused = () => {
-      // @ts-expect-error The exit writes the status; its extras cannot.
-      store.move(id, 'start', { status: RUN_STATUS.done });
-      // @ts-expect-error commitOutcome takes the status from `exit`, never from its patch.
-      store.commitOutcome(id, [], { patch: { status: RUN_STATUS.done } });
-      // @ts-expect-error commitWorkerContinuation takes the status from its exit argument.
-      store.commitWorkerContinuation(id, 'continue-line', { status: RUN_STATUS.done });
-    };
-    expect(refused).toBeTypeOf('function');
-  });
 });
 
 /**

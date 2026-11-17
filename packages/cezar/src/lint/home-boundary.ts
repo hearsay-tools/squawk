@@ -1,10 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parse } from '@babel/parser';
-import type { Node } from '@babel/types';
 import { repoRoot } from './source-rule.ts';
-import type { AstRule } from './ast-rule.ts';
-import { astChildren, deferredAstView, originalAt } from './ast-node-view.ts';
+import { child, children, stringOf, type AstRule, type EsNode, type Visitors } from './ast-rule.ts';
+import { bare, field, item, reportNode, scanSource } from './ast-tree.ts';
 
 export const homeReadersFile = 'packages/cezar/src/lint/home-readers.baseline.json';
 export interface HomeReader { file: string; kind: 'homedir'; calls: number; reason: string }
@@ -18,138 +16,192 @@ export function readHomeReaders(path = join(repoRoot, homeReadersFile)): HomeRea
   return (JSON.parse(readFileSync(path, 'utf8')) as { entries: HomeReader[] }).entries;
 }
 
-export function visit(node: Node, accept: (node: Node) => void): void {
-  accept(node);
-  for (const child of astChildren(node)) visit(child, accept);
+/** `node` without its type casts and chain, as the rule reads a value. `satisfies` stays. */
+export function unwrapped(node: EsNode): EsNode {
+  let current = node;
+  while (UNWRAPPED.has(current.type)) {
+    const inner = child(current, 'expression');
+    if (!inner) break;
+    current = inner;
+  }
+  return current;
 }
+const UNWRAPPED = new Set(['ChainExpression', 'TSAsExpression', 'TSNonNullExpression', 'TSTypeAssertion', 'ParenthesizedExpression']);
 
-function staticKey(node: Node | null | undefined): string | undefined {
+/** A string, a plain template or a `+` of both, through casts. */
+export function staticKey(node: EsNode | undefined): string | undefined {
   if (!node) return undefined;
   const target = unwrapped(node);
-  if (target.type === 'StringLiteral') return target.value;
-  if (target.type === 'TemplateLiteral' && target.expressions.length === 0) return target.quasis[0]?.value.cooked ?? undefined;
+  if (target.type === 'Literal') return typeof target.value === 'string' ? target.value : undefined;
+  if (target.type === 'TemplateLiteral') return stringOf(target);
   if (target.type === 'BinaryExpression' && target.operator === '+') {
-    const left = staticKey(target.left);
-    const right = staticKey(target.right);
+    const left = staticKey(field(target, 'left'));
+    const right = left === undefined ? undefined : staticKey(field(target, 'right'));
     return left === undefined || right === undefined ? undefined : left + right;
   }
   return undefined;
 }
 
-function name(node: Node | null | undefined): string | undefined {
-  return node?.type === 'Identifier' ? node.name : staticKey(node);
+/** An identifier's name, or the static text of any other node. */
+export function name(node: EsNode | undefined): string | undefined {
+  const target = bare(node);
+  return target?.type === 'Identifier' ? target.name as string : staticKey(target);
 }
 
-export function property(node: Node | null | undefined): string | undefined {
-  if (node?.type !== 'MemberExpression' && node?.type !== 'OptionalMemberExpression') return name(node);
-  return node.computed ? staticKey(node.property) : name(node.property);
+/** A member's static property name, or `name` of any other node. */
+export function property(node: EsNode | undefined): string | undefined {
+  const target = bare(node);
+  if (target?.type !== 'MemberExpression') return name(target);
+  return target.computed ? staticKey(field(target, 'property')) : name(field(target, 'property'));
 }
 
-export function unwrapped(node: Node): Node {
-  if (node.type === 'TSAsExpression' || node.type === 'TSNonNullExpression' || node.type === 'TSTypeAssertion' || node.type === 'ParenthesizedExpression') return unwrapped(node.expression);
-  return node;
-}
+const isMember = (node: EsNode | undefined): node is EsNode => node?.type === 'MemberExpression';
 
-function homedirRef(node: Node | null | undefined, aliases: Set<string>): boolean {
+/** The identifier a reference ends at without a match yet: an alias declared later can still match it. */
+let unresolved: string | undefined;
+
+function homedirRef(node: EsNode | undefined, aliases: Set<string>): boolean {
   if (!node) return false;
   const target = unwrapped(node);
-  if (target.type === 'SequenceExpression') return homedirRef(target.expressions.at(-1), aliases);
-  if (target.type === 'Identifier') return aliases.has(target.name);
-  if (target.type === 'CallExpression' || target.type === 'OptionalCallExpression') {
-    const callee = unwrapped(target.callee);
-    return (callee.type === 'MemberExpression' || callee.type === 'OptionalMemberExpression')
-      && property(callee) === 'bind' && homedirRef(callee.object, aliases);
+  if (target.type === 'SequenceExpression') return homedirRef(item(target, 'expressions', -1), aliases);
+  if (target.type === 'Identifier') {
+    if (aliases.has(target.name as string)) return true;
+    unresolved = target.name as string;
+    return false;
   }
-  if (target.type !== 'MemberExpression' && target.type !== 'OptionalMemberExpression') return false;
+  if (target.type === 'CallExpression') {
+    const callee = unwrapped(field(target, 'callee')!);
+    return isMember(callee) && property(callee) === 'bind' && homedirRef(field(callee, 'object'), aliases);
+  }
+  if (!isMember(target)) return false;
   const member = property(target);
-  return member === 'homedir' || ((member === 'call' || member === 'apply') && homedirRef(target.object, aliases));
+  return member === 'homedir' || ((member === 'call' || member === 'apply') && homedirRef(field(target, 'object'), aliases));
 }
 
-function callsHomedir(node: Node, aliases: Set<string>): boolean {
-  if (node.type !== 'CallExpression' && node.type !== 'OptionalCallExpression') return false;
-  const callee = unwrapped(node.callee);
-  if ((callee.type === 'MemberExpression' || callee.type === 'OptionalMemberExpression')
-    && property(callee) === 'apply' && name(callee.object) === 'Reflect') return homedirRef(node.arguments[0], aliases);
+function callsHomedir(node: EsNode, aliases: Set<string>): boolean {
+  const callee = unwrapped(field(node, 'callee')!);
+  if (isMember(callee) && property(callee) === 'apply' && name(field(callee, 'object')) === 'Reflect') return homedirRef(item(node, 'arguments', 0), aliases);
   return homedirRef(callee, aliases);
 }
 
-function processEnv(node: Node | null | undefined): boolean {
+function processEnv(node: EsNode | undefined): boolean {
   if (!node) return false;
   const env = unwrapped(node);
-  return (env.type === 'MemberExpression' || env.type === 'OptionalMemberExpression')
-    && property(env) === 'env' && name(unwrapped(env.object)) === 'process';
+  return isMember(env) && property(env) === 'env' && name(unwrapped(field(env, 'object')!)) === 'process';
 }
 
-function homeWriteTarget(node: Node | null): boolean {
+function homeWriteTarget(node: EsNode | undefined): boolean {
   if (!node) return false;
   const target = unwrapped(node);
-  if (target.type === 'ArrayPattern') return target.elements.some(homeWriteTarget);
-  if (target.type === 'ObjectPattern') return target.properties.some(field => {
-    return homeWriteTarget(field.type === 'RestElement' ? field.argument : field.value);
+  if (target.type === 'ArrayPattern') return children(target, 'elements').some(homeWriteTarget);
+  if (target.type === 'ObjectPattern') return children(target, 'properties').some(entry => {
+    return homeWriteTarget(field(entry, entry.type === 'RestElement' ? 'argument' : 'value'));
   });
-  if (target.type === 'AssignmentPattern') return homeWriteTarget(target.left);
-  if (target.type === 'RestElement') return homeWriteTarget(target.argument);
-  return (target.type === 'MemberExpression' || target.type === 'OptionalMemberExpression')
-    && property(target) === 'CEZ_HOME' && processEnv(target.object);
+  if (target.type === 'AssignmentPattern') return homeWriteTarget(field(target, 'left'));
+  if (target.type === 'RestElement') return homeWriteTarget(field(target, 'argument'));
+  return isMember(target) && property(target) === 'CEZ_HOME' && processEnv(field(target, 'object'));
 }
 
-function homeProperty(node: Node): boolean {
+function homeProperty(node: EsNode): boolean {
   const source = unwrapped(node);
-  return source.type === 'ObjectExpression' && source.properties.some(field => {
-    return (field.type === 'ObjectProperty' || field.type === 'ObjectMethod')
-      && (field.computed ? staticKey(field.key) : name(field.key)) === 'CEZ_HOME';
+  return source.type === 'ObjectExpression' && children(source, 'properties').some(entry => {
+    return entry.type === 'Property' && (entry.computed ? staticKey(field(entry, 'key')) : name(field(entry, 'key'))) === 'CEZ_HOME';
   });
 }
 
-function selectsHomeCall(node: Node): boolean {
-  if (node.type !== 'CallExpression' && node.type !== 'OptionalCallExpression') return false;
-  const callee = unwrapped(node.callee);
+function selectsHomeCall(node: EsNode): boolean {
+  const callee = unwrapped(field(node, 'callee')!);
   const method = property(callee);
-  if (method === 'stubEnv') return staticKey(node.arguments[0]) === 'CEZ_HOME';
-  if (callee.type !== 'MemberExpression' && callee.type !== 'OptionalMemberExpression') return false;
-  if (!processEnv(node.arguments[0])) return false;
-  const owner = name(unwrapped(callee.object));
-  if (owner === 'Object' && method === 'assign') return node.arguments.slice(1).some(homeProperty);
+  const args = children(node, 'arguments');
+  if (method === 'stubEnv') return staticKey(bare(args[0])) === 'CEZ_HOME';
+  if (!isMember(callee)) return false;
+  if (!processEnv(bare(args[0]))) return false;
+  const owner = name(unwrapped(field(callee, 'object')!));
+  if (owner === 'Object' && method === 'assign') return args.slice(1).some(arg => homeProperty(bare(arg)!));
   return ['Reflect.set', 'Reflect.defineProperty', 'Object.defineProperty'].includes(`${owner}.${method}`)
-    && staticKey(node.arguments[1]) === 'CEZ_HOME';
+    && staticKey(bare(args[1])) === 'CEZ_HOME';
 }
 
-function selectsHome(node: Node): boolean {
-  if (node.type === 'AssignmentExpression' || node.type === 'ForInStatement' || node.type === 'ForOfStatement') return homeWriteTarget(node.left);
-  if (node.type === 'UpdateExpression') return homeWriteTarget(node.argument);
-  if (node.type === 'UnaryExpression' && node.operator === 'delete') return homeWriteTarget(node.argument);
-  return selectsHomeCall(node);
+type Site = HomeSite & { node: EsNode; order: number };
+
+/**
+ * The visitors that find home sites in one file, and the sites they found, in source order. With
+ * `selectionsOnly`, only test home selections: a test file reports nothing else.
+ */
+function homeSiteVisitors(selectionsOnly: boolean): { visitors: Visitors; sites(): Site[] } {
+  const aliases = new Set(['homedir']);
+  const found: Site[] = [];
+  // A call whose callee ends at a name that is no alias yet: an alias declared later still counts.
+  const pending: { node: EsNode; alias: string; order: number }[] = [];
+  let order = 0;
+  const add = (kind: HomeSite['kind'], node: EsNode) => found.push({ kind, offset: node.start as number, node, order: order++ });
+  const selection = (node: EsNode) => {
+    order++;
+    const target = node.type === 'UpdateExpression' || node.type === 'UnaryExpression' ? 'argument' : 'left';
+    if (node.type === 'UnaryExpression' && node.operator !== 'delete') return;
+    if (homeWriteTarget(field(node, target))) add('test-selection', node);
+  };
+  const named = (node: EsNode) => {
+    if (node.name === 'cezarHomeDir' || node.name === 'resolveHome') add(node.name, node);
+  };
+  const visitors: Visitors = {
+    AssignmentExpression: selection,
+    ForInStatement: selection,
+    ForOfStatement: selection,
+    UpdateExpression: selection,
+    UnaryExpression: selection,
+    CallExpression(node) {
+      order++;
+      if (!selectionsOnly) {
+        unresolved = undefined;
+        if (callsHomedir(node, aliases)) add('homedir', node);
+        else if (unresolved !== undefined) pending.push({ node, alias: unresolved, order: order++ });
+      }
+      if (selectsHomeCall(node)) add('test-selection', node);
+    },
+  };
+  if (selectionsOnly) return { visitors, sites: () => found };
+  return {
+    visitors: {
+      ...visitors,
+      Identifier: named,
+      // A private name reads as its identifier (`#resolveHome`), as the rule always read it.
+      PrivateIdentifier: named,
+      MemberExpression(node) {
+        if (!node.computed) return;
+        const member = property(node);
+        if (member === 'cezarHomeDir' || member === 'resolveHome') add(member, node);
+      },
+      ImportSpecifier(node) {
+        if (name(field(node, 'imported')) === 'homedir') aliases.add(field(node, 'local')!.name as string);
+      },
+      VariableDeclarator(node) {
+        const id = field(node, 'id')!;
+        if (id.type === 'ObjectPattern') {
+          for (const entry of children(id, 'properties')) {
+            const value = field(entry, 'value');
+            if (entry.type === 'Property' && name(field(entry, 'key')) === 'homedir' && value?.type === 'Identifier') aliases.add(value.name as string);
+          }
+        }
+        if (id.type === 'Identifier' && homedirRef(field(node, 'init'), aliases)) aliases.add(id.name as string);
+      },
+    },
+    sites() {
+      for (const call of pending) if (aliases.has(call.alias)) found.push({ kind: 'homedir', offset: call.node.start as number, node: call.node, order: call.order });
+      return found.sort((a, b) => a.offset - b.offset || a.order - b.order);
+    },
+  };
 }
 
 /** Parse failures propagate to lint. Strings and comments cannot hide or create sites. */
 export function homeSites(source: string, file = 'file.ts'): HomeSite[] {
-  const ast = parse(source, { sourceType: 'module', plugins: ['typescript', ...(/\.[cm]?[jt]sx$/.test(file) ? ['jsx' as const] : [])] });
-  return homeSitesFromAst(ast);
+  return homeSiteNodes(source, file).map(({ kind, offset }) => ({ kind, offset }));
 }
 
-function homeSitesFromAst(ast: Node): HomeSite[] {
-  const aliases = new Set(['homedir']);
-  visit(ast, node => {
-    if (node.type === 'ImportSpecifier' && name(node.imported) === 'homedir') aliases.add(node.local.name);
-    if (node.type === 'VariableDeclarator' && node.id.type === 'ObjectPattern') {
-      for (const field of node.id.properties) {
-        if (field.type === 'ObjectProperty' && name(field.key) === 'homedir' && field.value.type === 'Identifier') aliases.add(field.value.name);
-      }
-    }
-    if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier' && homedirRef(node.init, aliases)) aliases.add(node.id.name);
-  });
-  const sites: HomeSite[] = [];
-  visit(ast, node => {
-    const id = name(node);
-    if (node.type === 'Identifier' && (id === 'cezarHomeDir' || id === 'resolveHome')) sites.push({ kind: id, offset: node.start ?? 0 });
-    if ((node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') && node.computed) {
-      const member = property(node);
-      if (member === 'cezarHomeDir' || member === 'resolveHome') sites.push({ kind: member, offset: node.start ?? 0 });
-    }
-    if (callsHomedir(node, aliases)) sites.push({ kind: 'homedir', offset: node.start ?? 0 });
-    if (selectsHome(node)) sites.push({ kind: 'test-selection', offset: node.start ?? 0 });
-  });
-  return sites.sort((a, b) => a.offset - b.offset);
+function homeSiteNodes(source: string, file: string): Site[] {
+  const scan = homeSiteVisitors(false);
+  scanSource(file, source, () => scan.visitors);
+  return scan.sites();
 }
 
 function testFile(file: string): boolean { return TEST_FILE.test(file) || file.startsWith('packages/cezar/test/'); }
@@ -160,7 +212,7 @@ export function scanHomeBoundary(file: string, source: string, exemptions = (rea
   return homeBoundarySites(file, homeSites(source, file), exemptions);
 }
 
-function homeBoundarySites(file: string, sites: HomeSite[], exemptions: HomeReader[]): HomeSite[] {
+function homeBoundarySites<T extends HomeSite>(file: string, sites: T[], exemptions: HomeReader[]): T[] {
   if (testFile(file)) return sites.filter(site => site.kind === 'test-selection');
   if (!productFile(file)) return [];
   const allowed = exemptions.find(entry => entry.file === file)?.calls ?? 0;
@@ -192,9 +244,15 @@ export const homeBoundary: AstRule = {
   name: 'home-boundary',
   description: 'Resolve cockpit homes at entry points; tests select Home.sandbox (hearsay-tools/cezarion#2810).',
   applies: file => file !== SHARED_SETUP && (TEST_FILE.test(file) || /^packages\/cezar\/(?:src|test)\/.*\.[cm]?[jt]sx?$/.test(file)),
-  create: (report, { file }) => deferredAstView(name => ['homedir', 'cezarHomeDir', 'resolveHome', 'CEZ_HOME'].includes(name), ast => {
-    for (const site of homeBoundarySites(file, homeSitesFromAst(ast), readers ??= readHomeReaders())) {
-      report(originalAt(ast, site.offset), homeBoundaryMessage(site.kind));
-    }
-  }),
+  create(report, { file }) {
+    const scan = homeSiteVisitors(testFile(file));
+    return {
+      ...scan.visitors,
+      'Program:exit'() {
+        const sites = scan.sites();
+        if (sites.length === 0) return;
+        for (const site of homeBoundarySites(file, sites, readers ??= readHomeReaders())) report(reportNode(site.node), homeBoundaryMessage(site.kind));
+      },
+    };
+  },
 };

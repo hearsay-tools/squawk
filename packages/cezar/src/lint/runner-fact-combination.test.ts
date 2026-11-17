@@ -1,4 +1,4 @@
-import { checkRule } from './ast-rule.testkit.ts';
+import { checkRule, ruleCases, spanError } from './ast-rule.testkit.ts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -182,3 +182,45 @@ describe('runner-fact-combination (hearsay-tools/cezarion#2991)', () => {
     }
   });
 });
+
+// Shapes, report nodes and spans the rule matched with the Babel view (hearsay-tools/squawk#3806).
+// They stay pinned after the rule moved to oxlint's own tree.
+describe('runner-fact-combination keeps its names, report nodes and spans', () => ruleCases(runnerFactCombination, {
+  file: 'packages/cezar/src/workflows/ast-fixture.ts',
+  valid: [
+    "import { RUNNER_FACTS } from '../core/runner-facts.ts';\nfunction f(o) { return o.mode && o.consumption; }",
+    "function f(o) { return o.mode && o.consumption; }\nfunction g(o) { return o.inputDelivery; }",
+    "function f(r) { return r.inputDelivery[mode] && r.inputDelivery.consumption; }",
+  ],
+  invalid: [
+    { code: "export function f(r) { return r.inputDelivery.mode && r.inputDelivery.consumption; }", errors: [spanError("1:7-1:84", /^f touches a runner fact source and reads consumption and mode\./)] },
+    { code: "const g = (r) => r.inputDelivery?.mode && r.inputDelivery?.consumption;", errors: [spanError("1:10-1:70", /^g touches a runner fact source and reads consumption and mode\./)] },
+    { code: "class A { static async run(r) { return r.inputDelivery.mode && r.inputDelivery.consumption; } }", errors: [spanError("1:10-1:93", /^A>run touches a runner fact source and reads consumption and mode\./)] },
+    { code: "class A { [key](r) { return r.inputDelivery.mode && r.inputDelivery.consumption; } }", errors: [spanError("1:10-1:82", /^A>key touches a runner fact source and reads consumption and mode\./)] },
+    { code: "class A { 'str'(r) { return r.inputDelivery.mode && r.inputDelivery.consumption; } }", errors: [spanError("1:10-1:82", /^A>\(anonymous function\) touches a runner fact source and reads consumption and mode\./)] },
+    { code: "class A { get m() { return this.inputDelivery.mode && this.inputDelivery.consumption; } }", errors: [spanError("1:10-1:87", /^A>m touches a runner fact source and reads consumption and mode\./)] },
+    { code: "const o = { m(r) { return r.inputDelivery.mode && r.inputDelivery.consumption; } };", errors: [spanError("1:12-1:80", /^m touches a runner fact source and reads consumption and mode\./)] },
+    { code: "const o = { m: function (r) { return r.inputDelivery.mode && r.inputDelivery.consumption; } };", errors: [spanError("1:15-1:91", /^m touches a runner fact source and reads consumption and mode\./)] },
+    { code: "const o = { get m() { return this.inputDelivery.mode && this.inputDelivery.consumption; } };", errors: [spanError("1:17-1:89", /^m touches a runner fact source and reads consumption and mode\./)] },
+    { code: "class A { m = (r) => r.inputDelivery.mode && r.inputDelivery.consumption; }", errors: [spanError("1:14-1:72", /^A>m touches a runner fact source and reads consumption and mode\./)] },
+    { code: "class A { #m = (r) => r.inputDelivery.mode && r.inputDelivery.consumption; }", errors: [spanError("1:15-1:73", /^A>\(anonymous function\) touches a runner fact source and reads consumption and mode\./)] },
+    { code: "class A { #m(r) { return r.inputDelivery.mode && r.inputDelivery.consumption; } }", errors: [spanError("1:10-1:79", /^A>#m touches a runner fact source and reads consumption and mode\./)] },
+    { code: "class A { m(r: InputDelivery): void; m(r) { return r.mode && r.consumption; } }", errors: [spanError("1:37-1:77", /^A>m touches a runner fact source and reads consumption and mode\./)] },
+    { code: "abstract class A { abstract m(r: InputDelivery): void; n(r) { return r.mode && r.consumption; } }", errors: [spanError("1:55-1:95", /^A>n touches a runner fact source and reads consumption and mode\./)] },
+    { code: "const K = class { run(r) { return r.inputDelivery.mode && r.inputDelivery.consumption; } };", errors: [spanError("1:18-1:88", /^K>run touches a runner fact source and reads consumption and mode\./)] },
+    { code: "export default class { run(r) { return r.inputDelivery.mode && r.inputDelivery.consumption; } }", errors: [spanError("1:23-1:93", /^\(anonymous class\)>run touches a runner fact source and reads consumption and mode\./)] },
+    { code: "function outer(r) {\n  function inner() { return r.inputDelivery.mode; }\n  return r.facts.costReport;\n}", errors: [spanError("1:0-4:1", /^outer touches a runner fact source and reads costReport and mode\./)] },
+    { code: "function f(d: InputDelivery) { return (d as InputDelivery).mode && d!.consumption && (d satisfies object)['acknowledgement']; }", errors: [spanError("1:0-1:127", /^f touches a runner fact source and reads acknowledgement and consumption and mode\./)] },
+    { code: "function f(d) { return d?.['mode'] && d?.[`consumption`] && RUNNER_FACTS; }", errors: [spanError("1:0-1:75", /^f touches a runner fact source and reads consumption and mode\./)] },
+    { code: "import * as facts from '../core/runner-facts.ts';\nfunction f(id) { return facts.RUNNER_FACTS[id].nativeAsk && facts.RUNNER_FACTS[id].costReport; }", errors: [spanError("2:0-2:96", /^f touches a runner fact source and reads costReport and nativeAsk\./)] },
+    { code: "type P = Readonly<InputDelivery>;\nexport type Q = P | undefined;\nfunction f(d: Q) { return d.mode && d.consumption; }", errors: [spanError("3:0-3:52", /^f touches a runner fact source and reads consumption and mode\./)] },
+    { code: "function f(d: ns.InputDelivery) { return d.mode && d.consumption; }", errors: [spanError("1:0-1:67", /^f touches a runner fact source and reads consumption and mode\./)] },
+    { code: "export { RUNNER_FACTS } from '../core/runner-facts.ts';\nfunction f(o) { return o.mode && o.consumption; }", errors: [spanError("2:0-2:49", /^f touches a runner fact source and reads consumption and mode\./)] },
+    { code: "function f(r) { const { inputDelivery: { mode }, facts: { costReport } } = r; return mode && costReport; }", errors: [spanError("1:0-1:106", /^f touches a runner fact source and reads costReport and mode\./)] },
+    { code: "list.map(function named(r) { return r.inputDelivery.mode && r.inputDelivery.consumption; });\nlist.map(function named(r) { return r.inputDelivery.mode && r.inputDelivery.consumption; });", errors: [spanError("1:9-1:90", /^named touches a runner fact source and reads consumption and mode\./), spanError("2:9-2:90", /^named#2 touches a runner fact source and reads consumption and mode\./)] },
+    { code: "@decorate((r) => r.inputDelivery.mode)\nclass A { run(r) { return r.inputDelivery.consumption && r.facts.nativeAsk; } }", errors: [spanError("2:10-2:77", /^A>run touches a runner fact source and reads consumption and nativeAsk\./)] },
+    { code: "class A { constructor(private r = RUNNER_FACTS) { this.x = r.mode && r.consumption; } }", errors: [spanError("1:10-1:85", /^A>constructor touches a runner fact source and reads consumption and mode\./)] },
+    { code: "const f = async function* (r) { yield r.inputDelivery.mode; yield r.inputDelivery.consumption; };", errors: [spanError("1:10-1:96", /^f touches a runner fact source and reads consumption and mode\./)] },
+    { code: "class A { #RUNNER_FACTS = 1; run(o) { return o.mode && o.consumption; } }", errors: [spanError("1:29-1:71", /^A>run touches a runner fact source and reads consumption and mode\./)] },
+  ],
+}));

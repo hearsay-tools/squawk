@@ -86,14 +86,13 @@ describe('selectReclaimableWorktrees (#483)', () => {
 
   it('excludes runs with no worktree dir and already-reclaimed runs', () => {
     const runs = [
-      run({ id: 'nodir', status: RUN_STATUS.done, worktreePath: null, finishedAt: '2026-07-01T00:00:00Z' }),
-      run({ id: 'gone', status: RUN_STATUS.done, worktreeReclaimedAt: '2026-07-05T00:00:00Z', finishedAt: '2026-07-02T00:00:00Z' }),
-      run({ id: 'live-dir', status: RUN_STATUS.done, finishedAt: '2026-07-03T00:00:00Z' }),
+      run({ id: 'nodir', status: RUN_STATUS.done, worktreePath: null, finishedAt: '2026-07-05T00:00:00Z' }),
+      run({ id: 'gone', status: RUN_STATUS.done, worktreeReclaimedAt: '2026-07-05T00:00:00Z', finishedAt: '2026-07-04T00:00:00Z' }),
+      run({ id: 'new-dir', status: RUN_STATUS.done, finishedAt: '2026-07-03T00:00:00Z' }),
+      run({ id: 'old-dir', status: RUN_STATUS.done, finishedAt: '2026-07-02T00:00:00Z' }),
     ];
-    // Only live-dir is reclaimable; keep=0 would disable, so use keep=... none over budget.
-    expect(selectReclaimableWorktrees(runs, 5)).toEqual([]);
-    // With keep below the single reclaimable count it still never selects the excluded ones.
-    // (live-dir is the only candidate; keeping 0 finished means "unlimited", see next test.)
+    // Excluded newer records cannot take the one slot kept for a materialized worktree.
+    expect(selectReclaimableWorktrees(runs, 1)).toEqual(['old-dir']);
   });
 
   it('does not let a missing worktree directory occupy a keep slot (#571)', () => {

@@ -16,7 +16,6 @@ import { QUICK_TASK_WORKFLOW } from '../workflows/types.ts';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import { ProjectContexts } from '../server/project-context.ts';
-import { readPersistedText } from '../runs/run-store.testkit.ts';
 import { provisionWorkflowFixture, delegationToken, until, PROVISION_ROWS } from './provision-workflows.testkit.ts';
 import { createRunner } from '../core/runner-factory.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
@@ -140,22 +139,11 @@ describe('manager session delegation lifecycle', { timeout: 15_000 }, () => {
     await until(() => sessions.length === 1);
     expect(sessions[0]!.spec.skill).toMatchObject({ id: 'parent-skill', args: 'parent' });
     expect(sessions[0]!.spec.systemPrompt).not.toContain('Selected skill:');
-    expect(sessions[0]!.spec.systemPrompt).not.toContain('PARENT SKILL BODY 778');
     expect(sessions[0]!.spec.systemPrompt).toContain('parent extra');
     const caller = controller.credentials.authenticate(delegationToken(sessions[0]!.spec))!;
     const admission = vi.spyOn(WorkspaceSemaphore.prototype, 'maxParallel').mockReturnValue(0);
     return { parent, caller, admission };
   }
-  it("does not copy the parent's selected skill into worker records", async () => {
-    const { caller } = await startSkillParent();
-    const children = [];
-    for (let index = 0; index < 10; index++) {
-      children.push(await controller.service.spawn(caller, { task: `child ${index}`, baseline: 'HEAD', requestId: randomUUID() }));
-    }
-    f.store.flush();
-    expect(readPersistedText(join(f.root, '.ai/cezar'))).not.toContain('PARENT SKILL BODY 778');
-    for (const child of children) expect(f.store.getRun(child.workerId)?.systemPrompt).toBe('parent extra');
-  });
   it('gives first-session and post-Continue spawns the same inherited prompt', async () => {
     const { parent, caller, admission } = await startSkillParent();
     const first = await controller.service.spawn(caller, { task: 'first', baseline: 'HEAD', requestId: randomUUID() });

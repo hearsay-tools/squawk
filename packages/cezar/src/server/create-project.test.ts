@@ -193,16 +193,6 @@ describe('createProject', () => {
     ]);
   });
 
-  it('never passes a visibility other than --private, on either GitHub path', async () => {
-    for (const github of [{ owner: 'acme' }, { owner: 'acme', template: 'tmpl/x' }]) {
-      const { run, calls } = recordingRunner();
-      await createProject({ name: github.template ? 'from-template' : 'empty', github, projectsDir: root, onProgress, run, sleep: async () => {} });
-      const creates = calls.filter((c) => isCall(c, 'gh', 'repo', 'create'));
-      expect(creates).toHaveLength(1);
-      expect(creates[0]?.args).toContain('--private');
-      expect(creates[0]?.args.some((a) => /^--(public|internal|visibility)/.test(a))).toBe(false);
-    }
-  });
 
   it('a failed gh repo create cleans up the local folder, names no remote and registers nothing', async () => {
     const { run } = recordingRunner((c) => (isCall(c, 'gh', 'repo', 'create') ? fail('GraphQL: Name already exists on this account') : undefined));

@@ -36,7 +36,7 @@ describe('ProjectContexts.warmAll', () => {
   });
 
   afterEach(() => {
-    warn.mockRestore();
+    vi.restoreAllMocks();
     for (const child of children.splice(0)) child.kill('SIGKILL');
     for (const dir of roots.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
@@ -236,7 +236,6 @@ describe('ProjectContexts.warmAll', () => {
     expect(dispose).toHaveBeenCalledTimes(1);
     releaseRecover();
     await expect(building).rejects.toBeInstanceOf(ProjectContextsClosedError);
-    recover.mockRestore();
   });
 
   it('never recovers a build whose shutdown landed while it waited for the lock (#667)', async () => {
@@ -256,7 +255,6 @@ describe('ProjectContexts.warmAll', () => {
     release();
     await expect(building).rejects.toBeInstanceOf(ProjectContextsClosedError);
     expect(recover).not.toHaveBeenCalled();
-    recover.mockRestore();
   });
 
   it('never recovers a build whose project was removed while it read the registry (#667)', async () => {
@@ -270,7 +268,6 @@ describe('ProjectContexts.warmAll', () => {
     release();
     await expect(building).rejects.toBeInstanceOf(ProjectContextsClosedError);
     expect(recover).not.toHaveBeenCalled();
-    recover.mockRestore();
     contexts.disposeAll();
   });
 });

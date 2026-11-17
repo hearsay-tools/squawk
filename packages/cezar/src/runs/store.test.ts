@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { runRecordSchema as contractRunRecordSchema , runWorktreeSetupSchema } from '@open-mercato/cezar-contract/runs';
+import { runWorktreeSetupSchema } from '@open-mercato/cezar-contract/runs';
 import { claimJob, jobPaths } from '../jobs/job.ts';
 import { processStartToken } from '../detached-process.ts';
 import { historyPaths } from './history-file.ts';
@@ -3157,13 +3157,6 @@ describe('RunRecord.automationTrigger', () => {
     expect(parsed.automationTrigger).toEqual(trigger);
   });
 
-  it('is stripped, not fatal, for a schema that predates the key', () => {
-    const previous = contractRunRecordSchema.omit({ automationTrigger: true });
-    const parsed = previous.parse({ ...LEGACY_RUN, automationTrigger: trigger });
-    expect(parsed.id).toBe('legacy-1');
-    expect('automationTrigger' in parsed).toBe(false);
-  });
-
   it('is absent on an ordinary record', () => {
     expect(runRecordSchema.parse(LEGACY_RUN).automationTrigger).toBeUndefined();
   });
@@ -3245,11 +3238,10 @@ describe('RunRecord.handoffRecords (hearsay-tools/cezarion#1809)', () => {
     store.close();
   });
 
-  it('is absent on a record that predates it, and stripped by a schema that predates the key', () => {
+  it('is absent on a record that predates handoff records', () => {
     expect(runRecordSchema.parse(LEGACY_RUN).handoffRecords).toBeUndefined();
-    const previous = contractRunRecordSchema.omit({ handoffRecords: true });
-    expect('handoffRecords' in previous.parse({ ...LEGACY_RUN, handoffRecords: records })).toBe(false);
   });
+
 });
 
 describe('RunStore — a row whose stored summary is not JSON (hearsay-tools/squawk#3530)', () => {

@@ -1,20 +1,15 @@
-import { checkRule } from './ast-rule.testkit.ts';
+import { checkRule, ruleCases, spanError } from './ast-rule.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { externalTestHomeProblems } from './test-home-repository.ts';
-import { testHomeWrite, unsafeHomeWrites as sourceHomeWrites } from './test-home-write.ts';
+import { testHomeWrite, testHomeWriteMessage, unsafeHomeWrites as sourceHomeWrites } from './test-home-write.ts';
 
 function unsafeHomeWrites(source: string, file = 'file.test.ts'): number[] {
   const offsets = sourceHomeWrites(source, file);
-  if (source === 'let read; ({resolveHome: read} as any) = source') {
-    // The legacy scanner accepts this malformed TypeScript assignment. Oxlint owns parsing now.
-    expect(() => checkRule(testHomeWrite, file, source)).toThrow(/Parsing failed/);
-  } else {
-    expect(checkRule(testHomeWrite, file, source).map(finding => finding.line))
-      .toEqual(offsets.map(offset => source.slice(0, offset).split('\n').length));
-  }
+  expect(checkRule(testHomeWrite, file, source).map(finding => finding.line))
+    .toEqual(offsets.map(offset => source.slice(0, offset).split('\n').length));
   return offsets;
 }
 
@@ -87,6 +82,13 @@ describe('test writes use explicit sandbox paths', () => {
 
   it('fails closed on malformed source', () => {
     expect(() => unsafeHomeWrites('const x = ;')).toThrow();
+  });
+
+  it('fails closed on a cast destructuring target, which oxlint does not parse', () => {
+    // The Babel scanner accepted it and found the guarded key; oxlint parses both the scanner and the rule now.
+    const source = 'let read; ({resolveHome: read} as any) = source';
+    expect(() => sourceHomeWrites(source)).toThrow(/Parsing failed/);
+    expect(() => checkRule(testHomeWrite, 'file.test.ts', source)).toThrow(/Parsing failed/);
   });
 
   it.each([
@@ -194,7 +196,6 @@ describe('test writes use explicit sandbox paths', () => {
     "function go({homedir: read = fallback} = require('node:os')) { read() }",
     "function go({default: {resolveHome: read} = fallback} = source) { read() }",
     "let read; ({homedir: (read as any)} = require('node:os'))",
-    "let read; ({resolveHome: read} as any) = source",
     "let read; ({resolveHome: read} = source as any)",
     "let read; for ({resolveHome: read} of [await import('./resolve.ts')]) read()",
     "for (const {cezarHomeDir: read = fallback} of sources) read()",
@@ -282,3 +283,27 @@ describe('test writes use explicit sandbox paths', () => {
     expect(unsafeHomeWrites(`fs.promises.${method}(join(cezarHomeDir(), 'x'), '/tmp/b')`)).toHaveLength(1);
   });
 });
+
+// Shapes, report nodes and spans the rule matched with the Babel view (hearsay-tools/squawk#3806).
+// They stay pinned after the rule moved to oxlint's own tree.
+describe('test-home-write keeps its report spans', () => ruleCases(testHomeWrite, {
+  file: 'packages/cezar/src/x.test.ts',
+  valid: [
+    "class K { #homedir() {} }",
+    "x; new (homedir as any)();",
+  ],
+  invalid: [
+    { code: "homedir();", errors: [spanError("1:0-1:10", testHomeWriteMessage)] },
+    { code: "x; os?.homedir?.();", errors: [spanError("1:7-1:14", testHomeWriteMessage)] },
+    { code: "x; (homedir as any)!();", errors: [spanError("1:4-1:18", testHomeWriteMessage)] },
+    { code: "x; const { homedir: h = f } = os;", errors: [spanError("1:11-1:25", testHomeWriteMessage)] },
+    { code: "x; ({ homedir: h } = os);", errors: [spanError("1:6-1:16", testHomeWriteMessage)] },
+    { code: "export { homedir } from 'node:os';", errors: [spanError("1:9-1:16", testHomeWriteMessage)] },
+    { code: "x; import('node:os').then(({ homedir }) => homedir());", errors: [spanError("1:29-1:36", testHomeWriteMessage), spanError("1:43-1:52", testHomeWriteMessage)] },
+    { code: "function f(this: typeof homedir, a = cezarHomeDir()) {}", errors: [spanError("1:37-1:51", testHomeWriteMessage)] },
+    { code: "x; obj?.['resolveHome'];", errors: [spanError("1:9-1:22", testHomeWriteMessage)] },
+    { code: "enum E { A = resolveHome().length }", errors: [spanError("1:13-1:33", testHomeWriteMessage)] },
+    { code: "x; f<typeof homedir>(homedir());", errors: [spanError("1:21-1:30", testHomeWriteMessage)] },
+    { code: "class K { m(): void; m() { homedir(); } }", errors: [spanError("1:27-1:37", testHomeWriteMessage)] },
+  ],
+}));

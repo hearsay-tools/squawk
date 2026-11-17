@@ -1,7 +1,7 @@
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
 import { AskCard } from './ask-card'
@@ -17,8 +17,9 @@ vi.mock('@/api/queries', () => ({
   useProviderStatus: () => ({ data: providerStatus, isSuccess: true }),
 }))
 
-afterEach(() => {
-  cleanup()
+afterEach(cleanup)
+
+beforeEach(() => {
   mutateAsync.mockClear().mockResolvedValue({})
   continueAsync.mockClear().mockResolvedValue({})
   providerStatus = {

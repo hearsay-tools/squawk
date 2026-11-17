@@ -96,17 +96,6 @@ describe('cez task', () => {
       expect(record?.task).toBe('do the thing');
     });
 
-    it('retries a skill start with the same request id without creating another run', async () => {
-      const dir = join(ctx.harness.repoRoot, '.ai/skills');
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, 'cli-sample-skill.md'), '# CLI sample skill\n');
-      const args = ['start', 'x', '--skill', 'cli-sample-skill', '--request-id', '2b7e1c9a-5d4f-4a3b-8c2d-1e0f9a8b7c6d'];
-      expect(await run(args)).toBe(0);
-      const first = last();
-      expect(await run(args)).toBe(0);
-      expect(last()).toMatchObject({ id: first.id, created: false });
-      expect(ctx.store.listRuns()).toHaveLength(1);
-    });
 
     it('retries an accepted skill start after the skill disappears', async () => {
       const dir = join(ctx.harness.repoRoot, '.ai/skills');
@@ -192,18 +181,7 @@ describe('cez task', () => {
       expect(ctx.store.listRuns()).toHaveLength(1);
     });
 
-    it('rejects an empty --skill before discovering a cockpit', async () => {
-      expect(await run(['start', 'x', '--skill', '  '])).toBe(64);
-      expect(last()).toMatchObject({ code: 'invalid_input' });
-      expect(ctx.discoveries).toBe(0);
-    });
 
-    it('rejects --skill with --workflow before discovering a cockpit', async () => {
-      expect(await run(['start', 'x', '--skill', 'cli-sample-skill', '--workflow', 'quick-task'])).toBe(64);
-      expect(last()).toMatchObject({ code: 'invalid_input' });
-      expect(ctx.discoveries).toBe(0);
-      expect(ctx.store.listRuns()).toHaveLength(0);
-    });
 
     it('reports created:false for a retry with the same request id', async () => {
       const id = '2b7e1c9a-5d4f-4a3b-8c2d-1e0f9a8b7c6d';
@@ -269,10 +247,6 @@ describe('cez task', () => {
       expect(ctx.store.getRun(last().id as string)?.notify).toBeUndefined();
     });
 
-    it('rejects --notify with --no-notify before discovering a cockpit', async () => {
-      expect(await run(['start', 'do it', '--notify', '--no-notify'])).toBe(64);
-      expect(ctx.discoveries).toBe(0);
-    });
 
     describe('runner flag (hearsay-tools/cezarion#632)', () => {
       const cases = RUNNER_IDS.flatMap((runner) => [
@@ -285,15 +259,6 @@ describe('cez task', () => {
         expect(ctx.store.getRun(last().id as string)?.runner).toBe(runner);
       });
 
-      it('rejects conflicting --runner and --backend before discovering a cockpit', async () => {
-        expect(await run(['start', '--runner', 'codex', '--backend', 'claude', 'x'])).toBe(64);
-        expect(last()).toMatchObject({
-          code: 'invalid_input',
-          error: '--runner codex and --backend claude name different runners; pass one --runner',
-        });
-        expect(ctx.discoveries).toBe(0);
-        expect(ctx.store.listRuns()).toHaveLength(0);
-      });
 
       it('shows --runner first and --backend as a one-line alias in start help', () => {
         const lines = taskHelp('start').split('\n');

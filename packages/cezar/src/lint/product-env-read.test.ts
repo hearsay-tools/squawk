@@ -1,8 +1,8 @@
-import { checkRule } from './ast-rule.testkit.ts';
+import { checkRule, ruleCases, spanError } from './ast-rule.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { productEnvBaselineFile, productEnvFile, productEnvRead, productEnvReads as sourceEnvReads, scanProductEnvReads, staleProductEnvReads } from './product-env-read.ts';
 
 function productEnvReads(source: string, file = 'file.ts'): ReturnType<typeof sourceEnvReads> {
@@ -236,3 +236,26 @@ it.each([
 ])('keeps computed reads from recognized roots without env names: %s', source => {
   expect(productEnvReads(source).map(({ form, name }) => [form, name])).toEqual([['computed', '*']]);
 });
+
+// Shapes, report nodes and spans the rule matched with the Babel view (hearsay-tools/squawk#3806).
+// They stay pinned after the rule moved to oxlint's own tree.
+describe('product-env-read keeps its report spans', () => ruleCases(productEnvRead, {
+  file: 'packages/cezar/src/env-ast-fixture.ts',
+  valid: [
+  ],
+  invalid: [
+    { code: "process.env.CEZ_X;", errors: [spanError("1:0-1:18", /^dot CEZ_X:/)] },
+    { code: "x; process?.env?.['HSQ_Y'];", errors: [spanError("1:3-1:27", /^bracket HSQ_Y:/)] },
+    { code: "x; (process.env as any).CEZ_Z;", errors: [spanError("1:3-1:30", /^dot CEZ_Z:/)] },
+    { code: "x; process.env!.CEZ_Q;", errors: [spanError("1:3-1:22", /^dot CEZ_Q:/)] },
+    { code: "x; globalThis.process.env[`CEZ_T`];", errors: [spanError("1:3-1:35", /^bracket CEZ_T:/)] },
+    { code: "const { CEZ_A } = process.env;", errors: [spanError("1:8-1:13", /^destructure CEZ_A:/)] },
+    { code: "x; const { env: { HSQ_B } } = process;", errors: [spanError("1:18-1:23", /^destructure HSQ_B:/)] },
+    { code: "function f({ CEZ_C }: NodeJS.ProcessEnv) {}", errors: [spanError("1:13-1:18", /^destructure CEZ_C:/)] },
+    { code: "x; productEnv(name);", errors: [spanError("1:3-1:20", /^helper-dynamic \*:/)] },
+    { code: "x; const k = 'CEZ_K'; process.env[k];", errors: [spanError("1:22-1:37", /^bracket CEZ_K:/)] },
+    { code: "x; (process.env satisfies object).CEZ_S;", errors: [spanError("1:3-1:40", /^dot CEZ_S:/)] },
+    { code: "class K { m(e: NodeJS.ProcessEnv) { return e[k]; } }", errors: [spanError("1:43-1:47", /^computed \*:/)] },
+    { code: "x; env.CEZ_X += 'a';", errors: [spanError("1:3-1:20", /^dot CEZ_X:/)] },
+  ],
+}));

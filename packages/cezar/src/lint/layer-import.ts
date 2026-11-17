@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { parse } from '@babel/parser';
 import type { Node } from '@babel/types';
-import { visit } from './home-boundary.ts';
+import { visit } from './babel-walk.ts';
 import { repoRoot } from './source-rule.ts';
 import { child, stringOf, type AstRule, type EsNode, type Report, type Visitors } from './ast-rule.ts';
 

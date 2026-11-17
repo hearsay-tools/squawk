@@ -4,7 +4,7 @@ import { parse } from '@babel/parser';
 import type { Node } from '@babel/types';
 import { child, children, nameOf, type AstRule, type EsNode } from './ast-rule.ts';
 import { literal, propertyName, unwrap } from './ast-syntax.ts';
-import { visit } from './home-boundary.ts';
+import { visit } from './babel-walk.ts';
 import { repoRoot } from './source-rule.ts';
 
 /**

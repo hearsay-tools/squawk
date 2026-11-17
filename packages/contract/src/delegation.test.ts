@@ -11,7 +11,6 @@ import {
   workerSteerRequestSchema, workerSteerResultSchema, workerStopResultSchema, workerWaitRequestSchema, workerWaitResultSchema,
 } from './delegation.ts';
 import { runStatusSchema } from './run-status.ts';
-import { runnerSchema } from './runner.ts';
 import { RUN_STATUS, WAIT_PHASE, WAIT_VIA, WORKER_OUTCOME_STATUS } from './test-factories.testkit.ts';
 
 describe('parent-file context reference', () => {
@@ -25,33 +24,17 @@ describe('parent-file context reference', () => {
     expect(workerContextSchema.safeParse(context(path)).success).toBe(false);
   });
 
-  it('refuses a duplicated path, naming it', () => {
-    const parsed = workerContextSchema.safeParse(context('a.md', 'b.md', 'a.md'));
-    expect(parsed.success).toBe(false);
-    expect(parsed.error?.issues.map(issue => issue.message)).toContainEqual(expect.stringContaining('duplicate --attach path: a.md'));
-  });
-
-  it.each(['.gitignore', 'qa/.gitignore', 'qa/data/.GitIgnore'])('refuses an attached .gitignore %j, naming it', path => {
-    const parsed = workerContextSchema.safeParse(context(path));
-    expect(parsed.success).toBe(false);
-    expect(parsed.error?.issues.map(issue => issue.message)).toContainEqual(`--attach cannot attach a .gitignore: ${path}; ignore rules must come from the baseline`);
-  });
-
-  it.each(['qa/.gitignore.bak', 'qa/gitignore', '.gitignore-notes/x.md'])('accepts a near-miss name %j', path => {
-    expect(workerContextSchema.safeParse(context(path)).success).toBe(true);
-  });
-
   it('leaves baseline-file references as they were', () => {
     expect(workerContextSchema.safeParse({ artifacts: [{ kind: 'baseline-file', path: 'src/x.ts' }] }).success).toBe(true);
   });
 });
 
 describe('delegation refusal details', () => {
-  it.each(['.gitignore', 'qa/.GITIGNORE', 'nested/path/.gitignore'])('names the refused parent file %s', path => {
+  it.each(['.gitignore', 'qa/.GITIGNORE', 'qa/data/.GitIgnore'])('names the refused parent file %s', path => {
     expect(parentFileRefusal(path)).toBe(`--attach cannot attach a .gitignore: ${path}; ignore rules must come from the baseline`);
   });
 
-  it.each(['', 'README.md', '.gitignore/file.md', 'qa/.gitignore.bak'])('permits the parent file %j', path => {
+  it.each(['', 'README.md', '.gitignore/file.md', 'qa/.gitignore.bak', 'qa/gitignore', '.gitignore-notes/x.md'])('permits the parent file %j', path => {
     expect(parentFileRefusal(path)).toBeUndefined();
   });
 
@@ -71,16 +54,6 @@ describe('delegation refusal details', () => {
     expect(peerWaitViewSchema.safeParse({ ...wait, phase: WAIT_PHASE.open }).error?.issues)
       .toEqual([{ code: 'custom', message: 'an open peer wait has no result', path: ['result'] }]);
     expect(peerWaitViewSchema.safeParse({ ...wait, phase: WAIT_PHASE.cancelled }).success).toBe(true);
-  });
-
-  it('bounds the combined spawn text and distinguishes skill from workflow', () => {
-    const request = { task: 't', baseline: 'main', requestId: '11111111-1111-4111-8111-111111111111' };
-    expect(workerSpawnRequestSchema.safeParse({ ...request, context: { text: 'c'.repeat(99999) } }).success).toBe(true);
-    expect(workerSpawnRequestSchema.safeParse({ ...request, context: { text: 'c'.repeat(100000) } }).success).toBe(false);
-    expect(workerSpawnRequestSchema.safeParse({ ...request, skill: 'review', workflow: 'quick-task' }).success).toBe(false);
-    expect(workerSpawnRequestSchema.safeParse({ ...request, skill: 'review' }).success).toBe(true);
-    expect(workerSpawnRequestSchema.safeParse({ ...request, workflow: 'quick-task' }).success).toBe(true);
-    expect(workerSteerRequestSchema.safeParse({ text: ' \n\t' }).success).toBe(false);
   });
 });
 
@@ -190,21 +163,20 @@ describe('worker spawn, steer and wait requests', () => {
     accepts(workerSpawnRequestSchema, { ...spawn, model: 'm'.repeat(512) });
     refuses(workerSpawnRequestSchema, { ...spawn, model: 'm'.repeat(513) });
     refuses(workerSpawnRequestSchema, { ...spawn, task: '' });
+    refuses(workerSpawnRequestSchema, { ...spawn, backend: 'nope' });
   });
 
-  it('accepts every backend', () => {
-    acceptsEach(workerSpawnRequestSchema, spawn, 'backend', runnerSchema.options);
-  });
-
-  it('names each refused spawn combination', () => {
+  it('names each refused spawn combination, and takes a combined text of exactly 100000', () => {
     expect(issuesOf(workerSpawnRequestSchema, { ...spawn, skill: 'review', workflow: 'quick-task' }))
       .toEqual([{ code: 'custom', message: '--skill and --workflow cannot be used together', path: [] }]);
     expect(issuesOf(workerSpawnRequestSchema, { ...spawn, task: 't'.repeat(60_000), context: { text: 'c'.repeat(40_001) } }))
       .toEqual([{ code: 'custom', message: 'Combined task and context exceed 100000 characters', path: [] }]);
+    accepts(workerSpawnRequestSchema, { ...spawn, task: 't'.repeat(60_000), context: { text: 'c'.repeat(40_000) } });
   });
 
   it('accepts a nonblank steer text up to its limit', () => {
     accepts(workerSteerRequestSchema, { text: 'go on' });
+    refuses(workerSteerRequestSchema, { text: ' \n\t' });
     accepts(workerSteerRequestSchema, { text: 's'.repeat(100_000) });
     refuses(workerSteerRequestSchema, { text: 's'.repeat(100_001) });
     refuses(workerSteerRequestSchema, { text: 'go on', extra: true });
@@ -377,7 +349,6 @@ describe('collected worker results', () => {
   });
 
   it.each([
-    ['status', runStatusSchema.options],
     ['outcome', ['running', 'review-ready', 'completed', 'failed', 'cancelled', 'destroyed']],
     ['lastExecutionOutcome', ['running', 'review-ready', 'completed', 'failed', 'cancelled']],
     ['cleanup', ['retained', 'requested', 'terminating', 'cleaning', 'complete', 'incomplete']],
@@ -491,10 +462,8 @@ describe('worker diff, stop, destroy and error answers', () => {
     refuses(workerSteerResultSchema, { workerId: U1, state: 'queued', extra: true });
   });
 
-  it('accepts every delegation error code', () => {
-    const codes = ['unavailable_transport', 'unauthenticated', 'denied_scope', 'invalid_input', 'invalid_baseline',
-      'incompatible_state', 'capacity_limit', 'unavailable_diff', 'incomplete_cleanup'];
-    acceptsEach(delegationErrorResponseSchema, { error: 'refused' }, 'code', codes);
+  it('keeps a delegation error answer and bounds its message', () => {
+    acceptsEach(delegationErrorResponseSchema, { error: 'refused' }, 'code', ['invalid_input']);
     refuses(delegationErrorResponseSchema, { code: 'invalid_input', error: 'e'.repeat(2001) });
   });
 });

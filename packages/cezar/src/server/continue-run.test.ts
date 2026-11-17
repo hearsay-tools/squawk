@@ -98,12 +98,13 @@ describe('POST /api/v1/runs/:id/continue override', () => {
     expect(captured?.opts.model).toBe('gpt-5.1-codex');
   });
 
-  it('an empty POST omits both — the run keeps its current backend (backward compat)', async () => {
+  it('an empty POST keeps the current backend, model, effort and account', async () => {
     const res = await post({});
     expect(res.status).toBe(200);
     expect(captured?.opts.runner).toBeUndefined();
     expect(captured?.opts.model).toBeUndefined();
     expect(captured?.opts.effort).toBeUndefined();
+    expect(captured?.opts.agentProfile).toBeUndefined();
   });
 
   it('plumbs an effort override through to the manager (#45)', async () => {
@@ -185,11 +186,6 @@ describe('POST /api/v1/runs/:id/continue override', () => {
     expect(captured?.opts.agentProfile).toBe('default');
   });
 
-  it('an empty POST names no account — the run keeps the one it is on', async () => {
-    const res = await post({});
-    expect(res.status).toBe(200);
-    expect(captured?.opts.agentProfile).toBeUndefined();
-  });
 
   it('rejects an account that no longer exists with a 400, and never reaches the manager', async () => {
     // A USER just picked this from a menu, so "unknown account" is honest and actionable —
