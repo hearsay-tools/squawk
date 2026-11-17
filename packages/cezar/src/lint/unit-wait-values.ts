@@ -1,5 +1,5 @@
 import { VITEST_DEFAULT_MS, targetNames, namesWritten, type Ctx, type Where } from './unit-wait-discipline.ts';
-import { walk, isFunction, isCall, isMember, isObjectProperty, paramsOf, type N } from './unit-wait-tree.ts';
+import { walk, isFunction, isCall, isMember, isObjectProperty, isTypeScriptNode, paramsOf, type N } from './unit-wait-tree.ts';
 import { isNullLiteral, isNumberLiteral, isStringLiteral } from './server-wait-tree.ts';
 import { type Bound, isPath, isLimit, isNamed } from './unit-wait-deadlines.ts';
 
@@ -145,7 +145,7 @@ export function declaredHere(view: View, use: Use, name: string): boolean {
 export function rootsOf(root: N): string[] {
   const found: string[] = []
   walk(root, [], (node, ancestors) => {
-    if (isFunction(node) || (node.type.startsWith('TS') && !/^TS(?:As|Satisfies|NonNull)Expression$|^TSTypeAssertion$/.test(node.type))) return false
+    if (isFunction(node) || (isTypeScriptNode(node) && !/^TS(?:As|Satisfies|NonNull)Expression$|^TSTypeAssertion$/.test(node.type))) return false
     const parent = ancestors.at(-1)
     const property = (isMember(parent) && parent?.property === node && !parent.computed) || (isObjectProperty(parent) && parent?.key === node && !parent.computed)
     if ((node.type === 'Identifier' && !property) || node.type === 'PrivateIdentifier') found.push(node.name)

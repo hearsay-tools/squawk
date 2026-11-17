@@ -10,6 +10,8 @@ import type { N } from './server-wait-tree.ts';
  * - A call or member access at or past the first optional link of a chain (`a?.b`, `a?.b.c()`) is none of the plain shapes the
  *   scan matches; the base of the chain stays plain. The `ChainExpression` around a chain matches no shape either.
  * - A private name (`#limit`) is read as a name where the scan collects the names an expression reads.
+ * - TypeScript-only syntax is what Babel typed `TS…`: a bodiless class method (an overload) is one, and an abstract
+ *   property is not, since Babel read it as a class property.
  */
 
 export type { N };
@@ -33,6 +35,12 @@ const isClassFunction = (node: N): boolean =>
 export const isFunction = (node: N): boolean =>
   node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' || node.type === 'ArrowFunctionExpression' ||
   (node.type === 'Property' && node.method === true) || isClassFunction(node)
+
+/** Whether Babel typed the node `TS…`: a bodiless class method was a `TSDeclareMethod`, an abstract property a `ClassProperty`. */
+export function isTypeScriptNode(node: N): boolean {
+  if (node.type === 'MethodDefinition') return node.value?.type === 'TSEmptyBodyFunctionExpression'
+  return node.type !== 'TSAbstractPropertyDefinition' && node.type.startsWith('TS')
+}
 
 /** A function's parameters; a method's are its function's. */
 export const paramsOf = (node: N): readonly N[] | undefined => {
