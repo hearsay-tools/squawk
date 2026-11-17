@@ -183,6 +183,8 @@ describe('runRowMeta (#617, #729: what the meta line is made of)', () => {
     it.each([
       ['age', {}, { finishedAt: ago(5 * 60_000) }],
       ['pull request', {}, { prNumber: 594 }],
+      ['pull request number', { prNumber: 594 }, { prNumber: 595 }],
+      ['issue number', { issueNumber: 12 }, { issueNumber: 13 }],
       ['issue beside a pull request', { prNumber: 594 }, { prNumber: 594, issueNumber: 12 }],
       ['reference URL', { prNumber: 594 }, { prNumber: 594, pullRequestUrl: 'https://github.com/acme/repo/pull/594' }],
       ['hand-off', {}, { notify: true }],

@@ -128,6 +128,11 @@ describe('ATTENTION_RANK', () => {
     expect(order).toEqual(['permission', 'error', 'waiting', 'running', 'unseen', 'none'])
   })
 
+  it('ranks error above waiting — an error can never be masked by a gate', () => {
+    expect(ATTENTION_RANK.error).toBeLessThan(ATTENTION_RANK.waiting)
+    expect(ATTENTION_RANK.permission).toBeLessThan(ATTENTION_RANK.error)
+  })
+
 })
 
 describe('a run waiting out a usage limit', () => {
