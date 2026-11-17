@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { buildPiArgs } from './pi-runner.ts';
+import { buildPiArgs } from './pi-args.ts';
 import type { SkillCatalog } from './runner-skill-catalog.ts';
 import { skillLines, skillProbe, type SkillDiscoveryOptions } from './skill-probe.ts';
 import { skillPathScope } from './skill-path-scope.ts';
