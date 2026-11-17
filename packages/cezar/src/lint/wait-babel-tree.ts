@@ -1,4 +1,4 @@
-import type { Node, Program } from '@babel/types';
+import type { Program } from '@babel/types';
 import type { EsNode } from './ast-rule.ts';
 import { isMethodDefinition, mapShape } from './ast-node-view.ts';
 
@@ -60,17 +60,4 @@ export function babelTree(program: EsNode): Program {
   } finally {
     chains = new Map();
   }
-}
-
-/** The child nodes of a plain babel-shaped node, in source order. */
-export function plainChildren(node: Node): Node[] {
-  const out: Node[] = [];
-  for (const key of Object.keys(node)) {
-    if (key === 'start' || key === 'end' || key === 'extra' || key === 'loc' || key.endsWith('Comments')) continue;
-    const value = (node as unknown as Out)[key];
-    if (Array.isArray(value)) {
-      for (const item of value) if (isNode(item)) out.push(item as unknown as Node);
-    } else if (isNode(value)) out.push(value as unknown as Node);
-  }
-  return out;
 }

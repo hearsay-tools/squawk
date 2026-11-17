@@ -67,7 +67,8 @@ appropriate boundary or checker explicitly.
 
 AST source rules share oxlint's parse. `ast-rule.ts` passes the repository-relative file,
 node text and parsed comments to visitors. The typed env, home and runner-fact
-engines use one cached structural view of ESTree nodes; the view changes node shapes,
+engines use one structural view of ESTree nodes (`lint/ast-node-view.ts`), copied once per file
+and cached on the nodes under a symbol key; the view changes node shapes,
 without reparsing source or scanning whole-file text. The cockpit wait engine reads a plain
 babel-shaped copy instead (`lint/wait-babel-tree.ts`): oxlint wraps `WeakMap`, so the cached
 view cost more than the rule itself on every test file. Runner checks still read their
@@ -447,6 +448,12 @@ its static scope before implementing its scanner.
    `// oxlint-disable-next-line cez/<rule> -- <reason>`; add no baseline.
 5. Put a whole-repository check (a baseline, a stale entry) in `run.ts`, never in a rule: oxlint
    runs rules per file, in parallel.
+6. Check what the rule costs: `node packages/cezar/scripts/profile-lint.ts --alone` prints the user
+   CPU of oxlint with each rule alone, next to built-ins only, the plugin with no visitor, and
+   no-op visitors on every file, and then oxlint's own JS time per rule (`--debug timings`).
+   Every rule's JS runs on one thread. Keep per-file work in one pass: no walk of the whole tree
+   on top of oxlint's own, no list built per node, and a per-node cache under a symbol key on the
+   node: oxlint replaces `WeakMap` with a slower wrapper (hearsay-tools/squawk#3774).
 
 ## Migration inventory
 

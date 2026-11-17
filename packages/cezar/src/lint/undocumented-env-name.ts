@@ -46,12 +46,25 @@ function envSitesFromAst(ast: Node): Map<string, number> {
 }
 
 /** Named-import aliases retain the same env contract as productEnv. */
+export function addProductEnvHelper(node: Node, names: Set<string>): void {
+  if (node.type === 'ImportSpecifier' && property(node.imported) === 'productEnv') names.add(node.local.name);
+}
+
 function productEnvHelpers(ast: Node): Set<string> {
   const names = new Set(['productEnv']);
-  visit(ast, node => {
-    if (node.type === 'ImportSpecifier' && property(node.imported) === 'productEnv') names.add(node.local.name);
-  });
+  visit(ast, node => addProductEnvHelper(node, names));
   return names;
+}
+
+/** A call to one of `helpers`. Only a literal suffix can prove both accepted full names. */
+export function productEnvCall(node: Node, helpers: Set<string>): { suffix: string | undefined; offset: number } | undefined {
+  if (node.type !== 'CallExpression' && node.type !== 'OptionalCallExpression') return undefined;
+  if (!helpers.has(property(unwrapped(node.callee)) ?? '')) return undefined;
+  const argument = node.arguments[0];
+  const literal = argument && unwrapped(argument);
+  const suffix = literal?.type === 'StringLiteral' ? literal.value
+    : literal?.type === 'TemplateLiteral' && literal.expressions.length === 0 ? literal.quasis[0]?.value.cooked : undefined;
+  return { suffix: suffix != null && /^[A-Z][A-Z0-9_]*$/.test(suffix) ? suffix : undefined, offset: node.start ?? 0 };
 }
 
 /** Only a literal suffix can prove both accepted full names; dynamic calls fail read lint. */
@@ -59,13 +72,8 @@ export function productEnvCalls(ast: Node): { suffix: string | undefined; offset
   const helpers = productEnvHelpers(ast);
   const calls: { suffix: string | undefined; offset: number }[] = [];
   visit(ast, node => {
-    if (node.type !== 'CallExpression' && node.type !== 'OptionalCallExpression') return;
-    if (!helpers.has(property(unwrapped(node.callee)) ?? '')) return;
-    const argument = node.arguments[0];
-    const literal = argument && unwrapped(argument);
-    const suffix = literal?.type === 'StringLiteral' ? literal.value
-      : literal?.type === 'TemplateLiteral' && literal.expressions.length === 0 ? literal.quasis[0]?.value.cooked : undefined;
-    calls.push({ suffix: suffix != null && /^[A-Z][A-Z0-9_]*$/.test(suffix) ? suffix : undefined, offset: node.start ?? 0 });
+    const call = productEnvCall(node, helpers);
+    if (call) calls.push(call);
   });
   return calls;
 }

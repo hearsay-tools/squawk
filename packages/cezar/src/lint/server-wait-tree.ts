@@ -30,26 +30,34 @@ export const isNullLiteral = (node: N | undefined): boolean => node?.type === 'L
 /** The fields of a node that are not syntax. */
 const META = new Set(['type', 'parent', 'start', 'end', 'range', 'loc']);
 
-/** The child nodes of a node, in source order. */
-export function childrenOf(node: N): N[] {
-  const out: N[] = [];
+/** Calls `each` with every child node of a node, in source order. */
+function eachChild(node: N, each: (child: N) => void): void {
   for (const key of Object.keys(node)) {
     if (META.has(key)) continue;
     const value = node[key];
     if (Array.isArray(value)) {
-      for (const item of value) if (item && typeof item.type === 'string') out.push(item);
-    } else if (value && typeof value.type === 'string') out.push(value);
+      for (const item of value) if (item && typeof item.type === 'string') each(item);
+    } else if (value && typeof value.type === 'string') each(value);
   }
+}
+
+/** The child nodes of a node, in source order. */
+export function childrenOf(node: N): N[] {
+  const out: N[] = [];
+  eachChild(node, child => out.push(child));
   return out;
 }
 
-/** Every node of the tree under `root`, parents first. */
+/** Every node of the tree under `root`, parents first. One scratch list serves every node. */
 export function walkAll(root: N, visit: (node: N) => void): void {
   const stack: N[] = [root];
+  const children: N[] = [];
+  const collect = (child: N) => { children.push(child); };
   while (stack.length > 0) {
     const node = stack.pop()!;
     visit(node);
-    const children = childrenOf(node);
+    children.length = 0;
+    eachChild(node, collect);
     for (let i = children.length - 1; i >= 0; i -= 1) stack.push(children[i]!);
   }
 }

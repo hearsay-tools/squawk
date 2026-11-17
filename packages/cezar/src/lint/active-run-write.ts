@@ -150,13 +150,72 @@ function parenthesized(node: EsNode, tokens: NodeTokens): boolean {
   return true;
 }
 
+type ScopeIndex = Map<string, EsNode[]>;
+const isSyntax = (value: unknown): value is EsNode => typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string';
+interface ScopeFacts { types: Map<EsNode, ScopeIndex>; bindings: Map<EsNode, ScopeIndex>; patterns: Map<EsNode, EsNode[]>; reached: Set<EsNode>; imports: EsNode[] }
+
+function addEntry(index: Map<EsNode, ScopeIndex>, scopes: EsNode[], name: string | undefined, value: EsNode | undefined): void {
+  if (!name || !value) return;
+  for (const scope of scopes) {
+    let entries = index.get(scope);
+    if (!entries) { entries = new Map(); index.set(scope, entries); }
+    const list = entries.get(name);
+    if (list) list.push(value);
+    else entries.set(name, [value]);
+  }
+}
+
+/**
+ * One pre-order walk of the file in the order `nodes()` uses. Each function scope gets the typed
+ * names of its descendants, each block scope its bindings and object-pattern declarators, so a
+ * check never walks a scope again.
+ */
+function scopeFacts(program: EsNode, tokens: NodeTokens): ScopeFacts {
+  // Plain maps: they live as long as the file's Program, and oxlint's WeakMap wrapper costs more.
+  const facts: ScopeFacts = { types: new Map(), bindings: new Map(), patterns: new Map(), reached: new Set(), imports: [] };
+  const functions: EsNode[] = [];
+  const blocks: EsNode[] = [];
+  function visit(node: EsNode) {
+    const isFunction = FUNCTION_SCOPES.has(node.type);
+    const isBlock = BLOCK_SCOPES.has(node.type);
+    if (isFunction) functions.push(node);
+    if (isBlock) blocks.push(node);
+    if (isFunction || isBlock) facts.reached.add(node);
+    record(facts, node, functions, blocks);
+    for (const key of tokens.visitorKeys[node.type] ?? []) {
+      const value = node[key];
+      if (Array.isArray(value)) { for (const item of value) if (isSyntax(item)) visit(item); }
+      else if (isSyntax(value)) visit(value);
+    }
+    if (isFunction) functions.pop();
+    if (isBlock) blocks.pop();
+  }
+  visit(program);
+  return facts;
+}
+
+/** The entries one node adds to its enclosing scopes. Only an identifier has both a name and a type annotation. */
+function record(facts: ScopeFacts, node: EsNode, functions: EsNode[], blocks: EsNode[]): void {
+  if (node.type === 'Identifier' || node.type === 'PrivateIdentifier') addEntry(facts.types, functions, nameOf(node), child(node, 'typeAnnotation'));
+  else if (node.type === 'VariableDeclarator') {
+    addEntry(facts.bindings, blocks, nameOf(child(node, 'id')), child(node, 'init'));
+    if (child(node, 'id')?.type === 'ObjectPattern') for (const scope of blocks) {
+      const list = facts.patterns.get(scope);
+      if (list) list.push(node);
+      else facts.patterns.set(scope, [node]);
+    }
+  } else if (node.type === 'ImportSpecifier') facts.imports.push(node);
+}
+
+const NO_ENTRIES: ScopeIndex = new Map();
+
 /** Structural facts shared by the eight owners, with no owner-dependent reference results. */
-function syntaxIndex(tokens: NodeTokens) {
-  const descendants = new WeakMap<EsNode, EsNode[]>();
-  const annotations = new WeakMap<EsNode, Map<string, EsNode[]>>();
-  const declarations = new WeakMap<EsNode, Map<string, EsNode[]>>();
-  const parentheses = new WeakMap<EsNode, boolean>();
-  let imports: EsNode[] | undefined;
+function syntaxIndex(program: EsNode, tokens: NodeTokens) {
+  const descendants = new Map<EsNode, EsNode[]>();
+  const annotations = new Map<EsNode, Map<string, EsNode[]>>();
+  const declarations = new Map<EsNode, Map<string, EsNode[]>>();
+  const parentheses = new Map<EsNode, boolean>();
+  let facts: ScopeFacts | undefined;
   function nodes(scope: EsNode): EsNode[] {
     const known = descendants.get(scope);
     if (known) return known;
@@ -174,10 +233,17 @@ function syntaxIndex(tokens: NodeTokens) {
     descendants.set(scope, result);
     return result;
   }
+  /** The scope's entries from the file walk; a scope it did not reach is walked on its own. */
+  function scanned(scope: EsNode): ScopeFacts | undefined {
+    facts ??= scopeFacts(program, tokens);
+    return facts.reached.has(scope) ? facts : undefined;
+  }
   function index(scope: EsNode, kind: 'type' | 'binding'): Map<string, EsNode[]> {
+    const known = scanned(scope);
+    if (known) return (kind === 'type' ? known.types : known.bindings).get(scope) ?? NO_ENTRIES;
     const cache = kind === 'type' ? annotations : declarations;
-    const known = cache.get(scope);
-    if (known) return known;
+    const cached = cache.get(scope);
+    if (cached) return cached;
     const result = new Map<string, EsNode[]>();
     for (const part of nodes(scope)) {
       const name = kind === 'type' ? nameOf(part) : part.type === 'VariableDeclarator' ? nameOf(child(part, 'id')) : undefined;
@@ -190,22 +256,28 @@ function syntaxIndex(tokens: NodeTokens) {
     cache.set(scope, result);
     return result;
   }
+  /** The scope's variable declarators with an object pattern, in source order. */
+  function patterns(scope: EsNode): EsNode[] {
+    const known = scanned(scope);
+    if (known) return known.patterns.get(scope) ?? [];
+    return nodes(scope).filter(node => node.type === 'VariableDeclarator' && child(node, 'id')?.type === 'ObjectPattern');
+  }
   function isParenthesized(node: EsNode): boolean {
     let result = parentheses.get(node);
     if (result === undefined) { result = parenthesized(node, tokens); parentheses.set(node, result); }
     return result;
   }
-  function importSpecifiers(program: EsNode): EsNode[] {
-    return imports ??= nodes(program).filter(node => node.type === 'ImportSpecifier');
+  function importSpecifiers(): EsNode[] {
+    return (facts ??= scopeFacts(program, tokens)).imports;
   }
-  return { nodes, index, isParenthesized, importSpecifiers };
+  return { nodes, index, patterns, isParenthesized, importSpecifiers };
 }
 
 // sourceCode is a singleton in oxlint. Only the Program identity is a per-file cache key.
 const syntaxByProgram = new WeakMap<EsNode, ReturnType<typeof syntaxIndex>>();
 function programSyntax(program: EsNode, tokens: NodeTokens) {
   let syntax = syntaxByProgram.get(program);
-  if (!syntax) { syntax = syntaxIndex(tokens); syntaxByProgram.set(program, syntax); }
+  if (!syntax) { syntax = syntaxIndex(program, tokens); syntaxByProgram.set(program, syntax); }
   return syntax;
 }
 
@@ -221,12 +293,12 @@ function references(group: OwnerGroup, sourceCode: AstContext['sourceCode']) {
   let syntax: ReturnType<typeof syntaxIndex>;
   let program: EsNode;
   let imported = false;
-  const memo = new Map<string, WeakMap<EsNode, boolean>>();
+  const memo = new Map<string, Map<EsNode, boolean>>();
   const nodes = (node: EsNode) => syntax.nodes(node);
   function cached(kind: string, node: EsNode | undefined, check: (node: EsNode) => boolean): boolean {
     if (!node) return false;
     let entries = memo.get(kind);
-    if (!entries) { entries = new WeakMap(); memo.set(kind, entries); }
+    if (!entries) { entries = new Map(); memo.set(kind, entries); }
     const known = entries.get(node);
     if (known !== undefined) return known;
     entries.set(node, false);
@@ -298,10 +370,8 @@ function references(group: OwnerGroup, sourceCode: AstContext['sourceCode']) {
     const name = referenceName(node);
     if (!name) return false;
     const keys = [group.slot!, ...(group.bindings ?? group.getters)];
-    return nodes(nearest(node, BLOCK_SCOPES)).some(declaration => {
-      if (declaration.type !== 'VariableDeclarator') return false;
-      const pattern = child(declaration, 'id');
-      if (pattern?.type !== 'ObjectPattern') return false;
+    return syntax.patterns(nearest(node, BLOCK_SCOPES)).some(declaration => {
+      const pattern = child(declaration, 'id')!;
       const matches = children(pattern, 'properties').some(property =>
         property.type === 'Property' && property.computed !== true && keys.includes(nameOf(child(property, 'key')) ?? '') && nameOf(child(property, 'value')) === name,
       );
@@ -318,7 +388,7 @@ function references(group: OwnerGroup, sourceCode: AstContext['sourceCode']) {
   function importTypes() {
     if (imported) return;
     imported = true;
-    for (const node of syntax.importSpecifiers(program)) {
+    for (const node of syntax.importSpecifiers()) {
       const imported = nameOf(child(node, 'imported'));
       const local = nameOf(child(node, 'local'));
       if (!imported || !local) continue;

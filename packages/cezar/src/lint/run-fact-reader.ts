@@ -221,7 +221,9 @@ export const runFactReader: AstRule = {
       if (parent?.type === 'SwitchStatement' && child(parent, 'discriminant') === node) return true;
       return parent?.type === 'MemberExpression' && !parent.computed && ['startsWith', 'endsWith', 'includes', 'toLowerCase', 'toUpperCase', 'match', 'localeCompare'].includes(propertyName(parent) ?? '');
     };
-    const code = blankOnce(sourceCode.text);
+    // Blanking reads the whole file; only a `'waiting'` comparison needs it.
+    let blanked: string | undefined;
+    const code = () => (blanked ??= blankOnce(sourceCode.text));
     const resumes: ResumeAccess[] = [];
     const waitingNodes: EsNode[] = [];
     return {
@@ -239,17 +241,18 @@ export const runFactReader: AstRule = {
       BinaryExpression(node) {
         if (file.startsWith(HOME) || isTest(file)) return;
         const status = waitingStatus(node);
-        if (status && scannerWaitingComparison(node, status, sourceCode.text, code)) waitingNodes.push(node);
+        if (status && scannerWaitingComparison(node, status, sourceCode.text, code())) waitingNodes.push(node);
       },
       'Program:exit'() {
         resumes.sort((a, b) => a.start - b.start);
         if (resumes.length && !(file in (listed ??= readReaders()))) sites['resume-time-read'].push(resumes[0]!.node);
         for (const node of waitingNodes) {
-          if (!joinedResume(code, waitingBounds(node), resumes)) continue;
+          if (!joinedResume(code(), waitingBounds(node), resumes)) continue;
           const status = waitingStatus(node)!;
           const left = child(node, 'left')!;
           sites['restated-hold'].push(literal(left) === 'waiting' ? left : child(status, 'property')!);
         }
+        if (!sites['label-comparison'].length && !sites['restated-hold'].length && !sites['resume-time-read'].length) return;
         const lines = sourceCode.text.split('\n');
         for (const rule of ['label-comparison', 'restated-hold', 'resume-time-read'] as const) for (const node of sites[rule]) {
           const text = lines[nodeLine(node) - 1]!.trim();

@@ -3,11 +3,24 @@ import { child, stringOf, type EsNode, type Visitors } from './ast-rule.ts';
 
 /**
  * A cached structural view for the existing typed AST engines (hearsay-tools/squawk#3774).
- * Oxlint owns parsing. This translates ESTree field shapes lazily, once per node, and never
- * reads source text. Parent links stay on the original nodes so recursive engines cannot cycle.
+ * Oxlint owns parsing. This translates ESTree field shapes once per node and never reads source
+ * text. Parent links stay on the original nodes so recursive engines cannot cycle.
  */
-const views = new WeakMap<EsNode, Node>();
-const originals = new WeakMap<Node, EsNode>();
+/**
+ * Per-node caches live on the nodes under symbol keys, which `Object.keys` and `for…in` skip:
+ * oxlint wraps `WeakMap`, and a map entry per node cost more than the work it saved.
+ * On an oxlint node: its view, its chain membership and its static text. On a view: its oxlint
+ * node and its structural children.
+ */
+const VIEW = Symbol('view');
+const CHAIN = Symbol('optional chain');
+const TEXT = Symbol('static text');
+const NO_TEXT = Symbol('no static text');
+const ORIGINAL = Symbol('original');
+const CHILDREN = Symbol('children');
+type ViewFields = Record<string | symbol, unknown>;
+const cache = (node: EsNode): ViewFields => node as unknown as ViewFields;
+const originalOf = (node: Node): EsNode | undefined => (node as unknown as ViewFields)[ORIGINAL] as EsNode | undefined;
 const isNode = (value: unknown): value is EsNode => typeof value === 'object' && value !== null
   && typeof (value as { type?: unknown }).type === 'string';
 
@@ -20,32 +33,18 @@ function needsChildView(value: unknown): boolean {
   return isNode(value) || (Array.isArray(value) && value.some(item => isNode(item) || Array.isArray(item)));
 }
 
-/** Child fields materialize only when an engine reads them; scalar arrays stay shared. */
-function defineViewField(out: Record<string, unknown>, key: string, raw: unknown): void {
-  if (!needsChildView(raw)) {
-    out[key] = raw;
-    return;
-  }
-  const descriptor = { enumerable: true, configurable: true, writable: true };
-  Object.defineProperty(out, key, {
-    enumerable: true,
-    configurable: true,
-    get(this: Record<string, unknown>) {
-      const value = fieldView(raw);
-      Object.defineProperty(this, key, { ...descriptor, value });
-      return value;
-    },
-    set(this: Record<string, unknown>, value: unknown) {
-      Object.defineProperty(this, key, { ...descriptor, value });
-    },
-  });
-}
+/**
+ * Every view inherits `loc` from here, so it stays out of `Object.keys` and costs no own property.
+ * Each typed engine walks the whole view, so views copy their fields once as plain data.
+ */
+const VIEW_PROTOTYPE = Object.create(Object.prototype, {
+  loc: { enumerable: false, get(this: Node) { return originalOf(this)?.loc; } },
+}) as object;
 
-/** Copy lazy descriptors, so merging a method never reads its function body. */
-function mergeMethodFields(out: Record<string, unknown>, value: EsNode): void {
-  const descriptors = Object.getOwnPropertyDescriptors(babelView(value));
-  delete descriptors.loc;
-  Object.defineProperties(out, descriptors);
+/** Copy plain fields, so merging a method keeps the function's fields before its own. */
+function mergeMethodFields(out: ViewFields, value: EsNode): void {
+  const fn = babelView(value) as unknown as Record<string, unknown>;
+  for (const key of Object.keys(fn)) out[key] = fn[key];
 }
 
 function literalType(node: EsNode): string {
@@ -57,7 +56,6 @@ function literalType(node: EsNode): string {
   return 'NumericLiteral';
 }
 
-const chainMembership = new WeakMap<EsNode, boolean>();
 
 /** Only receiver/callee edges continue a chain; a nested ChainExpression starts a new one. */
 function chainReceiver(node: EsNode): EsNode | undefined {
@@ -69,20 +67,20 @@ function chainReceiver(node: EsNode): EsNode | undefined {
 
 /** Babel's optional node shapes begin at the first optional segment, leaving its base ordinary. */
 function optionalChainNode(node: EsNode): boolean {
-  const known = chainMembership.get(node);
+  const known = cache(node)[CHAIN] as boolean | undefined;
   if (known !== undefined) return known;
-  if (node.optional === true) { chainMembership.set(node, true); return true; }
+  if (node.optional === true) { cache(node)[CHAIN] = true; return true; }
   const pending: EsNode[] = [node];
   let current = chainReceiver(node);
   let optional = false;
   while (current) {
-    const cached = chainMembership.get(current);
+    const cached = cache(current)[CHAIN] as boolean | undefined;
     if (cached !== undefined) { optional = cached; break; }
     pending.push(current);
     if (current.optional === true) { optional = true; break; }
     current = chainReceiver(current);
   }
-  for (const member of pending) chainMembership.set(member, optional);
+  for (const member of pending) cache(member)[CHAIN] = optional;
   return optional;
 }
 
@@ -114,34 +112,34 @@ export function mapShape(out: Record<string, unknown>, node: EsNode, method: boo
   }
 }
 
-/** The same shallow view is returned for every visit; child fields are memoized on first read. */
+/** The same view is returned for every visit; its child views are built with it. */
 export function babelView(node: EsNode): Node {
-  const cached = views.get(node);
+  const cached = cache(node)[VIEW] as Node | undefined;
   if (cached) return cached;
   if (node.type === 'ChainExpression' && isNode(node.expression)) {
     const expression = babelView(node.expression);
-    views.set(node, expression);
+    cache(node)[VIEW] = expression;
     return expression;
   }
-  const out: Record<string, unknown> = {};
+  const out = Object.create(VIEW_PROTOTYPE) as ViewFields;
   const view = out as unknown as Node;
-  views.set(node, view);
-  originals.set(view, node);
+  cache(node)[VIEW] = view;
+  out[ORIGINAL] = node;
   const method = isMethodDefinition(node) || (node.type === 'Property' && node.method === true);
   if (method && isNode(node.value)) mergeMethodFields(out, node.value);
   for (const key of Object.keys(node)) {
     if (key === 'parent' || key === 'tokens' || key === 'comments' || key === 'loc' || (method && key === 'value')) continue;
-    defineViewField(out, key, node[key]);
+    const raw = node[key];
+    out[key] = needsChildView(raw) ? fieldView(raw) : raw;
   }
-  // Oxlint inherits a lazy loc getter. Object.keys does not include it.
-  Object.defineProperty(out, 'loc', { enumerable: false, get: () => node.loc });
   mapShape(out, node, method);
+  out[CHILDREN] = structuralChildren(view);
   return view;
 }
 
 /** The oxlint node to use when reporting a finding from a typed AST engine. */
 export function originalNode(node: Node): EsNode {
-  const original = originals.get(node);
+  const original = originalOf(node);
   if (!original) throw new Error('AST view has no original oxlint node');
   return original;
 }
@@ -153,7 +151,7 @@ export function originalAt(root: Node, offset: number): EsNode {
   if (!index) {
     index = new Map();
     const walk = (node: Node) => {
-      const original = originals.get(node);
+      const original = originalOf(node);
       if (original && node.start != null && !index!.has(node.start)) index!.set(node.start, original);
       for (const child of astChildren(node)) walk(child);
     };
@@ -163,14 +161,14 @@ export function originalAt(root: Node, offset: number): EsNode {
   return index.get(offset) ?? originalNode(root);
 }
 
-const staticTexts = new WeakMap<EsNode, string | undefined>();
 
 /** Static text is evaluated once per immutable node, including an unknown result. */
 export function staticNodeText(node: EsNode | undefined): string | undefined {
   if (!node) return undefined;
-  if (staticTexts.has(node)) return staticTexts.get(node);
+  const known = cache(node)[TEXT] as string | typeof NO_TEXT | undefined;
+  if (known !== undefined) return known === NO_TEXT ? undefined : known;
   const text = evaluateStaticNodeText(node);
-  staticTexts.set(node, text);
+  cache(node)[TEXT] = text ?? NO_TEXT;
   return text;
 }
 
@@ -215,8 +213,16 @@ const noChildren: Node[] = [];
 const metadataFields = new Set(['parent', 'loc', 'start', 'end', 'range', 'tokens', 'comments', 'leadingComments', 'trailingComments', 'innerComments', 'extra']);
 /** Cache structural children so multi-pass typed engines do not enumerate node metadata again. */
 export function astChildren(node: Node): Node[] {
+  const own = (node as unknown as ViewFields)[CHILDREN] as Node[] | undefined;
+  if (own) return own;
   const cached = childLists.get(node);
   if (cached) return cached;
+  const result = structuralChildren(node);
+  childLists.set(node, result);
+  return result;
+}
+
+function structuralChildren(node: Node): Node[] {
   const found: Node[] = [];
   for (const key of Object.keys(node)) {
     if (metadataFields.has(key)) continue;
@@ -225,7 +231,5 @@ export function astChildren(node: Node): Node[] {
       if (isNode(item)) found.push(item as unknown as Node);
     }
   }
-  const result = found.length === 0 ? noChildren : found;
-  childLists.set(node, result);
-  return result;
+  return found.length === 0 ? noChildren : found;
 }

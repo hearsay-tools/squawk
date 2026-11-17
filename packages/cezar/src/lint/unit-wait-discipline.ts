@@ -1,5 +1,5 @@
 import type { AstContext, AstRule, EsNode, Visitors } from './ast-rule.ts';
-import { babelTree, plainChildren } from './wait-babel-tree.ts';
+import { babelTree } from './wait-babel-tree.ts';
 import { inOxlint } from './wait-oxlint.ts';
 import { compareToBaseline, tally, readBaseline } from './wait-baseline.ts';
 import { WaitSource, waitComments, type ParsedComment } from './wait-source.ts';
@@ -91,12 +91,22 @@ export const baselinePath = resolve(import.meta.dirname, '../../../web/src/test/
 /** Returns `false` to leave a node's children unvisited. */
 export type Visit = (node: Node, ancestors: readonly Node[]) => void | false
 
+/** Child nodes in source order, walked in place so no node allocates a child list. Offsets, `extra`, `loc` and comments are not children. */
 export function walk(node: Node, ancestors: Node[], visit: Visit): void {
   if (visit(node, ancestors) === false) return
   ancestors.push(node)
-  for (const child of plainChildren(node)) walk(child, ancestors, visit)
+  const fields = node as unknown as Record<string, unknown>
+  for (const key of Object.keys(node)) {
+    if (key === 'start' || key === 'end' || key === 'extra' || key === 'loc' || key.endsWith('Comments')) continue
+    const value = fields[key]
+    if (Array.isArray(value)) {
+      for (const item of value) if (isSyntax(item)) walk(item, ancestors, visit)
+    } else if (isSyntax(value)) walk(value, ancestors, visit)
+  }
   ancestors.pop()
 }
+
+const isSyntax = (value: unknown): value is Node => typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string'
 
 export const isFunction = (node: Node) =>
   node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' || node.type === 'ArrowFunctionExpression' ||

@@ -53,10 +53,17 @@ export function child(node: EsNode, field: string): EsNode | undefined {
   return isNode(value) ? value : undefined;
 }
 
-/** The child nodes in the list `field`. Holes, such as `[, b] = list`, are left out. */
-export function children(node: EsNode, field: string): EsNode[] {
+const NO_NODES: readonly EsNode[] = Object.freeze([]);
+
+/**
+ * The child nodes in the list `field`. Holes, such as `[, b] = list`, are left out. A list with no
+ * hole is returned as it is, so callers must not change the result.
+ */
+export function children(node: EsNode, field: string): readonly EsNode[] {
   const value = node[field];
-  return Array.isArray(value) ? value.filter(isNode) : [];
+  if (!Array.isArray(value)) return NO_NODES;
+  for (const item of value) if (!isNode(item)) return value.filter(isNode);
+  return value as EsNode[];
 }
 
 /** The name of an identifier or a private name, or `undefined` for any other node. */
@@ -84,6 +91,13 @@ export interface AstRuleContext extends Pick<RuleContext, 'cwd' | 'filename'> {
   report(descriptor: { node: EsNode; message: string; loc?: { start: Position; end: Position } }): void;
 }
 
+let lastFile = { cwd: '', filename: '', path: '' };
+/** Oxlint creates every rule for one file before the next, so they share one relative path. */
+function fileOf(cwd: string, filename: string): string {
+  if (lastFile.cwd !== cwd || lastFile.filename !== filename) lastFile = { cwd, filename, path: repoPath(cwd, filename) };
+  return lastFile.path;
+}
+
 /**
  * The rule as oxlint runs it. Outside the rule's scope it returns no visitor, so oxlint calls
  * nothing of it for that file. Paths are relative to the directory oxlint runs in.
@@ -92,7 +106,7 @@ export function oxlintAstRule(rule: AstRule) {
   return {
     meta: { type: 'problem' as const, docs: { description: rule.description } },
     create(context: AstRuleContext): Visitors {
-      const file = repoPath(context.cwd, context.filename);
+      const file = fileOf(context.cwd, context.filename);
       if (!rule.applies(file)) return {};
       return rule.create((node, message, position) => context.report({ node, message,
         ...(position ? { loc: { start: position, end: position } } : {}),

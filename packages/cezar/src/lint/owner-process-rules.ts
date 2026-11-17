@@ -9,9 +9,20 @@ const fileLaunchers = /^(execFile|execFileSync|spawn|spawnSync)$/;
 const shellLaunchers = /^(exec|execSync)$/;
 const isPromisify = (node: EsNode | undefined) => node?.type === 'CallExpression' && nameOf(child(node, 'callee')) === 'promisify';
 
-function hasRunPath(node: EsNode): boolean {
-  let found = false;
-  walk(node, part => { if (/(^|[/\\])runs\.json$/.test(fragment(part) ?? '')) found = true; });
+const RUN_PATH = /(^|[/\\])runs\.json$/;
+/** Whether a fragment under `node` names runs.json. Each subtree's answer is kept, so nested declarations walk it once. */
+function hasRunPath(node: EsNode, known: Map<EsNode, boolean>): boolean {
+  let found = known.get(node);
+  if (found !== undefined) return found;
+  found = RUN_PATH.test(fragment(node) ?? '');
+  for (const key of Object.keys(node)) {
+    if (found) break;
+    if (key === 'parent') continue;
+    const single = child(node, key);
+    if (single) found = hasRunPath(single, known);
+    else found = children(node, key).some(item => hasRunPath(item, known));
+  }
+  known.set(node, found);
   return found;
 }
 function hasHandoff(node: EsNode): boolean {
@@ -40,46 +51,58 @@ export const detachedSpawn = ownerRule(OWNER_POLICIES['detached-spawn-outside-he
   },
 }));
 
-/** Collect local path bindings once before visiting calls, including forward declarations. */
+/** Decide each seed write once the file's path bindings are known, forward declarations included. */
 export const e2eRawRunSeed = ownerRule(OWNER_POLICIES['e2e-raw-run-seed']!, report => {
-  const paths = new Set<string>();
+  const declarations: EsNode[] = [];
+  const writes: Array<{ node: EsNode; first: EsNode }> = [];
   return {
-    Program(node) {
-      walk(node, part => {
-        if (part.type !== 'VariableDeclarator') return;
-        const name = nameOf(child(part, 'id'));
-        const value = child(part, 'init');
-        if (name && value && hasRunPath(value)) paths.add(name);
-      });
-    },
+    VariableDeclarator(node) { declarations.push(node); },
     CallExpression(node) {
       if (!seedWrites.test(callee(node) ?? '')) return;
       const first = children(node, 'arguments')[0];
-      if (first && (hasRunPath(first) || paths.has(nameOf(first) ?? ''))) report(node);
+      if (first) writes.push({ node, first });
+    },
+    'Program:exit'() {
+      if (writes.length === 0) return;
+      const known = new Map<EsNode, boolean>();
+      const paths = new Set<string>();
+      for (const part of declarations) {
+        const name = nameOf(child(part, 'id'));
+        const value = child(part, 'init');
+        if (name && value && hasRunPath(value, known)) paths.add(name);
+      }
+      for (const { node, first } of writes) if (hasRunPath(first, known) || paths.has(nameOf(first) ?? '')) report(node);
     },
   };
 });
 
-/** File-level promisify bindings scope the cez/exec* owner rules to one program. */
+/**
+ * File-level promisify bindings scope the cez/exec* owner rules to one program. A binding may
+ * follow its call, so a `'git'` call through a plain name waits for the whole file's bindings.
+ */
 export const gitSpawn = ownerRule(OWNER_POLICIES['git-spawn-outside-helper']!, report => {
   const launchers = new Set<string>();
+  const calls: Array<{ node: EsNode; name?: string }> = [];
   return {
-    Program(node) {
-      walk(node, part => {
-        if (part.type !== 'VariableDeclarator' || !isPromisify(child(part, 'init'))) return;
-        const name = nameOf(child(part, 'id'));
-        if (name) launchers.add(name);
-      });
+    VariableDeclarator(part) {
+      if (!isPromisify(child(part, 'init'))) return;
+      const name = nameOf(child(part, 'id'));
+      if (name) launchers.add(name);
     },
     CallExpression(node) {
       const fn = child(node, 'callee');
       const name = callee(node) ?? '';
       const first = children(node, 'arguments')[0];
-      if ((fileLaunchers.test(name) || isPromisify(fn) || launchers.has(nameOf(fn) ?? '')) && stringOf(first) === 'git') report(node);
-      else if (shellLaunchers.test(name)) {
+      if (stringOf(first) === 'git') {
+        if (fileLaunchers.test(name) || isPromisify(fn)) calls.push({ node });
+        else calls.push({ node, name: nameOf(fn) ?? '' });
+      } else if (shellLaunchers.test(name)) {
         const prefix = first?.type === 'TemplateLiteral' ? fragment(children(first, 'quasis')[0]!) : stringOf(first);
-        if (/^git\s/.test(prefix ?? '')) report(node);
+        if (/^git\s/.test(prefix ?? '')) calls.push({ node });
       }
+    },
+    'Program:exit'() {
+      for (const { node, name } of calls) if (name === undefined || launchers.has(name)) report(node);
     },
   };
 });
