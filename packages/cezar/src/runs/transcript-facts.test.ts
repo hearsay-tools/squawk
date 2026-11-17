@@ -59,6 +59,7 @@ describe('transcript facts fold', () => {
     const first = ev('ask.requested', { requestId: 'a', context: 'old', questions });
     foldEvent(facts, first);
     foldEvent(facts, ev('worker-question-routed', { askSeq: first.seq, messageId: 'm' }));
+    foldEvent(facts, ev('worker-question-fallback', { askSeq: first.seq, reason: 'x' }));
     const second = ev('ask.requested', { requestId: 'b', questions });
     expect(foldEvent(facts, second)).toBe(true);
     // The new ask starts clean: no routing and no context from the one it replaced.
@@ -77,17 +78,6 @@ describe('transcript facts fold', () => {
     expect(facts.pendingAsk?.routedMessageId).toBe('m');
     expect(foldEvent(facts, ev('worker-question-fallback', { askSeq: asked.seq, reason: 'x' }))).toBe(true);
     expect(facts.pendingAsk?.fallback).toBe(true);
-  });
-
-  it('a new ask drops the previous routing', () => {
-    const facts = emptyFacts();
-    const first = ask('one');
-    foldEvent(facts, first);
-    foldEvent(facts, ev('worker-question-routed', { askSeq: first.seq, messageId: 'm' }));
-    foldEvent(facts, ev('worker-question-fallback', { askSeq: first.seq, reason: 'x' }));
-    const second = ask('two');
-    foldEvent(facts, second);
-    expect(facts.pendingAsk).toEqual({ seq: second.seq, requestId: 'two', questions });
   });
 
   it('tracks a prose human gate like pendingHumanAskSeq', () => {

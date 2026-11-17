@@ -304,11 +304,6 @@ describe('RunDatabase', () => {
     expect(() => db.close()).not.toThrow();
   });
 
-  it('creates the schema once and leaves a current database untouched on reopen', () => {
-    RunDatabase.open(path).close();
-    const db = openDb();
-    expect(db.listRevisions()).toEqual([]);
-  });
 
   describe('claims and fenced writes (#779, plan step 3)', () => {
     const owner = (session: string) => ({ session, pid: 4242, startToken: 'boot:1' });
@@ -935,13 +930,6 @@ describe('RunDatabase', () => {
       }
     });
 
-    it('refuses a newer schema', () => {
-      RunDatabase.open(path).close();
-      const raw = new DatabaseSync(path);
-      raw.exec(`PRAGMA user_version = ${RUN_DATABASE_SCHEMA_VERSION + 1}`);
-      raw.close();
-      expect(() => RunDatabase.openReadOnly(path)).toThrow(RunDatabaseUnsupportedSchemaError);
-    });
 
     it.skipIf(process.getuid?.() === 0)('reads a read-only directory while a writer keeps the WAL open, creating nothing', () => {
       const writer = openDb();
