@@ -34,7 +34,7 @@ describe('RunManager continuation membership', () => {
     expect(fixture.manager.continueRun(record.id, { text: 'plain markerless continuation' })).toEqual({ ok: true });
     await waitFor(record.id, candidate => candidate?.status === 'waiting');
     await idleClose(clock, record.id, fixture.manager, fixture.store, predicate => waitFor(record.id, predicate));
-    fixture.store.getRun(record.id)!.steps.find(step => step.id === 'continue-1')!.synthetic = undefined;
+    fixture.store.updateStep(record.id, 'continue-1', { synthetic: undefined });
     fixture.store.updateRun(record.id, { continuationMessage: undefined, workflowDef: SINGLE_STEP });
     fixture.store.flush();
     fixture.manager.dispose();

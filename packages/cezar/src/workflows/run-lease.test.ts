@@ -189,6 +189,11 @@ describe('RunManager repository-root lease scheduling', () => {
       );
       expect(store.getRun(holder.id)?.status).toBe('done');
       expect(store.getRun(blocked.id)?.status).toBe('done');
+      for (const id of [holder.id, blocked.id]) {
+        const notes = store.readEvents(id).filter(event => event.type === 'note');
+        expect(notes.some(event => String(event.message).includes('worktree off'))).toBe(true);
+        expect(notes.some(event => String(event.message).includes('exclusive access'))).toBe(true);
+      }
     },
     TEST_TIMEOUT_MS,
   );
