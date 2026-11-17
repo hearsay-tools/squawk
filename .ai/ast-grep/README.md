@@ -73,7 +73,8 @@ it; editing that line makes the match new. That is deliberate: edit it by moving
 - `$$$` after a comma does not match zero arguments. Write the one-argument pattern and the
   many-argument pattern.
 - Relational rules (`has`, `inside`) share metavariables with their `all` siblings. That is how
-  `server-declared-validator-schema.yml` ties a call's argument to a declaration in the same file.
+  `cez/server-declared-validator-schema` ties a call's argument to a declaration in the same file.
+  Its replacement is `cez/server-declared-validator-schema`, with a Program binding pass.
 - Start from the rare node. The same rule started from every `const` in `server.ts` and searched
   the file for a call: 11 s. Started from the 106 validator calls: 1 s.
 - Every branch of a rule needs a `kind`, a `pattern` or an `any` of those, or the rule fails to load.

@@ -24,6 +24,30 @@ ruleCases(AST_RULES.find(rule => rule.name === "agent-session-send-outside-hando
   ]
 });
 
+ruleCases(AST_RULES.find(rule => rule.name === "ask-requested-read-outside-projection")!, {
+  "file": "packages/cezar/src/fixture.ts",
+  "valid": [
+    "store.appendEvent(runId, { type: 'ask.requested', requestId, questions })",
+    "sink.handle({ type: 'ask.requested', requestId, questions: [] })",
+    "const reducers = new Map([['ask.requested', reduceAskRequested]])",
+    "const kept = ['ask.requested', 'human-input-delivered']",
+    "const turn = events.find((event) => event.type === 'turn.completed')",
+    "if (event.type === 'ask.requested.v2') return",
+    "const note = type === 'my ask.requested'",
+    "const ask = pendingAskOf(events); const questions = ask?.questions",
+    "const payload = askPayloadOf(event)"
+  ],
+  "invalid": [
+    "const ask = [...events].reverse().find((event) => event.type === 'ask.requested')",
+    "const ask = events.find((event) => event.type === \"ask.requested\")",
+    "const ask = events.find(e => e.type == 'ask.requested')",
+    "const other = events.filter((event) => event.type !== 'ask.requested')",
+    "if (event.type === 'ask.requested') { use(event.questions) }",
+    "if ('ask.requested' === event.type) return event.context",
+    "switch (event.type) { case 'ask.requested': return event.questions }"
+  ]
+});
+
 ruleCases(AST_RULES.find(rule => rule.name === "detached-spawn-outside-helper")!, {
   "file": "packages/cezar/src/fixture.ts",
   "valid": [
@@ -125,6 +149,22 @@ ruleCases(AST_RULES.find(rule => rule.name === "handoff-written-outside-handoff-
     "writeFileSync(handoffFile, text)",
     "await fs.promises.writeFile(process.env.CEZ_HANDOFF_FILE!, text)",
     "renameSync(tmp, this.handoffPath(id))"
+  ]
+});
+
+ruleCases(AST_RULES.find(rule => rule.name === "json-valid-outside-guard")!, {
+  "file": "packages/cezar/src/fixture.ts",
+  "valid": [
+    "const where = guardedJsonSql(\"json_extract(summary, '$.pinned') IS 1\", 0)",
+    "const sql = `SELECT id FROM runs WHERE ${guardedJsonSql(rule, 0, ['data'])}`",
+    "const where = 'archived = 0 AND live = 0'",
+    "const note = 'is json_valid_ish'"
+  ],
+  "invalid": [
+    "const where = `CASE WHEN json_valid(summary) THEN (${sql}) ELSE 1 END`",
+    "const where = \"CASE WHEN json_valid(data) THEN json_extract(data, '$.x') ELSE 0 END\"",
+    "const where = 'json_valid (s.summary) AND json_valid(s.data)'",
+    "db.prepare(`SELECT id FROM runs WHERE json_valid(summary)`)"
   ]
 });
 

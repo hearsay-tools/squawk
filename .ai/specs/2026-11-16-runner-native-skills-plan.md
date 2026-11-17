@@ -305,9 +305,9 @@ runner, and an enable without the explicit argument is refused.
   expansion in `workflows/run/prompts.ts`, `automations/builtin-skill.ts`, the `skillsRepos`
   schema in `config.ts`, `disabledTeamSkills` in `packages/contract/src/workspace.ts`,
   `packages/contract/src/skill-sources.ts` and `team-skill-ref.ts`, their api-client mirrors,
-  the `interactive` hint, `components/skill-empty-hint.tsx` and the two ast-grep rules
-  `skills-read-outside-enabled-skills` (with its baseline file) and
-  `skills-write-outside-load-run-skills`. The generated rule
+  the `interactive` hint, `components/skill-empty-hint.tsx` and the two oxlint AST rules
+  `cez/skills-read-outside-enabled-skills` and
+  `cez/skills-write-outside-load-run-skills`. The generated rule
   `active-run-skills-write-outside-owner` stays: slice 3 changes what the `ActiveRun` skills
   group holds, and regenerates the rule with `scripts/active-run-owner-rules.mjs`.
 - Move first, then delete: `agent-config/seed.ts` uses `excludeFromGit` and
