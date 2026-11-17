@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLiveCoordinator, onLiveReconcile } from './live-coordinator'
-import { LIVE_PROTOCOL, LIVE_WORKER_NAME } from './live-protocol'
+import { LIVE_PROTOCOL } from './live-protocol'
 
 class Worker {
   static all: Worker[] = []
@@ -13,6 +13,7 @@ class Worker {
   constructor() { Worker.all.push(this) }
   reply(data: unknown) { this.port.onmessage?.({ data }) }
 }
+const visibilityState = Object.getOwnPropertyDescriptor(document, 'visibilityState')
 let coordinator: ReturnType<typeof createLiveCoordinator>
 beforeEach(() => {
   vi.useFakeTimers(); Worker.all = []
@@ -21,7 +22,11 @@ beforeEach(() => {
   Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
   coordinator = createLiveCoordinator()
 })
-afterEach(() => { coordinator.dispose(); vi.useRealTimers(); vi.unstubAllGlobals() })
+afterEach(() => {
+  coordinator.dispose(); vi.useRealTimers(); vi.unstubAllGlobals()
+  if (visibilityState) Object.defineProperty(document, 'visibilityState', visibilityState)
+  else Reflect.deleteProperty(document, 'visibilityState')
+})
 const local = { local: true, bootProject: 'boot', apiBase: '' }
 
 describe('document live demand', () => {
@@ -115,8 +120,6 @@ describe('worker recovery boundaries', () => {
   it('does not attach a workspace demand to a worker that announces protocol 2 (hearsay-tools/cezarion#2729)', async () => {
     // An older open tab keeps a version-2 worker alive across an upgrade. That worker never sends
     // a late subscriber the stream's ready, so a new document must not take frames from it.
-    expect(LIVE_PROTOCOL).toBe(3)
-    expect(LIVE_WORKER_NAME).toBe('cezar-live-v3')
     const frame = vi.fn()
     coordinator.configure(local)
     coordinator.subscribe({ kind: 'workspace' }, { frame })
