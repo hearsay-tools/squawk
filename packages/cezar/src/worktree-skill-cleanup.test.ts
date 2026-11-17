@@ -97,6 +97,35 @@ it.each(['file', 'symlink', 'directory'])('keeps a changed %s ignored after remo
   expect(existsSync(manifest)).toBe(false);
 });
 
+it.each([
+  ['plain', 'plain-sibling'],
+  ['star*', 'star-match'],
+  ['question?', 'questionx'],
+  ['[a]', 'a'],
+  ['trailing  ', 'trailing'],
+  ['#leading', 'leading'],
+  ['!leading', 'leading'],
+  ['internal space', 'internalspace'],
+])('excludes only the literal kept path %j and not sibling %j', async (name, sibling) => {
+  const { paths, manifest } = await seedOldSkills(worktree);
+  const parent = dirname(paths[0]!);
+  const path = `${parent}/${name}`;
+  const siblingPath = `${parent}/${sibling}`;
+  renameSync(join(worktree, paths[0]!), join(worktree, path));
+  writeFileSync(join(worktree, path, 'SKILL.md'), 'user edit\n');
+  mkdirSync(join(worktree, siblingPath));
+  writeFileSync(join(worktree, siblingPath, 'SKILL.md'), 'user sibling\n');
+  const saved = JSON.parse(readFileSync(manifest, 'utf8'));
+  saved.entries.find((entry: { path: string }) => entry.path === paths[0]).path = path;
+  writeFileSync(manifest, JSON.stringify(saved));
+  await removeProvisionedSkills(worktree);
+  expect(existsSync(join(worktree, parent, '.gitignore'))).toBe(false);
+  expect(existsSync(manifest)).toBe(false);
+  expect(execFileSync('git', ['check-ignore', '-z', '--stdin'], {
+    cwd: worktree, encoding: 'utf8', input: `${path}\0${siblingPath}\0`,
+  })).toBe(`${path}\0`);
+});
+
 it.each([false, true])('retains ignore files and records if exclusion fails (note write fails: %s)', async noteFails => {
   const { paths, manifest } = await seedOldSkills(worktree);
   const saved = readFileSync(manifest, 'utf8');
