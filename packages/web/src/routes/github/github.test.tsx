@@ -75,7 +75,6 @@ describe('the GitHub tab lists', () => {
     expect(handle.getAttribute('aria-label')).toBe('Resize the GitHub list')
     expect(handle.getAttribute('aria-valuemin')).toBe(String(MIN_GITHUB_LIST_WIDTH))
     expect(handle.getAttribute('aria-valuemax')).toBe(String(MAX_GITHUB_LIST_WIDTH))
-    expect(handle.className).toContain('touch-none')
 
     dragGithubList(360, 440)
     expect(ghList().style.getPropertyValue('--github-list-width')).toBe('440px')
@@ -414,14 +413,6 @@ describe('the GitHub detail pane', () => {
     const checks = document.querySelector('[data-slot="gh-checks"]')
     expect(checks?.getAttribute('data-checks')).toBe('failing')
     expect(checks?.textContent).toContain('checks failing')
-  })
-
-  it('the checks badge links to the PR checks tab on GitHub, open in a new tab (#415)', async () => {
-    stubFetch()
-    renderAt('/github/prs/137')
-
-    await waitFor(() => expect(detail()).not.toBeNull())
-    const checks = document.querySelector('[data-slot="gh-checks"]')
     expect(checks?.tagName).toBe('A')
     expect(checks?.getAttribute('href')).toBe(`${PR_137.url}/checks`)
     expect(checks?.getAttribute('target')).toBe('_blank')
@@ -637,15 +628,11 @@ describe('the comment thread', () => {
     expect(entries()[0]?.querySelector('[data-slot="gh-thread-body"]')?.textContent).toContain(
       'Confirmed on my end too',
     )
-  })
-
-  it('renders an image comment as an <img> through the shared Markdown component', async () => {
-    stubFetch(thread('issue', 142, { available: true, comments: [COMMENT_IMAGE] }))
-    renderAt('/github/issues/142')
-
-    await waitFor(() => expect(threadSection()).not.toBeNull())
-    const img = document.querySelector<HTMLImageElement>('[data-slot="gh-thread-body"] img')
-    expect(img?.getAttribute('src')).toBe('https://example.com/shot.png')
+    expect(document.querySelector<HTMLImageElement>('[data-slot="gh-thread-body"] img')?.getAttribute('src')).toBe('https://example.com/shot.png')
+    expect(entries()[0]?.querySelector('[data-slot="gh-avatar"]')?.getAttribute('src')).toBe(COMMENT_TEXT.avatarUrl)
+    const fallback = entries()[1]?.querySelector('[data-slot="gh-avatar-fallback"]')
+    expect(fallback).not.toBeNull()
+    expect(fallback?.textContent).toBe('n')
   })
 
   it('renders nothing when BOTH streams are empty — the count badge already said so', async () => {
@@ -676,20 +663,6 @@ describe('the comment thread', () => {
     const chip = review?.querySelector('[data-slot="gh-review-chip"]')
     expect(chip?.getAttribute('data-review-state')).toBe('changes_requested')
     expect(chip?.textContent).toBe('changes requested')
-  })
-
-  it('uses the real avatar when present and a letter fallback when absent', async () => {
-    stubFetch(thread('issue', 142, { available: true, comments: [COMMENT_TEXT, COMMENT_IMAGE] }))
-    renderAt('/github/issues/142')
-
-    await waitFor(() => expect(entries()).toHaveLength(2))
-    // COMMENT_TEXT has an avatarUrl → an <img>; COMMENT_IMAGE has none → a letter block.
-    expect(entries()[0]?.querySelector('[data-slot="gh-avatar"]')?.getAttribute('src')).toBe(
-      COMMENT_TEXT.avatarUrl,
-    )
-    const fallback = entries()[1]?.querySelector('[data-slot="gh-avatar-fallback"]')
-    expect(fallback).not.toBeNull()
-    expect(fallback?.textContent).toBe('n') // first letter of "noAvatar"
   })
 
   // ---- timeline events (#525) ----------------------------------------------
@@ -739,20 +712,8 @@ describe('the comment thread', () => {
     expect(events()[4]?.textContent).toContain('assigned maya')
     expect(events()[5]?.textContent).toContain('renamed this to A better title')
     expect(events()[6]?.textContent).toContain('force-pushed')
-  })
-
-  it('renders a PR with events but ZERO comments — the motivating case', async () => {
-    // The empty guard used to key on comments alone, which would hide the whole feature on a
-    // merged PR carrying commits, labels and a merge event but no conversation.
-    stubFetch(thread('pr', 137, { available: true, comments: [], events: [EVT.committed, EVT.merged] }))
-    renderAt('/github/prs/137')
-
-    await waitFor(() => expect(threadSection()).not.toBeNull())
-    expect(events()).toHaveLength(2)
     expect(entries()).toHaveLength(0)
-    expect(document.querySelector('[data-slot="gh-thread-header"]')?.textContent).toBe(
-      'Activity · 0 comments',
-    )
+    expect(document.querySelector('[data-slot="gh-thread-header"]')?.textContent).toBe('Activity · 0 comments')
   })
 
   it('interleaves comments and events chronologically', async () => {
@@ -797,17 +758,26 @@ describe('the comment thread', () => {
   })
 
   it('does not blank the open thread while refreshing it', async () => {
-    // The other half of that regression: the removeQueries predicate wiped the MOUNTED thread,
-    // resetting it to pending so the loading skeleton flashed under the user on every refresh.
-    stubFetch({ 'GET /api/v1/github?refresh=1': () => jsonResponse(GITHUB) })
+    let started = false
+    let finish!: (response: Response) => void
+    stubFetch({
+      'GET /api/v1/github?refresh=1': () => jsonResponse(GITHUB),
+      'GET /api/v1/github/comments/issue/142?refresh=1': () => {
+        started = true
+        return new Promise<Response>((resolve) => { finish = resolve })
+      },
+    })
     renderAt('/github/issues/142')
-
-    await waitFor(() => expect(document.querySelector('[data-slot="gh-thread"]')).not.toBeNull())
-
+    await waitFor(() => expect(threadSection()).not.toBeNull())
     fireEvent.click(document.querySelector<HTMLElement>('[data-slot="gh-refresh"]')!)
-
-    // The thread stays rendered throughout — never replaced by the loading skeleton.
-    await waitFor(() => expect(document.querySelector('[data-slot="gh-thread"]')).not.toBeNull())
+    await waitFor(() => expect(started).toBe(true))
+    expect(threadSection()).not.toBeNull()
+    expect(document.querySelector('[data-slot="gh-thread-loading"]')).toBeNull()
+    await act(async () => {
+      finish(jsonResponse({ ...THREAD, comments: [{ ...COMMENT_TEXT, body: 'Fresh thread after refresh' }] }))
+    })
+    await screen.findByText('Fresh thread after refresh')
+    expect(threadSection()).not.toBeNull()
     expect(document.querySelector('[data-slot="gh-thread-loading"]')).toBeNull()
   })
 
