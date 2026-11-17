@@ -259,3 +259,15 @@ describe('product-env-read keeps its report spans', () => ruleCases(productEnvRe
     { code: "x; env.CEZ_X += 'a';", errors: [spanError("1:3-1:20", /^dot CEZ_X:/)] },
   ],
 }));
+
+// Inside a method, the rule once read the method's function before its decorators and key; oxlint
+// visits them first. Numbered names and aliases keep the old order (hearsay-tools/squawk#3806).
+describe('product-env-read keeps the old order inside methods', () => ruleCases(productEnvRead, {
+  file: 'packages/cezar/src/env-ast-fixture.ts',
+  valid: [],
+  invalid: [
+    { code: "class K { [(() => { const t = s; const { CEZ_X } = t; })()]() { const s = process.env; } }", errors: [spanError("1:41-1:46", /^destructure CEZ_X:/)] },
+    { code: "class K { @d(() => { const t = s; return t[k]; }) m() { const s = process.env; } }", errors: [spanError("1:41-1:45", /^computed \*:/)] },
+    { code: "const o = { [(() => { const t = s; return t.HSQ_Y + t[k]; })()]() { const s = globalThis.process.env; } };", errors: [spanError("1:42-1:56", /^dot HSQ_Y:/), spanError("1:52-1:56", /^computed \*:/)] },
+  ],
+}));

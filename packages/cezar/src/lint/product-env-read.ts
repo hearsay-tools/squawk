@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { property, unwrapped } from './home-boundary.ts';
 import { repoRoot } from './source-rule.ts';
 import { child, children, stringOf, type AstRule, type EsNode, type Visitors } from './ast-rule.ts';
-import { eachChild, field, item, reportNode, scanSource } from './ast-tree.ts';
+import { eachChild, field, item, reportNode, scanSource, viewOrder } from './ast-tree.ts';
 import { productEnvSuffix, scannedEnvFile } from './undocumented-env-name.ts';
 
 export const productEnvBaselineFile = 'packages/cezar/src/lint/product-env-read.baseline.json';
@@ -247,18 +247,14 @@ function productEnvHelpers(program: EsNode): Set<string> {
  * and decided at the end: first the env aliases, which need every type alias, then the reads.
  */
 function envReadVisitors(source: string): { visitors: Visitors; reads(program: EsNode): Site[] } {
-  const types: TypeAliases = new Map();
   const constants = new Map<string, EsNode>();
   const writes = new Set<EsNode>();
   let helpers = new Set<string>();
-  const sites: (Site & { order: number })[] = [];
-  const dynamicCalls: (Site & { order: number })[] = [];
-  // Binding nodes and computed reads whose answer depends on facts later in the file, in walk order.
-  const deferred: { node: EsNode; order: number }[] = [];
-  let order = 0;
+  // Facts and reads in the rule's old walk order: type aliases, binding nodes and computed reads
+  // whose answer depends on facts later in the file, member reads and dynamic helper calls.
+  const events = viewOrder<{ kind: 'type' | 'binding' | 'computed'; node: EsNode } | { kind: 'read' | 'dynamic'; site: Site }>();
   const binding = (node: EsNode) => {
-    order++;
-    if (bindingMatters(node)) deferred.push({ node, order });
+    if (bindingMatters(node)) events.add({ kind: 'binding', node });
   };
   const write = (node: EsNode) => {
     if (node.type === 'AssignmentExpression' ? node.operator === '=' : node.type !== 'UnaryExpression' || node.operator === 'delete') {
@@ -267,7 +263,7 @@ function envReadVisitors(source: string): { visitors: Visitors; reads(program: E
   };
   const visitors: Visitors = {
     Program(node) { helpers = productEnvHelpers(node); },
-    TSTypeAliasDeclaration(node) { types.set(field(node, 'id')!.name as string, node); },
+    TSTypeAliasDeclaration(node) { events.add({ kind: 'type', node }); },
     VariableDeclaration(node) {
       if (node.kind !== 'const') return;
       for (const declaration of children(node, 'declarations')) {
@@ -283,41 +279,47 @@ function envReadVisitors(source: string): { visitors: Visitors; reads(program: E
     ForInStatement(node) { write(node); binding(node); },
     UnaryExpression: write,
     MemberExpression(node) {
-      order++;
       if (writes.has(node)) return;
       const name = property(node);
-      if (name === undefined && node.computed) deferred.push({ node, order });
-      else if (productName(name)) sites.push(memberSite(node, name, source, order));
+      if (name === undefined && node.computed) events.add({ kind: 'computed', node });
+      else if (productName(name)) events.add({ kind: 'read', site: memberSite(node, name, source) });
     },
     CallExpression(node) {
-      order++;
       if (!helpers.has(property(unwrapped(field(node, 'callee')!)) ?? '')) return;
-      if (productEnvSuffix(item(node, 'arguments', 0)) === undefined) dynamicCalls.push({ form: 'helper-dynamic', name: '*', offset: node.start as number, node, order });
+      if (productEnvSuffix(item(node, 'arguments', 0)) === undefined) events.add({ kind: 'dynamic', site: { form: 'helper-dynamic', name: '*', offset: node.start as number, node } });
     },
   };
   for (const type of FUNCTION_TYPES) visitors[type] = binding;
   return {
-    visitors,
+    visitors: events.wrap(visitors),
     reads(program) {
+      const ordered = events.items();
+      const types: TypeAliases = new Map();
       const aliases: EnvBindings = new Map();
-      for (const { node } of deferred) if (node.type !== 'MemberExpression') bindingReads(node, aliases, types, true);
-      const staticNames = deferred.some(({ node }) => node.type === 'MemberExpression' && namesConstant(node, constants, aliases))
-        ? staticEnvNames(constants, declarationCounts(program, new Set(constants.keys()))) : new Map<string, string>();
-      for (const { node, order: at } of deferred) {
-        if (node.type !== 'MemberExpression') { for (const site of bindingReads(node, aliases, types, false)) sites.push({ ...site, order: at }); continue; }
-        const key = field(node, 'property')!;
-        const name = key.type === 'Identifier' ? staticNames.get(key.name as string) : undefined;
-        if (productName(name) || (name === undefined && reference(field(node, 'object'), aliases) === 'env')) sites.push(memberSite(node, name, source, at));
+      for (const event of ordered) {
+        if (event.kind === 'type') types.set(field(event.node, 'id')!.name as string, event.node);
       }
-      const ordered = sites.sort((a, b) => a.order - b.order);
-      return [...ordered, ...dynamicCalls.sort((a, b) => a.order - b.order)].sort((a, b) => a.offset - b.offset);
+      for (const event of ordered) if (event.kind === 'binding') bindingReads(event.node, aliases, types, true);
+      const staticNames = ordered.some(event => event.kind === 'computed' && namesConstant(event.node, constants, aliases))
+        ? staticEnvNames(constants, declarationCounts(program, new Set(constants.keys()))) : new Map<string, string>();
+      const sites: Site[] = [];
+      for (const event of ordered) {
+        if (event.kind === 'read') sites.push(event.site);
+        if (event.kind === 'binding') sites.push(...bindingReads(event.node, aliases, types, false));
+        if (event.kind !== 'computed') continue;
+        const key = field(event.node, 'property')!;
+        const name = key.type === 'Identifier' ? staticNames.get(key.name as string) : undefined;
+        if (productName(name) || (name === undefined && reference(field(event.node, 'object'), aliases) === 'env')) sites.push(memberSite(event.node, name, source));
+      }
+      for (const event of ordered) if (event.kind === 'dynamic') sites.push(event.site);
+      return sites.sort((a, b) => a.offset - b.offset);
     },
   };
 }
 
-function memberSite(node: EsNode, name: string | undefined, source: string, order: number): Site & { order: number } {
+function memberSite(node: EsNode, name: string | undefined, source: string): Site {
   const offset = node.start as number;
-  return { form: node.computed ? name === undefined ? 'computed' : 'bracket' : 'dot', name: name ?? '*', offset, expression: source.slice(offset, node.end as number), node, order };
+  return { form: node.computed ? name === undefined ? 'computed' : 'bracket' : 'dot', name: name ?? '*', offset, expression: source.slice(offset, node.end as number), node };
 }
 
 /** Whether a computed read's key is a `const` name whose literal key could change its finding. */
