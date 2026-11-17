@@ -2,10 +2,27 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DESIGN_RULES, guardianFindings, stripComments } from './design-guardian.ts';
+import { DESIGN_RULES, designGuardian, guardianFindings as originalGuardianFindings, stripComments } from './design-guardian.ts';
 import { guardianCssFiles, guardianCssProblems, statusStyleProblems } from './design-guardian-css.ts';
 
+import { checkRule } from './ast-rule.testkit.ts';
+
 import { DESIGN_SAMPLES } from './design-guardian.testkit.ts';
+
+/** CSS keeps its runner; source fixtures also exercise oxlint nodes. */
+function guardianFindings(file: string, source: string) {
+  const expected = originalGuardianFindings(file, source);
+  if (!file.endsWith('.css')) {
+    let code = source;
+    // Allowed-path fixtures historically supplied a token rather than a JS statement.
+    if (Object.values(DESIGN_SAMPLES).includes(source)) code = JSON.stringify(source);
+    if (source === 'CEZ_DRY_RUN CEZ_HOME') code = 'const pair = { CEZ_DRY_RUN, CEZ_HOME };';
+    const findings = checkRule(designGuardian, file, code);
+    expect(findings).toHaveLength(expected.length);
+    for (const [index, finding] of findings.entries()) expect(finding.message).toContain(expected[index]!.message.split(' — ')[0]!);
+  }
+  return expected;
+}
 
 const sampleFile = (name: string) => name === 'fixture-serve-must-pin-cez-home' ? 'packages/web/e2e/sample.e2e.ts' : 'packages/web/src/sample.tsx';
 
@@ -14,6 +31,15 @@ describe('design guardian scanner', () => {
     const findings = guardianFindings(sampleFile(name), `// ignored\nconst value = "${token}";`);
     expect(findings).toEqual([expect.objectContaining({ line: 2, message: expect.stringContaining(`${name} —`) })]);
     expect(findings[0]?.message).toContain(name === 'no-dark-variant' ? 'dark:' : token);
+  });
+
+  it('reports tokens on their real lines inside multiline literals', () => {
+    const source = 'const classes = `safe\ntext-pending\ntext-pending`;';
+    const findings = checkRule(designGuardian, 'packages/web/src/sample.tsx', source);
+    expect(findings.map(finding => finding.line)).toEqual([2, 3]);
+    expect(findings.every(finding => finding.message.startsWith('no-amber-text —'))).toBe(true);
+    const fixture = checkRule(designGuardian, 'packages/web/e2e/sample.e2e.ts', 'const env = `safe\nCEZ_DRY_RUN`;');
+    expect(fixture.map(finding => finding.line)).toEqual([2]);
   });
 
   it('covers every original rule', () => {
