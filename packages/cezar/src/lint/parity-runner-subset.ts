@@ -1,5 +1,5 @@
 import { parse } from '@babel/parser';
-import { visit } from './home-boundary.ts';
+import { visit } from './babel-walk.ts';
 import { declaredRunnerIds, literalText, parserPlugins } from './runner-id-branch.ts';
 import { children, type AstRule } from './ast-rule.ts';
 import { literal } from './ast-syntax.ts';
