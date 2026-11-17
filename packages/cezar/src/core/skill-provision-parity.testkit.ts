@@ -56,7 +56,10 @@ export function describeSkillProvisionParity(part: ParityPart, collect?: ParityC
           const result = await driveRun(runner, { prompt: 'native step arguments' }, run => run?.status === 'waiting' || run?.status === 'failed', 30_000, undefined, {
             workflowDef: plannedWorkflow(skillTaskSteps('probe-project')),
             env: { CEZ_MOCK_STDIN_FILE: wireFile, CEZ_MOCK_ARGS_FILE: argsFile },
-            beforeStart: ({ manager }) => manager.setSkillCatalog(new RunnerSkillCatalog({ adapters: hostSkillCatalogAdapters({ [runner]: HARNESS_ADAPTERS[runner].mockBin }) })),
+            beforeStart: ({ manager, repoRoot }) => {
+              writeFileSync(join(repoRoot, '.ai/cezar/context.yaml'), 'version: 1\nrules:\n  - id: native-opening\n    target: both\n    template: CONTEXT-RULE-NATIVE-SENTINEL\n');
+              manager.setSkillCatalog(new RunnerSkillCatalog({ adapters: hostSkillCatalogAdapters({ [runner]: HARNESS_ADAPTERS[runner].mockBin }) }));
+            },
           });
           expect(result.record?.error).toBeUndefined();
           expect(result.events.some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE'))).toBe(true);
@@ -64,6 +67,8 @@ export function describeSkillProvisionParity(part: ParityPart, collect?: ParityC
           expect(wire).toContain('probe-project');
           expect(wire).toContain('native step arguments');
           expect(wire).toContain('cezar-context');
+          expect(wire).toContain('handoff');
+          expect(wire).toContain('CONTEXT-RULE-NATIVE-SENTINEL');
           expect(wire).not.toContain('Selected skill:');
         } finally { rmSync(dir, { recursive: true, force: true }); }
       }, 45_000); // bound: native list, session and cleanup each own a bounded process.
