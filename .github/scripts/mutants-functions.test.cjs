@@ -64,6 +64,7 @@ for (const fixture of [
   require('./fixtures/mutation-ranges/button.tsx.json'),
   require('./fixtures/mutation-ranges/v1-text-coalescer.ts.json'),
   require('./fixtures/mutation-ranges/syntax.tsx.json'),
+  ...require('./fixtures/mutation-ranges/exports.json').cases,
 ]) {
   test(`function names and ranges match stored parser output: ${fixture.file}`, t => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mutants-range-parity-'));

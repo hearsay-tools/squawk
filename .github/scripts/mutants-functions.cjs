@@ -28,9 +28,21 @@ function rangeNode(node) {
     return ['ArrowFunctionExpression', 'FunctionExpression'].includes(node.init?.type)
       && !node.init.generator && !node.init.extra?.parenthesized;
   }
-  return (node.type === 'FunctionDeclaration' && !node.generator)
-    || (node.type === 'ClassDeclaration' && !node.abstract)
+  return (node.type === 'FunctionDeclaration' && node.id && !node.generator)
+    || (node.type === 'ClassDeclaration' && node.id && !node.abstract)
     || ['ClassMethod', 'ClassPrivateMethod', 'ObjectMethod'].includes(node.type);
+}
+
+/** Method decorators and decorators before export sit outside the former syntax range. */
+function rangeStart(node, tokens) {
+  const decorator = node.decorators?.at(-1);
+  if (!decorator) return node;
+  const after = tokens.find(token => token.start >= decorator.end && typeof token.type === 'object');
+  if (node.type.endsWith('Method')) return after;
+  if (node.type === 'ClassDeclaration' && after.type.label === 'export') {
+    return tokens.find(token => token.start >= after.end && token.type.label === 'class');
+  }
+  return node;
 }
 
 function functionRanges(file, cwd = process.cwd()) {
@@ -45,9 +57,7 @@ function functionRanges(file, cwd = process.cwd()) {
   function visit(node) {
     if (!node || typeof node.type !== 'string') return;
     if (rangeNode(node)) {
-      // Method decorators are outside the syntax range; class decorators are inside it.
-      const decorator = node.type.endsWith('Method') && node.decorators?.at(-1);
-      const start = decorator ? ast.tokens.find(token => token.start >= decorator.end && typeof token.type === 'object') : node;
+      const start = rangeStart(node, ast.tokens);
       nodes.push({ text: source.slice(start.start, node.end), range: { start: point(start.loc.start), end: point(node.loc.end) } });
     }
     for (const [key, value] of Object.entries(node)) {

@@ -1,0 +1,239 @@
+{
+  "origin": "Captured from the former parser on review round one variants before uninstalling its binary.",
+  "cases": [
+    {
+      "file": "default-anonymous-function.tsx",
+      "source": "export default function() { return true; }",
+      "ranges": []
+    },
+    {
+      "file": "default-anonymous-async.tsx",
+      "source": "export default async function() { return true; }",
+      "ranges": []
+    },
+    {
+      "file": "default-anonymous-generator.tsx",
+      "source": "export default function*() { yield true; }",
+      "ranges": []
+    },
+    {
+      "file": "default-named-function.tsx",
+      "source": "export default function named() { return true; }",
+      "ranges": [
+        {
+          "name": "named",
+          "range": {
+            "start": {
+              "line": 0,
+              "column": 15
+            },
+            "end": {
+              "line": 0,
+              "column": 48
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "default-anonymous-class.tsx",
+      "source": "export default class { method() { return true; } }",
+      "ranges": [
+        {
+          "name": "method",
+          "range": {
+            "start": {
+              "line": 0,
+              "column": 23
+            },
+            "end": {
+              "line": 0,
+              "column": 48
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "default-named-class.tsx",
+      "source": "export default class Example { method() { return true; } }",
+      "ranges": [
+        {
+          "name": "Example.method",
+          "range": {
+            "start": {
+              "line": 0,
+              "column": 31
+            },
+            "end": {
+              "line": 0,
+              "column": 56
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "default-arrow.tsx",
+      "source": "export default () => true;",
+      "ranges": []
+    },
+    {
+      "file": "default-async-arrow.tsx",
+      "source": "export default async () => true;",
+      "ranges": []
+    },
+    {
+      "file": "decorator-before-export.tsx",
+      "source": "@deco export class Example { method() { return true; } }",
+      "ranges": [
+        {
+          "name": "Example.method",
+          "range": {
+            "start": {
+              "line": 0,
+              "column": 29
+            },
+            "end": {
+              "line": 0,
+              "column": 54
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "decorators-before-export.tsx",
+      "source": "@first\n@second()\nexport class Example { @methodDecorator method() { return true; } }",
+      "ranges": [
+        {
+          "name": "Example.method",
+          "range": {
+            "start": {
+              "line": 2,
+              "column": 40
+            },
+            "end": {
+              "line": 2,
+              "column": 65
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "decorator-before-default.tsx",
+      "source": "@deco export default class Example { method() { return true; } }",
+      "ranges": [
+        {
+          "name": "Example.method",
+          "range": {
+            "start": {
+              "line": 0,
+              "column": 37
+            },
+            "end": {
+              "line": 0,
+              "column": 62
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "decorator-before-anonymous-default.tsx",
+      "source": "@deco export default class { method() { return true; } }",
+      "ranges": [
+        {
+          "name": "method",
+          "range": {
+            "start": {
+              "line": 0,
+              "column": 29
+            },
+            "end": {
+              "line": 0,
+              "column": 54
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "decorator-after-export.tsx",
+      "source": "export @deco class Example { method() { return true; } }",
+      "ranges": [
+        {
+          "name": "method",
+          "range": {
+            "start": {
+              "line": 0,
+              "column": 29
+            },
+            "end": {
+              "line": 0,
+              "column": 54
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "decorator-after-default.tsx",
+      "source": "export default @deco class Example { method() { return true; } }",
+      "ranges": [
+        {
+          "name": "method",
+          "range": {
+            "start": {
+              "line": 0,
+              "column": 37
+            },
+            "end": {
+              "line": 0,
+              "column": 62
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "decorator-no-export.tsx",
+      "source": "@deco class Example { method() { return true; } }",
+      "ranges": [
+        {
+          "name": "method",
+          "range": {
+            "start": {
+              "line": 0,
+              "column": 22
+            },
+            "end": {
+              "line": 0,
+              "column": 47
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "abstract-decorator-before-export.tsx",
+      "source": "@deco export abstract class Example { method() { return true; } }",
+      "ranges": [
+        {
+          "name": "method",
+          "range": {
+            "start": {
+              "line": 0,
+              "column": 38
+            },
+            "end": {
+              "line": 0,
+              "column": 63
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
