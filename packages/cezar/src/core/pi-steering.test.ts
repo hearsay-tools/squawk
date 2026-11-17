@@ -105,21 +105,27 @@ describe('pi agent input steering (#505)', () => {
   });
 
   it('does not count a steer pi had not acknowledged when a turn started as carried by it (#505 CI race)', async () => {
-    // A scripted pi: the opening turn starts 300 ms after its ack, before pi reads the steer
-    // the runner wrote meanwhile; pi then runs the steer as its own next turn.
+    // The opening turn waits until the caller reserves the steer. Pi has not read or
+    // acknowledged that steer when agent_start arrives; it runs in the next turn.
     const dir = mkdtempSync(join(tmpdir(), 'cez-pi-carried-')); dirs.push(dir);
     const script = join(dir, 'pi-scripted.mjs');
     writeFileSync(script, `#!/usr/bin/env node
 import readline from 'node:readline';
+import { existsSync, watch } from 'node:fs';
 const send = v => process.stdout.write(JSON.stringify(v) + '\\n');
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+const openingGate = () => new Promise(resolve => {
+  const watcher = watch(process.cwd(), () => {
+    if (existsSync('opening.release')) { watcher.close(); resolve(); }
+  });
+  if (existsSync('opening.release')) { watcher.close(); resolve(); }
+});
 let n = 0;
 for await (const line of readline.createInterface({ input: process.stdin })) {
   const c = JSON.parse(line);
   if (c.type === 'get_state') { send({ id: c.id, type: 'response', command: 'get_state', success: true, data: { sessionId: 's' } }); continue; }
   if (c.type !== 'prompt') continue;
   send({ ...(c.id ? { id: c.id } : {}), type: 'response', command: 'prompt', success: true });
-  if (++n === 1) await sleep(300);
+  if (++n === 1) await openingGate();
   send({ type: 'agent_start' }); send({ type: 'turn_start' });
   if (n > 1) send({ type: 'message_start', message: { role: 'user', content: [{ type: 'text', text: c.message }] } });
   send({ type: 'message_update', message: {}, assistantMessageEvent: { type: 'text_end', contentIndex: 0, content: 'turn ' + n } });
@@ -131,11 +137,15 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
     const session = new PiRunner({ bin: script, timeoutMs: 0 }).startSession({ toolGrant: UNSET_TOOL_GRANT, userPrompt: 'opening', cwd: dir },
       event => { events.push(event); if (event.type === 'turn-end') order.push('turn-end'); },
       { onAgentInputConsumed: ids => order.push('read:' + ids.join(',')), onAgentInputReady: () => undefined });
-    await waitUntil(() => session.sendAgentMessage([{ type: 'text', text: 'steer' }], ['late']) !== false);
-    await waitUntil(() => order.includes('read:late'));
-    // Read by the second turn, never credited to the opening turn's settle.
-    expect(order.indexOf('read:late')).toBeGreaterThan(order.indexOf('turn-end'));
-    session.end(); await session.result.catch(() => undefined);
+    try {
+      await waitUntil(() => session.sendAgentMessage([{ type: 'text', text: 'steer' }], ['late']) !== false);
+      writeFileSync(join(dir, 'opening.release'), '');
+      await waitUntil(() => order.includes('read:late'));
+      // Read by the second turn, never credited to the opening turn's settle.
+      expect(order.indexOf('read:late')).toBeGreaterThan(order.indexOf('turn-end'));
+    } finally {
+      session.end(); await session.result.catch(() => undefined);
+    }
   });
 
   it('sends set_steering_mode all at session start so a burst shares the next step (#551)', async () => {
