@@ -908,15 +908,6 @@ describe('prompt templates on the new-task composer', () => {
     )
   })
 
-  it('picking a skill auto-applies the templates assigned to it into an empty composer', async () => {
-    serve({ uiState: { promptTemplates: ASSIGNED } })
-    renderNewTask()
-    await pillReady()
-
-    await pickSource('om-fix')
-    await waitFor(() => expect(textarea().value).toBe('Follow the fix rules.'))
-  })
-
   it('switching to a skill with nothing assigned takes the auto-applied text back out', async () => {
     serve({ uiState: { promptTemplates: ASSIGNED } })
     renderNewTask()

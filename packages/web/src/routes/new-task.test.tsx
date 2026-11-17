@@ -39,7 +39,6 @@ describe('submit', () => {
     { choice: true, configured: false, expected: true },
     { choice: null, configured: false, expected: false },
     { choice: null, configured: true, expected: true },
-    { choice: null, configured: true, expected: true },
     { choice: false, configured: null, expected: false },
     { choice: true, configured: null, expected: true },
   ])('/setup choice=$choice policy=$configured agrees with its payload', async ({
