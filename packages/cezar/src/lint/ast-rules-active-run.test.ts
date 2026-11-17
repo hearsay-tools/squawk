@@ -689,3 +689,15 @@ ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-usage-write
     'Object.assign?.<Mutable>((new Map(state.usage.cumulativeSessionCost)));',
   ],
 });
+
+// Object accessors, like object methods, cannot inherit a surrounding manager exemption.
+ruleCases(activeRunMapWrite, {
+  file: 'packages/cezar/src/workflows/run/example.ts',
+  valid: [],
+  invalid: [
+    "class RunManager { activate() { return { active: new Map(), get value() { this.active.set('id', {}); return 1; } }; } }",
+    "class RunManager { activate() { return { active: new Map(), set value(value) { this.active.set('id', value); } }; } }",
+    "class RunManager { dropActive() { return { active: new Map(), get value() { this.active.delete('id'); return 1; } }; } }",
+    "class RunManager { dropActive() { return { active: new Map(), set value(value) { this.active.delete(value); } }; } }",
+  ],
+});
