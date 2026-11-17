@@ -499,6 +499,8 @@ describe('design workflow controls', () => {
     expect(stepIds()).toEqual(['om-review', 'om-fix'])
     expect(yamlText().indexOf('- om-review')).toBeLessThan(yamlText().indexOf('- om-fix'))
     expect((screen.getByLabelText('Move step 2 down') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByLabelText('Move step 2 up'))
+    expect(stepIds()).toEqual(['om-fix', 'om-review'])
   })
 })
 
@@ -852,13 +854,7 @@ describe('workflow drag and drop through real sensors', () => {
     expect(canvas().hasAttribute('data-dragging')).toBe(false)
   })
 
-  it('Move up returns a step to its earlier position', async () => {
-    stubFetch()
-    renderAt('/workflows')
-    await waitFor(() => expect(stepCards()).toHaveLength(2))
-    fireEvent.click(screen.getByLabelText('Move step 2 up'))
-    expect(stepIds()).toEqual(['om-review', 'om-fix'])
-  })
+
 })
 
 it('reads each saved step from its own runner and account', async () => {
