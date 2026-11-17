@@ -217,9 +217,9 @@ Server and run path (3a):
   for a slash opening. The adapter now places it.
 - `workflows/run/continuation-session.ts` and `launch-read-resolver.ts`: a Continue that
   resumed sends no trigger; one that opens a fresh session sends the step's trigger again.
-  The `session` event's `resumed` comes after the opening message is committed (OpenCode
-  `bootstrap` decides and posts in one call; Claude learns it from the CLI's own report), so
-  shared code cannot wait for it. Add a spec field, for example `resumeFallbackSkill`, with a
+  Shared code cannot wait for the `session` event's `resumed` before it chooses the opening
+  message: OpenCode's `bootstrap` decides, emits the event and posts the opening in one call,
+  and Claude learns it from the CLI's own report after the start. Add a spec field, for example `resumeFallbackSkill`, with a
   row in each `specSupport`: the adapter sends it only when it opens a fresh session, as
   OpenCode does with `resumeFallbackSystemPrompt` (`agent-runner.ts`). The `resumed` event
   stays as the record of what happened. `skipSkillOnResume` goes away with the skill prefix.
@@ -241,10 +241,13 @@ Server and run path (3a):
   handling reads only a leading `/name`, so on omp a `/skill:` inside a message starts the
   skill natively, without Squawk's list check or a D8 note. Squawk does not intercept it. Add
   an omp parity row that shows it.
-- `packages/web/src/lib/prompt-templates.ts`: the "Create an automation" template attaches
-  `skills: ['create-cezarion-automation']`. No runner lists that built-in skill, so the step
-  would fail at step open. Drop `skills` from the template: the `cezar_automation` tool from
-  slice 4 covers it.
+- The built-in `create-cezarion-automation` skill: no runner lists it, so a pick of it would
+  fail at step open. 3a stops offering and resolving it: drop `builtinSkillsOf(manager)` from
+  the list `GET /skills` answers (`server/server.ts`), stop `launch-context.ts` from returning
+  `createAutomationSkill`, and drop `skills: ['create-cezarion-automation']` from the "Create
+  an automation" template (`packages/web/src/lib/prompt-templates.ts`), whose `skills` field
+  only links the template's text to that pick. The `cezar_automation` tool from slice 4
+  covers the job. Slice 5 deletes `automations/builtin-skill.ts`.
 - Regenerate the ast-grep rule `active-run-skills-write-outside-owner` with
   `scripts/active-run-owner-rules.mjs` when the `ActiveRun` skills group changes.
 - D8 names Codex's `admin` scope; the contract maps it to `other`
@@ -305,7 +308,8 @@ value back to the draft.
 
 **Done when** (3a) a selected skill starts natively on each runner with no skill text in the
 system prompt, a missing id fails before a model call, a fresh-session Continue starts the
-step's skill again, and no server or run-path reader is left on `discoverSkills`; (3b) every
+step's skill again, and no run-path reader is left on `discoverSkills` (the old `GET /skills`
+and `POST /skills/refresh` routes still call it until 3b); (3b) every
 cockpit picker and page reads `/runner-skills`, and the three old routes are gone.
 
 ## Slice 4: automation tool
