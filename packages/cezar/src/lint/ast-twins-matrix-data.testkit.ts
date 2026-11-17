@@ -1,7 +1,8 @@
 /** Old counts measured once from the caf0e3eaa YAML (hearsay-tools/squawk#3774).
  * Each character corresponds to one generated probe; '-' is invalid ESTree grammar.
- * Accepted widenings are explicit source cells, never inferred from the current rule. */
-export interface MatrixBaseline { counts: string; accepted: { ext: string; code: string; count: number }[] }
+ * Accepted widenings and invalid-type limits are explicit measured source cells. */
+export interface MatrixCell { ext: string; code: string; count: number }
+export interface MatrixBaseline { counts: string; accepted: MatrixCell[]; documentedLimits: (MatrixCell & { oldCount: number })[] }
 export const MATRIX_BASELINES: Record<string, MatrixBaseline> = {
   'attention-bucket-compare-outside-owner': {
     counts: [
@@ -93,6 +94,8 @@ export const MATRIX_BASELINES: Record<string, MatrixBaseline> = {
       {"ext":"tsx","code":"const x = 'waiting' !== await ((attention!)).bucket as any","count":1},
       {"ext":"tsx","code":"const x = 'waiting' !== await ((attention!)).bucket satisfies any","count":1},
     ],
+    documentedLimits: [
+    ],
   },
   'automations-capability-read-outside-owner': {
     counts: [
@@ -107,6 +110,8 @@ export const MATRIX_BASELINES: Record<string, MatrixBaseline> = {
       '010101010101010101010101010101010101010101010101111111111111',
     ].join(''),
     accepted: [
+    ],
+    documentedLimits: [
     ],
   },
   'subagent-children-outside-dock': {
@@ -134,6 +139,8 @@ export const MATRIX_BASELINES: Record<string, MatrixBaseline> = {
       {"ext":"tsx","code":"const x = await subagentChildren<T>() satisfies any","count":1},
       {"ext":"tsx","code":"const x = await await subagentChildren<T>()","count":1},
     ],
+    documentedLimits: [
+    ],
   },
   'test-enum-literal': {
     counts: [
@@ -145,9 +152,77 @@ export const MATRIX_BASELINES: Record<string, MatrixBaseline> = {
       '0101010100000101010100001111111100000101010100000-0-0-0-0-0-010101010000010101010000010101010000010101010000010101010000',
       '0-0-0-0-0-0-0101010100000101010100000101010100000101010100000101010100000-0-0-0-0-0-111111110000010101010000010101010000',
       '0101010100000101010100000-0-0-0-0-0-0101010100000101010100000101010100000101010100000101010100000-0-0-0-0-0-0-0-0-0-0-0-',
-      '0101010100000-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0101010100001110111101',
+      '0101010100000-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0-0101010100001110110101010001010001010--101010100010101000001010001010100',
+      '0100000101000101010----001010101010101000101010001000100010101000101010--------1010------------0000101000101010001010101',
+      '01010101010----001010101010101000101010001000100010101000101010--------1010101000101010001110110101010001010001010--1010',
+      '101000101010000010100010101000100000101000101010----001010101010101000101010001000100010101000101010--------1010--------',
+      '----000010100010101000101010101010101010----001010101010101000101010001000100010101000101010--------101010100010101000',
     ].join(''),
     accepted: [
+    ],
+    documentedLimits: [
+      {"ext":"ts","code":"const x = { status: 'done' as (any)! }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as !!any }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as !(!any) }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as ?(!any) }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as (?(!any)) }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as (!any)? }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as ?any! }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as (?any)! }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as any!? }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as !(any!) }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as (any!)! }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as !!(any) }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as !(!(any)) }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as ?(any)! }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as (?(any))! }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as (any)!? }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as !((any)!) }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as ((any)!)! }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as ((any)?)! }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as ((any))! }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as (any)! }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as !!any }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as !(!any) }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as ?(!any) }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as (?(!any)) }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as (!any)? }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as ?any! }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as (?any)! }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as any!? }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as !(any!) }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as (any!)! }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as !!(any) }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as !(!(any)) }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as ?(any)! }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as (?(any))! }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as (any)!? }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as !((any)!) }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as ((any)!)! }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as ((any)?)! }","oldCount":0,"count":1},
+      {"ext":"tsx","code":"const x = { status: 'done' as ((any))! }","oldCount":0,"count":1},
+      {"ext":"ts","code":"const x = { status: 'done' as (!(any)) }","oldCount":1,"count":0},
+      {"ext":"ts","code":"const x = { status: 'done' as (!(!any)) }","oldCount":1,"count":0},
+      {"ext":"ts","code":"const x = { status: 'done' as (!?any) }","oldCount":1,"count":0},
+      {"ext":"ts","code":"const x = { status: 'done' as (!(?any)) }","oldCount":1,"count":0},
+      {"ext":"ts","code":"const x = { status: 'done' as (!(any!)) }","oldCount":1,"count":0},
+      {"ext":"ts","code":"const x = { status: 'done' as (!(any?)) }","oldCount":1,"count":0},
+      {"ext":"ts","code":"const x = { status: 'done' as (!(!(any))) }","oldCount":1,"count":0},
+      {"ext":"ts","code":"const x = { status: 'done' as (!?(any)) }","oldCount":1,"count":0},
+      {"ext":"ts","code":"const x = { status: 'done' as (!(?(any))) }","oldCount":1,"count":0},
+      {"ext":"ts","code":"const x = { status: 'done' as (!((any)!)) }","oldCount":1,"count":0},
+      {"ext":"ts","code":"const x = { status: 'done' as (!((any)?)) }","oldCount":1,"count":0},
+      {"ext":"tsx","code":"const x = { status: 'done' as (!(any)) }","oldCount":1,"count":0},
+      {"ext":"tsx","code":"const x = { status: 'done' as (!(!any)) }","oldCount":1,"count":0},
+      {"ext":"tsx","code":"const x = { status: 'done' as (!?any) }","oldCount":1,"count":0},
+      {"ext":"tsx","code":"const x = { status: 'done' as (!(?any)) }","oldCount":1,"count":0},
+      {"ext":"tsx","code":"const x = { status: 'done' as (!(any!)) }","oldCount":1,"count":0},
+      {"ext":"tsx","code":"const x = { status: 'done' as (!(any?)) }","oldCount":1,"count":0},
+      {"ext":"tsx","code":"const x = { status: 'done' as (!(!(any))) }","oldCount":1,"count":0},
+      {"ext":"tsx","code":"const x = { status: 'done' as (!?(any)) }","oldCount":1,"count":0},
+      {"ext":"tsx","code":"const x = { status: 'done' as (!(?(any))) }","oldCount":1,"count":0},
+      {"ext":"tsx","code":"const x = { status: 'done' as (!((any)!)) }","oldCount":1,"count":0},
+      {"ext":"tsx","code":"const x = { status: 'done' as (!((any)?)) }","oldCount":1,"count":0},
     ],
   },
 };

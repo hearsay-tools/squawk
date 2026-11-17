@@ -12,6 +12,30 @@ const wrappers = [
 ];
 const members = ['attention.bucket', 'attention?.bucket', 'attention!.bucket', 'attention.bucket?.bucket', '(attention).bucket', 'attention?.bucket!.bucket', '(attention!).bucket', '((attention!)).bucket'];
 
+/** Parser-accepted cast types, including JSDoc modifiers that TypeScript rejects. */
+function enumCastTypes(): string[] {
+  const modifiers = [
+    (x: string) => '!' + x,
+    (x: string) => '?' + x,
+    (x: string) => x + '!',
+    (x: string) => x + '?',
+  ];
+  const types = new Set(['any', '(any)', '((any))']);
+  let level = ['any', '(any)'];
+  for (let depth = 0; depth < 2; depth++) {
+    const next = new Set<string>();
+    for (const type of level) for (const modify of modifiers) {
+      const modified = modify(type);
+      next.add(modified);
+      next.add('(' + modified + ')');
+    }
+    for (const type of next) types.add(type);
+    level = [...next];
+  }
+  types.add('((any))!');
+  return [...types];
+}
+
 /** Reviewer matrix plus parenthesized non-null receivers: 2,720 probes; no TSX angles. */
 export function attentionProbes(): TwinProbe[] {
   const cases: TwinProbe[] = [];
@@ -56,6 +80,10 @@ export function otherTwinProbes(name: string): TwinProbe[] {
   if (name === 'test-enum-literal') for (const ext of ['ts', 'tsx'] as const) {
     for (const type of ['!any', '(any!)', '((any!))', '(!any)', '(!any)!']) {
       cases.push({ ext, code: `const x = { status: 'done' as ${type} }` });
+    }
+    for (const type of enumCastTypes()) {
+      cases.push({ ext, code: `const x = { status: 'done' as ${type} }` });
+      cases.push({ ext, code: `const status = 'done' as ${type}` });
     }
   }
   return cases;

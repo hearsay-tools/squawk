@@ -17,13 +17,22 @@ describe('twin rule generated parity matrices', () => {
     expect(probes).toHaveLength(baseline.counts.length);
     const key = (ext: string, code: string) => `${ext}\0${code}`;
     const accepted = new Map(baseline.accepted.map((cell) => [key(cell.ext, cell.code), cell.count]));
+    const limits = new Map(baseline.documentedLimits.map((cell) => [key(cell.ext, cell.code), cell]));
     expect(accepted.size).toBe(baseline.accepted.length);
+    expect(limits.size).toBe(baseline.documentedLimits.length);
     const seen = new Set<string>();
+    const seenLimits = new Set<string>();
     for (const [index, { ext, code }] of probes.entries()) {
       const oldCount = baseline.counts[index]!;
       if (oldCount === '-') continue; // Invalid TypeScript grammar; measured and excluded once.
       const cell = key(ext, code);
-      const expected = accepted.get(cell) ?? Number(oldCount);
+      const limit = limits.get(cell);
+      const expected = limit?.count ?? accepted.get(cell) ?? Number(oldCount);
+      if (limit) {
+        expect(accepted.has(cell)).toBe(false);
+        expect(limit.oldCount).toBe(Number(oldCount));
+        seenLimits.add(cell);
+      }
       if (accepted.has(cell)) {
         expect(oldCount).toBe('0');
         seen.add(cell);
@@ -32,5 +41,6 @@ describe('twin rule generated parity matrices', () => {
       expect(checkRule(rule, file, code).length, `${rule.name}: ${ext}: ${code}`).toBe(expected);
     }
     expect([...seen].sort()).toEqual([...accepted.keys()].sort());
+    expect([...seenLimits].sort()).toEqual([...limits.keys()].sort());
   });
 });
