@@ -44,8 +44,7 @@ async function start(runner: RunnerId = 'claude', skills: RunnerSkill[] = [{ id:
   return record.id;
 }
 async function readFinished() {
-  await waitForProduct(f.manager, f.store, () => ![...fixtureWork(f.manager).pending.values()]
-    .some(label => label === 'nativeInputBoundary' || label === 'nativeSkillInput'));
+  await waitForProduct(f.manager, f.store, () => ![...fixtureWork(f.manager).pending.values()].includes('nativeSkillInput'));
 }
 const say = (id: string, text: string) => f.manager.sendMessage(id, [{ type: 'text', text }]);
 

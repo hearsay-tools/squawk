@@ -41,6 +41,7 @@ const sessions: AgentSession[] = [];
 const events: Array<((event: AgentEvent) => void) | undefined> = [];
 const delivered: Array<string | ContentBlock[]> = [];
 const agentDelivered: ContentBlock[][] = [];
+const transportTrace: Array<'agent' | 'human'> = [];
 const acceptedWorkflow: WorkflowDef = { name: 'accepted', source: 'built-in', steps: [{ id: 'work', prompt: 'ACCEPTED {{task}}' }] };
 const config = (values: object) => writeFileSync(join(root, '.ai/cezar/config.json'), JSON.stringify(values));
 
@@ -55,6 +56,7 @@ beforeEach(() => {
   events.length = 0;
   delivered.length = 0;
   agentDelivered.length = 0;
+  transportTrace.length = 0;
   runnerHook.runner = {
     backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
     run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: async () => {},
@@ -63,7 +65,7 @@ beforeEach(() => {
       let finish!: (result: AgentRunResult) => void;
       const result = new Promise<AgentRunResult>(resolve => { finish = resolve; });
       const end = () => { open = false; finish({ text: '', toolCalls: [], tokensUsed: 0 }); };
-      const session: AgentSession = { get open() { return open; }, result, end, interrupt: end, sendMessage: content => { delivered.push(content); return true; }, sendAgentMessage: async content => { agentDelivered.push(content); }, discardQueuedMessages() {}, holdsHumanInput: () => false };
+      const session: AgentSession = { get open() { return open; }, result, end, interrupt: end, sendMessage: content => { transportTrace.push('human'); delivered.push(content); return true; }, sendAgentMessage: async content => { transportTrace.push('agent'); agentDelivered.push(content); }, discardQueuedMessages() {}, holdsHumanInput: () => false };
       opened.push(spec);
       sessions.push(session);
       events.push(onEvent);
@@ -561,15 +563,22 @@ async function liveSlashAtBoundary(kind: 'skill' | 'source', order: 'before' | '
   const target = manager.startRun(acceptedWorkflow, { task: 'target', worktree: false });
   await waitForOpen(target.id, 1);
   disableTeamSkill(kind);
-  if (order === 'after') events[0]!({ type: 'turn-end' });
+  if (order === 'after') {
+    events[0]!({ type: 'turn-end' });
+    await new Promise<void>(resolve => setImmediate(resolve)); // A human HTTP message arrives in a later task.
+    expect(transportTrace).toEqual(['agent']); // Main also sends its no-wait nudge before this human message exists.
+  }
   expect(manager.sendMessage(target.id, [{ type: 'text', text: '/team-playbook current input' }])).toBe(true);
-  if (order === 'before') events[0]!({ type: 'turn-end' });
+  expect(delivered).toEqual([]); // Claude holds this trigger behind the running turn (D6).
+  expect(transportTrace).toEqual(order === 'after' ? ['agent'] : []);
+  events[0]!({ type: 'turn-end' }); // The original turn, or the nudge's turn, now releases the trigger.
   // bound: native reference resolution completes asynchronously before transport delivery.
   await waitForProduct(manager, store, () => delivered.length === 1 &&
-    ![...fixtureWork(manager).pending.values()].some(label => label === 'nativeInputBoundary' || label === 'nativeSkillInput'));
+    ![...fixtureWork(manager).pending.values()].some(label => label === 'nativeSkillInput'));
   expect(delivered).toEqual([[{ type: 'skill', id: 'team-playbook', path: join(root, '.claude/skills/team-playbook/SKILL.md'), args: 'current input' }]]);
   expect(opened).toHaveLength(1);
-  expect(agentDelivered).toEqual([]); // The boundary settled after the accepted human input; no nudge reached the wire.
+  expect(transportTrace).toEqual(order === 'after' ? ['agent', 'human'] : ['human']);
+  expect(agentDelivered).toHaveLength(order === 'after' ? 1 : 0); // No Squawk input between human acceptance and delivery.
 }
 
 const pastedImage = (body: string) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/png', data: Buffer.from(body).toString('base64') } });

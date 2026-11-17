@@ -27,7 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentSession, AgentEvent, AgentRunResult } from '../core/agent-runner.ts';
 import { ciWaitEntry, RunStore } from '../runs/store.ts';
 import { setRunStatus, readPersistedRuns } from '../runs/run-store.testkit.ts';
-import { createFixtureManager, fixtureWork } from './fixture-cleanup.testkit.ts';
+import { createFixtureManager } from './fixture-cleanup.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { AUTONOMOUS_NUDGE, COMPLETION_NO_REPLY_NOTE, NO_WAIT_NO_REPLY_NOTE, NO_WAIT_NUDGE_NOTE, IDLE_TIMEOUT_MS } from './run.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
@@ -323,17 +323,11 @@ describe('nudge bounds through a live runner', () => {
     return { id: record.id, session };
   }
 
-  async function boundarySettled(): Promise<void> {
-    // bound: native-input priority is decided before the nudge's transport attempt.
-    await waitForProduct(f.manager, f.store, () => ![...fixtureWork(f.manager).pending.values()].includes('nativeInputBoundary'));
-  }
-
   it('refused ordinary input waits for readiness without charging the cap or releasing capacity', async () => {
     const { id, session } = await start(true);
     f.store.updateRun(id, { automaticWakes: 39 });
     vi.mocked(session.sendAgentMessage).mockReturnValueOnce(false);
     emit({ type: 'turn-end' });
-    await boundarySettled();
     expect(f.store.getRun(id)).toMatchObject({ status: RUN_STATUS.running, automaticWakes: 39 });
     ready();
     expect(session.sendAgentMessage).toHaveBeenLastCalledWith([{ type: 'text', text: AUTONOMOUS_NUDGE }], []);
@@ -354,7 +348,6 @@ describe('nudge bounds through a live runner', () => {
     const { id, session } = await start(true);
     vi.mocked(session.sendAgentMessage).mockReturnValueOnce(false);
     emit({ type: 'turn-end' });
-    await boundarySettled();
     const inputId = randomUUID();
     f.store.commitAgentInputs(id, [{ id: inputId, parentRunId: randomUUID(), source: agentInputSchema.shape.source.enum.agent,
       text: 'Read this first', createdAt: new Date().toISOString() }]);
@@ -370,7 +363,6 @@ describe('nudge bounds through a live runner', () => {
     const { id, session } = await start(true);
     vi.mocked(session.sendAgentMessage).mockReturnValue(false);
     emit({ type: 'turn-end' });
-    await boundarySettled();
     emitUi({ type: 'turn.started', turnId: randomUUID() });
     ready();
     expect(session.sendAgentMessage).toHaveBeenCalledOnce();
@@ -388,7 +380,6 @@ describe('nudge bounds through a live runner', () => {
     expect(session.sendAgentMessage).toHaveBeenCalledOnce();
     expect(f.manager.sendMessage(id, [{ type: 'text', text: 'please continue' }])).toBe(true);
     emit({ type: 'turn-end' });
-    await boundarySettled();
     expect(session.sendAgentMessage).toHaveBeenCalledTimes(2);
     expect(f.store.getRun(id)?.automaticWakes).toBe(1);
   });
@@ -397,7 +388,6 @@ describe('nudge bounds through a live runner', () => {
     const { id, session } = await start(true);
     vi.mocked(session.sendAgentMessage).mockImplementation(() => { throw new Error('failed transport'); });
     emit({ type: 'turn-end' });
-    await boundarySettled();
     expect(f.store.readEvents(id)).toEqual(expect.arrayContaining([expect.objectContaining({
       type: 'error', message: expect.stringContaining('failed transport'),
     })]));

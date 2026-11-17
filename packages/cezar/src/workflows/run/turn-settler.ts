@@ -131,25 +131,10 @@ export class TurnSettler {
     this.host.subagentWaits.atTurnEnd(runId, state, { sessionOpen, done: read.done, asks: !!ask || humanGate });
     transitionTurnBoundary(state, { kind: 'turn-end', phase: 'save-ack', session: state.liveSession.session, boundary: sessionOpen && state.liveSession.session
       ? { session: state.liveSession.session, monitoring, humanGate, nudgedLastTurn, scheduleWakeup: turn.scheduleWakeup } : undefined });
-    const settledTurn: SettledTurn = {
+    const settled = this.settleTurn(runId, state, 'turn-end', {
       stepId: turn.stepId, monitoring, humanGate, ask, humanWait, sink,
       done: read.done, doneRequest, nudgedLastTurn, scheduleWakeup: turn.scheduleWakeup,
-    };
-    // Native human input resolves asynchronously. Give input accepted at this boundary the
-    // same priority as synchronous human delivery, before Squawk can submit its next turn.
-    // A consumed or replaced boundary must never send the old turn's nudge.
-    if (state.skills.query && sessionOpen) {
-      const boundary = state.boundary.parkAfterAck;
-      void this.context.work.track('nativeInputBoundary', Promise.resolve().then(() => {
-        if (this.context.disposed() || state.liveSession.cancelled || state.liveSession.finishRequested ||
-          !boundary || state.liveSession.session !== boundary.session || state.boundary.parkAfterAck !== boundary) return;
-        this.settleEndedTurn(runId, state, settledTurn);
-      }));
-    } else this.settleEndedTurn(runId, state, settledTurn);
-  }
-
-  private settleEndedTurn(runId: string, state: ActiveRun, turn: SettledTurn): void {
-    const settled = this.settleTurn(runId, state, 'turn-end', turn);
+    });
     // A turn that completed is the ONLY evidence the provider's window actually reopened, so
     // it is what retires the consecutive-resume counter — which in turn releases the account
     // hold for every other task queued behind it (spec

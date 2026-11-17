@@ -97,7 +97,7 @@ it('replays a durable held trigger natively after restart, keeps FIFO, and never
   // Observe the reopened boundary's delivery work, rather than waiting for the unrelated
   // no-wait nudge to time out: the fixture deliberately emits no answer to that nudge.
   await waitForProduct(manager, store, () => ![...fixtureWork(manager).pending.values()]
-    .some(label => label === 'nativeInputBoundary' || label === 'nativeSkillInput'));
+    .some(label => label === 'nativeSkillInput'));
   expect(sessions.flatMap(session => session.sent).filter(blocks => blocks[0]?.type === 'skill')).toHaveLength(1);
   expect(sessions[2]!.spec.userPrompt).not.toContain('/known saved arguments');
 });
