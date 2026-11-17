@@ -129,6 +129,22 @@ function waitingStatus(node: EsNode): EsNode | undefined {
   return status?.type === 'MemberExpression' && !status.computed && propertyName(status) === 'status' ? status : undefined;
 }
 
+/** ESTree erases parentheses and decodes literals. Keep the old scanner's operand spelling.
+ * Inspect only the token gap inside this comparison; comments were whitespace in the old scan. */
+function scannerWaitingComparison(node: EsNode, status: EsNode, source: string): boolean {
+  const left = child(node, 'left')!, right = child(node, 'right')!;
+  const reversed = literal(left) === 'waiting';
+  const quoted = unwrap(reversed ? left : right)!;
+  if (quoted.type !== 'Literal') return false;
+  const [quoteStart, quoteEnd] = quoted.range as [number, number];
+  if (!["'waiting'", '"waiting"'].includes(source.slice(quoteStart, quoteEnd))) return false;
+  const property = child(status, 'property')!;
+  const [propertyStart, propertyEnd] = property.range as [number, number];
+  if (property.type !== 'Identifier' || source.charAt(propertyStart - 1) !== '.') return false;
+  const gap = blankOnce(reversed ? source.slice(quoteEnd, propertyStart) : source.slice(propertyEnd, quoteStart));
+  return reversed ? /^\s*(?:===|!==)\s*[\w$.?]*\.$/.test(gap) : /^\s*(?:===|!==)\s*$/.test(gap);
+}
+
 /** The original lookaround starts at .status (or the left literal), and ends at its other side. */
 function waitingBounds(node: EsNode): { start: number; end: number } {
   const status = waitingStatus(node)!;
@@ -207,7 +223,9 @@ export const runFactReader: AstRule = {
         if (!isTest(file) && !(file in (listed ??= readReaders())) && key === 'autoResumeAt' && sites['resume-time-read'].length === 0) sites['resume-time-read'].push(child(node, 'property')!);
       },
       BinaryExpression(node) {
-        if (!file.startsWith(HOME) && !isTest(file) && waitingStatus(node)) waitingNodes.push(node);
+        if (file.startsWith(HOME) || isTest(file)) return;
+        const status = waitingStatus(node);
+        if (status && scannerWaitingComparison(node, status, sourceCode.text)) waitingNodes.push(node);
       },
       'LogicalExpression:exit'(node) {
         if (file.startsWith(HOME) || isTest(file)) return;

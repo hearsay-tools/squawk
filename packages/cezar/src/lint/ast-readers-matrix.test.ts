@@ -14,15 +14,15 @@ describe('run reader generated parity matrices', () => {
     { rule: runFactReader, probes: factProbes },
   ])('$rule.name matches all old scanner cells', ({ rule, probes }) => {
     const expected = JSON.parse(readFileSync(new URL(`./reader-matrix/${rule.name}.json`, import.meta.url), 'utf8')) as {
-      revision: string; digest: string; findings: string[][];
+      revision: string; digest: string; findingSets: string[][]; outcomes: number[];
     };
     expect(expected.revision).toBe('9f43ee092');
     const generated = probes();
     expect(createHash('sha256').update(JSON.stringify(generated)).digest('hex')).toBe(expected.digest);
-    expect(generated).toHaveLength(expected.findings.length);
+    expect(generated).toHaveLength(expected.outcomes.length);
     expect(new Set(generated.map(cell => cell.id)).size).toBe(generated.length);
     const differences = generated.flatMap(({ id, code }, index) => {
-      const findings = expected.findings[index]!;
+      const findings = expected.findingSets[expected.outcomes[index]!]!;
       const actual = checkRule(rule, 'packages/cezar/src/reader-matrix-probe.ts', code)
         .map(finding => finding.message.split(':')[0]!).sort();
       return JSON.stringify(actual) === JSON.stringify(findings) ? [] : [{ id, code, expected: findings, actual }];

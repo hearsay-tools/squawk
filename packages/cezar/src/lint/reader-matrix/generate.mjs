@@ -40,7 +40,9 @@ try {
     const findings = generated.map(probe => name === 'run-history-reader'
       ? scanner.scanHistoryReaders(file, probe.code, []).map(site => site.kind).sort()
       : scanner.scanRunFacts(file, probe.code, {}).map(site => site.rule).sort());
-    writeFileSync(new URL(`./${name}.json`, import.meta.url), JSON.stringify({ revision, digest, findings }, null, 2) + '\n');
+    const findingSets = [...new Map(findings.map(ids => [JSON.stringify(ids), ids])).values()];
+    const outcomes = findings.map(ids => findingSets.findIndex(set => JSON.stringify(set) === JSON.stringify(ids)));
+    writeFileSync(new URL(`./${name}.json`, import.meta.url), JSON.stringify({ revision, digest, findingSets, outcomes }) + '\n');
     process.stdout.write(`${name}: captured ${generated.length} cells from ${revision}\n`);
   }
 } finally {
