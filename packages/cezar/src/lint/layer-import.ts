@@ -3,7 +3,8 @@ import { join, posix } from 'node:path';
 import { parse } from '@babel/parser';
 import type { Node } from '@babel/types';
 import { visit } from './home-boundary.ts';
-import { lineAt, repoRoot, type SourceRule } from './source-rule.ts';
+import { repoRoot } from './source-rule.ts';
+import { child, stringOf, type AstRule, type EsNode, type Report, type Visitors } from './ast-rule.ts';
 
 /**
  * The core does not depend on a feature (ADR 0065, hearsay-tools/squawk#3706). `layers.json`
@@ -215,12 +216,39 @@ export function staleLayerImports(root = repoRoot): string[] {
   });
 }
 
-export const layerImport: SourceRule = {
+/** Read only literal import nodes; computed specifiers and re-export chains stay out of scope. */
+function astSpecifier(node: EsNode): string | undefined {
+  if (node.type === 'TSImportEqualsDeclaration') {
+    const reference = child(node, 'moduleReference');
+    return reference?.type === 'TSExternalModuleReference' ? stringOf(child(reference, 'expression')) : undefined;
+  }
+  const source = child(node, 'source');
+  return source?.type === 'Literal' ? stringOf(source) : undefined;
+}
+
+/** The same layer map and count allowances, fed by oxlint's import visitors. */
+export function layerImportVisitors(report: Report, file: string, map = (loadedMap ??= readLayerMap()), exceptions = (listed ??= readLayerImportExceptions())): Visitors {
+  const local = file.slice(SRC.length);
+  if (layerOf(local, map) !== 'core') return {};
+  const seen = new Map<string, number>();
+  const inspect = (node: EsNode) => {
+    const specifier = astSpecifier(node);
+    if (!specifier?.startsWith('.')) return;
+    const target = posix.join(posix.dirname(local), specifier).replace(/\.js$/, '.ts');
+    if (target.startsWith('../')) return;
+    const reason = crossing(local, target, map);
+    if (reason === undefined) return;
+    const count = (seen.get(target) ?? 0) + 1;
+    seen.set(target, count);
+    if (count <= (exceptions.find(entry => entry.file === file && entry.target === `${SRC}${target}`)?.count ?? 0)) return;
+    report(node, `${reason}. The core does not depend on a feature or a runner (ADR 0065, hearsay-tools/squawk#3706). Move the shared code into core, or invert the dependency; see ${layerMapFile}.`);
+  };
+  return Object.fromEntries(['ImportDeclaration', 'ExportAllDeclaration', 'ExportNamedDeclaration', 'ImportExpression', 'TSImportType', 'TSImportEqualsDeclaration'].map(type => [type, inspect]));
+}
+
+export const layerImport: AstRule = {
   name: 'layer-import',
   description: 'A core file imports no feature file, and only core/runner-factory.ts imports a runner file (ADR 0065, hearsay-tools/squawk#3706).',
   applies,
-  check: (file, source) => scanLayerImports(file, source).map(({ offset, reason }) => ({
-    line: lineAt(source, offset),
-    message: `${reason}. The core does not depend on a feature or a runner (ADR 0065, hearsay-tools/squawk#3706). Move the shared code into core, or invert the dependency; see ${layerMapFile}.`,
-  })),
+  create: (report, context) => layerImportVisitors(report, context.file),
 };
