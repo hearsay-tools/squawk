@@ -145,7 +145,9 @@ export function startRunInput(body: StartRunOptions): StartRunInput {
   const images = body.images?.map(toPastedContent);
   return {
     task: body.task,
-    skillPaths: Object.fromEntries((body.steps ?? []).filter(s => s.skillPath !== undefined).map(s => [s.id, s.skillPath!])),
+    ...(body.steps?.some(step => step.skillPath !== undefined) ? {
+      skillPaths: Object.fromEntries(body.steps.filter(step => step.skillPath !== undefined).map(step => [step.id, step.skillPath!])),
+    } : {}),
     notify: body.notify,
     model: body.model,
     effort: body.effort,
