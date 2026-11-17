@@ -1,11 +1,13 @@
-import type { SourceRule } from './source-rule.ts';
+import type { AstContext, AstRule, EsNode, Visitors } from './ast-rule.ts';
+import { babelTree, plainChildren } from './wait-babel-tree.ts';
+import { inOxlint } from './wait-oxlint.ts';
 import { compareToBaseline, tally, readBaseline } from './wait-baseline.ts';
+import { WaitSource, waitComments, type ParsedComment } from './wait-source.ts';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import { parse } from '@babel/parser';
 import type { BaselineEntry as Entry } from './wait-baseline.ts';
-import type { AwaitExpression, CallExpression, Comment, DoWhileStatement, File, ForStatement, Node, WhileStatement } from '@babel/types';
-import { sizeNumber, calleeOf, vitestBound, testingLibraryBound, contains, placeAt, readerFor } from './unit-wait-values.ts';
+import type { AwaitExpression, CallExpression, DoWhileStatement, ForStatement, Node, Program, WhileStatement } from '@babel/types';
+import { findQuery, sizeNumber, calleeOf, vitestBound, testingLibraryBound, contains, placeAt, readerFor } from './unit-wait-values.ts';
 import { pollDeadline } from './unit-wait-deadlines.ts';
 
 /**
@@ -92,11 +94,7 @@ export type Visit = (node: Node, ancestors: readonly Node[]) => void | false
 export function walk(node: Node, ancestors: Node[], visit: Visit): void {
   if (visit(node, ancestors) === false) return
   ancestors.push(node)
-  for (const value of Object.values(node)) {
-    for (const child of Array.isArray(value) ? value : [value]) {
-      if (child && typeof child === 'object' && typeof (child as Node).type === 'string') walk(child as Node, ancestors, visit)
-    }
-  }
+  for (const child of plainChildren(node)) walk(child, ancestors, visit)
   ancestors.pop()
 }
 
@@ -124,10 +122,10 @@ export function targetNames(target: Node): string[] {
 export const namesWritten = (node: Node): string[] => (node.type === 'AssignmentExpression' ? targetNames(node.left) : node.type === 'UpdateExpression' ? targetNames(node.argument) : [])
 
 /** The local names of Testing Library's `waitFor` and `waitForElementToBeRemoved`, and of a namespace import of the library (`rtl` in `rtl.waitFor`). */
-export function testingLibrary(ast: File): { tlWaits: Set<string>; tlNamespaces: Set<string> } {
+export function testingLibrary(program: Program): { tlWaits: Set<string>; tlNamespaces: Set<string> } {
   const tlWaits = new Set<string>()
   const tlNamespaces = new Set<string>()
-  for (const node of ast.program.body) {
+  for (const node of program.body) {
     if (node.type !== 'ImportDeclaration' || !node.source.value.startsWith('@testing-library/')) continue
     for (const specifier of node.specifiers) {
       if (specifier.type === 'ImportNamespaceSpecifier') tlNamespaces.add(specifier.local.name)
@@ -141,6 +139,7 @@ export function testingLibrary(ast: File): { tlWaits: Set<string>; tlNamespaces:
 export interface Ctx {
   file: string
   lines: string[]
+  lineOf: (offset: number) => number
   tlWaits: ReadonlySet<string>
   tlNamespaces: ReadonlySet<string>
   accepted: (line: number) => boolean
@@ -150,7 +149,7 @@ export interface Ctx {
 }
 
 export function report(ctx: Ctx, rule: Rule, node: Node): void {
-  const line = node.loc?.start.line ?? 0
+  const line = ctx.lineOf(node.start ?? 0)
   if (ctx.accepted(line)) return
   ctx.sites.push({ file: ctx.file, rule, line, site: ctx.lines[line - 1]?.trim() ?? '' })
 }
@@ -258,10 +257,11 @@ export function visit(node: Node, ancestors: readonly Node[], ctx: Ctx): void {
 }
 
 /** Acceptance by `// bound: <reason>`: on the site's line, or in the block of comment lines directly above it. */
-export function acceptance(lines: readonly string[], comments: readonly Comment[]): (line: number) => boolean {
+export function acceptance(source: WaitSource): (line: number) => boolean {
+  const { lines } = source
   const reasoned = new Set<number>()
-  for (const comment of comments) {
-    if (comment.type === 'CommentLine' && /^\s*bound:\s*\S/.test(comment.value)) reasoned.add(comment.loc?.start.line ?? 0)
+  for (const comment of source.comments) {
+    if (comment.line && /^\s*bound:\s*\S/.test(comment.value)) reasoned.add(source.lineOf(comment.start))
   }
   return line => {
     if (reasoned.has(line)) return true
@@ -270,14 +270,14 @@ export function acceptance(lines: readonly string[], comments: readonly Comment[
   }
 }
 
-export function scanSource(file: string, source: string): Site[] {
-  const ast = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'], attachComment: false })
-  const lines = source.split('\n')
+
+/** The sites of one parsed file: `@babel/parser`'s tree, or oxlint's through `babelView`. */
+export function scanProgram(file: string, program: Program, source: WaitSource): Site[] {
   const ctx: Ctx = {
-    file, lines, ...testingLibrary(ast), accepted: acceptance(lines, ast.comments ?? []),
+    file, lines: source.lines, lineOf: offset => source.lineOf(offset), ...testingLibrary(program), accepted: acceptance(source),
     sites: [], loops: new Map(),
   }
-  walk(ast.program, [], (node, ancestors) => visit(node, ancestors, ctx))
+  walk(program, [], (node, ancestors) => visit(node, ancestors, ctx))
   for (const [loop, { sleeps, where }] of ctx.loops) {
     const deadline = pollDeadline(where, sleeps)
     if (deadline === 'none' || (typeof deadline === 'number' && !(deadline >= FLOOR_MS && Number.isFinite(deadline)))) report(ctx, 'poll-deadline', loop)
@@ -285,13 +285,18 @@ export function scanSource(file: string, source: string): Site[] {
   return ctx.sites.sort((a, b) => a.line - b.line || a.rule.localeCompare(b.rule))
 }
 
-/** Every cockpit unit test under a directory. */
-export function scanTree(root = srcDir, dir = root): Site[] {
+/** Every cockpit unit test under a directory, or those of them `only` names. */
+export function scanTree(root = srcDir, dir = root, only?: ReadonlySet<string>): Site[] {
+  return scanFiles(testFiles(root, dir, only)).flat()
+}
+
+function testFiles(root: string, dir: string, only?: ReadonlySet<string>): Array<{ file: string; code: string }> {
   return readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name)).flatMap(entry => {
     const path = join(dir, entry.name)
-    if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : scanTree(root, path)
-    if (!/\.test\.tsx?$/.test(entry.name)) return []
-    return scanSource(relative(root, path).replaceAll('\\', '/'), readFileSync(path, 'utf8'))
+    if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : testFiles(root, path, only)
+    const file = relative(root, path).replaceAll('\\', '/')
+    if (!/\.test\.tsx?$/.test(entry.name) || (only && !only.has(file))) return []
+    return [{ file, code: readFileSync(path, 'utf8') }]
   })
 }
 
@@ -310,16 +315,59 @@ export const unitBaseline = {
 export const scannedUnitFile = (file: string): boolean => file.startsWith('packages/web/src/')
   && /\.test\.tsx?$/.test(file) && !file.split('/').includes('node_modules');
 
-export const unitWaitDiscipline: SourceRule = {
+/**
+ * Whether a call can be a wait the rule reads, so a file with none, no `await` and no Testing Library import costs no
+ * scan: a wait's name, or a bracketed member whose key the scan may resolve to one (`vi['waitFor']`). A renamed or
+ * namespaced Testing Library wait is caught by its import.
+ */
+const waitCallee = (callee: { type: string; name?: unknown; computed?: unknown; property?: { name?: unknown } }): boolean => {
+  if (callee.type === 'MemberExpression' && callee.computed === true) return true
+  const name = callee.type === 'Identifier' ? callee.name : callee.property?.name
+  return typeof name === 'string' && (/^(?:waitFor|waitUntil|poll|waitForElementToBeRemoved)$/.test(name) || findQuery.test(name))
+}
+
+/** The visitors that note whether a file can hold a site as oxlint walks it, then give its sites. */
+export function unitVisitors(file: string, sourceCode: AstContext['sourceCode'], done: (sites: Site[], program: EsNode) => void): Visitors {
+  let relevant = false
+  return {
+    AwaitExpression() {
+      relevant = true
+    },
+    CallExpression(node) {
+      relevant ||= waitCallee(node.callee as Parameters<typeof waitCallee>[0])
+    },
+    ImportDeclaration(node) {
+      relevant ||= String((node.source as { value?: unknown } | undefined)?.value ?? '').startsWith('@testing-library/')
+    },
+    'Program:exit'(node) {
+      if (!relevant) return
+      const source = new WaitSource(sourceCode.text, waitComments(sourceCode.getAllComments() as unknown as ParsedComment[]))
+      done(scanProgram(file, babelTree(node), source), node)
+    },
+  }
+}
+
+/** The cockpit sites of files under `packages/web/src`, as oxlint parses them: the baseline runner and the rule's tests read this. */
+export function scanFiles(files: ReadonlyArray<{ file: string; code: string }>): Site[][] {
+  const found = new Map<string, Site[]>()
+  inOxlint(files.map(each => ({ file: `packages/web/src/${each.file}`, code: each.code })), context => unitVisitors(
+    context.file.slice('packages/web/src/'.length), context.sourceCode, sites => found.set(`${context.file}\0${context.sourceCode.text}`, sites)))
+  return files.map(each => found.get(`packages/web/src/${each.file}\0${each.code}`) ?? [])
+}
+
+/** One file's cockpit sites; see `scanFiles`. */
+export const scanSource = (file: string, code: string): Site[] => scanFiles([{ file, code }])[0] ?? []
+
+export const unitWaitDiscipline: AstRule = {
   name: 'unit-wait-discipline',
   description: 'Wait on the cockpit product signal, with a reason for a wall-clock bound.',
   applies: scannedUnitFile,
-  check(file, source) {
-    const sites = scanSource(file.slice('packages/web/src/'.length), source);
-    const { added } = compareToBaseline(tally(sites), readBaseline(baselinePath));
-    return added.flatMap(entry => sites.filter(site => site.rule === entry.rule && site.site === entry.site).map(site => ({
-      line: site.line,
-      message: `[${site.rule}] ${site.site}. New wait-discipline sites. Give each a product signal, a bound of at least ${FLOOR_MS} ms, or a "// bound: <reason>" comment, rather than adding it to ${baselinePath} (AGENTS.md § Validation)`,
-    })));
-  },
+  create: (report, { file, sourceCode }) => unitVisitors(file.slice('packages/web/src/'.length), sourceCode, (sites, program) => {
+    const { added } = compareToBaseline(tally(sites), readBaseline(baselinePath))
+    for (const entry of added) {
+      for (const site of sites.filter(each => each.rule === entry.rule && each.site === entry.site)) {
+        report(program, `[${site.rule}] ${site.site}. New wait-discipline sites. Give each a product signal, a bound of at least ${FLOOR_MS} ms, or a "// bound: <reason>" comment, rather than adding it to ${baselinePath} (AGENTS.md § Validation)`, { line: site.line, column: 0 })
+      }
+    }
+  }),
 };

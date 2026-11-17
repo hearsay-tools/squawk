@@ -86,7 +86,7 @@ function optionalChainNode(node: EsNode): boolean {
   return optional;
 }
 
-function isMethodDefinition(node: EsNode): boolean {
+export function isMethodDefinition(node: EsNode): boolean {
   return node.type === 'MethodDefinition' || node.type === 'TSAbstractMethodDefinition';
 }
 
@@ -95,7 +95,8 @@ function methodType(node: EsNode): string {
   return child(node, 'key')?.type === 'PrivateIdentifier' ? 'ClassPrivateMethod' : 'ClassMethod';
 }
 
-function mapShape(out: Record<string, unknown>, node: EsNode, method: boolean): void {
+/** Babel's node types on a view or a copy of `node`; `optional` says whether a call or member sits in an optional chain. */
+export function mapShape(out: Record<string, unknown>, node: EsNode, method: boolean, optional: (node: EsNode) => boolean = optionalChainNode): void {
   if (node.type === 'Literal') {
     out.type = literalType(node);
     if (node.regex && typeof node.regex === 'object') Object.assign(out, node.regex);
@@ -106,7 +107,7 @@ function mapShape(out: Record<string, unknown>, node: EsNode, method: boolean): 
     out.type = child(node, 'key')?.type === 'PrivateIdentifier' ? 'ClassPrivateProperty' : 'ClassProperty';
     if (node.type === 'TSAbstractPropertyDefinition') out.abstract = true;
   }
-  if ((node.type === 'CallExpression' || node.type === 'MemberExpression') && optionalChainNode(node)) out.type = `Optional${node.type}`;
+  if ((node.type === 'CallExpression' || node.type === 'MemberExpression') && optional(node)) out.type = `Optional${node.type}`;
   if (node.type === 'PrivateIdentifier') {
     out.type = 'PrivateName';
     out.id = { type: 'Identifier', name: node.name, start: node.start, end: node.end, loc: node.loc };

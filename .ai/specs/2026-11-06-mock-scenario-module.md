@@ -281,7 +281,7 @@ byte-identical.
 3. **Mapper and dry run.** The runner's `*-ui-mapper.test.ts`, `npm run
    test:package` after `npm run build` (dry run from the packed tarball), and the
    browser specs `npm run test:e2e:affected` selects.
-4. **Guard.** A lint `SourceRule` under `packages/cezar/src/lint/`, beside
+4. **Guard.** A lint rule (`AstRule`) under `packages/cezar/src/lint/`, beside
    `native-mock-source.ts`. The lint runner reads the scripts, so no test reads mock
    source and `cez/native-mock-source` holds. The rule applies to
    `packages/cezar/scripts/mock-*.mjs` other than the shared modules. It reports a

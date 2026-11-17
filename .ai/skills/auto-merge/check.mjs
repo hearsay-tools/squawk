@@ -20,7 +20,7 @@ const MAX_LINES = 400
 const BLOCKED_TYPES = new Set(['feat'])
 
 // Lint scanners whose cases may grow without owner review.
-const LINT_CASES = 'packages/cezar/src/lint/{blank,server-wait-*,test-wait-discipline,unit-wait-*,wait-baseline,wait-discipline-runner}.ts'
+const LINT_CASES = 'packages/cezar/src/lint/{blank,server-wait-*,test-wait-discipline,unit-wait-*,wait-babel-tree,wait-baseline,wait-discipline-runner,wait-oxlint,wait-source}.ts'
 
 // Paths that never auto-merge. A `source` rule skips test files; `except` skips the
 // globs it names. `unless` lets a file through when its diff only deletes
