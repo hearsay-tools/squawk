@@ -160,7 +160,7 @@ describe('AgentBrowser auto-wait (#405)', () => {
     expect(commands().filter(args => args[0] === 'set').slice(-2)).toEqual([
       ['set', 'viewport', '1440', '900', '1.5'], ['set', 'media', 'dark', 'reduced-motion'],
     ])
-  })
+  }, 10_000) // bound: 16 synchronous fake-provider Node starts; observed 5627 ms under host load.
 
   it('freezes the resolved scoped route after setup visits bare root', () => {
     const { browser, commands } = open({
