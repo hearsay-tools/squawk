@@ -1,6 +1,6 @@
 import type { Node, Program } from '@babel/types';
 import type { EsNode } from './ast-rule.ts';
-import { isMethodDefinition, literalType, methodType } from './ast-node-view.ts';
+import { isMethodDefinition, mapShape } from './ast-node-view.ts';
 
 /**
  * Oxlint's ESTree program as the plain babel-shaped tree the cockpit wait rule reads
@@ -27,22 +27,6 @@ function inOptionalChain(node: EsNode): boolean {
   return false;
 }
 
-function shape(out: Out, node: EsNode, method: boolean): void {
-  if (node.type === 'Literal') {
-    out.type = literalType(node);
-    if (node.regex && typeof node.regex === 'object') Object.assign(out, node.regex);
-  } else if (node.type === 'Property') out.type = method ? 'ObjectMethod' : 'ObjectProperty';
-  else if (isMethodDefinition(node)) out.type = methodType(node);
-  else if (node.type === 'PropertyDefinition' || node.type === 'TSAbstractPropertyDefinition') {
-    out.type = (node.key as EsNode | undefined)?.type === 'PrivateIdentifier' ? 'ClassPrivateProperty' : 'ClassProperty';
-    if (node.type === 'TSAbstractPropertyDefinition') out.abstract = true;
-  } else if ((node.type === 'CallExpression' || node.type === 'MemberExpression') && inOptionalChain(node)) out.type = `Optional${node.type}`;
-  else if (node.type === 'PrivateIdentifier') {
-    out.type = 'PrivateName';
-    out.id = { type: 'Identifier', name: node.name, start: node.start, end: node.end };
-  }
-}
-
 function copyFields(out: Out, node: EsNode, skipValue: boolean): void {
   for (const key of Object.keys(node)) {
     if (SKIPPED.has(key) || (skipValue && key === 'value')) continue;
@@ -57,7 +41,7 @@ function convert(node: EsNode): Out {
   const method = isMethodDefinition(node) || (node.type === 'Property' && node.method === true);
   if (method && isNode(node.value)) copyFields(out, node.value, false);
   copyFields(out, node, method);
-  shape(out, node, method);
+  mapShape(out, node, method, inOptionalChain);
   return out;
 }
 
