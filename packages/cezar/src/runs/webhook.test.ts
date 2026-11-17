@@ -11,7 +11,7 @@ import {
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from './store.ts';
 import { mergeWriteWorkspaceConfig } from '../workspace/config.ts';
 import { registerProject } from '../workspace/projects.ts';
@@ -489,6 +489,7 @@ describe('TaskWebhooks', () => {
     delete process.env.CEZ_DRY_RUN;
   });
   afterEach(() => {
+    vi.useRealTimers();
     rmSync(root, { recursive: true, force: true });
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
     else process.env.CEZ_DRY_RUN = savedDryRun;
@@ -505,10 +506,10 @@ describe('TaskWebhooks', () => {
     const hook = hooks.attach({ id: 'default', root, store });
     expect(hooks.attach({ id: 'default', root, store })).toBe(hook);
 
+    vi.useFakeTimers();
     const run = store.createRun({ title: 't', workflow: 'quick-task', task: 't', notify: true, steps: [] });
     setRunStatus(store, run.id, RUN_STATUS.done);
-    // bound: negative window. A delivery that was not held would reach the recorder within a few event-loop turns of the status change; 20 ms covers them.
-    await new Promise((done) => setTimeout(done, 20));
+    await vi.advanceTimersByTimeAsync(20);
     expect(calls).toEqual([]);
 
     hooks.setOrigin('http://127.0.0.1:4321');

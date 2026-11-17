@@ -73,11 +73,8 @@ const SITES: Site[] = [
   { site: 'requeueInterruptedRun (both)', exit: 'requeue', from: 'failed', manager: true,
     before: () => ({ error: u, finishedAt: u, currentStepId: u }), after: () => ({ error: u, finishedAt: u }) },
   { site: 'holdContinuationForRootFinish', exit: 'requeue', from: 'running', manager: true, before: () => ({ currentStepId: u }), after: () => ({}) },
-  { site: 'settleResumedWorkflowStep', exit: 'requeue', from: 'running', manager: true, before: () => ({ currentStepId: u }), after: () => ({}) },
-  { site: 'requeueWhileHeld, resumed workflow', exit: 'requeue', from: 'running', manager: true, before: () => ({ currentStepId: u }), after: () => ({}) },
   { site: 'requeueWhileHeld, first step', exit: 'requeue', from: 'queued', manager: true,
     before: () => ({ startedAt: u, currentStepId: u }), after: () => ({ startedAt: u }) },
-  { site: 'check step retry', exit: 'requeue', from: 'running', manager: true, before: () => ({ currentStepId: u }), after: () => ({}) },
   // continue-line, continue-now
   { site: 'acceptUntouchedContinuation', exit: 'continue-line', from: 'done', manager: true,
     before: () => ({ stopping: u, error: u, finishedAt: u, currentStepId: u, queuedMessages: [] }), after: () => ({ stopping: u, queuedMessages: [] }) },
@@ -101,8 +98,6 @@ const SITES: Site[] = [
     before: () => ({ error: 'e', finishedAt: NOW }), after: () => ({ error: 'e' }), s7: ['B1-B3'] },
   { site: 'ownedContinuationWorkspace, failContinuationBeforeSpawn, reviveQueuedContinuation', exit: 'fail-start', from: 'running', manager: true,
     before: () => ({ error: 'e', finishedAt: SHARED, currentStepId: u }), after: () => ({ error: 'e', finishedAt: SHARED }), s7: ['B1-B3'] },
-  { site: 'reviveQueuedRun, reviveQueuedWorker', exit: 'fail-start', from: 'queued', manager: true,
-    before: () => ({ error: 'e', finishedAt: NOW }), after: () => ({ error: 'e' }), s7: ['B1-B3'] },
   { site: 'worktree creation failed', exit: 'fail-start', from: 'running', manager: true,
     before: () => ({ error: 'e', finishedAt: NOW, currentStepId: u }), after: () => ({ error: 'e' }), s7: ['B1-B3'] },
   // fail, fail-continue

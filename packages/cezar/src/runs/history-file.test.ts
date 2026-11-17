@@ -72,22 +72,15 @@ async function collect(stream: Readable): Promise<Buffer> {
 }
 
 describe('history-file', () => {
-  it('round-trips a transcript byte for byte', async () => {
+  it('compresses, reads and restores a transcript byte for byte', async () => {
     const { dataDir, id, plain, compressed } = setup();
-    const original = transcript();
+    const original = Buffer.from(transcript());
     writeFileSync(plain, original);
     expect(await compressHistory(dataDir, id, () => true)).toBe('compressed');
     expect(existsSync(plain)).toBe(false);
     expect(existsSync(compressed)).toBe(true);
     expect(leftoverTmp(dataDir)).toEqual([]);
-    expect(readHistoryText(dataDir, id)).toBe(original);
-  });
-
-  it('restore writes the original bytes back', async () => {
-    const { dataDir, id, plain, compressed } = setup();
-    const original = Buffer.from(transcript());
-    writeFileSync(plain, original);
-    expect(await compressHistory(dataDir, id, () => true)).toBe('compressed');
+    expect(readHistoryText(dataDir, id)).toBe(original.toString('utf8'));
     restoreHistory(dataDir, id);
     expect(readFileSync(plain).equals(original)).toBe(true);
     expect(existsSync(compressed)).toBe(false);
