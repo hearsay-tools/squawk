@@ -97,6 +97,11 @@ function serve(
   requests = []
   const json = (payload: unknown, status = 200) =>
     new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } })
+  const reads = new Map<string, unknown>([
+    ['/api/v1/health', health],
+    ['/api/v1/run-summaries', []],
+    ['/api/v1/repo', { info: { root: '/repo', branch: 'main' } }],
+  ])
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -104,7 +109,7 @@ function serve(
       const method = init.method ?? 'GET'
       const body = init.body ? (JSON.parse(String(init.body)) as unknown) : undefined
       requests.push({ method, url, body })
-      if (url === '/api/v1/health') return json(health)
+      if (method === 'GET' && reads.has(url)) return json(reads.get(url))
       if (url === '/api/v1/providers/status') return json(providerStatus, providerStatusCode)
       if (url.includes('/runner-skills?')) {
         if (!health.capabilities.localHandoff && new URL(url, 'http://localhost').searchParams.has('account')) {
@@ -126,11 +131,8 @@ function serve(
           maxParallel: 1,
           memoryLimitMb: null,
         })
-      if (url === '/api/v1/run-summaries' && method === 'GET') return json([])
       if (url === '/api/v1/workspace/agent-profiles' && method === 'GET')
         return agentProfiles ? json(agentProfiles) : json({ error: 'not found' }, 404)
-      if (url === '/api/v1/repo' && method === 'GET')
-        return json({ info: { root: '/repo', branch: 'main' } })
       if (url.endsWith('/continue') && method === 'POST') return json({ continued: true })
       return json({}, 200)
     }),
