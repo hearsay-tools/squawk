@@ -79,7 +79,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
   "run-search-field-list-outside-contract": ["packages/web/src/search-leak.ts", "const fields = [run.branch, run.workflow];"],
   "runner-class-outside-factory": ["packages/cezar/src/runner-leak.ts", "new PiRunner();"],
   "server-declared-validator-schema": ["packages/cezar/src/server/server.ts", "jsonZodValidator(z.object({}));"],
-  "skills-read-outside-enabled-skills": ["packages/cezar/src/workflows/run/skills-reader.ts", "const skills = state.skills.catalog;"],
+  "skills-read-outside-enabled-skills": ["packages/cezar/src/workflows/run/skills-reader.ts", "const { catalog } = state.skills;"],
   "skills-write-outside-load-run-skills": ["packages/cezar/src/workflows/run/skills-writer.ts", "skillsWrites.catalog(state.skills, []);"],
   "wait-kind-literal-outside-engine": ["packages/cezar/src/wait-kind-leak.ts", "kind === 'pr';"],
   "worktree-write-outside-manifest": ["packages/cezar/src/skills-provision.ts", "import { writeFile } from 'node:fs/promises';"],
