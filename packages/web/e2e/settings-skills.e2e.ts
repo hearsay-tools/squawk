@@ -29,8 +29,9 @@ afterAll(async () => {
 describe('runner skill inventory against the native mock list', () => {
   function openInventory() {
     browser.goto(`${baseUrl}/skills`)
-    browser.waitForFunction(`document.querySelector('select[aria-label="Runner"]') !== null`)
-    browser.evaluate(`(() => { const select = document.querySelector('select[aria-label="Runner"]'); select.value = 'codex'; select.dispatchEvent(new Event('change', { bubbles: true })) })()`)
+    const codex = `[role="group"][aria-label="Runner"] button:nth-child(2)`
+    browser.waitForFunction(`document.querySelector(${JSON.stringify(codex)})?.textContent === 'Codex'`)
+    browser.click(codex)
     browser.waitForFunction(`document.querySelectorAll('[data-slot="skill-row"]').length === 2 && document.body.textContent.includes('Invalid skill manifest')`)
     expect(browser.count(repoSkillRow)).toBe(1)
   }
@@ -41,7 +42,7 @@ describe('runner skill inventory against the native mock list', () => {
     expect(browser.count('[data-slot="skill-body"]')).toBe(0)
     clickInView(browser, `${repoSkillRow} summary`)
     browser.waitForFunction(`document.querySelector(${JSON.stringify(repoSkillRow)})?.open === true`)
-    expect(browser.evaluate(`document.querySelector('[data-slot="skill-row"][open]').textContent`)).toContain('Plugin: plugin')
+    expect(browser.evaluate(`document.querySelector('[data-slot="skill-row"][open]').textContent`)).toContain('Plugin plugin')
     expect(browser.evaluate(`document.querySelector('[data-slot="skill-row"][open]').textContent`)).toContain('.agents/check/SKILL.md')
   })
   it('re-reads the selected runner and retains the open entry', () => {

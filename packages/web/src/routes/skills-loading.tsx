@@ -4,10 +4,10 @@ export function SkillsLoading() {
     <div
       data-route="skills"
       aria-busy="true"
-      className="mx-auto min-h-full w-full px-[18px] py-6 md:p-9"
+      className="mx-auto min-h-full w-full max-w-[1100px] px-[18px] py-6 md:p-9"
     >
-      <h1 className="text-[30px] font-semibold tracking-tight">Skills</h1>
-      <p className="mt-1 text-[13px] text-muted-foreground">Markdown playbooks your agents can follow.</p>
+      <h1 className="text-[25px] font-semibold tracking-tight md:text-[30px]">Skills</h1>
+      <p className="mt-1 text-[13px] text-muted-foreground">The skills each agent loads in this project, as its runner reports them.</p>
       <p data-slot="skills-loading" role="status" className="mt-6 text-xs text-muted-foreground">
         Loading skills…
       </p>
