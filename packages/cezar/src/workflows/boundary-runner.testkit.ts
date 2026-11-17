@@ -25,7 +25,7 @@ export function useBoundaryRunner(log: string[] = []) {
         const session: AgentSession = { get open() { return open; }, result, end: close, interrupt: close,
           sendMessage: () => true, sendAgentMessage: async () => {}, discardQueuedMessages() {}, holdsHumanInput: () => false };
         sessions.push(session);
-        queueMicrotask(() => onEvent?.({ type: 'session', sessionId: `boundary-order-${sessions.length}` }));
+        queueMicrotask(() => onEvent?.({ type: 'session', sessionId: `boundary-order-${sessions.length}`, resumed: false }));
         return session;
       },
     };

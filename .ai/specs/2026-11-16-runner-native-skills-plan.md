@@ -63,7 +63,7 @@ account home, without a model call. Nothing in the product reads the answer yet.
 
   | Runner | Route | Notes from the probe |
   | --- | --- | --- |
-  | Claude | `get_skills_dialog` control request to a short `claude` process with `--settings '{"disableAllHooks":true}'` and `--no-session-persistence` | No path in the answer. `--bare` and `--safe-mode` list nothing |
+  | Claude | `get_skills_dialog` control request to a short `claude` process with `--settings '{"disableAllHooks":true}'` and `--no-session-persistence --strict-mcp-config --mcp-config '{"mcpServers":{}}'` | No path in the answer. `--bare` and `--safe-mode` list nothing |
   | Codex | `skills/list` with `cwds`, after `initialize`, no thread | Reuse `codex-app-server-transport.ts` as `codex-model-catalog.ts` does. Map `errors` to `problems`. One id can come twice |
   | OpenCode | `GET /skill?directory=` | No scope field: derive it from `location`. The server caches its list. Drop entries under a `.trash` folder |
   | pi | RPC `get_commands` to `pi --mode rpc --no-session` | Launch with `pi-project-skills.mjs` exactly as `pi-runner.ts` does, or project skills are missing. Strip the `skill:` prefix from the id |

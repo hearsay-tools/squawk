@@ -302,3 +302,26 @@ Implemented adapter output (389 ms, trimmed metadata):
 
 Real native response excerpt: `core/__fixtures__/claude/skill-list.json` under the service
 workspace. Only metadata entries were retained; no skill body or account response.
+
+## Slice 2 trigger checks (2026-11-16)
+
+Claude Code 2.1.321, `haiku`. The opening trigger returned the random fixture token in
+3493 ms with zero tool calls. The mid-turn check sent a stream-json user message on the first
+native assistant/stream frame. It returned the token in 6582 ms, across two turn boundaries:
+Claude queued the trigger to the second turn. `skillTriggerMidTurn` remains false.
+
+Four real turns were used: one failed delta-hook attempt, one opening turn, and two turns for
+the corrected mid-turn check. The coordinator authorized the two extra mid-turn turns.
+The first hook waited for a normalized delta that this CLI did not emit; it timed out without
+sending the trigger. A later invalid-model attempt made no paid turn and is not evidence.
+
+The stdout recorder did not enable input replay because its help process lacked the runner
+environment. Therefore the summaries have zero expansion frames. The opening fixture was
+recovered from that exact session's persisted native JSONL payloads (session
+`6d8e2e12-af44-42d2-b863-f2e959b5bc45`), not from stdout replay. Only the command user payload,
+the `isMeta` user payload with opening context plus injected skill body, and the assistant text
+were kept. Thinking, signatures and account data were excluded. The scratch root and random
+token were replaced by `/probe/repo` and `TRIGGER-FIXTURE`. The mock uses the existing replay
+outer envelope around these real payloads.
+
+See [slice 2 evidence](slice2-evidence.md) for commands, captures and offline checks.

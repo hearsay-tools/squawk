@@ -150,7 +150,8 @@
     "cez/active-run-usage-write-outside-owner": "error",
     "cez/active-run-wait-write-outside-owner": "error",
     "cez/active-run-literal": "error",
-    "cez/active-run-map-write": "error"
+    "cez/active-run-map-write": "error",
+    "cez/launch-read-outside-resolver": "error"
   },
   "ignorePatterns": [
     "**/node_modules/**",

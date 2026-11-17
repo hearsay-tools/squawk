@@ -72,6 +72,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
   'active-run-wait-write-outside-owner': ['packages/cezar/src/owner-wait.ts', 'state.waitIdentity as any;'],
   'active-run-literal': ['packages/cezar/src/literal.ts', 'const state: ActiveRun = {};'],
   'active-run-map-write': ['packages/cezar/src/workflows/map.ts', 'host.active.set(id, state);'],
+  'launch-read-outside-resolver': ['packages/cezar/src/workflows/run/launch-read-violation.ts', 'input.model;\n'],
   'product-env-read': ['packages/cezar/src/env-reader.ts', 'const flag = process.env.CEZ_DRY_RUN;\n'],
   'test-home-write': ['packages/web/src/ambient-home.test.ts', "writeFileSync(join(cezarHomeDir(), 'config.json'), '{}');\n"],
   'home-boundary': ['packages/cezar/src/ambient-home.ts', 'cezarHomeDir();\n'],

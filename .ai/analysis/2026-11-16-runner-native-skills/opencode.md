@@ -142,3 +142,17 @@ Setup for B1, B2, B4: Squawk's launch (`opencode serve --hostname 127.0.0.1 --po
 | B4 second `command` while the turn is busy | **Accepted and steered into the running turn; no error, no queue of its own. TESTED.** | `[1516] POST A probe-mid` (`sleep 30`) -> `[4673] tool bash running` -> `[15515] POST B probe-quick "second"` -> `[15534] SSE message.updated role=user` + text part with the second skill's body (inserted at once, while bash still runs) -> `[34683] tool bash completed` -> one more model step -> `[36446] POST A status=200 after 34930ms` and `[36447] POST B status=200 after 20932ms`, both with the SAME body (assistant message `msg_...nmztnLe7qgiI8S`) -> one `session.idle` -> `command.executed name=probe-mid` and `command.executed name=probe-quick`, both with that same `messageID`. Final text: `QUICK-0436886b:second`; the first skill's token `MID-e02da699` was never returned, although its shell command ran. |
 
 Cleanup: servers PID 1604019 and 1784634 stopped by PID and confirmed gone; scratch folder removed; no process with a cwd inside the scratch folder is left. The three probe sessions of B1, B2 and B4 stay in OpenCode's own data folder.
+
+## Slice 2 trigger checks (2026-11-16)
+
+OpenCode 1.19.4, `zai-coding-plan/glm-5.3-flash`. One real turn returned the random
+fixture token in 5570 ms with zero tool calls. The recording HTTP proxy captured the native
+user message and its expanded text part before the command response completed.
+
+The wrapper translated its cleanup SIGTERM to exit code 1, so the summary also records a
+post-output process error. This is successful native token output, not a clean whole-session
+verdict. The wrapper now preserves signal exit 143; no further paid turn was used.
+The native mock checks dropped-command survival, a gated turn beyond 300 s with fake parent
+time, HTTP-only error, SSE-only error, and termination before acknowledgement.
+
+See [slice 2 evidence](slice2-evidence.md) for commands, captures and offline checks.

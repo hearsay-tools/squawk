@@ -114,7 +114,7 @@ describe('team directory skills never land in the main checkout (#1024)', { time
             }
           } finally { finish(); }
         });
-        queueMicrotask(() => onEvent?.({ type: 'session', sessionId: `sess-${launches.length}` }));
+        queueMicrotask(() => onEvent?.({ type: 'session', sessionId: `sess-${launches.length}`, resumed: false }));
         return session;
       },
     }));

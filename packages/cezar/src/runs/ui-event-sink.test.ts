@@ -416,3 +416,14 @@ describe('reasoning text survives persist → replay (#528)', () => {
     expect(reasoning?.kind === 'reasoning' && reasoning.text).toBe('The session cookie is dropped on refresh.');
   });
 });
+
+
+it('persists one omp skill item for live and replay transcript readers', () => {
+  const events = JSON.parse(readFileSync(join(HERE, '../core/__fixtures__/omp/skill-trigger.expected.json'), 'utf8')) as UiEvent[];
+  const { sink, persisted, wire } = recorder();
+  for (const event of events) sink.handle(event);
+  sink.flushAll();
+  expect(persisted).toEqual(events);
+  expect(wire).toEqual(events);
+  expect(persisted.filter(event => event.type === 'item.completed')).toHaveLength(1);
+});

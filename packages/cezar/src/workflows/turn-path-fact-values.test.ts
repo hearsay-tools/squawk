@@ -51,7 +51,7 @@ beforeEach(() => {
       const close = () => { open = false; result.resolve({ text: '', toolCalls: [], tokensUsed: 0 }); };
       emitAgentEvent = event => onEvent?.(event);
       reportConsumed = ids => options?.onAgentInputConsumed?.(ids);
-      queueMicrotask(() => { onEvent?.({ type: 'session', sessionId: 'fact-values-session' }); opened.resolve(group); });
+      queueMicrotask(() => { onEvent?.({ type: 'session', sessionId: 'fact-values-session', resumed: false }); opened.resolve(group); });
       return { get open() { return open; }, result: result.promise, sendMessage: () => true,
         sendAgentMessage: () => sendAck(), discardQueuedMessages: () => {}, holdsHumanInput: () => holdsInput(),
         end: close, interrupt: close };

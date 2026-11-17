@@ -36,7 +36,7 @@ describe('RunManager memory guard', () => {
           end: vi.fn(close), interrupt: vi.fn(() => { close(); settle(); }),
         };
         queueMicrotask(() => {
-          emit({ type: 'session', sessionId: 'memory-session' });
+          emit({ type: 'session', sessionId: 'memory-session', resumed: false });
           notifyStarted();
         });
         return session;
