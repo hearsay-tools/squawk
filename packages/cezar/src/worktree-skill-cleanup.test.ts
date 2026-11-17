@@ -31,7 +31,7 @@ it('keeps user-changed entries and ignore files, and other writers records', asy
   const ignore = join(worktree, dirname(paths[0]!), '.gitignore');
   writeFileSync(ignore, '# user edit\n');
   const saved = JSON.parse(readFileSync(manifest, 'utf8'));
-  const seed = { writer: 'seed', path: 'AGENTS.md', kind: 'file', identity: 'tree2:unrelated' };
+  const seed = { writer: 'seed', path: 'seed-config.txt', kind: 'file', identity: 'tree2:unrelated' };
   saved.entries.push(seed);
   writeFileSync(manifest, JSON.stringify(saved));
   await removeProvisionedSkills(worktree);
