@@ -165,7 +165,7 @@ describe('RunManager repository-root lease scheduling', () => {
         if (event.type === 'step-start' || event.type === 'step-end') steps.push([runId, event.type]);
       };
       store.on('event', recordStep);
-      onTestFinished(() => store.off('event', recordStep));
+      onTestFinished(() => { store.off('event', recordStep); });
 
       // maxParallel defaults to 2. `holder` takes the lease; `blocked` waits on
       // it while idle and must hand its slot back, or `isolated` — which needs
