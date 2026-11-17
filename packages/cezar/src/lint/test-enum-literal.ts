@@ -30,6 +30,16 @@ function enumLiteral(node: EsNode, values: readonly string[], { sourceCode }: As
   return node.type === 'Literal' && typeof node.value === 'string' && sourceCode.getText(node).slice(1, -1).split(ESCAPE).some((fragment) => values.includes(fragment));
 }
 
+/** Keep tree-sitter's cast boundary when ESTree accepts a JSDoc non-null type. */
+function outsideDirectCast(value: EsNode, context: AstContext): boolean {
+  const annotation = child(value, 'typeAnnotation');
+  if (annotation?.type !== 'TSJSDocNonNullableType') return false;
+  const atEnd = sameBoundary(value, annotation, 1, context);
+  if (annotation.postfix !== true) return !atEnd;
+  const type = child(annotation, 'typeAnnotation');
+  return atEnd && type !== undefined && sameBoundary(annotation, type, 0, context);
+}
+
 /** Object-expression pairs only; one direct `as` cast is allowed, other wrappers stay out. */
 export const testEnumLiteral: AstRule = {
   name: 'test-enum-literal',
@@ -47,7 +57,7 @@ export const testEnumLiteral: AstRule = {
       if (!values) return;
       if (value.type === 'TSAsExpression') {
         // ESTree parses `as any!` as a JSDoc type; tree-sitter puts `!` around the cast.
-        if (child(value, 'typeAnnotation')?.type === 'TSJSDocNonNullableType') return;
+        if (outsideDirectCast(value, context)) return;
         const expression = child(value, 'expression');
         if (!expression || !sameBoundary(value, expression, 0, context)) return;
         value = expression;

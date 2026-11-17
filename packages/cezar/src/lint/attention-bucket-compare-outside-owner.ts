@@ -29,7 +29,8 @@ function assertedNonNullMember(node: EsNode, context: AstContext): EsNode | unde
     node = expression;
   }
   const member = chainExpression(node);
-  return member?.type === 'MemberExpression' && child(member, 'object')?.type === 'TSNonNullExpression' ? member : undefined;
+  const receiver = member && child(member, 'object');
+  return member?.type === 'MemberExpression' && receiver?.type === 'TSNonNullExpression' && sameBoundary(member, receiver, 0, context) ? member : undefined;
 }
 
 /** Peel wrappers in AST order, retaining the old grammar's operand and precedence limits. */

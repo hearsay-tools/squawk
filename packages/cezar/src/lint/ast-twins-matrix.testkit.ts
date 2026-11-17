@@ -10,9 +10,9 @@ const wrappers = [
   (x: string) => '<string>' + x,
   (x: string) => 'await ' + x,
 ];
-const members = ['attention.bucket', 'attention?.bucket', 'attention!.bucket', 'attention.bucket?.bucket', '(attention).bucket', 'attention?.bucket!.bucket'];
+const members = ['attention.bucket', 'attention?.bucket', 'attention!.bucket', 'attention.bucket?.bucket', '(attention).bucket', 'attention?.bucket!.bucket', '(attention!).bucket', '((attention!)).bucket'];
 
-/** Exact reviewer matrix: 2,040 probes, with angle assertions omitted for TSX. */
+/** Reviewer matrix plus parenthesized non-null receivers: 2,720 probes; no TSX angles. */
 export function attentionProbes(): TwinProbe[] {
   const cases: TwinProbe[] = [];
   for (const ext of ['ts', 'tsx'] as const) for (const member of members)
@@ -51,6 +51,11 @@ export function otherTwinProbes(name: string): TwinProbe[] {
         cases.push({ ext, code: `const x = { ${key}: ${wrap(value)} }` });
         cases.push({ ext, code: `const x = ${wrap(`{ ${key}: ${value} }`)}` });
       }
+    }
+  }
+  if (name === 'test-enum-literal') for (const ext of ['ts', 'tsx'] as const) {
+    for (const type of ['!any', '(any!)', '((any!))', '(!any)', '(!any)!']) {
+      cases.push({ ext, code: `const x = { status: 'done' as ${type} }` });
     }
   }
   return cases;

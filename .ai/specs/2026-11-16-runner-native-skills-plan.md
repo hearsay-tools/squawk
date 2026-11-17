@@ -248,8 +248,8 @@ Server and run path (3a):
   an automation" template (`packages/web/src/lib/prompt-templates.ts`), whose `skills` field
   only links the template's text to that pick. The `cezar_automation` tool from slice 4
   covers the job. Slice 5 deletes `automations/builtin-skill.ts`.
-- Regenerate the ast-grep rule `active-run-skills-write-outside-owner` with
-  `scripts/active-run-owner-rules.mjs` when the `ActiveRun` skills group changes.
+- Update the AST rule `cez/active-run-skills-write-outside-owner` metadata in
+  `packages/cezar/src/lint/active-run-write.ts` when the `ActiveRun` skills group changes.
 - D8 names Codex's `admin` scope; the contract maps it to `other`
   (`packages/contract/src/runner-skills.ts`). The resolver treats a copy with scope `other` as
   ambiguous, as D8 says for `admin`.
@@ -360,10 +360,10 @@ runner, and an enable without the explicit argument is refused.
   `packages/contract/src/skill-sources.ts` and `team-skill-ref.ts`, their api-client mirrors,
   the `interactive` hint, `components/skill-empty-hint.tsx` and the two ast-grep rules
   `skills-read-outside-enabled-skills` (with its baseline file) and
-  `skills-write-outside-load-run-skills`. The generated rule
-  `active-run-skills-write-outside-owner` stays: slice 3a changes what the `ActiveRun` skills
-  group holds and regenerates it. Check the rules' current form first: hearsay-tools/squawk#3775
-  started porting ast-grep rules to oxlint.
+  `skills-write-outside-load-run-skills`. The AST rule
+  `cez/active-run-skills-write-outside-owner` stays: slice 3a changes what the `ActiveRun` skills
+  group holds and updates its metadata in `packages/cezar/src/lint/active-run-write.ts`. Check the
+  rules' current form first: hearsay-tools/squawk#3775 started porting ast-grep rules to oxlint.
 - Move first, then delete: `agent-config/seed.ts` uses `excludeFromGit` and
   `worktree-manifest.ts` uses `landsInside`, both from `skills-remote.ts`. Move the two
   helpers to a module that stays.

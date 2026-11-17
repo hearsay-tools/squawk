@@ -59,7 +59,7 @@ it; editing that line makes the match new. That is deliberate: edit it by moving
 ## Traps
 
 - A pattern that starts with `{` parses as a block. Name the statement as `context` and the node
-  as `selector`, as `active-run-literal.yml` does.
+  as `selector`.
 - `$$$` after a comma does not match zero arguments. Write the one-argument pattern and the
   many-argument pattern.
 - Relational rules (`has`, `inside`) share metavariables with their `all` siblings. That is how
