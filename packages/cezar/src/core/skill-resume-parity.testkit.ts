@@ -505,7 +505,7 @@ describe('harness parity — native skill on Continue (#790)', () => {
         expect(fixture.manager.continueRun(fixture.runId, { text: promptFor(backend, 'baseline') }).ok).toBe(true);
         await waitFor(() => fixture.store.getRun(fixture.runId)?.status === 'failed');
         expect(fixture.store.getRun(fixture.runId)?.error).toContain(`${backend} account "default"`);
-        expect(hasNativeTrigger(fixture.wireSince(marked))).toBe(false);
+        expect(hasNativeTrigger(backend, fixture.wireSince(marked))).toBe(false);
       });
     }, 60_000);
   }
@@ -531,7 +531,7 @@ describe('harness parity — native skill on Continue (#790)', () => {
           // The continuation's opening prompt; its turn end's nudge follows (hearsay-tools/cezarion#1234).
           const last = continued[0]!;
           expect(skillInPrompt(last, fixture.repoRoot)).toBe(true);
-          expect(hasNativeTrigger(continuedWire)).toBe(true);
+          expect(hasNativeTrigger(backend, continuedWire)).toBe(true);
           expect(launchPrompt).not.toContain(SKILL_BODY);
         });
       } finally {
@@ -632,7 +632,7 @@ describe('opencode lost-session fallback (#790)', () => {
       const prompts = systemPromptsFrom('opencode', continued);
       expect(prompts.length).toBeGreaterThan(0);
       expect(skillInPrompt(prompts[0]!, fixture.repoRoot)).toBe(true);
-      expect(hasNativeTrigger(continued)).toBe(true);
+      expect(hasNativeTrigger('opencode', continued)).toBe(true);
       expect(launchPrompt).not.toContain(SKILL_BODY);
       const events = fixture.store.readEvents(fixture.runId);
       const notices = events.filter((event) => String(event.message).includes('no longer exists'));
