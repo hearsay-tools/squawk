@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from './run.ts';
 import type { WorkflowDef } from './types.ts';
@@ -160,6 +160,12 @@ describe('RunManager repository-root lease scheduling', () => {
     async () => {
       const fixture = fixtureRepo();
       const { store, holdsLease, release, start } = fixture;
+      const steps: Array<[string, string]> = [];
+      const recordStep = ({ runId, event }: { runId: string; event: { type: string } }) => {
+        if (event.type === 'step-start' || event.type === 'step-end') steps.push([runId, event.type]);
+      };
+      store.on('event', recordStep);
+      onTestFinished(() => store.off('event', recordStep));
 
       // maxParallel defaults to 2. `holder` takes the lease; `blocked` waits on
       // it while idle and must hand its slot back, or `isolated` — which needs
@@ -189,6 +195,10 @@ describe('RunManager repository-root lease scheduling', () => {
       );
       expect(store.getRun(holder.id)?.status).toBe('done');
       expect(store.getRun(blocked.id)?.status).toBe('done');
+      expect(steps.filter(([id]) => id === holder.id || id === blocked.id)).toEqual([
+        [holder.id, 'step-start'], [holder.id, 'step-end'],
+        [blocked.id, 'step-start'], [blocked.id, 'step-end'],
+      ]);
       for (const id of [holder.id, blocked.id]) {
         const notes = store.readEvents(id).filter(event => event.type === 'note');
         expect(notes.some(event => String(event.message).includes('worktree off'))).toBe(true);
