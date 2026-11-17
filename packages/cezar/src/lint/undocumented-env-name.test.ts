@@ -24,11 +24,15 @@ it('requires HSQ documentation for property reads, writes and dynamic literal na
   expect(envNames(source)).toEqual(['CEZ_HOME', 'HSQ_DYNAMIC', 'HSQ_HOME', 'HSQ_NEW']);
   expect(undocumented(source, new Set(['CEZ_HOME', 'HSQ_HOME']))).toEqual(['HSQ_DYNAMIC', 'HSQ_NEW']);
   expect(documentedNames().has('HSQ_HOME')).toBe(true);
+  expect(envNames(`process.env.CEZ_ONE; env.CEZ_TWO; process.env['CEZ_THREE']; env["CEZ_FOUR"];`))
+    .toEqual(['CEZ_FOUR', 'CEZ_ONE', 'CEZ_THREE', 'CEZ_TWO']);
 });
 
-it('keeps conservative literal-key scanning and ignores HSQ comments', () => {
+it('keeps conservative literal-key scanning and scans template substitutions', () => {
   expect(envNames(`// env.HSQ_COMMENT\nconst x = 'HSQ_EXAMPLE'; /* env.HSQ_COMMENT2 */`)).toEqual(['HSQ_EXAMPLE']);
   expect(envNames(`// env.HSQ_COMMENT\nconst x = 'other text HSQ_EXAMPLE';`)).toEqual([]);
+  expect(envNames('// env.CEZ_COMMENT\n"process.env.CEZ_STRING"; `example ${env.CEZ_REAL}`;'))
+    .toEqual(['CEZ_REAL']);
 });
 
 it('derives both complete names from literal product helper suffixes', () => {
@@ -65,7 +69,14 @@ it('keeps complete environment names in directive literals documented', () => {
   expect(envNames("'CEZ_DOC_DIRECTIVE';")).toEqual(['CEZ_DOC_DIRECTIVE']);
 });
 
-it('ignores literal name prefixes while keeping complete names and identifier spellings', () => {
+it('ignores literal name prefixes while keeping complete names, helpers and identifier spellings', () => {
   expect(envNames("const prefix = 'CEZ_TOOL_'; const other = `HSQ_TOOL_`; const CEZ_IDENTIFIER_ = 1; env['CEZ_COMPLETE'];"))
     .toEqual(['CEZ_COMPLETE', 'CEZ_IDENTIFIER_']);
+  expect(envNames("const prefix = 'CEZ_TOOL_'; const key = 'CEZ_KEY'; readEnv('CEZ_HELPER'); (opts.env ?? process.env).CEZ_FALLBACK;"))
+    .toEqual(['CEZ_FALLBACK', 'CEZ_HELPER', 'CEZ_KEY']);
+});
+
+it('rejects an undocumented read and exempts every mock switch', () => {
+  expect(undocumented('env.CEZ_NEW; env.CEZ_KNOWN; env.CEZ_MOCK_NEW;', new Set(['CEZ_KNOWN'])))
+    .toEqual(['CEZ_NEW']);
 });

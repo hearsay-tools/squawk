@@ -1,9 +1,8 @@
-import { beforeEach, expect, it } from 'vitest';
-import { MergedPullRequestObservations, mergedPullRequestObservations } from './merge-observations.ts';
+import { expect, it } from 'vitest';
+import { MergedPullRequestObservations } from './merge-observations.ts';
 
 const identity = { owner: 'org', repo: 'repo', number: 42 };
 const observation = { number: 42, url: 'https://github.com/org/repo/pull/42', state: 'MERGED', mergedAt: '2026-01-02T00:00:00Z' };
-beforeEach(() => mergedPullRequestObservations.clear());
 
 it('retains repo-qualified immutable facts across repeated observations', () => {
   const cache = new MergedPullRequestObservations();

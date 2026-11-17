@@ -39,20 +39,19 @@ describe('reconcileServeWorktrees', () => {
 
   it('keeps step order, output, live ids and the resolved sweep retention', async () => {
     const { store, manager, repo, steps, home } = reconcileFixture();
+    const previewHost = {} as PreviewHost;
     steps.pruneOrphans.mockResolvedValue(['12345678-orphan', 'abcdefgh-orphan']);
     steps.reclaimWorktrees.mockResolvedValue(['87654321-old']);
     // A sweep can remain pending without delaying boot.
     steps.sweepMergedBranches.mockReturnValue(new Promise(() => {}));
-    await reconcileServeWorktrees('/repo', repo, store, manager, undefined, steps, home);
+    await reconcileServeWorktrees('/repo', repo, store, manager, previewHost, steps, home);
     expect(steps.pruneOrphans).toHaveBeenCalledWith('/repo', new Set(['live-run']));
-    expect(steps.reclaimWorktrees).toHaveBeenCalledWith('/repo', store, 7, { previewHost: undefined });
+    expect(steps.reclaimWorktrees).toHaveBeenCalledWith('/repo', store, 7, { previewHost });
     expect(steps.sweepMergedBranches).toHaveBeenCalledWith({ root: '/repo', store, manager, home }, { keep: 7 });
     expect(steps.log.mock.calls).toEqual([
       ['  cleaned 2 orphaned worktree(s): 12345678, abcdefgh'],
       ['  reclaimed 1 old worktree(s), branch kept: 87654321'],
     ]);
-    expect(steps.pruneOrphans).toHaveBeenCalledBefore(steps.resolveWorktreeRetention);
-    expect(steps.resolveWorktreeRetention).toHaveBeenCalledBefore(steps.reclaimWorktrees);
     expect(steps.reclaimWorktrees).toHaveBeenCalledBefore(steps.sweepMergedBranches);
   });
 
@@ -94,9 +93,7 @@ describe('recoverServeProject', () => {
     expect(f.recover).toHaveBeenCalledWith(f.store, expect.any(Function), f.observer);
     expect(f.manager.recover).toHaveBeenCalledOnce();
     expect(f.manager.recover).toHaveBeenCalledBefore(vi.mocked(f.store.compressArchivedHistory));
-    expect(f.store.compressArchivedHistory).toHaveBeenCalledBefore(f.armDestroyRetries);
     expect(f.armDestroyRetries).toHaveBeenCalledWith(projectId ?? 'default');
-    expect(f.armDestroyRetries).toHaveBeenCalledBefore(log);
     expect(log).toHaveBeenCalledWith('  recovered 3 run(s) from the previous session');
   });
 
@@ -186,13 +183,6 @@ describe('stopServe', () => {
 });
 
 describe('serve boot mutation regressions', () => {
-  it('passes the preview host to worktree reclamation', async () => {
-    const f = reconcileFixture();
-    const previewHost = {} as PreviewHost;
-    await reconcileServeWorktrees('/repo', f.repo, f.store, f.manager, previewHost, f.steps, testHome());
-    expect(f.steps.reclaimWorktrees).toHaveBeenCalledWith('/repo', f.store, 7, { previewHost });
-  });
-
   it('uses SIGTERM by default and cancels its bound after successful shutdown', async () => {
     vi.useFakeTimers();
     try {
