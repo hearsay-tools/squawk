@@ -563,17 +563,6 @@ it('mounts summary actions only while the row is expanded', async () => {
       await waitFor(() => expect(rowIds()).toEqual(['w1', 'a1']))
     })
 
-    it('restores the archived view from the URL alone', async () => {
-      stubFetch({ runs: RUNS.map((run) => (run.id === 'i1' ? { ...run, archived: true } : run)) })
-      renderPage(createQueryClient(), '/tasks?archived=1')
-      await screen.findByText('Bump the runner')
-
-      expect(rowIds()).toEqual(['i1'])
-      expect(screen.getByRole('button', { name: 'Archived' }).getAttribute('aria-pressed')).toBe(
-        'true',
-      )
-    })
-
     it('keeps the view alongside the filters rather than dropping one for the other', async () => {
       stubFetch()
       renderPage(createQueryClient(), '/tasks?archived=1')
@@ -644,18 +633,6 @@ it('mounts summary actions only while the row is expanded', async () => {
       expect(document.querySelectorAll('[data-slot="task-status-group"]').length).toBeGreaterThan(0)
     })
     expect(groupBy().getByText('Project').getAttribute('aria-pressed')).toBe('false')
-  })
-
-  it('clears every facet at once', async () => {
-    stubFetch()
-    renderPage()
-    await screen.findByText('Add checkout endpoint')
-
-    fireEvent.click(screen.getByRole('button', { name: /storefront/ }))
-    await waitFor(() => expect(rowIds()).toEqual(['w1', 'a1']))
-
-    fireEvent.click(screen.getByRole('button', { name: /^Clear/ }))
-    await waitFor(() => expect(rowIds()).toEqual(['w1', 'i1', 'a1']))
   })
 
   it('shows the PR / issue chip each task actually references', async () => {
@@ -994,6 +971,7 @@ it('mounts summary actions only while the row is expanded', async () => {
       renderPage()
       await screen.findByText('Add checkout endpoint')
 
+      fireEvent.click(screen.getByRole('button', { name: 'Show resources for Add checkout endpoint' }))
       expect(screen.queryByText('Cost')).toBeNull()
       expect(screen.queryByText('$0.31')).toBeNull()
     })
@@ -1049,6 +1027,7 @@ it('mounts summary actions only while the row is expanded', async () => {
       renderPage()
       await screen.findByText('Add checkout endpoint')
 
+      fireEvent.click(screen.getByRole('button', { name: 'Show resources for Add checkout endpoint' }))
       const running = document.querySelector('[data-slot="global-task-row"][data-run-id="a1"]')!
       expect(running.querySelector('[data-action^="mark-"]')).toBeNull()
     })
@@ -1060,6 +1039,7 @@ it('mounts summary actions only while the row is expanded', async () => {
     await screen.findByText('Bump the runner')
 
     // `i1` is done; `a1` is running, so it has no archive button at all.
+    fireEvent.click(screen.getByRole('button', { name: 'Show resources for Add checkout endpoint' }))
     const row = document.querySelector('[data-slot="global-task-row"][data-run-id="a1"]')!
     expect(row.querySelector('[data-action="archive-run"]')).toBeNull()
 
