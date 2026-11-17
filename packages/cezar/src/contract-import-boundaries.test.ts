@@ -1,7 +1,18 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { contractModules, hint, scanRootImports } from './lint/contract-root-import.ts';
+import { contractModules, contractRootImport, hint, scanRootImports as scanOriginalRootImports } from './lint/contract-root-import.ts';
+
+import { checkRule } from './lint/ast-rule.testkit.ts';
+
+/** Every retained snippet exercises the AST rule as well as the runner's baseline reader. */
+function scanRootImports(file: string, source: string) {
+  const expected = scanOriginalRootImports(file, source);
+  const findings = checkRule(contractRootImport, `packages/cezar/src/${file}`, source);
+  expect(findings).toHaveLength(expected.length);
+  for (const [index, finding] of findings.entries()) expect(finding.message).toContain(hint(expected[index]!));
+  return expected;
+}
 
 /**
  * The scanner behind `cez/contract-root-import` (hearsay-tools/cezarion#1237): contract values

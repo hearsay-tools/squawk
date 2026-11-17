@@ -1,9 +1,19 @@
+import { checkRule } from './ast-rule.testkit.ts';
 import { createRequire } from 'node:module';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { homeBoundary, homeReadersFile, homeSites, scanHomeBoundary, staleHomeReaders, type HomeReader } from './home-boundary.ts';
+import { homeBoundary, homeReadersFile, homeSites, scanHomeBoundary as sourceBoundary, staleHomeReaders, type HomeReader } from './home-boundary.ts';
+
+function scanHomeBoundary(file: string, source: string, exemptions: HomeReader[]): ReturnType<typeof sourceBoundary> {
+  const sites = sourceBoundary(file, source, exemptions);
+  if (exemptions.length === 0) {
+    expect(checkRule(homeBoundary, file, source).map(finding => finding.message.split(':')[0]))
+      .toEqual(sites.map(site => site.kind));
+  }
+  return sites;
+}
 
 const product = 'packages/cezar/src/library.ts';
 const test = 'packages/cezar/src/library.test.ts';

@@ -2,7 +2,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from '@babel/parser';
 import type { Node } from '@babel/types';
-import { lineAt, repoRoot, type SourceRule } from './source-rule.ts';
+import { repoRoot } from './source-rule.ts';
+import type { AstRule } from './ast-rule.ts';
+import { astChildren, deferredAstView, originalAt } from './ast-node-view.ts';
 
 export const homeReadersFile = 'packages/cezar/src/lint/home-readers.baseline.json';
 export interface HomeReader { file: string; kind: 'homedir'; calls: number; reason: string }
@@ -18,11 +20,7 @@ export function readHomeReaders(path = join(repoRoot, homeReadersFile)): HomeRea
 
 export function visit(node: Node, accept: (node: Node) => void): void {
   accept(node);
-  for (const value of Object.values(node)) {
-    for (const child of Array.isArray(value) ? value : [value]) {
-      if (child && typeof child === 'object' && typeof child.type === 'string') visit(child as Node, accept);
-    }
-  }
+  for (const child of astChildren(node)) visit(child, accept);
 }
 
 function staticKey(node: Node | null | undefined): string | undefined {
@@ -126,6 +124,10 @@ function selectsHome(node: Node): boolean {
 /** Parse failures propagate to lint. Strings and comments cannot hide or create sites. */
 export function homeSites(source: string, file = 'file.ts'): HomeSite[] {
   const ast = parse(source, { sourceType: 'module', plugins: ['typescript', ...(/\.[cm]?[jt]sx$/.test(file) ? ['jsx' as const] : [])] });
+  return homeSitesFromAst(ast);
+}
+
+function homeSitesFromAst(ast: Node): HomeSite[] {
   const aliases = new Set(['homedir']);
   visit(ast, node => {
     if (node.type === 'ImportSpecifier' && name(node.imported) === 'homedir') aliases.add(node.local.name);
@@ -155,7 +157,10 @@ function productFile(file: string): boolean { return file.startsWith('packages/c
 
 let readers: HomeReader[] | undefined;
 export function scanHomeBoundary(file: string, source: string, exemptions = (readers ??= readHomeReaders())): HomeSite[] {
-  const sites = homeSites(source, file);
+  return homeBoundarySites(file, homeSites(source, file), exemptions);
+}
+
+function homeBoundarySites(file: string, sites: HomeSite[], exemptions: HomeReader[]): HomeSite[] {
   if (testFile(file)) return sites.filter(site => site.kind === 'test-selection');
   if (!productFile(file)) return [];
   const allowed = exemptions.find(entry => entry.file === file)?.calls ?? 0;
@@ -181,12 +186,15 @@ export function staleHomeReaders(root = repoRoot): string[] {
   });
 }
 
-export const homeBoundary: SourceRule = {
+export const homeBoundaryMessage = (kind: HomeSite['kind']): string => `${kind}: pass an explicit Home from an entry point; tests select Home.sandbox through shared setup. OS-user readers belong to shrink-only home-readers.baseline.json (hearsay-tools/cezarion#2810).`;
+
+export const homeBoundary: AstRule = {
   name: 'home-boundary',
   description: 'Resolve cockpit homes at entry points; tests select Home.sandbox (hearsay-tools/cezarion#2810).',
   applies: file => file !== SHARED_SETUP && (TEST_FILE.test(file) || /^packages\/cezar\/(?:src|test)\/.*\.[cm]?[jt]sx?$/.test(file)),
-  check: (file, source) => scanHomeBoundary(file, source).map(site => ({
-    line: lineAt(source, site.offset),
-    message: `${site.kind}: pass an explicit Home from an entry point; tests select Home.sandbox through shared setup. OS-user readers belong to shrink-only home-readers.baseline.json (hearsay-tools/cezarion#2810).`,
-  })),
+  create: (report, { file }) => deferredAstView(name => ['homedir', 'cezarHomeDir', 'resolveHome', 'CEZ_HOME'].includes(name), ast => {
+    for (const site of homeBoundarySites(file, homeSitesFromAst(ast), readers ??= readHomeReaders())) {
+      report(originalAt(ast, site.offset), homeBoundaryMessage(site.kind));
+    }
+  }),
 };

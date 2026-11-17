@@ -1,3 +1,4 @@
+import { checkRule } from './ast-rule.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -9,7 +10,11 @@ import {
 } from './runner-id-branch.ts';
 
 const file = 'packages/cezar/src/server/pick.ts';
-const sites = (source: string, path = file) => runnerIdBranches(path, source).map(({ site }) => site);
+const sites = (source: string, path = file) => {
+  const found = runnerIdBranches(path, source);
+  expect(checkRule(runnerIdBranch, path, source)).toHaveLength(found.length);
+  return found.map(({ site }) => site);
+};
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
@@ -45,6 +50,11 @@ describe('runner-id-branch (hearsay-tools/cezarion#2991)', () => {
     expect(sites("const a = <p>{runner === 'opencode' ? 'a' : 'b'}</p>;", 'packages/web/src/routes/pick.tsx')).toEqual(["runner === 'opencode'"]);
   });
 
+  it.each(['t', 'type'])('does not exempt the private #%s field as a message tag', (name) => {
+    expect(sites(`class Fixture { #${name}; check() { return this.#${name} === 'pi'; } }`)).toEqual([`this.#${name} === 'pi'`]);
+    expect(sites(`class Fixture { #${name}; check() { switch (this.#${name}) { case 'pi': break; } } }`)).toEqual([`switch (this.#${name}) case 'pi'`]);
+  });
+
   it.each([
     "message.t === 'opencode'",
     "switch (message.t) { case 'opencode': break; }",
@@ -63,8 +73,8 @@ describe('runner-id-branch (hearsay-tools/cezarion#2991)', () => {
   });
 
   it('refuses malformed source that names an id, and skips source that names none', () => {
-    expect(() => sites("runner === 'pi'; let x = ;")).toThrow();
-    expect(sites('let x = ;')).toEqual([]);
+    expect(() => runnerIdBranches(file, "runner === 'pi'; let x = ;")).toThrow();
+    expect(runnerIdBranches(file, 'let x = ;')).toEqual([]);
   });
 
   it.each([
@@ -87,7 +97,7 @@ describe('runner-id-branch (hearsay-tools/cezarion#2991)', () => {
     const exceptions = [{ file, site: "runner === 'opencode'", count: 1, reason: 'identity choice: a fixture' }];
     expect(scanRunnerIdBranches(file, source, exceptions).map(({ site }) => site)).toEqual(["runner === 'opencode'", "runner === 'omp'"]);
     expect(scanRunnerIdBranches('packages/cezar/src/server/other.ts', source, exceptions)).toHaveLength(3);
-    expect(runnerIdBranch.check(file, "\nif (runner === 'opencode') a();")).toEqual([
+    expect(checkRule(runnerIdBranch, file, "\nif (runner === 'opencode') a();")).toEqual([
       { line: 2, message: expect.stringMatching(/^runner === 'opencode': only packages\/cezar\/src\/core\/ branches on a runner id\..+RUNNER_FACTS.+hearsay-tools\/cezarion#2991/) },
     ]);
   });

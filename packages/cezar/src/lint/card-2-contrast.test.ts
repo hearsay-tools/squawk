@@ -1,10 +1,11 @@
 // @vitest-environment node
 import { expect, it } from 'vitest'
-import { scan as scanContrast } from './card-2-contrast.ts'
+import { card2Contrast, contrastVisitors } from './card-2-contrast.ts'
+import { checkRule } from './ast-rule.testkit.ts'
 
 // Explicit fixture palette: no repository reads belong to these scanner cases.
 const surfaces = new Set(['bg-card-2', 'bg-background', 'bg-black', 'bg-white'])
-const scan = (source: string): string[] => scanContrast(source, surfaces)
+const scan = (source: string): string[] => checkRule({ ...card2Contrast, create: report => contrastVisitors(surfaces, node => report(node, 'unsafe')) }, 'packages/web/src/contrast-fixture.tsx', source).map(finding => finding.message)
 
 it('catches unsafe small text on the element, descendants, conditional classes and known body slots', () => {
   expect(scan(`<><p className="bg-card-2 text-danger text-xs">bad</p><div className="bg-card-2"><span className={cn('text-xs', bad ? 'text-danger' : 'text-muted-foreground')}>bad</span></div><div data-slot="tool-error" className="text-soft-foreground">bad</div></>`)).toHaveLength(3)

@@ -1,8 +1,17 @@
+import { checkRule } from './ast-rule.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { expect, it } from 'vitest';
-import { productEnvBaselineFile, productEnvFile, productEnvReads, scanProductEnvReads, staleProductEnvReads } from './product-env-read.ts';
+import { productEnvBaselineFile, productEnvFile, productEnvRead, productEnvReads as sourceEnvReads, scanProductEnvReads, staleProductEnvReads } from './product-env-read.ts';
+
+function productEnvReads(source: string, file = 'file.ts'): ReturnType<typeof sourceEnvReads> {
+  const sites = sourceEnvReads(source, file);
+  const findings = checkRule(productEnvRead, 'packages/cezar/src/env-ast-fixture.ts', source);
+  expect(findings.map(finding => finding.message.split(':')[0]))
+    .toEqual(sites.map(site => `${site.form} ${site.name}`));
+  return sites;
+}
 
 it('inventories dot, bracket, optional, env-argument, alias and computed reads', () => {
   const source = `process.env.CEZ_X; process['env']['HSQ_X']; env?.CEZ_Y;
@@ -216,4 +225,14 @@ it('keeps shadowed literal names unknown in computed reads', () => {
     "const key = 'PATH'; function f() { const key = config.key; return process.env[key]; }",
     "const key = 'PATH'; try {} catch (key) { process.env[key]; }",
   ]) expect(productEnvReads(source).map(({form, name}) => [form, name])).toEqual([['computed', '*']]);
+});
+
+it.each([
+  'const { [key]: value } = process;',
+  'const { [key]: value } = globalThis;',
+  'const owner = process; const { [key]: value } = owner;',
+  'function read({ [key]: value }: Process) {}',
+  'function read({ [key]: value }: NodeJS.Process) {}',
+])('keeps computed reads from recognized roots without env names: %s', source => {
+  expect(productEnvReads(source).map(({ form, name }) => [form, name])).toEqual([['computed', '*']]);
 });

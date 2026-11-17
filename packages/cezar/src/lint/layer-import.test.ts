@@ -3,9 +3,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  covers, layerImport, layerImportBaselineFile, layerImports, layerMapFile, layerMapProblems, layerOf, readLayerImportExceptions,
+  covers, layerImport, layerImportBaselineFile, layerImportVisitors, layerImports, layerMapFile, layerMapProblems, layerOf, readLayerImportExceptions,
   readLayerMap, scanLayerImports, staleLayerImports, type LayerImportException, type LayerPath,
 } from './layer-import.ts';
+
+import { checkRule } from './ast-rule.testkit.ts';
 
 const MAP: LayerPath[] = [
   { layer: 'core', path: 'core/' },
@@ -18,8 +20,13 @@ const MAP: LayerPath[] = [
   { layer: 'feature:forge', path: 'server/forge/' },
 ];
 const file = 'packages/cezar/src/workflows/run/steps.ts';
-const scan = (source: string, path = file, exceptions: LayerImportException[] = []) =>
-  scanLayerImports(path, source, MAP, exceptions).map(({ target, reason }) => `${target}: ${reason}`);
+const scan = (source: string, path = file, exceptions: LayerImportException[] = []) => {
+  const expected = scanLayerImports(path, source, MAP, exceptions);
+  const findings = checkRule({ ...layerImport, create: report => layerImportVisitors(report, path, MAP, exceptions) }, path, source);
+  expect(findings).toHaveLength(expected.length);
+  for (const [index, finding] of findings.entries()) expect(finding.message).toContain(expected[index]!.reason);
+  return expected.map(({ target, reason }) => `${target}: ${reason}`);
+};
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -105,7 +112,7 @@ describe('layer-import (hearsay-tools/squawk#3706)', () => {
 
   it('reports each finding on its import line', () => {
     const source = "import { a } from '../../paths.ts';\n\nimport { b } from '../../delegation/b.ts';\n";
-    expect(layerImport.check(file, source).map(({ line }) => line)).toEqual([3]);
+    expect(checkRule(layerImport, file, source).map(({ line }) => line)).toEqual([3]);
   });
 
   it('resolves a specifier against the importing file', () => {
@@ -161,8 +168,7 @@ describe('layer-import (hearsay-tools/squawk#3706)', () => {
   });
 
   it('holds the repository: a placed file for each source, and a reasoned entry for each existing import', () => {
-    expect(layerMapProblems()).toEqual([]);
-    expect(staleLayerImports()).toEqual([]);
+    // Repository-wide map and stale-entry scans belong to npm run lint; fixture trees above pin them.
     expect(readLayerMap().length).toBeGreaterThan(0);
     for (const entry of readLayerImportExceptions()) expect(entry.reason).toMatch(/^(?:feature:[a-z-]+|runner): /);
   });

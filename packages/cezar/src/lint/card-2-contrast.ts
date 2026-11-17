@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parse } from '@babel/parser'
-import type { Node, JSXAttribute } from '@babel/types'
-import { repoRoot, type SourceRule } from './source-rule.ts'
+import { repoRoot } from './source-rule.ts'
+import { child, children, nameOf, stringOf, type AstRule, type EsNode, type Visitors } from './ast-rule.ts'
 
 export const WEB_SRC = 'packages/web/src/'
 export const baselineFile = 'packages/web/src/test/card-2-contrast.baseline.json'
@@ -20,66 +20,71 @@ export function paletteSurfaces(): Set<string> {
 
 /** Static guard, not a computed-style audit. Unknown sizes are conservatively small.
  * Literal branches in cn()/templates are inspected; arbitrary runtime class values are not. */
-function eachChild(node: Node, visit: (node: Node) => void): void {
-  for (const value of Object.values(node)) {
-    for (const child of Array.isArray(value) ? value : [value]) {
-      if (child && typeof child === 'object' && typeof child.type === 'string') visit(child as Node)
+function eachChild(node: EsNode, visit: (node: EsNode) => void): void {
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'parent') continue
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item && typeof item === 'object' && typeof item.type === 'string') visit(item as EsNode)
     }
   }
 }
 
-/** Preserve empty alternatives: a missing size/background keeps the inherited default.
- * Bound expansion; overflow collapses to a conservative union with a small size. */
-function classBranches(node: Node | null | undefined): string[] {
+/** Preserve empty alternatives and bound class expansion, as in the original guard. */
+function classBranches(node: EsNode | undefined): string[] {
   if (!node) return ['']
   const combine = (groups: string[][], separator = ' '): string[] => groups.reduce((left, right) => {
     if (left.length * right.length > 128) return [[...left, ...right, 'text-xs'].join(' ')]
     return [...new Set(left.flatMap(a => right.map(b => a + separator + b)))]
   }, [''])
   switch (node.type) {
-    case 'StringLiteral': return [node.value]
+    case 'Literal': return [stringOf(node) ?? '']
     case 'JSXExpressionContainer': case 'TSAsExpression': case 'TSSatisfiesExpression':
-    case 'TSNonNullExpression': return classBranches(node.expression)
-    case 'SpreadElement': return classBranches(node.argument)
-    case 'ConditionalExpression': return [...classBranches(node.consequent), ...classBranches(node.alternate)]
-    case 'LogicalExpression': return ['', ...classBranches(node.left), ...classBranches(node.right)]
-    case 'CallExpression': return combine(node.arguments.map(classBranches))
-    case 'ArrayExpression': return combine(node.elements.map(classBranches))
-    case 'TemplateLiteral': return combine(node.quasis.flatMap((q, i) => i < node.expressions.length
-      ? [[q.value.raw], classBranches(node.expressions[i])] : [[q.value.raw]]), '')
-    case 'ObjectExpression': return combine(node.properties.map(p => p.type === 'ObjectProperty' && !p.computed
-      ? ['', p.key.type === 'StringLiteral' ? p.key.value : p.key.type === 'Identifier' ? p.key.name : '']
-      : ['']))
-    default: return [''] // arbitrary runtime values still require rendered checks
+    case 'TSNonNullExpression': return classBranches(child(node, 'expression'))
+    case 'SpreadElement': return classBranches(child(node, 'argument'))
+    case 'ConditionalExpression': return [...classBranches(child(node, 'consequent')), ...classBranches(child(node, 'alternate'))]
+    case 'LogicalExpression': return ['', ...classBranches(child(node, 'left')), ...classBranches(child(node, 'right'))]
+    case 'CallExpression': return combine(children(node, 'arguments').map(classBranches))
+    case 'ArrayExpression': return combine((Array.isArray(node.elements) ? node.elements : []).map(item => classBranches(item as EsNode | undefined)))
+    case 'TemplateLiteral': {
+      const expressions = children(node, 'expressions')
+      return combine(children(node, 'quasis').flatMap((q, i) => {
+        const raw = (q.value as { raw: string }).raw
+        return i < expressions.length ? [[raw], classBranches(expressions[i])] : [[raw]]
+      }), '')
+    }
+    case 'ObjectExpression': return combine(children(node, 'properties').map(p => p.type === 'Property' && !p.computed
+      ? ['', stringOf(child(p, 'key')) ?? nameOf(child(p, 'key')) ?? ''] : ['']))
+    default: return ['']
   }
 }
 
-/** Only a falsy number (0/NaN) survives React's && short circuit as visible text. */
-function mayRenderFalsyNumber(node: Node): boolean {
+/** Only a falsy number survives React's && short circuit as visible text. */
+function mayRenderFalsyNumber(node: EsNode | undefined): boolean {
+  if (!node) return false
   switch (node.type) {
-    case 'BooleanLiteral': case 'NullLiteral': case 'StringLiteral':
+    case 'Literal': return typeof node.value === 'number' && node.value === 0
     case 'JSXElement': case 'JSXFragment': return false
-    case 'NumericLiteral': return node.value === 0
-    case 'UnaryExpression': return node.operator !== '!' && node.operator !== 'void' && node.operator !== 'typeof' && node.operator !== 'delete'
-    case 'BinaryExpression': return !['===', '!==', '==', '!=', '<', '>', '<=', '>=', 'in', 'instanceof'].includes(node.operator)
-    default: return true // a runtime identifier/call may evaluate to 0 or NaN
+    case 'UnaryExpression': return !['!', 'void', 'typeof', 'delete'].includes(String(node.operator))
+    case 'BinaryExpression': return !['===', '!==', '==', '!=', '<', '>', '<=', '>=', 'in', 'instanceof'].includes(String(node.operator))
+    default: return true
   }
 }
 
-/** JSX branches are visited separately; only expressions that can render text belong to the wrapper. */
-function rendersText(node: Node): boolean {
+/** JSX branches are visited separately; only rendered text belongs to the wrapper. */
+function rendersText(node: EsNode | undefined): boolean {
+  if (!node) return false
   switch (node.type) {
-    case 'JSXText': return node.value.trim() !== ''
-    case 'JSXFragment': return node.children.some(rendersText)
-    case 'JSXElement': case 'JSXEmptyExpression':
-    case 'NullLiteral': case 'BooleanLiteral': return false
+    case 'JSXText': return String(node.value).trim() !== ''
+    case 'JSXFragment': return children(node, 'children').some(rendersText)
+    case 'JSXElement': case 'JSXEmptyExpression': return false
+    case 'Literal': return node.value !== null && typeof node.value !== 'boolean'
     case 'JSXExpressionContainer': case 'TSAsExpression': case 'TSSatisfiesExpression':
-    case 'TSNonNullExpression': return rendersText(node.expression)
-    case 'BinaryExpression': return !['===', '!==', '==', '!=', '<', '>', '<=', '>=', 'in', 'instanceof'].includes(node.operator)
-    case 'UnaryExpression': return !['!', 'delete', 'void'].includes(node.operator)
-    case 'ConditionalExpression': return rendersText(node.consequent) || rendersText(node.alternate)
-    case 'LogicalExpression': return (node.operator === '&&' ? mayRenderFalsyNumber(node.left) : rendersText(node.left)) || rendersText(node.right)
-    default: return true // identifiers and calls can contain runtime text
+    case 'TSNonNullExpression': return rendersText(child(node, 'expression'))
+    case 'BinaryExpression': return !['===', '!==', '==', '!=', '<', '>', '<=', '>=', 'in', 'instanceof'].includes(String(node.operator))
+    case 'UnaryExpression': return !['!', 'delete', 'void'].includes(String(node.operator))
+    case 'ConditionalExpression': return rendersText(child(node, 'consequent')) || rendersText(child(node, 'alternate'))
+    case 'LogicalExpression': return (node.operator === '&&' ? mayRenderFalsyNumber(child(node, 'left')) : rendersText(child(node, 'left'))) || rendersText(child(node, 'right'))
+    default: return true
   }
 }
 
@@ -114,50 +119,66 @@ function fontSize(utility: string): number {
   return pixels ? Number(pixels[1]) : namedSizes[value] ?? 0 // unknown explicit size is conservatively small
 }
 
-export function scan(source: string, surfaceClasses: Set<string>): string[] {
-  const file = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'] })
-  const sites: string[] = []
-  function visit(node: Node, card = false, color = '', inheritedSize = 0, inheritedBold = false): void {
-    if (node.type === 'JSXElement') {
-      const opening = node.openingElement
-      const attr = (name: string) => opening.attributes.find(p => p.type === 'JSXAttribute' && p.name.type === 'JSXIdentifier' && p.name.name === name) as JSXAttribute | undefined
-      const strings = (n: Node | null | undefined): string[] => {
-        if (!n) return []
-        if (n.type === 'StringLiteral' || n.type === 'TemplateElement') return [n.type === 'StringLiteral' ? n.value : n.value.raw]
-        const result: string[] = []
-        eachChild(n, c => { result.push(...strings(c)) })
-        return result
-      }
-      const slot = strings(attr('data-slot')?.value)[0]
-      const bodySlot = ['tool-error', 'tool-command', 'hook-entry', 'hook-source', 'hook-raw-toggle', 'hook-stdout', 'hook-stderr'].includes(slot ?? '')
-      const states = classBranches(attr('className')?.value).flatMap(utilityStates).map(classes => {
-        const backgrounds = classes.filter(c => surfaceClasses.has(c) || c === 'bg-transparent' || surfaceClasses.has(c.split('/')[0] ?? ''))
-        const inheritsSurface = backgrounds.length === 0 || backgrounds.some(c => c === 'bg-transparent' || c.includes('/'))
-        const onCard = backgrounds.includes('bg-card-2') || inheritsSurface && (card || bodySlot)
-        const ownColors = classes.map(c => c.replace(/^(text-(?:danger|destructive|soft-foreground|pending-strong))\/.+$/, '$1')).filter(c => /^text-(?:danger|destructive|soft-foreground|pending-strong|muted-foreground|supporting-foreground|link-foreground|foreground|signal-word-red|signal-word-amber)$/.test(c))
-        const colors = ownColors.length ? ownColors : [color]
-        const sizes = classes.filter(c => /^text-(?:xs|sm|base|lg|xl|\d+xl)(?:\/.*)?$|^text-(?:\[|\(length:)/.test(c))
-        const size = sizes.length ? Math.min(...sizes.map(fontSize)) : inheritedSize
-        const weights = classes.filter(c => /^font-(?:thin|extralight|light|normal|medium|semibold|bold|extrabold|black)$|^font-(?:\[|\(weight:)/.test(c))
-        const bold = weights.length ? weights.every(w => /^font-(?:bold|extrabold|black)$/.test(w)) : inheritedBold
-        return { onCard, colors, size, bold, large: size >= 24 || bold && size >= 56 / 3 }
-      })
-      const unsafe = (ink: string) => ink === 'text-danger' || ink === 'text-destructive' || ink === 'text-soft-foreground' || ink === 'text-pending-strong'
-      const children = node.children
-      if (children.some(rendersText) && states.some(s => s.onCard && !s.large && s.colors.some(unsafe))) {
-        sites.push(source.slice(opening.start ?? 0, opening.end ?? 0).replace(/\s+/g, ' '))
-      }
-      // Descendants conservatively inherit any unsafe alternative across a class branch.
-      const inks = states.flatMap(s => s.colors)
-      for (const child of children) visit(child, states.some(s => s.onCard), inks.find(unsafe) ?? inks[0] ?? '', Math.min(...states.map(s => s.size)), states.every(s => s.bold))
-      return
-    }
-    eachChild(node, child => visit(child, card, color, inheritedSize, inheritedBold))
+interface ContrastState { onCard: boolean; colors: string[]; size: number; bold: boolean; large: boolean }
+const unsafe = (ink: string) => ['text-danger', 'text-destructive', 'text-soft-foreground', 'text-pending-strong'].includes(ink)
+const initialState: ContrastState = { onCard: false, colors: [''], size: 0, bold: false, large: false }
+
+function elementStates(node: EsNode, inherited: ContrastState[], surfaceClasses: Set<string>): ContrastState[] {
+  const opening = child(node, 'openingElement')!
+  const attr = (name: string) => children(opening, 'attributes').find(p => p.type === 'JSXAttribute' && child(p, 'name')?.name === name)
+  const strings = (n: EsNode | undefined): string[] => {
+    if (!n) return []
+    if (n.type === 'Literal') return typeof n.value === 'string' ? [n.value] : []
+    if (n.type === 'TemplateElement') return [(n.value as { raw: string }).raw]
+    const result: string[] = []
+    eachChild(n, c => result.push(...strings(c)))
+    return result
   }
-  visit(file)
-  return sites
+  const slot = strings(child(attr('data-slot') ?? opening, 'value'))[0]
+  const bodySlot = ['tool-error', 'tool-command', 'hook-entry', 'hook-source', 'hook-raw-toggle', 'hook-stdout', 'hook-stderr'].includes(slot ?? '')
+  const inks = inherited.flatMap(state => state.colors)
+  const color = inks.find(unsafe) ?? inks[0] ?? ''
+  return classBranches(child(attr('className') ?? opening, 'value')).flatMap(utilityStates).map(classes => {
+    const backgrounds = classes.filter(c => surfaceClasses.has(c) || c === 'bg-transparent' || surfaceClasses.has(c.split('/')[0] ?? ''))
+    const inheritsSurface = backgrounds.length === 0 || backgrounds.some(c => c === 'bg-transparent' || c.includes('/'))
+    const onCard = backgrounds.includes('bg-card-2') || inheritsSurface && (inherited.some(state => state.onCard) || bodySlot)
+    const ownColors = classes.map(c => c.replace(/^(text-(?:danger|destructive|soft-foreground|pending-strong))\/.+$/, '$1')).filter(c => /^text-(?:danger|destructive|soft-foreground|pending-strong|muted-foreground|supporting-foreground|link-foreground|foreground|signal-word-red|signal-word-amber)$/.test(c))
+    const colors = ownColors.length ? ownColors : [color]
+    const sizes = classes.filter(c => /^text-(?:xs|sm|base|lg|xl|\d+xl)(?:\/.*)?$|^text-(?:\[|\(length:)/.test(c))
+    const size = sizes.length ? Math.min(...sizes.map(fontSize)) : Math.min(...inherited.map(state => state.size))
+    const weights = classes.filter(c => /^font-(?:thin|extralight|light|normal|medium|semibold|bold|extrabold|black)$|^font-(?:\[|\(weight:)/.test(c))
+    const bold = weights.length ? weights.every(w => /^font-(?:bold|extrabold|black)$/.test(w)) : inherited.every(state => state.bold)
+    return { onCard, colors, size, bold, large: size >= 24 || bold && size >= 56 / 3 }
+  })
 }
 
+/** Each JSX element reads the state of its nearest JSX ancestor; expression wrappers preserve it. */
+export function contrastVisitors(surfaceClasses: Set<string>, report: (node: EsNode) => void): Visitors {
+  const states = new WeakMap<EsNode, ContrastState[]>()
+  return {
+    JSXElement(node) {
+      let ancestor = node.parent
+      while (ancestor && ancestor.type !== 'JSXElement') ancestor = ancestor.parent
+      const current = elementStates(node, ancestor ? states.get(ancestor) ?? [initialState] : [initialState], surfaceClasses)
+      states.set(node, current)
+      if (children(node, 'children').some(rendersText) && current.some(state => state.onCard && !state.large && state.colors.some(unsafe))) report(child(node, 'openingElement')!)
+    },
+  }
+}
+
+/** The runner's baseline reader shares the visitor analysis and parses only its explicit inputs. */
+export function scan(source: string, surfaceClasses: Set<string>): string[] {
+  const ast = parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx', 'estree'] }).program as unknown as EsNode
+  const found: string[] = []
+  const visitors = contrastVisitors(surfaceClasses, node => found.push(source.slice(Number(node.start), Number(node.end)).replace(/\s+/g, ' ')))
+  function walk(node: EsNode, parent?: EsNode): void {
+    const withParent = Object.assign(node, { parent })
+    visitors[node.type]?.(withParent)
+    eachChild(node, nested => walk(nested, node))
+  }
+  walk(ast)
+  return found
+}
 
 /** Consume duplicate entries individually, as the original sorted-array equality did. */
 export function compareContrast(actual: string[], baseline: string[]) {
@@ -175,16 +196,18 @@ export const scannedContrastFile = (file: string): boolean =>
   file.startsWith(WEB_SRC) && file.endsWith('.tsx') && !file.slice(file.lastIndexOf('/') + 1).includes('.test.')
 
 let baseline: string[] | undefined
-export const card2Contrast: SourceRule = {
+export const card2Contrast: AstRule = {
   name: 'card-2-contrast',
   description: 'Guard small-text contrast on card-2 (hearsay-tools/cezarion#1133, hearsay-tools/cezarion#2423).',
   applies: scannedContrastFile,
-  check: (file, source) => {
-    const local = file.slice(WEB_SRC.length)
-    const actual = scan(source, paletteSurfaces()).map(site => `${local}: ${site}`)
-    return compareContrast(actual, baseline ??= readContrastBaseline()).added.map(site => ({
-      line: 1,
-      message: `Unsafe small text: ${site}. Use text-muted-foreground for soft ink, text-signal-word-red for danger ink or text-signal-word-amber for amber ink. Fix new sites; remove fixed entries from the baseline. Never add allowances. (hearsay-tools/cezarion#1133, hearsay-tools/cezarion#2423).`,
-    }))
+  create(report, context) {
+    const local = context.file.slice(WEB_SRC.length)
+    const remaining = [...(baseline ??= readContrastBaseline())]
+    return contrastVisitors(paletteSurfaces(), node => {
+      const site = `${local}: ${context.sourceCode.getText(node).replace(/\s+/g, ' ')}`
+      const index = remaining.indexOf(site)
+      if (index >= 0) { remaining.splice(index, 1); return }
+      report(node, `Unsafe small text: ${site}. Use text-muted-foreground for soft ink, text-signal-word-red for danger ink or text-signal-word-amber for amber ink. Fix new sites; remove fixed entries from the baseline. Never add allowances. (hearsay-tools/cezarion#1133, hearsay-tools/cezarion#2423).`)
+    })
   },
 }

@@ -1,7 +1,8 @@
 import { parse } from '@babel/parser';
 import { visit } from './home-boundary.ts';
 import { declaredRunnerIds, literalText, parserPlugins } from './runner-id-branch.ts';
-import { lineAt, type SourceRule } from './source-rule.ts';
+import { children, type AstRule } from './ast-rule.ts';
+import { literal } from './ast-syntax.ts';
 
 /**
  * A parity test selects the runners a row covers from what each runner declares: `runnersWhere()`
@@ -39,12 +40,20 @@ export function runnerSubsets(file: string, source: string, ids: readonly string
 
 const applies = (file: string) => /^packages\/.+\.[cm]?[jt]sx?$/.test(file) && /parity[^/]*$/.test(file);
 
-export const parityRunnerSubset: SourceRule = {
+export const parityRunnerSubset: AstRule = {
   name: 'parity-runner-subset',
   description: 'A parity test selects runners from their declared facts, not from a hand-written group of runner ids (hearsay-tools/squawk#3642).',
   applies,
-  check: (file, source) => runnerSubsets(file, source).map(offset => ({
-    line: lineAt(source, offset),
-    message: 'This array lists a group of runner ids by hand, so a changed facts row would not change it. Select the runners from what they declare: runnersWhere() over RUNNER_FACTS in packages/cezar/src/core/runner-facts.ts, or exemptWhere() in core/harness-parity-core.testkit.ts. A protocol quirk of one runner names that one runner (hearsay-tools/squawk#3642).',
-  })),
+  create(report) {
+    const ids = declared ??= declaredRunnerIds();
+    return {
+      ArrayExpression(node) {
+        const elements = node.elements as Array<unknown>;
+        const named = children(node, 'elements').map(element => literal(element));
+        if (named.length !== elements.length || !named.every(name => name !== undefined && ids.includes(name))) return;
+        const distinct = new Set(named).size;
+        if (distinct >= 2 && distinct < ids.length) report(node, "This array lists a group of runner ids by hand, so a changed facts row would not change it. Select the runners from what they declare: runnersWhere() over RUNNER_FACTS in packages/cezar/src/core/runner-facts.ts, or exemptWhere() in core/harness-parity-core.testkit.ts. A protocol quirk of one runner names that one runner (hearsay-tools/squawk#3642).");
+      },
+    };
+  },
 };

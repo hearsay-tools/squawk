@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { child, children, type AstRule, type EsNode } from './ast-rule.ts';
+import { literal, nodeLine, offset, propertyName, unwrap } from './ast-syntax.ts';
 import { scanned } from './contract-root-import.ts';
-import { blankOnce, repoRoot, type SourceRule } from './source-rule.ts';
+import { blankOnce, repoRoot } from './source-rule.ts';
 
 /**
  * Run facts have one home in `packages/contract` (hearsay-tools/cezarion#1496): a reader decides
@@ -9,7 +11,7 @@ import { blankOnce, repoRoot, type SourceRule } from './source-rule.ts';
  * spelling the hold out. Types catch a new rung id; this scan catches the two things types cannot,
  * a label comparison (in any file) and a restated hold (in a source file), plus an `autoResumeAt`
  * read in a source file the reader list does not name.
- * TypeScript 7 has no parser API, so the scan reads `blank()`ed source.
+ * Oxlint supplies the source tree; the visitors inspect the named syntax.
  */
 /** The facts' home: it defines the rungs and the hold, and its tests keep the deleted copies as oracles. */
 const HOME = 'packages/contract/src/';
@@ -111,12 +113,135 @@ const HOW: Record<Rule, string> = {
   'resume-time-read': 'decide through `isUsageLimitHold`, or add the file to packages/cezar/src/lint/resume-time-readers.json with its reason',
 };
 
-export const runFactReader: SourceRule = {
+const HOLD_WINDOW = 160;
+const HOLD_BOUNDARIES = new Set([
+  'BlockStatement', 'StaticBlock', 'ObjectExpression', 'ObjectPattern', 'ClassBody',
+  'TSTypeLiteral', 'JSXExpressionContainer', 'JSXSpreadAttribute',
+]);
+interface ResumeAccess { start: number; end: number }
+interface HoldSummary { resumes: ResumeAccess[]; waits: EsNode[]; barriers: number[] }
+
+/** A comparison can join a hold through logical, optional-chain and unary nodes. */
+function waitingStatus(node: EsNode): EsNode | undefined {
+  if (node.type !== 'BinaryExpression' || !['===', '!=='].includes(String(node.operator))) return undefined;
+  const left = child(node, 'left')!, right = child(node, 'right')!;
+  const status = literal(left) === 'waiting' ? unwrap(right) : literal(right) === 'waiting' ? unwrap(left) : undefined;
+  return status?.type === 'MemberExpression' && !status.computed && propertyName(status) === 'status' ? status : undefined;
+}
+
+/** The original lookaround starts at .status (or the left literal), and ends at its other side. */
+function waitingBounds(node: EsNode): { start: number; end: number } {
+  const status = waitingStatus(node)!;
+  const left = child(node, 'left')!, right = child(node, 'right')!;
+  const reversed = literal(left) === 'waiting';
+  const property = child(status, 'property')!;
+  const end = (reversed ? property : right).range as [number, number];
+  return {
+    start: reversed ? offset(left) : offset(property) - 1,
+    end: end[1],
+  };
+}
+
+/** Keep only accesses near either edge. A join cannot reach an interior access beyond 160 chars.
+ * Cached child summaries make a chain of waiting comparisons linear, with bounded summaries. */
+function holdSummary(node: EsNode, cache: WeakMap<EsNode, HoldSummary>): HoldSummary {
+  const previous = cache.get(node);
+  if (previous) return previous;
+  const [start, end] = node.range as [number, number];
+  if (HOLD_BOUNDARIES.has(node.type) || node.type === 'TemplateLiteral' && children(node, 'expressions').length > 0) {
+    const boundary = { resumes: [], waits: [], barriers: [start, end] };
+    cache.set(node, boundary);
+    return boundary;
+  }
+  const parts: HoldSummary[] = [];
+  for (const key of Object.keys(node)) {
+    if (key === 'parent') continue;
+    const one = child(node, key);
+    for (const item of one ? [one] : children(node, key)) parts.push(holdSummary(item, cache));
+  }
+  const nearEdge = (at: number) => at - start <= HOLD_WINDOW || end - at <= HOLD_WINDOW;
+  const resumes = parts.flatMap(part => part.resumes);
+  if (node.type === 'MemberExpression' && !node.computed && propertyName(node) === 'autoResumeAt') {
+    const property = child(node, 'property')!;
+    resumes.push({ start: offset(property) - (node.optional ? 2 : 1), end: (property.range as [number, number])[1] });
+  }
+  const waits = waitingStatus(node) ? [node] : ['LogicalExpression', 'ChainExpression', 'UnaryExpression'].includes(node.type) ? parts.flatMap(part => part.waits) : [];
+  const summary = {
+    resumes: [...new Set(resumes)].filter(access => nearEdge(access.start) || nearEdge(access.end)),
+    waits: waits.filter(wait => { const bounds = waitingBounds(wait); return nearEdge(bounds.start) || nearEdge(bounds.end); }),
+    barriers: parts.flatMap(part => part.barriers).filter(nearEdge),
+  };
+  cache.set(node, summary);
+  return summary;
+}
+
+export const runFactReader: AstRule = {
   name: 'run-fact-reader',
   description: 'Read run facts from the contract: attention rungs, `isUsageLimitHold`, listed resume-time readers (hearsay-tools/cezarion#1496).',
   applies: scanned,
-  check: (file, source) => scanRunFacts(file, source).map((site) => ({
-    line: site.line,
-    message: `${site.rule}: ${site.text} — ${HOW[site.rule]} (hearsay-tools/cezarion#1496).`,
-  })),
+  create(report, { file, sourceCode }) {
+    const sites: Record<Rule, EsNode[]> = { 'label-comparison': [], 'restated-hold': [], 'resume-time-read': [] };
+    const attention = (node: EsNode | undefined): boolean => {
+      node = unwrap(node);
+      if (!node) return false;
+      if (node.type === 'CallExpression') return propertyName(child(node, 'callee')) === 'deriveAttention';
+      return /[aA]ttention$/.test(propertyName(node) ?? '');
+    };
+    const compares = (node: EsNode): boolean => {
+      let parent = node.parent;
+      while (parent?.type === 'ChainExpression') { node = parent; parent = parent.parent; }
+      if (parent?.type === 'BinaryExpression' && ['===', '!==', '==', '!='].includes(String(parent.operator))) return true;
+      if (parent?.type === 'SwitchStatement' && child(parent, 'discriminant') === node) return true;
+      return parent?.type === 'MemberExpression' && !parent.computed && ['startsWith', 'endsWith', 'includes', 'toLowerCase', 'toUpperCase', 'match', 'localeCompare'].includes(propertyName(parent) ?? '');
+    };
+    const summaries = new WeakMap<EsNode, HoldSummary>();
+    const joinedWaits = new Set<EsNode>();
+    const waitingNodes: EsNode[] = [];
+    return {
+      MemberExpression(node) {
+        if (node.computed) return;
+        const key = propertyName(node);
+        if (!file.startsWith(HOME) && key === 'label' && attention(child(node, 'object')) && compares(node)) sites['label-comparison'].push(child(node, 'property')!);
+        if (!isTest(file) && !(file in (listed ??= readReaders())) && key === 'autoResumeAt' && sites['resume-time-read'].length === 0) sites['resume-time-read'].push(child(node, 'property')!);
+      },
+      BinaryExpression(node) {
+        if (!file.startsWith(HOME) && !isTest(file) && waitingStatus(node)) waitingNodes.push(node);
+      },
+      'LogicalExpression:exit'(node) {
+        if (file.startsWith(HOME) || isTest(file)) return;
+        const left = holdSummary(child(node, 'left')!, summaries);
+        const right = holdSummary(child(node, 'right')!, summaries);
+        const barriers = [...left.barriers, ...right.barriers];
+        const join = (waits: EsNode[], resumes: ResumeAccess[]) => {
+          for (const wait of waits) {
+            const { start, end } = waitingBounds(wait);
+            const reachable = (access: ResumeAccess) => {
+              const before = access.start < start;
+              const insideWindow = before ? start - access.start <= HOLD_WINDOW : access.end - end <= HOLD_WINDOW;
+              const low = before ? access.end : end;
+              const high = before ? start : access.start;
+              return insideWindow && !barriers.some(at => low <= at && at <= high);
+            };
+            if (resumes.some(reachable)) joinedWaits.add(wait);
+          }
+        };
+        join(left.waits, right.resumes);
+        join(right.waits, left.resumes);
+        holdSummary(node, summaries);
+      },
+      'Program:exit'() {
+        for (const node of waitingNodes) {
+          if (!joinedWaits.has(node)) continue;
+          const status = waitingStatus(node)!;
+          const left = child(node, 'left')!;
+          sites['restated-hold'].push(literal(left) === 'waiting' ? left : child(status, 'property')!);
+        }
+        const lines = sourceCode.text.split('\n');
+        for (const rule of ['label-comparison', 'restated-hold', 'resume-time-read'] as const) for (const node of sites[rule]) {
+          const text = lines[nodeLine(node) - 1]!.trim();
+          report(node, `${rule}: ${text} — ${HOW[rule]} (hearsay-tools/cezarion#1496).`);
+        }
+      },
+    };
+  },
 };

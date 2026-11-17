@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { mockSourceViolations } from './lint/native-mock-source.ts';
+import { nativeMockSource } from './lint/native-mock-source.ts';
+import { checkRule } from './lint/ast-rule.testkit.ts';
+
+const mockSourceViolations = (file: string, source: string) => checkRule(nativeMockSource, `packages/cezar/src/${file}`, source)
+  .map(finding => `${file}:${finding.line} ${finding.message.slice('Test '.length).split('. Change a mock')[0]}`);
 
 /**
  * The scanner behind `cez/native-mock-source` (hearsay-tools/cezarion#1479): tests run the real
@@ -9,7 +13,10 @@ import { mockSourceViolations } from './lint/native-mock-source.ts';
 describe('native mock source boundary', () => {
   it.each([
     ['an adapter mockBin read', "const source = readFileSync(adapter.mockBin, 'utf8');", 'reads native mock source'],
+    ['a computed adapter mockBin read', "const source = readFileSync(adapter['mockBin'], 'utf8');", 'reads native mock source'],
     ['a mock script read by URL', "readFileSync(new URL('../../scripts/mock-codex-app-server.mjs', import.meta.url), 'utf8');", 'reads native mock source'],
+    ['an interpolated mock path', "readFileSync(`${scriptsDir}/mock-claude.mjs`, 'utf8');", 'reads native mock source'],
+    ['a nested interpolated mock path', "readFileSync(new URL(`${scriptsDir}/mock-codex-app-server.mjs`, import.meta.url), 'utf8');", 'reads native mock source'],
     ['a harness mock constant read', 'const text = await readFile(CLAUDE_MOCK);', 'reads native mock source'],
     ['an adapter mockBin assignment', 'HARNESS_ADAPTERS.pi.mockBin = patched;', 'assigns an adapter mockBin'],
   ])('refuses %s', (_name, sample, rule) => {

@@ -46,15 +46,15 @@ export function checkRule(rule: AstRule, file: string, source: string): import('
     const inspected: AstRule = {
       ...rule,
       create(_report, context) {
-        return rule.create((node, message) => {
+        return rule.create((node, message, position) => {
           const loc = node.loc as { start: { line: number } };
-          findings.push({ line: loc.start.line, message });
+          findings.push({ line: position?.line ?? loc.start.line, message });
         }, context);
       },
     };
     const asOxlintRule = oxlintAstRule(inspected) as unknown as Parameters<RuleTester['run']>[1];
     new RuleTester({ cwd: repoRoot }).run(rule.name, asOxlintRule, {
-      valid: [{ code: source, filename: join(repoRoot, file) }], invalid: [],
+      valid: [{ code: source, filename: join(repoRoot, file), languageOptions: { parserOptions: { ignoreNonFatalErrors: true } } }], invalid: [],
     });
   } finally {
     RuleTester.describe = previousDescribe;

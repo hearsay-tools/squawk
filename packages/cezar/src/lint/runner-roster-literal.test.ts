@@ -1,3 +1,4 @@
+import { checkRule } from './ast-rule.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -27,7 +28,7 @@ describe('runner-roster-literal (open-mercato/cezar#387)', () => {
     ['a test oracle', `expect(tabs()).toEqual([${ALL}]);`],
   ])('refuses %s', (_case, source) => {
     expect(runnerRosters(file, `\n${source}`)).toHaveLength(1);
-    expect(runnerRosterLiteral.check(file, `\n${source}`)).toEqual([
+    expect(checkRule(runnerRosterLiteral, file, `\n${source}`)).toEqual([
       { line: 2, message: expect.stringMatching(/RUNNER_IDS or isRunnerId\(\).+runnerSchema\.options.+open-mercato\/cezar#387/) },
     ]);
   });
@@ -42,6 +43,7 @@ describe('runner-roster-literal (open-mercato/cezar#387)', () => {
     ['separate arguments', `pick(${ALL});`],
   ])('passes %s', (_case, source) => {
     expect(runnerRosters(file, source)).toEqual([]);
+    expect(checkRule(runnerRosterLiteral, file, source)).toEqual([]);
   });
 
   it('reads JSX, plain JavaScript and refuses malformed source that names every id', () => {

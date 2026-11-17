@@ -1,7 +1,8 @@
 import { parse } from '@babel/parser';
 import type { Node } from '@babel/types';
 import { TEST_FILE } from './home-boundary.ts';
-import { lineAt, type SourceRule } from './source-rule.ts';
+import type { AstRule } from './ast-rule.ts';
+import { deferredAstView, originalAt } from './ast-node-view.ts';
 
 const SOURCES = new Set(['homedir', 'cezarHomeDir', 'resolveHome']);
 const EXPRESSIONS = new Set(['TSAsExpression', 'TSTypeAssertion', 'TSNonNullExpression', 'TSSatisfiesExpression', 'TSInstantiationExpression']);
@@ -46,15 +47,24 @@ function bareCall(node: Node): Node[] {
   return callee.type === 'Identifier' && guarded(callee) ? [callee] : [];
 }
 
+/** Runtime import and export names share the same guarded-name check. */
+function specifierSites(node: Node): Node[] {
+  if (node.type === 'ImportSpecifier') return [node.imported, node.local].filter(guarded);
+  if (node.type === 'ExportSpecifier') return [node.local, node.exported].filter(guarded);
+  if (node.type === 'ExportAllDeclaration') {
+    const exported = (node as Node & { exported?: Node }).exported;
+    return exported && guarded(exported) ? [exported] : [];
+  }
+  if (node.type === 'ImportDefaultSpecifier' || node.type === 'ImportNamespaceSpecifier') return guarded(node.local) ? [node.local] : [];
+  if (node.type === 'ExportNamespaceSpecifier' || node.type === 'ExportDefaultSpecifier') return guarded(node.exported) ? [node.exported] : [];
+  return [];
+}
+
 function sites(node: Node, parent: Node | undefined): Node[] {
   if (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') return bareCall(node);
   if (node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') return guarded(node.property) ? [node.property] : [];
   if (node.type === 'ObjectProperty' && parent?.type === 'ObjectPattern') return guarded(node.key) ? [node.key] : [];
-  if (node.type === 'ImportSpecifier') return [node.imported, node.local].filter(guarded);
-  if (node.type === 'ExportSpecifier') return [node.local, node.exported].filter(guarded);
-  if (node.type === 'ImportDefaultSpecifier' || node.type === 'ImportNamespaceSpecifier') return guarded(node.local) ? [node.local] : [];
-  if (node.type === 'ExportNamespaceSpecifier' || node.type === 'ExportDefaultSpecifier') return guarded(node.exported) ? [node.exported] : [];
-  return [];
+  return specifierSites(node);
 }
 
 /** Ban guarded syntax instead of attempting open-ended binding or value flow. */
@@ -62,6 +72,10 @@ export function unsafeHomeWrites(source: string, file = 'file.test.ts'): number[
   const ast = parse(source, { sourceType: 'unambiguous', plugins: ['typescript', 'decorators', ...(/\.[cm]?[jt]sx$/.test(file) ? ['jsx' as const] : [])] });
   const allowedLines = new Set((ast.comments ?? []).filter(comment => comment.type === 'CommentLine'
     && /^\s*test-home-read:\s*\S/.test(comment.value)).map(comment => comment.loc?.start.line));
+  return unsafeHomeWritesFromAst(ast, allowedLines);
+}
+
+function unsafeHomeWritesFromAst(ast: Node, allowedLines: Set<number | undefined>): number[] {
   const offsets = new Set<number>();
   function scan(node: Node, parent?: Node): void {
     const selected = runtimeChildren(node);
@@ -73,12 +87,18 @@ export function unsafeHomeWrites(source: string, file = 'file.test.ts'): number[
   return [...offsets].sort((a, b) => a - b);
 }
 
-export const testHomeWrite: SourceRule = {
+export const testHomeWriteMessage = 'Ambient home syntax in a test; use Home.sandbox or add // test-home-read: <reason> on this line (hearsay-tools/cezarion#2813).';
+
+export const testHomeWrite: AstRule = {
   name: 'test-home-write',
   description: 'Test home syntax requires a reasoned exception (hearsay-tools/cezarion#2813).',
   applies: file => TEST_FILE.test(file),
-  check: (file, source) => unsafeHomeWrites(source, file).map(offset => ({
-    line: lineAt(source, offset),
-    message: 'Ambient home syntax in a test; use Home.sandbox or add // test-home-read: <reason> on this line (hearsay-tools/cezarion#2813).',
-  })),
+  create: (report, { sourceCode }) => deferredAstView(name => SOURCES.has(name), ast => {
+    const allowedLines = new Set(sourceCode.getAllComments().filter(comment => comment.type === 'Line'
+      && typeof comment.value === 'string' && /^\s*test-home-read:\s*\S/.test(comment.value))
+      .map(comment => (comment.loc as { start: { line: number } }).start.line));
+    for (const offset of unsafeHomeWritesFromAst(ast, allowedLines)) {
+      report(originalAt(ast, offset), testHomeWriteMessage);
+    }
+  }),
 };

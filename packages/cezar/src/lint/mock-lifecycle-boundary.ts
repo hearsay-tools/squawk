@@ -1,26 +1,37 @@
-import { blankOnce, lineAt, type SourceRule } from './source-rule.ts';
+import { child, children, nameOf, stringOf, type AstRule } from './ast-rule.ts';
 
-const NAMES = '(?:watchdogStall|watchdogWritePid|waitForMockRelease|waitForRelease)';
-const DEFINITION = new RegExp(`\\b(?:function\\s*\\*?\\s*|(?:const|let|var)\\s+)${NAMES}\\b`, 'g');
-// A template substitution may supply a separator or suffix: refuse that uncertain path too.
-const PID_LITERAL = /(['"`])(?:[^'"`\n]*(?:[/\\]|}))?watchdog\.pid(?=\1|[/\\]|\$\{)/g;
+const NAMES = new Set(['watchdogStall', 'watchdogWritePid', 'waitForMockRelease', 'waitForRelease']);
+const PID = /(?:^|[/\\])watchdog\.pid(?:$|[/\\])/;
+const MESSAGE = 'Use mock-lifecycle.mjs for the stall, readiness pid and release wait (hearsay-tools/cezarion#1529).';
 
 /** Stall ordering and readiness belong to the lifecycle module, never its callers. */
-export const mockLifecycleBoundary: SourceRule = {
+export const mockLifecycleBoundary: AstRule = {
   name: 'mock-lifecycle-boundary',
   description: 'Native mocks share the no-progress stall and release wait (hearsay-tools/cezarion#1529).',
   applies: file => /^packages\/cezar\/scripts\/mock-[^/]+\.mjs$/.test(file)
     && file !== 'packages/cezar/scripts/mock-lifecycle.mjs',
-  check: (_file, source) => {
-    const code = blankOnce(source);
-    const sites = [...code.matchAll(DEFINITION)].map(match => match.index);
-    // Blanking keeps literal delimiters: reject real literals, but ignore samples in comments.
-    for (const match of source.matchAll(PID_LITERAL)) {
-      if (code[match.index] === match[1]) sites.push(match.index);
-    }
-    return sites.sort((a, b) => a - b).map(offset => ({
-      line: lineAt(source, offset),
-      message: 'Use mock-lifecycle.mjs for the stall, readiness pid and release wait (hearsay-tools/cezarion#1529).',
-    }));
+  create(report) {
+    return {
+      FunctionDeclaration(node) {
+        if (NAMES.has(nameOf(child(node, 'id')) ?? '')) report(node, MESSAGE);
+      },
+      FunctionExpression(node) {
+        if (NAMES.has(nameOf(child(node, 'id')) ?? '')) report(node, MESSAGE);
+      },
+      VariableDeclarator(node) {
+        if (node.parent?.type !== 'VariableDeclaration' || children(node.parent, 'declarations')[0] !== node) return;
+        if (NAMES.has(nameOf(child(node, 'id')) ?? '')) report(node, MESSAGE);
+      },
+      Literal(node) {
+        const value = stringOf(node);
+        if (value !== undefined && PID.test(value)) report(node, MESSAGE);
+      },
+      TemplateLiteral(node) {
+        if (children(node, 'quasis').some(quasi => {
+          const value = quasi.value as { raw: string };
+          return PID.test(value.raw);
+        })) report(node, MESSAGE);
+      },
+    };
   },
 };

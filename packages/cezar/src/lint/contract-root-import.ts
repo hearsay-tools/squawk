@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { blankOnce, lineAt, repoRoot, type SourceRule } from './source-rule.ts';
+import { parse } from '@babel/parser';
+import { blankOnce, lineAt, repoRoot } from './source-rule.ts';
+import { child, children, nameOf, stringOf, type AstRule, type EsNode } from './ast-rule.ts';
 
 /**
  * Contract values load through module subpaths, never through a package root
@@ -115,8 +117,14 @@ type Owners = Map<string, { contract?: string; apiClient?: string }>;
 function subpathOwners(): Owners {
   const owners: Owners = new Map();
   const record = (path: string, key: 'contract' | 'apiClient', subpath: string) => {
-    for (const [, name] of readFileSync(join(repoRoot, path), 'utf8').matchAll(/^export (?:async )?(?:const|let|function\*?|class|enum) ([\w$]+)/gm)) {
-      owners.set(name as string, { ...owners.get(name as string), [key]: subpath });
+    const ast = parse(readFileSync(join(repoRoot, path), 'utf8'), { sourceType: 'module', plugins: ['typescript'] });
+    for (const statement of ast.program.body) {
+      if (statement.type !== 'ExportNamedDeclaration' || !statement.declaration) continue;
+      const declaration = statement.declaration;
+      const ids = declaration.type === 'VariableDeclaration'
+        ? declaration.declarations.flatMap(item => item.id.type === 'Identifier' ? [item.id.name] : [])
+        : 'id' in declaration && declaration.id?.type === 'Identifier' ? [declaration.id.name] : [];
+      for (const name of ids) owners.set(name, { ...owners.get(name), [key]: subpath });
     }
   };
   for (const name of contractModules()) record(`packages/contract/src/${name}.ts`, 'contract', name);
@@ -149,12 +157,38 @@ export const scanned = (file: string): boolean =>
 
 let exemptions: Record<string, string> | undefined;
 
-export const contractRootImport: SourceRule = {
+/** The root import's syntax supplies the same diagnostic fields as the original scanner. */
+function rootImportNode(file: string, node: EsNode): RootImport | undefined {
+  const specifier = child(node, 'source');
+  const root = rootOf(stringOf(specifier) ?? '');
+  if (!root) return undefined;
+  if (node.importKind === 'type' || node.exportKind === 'type') return undefined;
+  const specifiers = children(node, 'specifiers');
+  const names = specifiers.filter(item => item.type === 'ImportSpecifier' || item.type === 'ExportSpecifier').map(item => {
+    const imported = child(item, item.type === 'ImportSpecifier' ? 'imported' : 'local');
+    return `${item.importKind === 'type' || item.exportKind === 'type' ? 'type ' : ''}${nameOf(imported) ?? stringOf(imported) ?? ''}`;
+  });
+  let kind: Kind;
+  if (node.type === 'ImportExpression' || node.type === 'TSImportType') kind = 'dynamic';
+  else if (node.type.startsWith('Export')) kind = 're-export';
+  else if (specifiers.length === 0) kind = 'side-effect';
+  else if (specifiers[0]?.type === 'ImportNamespaceSpecifier') kind = 'namespace';
+  else kind = specifiers[0]?.type === 'ImportSpecifier' ? 'value-import' : 'default';
+  return { file, line: 1, root, kind, names };
+}
+
+export const contractRootImport: AstRule = {
   name: 'contract-root-import',
   description: 'Import contract values through module subpaths, never through a package root (hearsay-tools/cezarion#1237).',
   applies: (file) => scanned(file) && !(file in (exemptions ??= readExemptions())),
-  check: (file, source) => scanRootImports(file, source).map((site) => ({
-    line: site.line,
-    message: `${hint(site)}. Import values from the subpaths named, or types as \`import type\` from the root (hearsay-tools/cezarion#1237).`,
-  })),
+  create(report, context) {
+    const inspect = (node: EsNode) => {
+      if (node.type === 'TSImportType') {
+        for (let parent = node.parent; parent; parent = parent.parent) if (parent.type === 'TSTypeAliasDeclaration') return;
+      }
+      const site = rootImportNode(context.file, node);
+      if (site) report(node, `${hint(site)}. Import values from the subpaths named, or types as \`import type\` from the root (hearsay-tools/cezarion#1237).`);
+    };
+    return Object.fromEntries(['ImportDeclaration', 'ExportAllDeclaration', 'ExportNamedDeclaration', 'ImportExpression', 'TSImportType'].map(type => [type, inspect]));
+  },
 };

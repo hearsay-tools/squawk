@@ -1,3 +1,4 @@
+import { checkRule } from './ast-rule.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -57,6 +58,7 @@ describe('run history ownership', () => {
     'const name = ".ndjson.br";',
   ])('refuses raw access: %s', (source) => {
     expect(scanHistoryReaders(other, source)).toHaveLength(1);
+    expect(checkRule(runHistoryReader, other, source)).toHaveLength(1);
   });
 
   it.each([
@@ -76,10 +78,25 @@ describe('run history ownership', () => {
     'const name = "name-.ndjson";',
   ])('passes non-path code: %s', (source) => {
     expect(scanHistoryReaders(other, source)).toEqual([]);
+    expect(checkRule(runHistoryReader, other, source)).toEqual([]);
   });
 
   it('does not parse files outside the raw ndjson prefilter', () => {
     expect(historyAccesses('let x = ;')).toEqual([]);
+  });
+
+  it.each([
+    ['const raw = store\n .eventsPath(id);', 2, 'eventsPath'],
+    ['const raw = owner\n .historyPaths(dir, id);', 2, 'historyPaths'],
+    ['const helpers = { historyPaths(dir, id) { return []; } };', 1, 'historyPaths'],
+    ['const helpers = {\n eventsPath(id) { return ""; }\n};', 2, 'eventsPath'],
+  ])('reports the helper name at its original line: %s', (source, line, kind) => {
+    const expected = [{ line, message: expect.stringMatching(new RegExp(`^${kind}:`)) }];
+    expect(scanHistoryReaders(other, source).map(site => ({
+      line: source.slice(0, site.offset).split('\n').length,
+      message: `${site.kind}:`,
+    }))).toEqual(expected);
+    expect(checkRule(runHistoryReader, other, source)).toEqual(expected);
   });
 
   it('refuses malformed source instead of hiding a path', () => {
@@ -105,9 +122,12 @@ describe('run history ownership', () => {
     for (const entry of readHistoryReaders()) {
       expect(entry.reason.trim()).not.toBe('');
       expect(scanHistoryReaders(entry.file, samples[entry.kind])).toEqual([]);
+      expect(checkRule(runHistoryReader, entry.file, samples[entry.kind])).toEqual([]);
+      expect(checkRule(runHistoryReader, other, samples[entry.kind])).toHaveLength(1);
       expect(scanHistoryReaders(other, samples[entry.kind])).toHaveLength(1);
     }
     expect(scanHistoryReaders('packages/cezar/src/runs/store.ts', 'readFileSync(this.eventsPath(id))')).toHaveLength(1);
+    expect(checkRule(runHistoryReader, 'packages/cezar/src/runs/store.ts', 'fs.appendFileSync(this.eventsPath(id), line)')).toEqual([]);
   });
 
   it.each([

@@ -2,7 +2,18 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { compareSetters, readSetterBaseline, scanSetters, scanTree } from './raw-query-setter.ts'
+import { compareSetters, rawQuerySetter, readSetterBaseline, scanSetters as scanOriginalSetters, scanTree } from './raw-query-setter.ts'
+
+import { checkRule } from './ast-rule.testkit.ts'
+
+/** Every original snippet also exercises oxlint's real ESTree visitors. */
+function scanSetters(file: string, source: string) {
+  const expected = scanOriginalSetters(file, source)
+  const findings = checkRule(rawQuerySetter, `packages/web/src/${file}`, source)
+  expect(findings).toHaveLength(expected.length)
+  for (const [index, finding] of findings.entries()) expect(finding.message).toContain(expected[index]!.site)
+  return expected
+}
 
 /** The baseline `cez/raw-query-setter` reads; `npm run lint` applies the rule to the cockpit. */
 const baseline = { sites: readSetterBaseline() }

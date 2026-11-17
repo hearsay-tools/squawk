@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { homeBoundary } from './home-boundary.ts';
-import { repoRoot } from './source-rule.ts';
-import { testHomeWrite } from './test-home-write.ts';
+import { homeBoundaryMessage, scanHomeBoundary } from './home-boundary.ts';
+import { lineAt, repoRoot } from './source-rule.ts';
+import { testHomeWrite, testHomeWriteMessage, unsafeHomeWrites } from './test-home-write.ts';
 import { gitSync } from '../git-command.ts';
 
 /** Oxlint owns packages; use the same two scanners for test files elsewhere. */
@@ -12,7 +12,9 @@ export function externalTestHomeProblems(root = repoRoot, files?: string[]): str
   }).split('\0').filter(Boolean);
   return [...new Set(listed)].filter(file => !file.startsWith('packages/') && testHomeWrite.applies(file) && existsSync(join(root, file))).flatMap(file => {
     const source = readFileSync(join(root, file), 'utf8');
-    return [homeBoundary, testHomeWrite].flatMap(rule => rule.check(file, source).map(finding =>
-      `${file}:${finding.line}:${finding.column ?? 0} cez/${rule.name}: ${finding.message}`));
+    return [
+      ...scanHomeBoundary(file, source).map(site => `${file}:${lineAt(source, site.offset)}:0 cez/home-boundary: ${homeBoundaryMessage(site.kind)}`),
+      ...unsafeHomeWrites(source, file).map(offset => `${file}:${lineAt(source, offset)}:0 cez/test-home-write: ${testHomeWriteMessage}`),
+    ];
   });
 }

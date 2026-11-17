@@ -2,7 +2,8 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { parse } from '@babel/parser'
 import type { Node } from '@babel/types'
-import { lineAt, repoRoot, type SourceRule } from './source-rule.ts'
+import { repoRoot } from './source-rule.ts'
+import { child, children, nameOf, stringOf, type AstRule, type EsNode } from './ast-rule.ts'
 
 /**
  * Cockpit query writes go through `useSearchParamsWriter` (hearsay-tools/cezarion#1649): a raw
@@ -93,17 +94,42 @@ export function readSetterBaseline(path = baselinePath): SetterException[] {
 
 let baseline: SetterException[] | undefined
 
-export const rawQuerySetter: SourceRule = {
+export const rawQuerySetter: AstRule = {
   name: 'raw-query-setter',
   description: 'Write cockpit query strings through useSearchParamsWriter, never a raw useSearchParams setter (hearsay-tools/cezarion#1649).',
   applies: file => file.startsWith(WEB_SRC) && /\.[cm]?[jt]sx?$/.test(file),
-  check: (file, source) => {
-    const local = file.slice(WEB_SRC.length)
-    const sites = setterSites(local, source)
-    const { added } = compareSetters(sites, (baseline ??= readSetterBaseline()).filter(entry => entry.file === local))
-    return added.map(site => ({
-      line: lineAt(source, site.start),
-      message: `Raw query setter: ${site.site}. Write the query through useSearchParamsWriter; never add to packages/web/src/test/search-params-discipline.baseline.json (hearsay-tools/cezarion#1649).`,
-    }))
+  create(report, context) {
+    const local = context.file.slice(WEB_SRC.length)
+    const hooks = new Set<string>()
+    const namespaces = new Set<string>()
+    const remaining = (baseline ??= readSetterBaseline()).filter(entry => entry.file === local)
+    function imported(node: EsNode): void {
+      if (!['react-router', 'react-router-dom'].includes(stringOf(child(node, 'source')) ?? '')) return
+      for (const specifier of children(node, 'specifiers')) {
+        const localName = nameOf(child(specifier, 'local'))
+        if (!localName) continue
+        if (specifier.type === 'ImportNamespaceSpecifier') namespaces.add(localName)
+        if (specifier.type === 'ImportSpecifier' && nameOf(child(specifier, 'imported')) === 'useSearchParams') hooks.add(localName)
+      }
+    }
+    return {
+      Program(node) { for (const statement of children(node, 'body')) if (statement.type === 'ImportDeclaration') imported(statement) },
+      VariableDeclarator(node) {
+        const init = child(node, 'init')
+        if (init?.type !== 'CallExpression') return
+        const callee = child(init, 'callee')
+        const hook = hooks.has(nameOf(callee) ?? '')
+        const namespaced = callee?.type === 'MemberExpression' && !callee.computed
+          && namespaces.has(nameOf(child(callee, 'object')) ?? '') && nameOf(child(callee, 'property')) === 'useSearchParams'
+        if (!hook && !namespaced) return
+        const id = child(node, 'id')
+        const elements = id?.elements
+        if (id?.type === 'ArrayPattern' && Array.isArray(elements) && elements.length <= 1 && !children(id, 'elements').some(element => element.type === 'RestElement')) return
+        const site = context.sourceCode.getText(node).replace(/\s+/g, ' ')
+        const index = remaining.findIndex(entry => entry.site === site)
+        if (index >= 0) { remaining.splice(index, 1); return }
+        report(node, `Raw query setter: ${site}. Write the query through useSearchParamsWriter; never add to packages/web/src/test/search-params-discipline.baseline.json (hearsay-tools/cezarion#1649).`)
+      },
+    }
   },
 }

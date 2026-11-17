@@ -1,4 +1,5 @@
-import type { Finding, SourceRule } from './source-rule.ts';
+import type { Finding } from './source-rule.ts';
+import { child, nameOf, type AstRule, type EsNode } from './ast-rule.ts';
 
 interface SourceFile {
   /** Path relative to packages/web, always with `/` separators (allowlists match on it). */
@@ -225,9 +226,117 @@ export function guardianFindings(file: string, source: string): Finding[] {
   return findings;
 }
 
-export const designGuardian: SourceRule = {
+function guardianLocation(node: EsNode): { line: number; column: number } {
+  const loc = node.loc as { start: { line: number; column: number } };
+  return loc.start;
+}
+
+function dialogToken(node: EsNode): string | undefined {
+  const callee = child(node, 'callee');
+  const name = nameOf(callee);
+  if (name && ['confirm', 'alert', 'prompt'].includes(name)) return `${name}(`;
+  if (callee?.type !== 'MemberExpression' || callee.computed) return undefined;
+  const object = child(callee, 'object');
+  if (!object || (callee.range as [number, number])[0] !== (object.range as [number, number])[0]) return undefined;
+  const owner = nameOf(object);
+  const method = nameOf(child(callee, 'property'));
+  return owner && ['window', 'globalThis'].includes(owner) && method && ['confirm', 'alert', 'prompt'].includes(method)
+    ? `${owner}.${method}(` : undefined;
+}
+
+/** Source tokens come from syntax nodes; CSS keeps the line scanner in the runner. */
+export const designGuardian: AstRule = {
   name: 'design-guardian',
   description: 'The cockpit design guardian per-file rules (hearsay-tools/cezarion#2422)',
-  applies: (file) => guardianFile(file, '') !== undefined,
-  check: guardianFindings,
+  applies: (file) => !file.endsWith('.css') && guardianFile(file, '') !== undefined,
+  create(report, context) {
+    const file = guardianFile(context.file, '')!;
+    const active = DESIGN_RULES.filter(rule => rule.applies(file) && !rule.allowed?.(file.rel));
+    const fixtureRule = active.find(rule => rule.name === 'fixture-serve-must-pin-cez-home');
+    const nativeRule = active.find(rule => rule.name === 'no-native-dialogs');
+    const fixtureLines = new Map<number, { node: EsNode; offset: number; home: boolean; dry: boolean }>();
+    const emitted = new Set<string>();
+    let commentEnds: Map<number, { end: number; multiline: boolean }> | undefined;
+    const sameDialogLine = (callee: EsNode): boolean => {
+      commentEnds ??= new Map(context.sourceCode.getAllComments().map(comment => {
+        const range = comment.range as [number, number];
+        const loc = comment.loc as { start: { line: number }; end: { line: number } };
+        return [range[0], { end: range[1], multiline: loc.start.line !== loc.end.line }];
+      }));
+      let at = (callee.range as [number, number])[1];
+      while (context.sourceCode.text[at] !== '(') {
+        const comment = commentEnds.get(at);
+        if (comment) {
+          if (comment.multiline) return false;
+          at = comment.end;
+        } else {
+          const character = context.sourceCode.text[at];
+          if (character === '\n' || character === '\r' || character === undefined) return false;
+          at++;
+        }
+      }
+      return true;
+    };
+    const emit = (rule: Rule, node: EsNode, token: string, offset = 0) => {
+      const start = guardianLocation(node);
+      const prefix = context.sourceCode.getText(node).slice(0, offset).split('\n');
+      const position = { line: start.line + prefix.length - 1, column: prefix.length === 1 ? start.column + offset : prefix.at(-1)!.length };
+      const key = `${rule.name}:${position.line}:${position.column}`;
+      if (emitted.has(key)) return;
+      emitted.add(key);
+      report(node, `${rule.name} — ${rule.why}: ${token.trim()} → hearsay-tools/cezarion#2422`, position);
+    };
+    const fixtureToken = (node: EsNode, value: string) => {
+      if (!fixtureRule) return;
+      const firstLine = guardianLocation(node).line;
+      let offset = 0;
+      value.split('\n').forEach((line, index) => {
+        const home = /\bCEZ_HOME\b/.test(line);
+        const dry = /\bCEZ_DRY_RUN\b/.test(line);
+        if (!home && !dry) { offset += line.length + 1; return; }
+        const previous = fixtureLines.get(firstLine + index);
+        fixtureLines.set(firstLine + index, { node: dry ? node : previous?.node ?? node, offset: dry ? offset + line.indexOf('CEZ_DRY_RUN') : previous?.offset ?? offset, home: home || previous?.home === true, dry: dry || previous?.dry === true });
+        offset += line.length + 1;
+      });
+    };
+    const literal = (node: EsNode) => {
+      if (node.type === 'Literal' && typeof node.value !== 'string' && !node.regex) return;
+      const value = context.sourceCode.getText(node);
+      fixtureToken(node, value);
+      for (const rule of active) {
+        if (rule === fixtureRule) continue;
+        // Each regex reads one literal, never the file or a containing source subtree.
+        let offset = 0;
+        for (const line of value.split('\n')) {
+          for (const match of line.matchAll(rule.pattern)) emit(rule, node, match[0], offset + match.index);
+          offset += line.length + 1;
+        }
+      }
+    };
+    return {
+      Literal: literal,
+      TemplateElement: literal,
+      JSXText: literal,
+      ...(fixtureRule ? { Identifier(node: EsNode) { fixtureToken(node, nameOf(node) ?? '') } } : {}),
+      CallExpression(node) {
+        const recognized = dialogToken(node);
+        if (!nativeRule || !recognized) return;
+        // The callee syntax survives comments between its name and the argument list.
+        const callee = child(node, 'callee')!;
+        if (node.optional || callee.optional || child(node, 'typeArguments') || (node.range as [number, number])[0] !== (callee.range as [number, number])[0] || !sameDialogLine(callee)) return;
+        emit(nativeRule, node, recognized);
+      },
+      Property(node) {
+        const key = child(node, 'key');
+        const value = child(node, 'value');
+        if ((nameOf(key) ?? (typeof key?.value === 'string' ? key.value : undefined)) !== 'color' || value?.value !== 'var(--accent-strong)') return;
+        const rule = active.find(rule => rule.name === 'no-fill-accent-as-ink');
+        if (rule) emit(rule, node, context.sourceCode.getText(node));
+      },
+      'Program:exit'() {
+        if (!fixtureRule) return;
+        for (const { node, offset, dry, home } of fixtureLines.values()) if (dry && !home) emit(fixtureRule, node, 'CEZ_DRY_RUN', offset);
+      },
+    };
+  },
 };

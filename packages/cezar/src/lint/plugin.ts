@@ -34,10 +34,20 @@ import { undocumentedEnvName } from './undocumented-env-name.ts';
 import { unitWaitDiscipline } from './unit-wait-discipline.ts';
 
 /** The rules that visit oxlint's syntax tree (hearsay-tools/squawk#3774). */
-export const AST_RULES: AstRule[] = [childKilledRead, runStoreTestkitImport, attentionBucketCompareOutsideOwner, automationsCapabilityReadOutsideOwner, subagentChildrenOutsideDock, testEnumLiteral, activeRunLiteral, activeRunMapWrite, ...activeRunWriteRules, launchReadOutsideResolver, ...PROCESS_OWNER_RULES, ...STATE_OWNER_RULES, ...READER_OWNER_RULES];
+export const AST_RULES: AstRule[] = [
+  productEnvRead, homeBoundary, testHomeWrite, card2Contrast, contractRootImport,
+  designGuardian, layerImport, mockLifecycleBoundary, mockScenarioBoundary, nativeMockSource,
+  parityRunnerSubset, rawQuerySetter, runFactReader, runHistoryReader, runnerFactCombination,
+  runnerIdBranch, runnerRosterLiteral, undocumentedEnvName,
+  childKilledRead, runStoreTestkitImport, launchReadOutsideResolver,
+  attentionBucketCompareOutsideOwner, automationsCapabilityReadOutsideOwner,
+  subagentChildrenOutsideDock, testEnumLiteral,
+  activeRunLiteral, activeRunMapWrite, ...activeRunWriteRules,
+  ...PROCESS_OWNER_RULES, ...STATE_OWNER_RULES, ...READER_OWNER_RULES,
+];
 
-/** The rules that scan a file's text. New rules are AST rules. */
-export const TEXT_RULES: SourceRule[] = [productEnvRead, homeBoundary, testHomeWrite, card2Contrast, contractRootImport, designGuardian, layerImport, mockLifecycleBoundary, mockScenarioBoundary, nativeMockSource, parityRunnerSubset, rawQuerySetter, runFactReader, runHistoryReader, runnerFactCombination, runnerIdBranch, runnerRosterLiteral, testWaitDiscipline, undocumentedEnvName, unitWaitDiscipline];
+/** The wait rules retain their text scanners until the next port slice. */
+export const TEXT_RULES: SourceRule[] = [testWaitDiscipline, unitWaitDiscipline];
 
 /** Every repository rule. `.oxlintrc.json` turns each one on as `cez/<name>`. */
 export const RULES: (AstRule | SourceRule)[] = [...TEXT_RULES, ...AST_RULES];

@@ -9,8 +9,9 @@ command, it fails closed, and it does not depend on which tests a change selects
 `file:line:column rule: reason → owner`:
 
 1. **oxlint** with the `cez` JS plugin (`packages/cezar/src/lint/plugin.ts`) over `packages/`.
-   AST rules (`AST_RULES`) visit oxlint's own syntax tree; text rules (`TEXT_RULES`) scan the
-   file's text. All former YAML rules now run as AST rules
+   The `AST_RULES` visit oxlint's own syntax tree. The two wait rules retain
+   their text scanners in `TEXT_RULES` until their separate AST port. All former YAML rules
+   now run as AST rules
    (hearsay-tools/squawk#3774).
    `.oxlintrc.json` keeps every category off and explicitly enables all `cez` rules and 93
    built-in correctness rules. The `typescript`, `unicorn` and `oxc` plugins are enabled.
@@ -63,6 +64,12 @@ when value tracking is outside the contract; do not expand the contract one bypa
 a time. If the required guarantee needs binding, type or value resolution, choose the
 appropriate boundary or checker explicitly.
 
+AST source rules share oxlint's parse. `ast-rule.ts` passes the repository-relative file,
+node text and parsed comments to visitors. The typed env, home and runner-fact
+engines use one cached structural view of ESTree nodes; the view changes node shapes,
+without reparsing source or scanning whole-file text. Runner checks still read their
+explicit baseline and reader-list inputs. CSS remains a runner check.
+
 ## The `cez` rules
 
 | Rule | Refuses | Exceptions |
@@ -87,7 +94,7 @@ appropriate boundary or checker explicitly.
 | `cez/runner-id-branch` | An equality comparison (`===`, `!==`, `==`, `!=`) with a runner-id string literal, or a `switch` with a runner-id `case` label, outside `packages/cezar/src/core/`. Shared code reads `RUNNER_FACTS` (hearsay-tools/cezarion#2991) | `runner-id-branch.baseline.json`: each site with its count and a reason, `identity choice: …` or `capability branch; should become a fact: …`; shrink-only, stale entries fail |
 | `cez/runner-roster-literal` | An array literal that names every runner id, outside the file that defines `RUNNER_IDS`, tests included. Use `RUNNER_IDS` or `isRunnerId()`; a Node-free package uses `runnerSchema.options` (open-mercato/cezar#387) | `runner-roster-literal.baseline.json`: each file with its count and a reason; shrink-only, stale entries fail |
 | `cez/test-wait-discipline` | Bare sleeps, bounds under 10 s and poll loops without a sufficient deadline in server tests (hearsay-tools/cezarion#2421) | `packages/cezar/src/test-wait-discipline.baseline.json` and `test-wait-discipline-polls.baseline.json`, shrink-only |
-| `cez/undocumented-env-name` | A `CEZ_*` name in a shipped source or runner script that `.env.example` lacks | The `CEZ_MOCK_*` prefix |
+| `cez/undocumented-env-name` | A `CEZ_*` or `HSQ_*` name in a shipped source or runner script that `.env.example` lacks | The `CEZ_MOCK_*` prefix |
 | `cez/unit-wait-discipline` | Bare sleeps, bounds under 3 s and poll loops without a sufficient deadline in cockpit unit tests (hearsay-tools/cezarion#2421) | `packages/web/src/test/unit-wait-discipline.baseline.json`, shrink-only |
 | `cez/child-killed-read` | A `ChildProcess.killed` read (open-mercato/cezar#844). See [`ChildProcess.killed` reads](#childprocesskilled-reads-child-killed-read) | None |
 | `cez/run-store-testkit-import` | A run-store testkit loaded from production code (hearsay-tools/cezarion#2685) | None |
@@ -126,7 +133,7 @@ appropriate boundary or checker explicitly.
 
 ### Static scope of guards without a separate section
 
-These are source checks, not proofs of the values a program will use. Each scanner's
+These are source checks, not proofs of the values a program will use. Each rule's
 `applies` predicate in `packages/cezar/src/lint/` defines its file scope; the table
 below states the checked forms and limits. The exceptions in the rule table above
 remain in force.
@@ -143,7 +150,7 @@ remain in force.
 | `cez/run-store-testkit-import` | Non-test `.ts` files in `packages/cezar/src`: a string literal ending in `run-store.testkit` or `run-store-open.testkit`, with or without `.ts`/`.js`, inside an import, an export, an `import()`, an `import x = require()` or any call. A template literal and a path assembled from pieces are out of scope. |
 | `cez/card-2-contrast` | Cockpit TSX source: JSX text and literal class branches, inherited card surfaces, ink, size and weight. Unknown sizes are conservatively small. Arbitrary runtime class values and computed styles require rendered checks; this is not a browser contrast audit. |
 | `cez/contract-root-import` | Static root specifiers in runtime imports and re-exports in the selected package TS/TSX trees, including literal dynamic imports; `import type` declarations and import queries inside type aliases stay allowed. Inline type specifiers and variable-annotation queries are still reported. It does not resolve computed specifiers or transitive imports. |
-| `cez/native-mock-source` | TS files under service `src/` and `test/`, excluding the scanner itself: named read calls whose argument text identifies native mock source, `.mockBin` assignments and mock-patcher specifiers. It does not track arbitrary aliases or source bytes through helpers. |
+| `cez/native-mock-source` | TS files under service `src/` and `test/`, excluding the scanner itself: named read calls whose argument identifiers or literal values identify native mock source, `.mockBin` assignments and mock-patcher specifiers. It does not track arbitrary aliases or source bytes through helpers. |
 | `cez/mock-scenario-boundary` | Service `mock-*.mjs` scripts except `mock-scenario.mjs`: required runner mocks must contain a recognized scenario-module import. Scripts with that import are checked for shared scenario tokens in string, template and regex literals, with listed native-token exceptions. It does not resolve computed imports or constructed token values. |
 | `cez/parity-runner-subset` | JS/TS files under `packages/` whose file name contains `parity`: array literals whose elements are all runner-id strings and that name two or more distinct ids of `RUNNER_IDS`, but not all of them. It leaves out a one-runner list, an array that pairs a runner id with other values, the full roster (`cez/runner-roster-literal`), a list built from parts or held in another file, and runner groups in files that are not parity files. |
 | `cez/raw-query-setter` | Cockpit JS/TS source, including tests: variable declarations that acquire a tuple or setter from a direct imported or namespace `useSearchParams` call. Named import aliases are recognized; inter-module value flow is not followed. |
@@ -403,7 +410,7 @@ For a safety guard, first apply [New safety guards](#new-safety-guards) and docu
 its static scope before implementing its scanner.
 
 1. Write the rule in `packages/cezar/src/lint/<rule>.ts` as an `AstRule` (`ast-rule.ts`): its
-   scope (`applies`) and the ESTree visitors it returns from `create(report)`, such as
+   scope (`applies`) and the ESTree visitors it returns from `create(report, context)`, such as
    `MemberExpression` or `ImportDeclaration`. Oxlint parses each file once for every rule, so a
    visitor costs no parse. Read node fields through `child`, `children`, `nameOf` and `stringOf`.
    Never match text over a whole file in a new rule.
@@ -411,7 +418,9 @@ its static scope before implementing its scanner.
 3. Add it to `AST_RULES` in `plugin.ts` and turn it on in `.oxlintrc.json` as `"error"`.
 4. Pin it with `ruleCases(rule, { file, valid, invalid })` from `ast-rule.testkit.ts` in
    `ast-rules.test.ts`. Oxlint's own `RuleTester` runs each snippet in the test process, and each
-   invalid snippet must give exactly one finding. Add a seeded violation to `plugin.test.ts`,
+   invalid snippet must give exactly one finding. Existing imperative fixture suites can use
+   `checkRule(rule, file, source)` from the same testkit; it runs the same oxlint visitors and
+   returns their findings without starting a CLI. Add a seeded violation to `plugin.test.ts`,
    which runs the real oxlint. A deliberate exception is
    `// oxlint-disable-next-line cez/<rule> -- <reason>`; add no baseline.
 5. Put a whole-repository check (a baseline, a stale entry) in `run.ts`, never in a rule: oxlint
@@ -487,14 +496,14 @@ The 15 type-aware TypeScript correctness rules remain off and outside this adopt
 
 ### Design guardian (M09)
 
-**Static scope:** the existing source-text patterns and CSS selector/body patterns in
+**Static scope:** syntax nodes, literal tokens and CSS selector/body patterns in
 the rule table, with their original file predicates and reasoned exceptions. The fixture
 home check is a same-line heuristic; it does not establish a child's environment.
 
 hearsay-tools/cezarion#2422 accounts for all 18 original cases (the issue's count of 17 omitted
-one). The shared table and string-aware comment stripper live in
-`packages/cezar/src/lint/design-guardian.ts`; strings remain visible to these rules. The original
-regexes, applicability, allowed predicates and their reasons remain unchanged.
+one). The shared table lives in `packages/cezar/src/lint/design-guardian.ts`. Source visitors
+check calls and literal tokens. The CSS runner keeps its string-aware comment stripper.
+Applicability, allowed predicates and their reasons remain unchanged.
 
 | Original case | Fate and guarantee |
 | --- | --- |
