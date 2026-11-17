@@ -148,6 +148,7 @@ export function archiveInComposer(run: RunRecord, workersLive = false): boolean 
  * stays hidden until the detail response arrives; the client never reconstructs blockers. */
 export function offersComposerFinish(run: ApiRun): boolean {
   return run.status === 'waiting' && run.finishBlocked === null &&
+    // oxlint-disable-next-line cez/attention-bucket-compare-outside-owner -- Finish needs a waiting reply, not permission approval
     deriveAttention(run).bucket === 'waiting'
 }
 

@@ -38,7 +38,7 @@ const events = [
     id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', text: 'Wave 2 is merged.', parentRunId: schemaPeer, createdAt: '2026-10-28T12:03:00Z',
     conversation: { senderRunId: schemaPeer, recipientRunId: self, kind: 'progress', relationship: 'peer' },
     // An `AgentInput` origin, not a wait source.
-    // ast-grep-ignore: test-enum-literal
+    // oxlint-disable-next-line cez/test-enum-literal -- this object uses its own field meaning, outside the contract enum
     source: WAIT_SOURCE.agent,
   } },
   projection(toDeleted),

@@ -24,7 +24,7 @@ import type { HumanWaitEntry, PeerWaitEntry, PrWaitEntry, ProcessWaitEntry, Suba
  *
  * Tests only: nothing in a build reaches this file, and it imports no Node module, so the cockpit's
  * tests can use it too, through `@open-mercato/cezar-api-client/contract/test-factories.testkit`.
- * The `test-enum-literal` ast-grep rule (`.ai/ast-grep/rules`) fails a new enum literal in a test.
+ * The `cez/test-enum-literal` oxlint AST rule fails a new enum literal in a test.
  *
  * Each factory returns a value the contract's own schema accepts, which `test-factories.test.ts`
  * proves with `parse`. The overrides are `Partial` of the contract type, so a fresh object literal

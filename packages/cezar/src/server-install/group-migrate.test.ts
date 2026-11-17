@@ -204,13 +204,13 @@ describe('server-migrate group', () => {
     const f = sharedHome();
     f.host.unhealthy.add('hearsay-squawk-shop.service');
     f.host.failDisable.add('hearsay-squawk.service');
-    // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
+    // oxlint-disable-next-line cez/test-enum-literal -- a server-migrate result status, not a run status.
     await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'failed' });
     expect(readServerMigrateJournal(f.target)?.phase).toBe('rolling-back');
     // A re-run whose rollback still fails reports it and starts no new migration.
     f.host.unhealthy.clear();
     const starts = f.host.unit('system', 'hearsay-squawk-shop.service').starts;
-    // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
+    // oxlint-disable-next-line cez/test-enum-literal -- a server-migrate result status, not a run status.
     await expect(serverMigrate(f)).resolves.toMatchObject({ status: 'failed' });
     expect(readServerMigrateJournal(f.target)?.phase).toBe('rolling-back');
     expect(readInstallMarker(f.target.config)?.state).toBe('pending');
@@ -225,7 +225,7 @@ describe('server-migrate group', () => {
     // The first site rollback (shop, reverse order) then fails its nginx -t.
     f.host.onUpstreamProbe = () => { f.host.nginxTestFailures = 1; delete f.host.onUpstreamProbe; };
     const result = await serverMigrate(f);
-    // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
+    // oxlint-disable-next-line cez/test-enum-literal -- a server-migrate result status, not a run status.
     expect(result.status).toBe('failed');
     expect(result.lines).toContainEqual(expect.stringMatching(/^shop: rollback of \/etc\/nginx\/sites-available\/hearsay-squawk-shop: /));
     expect(result.lines).toContain('The rollback is incomplete. Re-run server-migrate to finish it.');
@@ -247,7 +247,7 @@ describe('server-migrate refusals', () => {
     // serverStateSchema keeps an unknown platform id so that a downgrade still opens the record.
     Home.seed(f.legacy, f.legacy.serverState('api'), { ...loadServerState('shop', f.legacy), instance: 'api', platform: 'windows-service' });
     const result = await serverMigrate(f);
-    // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
+    // oxlint-disable-next-line cez/test-enum-literal -- a server-migrate result status, not a run status.
     expect(result.status).toBe('failed');
     expect(result.lines).toContain('api: server-migrate does not support platform windows-service');
     expect(f.host.commands).toEqual([]);
@@ -258,7 +258,7 @@ describe('server-migrate refusals', () => {
     const f = sharedHome();
     writeFileSync(userUnit(f, 'hearsay-squawk.service'), '[Unit]\n');
     const result = await serverMigrate(f);
-    // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
+    // oxlint-disable-next-line cez/test-enum-literal -- a server-migrate result status, not a run status.
     expect(result.status).toBe('failed');
     expect(result.lines).toContain(`default: ${userUnit(f, 'cezar.service')}: Destination already exists: ${userUnit(f, 'hearsay-squawk.service')}`);
     expect(f.host.commands).toEqual([]);
@@ -352,7 +352,7 @@ describe('server-migrate rollback and recovery', () => {
     const journal = readServerMigrateJournal(f.target);
     const commands = f.host.commands.length;
     const result = await serverMigrate(f);
-    // ast-grep-ignore: test-enum-literal — a server-migrate result status, not a run status.
+    // oxlint-disable-next-line cez/test-enum-literal -- a server-migrate result status, not a run status.
     expect(result.status).toBe('failed');
     expect(result.lines).toContain('shop: server-migrate does not support platform unknown');
     expect(readServerMigrateJournal(f.target)).toEqual(journal);
