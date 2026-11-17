@@ -1,4 +1,4 @@
-import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { Home } from './home.ts';
 import { useTestHome } from './test-home.testkit.ts';
 import { execFileSync } from 'node:child_process';
@@ -27,20 +27,22 @@ function seedSkills(root: string, home: Home, name: string): void {
   git('clone', '--bare', repo, bare);
 }
 
-it('resolves a worker --skill from Home A while the ambient home and cached catalog are B', async () => {
+it('refuses team-only worker skills from both the selected and ambient home catalogs', async () => {
   const root = mkdtempSync(join(tmpdir(), 'cez-worker-skill-home-'));
   const selected = isolatedHome(join(root, 'selected'));
   const ambient = isolatedHome(join(root, 'ambient'));
   useTestHome(ambient);
   const f = fixture(undefined, selected);
+  f.manager.setSkillCatalog(fixedSkillCatalog());
   try {
     seedSkills(root, selected, 'selected-skill'); seedSkills(root, ambient, 'ambient-skill');
     writeFileSync(join(f.root, '.ai/cezar/config.json'), JSON.stringify({ skillsRepos: [{ repo: 'team/skills' }] }));
     expect((await reloadTeamSkills(f.root, selected)).map(skill => skill.name)).toEqual(['selected-skill']);
     expect((await reloadTeamSkills(f.root, ambient)).map(skill => skill.name)).toEqual(['ambient-skill']);
-    const child = await f.service.spawn(f.caller, { task: 'Use selected skill', baseline: 'HEAD', requestId: randomUUID(), skill: 'selected-skill' });
-    expect(f.store.getRun(child.workerId)).toMatchObject({ status: RUN_STATUS.queued, delegation: { role: 'worker' } });
-    await expect(f.service.spawn(f.caller, { task: 'Refuse ambient skill', baseline: 'HEAD', requestId: randomUUID(), skill: 'ambient-skill' }))
-      .rejects.toThrow('Unknown skill "ambient-skill"');
+    for (const skill of ['selected-skill', 'ambient-skill']) {
+      await expect(f.service.spawn(f.caller, { task: 'Refuse team-only skill', baseline: 'HEAD', requestId: randomUUID(), skill }))
+        .rejects.toThrow(`claude account "default" skill "${skill}" is missing from this worktree's list`);
+    }
+    expect(f.store.listWorkerIds()).toEqual([]);
   } finally { await f.close(); vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true }); }
 });
