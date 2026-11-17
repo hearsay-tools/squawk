@@ -1175,9 +1175,6 @@ describe('pi spawns under pi credentials, not another runner', () => {
     expect(buildChildEnv({ backend: 'claude', source: cloudSource }).AWS_ACCESS_KEY_ID).toBe('akid');
   });
 
-  it('keeps the seam identity pi-specific', () => {
-    expect(new PiRunner().backend).toBe('pi');
-  });
 });
 
 

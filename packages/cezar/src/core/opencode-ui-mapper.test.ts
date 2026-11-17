@@ -217,18 +217,6 @@ describe('mapOpencodeEvent edge cases', () => {
     ).toEqual([]);
   });
 
-  it('opencode is the only backend with a real pending phase — first sight of a pending tool emits status pending', () => {
-    const state = startedState();
-    const [started] = mapOpencodeEvent(
-      part({ id: 'prt_b', type: 'tool', tool: 'bash', state: { status: WIRE_TOOL_STATUS.pending, input: { command: 'ls' } } }),
-      state,
-    ).events;
-    expect(started).toEqual({
-      type: 'item.started',
-      item: { kind: 'tool', id: 'prt_b', name: 'bash', toolKind: 'execute', title: 'Ran ls', status: TOOL_STATUS.pending, input: { command: 'ls' } },
-    });
-  });
-
   it('maps an Object.prototype member status like any unknown status (hearsay-tools/squawk#2890)', () => {
     const tool = (status: string | undefined, title?: string) =>
       part({ id: 'prt_p', type: 'tool', tool: 'bash', state: { status, input: { command: 'ls' }, ...(title ? { title } : {}) } });
@@ -245,10 +233,15 @@ describe('mapOpencodeEvent edge cases', () => {
 
   it('tool state carries across updates: pending→running flips via item.updated, error settles as failed', () => {
     let state = startedState();
-    state = mapOpencodeEvent(
+    const pending = mapOpencodeEvent(
       part({ id: 'prt_b', type: 'tool', tool: 'bash', state: { status: WIRE_TOOL_STATUS.pending, input: { command: 'ls' } } }),
       state,
-    ).state;
+    );
+    expect(pending.events[0]).toEqual({
+      type: 'item.started',
+      item: { kind: 'tool', id: 'prt_b', name: 'bash', toolKind: 'execute', title: 'Ran ls', status: TOOL_STATUS.pending, input: { command: 'ls' } },
+    });
+    state = pending.state;
     const running = mapOpencodeEvent(
       part({ id: 'prt_b', type: 'tool', tool: 'bash', state: { status: WIRE_TOOL_STATUS.running, input: { command: 'ls' }, title: 'ls', time: { start: 1 } } }),
       state,

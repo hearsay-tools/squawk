@@ -672,7 +672,7 @@ describe('ProviderAuthService', () => {
   });
 
   describe('cache lifetime is asymmetric on purpose', () => {
-    it('keeps an all-connected answer for MINUTES — it is what every run needs and rarely changes', async () => {
+    it('keeps a connected answer for nine minutes and re-probes after ten', async () => {
       let now = 1_000;
       const runCommand = runner();
       const service = new ProviderAuthService({ runCommand, now: () => now });
@@ -682,15 +682,7 @@ describe('ProviderAuthService', () => {
       await service.status();
       // One probe per provider, from the first call only.
       expect(runCommand).toHaveBeenCalledTimes(ROSTER);
-    });
-
-    it('re-probes an all-connected answer once the long window passes', async () => {
-      let now = 1_000;
-      const runCommand = runner();
-      const service = new ProviderAuthService({ runCommand, now: () => now });
-
-      await service.status();
-      now += 10 * 60_000 + 1;
+      now += 60_001;
       await service.status();
       expect(runCommand).toHaveBeenCalledTimes(2 * ROSTER);
     });
@@ -748,17 +740,6 @@ describe('ProviderAuthService', () => {
       await expect(service.status()).resolves.toBeDefined();
       expect(probes).toBe(2 * ROSTER); // no second refresh piled on top
       release();
-    });
-
-    it('waits when NOTHING is known yet — there is no stale answer to serve', async () => {
-      const runCommand = runner();
-      const service = new ProviderAuthService({ runCommand, now: () => 1_000 });
-      await expect(service.status()).resolves.toMatchObject({
-        providers: expect.arrayContaining([
-          expect.objectContaining({ provider: 'claude', status: 'connected' }),
-        ]),
-      });
-      expect(runCommand).toHaveBeenCalledTimes(ROSTER);
     });
 
     it('applies the same asymmetry per account', async () => {
@@ -819,6 +800,12 @@ describe('ProviderAuthService', () => {
 
     expect(service.reportRuntimeAuthFailure('claude')).toMatchObject({
       status: { authFailureId: 'incident-2' },
+    });
+    expect(service.clearRuntimeAuthFailure('claude', first.status.authFailureId)).toBe(false);
+    await expect(service.status()).resolves.toMatchObject({
+      providers: expect.arrayContaining([
+        expect.objectContaining({ provider: 'claude', authFailureId: 'incident-2' }),
+      ]),
     });
   });
 
@@ -1391,9 +1378,10 @@ describe('ProviderAuthService', () => {
     it.each(['CEZ_DRY_RUN', 'CEZ_AGENT_MODELS_LOCKED'])(
       'probes nothing under %s=1',
       async (variable) => {
-        process.env[variable] = '1';
         const runCommand = runner();
         const service = new ProviderAuthService({ runCommand });
+        expect(service.reportRuntimeAuthFailure('claude')).not.toBeNull();
+        process.env[variable] = '1';
 
         await expect(service.verifyRuntimeAuthFailure('claude')).resolves.toBeNull();
         expect(runCommand).not.toHaveBeenCalled();
@@ -1420,41 +1408,6 @@ describe('ProviderAuthService', () => {
       provider: 'claude',
       status: 'disconnected',
     });
-  });
-
-  it('rejects a stale clear after a newer incident replaces it', async () => {
-    const ids = ['incident-1', 'incident-2'];
-    const service = new ProviderAuthService({
-      runCommand: runner(),
-      createAuthFailureId: () => ids.shift()!,
-    });
-    const firstReport = service.reportRuntimeAuthFailure('claude');
-    expect(firstReport).not.toBeNull();
-    if (!firstReport) throw new Error('runtime incident was not created');
-    const first = firstReport.status.authFailureId;
-
-    expect(service.clearRuntimeAuthFailure('claude', first)).toBe(true);
-    const secondReport = service.reportRuntimeAuthFailure('claude');
-    expect(secondReport).not.toBeNull();
-    if (!secondReport) throw new Error('runtime incident was not created');
-    const second = secondReport.status.authFailureId;
-
-    expect(service.clearRuntimeAuthFailure('claude', first)).toBe(false);
-    await expect(service.status()).resolves.toMatchObject({
-      providers: expect.arrayContaining([
-        expect.objectContaining({ provider: 'claude', authFailureId: second }),
-      ]),
-    });
-  });
-
-  it('keeps CEZ_DRY_RUN connected and ignores runtime invalidation', async () => {
-    process.env.CEZ_DRY_RUN = '1';
-    const createAuthFailureId = vi.fn(() => 'unused-incident');
-    const service = new ProviderAuthService({ runCommand: runner(), createAuthFailureId });
-
-    expect(service.reportRuntimeAuthFailure('claude')).toBeNull();
-    expect(createAuthFailureId).not.toHaveBeenCalled();
-    await expect(statuses(service)).resolves.toMatchObject({ claude: { status: 'connected' } });
   });
 
   it('keeps exact CEZ_AGENT_MODELS_LOCKED=1 connected without credential probes or runtime invalidation', async () => {
@@ -1502,6 +1455,9 @@ describe('ProviderAuthService', () => {
     await vi.waitFor(() => expect(runCommand).toHaveBeenCalledTimes(ROSTER), { timeout: 10_000 });
     release();
     await expect(Promise.all([ordinary, refresh])).resolves.toHaveLength(2);
+    await expect(ordinary).resolves.toMatchObject({
+      providers: expect.arrayContaining([expect.objectContaining({ provider: 'claude', status: 'connected' })]),
+    });
     expect(runCommand).toHaveBeenCalledTimes(ROSTER);
   });
 
@@ -1587,7 +1543,10 @@ describe('ProviderAuthService', () => {
   it('reports all five providers connected in CEZ_DRY_RUN without executing a command', async () => {
     process.env.CEZ_DRY_RUN = '1';
     const runCommand = runner();
-    const service = new ProviderAuthService({ runCommand });
+    const createAuthFailureId = vi.fn(() => 'unused-incident');
+    const service = new ProviderAuthService({ runCommand, createAuthFailureId });
+    expect(service.reportRuntimeAuthFailure('claude')).toBeNull();
+    expect(createAuthFailureId).not.toHaveBeenCalled();
 
     await expect(service.status()).resolves.toEqual({
       providers: [
