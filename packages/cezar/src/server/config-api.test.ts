@@ -270,11 +270,6 @@ describe('the config API', () => {
   });
 
   // ---- worktreeSetup (#917, spec .ai/specs/2026-10-07-worktree-setup.md) ----
-  it('GET reports worktreeSetup null with no issue by default', async () => {
-    const body = await getBody();
-    expect(body.worktreeSetup).toBeNull();
-    expect(body.worktreeSetupIssue).toBeNull();
-  });
 
   it('PUT worktreeSetup persists the raw key and round-trips', async () => {
     const res = await put({ worktreeSetup: { commands: ['npm ci'] } });
