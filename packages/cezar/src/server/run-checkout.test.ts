@@ -131,10 +131,10 @@ const holdPublish = 'run is waiting on a usage-limit hold — choose Don’t res
 const holdRemove = 'run is waiting on a usage-limit hold — choose Don’t resume in the task’s usage-limit hint, then retry';
 const fallbackRefusal = fallbackProjectWriteError(fallback)!;
 const claimedRoutes = [
-  { intent: 'publish' },
-  { intent: 'remove', claim: 'publish', checksActive: true, deletion: 'worktree', nullClaimError: cleanupPending },
-  { intent: 'remove', claim: 'publish', checksActive: true, deletion: 'record', nullClaimError: cleanupPending },
-  { intent: 'remove', claim: 'reclaim', checksActive: false, deletion: 'inline', nullClaimError: reclaimPending },
+  { route: 'pr', intent: 'publish' },
+  { route: 'remove-worktree', intent: 'remove', claim: 'publish', checksActive: true, deletion: 'worktree', nullClaimError: cleanupPending },
+  { route: 'DELETE', intent: 'remove', claim: 'publish', checksActive: true, deletion: 'record', nullClaimError: cleanupPending },
+  { route: 'reclaim', intent: 'remove', claim: 'reclaim', checksActive: false, deletion: 'inline', nullClaimError: reclaimPending },
 ] as const;
 // Each tuple is pr / remove-worktree / DELETE / reclaim. null means admitted.
 const claimedOutcomes: Record<string, readonly (string | null | 404)[]> = {
