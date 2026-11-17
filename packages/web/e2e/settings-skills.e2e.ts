@@ -35,7 +35,7 @@ describe('runner skill inventory against the native mock list', () => {
     browser.waitForFunction(`document.querySelectorAll('[data-slot="skill-row"]').length === 2 && document.body.textContent.includes('Invalid skill manifest')`)
     expect(browser.count(repoSkillRow)).toBe(1)
   }
-  it('shows duplicate ids with paths, metadata and runner problems, with no edit controls or body', () => {
+  it('shows native metadata and runner problems, and retains the open entry after refresh', () => {
     openInventory()
     expect(browser.count('[data-slot="skill-row"][data-skill="plugin:check"]')).toBe(2)
     expect(browser.count('[role="switch"]')).toBe(0)
@@ -44,11 +44,6 @@ describe('runner skill inventory against the native mock list', () => {
     browser.waitForFunction(`document.querySelector(${JSON.stringify(repoSkillRow)})?.open === true`)
     expect(browser.evaluate(`document.querySelector('[data-slot="skill-row"][open]').textContent`)).toContain('Plugin plugin')
     expect(browser.evaluate(`document.querySelector('[data-slot="skill-row"][open]').textContent`)).toContain('.agents/check/SKILL.md')
-  })
-  it('re-reads the selected runner and retains the open entry', () => {
-    openInventory()
-    clickInView(browser, `${repoSkillRow} summary`)
-    browser.waitForFunction(`document.querySelector(${JSON.stringify(repoSkillRow)})?.open === true`)
     browser.click('[data-slot="skills-refresh"]')
     browser.waitForFunction(`!document.querySelector('[data-slot="skills-refresh"]').disabled`)
     expect(browser.count('[data-slot="skill-row"][open]')).toBe(1)

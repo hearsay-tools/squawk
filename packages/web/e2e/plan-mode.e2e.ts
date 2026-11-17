@@ -293,20 +293,11 @@ describe('plan mode against a live dry-run server', () => {
     ])
     // The thread really rendered (the dry-run session parks at waiting).
     browser.waitForFunction(`document.querySelector('[data-route="task-thread"] [data-slot="composer"] textarea') !== null`)
-  }, 90_000)
-
-  it('back on /new: plan mode stuck (draft store) and the spent draft text is gone', () => {
-    proposePlan()
-    browser.click('[data-slot="plan-step"]:nth-of-type(2) [data-slot="plan-step-remove"]')
-    browser.waitForFunction(`document.querySelectorAll('[data-slot="plan-step"]').length === 2`)
-    browser.click('[data-slot="plan-start"]')
-    browser.waitForFunction(`location.pathname.startsWith('${scoped('/tasks/')}')`)
-    browser.waitForFunction(`document.querySelector('[data-route="task-thread"]') !== null && document.querySelector('[data-route="new"]') === null`)
     browser.click(`[data-slot="sidebar"] a[href="${scoped('/new')}"]`)
     browser.waitForFunction(`document.querySelector('[data-slot="mode-plan"]') !== null`)
     expect(
       browser.evaluate(`document.querySelector('[data-slot="mode-plan"]').getAttribute('aria-checked')`),
     ).toBe('true')
     expect(browser.evaluate(`document.querySelector('[data-slot="composer"] textarea').value`)).toBe('')
-  })
+  }, 90_000)
 })

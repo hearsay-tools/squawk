@@ -90,7 +90,21 @@ function revealReviewAction(slot: string): void {
 }
 
 describe('the review gate against a live parked run', () => {
-  it('shows the banner and the real worktree diff as per-file sections', () => {
+  it('keeps the notes and every exit reachable on an iPhone viewport, without sideways scroll', () => {
+    browser.setViewport(390, 844)
+    try {
+      browser.waitForFunction(`document.querySelector('[data-slot="review-banner"]') !== null`)
+      revealControl(browser, '[data-slot="review-notes"]')
+      for (const slot of ['review-send-back', 'review-draft-pr', 'review-accept']) revealReviewAction(slot)
+      browser.waitForFunction(`document.documentElement.scrollWidth <= innerWidth`)
+      browser.evaluate(`document.querySelector('[data-slot="review-banner"]').scrollIntoView() ?? true`)
+      browser.screenshot(`${artifactsDir}/review-gate-iphone.png`)
+    } finally {
+      browser.setViewport(1440, 900)
+    }
+  })
+
+  it('reviews the diff, returns feedback, gates again and accepts the run', async () => {
     expect(browser.isVisible('[data-slot="review-banner"]')).toBe(true)
     // The diff is REAL — the mock touched notes.md in the worktree, and it renders as an
     // added-file section with added lines.
@@ -111,23 +125,7 @@ describe('the review gate against a live parked run', () => {
     // viewport so the capture shows the review surface, not the top of the thread.
     browser.evaluate(`document.querySelector('[data-slot="review-banner"]').scrollIntoView() ?? true`)
     browser.screenshot(`${artifactsDir}/review-gate-desktop.png`)
-  })
 
-  it('keeps the notes and every exit reachable on an iPhone viewport, without sideways scroll', () => {
-    browser.setViewport(390, 844)
-    try {
-      browser.waitForFunction(`document.querySelector('[data-slot="review-banner"]') !== null`)
-      revealControl(browser, '[data-slot="review-notes"]')
-      for (const slot of ['review-send-back', 'review-draft-pr', 'review-accept']) revealReviewAction(slot)
-      browser.waitForFunction(`document.documentElement.scrollWidth <= innerWidth`)
-      browser.evaluate(`document.querySelector('[data-slot="review-banner"]').scrollIntoView() ?? true`)
-      browser.screenshot(`${artifactsDir}/review-gate-iphone.png`)
-    } finally {
-      browser.setViewport(1440, 900)
-    }
-  })
-
-  it('Send back delivers the notes into the SAME session — the transcript grows', async () => {
     browser.fill('[data-slot="review-notes"]', 'Please also mention the port in the notes.')
     revealReviewAction('review-send-back')
     browser.click('[data-slot="review-send-back"]')
@@ -142,13 +140,7 @@ describe('the review gate against a live parked run', () => {
     )
     // The panel is gone while the agent works — the gate exists only at `review`.
     browser.waitForFunction(`document.querySelector('[data-slot="review-panel"]') === null`)
-  }, 90_000)
 
-  it('the run gates again after the follow-up turn, with a fresh diff', async () => {
-    browser.fill('[data-slot="review-notes"]', 'Please also mention the port in the notes.')
-    revealReviewAction('review-send-back')
-    browser.click('[data-slot="review-send-back"]')
-    browser.waitForFunction(`document.querySelector('[data-slot="review-panel"]') === null`)
     const deadline = Date.now() + 110_000
     await waitForStatus(baseUrl, runId, ['waiting'], { deadline })
     await fetch(`${baseUrl}/api/v1/runs/${runId}/finish`, { method: 'POST' })
@@ -157,9 +149,7 @@ describe('the review gate against a live parked run', () => {
     browser.waitForFunction(`document.querySelector('[data-slot="review-panel"]') !== null`)
     browser.waitForFunction(`document.querySelector('[data-slot="diff-file"]') !== null`)
     expect(browser.text('[data-slot="diff-file-path"]')).toContain('notes.md')
-  }, 180_000)
 
-  it('✓ Accept finishes the run as done and fires the one-shot celebration', async () => {
     // The overlay lives ~1.5s — watch for it with an observer armed BEFORE the click, so the
     // assertion cannot lose a race against its own polling.
     browser.evaluate(`(() => {
@@ -181,5 +171,5 @@ describe('the review gate against a live parked run', () => {
     browser.waitForFunction(
       `document.querySelector('[data-slot="thread-footer"]')?.textContent.includes('Session closed')`,
     )
-  }, 90_000)
+  }, 180_000)
 })
