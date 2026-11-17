@@ -17,14 +17,17 @@ export const jsonValid = ownerRule(OWNER_POLICIES['json-valid-outside-guard']!, 
 });
 
 /** Report each leaf syntax occurrence once; ESTree shares shorthand/import identifier slots. */
+const RETIRED_NAME = ['run', 'Internals'].join('');
+const RETIRED_MODULE = ['run-internals', 'testkit'].join('.');
 export const retiredInternals = ownerRule(OWNER_POLICIES['run-internals']!, report => {
   const seen = new Set<string>();
   const check = (node: EsNode) => {
+    const text = nameOf(node) ?? fragment(node);
+    if (text !== RETIRED_NAME && !(fragment(node) ?? '').includes(RETIRED_MODULE)) return;
     const position = `${node.start}:${node.end}`;
     if (seen.has(position)) return;
     seen.add(position);
-    const text = nameOf(node) ?? fragment(node);
-    if (text === ['run', 'Internals'].join('') || (fragment(node) ?? '').includes(['run-internals', 'testkit'].join('.'))) report(node);
+    report(node);
   };
   return { Identifier: check, PrivateIdentifier: check, Literal: check, TemplateElement: check };
 });
