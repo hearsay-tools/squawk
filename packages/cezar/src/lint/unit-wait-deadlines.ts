@@ -1,6 +1,6 @@
 import type { BinaryExpression, BlockStatement, ForStatement, Identifier, Node } from '@babel/types';
 import { walk, isFunction, namesWritten, type Where, type Sleep } from './unit-wait-discipline.ts';
-import { numberOf, sizeNumber, keyName, sizedOutside, clockCall, contains, type Use, type Probe, type DeadlineEvaluation, definition, writes, writtenNames, valuesOf, isNumber, nameReader, valueOf } from './unit-wait-values.ts';
+import { numberOf, sizeNumber, keyName, sizedOutside, clockCall, contains, type Use, type Probe, definition, writes, valuesOf, isNumber, nameReader, valueOf } from './unit-wait-values.ts';
 
 /** A bound on how long a loop runs, in milliseconds: `unreadable` when one exists the scan cannot evaluate, `undefined` when there is none. */
 export type Bound = number | 'unreadable' | undefined
@@ -11,10 +11,10 @@ export const isPath = (node: Node): boolean => node.type === 'Identifier' || (no
 export const impure = new Set(['AssignmentExpression', 'UpdateExpression', 'CallExpression', 'NewExpression', 'TaggedTemplateExpression', 'AwaitExpression', 'YieldExpression'])
 
 /** Whether a condition only reads: no write, no call but a read of the clock, no `delete`, `await` or `new`. */
-export function isPure(root: Node, clock = clockCall): boolean {
+export function isPure(root: Node): boolean {
   let pure = true
   walk(root, [], node => {
-    if (clock(node)) return false
+    if (clockCall(node)) return false
     if (impure.has(node.type) || (node.type === 'UnaryExpression' && node.operator === 'delete')) pure = false
     return isFunction(node) ? false : undefined
   })
@@ -22,10 +22,10 @@ export function isPure(root: Node, clock = clockCall): boolean {
 }
 
 /** The names a comparison reads: not what a clock read holds, a called function's name, or a property name. */
-export function references(root: Node, clock = clockCall): Identifier[] {
+export function references(root: Node): Identifier[] {
   const found: Identifier[] = []
   walk(root, [], (node, ancestors) => {
-    if (clock(node)) return false
+    if (clockCall(node)) return false
     const parent = ancestors.at(-1)
     const skipped = (parent?.type === 'MemberExpression' && parent.property === node && !parent.computed) || (parent?.type === 'ObjectProperty' && parent.key === node && !parent.computed)
     if (node.type === 'Identifier' && !skipped && !(parent?.type === 'CallExpression' && parent.callee === node) && !globalNames.has(node.name)) found.push(node)
@@ -40,20 +40,15 @@ export const isWritten = (root: Node, name: string): boolean => {
   return written.other || written.values.length > 0
 }
 
-const closureNames = new WeakMap<Node, Set<string>>()
-
 /** Whether a function nested in the loop's function writes the name: it can run in any pass. */
 export function closureWrites(scope: Node, name: string): boolean {
-  const cached = closureNames.get(scope)
-  if (cached) return cached.has(name)
-  const names = new Set<string>()
+  let found = false
   walk(scope, [], node => {
     if (node === scope || !isFunction(node)) return
-    for (const written of writtenNames(node)) names.add(written)
+    found ||= isWritten(node, name)
     return false
   })
-  closureNames.set(scope, names)
-  return names.has(name)
+  return found
 }
 
 /**
@@ -93,7 +88,7 @@ export function perPass(cx: Probe, name: string): PerPass | undefined {
 }
 
 /** A clock read, or one minus a start: the values a name holds that the loop samples the clock into (`const now = Date.now()`, `elapsed = Date.now() - start`). */
-export const isMeasure = (node: Node, clock = clockCall): boolean => clock(node) || (node.type === 'BinaryExpression' && node.operator === '-' && clock(node.left) && isPath(node.right))
+export const isMeasure = (node: Node): boolean => clockCall(node) || (node.type === 'BinaryExpression' && node.operator === '-' && clockCall(node.left) && isPath(node.right))
 
 /**
  * The values a name a comparison reads may hold: a literal, a name or path, or a read of the clock. A deadline may also be a read
@@ -101,9 +96,8 @@ export const isMeasure = (node: Node, clock = clockCall): boolean => clock(node)
  * deadline, a call) is not a start, a limit or a deadline the scan reads.
  */
 export function isListed(value: Node, cx: Probe, deadline: boolean): boolean {
-  const clock = cx.evaluation?.clock ?? clockCall
   const limit = (side: Node): boolean => numberOf(side, cx.read) !== undefined || isPath(side)
-  return limit(value) || clock(value) || (deadline && value.type === 'BinaryExpression' && value.operator === '+' && clock(value.left) && limit(value.right))
+  return limit(value) || clockCall(value) || (deadline && value.type === 'BinaryExpression' && value.operator === '+' && clockCall(value.left) && limit(value.right))
 }
 
 /**
@@ -114,17 +108,16 @@ export function isListed(value: Node, cx: Probe, deadline: boolean): boolean {
  */
 export function anchored(root: Node, cx: Probe, use: Use, deadlines: readonly Node[], depth = 0): -1 | 0 | 1 {
   let found: -1 | 0 | 1 = 0
-  const clock = cx.evaluation?.clock ?? clockCall
-  for (const ref of references(root, clock)) {
+  for (const ref of references(root)) {
     if (!movesIn(cx, ref.name, use)) {
       const declared = definition(cx.where, use, ref.name)
       const values = declared ? valuesOf(cx.where, declared, ref.name) : []
       if (!values.every(value => isListed(value, cx, deadlines.some(each => each.type === 'Identifier' && each.name === ref.name)))) return -1
-      if (values.some(value => contains(value, clock)) || valueOf(ref, cx, use) === undefined) found = 1
+      if (values.some(value => contains(value, clockCall)) || valueOf(ref, cx, use) === undefined) found = 1
       continue
     }
     const pass = depth < 3 ? perPass(cx, ref.name) : undefined
-    if (!pass || !isMeasure(pass.value, clock)) return -1
+    if (!pass || !isMeasure(pass.value)) return -1
     const inner = anchored(pass.value, cx, pass.use, [], depth + 1)
     if (inner === -1) return -1
     if (inner === 1) found = 1
@@ -134,13 +127,12 @@ export function anchored(root: Node, cx: Probe, use: Use, deadlines: readonly No
 
 /** What a clock comparison measures against: a literal sum of products, a name or path, or `start + limit` of those. Any other expression is a shape the scan does not read. */
 export function isLimit(node: Node, cx: Probe): boolean {
-  const clock = cx.evaluation?.clock ?? clockCall
-  const operand = (inner: Node): boolean => isPath(inner) || clock(inner) || numberOf(inner, cx.read) !== undefined
+  const operand = (inner: Node): boolean => isPath(inner) || clockCall(inner) || numberOf(inner, cx.read) !== undefined
   return numberOf(node, cx.read) !== undefined || isPath(node) || (node.type === 'BinaryExpression' && node.operator === '+' && operand(node.left) && operand(node.right))
 }
 
 /** A read of the clock: the call itself, or a name the loop sets from one on every pass (`const now = Date.now()`). */
-export const sampled = (node: Node, cx: Probe): boolean => (cx.evaluation?.clock ?? clockCall)(node) || (node.type === 'Identifier' && isMeasure(perPass(cx, node.name)?.value ?? node, cx.evaluation?.clock))
+export const sampled = (node: Node, cx: Probe): boolean => clockCall(node) || (node.type === 'Identifier' && isMeasure(perPass(cx, node.name)?.value ?? node))
 
 /** The side of a clock comparison that measures time: a read of the clock, or one minus a start (`Date.now() - start`). */
 export const measures = (node: Node, cx: Probe): boolean =>
@@ -154,8 +146,6 @@ export const measures = (node: Node, cx: Probe): boolean =>
 export function clockBound(comparison: BinaryExpression, cx: Probe, use: Use): Bound {
   const measuring = ([[comparison.left, comparison.right], [comparison.right, comparison.left]] as const).filter(([measured, limit]) => measures(measured, cx) && isLimit(limit, cx))
   if (measuring.length === 0 || anchored(comparison, cx, use, measuring.map(([, limit]) => limit)) !== 1) return undefined
-  const evaluation = cx.evaluation
-  if (evaluation) return earliest(measuring.map(([, limit]) => evaluation.clockLimit(limit, cx.where, use)))
   const values = measuring.map(([, limit]) => valueOf(limit, cx, use)).filter(isNumber)
   if (values.length > 0) return Math.min(...values)
   return measuring.some(([, limit]) => sizedOutside(limit, cx.where, use)) ? 'unreadable' : undefined
@@ -221,7 +211,7 @@ export function counterBound(test: BinaryExpression, name: string, cx: Probe, us
   const counts = loop.type === 'ForStatement' && loop.init?.type === 'VariableDeclaration' && loop.init.declarations.some(declaration => isNamed(declaration.id, name))
   if (loop.type !== 'ForStatement' || !counts || isWritten(loop.body, name) || hasSideEffects(test)) return undefined
   // A limit or a step the loop changes is not the one the header names.
-  const limits = [test.left, test.right, ...(loop.update ? [loop.update] : [])].flatMap(node => references(node, cx.evaluation?.clock)).filter(ref => ref.name !== name)
+  const limits = [test.left, test.right, ...(loop.update ? [loop.update] : [])].flatMap(references).filter(ref => ref.name !== name)
   if (limits.some(ref => movesIn(cx, ref.name, use))) return undefined
   const count = iterations(loop, test, cx, use)
   return isNumber(count) ? timeOf(count, cx.interval) : count
@@ -267,7 +257,7 @@ export function ends(test: Node, want: boolean, cx: Probe, use: Use, depth = 0):
     return (test.operator === '&&') === want ? latest(parts) : earliest(parts)
   }
   if (test.type === 'UnaryExpression' && test.operator === '!') return ends(test.argument, !want, cx, use, depth)
-  if (isCompare(test)) return isPure(test, cx.evaluation?.clock) ? comparisonBound(test, cx, use) : undefined
+  if (isCompare(test)) return isPure(test) ? comparisonBound(test, cx, use) : undefined
   return test.type === 'Identifier' ? aliasBound(test, want, cx, depth) : undefined
 }
 
@@ -308,20 +298,18 @@ export type Deadline = 'none' | 'unreadable' | number
  * body that leaves it. `none` when no exit reads the clock or counts attempts; `unreadable` when the exits that do are ones the
  * scan cannot evaluate.
  */
-export function pollDeadline(where: Where, sleeps: readonly Sleep[], evaluation?: DeadlineEvaluation): Deadline {
+export function pollDeadline(where: Where, sleeps: readonly Sleep[]): Deadline {
   // One pass takes the sum of the delays it cannot skip. A loop whose sleeps a pass may skip has no interval to count by.
   const { loop, above } = where
   const inLoop = [...above, loop, ...(loop.body.type === 'BlockStatement' ? [loop.body] : [])]
   const delays = sleeps.filter(sleep => sleep.always).map((sleep): Bound => {
     const use = { chain: inLoop, at: sleep.delay?.start ?? loop.start ?? 0 }
     if (!sleep.delay) return undefined
-    if (evaluation) return evaluation.delay(sleep.delay, where, use)
     return sizeNumber(sleep.delay, nameReader(where, use)) ?? (sizedOutside(sleep.delay, where, use) ? 'unreadable' : undefined)
   })
   const interval: Bound = delays.includes(undefined) ? undefined : delays.every(isNumber) ? delays.reduce((sum, each) => sum + each, 0) : 'unreadable'
-  const outside = (node: Node, use: Use): boolean => isPath(node) && (evaluation ? evaluation.outside(node, where, use) : sizedOutside(node, where, use))
-  const use = { chain: [...above, loop], at: loop.start ?? 0 }
-  const cx: Probe = { where, read: evaluation ? evaluation.read(where, use) : nameReader(where, use), interval, outside, evaluation }
+  const outside = (node: Node, use: Use): boolean => isPath(node) && sizedOutside(node, where, use)
+  const cx: Probe = { where, read: nameReader(where, { chain: [...above, loop], at: loop.start ?? 0 }), interval, outside }
   const head = loop.test ? ends(loop.test, false, cx, { chain: [...above, loop], at: loop.test.start ?? 0 }) : undefined
   return earliest([head, ...exitBounds(cx)]) ?? 'none'
 }

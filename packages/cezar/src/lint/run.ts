@@ -38,7 +38,7 @@ import { repoRoot } from './source-rule.ts';
  * error is a failure, never a pass. `docs/sdlc/lint.md` describes each rule.
  */
 
-/** The directories oxlint reads. Each rule narrows them to its own scope (`AstRule.applies`). */
+/** The directories oxlint reads. Each rule narrows them to its own scope (`applies`). */
 export const LINT_PATHS = ['packages'];
 
 // bound: a hang guard, not a wait. Oxlint reads every package source in a few seconds on an idle

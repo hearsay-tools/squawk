@@ -9,7 +9,8 @@ command, it fails closed, and it does not depend on which tests a change selects
 `file:line:column rule: reason → owner`:
 
 1. **oxlint** with the `cez` JS plugin (`packages/cezar/src/lint/plugin.ts`) over `packages/`.
-   Every `cez` rule (`AST_RULES`) visits oxlint's own syntax tree. The ast-grep rules
+   The `AST_RULES` visit oxlint's own syntax tree. The two wait rules retain
+   their text scanners in `TEXT_RULES` until their separate AST port. The ast-grep rules
    move into these visitors one slice at a time
    (hearsay-tools/squawk#3774).
    `.oxlintrc.json` keeps every category off and explicitly enables all `cez` rules and 93
@@ -29,9 +30,7 @@ command, it fails closed, and it does not depend on which tests a change selects
 
 6. **Unit wait discipline** (M07): `cez/test-wait-discipline` scans server test and testkit files
    with a 10 s floor; `cez/unit-wait-discipline` scans cockpit unit tests with a 3 s floor.
-   Calls, awaits, functions and loops supply the sites; the shared AST value and deadline
-   engines evaluate their bounds. Comments from oxlint supply reasoned exceptions. Both use
-   `lint/wait-baseline.ts` for the same shrink-only
+   Each rule uses its original scanner. Both use `lint/wait-baseline.ts` for the same shrink-only
    ratchet. The runner checks stale entries in the three baselines,
    server scan scope, and unterminated constructs that would hide a file's tail. Update mode
    runs before oxlint: `TEST_WAIT_DISCIPLINE_UPDATE=1 npm run lint` (both server baselines),
@@ -67,8 +66,8 @@ when value tracking is outside the contract; do not expand the contract one bypa
 a time. If the required guarantee needs binding, type or value resolution, choose the
 appropriate boundary or checker explicitly.
 
-All source rules share oxlint's parse. `ast-rule.ts` passes the repository-relative file,
-node text and parsed comments to visitors. The typed env, home, runner-fact and wait
+AST source rules share oxlint's parse. `ast-rule.ts` passes the repository-relative file,
+node text and parsed comments to visitors. The typed env, home and runner-fact
 engines use one cached structural view of ESTree nodes; the view changes node shapes,
 without reparsing source or scanning whole-file text. Runner checks still read their
 explicit baseline and reader-list inputs. CSS remains a runner check.
@@ -132,8 +131,8 @@ remain in force.
 | `cez/runner-fact-combination` | Non-test workflow TS files: functions touching the listed fact sources and at least two declared fact-key names. Import/type aliases and static keys are recognized; receiver values are not tracked. Its source/key forms, over-approximation and excluded helper/dynamic/cross-module flows are listed in the rule table above. |
 | `cez/runner-id-branch` | Non-test TS/TSX source in `packages/cezar/src/` outside `core/`, and in `packages/web/src/`. The ids come from `RUNNER_IDS` in `core/agent-runner.ts`, plus the legacy `claude-cli`. A literal may sit under parentheses, `as`, `satisfies` or `!`, or be a template with no substitution. The rule tracks no value and knows no type, so it over-approximates: `'pi'` is also a plain word. It leaves out an operand named `t` or `type` (a message or event tag), a comparison of two literals, an id held in a variable or constant, an id tested with `includes`, `has`, a map lookup or a regular expression, and an id used as an object key. |
 | `cez/runner-roster-literal` | Every JS/TS file under `packages/`, tests included, except `core/agent-runner.ts`: array literals whose string elements name every id of `RUNNER_IDS`, in any order, with any other element beside them. It leaves out a list that omits a runner, a roster spelled as a union type, as object keys or as separate arguments, and a list built from parts. |
-| `cez/test-wait-discipline` | Server `src/` `.test.ts`/`.testkit.ts` files, excluding fixtures and scanner self-fixtures: AST visitors for awaited sleeps, recognized wait calls and poll-loop exits, with a 10 s floor. Parsed comments supply reasoned exceptions. The scanner evaluates supported local bound expressions; bounds supplied from outside the file or through parameters are left to callers. It does not prove those bounds are sufficient or cover arbitrary helper/control-flow forms. Reasoned `// bound:` comments and the shrink-only baselines remain the exceptions. |
-| `cez/unit-wait-discipline` | Cockpit `src/` `.test.ts`/`.test.tsx` files: AST visitors for sleeps, wait bounds and poll deadlines with a 3 s floor. Parsed comments supply reasoned exceptions. Supported local bound expressions are evaluated; externally supplied bounds are left to callers. It does not prove those bounds are sufficient or analyze arbitrary helper/control-flow forms. Reasoned `// bound:` comments and the shrink-only baseline remain the exceptions. |
+| `cez/test-wait-discipline` | Server `src/` `.test.ts`/`.testkit.ts` files, excluding fixtures and scanner self-fixtures: source-text patterns for awaited sleeps, recognized wait calls and poll-loop exits, with a 10 s floor. Strings and comments are blanked. The scanner evaluates supported local bound expressions; bounds supplied from outside the file or through parameters are left to callers. It does not prove those bounds are sufficient or cover arbitrary helper/control-flow forms. Reasoned `// bound:` comments and the shrink-only baselines remain the exceptions. |
+| `cez/unit-wait-discipline` | Cockpit `src/` `.test.ts`/`.test.tsx` files: source-text sleep, wait-bound and poll-deadline patterns with a 3 s floor. Strings and comments are blanked. Supported local bound expressions are evaluated; externally supplied bounds are left to callers. It does not prove those bounds are sufficient or analyze arbitrary helper/control-flow forms. Reasoned `// bound:` comments and the shrink-only baseline remain the exceptions. |
 | `cez/undocumented-env-name` | Shipped package source and runner scripts, excluding tests and fixtures: literal `CEZ_*`/`HSQ_*` spellings and literal suffixes passed to `productEnv`, including named import aliases. It proves name documentation, not computed-name completeness or default behavior. |
 
 The lists live beside the rules in `packages/cezar/src/lint/`, except the query-setter and card-2 contrast baselines,

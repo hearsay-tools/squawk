@@ -2,8 +2,6 @@ import { expect, it } from 'vitest';
 import { babelView } from './ast-node-view.ts';
 import type { AstRule, EsNode } from './ast-rule.ts';
 import { checkRule } from './ast-rule.testkit.ts';
-import { testWaitDiscipline } from './test-wait-discipline.ts';
-import { unitWaitDiscipline } from './unit-wait-discipline.ts';
 
 const waitSource = 'vi.waitFor(() => ready(), { timeout: 100 })?.then(done)';
 
@@ -36,14 +34,6 @@ it.each([
   };
   expect(checkRule(inspector, 'packages/cezar/src/ast-view-fixture.test.ts', source).map(finding => finding.message))
     .toEqual([expected]);
-});
-
-it.each([
-  ['server', testWaitDiscipline, 'packages/cezar/src/ast-view-fixture.test.ts'],
-  ['unit', unitWaitDiscipline, 'packages/web/src/ast-view-fixture.test.ts'],
-] as const)('keeps the short wait before an optional continuation in %s', (_profile, rule, file) => {
-  expect(checkRule(rule, file, waitSource).map(finding => finding.message.split(']')[0]))
-    .toEqual(['[short-bound']);
 });
 
 it('computes optional-chain membership once along a shared spine', () => {

@@ -1,6 +1,4 @@
-import type { AstRule } from './ast-rule.ts';
-import { waitVisitors } from './wait-ast-visitors.ts';
-import { astChildren } from './ast-node-view.ts';
+import type { SourceRule } from './source-rule.ts';
 import { compareToBaseline, tally, readBaseline } from './wait-baseline.ts';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -94,7 +92,11 @@ export type Visit = (node: Node, ancestors: readonly Node[]) => void | false
 export function walk(node: Node, ancestors: Node[], visit: Visit): void {
   if (visit(node, ancestors) === false) return
   ancestors.push(node)
-  for (const child of astChildren(node)) walk(child, ancestors, visit)
+  for (const value of Object.values(node)) {
+    for (const child of Array.isArray(value) ? value : [value]) {
+      if (child && typeof child === 'object' && typeof (child as Node).type === 'string') walk(child as Node, ancestors, visit)
+    }
+  }
   ancestors.pop()
 }
 
@@ -171,8 +173,7 @@ export const sleepNames = new Set(['delay', 'sleep', 'wait', 'pause'])
 export function timerDelay(fn: Node, resolver: string): { delay: Node | undefined } | undefined {
   let found: { delay: Node | undefined } | undefined
   walk(fn, [], node => {
-    if (found) return false
-    if (node.type !== 'CallExpression') return
+    if (found || node.type !== 'CallExpression') return
     const callee = calleeOf(node.callee)
     if (!callee || !/(?:setTimeout|SetTimeout)$/.test(callee.name)) return
     const first = node.arguments[0]
@@ -309,17 +310,16 @@ export const unitBaseline = {
 export const scannedUnitFile = (file: string): boolean => file.startsWith('packages/web/src/')
   && /\.test\.tsx?$/.test(file) && !file.split('/').includes('node_modules');
 
-export const unitWaitDiscipline: AstRule = {
+export const unitWaitDiscipline: SourceRule = {
   name: 'unit-wait-discipline',
-  description: 'Wait on the cockpit product signal, with a reason for a wall-clock bound (hearsay-tools/cezarion#2421).',
+  description: 'Wait on the cockpit product signal, with a reason for a wall-clock bound.',
   applies: scannedUnitFile,
-  create(report, context) {
-    const file = context.file.slice('packages/web/src/'.length);
-    return waitVisitors('unit', { ...context, file }, sites => {
-      const { added } = compareToBaseline(tally(sites), readBaseline(baselinePath));
-      for (const entry of added) for (const site of sites.filter(site => site.rule === entry.rule && site.site === entry.site)) {
-        report(site.node, `[${site.rule}] ${site.site}. New wait-discipline sites. Give each a product signal, a bound of at least ${FLOOR_MS} ms, or a "// bound: <reason>" comment, rather than adding it to ${baselinePath} (AGENTS.md § Validation, hearsay-tools/cezarion#2421)`);
-      }
-    });
+  check(file, source) {
+    const sites = scanSource(file.slice('packages/web/src/'.length), source);
+    const { added } = compareToBaseline(tally(sites), readBaseline(baselinePath));
+    return added.flatMap(entry => sites.filter(site => site.rule === entry.rule && site.site === entry.site).map(site => ({
+      line: site.line,
+      message: `[${site.rule}] ${site.site}. New wait-discipline sites. Give each a product signal, a bound of at least ${FLOOR_MS} ms, or a "// bound: <reason>" comment, rather than adding it to ${baselinePath} (AGENTS.md § Validation)`,
+    })));
   },
 };

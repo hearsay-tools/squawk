@@ -122,24 +122,16 @@ export interface Place {
 /** Names that stand for the same value in every file: JavaScript's own, which a bound may use without declaring. */
 export const ownNames = new Set(['Math', 'Number', 'Date', 'Infinity', 'NaN', 'undefined'])
 
-const apartNames = new WeakMap<Node, Set<string>>()
-
-/** Index the file's non-scalar bindings once, rather than rescanning it for each unknown name. */
-function boundApartNames(root: Node): Set<string> {
-  const cached = apartNames.get(root)
-  if (cached) return cached
-  const names = new Set<string>()
-  walk(root, [], node => {
-    if ((node.type === 'FunctionDeclaration' || node.type === 'ClassDeclaration') && node.id) names.add(node.id.name)
-    if (node.type === 'VariableDeclarator' && node.id.type !== 'Identifier') for (const name of targetNames(node.id)) names.add(name)
-  })
-  apartNames.set(root, names)
-  return names
-}
-
 /** Whether the file binds `name` other than by a plain declaration: as a function or class, or as part of a destructuring. */
 export function boundApart(root: Node | undefined, name: string): boolean {
-  return root !== undefined && boundApartNames(root).has(name)
+  let found = false
+  if (root) {
+    walk(root, [], node => {
+      found ||= ((node.type === 'FunctionDeclaration' || node.type === 'ClassDeclaration') && node.id?.name === name) ||
+        (node.type === 'VariableDeclarator' && node.id.type !== 'Identifier' && targetNames(node.id).includes(name))
+    })
+  }
+  return found
 }
 
 /** Whether the file declares `name` itself: a `const`, `let`, `var`, function or class, a destructured binding or a loop variable. A parameter and an import are the caller's. */
@@ -149,10 +141,7 @@ export function declaredHere(view: View, use: Use, name: string): boolean {
 }
 
 /** The names an expression reads: a called function's, the start of a path, not a property, a type or a function's own. */
-const roots = new WeakMap<Node, string[]>()
 export function rootsOf(root: Node): string[] {
-  const cached = roots.get(root)
-  if (cached) return cached
   const found: string[] = []
   walk(root, [], (node, ancestors) => {
     if (isFunction(node) || (node.type.startsWith('TS') && !/^TS(?:As|Satisfies|NonNull)Expression$|^TSTypeAssertion$/.test(node.type))) return false
@@ -160,7 +149,6 @@ export function rootsOf(root: Node): string[] {
     const property = (parent?.type === 'MemberExpression' && parent.property === node && !parent.computed) || (parent?.type === 'ObjectProperty' && parent.key === node && !parent.computed)
     if (node.type === 'Identifier' && !property) found.push(node.name)
   })
-  roots.set(root, found)
   return found
 }
 
@@ -264,8 +252,7 @@ export const clockCall = (node: Node): boolean => {
 export function contains(root: Node, test: (node: Node) => boolean): boolean {
   let found = false
   walk(root, [], node => {
-    if (found) return false
-    if (test(node)) { found = true; return false }
+    found ||= test(node)
     return node !== root && isFunction(node) ? false : undefined
   })
   return found
@@ -305,28 +292,6 @@ export interface View {
   above: readonly Node[]
 }
 
-const declarationIndexes = new WeakMap<Node, Map<string, Declaration[]>>()
-
-/** A scope's declaration tree is immutable during lint, so build its name index once. */
-function scopeDeclarations(scope: Node): Map<string, Declaration[]> {
-  const cached = declarationIndexes.get(scope)
-  if (cached) return cached
-  const names = new Map<string, Declaration[]>()
-  walk(scope, [], (node, ancestors) => {
-    if (node !== scope && isFunction(node)) return false
-    const identifier = node.type === 'VariableDeclarator' ? node.id : node.type === 'AssignmentPattern' ? node.left : node
-    if (identifier.type !== 'Identifier') return
-    const declared = declaredAs(node, ancestors, scope, identifier.name)
-    if (!declared) return
-    const entry = { ...declared, scope, chain: [...ancestors], start: node.start ?? 0 }
-    const known = names.get(identifier.name)
-    if (known) known.push(entry)
-    else names.set(identifier.name, [entry])
-  })
-  declarationIndexes.set(scope, names)
-  return names
-}
-
 /**
  * Every declaration of a name in the function around the use and in every function around that one, up to the module, leaving
  * out the functions nested in each: their names are theirs.
@@ -335,7 +300,11 @@ export function declarationsOf(view: View, name: string): Declaration[] {
   const found: Declaration[] = []
   for (const scope of view.above.filter(node => isFunction(node) || node.type === 'Program')) {
     const base = view.above.slice(0, view.above.indexOf(scope))
-    for (const declared of scopeDeclarations(scope).get(name) ?? []) found.push({ ...declared, chain: [...base, ...declared.chain] })
+    walk(scope, [], (node, ancestors) => {
+      if (node !== scope && isFunction(node)) return false
+      const declared = declaredAs(node, ancestors, scope, name)
+      if (declared) found.push({ ...declared, scope, chain: [...base, ...ancestors], start: node.start ?? 0 })
+    })
   }
   return found
 }
@@ -356,17 +325,6 @@ export interface Probe {
   interval: Bound
   /** Whether a name or path read at a use comes from outside the file, so the caller sizes it. */
   outside: (node: Node, use: Use) => boolean
-  /** The server keeps its original numeric and clock semantics; absent for cockpit scans. */
-  evaluation?: DeadlineEvaluation | undefined
-}
-
-export interface DeadlineEvaluation {
-  clock(node: Node): boolean
-  clockLimit(node: Node, view: View, use: Use): Bound
-  outside(node: Node, view: View, use: Use): boolean
-  read(view: View, use: Use): Read
-  delay(node: Node, view: Where, use: Use): Bound
-  value(node: Node, view: View, use: Use): number | undefined
 }
 
 /**
@@ -387,32 +345,16 @@ export function definition(view: View, use: Use, name: string): Declaration | un
  * What writes a name inside `root`, closures included, since a closure can reassign it: the right-hand sides of `name = …`, and
  * whether anything else writes it (`name += 1`, `name++`, a destructuring target).
  */
-type NameWrites = { values: Node[]; other: boolean }
-const writeIndexes = new WeakMap<Node, Map<string, NameWrites>>()
-const noWrites: NameWrites = { values: [], other: false }
-
-function indexedWrites(root: Node): Map<string, NameWrites> {
-  const cached = writeIndexes.get(root)
-  if (cached) return cached
-  const names = new Map<string, NameWrites>()
+export function writes(root: Node, name: string): { values: Node[]; other: boolean } {
+  const values: Node[] = []
+  let other = false
   walk(root, [], node => {
-    for (const name of namesWritten(node)) {
-      let writes = names.get(name)
-      if (!writes) { writes = { values: [], other: false }; names.set(name, writes) }
-      if (node.type === 'AssignmentExpression' && node.operator === '=' && isNamed(node.left, name)) writes.values.push(node.right)
-      else writes.other = true
-    }
+    if (!namesWritten(node).includes(name)) return
+    if (node.type === 'AssignmentExpression' && node.operator === '=' && isNamed(node.left, name)) values.push(node.right)
+    else other = true
   })
-  writeIndexes.set(root, names)
-  return names
+  return { values, other }
 }
-
-export function writes(root: Node, name: string): NameWrites {
-  return indexedWrites(root).get(name) ?? noWrites
-}
-
-/** The same write index serves closure checks without another walk per referenced name. */
-export const writtenNames = (root: Node): IterableIterator<string> => indexedWrites(root).keys()
 
 /**
  * Every value a declared name can hold where it is read: its initializer and each plain assignment. None when something else
@@ -463,7 +405,6 @@ export const readerFor = (ancestors: readonly Node[], at: number): Read => place
  * hold several values gives the smallest it can read, so a long value never hides a short one.
  */
 export function valueOf(node: Node, cx: Probe, use: Use, depth = 0): number | undefined {
-  if (cx.evaluation) return cx.evaluation.value(node, cx.where, use)
   if (depth > 3) return undefined
   if (node.type === 'Identifier' && !namedNumbers.has(node.name)) return smallest(heldBy(cx.where, use, node.name).map(held => valueOf(held.value, cx, held.use, depth + 1)))
   const direct = numberOf(node, nameReader(cx.where, use, depth))
