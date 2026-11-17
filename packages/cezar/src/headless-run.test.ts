@@ -196,13 +196,12 @@ describe('runHeadless', () => {
     expect(f.fakeProcess.eventNames()).toEqual([]);
   });
 
-  it('preserves the existing close rejection path', async () => {
+  it('aborts the repository-handle lookup and closes the store when delegation close rejects', async () => {
     const f = fixture();
     f.delegation.close.mockRejectedValue(new Error('cannot close'));
     await expect(f.run()).rejects.toThrow('cannot close');
-    expect(f.trace.slice(-3)).toEqual(['off SIGINT', 'off SIGTERM', 'off SIGHUP']);
-    expect(f.store.close).not.toHaveBeenCalled();
-    expect(f.deps.openStore.mock.calls[0]![1].repoHandleSignal.aborted).toBe(false);
+    expect(f.trace.slice(-5)).toEqual(['off SIGINT', 'off SIGTERM', 'off SIGHUP', 'abort', 'store.close']);
+    expect(f.store.close).toHaveBeenCalledTimes(1);
   });
 
   it.each(['SIGINT', 'SIGTERM', 'SIGHUP'] as const)('forwards %s before removing handlers and signalling itself', async (signal) => {
