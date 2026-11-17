@@ -69,9 +69,10 @@ AST source rules share oxlint's parse. `ast-rule.ts` passes the repository-relat
 node text and parsed comments to visitors. The typed env, home and runner-fact
 engines use one structural view of ESTree nodes (`lint/ast-node-view.ts`), copied once per file
 and cached on the nodes under a symbol key; the view changes node shapes,
-without reparsing source or scanning whole-file text. The cockpit wait engine reads a plain
-babel-shaped copy instead (`lint/wait-babel-tree.ts`): oxlint wraps `WeakMap`, so the cached
-view cost more than the rule itself on every test file. Runner checks still read their
+without reparsing source or scanning whole-file text. The cockpit wait engine reads
+oxlint's nodes in place, with no copy: `lint/unit-wait-tree.ts` walks them and keeps the node
+meanings its checks were written for (a method is one function node, an optional chain link is no
+plain call or member). Runner checks still read their
 explicit baseline and reader-list inputs. CSS remains a runner check.
 
 ## The `cez` rules
