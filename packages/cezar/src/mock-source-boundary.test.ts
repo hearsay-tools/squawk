@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { mockSourceViolations } from './lint/native-mock-source.ts';
+import { nativeMockSource } from './lint/native-mock-source.ts';
+import { checkRule } from './lint/ast-rule.testkit.ts';
+
+const mockSourceViolations = (file: string, source: string) => checkRule(nativeMockSource, `packages/cezar/src/${file}`, source)
+  .map(finding => `${file}:${finding.line} ${finding.message.slice('Test '.length).split('. Change a mock')[0]}`);
 
 /**
  * The scanner behind `cez/native-mock-source` (hearsay-tools/cezarion#1479): tests run the real
