@@ -1,3 +1,4 @@
+import { checkRule } from './lint/ast-rule.testkit.ts';
 import { describe, expect, it } from 'vitest';
 import { mockLifecycleBoundary as rule } from './lint/mock-lifecycle-boundary.ts';
 
@@ -6,7 +7,7 @@ describe('mock lifecycle boundary', () => {
   it.each(['watchdogStall', 'watchdogWritePid', 'waitForMockRelease', 'waitForRelease'])(
     'refuses a definition of %s', name => {
       for (const sample of [`function ${name}() {}`, `async function ${name}() {}`, `const ${name} = () => {};`]) {
-        expect(rule.check(file, sample)).toHaveLength(1);
+        expect(checkRule(rule, file, sample)).toHaveLength(1);
       }
     });
   it.each(["'watchdog.pid'", '"watchdog.pid"', '`watchdog.pid`',
@@ -14,7 +15,7 @@ describe('mock lifecycle boundary', () => {
     '`${dir}watchdog.pid`', '`./watchdog.pid${suffix}`',
   ])(
     'refuses the readiness literal %s', sample => {
-      expect(rule.check(file, `writeFileSync(${sample}, pid);`)).toHaveLength(1);
+      expect(checkRule(rule, file, `writeFileSync(${sample}, pid);`)).toHaveLength(1);
     });
   it.each([
     "// function watchdogStall() {} 'watchdog.pid'",
@@ -26,7 +27,7 @@ describe('mock lifecycle boundary', () => {
     "import { stall, waitForRelease } from './mock-lifecycle.mjs';",
     'stall(prompt); waitForRelease(400);',
   ])('allows comments, samples and imports: %s', sample => {
-    expect(rule.check(file, sample)).toEqual([]);
+    expect(checkRule(rule, file, sample)).toEqual([]);
   });
   it('scans only mock scripts outside the module', () => {
     expect(rule.applies(file)).toBe(true);
@@ -35,6 +36,6 @@ describe('mock lifecycle boundary', () => {
     }
   });
   it('reports the source line', () => {
-    expect(rule.check(file, "// ignored\nwrite('watchdog.pid');")[0]?.line).toBe(2);
+    expect(checkRule(rule, file, "// ignored\nwrite('watchdog.pid');")[0]?.line).toBe(2);
   });
 });
