@@ -351,9 +351,11 @@ ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-skills-writ
     "state.skills.catalog[\"pop\"]()",
     "const map = state.skills.catalog; map.splice(0, 1)",
     "const { catalog: map } = state.skills; map.sort()",
-    "const child = state.skills.catalog[0]; child.body = \"failed\"",
-    "const child = state.skills.catalog[0]; Object.assign(child, { body: \"changed\" })",
-    "state.skills.catalog[0].team.repo = other",
+    "const child = state.skills.catalog[0]; child.description = \"failed\"",
+    "const child = state.skills.catalog[0]; Object.assign(child, { path: \"changed\" })",
+    "state.skills.query.accountHome = other",
+    "state.skills.account = \"other\"",
+    "state.skills.unavailableReason = undefined",
     "function f(view: SkillsGroup) { Object.assign(view, { catalog: new Map() }); }",
     "import type { SkillsGroup as Children } from \"./run-skills.ts\"; function f(view: Children) { Reflect.set(view, \"catalog\", new Map()); }",
     "state.skills.catalog as Map<string, Child>",
@@ -372,14 +374,14 @@ ruleCases(activeRunWriteRules.find(rule => rule.name === 'active-run-skills-writ
     "const state = createActiveRun(init); const alias = state; Object.assign(alias, { skills: other.skills })",
     "function f(target: ActiveRun, key: string, replacement: SkillsGroup) { Object.assign(target, { [key]: replacement }); }",
     "class SkillsGroup { skills = new Map(); }",
-    "class SkillView { readonly backing = new Map(); }",
+    "class SkillsGroup { readonly backing = new Map(); }",
     "const view = createSkillsGroup(); view as any",
     "state.skills.catalog[0] = other",
     "const view = state.skills.catalog; view[0] = other",
     "const { catalog } = state.skills; catalog.push(other)",
-    "state.skills.catalog[0].body = \"forged\"",
-    "const skill = state.skills.catalog[0]; skill.team.repo = \"forged\"",
-    "function f(view: SkillTeamView) { Reflect.set(view, \"repo\", \"forged\") }"
+    "state.skills.catalog[0].path = \"forged\"",
+    "const skill = state.skills.catalog[0]; skill.scope = \"forged\"",
+    "function f(view: SkillsGroup) { Reflect.set(view, \"query\", \"forged\") }"
   ]
 });
 
@@ -567,7 +569,7 @@ for (const [group, slot, type, field] of [
   ['children', 'children', 'ChildrenGroup', 'status'],
   ['input', 'inputState', 'InputGroup', 'writingInput'],
   ['session', 'liveSession', 'SessionGroup', 'cancelled'],
-  ['skills', 'skills', 'SkillsGroup', 'body'],
+  ['skills', 'skills', 'SkillsGroup', 'path'],
   ['usage', 'usage', 'UsageGroup', 'observed'],
   ['wait', 'waitIdentity', 'WaitGroup', 'ciTurnId'],
 ]) {

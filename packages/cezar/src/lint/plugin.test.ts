@@ -125,6 +125,7 @@ const VIOLATIONS: Record<string, [string, string]> = {
 
 /** Each approved exception, by the rule it exercises. None may produce a finding. */
 const APPROVED: Record<string, string> = {
+  'packages/cezar/src/workflows/run/launch-read-resolver.ts': 'const skills = state.skills.catalog;\n',
   'packages/cezar/src/env-approved.ts': "productEnv('DRY_RUN'); delete process.env.CEZ_DRY_RUN;",
   'packages/web/src/sandbox-home.test.ts': "writeFileSync(join(Home.sandbox(dir).root, 'config.json'), '{}');\n",
   'packages/cezar/src/paths.ts': 'homedir();',
