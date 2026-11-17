@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { child, type AstRule, type EsNode } from './ast-rule.ts';
+import { literal, nodeLine, offset, propertyName, unwrap, walk } from './ast-syntax.ts';
 import { scanned } from './contract-root-import.ts';
-import { blankOnce, repoRoot, type SourceRule } from './source-rule.ts';
+import { blankOnce, repoRoot } from './source-rule.ts';
 
 /**
  * Run facts have one home in `packages/contract` (hearsay-tools/cezarion#1496): a reader decides
@@ -9,7 +11,7 @@ import { blankOnce, repoRoot, type SourceRule } from './source-rule.ts';
  * spelling the hold out. Types catch a new rung id; this scan catches the two things types cannot,
  * a label comparison (in any file) and a restated hold (in a source file), plus an `autoResumeAt`
  * read in a source file the reader list does not name.
- * TypeScript 7 has no parser API, so the scan reads `blank()`ed source.
+ * Oxlint supplies the source tree; the visitors inspect the named syntax.
  */
 /** The facts' home: it defines the rungs and the hold, and its tests keep the deleted copies as oracles. */
 const HOME = 'packages/contract/src/';
@@ -111,12 +113,54 @@ const HOW: Record<Rule, string> = {
   'resume-time-read': 'decide through `isUsageLimitHold`, or add the file to packages/cezar/src/lint/resume-time-readers.json with its reason',
 };
 
-export const runFactReader: SourceRule = {
+export const runFactReader: AstRule = {
   name: 'run-fact-reader',
   description: 'Read run facts from the contract: attention rungs, `isUsageLimitHold`, listed resume-time readers (hearsay-tools/cezarion#1496).',
   applies: scanned,
-  check: (file, source) => scanRunFacts(file, source).map((site) => ({
-    line: site.line,
-    message: `${site.rule}: ${site.text} — ${HOW[site.rule]} (hearsay-tools/cezarion#1496).`,
-  })),
+  create(report, { file, sourceCode }) {
+    const sites: Record<Rule, EsNode[]> = { 'label-comparison': [], 'restated-hold': [], 'resume-time-read': [] };
+    const attention = (node: EsNode | undefined): boolean => {
+      node = unwrap(node);
+      if (!node) return false;
+      if (node.type === 'CallExpression') return propertyName(child(node, 'callee')) === 'deriveAttention';
+      return /[aA]ttention$/.test(propertyName(node) ?? '');
+    };
+    const compares = (node: EsNode): boolean => {
+      let parent = node.parent;
+      while (parent?.type === 'ChainExpression') { node = parent; parent = parent.parent; }
+      if (parent?.type === 'BinaryExpression' && ['===', '!==', '==', '!='].includes(String(parent.operator))) return true;
+      if (parent?.type === 'SwitchStatement' && child(parent, 'discriminant') === node) return true;
+      return parent?.type === 'MemberExpression' && !parent.computed && ['startsWith', 'endsWith', 'includes', 'toLowerCase', 'toUpperCase', 'match', 'localeCompare'].includes(propertyName(parent) ?? '');
+    };
+    const resume = (node: EsNode): boolean => node.type === 'MemberExpression' && !node.computed && propertyName(node) === 'autoResumeAt';
+    return {
+      MemberExpression(node) {
+        if (node.computed) return;
+        const key = propertyName(node);
+        if (!file.startsWith(HOME) && key === 'label' && attention(child(node, 'object')) && compares(node)) sites['label-comparison'].push(child(node, 'property')!);
+        if (!isTest(file) && !(file in (listed ??= readReaders())) && key === 'autoResumeAt' && sites['resume-time-read'].length === 0) sites['resume-time-read'].push(child(node, 'property')!);
+      },
+      BinaryExpression(node) {
+        if (file.startsWith(HOME) || isTest(file) || !['===', '!=='].includes(String(node.operator))) return;
+        const left = child(node, 'left')!, right = child(node, 'right')!;
+        const status = literal(left) === 'waiting' ? unwrap(right) : literal(right) === 'waiting' ? unwrap(left) : undefined;
+        if (status?.type !== 'MemberExpression' || status.computed || propertyName(status) !== 'status') return;
+        let parent = node.parent;
+        while (parent?.type === 'ChainExpression') parent = parent.parent;
+        while (parent?.type === 'LogicalExpression') {
+          let joined = false;
+          walk(parent, candidate => { if (resume(candidate) && Math.abs(offset(candidate) - offset(node)) <= 160) joined = true; });
+          if (joined) { sites['restated-hold'].push(literal(left) === 'waiting' ? left : child(status, 'property')!); return; }
+          parent = parent.parent;
+        }
+      },
+      'Program:exit'() {
+        const lines = sourceCode.text.split('\n');
+        for (const rule of ['label-comparison', 'restated-hold', 'resume-time-read'] as const) for (const node of sites[rule]) {
+          const text = lines[nodeLine(node) - 1]!.trim();
+          report(node, `${rule}: ${text} — ${HOW[rule]} (hearsay-tools/cezarion#1496).`);
+        }
+      },
+    };
+  },
 };

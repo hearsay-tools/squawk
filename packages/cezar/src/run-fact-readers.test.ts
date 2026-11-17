@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { scanRunFacts } from './lint/run-fact-reader.ts';
+import { checkRule } from './lint/ast-rule.testkit.ts';
+import { runFactReader, scanRunFacts } from './lint/run-fact-reader.ts';
 
 /**
  * The scanner behind `cez/run-fact-reader` (hearsay-tools/cezarion#1496): run facts are read from
@@ -8,7 +9,12 @@ import { scanRunFacts } from './lint/run-fact-reader.ts';
  */
 describe('run facts are read from the contract (hearsay-tools/cezarion#1496)', () => {
   describe('the scan', () => {
-    const rules = (source: string, file = 'packages/web/src/lib/x.ts') => scanRunFacts(file, source).map((s) => s.rule);
+    const rules = (source: string, file = 'packages/web/src/lib/x.ts') => {
+      const expected = scanRunFacts(file, source).map(s => s.rule);
+      const path = source.includes('<StatusDot') ? file.replace(/\.ts$/, '.tsx') : file;
+      expect(checkRule(runFactReader, path, source).map(finding => finding.message.split(':')[0])).toEqual(expected);
+      return expected;
+    };
 
     it.each([
       ['an attention compared with ===', "if (attention.label === 'usage limit') go()"],
