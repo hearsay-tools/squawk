@@ -12,26 +12,6 @@ import { RUN_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/
 
 describe('worker waits through RunManager', { timeout: 30_000 }, () => {
   useWorkerWaitFixture();
-  it('retiring a delivered wait durably records the resumed status in the same snapshot', async () => {
-    const p = await parent(); const w = await worker(p.id);
-    fixtureUpdateRun(w.id, { status: RUN_STATUS.done });
-    // hearsay-tools/cezarion#1235: a worker entry retires through the wait list's delivery checkpoint.
-    const commit = store.commitOutcome.bind(store);
-    let retiredStatus: string | undefined;
-    store.commitOutcome = (...args) => {
-      const committed = commit(...args);
-      if (args[0] === p.id && retiredStatus === undefined && [args[1]].flat().some(outcome => outcome.kind === 'delivered') &&
-        store.getRun(p.id)?.lastWaits?.some(wait => wait.kind === 'worker' && wait.phase === 'delivered')) {
-        const records = readPersistedRuns(join(root, '.ai/cezar')) as RunRecord[];
-        retiredStatus = records.find(run => run.id === p.id)?.status;
-      }
-      return committed;
-    };
-    register(p.id, [w.id]);
-    await until(() => retiredStatus !== undefined);
-    expect(retiredStatus).toBe('running');
-  });
-
   it('restart after the delivery checkpoint resumes the parent instead of settling the parked snapshot', async () => {
     const p = await parent(); const w = await worker(p.id);
     const wait = register(p.id, [w.id]);

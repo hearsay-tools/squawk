@@ -17,28 +17,6 @@ import { completionNudges, sentTexts, recordAgentInput, blockedDone, sessionOf }
 describe('worker Finish and completion nudges', { timeout: 30_000 }, () => {
   useWorkerWaitFixture();
 
-for (const mode of ['fresh', 'continuation'] as const) {
-    it(`readiness ${mode}: a DONE blocked by live workers gets the refusal nudge, opens no wait, and Finish stays refused`, async () => {
-      const p = await parent();
-      await until(() => store.getRun(p.id)?.status === 'waiting');
-      if (mode === 'continuation') {
-        expect(manager.finish(p.id)).toBe(true); await until(() => !manager.isActive(p.id));
-        expect(manager.continueRun(p.id, { text: 'mock:hold' }).ok).toBe(true);
-        await until(() => store.getRun(p.id)?.status === 'waiting');
-      }
-      const sent = recordAgentInput(p.id);
-      const w = await blockedDone(p.id, () => worker(p.id));
-      // hearsay-tools/cezarion#1301: the turn end's refusal, as one automatic turn.
-      await until(() => completionNudges(p.id).length === 1 && store.getRun(p.id)?.status === 'waiting');
-      expect(sentTexts(sent, `Workers are still live: ${w.id}.`)).toEqual([expect.stringContaining(COMPLETION_WILL_WAIT)]);
-      expect(waitOf(store.getRun(p.id))).toBeUndefined();
-      expect(store.getRun(p.id)?.waits?.filter(wait => wait.kind === 'worker') ?? []).toEqual([]);
-      expect(manager.finish(p.id)).toBe(false);
-      expect(store.getRun(p.id)?.delegation).not.toHaveProperty('finishRequestedAt');
-      expect(store.getRun(w.id)?.status).toBe('queued');
-      expect(semaphore.busy()).toBe(0);
-    });
-  }
 // hearsay-tools/squawk#3337: a failed parent leaves its workers running, so their Continue (a human's,
 // a provider-error retry's, recovery's) is admitted beside it.
 it('a worker of a failed parent continues', async () => {
@@ -130,9 +108,12 @@ for (const mode of ['fresh', 'continuation'] as const) {
           await setImmediate();
           checkpoint('parent parked after nudge');
           expect(store.getRun(p.id)?.status).toBe('waiting');
-          expect(sentTexts(sent, `Workers are still live: ${w.id}.`)).toHaveLength(1);
+          expect(sentTexts(sent, `Workers are still live: ${w.id}.`)).toEqual([expect.stringContaining(COMPLETION_WILL_WAIT)]);
           expect(completionNudges(p.id)).toEqual([expect.objectContaining({ message: `${COMPLETION_NUDGE_NOTE} (1/${MAX_AUTO_CONTINUES}): workers_outstanding` })]);
           expect(waitOf(store.getRun(p.id))).toBeUndefined();
+          expect(store.getRun(p.id)?.waits?.filter(wait => wait.kind === 'worker') ?? []).toEqual([]);
+          expect(manager.finish(p.id)).toBe(false);
+          expect(store.getRun(p.id)?.delegation).not.toHaveProperty('finishRequestedAt');
           expect(store.getRun(p.id)?.delegation).not.toHaveProperty('completion');
           expect(store.getRun(w.id)?.status).toBe('queued');
           expect(semaphore.busy()).toBe(0);
