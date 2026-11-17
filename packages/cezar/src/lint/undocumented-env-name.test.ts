@@ -1,5 +1,23 @@
+import { checkRule } from './ast-rule.testkit.ts';
 import { expect, it } from 'vitest';
-import { documentedNames, envNames, undocumented } from './undocumented-env-name.ts';
+import { documentedNames, envNames as sourceEnvNames, undocumented as sourceUndocumented, undocumentedEnvName } from './undocumented-env-name.ts';
+
+function assertEnvRule(source: string): void {
+  const documented = documentedNames();
+  const expected = sourceEnvNames(source).filter(name => !name.startsWith('CEZ_MOCK_') && !documented.has(name));
+  expect(checkRule(undocumentedEnvName, 'packages/cezar/src/env-name-ast-fixture.ts', source)
+    .map(finding => finding.message.split(' ')[0]).sort()).toEqual(expected);
+}
+
+function envNames(source: string): string[] {
+  assertEnvRule(source);
+  return sourceEnvNames(source);
+}
+
+function undocumented(source: string, documented: Set<string>): string[] {
+  assertEnvRule(source);
+  return sourceUndocumented(source, documented);
+}
 
 it('requires HSQ documentation for property reads, writes and dynamic literal names', () => {
   const source = `const a = process.env.HSQ_HOME; env.HSQ_NEW = 'yes'; env['HSQ_DYNAMIC']; const old = env.CEZ_HOME;`;
@@ -41,4 +59,8 @@ it('checks literal helper suffixes across comments, whitespace, templates and im
     'CEZ_ALIASED_FLAG', 'CEZ_NEW_FLAG', 'CEZ_TEMPLATE_FLAG',
     'HSQ_ALIASED_FLAG', 'HSQ_NEW_FLAG', 'HSQ_TEMPLATE_FLAG',
   ]))).toEqual([]);
+});
+
+it('keeps complete environment names in directive literals documented', () => {
+  expect(envNames("'CEZ_DOC_DIRECTIVE';")).toEqual(['CEZ_DOC_DIRECTIVE']);
 });
