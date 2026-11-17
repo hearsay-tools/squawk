@@ -90,6 +90,8 @@ export const stepStateSchema = z.object({
    *  that created it, so resume and Continue read this rather than the project's current
    *  selection. Absent on records written before accounts existed. */
   profileId: z.string().optional(),
+  /** Host-local selected copy, relative to the step's working folder for project skills. */
+  skillPath: z.string().min(1).optional(),
   costUsd: z.number().optional(),
   /** Explicit provenance for engine-generated continuation steps. */
   synthetic: z.literal('continuation').optional(),
@@ -941,6 +943,7 @@ export const createRunInputBaseSchema = z
  */
 export const createRunInputSchema = createRunInputBaseSchema
   .extend({
+    steps: z.array(workflowStepDefSchema.safeExtend({ skillPath: z.string().min(1).optional() })).min(1).max(8).optional(),
     /** Idempotent start (#504): a retry with the same id and payload answers `200` with the run
      *  the first request created; a different payload answers `409`. Scoped to the project. Not
      *  on the base schema, so an automation's task definition cannot carry one. */
