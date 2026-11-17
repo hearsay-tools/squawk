@@ -42,6 +42,12 @@ export class NativeSkillInputQueue {
       !!(first?.type === 'text' && leadingSlashSkillName(first.text));
   }
 
+  /** Accepted human input owns the next delivery until it reaches its transport. */
+  pending(runId: string): boolean {
+    return !!this.memory.read(runId, 'nativeSkillInputs')?.length ||
+      !!atLiveInput.queuedMessages(this.context.store.getRun(runId))?.some(message => message.replayAfterOpen);
+  }
+
   /** Readiness during a synchronous send belongs to that read until it finishes. */
   markReady(runId: string, state: ActiveRun, session: AgentSession): boolean {
     const read = this.memory.read(runId, 'nativeSkillRead');

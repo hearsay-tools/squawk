@@ -109,6 +109,24 @@ it('a rejected async read interrupts the current session and keeps the accepted 
   expect(store.readEvents(id)).toContainEqual(expect.objectContaining({ type: 'error', message: expect.stringContaining('list failed') }));
 });
 
+it('accepted native human input blocks every Squawk submission and flush until its read delivers', async () => {
+  const read = deferred<ContentBlock[]>();
+  nativeInput.mockReturnValue(read.promise);
+  const sendAgent = vi.spyOn(wire, 'sendAgentMessage');
+  const flush = vi.mocked(delivery.flushAgentInputs);
+  flush.mockRestore();
+  expect(delivery.sendMessage(id, text('/demo human'), 'human')).toBe(true);
+  expect(delivery.submitAgentInput(id, state, text('no-wait nudge'))).toBe(false);
+  expect(delivery.submitAgentInput(id, state, text('worker result'), ['worker-result'])).toBe(false);
+  expect(delivery.flushAgentInputs(id)).toBe(false);
+  expect(sendAgent).not.toHaveBeenCalled();
+  // The unresolved read is the barrier; no timer or transport acknowledgement is involved.
+  read.resolve(text('/demo human'));
+  await drain();
+  expect(wire.sendMessage).toHaveBeenCalledExactlyOnceWith(text('/demo human'));
+  expect(queued()).toEqual([]);
+});
+
 it.each(['session', 'state'] as const)('an old %s read cannot send or clear its replacement read', async replacement => {
   const oldRead = deferred<ContentBlock[]>();
   const newRead = deferred<ContentBlock[]>();

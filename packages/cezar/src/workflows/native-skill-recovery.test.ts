@@ -4,7 +4,7 @@ import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { crashStore } from '../runs/run-store.testkit.ts';
 import { RunStore } from '../runs/store.ts';
-import { createFixtureManager, fixtureWorkSettled } from './fixture-cleanup.testkit.ts';
+import { createFixtureManager, fixtureWork, fixtureWorkSettled } from './fixture-cleanup.testkit.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import type { RunManager } from './run.ts';
 import { join } from 'node:path';
@@ -94,7 +94,10 @@ it('replays a durable held trigger natively after restart, keeps FIFO, and never
   await waitForProduct(manager, store, () => sessions.length === 3 && store.getRun(id)?.steps.at(-1)?.sessionId === 'recovery-3');
   expect(store.getRun(id)?.queuedMessages ?? []).toEqual([]);
   sessions[2]!.emit({ type: 'turn-end' });
-  await waitForProduct(manager, store, () => store.getRun(id)?.status === 'waiting');
+  // Observe the reopened boundary's delivery work, rather than waiting for the unrelated
+  // no-wait nudge to time out: the fixture deliberately emits no answer to that nudge.
+  await waitForProduct(manager, store, () => ![...fixtureWork(manager).pending.values()]
+    .some(label => label === 'nativeInputBoundary' || label === 'nativeSkillInput'));
   expect(sessions.flatMap(session => session.sent).filter(blocks => blocks[0]?.type === 'skill')).toHaveLength(1);
   expect(sessions[2]!.spec.userPrompt).not.toContain('/known saved arguments');
 });

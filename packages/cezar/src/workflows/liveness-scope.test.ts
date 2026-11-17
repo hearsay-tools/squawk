@@ -52,6 +52,8 @@ it('dropActive leaves no execution-scope bound armed, the unread-input bound inc
   // bound: the acknowledgement checkpoint is the product signal that the harness accepted the input.
   await waitForProduct(f.manager, f.store, () => !!f.store.getRun(record.id)?.agentInputs?.find(input => input.id === message.id)?.deliveredAt);
   wire.emit!({ type: 'turn-end' });
+  // bound: the turn-end settlement arms the bound after its native-input priority checkpoint.
+  await waitForProduct(f.manager, f.store, () => unread.mock.calls.length > 0);
   expect(unread).toHaveBeenCalled();
   const owner = arm.mock.contexts.find(context => context instanceof LivenessTimers) as LivenessTimers | undefined;
   expect(owner?.armedIn(record.id, 'execution')).toContain('unread-input');

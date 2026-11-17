@@ -595,6 +595,7 @@ export class InputDelivery {
 
   /** Reservation is synchronous; only an acknowledged transport may checkpoint delivery. */
   submitAgentInput(runId: string, state: ActiveRun, content: ContentBlock[], inputIds: readonly string[] = [], beforeHumanReset?: HumanAnswerBudget): boolean {
+    if (this.nativeInputs.pending(runId)) return false;
     const session = state.liveSession.session;
     if (!session?.open || state.inputState.agentInputFlight || state.liveSession.cancelled || state.liveSession.finishRequested || state.inputState.agentInputError) return false;
     if (!this.admitsAgentInput(runId, state, session, inputIds, beforeHumanReset)) return false;
@@ -744,6 +745,7 @@ export class InputDelivery {
    *  but this one synchronous flush keeps the budget decisions it made before that reset
    *  (hearsay-tools/cezarion#1906). Later acknowledgements read the restarted budget normally. */
   flushAgentInputs(runId: string, beforeHumanReset?: HumanAnswerBudget): boolean {
+    if (this.nativeInputs.pending(runId)) return false;
     const state = this.host.active.get(runId);
     let run = this.context.store.getRun(runId);
     if (!state?.liveSession.session?.open || state.liveSession.cancelled || state.inputState.agentInputError || state.inputState.agentInputFlight || !run ||
