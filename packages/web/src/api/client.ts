@@ -8,14 +8,11 @@ import type {
   FilePreviewData,
   PublishedArtifact, ArtifactMetadataResponse,
   AgentConfigFileContent,
-  AgentAccountDetailsResponse,
   AgentAccountStatusResponse,
   AgentProfileResponse,
   AgentProfileSelectionsResponse,
   AgentProfilesResponse,
   CreateAgentProfileInput,
-  OpenAgentAccountFileInput,
-  OpenAgentAccountFileResponse,
   RemoveAgentProfileResponse,
   SelectAgentProfileInput,
   UpdateAgentProfileInput,
@@ -1942,8 +1939,7 @@ export async function getAgentProfiles(opts?: ReadOptions): Promise<AgentProfile
     ...answer,
     profileCapableProviders: answer.profileCapableProviders ?? [],
     selections: answer.selections ?? {},
-    defaults: answer.defaults ?? {},
-    profiles: (answer.profiles ?? []).map((profile) => ({ ...profile, files: profile.files ?? [] })),
+    profiles: answer.profiles ?? [],
   }
 }
 
@@ -1973,37 +1969,6 @@ export async function getAgentAccountStatus(
       init(opts),
     ),
     `/workspace/agent-profiles/${encodeURIComponent(routeId)}/status`,
-  )
-}
-
-/** Who an account is signed in as (spec 2026-07-29-agent-profiles). Fetched only when the user
- *  asks for it — it is deliberately NOT part of the listing, so "hidden by default" means the data
- *  is absent rather than merely unrendered. Address discovered accounts via `agentAccountRouteId`. */
-export async function getAgentAccountDetails(
-  routeId: string,
-  opts?: ReadOptions,
-): Promise<AgentAccountDetailsResponse> {
-  return unwrap(
-    await cez.api.v1.workspace['agent-profiles'][':id'].details.$get(
-      { param: { id: encodeURIComponent(routeId) } },
-      init(opts),
-    ),
-    `/workspace/agent-profiles/${encodeURIComponent(routeId)}/details`,
-  )
-}
-
-/** Open one of an account's own config files — or its folder — in a local app. `file` is a catalog
- *  id (or `folder`); this never sends a path, so the route has no traversal surface. */
-export async function openAgentAccountFile(
-  routeId: string,
-  input: OpenAgentAccountFileInput,
-): Promise<OpenAgentAccountFileResponse> {
-  return unwrap(
-    await cez.api.v1.workspace['agent-profiles'][':id'].open.$post({
-      param: { id: encodeURIComponent(routeId) },
-      json: input,
-    }),
-    `/workspace/agent-profiles/${encodeURIComponent(routeId)}/open`,
   )
 }
 

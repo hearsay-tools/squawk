@@ -63,6 +63,14 @@
     "tooling": [
       "lint/"
     ],
+    "feature:accounts": [
+      "core/agent-profiles.ts",
+      "workspace/agent-accounts.ts",
+      "workspace/agent-profiles.ts",
+      "home/legacy-account-paths.ts",
+      "home/migration-account-source.ts",
+      "home/migration-accounts.ts"
+    ],
     "feature:activity": ["activity/"],
     "feature:agent-config": ["agent-config/"],
     "feature:archive-on-merge": ["archive-on-merge-setting.ts"],

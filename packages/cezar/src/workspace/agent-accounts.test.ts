@@ -190,23 +190,12 @@ describe('agent accounts store', () => {
       expect((await loadAgentAccounts(testHome())).accounts.map((a) => a.id)).toEqual(['work']);
     });
 
-    it('keeps pi and omp accounts — both have one variable that moves their credentials', async () => {
+    it('keeps a pi account and drops an omp one — omp carries no named accounts', async () => {
       write({ accounts: [
         account('pi-work', { provider: 'pi', configDir: '~/.pi-work/agent' }),
         account('omp-work', { provider: 'omp', configDir: '~/.omp/profiles/work' }),
       ] });
-      expect((await loadAgentAccounts(testHome())).accounts.map((a) => a.id)).toEqual(['pi-work', 'omp-work']);
-    });
-
-    it('refuses an omp folder that names no profile — OMP_PROFILE could not select it', async () => {
-      // `profileEnv` emits nothing for such a folder, so a named account there would run on the
-      // DEFAULT omp login: the same lie as an OpenCode row, refused by the same salvage.
-      write({ accounts: [
-        account('anywhere', { provider: 'omp', configDir: '/data/omp-work' }),
-        account('upper', { provider: 'omp', configDir: '~/.omp/profiles/Work' }),
-        account('ok', { provider: 'omp', configDir: '~/.omp/profiles/work' }),
-      ] });
-      expect((await loadAgentAccounts(testHome())).accounts.map((a) => a.id)).toEqual(['ok']);
+      expect((await loadAgentAccounts(testHome())).accounts.map((a) => a.id)).toEqual(['pi-work']);
     });
 
     it('refuses a configDir carrying control characters (it reaches a shell command)', async () => {
@@ -307,10 +296,17 @@ describe('agent accounts store', () => {
       expect(selectionFor(store, link, 'claude')).toBe('work');
     });
 
-    it('still answers the machine-wide default for a root nobody chose', async () => {
-      write({ accounts: [account('work')], defaults: { claude: 'work' } });
+    it('folds a saved machine-wide default into registered projects once, and reads none afterwards', async () => {
+      const project = (root: string) => ({ id: root.slice(1), root, name: root, addedAt: '', lastOpenedAt: '', source: 'local' });
+      Home.seedBytes(testHome(), workspaceConfigPath(undefined, testHome()), Buffer.from(JSON.stringify({ schemaVersion: 1, projects: [project('/a'), project('/b')] })));
+      write({ accounts: [account('work'), account('client')], defaults: { claude: 'work' }, selections: { '/b': { claude: 'client' } } });
+
       const store = await loadAgentAccounts(testHome());
-      expect(selectionFor(store, '/never-registered', 'claude')).toBe('work');
+      expect(store.selections).toEqual({ '/a': { claude: 'work' }, '/b': { claude: 'client' } });
+      expect(selectionFor(store, '/never-registered', 'claude')).toBeUndefined();
+      const saved = JSON.parse(readFileSync(agentAccountsPath(testHome()), 'utf8')) as Record<string, unknown>;
+      expect(saved).not.toHaveProperty('defaults');
+      expect(saved.selections).toEqual(store.selections);
     });
   });
 

@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { selectsByProfileName } from '../core/agent-profiles.ts';
 import { AGENT_ACCOUNT_ID_RE } from '../workspace/agent-accounts.ts';
 import type { Home } from './home.ts';
 import { migrationAccountSource } from './migration-account-source.ts';
@@ -25,8 +24,6 @@ export function preserveAccountRelocations(home: Home, record: MigrationRecord, 
     if (canonicalSource === undefined) return account;
     const id = String(account.id);
     if (!AGENT_ACCOUNT_ID_RE.test(id)) throw new Error(`Cannot import account ${id}: invalid account ID.`);
-    if (record.notMoved.some(entry => entry.id === id && entry.configDir === source.configDir
-      && entry.reason === 'omp-profile-root-inside-legacy-home') && selectsByProfileName(source.provider)) return account;
     const before = previous.get(id);
     const destination = join(home.data, 'accounts', id);
     const sameSource = typeof before?.configDir === 'string' && migrationAccountSource(record.legacyRoot, before.configDir) === canonicalSource;

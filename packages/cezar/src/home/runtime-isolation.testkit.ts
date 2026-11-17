@@ -21,7 +21,7 @@ export function runtimeHomes() {
   mkdirSync(join(root, 'selected-account'));
   mkdirSync(join(root, 'ambient-account'));
   const account = (path: string) => ({ accounts: [{ id: 'work', provider: 'claude', configDir: path, label: 'Work', addedAt: '' }],
-    defaults: { claude: 'work' }, selections: {} });
+    selections: { [root]: { claude: 'work' } } });
   Home.seed(selected, selected.agentAccounts, account(join(root, 'selected-account')));
   Home.seed(ambient, ambient.agentAccounts, account(join(root, 'ambient-account')));
   Home.seed(selected, selected.workspaceConfig, { agentDefaults: { runner: 'codex' }, modelsLocked: true,

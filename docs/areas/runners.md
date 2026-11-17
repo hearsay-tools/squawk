@@ -242,7 +242,7 @@ available and shows OMP as unavailable. `HSQ_DRY_RUN=1` (`CEZ_DRY_RUN` fallback)
 
 Agents ask questions through Squawk's `cezar_ask` tool, and OMP's own sub-agents appear in the
 Agents drawer. Settings → Agent config exposes OMP's `config.yml`, `mcp.json` and
-`AGENTS.md` files. Named OMP profiles and accounts are not supported yet.
+`AGENTS.md` files. Named OMP profiles and accounts are not supported.
 
 **Pick a backend at three levels** (most specific wins):
 

@@ -201,9 +201,7 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
       'PATCH /workspace/agent-profiles/:id',
       'DELETE /workspace/agent-profiles/:id',
       'PUT /workspace/agent-profiles/selection',
-      'GET /workspace/agent-profiles/:id/details',
       'GET /workspace/agent-profiles/:id/status',
-      'POST /workspace/agent-profiles/:id/open',
     ]) {
       expect(keys, workspaceOnly).not.toContain(workspaceOnly);
     }

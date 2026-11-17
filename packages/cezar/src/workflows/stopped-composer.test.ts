@@ -52,10 +52,10 @@ describe('stopped composer engine', { timeout: 15_000 }, () => {
     mkdirSync(accountDir); writeFileSync(join(accountDir, 'settings.json'), '{}');
     await mergeWriteAgentAccounts(accounts => { accounts.accounts.push({ id: 'stopped-composer-selected', provider: 'claude', configDir: accountDir, label: 'Selected', addedAt: '' }); }, testHome());
     const run = manager.startRun(workflow, { task: 'original task', systemPrompt: 'private instruction', worktree: false,
-      autonomous: true, runner: 'claude', model: 'opus', agentProfile: 'default',
+      autonomous: true, runner: 'claude', model: 'opus', agentProfile: 'stopped-composer-selected',
       images: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'aGVsbG8=' } }] });
     expect(manager.cancel(run.id)).toBe(true);
-    const accepted = manager.continueRun(run.id, { text: 'new request', model: 'sonnet', effort: 'high', agentProfile: 'stopped-composer-selected', images: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'd29ybGQ=' } }] });
+    const accepted = manager.continueRun(run.id, { text: 'new request', model: 'sonnet', effort: 'high', images: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'd29ybGQ=' } }] });
     expect(accepted).toEqual({ ok: true });
     expect(manager.continueRun(run.id)).toMatchObject({ ok: false });
     expect(store.getRun(run.id)).toMatchObject({ id: run.id, status: RUN_STATUS.queued, task: 'original task', model: 'sonnet', effort: 'high', systemPrompt: 'private instruction', worktree: false, autonomous: true });

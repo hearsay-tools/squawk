@@ -3,7 +3,8 @@
 Named accounts and their per-project selections live in `agent-accounts.json`, separate
 from the project registry. A version that rewrites only the registry cannot remove them.
 Selections use canonical project roots, and account removal clears its selections in the same
-write. The discovered default stays implicit.
+write. The discovered default stays implicit. There is no machine-wide default account: a
+project with no selection runs on the discovered default.
 
 ## Consequences
 
@@ -14,9 +15,10 @@ allowlist, and terminal takeover carries the same account context.
 
 The implemented mapping supports account relocation only where cezar has an accepted mapping;
 a config-only relocation is insufficient. Broad XDG relocation is not used for named accounts
-because it would also change tools called by the agent. Unknown stored selections can fall
-back in `selectProfile`; known unavailable named accounts refuse launch instead of silently
-using the default. Explicit request validation can be stricter.
+because it would also change tools called by the agent. A provider that selects a login by
+name under its own root (omp) carries no named accounts. Unknown stored selections fall back
+in `selectProfile`; an owned worker whose pinned folder is gone refuses launch instead of
+silently using the default. Explicit request validation can be stricter.
 
 Ordinary steps prefer their recorded account, then a matching run override, then the project
 selection and default. Owned workers instead use their accepted pinned identity.

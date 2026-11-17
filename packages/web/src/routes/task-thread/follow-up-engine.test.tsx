@@ -626,7 +626,6 @@ describe('follow-up ContinueAction runner/model selection (#401)', () => {
 
 /** One extra Claude login beside the discovered defaults. */
 const ACCOUNTS: AgentProfilesResponse = {
-  defaults: {},
   editable: true,
   profileCapableProviders: ['claude', 'codex'],
   selections: {},
@@ -641,7 +640,6 @@ const ACCOUNTS: AgentProfilesResponse = {
       looksValid: true,
       isDefault: true,
       status: { provider: 'claude', status: 'connected' },
-      files: [],
     },
     {
       id: 'klaudiusz',
@@ -653,30 +651,17 @@ const ACCOUNTS: AgentProfilesResponse = {
       looksValid: true,
       isDefault: false,
       status: { provider: 'claude', status: 'connected' },
-      files: [],
     },
   ],
 }
 
 const runnerPill = () => document.querySelector('[data-slot="runner-pill"]') as HTMLElement | null
 
-/** Open the runner pill and click the row whose label contains `match`. */
-const pickFrom = async (pill: HTMLElement, match: string) => {
-  fireEvent.pointerDown(pill)
-  const options = await screen.findAllByRole('menuitemradio')
-  fireEvent.click(options.find((o) => o.textContent?.includes(match)) as HTMLElement)
-}
-
 const serveAccounts = (
   accounts: AgentProfilesResponse = ACCOUNTS,
   health: HealthResponse = HEALTH_MULTI,
 ) => serve(health, {}, providersForHealth(health), 200, false, accounts)
 
-/**
- * The thread's Continue carries the SAME flat runner pill the /new composer does — `claude ·
- * Default` / `claude · Klaudiusz` / `codex` — so "continue this on my other Claude login" is
- * sayable after the task has started, not only when it is created.
- */
 describe('a task saved on a removed runner (hearsay-tools/squawk#3715)', () => {
   it('continues on the project default runner as a new session, naming it on the wire', async () => {
     serve()
@@ -687,8 +672,21 @@ describe('a task saved on a removed runner (hearsay-tools/squawk#3715)', () => {
   })
 })
 
-describe('the follow-up runner pill carries the account', () => {
-  it('lists every agent-and-login as one flat row, on a single-backend host too', async () => {
+/** A Continue names no account: the pill switches agents only, and the run keeps its login. */
+describe('the follow-up runner pill offers no account', () => {
+  it('lists agents only when one of them has two logins', async () => {
+    serveAccounts()
+    renderAction(makeRun())
+    await waitFor(() => expect(runnerPill()).not.toBeNull())
+
+    fireEvent.pointerDown(runnerPill()!)
+    const options = await screen.findAllByRole('menuitemradio')
+    // One row per connected agent; neither Claude login is named.
+    expect(options).toHaveLength(2)
+    expect(options.map((o) => o.textContent).join(' ')).not.toMatch(/Default|Klaudiusz/)
+  })
+
+  it('shows no pill on a single-backend host, even with a second login', async () => {
     serveAccounts(ACCOUNTS, {
       ...HEALTH_MULTI,
       checks: [
@@ -697,95 +695,19 @@ describe('the follow-up runner pill carries the account', () => {
       ],
     })
     renderAction(makeRun())
-    // One runner is not a choice, but a second login is — so the pill appears where it used to be
-    // hidden entirely.
-    await waitFor(() => expect(runnerPill()).not.toBeNull())
-
-    fireEvent.pointerDown(runnerPill()!)
-    const options = await screen.findAllByRole('menuitemradio')
-    expect(options.map((o) => o.textContent)).toEqual([
-      'claude · Default/home/u/.claude',
-      'claude · Klaudiusz~/.claude-klaudiusz',
-    ])
-  })
-
-  it('starts on the account the run is actually on, not the project selection', async () => {
-    // The step that spawned is what a Continue reattaches to; the project has since been switched
-    // to Klaudiusz, and that must not relabel a run that ran on the discovered account.
-    serveAccounts({ ...ACCOUNTS, selections: { '/repo': { claude: 'klaudiusz' } } })
-    renderAction(makeRun({ steps: [step({ sessionId: 'sess-1', profileId: 'default' })] }))
-    await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Default'))
-    expect(document.querySelector('[data-slot="skill-context"]')?.textContent).toBe('claude/default')
-
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
-    // Untouched, the Continue says nothing about the account — the run keeps the one it is on.
-    await waitFor(() => expect(continueBody()).toEqual({}))
-  })
-
-  it('shows the account the run recorded even when it is not the discovered one', async () => {
-    serveAccounts()
-    renderAction(makeRun({ steps: [step({ sessionId: 'sess-1', profileId: 'klaudiusz' })] }))
-    await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Klaudiusz'))
-    expect(document.querySelector('[data-slot="skill-context"]')?.textContent).toBe('claude/klaudiusz')
-  })
-
-  it('sends the picked account through to /continue', async () => {
-    serveAccounts()
-    renderAction(makeRun({ steps: [step({ sessionId: 'sess-1', profileId: 'default' })] }))
-    await waitFor(() => expect(runnerPill()).not.toBeNull())
-
-    await pickFrom(runnerPill()!, 'Klaudiusz')
-    await waitFor(() => expect(runnerPill()?.textContent).toContain('claude · Klaudiusz'))
-    expect(document.querySelector('[data-slot="skill-context"]')?.textContent).toBe('claude/klaudiusz')
-    expect(screen.getByText('Starts a new agent conversation.')).toBeTruthy()
-    expect(continueBody()).toBeUndefined()
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
-
-    // The runner did not change, so only the account rides the request.
-    await waitFor(() => expect(continueBody()).toEqual({ agentProfile: 'klaudiusz' }))
-  })
-
-  it('keeps the model pin when only the account changes', async () => {
-    serveAccounts()
-    renderAction(makeRun({ model: 'opus', steps: [step({ sessionId: 'sess-1', profileId: 'default' })] }))
-    await waitFor(() => expect(runnerPill()).not.toBeNull())
-    // The catalog is identical across logins of one agent, so the pin survives the switch.
-    expect(screen.getByRole('button', { name: /^Model · / }).textContent).toContain('opus')
-
-    await pickFrom(runnerPill()!, 'Klaudiusz')
-    await waitFor(() => expect(runnerPill()?.textContent).toContain('Klaudiusz'))
-    expect(screen.getByRole('button', { name: /^Model · / }).textContent).toContain('opus')
-  })
-
-  it('drops a claude account when the continuation switches to another agent', async () => {
-    serveAccounts()
-    renderAction(makeRun({ steps: [step({ sessionId: 'sess-1', profileId: 'default' })] }))
-    await waitFor(() => expect(runnerPill()).not.toBeNull())
-
-    await pickFrom(runnerPill()!, 'Klaudiusz')
-    await waitFor(() => expect(runnerPill()?.textContent).toContain('Klaudiusz'))
-    await pickFrom(runnerPill()!, 'codex')
-    await waitFor(() => expect(runnerPill()?.querySelector('[data-slot="picker-label"]')?.textContent?.trim()).toBe('Runner · codex'))
-
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
-    // A Claude login means nothing to codex, so it must not ride along. The switch writes the
-    // auto/auto the pills now display, so the record matches them (#411).
-    await waitFor(() => expect(continueBody()).toEqual({ runner: 'codex', model: '', effort: '' }))
-  })
-
-  it('leaves the zero-config thread exactly as it was', async () => {
-    serve(
-      {
-        ...HEALTH_MULTI,
-        checks: [
-          { name: 'claude', available: true },
-          { name: 'git', available: true },
-        ],
-      },
-    )
-    renderAction(makeRun())
     await screen.findByRole('button', { name: /^Model · / })
     expect(runnerPill()).toBeNull()
+  })
+
+  it('stays on the account the run is on, and sends no account on Continue', async () => {
+    // The step that spawned is what a Continue reattaches to; the project has since been switched
+    // to Klaudiusz, and that must not move a run that ran on the discovered account.
+    serveAccounts({ ...ACCOUNTS, selections: { '/repo': { claude: 'klaudiusz' } } })
+    renderAction(makeRun({ steps: [step({ sessionId: 'sess-1', profileId: 'default' })] }))
+    await waitFor(() => expect(document.querySelector('[data-slot="skill-context"]')?.textContent).toBe('claude/default'))
+
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+    await waitFor(() => expect(continueBody()).toEqual({}))
   })
 })
 

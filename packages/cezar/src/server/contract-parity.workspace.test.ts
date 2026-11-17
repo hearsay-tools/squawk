@@ -7,12 +7,10 @@ import { describe, expect, it } from 'vitest';
 import { uiStateSchema as uiStateSchemaValue } from '@open-mercato/cezar-contract/workspace';
 import type { z } from 'zod';
 import type {
-  agentAccountDetailsResponseSchema,
   agentAccountStatusResponseSchema,
   agentProfileResponseSchema,
   agentProfileSelectionsResponseSchema,
   agentProfilesResponseSchema,
-  openAgentAccountFileResponseSchema,
   removeAgentProfileResponseSchema,
 } from '@open-mercato/cezar-contract';
 import type {
@@ -149,16 +147,8 @@ describe('src/contract projects/workspace schemas match the routes exactly', () 
     (typeof client.api.v1.workspace)['agent-profiles']['selection']['$put'],
     200
   >;
-  type AgentAccountDetails200 = InferResponseType<
-    (typeof client.api.v1.workspace)['agent-profiles'][':id']['details']['$get'],
-    200
-  >;
   type AgentAccountStatus200 = InferResponseType<
     (typeof client.api.v1.workspace)['agent-profiles'][':id']['status']['$get'],
-    200
-  >;
-  type OpenAgentAccountFile200 = InferResponseType<
-    (typeof client.api.v1.workspace)['agent-profiles'][':id']['open']['$post'],
     200
   >;
 
@@ -218,9 +208,7 @@ describe('src/contract projects/workspace schemas match the routes exactly', () 
     Assert<Exact<z.infer<typeof agentProfileResponseSchema>, UpdateAgentProfile200>>,
     Assert<Exact<z.infer<typeof removeAgentProfileResponseSchema>, RemoveAgentProfile200>>,
     Assert<WireExact<z.infer<typeof agentProfileSelectionsResponseSchema>, SelectAgentProfile200>>,
-    Assert<Exact<z.infer<typeof agentAccountDetailsResponseSchema>, AgentAccountDetails200>>,
     Assert<Exact<z.infer<typeof agentAccountStatusResponseSchema>, AgentAccountStatus200>>,
-    Assert<Exact<z.infer<typeof openAgentAccountFileResponseSchema>, OpenAgentAccountFile200>>,
   ];
 
   it('is enforced by tsc, not at runtime', () => {

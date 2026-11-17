@@ -1,4 +1,3 @@
-import { logPrefix } from './display.ts';
 import { projectPaths } from '../project-paths.ts';
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -8,7 +7,6 @@ import { expandTilde } from '../paths.ts';
 import { loadWorkspaceConfigSync } from '../workspace/config.ts';
 import { parseAgentAccountEntries, readAgentAccountSource, type AgentAccount } from '../workspace/agent-accounts.ts';
 import { recordedProcessLive } from '../core/process-stat.ts';
-import { selectsByProfileName } from '../core/agent-profiles.ts';
 import type { Home } from './home.ts';
 import { replacePrivateTree, insideDirectory, migrationPrivacy } from './migration-files.ts';
 import { HomeStore } from './store.ts';
@@ -60,11 +58,6 @@ export function migrationAccounts(legacy: Home, target: Home): MigrationAccount[
   return migrationAccountInventory(legacy, target).accounts;
 }
 
-/** A profile-name provider (omp) redirects by name, not configDir. Copying it cannot redirect the vendor CLI. */
-export function accountMigrationPolicy(account: MigrationAccount): 'copy' | 'keep' {
-  return selectsByProfileName(account.provider) ? 'keep' : 'copy';
-}
-
 /** Read-only query: do not open RunStore, recover runs, or claim a family's execution. */
 export function accountInUse(home: Home, id: string): boolean {
   const config = loadWorkspaceConfigSync(home.workspaceConfig, undefined, path => readFileSync(path, 'utf8'));
@@ -95,10 +88,7 @@ export function copyMigrationAccounts(legacy: Home, target: Home, accounts: Migr
   record.notMoved = record.notMoved.filter(account => account.reason === 'duplicate-account-id');
   const rewrites = new Map<string, string>();
   for (const account of accounts) {
-    if (accountMigrationPolicy(account) === 'keep') {
-      record.notMoved.push({ id: account.id, configDir: account.configDir, reason: 'omp-profile-root-inside-legacy-home' });
-      console.warn(`${logPrefix()} account ${account.id} stays at ${account.configDir}; move omp's root (PI_CONFIG_DIR) outside ${legacy.root}`);
-    } else if (accountInUse(legacy, account.id)) record.deferredAccounts.push({ id: account.id, configDir: account.configDir });
+    if (accountInUse(legacy, account.id)) record.deferredAccounts.push({ id: account.id, configDir: account.configDir });
     else {
       replacePrivateTree(account.source, account.target);
       rewrites.set(account.id, account.target);

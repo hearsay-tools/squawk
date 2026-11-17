@@ -4,10 +4,7 @@ import {
   PROFILE_CAPABLE_PROVIDERS,
   PROFILE_ENV_VAR,
   looksLikeProfileDir,
-  ompProfileName,
-  profileAgentDir,
   profileEnv,
-  selectsByProfileName,
   supportsProfiles,
 } from './agent-profiles.ts';
 
@@ -16,13 +13,14 @@ describe('PROFILE_ENV_VAR', () => {
     expect(PROFILE_ENV_VAR.claude).toBe('CLAUDE_CONFIG_DIR');
     expect(PROFILE_ENV_VAR.codex).toBe('CODEX_HOME');
     expect(PROFILE_ENV_VAR.pi).toBe('PI_CODING_AGENT_DIR');
-    expect(PROFILE_ENV_VAR.omp).toBe('OMP_PROFILE');
   });
 
-  it('leaves OpenCode unsupported — no single variable moves its credentials', () => {
+  it('leaves OpenCode and omp unsupported — no folder variable moves their login', () => {
     expect(PROFILE_ENV_VAR.opencode).toBeNull();
+    expect(PROFILE_ENV_VAR.omp).toBeNull();
     expect(supportsProfiles('opencode')).toBe(false);
-    expect(PROFILE_CAPABLE_PROVIDERS).toEqual(['claude', 'codex', 'pi', 'omp']);
+    expect(supportsProfiles('omp')).toBe(false);
+    expect(PROFILE_CAPABLE_PROVIDERS).toEqual(['claude', 'codex', 'pi']);
   });
 
   it('covers every provider, so adding one forces a decision here', () => {
@@ -39,22 +37,6 @@ describe('profileEnv', () => {
     expect(profileEnv('pi', '/home/u/.pi-work/agent')).toEqual({ PI_CODING_AGENT_DIR: '/home/u/.pi-work/agent' });
   });
 
-  it('names the omp PROFILE, not a path — OMP_PROFILE takes a name', () => {
-    expect(profileEnv('omp', '/home/u/.omp/profiles/work')).toEqual({ OMP_PROFILE: 'work' });
-    expect(profileEnv('omp', '/home/u/.omp/profiles/work/')).toEqual({ OMP_PROFILE: 'work' });
-    expect(profileEnv('omp', '~/.omp/profiles/client.a_1')).toEqual({ OMP_PROFILE: 'client.a_1' });
-    expect(profileEnv('omp', 'C:\\Users\\u\\.omp\\profiles\\work')).toEqual({ OMP_PROFILE: 'work' });
-  });
-
-  it('adds nothing for an omp folder that names no profile — the default agent dir among them', () => {
-    // The discovered omp account is an AGENT dir (`~/.omp/agent`, or a profile's `agent/`), and
-    // it is spawned bare. A folder outside `profiles/` cannot be expressed as OMP_PROFILE at all,
-    // which is why the accounts store refuses one rather than relying on this branch.
-    expect(profileEnv('omp', '/home/u/.omp/agent')).toEqual({});
-    expect(profileEnv('omp', '/home/u/.omp/profiles/work/agent')).toEqual({});
-    expect(profileEnv('omp', '/data/omp-work')).toEqual({});
-  });
-
   it('adds NOTHING for the default profile — the zero-config path must stay untouched', () => {
     expect(profileEnv('claude', null)).toEqual({});
     expect(profileEnv('claude', undefined)).toEqual({});
@@ -63,6 +45,7 @@ describe('profileEnv', () => {
 
   it('adds nothing for a provider with no home variable, even given a dir', () => {
     expect(profileEnv('opencode', '/home/u/.config/opencode-work')).toEqual({});
+    expect(profileEnv('omp', '/home/u/.omp/profiles/work')).toEqual({});
   });
 
   it('can never emit another provider\'s variable', () => {
@@ -76,36 +59,6 @@ describe('profileEnv', () => {
       );
       expect(emitted.some((name) => foreign.includes(name))).toBe(false);
     }
-  });
-});
-
-describe('ompProfileName', () => {
-  it('takes the folder name when its parent is `profiles`', () => {
-    expect(ompProfileName('/home/u/.omp/profiles/work')).toBe('work');
-    expect(ompProfileName('/home/u/.omp-alt/profiles/a.b-c_d')).toBe('a.b-c_d');
-  });
-
-  it('refuses every name omp itself refuses, so Squawk never hands omp a profile it rejects', () => {
-    // omp 18.8.0 `packages/utils/src/dirs.ts`: `^[a-z0-9][a-z0-9._-]{0,63}$`, not ending in `.`,
-    // not a Windows device name, and `default` meaning NO profile.
-    for (const name of ['Work', '-work', '.work', 'work.', 'default', 'con', 'NUL.txt', 'com1', 'a'.repeat(65), 'wo rk', '']) {
-      expect(ompProfileName(`/home/u/.omp/profiles/${name}`), name).toBeNull();
-    }
-    expect(ompProfileName(`/home/u/.omp/profiles/${'a'.repeat(64)}`)).toBe('a'.repeat(64));
-  });
-
-  it('refuses a folder whose parent is not `profiles`', () => {
-    expect(ompProfileName('/home/u/.omp/agent')).toBeNull();
-    expect(ompProfileName('/home/u/work')).toBeNull();
-    expect(ompProfileName('work')).toBeNull();
-  });
-});
-
-describe('profileAgentDir', () => {
-  it('is the account folder itself, except omp, whose profile keeps its config in `agent/`', () => {
-    expect(profileAgentDir('claude', '/home/u/.claude-work')).toBe('/home/u/.claude-work');
-    expect(profileAgentDir('pi', '/home/u/.pi-work/agent')).toBe('/home/u/.pi-work/agent');
-    expect(profileAgentDir('omp', '/home/u/.omp/profiles/work')).toBe('/home/u/.omp/profiles/work/agent');
   });
 });
 
@@ -125,24 +78,13 @@ describe('looksLikeProfileDir', () => {
     expect(looksLikeProfileDir('pi', ['settings.json'])).toBe(true);
   });
 
-  it('recognises an omp profile folder and the discovered omp agent dir', () => {
-    // A named account is the profile folder (`agent/`, `logs/`, …); the default is an agent dir.
-    expect(looksLikeProfileDir('omp', ['agent', 'logs', 'run', 'cache'])).toBe(true);
+  it('recognises the discovered omp agent dir, not a profile folder', () => {
     expect(looksLikeProfileDir('omp', ['agent.db', 'config.yml', 'sessions'])).toBe(true);
+    expect(looksLikeProfileDir('omp', ['agent', 'logs', 'run', 'cache'])).toBe(false);
   });
 
   it('says no for an unrelated directory — advisory, so the caller still accepts it', () => {
     expect(looksLikeProfileDir('claude', ['README.md'])).toBe(false);
     expect(looksLikeProfileDir('claude', [])).toBe(false);
-  });
-});
-
-describe('selectsByProfileName', () => {
-  it('is true only for omp among the providers', () => {
-    expect(PROVIDER_IDS.filter((provider) => selectsByProfileName(provider))).toEqual(['omp']);
-  });
-
-  it.each([undefined, 7, 'claude-cli', 'unknown', 'toString', 'constructor'])('is false for a stored value that names no provider: %s', (value) => {
-    expect(selectsByProfileName(value)).toBe(false);
   });
 });

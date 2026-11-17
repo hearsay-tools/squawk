@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HOME_LOCATING_ENV } from '../core/agent-env.ts';
-import { workspaceConfigPath, workspaceUiStatePath, agentAccountsPath, serverInstancesDir, serverStatePath, serverLockPath, agentHomePaths, expandTilde, ompProfilesDir, claudeStateFilePath } from '../paths.ts';
+import { workspaceConfigPath, workspaceUiStatePath, agentAccountsPath, serverInstancesDir, serverStatePath, serverLockPath, agentHomePaths, expandTilde, claudeStateFilePath } from '../paths.ts';
 import { remoteSettingsPath } from '../remote-settings.ts';
 import { binDir, versionsDir } from '../managed-install/layout.ts';
 import { cezCacheDir, resolveChromium } from '../preview/chromium.ts';
@@ -88,7 +88,6 @@ describe('legacy Home layout (the migration source)', () => {
       pi: '/home/operator/.pi/agent', omp: '/home/operator/.omp/agent',
     });
     expect(expandTilde('~/projects').replaceAll('\\', '/')).toBe('/home/operator/projects');
-    expect(ompProfilesDir({ CEZ_HOME: '/srv/cockpit' }).replaceAll('\\', '/')).toBe('/home/operator/.omp/profiles');
     expect(claudeStateFilePath(join('/home/operator', '.claude'), {}).replaceAll('\\', '/')).toBe('/home/operator/.claude.json');
   });
 

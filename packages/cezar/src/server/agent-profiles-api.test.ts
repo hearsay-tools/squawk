@@ -95,8 +95,11 @@ describe('agent profiles API', () => {
       expect(body.profiles.every((p) => p.id === 'default')).toBe(true);
     });
 
-    it('names the providers that can carry an account at all — OpenCode cannot', async () => {
-      expect((await list()).profileCapableProviders).toEqual(['claude', 'codex', 'pi', 'omp']);
+    it('names the providers that can carry an account at all — OpenCode and omp cannot', async () => {
+      const body = await list();
+      expect(body.profileCapableProviders).toEqual(['claude', 'codex', 'pi']);
+      expect(body).not.toHaveProperty('defaults');
+      expect(body.profiles.every((p) => !Object.hasOwn(p, 'files'))).toBe(true);
     });
 
     it('reports each account\'s folder state, and does not refuse one that is missing', async () => {
@@ -233,120 +236,14 @@ describe('agent profiles API', () => {
       expect(body.profile).toMatchObject({ provider: 'pi', path: dir, isDefault: false });
     });
 
-    describe('omp, whose accounts are omp profiles', () => {
-      const savedEnv = { HOME: process.env.HOME, OMP_PROFILE: process.env.OMP_PROFILE, PI_PROFILE: process.env.PI_PROFILE,
-        PI_CONFIG_DIR: process.env.PI_CONFIG_DIR, PI_CODING_AGENT_DIR: process.env.PI_CODING_AGENT_DIR };
-      let userHome: string;
-      beforeEach(() => {
-        // omp resolves a profile name under `$HOME/.omp/profiles`, so the test owns HOME.
-        userHome = join(home, 'user');
-        mkdirSync(userHome);
-        process.env.HOME = userHome;
-        for (const key of ['OMP_PROFILE', 'PI_PROFILE', 'PI_CONFIG_DIR', 'PI_CODING_AGENT_DIR'] as const) delete process.env[key];
+    it('refuses omp — it selects a login by profile name, not by folder', async () => {
+      const { status, body } = await send('POST', '/api/v1/workspace/agent-profiles', {
+        provider: 'omp',
+        configDir: join(home, '.omp', 'profiles', 'work'),
       });
-      afterEach(() => {
-        for (const [key, value] of Object.entries(savedEnv)) {
-          if (value === undefined) delete process.env[key];
-          else process.env[key] = value;
-        }
-      });
-
-      // Each account's files resolve inside that account's own folder: the agent home slot of its
-      // provider. A named omp account keeps its config in `agent/`; every default is the discovered home.
-      it('lists every account\'s own config files from its own folder', async () => {
-        const named: Record<string, string> = {
-          claude: join(home, 'claude-work'),
-          codex: join(home, 'codex-work'),
-          pi: join(home, 'pi-work', 'agent'),
-          omp: join(userHome, '.omp', 'profiles', 'work'),
-        };
-        for (const [provider, configDir] of Object.entries(named)) {
-          const { status } = await send('POST', '/api/v1/workspace/agent-profiles', { provider, configDir });
-          expect(status, provider).toBe(201);
-        }
-        const profiles = (await list()).profiles;
-        for (const profile of profiles) {
-          const folder = profile.isDefault ? profile.path : profile.provider === 'omp' ? join(profile.path, 'agent') : profile.path;
-          expect(profile.files.length, `${profile.provider}/${profile.id}`).toBeGreaterThan(0);
-          for (const file of profile.files) expect(file.path, `${profile.provider}/${profile.id}`).toBe(join(folder, file.label));
-        }
-        expect(profiles.filter((p) => !p.isDefault).map((p) => p.provider).sort()).toEqual(Object.keys(named).sort());
-        expect(profiles.filter((p) => p.isDefault).map((p) => p.provider)).toEqual([...PROVIDER_IDS]);
-      });
-
-      it('adds a folder in omp\'s profiles dir, which need not exist yet', async () => {
-        const dir = join(userHome, '.omp', 'profiles', 'work');
-        const { status, body } = await send('POST', '/api/v1/workspace/agent-profiles', { provider: 'omp', label: 'Work', configDir: dir });
-        expect(status).toBe(201);
-        expect(body.profile).toMatchObject({ provider: 'omp', path: dir, exists: false });
-      });
-
-      it('refuses a folder outside omp\'s profiles dir — OMP_PROFILE could only select a different one', async () => {
-        const { status, body } = await send('POST', '/api/v1/workspace/agent-profiles', {
-          provider: 'omp',
-          configDir: join(home, 'profiles', 'work'),
-        });
-        expect(status).toBe(400);
-        expect(body.error).toContain(join(userHome, '.omp', 'profiles'));
-        expect((await loadAgentAccounts(testHome())).accounts).toEqual([]);
-      });
-
-      it('refuses a profile name omp would refuse', async () => {
-        const { status, body } = await send('POST', '/api/v1/workspace/agent-profiles', {
-          provider: 'omp',
-          configDir: join(userHome, '.omp', 'profiles', 'Work'),
-        });
-        expect(status).toBe(400);
-        expect(body.error).toContain('lowercase');
-      });
-
-      it('refuses the profile a host OMP_PROFILE already makes the default', async () => {
-        process.env.OMP_PROFILE = 'work';
-        const { status, body } = await send('POST', '/api/v1/workspace/agent-profiles', {
-          provider: 'omp',
-          configDir: join(userHome, '.omp', 'profiles', 'work'),
-        });
-        expect(status).toBe(409);
-        expect(body.error).toContain('default folder');
-      });
-
-      it('refuses repointing an omp account outside the profiles dir', async () => {
-        const { body: created } = await send('POST', '/api/v1/workspace/agent-profiles', {
-          provider: 'omp',
-          configDir: join(userHome, '.omp', 'profiles', 'work'),
-        });
-        const { status } = await send('PATCH', `/api/v1/workspace/agent-profiles/${created.profile.id}`, {
-          configDir: join(home, 'omp-work'),
-        });
-        expect(status).toBe(400);
-      });
-
-      it('neither connects nor probes an account once omp\'s root moved away from it (#1283)', async () => {
-        const dir = join(userHome, '.omp', 'profiles', 'work');
-        const { body: created } = await send('POST', '/api/v1/workspace/agent-profiles', { provider: 'omp', configDir: dir });
-        // `OMP_PROFILE=work` would now open `~/.omp-alt/profiles/work`, not the folder Settings shows.
-        process.env.PI_CONFIG_DIR = '.omp-alt';
-        const connect = await apiRequest(makeApp(), '/api/v1/providers/connect', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ provider: 'omp', profileId: created.profile.id }),
-        });
-        expect(connect.status).toBe(409);
-        expect(((await connect.json()) as { error: string }).error).toContain(join(userHome, '.omp-alt', 'profiles'));
-        const status = await apiRequest(makeApp(), `/api/v1/workspace/agent-profiles/${created.profile.id}/status`);
-        expect(status.status).toBe(200);
-        expect(await status.json()).toEqual({
-          status: { provider: 'omp', status: 'unknown', hint: expect.stringContaining('PI_CONFIG_DIR'), profileId: created.profile.id },
-        });
-      });
-
-      it('lists the profile\'s own config files, from its `agent/` folder', async () => {
-        const dir = join(userHome, '.omp', 'profiles', 'work');
-        const { body } = await send('POST', '/api/v1/workspace/agent-profiles', { provider: 'omp', configDir: dir });
-        const row = (await list()).profiles.find((p) => p.id === body.profile.id)!;
-        expect(row.files.length).toBeGreaterThan(0);
-        expect(row.files.every((f) => f.path.startsWith(join(dir, 'agent')))).toBe(true);
-      });
+      expect(status).toBe(400);
+      expect(body.error).toContain('omp cannot carry more than one account');
+      expect((await loadAgentAccounts(testHome())).accounts).toEqual([]);
     });
 
     it('400s an unknown key rather than dropping it silently', async () => {
@@ -568,6 +465,13 @@ describe('agent profiles API', () => {
       const account = await create('work');
       expect((await select(project.id, 'codex', account.id)).status).toBe(400);
     });
+
+    it('400s a null project — there is no machine-wide default to write', async () => {
+      const account = await create('work');
+      const { status } = await send('PUT', '/api/v1/workspace/agent-profiles/selection', { projectId: null, provider: 'claude', profileId: account.id });
+      expect(status).toBe(400);
+      expect(JSON.parse(readFileSync(agentAccountsPath(testHome()), 'utf8'))).not.toHaveProperty('defaults');
+    });
   });
 
   describe('the listing never pays a CLI spawn (perf contract)', () => {
@@ -694,164 +598,12 @@ describe('agent profiles API', () => {
     });
   });
 
-  describe('per-account details and files', () => {
-    /** A Claude account dir signed in as someone, with a settings.json beside it. */
-    const signedIn = (name: string): string => {
-      const dir = claudeDir(name);
-      writeFileSync(join(dir, '.claude.json'), JSON.stringify({
-        oauthAccount: { emailAddress: 'me@example.com', organizationName: 'Acme' },
-        primaryApiKey: 'sk-should-not-surface',
-      }), 'utf8');
-      return dir;
-    };
-    const create = async (label: string, dir: string) => {
-      const { body } = await send('POST', '/api/v1/workspace/agent-profiles', {
-        provider: 'claude',
-        label,
-        configDir: dir,
-      });
-      return body.profile;
-    };
-
-    it('lists each account\'s OWN user-scope config files', async () => {
-      const account = await create('work', signedIn('claude-klaudiusz'));
-      const row = (await list()).profiles.find((p) => p.id === account.id)!;
-      // Resolved inside THIS account's folder, not the default one's.
-      const settings = row.files.find((f) => f.label === 'settings.json');
-      expect(settings?.path.startsWith(row.path)).toBe(true);
-      expect(settings?.exists).toBe(true);
-      // A file the agent has not written yet is listed honestly rather than omitted.
-      expect(row.files.find((f) => f.label === 'CLAUDE.md')?.exists).toBe(false);
-    });
-
-    it('lists a pi account\'s config files from its own folder', async () => {
-      const dir = join(home, 'pi-work', 'agent');
-      const { body } = await send('POST', '/api/v1/workspace/agent-profiles', { provider: 'pi', configDir: dir });
-      const row = (await list()).profiles.find((p) => p.id === body.profile.id)!;
-      expect(row.files.find((f) => f.label === 'settings.json')?.path).toBe(join(dir, 'settings.json'));
-    });
-
-    it('answers the identity on demand, and only the named fields', async () => {
-      const account = await create('work', signedIn('claude-klaudiusz'));
-      const res = await apiRequest(makeApp(), `/api/v1/workspace/agent-profiles/${account.id}/details`);
-      expect(res.status).toBe(200);
-      const body = await res.text();
-      expect(body).toContain('me@example.com');
-      expect(body).toContain('Acme');
-      // The same file holds an api key; it must not ride along.
-      expect(body).not.toContain('sk-should-not-surface');
-    });
-
-    it('addresses the DISCOVERED account as `default:<provider>`', async () => {
-      const res = await apiRequest(makeApp(), '/api/v1/workspace/agent-profiles/default:claude/details');
-      expect(res.status).toBe(200);
-      // A bare `default` cannot say WHICH agent, so it is not an account.
-      const bare = await apiRequest(makeApp(), '/api/v1/workspace/agent-profiles/default/details');
-      expect(bare.status).toBe(404);
-    });
-
-    it('404s an unknown account on every per-account route', async () => {
-      for (const [method, path, payload] of [
-        ['GET', '/api/v1/workspace/agent-profiles/nope/status', undefined],
-        ['GET', '/api/v1/workspace/agent-profiles/nope/details', undefined],
-        ['POST', '/api/v1/workspace/agent-profiles/nope/open', { file: 'folder' }],
-      ] as const) {
-        const { status, body } = await send(method, path, payload);
-        expect(status, `${method} ${path}`).toBe(404);
-        expect(body.error).toBe('unknown account: nope');
-      }
-    });
-
-    it('opens a file named by its catalog id, never by a path', async () => {
-      const opened: string[] = [];
-      const account = await create('work', signedIn('claude-klaudiusz'));
-      const app = makeApp({ openFile: async (path) => { opened.push(path); return true; } });
-      const res = await apiRequest(app, `/api/v1/workspace/agent-profiles/${account.id}/open`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ file: 'claude.user.settings' }),
-      });
-      expect(res.status).toBe(200);
-      expect(opened).toEqual([join(account.path, 'settings.json')]);
-    });
-
-    it('opens the account folder itself', async () => {
-      const opened: string[] = [];
-      const account = await create('work', signedIn('claude-klaudiusz'));
-      const app = makeApp({ openFile: async (path) => { opened.push(path); return true; } });
-      await apiRequest(app, `/api/v1/workspace/agent-profiles/${account.id}/open`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ file: 'folder' }),
-      });
-      expect(opened).toEqual([account.path]);
-    });
-
-    it('404s a file id this account does not have — the only addressing the route accepts', async () => {
-      const account = await create('work', signedIn('claude-klaudiusz'));
-      for (const file of ['codex.user.config', '../../../etc/passwd', '/etc/passwd']) {
-        const res = await apiRequest(makeApp(), `/api/v1/workspace/agent-profiles/${account.id}/open`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ file }),
-        });
-        expect(res.status, file).toBe(404);
-      }
-    });
-
-    it('refuses a target that cannot act on what is being opened', async () => {
-      const account = await create('work', signedIn('claude-klaudiusz'));
-      const cases = [
-        // A terminal runs `cd <path>`, which is meaningless for a file…
-        [{ file: 'claude.user.settings', target: 'terminal' }, 'a terminal opens a folder'],
-        // …an agent CLI opens a task worktree, never a config folder…
-        [{ file: 'folder', target: 'cli:claude' }, 'agent CLIs open a task worktree'],
-        // …and an app this machine does not have cannot be launched.
-        [{ file: 'folder', target: 'not-installed-editor' }, 'no such app on this machine'],
-      ] as const;
-      for (const [body, reason] of cases) {
-        const res = await apiRequest(makeApp(), `/api/v1/workspace/agent-profiles/${account.id}/open`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        expect(res.status, JSON.stringify(body)).toBe(400);
-        expect(((await res.json()) as { error: string }).error).toContain(reason);
-      }
-    });
-
-    it('allows a terminal for the FOLDER, which is the case it does apply to', async () => {
-      const account = await create('work', signedIn('claude-klaudiusz'));
-      // #820: this reached the REAL launcher and opened a Terminal on whoever ran the suite,
-      // sitting in a `cez-profiles-home-*` fixture that `afterEach` had already deleted. Inject
-      // the launcher instead — which also lets the assertion say what it means: `not.toBe(400)`
-      // passed whether the target was accepted OR the launcher blew up behind it.
-      const launched: Array<[string, string]> = [];
-      const app = makeApp({
-        openApp: async (target, path) => {
-          launched.push([target, path]);
-          return true;
-        },
-      });
-      const res = await apiRequest(app, `/api/v1/workspace/agent-profiles/${account.id}/open`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ file: 'folder', target: 'terminal' }),
-      });
-      expect(res.status).toBe(200);
-      expect(launched).toEqual([['terminal', account.path]]);
-    });
-
-    it('409s a file the agent has not written yet rather than reporting a false success', async () => {
-      const account = await create('work', signedIn('claude-klaudiusz'));
-      const res = await apiRequest(makeApp(), `/api/v1/workspace/agent-profiles/${account.id}/open`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ file: 'claude.user.memory' }),
-      });
-      expect(res.status).toBe(409);
-      expect(((await res.json()) as { error: string }).error).toContain('CLAUDE.md');
-    });
+  it('404s an unknown account, and a bare `default` that names no agent, on the status route', async () => {
+    for (const id of ['nope', 'default']) {
+      const { status, body } = await send('GET', `/api/v1/workspace/agent-profiles/${id}/status`);
+      expect(status, id).toBe(404);
+      expect(body.error).toBe(`unknown account: ${id}`);
+    }
   });
 
   describe('hosted mode (CEZ_REMOTE)', () => {
@@ -864,12 +616,10 @@ describe('agent profiles API', () => {
       expect(body).toMatchObject({ editable: false, profiles: [] });
     });
 
-    it('refuses the per-account reads — an email or a probe is host state a hosted client is not trusted with', async () => {
-      for (const read of ['status', 'details']) {
-        const { status, body } = await send('GET', `/api/v1/workspace/agent-profiles/default:claude/${read}`);
-        expect(status, read).toBe(409);
-        expect(body.error).toContain('hosted mode');
-      }
+    it('refuses the per-account status read — a probe is host state a hosted client is not trusted with', async () => {
+      const { status, body } = await send('GET', '/api/v1/workspace/agent-profiles/default:claude/status');
+      expect(status).toBe(409);
+      expect(body.error).toContain('hosted mode');
     });
 
     it('409s every mutator and persists nothing', async () => {
@@ -879,81 +629,12 @@ describe('agent profiles API', () => {
         ['DELETE', '/api/v1/workspace/agent-profiles/work', undefined],
         ['PUT', '/api/v1/workspace/agent-profiles/selection',
           { projectId: 'default', provider: 'claude', profileId: null }],
-        ['POST', '/api/v1/workspace/agent-profiles/default:claude/open', { file: 'folder' }],
       ] as const) {
         const { status, body } = await send(method, path, payload);
         expect(status, `${method} ${path}`).toBe(409);
         expect(body.error).toContain('hosted mode');
       }
       expect((await loadAgentAccounts(testHome())).accounts).toEqual([]);
-    });
-  });
-
-  /**
-   * The machine-wide default account (spec 2026-07-29-agent-profiles): `projectId: null` on the
-   * selection route, so a second login is set up once instead of per checkout.
-   */
-  describe('PUT selection — the machine-wide default', () => {
-    const put = (body: unknown) =>
-      send('PUT', '/api/v1/workspace/agent-profiles/selection', body);
-
-    it('writes a default with no project involved, and lists it back', async () => {
-      const { body: created } = await send('POST', '/api/v1/workspace/agent-profiles', {
-        provider: 'claude',
-        configDir: claudeDir('claude-klaudiusz'),
-      });
-      const { status, body } = await put({
-        projectId: null,
-        provider: 'claude',
-        profileId: created.profile.id,
-      });
-      expect(status).toBe(200);
-      expect((body as unknown as { defaults: Record<string, string> }).defaults)
-        .toEqual({ claude: created.profile.id });
-      // …and it rides on the listing every reader already fetches.
-      expect((await list()).defaults).toEqual({ claude: created.profile.id });
-      // It is a DEFAULT, so it must not have invented a per-repo selection on the way.
-      expect((await list()).selections).toEqual({});
-    });
-
-    it('stores a cleared default as ABSENCE, never the reserved id', async () => {
-      await send('POST', '/api/v1/workspace/agent-profiles', {
-        provider: 'claude',
-        configDir: claudeDir('claude-klaudiusz'),
-      });
-      await put({ projectId: null, provider: 'claude', profileId: 'claude-klaudiusz' });
-      const { body } = await put({ projectId: null, provider: 'claude', profileId: null });
-      expect((body as unknown as { defaults: Record<string, string> }).defaults).toEqual({});
-      expect(JSON.stringify(await loadAgentAccounts(testHome()))).not.toContain('"claude":"default"');
-    });
-
-    it('refuses an account that does not exist, exactly as the per-repo write does', async () => {
-      const { status, body } = await put({
-        projectId: null,
-        provider: 'claude',
-        profileId: 'nope',
-      });
-      expect(status).toBe(400);
-      expect(body.error).toContain('unknown claude account');
-    });
-
-    it('leaves a repo that has chosen alone — a default never overrules a choice', async () => {
-      const { body: work } = await send('POST', '/api/v1/workspace/agent-profiles', {
-        provider: 'claude',
-        configDir: claudeDir('claude-klaudiusz'),
-      });
-      const { body: other } = await send('POST', '/api/v1/workspace/agent-profiles', {
-        provider: 'claude',
-        label: 'Client',
-        configDir: claudeDir('claude-client'),
-      });
-      const project = await registerProject(repoRoot, undefined, testHome());
-      await put({ projectId: project.id, provider: 'claude', profileId: other.profile.id });
-      await put({ projectId: null, provider: 'claude', profileId: work.profile.id });
-
-      const listed = await list();
-      expect(listed.defaults).toEqual({ claude: work.profile.id });
-      expect(listed.selections[project.root]).toEqual({ claude: other.profile.id });
     });
   });
 
