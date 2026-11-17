@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { parse } from '@babel/parser';
 import type { Node } from '@babel/types';
 import { lineAt, repoRoot } from './source-rule.ts';
-import type { AstRule } from './ast-rule.ts';
-import { astChildren, deferredAstView, originalAt } from './ast-node-view.ts';
+import { child, children, stringOf, type AstRule, type EsNode, type Visitors } from './ast-rule.ts';
+import { eachChild, field, reportNode, scanSource } from './ast-tree.ts';
 
 /**
  * Shared parity rows run on one runner, and unit tests drive every other value of each turn-path
@@ -86,6 +86,7 @@ export function declaredFactKeys(read: (path: string) => string = path => readFi
 }
 
 let factKeys: Set<string> | undefined;
+// @babel/parser stays here: oxlint's in-process parser (RuleTester) resets a running lint, and this reads two files once per lint process (hearsay-tools/squawk#3806).
 const FACT_KEYS = () => (factKeys ??= declaredFactKeys());
 
 /** Property names and destructuring keys that make a function touch a fact source. */
@@ -94,158 +95,197 @@ const SOURCE_KEYS = new Set(['inputDelivery', 'facts', 'systemPromptOnResume']);
 const SOURCE_NAMES = new Set(['RUNNER_FACTS', 'inputDeliveryOf']);
 const SOURCE_TYPES = new Set(Object.keys(TYPE_FILES));
 
-const FUNCTION_TYPES = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression', 'ClassMethod', 'ClassPrivateMethod', 'ObjectMethod']);
-const CLASS_TYPES = new Set(['ClassDeclaration', 'ClassExpression']);
-
 /**
  * The static key of a member's property or a pattern's property: `a.b`, `a['b']`, `` a[`b`] ``,
  * `{ b }`, `{ 'b': c }`. A dynamic computed key is undefined.
  */
-function staticKey(key: Node, computed: boolean): string | undefined {
-  if (!computed && key.type === 'Identifier') return key.name;
-  if (key.type === 'StringLiteral') return key.value;
-  if (key.type === 'TemplateLiteral' && key.expressions.length === 0) return key.quasis[0]?.value.cooked ?? undefined;
-  return undefined;
+function staticKey(key: EsNode | undefined, computed: boolean): string | undefined {
+  if (!computed && key?.type === 'Identifier') return key.name as string;
+  if (key?.type === 'Literal') return typeof key.value === 'string' ? key.value : undefined;
+  return key?.type === 'TemplateLiteral' ? stringOf(key) : undefined;
 }
 
 /** The local names the file binds to a fact source: its imports (renamed or not, namespaces too)
  *  and its type aliases of a source type, so a renamed source is still a source. */
 interface Names { values: Set<string>; types: Set<string>; namespaces: Set<string> }
 
-function sourceNames(program: Extract<Node, { type: 'Program' }>): Names {
+/** A top-level statement, or the declaration an `export` wraps. */
+const declarationOf = (statement: EsNode): EsNode => statement.type === 'ExportNamedDeclaration' ? child(statement, 'declaration') ?? statement : statement;
+
+function sourceNames(program: EsNode): Names {
   const names: Names = { values: new Set(SOURCE_NAMES), types: new Set(SOURCE_TYPES), namespaces: new Set() };
-  for (const statement of program.body) {
+  const aliases: EsNode[] = [];
+  for (const statement of children(program, 'body')) {
+    const declaration = declarationOf(statement);
+    if (declaration.type === 'TSTypeAliasDeclaration') aliases.push(declaration);
     if (statement.type !== 'ImportDeclaration') continue;
-    for (const specifier of statement.specifiers) {
-      if (specifier.type === 'ImportNamespaceSpecifier') names.namespaces.add(specifier.local.name);
+    for (const specifier of children(statement, 'specifiers')) {
+      const local = child(specifier, 'local')?.name as string;
+      if (specifier.type === 'ImportNamespaceSpecifier') names.namespaces.add(local);
       if (specifier.type !== 'ImportSpecifier') continue;
-      const imported = specifier.imported.type === 'Identifier' ? specifier.imported.name : specifier.imported.value;
-      if (SOURCE_NAMES.has(imported)) names.values.add(specifier.local.name);
-      if (SOURCE_TYPES.has(imported)) names.types.add(specifier.local.name);
+      const imported = child(specifier, 'imported');
+      const name = imported?.type === 'Identifier' ? imported.name : imported?.value;
+      if (typeof name !== 'string') continue;
+      if (SOURCE_NAMES.has(name)) names.values.add(local);
+      if (SOURCE_TYPES.has(name)) names.types.add(local);
     }
   }
   // A local `type X = InputDelivery` (or one built on another alias) names a source type too.
+  const referenced = new Map(aliases.map(alias => [alias, typeNames(child(alias, 'typeAnnotation'))]));
   for (let grew = true; grew;) {
     grew = false;
-    for (const statement of program.body) {
-      const declaration = statement.type === 'ExportNamedDeclaration' && statement.declaration ? statement.declaration : statement;
-      if (declaration.type !== 'TSTypeAliasDeclaration' || names.types.has(declaration.id.name)) continue;
-      if (typeNames(declaration.typeAnnotation).some(name => names.types.has(name))) { names.types.add(declaration.id.name); grew = true; }
+    for (const [alias, used] of referenced) {
+      const name = child(alias, 'id')?.name as string;
+      if (names.types.has(name) || !used.some(type => names.types.has(type))) continue;
+      names.types.add(name);
+      grew = true;
     }
   }
   return names;
 }
 
 /** Every type name a type annotation references. */
-function typeNames(node: Node): string[] {
+function typeNames(node: EsNode | undefined): string[] {
   const found: string[] = [];
-  const visit = (current: Node) => {
+  const visit = (current: EsNode) => {
     if (current.type === 'TSTypeReference') found.push(typeRefName(current) ?? '');
-    for (const child of astChildren(current)) visit(child);
+    eachChild(current, visit);
   };
-  visit(node);
+  if (node) visit(node);
   return found;
 }
 
 /** The name a type reference uses: `T` or the right side of `ns.T`. */
-function typeRefName(node: Extract<Node, { type: 'TSTypeReference' }>): string | undefined {
-  if (node.typeName.type === 'Identifier') return node.typeName.name;
-  return node.typeName.type === 'TSQualifiedName' ? node.typeName.right.name : undefined;
+function typeRefName(node: EsNode): string | undefined {
+  const typeName = child(node, 'typeName');
+  if (typeName?.type === 'Identifier') return typeName.name as string;
+  return typeName?.type === 'TSQualifiedName' ? child(typeName, 'right')?.name as string | undefined : undefined;
 }
 
-type Contribution = { source: boolean; key?: string | undefined };
+interface Scope { node: EsNode; name: string; source: boolean; facts: Set<string>; children: Scope[] }
 
-/** A property read or destructuring key: a source when it names one, a fact when it names one. */
-function keyContribution(key: string | undefined, keys: Set<string>, namespaced = false): Contribution {
-  return { source: namespaced || (key !== undefined && SOURCE_KEYS.has(key)), key: key !== undefined && keys.has(key) ? key : undefined };
+/** A method signature with no body: an overload or an abstract method. It opens no scope. */
+function declaredMethod(node: EsNode): boolean {
+  return node.type === 'TSAbstractMethodDefinition' || (node.type === 'MethodDefinition' && child(node, 'value')?.type === 'TSEmptyBodyFunctionExpression');
 }
 
-/** What one node contributes: whether it touches a fact source, and the fact key it reads. */
-function inspect(node: Node, parent: Node | undefined, keys: Set<string>, names: Names): Contribution {
-  if (node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') {
-    const key = staticKey(node.property, node.computed);
-    const namespaced = node.object.type === 'Identifier' && names.namespaces.has(node.object.name) && key !== undefined && SOURCE_NAMES.has(key);
-    return keyContribution(key, keys, namespaced);
-  }
-  if (node.type === 'ObjectProperty' && parent?.type === 'ObjectPattern') return keyContribution(staticKey(node.key, node.computed), keys);
-  if (node.type === 'Identifier') return { source: names.values.has(node.name) };
-  if (node.type === 'TSTypeReference') {
-    const name = typeRefName(node);
-    return { source: name !== undefined && names.types.has(name) };
-  }
-  return { source: false };
+/** Whether `node` is a method's function: the method itself is the scope. */
+function methodValue(node: EsNode): boolean {
+  const owner = node.parent;
+  return !!owner && owner.value === node && (owner.type === 'MethodDefinition' || (owner.type === 'Property' && owner.method === true));
 }
 
-interface Scope { node: Node; name: string; source: boolean; facts: Set<string>; children: Scope[] }
+const CLASS_FIELDS = new Set(['PropertyDefinition', 'TSAbstractPropertyDefinition']);
 
 /** A function's own name: its id, its method key, or the binding or property that holds it. */
-function ownName(node: Node, parent: Node | undefined): string | undefined {
-  if ((node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression') && node.id) return node.id.name;
-  if ((node.type === 'ClassMethod' || node.type === 'ObjectMethod') && node.key.type === 'Identifier') return node.key.name;
-  if (node.type === 'ClassPrivateMethod') return `#${node.key.id.name}`;
-  if (parent?.type === 'VariableDeclarator' && parent.id.type === 'Identifier') return parent.id.name;
-  if ((parent?.type === 'ObjectProperty' || parent?.type === 'ClassProperty') && parent.key.type === 'Identifier') return parent.key.name;
-  return undefined;
+function ownName(node: EsNode): string | undefined {
+  const id = child(node, 'id');
+  if ((node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression') && id) return id.name as string;
+  const key = child(node, 'key');
+  if (node.type === 'MethodDefinition' || node.type === 'Property') {
+    if (key?.type === 'Identifier') return key.name as string;
+    return key?.type === 'PrivateIdentifier' && node.type === 'MethodDefinition' ? `#${key.name as string}` : undefined;
+  }
+  const parent = node.parent;
+  const held = parent?.type === 'VariableDeclarator' ? child(parent, 'id') : parent && ((parent.type === 'Property' && parent.method !== true) || CLASS_FIELDS.has(parent.type)) ? child(parent, 'key') : undefined;
+  return held?.type === 'Identifier' ? held.name as string : undefined;
 }
-
-/** Walk state: the open function scopes, the qualified-name path, and the module-level touch. */
-interface Walk { scopes: Scope[]; roots: Scope[]; path: string[]; seen: Map<string, number>; moduleSource: boolean; keys: Set<string>; names: Names }
 
 /**
- * A function's name qualified by its enclosing classes and functions (`Runner>settle>inner`), so
- * an exception names one function. An unnamed function or a repeated name is numbered in order.
+ * The visitors that find qualifying functions in one file. Each function is a scope, opened when
+ * oxlint enters it and closed when it leaves; a closed scope passes its reads to the one around it,
+ * so an outer function counts its nested callbacks. Imports bind names only: `sourceNames` reads
+ * them, so nothing inside an import counts.
  */
-function qualifiedName(state: Walk, own: string | undefined): string {
-  const base = [...state.path, own ?? '(anonymous function)'].join('>');
-  const count = (state.seen.get(base) ?? 0) + 1;
-  state.seen.set(base, count);
-  return count === 1 ? base : `${base}#${count}`;
-}
-
-/** The AST nodes directly under a node, in source order. */
-function childNodes(node: Node): Node[] {
-  return astChildren(node);
-}
-
-/** Open a function scope or a class name segment for a node; neither for any other node. */
-function enter(node: Node, parent: Node | undefined, state: Walk): { scope?: Scope | undefined; segment?: string | undefined } {
-  if (FUNCTION_TYPES.has(node.type)) {
-    const scope: Scope = { node, name: qualifiedName(state, ownName(node, parent)), source: false, facts: new Set(), children: [] };
-    (state.scopes.at(-1)?.children ?? state.roots).push(scope);
-    state.scopes.push(scope);
-    return { scope, segment: scope.name.split('>').at(-1) };
+function combinationVisitors(keys: () => Set<string>): { visitors: Visitors; scopes(): Scope[] } {
+  let names: Names = { values: new Set(), types: new Set(), namespaces: new Set() };
+  const open: Scope[] = [];
+  const roots: Scope[] = [];
+  const path: string[] = [];
+  const seen = new Map<string, number>();
+  let moduleSource = false;
+  let imports = 0;
+  /** A function's name qualified by its enclosing classes and functions (`Runner>settle>inner`); repeats are numbered in order. */
+  const qualifiedName = (own: string | undefined): string => {
+    const base = [...path, own ?? '(anonymous function)'].join('>');
+    const count = (seen.get(base) ?? 0) + 1;
+    seen.set(base, count);
+    return count === 1 ? base : `${base}#${count}`;
+  };
+  const credit = (source: boolean, key: string | undefined) => {
+    const scope = open.at(-1);
+    if (!scope) { if (source) moduleSource = true; return; }
+    if (source) scope.source = true;
+    if (key !== undefined && keys().has(key)) scope.facts.add(key);
+  };
+  const keyRead = (key: string | undefined, namespaced = false) => {
+    if (imports === 0) credit(namespaced || (key !== undefined && SOURCE_KEYS.has(key)), key);
+  };
+  const enter = (node: EsNode) => {
+    if (imports > 0 || methodValue(node) || declaredMethod(node) || (node.type === 'Property' && node.method !== true)) return;
+    const scope: Scope = { node, name: qualifiedName(ownName(node)), source: false, facts: new Set(), children: [] };
+    (open.at(-1)?.children ?? roots).push(scope);
+    open.push(scope);
+    path.push(scope.name.split('>').at(-1)!);
+  };
+  const leave = (node: EsNode) => {
+    const scope = open.at(-1);
+    if (scope?.node !== node) return;
+    open.pop();
+    path.pop();
+    const outer = open.at(-1);
+    if (!outer) return;
+    if (scope.source) outer.source = true;
+    for (const fact of scope.facts) outer.facts.add(fact);
+  };
+  const enterClass = (node: EsNode) => {
+    const parent = node.parent;
+    const held = parent?.type === 'VariableDeclarator' && child(parent, 'id')?.type === 'Identifier' ? child(parent, 'id')!.name as string : '(anonymous class)';
+    path.push((child(node, 'id')?.name as string | undefined) ?? held);
+  };
+  const identifier = (node: EsNode) => { if (imports === 0 && names.values.has(node.name as string)) credit(true, undefined); };
+  const visitors: Visitors = {
+    Program(node) { names = sourceNames(node); },
+    ImportDeclaration() { imports++; },
+    'ImportDeclaration:exit'() { imports--; },
+    ClassDeclaration: enterClass,
+    'ClassDeclaration:exit'() { path.pop(); },
+    ClassExpression: enterClass,
+    'ClassExpression:exit'() { path.pop(); },
+    MemberExpression(node) {
+      const key = staticKey(child(node, 'property'), node.computed === true);
+      const object = field(node, 'object');
+      keyRead(key, object?.type === 'Identifier' && names.namespaces.has(object.name as string) && key !== undefined && SOURCE_NAMES.has(key));
+    },
+    Property(node) {
+      enter(node);
+      if (node.parent?.type === 'ObjectPattern') keyRead(staticKey(child(node, 'key'), node.computed === true));
+    },
+    'Property:exit': leave,
+    Identifier: identifier,
+    // A private name reads as its identifier (`#RUNNER_FACTS`), as the rule always read it.
+    PrivateIdentifier: identifier,
+    TSTypeReference(node) {
+      const name = typeRefName(node);
+      if (imports === 0 && name !== undefined && names.types.has(name)) credit(true, undefined);
+    },
+  };
+  for (const type of ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression', 'MethodDefinition']) {
+    visitors[type] = enter;
+    visitors[`${type}:exit`] = leave;
   }
-  if (!CLASS_TYPES.has(node.type)) return {};
-  const id = (node as Extract<Node, { type: 'ClassDeclaration' }>).id;
-  const held = parent?.type === 'VariableDeclarator' && parent.id.type === 'Identifier' ? parent.id.name : '(anonymous class)';
-  return { segment: id?.name ?? held };
-}
-
-/** Credit what one node contributes to every open function scope, or to the module level. */
-function record(node: Node, parent: Node | undefined, state: Walk): void {
-  const { source, key } = inspect(node, parent, state.keys, state.names);
-  if (source && !state.scopes.length) state.moduleSource = true;
-  for (const open of state.scopes) {
-    if (source) open.source = true;
-    if (key) open.facts.add(key);
-  }
-}
-
-function walk(node: Node, parent: Node | undefined, state: Walk): void {
-  // An import binds names only; sourceNames resolves them, so the walk skips its subtree.
-  if (node.type === 'ImportDeclaration') return;
-  const { scope, segment } = enter(node, parent, state);
-  record(node, parent, state);
-  if (segment !== undefined) state.path.push(segment);
-  for (const child of childNodes(node)) walk(child, node, state);
-  if (segment !== undefined) state.path.pop();
-  if (scope) state.scopes.pop();
-}
-
-/** Every function that qualifies, outer functions included: their nested reads count for them. */
-function qualifying(scope: Scope, moduleSource: boolean, found: Scope[]): void {
-  if ((scope.source || moduleSource) && scope.facts.size >= 2) found.push(scope);
-  for (const child of scope.children) qualifying(child, moduleSource, found);
+  return {
+    visitors,
+    scopes() {
+      const found: Scope[] = [];
+      const qualifying = (scope: Scope) => {
+        if ((scope.source || moduleSource) && scope.facts.size >= 2) found.push(scope);
+        for (const nested of scope.children) qualifying(nested);
+      };
+      for (const root of roots) qualifying(root);
+      return found;
+    },
+  };
 }
 
 export interface FactCombination { name: string; line: number; facts: string[] }
@@ -253,19 +293,14 @@ export interface FactCombination { name: string; line: number; facts: string[] }
 export function factCombinations(source: string, keys: Set<string> = FACT_KEYS()): FactCombination[] {
   // A cheap pre-filter: a fact source is spelled by one of these words, or reached through a module import.
   if (!/RUNNER_FACTS|\bfacts\b|inputDelivery|systemPromptOnResume|RunnerFacts|\bimport\b/i.test(source)) return [];
-  const ast = parse(source, { sourceType: 'module', plugins: ['typescript'] });
-  return combinationScopes(ast.program, keys)
-    .map(scope => ({ name: scope.name, line: lineAt(source, scope.node.start ?? 0), facts: [...scope.facts].sort() }))
+  const scan = combinationVisitors(() => keys);
+  let found: Scope[] = [];
+  scanSource('file.ts', source, () => ({ ...scan.visitors, 'Program:exit'() { found = scan.scopes(); } }));
+  return found
+    .map(scope => ({ name: scope.name, line: lineAt(source, scope.node.start as number), facts: [...scope.facts].sort() }))
     .sort((a, b) => a.line - b.line || a.name.localeCompare(b.name));
 }
 
-function combinationScopes(program: Extract<Node, { type: 'Program' }>, keys: Set<string>): Scope[] {
-  const state: Walk = { scopes: [], roots: [], path: [], seen: new Map(), moduleSource: false, keys, names: sourceNames(program) };
-  walk(program, undefined, state);
-  const found: Scope[] = [];
-  for (const root of state.roots) qualifying(root, state.moduleSource, found);
-  return found;
-}
 /**
  * A reported function the rule lets pass, as `<file>#<function>`. `reason` says why. A real
  * combination also names `row`, `<family> <row>`: a registered parity row that runs the combination
@@ -291,12 +326,14 @@ export const runnerFactCombination: AstRule = {
   name: 'runner-fact-combination',
   description: 'A function above the runner seam that touches a fact source reads at most one declared runner fact key (hearsay-tools/cezarion#2991).',
   applies: file => /^packages\/cezar\/src\/workflows\/.+\.ts$/.test(file) && !isTest(file),
-  create: (report, { file }) => deferredAstView(name => SOURCE_KEYS.has(name) || SOURCE_NAMES.has(name) || SOURCE_TYPES.has(name), ast => {
-    if (ast.type !== 'Program') return;
-    for (const scope of combinationScopes(ast, FACT_KEYS())) {
+  create(report, { file }) {
+    const scan = combinationVisitors(FACT_KEYS);
+    return { ...scan.visitors, 'Program:exit'() {
+    for (const scope of scan.scopes()) {
       if (COMBINATION_ROWS[`${file}#${scope.name}`] !== undefined) continue;
-      report(originalAt(ast, scope.node.start ?? 0), `${scope.name} touches a runner fact source and reads ${[...scope.facts].sort().join(' and ')}. Shared parity rows run on one runner and unit tests drive each other fact value once, not each combination: `
+      report(reportNode(scope.node), `${scope.name} touches a runner fact source and reads ${[...scope.facts].sort().join(' and ')}. Shared parity rows run on one runner and unit tests drive each other fact value once, not each combination: `
         + 'split the function so each part reads one fact, or add it to COMBINATION_ROWS with a reason and, for a real combination, a parity row that runs on every runner (hearsay-tools/cezarion#2991).');
     }
-  }),
+    } };
+  },
 };
