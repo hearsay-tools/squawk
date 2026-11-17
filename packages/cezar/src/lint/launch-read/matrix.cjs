@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Regenerate with: node .ai/ast-grep/generate-launch-read-matrix.cjs
-// --check verifies the committed matrix without writing it.
+// Inspect counts with: node packages/cezar/src/lint/launch-read/matrix.cjs
+// The AST matrix tests evaluate this corpus in process.
 const { parse } = require('@babel/parser');
 
 const prefix = '/* launch-matrix:';
@@ -512,7 +512,7 @@ dimensions.modules = modules;
 dimensions.moduleSpecifiers = Object.keys(moduleSpecifiers);
 dimensions.moduleSpecifierWrappers = Object.keys(wrappers);
 dimensions.moduleLoaders = ['import', 'require'];
-// The corpus exists only in memory. The Vitest batch scan owns its executable proof.
+// The corpus exists only in memory. The AST matrix tests own its executable proof.
 module.exports = { generated, documentedLimits, dimensions };
 if (require.main === module) console.log(JSON.stringify({
   documentedLimitCount: documentedLimits.length,
