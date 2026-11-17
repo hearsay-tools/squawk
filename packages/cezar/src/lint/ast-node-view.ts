@@ -3,7 +3,7 @@ import { child, stringOf, type EsNode, type Visitors } from './ast-rule.ts';
 
 /**
  * A cached structural view for the existing typed AST engines (hearsay-tools/squawk#3774).
- * Oxlint owns parsing. This only translates ESTree field shapes, once per node, and never
+ * Oxlint owns parsing. This translates ESTree field shapes lazily, once per node, and never
  * reads source text. Parent links stay on the original nodes so recursive engines cannot cycle.
  */
 const views = new WeakMap<EsNode, Node>();
@@ -14,6 +14,38 @@ const isNode = (value: unknown): value is EsNode => typeof value === 'object' &&
 function fieldView(value: unknown): unknown {
   if (Array.isArray(value)) return value.length === 0 ? value : value.map(fieldView);
   return isNode(value) ? babelView(value) : value;
+}
+
+function needsChildView(value: unknown): boolean {
+  return isNode(value) || (Array.isArray(value) && value.some(item => isNode(item) || Array.isArray(item)));
+}
+
+/** Child fields materialize only when an engine reads them; scalar arrays stay shared. */
+function defineViewField(out: Record<string, unknown>, key: string, raw: unknown): void {
+  if (!needsChildView(raw)) {
+    out[key] = raw;
+    return;
+  }
+  const descriptor = { enumerable: true, configurable: true, writable: true };
+  Object.defineProperty(out, key, {
+    enumerable: true,
+    configurable: true,
+    get(this: Record<string, unknown>) {
+      const value = fieldView(raw);
+      Object.defineProperty(this, key, { ...descriptor, value });
+      return value;
+    },
+    set(this: Record<string, unknown>, value: unknown) {
+      Object.defineProperty(this, key, { ...descriptor, value });
+    },
+  });
+}
+
+/** Copy lazy descriptors, so merging a method never reads its function body. */
+function mergeMethodFields(out: Record<string, unknown>, value: EsNode): void {
+  const descriptors = Object.getOwnPropertyDescriptors(babelView(value));
+  delete descriptors.loc;
+  Object.defineProperties(out, descriptors);
 }
 
 function literalType(node: EsNode): string {
@@ -40,14 +72,26 @@ function optionalChainNode(node: EsNode): boolean {
   return false;
 }
 
+function isMethodDefinition(node: EsNode): boolean {
+  return node.type === 'MethodDefinition' || node.type === 'TSAbstractMethodDefinition';
+}
+
+function methodType(node: EsNode): string {
+  if (node.type === 'TSAbstractMethodDefinition' || child(node, 'value')?.type === 'TSEmptyBodyFunctionExpression') return 'TSDeclareMethod';
+  return child(node, 'key')?.type === 'PrivateIdentifier' ? 'ClassPrivateMethod' : 'ClassMethod';
+}
+
 function mapShape(out: Record<string, unknown>, node: EsNode, method: boolean): void {
   if (node.type === 'Literal') {
     out.type = literalType(node);
     if (node.regex && typeof node.regex === 'object') Object.assign(out, node.regex);
   }
   if (node.type === 'Property') out.type = method ? 'ObjectMethod' : 'ObjectProperty';
-  if (node.type === 'MethodDefinition') out.type = isNode(node.key) && node.key.type === 'PrivateIdentifier' ? 'ClassPrivateMethod' : 'ClassMethod';
-  if (node.type === 'PropertyDefinition') out.type = isNode(node.key) && node.key.type === 'PrivateIdentifier' ? 'ClassPrivateProperty' : 'ClassProperty';
+  if (isMethodDefinition(node)) out.type = methodType(node);
+  if (node.type === 'PropertyDefinition' || node.type === 'TSAbstractPropertyDefinition') {
+    out.type = child(node, 'key')?.type === 'PrivateIdentifier' ? 'ClassPrivateProperty' : 'ClassProperty';
+    if (node.type === 'TSAbstractPropertyDefinition') out.abstract = true;
+  }
   if ((node.type === 'CallExpression' || node.type === 'MemberExpression') && optionalChainNode(node)) out.type = `Optional${node.type}`;
   if (node.type === 'PrivateIdentifier') {
     out.type = 'PrivateName';
@@ -55,7 +99,7 @@ function mapShape(out: Record<string, unknown>, node: EsNode, method: boolean): 
   }
 }
 
-/** The same view is returned for every visit to an oxlint node. */
+/** The same shallow view is returned for every visit; child fields are memoized on first read. */
 export function babelView(node: EsNode): Node {
   const cached = views.get(node);
   if (cached) return cached;
@@ -68,11 +112,11 @@ export function babelView(node: EsNode): Node {
   const view = out as unknown as Node;
   views.set(node, view);
   originals.set(view, node);
-  const method = node.type === 'MethodDefinition' || (node.type === 'Property' && node.method === true);
-  if (method && isNode(node.value)) Object.assign(out, babelView(node.value));
+  const method = isMethodDefinition(node) || (node.type === 'Property' && node.method === true);
+  if (method && isNode(node.value)) mergeMethodFields(out, node.value);
   for (const key of Object.keys(node)) {
     if (key === 'parent' || key === 'tokens' || key === 'comments' || key === 'loc' || (method && key === 'value')) continue;
-    out[key] = key === 'range' ? node[key] : fieldView(node[key]);
+    defineViewField(out, key, node[key]);
   }
   // Oxlint inherits a lazy loc getter. Object.keys does not include it.
   Object.defineProperty(out, 'loc', { enumerable: false, get: () => node.loc });
