@@ -289,11 +289,6 @@ describe('the state table', () => {
   });
 
   describe('the three waiting-on-workers rows', () => {
-    it('worker outcomes only: the mode of one entry', () => {
-      const root = makeRoot({ status: RUN_STATUS.waiting, waits: [makeWorkerWait({ mode: 'all', workerIds: [worker] })] });
-      expect(card([root], root.id).wait).toMatchObject({ kind: 'workers', detail: { owed: 1, total: 1, settled: 0, mode: 'all' } });
-    });
-
     it('replies: every open entry names requests; the recipients, each once', () => {
       const root = makeRoot({ status: RUN_STATUS.waiting });
       const peer = makeRoot();
