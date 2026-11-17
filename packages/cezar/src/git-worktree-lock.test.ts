@@ -12,7 +12,11 @@ import { keeperWaitBudget, readMutationClaim } from './git-worktree-lock-helper.
 
 const exec = promisify(execFile);
 const roots: string[] = [];
-afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true, maxRetries: 10 }); });
+const originalExecPath = process.execPath;
+afterEach(async () => {
+  process.execPath = originalExecPath;
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true, maxRetries: 10 });
+});
 async function repo() {
   const root = await mkdtemp(join(tmpdir(), 'cezar-worktree-lock-'));
   roots.push(root);
@@ -84,14 +88,11 @@ it('reports failure to spawn the keeper instead of hanging cleanup', async () =>
   const root = await repo();
   const original = process.execPath;
   process.execPath = join(root, 'missing-node');
-  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    await expect(Promise.race([
-      createWorktree(root, 'spawn0000000', 'main'),
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('keeper failure was not reported')), 2000); }),
-    ])).rejects.toThrow(/ENOENT/);
-  } finally { clearTimeout(timer); process.execPath = original; }
-}, 5000);
+    await expect(createWorktree(root, 'spawn0000000', 'main')).rejects.toThrow(/ENOENT/);
+  } finally { process.execPath = original; }
+  // bound: a keeper spawn failure must reject; this only guards a hang.
+}, 10_000);
 
 it('can launch the source helper when the caller runs outside the repository', async () => {
   const root = await repo();

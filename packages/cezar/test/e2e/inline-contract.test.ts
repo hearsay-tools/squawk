@@ -70,7 +70,7 @@ test('no emitted file names the contract package by any specifier', async () => 
 
 test('the bundled contract ships declarations, not just JavaScript', async () => {
   const found = await referrers();
-  if (found.length === 0) return; // the guard above owns that failure
+  assert.ok(found.length > 0, 'no emitted file refers to the bundled contract');
 
   assert.ok(
     existsSync(join(dist, 'contract', 'index.js')),
@@ -96,7 +96,7 @@ test('the bundled contract ships declarations, not just JavaScript', async () =>
 
 test('a repointed declaration type-checks with skipLibCheck OFF', async () => {
   const declarations = (await referrers()).filter((r) => r.file.endsWith('.d.ts'));
-  if (declarations.length === 0) return;
+  assert.ok(declarations.length > 0, 'no declaration refers to the bundled contract');
 
   // `skipLibCheck` is on in every tsconfig here, which is precisely what hid the broken import.
   // The probe turns it off and imports each repointed module the way a consumer would.

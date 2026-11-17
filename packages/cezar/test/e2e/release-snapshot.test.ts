@@ -157,24 +157,6 @@ test('dry-run publish stamps every manifest, pins each sibling exact, and emits 
   }
 });
 
-test('OIDC without a token still forces a snapshot dry run', { timeout: 120_000 }, async () => {
-  const root = await makeFixture();
-  try {
-    await writeFile(join(root, 'github-output.txt'), '');
-    const { stdout } = await runScript(root, {
-      GITHUB_EVENT_NAME: 'push',
-      GITHUB_REF_NAME: 'main',
-      GITHUB_REPOSITORY: 'open-mercato/cezar',
-      GITHUB_RUN_NUMBER: '8',
-      ACTIONS_ID_TOKEN_REQUEST_URL: 'https://example.invalid/oidc',
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'fake-oidc',
-    });
-    assert.match(stdout, /forcing --dry-run/);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
 test('a missing NPM token forces a dry run instead of failing the job', { timeout: 120_000 }, async () => {
   const root = await makeFixture();
   try {
@@ -185,6 +167,8 @@ test('a missing NPM token forces a dry run instead of failing the job', { timeou
       GITHUB_REF_NAME: 'main',
       GITHUB_REPOSITORY: 'open-mercato/cezar',
       GITHUB_RUN_NUMBER: '8',
+      ACTIONS_ID_TOKEN_REQUEST_URL: 'https://example.invalid/oidc',
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'fake-oidc',
     });
     assert.match(stdout, /forcing --dry-run/);
     const output = await readFile(join(root, 'github-output.txt'), 'utf8');
@@ -254,41 +238,26 @@ test('a nightly re-run stamps the attempt onto the version so it cannot collide'
   }
 });
 
-test('the same schedule event without the channel request publishes nothing', { timeout: 60_000 }, async () => {
-  const root = await makeFixture();
-  try {
-    await writeFile(join(root, 'github-output.txt'), '');
-    await runScript(root, {
-      GITHUB_EVENT_NAME: 'schedule',
-      GITHUB_REF_NAME: 'main',
-      GITHUB_REPOSITORY: 'open-mercato/cezar',
-      GITHUB_RUN_NUMBER: '13',
-    });
-    assert.equal((await readPkg(root, 'packages', 'cezar')).version, '0.9.9');
-    assert.match(await readFile(join(root, 'github-output.txt'), 'utf8'), /^attempted=false$/m);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-test('a non-publishable event exits 0 without touching the manifests', { timeout: 60_000 }, async () => {
-  const root = await makeFixture();
-  try {
-    await writeFile(join(root, 'github-output.txt'), '');
-    await runScript(root, {
-      GITHUB_EVENT_NAME: 'push',
-      GITHUB_REF_NAME: 'feat/some-branch',
-      GITHUB_REPOSITORY: 'open-mercato/cezar',
-      GITHUB_RUN_NUMBER: '9',
-    });
-    assert.equal((await readPkg(root, 'packages', 'cezar')).version, '0.9.9');
-    assert.equal((await readPkg(root, 'packages', 'api-client')).version, '0.9.9');
-    const output = await readFile(join(root, 'github-output.txt'), 'utf8');
-    assert.match(output, /^attempted=false$/m);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
+for (const [event, ref] of [['schedule', 'main'], ['push', 'feat/some-branch']] as const) {
+  test(`a non-publishable ${event} event exits 0 without touching the manifests`, { timeout: 60_000 }, async () => {
+    const root = await makeFixture();
+    try {
+      await writeFile(join(root, 'github-output.txt'), '');
+      await runScript(root, {
+        GITHUB_EVENT_NAME: event,
+        GITHUB_REF_NAME: ref,
+        GITHUB_REPOSITORY: 'open-mercato/cezar',
+        GITHUB_RUN_NUMBER: '9',
+      });
+      assert.equal((await readPkg(root, 'packages', 'cezar')).version, '0.9.9');
+      assert.equal((await readPkg(root, 'packages', 'api-client')).version, '0.9.9');
+      const output = await readFile(join(root, 'github-output.txt'), 'utf8');
+      assert.match(output, /^attempted=false$/m);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
 
  test('pack-only produces snapshot archives without publishing or running lifecycle scripts', { timeout: 120_000 }, async () => {
   const root = await makeFixture();

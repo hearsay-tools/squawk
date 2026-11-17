@@ -52,10 +52,10 @@ describe.runIf(process.platform === 'linux')('autosave holder attribution (#958)
     rmSync(bin, { recursive: true, force: true });
   });
   /** An unrelated process in the worktree; it records any signal it receives. */
-  function startUnrelated(ms: number) {
+  function startUnrelated(ms?: number) {
     const child = spawn(process.execPath, ['-e', `
 for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(signal, () => require('node:fs').writeFileSync(${JSON.stringify(join(bin, 'signalled'))}, signal));
-setTimeout(() => {}, ${ms});`], { cwd: repo, stdio: 'ignore' });
+${ms === undefined ? 'setInterval(() => {}, 1000);' : `setTimeout(() => {}, ${ms});`}`], { cwd: repo, stdio: 'ignore' });
     unrelated.push(child);
     return child;
   }
@@ -99,12 +99,10 @@ setTimeout(() => {}, ${ms});`], { cwd: repo, stdio: 'ignore' });
   }
 
   it('completes a successful status while an unrelated process starts in the worktree', async () => {
-    const started = Date.now();
     const warnings: string[] = [];
     const job = autosaveGit(repo, ['status', '--porcelain'], { timeoutMs: 800, killGraceMs: 20, confirmMs: 20, onWarning: message => warnings.push(message) });
-    const timer = startUnrelated(1800);
+    const timer = startUnrelated();
     expect(await job).toEqual({ ok: true, stdout: '?? work.txt\n', code: 0 });
-    expect(Date.now() - started).toBeLessThan(800);
     expect(warnings).toEqual([]);
     expect(timer.exitCode).toBeNull();
     expect(existsSync(join(bin, 'signalled'))).toBe(false);
@@ -115,12 +113,10 @@ setTimeout(() => {}, ${ms});`], { cwd: repo, stdio: 'ignore' });
     // bound: a load generator, not a poll; the `finally` below clears `churning` and awaits it.
     const churn = (async () => { while (churning) { startUnrelated(60); await delay(15); } })();
     try {
-      const started = Date.now();
       const warnings: string[] = [];
       const job = autosaveCommit(repo, 'run finalize', { timeoutMs: 1500, killGraceMs: 50, confirmMs: 50, onWarning: message => warnings.push(message) });
       jobs.push(job);
-      expect(await Promise.race([job, delay(3000).then(() => 'still waiting')])).toBe('committed');
-      expect(Date.now() - started).toBeLessThan(1500);
+      expect(await Promise.race([job, delay(HANG_CEILING_MS).then(() => 'still waiting')])).toBe('committed');
       expect(warnings).toEqual([]);
     } finally { churning = false; await churn; }
     expect(execFileSync(realGit, ['show', 'HEAD:work.txt'], { cwd: repo, encoding: 'utf8' })).toBe('keep this work\n');

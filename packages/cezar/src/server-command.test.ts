@@ -79,16 +79,6 @@ describe('serverCommand', () => {
     expect(process.exitCode).toBeUndefined();
   });
 
-  it('reports a missing platform without selecting a strategy, even when an install remembers one', async () => {
-    const f = fixture();
-    f.modules.loadServerState.mockReturnValue({ installed: true, platform: 'ubuntu-vps' });
-    await serverCommand('install', f.home, '/repo', undefined, { yes: true }, f.deps as unknown as typeof defaultServerCommandDeps);
-    expect(f.output.error).toHaveBeenCalledExactlyOnceWith('--platform is required. Valid platforms: ubuntu-vps, macosx-ngrok');
-    expect(process.exitCode).toBe(1);
-    expect(f.modules.getStrategy).not.toHaveBeenCalled();
-    expect(f.modules.runInstall).not.toHaveBeenCalled();
-  });
-
   it('reports an unknown platform and retains the valid-platform list', async () => {
     const f = fixture();
     f.modules.getStrategy.mockReturnValue(undefined);
@@ -130,12 +120,16 @@ describe('serverCommand', () => {
     expect(process.exitCode).toBe(0);
   });
 
-  it.each(['deploy', 'uninstall'] as const)('requires a platform when %s has no remembered platform', async (mode) => {
+  it.each([
+    ['install', true], ['deploy', false], ['uninstall', false],
+  ] as const)('requires a platform for %s (remembered: %s)', async (mode, remembered) => {
     const f = fixture();
-    await serverCommand(mode, f.home, '/repo', undefined, { yes: false }, f.deps as unknown as typeof defaultServerCommandDeps);
+    if (remembered) f.modules.loadServerState.mockReturnValue({ installed: true, platform: 'ubuntu-vps' });
+    await serverCommand(mode, f.home, '/repo', undefined, { yes: remembered }, f.deps as unknown as typeof defaultServerCommandDeps);
     expect(process.exitCode).toBe(1);
-    expect(f.output.error).toHaveBeenCalledWith('--platform is required. Valid platforms: ubuntu-vps, macosx-ngrok');
+    expect(f.output.error).toHaveBeenCalledExactlyOnceWith('--platform is required. Valid platforms: ubuntu-vps, macosx-ngrok');
     expect(f.modules.getStrategy).not.toHaveBeenCalled();
+    expect(f.modules.runInstall).not.toHaveBeenCalled();
   });
 
   it('prompts for a second instance only after finding an installed cockpit', async () => {

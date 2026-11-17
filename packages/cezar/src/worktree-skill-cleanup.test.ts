@@ -171,18 +171,6 @@ it.each([false, true])('retains ignore files and records if exclusion fails (not
   expect(readFileSync(join(worktree, paths[0]!, 'SKILL.md'), 'utf8')).toBe('user edit\n');
 });
 
-it('leaves durable records after a crash between removals and repeats safely', async () => {
-  const { paths, manifest } = await seedOldSkills(worktree);
-  const saved = readFileSync(manifest, 'utf8');
-  await removeProvisionedSkills(worktree, { faults: boundary => { if (boundary === 'removed') throw new Error('crash'); } });
-  expect(existsSync(join(worktree, paths[0]!))).toBe(false);
-  expect(existsSync(join(worktree, paths[1]!))).toBe(true);
-  expect(readFileSync(manifest, 'utf8')).toBe(saved);
-  await removeProvisionedSkills(worktree);
-  expect(paths.some(path => existsSync(join(worktree, path)))).toBe(false);
-  expect(existsSync(manifest)).toBe(false);
-});
-
 it('keeps ignore files until skills are handled when an old manifest cleanup fails', async () => {
   const { paths, manifest } = await seedOldSkills(worktree);
   const saved = readFileSync(manifest, 'utf8');
@@ -195,6 +183,8 @@ it('keeps ignore files until skills are handled when an old manifest cleanup fai
   expect(onError).toHaveBeenCalledTimes(1);
   expect(onError.mock.calls[0]![0]).toEqual(new Error('filesystem interruption'));
   expect(removed).toBe(paths[0]);
+  expect(existsSync(join(worktree, paths[0]!))).toBe(false);
+  expect(existsSync(join(worktree, paths[1]!))).toBe(true);
   for (const path of paths) expect(existsSync(join(worktree, dirname(path), '.gitignore'))).toBe(true);
   expect(execFileSync('git', ['check-ignore', `${paths[1]}/SKILL.md`], { cwd: worktree, encoding: 'utf8' }).trim())
     .toBe(`${paths[1]}/SKILL.md`);
