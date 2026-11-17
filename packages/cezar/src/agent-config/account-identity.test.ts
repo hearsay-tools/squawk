@@ -56,14 +56,13 @@ describe('readAccountIdentity', () => {
         oauthToken: 'token-should-not-surface',
       });
       const identity = await readAccountIdentity('claude', dir);
-      expect(identity.available).toBe(true);
-      expect(identity.fields).toEqual([
+      expect(identity).toEqual({ available: true, fields: [
         { label: 'Email', value: 'me@example.com' },
         { label: 'Name', value: 'Me' },
         { label: 'Organization', value: "Me's Organization" },
         { label: 'Role', value: 'admin' },
         { label: 'Seat', value: 'max' },
-      ]);
+      ] });
     });
 
     it('omits a row the vendor left blank rather than rendering an empty one', async () => {
@@ -100,12 +99,11 @@ describe('readAccountIdentity', () => {
         },
       });
       const identity = await readAccountIdentity('codex', dir);
-      expect(identity.available).toBe(true);
-      expect(identity.fields).toEqual([
+      expect(identity).toEqual({ available: true, fields: [
         { label: 'Email', value: 'me@example.com' },
         { label: 'Name', value: 'Me' },
         { label: 'Plan', value: 'pro' },
-      ]);
+      ] });
     });
 
     it('names an API-key login instead of calling it "not signed in"', async () => {
