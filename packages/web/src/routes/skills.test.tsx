@@ -78,7 +78,7 @@ it('invalidates equivalent explicit-account lists after re-reading the project d
 it('starts a task with the open skill on the selected runner, and filters across groups', async () => {
   mount()
   await waitFor(() => expect(document.querySelectorAll('[data-slot="skill-row"]')).toHaveLength(2))
-  const start = document.querySelector('[data-skill-path=".agents/skills/check/SKILL.md"] [data-slot="skill-start-task"]')
+  const start = document.querySelector('[data-skill-path=".agents/skills/check/SKILL.md"] [data-action="start-task"]')
   expect(start?.textContent).toBe('Start task')
   expect(start?.getAttribute('href')).toBe('/new?skill=plugin%3Acheck&skillPath=.agents%2Fskills%2Fcheck%2FSKILL.md&runner=codex')
   fireEvent.change(screen.getByLabelText('Search skills'), { target: { value: 'user copy' } })

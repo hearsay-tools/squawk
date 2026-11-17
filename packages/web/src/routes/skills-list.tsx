@@ -63,8 +63,8 @@ export function SkillGroups({ groups, openId, searching, runner, account }: {
   return (
     <div data-slot="skills-list" className="overflow-hidden rounded-xl border border-border bg-card">
       {groups.map((group) => {
-        // A search shows every match; a link opens the group that holds its skill.
-        const open = searching || !folded.has(group.key) || group.skills.some((skill) => skill.id === openId)
+        // Groups start open, so a `?skill=` link finds its row; a search shows every match.
+        const open = searching || !folded.has(group.key)
         return (
           <section key={group.key} data-slot="skill-group" aria-label={group.label} className="border-border not-first:border-t">
             <GroupHeader group={group} open={open} onToggle={() => toggle(group.key)} />
@@ -106,7 +106,7 @@ function SkillRow({ skill, open, runner, account }: { skill: RunnerSkill; open: 
       </summary>
       <div className="pr-3.5 pb-4 pl-9">
         <SkillDetailBody skill={skill} heading={null} actions={
-          <Button asChild size="sm" data-slot="skill-start-task">
+          <Button asChild size="sm" data-action="start-task">
             <Link to={start}>Start task</Link>
           </Button>
         } />

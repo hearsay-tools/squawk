@@ -98,13 +98,13 @@ function SkillNotices({ query }: { query: ReturnType<typeof useRunnerSkills> }) 
     <div className="grid gap-1.5 rounded-lg border border-pending/40 bg-pending/10 px-3.5 py-2.5 text-[13px]">
       {query.unchecked && !query.isPending ? (
         <p role="status" className="flex gap-2">
-          <TriangleAlertIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-pending" />
+          <TriangleAlertIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-pending-strong" />
           <span>Skill list unavailable. {query.list?.reason ?? query.error?.message} You can still type a skill id when starting a task.</span>
         </p>
       ) : null}
       {problems.map((problem, index) => (
         <p role="alert" key={index} className="flex gap-2 break-words">
-          <TriangleAlertIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-pending" />
+          <TriangleAlertIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-pending-strong" />
           <span>{problem.message}{problem.path ? ` · ${problem.path}` : ''}</span>
         </p>
       ))}

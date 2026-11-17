@@ -42,7 +42,8 @@ function DetailField({ label, children }: { label: string; children: ReactNode }
 }
 
 function CopyValue({ value, label, slot }: { value: string; label: string; slot?: string }) {
-  const copy = () => navigator.clipboard.writeText(value).then(
+  // `navigator.clipboard` is missing outside a secure context; report that like a failed write.
+  const copy = () => Promise.resolve().then(() => navigator.clipboard.writeText(value)).then(
     () => toast('Copied.'),
     (error: unknown) => toast(error instanceof Error ? error.message : String(error), { tone: 'danger' }),
   )
