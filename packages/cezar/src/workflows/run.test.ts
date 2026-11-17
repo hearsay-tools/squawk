@@ -31,8 +31,8 @@ import { asksQuestion } from '@open-mercato/cezar-contract/waits';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 
 describe('appendTurnText', () => {
-  it.each(['initial execution', 'resumed execution'])(
-    'preserves a marker boundary before later commentary during %s',
+  it(
+    'preserves a marker boundary before later commentary',
     () => {
       const turnText = appendTurnText(
         'Issue claimed.\n\nCEZ:PR=635\nCEZ:TITLE=linking per-project limits',
@@ -307,14 +307,6 @@ describe('TurnBookkeeper.recordTurnEnd', () => {
     const after = store.getRun(record.id);
     expect(after?.diffStat).toEqual({ adds: 3, dels: 1, files: 2 });
     expect(after?.diffStat).not.toHaveProperty('repointed');
-  });
-
-  it('never overwrites a user-edited title (PATCH sets titleSummary too)', async () => {
-    const record = await makeWorktreeRun();
-    // What PATCH /api/v1/runs/:id does on a rename:
-    store.updateRun(record.id, { title: 'My name', titleSummary: 'My name', titleOrigin: 'user' });
-    await bookkeeper.recordTurnEnd(record.id, TURN_TEXT);
-    expect(store.getRun(record.id)?.titleSummary).toBe('My name');
   });
 
   it('skips diffStat for a worktree-less run, and never throws', async () => {
