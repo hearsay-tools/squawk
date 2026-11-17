@@ -26,8 +26,8 @@ command, it fails closed, and it does not depend on which tests a change selects
 
 5. **Unit wait discipline** (M07): `cez/test-wait-discipline` reads server test and testkit files
    with a 10 s floor; `cez/unit-wait-discipline` reads cockpit unit tests with a 3 s floor.
-   Both are AST rules that keep the forms the text scanners they replaced read: the matrix in
-   `lint/wait-matrix.test.ts` checks them against what those scanners reported on 76,128
+   Both are AST rules that keep the forms the text scanners they replaced read: the matrix tests in
+   `lint/wait-matrix-<profile>.test.ts` (one file per profile) check them against what those scanners reported on 83,688
    generated cells (`lint/wait-matrix.oracle.json`, written by `scripts/record-wait-oracle.ts`).
    Both use `lint/wait-baseline.ts` for the same shrink-only ratchet. The runner checks stale
    entries in the three baselines and the server scan scope. It reads only the files a baseline
@@ -444,7 +444,7 @@ looped case). **Moved** cases now run in `npm run lint`; the scanner's fixture c
 | Active-run map ownership (M04) | `packages/cezar/src/workflows/run-active-pin.test.ts` (removed) | 2 ownership scans replaced by `cez/active-run-map-write`; call-presence scan retired (hearsay-tools/cezarion#2419) | Harness parity R48 runs execute and Continue, checks active pins and release from memory |
 | Shared run-fact readers (M05) | `packages/cezar/src/run-fact-readers.test.ts` | 2: no finding; every listed reader still reads | 27 scanner cases |
 | Run-history readers (M06) | `packages/cezar/src/runs/history-readers.test.ts` | 1: no raw transcript path outside its owners | The adapted predicate fixture and both compression/reopen behavior cases; new lint fixtures pin helpers, dynamic paths, fixed strings, comments and stale exceptions |
-| Unit wait discipline (M07) | `packages/cezar/src/test-wait-discipline.test.ts`, `packages/web/src/test/unit-wait-discipline.test.ts` | 4: server scope, two server baseline checks, cockpit baseline check; the reads-to-end check went with the text scanner (oxlint reports a file that does not parse) | 91 server fixtures; 79 cockpit fixtures moved to `packages/cezar/src/lint/unit-wait-discipline.test.ts`; both now lint through oxlint, and `lint/wait-matrix.test.ts` adds 76,128 oracle cells; host `asyncUtilTimeout` test stays in web |
+| Unit wait discipline (M07) | `packages/cezar/src/test-wait-discipline.test.ts`, `packages/web/src/test/unit-wait-discipline.test.ts` | 4: server scope, two server baseline checks, cockpit baseline check; the reads-to-end check went with the text scanner (oxlint reports a file that does not parse) | 91 server fixtures; 79 cockpit fixtures moved to `packages/cezar/src/lint/unit-wait-discipline.test.ts`; both now lint through oxlint, and `lint/wait-matrix-<profile>.test.ts` add the oracle cells; host `asyncUtilTimeout` test stays in web |
 | Design guardian (M09) | `packages/web/src/design-guardian.test.ts` | 11: ten per-file rules and status stylesheet ownership; walker replaced by discovery fixtures (see per-case inventory below) | Two named-content cases (Poppins license, reserved purple); fill-accent spelling fixture moved beside the scanner |
 | Card-2 contrast (M10) | `packages/web/src/test/card-2-contrast.test.ts`, now `packages/cezar/src/lint/card-2-contrast.test.ts` | 1: no new unsafe small-text site or stale baseline entry | 20 scanner fixture cases; static classes only, dynamic styling still needs browser evidence |
 | Environment-name documentation (M11) | `packages/cezar/src/env-example.test.ts` | 1: every `CEZ_*` name documented | 4 scanner cases |

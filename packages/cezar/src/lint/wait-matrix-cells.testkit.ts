@@ -1,7 +1,7 @@
 /**
  * The wait-rule matrix (hearsay-tools/squawk#3774, slice 6b). Each cell is one test file that
- * waits in one way. `wait-matrix.oracle/*.json` holds what the text scanners of main
- * a78d9e79e reported for every cell, and `wait-matrix.test.ts` checks the oxlint rules against
+ * waits in one way. `wait-matrix.oracle.json` holds what the text scanners of main
+ * a78d9e79e reported for every cell, and `wait-matrix-<profile>.test.ts` check the oxlint rules against
  * it. The cells cross six axes:
  *
  * - the wait: sleeps, promised timers, Vitest waits, Testing Library waits, wait helpers, poll loops;
@@ -377,12 +377,19 @@ function crossAxes(add: Add, values: Value[], few: Value[], fewSources: Source[]
   for (const wrapper of WRAPPERS.slice(1)) for (const wait of WAITS) add('wrapper', wait, local!, commentValues[0]!, 'date', COMMENTS[0], wrapper);
 }
 
-/** Every cell, by oracle file: the server and cockpit profiles in full, their second file type with the reduced cross. */
-export function matrixCells(): Record<string, Cell[]> {
-  return {
-    server: profileCells(PROFILES.server, { full: true }),
-    serverkit: profileCells(PROFILES.serverkit, { full: false }),
-    cockpit: profileCells(PROFILES.cockpit, { full: true }),
-    cockpitts: profileCells(PROFILES.cockpitts, { full: false }),
-  };
+const PLANS: Record<string, [Profile, boolean]> = {
+  server: [PROFILES.server, true],
+  serverkit: [PROFILES.serverkit, false],
+  cockpit: [PROFILES.cockpit, true],
+  cockpitts: [PROFILES.cockpitts, false],
+};
+
+/** One profile's cells, by oracle entry: the server and cockpit profiles in full, their second file type with the reduced cross. */
+export function matrixProfile(name: string): Cell[] {
+  const plan = PLANS[name];
+  if (!plan) throw new Error(`no matrix profile ${name}`);
+  return profileCells(plan[0], { full: plan[1] });
 }
+
+/** Every cell, by oracle entry. */
+export const matrixCells = (): Record<string, Cell[]> => Object.fromEntries(Object.keys(PLANS).map(name => [name, matrixProfile(name)]));
