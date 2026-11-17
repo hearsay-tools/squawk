@@ -7,7 +7,7 @@ each slice changes. Baseline: `main` at `6674cbeda`, after the Cursor removal
 (hearsay-tools/squawk#3725). The probe reports are in
 [`.ai/analysis/2026-11-16-runner-native-skills/`](../analysis/2026-11-16-runner-native-skills/).
 
-Seven slices, one pull request each. Slice 3 is cut in two (3a and 3b) after the check against `main` at `caf0e3eaa`. Delete this file when slice 5 merges.
+Eight slices, one pull request each. Slice 3 is cut in two (3a and 3b) after the check against `main` at `caf0e3eaa`. Delete this file when slice 5b merges.
 
 ## Order
 
@@ -19,7 +19,8 @@ Seven slices, one pull request each. Slice 3 is cut in two (3a and 3b) after the
 | 2. Trigger seam | slice 1 | Both edit the five adapter files and the mock wires |
 | 3a. Switch the server and run path | slices 2 and R | It needs both seams, and it stops reading `.ai/skills/` |
 | 3b. Switch the cockpit | slice 3a | It reads the route that 3a adds, and removes the old routes |
-| 5. Removal | slices 3b and 4 | It deletes what slice 3 stops using and the built-in skill that slice 4 replaces |
+| 5a. Remove the old code | slices 3b and 4 | It deletes what slice 3 stops using and the built-in skill that slice 4 replaces |
+| 5b. Docs and ADR | slice 5a | It describes the model that 5a leaves |
 
 The five adapter files (`packages/cezar/src/core/{claude-cli,codex-app-server,opencode-server,pi,omp}-runner.ts`),
 the mock wires in `packages/cezar/scripts/` and `core/runner-facts.ts` are hot files for slices
@@ -351,35 +352,75 @@ runner, and an enable without the explicit argument is refused.
 
 ## Slice 5: removal
 
-**Goal:** delete what the switch stopped using, and record the decision.
+**Goal:** delete what the switch stopped using, and record the decision. It lands as two pull
+requests, after a check against `main` at `e50c45c72`:
 
-- Delete: `skills-remote.ts`, `skills-provision.ts`, `server/skill-sources.ts`,
-  `discoverSkills` and `SKILL_DIRS` in `skills.ts`, `skillSystemPrompt` and the `/name`
-  expansion in `workflows/run/prompts.ts`, `automations/builtin-skill.ts`, the `skillsRepos`
-  schema in `config.ts`, `disabledTeamSkills` in `packages/contract/src/workspace.ts`,
-  `packages/contract/src/skill-sources.ts` and `team-skill-ref.ts`, their api-client mirrors,
-  the `interactive` hint, `components/skill-empty-hint.tsx` and the two oxlint AST rules
-  `cez/skills-read-outside-enabled-skills` and
-  `cez/skills-write-outside-load-run-skills`. The AST rule
-  `cez/active-run-skills-write-outside-owner` stays: slice 3a changes what the `ActiveRun` skills
-  group holds and updates its metadata in `packages/cezar/src/lint/active-run-write.ts`. Check the
-  rules' current form first: hearsay-tools/squawk#3775 started porting YAML rules to oxlint.
+- **5a, code (`!` in the title).** Every bullet below except "Docs". `main` stays usable: 5a
+  removes code that nothing calls, and its one runtime change, the worktree cleanup, removes
+  only unchanged skills that an older Squawk installed.
+- **5b, docs.** The "Docs" bullet. It follows 5a at once, because the docs then describe a
+  model that is gone.
+
+Code (5a):
+
+- Delete: `skills-remote.ts`, `skills-provision.ts` (after the move below),
+  `server/skill-sources.ts` (still mounted in `server/server.ts`), `discoverSkills`,
+  `SKILL_DIRS` and `fallbackSkillPath` in `skills.ts` (with its only reader in
+  `project-commands.ts`), `skillSystemPrompt` and `expandRegistrySlashSkillText` in
+  `workflows/run/prompts.ts` and their re-export in `workflows/run.ts`,
+  `automations/builtin-skill.ts`, `CREATE_AUTOMATION_SKILL_NAME` and
+  `createAutomationSkillBody` in `automations/prompts.ts` (and their test), the
+  `create-automation` prompt template in `packages/web/src/lib/prompt-templates.ts`, the
+  `skillsRepos` schema in `config.ts` and its help text in `cli-dispatch.ts`,
+  `disabledTeamSkills` in `packages/contract/src/workspace.ts` and `ui-state.ts`,
+  `packages/contract/src/skill-sources.ts`, `team-skill-ref.ts`, their api-client mirrors,
+  `web/api/skill-sources-client.ts` if 3b left it, the `interactive` field
+  (`contract/src/skills.ts`, `skills.ts`), `components/skill-empty-hint.tsx` and its readers,
+  and the team entries in `web/lib/skill-groups.ts`.
+- Keep `leadingSlashSkillName` in `prompts.ts`: `launch-context.ts`,
+  `continuation-session.ts` and `native-skill-input-queue.ts` read it.
+- Keep the session's saved list and its two oxlint rules. Slice 3a kept `state.skills.catalog`,
+  `loadRunSkills` and `enabledSkills` and made them hold the runner's list, and carried
+  `cez/skills-read-outside-enabled-skills` and `cez/skills-write-outside-load-run-skills`
+  (`lint/owner-state-rules.ts`, `lint/owner-policies.ts`) on purpose as owner and reader guards.
+  Rewrite their messages, which still cite the old off-list (hearsay-tools/cezarion#1494). The
+  rule `cez/active-run-skills-write-outside-owner` stays too.
+- `cez/launch-read-outside-resolver` (`lint/launch-read-outside-resolver.ts`,
+  `lint/launch-read/matrix.cjs`, `cases.json`) lists `discoverSkills`, `getTeamSkillsCached`,
+  `readDisabledTeamSkills`, `filterDisabledTeam*` and `disabledTeamSkills`: remove those rows.
 - Move first, then delete: `agent-config/seed.ts` uses `excludeFromGit` and
   `worktree-manifest.ts` uses `landsInside`, both from `skills-remote.ts`. Move the two
   helpers to a module that stays.
 - `project-commands.ts` (`hsq init`): stop writing the starter skill
   `project-conventions.md` into the project's `skills/` folder. Keep the starter workflow.
-- Keep one small piece: the cleanup of what an older Squawk installed in task worktrees
-  (`removeProvisionedSkills` and the `skills` writer of `worktree-manifest.ts`). It runs at the
-  first step open or Continue after the upgrade, as the spec's worktree case table says.
+- Move and wire the worktree cleanup. `removeProvisionedSkills` (`skills-provision.ts`) has no
+  product caller today, only its test. Move it and `PROVISION_IGNORE_MARK` with the `skills`
+  writer of `worktree-manifest.ts` into a small module that stays, and call it at step open and
+  at Continue, as the spec's worktree case table says. Rename the file entry of the
+  `worktree-write-outside-manifest` policy (`lint/owner-policies.ts`). Until 5a lands, an old
+  worktree keeps the skills an older Squawk copied into it, and the runners list them.
 - Saved data: a `config.json` with `skillsRepos` and a `ui-state.json` with
-  `disabledTeamSkills` still load; the keys are ignored. Add one test for each file.
-- Docs: rewrite `docs/areas/skills.md`; add an ADR that supersedes ADR 0023; update
-  `README.md`, `docs/configuration.md`, `docs/migration.md` and `AGENT_PROTOCOL.md`; one line
-  under Breaking in `CHANGELOG.md`; mark spec 005 as superseded by the runner-native spec and
-  set that spec to `Status: done`.
+  `disabledTeamSkills` still load; the keys are ignored. The schemas already drop unknown keys,
+  so add one test for each file and no schema code.
+- Leave `cezar_automation` and the rest of `automations/prompts.ts` alone: the owner's follow-up
+  hearsay-tools/squawk#3764 changes them. The two share only `automations/prompts.ts`, its
+  test and `docs/areas/automations.md`; neither has to go first.
 - Close as superseded: hearsay-tools/squawk#1119, hearsay-tools/squawk#1539 and
   hearsay-tools/squawk#1439.
 
-**Done when** `git grep` finds no reader of the deleted modules, a project with the old keys
-in its saved files boots, and a worktree with old installed skills is cleaned at its next step.
+Docs (5b):
+
+- Rewrite `docs/areas/skills.md`. Add ADR 0066 that supersedes ADR 0023.
+- Update `README.md`, `docs/configuration.md`, `docs/migration.md`,
+  `docs/areas/automations.md` and `docs/areas/workflows.md` (it names `.ai/skills` as a
+  source). In `AGENT_PROTOCOL.md` §6, add the list call, the trigger and the facts
+  `skillTriggerMidTurn`, `skillUnknownName` and `skillsSeenBySession`.
+- One line under Breaking in `CHANGELOG.md` for the whole switch (slices 3a, 3b and 5a), unless
+  3b already added one.
+- Mark spec 005 (`.ai/specs/005-remote-skills.md`) superseded by the runner-native spec, set
+  that spec to `Status: done`, and delete this plan.
+
+**Done when** (5a) `git grep` finds no reader of the deleted modules, a project with the old
+keys in its saved files boots, and a worktree with old installed skills is cleaned at its next
+step or Continue; (5b) the docs describe only the runner-native model, ADR 0066 supersedes ADR
+0023, the spec is `Status: done` and this plan is gone.
