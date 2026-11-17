@@ -9,13 +9,14 @@ import { CenteredState } from '@/components/centered-state'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { SettingsField } from './settings-field'
-import { WorktreeSetupField } from './worktree-setup-field'
+import { WORKTREE_COMMANDS_COPY, WorktreeCommandsField } from './worktree-commands-field'
 import { ChevronRightIcon } from '@/components/design-icons'
 import { Link } from '@/lib/project-router'
 
 /**
  * Project settings → Worktrees: configuration only — the retention count (#483), the commands
- * that prepare a new worktree (#917), and a link to Git → Cleanup, where the worktrees on disk
+ * that prepare a new worktree (#917), the commands that stop a worker's services before destroy
+ * (hearsay-tools/squawk#914), and a link to Git → Cleanup, where the worktrees on disk
  * are listed and reclaimed (issue 06 §3 moved the panel there, so it is listed once).
  *
  * It stayed PROJECT-scoped when step 3.5 split Settings (spec §"Resource governance"): retention
@@ -134,7 +135,8 @@ function WorktreesForm({ config }: { config: ConfigResponse }) {
         )}
       </SettingsField>
 
-      <WorktreeSetupField config={config} />
+      <WorktreeCommandsField config={config} copy={WORKTREE_COMMANDS_COPY.setup} />
+      <WorktreeCommandsField config={config} copy={WORKTREE_COMMANDS_COPY.teardown} />
 
       <Link
         to="/git/cleanup"

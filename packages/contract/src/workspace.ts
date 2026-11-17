@@ -381,6 +381,12 @@ export const configResponseSchema = z.object({
   worktreeSetup: z.object({ commands: z.array(z.string()), timeoutSeconds: z.number() }).nullable(),
   /** Why `config.json`'s `worktreeSetup` is invalid; null when it is valid or absent. */
   worktreeSetupIssue: z.string().nullable(),
+  /** Worktree teardown (hearsay-tools/squawk#914): the commands worker destroy runs in the worker's
+   *  worktree before it looks for holders, with the timeout filled in. null = no teardown, or an
+   *  invalid value (then `worktreeTeardownIssue` says why). */
+  worktreeTeardown: z.object({ commands: z.array(z.string()), timeoutSeconds: z.number() }).nullable(),
+  /** Why `config.json`'s `worktreeTeardown` is invalid; null when it is valid or absent. */
+  worktreeTeardownIssue: z.string().nullable(),
 });
 export type ConfigResponse = z.infer<typeof configResponseSchema>;
 
@@ -421,6 +427,9 @@ export const setConfigInputSchema = z.object({
   /** Worktree setup (#917). null or an empty command list deletes the key. Refused with 409 by a
    *  hosted cockpit: these are commands the host runs. */
   worktreeSetup: worktreeSetupConfigSchema.nullable().optional(),
+  /** Worktree teardown (hearsay-tools/squawk#914): the same shape, clear values and hosted-cockpit
+   *  refusal as `worktreeSetup`. */
+  worktreeTeardown: worktreeSetupConfigSchema.nullable().optional(),
 });
 export type SetConfigInput = z.infer<typeof setConfigInputSchema>;
 

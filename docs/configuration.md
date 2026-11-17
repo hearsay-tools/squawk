@@ -129,8 +129,12 @@ process scope. A failed command or a timeout is recorded in the worker's events,
 goes on: stopping the scope ends what the worker started (on macOS, and on Linux without
 cgroup delegation, a process that left the worker's process groups can survive; see
 [ADR 0032](adr/0032-prove-process-and-workspace-ownership-before-cleanup.md)). A process that
-is not the worker's is never signalled and does not block the removal. The key is edited in
-the config file only; Settings does not show it. Without the key nothing runs, exactly as before.
+is not the worker's is never signalled and does not block the removal. Without the key nothing
+runs, exactly as before.
+
+Or edit it in **Settings → Worktrees → Stop worker services before destroy**, one command per
+line. Like setup, a hosted cockpit shows it read-only until the host operator runs
+`hsq remote-settings enable`.
 
 ### Editing the agents' own config (Settings → Agent config)
 

@@ -11,12 +11,12 @@ function applyValue(raw: RawConfig, key: string, value: unknown, clear: readonly
   else raw[key] = value;
 }
 
-function applyWorktreeSetup(raw: RawConfig, body: SetConfigInput): void {
-  // null or no commands = no setup: delete the key rather than store an empty list.
-  const setup = body.worktreeSetup;
+function applyWorktreeCommands(raw: RawConfig, body: SetConfigInput, key: 'worktreeSetup' | 'worktreeTeardown'): void {
+  // null or no commands = no commands: delete the key rather than store an empty list.
+  const setup = body[key];
   if (setup === undefined) return;
-  if (setup === null || setup.commands.length === 0) delete raw.worktreeSetup;
-  else raw.worktreeSetup = {
+  if (setup === null || setup.commands.length === 0) delete raw[key];
+  else raw[key] = {
     commands: setup.commands,
     ...(setup.timeoutSeconds !== undefined ? { timeoutSeconds: setup.timeoutSeconds } : {}),
   };
@@ -51,7 +51,8 @@ const fieldAppliers = {
   reviewGate: (raw, body) => applyValue(raw, 'reviewGate', body.reviewGate),
   // null or 0 both mean "no ceiling" — drop the key back to the default.
   memoryLimitMb: (raw, body) => applyValue(raw, 'memoryLimitMb', body.memoryLimitMb, [null, 0]),
-  worktreeSetup: applyWorktreeSetup,
+  worktreeSetup: (raw, body) => applyWorktreeCommands(raw, body, 'worktreeSetup'),
+  worktreeTeardown: (raw, body) => applyWorktreeCommands(raw, body, 'worktreeTeardown'),
   defaultModels: applyDefaultModels,
 } satisfies Record<keyof SetConfigInput, ApplyField>;
 

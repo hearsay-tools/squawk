@@ -4,9 +4,10 @@ Paths `<config>`, `<state>`, `<data>` and `<cache>` refer to the
 [resolved home roots](../migration.md#home-directories).
 
 
-A remote cockpit (`HSQ_REMOTE=1` or `CEZ_REMOTE=1`) shows **Settings → Agent config** and **Settings → Worktrees →
-Prepare new worktrees** read-only. Both persist commands that run on the host: agent hooks and MCP
-servers start outside the agent's tool permissions, and setup commands run before every task. The
+A remote cockpit (`HSQ_REMOTE=1` or `CEZ_REMOTE=1`) shows **Settings → Agent config** and the two command fields in **Settings → Worktrees** (Prepare
+new worktrees, Stop worker services before destroy) read-only. All persist commands that run on the
+host: agent hooks and MCP servers start outside the agent's tool permissions, setup commands run
+before every task, and teardown commands run when a worker is destroyed. The
 host operator can let the people the deployment admits edit them from the browser
 (hearsay-tools/cezarion#2428).
 

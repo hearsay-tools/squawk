@@ -234,8 +234,12 @@ sharing the runner; `check-stop-kill.test.ts` stays green unchanged.
 
 `worktreeTeardown` (hearsay-tools/squawk#3515) reuses this key's schema, resolver and command
 runner. Worker destroy runs it in the proven-owned worker worktree before the holder scans, with
-no record, note or Settings field of its own; a failure is one lifecycle event on the worker.
+no record or note of its own; a failure is one lifecycle event on the worker.
 ADR 0032 holds the destroy order.
+
+2026-11-17: Settings → Worktrees edits it as "Stop worker services before destroy", the same field
+component as setup. `GET /config` gains `worktreeTeardown` and `worktreeTeardownIssue`, `PUT /config`
+accepts `worktreeTeardown` with the same clear values, and the hosted-cockpit 409 covers both keys.
 
 ## Out of scope
 

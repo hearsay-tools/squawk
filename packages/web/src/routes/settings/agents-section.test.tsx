@@ -137,6 +137,8 @@ function serve({
     reviewGate: null,
     worktreeSetup: null,
     worktreeSetupIssue: null,
+    worktreeTeardown: null,
+    worktreeTeardownIssue: null,
     ...config,
   }
   const json = (payload: unknown, status = 200) =>

@@ -14,7 +14,7 @@ const config = {
   archiveOnMerge: null, effectiveArchiveOnMerge: false, archiveOnMergeSource: 'default',
   baseBranch: null, defaultRunner: 'claude', systemPrompt: null, defaultModels: {}, modelsLocked: false,
   maxParallel: 2, memoryLimitMb: null, worktreeRetention: 10, liveTitleUpdates: null,
-  reviewGate: null, worktreeSetup: null, worktreeSetupIssue: null,
+  reviewGate: null, worktreeSetup: null, worktreeSetupIssue: null, worktreeTeardown: null, worktreeTeardownIssue: null,
 } satisfies Awaited<ReturnType<typeof putConfig>>
 function mount(global = false) {
   vi.mocked(useConfig).mockReturnValue({ isPending: false, isError: false, data: config } as ReturnType<typeof useConfig>)

@@ -12,22 +12,75 @@ import {
 } from '@open-mercato/cezar-api-client/contract/workspace'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
-import { WorktreeSetupStatus } from './worktree-setup-status'
+import { WorktreeCommandsStatus } from './worktree-commands-status'
 import { parseWorktreeSetupInput } from './worktree-setup-input'
 import { SettingsField } from './settings-field'
 import { useActiveProjectRoot } from './project-location'
 import { RemoteSettingsNotice, useSettingsAdminRefresh } from './remote-settings-notice'
 
+type WorktreeCommandsKey = 'worktreeSetup' | 'worktreeTeardown'
+
+/** The words and selectors that differ between the two command lists; everything else is shared. */
+export interface WorktreeCommandsCopy {
+  key: WorktreeCommandsKey
+  issueKey: 'worktreeSetupIssue' | 'worktreeTeardownIssue'
+  slot: string
+  title: string
+  hint: string
+  empty: string
+  label: string
+  example: string
+  fileEditApplies: string
+  saved: string
+  cleared: string
+  save: string
+}
+
+export const WORKTREE_COMMANDS_COPY: Record<'setup' | 'teardown', WorktreeCommandsCopy> = {
+  setup: {
+    key: 'worktreeSetup',
+    issueKey: 'worktreeSetupIssue',
+    slot: 'worktree-setup',
+    title: 'Prepare new worktrees',
+    hint: 'Runs in every new task and worker worktree before the agent starts, in order, stopping at the first failure. Leave commands empty to skip setup.',
+    empty: 'No setup commands configured. No commands will run in new worktrees.',
+    label: 'Worktree setup commands, one per line',
+    example: 'npm ci',
+    fileEditApplies: 'Valid file edits apply to new worktrees.',
+    saved: 'Worktree setup saved',
+    cleared: 'Worktree setup cleared',
+    save: 'Save setup',
+  },
+  teardown: {
+    key: 'worktreeTeardown',
+    issueKey: 'worktreeTeardownIssue',
+    slot: 'worktree-teardown',
+    title: 'Stop worker services before destroy',
+    hint: 'Runs in a worker’s worktree when the worker is destroyed, before destroy stops the worker’s processes, in order, stopping at the first failure. A failure is recorded on the worker and destroy goes on. Leave commands empty to skip teardown.',
+    empty: 'No teardown commands configured. Destroy runs no commands in worker worktrees.',
+    label: 'Worktree teardown commands, one per line',
+    example: 'docker compose down',
+    fileEditApplies: 'Valid file edits apply to the next worker destroy.',
+    saved: 'Worktree teardown saved',
+    cleared: 'Worktree teardown cleared',
+    save: 'Save teardown',
+  },
+}
+
 /**
- * Project settings → Worktrees → "Prepare new worktrees" (hearsay-tools/cezarion#917, spec
- * `.ai/specs/2026-10-07-worktree-setup.md`): the commands Squawk runs in every new task and worker
- * worktree before the agent starts. One command per line; blank lines are dropped.
+ * Project settings → Worktrees: one command list from `config.json`.
+ * - "Prepare new worktrees" (`worktreeSetup`, hearsay-tools/cezarion#917, spec
+ *   `.ai/specs/2026-10-07-worktree-setup.md`): runs in every new task and worker worktree before
+ *   the agent starts.
+ * - "Stop worker services before destroy" (`worktreeTeardown`, hearsay-tools/squawk#914): runs in a
+ *   worker's worktree when destroy starts, before destroy stops the worker's processes.
+ * One command per line; blank lines are dropped.
  *
  * Editable on a local cockpit, or on a remote one whose host operator ran `cez remote-settings
  * enable` (hearsay-tools/cezarion#2428). These are commands the host runs, so any other cockpit
  * shows them read-only and the server refuses the write (409) whatever the client does.
  */
-export function WorktreeSetupField({ config }: { config: ConfigResponse }) {
+export function WorktreeCommandsField({ config, copy }: { config: ConfigResponse; copy: WorktreeCommandsCopy }) {
   const queryClient = useQueryClient()
   const health = useHealth()
   const refreshSettingsAdmin = useSettingsAdminRefresh()
@@ -36,15 +89,17 @@ export function WorktreeSetupField({ config }: { config: ConfigResponse }) {
   // Unknown until health answers: read-only rather than editable-then-refused.
   const editable = health.data?.capabilities?.settingsAdmin === true
 
-  const savedCommands = config.worktreeSetup?.commands ?? []
-  const savedTimeout = config.worktreeSetup?.timeoutSeconds ?? WORKTREE_SETUP_DEFAULT_TIMEOUT_SECONDS
+  const saved = config[copy.key]
+  const issue = config[copy.issueKey]
+  const savedCommands = saved?.commands ?? []
+  const savedTimeout = saved?.timeoutSeconds ?? WORKTREE_SETUP_DEFAULT_TIMEOUT_SECONDS
   const [text, setText] = useState(savedCommands.join('\n'))
   const [timeoutText, setTimeoutText] = useState(String(savedTimeout))
 
   const { commands, timeoutSeconds, invalid } = parseWorktreeSetupInput(text, timeoutText)
   // An invalid value on disk is a change to make even when the box matches "nothing saved".
   const unchanged =
-    config.worktreeSetupIssue === null &&
+    issue === null &&
     commands.length === savedCommands.length &&
     commands.every((command, index) => command === savedCommands[index]) &&
     (commands.length === 0 || timeoutSeconds === savedTimeout)
@@ -54,7 +109,7 @@ export function WorktreeSetupField({ config }: { config: ConfigResponse }) {
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.config, result)
       setText(commands.join('\n'))
-      toast(commands.length === 0 ? 'Worktree setup cleared' : 'Worktree setup saved')
+      toast(commands.length === 0 ? copy.cleared : copy.saved)
     },
     onError: (error: Error) => {
       toast(error.message, { tone: 'danger' })
@@ -64,7 +119,7 @@ export function WorktreeSetupField({ config }: { config: ConfigResponse }) {
   })
   const submit = () =>
     save.mutate({
-      worktreeSetup:
+      [copy.key]:
         commands.length === 0
           ? null
           : {
@@ -79,20 +134,21 @@ export function WorktreeSetupField({ config }: { config: ConfigResponse }) {
 
   return (
     <SettingsField
-      title="Prepare new worktrees"
-      hint="Runs in every new task and worker worktree before the agent starts, in order, stopping at the first failure. Leave commands empty to skip setup."
+      title={copy.title}
+      hint={copy.hint}
     >
       <RemoteSettingsNotice risk={`These commands run on the machine running ${productName('Cezarion')}`} />
-      <WorktreeSetupStatus
+      <WorktreeCommandsStatus
+        copy={copy}
         savedCommandCount={savedCommands.length}
         settingsAdmin={health.data?.capabilities?.settingsAdmin}
         configPath={configPath}
-        issue={config.worktreeSetupIssue}
+        issue={issue}
         invalid={invalid}
       >
         <textarea
-          data-slot="worktree-setup-commands"
-          aria-label="Worktree setup commands, one per line"
+          data-slot={`${copy.slot}-commands`}
+          aria-label={copy.label}
           rows={4}
           spellCheck={false}
           autoCapitalize="off"
@@ -104,7 +160,7 @@ export function WorktreeSetupField({ config }: { config: ConfigResponse }) {
           className={`${control} min-h-24 w-full resize-y font-mono text-[13px] leading-relaxed`}
         />
         <p className="text-xs text-soft-foreground">
-          Example only: <code>npm ci</code>. Commands run only after they are saved.
+          Example only: <code>{copy.example}</code>. Commands run only after they are saved.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-xs text-soft-foreground">
@@ -115,7 +171,7 @@ export function WorktreeSetupField({ config }: { config: ConfigResponse }) {
               min={1}
               max={WORKTREE_SETUP_MAX_TIMEOUT_SECONDS}
               step={1}
-              data-slot="worktree-setup-timeout"
+              data-slot={`${copy.slot}-timeout`}
               value={timeoutText}
               readOnly={!editable}
               disabled={save.isPending}
@@ -129,14 +185,14 @@ export function WorktreeSetupField({ config }: { config: ConfigResponse }) {
             variant="primary"
             size="sm"
             className="min-h-11 self-start md:min-h-0"
-            data-action="worktree-setup-save"
+            data-action={`${copy.slot}-save`}
             disabled={!editable || unchanged || invalid !== null || save.isPending}
             onClick={submit}
           >
-            Save setup
+            {copy.save}
           </Button>
         </div>
-      </WorktreeSetupStatus>
+      </WorktreeCommandsStatus>
     </SettingsField>
   )
 }

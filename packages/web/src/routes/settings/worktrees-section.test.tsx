@@ -43,6 +43,8 @@ function serve(config: Partial<ConfigResponse> = {}) {
     reviewGate: null,
     worktreeSetup: null,
     worktreeSetupIssue: null,
+    worktreeTeardown: null,
+    worktreeTeardownIssue: null,
     ...config,
   }
   const json = (payload: unknown, status = 200) =>
@@ -66,6 +68,13 @@ function serve(config: Partial<ConfigResponse> = {}) {
             ? { commands: setup.commands, timeoutSeconds: setup.timeoutSeconds ?? 900 }
             : null
           state.worktreeSetupIssue = null
+        }
+        if (body && 'worktreeTeardown' in body) {
+          const teardown = body.worktreeTeardown as { commands: string[]; timeoutSeconds?: number } | null
+          state.worktreeTeardown = teardown && teardown.commands.length > 0
+            ? { commands: teardown.commands, timeoutSeconds: teardown.timeoutSeconds ?? 900 }
+            : null
+          state.worktreeTeardownIssue = null
         }
         return json(state)
       }
@@ -217,8 +226,9 @@ describe('Project settings → Worktrees: worktree setup commands (#917)', () =>
     serve()
     renderAt('/p/other/settings/worktrees', { localHandoff: false })
     await waitFor(() => expect(commandsBox()).not.toBeNull())
-    expect(screen.getByText('/host/other project/.ai/cezar/config.json')).toBeTruthy()
-    expect(document.querySelector('[data-slot="worktree-setup-readonly"]')?.textContent).toContain(`on the machine running ${productName("Cezarion")}`)
+    const readonly = document.querySelector('[data-slot="worktree-setup-readonly"]')?.textContent
+    expect(readonly).toContain('/host/other project/.ai/cezar/config.json')
+    expect(readonly).toContain(`on the machine running ${productName("Cezarion")}`)
     expect(screen.queryByText('/host/boot/.ai/cezar/config.json')).toBeNull()
   })
 
@@ -339,5 +349,81 @@ describe('Project settings → Worktrees: worktree setup commands (#917)', () =>
     fireEvent.change(timeoutInput()!, { target: { value: '7201' } })
     expect(saveSetup()!.disabled).toBe(true)
     expect(document.querySelector('[data-slot="worktree-setup-invalid"]')).not.toBeNull()
+  })
+})
+
+/**
+ * Project settings → Worktrees: "Stop worker services before destroy" (hearsay-tools/squawk#914).
+ * The same field as setup over `worktreeTeardown`; a save never sends the setup key.
+ */
+describe('Project settings → Worktrees: worktree teardown commands (hearsay-tools/squawk#914)', () => {
+  const commandsBox = () => document.querySelector<HTMLTextAreaElement>('[data-slot="worktree-teardown-commands"]')
+  const timeoutInput = () => document.querySelector<HTMLInputElement>('[data-slot="worktree-teardown-timeout"]')
+  const saveTeardown = () => document.querySelector<HTMLButtonElement>('[data-action="worktree-teardown-save"]')
+  const configPuts = () => requests.filter((r) => r.method === 'PUT' && r.url === '/api/v1/config')
+  const EMPTY = 'No teardown commands configured. Destroy runs no commands in worker worktrees.'
+  const LOCAL = { localHandoff: true }
+
+  it('an empty configuration says destroy runs no commands', async () => {
+    serve({ worktreeSetup: { commands: ['npm ci'], timeoutSeconds: 900 } })
+    renderAt('/settings/worktrees', LOCAL)
+    await waitFor(() => expect(commandsBox()).not.toBeNull())
+    expect(commandsBox()!.value).toBe('')
+    expect(screen.getByText(EMPTY)).toBeTruthy()
+    expect(screen.getByText('Stop worker services before destroy')).toBeTruthy()
+    expect(saveTeardown()!.disabled).toBe(true)
+  })
+
+  it('shows configured commands and the timeout apart from setup', async () => {
+    serve({
+      worktreeSetup: { commands: ['npm ci'], timeoutSeconds: 900 },
+      worktreeTeardown: { commands: ['docker compose down'], timeoutSeconds: 120 },
+    })
+    renderAt('/settings/worktrees', LOCAL)
+    await waitFor(() => expect(commandsBox()).not.toBeNull())
+    expect(commandsBox()!.value).toBe('docker compose down')
+    expect(timeoutInput()!.value).toBe('120')
+    expect(document.querySelector<HTMLTextAreaElement>('[data-slot="worktree-setup-commands"]')!.value).toBe('npm ci')
+    expect(screen.queryByText(EMPTY)).toBeNull()
+  })
+
+  it('saving sends only worktreeTeardown, and clearing sends null', async () => {
+    serve()
+    renderAt('/settings/worktrees', LOCAL)
+    await waitFor(() => expect(commandsBox()).not.toBeNull())
+    fireEvent.change(commandsBox()!, { target: { value: ' make stop \n' } })
+    fireEvent.change(timeoutInput()!, { target: { value: '120' } })
+    fireEvent.click(saveTeardown()!)
+    await waitFor(() => expect(configPuts()).toHaveLength(1))
+    expect(configPuts()[0]?.body).toEqual({ worktreeTeardown: { commands: ['make stop'], timeoutSeconds: 120 } })
+    await waitFor(() => expect(screen.getByText('Worktree teardown saved')).toBeTruthy())
+    fireEvent.change(commandsBox()!, { target: { value: '' } })
+    fireEvent.click(saveTeardown()!)
+    await waitFor(() => expect(configPuts()).toHaveLength(2))
+    expect(configPuts()[1]?.body).toEqual({ worktreeTeardown: null })
+    await waitFor(() => expect(screen.getByText('Worktree teardown cleared')).toBeTruthy())
+  })
+
+  it('a hosted cockpit shows the field read-only and names the key to edit', async () => {
+    serve({ worktreeTeardown: { commands: ['make stop'], timeoutSeconds: 900 } })
+    renderAt('/settings/worktrees', { localHandoff: false })
+    await waitFor(() => expect(commandsBox()).not.toBeNull())
+    expect(commandsBox()!.readOnly).toBe(true)
+    expect(timeoutInput()!.readOnly).toBe(true)
+    expect(saveTeardown()!.disabled).toBe(true)
+    const readonly = document.querySelector('[data-slot="worktree-teardown-readonly"]')?.textContent
+    expect(readonly).toContain('worktreeTeardown.commands')
+    expect(readonly).toContain(`${productCommand()} remote-settings enable`)
+  })
+
+  it('an invalid config shows its own issue', async () => {
+    serve({ worktreeTeardownIssue: 'commands: Invalid input' })
+    renderAt('/settings/worktrees', LOCAL)
+    await waitFor(() => expect(commandsBox()).not.toBeNull())
+    expect(document.querySelector('[data-slot="worktree-teardown-issue"]')?.textContent).toBe(
+      'config.json has an invalid worktreeTeardown (commands: Invalid input) — saving replaces it.',
+    )
+    expect(document.querySelector('[data-slot="worktree-setup-issue"]')).toBeNull()
+    expect(screen.queryByText(EMPTY)).toBeNull()
   })
 })

@@ -116,6 +116,8 @@ export const CONFIG: ConfigResponse = {
   reviewGate: null,
   worktreeSetup: null,
   worktreeSetupIssue: null,
+  worktreeTeardown: null,
+  worktreeTeardownIssue: null,
 }
 
 export const WORKSPACE_CONFIG: WorkspaceConfigResponse = {
