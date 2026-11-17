@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CODEX_MINIMAL_CONFIG } from './codex-app-server-runner.ts';
+import { CODEX_MINIMAL_CONFIG } from './codex-thread-config.ts';
 import { driveSeam, waitFor } from './harness-parity.testkit.ts';
 
 const directories: string[] = [];

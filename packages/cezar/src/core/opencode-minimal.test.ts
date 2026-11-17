@@ -1,7 +1,41 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { OPENCODE_MINIMAL_ENV, opencodeMinimalEnv } from './opencode-minimal.ts';
+import { driveSeam } from './harness-parity.testkit.ts';
+import { OPENCODE_MINIMAL_ENV, OPENCODE_MINIMAL_PROMPT_TOOLS, opencodeMinimalEnv } from './opencode-minimal.ts';
 
-afterEach(() => { vi.unstubAllEnvs(); });
+const directories: string[] = [];
+afterEach(() => { vi.unstubAllEnvs(); for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true }); });
+
+async function recordedWire(minimal: boolean): Promise<Array<Record<string, unknown>>> {
+  const dir = mkdtempSync(join(tmpdir(), 'cez-opencode-minimal-')); directories.push(dir);
+  const record = join(dir, 'wire.ndjson');
+  await driveSeam('opencode', 'baseline', {
+    spec: { minimal, env: { CEZ_MOCK_ARGS_FILE: record } },
+    sessionOptions: { autoEndAfterFirstTurn: true },
+    whileOpen: async session => { await session.result; },
+  });
+  return readFileSync(record, 'utf8').trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
+}
+
+describe('OpenCode minimal session on the wire', () => {
+  // OpenCode 1.19.4 appends an agent's own permission rules after the global ones, so a
+  // configured agent allow would beat the runtime config; the prompt's session rule comes last.
+  it('denies every tool through the prompt and the runtime config', async () => {
+    const wire = await recordedWire(true);
+    const prompts = wire.filter(entry => String(entry.url).endsWith('/prompt_async'));
+    expect(prompts.length).toBeGreaterThan(0);
+    for (const prompt of prompts) expect((prompt.body as Record<string, unknown>).tools).toEqual(OPENCODE_MINIMAL_PROMPT_TOOLS);
+    expect(wire.find(entry => entry.type === 'runtime-config')?.config).toMatchObject({ tools: { '*': false }, permission: { '*': 'deny' } });
+  });
+
+  it('sends no tools map without the field', async () => {
+    const prompts = (await recordedWire(false)).filter(entry => String(entry.url).endsWith('/prompt_async'));
+    expect(prompts.length).toBeGreaterThan(0);
+    for (const prompt of prompts) expect(prompt.body).not.toHaveProperty('tools');
+  });
+});
 
 describe('opencodeMinimalEnv', () => {
   it('returns the env unchanged when the session is not minimal', () => {

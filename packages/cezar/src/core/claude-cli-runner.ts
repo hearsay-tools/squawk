@@ -769,13 +769,9 @@ export function buildClaudeArgs(
   args.push('--settings', JSON.stringify({ crossSessionInbound: 'refuse' }));
   args.push(...claudeSettingSourceArgs(env));
   if (spec.minimal) args.push('--safe-mode', '--disable-slash-commands', '--no-session-persistence');
-  if (spec.systemPrompt) {
-    args.push('--append-system-prompt', spec.systemPrompt);
-  }
+  if (spec.systemPrompt) args.push('--append-system-prompt', spec.systemPrompt);
   args.push(...claudeSessionArgs(spec), ...claudeToolArgs(spec));
-  if (spec.model) {
-    args.push('--model', spec.model);
-  }
+  if (spec.model) args.push('--model', spec.model);
   const effort = parseEffort(spec.effort);
   if (effort) args.push('--effort', effort);
   for (const dir of spec.additionalDirectories ?? []) {

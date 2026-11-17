@@ -1,7 +1,16 @@
+import { ciOpenCodeEnv } from '../ci-wait/injection.ts';
+import { buildChildEnv } from './agent-env.ts';
+import type { AgentRunSpec } from './agent-runner.ts';
 import { isObject, suppliedOpenCodeConfig } from './opencode-runtime-config.ts';
+import { opencodeTaskScopeEnv } from './opencode-task-scope.ts';
 
 /** `opencode serve` flags for a minimal session (`AgentRunSpec.minimal`): no external plugins. */
 export const OPENCODE_MINIMAL_SERVE_ARGS = ['--pure'] as const;
+
+/** The `prompt_async` tools map of a minimal session. OpenCode turns it into a session
+ *  permission rule (`*` deny). Session rules come after an agent's own permission rules, and the
+ *  last matching rule wins, so a configured agent cannot allow a tool back (OpenCode 1.19.4). */
+export const OPENCODE_MINIMAL_PROMPT_TOOLS = { '*': false } as const;
 
 /** Env switches for a minimal session: no project config, no Claude Code files (CLAUDE.md,
  *  Claude skills), no external skills and no default plugins. */
@@ -16,7 +25,9 @@ export const OPENCODE_MINIMAL_ENV = {
  * Adds the minimal-session switches to an OpenCode session's extra env. The runner maps no
  * `toolGrant`, so the runtime config also turns every tool off (`tools: {"*": false}`) and denies
  * every permission (`permission: {"*": "deny"}`), in place of any supplied entries. OpenCode gives
- * this runtime config precedence over its config files. MCP servers named in the user's global config still start.
+ * this runtime config precedence over its config files, but an agent's own permission rules come
+ * after it, so the prompt body also sends `OPENCODE_MINIMAL_PROMPT_TOOLS`. MCP servers named in
+ * the user's global config, the global AGENTS.md and configured `instructions` still load.
  */
 export function opencodeMinimalEnv(
   env: Record<string, string> | undefined,
@@ -28,5 +39,15 @@ export function opencodeMinimalEnv(
     ...env,
     ...OPENCODE_MINIMAL_ENV,
     OPENCODE_CONFIG_CONTENT: JSON.stringify({ ...config, tools: { '*': false }, permission: { '*': 'deny' } }),
+  };
+}
+
+/** The `opencode serve` argv and child env for a session: Squawk's tools, the governed task scope
+ *  and the minimal-session switches, merged in that order. */
+export function opencodeServeLaunch(spec: AgentRunSpec, port: number): { args: string[]; env: NodeJS.ProcessEnv } {
+  const extraEnv = opencodeMinimalEnv(opencodeTaskScopeEnv(ciOpenCodeEnv(spec), spec.restrictCrossSessionMessaging), spec.minimal);
+  return {
+    args: ['serve', '--hostname', '127.0.0.1', '--port', String(port), ...(spec.minimal ? OPENCODE_MINIMAL_SERVE_ARGS : [])],
+    env: buildChildEnv({ backend: 'opencode', extraEnv }),
   };
 }

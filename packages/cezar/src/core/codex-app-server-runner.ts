@@ -24,7 +24,7 @@ import { codexStreamError } from './codex-stream-error.ts';
 import { codexTurnOutcome } from './codex-turn-outcome.ts';
 import { codexNetworkIsRestricted, codexMinimalSandbox, codexPermissionOverrides } from './codex-permissions.ts';
 import { codexApproval, isCodexApprovalRequest, type CodexApproval } from './codex-approvals.ts';
-import { squawkToolEnvNames } from '../ci-wait/tool-catalog.ts';
+import { codexThreadConfig } from './codex-thread-config.ts';
 import {
   CodexAppServerRpc,
   CodexRpcResponseError,
@@ -56,18 +56,6 @@ export interface CodexRunnerOptions {
   /** Wall-clock timeout for a run (ms); per-spec `timeoutMs` still wins. */
   timeoutMs?: number;
 }
-
-/** Config overrides for a minimal session (`AgentRunSpec.minimal`): no hooks, plugins, apps,
- *  memories, subagents, AGENTS.md or web search. */
-export const CODEX_MINIMAL_CONFIG = {
-  'features.hooks': false,
-  'features.plugins': false,
-  'features.apps': false,
-  'features.memories': false,
-  'features.multi_agent': false,
-  project_doc_max_bytes: 0,
-  web_search: 'disabled',
-} as const;
 
 /**
  * `AgentRunner` over `codex app-server` — the same JSONL transport the VS Code
@@ -647,24 +635,14 @@ class CodexSession implements AgentSession {
     this.assertOpen();
     const restrictNetwork = productEnv('CODEX_NETWORK') === '0';
 
-    // Start and resume accept dotted config overrides; no global config write. Governed sessions
-    // keep multi-agent and lose only the cross-thread message board (hearsay-tools/cezarion#2279).
-    const config = {
-      ...(restrictNetwork ? { 'sandbox_workspace_write.network_access': false } : {}),
-      ...(this.spec.restrictCrossSessionMessaging ? { 'features.agent_message_board': false } : {}),
-      ...(this.spec.minimal ? CODEX_MINIMAL_CONFIG : {}),
-      // hearsay-tools/cezarion#1294: Codex asks before every MCP tool call unless the
-      // server's mode is `approve`, and Squawk's own tools must never wait on that.
-      // approval_policy stays the user's (#381); older Codex ignores the unknown key.
-      ...(this.spec.squawkTools ? { [`mcp_servers.${this.spec.squawkTools.name}`]: { command: this.spec.squawkTools.command, args: this.spec.squawkTools.args, env_vars: squawkToolEnvNames(this.spec.env ?? {}), default_tools_approval_mode: 'approve' } } : {}),
-    };
+    const config = codexThreadConfig(this.spec, restrictNetwork);
     const overrides = {
       model: this.spec.model,
       cwd: this.spec.cwd,
       ...codexToolGrantFields(this.spec.toolGrant),
       ...codexPermissionOverrides(requirements, restrictNetwork),
       ...(this.spec.minimal ? codexMinimalSandbox(requirements) : {}),
-      ...(Object.keys(config).length > 0 ? { config } : {}),
+      ...(config ? { config } : {}),
     };
     let threadResponse: Record<string, unknown>, resumed = false;
     if (this.spec.resume && this.spec.sessionId) {
