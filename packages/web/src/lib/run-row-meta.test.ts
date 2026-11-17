@@ -181,13 +181,13 @@ describe('runRowMeta (#617, #729: what the meta line is made of)', () => {
 
   describe('the key that tells the line its content changed', () => {
     it.each([
-      ['age', { finishedAt: ago(5 * 60_000) }],
-      ['pull request', { prNumber: 594 }],
-      ['issue', { issueNumber: 12 }],
-      ['reference URL', { prNumber: 594, pullRequestUrl: 'https://github.com/acme/repo/pull/594' }],
-      ['hand-off', { notify: true }],
-    ] satisfies Array<[string, Partial<RunSummary>]>)('changes when the %s changes', (_name, change) => {
-      expect(meta({ run: run(change) }).key).not.toBe(meta({ run: run() }).key)
+      ['age', {}, { finishedAt: ago(5 * 60_000) }],
+      ['pull request', {}, { prNumber: 594 }],
+      ['issue beside a pull request', { prNumber: 594 }, { prNumber: 594, issueNumber: 12 }],
+      ['reference URL', { prNumber: 594 }, { prNumber: 594, pullRequestUrl: 'https://github.com/acme/repo/pull/594' }],
+      ['hand-off', {}, { notify: true }],
+    ] satisfies Array<[string, Partial<RunSummary>, Partial<RunSummary>]>)('changes when the %s changes', (_name, before, after) => {
+      expect(meta({ run: run(after) }).key).not.toBe(meta({ run: run(before) }).key)
     })
 
     it('changes with the state word', () => {
