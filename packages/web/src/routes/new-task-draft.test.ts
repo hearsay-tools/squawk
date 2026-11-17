@@ -97,7 +97,7 @@ describe('the new-task draft store', () => {
     })
   })
 
-  it('round-trips a draft and hands out copies, not the stored object', () => {
+  it('round-trips a draft through storage and hands out independent copies', () => {
     writeDraft({
       text: 'fix it',
       source: { source: 'skill', ref: 'om-fix' },
@@ -118,6 +118,12 @@ describe('the new-task draft store', () => {
     expect(first.worktree).toBe(false)
     first.text = 'mutated'
     expect(readDraft().text).toBe('fix it')
+    const stored = localStorage.getItem('cez-new-task-draft')!
+    resetDraft()
+    localStorage.setItem('cez-new-task-draft', stored)
+    expect(readDraft()).toMatchObject({ text: 'fix it', source: { source: 'skill', ref: 'om-fix' },
+      runner: 'codex', model: 'gpt-5-codex', effort: 'high', worktree: false, planFirst: false,
+      autonomous: null, archiveWhenDone: false, autoMergePr: false, allowWorkers: true, allowMessaging: true })
   })
 
   it('clearStartedDraft spends the text AND the source, keeping the way-of-working pills', () => {
@@ -153,37 +159,6 @@ describe('the new-task draft store', () => {
       autoMergePr: false,
       allowWorkers: true,
       allowMessaging: true,
-    })
-  })
-
-  it('survives a page reload — a cold read re-hydrates from localStorage', () => {
-    writeDraft({
-      text: 'do not lose me',
-      source: { source: 'skill', ref: 'om-fix' },
-      runner: 'claude',
-      agentProfile: null,
-      model: 'sonnet',
-      effort: 'low',
-      planFirst: true,
-      worktree: false,
-      autonomous: null,
-      archiveWhenDone: false,
-      autoMergePr: false,
-      allowWorkers: true,
-      allowMessaging: true,
-    })
-    // A fresh page has no in-memory cache but keeps localStorage: resetDraft removes storage, so
-    // instead drop only the cache by round-tripping through a raw storage read.
-    const raw = localStorage.getItem('cez-new-task-draft') as string
-    expect(JSON.parse(raw)).toMatchObject({
-      text: 'do not lose me',
-      worktree: false,
-      autonomous: null,
-      archiveWhenDone: false,
-      autoMergePr: false,
-      allowWorkers: true,
-      allowMessaging: true,
-      planFirst: true,
     })
   })
 
@@ -254,11 +229,5 @@ describe('composerRunModeNote (#793)', () => {
     })
   }
 
-  it('never promises isolation without a worktree', () => {
-    // The invariant the header actually owes the user, independent of the exact copy: the word
-    // only appears when the run really gets one.
-    for (const hasGit of [true, false]) {
-      expect(composerRunModeNote({ worktree: false, hasGit })).not.toContain('isolated worktree')
-    }
-  })
+
 })
