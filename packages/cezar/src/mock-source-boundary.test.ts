@@ -13,6 +13,7 @@ const mockSourceViolations = (file: string, source: string) => checkRule(nativeM
 describe('native mock source boundary', () => {
   it.each([
     ['an adapter mockBin read', "const source = readFileSync(adapter.mockBin, 'utf8');", 'reads native mock source'],
+    ['a computed adapter mockBin read', "const source = readFileSync(adapter['mockBin'], 'utf8');", 'reads native mock source'],
     ['a mock script read by URL', "readFileSync(new URL('../../scripts/mock-codex-app-server.mjs', import.meta.url), 'utf8');", 'reads native mock source'],
     ['a harness mock constant read', 'const text = await readFile(CLAUDE_MOCK);', 'reads native mock source'],
     ['an adapter mockBin assignment', 'HARNESS_ADAPTERS.pi.mockBin = patched;', 'assigns an adapter mockBin'],

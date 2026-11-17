@@ -123,7 +123,12 @@ function possibleCall(node: EsNode, ctx: Ctx, profile: WaitProfile): boolean {
   if (direct !== undefined) return profile === 'server' ? helpers.has(direct) : ctx.tlWaits.has(direct) || /^find(?:All)?By[A-Z]/.test(direct);
   if (callee?.type !== 'MemberExpression') return false;
   const receiver = nameOf(child(callee, 'object'));
-  if (receiver === 'vi' || receiver === 'expect') return true;
+  if (receiver === 'vi' || receiver === 'expect') {
+    const key = child(callee, 'property');
+    const name = callee.computed ? stringOf(key) : nameOf(key);
+    return name === undefined ? callee.computed === true
+      : receiver === 'vi' ? name === 'waitFor' || name === 'waitUntil' : name === 'poll';
+  }
   if (profile !== 'unit') return false;
   const key = child(callee, 'property');
   const name = callee.computed ? stringOf(key) : nameOf(key);

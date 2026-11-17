@@ -6,7 +6,7 @@ const file = 'packages/cezar/scripts/mock-pi-rpc.mjs';
 describe('mock lifecycle boundary', () => {
   it.each(['watchdogStall', 'watchdogWritePid', 'waitForMockRelease', 'waitForRelease'])(
     'refuses a definition of %s', name => {
-      for (const sample of [`function ${name}() {}`, `async function ${name}() {}`, `const ${name} = () => {};`]) {
+      for (const sample of [`function ${name}() {}`, `async function ${name}() {}`, `const handler = function ${name}() {};`, `const ${name} = () => {};`]) {
         expect(checkRule(rule, file, sample)).toHaveLength(1);
       }
     });
@@ -24,6 +24,7 @@ describe('mock lifecycle boundary', () => {
     "// write('./watchdog.pid');\nwrite('ordinary.pid');",
     'const sample = "write(\'./watchdog.pid\');";',
     "write('./watchdog.pid.backup');",
+    "const first = 0, watchdogStall = () => {};",
     "import { stall, waitForRelease } from './mock-lifecycle.mjs';",
     'stall(prompt); waitForRelease(400);',
   ])('allows comments, samples and imports: %s', sample => {

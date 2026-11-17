@@ -85,7 +85,7 @@ export const runHistoryReader: AstRule = {
           const callee = unwrap(child(node, 'callee'));
           const parent = node.parent;
           if (callee?.type === 'MemberExpression' && child(callee, 'object')?.type === 'ThisExpression'
-            && parent?.type === 'CallExpression' && nameOf(child(parent, 'callee')) === 'appendFileSync'
+            && parent?.type === 'CallExpression' && propertyName(child(parent, 'callee')) === 'appendFileSync'
             && children(parent, 'arguments')[0] === node) kind = 'eventsPath-append';
         }
       }

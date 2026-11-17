@@ -13,7 +13,7 @@ function mockArgument(node: EsNode): boolean {
     const name = nameOf(part);
     if (name === 'mockBin' || (name !== undefined && /^[A-Z][A-Z_]*_MOCK$/.test(name))) found = true;
     const value = stringOf(part);
-    if (value !== undefined && /mock-[\w-]+\.mjs/.test(value)) found = true;
+    if (value !== undefined && /\bmockBin\b|\b[A-Z][A-Z_]*_MOCK\b|mock-[\w-]+\.mjs/.test(value)) found = true;
   });
   return found;
 }

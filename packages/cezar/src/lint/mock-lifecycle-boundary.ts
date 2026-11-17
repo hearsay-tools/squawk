@@ -15,7 +15,11 @@ export const mockLifecycleBoundary: AstRule = {
       FunctionDeclaration(node) {
         if (NAMES.has(nameOf(child(node, 'id')) ?? '')) report(node, MESSAGE);
       },
+      FunctionExpression(node) {
+        if (NAMES.has(nameOf(child(node, 'id')) ?? '')) report(node, MESSAGE);
+      },
       VariableDeclarator(node) {
+        if (node.parent?.type !== 'VariableDeclaration' || children(node.parent, 'declarations')[0] !== node) return;
         if (NAMES.has(nameOf(child(node, 'id')) ?? '')) report(node, MESSAGE);
       },
       Literal(node) {

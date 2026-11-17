@@ -113,6 +113,7 @@ describe('run history ownership', () => {
       expect(scanHistoryReaders(other, samples[entry.kind])).toHaveLength(1);
     }
     expect(scanHistoryReaders('packages/cezar/src/runs/store.ts', 'readFileSync(this.eventsPath(id))')).toHaveLength(1);
+    expect(checkRule(runHistoryReader, 'packages/cezar/src/runs/store.ts', 'fs.appendFileSync(this.eventsPath(id), line)')).toEqual([]);
   });
 
   it.each([
