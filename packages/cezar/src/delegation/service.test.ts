@@ -19,7 +19,7 @@ import type { RunManager } from '../workflows/run.ts';
 import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import type { Caller } from './credentials.ts';
 
-import { fixture, seedWorkerWait, workerCleanupInternals } from "./service.testkit.ts";
+import { fixture, scheduledDestroyAttempts, seedWorkerWait, workerCleanupInternals } from "./service.testkit.ts";
 import { ensureOwnedWorkspace } from "./workspace.ts";
 import { DelegationService } from './service.ts';
 import { workerCleanups } from './worker-cleanup.ts';
@@ -454,7 +454,9 @@ describe('delegation service durable authority', () => {
     let release!: (value: boolean) => void;
     const held = new Promise<boolean>(resolve => { release = resolve; });
     const termination = vi.spyOn(f.manager, 'awaitRunTermination').mockReturnValue(held);
+    const attempts = scheduledDestroyAttempts(f.service);
     f.service.armDestroyRetries('project');
+    // bound: the scheduled attempt must reach its held termination before replacement.
     await vi.waitFor(() => expect(termination).toHaveBeenCalledOnce(), { timeout: 10_000 });
     const replacementManager = createFixtureManager(f.store, f.root);
     const detachReplacement = f.service.registerProject({ home: testHome(), id: 'project', root: f.root, store: f.store, manager: replacementManager });
@@ -462,7 +464,8 @@ describe('delegation service durable authority', () => {
     const results = vi.spyOn(f.store, 'commitWorkerResult');
     const events = vi.spyOn(f.store, 'appendEvent');
     release(terminated);
-    await new Promise<void>(resolve => setImmediate(resolve));
+    // Await the attempt itself so every write it could make precedes the absence checks.
+    await attempts[0];
     expect(writes).not.toHaveBeenCalled();
     expect(results).not.toHaveBeenCalled();
     expect(events).not.toHaveBeenCalled();

@@ -152,6 +152,7 @@ describe('authenticated delegation HTTP family', () => {
     const wrongReply = await request('/reply', { ...input, id: randomUUID(), kind: 'reply', requestId: input.id });
     expect(wrongReply.status).toBe(409);
     expect(await wrongReply.json()).toMatchObject({ code: 'incompatible_state', error: expect.stringContaining(`message follow-up ${workerId}`) });
+    expect(f.store.getRun(workerId)?.agentInputs).toHaveLength(1);
     const followup = await request('/follow-up', { id: randomUUID(), recipientRunId: workerId, kind: 'follow-up', requestId: input.id, text: 'More detail' });
     expect(followup.status).toBe(200); conversationSendResultSchema.parse(await followup.json());
     const token = f.credentials.issue('project', workerId, randomUUID()); setRunStatus(f.store, workerId, RUN_STATUS.running);
@@ -161,15 +162,6 @@ describe('authenticated delegation HTTP family', () => {
     expect(conversationInspectResultSchema.parse(await inspected.json()).messages).toHaveLength(3);
     const cancelled = await request('/cancel-request', { requestId: input.id });
     expect(requestOutcomeSchema.parse(await cancelled.json()).status).toBe('replied');
-  });
-  it('refuses replying to an outgoing request with a usable follow-up command', async () => {
-    const { workerId } = await spawn();
-    const input = { id: randomUUID(), recipientRunId: workerId, kind: 'request', text: 'Which file?' };
-    await request('/send', input);
-    const response = await request('/reply', { ...input, id: randomUUID(), kind: 'reply', requestId: input.id });
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ code: 'incompatible_state', error: expect.stringContaining(`message follow-up ${workerId}`) });
-    expect(f.store.getRun(workerId)?.agentInputs).toHaveLength(1);
   });
   it('validates inbox bodies and scopes receipts to the authenticated session', async () => {
     const { workerId } = await spawn(); setRunStatus(f.store, workerId, RUN_STATUS.running);
