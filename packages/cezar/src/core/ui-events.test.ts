@@ -162,7 +162,7 @@ describe('UiEvent vocabulary (compile-time contract)', () => {
       name: 'Bash',
       toolKind: 'execute',
       title: 'Ran npm test',
-      status: CODEX_TOOL_STATUS_MAP.inProgress,
+      status: CODEX_TOOL_STATUS_MAP.inProgress!,
     };
     expect(label(tool)).toBe('Ran npm test');
     expect(label({ kind: 'message', id: 'i2', role: 'assistant', text: 'hi' })).toBe('hi');
