@@ -7,7 +7,25 @@ interface Scope {
   values: Map<string, EsNode[]>;
   types: Map<string, EsNode[]>;
 }
-const lexical = new Set(['Program', 'BlockStatement', 'ClassBody', 'CatchClause', 'ForStatement', 'ForOfStatement', 'ForInStatement', 'SwitchStatement', 'TSModuleBlock', 'TSTypeAliasDeclaration', 'TSInterfaceDeclaration', 'ClassDeclaration', 'ClassExpression', 'TSFunctionType', 'TSConstructorType', 'TSMethodSignature', 'TSCallSignatureDeclaration', 'TSConstructSignatureDeclaration', 'TSDeclareFunction']);
+// Tree-sitter statement_block/class_body/internal_module boundaries become explicit ESTree
+// blocks, static blocks, classes and namespace bodies. All function shapes include empty-body
+// method signatures. Generic owners are detected by their declaration field below, so adding
+// another signature node cannot put its type parameters into an enclosing scope.
+const lexical = new Set([
+  'Program', 'BlockStatement', 'StaticBlock', 'ClassBody', 'CatchClause',
+  'ForStatement', 'ForOfStatement', 'ForInStatement', 'SwitchStatement',
+  'TSModuleDeclaration', 'TSModuleBlock', 'TSEnumDeclaration', 'TSEnumBody',
+  'TSTypeAliasDeclaration', 'TSInterfaceDeclaration', 'ClassDeclaration', 'ClassExpression',
+  'TSFunctionType', 'TSConstructorType', 'TSMethodSignature',
+  'TSCallSignatureDeclaration', 'TSConstructSignatureDeclaration',
+  'TSDeclareFunction', 'TSEmptyBodyFunctionExpression', 'TSMappedType', 'TSConditionalType',
+]);
+const varScopes = new Set(['Program', 'StaticBlock', 'TSModuleDeclaration', 'TSModuleBlock']);
+const signatureFunctions = new Set(['TSDeclareFunction', 'TSEmptyBodyFunctionExpression']);
+function functionScope(node: EsNode): boolean { return functionTypes.has(node.type) || signatureFunctions.has(node.type); }
+function ownsTypeParameters(node: EsNode): boolean {
+  return child(node, 'typeParameters')?.type === 'TSTypeParameterDeclaration';
+}
 
 /** Index declarations before checking reads, including hoisted var and nearer type shadows. */
 export class Bindings {
@@ -36,7 +54,7 @@ export class Bindings {
     if (['ClassDeclaration', 'TSInterfaceDeclaration', 'TSTypeAliasDeclaration'].includes(node.type)) this.add(outer, 'types', nameOf(id), node);
     if (['FunctionExpression', 'ClassExpression'].includes(node.type)) this.add(scope, 'values', nameOf(id), node);
     if (node.type === 'ClassExpression') this.add(scope, 'types', nameOf(id), node);
-    if (functionTypes.has(node.type)) for (const param of children(node, 'params')) this.bind(scope, param, param);
+    if (functionScope(node)) for (const param of children(node, 'params')) this.bind(scope, param, param);
     if (node.type === 'CatchClause') this.bind(scope, child(node, 'param'), node);
     if (node.type === 'VariableDeclarator') this.variable(node, scope);
     if (node.type.startsWith('Import') && node.type.endsWith('Specifier')) {
@@ -52,13 +70,13 @@ export class Bindings {
   private variable(node: EsNode, scope: Scope): void {
     let target = scope;
     if (node.parent?.kind === 'var') {
-      while (target.parent && target.node.type !== 'Program' && !functionTypes.has(target.node.type)) target = target.parent;
+      while (target.parent && !varScopes.has(target.node.type) && !functionScope(target.node)) target = target.parent;
     }
     this.bind(target, child(node, 'id'), node);
   }
 
   private index(node: EsNode, parent?: Scope): void {
-    const owns = lexical.has(node.type) || functionTypes.has(node.type);
+    const owns = lexical.has(node.type) || functionScope(node) || ownsTypeParameters(node);
     const scope = owns || !parent ? { node, parent, values: new Map(), types: new Map() } : parent;
     this.scopes.set(node, scope);
     this.declarations(node, scope, parent ?? scope);
