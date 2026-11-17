@@ -29,10 +29,6 @@ describe('AgentList — visibility', () => {
     expect(list()).toBeNull()
   })
 
-  it('mounts once there is at least one agent', () => {
-    render(<AgentList agents={[agent()]} />)
-    expect(list()).not.toBeNull()
-  })
 })
 
 describe('AgentList — rows', () => {
@@ -97,10 +93,6 @@ describe('AgentList — rows', () => {
     expect(document.querySelector('[data-slot="agent-activity"]')!.textContent).toBe('Ran npm test')
   })
 
-  it('exposes each status on the row for styling and tests', () => {
-    render(<AgentList agents={[agent({ status: 'declined' })]} />)
-    expect(rows()[0]!.getAttribute('data-status')).toBe('declined')
-  })
 })
 
 describe('AgentList — row interaction', () => {

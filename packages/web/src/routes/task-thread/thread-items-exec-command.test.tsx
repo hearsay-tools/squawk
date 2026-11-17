@@ -20,23 +20,6 @@ function goldenItem(events: object[], id: string, status: UiToolItem['status']):
 }
 
 describe('ToolCard expanded exec command from input', () => {
-  it('expands a command longer than 120 characters including its last argument', () => {
-    const tail = '--unique-final-flag-that-truncation-must-not-hide'
-    const segment = 'very-long-project-path-segment/'
-    const command = `cd /home/agent/projects/${segment.repeat(6)} && npm run typecheck ${tail}`
-    const base = goldenItem(bashAndScreenshot, 'toolu_mock_1', 'completed')
-    const item: UiToolItem = {
-      ...base,
-      title: toolDisplay('Bash', { command }).title,
-      input: { command },
-      output: undefined,
-    }
-    render(<ToolCard item={item} />)
-    const button = screen.getByRole('button', { name: /Ran/ })
-    expect(button.querySelector('code')?.textContent).not.toContain(tail)
-    fireEvent.click(button)
-    expect(document.querySelector('[data-slot="tool-command"]')?.textContent).toBe(command)
-  })
 
   it('preserves multiline string commands and shell operators', () => {
     const command = ['cat', 'hello world && echo HOME', 'done'].join('\n')
@@ -103,27 +86,14 @@ describe('ToolCard expanded exec command from input', () => {
     }
     render(<ToolCard item={item} />)
     expect(document.querySelector('[data-slot="tool-command"]')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /Ran/ }))
+    const button = screen.getByRole('button', { name: /Ran/ })
+    expect(button.querySelector('code')?.textContent).toContain('\u2026')
+    expect(button.querySelector('code')?.textContent).not.toContain(tail)
+    fireEvent.click(button)
     expect(document.querySelector('[data-slot="tool-command"]')?.textContent).toBe(command)
     expect(document.querySelector('[data-slot="tool-output"]')).toBeNull()
   })
 
-  it('keeps collapsed summaries compact', () => {
-    const tail = '--unique-final-flag-that-truncation-must-not-hide'
-    const segment = 'very-long-project-path-segment/'
-    const command = `cd /home/agent/projects/${segment.repeat(6)} && npm run typecheck ${tail}`
-    const base = goldenItem(bashAndScreenshot, 'toolu_mock_1', 'completed')
-    const item: UiToolItem = {
-      ...base,
-      title: toolDisplay('Bash', { command }).title,
-      input: { command },
-      output: undefined,
-    }
-    render(<ToolCard item={item} />)
-    const code = screen.getByRole('button', { name: /Ran/ }).querySelector('code')
-    expect(code?.textContent).toContain('\u2026')
-    expect(code?.textContent).not.toContain(tail)
-  })
 
   it('falls back to the title for historical items without command input', () => {
     const base = goldenItem(bashAndScreenshot, 'toolu_mock_1', 'completed')

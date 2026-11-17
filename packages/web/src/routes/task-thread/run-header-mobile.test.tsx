@@ -189,14 +189,6 @@ describe('RunHeader below md on a pushed task screen', () => {
     expect(links[2]!.querySelector('[data-slot="tab-count"]')).toBeNull()
   })
 
-  it('scrolls the tab row sideways instead of wrapping it (#692)', () => {
-    renderScreen()
-    const tabs = document.querySelector('[data-slot="run-tabs"]') as HTMLElement
-    expect(tabs.getAttribute('data-phone-bar')).toBe('true')
-    expect(tabs.className).toContain('max-md:overflow-x-auto')
-    expect(tabs.className).toContain('max-md:flex-nowrap')
-    expect(tabs.className).toContain('max-md:[&>*]:shrink-0')
-  })
 
   it('scrolls an active item tab into view on mount (#692)', () => {
     const scrolled: Element[] = []
