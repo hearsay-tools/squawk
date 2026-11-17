@@ -74,7 +74,30 @@ it('keeps user-changed entries and ignore files, and other writers records', asy
   expect(JSON.parse(readFileSync(manifest, 'utf8')).entries).toEqual([seed]);
 });
 
-it('retains ignore files and records if a kept copy cannot be excluded', async () => {
+it.each(['file', 'symlink', 'directory'])('keeps a changed %s ignored after removing its ignore file', async kind => {
+  const { paths, manifest } = await seedOldSkills(worktree);
+  const path = paths[0]!;
+  if (kind === 'directory') writeFileSync(join(worktree, path, 'SKILL.md'), 'changed directory\n');
+  else {
+    rmSync(join(worktree, path), { recursive: true });
+    if (kind === 'file') writeFileSync(join(worktree, path), 'changed file\n');
+    else {
+      const target = join(worktree, 'changed-target.md');
+      writeFileSync(target, 'changed link target\n');
+      symlinkSync(target, join(worktree, path));
+      const saved = JSON.parse(readFileSync(manifest, 'utf8'));
+      Object.assign(saved.entries.find((entry: { path: string }) => entry.path === path), { kind: 'link', identity: 'link:/old-target' });
+      writeFileSync(manifest, JSON.stringify(saved));
+    }
+  }
+  await removeProvisionedSkills(worktree);
+  expect(existsSync(join(worktree, path))).toBe(true);
+  expect(existsSync(join(worktree, dirname(path), '.gitignore'))).toBe(false);
+  expect(execFileSync('git', ['check-ignore', path], { cwd: worktree, encoding: 'utf8' }).trim()).toBe(path);
+  expect(existsSync(manifest)).toBe(false);
+});
+
+it.each([false, true])('retains ignore files and records if exclusion fails (note write fails: %s)', async noteFails => {
   const { paths, manifest } = await seedOldSkills(worktree);
   const saved = readFileSync(manifest, 'utf8');
   writeFileSync(join(worktree, paths[0]!, 'SKILL.md'), 'user edit\n');
@@ -83,8 +106,8 @@ it('retains ignore files and records if a kept copy cannot be excluded', async (
   mkdirSync(exclude);
   const repo = join(worktree, 'main');
   mkdirSync(repo);
-  const note = vi.fn();
-  await cleanupTaskWorktreeSkills(worktree, worktree, repo, note);
+  const note = vi.fn((_message: string) => { if (noteFails) throw new Error('run note write failed'); });
+  await expect(cleanupTaskWorktreeSkills(worktree, worktree, repo, note)).resolves.toBeUndefined();
   expect(note).toHaveBeenCalledTimes(1);
   expect(note.mock.calls[0]![0]).toContain(worktree);
   expect(note.mock.calls[0]![0]).toContain(`Could not exclude ${paths[0]} from git`);
@@ -137,7 +160,7 @@ it('keeps unverifiable legacy team copies excluded after their ignore file is re
   rmSync(manifest);
   await removeProvisionedSkills(worktree);
   expect(readFileSync(join(worktree, paths[0]!, 'SKILL.md'), 'utf8')).toBe('old installed copy\n');
-  expect(readFileSync(join(worktree, '.git/info/exclude'), 'utf8')).toContain(`${paths[0]}/\n`);
+  expect(readFileSync(join(worktree, '.git/info/exclude'), 'utf8')).toContain(`/${paths[0]}\n`);
   expect(existsSync(join(worktree, paths[1]!))).toBe(false);
   expect(existsSync(join(worktree, '.agents/skills/.gitignore'))).toBe(false);
   expect(existsSync(manifest)).toBe(false);

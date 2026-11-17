@@ -35,7 +35,7 @@ export function removeProvisionedSkills(worktree: string, options: SkillCleanupO
       // Changed and unverifiable copies stay excluded after their ignore file goes.
       const owner = (await files.inspect(entry.path)).owner;
       if (entry.kind !== 'ignore-file' && (owner === 'kept' || owner === 'theirs')) {
-        if (!(await excludeFromGit(files.worktree, `${entry.path}/`))) throw new Error(`Could not exclude ${entry.path} from git`);
+        if (!(await excludeFromGit(files.worktree, `/${entry.path}`))) throw new Error(`Could not exclude ${entry.path} from git`);
       }
       else if (await files.remove(entry.path)) continue;
       files.forget(entry.path);
@@ -44,6 +44,6 @@ export function removeProvisionedSkills(worktree: string, options: SkillCleanupO
     await files.save();
   }).catch(error => {
     // Leave durable records for the next step open or Continue to retry; the runner can still start.
-    options.onError?.(error);
+    try { options.onError?.(error); } catch { /* A failed run note must not block launch either. */ }
   });
 }
