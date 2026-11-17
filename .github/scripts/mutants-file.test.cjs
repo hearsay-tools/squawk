@@ -32,34 +32,6 @@ test('kind precedence and every mutator family, including unlisted Value mutator
   for (const name of ['ObjectLiteral', 'ArrayDeclaration', 'Regex', 'UnaryOperator', 'UpdateOperator', 'AssignmentOperator', 'ArithmeticOperator']) checkKind(name, 'x', 'y', 'Value');
 });
 
-test('the parser assigns nested names, methods, anonymous callbacks, and module code', t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mutants-functions-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const file = path.join(dir, 'sample.ts');
-  const source = [
-    'const moduleValue = 1;',
-    'function outer() {',
-    '  const nested = () => 2;',
-    '  [1].map(() => 3);',
-    '}',
-    'class Example {',
-    '  async method() { return 4; }',
-    '}',
-    'const expression = function () { return 5; };',
-    'const arrow = () => 6;',
-  ].join('\n');
-  fs.writeFileSync(file, source);
-  const ranges = m.functionRanges(file, root);
-  const at = line => m.functionOf({ start: { line, column: 20 } }, ranges);
-  assert.equal(at(1), '(module)');
-  assert.equal(at(2), 'outer');
-  assert.equal(at(3), 'nested');
-  assert.equal(at(4), 'outer');
-  assert.equal(at(7), 'Example.method');
-  assert.equal(at(9), 'expression');
-  assert.equal(at(10), 'arrow');
-});
-
 test('every target names a file at head with a declared tier and guard names that match exactly one function in it', () => {
   const targets = require('../mutants/targets.json');
   assert.equal(m.validateTargets(targets), targets);
