@@ -182,78 +182,22 @@ describe('a resumed session keeps its workflow step tools', () => {
     await settled(id);
   });
 
-  it("Continue rebuilds the session with the owning step's effort instead of the run effort", async () => {
-    const id = terminalRun({
-      def: EFFORT_CHAIN_DEF,
-      steps: [{ id: 'implement', sessionId: 'sess-1', backend: 'claude' }],
-      effort: 'medium',
+  it.each<{
+    name: string; def: WorkflowDef; stepId: string;
+    model?: string; effort?: string; field: 'model' | 'effort'; expected: string | undefined;
+  }>([
+    { name: 'owning step effort overrides run effort', def: EFFORT_CHAIN_DEF, stepId: 'implement', effort: 'medium', field: 'effort', expected: 'high' },
+    { name: 'explicit auto step effort clears run effort', def: { ...SINGLE_DEF, steps: SINGLE_DEF.steps.map(step => ({ ...step, effort: 'auto' })) }, stepId: 'work', effort: 'high', field: 'effort', expected: undefined },
+    { name: 'owning step model overrides run model', def: { ...SINGLE_DEF, steps: SINGLE_DEF.steps.map(step => ({ ...step, model: 'haiku' })) }, stepId: 'work', model: 'opus', field: 'model', expected: 'haiku' },
+    { name: 'absent step model inherits run model', def: SINGLE_DEF, stepId: 'work', model: 'opus', field: 'model', expected: 'opus' },
+    { name: 'absent step effort inherits run effort', def: SINGLE_DEF, stepId: 'work', effort: 'xhigh', field: 'effort', expected: 'xhigh' },
+  ])('Continue: $name', async ({ def, stepId, model, effort, field, expected }) => {
+    const id = terminalRun({ def, steps: [{ id: stepId, sessionId: 'sess-1', backend: 'claude' }],
+      ...(model === undefined ? {} : { model }), ...(effort === undefined ? {} : { effort }),
     });
-
     expect(manager!.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
     const spec = await specAt(0);
-    expect(spec.effort).toBe('high');
-    await settled(id);
-  });
-
-  it('Continue treats an explicit auto step effort as an override of the run effort', async () => {
-    const autoEffortDef: WorkflowDef = {
-      ...SINGLE_DEF,
-      steps: SINGLE_DEF.steps.map((step) => ({ ...step, effort: 'auto' })),
-    };
-    const id = terminalRun({
-      def: autoEffortDef,
-      steps: [{ id: 'work', sessionId: 'sess-1', backend: 'claude' }],
-      effort: 'high',
-    });
-
-    expect(manager!.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
-    const spec = await specAt(0);
-    expect(spec.effort).toBeUndefined();
-    await settled(id);
-  });
-
-  it("Continue rebuilds the session with the owning step's model instead of the run model (#464 review)", async () => {
-    // A catalog worker stores the parent's inherited model at run level while its step
-    // authored another; the first spawn ran `step.model ?? input.model`, so must Continue.
-    const modelDef: WorkflowDef = {
-      ...SINGLE_DEF,
-      steps: SINGLE_DEF.steps.map((step) => ({ ...step, model: 'haiku' })),
-    };
-    const id = terminalRun({
-      def: modelDef,
-      steps: [{ id: 'work', sessionId: 'sess-1', backend: 'claude' }],
-      model: 'opus',
-    });
-
-    expect(manager!.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
-    const spec = await specAt(0);
-    expect(spec.model).toBe('haiku');
-    await settled(id);
-  });
-
-  it('Continue inherits the run model when the owning step does not set one', async () => {
-    const id = terminalRun({
-      def: SINGLE_DEF,
-      steps: [{ id: 'work', sessionId: 'sess-1', backend: 'claude' }],
-      model: 'opus',
-    });
-
-    expect(manager!.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
-    const spec = await specAt(0);
-    expect(spec.model).toBe('opus');
-    await settled(id);
-  });
-
-  it('Continue inherits the run effort when the owning step does not set one', async () => {
-    const id = terminalRun({
-      def: SINGLE_DEF,
-      steps: [{ id: 'work', sessionId: 'sess-1', backend: 'claude' }],
-      effort: 'xhigh',
-    });
-
-    expect(manager!.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
-    const spec = await specAt(0);
-    expect(spec.effort).toBe('xhigh');
+    expect(spec[field]).toBe(expected);
     await settled(id);
   });
 

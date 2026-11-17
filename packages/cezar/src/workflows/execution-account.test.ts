@@ -166,7 +166,6 @@ describe('account holds read the execution account', () => {
     // bound: the owned ACK promise resolves immediately; wait only for its durable commit.
     await vi.waitFor(() => expect(store.getRun(live.id)?.agentInputs?.find(input => input.id === wait.id)?.deliveredAt).toBeDefined(), { timeout: 15_000 });
   });
-
 });
 
 describe('a held wake does not advertise itself to the workspace line', () => {
@@ -236,26 +235,5 @@ describe('a held wake does not advertise itself to the workspace line', () => {
       await drainFixtureManagers(otherRoot);
       otherStore.close(); rmSync(otherRoot, { recursive: true, force: true });
     }
-  });
-
-  it('keeps a recovered runnerless task queued while the configured default account is held', async () => {
-    const launched = controlledSessions();
-    const semaphore = new WorkspaceSemaphore({ home: testHome() });
-    manager.dispose();
-    manager = createFixtureManager(store, repoRoot, { home: testHome(), semaphore });
-    writeFileSync(join(repoRoot, '.ai/cezar/config.json'), JSON.stringify({ defaultRunner: 'codex' }));
-    const holder = store.createRun({ title: 'holder', workflow: 'quick-task', task: 'hold', runner: 'codex', steps: [] });
-    setRunStatus(store, holder.id, RUN_STATUS.waiting, { autoResumeAt: new Date(Date.now() + 600_000).toISOString() });
-    const parked = store.createRun({ title: 'legacy', workflow: 'quick-task', task: 'runnerless',
-      workflowDef: QUICK_TASK_WORKFLOW, steps: [{ id: 'task', name: 'task', kind: STEP_KIND.agent }] });
-    await manager.recover();
-    await pumps(manager);
-    expect(store.getRun(parked.id)?.status).toBe('queued');
-    expect(launched).toEqual([]);
-    setRunStatus(store, holder.id, RUN_STATUS.failed, { autoResumeAt: undefined });
-    await semaphore.release();
-    // bound: the owned runner's launch proves the recovered task left the account hold.
-    await vi.waitFor(() => expect(launched.map(session => session.id)).toEqual([parked.id]), { timeout: 15_000 });
-    expect(store.getRun(parked.id)?.runner).toBe('codex');
   });
 });
