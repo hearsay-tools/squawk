@@ -1,7 +1,14 @@
 import { child, children, nameOf, stringOf, type EsNode } from '../ast-rule.ts';
 
 export function nodes(node: EsNode): EsNode[] {
-  return Object.keys(node).filter(key => key !== 'parent').flatMap(key => child(node, key) ?? children(node, key));
+  const found: EsNode[] = [];
+  for (const key of Object.keys(node)) {
+    if (key === 'parent') continue;
+    const single = child(node, key);
+    if (single) found.push(single);
+    else for (const item of children(node, key)) found.push(item);
+  }
+  return found;
 }
 export function walk(node: EsNode, visit: (node: EsNode) => void): void {
   visit(node);

@@ -152,9 +152,9 @@ function parenthesized(node: EsNode, tokens: NodeTokens): boolean {
 
 type ScopeIndex = Map<string, EsNode[]>;
 const isSyntax = (value: unknown): value is EsNode => typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string';
-interface ScopeFacts { types: WeakMap<EsNode, ScopeIndex>; bindings: WeakMap<EsNode, ScopeIndex>; patterns: WeakMap<EsNode, EsNode[]>; reached: WeakSet<EsNode>; imports: EsNode[] }
+interface ScopeFacts { types: Map<EsNode, ScopeIndex>; bindings: Map<EsNode, ScopeIndex>; patterns: Map<EsNode, EsNode[]>; reached: Set<EsNode>; imports: EsNode[] }
 
-function addEntry(index: WeakMap<EsNode, ScopeIndex>, scopes: EsNode[], name: string | undefined, value: EsNode | undefined): void {
+function addEntry(index: Map<EsNode, ScopeIndex>, scopes: EsNode[], name: string | undefined, value: EsNode | undefined): void {
   if (!name || !value) return;
   for (const scope of scopes) {
     let entries = index.get(scope);
@@ -171,7 +171,8 @@ function addEntry(index: WeakMap<EsNode, ScopeIndex>, scopes: EsNode[], name: st
  * check never walks a scope again.
  */
 function scopeFacts(program: EsNode, tokens: NodeTokens): ScopeFacts {
-  const facts: ScopeFacts = { types: new WeakMap(), bindings: new WeakMap(), patterns: new WeakMap(), reached: new WeakSet(), imports: [] };
+  // Plain maps: they live as long as the file's Program, and oxlint's WeakMap wrapper costs more.
+  const facts: ScopeFacts = { types: new Map(), bindings: new Map(), patterns: new Map(), reached: new Set(), imports: [] };
   const functions: EsNode[] = [];
   const blocks: EsNode[] = [];
   function visit(node: EsNode) {
@@ -180,8 +181,9 @@ function scopeFacts(program: EsNode, tokens: NodeTokens): ScopeFacts {
     if (isFunction) functions.push(node);
     if (isBlock) blocks.push(node);
     if (isFunction || isBlock) facts.reached.add(node);
-    addEntry(facts.types, functions, nameOf(node), child(node, 'typeAnnotation'));
-    if (node.type === 'VariableDeclarator') {
+    // Only an identifier has both a name and a type annotation.
+    if (node.type === 'Identifier' || node.type === 'PrivateIdentifier') addEntry(facts.types, functions, nameOf(node), child(node, 'typeAnnotation'));
+    else if (node.type === 'VariableDeclarator') {
       addEntry(facts.bindings, blocks, nameOf(child(node, 'id')), child(node, 'init'));
       if (child(node, 'id')?.type === 'ObjectPattern') for (const scope of blocks) {
         const list = facts.patterns.get(scope);
@@ -189,7 +191,7 @@ function scopeFacts(program: EsNode, tokens: NodeTokens): ScopeFacts {
         else facts.patterns.set(scope, [node]);
       }
     }
-    if (node.type === 'ImportSpecifier') facts.imports.push(node);
+    else if (node.type === 'ImportSpecifier') facts.imports.push(node);
     for (const key of tokens.visitorKeys[node.type] ?? []) {
       const value = node[key];
       if (Array.isArray(value)) { for (const item of value) if (isSyntax(item)) visit(item); }
@@ -206,10 +208,10 @@ const NO_ENTRIES: ScopeIndex = new Map();
 
 /** Structural facts shared by the eight owners, with no owner-dependent reference results. */
 function syntaxIndex(program: EsNode, tokens: NodeTokens) {
-  const descendants = new WeakMap<EsNode, EsNode[]>();
-  const annotations = new WeakMap<EsNode, Map<string, EsNode[]>>();
-  const declarations = new WeakMap<EsNode, Map<string, EsNode[]>>();
-  const parentheses = new WeakMap<EsNode, boolean>();
+  const descendants = new Map<EsNode, EsNode[]>();
+  const annotations = new Map<EsNode, Map<string, EsNode[]>>();
+  const declarations = new Map<EsNode, Map<string, EsNode[]>>();
+  const parentheses = new Map<EsNode, boolean>();
   let facts: ScopeFacts | undefined;
   function nodes(scope: EsNode): EsNode[] {
     const known = descendants.get(scope);
@@ -288,12 +290,12 @@ function references(group: OwnerGroup, sourceCode: AstContext['sourceCode']) {
   let syntax: ReturnType<typeof syntaxIndex>;
   let program: EsNode;
   let imported = false;
-  const memo = new Map<string, WeakMap<EsNode, boolean>>();
+  const memo = new Map<string, Map<EsNode, boolean>>();
   const nodes = (node: EsNode) => syntax.nodes(node);
   function cached(kind: string, node: EsNode | undefined, check: (node: EsNode) => boolean): boolean {
     if (!node) return false;
     let entries = memo.get(kind);
-    if (!entries) { entries = new WeakMap(); memo.set(kind, entries); }
+    if (!entries) { entries = new Map(); memo.set(kind, entries); }
     const known = entries.get(node);
     if (known !== undefined) return known;
     entries.set(node, false);
