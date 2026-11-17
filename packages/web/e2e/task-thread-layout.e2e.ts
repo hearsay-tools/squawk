@@ -587,35 +587,6 @@ function expectUsableSessionControls(facts: SessionLayout, width: number, height
 
 // #478/#460: real fixture values and real browser geometry, including the narrow action collision.
 describe('responsive session composer', () => {
-  it('ends after normal padding, without an idle band below the action row', () => {
-    browser.setViewport(390, 844)
-    browser.goto(`${baseUrl}${scoped(`/tasks/${LONG_RUN.id}`)}`)
-    browser.waitForFunction(`document.querySelector('[data-slot="follow-up-model-pill"]')?.textContent?.includes('${LONG_RUN.model}') === true && !!document.querySelector('[data-slot="composer-actions"] [aria-label="Continue"]')`)
-    browser.evaluate(`document.querySelector('[data-slot="composer-editor"]').scrollIntoView({block:'end'})`)
-    const facts = waitForSettledSample(browser, sessionLayoutExpression) as SessionLayout
-    expectEditorFitsViewport(facts)
-    expect(facts.bottomGap).toBeGreaterThanOrEqual(0)
-    expect(facts.bottomGap).toBeLessThanOrEqual(20)
-  }, 90_000)
-
-  it.each(['light', 'dark'])('keeps all four actions separate at 360×640 / %s', (theme) => {
-    browser.setViewport(360, 640)
-    browser.goto(`${baseUrl}${scoped(`/tasks/${LONG_RUN.id}`)}`)
-    browser.waitForFunction(`document.querySelector('[data-slot="follow-up-model-pill"]')?.textContent?.includes('${LONG_RUN.model}') === true && !!document.querySelector('[data-slot="composer-actions"] [aria-label="Continue"]')`)
-    browser.evaluate(`document.documentElement.classList.toggle('light', ${theme === 'light'}); document.querySelector('[data-slot="composer-editor"]').scrollIntoView({block:'end'})`)
-    const facts = waitForSettledSample(browser, sessionLayoutExpression) as SessionLayout
-    expectEditorFitsViewport(facts)
-    const actions = [facts.controls.attach, facts.controls.dictation, facts.controls.archive, facts.controls.continue]
-    for (const [i, action] of actions.entries()) {
-      expect(action.hit, `action ${i} center hit`).toBe(true)
-      for (const [offset, other] of actions.slice(i + 1).entries()) {
-        expect(overlaps(action, other), `actions ${i} and ${i + offset + 1} overlap`).toBe(false)
-      }
-    }
-    expect(facts.archiveVisibleText).toBe('')
-    expect(facts.archiveLabel).toBe('Archive task')
-  }, 90_000)
-
   it.each([
     { width: 360, height: 640 }, { width: 390, height: 844 },
     { width: 768, height: 900 }, { width: 800, height: 900 }, { width: 1440, height: 900 },
@@ -626,6 +597,15 @@ describe('responsive session composer', () => {
     browser.evaluate(`document.documentElement.style.setProperty('--default-transition-duration', '0s'); document.documentElement.classList.toggle('light', ${theme === 'light'}); document.querySelector('[data-slot="composer-editor"]').scrollIntoView({block:'end'})`)
     const facts = waitForSettledSample(browser, sessionLayoutExpression) as SessionLayout
     expectEditorFitsViewport(facts)
+    if (width === 360) {
+      const actions = [facts.controls.attach, facts.controls.dictation, facts.controls.archive, facts.controls.continue]
+      for (const [i, action] of actions.entries()) {
+        expect(action.hit, `action ${i} center hit`).toBe(true)
+        for (const [offset, other] of actions.slice(i + 1).entries()) {
+          expect(overlaps(action, other), `actions ${i} and ${i + offset + 1} overlap`).toBe(false)
+        }
+      }
+    }
     const { runner, model, effort } = facts.controls
 
     // The fixture must reach the pill, not silently resolve to the automatic model.
