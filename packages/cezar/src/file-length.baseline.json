@@ -10,7 +10,7 @@
     "packages/cezar/src/server/server.ts": 4908,
     "packages/web/e2e/agent-browser.ts": 1233,
     "packages/web/src/api/client.ts": 2126,
-    "packages/web/src/api/queries.ts": 2024,
+    "packages/web/src/api/queries.ts": 2011,
     "packages/web/src/routes/github/github.tsx": 1243,
     "packages/web/src/routes/global-tasks.tsx": 1069,
     "packages/web/src/routes/tasks-overview.tsx": 1619
