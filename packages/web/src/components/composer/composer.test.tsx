@@ -42,7 +42,7 @@ const SKILLS: Skill[] = [
 /** The composer fetches `/api/v1/runner-skills?runner=claude` (only once `/` has been typed) and `/api/v1/ui-state`
  *  (#519: the autocomplete's usage order + bump). `uiState: null` answers the GET with a 404
  *  (the "ui-state unavailable" case); PUT bodies are recorded in `uiStatePuts`. */
-function stubSkillsFetch(uiState: Record<string, unknown> | null = {}) {
+function stubSkillsFetch(uiState: Record<string, unknown> | null = {}, skills: Skill[] = SKILLS) {
   const uiStatePuts: unknown[] = []
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -54,7 +54,7 @@ function stubSkillsFetch(uiState: Record<string, unknown> | null = {}) {
         new Response(body, { status, headers: { 'content-type': 'application/json' } }),
       )
     }
-    const body = url.includes('/api/v1/runner-skills?runner=claude') ? JSON.stringify({ runner: 'claude', skills: SKILLS, problems: [], source: 'live' }) : '[]'
+    const body = url.includes('/api/v1/runner-skills?') ? JSON.stringify({ runner: new URL(url, 'http://localhost').searchParams.get('runner'), skills, problems: [], source: 'live' }) : '[]'
     return Promise.resolve(
       new Response(body, { status: 200, headers: { 'content-type': 'application/json' } }),
     )
@@ -66,8 +66,9 @@ function stubSkillsFetch(uiState: Record<string, unknown> | null = {}) {
 function renderComposer(
   props: Partial<ComposerProps> = {},
   uiState: Record<string, unknown> | null = {},
+  skills: Skill[] = SKILLS,
 ) {
-  const { fetchMock, uiStatePuts } = stubSkillsFetch(uiState)
+  const { fetchMock, uiStatePuts } = stubSkillsFetch(uiState, skills)
   const onSubmit = vi.fn(() => Promise.resolve({}))
   render(
     <QueryClientProvider client={createQueryClient()}>
@@ -426,7 +427,7 @@ describe('/ skills autocomplete (#380)', () => {
   it('accepts a skill with Tab while Shift+Tab leaves the draft unchanged', async () => {
     const { textarea, onSubmit } = renderComposer()
     type(textarea, '/om-fix')
-    await screen.findByText('Fix an issue')
+    await screen.findByText(/Fix an issue/)
     expect(fireEvent.keyDown(textarea, { key: 'Tab', shiftKey: true })).toBe(true)
     expect(textarea.value).toBe('/om-fix')
     expect(fireEvent.keyDown(textarea, { key: 'Tab' })).toBe(false)
@@ -1204,4 +1205,15 @@ describe('session control layout', () => {
     expect(slot).not.toBeNull()
     expect(slot!.textContent).toBe('sonnet')
   })
+})
+
+it('lists the step runner/account and inserts its id while displaying its name', async () => {
+  const { textarea, fetchMock } = renderComposer({ skillRunner: 'codex', skillAccount: 'work' }, {}, [
+    { id: 'plugin:check', name: 'Check', description: 'Check this change', path: '/repo/check/SKILL.md' },
+  ])
+  type(textarea, '/Check')
+  await screen.findByText(/Check this change/)
+  expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/v1/runner-skills?runner=codex&account=work')).toBe(true)
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('/plugin:check ')
 })
