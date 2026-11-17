@@ -38,6 +38,21 @@ const site = (file: string, name: string, line = 1): Site => ({ file, rule: 'r',
 const entry = (file: string, name: string, count: number): BaselineEntry => ({ file, rule: 'r', site: name, count });
 
 describe('the rule files', () => {
+  it('allows an absent directory but keeps other read errors fatal', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ast-grep-empty-'));
+    try {
+      const absent = join(dir, 'absent');
+      expect(ruleIds(absent)).toEqual([]);
+      expect(baselineRules(absent)).toEqual([]);
+      const file = join(dir, 'file');
+      writeFileSync(file, 'not a directory');
+      expect(() => ruleIds(file)).toThrow();
+      expect(() => baselineRules(file)).toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('name each rule file for its rule, and give each rule a message and a rule-tests file', () => {
     const ids = ruleIds();
     for (const id of ids) {

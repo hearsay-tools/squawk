@@ -131,8 +131,18 @@ export async function scanRepository(filter?: string): Promise<Site[]> {
 
 const ruleFileSchema = z.object({ id: z.string(), message: z.string().min(1) });
 
+/** The last rule port removes the directory; every other read error stays fatal. */
+function directoryFiles(dir: string): string[] {
+  try {
+    return readdirSync(dir);
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return [];
+    throw error;
+  }
+}
+
 export function ruleIds(dir = rulesDir): string[] {
-  return readdirSync(dir)
+  return directoryFiles(dir)
     .filter((name) => name.endsWith('.yml'))
     .map((name) => name.slice(0, -'.yml'.length))
     .sort();
@@ -148,7 +158,7 @@ export function baselinePath(rule: string, dir = rulesDir): string {
 }
 
 export function baselineRules(dir = rulesDir): string[] {
-  return readdirSync(dir)
+  return directoryFiles(dir)
     .filter((name) => name.endsWith('.baseline.json'))
     .map((name) => name.slice(0, -'.baseline.json'.length))
     .sort();
