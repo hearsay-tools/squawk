@@ -32,17 +32,26 @@ import { activeRunWriteRules } from '../src/lint/active-run-write.ts';
 
 interface Measure { label: string; user: number; sys: number; wall: number; load: string }
 
-const args = process.argv.slice(2);
-const flag = (name: string) => args.includes(name);
-const runsIndex = args.indexOf('--runs');
-const runs = runsIndex >= 0 ? Number(args[runsIndex + 1]) : 1;
-const paths = args.filter((arg, index) => !arg.startsWith('--') && (runsIndex < 0 || index !== runsIndex + 1));
-if (paths.length === 0) paths.push('packages');
+export interface ProfileOptions { paths: string[]; runs: number; alone: boolean; families: boolean }
+
+/** The command line: flags, `--runs N`, and the paths to lint (default `packages`). */
+export function profileArgs(args: readonly string[]): ProfileOptions {
+  const runsIndex = args.indexOf('--runs');
+  const paths = args.filter((arg, index) => !arg.startsWith('--') && (runsIndex < 0 || index !== runsIndex + 1));
+  return {
+    paths: paths.length > 0 ? paths : ['packages'],
+    runs: runsIndex >= 0 ? Number(args[runsIndex + 1]) : 1,
+    alone: args.includes('--alone'),
+    families: args.includes('--families'),
+  };
+}
+
+const { paths, runs, alone, families: byFamily } = profileArgs(process.argv.slice(2));
 
 const base = JSON.parse(readFileSync(join(repoRoot, '.oxlintrc.json'), 'utf8')) as { jsPlugins?: string[]; rules: Record<string, unknown> };
 const pluginPath = resolve(repoRoot, base.jsPlugins?.[0] ?? 'packages/cezar/src/lint/plugin.ts');
 const builtinRules = Object.fromEntries(Object.entries(base.rules).filter(([name]) => !name.startsWith('cez/')));
-const scratch = mkdtempSync(join(tmpdir(), 'cez-profile-lint-'));
+let scratch = '';
 
 const loadavg = () => (existsSync('/proc/loadavg') ? readFileSync('/proc/loadavg', 'utf8').split(' ').slice(0, 3).join(' ') : 'n/a');
 const seconds = (text: string) => {
@@ -99,8 +108,8 @@ function main(): void {
   add(best('load', writeConfig('load', plugin('load'), { 'noop/noop': 'error' })));
   add(best('transport', writeConfig('transport', plugin('transport'), { 'noop/noop': 'error' })));
   add(best('full', join(repoRoot, '.oxlintrc.json')));
-  if (flag('--families')) for (const [name, rules] of Object.entries(families)) add(best(`family ${name}`, writeConfig(`family-${name}`, [pluginPath], enabled(rules))));
-  if (flag('--alone')) for (const rule of RULES) add(best(`cez/${rule.name}`, writeConfig(`rule-${rule.name}`, [pluginPath], enabled([rule.name]))));
+  if (byFamily) for (const [name, rules] of Object.entries(families)) add(best(`family ${name}`, writeConfig(`family-${name}`, [pluginPath], enabled(rules))));
+  if (alone) for (const rule of RULES) add(best(`cez/${rule.name}`, writeConfig(`rule-${rule.name}`, [pluginPath], enabled([rule.name]))));
   console.log(`Command: oxlint -c <config> ${paths.join(' ')} (cwd ${repoRoot}); best of ${runs}; CPU in seconds.\n`);
   console.log('| Config | User | Sys | Wall | Load (1/5/15 min) |\n| --- | ---: | ---: | ---: | --- |');
   for (const m of results) console.log(row(m));
@@ -113,8 +122,11 @@ function main(): void {
   }
 }
 
-try {
-  main();
-} finally {
-  rmSync(scratch, { recursive: true, force: true });
+if (import.meta.main) {
+  scratch = mkdtempSync(join(tmpdir(), 'cez-profile-lint-'));
+  try {
+    main();
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
 }
