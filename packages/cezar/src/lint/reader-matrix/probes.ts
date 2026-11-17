@@ -1,5 +1,7 @@
 /** Syntax matrices for the old run-reader scanners (hearsay-tools/squawk#3789). */
-export interface ReaderProbe { id: string; code: string }
+import { factReviewProbes } from './review-probes.ts';
+
+export interface ReaderProbe { id: string; code: string; file?: string }
 
 /** Method kinds cross key forms in both method containers. Invalid grammar is not a cell. */
 export function historyProbes(): ReaderProbe[] {
@@ -41,6 +43,8 @@ export function factProbes(): ReaderProbe[] {
     { id: 'issue/call-argument', code: "Boolean(run.status === 'waiting') && run.autoResumeAt;" },
     ...factOperandProbes(),
     ...factWindowProbes(),
+    ...factJoinProbes(),
+    ...factReviewProbes(),
   ];
   for (const [comparison, wait] of Object.entries({ forward: "run.status === 'waiting'", reverse: "'waiting' !== run.status" })) {
     for (const [outerName, outer] of Object.entries(wrappers)) for (const [innerName, inner] of Object.entries(wrappers)) {
@@ -116,6 +120,46 @@ export function factWindowProbes(): ReaderProbe[] {
     const expression = direction === 'forward' ? `${comparison} && ${gap} && run.autoResumeAt`
       : `run.autoResumeAt && ${gap} && ${comparison}`;
     probes.push({ id: `window/${comparison}/${length}/${direction}`, code: `const hold = ${expression};` });
+  }
+  return probes;
+}
+
+/** Joins follow bounded text between sites, independent of their common ancestor's syntax. */
+export function factJoinProbes(): ReaderProbe[] {
+  const probes: ReaderProbe[] = [];
+  const forms: Array<(wait: string, resume: string) => string> = [
+    (w, r) => `${r} ?? (x && ${w})`,
+    (w, r) => `(${w} || x) ?? ${r}`,
+    (w, r) => `${r} ?? f(a && b, ${w})`,
+    (w, r) => `f(${w}, a || b) ?? ${r}`,
+    (w, r) => `(${w} && a) ?? ${r}`,
+    (w, r) => `[${r}, a && b, ${w}]`,
+    (w, r) => `[${w}, a || b, ${r}]`,
+    (w, r) => `f(${r}, a && ${w})`,
+    (w, r) => `f(${w}, a || ${r})`,
+    (w, r) => `${w} ? a || b : ${r}`,
+    (w, r) => `${r} ? a && b : ${w}`,
+    (w, r) => `(${w}, a || b, ${r})`,
+    (w, r) => `(${r}, a && b, ${w})`,
+    (w, r) => `${r} ||= ${w}`,
+    (w, r) => `${r} &&= ${w}`,
+    (w, r) => `${r} ??= ${w}`,
+    (w, r) => `${w} && ${r}`,
+    (w, r) => `${r} || ${w}`,
+    (w, r) => `${w}; a || ${r}`,
+    (w, r) => `f({ test: ${w} }, a || ${r})`,
+    (w, r) => `${w} && f({}, ${r})`,
+    (w, r) => `[${w}, ${r}, a && b, ${r}]`,
+    (w, r) => `[${r}, a && b, ${r}, ${w}]`,
+  ];
+  for (const wait of ["run.status === 'waiting'", "'waiting' !== run.status"]) {
+    for (const resume of ['run.autoResumeAt', 'run?.autoResumeAt', 'run.\\u0061utoResumeAt', 'run?.\\u0061utoResumeAt', 'run.autoResum\\u0065At', 'run?.autoResum\\u0065At', 'run. autoResumeAt', "run['autoResumeAt']"]) {
+      for (const [index, form] of forms.entries()) {
+        // Optional member access cannot be an assignment target in TypeScript.
+        if (resume.includes('?.') && index >= 13 && index <= 15) continue;
+        probes.push({ id: `join/${wait}/${resume}/${index}`, code: `function check() { ${form(wait, resume)}; }` });
+      }
+    }
   }
   return probes;
 }

@@ -38,8 +38,8 @@ try {
     const generated = probes();
     const digest = createHash('sha256').update(JSON.stringify(generated)).digest('hex');
     const findings = generated.map(probe => name === 'run-history-reader'
-      ? scanner.scanHistoryReaders(file, probe.code, []).map(site => site.kind).sort()
-      : scanner.scanRunFacts(file, probe.code, {}).map(site => site.rule).sort());
+      ? scanner.scanHistoryReaders(probe.file ?? file, probe.code, []).map(site => site.kind).sort()
+      : scanner.scanRunFacts(probe.file ?? file, probe.code, {}).map(site => site.rule).sort());
     const findingSets = [...new Map(findings.map(ids => [JSON.stringify(ids), ids])).values()];
     const outcomes = findings.map(ids => findingSets.findIndex(set => JSON.stringify(set) === JSON.stringify(ids)));
     writeFileSync(new URL(`./${name}.json`, import.meta.url), JSON.stringify({ revision, digest, findingSets, outcomes }) + '\n');

@@ -376,11 +376,14 @@ from another module. It has no baseline and no exception.
 
 
 The generated reader matrices in `packages/cezar/src/lint/reader-matrix/` pin 444 method/key
-cells and 19,152 wrapper/operand/container/operator cells to finding IDs captured from the `9f43ee092` scanners
+cells and 19,548 wrapper/operand/container/operator cells to finding IDs captured from the `9f43ee092` scanners
 (hearsay-tools/squawk#3789). Operand and container cells include quoted/template literals,
 wrapped, chained, called, binary and unary member operands; called or uncalled functions;
-and `&&`, `||` and `??` joins. Only `&&` and `||` join a hold; window cells pin the 160-character limit with operand suffixes. The raw `status` spelling
-and the original token gap distinguish escaped names and parentheses. The data stores a finding-set
+and logical text under `??`, arrays, call arguments, conditionals, sequences and assignments.
+The AST supplies candidate sites. The old join test reads bounded slices of one blanked source:
+the nearest resume access must fit within 160 characters, with `&&` or `||` and no `;`, `{` or `}`
+between the sites. Window cells pin that limit with operand suffixes. Raw property spellings
+and the original comparison token gap distinguish escaped names and parentheses. The data stores a finding-set
 table and an outcome index per cell, plus a digest of the generated cells to refuse stale
 expectations. Run `node packages/cezar/src/lint/reader-matrix/generate.mjs` to reproduce the
 capture from the historical modules in a temporary directory. Tests use only the committed data;

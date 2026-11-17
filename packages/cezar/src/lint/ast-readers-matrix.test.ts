@@ -21,13 +21,13 @@ describe('run reader generated parity matrices', () => {
     expect(createHash('sha256').update(JSON.stringify(generated)).digest('hex')).toBe(expected.digest);
     expect(generated).toHaveLength(expected.outcomes.length);
     expect(new Set(generated.map(cell => cell.id)).size).toBe(generated.length);
-    const differences = generated.flatMap(({ id, code }, index) => {
+    const differences = generated.flatMap(({ id, code, file }, index) => {
       const findings = expected.findingSets[expected.outcomes[index]!]!;
-      const actual = checkRule(rule, 'packages/cezar/src/reader-matrix-probe.ts', code)
+      const actual = checkRule(rule, file ?? 'packages/cezar/src/reader-matrix-probe.ts', code)
         .map(finding => finding.message.split(':')[0]!).sort();
       return JSON.stringify(actual) === JSON.stringify(findings) ? [] : [{ id, code, expected: findings, actual }];
     });
     expect(differences).toEqual([]);
-    // bound: a matrix parses up to 19,152 snippets synchronously; only a hung rule should hit this.
+    // bound: a matrix parses up to 19,548 snippets synchronously; only a hung rule should hit this.
   }, 30_000);
 });

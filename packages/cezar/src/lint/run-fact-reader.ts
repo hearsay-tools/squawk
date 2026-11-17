@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { child, children, type AstRule, type EsNode } from './ast-rule.ts';
 import { literal, nodeLine, offset, propertyName, unwrap } from './ast-syntax.ts';
 import { scanned } from './contract-root-import.ts';
-import { blank } from './blank.ts';
 import { blankOnce, repoRoot } from './source-rule.ts';
 
 /**
@@ -115,12 +114,7 @@ const HOW: Record<Rule, string> = {
 };
 
 const HOLD_WINDOW = 160;
-const HOLD_BOUNDARIES = new Set([
-  'BlockStatement', 'StaticBlock', 'ObjectExpression', 'ObjectPattern', 'ClassBody',
-  'TSTypeLiteral', 'JSXExpressionContainer', 'JSXSpreadAttribute',
-]);
-interface ResumeAccess { start: number; end: number }
-interface HoldSummary { resumes: ResumeAccess[]; waits: EsNode[]; barriers: number[] }
+interface ResumeAccess { start: number; end: number; node: EsNode }
 
 const firstStatus = new WeakMap<EsNode, EsNode | undefined>();
 const lastStatus = new WeakMap<EsNode, EsNode | undefined>();
@@ -159,7 +153,7 @@ function waitingStatus(node: EsNode): EsNode | undefined {
 
 /** ESTree erases parentheses and decodes literals. Keep the old scanner's operand spelling.
  * Inspect only the token gap inside this comparison; comments were whitespace in the old scan. */
-function scannerWaitingComparison(node: EsNode, status: EsNode, source: string): boolean {
+function scannerWaitingComparison(node: EsNode, status: EsNode, source: string, code: string): boolean {
   const left = child(node, 'left')!, right = child(node, 'right')!;
   const reversed = literal(left) === 'waiting';
   const quoted = unwrap(reversed ? left : right)!;
@@ -169,7 +163,7 @@ function scannerWaitingComparison(node: EsNode, status: EsNode, source: string):
   const property = child(status, 'property')!;
   const [propertyStart, propertyEnd] = property.range as [number, number];
   if (property.type !== 'Identifier' || source.slice(propertyStart, propertyEnd) !== 'status' || source.charAt(propertyStart - 1) !== '.') return false;
-  const gap = blank(reversed ? source.slice(quoteEnd, propertyStart) : source.slice(propertyEnd, quoteStart));
+  const gap = reversed ? code.slice(quoteEnd, propertyStart) : code.slice(propertyEnd, quoteStart);
   return reversed ? /^\s*(?:===|!==)\s*[\w$.?]*\.$/.test(gap) : /^\s*(?:===|!==)\s*$/.test(gap);
 }
 
@@ -186,39 +180,26 @@ function waitingBounds(node: EsNode): { start: number; end: number } {
   };
 }
 
-/** Keep only accesses near either edge. A join cannot reach an interior access beyond 160 chars.
- * Cached child summaries make a chain of waiting comparisons linear, with bounded summaries. */
-function holdSummary(node: EsNode, cache: WeakMap<EsNode, HoldSummary>): HoldSummary {
-  const previous = cache.get(node);
-  if (previous) return previous;
-  const [start, end] = node.range as [number, number];
-  if (HOLD_BOUNDARIES.has(node.type) || node.type === 'TemplateLiteral' && children(node, 'expressions').length > 0) {
-    const boundary = { resumes: [], waits: [], barriers: [start, end] };
-    cache.set(node, boundary);
-    return boundary;
+/** First resume access at or after an offset. Access tokens do not overlap. */
+function resumeIndex(resumes: ResumeAccess[], at: number): number {
+  let low = 0, high = resumes.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (resumes[middle]!.start < at) low = middle + 1;
+    else high = middle;
   }
-  const parts: HoldSummary[] = [];
-  for (const key of Object.keys(node)) {
-    if (key === 'parent') continue;
-    const one = child(node, key);
-    for (const item of one ? [one] : children(node, key)) parts.push(holdSummary(item, cache));
-  }
-  const nearEdge = (at: number) => at - start <= HOLD_WINDOW || end - at <= HOLD_WINDOW;
-  const resumes = parts.flatMap(part => part.resumes);
-  if (node.type === 'MemberExpression' && !node.computed && propertyName(node) === 'autoResumeAt') {
-    const property = child(node, 'property')!;
-    resumes.push({ start: offset(property) - (node.optional ? 2 : 1), end: (property.range as [number, number])[1] });
-  }
-  // The old lookaround crossed expression wrappers and call arguments. Block boundaries above
-  // still stop it; every other child can carry a comparison to a surrounding logical join.
-  const waits = waitingStatus(node) ? [node] : parts.flatMap(part => part.waits);
-  const summary = {
-    resumes: [...new Set(resumes)].filter(access => nearEdge(access.start) || nearEdge(access.end)),
-    waits: waits.filter(wait => { const bounds = waitingBounds(wait); return nearEdge(bounds.start) || nearEdge(bounds.end); }),
-    barriers: parts.flatMap(part => part.barriers).filter(nearEdge),
-  };
-  cache.set(node, summary);
-  return summary;
+  return low;
+}
+
+/** Match the original nearest-access windows on bounded slices, regardless of AST ancestry.
+ * A gap needs logical text and no semicolon or brace. The full access must fit the window. */
+function joinedResume(code: string, at: { start: number; end: number }, resumes: ResumeAccess[]): boolean {
+  const joined = (between: string) => /&&|\|\|/.test(between) && !/[;{}]/.test(between);
+  const after = resumes[resumeIndex(resumes, at.end)];
+  if (after && after.end <= at.end + HOLD_WINDOW && joined(code.slice(at.end, after.start))) return true;
+  const before = resumes[resumeIndex(resumes, at.start) - 1];
+  return before !== undefined && before.start >= at.start - HOLD_WINDOW
+    && before.end <= at.start && joined(code.slice(before.end, at.start));
 }
 
 export const runFactReader: AstRule = {
@@ -240,47 +221,31 @@ export const runFactReader: AstRule = {
       if (parent?.type === 'SwitchStatement' && child(parent, 'discriminant') === node) return true;
       return parent?.type === 'MemberExpression' && !parent.computed && ['startsWith', 'endsWith', 'includes', 'toLowerCase', 'toUpperCase', 'match', 'localeCompare'].includes(propertyName(parent) ?? '');
     };
-    const summaries = new WeakMap<EsNode, HoldSummary>();
-    const joinedWaits = new Set<EsNode>();
+    const code = blankOnce(sourceCode.text);
+    const resumes: ResumeAccess[] = [];
     const waitingNodes: EsNode[] = [];
     return {
       MemberExpression(node) {
         if (node.computed) return;
         const key = propertyName(node);
         if (!file.startsWith(HOME) && key === 'label' && attention(child(node, 'object')) && compares(node)) sites['label-comparison'].push(child(node, 'property')!);
-        if (!isTest(file) && !(file in (listed ??= readReaders())) && key === 'autoResumeAt' && sites['resume-time-read'].length === 0) sites['resume-time-read'].push(child(node, 'property')!);
+        if (isTest(file) || key !== 'autoResumeAt') return;
+        const property = child(node, 'property')!;
+        const [start, end] = property.range as [number, number];
+        if (sourceCode.text.slice(start, end) === 'autoResumeAt' && sourceCode.text.charAt(start - 1) === '.') {
+          resumes.push({ start: start - 1, end, node: property });
+        }
       },
       BinaryExpression(node) {
         if (file.startsWith(HOME) || isTest(file)) return;
         const status = waitingStatus(node);
-        if (status && scannerWaitingComparison(node, status, sourceCode.text)) waitingNodes.push(node);
-      },
-      'LogicalExpression:exit'(node) {
-        if (file.startsWith(HOME) || isTest(file)) return;
-        if (node.operator === '??') { holdSummary(node, summaries); return; }
-        const left = holdSummary(child(node, 'left')!, summaries);
-        const right = holdSummary(child(node, 'right')!, summaries);
-        const barriers = [...left.barriers, ...right.barriers];
-        const join = (waits: EsNode[], resumes: ResumeAccess[]) => {
-          for (const wait of waits) {
-            const { start, end } = waitingBounds(wait);
-            const reachable = (access: ResumeAccess) => {
-              const before = access.start < start;
-              const insideWindow = before ? start - access.start <= HOLD_WINDOW : access.end - end <= HOLD_WINDOW;
-              const low = before ? access.end : end;
-              const high = before ? start : access.start;
-              return insideWindow && !barriers.some(at => low <= at && at <= high);
-            };
-            if (resumes.some(reachable)) joinedWaits.add(wait);
-          }
-        };
-        join(left.waits, right.resumes);
-        join(right.waits, left.resumes);
-        holdSummary(node, summaries);
+        if (status && scannerWaitingComparison(node, status, sourceCode.text, code)) waitingNodes.push(node);
       },
       'Program:exit'() {
+        resumes.sort((a, b) => a.start - b.start);
+        if (resumes.length && !(file in (listed ??= readReaders()))) sites['resume-time-read'].push(resumes[0]!.node);
         for (const node of waitingNodes) {
-          if (!joinedWaits.has(node)) continue;
+          if (!joinedResume(code, waitingBounds(node), resumes)) continue;
           const status = waitingStatus(node)!;
           const left = child(node, 'left')!;
           sites['restated-hold'].push(literal(left) === 'waiting' ? left : child(status, 'property')!);
