@@ -8,13 +8,8 @@ import { testHomeWrite, testHomeWriteMessage, unsafeHomeWrites as sourceHomeWrit
 
 function unsafeHomeWrites(source: string, file = 'file.test.ts'): number[] {
   const offsets = sourceHomeWrites(source, file);
-  if (source === 'let read; ({resolveHome: read} as any) = source') {
-    // The legacy scanner accepts this malformed TypeScript assignment. Oxlint owns parsing now.
-    expect(() => checkRule(testHomeWrite, file, source)).toThrow(/Parsing failed/);
-  } else {
-    expect(checkRule(testHomeWrite, file, source).map(finding => finding.line))
-      .toEqual(offsets.map(offset => source.slice(0, offset).split('\n').length));
-  }
+  expect(checkRule(testHomeWrite, file, source).map(finding => finding.line))
+    .toEqual(offsets.map(offset => source.slice(0, offset).split('\n').length));
   return offsets;
 }
 
@@ -87,6 +82,13 @@ describe('test writes use explicit sandbox paths', () => {
 
   it('fails closed on malformed source', () => {
     expect(() => unsafeHomeWrites('const x = ;')).toThrow();
+  });
+
+  it('fails closed on a cast destructuring target, which oxlint does not parse', () => {
+    // The Babel scanner accepted it and found the guarded key; oxlint parses both the scanner and the rule now.
+    const source = 'let read; ({resolveHome: read} as any) = source';
+    expect(() => sourceHomeWrites(source)).toThrow(/Parsing failed/);
+    expect(() => checkRule(testHomeWrite, 'file.test.ts', source)).toThrow(/Parsing failed/);
   });
 
   it.each([
@@ -194,7 +196,6 @@ describe('test writes use explicit sandbox paths', () => {
     "function go({homedir: read = fallback} = require('node:os')) { read() }",
     "function go({default: {resolveHome: read} = fallback} = source) { read() }",
     "let read; ({homedir: (read as any)} = require('node:os'))",
-    "let read; ({resolveHome: read} as any) = source",
     "let read; ({resolveHome: read} = source as any)",
     "let read; for ({resolveHome: read} of [await import('./resolve.ts')]) read()",
     "for (const {cezarHomeDir: read = fallback} of sources) read()",
