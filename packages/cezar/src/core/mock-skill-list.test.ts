@@ -7,10 +7,10 @@ import { RUNNER_IDS } from './agent-runner.ts';
 
 it('replaces the recorded skill lists for all five runner fixtures', () => {
   const replies = skillListFixtures([{ id: 'only-check', name: 'Check', path: '/p/SKILL.md' }]);
-  expect(replies.claude.response.response.skills).toMatchObject([{ name: 'only-check' }]);
-  expect(replies.codex.result.data[0].skills).toMatchObject([{ name: 'only-check', path: '/p/SKILL.md' }]);
+  expect(replies.claude).toMatchObject({ response: { response: { skills: [{ name: 'only-check' }] } } });
+  expect(replies.codex).toMatchObject({ result: { data: [{ skills: [{ name: 'only-check', path: '/p/SKILL.md' }] }] } });
   expect(replies.opencode).toEqual([{ name: 'only-check', description: '', location: '/p/SKILL.md' }]);
-  expect(replies.pi.data.commands).toMatchObject([{ name: 'skill:only-check', sourceInfo: { path: '/p/SKILL.md' } }]);
+  expect(replies.pi).toMatchObject({ data: { commands: [{ name: 'skill:only-check', sourceInfo: { path: '/p/SKILL.md' } }] } });
   expect(replies.omp).toMatchObject({ skills: [{ name: 'only-check', filePath: '/p/SKILL.md', baseDir: '/p' }] });
   expect(JSON.stringify(replies)).not.toContain('probe-project');
 });
