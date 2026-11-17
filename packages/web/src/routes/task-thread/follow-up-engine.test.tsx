@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
+import { useRunnerSkills } from '@/api/queries'
 import { setApiScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 import type {
   AgentProfilesResponse,
@@ -105,6 +106,12 @@ function serve(
       requests.push({ method, url, body })
       if (url === '/api/v1/health') return json(health)
       if (url === '/api/v1/providers/status') return json(providerStatus, providerStatusCode)
+      if (url.includes('/runner-skills?')) {
+        if (!health.capabilities.localHandoff && new URL(url, 'http://localhost').searchParams.has('account')) {
+          return json({ error: 'account selection is unavailable' }, 409)
+        }
+        return json({ runner: 'claude', skills: [{ id: 'check', name: 'Check' }], problems: [], source: 'live' })
+      }
       if (url === '/api/v1/models?runner=claude') return json({ runner: 'claude', models: [], source: 'unavailable', stale: false })
       if (url === '/api/v1/models?runner=codex') {
         return typeof modelCatalog === 'function' ? modelCatalog() : json(modelCatalog)
@@ -157,6 +164,7 @@ const makeRun = (extra: Partial<ApiRun> = {}): ApiRun => ({
 /** Stands in for the thread composer: the pills, plus a send that submits `draft`. */
 function Harness({ run, draft = '' }: { run: ApiRun; draft?: string }) {
   const action = useContinueAction(run)
+  const skills = useRunnerSkills(action.skillRunner, action.skillAccount, action.available)
   if (!action.available) return null
   if (!action.canContinue) {
     return (
@@ -172,6 +180,7 @@ function Harness({ run, draft = '' }: { run: ApiRun; draft?: string }) {
     <>
       {action.pills}
       <output data-slot="skill-context">{action.skillRunner}/{action.skillAccount}</output>
+      <output data-testid="thread-skills">{skills.data?.map((skill) => skill.name).join(', ')}</output>
       {action.startsNewConversation ? <p>Starts a new agent conversation.</p> : null}
       <button type="button" onClick={() => void action.continueWith(draft, [])}>
         Continue
@@ -193,6 +202,21 @@ function renderAction(record: ApiRun, draft = '', entry = '/') {
 
 const continueBody = () =>
   requests.find((r) => r.url.endsWith('/continue') && r.method === 'POST')?.body
+
+it.each(['default', 'work'])('loads hosted thread skills without an explicit %s account', async (profileId) => {
+  serve({ ...HEALTH_MULTI, capabilities: { ...HEALTH_MULTI.capabilities, localHandoff: false } })
+  renderAction(makeRun({ steps: [step({ sessionId: 'sess-1', profileId })] }))
+  await waitFor(() => expect(screen.getByTestId('thread-skills').textContent).toBe('Check'))
+  const urls = requests.filter((request) => request.url.includes('/runner-skills?')).map((request) => request.url)
+  expect(urls).toEqual(['/api/v1/runner-skills?runner=claude'])
+})
+
+it.each(['default', 'work'])('loads local thread skills with the recorded %s account', async (profileId) => {
+  serve()
+  renderAction(makeRun({ steps: [step({ sessionId: 'sess-1', profileId })] }))
+  await waitFor(() => expect(screen.getByTestId('thread-skills').textContent).toBe('Check'))
+  expect(requests.some((request) => request.url === `/api/v1/runner-skills?runner=claude&account=${profileId}`)).toBe(true)
+})
 
 describe('follow-up ContinueAction runner/model selection (#401)', () => {
   it('defaults the effort pill to the run pin and omits it when untouched (#45)', async () => {

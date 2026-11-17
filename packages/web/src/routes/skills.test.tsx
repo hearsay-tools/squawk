@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter } from 'react-router'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createQueryClient } from '@/api/query-client'
+import { queryKeys } from '@/api/queries'
 import { SkillsRoute } from './skills'
 
 const skills = [
@@ -11,7 +12,7 @@ const skills = [
 ]
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
-function mount(source = 'live') {
+function mount(source = 'live', client = createQueryClient()) {
   const requests: string[] = []
   vi.stubGlobal('fetch', vi.fn(async (input) => {
     const url = String(input)
@@ -22,7 +23,7 @@ function mount(source = 'live') {
       : url.endsWith('/agent-profiles') ? { profiles: [{ provider: 'codex', id: 'work', label: 'Work' }], selections: {} } : {}
     return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
   }))
-  render(<QueryClientProvider client={createQueryClient()}><MemoryRouter><SkillsRoute /></MemoryRouter></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><MemoryRouter><SkillsRoute /></MemoryRouter></QueryClientProvider>)
   return requests
 }
 
@@ -46,6 +47,7 @@ it('reads the selected runner and account and re-reads with refresh=1', async ()
   await screen.findByRole('option', { name: 'Work' })
   fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'work' } })
   await waitFor(() => expect(requests).toContain('/api/v1/runner-skills?runner=codex&account=work'))
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Re-read' }) as HTMLButtonElement).disabled).toBe(false))
   fireEvent.click(screen.getByRole('button', { name: 'Re-read' }))
   await waitFor(() => expect(requests).toContain('/api/v1/runner-skills?runner=codex&account=work&refresh=1'))
   fireEvent.change(screen.getByLabelText('Runner'), { target: { value: 'pi' } })
@@ -56,4 +58,17 @@ it('reports an unavailable list without hiding the inventory controls', async ()
   mount('unavailable')
   await screen.findByText(/Skill list unavailable/)
   expect(screen.getByRole('button', { name: 'Re-read' })).toBeTruthy()
+})
+
+it('invalidates equivalent explicit-account lists after re-reading the project default', async () => {
+  const client = createQueryClient()
+  const explicit = queryKeys.runnerSkills('codex', 'default')
+  const otherRunner = queryKeys.runnerSkills('pi', 'default')
+  for (const key of [explicit, otherRunner]) client.setQueryData(key, { skills: [] })
+  const requests = mount('live', client)
+  await waitFor(() => expect(document.querySelectorAll('[data-slot="skill-row"]')).toHaveLength(2))
+  fireEvent.click(screen.getByRole('button', { name: 'Re-read' }))
+  await waitFor(() => expect(requests).toContain('/api/v1/runner-skills?runner=codex&refresh=1'))
+  await waitFor(() => expect(client.getQueryState(explicit)?.isInvalidated).toBe(true))
+  expect(client.getQueryState(otherRunner)?.isInvalidated).toBe(false)
 })

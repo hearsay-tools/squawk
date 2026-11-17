@@ -228,13 +228,13 @@ const NAME_MATCH_BONUS = 10
  *  subsequence), and a word that lands in the NAME is boosted over one that only lands in the
  *  description — so the total ranks (almost-)exact name matches to the top (#484). Empty query
  *  is a neutral match (1). The shared match signal behind every skill/workflow search surface. */
-export function queryScore(name: string, description: string | null | undefined, query: string): number {
+export function queryScore(name: string, description: string | null | undefined, query: string, id?: string): number {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
   if (words.length === 0) return 1
   let total = 0
   for (const word of words) {
     const nameScore = matchScore(name, word)
-    const descScore = description ? matchScore(description, word) : 0
+    const descScore = Math.max(description ? matchScore(description, word) : 0, id ? matchScore(id, word) : 0)
     if (nameScore === 0 && descScore === 0) return 0 // every word must match somewhere
     total += nameScore > 0 ? nameScore + NAME_MATCH_BONUS : descScore
   }
@@ -273,7 +273,7 @@ function rankByQuery<T extends { id?: string; name: string; description?: string
     .map((item, index) => {
       // Native ids can contain a plugin prefix absent from the display name. Keep
       // name ranking first, while allowing each word to match the id or description.
-      const score = queryScore(item.name, [item.id, item.description].filter(Boolean).join(' '), query)
+      const score = queryScore(item.name, item.description, query, item.id)
       const count = usageCount(usage, item.id ?? item.name)
       return { item, index, count, nameScore: nameQueryScore(item.name, query), score }
     })

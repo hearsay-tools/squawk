@@ -274,6 +274,10 @@ describe('searchSkills / searchWorkflows (#484: the pickers rank in JS, not via 
     expect(searchSkillsForDisplay(copies, 'plugin:check').ranked).toEqual(copies)
     expect(searchSkills(copies, 'plugin:check changes')).toEqual(copies)
   })
+
+  it('does not fuzzy-match a query across the id and description boundary', () => {
+    expect(searchSkills([skill({ id: 'om-fix', name: 'om-fix', description: 'Leave a review note', scope: 'repo' })], 'om-review')).toEqual([])
+  })
   const skills = [
     skill({ id: 'om-auto-fix-issue', name: 'om-auto-fix-issue', scope: 'repo', description: 'Fix an issue; runs om-fix internally' }),
     skill({ id: 'om-fix', name: 'om-fix', scope: 'repo', description: 'Apply the minimal fix' }),

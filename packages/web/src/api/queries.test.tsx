@@ -605,6 +605,7 @@ describe('useRunnerSkills', () => {
   it('keys requests by runner and account and exposes unavailable lists as unchecked', async () => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input)
+      if (url === '/api/v1/health') return json(HEALTH)
       const runner = new URL(url, 'http://localhost').searchParams.get('runner')
       return json({ runner, skills: [], problems: [], source: 'unavailable', reason: 'offline' })
     })
@@ -616,6 +617,17 @@ describe('useRunnerSkills', () => {
     rerender({ runner: 'codex', account: 'personal' })
     await waitFor(() => expect(result.current.list?.runner).toBe('codex'))
     expect(fetchMock.mock.calls.map(([path]) => path)).toContain('/api/v1/runner-skills?runner=codex&account=personal')
+  })
+
+  it('uses the project-default account key on hosted cockpits for every picker', async () => {
+    fetchMock.mockImplementation(async (input) => String(input) === '/api/v1/health'
+      ? json({ ...HEALTH, capabilities: { ...HEALTH.capabilities, localHandoff: false } })
+      : json({ runner: 'codex', skills: [{ id: 'check', name: 'Check' }], problems: [], source: 'live' }))
+    const { result } = renderHook(() => useRunnerSkills('codex', 'work'), { wrapper: wrapper() })
+    await waitFor(() => expect(result.current.data?.[0]?.id).toBe('check'))
+    expect(result.current.account).toBeNull()
+    const urls = fetchMock.mock.calls.map(([path]) => String(path)).filter((path) => path.includes('/runner-skills?'))
+    expect(urls).toEqual(['/api/v1/runner-skills?runner=codex'])
   })
 })
 

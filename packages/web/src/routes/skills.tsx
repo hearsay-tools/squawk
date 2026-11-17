@@ -24,10 +24,14 @@ export function SkillsRoute() {
   const accounts = useAgentAccounts()
   const query = useRunnerSkills(pickedRunner ?? config.data?.defaultRunner, account)
   const client = useQueryClient()
-  const key = queryKeys.runnerSkills(runner, account)
+  const key = queryKeys.runnerSkills(runner, query.account)
   const refresh = async () => {
     setRefreshing(true)
-    try { client.setQueryData(key, await getRunnerSkills(runner, account, { refresh: true })) }
+    try {
+      client.setQueryData(key, await getRunnerSkills(runner, query.account, { refresh: true }))
+      // Omitted and explicit accounts can resolve to the same runner catalog.
+      await client.invalidateQueries({ queryKey: key.slice(0, 3) })
+    }
     catch (error) { toast(error instanceof Error ? error.message : String(error), { tone: 'danger' }) }
     finally { setRefreshing(false) }
   }
@@ -48,7 +52,7 @@ export function SkillsRoute() {
             {accounts.accounts.filter((entry) => entry.provider === runner).map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
           </select>
         </label>
-        <Button onClick={() => void refresh()} disabled={refreshing} data-slot="skills-refresh">Re-read</Button>
+        <Button onClick={() => void refresh()} disabled={refreshing || query.isPending} data-slot="skills-refresh">Re-read</Button>
       </div>
       <Input aria-label="Search skills" placeholder="Search skills…" value={search} onChange={(event) => setSearch(event.target.value)} />
       {query.unchecked ? <p role="status">Skill list unavailable. {query.list?.reason ?? query.error?.message} You can still type a skill id when starting a task.</p> : null}

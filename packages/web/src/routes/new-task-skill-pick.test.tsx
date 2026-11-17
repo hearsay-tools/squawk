@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { PROVIDERS_MULTI, pillReady, postedBody, renderNewTask, requests, serve, startTask, textarea } from './new-task.testkit'
+import { ACCOUNTS, PROVIDERS_MULTI, pillReady, postedBody, renderNewTask, requests, serve, startTask, textarea } from './new-task.testkit'
 import { readDraft, resetDraft, writeDraft } from './new-task-draft'
 
 beforeEach(() => {
@@ -11,12 +11,13 @@ beforeEach(() => {
 afterEach(() => { cleanup(); resetDraft(); vi.unstubAllGlobals() })
 
 it('shows both copies of a recent plugin id, sends its chosen path and persists only the id in ui-state', async () => {
+  writeDraft({ ...readDraft(), source: { source: 'skill', ref: 'plugin:check' } })
   serve({ skills: [
     { id: 'plugin:check', name: 'Check', description: 'Repo copy', path: '.agents/check/SKILL.md', scope: 'repo' },
     { id: 'plugin:check', name: 'Check', description: 'User copy', path: '/home/u/check/SKILL.md', scope: 'user' },
   ], uiState: { recentSources: [{ source: 'skill', ref: 'plugin:check' }], skillUsage: { 'plugin:check': 3 } } })
   renderNewTask()
-  await pillReady()
+  await pillReady('Check')
   fireEvent.click(screen.getByRole('button', { name: 'Choose a skill or workflow' }))
   await screen.findByText('Repo copy')
   fireEvent.change(screen.getByPlaceholderText('search skills & workflows…'), { target: { value: 'plugin:check' } })
@@ -38,7 +39,7 @@ it('shows both copies of a recent plugin id, sends its chosen path and persists 
 it.each(['claude', 'codex'] as const)('uses a palette link identity instead of a saved %s runner and non-default account', async (runner) => {
   serve({ providerStatus: PROVIDERS_MULTI, skills: [
     { id: 'plugin:check', name: 'Check', description: 'Default checks', path: 'repo/SKILL.md' },
-  ], agentProfiles: { profiles: [{ provider: runner, id: 'work', label: 'Work' }], selections: {} } })
+  ], agentProfiles: { ...ACCOUNTS, profiles: [{ ...ACCOUNTS.profiles[1]!, provider: runner, id: 'work' }] } })
   writeDraft({ ...readDraft(), runner, agentProfile: 'work', model: 'remembered-model', effort: 'high' })
   renderNewTask('/new?skill=plugin%3Acheck&skillPath=repo%2FSKILL.md&runner=claude')
   await pillReady('Check')

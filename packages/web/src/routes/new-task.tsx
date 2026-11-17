@@ -672,7 +672,7 @@ function SourcePill({
   /** Picking what is already picked CLEARS it — the gesture every other toggle in the cockpit
    *  answers to, and the one the report asked for by name. */
   const toggle = (next: TaskSource) =>
-    pick(source?.source === next.source && source.ref === next.ref && (source.source !== 'skill' || next.source !== 'skill' || (source.path === undefined || source.path === next.path)) ? null : next)
+    pick(source?.source === next.source && source.ref === next.ref && (source.source !== 'skill' || next.source !== 'skill' || source.path === next.path) ? null : next)
 
   const skillItem = (skill: RunnerSkill, emphasized: boolean) => {
     const selected = source?.source === 'skill' && source.ref === skill.id && source.path === skill.path

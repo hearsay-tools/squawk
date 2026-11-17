@@ -5,7 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { workspaceQueryKeys } from '@/api/queries'
 import type { HealthResponse } from '@open-mercato/cezar-api-client'
 import { resetToasts } from '@/components/ui/toaster'
-import { resetDraft, writeDraft } from './new-task-draft'
+import { readDraft, resetDraft, writeDraft } from './new-task-draft'
 
 beforeAll(() => {
   // cmdk scrolls the selected item into view; jsdom has no scrollIntoView.
@@ -680,7 +680,7 @@ describe('clearing the picked skill or workflow', () => {
   })
 
   it('picking the SELECTED row again clears it — for a skill and for a workflow', async () => {
-    draftSource({ source: 'skill', ref: 'om-fix' })
+    writeDraft({ ...readDraft(), source: { source: 'skill', ref: 'om-fix', path: '/p/om-fix.md' } })
     serve()
     renderNewTask()
     await pillReady('om-fix')
