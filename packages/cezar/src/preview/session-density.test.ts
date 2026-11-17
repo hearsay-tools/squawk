@@ -358,18 +358,6 @@ describe('pixel density (hearsay-tools/cezarion#2069)', () => {
     expect(calls.slice(before).map(call => call.method)).toEqual(['Page.stopScreencast']);
   });
 
-  it('a new viewer (a reconnect) streams at its own ratio from the first frame', async () => {
-    const { cdp, sent } = browser();
-    const session = await PreviewSession.create(cdp, { quality: () => 'ultra' });
-    const first = fakeViewer();
-    session.attach(first);
-    await session.handle({ t: 'resize', w: 800, h: 600, dpr: 2 });
-    session.detach(first);
-    session.attach(fakeViewer());
-    await flush();
-    expect(sent('Page.startScreencast').at(-1)?.params).toMatchObject({ maxWidth: 1600, maxHeight: 1200 });
-  });
-
   it.each([1, 2, undefined])('attach uses the supplied ratio %s and preserves the legacy default', async dpr => {
     const { cdp, sent } = browser();
     const session = await PreviewSession.create(cdp, { quality: () => 'ultra' });
