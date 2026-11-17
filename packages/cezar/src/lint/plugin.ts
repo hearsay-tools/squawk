@@ -20,6 +20,8 @@ import { runnerRosterLiteral } from './runner-roster-literal.ts';
 import { parityRunnerSubset } from './parity-runner-subset.ts';
 import { oxlintRule, type SourceRule } from './source-rule.ts';
 import { oxlintAstRule, type AstRule } from './ast-rule.ts';
+import { activeRunWriteRules } from './active-run-write.ts';
+import { activeRunLiteral, activeRunMapWrite } from './active-run.ts';
 import { launchReadOutsideResolver } from './launch-read-outside-resolver.ts';
 import { childKilledRead } from './child-killed-read.ts';
 import { runStoreTestkitImport } from './run-store-testkit-import.ts';
@@ -28,7 +30,7 @@ import { undocumentedEnvName } from './undocumented-env-name.ts';
 import { unitWaitDiscipline } from './unit-wait-discipline.ts';
 
 /** The rules that visit oxlint's syntax tree (hearsay-tools/squawk#3774). */
-export const AST_RULES: AstRule[] = [childKilledRead, runStoreTestkitImport, launchReadOutsideResolver, ...PROCESS_OWNER_RULES, ...STATE_OWNER_RULES, ...READER_OWNER_RULES];
+export const AST_RULES: AstRule[] = [childKilledRead, runStoreTestkitImport, activeRunLiteral, activeRunMapWrite, ...activeRunWriteRules, launchReadOutsideResolver, ...PROCESS_OWNER_RULES, ...STATE_OWNER_RULES, ...READER_OWNER_RULES];
 
 /** The rules that scan a file's text. New rules are AST rules. */
 export const TEXT_RULES: SourceRule[] = [productEnvRead, homeBoundary, testHomeWrite, card2Contrast, contractRootImport, designGuardian, layerImport, mockLifecycleBoundary, mockScenarioBoundary, nativeMockSource, parityRunnerSubset, rawQuerySetter, runFactReader, runHistoryReader, runnerFactCombination, runnerIdBranch, runnerRosterLiteral, testWaitDiscipline, undocumentedEnvName, unitWaitDiscipline];

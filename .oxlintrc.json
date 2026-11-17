@@ -162,6 +162,16 @@
     "unicorn/prefer-string-starts-ends-with": "error",
     "use-isnan": "error",
     "valid-typeof": "error",
+    "cez/active-run-autosave-write-outside-owner": "error",
+    "cez/active-run-boundary-write-outside-owner": "error",
+    "cez/active-run-children-write-outside-owner": "error",
+    "cez/active-run-input-write-outside-owner": "error",
+    "cez/active-run-session-write-outside-owner": "error",
+    "cez/active-run-skills-write-outside-owner": "error",
+    "cez/active-run-usage-write-outside-owner": "error",
+    "cez/active-run-wait-write-outside-owner": "error",
+    "cez/active-run-literal": "error",
+    "cez/active-run-map-write": "error",
     "cez/launch-read-outside-resolver": "error"
   },
   "ignorePatterns": [
