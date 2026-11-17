@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from '@babel/parser';
 import type { Node } from '@babel/types';
-import { blankOnce, lineAt, repoRoot, type SourceRule } from './source-rule.ts';
+import { child, children, nameOf, stringOf, type AstRule, type EsNode } from './ast-rule.ts';
+import { offset, propertyName, unwrap } from './ast-syntax.ts';
+import { blankOnce, repoRoot } from './source-rule.ts';
 
 export type HistoryAccess = 'historyPaths' | 'eventsPath-declaration' | 'eventsPath-append' | 'eventsPath' | 'dynamic-path';
 export interface HistoryReader { file: string; kind: HistoryAccess; reason: string }
@@ -64,12 +66,58 @@ export function scanHistoryReaders(file: string, source: string, readers = (list
   return historyAccesses(source).filter((site) => !readers.some((entry) => entry.file === file && entry.kind === site.kind));
 }
 
-export const runHistoryReader: SourceRule = {
+export const runHistoryReader: AstRule = {
   name: 'run-history-reader',
   description: 'Keep raw transcript paths in their listed owners (hearsay-tools/cezarion#2420).',
   applies: (file) => file.startsWith('packages/cezar/src/') && file.endsWith('.ts') && !/\.(?:test|testkit)\.ts$/.test(file),
-  check: (file, source) => scanHistoryReaders(file, source).map((site) => ({
-    line: lineAt(source, site.offset),
-    message: `${site.kind}: use compression-aware history-file.ts APIs; raw transcript paths belong to the reasoned run-history-readers.json owners (hearsay-tools/cezarion#2420).`,
-  })),
+  create(report, { file }) {
+    const aliases = new Set(['historyPaths']);
+    const sites: Array<{ node: EsNode; kind: HistoryAccess }> = [];
+    const path = (node: EsNode, value: string | undefined) => {
+      if (value !== undefined && /(?:^|[^A-Za-z0-9_-])[.]ndjson/.test(value)) sites.push({ node, kind: 'dynamic-path' });
+    };
+    const named = (node: EsNode, name: string | undefined, declaration = false) => {
+      if (name !== 'eventsPath' && !aliases.has(name ?? '')) return;
+      let kind: HistoryAccess = name === 'eventsPath' ? 'eventsPath' : 'historyPaths';
+      if (kind === 'eventsPath') {
+        if (declaration && node.accessibility === 'private') kind = 'eventsPath-declaration';
+        else if (!declaration) {
+          const callee = unwrap(child(node, 'callee'));
+          const parent = node.parent;
+          if (callee?.type === 'MemberExpression' && child(callee, 'object')?.type === 'ThisExpression'
+            && parent?.type === 'CallExpression' && nameOf(child(parent, 'callee')) === 'appendFileSync'
+            && children(parent, 'arguments')[0] === node) kind = 'eventsPath-append';
+        }
+      }
+      sites.push({ node, kind });
+    };
+    return {
+      Program(node) {
+        for (const statement of children(node, 'body')) for (const specifier of children(statement, 'specifiers')) {
+          if (specifier.type === 'ImportSpecifier' && nameOf(child(specifier, 'imported')) === 'historyPaths') aliases.add(nameOf(child(specifier, 'local'))!);
+        }
+      },
+      CallExpression(node) {
+        const callee = unwrap(child(node, 'callee'));
+        if (callee?.type === 'MemberExpression' && callee.computed) return;
+        named(node, propertyName(callee));
+      },
+      MethodDefinition(node) { named(node, propertyName(child(node, 'key')), true); },
+      FunctionDeclaration(node) { named(node, nameOf(child(node, 'id')), true); },
+      Literal(node) { path(node, stringOf(node)); },
+      TemplateLiteral(node) {
+        if (children(node, 'quasis').some(quasi => {
+          const value = quasi.value as { cooked?: string; raw: string };
+          return /(?:^|[^A-Za-z0-9_-])[.]ndjson/.test(value.cooked ?? value.raw);
+        })) sites.push({ node, kind: 'dynamic-path' });
+      },
+      'Program:exit'() {
+        const readers = listed ??= readHistoryReaders();
+        sites.sort((a, b) => offset(a.node) - offset(b.node));
+        for (const { node, kind } of sites) if (!readers.some(entry => entry.file === file && entry.kind === kind)) {
+          report(node, `${kind}: use compression-aware history-file.ts APIs; raw transcript paths belong to the reasoned run-history-readers.json owners (hearsay-tools/cezarion#2420).`);
+        }
+      },
+    };
+  },
 };
