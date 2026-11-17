@@ -1,4 +1,5 @@
 import type { SourceRule } from './source-rule.ts';
+import { astChildren } from './ast-node-view.ts';
 import { compareToBaseline, tally, readBaseline } from './wait-baseline.ts';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -92,11 +93,7 @@ export type Visit = (node: Node, ancestors: readonly Node[]) => void | false
 export function walk(node: Node, ancestors: Node[], visit: Visit): void {
   if (visit(node, ancestors) === false) return
   ancestors.push(node)
-  for (const value of Object.values(node)) {
-    for (const child of Array.isArray(value) ? value : [value]) {
-      if (child && typeof child === 'object' && typeof (child as Node).type === 'string') walk(child as Node, ancestors, visit)
-    }
-  }
+  for (const child of astChildren(node)) walk(child, ancestors, visit)
   ancestors.pop()
 }
 
@@ -173,7 +170,8 @@ export const sleepNames = new Set(['delay', 'sleep', 'wait', 'pause'])
 export function timerDelay(fn: Node, resolver: string): { delay: Node | undefined } | undefined {
   let found: { delay: Node | undefined } | undefined
   walk(fn, [], node => {
-    if (found || node.type !== 'CallExpression') return
+    if (found) return false
+    if (node.type !== 'CallExpression') return
     const callee = calleeOf(node.callee)
     if (!callee || !/(?:setTimeout|SetTimeout)$/.test(callee.name)) return
     const first = node.arguments[0]

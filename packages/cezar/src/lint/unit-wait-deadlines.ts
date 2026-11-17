@@ -1,6 +1,6 @@
 import type { BinaryExpression, BlockStatement, ForStatement, Identifier, Node } from '@babel/types';
 import { walk, isFunction, namesWritten, type Where, type Sleep } from './unit-wait-discipline.ts';
-import { numberOf, sizeNumber, keyName, sizedOutside, clockCall, contains, type Use, type Probe, definition, writes, valuesOf, isNumber, nameReader, valueOf } from './unit-wait-values.ts';
+import { numberOf, sizeNumber, keyName, sizedOutside, clockCall, contains, type Use, type Probe, definition, writes, writtenNames, valuesOf, isNumber, nameReader, valueOf } from './unit-wait-values.ts';
 
 /** A bound on how long a loop runs, in milliseconds: `unreadable` when one exists the scan cannot evaluate, `undefined` when there is none. */
 export type Bound = number | 'unreadable' | undefined
@@ -40,15 +40,20 @@ export const isWritten = (root: Node, name: string): boolean => {
   return written.other || written.values.length > 0
 }
 
+const closureNames = new WeakMap<Node, Set<string>>()
+
 /** Whether a function nested in the loop's function writes the name: it can run in any pass. */
 export function closureWrites(scope: Node, name: string): boolean {
-  let found = false
+  const cached = closureNames.get(scope)
+  if (cached) return cached.has(name)
+  const names = new Set<string>()
   walk(scope, [], node => {
     if (node === scope || !isFunction(node)) return
-    found ||= isWritten(node, name)
+    for (const written of writtenNames(node)) names.add(written)
     return false
   })
-  return found
+  closureNames.set(scope, names)
+  return names.has(name)
 }
 
 /**
