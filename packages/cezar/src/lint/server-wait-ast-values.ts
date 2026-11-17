@@ -2,6 +2,15 @@ import type { CallExpression, Node, ObjectExpression } from '@babel/types';
 import { calleeOf, definition, heldBy, keyName, mathFunctions, numberOf, optionObjects, placeFor, sizedOutside, smallest, unwrap, type Place, type Read } from './unit-wait-values.ts';
 import { unescaped } from './test-wait-discipline.ts';
 
+/** The server scanner has always recognized the zero-argument bigint clock too. */
+export function serverClock(node: Node): boolean {
+  if (node.type !== 'CallExpression' || node.arguments.length !== 0 || node.callee.type !== 'MemberExpression' || node.callee.computed) return false;
+  const { object, property } = node.callee;
+  if (property.type !== 'Identifier') return false;
+  if (object.type === 'Identifier') return property.name === 'now' ? object.name === 'Date' || object.name === 'performance' : property.name === 'hrtime' && object.name === 'process';
+  return property.name === 'bigint' && object.type === 'MemberExpression' && !object.computed && object.object.type === 'Identifier' && object.object.name === 'process' && object.property.type === 'Identifier' && object.property.name === 'hrtime';
+}
+
 /** The server's numeric evaluator, now fed AST nodes (hearsay-tools/squawk#3774). */
 export function serverNumber(node: Node | null | undefined, read: Read): number | undefined {
   if (!node) return undefined;
@@ -37,7 +46,7 @@ export function serverRead(place: Place, depth = 0): Read {
 function milliseconds(node: Node, place: Place): number | undefined {
   if (node.type === 'Identifier' && node.name === 'undefined') return 1_000;
   if (node.type === 'NullLiteral') return 0;
-  return serverNumber(node, place.read) ?? (sizedOutside(node, place.view, place.use) ? undefined : NaN);
+  return serverNumber(node, place.read) ?? (sizedOutside(node, place.view, place.use, 0, serverClock) ? undefined : NaN);
 }
 
 function serverKey(key: Node, computed: boolean, place: Place, text: (node: Node) => string): string | undefined {
@@ -52,7 +61,7 @@ function optionsBound(object: ObjectExpression, place: Place, text: (node: Node)
   for (const property of object.properties) {
     const name = property.type === 'SpreadElement' ? undefined : serverKey(property.key, property.computed, place, text);
     if (name === 'timeout' && property.type === 'ObjectProperty') bound = milliseconds(property.value, place);
-    else if (name === undefined) bound = sizedOutside(property.type === 'SpreadElement' ? property.argument : property.key, place.view, place.use) ? undefined : NaN;
+    else if (name === undefined) bound = sizedOutside(property.type === 'SpreadElement' ? property.argument : property.key, place.view, place.use, 0, serverClock) ? undefined : NaN;
   }
   return bound;
 }

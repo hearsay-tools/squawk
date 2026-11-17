@@ -1,7 +1,7 @@
 import type { Node } from '@babel/types';
 import { isPath, type Bound } from './unit-wait-deadlines.ts';
 import { boundApart, declaredHere, definition, isNumber, namedNumbers, ownNames, rootsOf, valuesOf, type DeadlineEvaluation, type Read, type Use, type View } from './unit-wait-values.ts';
-import { serverNumber } from './server-wait-ast-values.ts';
+import { serverClock, serverNumber } from './server-wait-ast-values.ts';
 import { walk } from './unit-wait-discipline.ts';
 
 const loopNames = new WeakMap<Node, Set<string>>();
@@ -27,15 +27,6 @@ function serverApart(view: View, name: string): boolean {
 
 function outside(node: Node, view: View, use: Use): boolean {
   return rootsOf(node).some(name => !ownNames.has(name) && !declaredHere(view, use, name) && !serverApart(view, name));
-}
-
-/** The server scanner has always recognized the zero-argument bigint clock too. */
-export function serverClock(node: Node): boolean {
-  if (node.type !== 'CallExpression' || node.arguments.length !== 0 || node.callee.type !== 'MemberExpression' || node.callee.computed) return false;
-  const { object, property } = node.callee;
-  if (property.type !== 'Identifier') return false;
-  if (object.type === 'Identifier') return property.name === 'now' ? object.name === 'Date' || object.name === 'performance' : property.name === 'hrtime' && object.name === 'process';
-  return property.name === 'bigint' && object.type === 'MemberExpression' && !object.computed && object.object.type === 'Identifier' && object.object.name === 'process' && object.property.type === 'Identifier' && object.property.name === 'hrtime';
 }
 
 /** An unknown same-file value invalidates a name, even beside another known value. */

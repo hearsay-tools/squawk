@@ -156,7 +156,7 @@ export function clockBound(comparison: BinaryExpression, cx: Probe, use: Use): B
   if (measuring.length === 0 || anchored(comparison, cx, use, measuring.map(([, limit]) => limit)) !== 1) return undefined
   const values = measuring.map(([, limit]) => valueOf(limit, cx, use)).filter(isNumber)
   if (values.length > 0) return Math.min(...values)
-  return measuring.some(([, limit]) => sizedOutside(limit, cx.where, use)) ? 'unreadable' : undefined
+  return measuring.some(([, limit]) => sizedOutside(limit, cx.where, use, 0, cx.evaluation?.clock)) ? 'unreadable' : undefined
 }
 
 export const compares = new Set(['<', '<=', '>', '>='])
@@ -317,7 +317,7 @@ export function pollDeadline(where: Where, sleeps: readonly Sleep[], evaluation?
     return sizeNumber(sleep.delay, nameReader(where, use)) ?? (sizedOutside(sleep.delay, where, use) ? 'unreadable' : undefined)
   })
   const interval: Bound = delays.includes(undefined) ? undefined : delays.every(isNumber) ? delays.reduce((sum, each) => sum + each, 0) : 'unreadable'
-  const outside = (node: Node, use: Use): boolean => isPath(node) && sizedOutside(node, where, use)
+  const outside = (node: Node, use: Use): boolean => isPath(node) && sizedOutside(node, where, use, 0, evaluation?.clock)
   const use = { chain: [...above, loop], at: loop.start ?? 0 }
   const cx: Probe = { where, read: evaluation ? evaluation.read(where, use) : nameReader(where, use), interval, outside, evaluation }
   const head = loop.test ? ends(loop.test, false, cx, { chain: [...above, loop], at: loop.test.start ?? 0 }) : undefined

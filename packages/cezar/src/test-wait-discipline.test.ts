@@ -405,6 +405,19 @@ describe('rule poll-deadline', () => {
     expect(polls('for (let i = 0; i < 20; i++) await sleep(Math.max(1, 2) * 1000); const t0 = process.hrtime.bigint(); while (process.hrtime.bigint() - t0 < 20000000000) await sleep(10);')).toEqual([]);
   });
 
+  const clockLimits = ['Date.now()', 'performance.now()', 'process.hrtime()', 'process.hrtime.bigint()']
+    .flatMap(clock => ['20_000', 'external', 'options.timeout'].flatMap(limit =>
+      ['inline', 'named deadline'].map(form => ({ clock, limit, form }))));
+
+  it.each(clockLimits)('keeps the server clock policy for $clock / $limit / $form', ({ clock, limit, form }) => {
+    const source = form === 'inline'
+      ? `const start = ${clock}; while (${clock} < start + ${limit}) await sleep(10);`
+      : `const deadline = ${clock} + ${limit}; while (${clock} < deadline) await sleep(10);`;
+    const before = scanSource('x.test.ts', source).map(({ rule, line }) => ({ rule, line }));
+    expect(before).toEqual([]);
+    expect(scanWaitAst('server', 'x.test.ts', source).map(({ rule, line }) => ({ rule, line }))).toEqual(before);
+  });
+
   it('pins the same 10 s threshold as the short-bound rule', () => {
     expect(polls('const deadline = Date.now() + 9_999;', 'while (Date.now() < deadline) await sleep(10);')).toHaveLength(1);
     expect(polls('const deadline = Date.now() + 10_000;', 'while (Date.now() < deadline) await sleep(10);')).toEqual([]);
