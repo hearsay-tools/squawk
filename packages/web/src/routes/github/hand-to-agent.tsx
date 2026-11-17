@@ -103,10 +103,11 @@ export function HandToAgent({
   const uiState = useUiState()
   const automationsOn = useAutomationsAvailable()
   const kindLabel = item.kind === 'pr' ? 'PR' : 'issue'
-  // A skill deleted since it was toggled must not reach the server (legacy rule).
+  // A missing picked path stays visible and blocks start until the user removes it.
   const resolved = useResolvedEngine(engine)
   const listed = useRunnerSkills(resolved.runner, resolved.account)
   const validSkills = selectedSkills.filter((entry) => listed.unchecked || entry.path === undefined || skills.some((skill) => skill.id === entry.id && (entry.path === undefined || skill.path === entry.path)))
+  const missingSkills = validSkills.length !== selectedSkills.length
   // Step open validates every selected id, including typed ids from an unavailable list.
   // The box is PRE-FILLED with the item's reference (#524) rather than starting empty: what you
   // see is what the agent gets, and it is editable — the previous "empty means the default
@@ -185,7 +186,7 @@ export function HandToAgent({
 
   const start = useMutation({
     mutationFn: async () => {
-      if (!resolved.canRun) return null
+      if (!resolved.canRun || missingSkills) return null
       return createRun(githubRunBody(item, workflow, validSkills, prompt, engineRunBody(resolved)))
     },
     onSuccess: (created) => {
@@ -276,31 +277,18 @@ export function HandToAgent({
         <div className="gh-field"><span>Skills · select one or more</span><SkillsPicker
           skills={skills}
           skillUsage={uiState.data?.skillUsage}
-          selected={validSkills}
+          selected={selectedSkills}
           onToggle={toggleSkill}
         /></div>
-      {/* Chips and the trigger's count render from `validSkills`, not `selectedSkills`: the run
-          POSTs `validSkills`, so showing a deleted skill here would promise the run a skill it
-          will not use. What the composer shows and what it sends are the same list. */}
-      {validSkills.length > 0 ? (
+      {selectedSkills.length > 0 ? (
         <div data-slot="gh-skill-chips" className="mt-2.5 flex flex-wrap gap-1.5">
-          {validSkills.map((skill) => (
-            <button
-              key={skillKey(skill)}
-              type="button"
-              data-slot="gh-skill-chip"
-              data-skill={skill.id}
-              onClick={() => toggleSkill(skill)}
-              title="Remove this skill"
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-danger/10 hover:text-danger"
-            >
-              {skills.find((entry) => entry.id === skill.id && (skill.path === undefined || entry.path === skill.path))?.name ?? skill.id}
-              {!skills.some((entry) => entry.id === skill.id) ? ' (unchecked)' : ''}
-              <XIcon size={16} aria-hidden="true" className="size-3" />
-            </button>
+          {selectedSkills.map((skill) => (
+            <SelectedSkillChip key={skillKey(skill)} skill={skill} skills={skills} unchecked={listed.unchecked}
+              onRemove={() => toggleSkill(skill)} />
           ))}
         </div>
       ) : null}
+      {missingSkills ? <p role="alert">A selected skill path is unavailable. Remove it or choose a current copy before starting.</p> : null}
 
         {/* `accounts`: this hand-off posts to `/api/v1/runs`, which takes `agentProfile` — so
             the runner pill may offer the agent's logins as rows (spec 2026-07-29-agent-profiles).
@@ -341,7 +329,7 @@ export function HandToAgent({
         <Button
           variant="primary"
           data-action="gh-run"
-          disabled={start.isPending || !resolved.canRun}
+          disabled={start.isPending || !resolved.canRun || missingSkills}
           onClick={() => start.mutate()}
         >
           <PlayIcon aria-hidden="true" className="size-3.5" />
@@ -373,10 +361,26 @@ export function HandToAgent({
   )
 }
 
-/**
- * The workflow dropdown: single-select, and — legacy parity — selecting the chosen workflow
- * again deselects it (no workflow means the toggled skills, or quick-task, drive the run).
- */
+function SelectedSkillChip({ skill, skills, unchecked, onRemove }: {
+  skill: PickedSkill
+  skills: readonly RunnerSkill[]
+  unchecked: boolean
+  onRemove: () => void
+}) {
+  const listed = skills.find((entry) => entry.id === skill.id && (skill.path === undefined || entry.path === skill.path))
+  const label = [listed?.name ?? skill.id, skill.path].filter(Boolean).join(' · ')
+  const unavailable = !unchecked && skill.path !== undefined && !listed
+  const status = unavailable ? ' (unavailable)' : unchecked || !listed ? ' (unchecked)' : ''
+  return (
+    <button type="button" data-slot="gh-skill-chip" data-skill={skill.id} onClick={onRemove}
+      title={`Remove skill ${label}`} aria-label={`Remove skill ${label}`}
+      className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-danger/10 hover:text-danger">
+      {label}{status}<XIcon size={16} aria-hidden="true" className="size-3" />
+    </button>
+  )
+}
+
+/** Selecting the chosen workflow again leaves the skills, or quick-task, to drive the run. */
 function WorkflowPicker({
   workflows,
   value,
@@ -527,8 +531,7 @@ function SkillsPicker({
     return (
       <CommandItem
         key={skillKey(skill)}
-        // The path suffix keeps values unique when a project skill shadows a global one.
-        value={`skill ${skill.name} ${skill.path}`}
+        value={skillKey(skill)}
         keywords={skillKeywords(skill.name, skill.description)}
         data-slot="gh-skill-option"
         data-skill={skill.id}

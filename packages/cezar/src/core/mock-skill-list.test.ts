@@ -2,7 +2,18 @@ import { homedir } from 'node:os'; // test-home-read: compare mock metadata path
 import { describe, expect, it } from 'vitest';
 import { mockSkillList } from '../../scripts/mock-skill-list.mjs';
 import { captures } from '../../scripts/mock-skill-list-data.mjs';
+import { skillListFixtures } from '../../scripts/mock-skill-fixtures.mjs';
 import { RUNNER_IDS } from './agent-runner.ts';
+
+it('replaces the recorded skill lists for all five runner fixtures', () => {
+  const replies = skillListFixtures([{ id: 'only-check', name: 'Check', path: '/p/SKILL.md' }]);
+  expect(replies.claude.response.response.skills).toMatchObject([{ name: 'only-check' }]);
+  expect(replies.codex.result.data[0].skills).toMatchObject([{ name: 'only-check', path: '/p/SKILL.md' }]);
+  expect(replies.opencode).toEqual([{ name: 'only-check', description: '', location: '/p/SKILL.md' }]);
+  expect(replies.pi.data.commands).toMatchObject([{ name: 'skill:only-check', sourceInfo: { path: '/p/SKILL.md' } }]);
+  expect(replies.omp).toMatchObject({ skills: [{ name: 'only-check', filePath: '/p/SKILL.md', baseDir: '/p' }] });
+  expect(JSON.stringify(replies)).not.toContain('probe-project');
+});
 
 describe('native mock skill paths', () => {
   for (const runner of RUNNER_IDS) it(`${runner}: substitutes string values before wire serialization`, () => {

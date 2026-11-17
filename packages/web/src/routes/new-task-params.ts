@@ -15,9 +15,10 @@ export interface NewTaskParams {
 export function parseNewTaskParams(search: string | URLSearchParams): NewTaskParams {
   const params = typeof search === 'string' ? new URLSearchParams(search) : search
   const runner = runnerSchema.safeParse(params.get('runner'))
+  const skillPath = params.get('skillPath')
   return {
     skill: (params.get('skill') ?? '').trim(),
-    ...(params.has('skillPath') ? { skillPath: params.get('skillPath')! } : {}),
+    ...(skillPath ? { skillPath } : {}),
     ...(runner.success ? { runner: runner.data } : {}),
     ...(params.has('account') ? { account: params.get('account')! } : {}),
     ref: (params.get('ref') ?? params.get('task') ?? '').trim(),

@@ -1003,3 +1003,37 @@ it.each(['unavailable', 'failed'])('keeps typed ids usable in handoff when the r
   fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
   await waitFor(() => expect(postedRun(sent)).toMatchObject({ steps: [{ skill: 'plugin:unchecked' }] }))
 })
+
+it('keeps a missing remembered path visible and blocks click and shortcut starts until it is removed', async () => {
+  writeFollowupSelection({ workflow: null, skills: [{ id: 'om-fix', path: '/gone/SKILL.md' }] })
+  const sent = stubFetch()
+  await openDetail()
+  await screen.findByRole('alert')
+  const chip = screen.getByRole('button', { name: 'Remove skill om-fix · /gone/SKILL.md' })
+  expect(chip.textContent).toContain('(unavailable)')
+  expect((screen.getByRole('button', { name: /Run agent on this issue/ }) as HTMLButtonElement).disabled).toBe(true)
+  await act(async () => { fireEvent.keyDown(promptField(), { key: 'Enter', ctrlKey: true }) })
+  expect(postedRun(sent)).toBeUndefined()
+  expect(readFollowupSelection().skills).toEqual([{ id: 'om-fix', path: '/gone/SKILL.md' }])
+  fireEvent.click(chip)
+  await waitForAgentRunEnabled()
+})
+
+it('labels duplicate-id chips with their paths and removes only the named copy', async () => {
+  writeFollowupSelection({ workflow: null, skills: [{ id: 'plugin:check', path: '/a/SKILL.md' }, { id: 'plugin:check', path: '/b/SKILL.md' }] })
+  const sent = stubFetch({ 'GET /api/v1/runner-skills?runner=claude': () => jsonResponse({
+    runner: 'claude', skills: [
+      { id: 'plugin:check', name: 'Check', path: '/a/SKILL.md' },
+      { id: 'plugin:check', name: 'Check', path: '/b/SKILL.md' },
+    ], problems: [], source: 'live',
+  }) })
+  await openDetail()
+  const first = await screen.findByRole('button', { name: 'Remove skill Check · /a/SKILL.md' })
+  const second = screen.getByRole('button', { name: 'Remove skill Check · /b/SKILL.md' })
+  expect(first.textContent).toContain('/a/SKILL.md')
+  expect(second.textContent).toContain('/b/SKILL.md')
+  fireEvent.click(first)
+  await waitForAgentRunEnabled()
+  fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
+  await waitFor(() => expect(postedRun(sent)).toMatchObject({ steps: [{ skill: 'plugin:check', skillPath: '/b/SKILL.md' }] }))
+})

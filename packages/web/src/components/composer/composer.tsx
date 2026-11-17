@@ -242,7 +242,7 @@ function composerInput(props: ComposerProps): Required<Pick<ComposerProps,
   }
 }
 
-// The path suffix keeps values unique when a project skill shadows a global one.
+// Slash completion inserts a typed id. The task picker selects a specific path.
 function composerMenuCandidates(
   trigger: TriggerState | null,
   skills: readonly RunnerSkill[],
@@ -251,17 +251,29 @@ function composerMenuCandidates(
 ): ComposerMenuCandidate[] {
   if (trigger === null) return []
   if (trigger.trigger === '/') {
-    return filterSkills(skills, trigger.query, skillUsage).map((skill) => ({
-      value: JSON.stringify([skill.id, skill.path]),
+    const seen = new Set<string>()
+    return filterSkills(skills, trigger.query, skillUsage).filter((skill) => {
+      if (seen.has(skill.id)) return false
+      seen.add(skill.id)
+      return true
+    }).map((skill) => ({
+      value: skill.id,
       insert: skill.id,
       label: skill.name,
-      description: [skill.description, skill.path].filter(Boolean).join(' · '),
+      description: slashSkillDescription(skill, skills),
       emphasized: isProjectSkill(skill),
     }))
   }
   return (getMentionCandidates?.() ?? [])
     .filter((path) => fuzzyMatch(path, trigger.query))
     .map((path) => ({ value: path, insert: path, label: path, emphasized: false }))
+}
+
+function slashSkillDescription(skill: RunnerSkill, skills: readonly RunnerSkill[]): string {
+  const copies = skills.filter((entry) => entry.id === skill.id)
+  return [skill.description, ...copies.map((entry) => entry.path),
+    copies.length > 1 ? 'Runner scope picks the copy. Use the task skill picker to choose a specific copy.' : undefined,
+  ].filter(Boolean).join(' · ')
 }
 
 function composerActiveValue(candidates: readonly ComposerMenuCandidate[], menuValue: string): string | undefined {

@@ -35,7 +35,7 @@ it('excludes invoking HOME skills from a real fixture server while keeping proje
     const names = skills.map(skill => skill.name)
     expect(names).toContain('probe-project')
     expect(skills.find(skill => skill.id === 'probe-project')?.path).toBe('.agents/skills/probe-project/SKILL.md')
-    expect(skills.find(skill => skill.id === 'capture')?.path).toContain(join(repo, '.server-home'))
+    expect(skills.find(skill => skill.id === 'capture')?.path).toMatch(/^\.server-home[\\/]/)
     expect(skills.every(skill => !skill.path?.startsWith(invokingHome))).toBe(true)
     expect(names).not.toContain('host-agents-sentinel')
     expect(names).not.toContain('host-claude-sentinel')

@@ -1217,3 +1217,19 @@ it('lists the step runner/account and inserts its id while displaying its name',
   fireEvent.keyDown(textarea, { key: 'Tab' })
   expect(textarea.value).toBe('/plugin:check ')
 })
+
+it('offers one slash completion per id, explains every duplicate path and inserts the typed id', async () => {
+  const { textarea } = renderComposer({}, {}, [
+    { id: 'plugin:check', name: 'Check', path: '/a/SKILL.md', scope: 'repo' },
+    { id: 'plugin:check', name: 'Check', path: '/b/SKILL.md', scope: 'user' },
+  ])
+  type(textarea, '/plugin:check')
+  await screen.findByText(/Runner scope picks the copy/)
+  const choices = document.querySelectorAll('[data-slot="composer-menu-item"]')
+  expect(choices).toHaveLength(1)
+  expect(choices[0]?.textContent).toContain('/a/SKILL.md')
+  expect(choices[0]?.textContent).toContain('/b/SKILL.md')
+  expect(choices[0]?.textContent).toContain('task skill picker')
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('/plugin:check ')
+})

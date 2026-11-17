@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { captures } from './mock-skill-list-data.mjs';
 
 export const MOCK_SKILLS_FILE = '.mock-runner-skills.json';
@@ -18,7 +18,29 @@ export function skillListFixtures(skills, problems = []) {
     path: skill.path ?? `/tmp/skill-list-probe/repo/.agents/skills/${skill.id ?? skill.name}/SKILL.md`,
   }));
   replies.codex.result.data[0].errors = problems;
+  replies.opencode = skills.map(skill => ({
+    name: skill.id ?? skill.name, description: skill.description ?? '',
+    location: fixturePath(skill),
+  }));
+  replies.pi.data.commands = skills.map(skill => ({
+    ...captures.pi.data.commands[0], name: `skill:${skill.id ?? skill.name}`,
+    description: skill.description ?? '',
+    sourceInfo: { ...captures.pi.data.commands[0].sourceInfo, path: fixturePath(skill),
+      source: skill.scope === 'user' ? 'auto' : 'extension:pi-project-skills.mjs',
+      scope: skill.scope === 'user' ? 'user' : 'project' },
+  }));
+  replies.omp.skills = skills.map(skill => ({
+    ...captures.omp.skills[0], name: skill.id ?? skill.name, description: skill.description ?? '',
+    filePath: fixturePath(skill), baseDir: dirname(fixturePath(skill)),
+    source: skill.scope === 'user' ? 'agents:user' : 'native:project',
+  }));
+  replies.omp.warnings = problems.map(problem => ({ message: problem.message,
+    ...(problem.path ? { skillPath: problem.path } : {}) }));
   return replies;
+}
+
+function fixturePath(skill) {
+  return skill.path ?? `/tmp/skill-list-probe/repo/.agents/skills/${skill.id ?? skill.name}/SKILL.md`;
 }
 
 export function writeMockSkills(root, skills, problems = []) {

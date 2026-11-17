@@ -30,6 +30,7 @@ import {
   searchSkillsForDisplay,
   searchWorkflows,
   skillKeywords,
+  skillKey,
 } from '@/lib/skills'
 import { submitShortcutHint } from '@/lib/use-submit-shortcut'
 import { orderProjects } from '@/lib/project-order'
@@ -134,6 +135,7 @@ export function NewTaskRoute() {
     draftProjectId,
     engine,
     agentProfile: accounts.agentProfile,
+    accountsSettled: accounts.accountsSettled,
     sourcesReady,
     source,
     runMode,
@@ -678,9 +680,8 @@ function SourcePill({
     const selected = source?.source === 'skill' && source.ref === skill.id && source.path === skill.path
     return (
       <CommandItem
-        key={JSON.stringify([skill.id, skill.path])}
-        // The path suffix keeps values unique when a project skill shadows a global one.
-        value={`skill ${skill.name} ${skill.path}`}
+        key={skillKey(skill)}
+        value={skillKey(skill)}
         keywords={skillKeywords(skill.name, skill.description)}
         data-slot="source-option"
         data-source-kind="skill"

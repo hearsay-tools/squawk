@@ -352,3 +352,20 @@ describe('assigning a template to a skill', () => {
     expect(rows()[0]!.textContent).toContain('unknown-id')
   })
 })
+
+it('keeps same-name pathless template skills distinct for keyboard selection', async () => {
+  serve({}, [{ id: 'first:check', name: 'Check' }, { id: 'second:check', name: 'Check' }])
+  renderSection()
+  await waitFor(() => expect(rows()).toHaveLength(DEFAULT_PROMPT_TEMPLATES.length))
+  const trigger = rows()[0]!.querySelector<HTMLButtonElement>('[data-slot="prompt-template-skills-trigger"]')!
+  await waitFor(() => expect(trigger.disabled).toBe(false))
+  fireEvent.click(trigger)
+  const input = await screen.findByPlaceholderText('search skills…')
+  const options = document.querySelectorAll('[data-slot="prompt-template-skill-option"]')
+  expect(options).toHaveLength(2)
+  expect(options[0]?.getAttribute('data-value')).not.toBe(options[1]?.getAttribute('data-value'))
+  fireEvent.keyDown(input, { key: 'End' })
+  fireEvent.keyDown(input, { key: 'Enter' })
+  expect(options[1]?.getAttribute('data-selected')).toBe('true')
+  expect(options[0]?.getAttribute('data-selected')).toBe('false')
+})

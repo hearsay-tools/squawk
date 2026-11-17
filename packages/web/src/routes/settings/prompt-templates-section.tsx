@@ -27,7 +27,7 @@ import {
   normalizePromptTemplates,
   type PromptTemplate,
 } from '@/lib/prompt-templates'
-import { isProjectSkill, searchSkillsForDisplay, skillKeywords } from '@/lib/skills'
+import { isProjectSkill, searchSkillsForDisplay, skillKeywords, skillKey } from '@/lib/skills'
 import { cn } from '@/lib/utils'
 
 /**
@@ -312,9 +312,8 @@ function TemplateSkillsPicker({
     const isSelected = selected.includes(skill.id)
     return (
       <CommandItem
-        key={JSON.stringify([skill.id, skill.path])}
-        // The path suffix keeps values unique when a project skill shadows a global one.
-        value={`skill ${skill.name} ${skill.path}`}
+        key={skillKey(skill)}
+        value={skillKey(skill)}
         keywords={skillKeywords(skill.name, skill.description)}
         data-slot="prompt-template-skill-option"
         data-skill={skill.id}

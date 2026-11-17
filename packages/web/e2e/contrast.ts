@@ -149,7 +149,7 @@ export function focusWithKeyboard(browser: AgentBrowser, selector: string): void
       `(() => {
     const describe = ${describe}
     const target = document.querySelector(${target})
-    const controls = [...document.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    const controls = [...document.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), details > summary:first-of-type, [tabindex]:not([tabindex="-1"])')]
       .filter((element) => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden')
     const index = target ? controls.indexOf(target) : -1
     if (index !== 0) { ${dropTabStart} }

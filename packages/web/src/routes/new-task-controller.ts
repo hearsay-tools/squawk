@@ -49,6 +49,7 @@ import {
   resolveModel,
   resolveRunner,
   resolveSource,
+  sourceExists,
   startedRunPath,
   type DraftTaskSource as TaskSource,
 } from './new-task-form'
@@ -334,7 +335,7 @@ export function useNewTaskDeepLink(input: {
   update: DraftUpdate
 }) {
   const navigate = useNavigate()
-  const [pending, setPending] = useState(() => input.deepLink.ref !== '')
+  const [pending, setPending] = useState(() => input.deepLink.ref !== '' || input.deepLink.skillPath !== undefined)
   useDeepLinkUrlCleanup(input.search, navigate)
   usePrefillNotice({ pending, setPending, deepLink: input.deepLink, sourcesReady: input.sourcesReady, listUnchecked: input.listUnchecked, skillList: input.skillList, update: input.update })
 }
@@ -373,7 +374,8 @@ function usePrefillNotice(input: {
     if (!pending || !sourcesReady) return
     input.setPending(false)
     const unknownSkill =
-      !input.listUnchecked && deepLink.skill !== '' && !input.skillList.some((s) => s.id === deepLink.skill)
+      !input.listUnchecked && deepLink.skill !== '' && !sourceExists({ source: 'skill', ref: deepLink.skill,
+        ...(deepLink.skillPath !== undefined ? { path: deepLink.skillPath } : {}) }, input.skillList, [])
         ? deepLink.skill
         : ''
     if (unknownSkill !== '') {
@@ -430,6 +432,7 @@ export function useNewTaskSubmit(input: {
   draftProjectId: string | null
   engine: ReturnType<typeof useEngineSelection>
   agentProfile: string | null
+  accountsSettled: boolean
   sourcesReady: boolean
   source: TaskSource | null
   runMode: { worktree: boolean; autonomous: boolean }
@@ -457,6 +460,7 @@ export function useNewTaskSubmit(input: {
     if (!providersReady || runner === null) throw new Error(providerUnavailableReason(providers))
     // Rejection restores the draft — nothing typed is lost to a race with the pickers.
     if (!input.sourcesReady) throw new Error('Still loading workflows and skills — try again in a second.')
+    if (draft.agentProfile && !input.accountsSettled) throw new Error('Still loading agent accounts — try again in a second.')
     if (draft.planFirst) {
       // Keep the original draft while planning so Discard returns to it unchanged.
       setPlanning(true)
@@ -497,6 +501,7 @@ export function useNewTaskSubmit(input: {
    *  current picker choices — legacy `startPlannedRun` semantics on the new surface. */
   const startPlanned = async () => {
     if (plan === null || plan.steps.length === 0 || starting || !providersReady || runner === null) return
+    if (draft.agentProfile && !input.accountsSettled) return
     const submittedRevision = draftRevision(draftProjectId)
     setStarting(true)
     try {

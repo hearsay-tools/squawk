@@ -302,7 +302,7 @@ export function ComposerMenuList({
                 {candidate.label}
               </span>
               {candidate.description ? (
-                <span className="min-w-0 flex-1 truncate text-xs text-soft-foreground">
+                <span title={candidate.description} className="min-w-0 flex-1 truncate text-xs text-soft-foreground">
                   {candidate.description}
                 </span>
               ) : null}

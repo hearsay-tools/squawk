@@ -18,6 +18,9 @@ describe('parseNewTaskParams', () => {
     ['native skill identity', '?skill=plugin%3Acheck&skillPath=repo%2FSKILL.md&runner=codex&account=work',
       { ...empty, skill: 'plugin:check', skillPath: 'repo/SKILL.md', runner: 'codex', account: 'work' }],
     ['invalid runner is ignored', '?runner=unknown', empty],
+    ['empty path is absent', '?skill=check&skillPath=', { ...empty, skill: 'check' }],
+    ['nonempty paths are preserved without trimming', '?skill=check&skillPath=%20repo%2FSKILL.md%20',
+      { ...empty, skill: 'check', skillPath: ' repo/SKILL.md ' }],
     // `task` is the older spelling of `ref`; app.js still accepts it, so must we.
     ['legacy `task` alias for `ref`', '?task=issue-12', { ...empty, ref: 'issue-12' }],
     ['`ref` wins over `task` when both are present', '?ref=a&task=b', { ...empty, ref: 'a' }],

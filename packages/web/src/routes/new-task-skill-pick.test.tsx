@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ACCOUNTS, PROVIDERS_MULTI, pillReady, postedBody, renderNewTask, requests, serve, startTask, textarea } from './new-task.testkit'
+import { resetToasts } from '@/components/ui/toaster'
 import { readDraft, resetDraft, writeDraft } from './new-task-draft'
 
 beforeEach(() => {
@@ -8,7 +9,57 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn()
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
 })
-afterEach(() => { cleanup(); resetDraft(); vi.unstubAllGlobals() })
+afterEach(() => { act(() => resetToasts()); cleanup(); resetDraft(); vi.unstubAllGlobals() })
+
+it('keeps same-name pathless skill rows distinct for keyboard selection', async () => {
+  serve({ skills: [
+    { id: 'first:check', name: 'Check' }, { id: 'second:check', name: 'Check' },
+  ] })
+  renderNewTask()
+  await pillReady()
+  fireEvent.click(screen.getByRole('button', { name: 'Choose a skill or workflow' }))
+  const input = await screen.findByPlaceholderText('search skills & workflows…')
+  fireEvent.change(input, { target: { value: 'Check' } })
+  const options = document.querySelectorAll('[data-source-kind="skill"][data-slot="source-option"]')
+  expect(options).toHaveLength(2)
+  expect(options[0]?.getAttribute('data-value')).not.toBe(options[1]?.getAttribute('data-value'))
+  fireEvent.keyDown(input, { key: 'End' })
+  fireEvent.keyDown(input, { key: 'Enter' })
+  await waitFor(() => expect(readDraft().source).toEqual({ source: 'skill', ref: 'second:check' }))
+})
+
+it.each(['', '&ref=Review'])('warns when a deep-linked path is absent even though its id remains%s', async (ref) => {
+  serve({ skills: [{ id: 'plugin:check', name: 'Check', path: 'current/SKILL.md' }] })
+  renderNewTask(`/new?skill=plugin%3Acheck&skillPath=gone%2FSKILL.md${ref}`)
+  await screen.findByText(/Unknown skill/)
+  expect(readDraft().source).toBeNull()
+  expect(textarea().value).toContain('Use the "plugin:check" skill on:')
+})
+
+it.each([true, false])('waits for account settlement only for explicit account drafts: %s', async (explicit) => {
+  serve()
+  writeDraft({ ...readDraft(), agentProfile: explicit ? 'work' : null })
+  const fallback = globalThis.fetch
+  let release!: (response: Response) => void
+  const profiles = new Promise<Response>((resolve) => { release = resolve })
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => String(input).endsWith('/workspace/agent-profiles') ? profiles : fallback(input, init))
+  renderNewTask()
+  await pillReady()
+  fireEvent.change(textarea(), { target: { value: 'Review changes' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Start task' }))
+  if (explicit) {
+    await screen.findByText(/Still loading agent accounts/)
+    expect(postedBody()).toBeUndefined()
+  } else {
+    await waitFor(() => expect(postedBody()).toBeDefined())
+  }
+  await act(async () => { release(new Response(JSON.stringify({ ...ACCOUNTS, profiles: [{ ...ACCOUNTS.profiles[1]!, id: 'work' }] }), { headers: { 'content-type': 'application/json' } })) })
+  if (explicit) {
+    await waitFor(() => expect(requests.some((request) => request.url.includes('account=work'))).toBe(true))
+    await startTask()
+    expect(postedBody()).toMatchObject({ agentProfile: 'work' })
+  }
+})
 
 it('shows both copies of a recent plugin id, sends its chosen path and persists only the id in ui-state', async () => {
   writeDraft({ ...readDraft(), source: { source: 'skill', ref: 'plugin:check' } })
