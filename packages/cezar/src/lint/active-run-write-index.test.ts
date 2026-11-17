@@ -34,8 +34,17 @@ function fixture(imported: string) {
     }
   }
   parents(program);
+  // The pre-order oxlint visits, recorded before counting starts.
+  const order: EsNode[] = [];
+  (function walk(current: EsNode) {
+    order.push(current);
+    for (const key of visitorKeys[current.type] ?? []) {
+      const value = current[key];
+      for (const part of Array.isArray(value) ? value : value ? [value] : []) walk(part);
+    }
+  })(program);
   reads = 0;
-  return { program, cast, reads: () => reads };
+  return { program, order, reads: () => reads };
 }
 
 // oxlint reuses one sourceCode object across files. The cache must use each Program identity.
@@ -43,30 +52,25 @@ const sourceCode = {
   text: '', getText: () => '', getAllComments: () => [], visitorKeys,
   getTokenBefore: () => null, getTokenAfter: () => null,
 };
-function owners(tree: ReturnType<typeof fixture>) {
+/** Drive every owner as oxlint does: each node's visitors in pre-order, then Program:exit. */
+function lint(tree: ReturnType<typeof fixture>) {
   const findings: string[] = [];
   const context: AstContext = { file: 'packages/cezar/src/example.ts', sourceCode };
   const visitors = activeRunWriteRules.map(rule => rule.create(() => findings.push(rule.name), context));
-  for (const visitor of visitors) visitor.Program!(tree.program);
-  return { findings, cast: () => { for (const visitor of visitors) visitor.TSAsExpression!(tree.cast); } };
+  for (const part of tree.order) for (const visitor of visitors) visitor[part.type]?.(part);
+  for (const visitor of visitors) visitor['Program:exit']!(tree.program);
+  return findings;
 }
 
 describe('active-run owner syntax index', () => {
-  it('waits for a candidate and shares the Program walk across all eight owners', () => {
+  it('collects scope facts from oxlint\'s visitors, with no walk of its own, and shares them across all eight owners', () => {
     const tree = fixture('BoundaryGroup');
-    const scan = owners(tree);
+    expect(lint(tree)).toEqual(['active-run-boundary-write-outside-owner']);
     expect(tree.reads()).toBe(0);
-    scan.cast();
-    expect(scan.findings).toEqual(['active-run-boundary-write-outside-owner']);
-    expect(tree.reads()).toBeLessThanOrEqual(2);
   });
 
   it('keeps imported types separate when sourceCode is reused for the next file', () => {
-    const first = owners(fixture('BoundaryGroup'));
-    first.cast();
-    expect(first.findings).toEqual(['active-run-boundary-write-outside-owner']);
-    const second = owners(fixture('UsageGroup'));
-    second.cast();
-    expect(second.findings).toEqual(['active-run-usage-write-outside-owner']);
+    expect(lint(fixture('BoundaryGroup'))).toEqual(['active-run-boundary-write-outside-owner']);
+    expect(lint(fixture('UsageGroup'))).toEqual(['active-run-usage-write-outside-owner']);
   });
 });
