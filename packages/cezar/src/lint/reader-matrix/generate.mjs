@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { transformSync } from 'esbuild';
 import { factProbes, historyProbes } from './probes.ts';
+import { factDocumentedLimits } from './review-probes.ts';
 
 const revision = '9f43ee092';
 const lint = 'packages/cezar/src/lint/';
@@ -42,7 +43,14 @@ try {
       : scanner.scanRunFacts(probe.file ?? file, probe.code, {}).map(site => site.rule).sort());
     const findingSets = [...new Map(findings.map(ids => [JSON.stringify(ids), ids])).values()];
     const outcomes = findings.map(ids => findingSets.findIndex(set => JSON.stringify(set) === JSON.stringify(ids)));
-    writeFileSync(new URL(`./${name}.json`, import.meta.url), JSON.stringify({ revision, digest, findingSets, outcomes }) + '\n');
+    // Accepted AST scope limits keep both historical findings and the chosen current findings.
+    const limits = name === 'run-fact-reader' ? factDocumentedLimits() : [];
+    const documentedLimits = limits.map(probe => ({ id: probe.id, expected: probe.expected,
+      old: scanner.scanRunFacts(probe.file ?? file, probe.code, {}).map(site => site.rule).sort() }));
+    const limitData = limits.length ? {
+      limitsDigest: createHash('sha256').update(JSON.stringify(limits)).digest('hex'), documentedLimits,
+    } : {};
+    writeFileSync(new URL(`./${name}.json`, import.meta.url), JSON.stringify({ revision, digest, findingSets, outcomes, ...limitData }) + '\n');
     process.stdout.write(`${name}: captured ${generated.length} cells from ${revision}\n`);
   }
 } finally {

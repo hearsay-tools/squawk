@@ -67,3 +67,43 @@ export function factReviewProbes(): ReaderProbe[] {
     ...(name === 'jsx' ? { file: 'packages/cezar/src/reader-matrix-probe.tsx' } : {}),
   }));
 }
+
+/** Accepted limits: syntax candidates exclude text-only matches and partial identifier matches.
+ * Historical findings are captured separately; these expected findings are deliberate scope decisions. */
+export function factDocumentedLimits(): (ReaderProbe & { expected: string[] })[] {
+  const textOnly = {
+    typeQuery: 'type T = typeof run.autoResumeAt;',
+    qualifiedType: 'type T = Foo.autoResumeAt;',
+    importAlias: 'import t = Foo.autoResumeAt;',
+    typeArgument: 'g<typeof run.autoResumeAt>();',
+    typeArgumentHold: `function f() { return ${W} && g<typeof run.autoResumeAt>(); }`,
+    typeAssertionHold: `function f(run: Run) { return ${W} && (null as unknown as typeof run.autoResumeAt); }`,
+    regexAfterBrace: `function f() { if (a) {}\n/.autoResumeAt/.test(s) && ${W}; }`,
+    jsxText: 'const view = <div>run.autoResumeAt</div>;',
+    jsxMemberTag: 'const view = <Foo.autoResumeAt />;',
+    jsxTextHold: 'export const A = () => <p>x.status === "waiting" && x.autoResumeAt</p>;',
+  };
+  const partialName = {
+    resumeDollar: 'const time = run.autoResumeAt$;',
+    resumeDollarHold: `function f() { return ${W} && run.autoResumeAt$; }`,
+    resumeEscapeHold: String.raw`function f() { return run.status === 'waiting' && run.autoResumeAt\u0041; }`,
+    sliceEdgeForward: `function f() { return ${W} && ${'x'.repeat(136)} || run.autoResumeAtMs; }`,
+    sliceEdgeReverseComparison: `function f() { return 'waiting' !== run.status && ${'x'.repeat(136)} || run.autoResumeAtMs; }`,
+    resumeEscape: String.raw`const time = run.autoResumeAt\u0041;`,
+    statusDollar: `const hold = 'waiting' === run.status$ && ${R};`,
+    statusEscape: String.raw`const hold = 'waiting' === run.status\u0041 && run.autoResumeAt;`,
+  };
+  return [
+    ...Object.entries(textOnly).map(([name, code]) => ({
+      id: `H4/${name}`, code, expected: [],
+      ...(name.startsWith('jsx') ? { file: 'packages/cezar/src/reader-matrix-probe.tsx' } : {}),
+    })),
+    { id: 'H5/nearerTextSiteForward', code: `function f() { return ${W} && run.autoResumeAt$ ; ${R}; }`,
+      expected: ['resume-time-read'] },
+    { id: 'H5/nearerTextSiteBackward', code: `function f() { ${R}; x || run.autoResumeAt$ || ${W}; }`,
+      expected: ['resume-time-read'] },
+    ...Object.entries(partialName).map(([name, code]) => ({
+      id: `H5/${name}`, code, expected: name.startsWith('status') ? ['resume-time-read'] : [],
+    })),
+  ];
+}
