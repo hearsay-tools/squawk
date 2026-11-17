@@ -240,13 +240,13 @@ for (const [name, file] of [
   });
 }
 
-// Moved M07 scanners and their fixtures keep the old guard's owner-review requirement.
+// The M07 wait rule engines and their fixtures keep the old guard's owner-review requirement.
 test('auto-merge protects moved unit wait scanners and fixtures while permitting added cases', (t) => {
   const r = repository(t);
   const files = [
-    'blank.ts', 'server-wait-syntax.ts', 'server-wait-deadlines.ts', 'server-wait-baseline.ts',
-    'test-wait-discipline.ts', 'unit-wait-values.ts', 'unit-wait-deadlines.ts',
-    'wait-baseline.ts', 'unit-wait-discipline.ts',
+    'blank.ts', 'server-wait-tree.ts', 'server-wait-names.ts', 'server-wait-values.ts', 'server-wait-options.ts',
+    'server-wait-loops.ts', 'server-wait-baseline.ts', 'test-wait-discipline.ts', 'unit-wait-values.ts', 'unit-wait-deadlines.ts',
+    'wait-baseline.ts', 'unit-wait-discipline.ts', 'wait-source.ts', 'wait-oxlint.ts', 'wait-babel-tree.ts',
     'wait-discipline-runner.ts',
   ].map(file => `packages/cezar/src/lint/${file}`);
   const fixture = "export const expected = 1;\n";

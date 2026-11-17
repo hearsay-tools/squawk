@@ -80,6 +80,20 @@ for (const relative of [
   assert.equal(created.status, 0, created.stdout + created.stderr);
 });
 
+for (const relative of [
+  'packages/cezar/src/lint/server-wait-loops.ts',
+  'packages/cezar/src/lint/unit-wait-values.ts',
+  'packages/cezar/src/lint/wait-babel-tree.ts',
+  'packages/cezar/src/lint/wait-oxlint.ts',
+  'packages/cezar/src/lint/wait-source.ts',
+]) test(`the wait rule engine ${relative} takes added cases and keeps owner review for any other change`, t => {
+  const changed = checkChange(t, relative, 'first: 1\nsecond: 2\n', 'first: 1\nsecond: 3\n');
+  assert.equal(changed.status, 1, changed.stdout + changed.stderr);
+  assert.ok(changed.stdout.includes(`guard test change: ${relative}`), changed.stdout);
+  const added = checkChange(t, relative, 'first: 1\n', 'first: 1\nsecond: 2\n');
+  assert.equal(added.status, 0, added.stdout + added.stderr);
+});
+
 test('path rules name each guarded file, file mode change and new baseline', async () => {
   const { pathReasons } = await import(require('node:url').pathToFileURL(script).href);
   const file = (relative, change = {}) => ({ path: relative, status: 'M', oldMode: '100644', newMode: '100644', adds: ['new'], dels: ['old'], ...change });
