@@ -11,7 +11,7 @@ import { checkWaitWrite } from './wait-phases.ts';
  * Outcome writes (hearsay-tools/cezarion#1805). A write that records an outcome — an input or a
  * wait `delivered`, a wake `charged`, a wait `settled`, a question `answered` — is staged here, with
  * what it depends on, and committed by `RunStore.commitOutcome` in one transaction. Nothing outside
- * this module writes those fields: the `outcome-write-outside-commit-outcome` ast-grep rule refuses
+ * this module writes those fields: the `outcome-write-outside-commit-outcome` oxlint AST rule refuses
  * one. A conversation request outcome is the one exception: `RunStore.commitConversation` commits
  * it with the recipient's reply input, in one transaction of its own.
  *

@@ -69,6 +69,12 @@ const VIOLATIONS: Record<string, [string, string]> = {
   "handoff-write-outside-writers": ["packages/cezar/src/handoff.ts", "function other() { writeFileSync(file, text); }"],
   "handoff-written-outside-handoff-module": ["packages/cezar/src/handoff-leak.ts", "writeFileSync(handoffFile, text);"],
   "liveness-timer-outside-owner": ["packages/cezar/src/workflows/run/raw-timer.ts", "setTimeout(expire, 1000);"],
+  "nudge-fact-write-outside-owner": ["packages/cezar/src/nudge-leak.ts", "const event = { kind: 'nudge-fact' };"],
+  "outcome-write-outside-commit-outcome": ["packages/cezar/src/outcome-leak.ts", "run.automaticWakes = 2;"],
+  "run-fact-write-outside-owner": ["packages/cezar/src/fact-leak.ts", "run.workflowCursor = undefined;"],
+  "run-memory-field-outside-owner": ["packages/cezar/src/workflows/run/map-leak.ts", "class Part { #byRun = new Map(); }"],
+  "skills-read-outside-enabled-skills": ["packages/cezar/src/workflows/run/skills-reader.ts", "const skills = state.skills.catalog;"],
+  "skills-write-outside-load-run-skills": ["packages/cezar/src/workflows/run/skills-writer.ts", "skillsWrites.catalog(state.skills, []);"],
   "worktree-write-outside-manifest": ["packages/cezar/src/skills-provision.ts", "import { writeFile } from 'node:fs/promises';"],
 
   'product-env-read': ['packages/cezar/src/env-reader.ts', 'const flag = process.env.CEZ_DRY_RUN;\n'],

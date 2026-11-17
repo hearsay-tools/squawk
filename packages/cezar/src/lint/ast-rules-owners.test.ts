@@ -146,3 +146,19 @@ ruleCases(AST_RULES.find(rule => rule.name === "liveness-timer-outside-owner")!,
     "await timers.setTimeout(500)"
   ]
 });
+
+ruleCases(AST_RULES.find(rule => rule.name === "nudge-fact-write-outside-owner")!, {
+  "file": "packages/cezar/src/fixture.ts",
+  "valid": [
+    "type Event = { kind: 'nudge-fact'; phase: 'retire' }",
+    "const refused = state.boundary.nudge?.state === 'refused'",
+    "transitionTurnBoundary(state, { kind: 'turn-started', phase: 'clear-boundary', session })",
+    "return { kind: 'nudge', cause: 'no-wait', autonomous: true }",
+    "retireNudge(state)"
+  ],
+  "invalid": [
+    "transitionTurnBoundary(state, { kind: 'nudge-fact', phase: 'retire', session })",
+    "transitionTurnBoundary(state, { kind: 'nudge-fact', phase: 'record', session, nudge: { cause: 'autonomous', state: 'refused' } })",
+    "const event = { kind: \"nudge-fact\", phase: \"retire\" }"
+  ]
+});
