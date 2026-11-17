@@ -55,9 +55,20 @@ it('refuses catalog, row and query writes; a new process replaces its snapshot',
 });
 
 it('an unavailable list fails a selected skill with runner and account diagnostics', async () => {
-  vi.spyOn(catalog, 'get').mockResolvedValue({ runner: 'codex', skills: [], problems: [], source: 'unavailable' });
+  vi.spyOn(catalog, 'get').mockResolvedValue({ runner: 'codex', skills: [], problems: [], source: 'unavailable', reason: 'probe refused sentinel' });
   const active = state();
   await owner.loadRunSkills(active, 'codex', profile);
   expect(owner.selectedSkill(active, undefined, undefined, 'task')).toBeUndefined();
   expect(() => owner.selectedSkill(active, 'demo', undefined, 'task')).toThrow('codex account "work"');
+  expect(() => owner.selectedSkill(active, 'demo', undefined, 'task')).toThrow('runner skill list is unavailable: probe refused sentinel');
+});
+
+
+it.each(['claude', 'codex'] as const)('opening an unknown command on %s reads only the opening snapshot', async runner => {
+  const active = state();
+  const read = vi.spyOn(catalog, 'get');
+  await owner.loadRunSkills(active, runner, profile);
+  const command = [{ type: 'text' as const, text: '/unknown arguments' }];
+  expect(await owner.openingInput('opening', active, command)).toBe(command);
+  expect(read).toHaveBeenCalledOnce();
 });

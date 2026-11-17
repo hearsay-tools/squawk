@@ -411,7 +411,7 @@ export class ContinuationSession {
 
     const skills: ContinuationSkills = { fallback: this.runSkills.selectedSkill(state, settings.toolsStep?.skill,
       settings.owningStep?.skillPath, '') };
-    const native = await this.runSkills.nativeInput(runId, state, [{ type: 'text', text: prompt }]);
+    const native = await this.runSkills.openingInput(runId, state, [{ type: 'text', text: prompt }]);
     if (native[0]?.type === 'skill') { skills.trigger = native[0]; prompt = ''; }
     state.liveSession.selectStep(stepId);
     this.host.beginUsageInvocation(runId, state, stepId);

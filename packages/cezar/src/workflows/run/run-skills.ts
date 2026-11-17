@@ -8,20 +8,23 @@ import { atStepOpen } from './launch-read-resolver.ts';
 import { leadingSlashSkillName } from './prompts.ts';
 import type { RunModuleContext, StepProfile } from './types.ts';
 
-let skillsWrites: { catalog(group: SkillsGroup, catalog: readonly RunnerSkill[], query: SkillCatalogQuery, account: string): void };
+let skillsWrites: { catalog(group: SkillsGroup, catalog: readonly RunnerSkill[], query: SkillCatalogQuery, account: string, unavailableReason: string | undefined): void };
 /** The exact list this runner process saw when it opened. Only RunSkills writes it. */
 export class SkillsGroup {
   #catalog: readonly RunnerSkill[] = Object.freeze([]);
   #query: Readonly<SkillCatalogQuery> | undefined;
   #account = 'default';
+  #unavailableReason: string | undefined;
   constructor() { Object.freeze(this); }
   get catalog(): readonly RunnerSkill[] { return this.#catalog; }
   get query(): Readonly<SkillCatalogQuery> | undefined { return this.#query; }
   get account(): string { return this.#account; }
+  get unavailableReason(): string | undefined { return this.#unavailableReason; }
   static {
-    skillsWrites = { catalog(group, catalog, query, account) {
+    skillsWrites = { catalog(group, catalog, query, account, unavailableReason) {
       group.#catalog = Object.freeze(catalog.map(skill => Object.freeze({ ...skill })));
       group.#query = Object.freeze({ ...query }); group.#account = account;
+      group.#unavailableReason = unavailableReason;
     } };
   }
 }
@@ -38,15 +41,16 @@ export class RunSkills {
   async loadRunSkills(state: ActiveRun, runner: RunnerId, profile: StepProfile): Promise<void> {
     const query = atStepOpen.skillQuery(state, runner, profile);
     const list = await this.catalog().get(query);
-    skillsWrites.catalog(state.skills, list.skills, query, profile.profileId);
+    skillsWrites.catalog(state.skills, list.skills, query, atStepOpen.skillAccount(profile), list.source === 'unavailable' ? list.reason ?? `${runner} skill discovery is temporarily unavailable` : undefined);
   }
 
-  enabledSkills(state: ActiveRun): readonly RunnerSkill[] { return state.skills.catalog; }
+  enabledSkills(state: ActiveRun): readonly RunnerSkill[] { return atStepOpen.sessionSkills(state); }
 
   selectedSkill(state: ActiveRun, id: string | undefined, path: string | undefined, args: string): SkillTrigger | undefined {
     if (!id) return undefined;
     const query = state.skills.query;
     if (!query) throw new Error('Runner skill list has not been read');
+    if (state.skills.unavailableReason) throw new Error(`${query.runner} account "${state.skills.account}" skill "${id}": runner skill list is unavailable: ${state.skills.unavailableReason}. Selected path: ${path ?? '(name only)'}. Listed paths: (unavailable)`);
     const result = resolveRunnerSkill(this.enabledSkills(state), { id, path }, { ...query, account: state.skills.account });
     if (result.error !== undefined) throw new Error(result.error);
     return { id: result.skill.id, ...(result.skill.path ? { path: result.skill.path } : {}), args };
@@ -63,13 +67,22 @@ export class RunSkills {
 
   /** Resolve at transport release, including for messages held during a turn. */
   async nativeInput(runId: string, state: ActiveRun, blocks: ContentBlock[]): Promise<ContentBlock[]> {
+    return this.resolveInput(runId, state, blocks, true);
+  }
+
+  /** Opening commands use the list this process just read, without a second probe. */
+  openingInput(runId: string, state: ActiveRun, blocks: ContentBlock[]): Promise<ContentBlock[]> {
+    return this.resolveInput(runId, state, blocks, false);
+  }
+
+  private async resolveInput(runId: string, state: ActiveRun, blocks: ContentBlock[], live: boolean): Promise<ContentBlock[]> {
     const index = blocks.findIndex(block => block.type === 'text');
     const first = blocks[index];
     const id = first?.type === 'text' ? leadingSlashSkillName(first.text) : undefined;
     if (!id || first?.type !== 'text' || !state.skills.query) return blocks;
-    const skills = await this.inputSkills(state);
+    const skills = live ? await this.inputSkills(state) : this.enabledSkills(state);
     if (!skills.some(skill => skill.id === id)) {
-      await this.noteNewSkill(runId, state, id);
+      if (live) await this.noteNewSkill(runId, state, id);
       return blocks;
     }
     const result = resolveRunnerSkill(skills, { id }, { ...state.skills.query, account: state.skills.account });

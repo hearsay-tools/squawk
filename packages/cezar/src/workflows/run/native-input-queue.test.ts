@@ -117,6 +117,7 @@ it.each(['session', 'state'] as const)('an old %s read cannot send or clear its 
   const oldWork = [...work.pending.keys()];
   const oldWire = wire;
   delivery.clearNativeInputs(id);
+  store.updateRun(id, { queuedMessages: [] }); // This test discards the old input; recovery is covered separately.
   if (replacement === 'state') {
     state = createActiveRun({ cwd: root, pendingHumanAsk: false, autonomous: false });
     state.liveSession.selectStep('task');
@@ -133,7 +134,7 @@ it.each(['session', 'state'] as const)('an old %s read cannot send or clear its 
   newRead.resolve(text('/demo new'));
   await drain();
   expect(wire.sendMessage).toHaveBeenCalledExactlyOnceWith(text('/demo new'));
-  expect(queued()).toEqual(['old']);
+  expect(queued()).toEqual([]);
 });
 
 it('refuses a routed worker answer before accepting it into the durable queue', () => {
@@ -196,4 +197,16 @@ it('execution cleanup releases native input memory and prevents an old read from
   await drain();
   expect(wire.sendMessage).not.toHaveBeenCalled();
   expect(queued()).toEqual(['held']);
+});
+
+it('restores durable FIFO before a later live message in the session-open gap', async () => {
+  store.updateRun(id, { queuedMessages: [{ id: 'restored', text: '/demo restored',
+    createdAt: new Date().toISOString(), replayAfterOpen: true }] });
+  expect(memory.holds(id)).toBe(false);
+  expect(delivery.sendMessage(id, text('later live message'), 'later')).toBe(true);
+  await drain();
+  expect(vi.mocked(wire.sendMessage).mock.calls.map(([blocks]) => blocks[0])).toEqual([
+    { type: 'text', text: '/demo restored' }, { type: 'text', text: 'later live message' },
+  ]);
+  expect(queued()).toEqual([]);
 });

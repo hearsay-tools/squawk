@@ -1,7 +1,7 @@
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import type { RunnerSkillList } from '@open-mercato/cezar-contract/runner-skills';
-import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
+import type { RunnerSkill, RunnerSkillList } from '@open-mercato/cezar-contract/runner-skills';
+import { createFixtureManager, drainFixtureManagers, fixtureWork } from './fixture-cleanup.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -14,6 +14,8 @@ import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import * as runners from '../core/runner-factory.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { scopeFixtureProcesses } from '../delegation/process-scope.testkit.ts';
+import { testHome } from '../home/test-home.testkit.ts';
+import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { planOwnedWorkspace } from '../delegation/workspace.ts';
 import { workerWorkflowHash } from '../delegation/execution-identity.ts';
 import { RunStore } from '../runs/store.ts';
@@ -32,6 +34,8 @@ describe('skill resume continuation follow-ups (#790 review)', { timeout: 20_000
   let repoRoot: string;
   let store: RunStore;
   let manager: RunManager;
+  let semaphore: WorkspaceSemaphore;
+  let oneShotCalls: ReturnType<typeof vi.fn<() => Promise<AgentRunResult>>>;
   let restoreProcesses: () => void;
   let launches: Array<{ spec: AgentRunSpec }>;
   let sessions: Array<{ spec: AgentRunSpec; finish: (text?: string) => void }>;
@@ -51,13 +55,16 @@ describe('skill resume continuation follow-ups (#790 review)', { timeout: 20_000
     await execFileAsync('git', ['add', '-A'], { cwd: repoRoot });
     await execFileAsync('git', [...GIT_ID, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
     store = RunStore.open(join(repoRoot, '.ai/cezar'), { keepLive: true });
-    manager = createFixtureManager(store, repoRoot);
+    semaphore = new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 1 },
+      load: async () => ({ maxParallel: 1, memoryLimitMb: null }) });
+    manager = createFixtureManager(store, repoRoot, { semaphore });
+    oneShotCalls = vi.fn(async () => ({ text: '', toolCalls: [], tokensUsed: 0 }));
     vi.spyOn(runners, 'createRunner').mockImplementation((backend) => ({
       backend: backend ?? 'claude',
       specSupport: CLAUDE_SPEC_SUPPORT,
       systemPromptOnResume: 'resent',
       interrupt: async () => undefined,
-      run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }),
+      run: oneShotCalls,
       startSession: (spec: AgentRunSpec, onEvent) => {
         launches.push({ spec });
         let resolveResult!: (value: AgentRunResult) => void;
@@ -145,14 +152,92 @@ describe('skill resume continuation follow-ups (#790 review)', { timeout: 20_000
     expect(store.getRun(id)?.status).toBe('cancelled');
   });
 
-  it('a selected skill missing from the native list fails Continue before opening a session', async () => {
+  const rejectedSkills = ['missing', 'ambiguous', 'stale path', 'unavailable'] as const;
+  type RejectedSkill = typeof rejectedSkills[number];
+
+  function rejectedCatalog(kind: RejectedSkill) {
+    const path = join(repoRoot, 'native', TEAM_SKILL, 'SKILL.md');
+    const other = join(repoRoot, 'second', TEAM_SKILL, 'SKILL.md');
+    const old = join(repoRoot, 'removed', TEAM_SKILL, 'SKILL.md');
+    const closeId = `${TEAM_SKILL}-near`;
+    const skills: RunnerSkill[] = kind === 'missing'
+      ? [{ id: closeId, name: closeId, scope: 'repo', path }]
+      : [{ id: TEAM_SKILL, name: TEAM_SKILL, scope: 'repo', path },
+        ...(kind === 'ambiguous' ? [{ id: TEAM_SKILL, name: TEAM_SKILL, scope: 'repo' as const, path: other }] : [])];
+    const catalog = fixedSkillCatalog(skills);
+    if (kind === 'unavailable') vi.spyOn(catalog, 'get').mockResolvedValue({
+      runner: 'claude', skills: [], problems: [], source: 'unavailable', reason: 'probe refused sentinel',
+    });
+    const evidence = kind === 'missing' ? ['missing', closeId, path]
+      : kind === 'ambiguous' ? ['ambiguous', path, other]
+      : kind === 'stale path' ? ['selected path', old, path]
+      : ['unavailable', 'probe refused sentinel', 'Selected path: (name only)', 'Listed paths: (unavailable)'];
+    return { catalog, evidence, path: kind === 'stale path' ? old : undefined };
+  }
+
+  for (const queued of [false, true]) it.each(rejectedSkills)(`%s fails Continue before any model call and releases admission (queued=${queued})`, async kind => {
     const id = terminalSkillRun(TEAM_SKILL);
-    expect(manager.continueRun(id, { text: 'keep going' })).toEqual({ ok: true });
-    // bound: the failed list resolution ends Continue without a runner process.
-    await vi.waitFor(() => expect(manager.isActive(id)).toBe(false), { timeout: LAUNCH_WAIT_MS });
+    const rejected = rejectedCatalog(kind);
+    if (rejected.path) store.updateStep(id, 'task', { skillPath: rejected.path });
+    manager.setSkillCatalog(rejected.catalog);
+    const revoke = vi.fn();
+    const provision = vi.fn(() => ({ env: {}, instructions: '', restrictCrossSessionMessaging: true as const, revoke }));
+    manager.setDelegationProvisioner(provision);
+
+    expect(manager.continueRun(id, { text: 'keep going' }, queued)).toEqual({ ok: true });
+    // bound: failure settlement and active-slot release are the resolver's completion signal.
+    await vi.waitFor(() => {
+      expect(store.getRun(id)?.status).toBe('failed');
+      expect(manager.isActive(id)).toBe(false);
+      expect(semaphore.busy()).toBe(0);
+    }, { timeout: LAUNCH_WAIT_MS });
+    const failed = store.getRun(id)!;
+    expect(failed.error).toContain('claude');
+    expect(failed.error).toContain('account "default"');
+    expect(failed.error).toContain(TEAM_SKILL);
+    for (const text of rejected.evidence) expect(failed.error).toContain(text);
+    expect(failed.steps.at(-1)).toMatchObject({ status: STEP_STATUS.FAILED, error: failed.error });
     expect(launches).toEqual([]);
-    expect(store.getRun(id)?.status).toBe('failed');
-    expect(store.getRun(id)?.error).toContain(TEAM_SKILL);
+    expect(oneShotCalls).not.toHaveBeenCalled();
+    expect(fixtureWork(manager).liveSessions.size).toBe(0);
+    // Resolution precedes the launch preamble, so it never creates delegation grants to leak.
+    expect(provision).not.toHaveBeenCalled();
+    expect(revoke).not.toHaveBeenCalled();
+
+    const next = manager.startRun(plannedWorkflow([{ id: 'plain', prompt: '{{task}}' }]), {
+      task: 'after the failed skill', runner: 'claude', worktree: false,
+    });
+    // bound: the next launch proves both the capacity slot and exclusive repo lease were released.
+    await vi.waitFor(() => expect(launches).toHaveLength(1), { timeout: LAUNCH_WAIT_MS });
+    expect(launches[0]!.spec.userPrompt).toContain('after the failed skill');
+    expect(launches[0]!.spec.skill).toBeUndefined();
+    expect(provision).toHaveBeenCalledTimes(1);
+    sessions[0]!.finish();
+    // bound: the fake runner has returned; wait for the normal root-run release signals.
+    await vi.waitFor(() => {
+      expect(manager.isActive(next.id)).toBe(false);
+      expect(revoke).toHaveBeenCalledTimes(1);
+      expect(semaphore.busy()).toBe(0);
+    }, { timeout: LAUNCH_WAIT_MS });
+  });
+
+  it('an unknown Continue command uses only the opening snapshot and adds no next-Continue note', async () => {
+    const record = store.createRun({ title: 'plain', task: 'plain', workflow: 'quick-task', runner: 'claude',
+      steps: [{ id: 'task', name: 'Task', kind: STEP_KIND.agent }] });
+    setRunStatus(store, record.id, RUN_STATUS.done, { workflowDef: plannedWorkflow([{ id: 'task', prompt: '{{task}}' }]) });
+    store.updateStep(record.id, 'task', { status: STEP_STATUS.done, sessionId: 'sess-plain', backend: 'claude' });
+    const catalog = fixedSkillCatalog();
+    const get = vi.spyOn(catalog, 'get');
+    manager.setSkillCatalog(catalog);
+    expect(manager.continueRun(record.id, { text: '/unknown keep the command' })).toEqual({ ok: true });
+    // bound: the spec at startSession is the opening-input delivery signal.
+    await vi.waitFor(() => expect(launches).toHaveLength(1), { timeout: LAUNCH_WAIT_MS });
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(launches[0]!.spec.userPrompt).toContain('/unknown keep the command');
+    expect(launches[0]!.spec.skill).toBeUndefined();
+    expect(launches[0]!.spec.resumeFallbackSkill).toBeUndefined();
+    expect(store.readEvents(record.id).some(event => event.type === 'note' && String(event.message).includes('after the next Continue'))).toBe(false);
+    sessions[0]!.finish();
   });
 
   it('Continue of a --skill worker carries a native fallback and keeps extra-only delegationSettings', async () => {

@@ -268,13 +268,14 @@ export class PiRunner implements AgentRunner {
       interruptKillTimer.unref?.();
     };
 
+    let fallbackOpeningPending = !spec.skill && !!spec.resumeFallbackSkill;
     write({ id: 'cezar-state', type: 'get_state' });
     // #551: Pi defaults steeringMode to one-at-a-time (one steer per completed
     // assistant turn). This session is Squawk's, and sendAgentMessage requires every
     // accepted steer at the next model call. get_state cannot tell that default
     // from an explicit user setting, so we always set all rather than guess.
     write({ type: 'set_steering_mode', mode: 'all' });
-    sendMessage(openingContent(spec));
+    if (!fallbackOpeningPending) sendMessage(openingContent(spec, false));
 
     const limitMs = spec.timeoutMs ?? this.timeoutMs ?? spec.timings?.runTimeoutMs ?? DEFAULT_RUNNER_TIMINGS.runTimeoutMs;
     const deadline =
@@ -358,12 +359,24 @@ export class PiRunner implements AgentRunner {
       }
       rpcInput.readyAfterAck();
     };
-    // A failed get_state has no branch of its own: it is reported like any other failed command.
+    const rejectUnknownStartup = (value: Record<string, unknown>): boolean => {
+      if (!fallbackOpeningPending || value.id !== 'cezar-state') return false;
+      if (value.command === 'get_state' && value.success === true && isRecord(value.data) && string(value.data.sessionId)) return false;
+      fallbackOpeningPending = false;
+      failInput(new Error('startup session identity unavailable'));
+      return true;
+    };
     let sessionReported = false;
     const handleResponse = (value: Record<string, unknown>): void => {
+      if (rejectUnknownStartup(value)) return;
       if (value.command === 'get_state' && value.success === true && isRecord(value.data)) {
-        adoptRpcSessionId(value.data, (id) => { sessionId = id; }, Boolean(spec.resume && spec.sessionId === value.data.sessionId), sessionReported ? undefined : onEvent);
+        const resumed = Boolean(spec.resume && spec.sessionId === value.data.sessionId);
+        adoptRpcSessionId(value.data, (id) => { sessionId = id; }, resumed, sessionReported ? undefined : onEvent);
         sessionReported ||= typeof value.data.sessionId === 'string' && value.data.sessionId.length > 0;
+        if (fallbackOpeningPending && value.id === 'cezar-state') {
+          fallbackOpeningPending = false;
+          sendMessage(openingContent(spec, resumed));
+        }
       } else if (value.command === 'set_steering_mode') {
         if (value.success !== true) {
           onEvent?.({ type: 'note', message: `pi: set_steering_mode failed: ${rpcError(value)}` });

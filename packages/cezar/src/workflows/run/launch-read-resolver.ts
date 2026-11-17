@@ -212,14 +212,14 @@ function stepEffort(
 }
 
 export const atTaskHead = { executionPayload, queuedPayload, resumedPayload, acceptedWorkflowFields, recordedRunner, defaultRunner, runnerless, heldFor, accountFor, workerStep, executionInput, executionWorkflow, requeueJob, baseBranch, worktreeSetup: continuationWorktreeSetup, jobInput, jobWorkflow, resumedJob, storedWorkflow, interruptedIndex, interruptedDefinition, heldAccount, worktree: inputWorktree, workflowName, images: acceptedImages, task: acceptedTask, skillHint: acceptedSkillHint, ownedJob, verifyIdentity: verifyWorkerIdentity, autonomous: inputAutonomous, reviveWorkflow, queuedResumeSession, recoveryInput: queuedRecoveryInput, acceptedRunFields, acceptInput, modelIdentity: taskModelIdentity, config: readLaunchConfig, runner: taskRunner, systemPrompt: taskSystemPrompt, hydrateQueuedInput, attachments: readPersistedAttachments };
-export const atStepOpen = { afterStepPayload, sessionPayload, sessionWaitPayload, retryIndex, workflowLength, workflowStep, workflowSlice, workflowChainNote, skillQuery: runSkillQuery, runner: stepRunner, prompt: stepPrompt, skill: stepSkill, toolGrant: continuationToolGrant, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, contextVariables, model: stepModel, effort: stepEffort, openingInputs, agentEnvForStep, workerStep };
-export const atLiveInput = { projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, queuedMessages: queuedMessageSource, taskAttachmentUrls, };
+export const atStepOpen = { afterStepPayload, sessionPayload, sessionWaitPayload, retryIndex, workflowLength, workflowStep, workflowSlice, workflowChainNote, skillQuery: runSkillQuery, skillAccount, sessionSkills, runner: stepRunner, prompt: stepPrompt, skill: stepSkill, toolGrant: continuationToolGrant, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, contextVariables, model: stepModel, effort: stepEffort, openingInputs, agentEnvForStep, workerStep };
+export const atLiveInput = { projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, queuedMessages: queuedMessageSource, attachments: readPersistedAttachments, taskAttachmentUrls, };
 export const atContinue = { skillQuery: runSkillQuery, task: retriedTask, heldStep: heldWorkflowStepId, heldRunner: heldStepRunner, resumedStep, storedWorkflow, workflowStep, workflowLength, agentEnvForStep, workerStep, projectUiState: readProjectUiState, projectUiStateSync: readProjectUiStateSync, skill: continuedSkill, checkpoint: continuedCheckpoint, prompt: continuedPrompt, rejoinLine: rejoinContinuationLine, verifyIdentity: verifyWorkerIdentity, waitingBeforeFinalWorkflowStep, waitingWorkflowStepIndex, continuationNextStep, ciWorkflowResumeStepIndex, workflowStartIndex, resumableSessionId, continuedSessionId, isSyntheticContinuation, owningStep: continuationOwningStep, definitionStep: continuationDefStep, continuedStep: continuedStepId, toolGrant: continuationToolGrant, extraSystemPrompt: continuedSystemPrompt, recordedProfile: continuedProfileId, definitionId: continuationStepId, model: continuationModel, effort: continuationEffort, runner: continuationRunner, hydrateQueuedContinuation, config: readLaunchConfig, worktreeSetup: continuationWorktreeSetup, opening: continuationOpening, openingImages: continuationImages };
 
 function hydrateQueuedInput(context: RunModuleContext, readAttachments: AttachmentReader, runId: string, input: StartRunInput): StartRunInput {
     const run = context.store.getRun(runId);
     if (!run) return input;
-    const stack = run.queuedMessages ?? [];
+    const stack = (run.queuedMessages ?? []).filter(message => !message.replayAfterOpen);
 
     const task = foldQueuedTask(run.task, stack);
 
@@ -254,7 +254,7 @@ function hydrateQueuedContinuation(context: RunModuleContext, readAttachments: A
     if (!run) {
       return { ...continuation, persistedImages: [], persistedAttachments: [] };
     }
-    const stack = run.queuedMessages ?? [];
+    const stack = (run.queuedMessages ?? []).filter(message => !message.replayAfterOpen);
     const amendedTask = foldQueuedTask(run.task, stack);
     const openingPrompt = run.continuationMessage?.text ?? continuation.prompt;
     const prompt = queuedContinuationPrompt(openingPrompt, amendedTask);
@@ -395,7 +395,7 @@ function openingInputs(store: RunStore, dataDir: string, execution: Execution): 
   );
   const attachments: PersistedAttachment[] = openingAlreadyDelivered ? [] : [
     ...(startRecord?.taskImages ?? []),
-    ...(startRecord?.queuedMessages ?? []).flatMap((m) => m.images ?? []),
+    ...(startRecord?.queuedMessages ?? []).filter(message => !message.replayAfterOpen).flatMap((m) => m.images ?? []),
   ]
     .map((url): PersistedAttachment | null => {
       const name = url.split('/').pop();
@@ -818,3 +818,6 @@ function accountFor(...args: Parameters<typeof executionAccount>): ReturnType<ty
 function runSkillQuery(state: ActiveRun, runner: RunnerId, profile: StepProfile) {
   return { runner, cwd: state.liveSession.cwd, accountHome: profile.accountBinding?.homePath };
 }
+
+function skillAccount(profile: StepProfile): string { return profile.profileId; }
+function sessionSkills(state: ActiveRun) { return state.skills.catalog; }

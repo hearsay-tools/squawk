@@ -10,28 +10,37 @@ import { RUNNER_FACTS } from './runner-facts.ts';
 const TOKEN = 'TRIGGER-FIXTURE';
 const ARGS = 'native arguments';
 const CONTEXT = 'opening context sentinel';
-export const SKILL_TRIGGER_ROWS = ['first', 'context', 'later', 'resume', 'fallback-fresh', 'fallback-resume', 'unknown', 'position', 'plain'] as const;
+const CONTINUE = 'Continue with the revised task.';
+export const SKILL_TRIGGER_ROWS = ['first', 'context', 'later', 'resume', 'fallback-fresh', 'fallback-resume', 'fallback-bootstrap', 'unknown', 'position', 'plain'] as const;
 
-function assertTriggerWire(runner: RunnerId, wire: string, context = ''): void {
+function assertTriggerWire(runner: RunnerId, wire: string, context = '', args = ARGS): void {
   const rows = wire.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
   if (runner === 'claude') {
     const message = rows.find(row => row.blocks)?.blocks;
-    expect(message.at(-1)).toEqual({ type: 'text', text: `/probe-project ${ARGS}` });
+    expect(message.at(-1)).toEqual({ type: 'text', text: `/probe-project ${args}` });
     if (context) expect(message.slice(0, -1)).toContainEqual({ type: 'text', text: context });
   } else if (runner === 'codex') {
     const input = rows.find(row => row.method === 'turn/start' && row.params.input.some((item: { type: string }) => item.type === 'skill'))?.params.input;
     expect(input).toContainEqual(expect.objectContaining({ type: 'skill', name: 'probe-project', path: expect.stringContaining('SKILL.md') }));
-    expect(input[0].text).toContain(ARGS);
+    expect(input[0].text).toContain(args);
     if (context) expect(input[0].text).toContain(context);
   } else if (runner === 'opencode') {
     const command = rows.find(row => row.url?.endsWith('/command'))?.body;
-    expect(command).toMatchObject({ command: 'probe-project', arguments: expect.stringContaining(ARGS) });
+    expect(command).toMatchObject({ command: 'probe-project', arguments: expect.stringContaining(args) });
     if (context) expect(command.arguments).toContain(context);
     expect(rows.some(row => row.url?.endsWith('/prompt_async'))).toBe(false);
   } else {
     const text = rows.find(row => row.userText?.startsWith('/skill:probe-project'))?.userText;
-    expect(text).toBe(`/skill:probe-project ${ARGS}${context ? `\n\n${context}` : ''}`);
+    expect(text).toBe(`/skill:probe-project ${args}${context ? `\n\n${context}` : ''}`);
   }
+}
+
+function triggerCount(runner: RunnerId, wire: string): number {
+  const rows = wire.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+  if (runner === 'claude') return rows.filter(row => row.blocks?.some((block: { text?: string }) => block.text?.startsWith('/probe-project'))).length;
+  if (runner === 'codex') return rows.filter(row => row.method === 'turn/start' && row.params.input.some((item: { type: string }) => item.type === 'skill')).length;
+  if (runner === 'opencode') return rows.filter(row => row.url?.endsWith('/command')).length;
+  return rows.filter(row => row.userText?.startsWith('/skill:probe-project')).length;
 }
 
 function assertSuccess(obs: SeamObservation): void {
@@ -44,7 +53,7 @@ function assertSuccess(obs: SeamObservation): void {
 export function describeNativeSkillTriggers(runner: RunnerId): void {
   if (!parityRunners('runner-skill-trigger', 'native').includes(runner)) return;
   describe(`${runner}: native skill trigger`, () => {
-    for (const row of SKILL_TRIGGER_ROWS) it(row, async () => {
+    for (const row of SKILL_TRIGGER_ROWS.filter(row => row !== 'fallback-bootstrap' || runner === 'pi' || runner === 'omp' || runner === 'opencode')) it(row, async () => {
       const dir = mkdtempSync(join(tmpdir(), `skill-trigger-${runner}-`));
       const argsFile = join(dir, 'args.ndjson');
       const stdinFile = join(dir, 'stdin.ndjson');
@@ -53,9 +62,10 @@ export function describeNativeSkillTriggers(runner: RunnerId): void {
       const base: Partial<AgentRunSpec> = { cwd: dir, userPrompt: '', env: { CEZ_HANDOFF_FILE: '', CEZ_MOCK_ARGS_FILE: argsFile, CEZ_MOCK_STDIN_FILE: stdinFile } };
       try {
         if (row === 'fallback-fresh') {
-          const obs = await driveSeam(runner, 'baseline', { spec: { ...base, userPrompt: CONTEXT, resumeFallbackSkill: skill } });
+          const obs = await driveSeam(runner, 'baseline', { spec: { ...base, userPrompt: CONTINUE, resumeFallbackSkill: { ...skill, args: '' } } });
           assertSuccess(obs);
-          assertTriggerWire(runner, wire(), CONTEXT);
+          assertTriggerWire(runner, wire(), '', CONTINUE);
+          expect(triggerCount(runner, wire())).toBe(1);
           expect(obs.v1.filter(event => event.type === 'session')).toEqual([{ type: 'session', sessionId: obs.result.sessionId, resumed: false }]);
           return;
         }
@@ -63,13 +73,26 @@ export function describeNativeSkillTriggers(runner: RunnerId): void {
           const first = await driveSeam(runner, 'baseline', { spec: { ...base, skill } });
           assertSuccess(first);
           for (const file of [argsFile, stdinFile]) writeFileSync(file, '');
-          const resumed = await driveSeam(runner, 'baseline', { spec: { ...base, userPrompt: CONTEXT, resumeFallbackSkill: skill, sessionId: first.result.sessionId, resume: true } });
+          const resumed = await driveSeam(runner, 'baseline', { spec: { ...base, userPrompt: CONTINUE, resumeFallbackSkill: { ...skill, args: '' }, sessionId: first.result.sessionId, resume: true } });
           expect(resumed.failure).toBeUndefined();
           expect(resumed.v1.filter(event => event.type === 'error')).toEqual([]);
           expect(resumed.result.text).not.toContain(TOKEN);
           expect(wire()).not.toContain('probe-project');
-          expect(wire()).toContain(CONTEXT);
+          expect(wire()).toContain(CONTINUE);
           expect(resumed.v1.filter(event => event.type === 'session')).toEqual([{ type: 'session', sessionId: first.result.sessionId, resumed: true }]);
+          return;
+        }
+        if (row === 'fallback-bootstrap') {
+          // Native resume can create a new id: absent pi/OpenCode session, or moved omp session.
+          const requestedSession = runner === 'opencode' ? 'ses_missing_skill' : join(dir, 'empty-session.jsonl');
+          const obs = await driveSeam(runner, 'baseline', { spec: { ...base, resume: true, sessionId: requestedSession,
+            userPrompt: CONTINUE, resumeFallbackSkill: { ...skill, args: '' },
+            env: { ...base.env, CEZ_MOCK_OMP_RESUME_MOVED: '1' } } });
+          assertSuccess(obs);
+          expect(obs.v1.filter(event => event.type === 'session')).toEqual([{ type: 'session', sessionId: obs.result.sessionId, resumed: false }]);
+          expect(obs.result.sessionId).not.toBe(requestedSession);
+          assertTriggerWire(runner, wire(), '', CONTINUE);
+          expect(triggerCount(runner, wire())).toBe(1);
           return;
         }
         if (row === 'plain') {

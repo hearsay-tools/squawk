@@ -97,7 +97,9 @@ if (process.env.CEZ_MOCK_CI_PR) { const { probeCiTool } = await import('./mock-c
 // OMP v18.6.1 main.ts createSessionManager can implicitly continueRecent when autoResume
 // is enabled. rpc-mode.ts get_state reports the restored conversation's messageCount.
 const autoResume = process.env.CEZ_MOCK_OMP_AUTO_RESUME === '1';
-const sessionId = typeof flags.get('--resume') === 'string' ? flags.get('--resume')
+// OMP forks a resumed session whose last transfer marker is departed (session-transfer.ts).
+const sessionId = process.env.CEZ_MOCK_OMP_RESUME_MOVED === '1' ? '019a0000-0000-7000-8000-0000000000cc'
+  : typeof flags.get('--resume') === 'string' ? flags.get('--resume')
   : autoResume ? '019a0000-0000-7000-8000-0000000000bb' : '019a0000-0000-7000-8000-0000000000aa';
 let steeringMode = 'one-at-a-time';
 let messageUpdates = 'full';

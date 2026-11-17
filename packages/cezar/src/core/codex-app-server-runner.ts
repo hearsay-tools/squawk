@@ -1,6 +1,6 @@
 import { codexTurnStartExtras } from './codex-turn-config.ts';
 export { reasoningSummary, codexTurnStartExtras } from './codex-turn-config.ts';
-import { openingSkill, skillOf, validSkillMessage } from './skill-trigger.ts';
+import { openingInput, skillOf, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { uiAskQuestions } from './ask.ts';
 import { summarizeRunnerStderr } from './runner-stderr.ts';
@@ -650,12 +650,13 @@ class CodexSession implements AgentSession {
         ...(this.spec.squawkTools ? { [`mcp_servers.${this.spec.squawkTools.name}`]: { command: this.spec.squawkTools.command, args: this.spec.squawkTools.args, env_vars: squawkToolEnvNames(this.spec.env ?? {}), default_tools_approval_mode: 'approve' } } : {}),
       } } : {}),
     };
-    let threadResponse: Record<string, unknown>;
+    let threadResponse: Record<string, unknown>, resumed = false;
     if (this.spec.resume && this.spec.sessionId) {
       this.startupWaitingFor('thread/resume');
       threadResponse = await this.rpc.request('thread/resume', { threadId: this.spec.sessionId, ...clean(overrides) });
       this.assertOpen();
       this.threadId = this.spec.sessionId;
+      resumed = true;
     } else {
       this.startupWaitingFor('thread/start');
       threadResponse = await this.rpc.request('thread/start', clean(overrides));
@@ -668,17 +669,17 @@ class CodexSession implements AgentSession {
       throw new Error('CEZ_CODEX_NETWORK=0 requires a network-restricted Codex permission policy; the thread did not confirm one');
     }
     if (this.threadId) {
-      this.emit({ type: 'session', sessionId: this.threadId, resumed: Boolean(this.spec.resume && this.spec.sessionId) });
+      this.emit({ type: 'session', sessionId: this.threadId, resumed });
       // The result path (thread/start response, or thread/resume which sends
       // no thread/started notification) — deduplicated inside the mapper.
       const threadId = this.threadId;
       this.emitUi((state) => codexSessionStarted(threadId, state));
     }
 
-    // Codex receives system instructions at the start of the opening message.
-    const first = prependSystemPrompt(this.spec.systemPrompt, this.spec.userPrompt);
+    const opening = openingInput(this.spec, resumed);
+    const first = prependSystemPrompt(this.spec.systemPrompt, opening.userPrompt);
     this.startupWaitingFor('turn/start');
-    await this.startOrSteerTurn(first, undefined, openingSkill(this.spec));
+    await this.startOrSteerTurn(first, undefined, opening.skill);
     this.assertOpen();
     this.openingAcknowledged = true;
     this.checkStartupComplete();

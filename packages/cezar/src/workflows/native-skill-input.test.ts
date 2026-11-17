@@ -1,4 +1,4 @@
-import { beforeEach, expect, it } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import type { RunnerSkill } from '@open-mercato/cezar-contract/runner-skills';
 import type { AgentEvent, AgentRunResult, ContentBlock, RunnerId } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
@@ -131,4 +131,28 @@ it('uses a plugin-qualified id exactly and preserves a near miss', async () => {
   expect(say(id, '/plugin:know near miss')).toBe(true);
   await readFinished();
   expect(sent[1]?.[0]).toEqual({ type: 'text', text: '/plugin:know near miss' });
+});
+
+
+it('fails a selected skill before a model call when its runner list is unavailable', async () => {
+  const catalog = fixedSkillCatalog();
+  vi.spyOn(catalog, 'get').mockResolvedValue({ runner: 'claude', skills: [], problems: [], source: 'unavailable', reason: 'probe refused sentinel' });
+  f.manager.setSkillCatalog(catalog);
+  const record = f.manager.startRun({ ...f.SINGLE_STEP, steps: [{ id: 'task', skill: 'known', prompt: '{{task}}' }] }, { task: 'work', runner: 'claude', worktree: false });
+  f.currentId = record.id;
+  await waitForProduct(f.manager, f.store, () => f.store.getRun(record.id)?.status === 'failed' && !f.manager.isActive(record.id));
+  expect(f.store.getRun(record.id)?.error).toContain('claude account "default" skill "known"');
+  expect(f.store.getRun(record.id)?.error).toContain('runner skill list is unavailable: probe refused sentinel');
+  expect(f.store.readEvents(record.id).some(event => event.type === 'session')).toBe(false);
+});
+
+it('passes an unknown opening command without probing the list a second time', async () => {
+  const catalog = fixedSkillCatalog();
+  const get = vi.spyOn(catalog, 'get');
+  f.manager.setSkillCatalog(catalog);
+  const record = f.manager.startRun(f.SINGLE_STEP, { task: '/unknown arguments', runner: 'claude', worktree: false });
+  f.currentId = record.id;
+  await opened;
+  expect(get).toHaveBeenCalledOnce();
+  expect(f.store.readEvents(record.id).some(event => event.type === 'note' && String(event.message).includes('after the next Continue'))).toBe(false);
 });

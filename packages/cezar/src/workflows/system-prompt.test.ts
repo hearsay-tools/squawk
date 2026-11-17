@@ -21,7 +21,6 @@ import {
   composeSystemPrompt,
   makeRunTitle,
   resolveExtraSystemPrompt,
-  skillSystemPrompt,
 } from './run.ts';
 import { createRunner } from '../core/runner-factory.ts';
 import { RunMemory } from './run/run-memory.ts';

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentSession, ContentBlock } from '../../core/agent-runner.ts';
 import { RUNNER_FACTS } from '../../core/runner-facts.ts';
-import type { RunRecord } from '../../runs/store.ts';
+import type { QueuedMessage, RunRecord } from '../../runs/store.ts';
 import type { ActiveRun } from '../active-run.ts';
 import { contentBlocksOf, type PastedContent, type PersistedAttachment } from '../pasted-content.ts';
 import type { AttachmentWriter } from './attachment-writer.ts';
@@ -37,7 +37,9 @@ export class NativeSkillInputQueue {
 
   handles(runId: string, content: PastedContent[]): boolean {
     const first = content.find(block => block.type === 'text');
-    return !!this.memory.read(runId, 'nativeSkillInputs')?.length || !!(first?.type === 'text' && leadingSlashSkillName(first.text));
+    return !!this.memory.read(runId, 'nativeSkillInputs')?.length ||
+      !!atLiveInput.queuedMessages(this.context.store.getRun(runId))?.some(message => message.replayAfterOpen) ||
+      !!(first?.type === 'text' && leadingSlashSkillName(first.text));
   }
 
   /** Readiness during a synchronous send belongs to that read until it finishes. */
@@ -55,21 +57,38 @@ export class NativeSkillInputQueue {
     const run = this.context.store.getRun(runId);
     if (this.context.disposed() || !state || !session?.open || state.liveSession.cancelled || state.liveSession.finishRequested || state.liveSession.pendingPermissions?.size || !this.host.canProceedWithRun(runId, run)) return false;
     const id = messageId ?? randomUUID();
-    const pending = this.memory.read(runId, 'nativeSkillInputs') ?? [];
-    if (pending.some(entry => entry.messageId === id)) return true;
+    const queued = atLiveInput.queuedMessages(this.context.store.getRun(runId)) ?? [];
+    const pending = this.restorePending(runId, session, queued);
+    if (pending.some(entry => entry.messageId === id)) { this.release(runId, state); return true; }
     if (!this.host.authorizeHumanMessage(runId)) return false;
     const snapshot = structuredClone(content);
     const persisted = this.host.attachments.persistPastedAttachments(runId, snapshot);
     this.host.recordHumanMessage(runId, state, snapshot, persisted);
-    const queued = atLiveInput.queuedMessages(this.context.store.getRun(runId)) ?? [];
-    if (!queued.some(message => message.id === id)) this.context.store.updateRun(runId, { queuedMessages: [...queued, {
+    const existing = queued.find(message => message.id === id);
+    const message: QueuedMessage = existing ? { ...existing, replayAfterOpen: true } : {
       id, text: snapshot.filter(block => block.type === 'text').map(block => block.text).join('\n'),
-      images: persisted.map(file => file.url), createdAt: new Date().toISOString(),
-    }] });
+      images: persisted.map(file => file.url), createdAt: new Date().toISOString(), replayAfterOpen: true,
+    };
+    this.context.store.updateRun(runId, { queuedMessages: existing
+      ? queued.map(entry => entry.id === id ? message : entry) : [...queued, message] });
+    this.context.store.flush();
     pending.push({ session, content: snapshot, messageId: id, persisted });
     this.memory.write(runId, 'nativeSkillInputs', pending);
     this.release(runId, state);
     return true;
+  }
+
+  /** Restore before accepting later live input, including the session-open → deferred-flush gap. */
+  private restorePending(runId: string, session: AgentSession, queued: QueuedMessage[]): NativeInput[] {
+    const current = this.memory.read(runId, 'nativeSkillInputs');
+    if (current?.length && current.every(entry => entry.session === session)) return current;
+    const restored = queued.filter(message => message.replayAfterOpen).map(message => {
+      const persisted = atLiveInput.attachments(this.context, runId, message.images ?? [], 'queued');
+      return { session, messageId: message.id, content: [{ type: 'text' as const, text: message.text }, ...persisted.blocks],
+        persisted: persisted.attachments };
+    });
+    this.memory.write(runId, 'nativeSkillInputs', restored.length ? restored : undefined);
+    return restored;
   }
 
   private holdsNativeSkill(state: ActiveRun, content: PastedContent[]): boolean {

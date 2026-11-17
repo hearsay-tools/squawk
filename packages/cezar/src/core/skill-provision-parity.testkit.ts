@@ -8,7 +8,7 @@ import { SKILL_PROVISION_CRITERIA, waitFor } from './harness-parity-core.testkit
 import { driveRun } from './workflow-parity-core.testkit.ts';
 import { fixedSkillCatalog } from './runner-skill-fixture.testkit.ts';
 import { hostSkillCatalogAdapters } from './host-skill-catalog.ts';
-import { RunnerSkillCatalog } from './runner-skill-catalog.ts';
+import { RunnerSkillCatalog, type SkillCatalogQuery } from './runner-skill-catalog.ts';
 import { HARNESS_ADAPTERS } from './harness-parity-core.testkit.ts';
 import { plannedWorkflow, skillTaskSteps } from '../workflows/types.ts';
 
@@ -103,7 +103,7 @@ export function describeSkillProvisionParity(part: ParityPart, collect?: ParityC
         const result = await driveRun(runner, { prompt: 'worktree arguments' }, run => run?.status === 'waiting', 30_000, undefined, {
           workflowDef: plannedWorkflow(skillTaskSteps('probe-project')), worktree: true, skillPaths: { task: '.agents/skills/probe-project/SKILL.md' },
           beforeStart: ({ manager }) => manager.setSkillCatalog(new RunnerSkillCatalog({ adapters: { [runner]: {
-            discover: async query => ({ skills: [{ id: 'probe-project', name: 'Probe', scope: 'repo', path: join(query.cwd, '.agents/skills/probe-project/SKILL.md') }], problems: [] }),
+            discover: async (query: SkillCatalogQuery) => ({ skills: [{ id: 'probe-project', name: 'Probe', scope: 'repo', path: join(query.cwd, '.agents/skills/probe-project/SKILL.md') }], problems: [] }),
           } } })),
         });
         expect(result.record?.error).toBeUndefined();

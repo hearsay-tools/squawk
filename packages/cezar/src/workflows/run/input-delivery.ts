@@ -304,7 +304,8 @@ export class InputDelivery {
   constructor(private readonly context: RunModuleContext, private readonly host: InputDeliveryHost, private readonly maxAutoContinues: number, private readonly routedQuestionRefusal: string,
     private readonly timers = new LivenessTimers(), memory = new RunMemory()) {
     this.nativeInputs = new NativeSkillInputQueue(context, {
-      active: host.active, attachments: host.attachments, runSkills: host.runSkills, line: host.line,
+      get active() { return host.active; }, get attachments() { return host.attachments; },
+      get runSkills() { return host.runSkills; }, get line() { return host.line; },
       canProceedWithRun: (id, run) => host.canProceedWithRun(id, run),
       parkForUser: (id, state, step) => host.parkForUser(id, state, step),
       authorizeHumanMessage: id => this.authorizeHumanMessage(id),
@@ -859,7 +860,7 @@ export class InputDelivery {
 
     if (!this.authorizeHumanMessage(runId)) return false;
     const prepared = this.prepareMessageContent(runId, state, content, nativeBlocks, saved);
-    const { blocks, expanded, deliverable } = prepared;
+    const { deliverable } = prepared;
     const session = state.liveSession.session;
     const atTurnBoundary = state.boundary.atTurnBoundary === session;
     // A human message withdraws an accepted done: its turn end reads the message (hearsay-tools/squawk#2587).

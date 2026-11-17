@@ -149,7 +149,7 @@ export class StepSession {
       if (selectedPath) this.context.store.updateStep(runId, step.id, { skillPath: selectedPath });
       opening.userPrompt = ''; return skill;
     }
-    const native = await this.runSkills.nativeInput(runId, state, [{ type: 'text', text: opening.userPrompt }]);
+    const native = await this.runSkills.openingInput(runId, state, [{ type: 'text', text: opening.userPrompt }]);
     if (native[0]?.type !== 'skill') return undefined;
     opening.userPrompt = '';
     return native[0];

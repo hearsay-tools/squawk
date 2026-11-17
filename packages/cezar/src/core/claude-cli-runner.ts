@@ -64,9 +64,8 @@ export interface ClaudeCliRunnerOptions {
  * repo `cwd`; `Bash` is narrowed to `Bash(<prefix>:*)` patterns only when the
  * grant carries a `bashAllowlist` — the zero-config default has none, so `Bash`
  * is unrestricted shell access (#430).
- * Session mechanics (multi-turn stdin, EOF watchdog, reopen window) follow
- * github-janitor's `claudeRunner.ts`; the original single-turn adaptation
- * came from @cezar/core's `ClaudeCodeCliRunner`.
+ * Session mechanics follow github-janitor's `claudeRunner.ts`; the single-turn
+ * adaptation came from @cezar/core's `ClaudeCodeCliRunner`.
  */
 /**
  * What the claude CLI receives from each `AgentRunSpec` field (#284). Every
@@ -312,7 +311,8 @@ export class ClaudeCliRunner implements AgentRunner {
       killTimer.unref?.();
     };
 
-    sendMessage(openingContent(spec));
+    // Claude refuses a missing --resume id before any turn; this adapter never starts a replacement.
+    sendMessage(openingContent(spec, Boolean(spec.resume && spec.sessionId)));
 
     const toolCalls: AgentToolCallRecord[] = [];
     let tokensUsed = 0;

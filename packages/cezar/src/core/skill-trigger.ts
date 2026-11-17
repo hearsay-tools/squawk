@@ -9,16 +9,17 @@ export function skillOf(content: readonly ContentBlock[]): SkillTrigger | undefi
   return content[0]?.type === 'skill' ? content[0] : undefined;
 }
 
-/** The adapter knows whether native bootstrap actually resumed. */
-export function openingSkill(spec: AgentRunSpec, resumed = !!(spec.resume && spec.sessionId)): SkillTrigger | undefined {
-  return spec.skill ?? (resumed ? undefined : spec.resumeFallbackSkill);
+/** The adapter supplies the bootstrap result. A fresh fallback receives the Continue as arguments. */
+export function openingInput(spec: AgentRunSpec, resumed: boolean): { skill: SkillTrigger | undefined; userPrompt: string } {
+  if (spec.skill || resumed || !spec.resumeFallbackSkill) return { skill: spec.skill, userPrompt: spec.userPrompt };
+  return { skill: { ...spec.resumeFallbackSkill, args: [spec.resumeFallbackSkill.args, spec.userPrompt].filter(Boolean).join('\n\n') }, userPrompt: '' };
 }
-export function openingContent(spec: AgentRunSpec): ContentBlock[] {
-  const skill = openingSkill(spec);
+export function openingContent(spec: AgentRunSpec, resumed: boolean): ContentBlock[] {
+  const { skill, userPrompt } = openingInput(spec, resumed);
   return [
     ...(skill ? [{ type: 'skill' as const, ...skill }] : []),
     ...(spec.images ?? []),
-    { type: 'text', text: spec.userPrompt },
+    { type: 'text', text: userPrompt },
   ];
 }
 

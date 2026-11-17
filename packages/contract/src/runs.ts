@@ -116,6 +116,7 @@ export type DiffStat = z.infer<typeof diffStatSchema>;
 
 /** One prompt message stacked onto a run while it waits for a free agent slot (#472). */
 export const queuedMessageSchema = z.object({
+  replayAfterOpen: z.literal(true).optional(), // NativeSkillInputQueue sets; launch hydration excludes; QueuedInput replays after open.
   id: z.string(),
   text: z.string(),
   /** `/api/v1/runs/:id/images/…` URLs — attachments are persisted, never inlined. Images and

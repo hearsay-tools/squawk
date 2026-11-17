@@ -1,5 +1,5 @@
 import { opencodeHttp } from './opencode-http.ts';
-import { openingSkill, skillOf, validSkillMessage } from './skill-trigger.ts';
+import { openingInput, skillOf, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { uiAskQuestions } from './ask.ts';
 import { opencodeSkillWarning, sessionErrorDetail, sessionErrorText } from './opencode-session-error.ts';
@@ -803,12 +803,12 @@ class OpencodeSession implements AgentSession {
     await this.consumeEvents();
 
     // A lost session can use the fallback system prompt supplied by its caller.
-    // The native skill fallback below follows the actual bootstrap result.
+    const opening = openingInput(this.spec, resumed);
     const systemPrompt = !resumed && requested
       ? (this.spec.resumeFallbackSystemPrompt ?? this.spec.systemPrompt)
       : this.spec.systemPrompt;
-    const first = prependSystemPrompt(systemPrompt, this.spec.userPrompt);
-    await this.prompt(first, 'opening', undefined, this.queuedPromptGeneration, openingSkill(this.spec, resumed));
+    const first = prependSystemPrompt(systemPrompt, opening.userPrompt);
+    await this.prompt(first, 'opening', undefined, this.queuedPromptGeneration, opening.skill);
     if (this.refusedBeforeOpening) queueMicrotask(() => {
       this.refusedBeforeOpening = false;
       if (this.serverOpen && !this.pendingQuestion && !this.questionReply && this.pendingPermissions.size === 0 && !this.agentRequest) {
