@@ -5,7 +5,7 @@ import { createQueryClient } from '@/api/query-client'
 import { useUiState } from '@/api/queries'
 import { useSourceSelection } from './new-task-controller'
 import { readDraft, resetDraft, writeDraft } from './new-task-draft'
-import { buildCreateRunBody, resolveSource, type DraftTaskSource } from './new-task-form'
+import { buildAutomationTask, buildCreateRunBody, resolveSource, type DraftTaskSource } from './new-task-form'
 
 const skills = [
   { id: 'plugin:check', name: 'Check', description: 'Runner description', path: '.agents/check/SKILL.md' },
@@ -55,6 +55,7 @@ describe('state restore cases', () => {
 it('sends the exact plugin id and chosen path only on the inline run step', () => {
   const body = buildCreateRunBody({ task: 'Check', source: picked, runner: 'codex', model: '', images: [] })
   expect(body.steps?.[0]).toMatchObject({ skill: 'plugin:check', skillPath: '.agents/check/SKILL.md' })
+  expect(buildAutomationTask({ task: 'Check', source: picked, runner: 'codex', model: '', images: [] }).steps?.[0]).not.toHaveProperty('skillPath')
 })
 
 it.each(['unavailable', 'failed', 'live'])('reads the selected runner/account and keeps the form usable for a %s list', async (state) => {
