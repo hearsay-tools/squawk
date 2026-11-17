@@ -181,17 +181,7 @@ function scopeFacts(program: EsNode, tokens: NodeTokens): ScopeFacts {
     if (isFunction) functions.push(node);
     if (isBlock) blocks.push(node);
     if (isFunction || isBlock) facts.reached.add(node);
-    // Only an identifier has both a name and a type annotation.
-    if (node.type === 'Identifier' || node.type === 'PrivateIdentifier') addEntry(facts.types, functions, nameOf(node), child(node, 'typeAnnotation'));
-    else if (node.type === 'VariableDeclarator') {
-      addEntry(facts.bindings, blocks, nameOf(child(node, 'id')), child(node, 'init'));
-      if (child(node, 'id')?.type === 'ObjectPattern') for (const scope of blocks) {
-        const list = facts.patterns.get(scope);
-        if (list) list.push(node);
-        else facts.patterns.set(scope, [node]);
-      }
-    }
-    else if (node.type === 'ImportSpecifier') facts.imports.push(node);
+    record(facts, node, functions, blocks);
     for (const key of tokens.visitorKeys[node.type] ?? []) {
       const value = node[key];
       if (Array.isArray(value)) { for (const item of value) if (isSyntax(item)) visit(item); }
@@ -202,6 +192,19 @@ function scopeFacts(program: EsNode, tokens: NodeTokens): ScopeFacts {
   }
   visit(program);
   return facts;
+}
+
+/** The entries one node adds to its enclosing scopes. Only an identifier has both a name and a type annotation. */
+function record(facts: ScopeFacts, node: EsNode, functions: EsNode[], blocks: EsNode[]): void {
+  if (node.type === 'Identifier' || node.type === 'PrivateIdentifier') addEntry(facts.types, functions, nameOf(node), child(node, 'typeAnnotation'));
+  else if (node.type === 'VariableDeclarator') {
+    addEntry(facts.bindings, blocks, nameOf(child(node, 'id')), child(node, 'init'));
+    if (child(node, 'id')?.type === 'ObjectPattern') for (const scope of blocks) {
+      const list = facts.patterns.get(scope);
+      if (list) list.push(node);
+      else facts.patterns.set(scope, [node]);
+    }
+  } else if (node.type === 'ImportSpecifier') facts.imports.push(node);
 }
 
 const NO_ENTRIES: ScopeIndex = new Map();
