@@ -31,8 +31,8 @@ import { asksQuestion } from '@open-mercato/cezar-contract/waits';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 
 describe('appendTurnText', () => {
-  it.each(['initial execution', 'resumed execution'])(
-    'preserves a marker boundary before later commentary during %s',
+  it(
+    'preserves a marker boundary before later commentary',
     () => {
       const turnText = appendTurnText(
         'Issue claimed.\n\nCEZ:PR=635\nCEZ:TITLE=linking per-project limits',

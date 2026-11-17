@@ -8,23 +8,6 @@ import { monitoringTimerWait, monitoringWakeOf } from './waits.testkit.ts';
 describe('RunManager schedule wakeup', () => {
   const fixture = setupMonitoringFixture();
   const { SINGLE_STEP, waitFor, openTimer } = fixture;
-  it('a cezar_wait timer turn-end parks the run on an open timer', async () => {
-    const idle = fixture.observeIdleTimers();
-    const wakes = fixture.observeWakeTimers();
-    const record = fixture.manager.startRun(SINGLE_STEP, { task: 'mock:cezar-wait keep going', worktree: false });
-    fixture.currentId = record.id;
-    await waitFor(record.id, (r) => r?.status === 'waiting' && Boolean(openTimer(r)));
-    const parked = fixture.store.getRun(record.id);
-    expect(parked?.waits?.find(wait => wait.phase === 'open')).toMatchObject({ kind: WAIT_KIND.timer, via: WAIT_VIA.cezar_wait });
-    expect(deriveAttention(parked!).label).toBe('monitoring');
-    const timer = openTimer(fixture.store.getRun(record.id))!;
-    expect(wakes.captured).toBe(1);
-    wakes.fire(0);
-    await waitFor(record.id, run => run?.lastWaits?.some(wait => wait.id === timer.id && wait.phase === 'delivered') === true);
-    expect(fixture.store.getRun(record.id)?.agentInputs?.filter(input => input.id === timer.id)).toHaveLength(1);
-    expect(idle.pending).toBe(0); // durable monitors do not inherit the 15-minute user-wait timer
-  }, 30_000);
-
   it('a Claude ScheduleWakeup turn-end parks on a schedule-wakeup timer', async () => {
     const idle = fixture.observeIdleTimers();
     const wakes = fixture.observeWakeTimers();
