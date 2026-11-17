@@ -13,9 +13,9 @@ export function ownerExceptions(rule: AstRule): void {
       ...rule,
       name: `${rule.name}: ${file} still needs its exception`,
       applies: () => true,
-      create(report) {
+      create(report, context) {
         let hit: EsNode | undefined;
-        const visitors = rule.create(node => { hit = node; });
+        const visitors = rule.create(node => { hit = node; }, context);
         return { ...visitors, 'Program:exit'() { if (hit) report(hit, 'Remove a stale owner exception.'); } };
       },
     };
