@@ -622,6 +622,7 @@ describe("native /skill triggers on a fresh run's opening prompt (#87)", () => {
   let manager: RunManager;
   let runId: string | undefined;
   let savedDryRun: string | undefined;
+  let savedMockStdin: string | undefined;
   const SINGLE_STEP: WorkflowDef = {
     name: 'quick-task',
     source: 'built-in',
@@ -631,7 +632,9 @@ describe("native /skill triggers on a fresh run's opening prompt (#87)", () => {
   beforeEach(async () => {
     repoRoot = mkdtempSync(join(tmpdir(), 'cez-87-'));
     savedDryRun = process.env.CEZ_DRY_RUN;
+    savedMockStdin = process.env.CEZ_MOCK_STDIN_FILE;
     process.env.CEZ_DRY_RUN = '1';
+    process.env.CEZ_MOCK_STDIN_FILE = join(repoRoot, 'stdin.ndjson');
     await run('git', ['init', '-q', '-b', 'main'], { cwd: repoRoot });
     await run('git', ['config', 'gc.auto', '0'], { cwd: repoRoot });
     await run('git', ['config', 'maintenance.auto', 'false'], { cwd: repoRoot });
@@ -651,6 +654,8 @@ describe("native /skill triggers on a fresh run's opening prompt (#87)", () => {
     if (runId) manager.cancel(runId);
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
     else process.env.CEZ_DRY_RUN = savedDryRun;
+    if (savedMockStdin === undefined) delete process.env.CEZ_MOCK_STDIN_FILE;
+    else process.env.CEZ_MOCK_STDIN_FILE = savedMockStdin;
     store.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
@@ -698,15 +703,11 @@ describe("native /skill triggers on a fresh run's opening prompt (#87)", () => {
     if (!registry) manager.setSkillCatalog(fixedSkillCatalog());
     const record = manager.startRun(SINGLE_STEP, { task, worktree: false });
     runId = record.id;
-    await waitFor(() =>
-      eventsOf(record.id).some(
-        (e) => e.stepId === 'task' && e.type === 'text' && e.text?.includes('looking into'),
-      ),
-    );
-    const echoed = eventsOf(record.id).find(
-      (e) => e.stepId === 'task' && e.type === 'text' && e.text?.includes('looking into'),
-    );
-    expect(echoed?.text).toBe(`Okay — looking into: ${task}`);
+    await waitFor(() => eventsOf(record.id).some(e => e.stepId === 'task' && e.type === 'text'));
+    // An unlisted command belongs to the runner, which may resolve it natively.
+    // Assert Squawk's wire input rather than the runner's response to that command.
+    const first = JSON.parse(readFileSync(join(repoRoot, 'stdin.ndjson'), 'utf8').trim().split('\n')[0]!);
+    expect(first.userText).toBe(task);
     expect(store.getRun(record.id)?.task).toBe(task);
   }, 40_000);
 });
