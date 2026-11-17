@@ -1,6 +1,6 @@
 import { child, children, nameOf, stringOf, type AstRule, type EsNode } from './ast-rule.ts';
 import { Resolver, type Family } from './launch-read/resolve.ts';
-import { annotation, functionTypes, keyOf, unwrap, walk } from './launch-read/syntax.ts';
+import { annotation, functionTypes, keyOf, parameterOwner, unwrap, walk } from './launch-read/syntax.ts';
 
 const rawFields = new Set('workflow workflowDef input runner defaultRunner systemPrompt model effort agentProfile profileId account grants prompt task images taskImages stackedImages queuedMessages continuationMessage sessionTransport skill catalog disabledTeamSkills worktreeSetup'.split(' '));
 const fieldGroups: [Family, Set<string>][] = [
@@ -89,7 +89,8 @@ function variableRead(node: EsNode, resolver: Resolver): boolean {
 }
 function capturedReturn(node: EsNode): boolean {
   for (let owner = node.parent; owner; owner = owner.parent) {
-    if (functionTypes.has(owner.type)) return owner.parent?.type === 'MethodDefinition' || (owner.parent?.type === 'Property' && (owner.parent.method === true || owner.parent.kind !== 'init'));
+    if (owner.type === 'MethodDefinition') return true;
+    if (owner.type === 'Property' && (owner.method === true || owner.kind === 'get' || owner.kind === 'set')) return true;
   }
   return false;
 }
@@ -110,7 +111,7 @@ export const launchReadOutsideResolver: AstRule = {
         const left = child(node, 'left')!;
         check(node, resolver.capture(child(node, 'right')) || (left.type === 'ObjectPattern' && patternRead(left, child(node, 'right'), resolver)));
       },
-      ObjectPattern(node) { if (functionTypes.has(node.parent?.type ?? '')) check(node, typedPattern(node, resolver)); },
+      ObjectPattern(node) { if (functionTypes.has(parameterOwner(node)?.type ?? '')) check(node, typedPattern(node, resolver)); },
       SpreadElement(node) { check(node, resolver.capture(child(node, 'argument'), true)); },
       CallExpression(node) {
         const callee = unwrap(child(node, 'callee'));

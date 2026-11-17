@@ -7,7 +7,7 @@ interface Scope {
   values: Map<string, EsNode[]>;
   types: Map<string, EsNode[]>;
 }
-const lexical = new Set(['Program', 'BlockStatement', 'ClassBody', 'CatchClause', 'ForStatement', 'ForOfStatement', 'ForInStatement', 'SwitchStatement', 'TSModuleBlock', 'TSTypeAliasDeclaration', 'TSInterfaceDeclaration', 'ClassDeclaration', 'ClassExpression']);
+const lexical = new Set(['Program', 'BlockStatement', 'ClassBody', 'CatchClause', 'ForStatement', 'ForOfStatement', 'ForInStatement', 'SwitchStatement', 'TSModuleBlock', 'TSTypeAliasDeclaration', 'TSInterfaceDeclaration', 'ClassDeclaration', 'ClassExpression', 'TSFunctionType', 'TSConstructorType', 'TSMethodSignature', 'TSCallSignatureDeclaration', 'TSConstructSignatureDeclaration', 'TSDeclareFunction']);
 
 /** Index declarations before checking reads, including hoisted var and nearer type shadows. */
 export class Bindings {

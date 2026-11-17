@@ -1,6 +1,6 @@
 import { child, children, nameOf, type EsNode } from '../ast-rule.ts';
 import { Bindings } from './bindings.ts';
-import { annotation, assertedTypes, functionTypes, keyOf, unwrap } from './syntax.ts';
+import { annotation, assertedTypes, bindingTarget, functionTypes, keyOf, unwrap } from './syntax.ts';
 
 export type Family = 'source' | 'capture' | 'input' | 'workflow' | 'step' | 'config';
 const roots: Record<Family, Set<string>> = {
@@ -116,7 +116,7 @@ export class Resolver {
   private classProperty(node: EsNode, key: string, family: Family): boolean {
     if (keyOf(node) === key && this.type(annotation(node), family)) return true;
     if (node.type !== 'MethodDefinition' || node.kind !== 'constructor') return false;
-    return children(child(node, 'value')!, 'params').some(param => param.type === 'TSParameterProperty' && nameOf(child(param, 'parameter')) === key && this.type(annotation(child(param, 'parameter')), family));
+    return children(child(node, 'value')!, 'params').some(param => param.type === 'TSParameterProperty' && nameOf(bindingTarget(param)) === key && this.type(annotation(child(param, 'parameter')), family));
   }
 
   factory(node: EsNode | undefined): boolean {

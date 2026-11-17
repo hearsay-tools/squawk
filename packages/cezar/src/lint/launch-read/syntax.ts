@@ -16,9 +16,20 @@ export function keyOf(node: EsNode): string | undefined {
   const key = child(node, node.type === 'MemberExpression' ? 'property' : 'key');
   return node.computed ? stringOf(key) : nameOf(key) ?? stringOf(key);
 }
+/** Defaults and parameter properties keep the annotation on the underlying binding. */
+export function bindingTarget(node: EsNode | undefined): EsNode | undefined {
+  if (node?.type === 'AssignmentPattern') return bindingTarget(child(node, 'left'));
+  if (node?.type === 'TSParameterProperty') return bindingTarget(child(node, 'parameter'));
+  return node;
+}
+export function parameterOwner(node: EsNode): EsNode | undefined {
+  let owner = node.parent;
+  while (owner?.type === 'AssignmentPattern' || owner?.type === 'TSParameterProperty') owner = owner.parent;
+  return owner;
+}
 export function annotation(node: EsNode | undefined): EsNode | undefined {
   if (!node) return undefined;
-  const type = child(node, 'typeAnnotation');
+  const type = child(bindingTarget(node)!, 'typeAnnotation');
   return type?.type === 'TSTypeAnnotation' ? child(type, 'typeAnnotation') : type;
 }
 export function bindingNames(node: EsNode): string[] {
