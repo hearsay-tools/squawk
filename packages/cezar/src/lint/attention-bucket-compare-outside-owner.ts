@@ -1,5 +1,5 @@
 import { child, type AstRule, type AstContext, type EsNode } from './ast-rule.ts';
-import { namedMember, sameBoundary } from './twin-syntax.ts';
+import { chainExpression, namedMember, sameBoundary } from './twin-syntax.ts';
 
 // attention-bucket-compare-outside-owner (hearsay-tools/squawk#3774).
 const MESSAGE =
@@ -21,9 +21,21 @@ function bucketLiteral(node: EsNode, { sourceCode }: AstContext): boolean {
 const WRAPPERS = new Set(['ChainExpression', 'TSNonNullExpression', 'TSAsExpression', 'TSSatisfiesExpression', 'TSTypeAssertion', 'ParenthesizedExpression']);
 const TRAILING_CASTS = new Set(['TSNonNullExpression', 'TSAsExpression', 'TSSatisfiesExpression']);
 
+/** Tree-sitter binds a leading angle assertion inside a receiver's non-null assertion. */
+function assertedNonNullMember(node: EsNode, context: AstContext): EsNode | undefined {
+  while (node.type === 'TSTypeAssertion') {
+    const expression = child(node, 'expression');
+    if (!expression || !sameBoundary(node, expression, 1, context)) return undefined;
+    node = expression;
+  }
+  const member = chainExpression(node);
+  return member?.type === 'MemberExpression' && child(member, 'object')?.type === 'TSNonNullExpression' ? member : undefined;
+}
+
 /** Peel wrappers in AST order, retaining the old grammar's operand and precedence limits. */
 function comparisonOperand(node: EsNode, side: 'left' | 'right', context: AstContext): EsNode | undefined {
   while (WRAPPERS.has(node.type)) {
+    if (side === 'left' && node.type === 'TSTypeAssertion') return assertedNonNullMember(node, context);
     const expression = child(node, 'expression');
     if (!expression) return undefined;
     // Tree-sitter puts trailing casts around the comparison; ESTree puts them on its right.

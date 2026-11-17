@@ -46,6 +46,8 @@ export const testEnumLiteral: AstRule = {
       const values = Object.hasOwn(TEST_ENUM_VALUES, name) ? TEST_ENUM_VALUES[name] : undefined;
       if (!values) return;
       if (value.type === 'TSAsExpression') {
+        // ESTree parses `as any!` as a JSDoc type; tree-sitter puts `!` around the cast.
+        if (child(value, 'typeAnnotation')?.type === 'TSJSDocNonNullableType') return;
         const expression = child(value, 'expression');
         if (!expression || !sameBoundary(value, expression, 0, context)) return;
         value = expression;
