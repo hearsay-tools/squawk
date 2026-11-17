@@ -18,11 +18,8 @@ import {
 } from './agent-runner.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
 import { InputSubmissions } from './input-submissions.ts';
-import { opencodeToolGrantFields } from './runner-tool-grants.ts';
 import { signalSession, spawnSessionLeader } from './session-process.ts';
-import { buildChildEnv } from './agent-env.ts';
-import { opencodeTaskScopeEnv } from './opencode-task-scope.ts';
-import { ciOpenCodeEnv } from '../ci-wait/injection.ts';
+import { OPENCODE_MINIMAL_PROMPT_TOOLS, OPENCODE_MINIMAL_SESSION_PERMISSION, opencodeServeLaunch, opencodeSessionBody } from './opencode-minimal.ts';
 import type { AskQuestion } from './ask.ts';
 import { toSquawkQuestions, questionAnswers } from './opencode-questions.ts';
 import { boundOutputDrainAfterExit, AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS } from './runner-runtime.ts';
@@ -149,6 +146,7 @@ export const OPENCODE_SPEC_SUPPORT: AgentRunSpecSupport = {
   images: { honored: false, reason: 'the adapter posts text parts only; image blocks are dropped' },
   cwd: { honored: true, via: 'opencode serve spawn cwd; the session is bound to it' },
   toolGrant: { honored: false, reason: 'OpenCode permission config governs tool access and bash; this runner answers its built-in default asks and routes configured asks to the cockpit, but maps no per-tool allowlist, so no command-prefix restriction either' },
+  minimal: { honored: true, via: 'opencode serve --pure; OPENCODE_DISABLE_PROJECT_CONFIG, OPENCODE_DISABLE_CLAUDE_CODE and OPENCODE_DISABLE_EXTERNAL_SKILLS (default plugins stay: they carry the Codex and Copilot sign-in loaders); OPENCODE_CONFIG_CONTENT tools {"*": false} and permission {"*": "deny"}, and a "*" deny session rule (POST /session permission, and prompt_async tools {"*": false}) that outranks agent permission rules and covers skill command turns, since the runner maps no toolGrant; a resumed session gets it through PATCH /session/{id} before its first turn. Still loaded: MCP servers in the user\'s global config, the global AGENTS.md and configured instructions; the session is saved' },
   restrictCrossSessionMessaging: { honored: true, via: 'the opencode-task-scope.mjs plugin appended to the OPENCODE_CONFIG_CONTENT plugin list; its tool.execute.before hook refuses a task call whose task_id names a session outside the caller\'s session tree, and keeps subagents (hearsay-tools/cezarion#2279)' },
   additionalDirectories: { honored: false, reason: 'the server works from cwd; no extra-root mapping' },
   env: { honored: true, via: 'merged over the child env through buildChildEnv' },
@@ -634,10 +632,8 @@ class OpencodeSession implements AgentSession {
     const port = 40000 + Math.floor(Math.random() * 20000);
     let child: ChildProcessWithoutNullStreams;
     try {
-      child = spawnSessionLeader(this.bin, ['serve', '--hostname', '127.0.0.1', '--port', String(port)], {
-        cwd: this.spec.cwd, timings: this.spec.timings, scope: this.spec.scope,
-        env: buildChildEnv({ backend: 'opencode', extraEnv: opencodeTaskScopeEnv(ciOpenCodeEnv(this.spec), this.spec.restrictCrossSessionMessaging) }),
-      });
+      const launch = opencodeServeLaunch(this.spec, port);
+      child = spawnSessionLeader(this.bin, launch.args, { cwd: this.spec.cwd, timings: this.spec.timings, scope: this.spec.scope, env: launch.env });
     } catch (err) {
       throw wrapSpawnError(err, this.bin);
     }
@@ -781,17 +777,14 @@ class OpencodeSession implements AgentSession {
           message: `OpenCode session ${requested} no longer exists; the continuation runs in a fresh session without the earlier conversation.`,
         });
       } else {
-        // A `task` deny an older Squawk added stays on the session: OpenCode appends permission
-        // rules and has no remove (hearsay-tools/cezarion#2279).
+        // OpenCode appends permission rules and has no remove: an older `task` deny stays (hearsay-tools/cezarion#2279).
+        if (this.spec.minimal) await this.http('PATCH', `/session/${requested}`, { permission: OPENCODE_MINIMAL_SESSION_PERMISSION });
         this.attachSession(stringField(existing, 'id') ?? requested, true);
         resumed = true;
       }
     }
     if (!resumed) {
-      const created = await this.http('POST', '/session', {
-        title: 'cezar task',
-        ...opencodeToolGrantFields(this.spec.toolGrant),
-      });
+      const created = await this.http('POST', '/session', opencodeSessionBody(this.spec));
       const sessionId = stringField(created, 'id');
       if (!sessionId) throw new Error('opencode did not return a session id');
       this.attachSession(sessionId, false);
@@ -929,6 +922,7 @@ class OpencodeSession implements AgentSession {
     if (id) body.model = { providerID: id.provider, modelID: id.model };
     const effort = parseEffort(this.spec.effort);
     if (effort) body.variant = effort;
+    if (this.spec.minimal) body.tools = OPENCODE_MINIMAL_PROMPT_TOOLS;
     return body;
   }
 
