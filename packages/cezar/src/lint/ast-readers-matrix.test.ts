@@ -37,7 +37,8 @@ describe('run reader generated parity matrices', () => {
       limitsDigest: string; documentedLimits: { id: string; expected: string[]; old: string[] }[];
     };
     const probes = factDocumentedLimits();
-    expect(createHash('sha256').update(JSON.stringify(probes)).digest('hex')).toBe(oracle.limitsDigest);
+    expect(createHash('sha256').update(JSON.stringify({ probes, documentedLimits: oracle.documentedLimits }))
+      .digest('hex')).toBe(oracle.limitsDigest);
     expect(probes.length).toBeGreaterThan(0);
     expect(oracle.documentedLimits).toHaveLength(probes.length);
     for (const [index, probe] of probes.entries()) {
@@ -45,6 +46,7 @@ describe('run reader generated parity matrices', () => {
       expect(stored.id).toBe(probe.id);
       expect(stored.expected).toEqual(probe.expected);
       expect(stored.old.length).toBeGreaterThan(stored.expected.length);
+      expect(stored.old).toEqual(expect.arrayContaining(stored.expected));
       const actual = checkRule(runFactReader, probe.file ?? 'packages/cezar/src/reader-matrix-probe.ts', probe.code)
         .map(finding => finding.message.split(':')[0]!).sort();
       expect({ id: probe.id, findings: actual }).toEqual({ id: probe.id, findings: stored.expected });

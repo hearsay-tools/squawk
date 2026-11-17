@@ -48,7 +48,7 @@ try {
     const documentedLimits = limits.map(probe => ({ id: probe.id, expected: probe.expected,
       old: scanner.scanRunFacts(probe.file ?? file, probe.code, {}).map(site => site.rule).sort() }));
     const limitData = limits.length ? {
-      limitsDigest: createHash('sha256').update(JSON.stringify(limits)).digest('hex'), documentedLimits,
+      limitsDigest: createHash('sha256').update(JSON.stringify({ probes: limits, documentedLimits })).digest('hex'), documentedLimits,
     } : {};
     writeFileSync(new URL(`./${name}.json`, import.meta.url), JSON.stringify({ revision, digest, findingSets, outcomes, ...limitData }) + '\n');
     process.stdout.write(`${name}: captured ${generated.length} cells from ${revision}\n`);
