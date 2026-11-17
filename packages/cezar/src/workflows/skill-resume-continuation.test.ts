@@ -196,7 +196,7 @@ describe('skill resume continuation follow-ups (#790 review)', { timeout: 20_000
     expect(failed.error).toContain('account "default"');
     expect(failed.error).toContain(TEAM_SKILL);
     for (const text of rejected.evidence) expect(failed.error).toContain(text);
-    expect(failed.steps.at(-1)).toMatchObject({ status: STEP_STATUS.FAILED, error: failed.error });
+    expect(failed.steps.at(-1)).toMatchObject({ status: STEP_STATUS.failed, error: failed.error });
     expect(launches).toEqual([]);
     expect(oneShotCalls).not.toHaveBeenCalled();
     expect(fixtureWork(manager).liveSessions.size).toBe(0);
