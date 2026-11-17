@@ -1,3 +1,5 @@
+import { request } from 'node:http';
+import { json } from 'node:stream/consumers';
 import { seedOldSkills } from '../worktree-skill-cleanup.testkit.ts';
 import { removeProvisionedSkills } from '../worktree-skill-cleanup.ts';
 import { readManifest } from '../worktree-manifest.testkit.ts';
@@ -30,6 +32,7 @@ describe('native skills do not materialize Squawk copies', () => {
   let manager: RunManager;
   let launches: AgentRunSpec[];
   let finish: (() => void)[];
+  let turnEnd: (() => void)[];
 
   beforeEach(async () => {
     repoRoot = mkdtempSync(join(tmpdir(), 'cez-native-no-copy-'));
@@ -44,11 +47,12 @@ describe('native skills do not materialize Squawk copies', () => {
     manager = createFixtureManager(store, repoRoot, { skillCatalog: fixedSkillCatalog([{
       id: NATIVE, name: NATIVE, scope: 'user', path: join(repoRoot, 'account-skills', NATIVE, 'SKILL.md'),
     }]) });
-    launches = []; finish = [];
+    launches = []; finish = []; turnEnd = [];
     vi.spyOn(runners, 'createRunner').mockImplementation(backend => ({
       backend: backend ?? 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
       run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: async () => {},
-      startSession: spec => {
+      startSession: (spec, onEvent) => {
+        turnEnd.push(() => onEvent?.({ type: 'turn-end' }));
         launches.push(spec);
         let end!: () => void;
         let open = true;
@@ -136,7 +140,16 @@ describe('native skills do not materialize Squawk copies', () => {
       return get(query);
     });
     manager.setSkillCatalog(catalog);
-    finish[0]!();
+    // Closing a provider session is not step completion. Use the agent's done boundary.
+    const spec = launches[0]!;
+    const response = await new Promise<import('node:http').IncomingMessage>((resolve, reject) => {
+      const call = request({ socketPath: spec.env!.CEZ_TOOL_SOCKET, path: '/api/v1/tools/done', method: 'POST',
+        headers: { authorization: `Bearer ${spec.env!.CEZ_TOOL_TOKEN}`, 'content-type': 'application/json' } }, resolve);
+      call.on('error', reject);
+      call.end('{}');
+    });
+    expect(await json(response)).toMatchObject({ ok: true });
+    turnEnd[0]!();
     // bound: the workflow's second startSession is the cleanup completion signal.
     await vi.waitFor(() => expect(launches).toHaveLength(2), { timeout: 15_000 });
     expect(store.getRun(record.id)?.error).toBeUndefined();
