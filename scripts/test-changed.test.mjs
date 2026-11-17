@@ -106,7 +106,7 @@ test('declared readers select their tests and inputs no Vitest test reads skip',
   const rules = plan(cwd);
   assert.equal(rules.mode, 'changed', JSON.stringify(rules));
   assert.deepEqual(rules.tests, ['packages/cezar/src/lint/scanner-inputs.test.ts']);
-  rmSync(join(cwd, '.ai'), { recursive: true });
+  rmSync(join(cwd, 'tools/rules'), { recursive: true });
   put('.github/workflows/ci.yml', 'on: push\n');
   const workflow = plan(cwd);
   assert.equal(workflow.mode, 'skip');
