@@ -307,9 +307,9 @@ runner, and an enable without the explicit argument is refused.
   `packages/contract/src/skill-sources.ts` and `team-skill-ref.ts`, their api-client mirrors,
   the `interactive` hint, `components/skill-empty-hint.tsx` and the two ast-grep rules
   `skills-read-outside-enabled-skills` (with its baseline file) and
-  `skills-write-outside-load-run-skills`. The generated rule
-  `active-run-skills-write-outside-owner` stays: slice 3 changes what the `ActiveRun` skills
-  group holds, and regenerates the rule with `scripts/active-run-owner-rules.mjs`.
+  `skills-write-outside-load-run-skills`. The AST rule
+  `cez/active-run-skills-write-outside-owner` stays: slice 3 changes what the `ActiveRun` skills
+  group holds, and updates the AST rule metadata in `packages/cezar/src/lint/active-run-write.ts`.
 - Move first, then delete: `agent-config/seed.ts` uses `excludeFromGit` and
   `worktree-manifest.ts` uses `landsInside`, both from `skills-remote.ts`. Move the two
   helpers to a module that stays.

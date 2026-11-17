@@ -22,7 +22,7 @@ on 2026-11-04 (decision `2ed14ca2`, routed by the coordinator). Both require the
 
 Use ES `#private` fields in one class per owner module. Getters expose read-only values;
 methods perform the owner operations. Aliases and helpers do not acquire a writable reference.
-The ast-grep rules guard escape forms and public mutable fields. No new semantic lint tool
+The `cez/active-run-*-write-outside-owner` AST rules guard escape forms and public mutable fields. No new semantic lint tool
 is part of the primary design. P1 must prove the representation and guards before it expands.
 
 ## Evidence
@@ -227,20 +227,20 @@ restores `writingInput` in its current synchronous finally. Add explicit order t
 
 ## Guards with no baseline
 
-Each row adds one ast-grep rule and valid/invalid fixtures. Rules scan production and tests.
+Each row names one `cez` oxlint AST rule and valid/invalid fixtures. Rules scan production and tests.
 No baseline file or suppression is allowed. The writing module contains the owner class and
 all its command implementations, including initial values. `createActiveRun` calls constructors.
 
 | Rule id | Owner class module (under `workflows/`) |
 | --- | --- |
-| `active-run-session-write-outside-owner` | `run/live-session-state.ts` |
-| `active-run-boundary-write-outside-owner` | `run/turn-boundary.ts` |
-| `active-run-input-write-outside-owner` | `run/input-delivery.ts` |
-| `active-run-wait-write-outside-owner` | `run/wait-registry.ts` |
-| `active-run-children-write-outside-owner` | `run/subagent-waits.ts` |
-| `active-run-usage-write-outside-owner` | `run/usage-accounting.ts` |
-| `active-run-skills-write-outside-owner` | `run/run-skills.ts` |
-| `active-run-autosave-write-outside-owner` | `run/worktree-autosave.ts` |
+| `cez/active-run-session-write-outside-owner` | `run/live-session-state.ts` |
+| `cez/active-run-boundary-write-outside-owner` | `run/turn-boundary.ts` |
+| `cez/active-run-input-write-outside-owner` | `run/input-delivery.ts` |
+| `cez/active-run-wait-write-outside-owner` | `run/wait-registry.ts` |
+| `cez/active-run-children-write-outside-owner` | `run/subagent-waits.ts` |
+| `cez/active-run-usage-write-outside-owner` | `run/usage-accounting.ts` |
+| `cez/active-run-skills-write-outside-owner` | `run/run-skills.ts` |
+| `cez/active-run-autosave-write-outside-owner` | `run/worktree-autosave.ts` |
 
 ES private fields make `s.#value`, `s['#value']`, a renamed receiver, destructuring, or a helper
 parameter unable to reach the backing state. Getter-only interfaces refuse direct assignments,

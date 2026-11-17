@@ -62,6 +62,14 @@ const findingsFor = (file: string): string[] => fixtureFindings.filter(problem =
 const ROSTER = declaredRunnerIds().map(id => `'${id}'`).join(', ');
 
 const VIOLATIONS: Record<string, [string, string]> = {
+  'active-run-autosave-write-outside-owner': ['packages/cezar/src/owner-autosave.ts', 'state.autosave as any;'],
+  'active-run-boundary-write-outside-owner': ['packages/cezar/src/owner-boundary.ts', 'state.boundary as any;'],
+  'active-run-children-write-outside-owner': ['packages/cezar/src/owner-children.ts', 'state.children as any;'],
+  'active-run-input-write-outside-owner': ['packages/cezar/src/owner-input.ts', 'state.inputState as any;'],
+  'active-run-session-write-outside-owner': ['packages/cezar/src/owner-session.ts', 'state.liveSession as any;'],
+  'active-run-skills-write-outside-owner': ['packages/cezar/src/owner-skills.ts', 'state.skills as any;'],
+  'active-run-usage-write-outside-owner': ['packages/cezar/src/owner-usage.ts', 'state.usage as any;'],
+  'active-run-wait-write-outside-owner': ['packages/cezar/src/owner-wait.ts', 'state.waitIdentity as any;'],
   'active-run-literal': ['packages/cezar/src/literal.ts', 'const state: ActiveRun = {};'],
   'active-run-map-write': ['packages/cezar/src/workflows/map.ts', 'host.active.set(id, state);'],
   'product-env-read': ['packages/cezar/src/env-reader.ts', 'const flag = process.env.CEZ_DRY_RUN;\n'],

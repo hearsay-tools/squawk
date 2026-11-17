@@ -88,10 +88,16 @@ appropriate boundary or checker explicitly.
 | `cez/unit-wait-discipline` | Bare sleeps, bounds under 3 s and poll loops without a sufficient deadline in cockpit unit tests (hearsay-tools/cezarion#2421) | `packages/web/src/test/unit-wait-discipline.baseline.json`, shrink-only |
 | `cez/child-killed-read` | A `ChildProcess.killed` read (open-mercato/cezar#844). See [`ChildProcess.killed` reads](#childprocesskilled-reads-child-killed-read) | None |
 | `cez/run-store-testkit-import` | A run-store testkit loaded from production code (hearsay-tools/cezarion#2685) | None |
-
 | `cez/active-run-literal` | An ActiveRun literal outside the factory (open-mercato/cezar#811, hearsay-tools/cezarion#1806) | None |
-
 | `cez/active-run-map-write` | A direct active-map write outside RunManager.activate/dropActive (hearsay-tools/cezarion#2419) | Owning methods in RunManager |
+| `cez/active-run-autosave-write-outside-owner` | A write or mutable escape of the ActiveRun autosave group (hearsay-tools/cezarion#2520) | Private backing fields and immutable slot installation in createActiveRun |
+| `cez/active-run-boundary-write-outside-owner` | A write or mutable escape of the ActiveRun boundary group (hearsay-tools/cezarion#2520) | Private backing fields and immutable slot installation in createActiveRun |
+| `cez/active-run-children-write-outside-owner` | A write or mutable escape of the ActiveRun children group (hearsay-tools/cezarion#2520) | Private backing fields and immutable slot installation in createActiveRun |
+| `cez/active-run-input-write-outside-owner` | A write or mutable escape of the ActiveRun input group (hearsay-tools/cezarion#2520) | Private backing fields and immutable slot installation in createActiveRun |
+| `cez/active-run-session-write-outside-owner` | A write or mutable escape of the ActiveRun session group (hearsay-tools/cezarion#2520) | Private backing fields and immutable slot installation in createActiveRun |
+| `cez/active-run-skills-write-outside-owner` | A write or mutable escape of the ActiveRun skills group (hearsay-tools/cezarion#2520) | Private backing fields and immutable slot installation in createActiveRun |
+| `cez/active-run-usage-write-outside-owner` | A write or mutable escape of the ActiveRun usage group (hearsay-tools/cezarion#2520) | Private backing fields and immutable slot installation in createActiveRun |
+| `cez/active-run-wait-write-outside-owner` | A write or mutable escape of the ActiveRun wait group (hearsay-tools/cezarion#2520) | Private backing fields and immutable slot installation in createActiveRun |
 
 ### Static scope of guards without a separate section
 
@@ -102,8 +108,9 @@ remain in force.
 
 | Guard | Static scope |
 | --- | --- |
-| `cez/active-run-map-write` | Production workflow `.ts` files: direct `.active.set()` and `.active.delete()` calls. Only `this.active` in the nearest owning method of the `RunManager` class is exempt. Nested methods, other classes and other receivers are checked. Computed access and aliases are outside scope. |
 | `cez/active-run-literal` | All server `src/**/*.ts`, including tests: the first declarator of a `const`/`let` declaration annotated `ActiveRun` with an object initializer, or an object cast/satisfies expression naming `ActiveRun` (including `as unknown as ActiveRun`). Parenthesized literals and generic type arguments are checked too. Return types, unions and type aliases are outside scope. |
+| `cez/active-run-map-write` | Production workflow `.ts` files: direct `.active.set()` and `.active.delete()` calls. Only `this.active` in the nearest owning method of the `RunManager` class is exempt. Nested methods, other classes and other receivers are checked. Computed access and aliases are outside scope. |
+| `cez/active-run-*-write-outside-owner` | All server `src/**/*.ts`, including tests: assignments, updates, delete, collection mutators, casts, spread casts, Object/Reflect writes and public fields on named owner classes. The shared metadata in `lint/active-run-write.ts` names slots, getter names, fields, factories and types. Typed names (including imported aliases) are searched within the nearest function; variable bindings and destructuring within the nearest block. The rules keep the former template's bounded alias steps and descendant checks, not arbitrary binding or value flow. Literal quoted computed names are checked; computed templates and expressions are not followed. Private backing fields are exempt. `Object.defineProperty(target, slot, { writable: false, configurable: false })` inside `createActiveRun` is exempt. |
 | `cez/run-store-testkit-import` | Non-test `.ts` files in `packages/cezar/src`: a string literal ending in `run-store.testkit` or `run-store-open.testkit`, with or without `.ts`/`.js`, inside an import, an export, an `import()`, an `import x = require()` or any call. A template literal and a path assembled from pieces are out of scope. |
 | `cez/card-2-contrast` | Cockpit TSX source: JSX text and literal class branches, inherited card surfaces, ink, size and weight. Unknown sizes are conservatively small. Arbitrary runtime class values and computed styles require rendered checks; this is not a browser contrast audit. |
 | `cez/contract-root-import` | Static root specifiers in runtime imports and re-exports in the selected package TS/TSX trees, including literal dynamic imports; `import type` declarations and import queries inside type aliases stay allowed. Inline type specifiers and variable-annotation queries are still reported. It does not resolve computed specifiers or transitive imports. |
@@ -283,7 +290,7 @@ The rule checks production `.ts` files in `packages/cezar/src`; it ignores tests
 (hearsay-tools/squawk#2452, ADR 0064). It reports a `kind: 'nudge-fact'` entry in an object
 literal: the boundary event that records or retires the nudge fact. Only
 `workflows/run/turn-nudges.ts` sends it; another module calls `retireNudge(state)` there. The
-generated `active-run-boundary-write-outside-owner` rule keeps the fact itself inside
+`cez/active-run-boundary-write-outside-owner` AST rule keeps the fact itself inside
 `BoundaryGroup`. The rule does not follow an event built under a computed key. It has no baseline.
 
 ### Per-run memory fields (`run-memory-field-outside-owner`)
