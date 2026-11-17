@@ -163,6 +163,7 @@ describe('worker spawn, steer and wait requests', () => {
     accepts(workerSpawnRequestSchema, { ...spawn, model: 'm'.repeat(512) });
     refuses(workerSpawnRequestSchema, { ...spawn, model: 'm'.repeat(513) });
     refuses(workerSpawnRequestSchema, { ...spawn, task: '' });
+    refuses(workerSpawnRequestSchema, { ...spawn, backend: 'nope' });
   });
 
   it('names each refused spawn combination, and takes a combined text of exactly 100000', () => {
