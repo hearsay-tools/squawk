@@ -123,7 +123,10 @@ describe('held human input liveness bound (#486)', () => {
     expect(store.readEvents(record.id).some(e => e.type === 'lifecycle' && String(e.message).includes('goal achieved'))).toBe(true);
   });
 
-  it('expires a hold that never drains and settles with an unconfirmed-read note', async () => {
+  it.each([
+    { count: undefined, note: 'delivered held messages; the agent did not confirm reading them' },
+    { count: 2, note: 'delivered 2 messages; the agent did not confirm reading them' },
+  ])('expires a hold with count $count and records the unconfirmed-read note', async ({ count, note: expectedNote }) => {
     let open = true;
     let held = false;
     let finish!: (result: AgentRunResult) => void;
@@ -147,6 +150,7 @@ describe('held human input liveness bound (#486)', () => {
         return {
           result, sendMessage: () => true, sendAgentMessage: () => false,
           discardQueuedMessages: () => undefined, holdsHumanInput: () => held,
+          ...(count === undefined ? {} : { heldHumanInputCount: () => count }),
           end: close, interrupt: close, get open() { return open; },
         };
       },
@@ -157,47 +161,8 @@ describe('held human input liveness bound (#486)', () => {
     expect(['done', 'review']).toContain(store.getRun(record.id)?.status);
     const note = store.readEvents(record.id).filter(e => e.type === 'note').map(e => String(e.message))
       .find(m => m.includes('did not confirm reading'));
-    expect(note).toBe('delivered held messages; the agent did not confirm reading them');
-    expect(note).not.toMatch(/\d/);
-    expect(store.readEvents(record.id).some(e => e.type === 'lifecycle' && String(e.message).includes('goal achieved'))).toBe(true);
-  });
-
-  it('expires a counted hold with the exact unconfirmed-read note', async () => {
-    let open = true;
-    let held = false;
-    let finish!: (result: AgentRunResult) => void;
-    runnerHook.runner = {
-      backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
-      run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }),
-      interrupt: async () => undefined,
-      startSession(spec, onEvent, opts): AgentSession {
-        const result = new Promise<AgentRunResult>(resolve => { finish = resolve; });
-        queueMicrotask(() => {
-          opts?.onUiEvent?.({ type: 'session.started', sessionId: spec.sessionId ?? 's', backend: 'claude' });
-          opts?.onUiEvent?.({ type: 'turn.started', turnId: 't1' });
-          onEvent?.({ type: 'text', text: 'Working.' });
-          void doneTurn(manager, onEvent, () => { held = true; });
-        });
-        const close = () => {
-          if (!open) return;
-          open = false;
-          finish({ text: 'Working.', toolCalls: [], tokensUsed: 0, sessionId: spec.sessionId });
-        };
-        return {
-          result, sendMessage: () => true, sendAgentMessage: () => false,
-          discardQueuedMessages: () => undefined, holdsHumanInput: () => held,
-          heldHumanInputCount: () => 2,
-          end: close, interrupt: close, get open() { return open; },
-        };
-      },
-    };
-
-    const record = manager.startRun(SINGLE_STEP, { task: 'hold two forever', runner: 'claude', worktree: false });
-    await until(() => ['done', 'review', 'failed', 'waiting'].includes(store.getRun(record.id)?.status ?? ''), () => `run stuck ${store.getRun(record.id)?.status}`);
-    expect(['done', 'review']).toContain(store.getRun(record.id)?.status);
-    const note = store.readEvents(record.id).filter(e => e.type === 'note').map(e => String(e.message))
-      .find(m => m.includes('did not confirm reading'));
-    expect(note).toBe('delivered 2 messages; the agent did not confirm reading them');
+    expect(note).toBe(expectedNote);
+    if (count === undefined) expect(note).not.toMatch(/\d/);
     expect(store.readEvents(record.id).some(e => e.type === 'lifecycle' && String(e.message).includes('goal achieved'))).toBe(true);
   });
 });
