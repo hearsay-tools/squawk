@@ -199,10 +199,14 @@ const timer = setInterval(() => {
   });
   it.each([false, true])('waits for a detached descendant after leader exit (stalled=%s)', async stalled => {
     const descendant = join(bin, 'detached.cjs');
+    const release = join(bin, 'release');
     writeFileSync(descendant, `
 const fs = require('node:fs');
 ${writePidSource(join(bin, 'pid'))}
-setTimeout(() => { fs.writeFileSync('late.txt', 'last write'); process.exit(0); }, 1400);
+const timer = setInterval(() => {
+  if (!fs.existsSync(${JSON.stringify(release)})) return;
+  clearInterval(timer); fs.writeFileSync('late.txt', 'last write'); process.exit(0);
+}, 10);
 `);
     writeFileSync(join(bin, 'git'), `#!${process.execPath}\n
 const fs = require('node:fs');
@@ -220,11 +224,23 @@ if (args.includes('status')) {
     // observation (#1107): timed from that write, not from a wall clock that also charges the
     // fake's and the descendant's Node startups.
     const late = join(repo, 'late.txt');
-    const job = autosaveCommit(repo, 'run finalize', budget).then(result => ({
-      result, lateWrittenMs: existsSync(late) ? Date.now() - fs.statSync(late).mtimeMs : undefined,
-    }));
+    const blocked = vi.fn();
+    let settled = false;
+    const job = autosaveCommit(repo, 'run finalize', { ...budget, onBlocked: blocked }).then(result => {
+      settled = true;
+      return { result, lateWrittenMs: existsSync(late) ? Date.now() - fs.statSync(late).mtimeMs : undefined };
+    });
     jobs.push(job);
-    const outcome = await Promise.race([job, delay(1400 + saveCeilingMs).then(() => ({ result: 'still waiting', lateWrittenMs: undefined }))]);
+    // bound: wait for the product to name the held descendant, not for a fixture lifetime.
+    await vi.waitFor(() => {
+      expect(settled).toBe(false);
+      const pid = requirePid(join(bin, 'pid'));
+      expect(blocked.mock.calls.some(([, proof]) => proof.processes.some((entry: { pid: number }) => entry.pid === pid))).toBe(true);
+    }, { timeout: 10_000, interval: 10 });
+    expect(existsSync(late)).toBe(false);
+    writeFileSync(release, '');
+    // bound: a hang guard after release, independent of descendant startup time.
+    const outcome = await Promise.race([job, delay(saveCeilingMs).then(() => ({ result: 'still waiting', lateWrittenMs: undefined }))]);
     expect(outcome.result).toBe('failed');
     expect(outcome.lateWrittenMs).toBeDefined();
     expect(outcome.lateWrittenMs).toBeLessThanOrEqual(observeBoundMs);
@@ -253,13 +269,15 @@ if (args.includes('status')) {
     const job = autosaveCommit(repo, 'run finalize', { ...budget, onBlocked: blocked }).then(result => { settled = true; return result; });
     jobs.push(job);
     try {
+      // bound: wait for the product's blocked-cleanup report; this only guards a hang.
       await vi.waitFor(() => { expect(blocked).toHaveBeenCalled(); }, { timeout: 10_000, interval: 10 });
       expect(settled).toBe(false);
       expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('termination'));
       expect(blocked).toHaveBeenCalledWith(expect.stringContaining('EPERM'), expect.objectContaining({ groups: expect.any(Array) }));
       expect(blocked).toHaveBeenCalledWith(expect.stringContaining('process group'), expect.objectContaining({ groups: expect.any(Array) }));
     } finally { obscure = false; }
-    // Once the group probe is readable again, one poll and one observation settle the save.
-    expect(await Promise.race([job, delay(observeBoundMs).then(() => 'still waiting')])).toBe('failed');
-  }, 15_000);
+    // bound: the readable group probe lets the product settle; this only guards a hang.
+    expect(await Promise.race([job, delay(10_000).then(() => 'still waiting')])).toBe('failed');
+    // bound: permits blocked-proof observation and settlement after the probe is restored.
+  }, 25_000);
 });

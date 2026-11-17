@@ -42,8 +42,9 @@ interface Result { code: number; stdout: string; stderr: string; json: Record<st
  * this checkout's root on the default port range, idempotent start, waiting, steering and
  * stopping — and, with the cockpit gone, the `no-cockpit` exit 2.
  */
-test('built cez task drives a dry-run cockpit it discovers from the checkout', { timeout: 180_000 }, async () => {
+test('built cez task drives a dry-run cockpit it discovers from the checkout', { timeout: 180_000 }, async (t) => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'cez-task-e2e-')));
+  t.after(() => rm(root, { recursive: true, force: true }));
   const repo = join(root, 'repo');
   await mkdir(repo);
   await execFile('git', ['init', '-q', '-b', 'main'], { cwd: repo });
@@ -68,16 +69,27 @@ test('built cez task drives a dry-run cockpit it discovers from the checkout', {
   server.stdout.on('data', (chunk) => { startupOutput += String(chunk); });
   server.stderr.on('data', (chunk) => { startupOutput += String(chunk); });
   try {
-    let listed: Result | undefined;
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      assert.equal(server.exitCode, null, `cockpit exited before discovery: ${startupOutput}`);
-      assert.equal(server.signalCode, null, `cockpit stopped before discovery: ${startupOutput}`);
-      listed = await task(['list']);
-      if (listed.code === 0) break;
-      // e2e-wait: condition-poll — retry interval follows the fixture state probe; never signals readiness
-      await new Promise((done) => setTimeout(done, 200));
-    }
-    assert.equal(listed?.code, 0, `cockpit never became discoverable: ${listed?.stdout}`);
+    await new Promise<void>((resolveReady, reject) => {
+      const check = () => {
+        if (/cockpit → http:\/\//.test(startupOutput)) finish();
+      };
+      const failed = () => finish(new Error(`cockpit exited before discovery: ${startupOutput}`));
+      const finish = (error?: Error) => {
+        clearTimeout(timer);
+        server.stdout.off('data', check);
+        server.off('exit', failed);
+        server.off('error', finish);
+        if (error) reject(error); else resolveReady();
+      };
+      // bound: stop a hung server startup; readiness comes from its own listening banner.
+      const timer = setTimeout(() => finish(new Error(`cockpit never started: ${startupOutput}`)), 30_000);
+      server.stdout.on('data', check);
+      server.once('exit', failed);
+      server.once('error', finish);
+      if (server.exitCode !== null || server.signalCode !== null) failed(); else check();
+    });
+    const listed = await task(['list']);
+    assert.equal(listed.code, 0, `cockpit is not discoverable: ${listed.stdout}${listed.stderr}`);
 
     const requestId = '3c9d2f1a-7b4e-4c5d-9e8f-0a1b2c3d4e5f';
     const started = await task(['start', 'mock:cezar-done', '--request-id', requestId, '--wait', '--timeout-seconds', '120']);
@@ -185,5 +197,4 @@ test('built cez task drives a dry-run cockpit it discovers from the checkout', {
   const usage = await task(['nope']);
   assert.equal(usage.code, 64);
   assert.equal(usage.json.code, 'invalid_input');
-  await rm(root, { recursive: true, force: true });
 });
