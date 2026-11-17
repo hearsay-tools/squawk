@@ -1,4 +1,4 @@
-import { piBaseArgs } from './pi-args.ts';
+import { PI_MINIMAL_ARGS, piBaseArgs } from './pi-args.ts';
 import { openingContent, validSkillMessage } from './skill-trigger.ts';
 import { productEnv } from './product-env.ts';
 import { dirname, resolve as resolvePath } from 'node:path';
@@ -78,6 +78,7 @@ export const PI_SPEC_SUPPORT: AgentRunSpecSupport = {
   cwd: { honored: true, via: 'spawn cwd' },
   toolGrant: { honored: true, via: `mapped through piTools: the default list sends --no-builtin-tools and names its built-ins to the default-tools extension; a narrowed list, or one naming a tool outside the pi default set, sends --tools; a list that maps to nothing sends --tools with the ${productName('Cezar')} tools only, or --no-tools; a bashAllowlist has no prefix equivalent, so it narrows the list to --tools without bash (fail closed); unset sends no tool flags` },
   restrictCrossSessionMessaging: { honored: false, reason: 'pi 1.4.0 has no built-in cross-session tool, and an extension\'s name cannot be discovered as messaging; the subagent extension stays (hearsay-tools/cezarion#2279)' },
+  minimal: { honored: true, via: `${PI_MINIMAL_ARGS.join(' ')}, and no project-skills extension; explicit --extension paths (the Squawk tools, the retry extension) still load` },
   additionalDirectories: { honored: false, reason: 'pi has no extra-root flag' },
   env: { honored: true, via: 'merged over the child env through buildChildEnv' },
   model: { honored: true, via: '--model provider/model' },
@@ -497,7 +498,8 @@ export class PiRunner implements AgentRunner {
 export function buildPiArgs(spec: AgentRunSpec): string[] {
   // pi loads a repo's .pi/skills and .agents/skills only for a trusted folder; the project-skills
   // extension offers them to an untrusted one without trusting it (hearsay-tools/cezarion#1295).
-  const args = piBaseArgs();
+  const args = piBaseArgs({ projectSkills: !spec.minimal });
+  if (spec.minimal) args.push(...PI_MINIMAL_ARGS);
   if (spec.squawkTools) args.push('--extension', fileURLToPath(new URL('../../scripts/pi-ci-wait.mjs', import.meta.url)));
   if (spec.sessionId) args.push(spec.resume ? '--session' : '--session-id', spec.sessionId);
   if (spec.systemPrompt) args.push('--append-system-prompt', spec.systemPrompt);

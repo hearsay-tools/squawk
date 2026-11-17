@@ -23,6 +23,7 @@ import { signalSession, spawnSessionLeader } from './session-process.ts';
 import { buildChildEnv } from './agent-env.ts';
 import { opencodeTaskScopeEnv } from './opencode-task-scope.ts';
 import { ciOpenCodeEnv } from '../ci-wait/injection.ts';
+import { OPENCODE_MINIMAL_SERVE_ARGS, opencodeMinimalEnv } from './opencode-minimal.ts';
 import type { AskQuestion } from './ask.ts';
 import { toSquawkQuestions, questionAnswers } from './opencode-questions.ts';
 import { boundOutputDrainAfterExit, AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS } from './runner-runtime.ts';
@@ -149,6 +150,7 @@ export const OPENCODE_SPEC_SUPPORT: AgentRunSpecSupport = {
   images: { honored: false, reason: 'the adapter posts text parts only; image blocks are dropped' },
   cwd: { honored: true, via: 'opencode serve spawn cwd; the session is bound to it' },
   toolGrant: { honored: false, reason: 'OpenCode permission config governs tool access and bash; this runner answers its built-in default asks and routes configured asks to the cockpit, but maps no per-tool allowlist, so no command-prefix restriction either' },
+  minimal: { honored: true, via: 'opencode serve --pure; OPENCODE_DISABLE_PROJECT_CONFIG, OPENCODE_DISABLE_CLAUDE_CODE, OPENCODE_DISABLE_EXTERNAL_SKILLS and OPENCODE_DISABLE_DEFAULT_PLUGINS; OPENCODE_CONFIG_CONTENT tools {"*": false} and permission {"*": "deny"}, since the runner maps no toolGrant. MCP servers in the user\'s global config still start' },
   restrictCrossSessionMessaging: { honored: true, via: 'the opencode-task-scope.mjs plugin appended to the OPENCODE_CONFIG_CONTENT plugin list; its tool.execute.before hook refuses a task call whose task_id names a session outside the caller\'s session tree, and keeps subagents (hearsay-tools/cezarion#2279)' },
   additionalDirectories: { honored: false, reason: 'the server works from cwd; no extra-root mapping' },
   env: { honored: true, via: 'merged over the child env through buildChildEnv' },
@@ -634,9 +636,11 @@ class OpencodeSession implements AgentSession {
     const port = 40000 + Math.floor(Math.random() * 20000);
     let child: ChildProcessWithoutNullStreams;
     try {
-      child = spawnSessionLeader(this.bin, ['serve', '--hostname', '127.0.0.1', '--port', String(port)], {
+      const serveArgs = ['serve', '--hostname', '127.0.0.1', '--port', String(port), ...(this.spec.minimal ? OPENCODE_MINIMAL_SERVE_ARGS : [])];
+      const extraEnv = opencodeMinimalEnv(opencodeTaskScopeEnv(ciOpenCodeEnv(this.spec), this.spec.restrictCrossSessionMessaging), this.spec.minimal);
+      child = spawnSessionLeader(this.bin, serveArgs, {
         cwd: this.spec.cwd, timings: this.spec.timings, scope: this.spec.scope,
-        env: buildChildEnv({ backend: 'opencode', extraEnv: opencodeTaskScopeEnv(ciOpenCodeEnv(this.spec), this.spec.restrictCrossSessionMessaging) }),
+        env: buildChildEnv({ backend: 'opencode', extraEnv }),
       });
     } catch (err) {
       throw wrapSpawnError(err, this.bin);

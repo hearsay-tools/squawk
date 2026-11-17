@@ -424,7 +424,7 @@ function replyWithRequirements(msg) {
 async function handleThread(msg) {
   if (process.env.CEZ_MOCK_CI_PR) { const { probeCiTool } = await import('./mock-ci-tool.mjs'); await probeCiTool('codex', msg.params); }
   ciWire = msg.params;
-  const expectedSandbox = productEnv('CODEX_NETWORK') === '0' ? 'workspace-write' : 'danger-full-access';
+  const expectedSandbox = expectedThreadSandbox(msg);
   rejectedPermissionOverride = managedRequirements !== null && msg.params?.sandbox !== undefined;
   if (rejectedPermissionOverride) permissionWarning();
   if (rejectThreadPermissions(msg, expectedSandbox)) return;
@@ -450,6 +450,13 @@ async function handleThread(msg) {
   }
 }
 
+/** The sandbox Squawk must send under an unmanaged policy. A minimal session (its config turns
+ *  hooks off) runs read-only. */
+function expectedThreadSandbox(msg) {
+  if (msg.params?.config?.['features.hooks'] === false) return 'read-only';
+  return productEnv('CODEX_NETWORK') === '0' ? 'workspace-write' : 'danger-full-access';
+}
+
 function rejectThreadPermissions(msg, expectedSandbox) {
   const unknownRequirements = process.env.MOCK_CODEX_REQUIREMENTS_ERROR || process.env.MOCK_CODEX_REQUIREMENTS_MALFORMED;
   if ((!managedRequirements && !unknownRequirements && msg.params?.sandbox !== expectedSandbox) || msg.params?.approvalPolicy !== undefined) {
@@ -463,6 +470,7 @@ function threadSandbox(msg) {
   return managedRequirements
     ? { type: 'readOnly', networkAccess: process.env.MOCK_CODEX_MANAGED_NETWORK === '1' }
     : msg.params?.sandbox === 'danger-full-access' ? { type: 'dangerFullAccess' }
+    : msg.params?.sandbox === 'read-only' ? { type: 'readOnly', networkAccess: false }
     : { type: 'workspaceWrite', networkAccess: false, writableRoots: [], excludeTmpdirEnvVar: false, excludeSlashTmp: false };
 }
 

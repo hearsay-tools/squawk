@@ -27,6 +27,7 @@ import type { UiEvent } from './ui-events.js';
 import { buildChildEnv } from './agent-env.js';
 import { detectEnvironment } from './backend-detect.js';
 import { buildPiArgs, PiRunner } from './pi-runner.js';
+import { PI_MINIMAL_ARGS } from './pi-args.ts';
 import { squawkToolNames } from '../ci-wait/tools.js';
 import { appendTurnText } from '../workflows/run.js';
 import { allowedToolsForStep } from '../workflows/types.js';
@@ -956,6 +957,14 @@ describe('pi RPC argv', () => {
       'openai/gpt-5.1',
       ...defaultToolArgs('read,bash,edit,write,grep,find'),
     ]);
+  });
+
+  it('a minimal session drops the project-skills extension and adds the pi minimal flags', () => {
+    const args = buildPiArgs({ toolGrant: { kind: 'explicit', tools: [] }, cwd: '/repo', userPrompt: 'task', minimal: true });
+    expect(args).toEqual(expect.arrayContaining([...PI_MINIMAL_ARGS]));
+    expect(args.some(arg => arg.endsWith('pi-project-skills.mjs'))).toBe(false);
+    expect(args.some(arg => arg.endsWith('pi-retry-degraded-service.mjs'))).toBe(true);
+    expect(buildPiArgs({ toolGrant: UNSET_TOOL_GRANT, cwd: '/repo', userPrompt: 'task' })).not.toContain('--no-session');
   });
 
   it('creates a new exact session id instead of invoking the interactive resume picker', () => {

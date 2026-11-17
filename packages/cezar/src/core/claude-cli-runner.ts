@@ -84,6 +84,7 @@ export const CLAUDE_SPEC_SUPPORT: AgentRunSpecSupport = {
   cwd: { honored: true, via: 'spawn cwd' },
   toolGrant: { honored: true, via: '--allowedTools, through buildAllowedTools, with a bashAllowlist as Bash(<prefix>:*) entries, one per prefix; unset sends none; an empty list sends --tools "" so no built-in tool exists, and --allowedTools names only the Squawk tools' },
   restrictCrossSessionMessaging: { honored: false, reason: 'SendMessage and ListAgents also reach the session\'s own subagents, so no outbound tool is separate from subagent messaging; inbound messages from other sessions are refused on every launch (crossSessionInbound, D3)' },
+  minimal: { honored: true, via: '--safe-mode (no CLAUDE.md, plugins, hooks, MCP servers or custom agents; auth and model selection stay), --disable-slash-commands (no skills or commands) and --no-session-persistence; not --bare, which accepts only API-key auth. Managed (policy) settings still apply' },
   additionalDirectories: { honored: true, via: '--add-dir, once per directory' },
   env: { honored: true, via: 'merged over the child env through buildChildEnv' },
   model: { honored: true, via: '--model' },
@@ -767,6 +768,7 @@ export function buildClaudeArgs(
   // Refuse other Claude sessions' SendMessage on every launch; fails open (spec 2026-10-27-task-communication-protocol § 11).
   args.push('--settings', JSON.stringify({ crossSessionInbound: 'refuse' }));
   args.push(...claudeSettingSourceArgs(env));
+  if (spec.minimal) args.push('--safe-mode', '--disable-slash-commands', '--no-session-persistence');
   if (spec.systemPrompt) {
     args.push('--append-system-prompt', spec.systemPrompt);
   }

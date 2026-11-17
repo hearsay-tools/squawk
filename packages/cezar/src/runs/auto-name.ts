@@ -168,6 +168,8 @@ export async function generateRunName(repoRoot: string, ctx: NamerContext, home:
         userPrompt: buildNamerPrompt(ctx),
         cwd: repoRoot,
         toolGrant: { kind: 'explicit', tools: [] },
+        // A bookkeeping call: no hooks, plugins, context files or MCP servers, and no saved session.
+        minimal: true,
         model,
         timeoutMs: NAMER_TIMEOUT_MS,
         // Shadow the argv-capture hook: dry-run tests capture the AGENT's argv

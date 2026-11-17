@@ -18,6 +18,12 @@ export function codexPermissionOverrides(response: unknown, restrictNetwork: boo
   return {};
 }
 
+/** A minimal session (`AgentRunSpec.minimal`) runs read-only, because the app-server ignores
+ *  `toolGrant`. Only a confirmed unmanaged policy is replaced: a managed one belongs to Codex. */
+export function codexMinimalSandbox(response: unknown): { sandbox?: 'read-only' } {
+  return requirementsResponse.safeParse(response).success ? { sandbox: 'read-only' } : {};
+}
+
 export function codexNetworkIsRestricted(response: Record<string, unknown>): boolean {
   const parsed = z.object({ sandbox: z.discriminatedUnion('type', [
     // Older app-server versions omit networkAccess on readOnly (restricted).
