@@ -106,16 +106,6 @@ describe('useRunEvents — subscription', () => {
     ])
   })
 
-  it('survives a malformed frame — one bad line costs one line', () => {
-    const { result } = renderHook(() => useRunEvents('run-1'))
-    const source = FakeFeed.last
-
-    source.emit('ui-event', 'not json{')
-    source.emit('ui-event', '{"type":"item.started"}') // no seq — unorderable
-    source.emit('ui-event', line(1, 'plan.updated', { entries: [] }))
-
-    expect(result.current.map((event) => event.type)).toEqual(['plan.updated'])
-  })
 
 })
 

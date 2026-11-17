@@ -13,20 +13,12 @@ import { healthResponseSchema, type HealthResponse } from '@open-mercato/cezar-a
  */
 describe('the contract reaches the cockpit as BOTH a schema and a type', () => {
   it('validates at runtime', () => {
-    const ok = healthResponseSchema.safeParse({
-      version: '1', repoRoot: '/r', repo: null, checks: [], defaultRunner: 'claude',
-      forge: null, capabilities: { localHandoff: true, settingsAdmin: true, remoteSettingsAdmin: false, tokenMetrics: true, tokenUsageMetrics: true, costMetrics: true, automations: false, preview: false },
-      projects: [], bootProject: 'default',
-    })
-    expect(ok.success).toBe(true)
-    expect(healthResponseSchema.safeParse({ version: 1 }).success).toBe(false)
-  })
-  it('infers the type from that same schema', () => {
-    const h: HealthResponse = {
+    const health: HealthResponse = {
       version: '1', repoRoot: '/r', repo: null, checks: [], defaultRunner: 'claude',
       forge: null, capabilities: { localHandoff: true, settingsAdmin: true, remoteSettingsAdmin: false, tokenMetrics: true, tokenUsageMetrics: true, costMetrics: true, automations: false, preview: false },
       projects: [], bootProject: 'default',
     }
-    expect(h.defaultRunner).toBe('claude')
+    expect(healthResponseSchema.safeParse(health).success).toBe(true)
+    expect(healthResponseSchema.safeParse({ version: 1 }).success).toBe(false)
   })
 })

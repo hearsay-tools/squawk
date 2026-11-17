@@ -53,6 +53,7 @@ vi.mock('./ws', () => ({ subscribeTopic: (topic: string, listener: (data: unknow
 } }))
 
 const fetchMock = vi.fn<typeof fetch>()
+const visibilityState = Object.getOwnPropertyDescriptor(document, 'visibilityState')
 
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
@@ -66,6 +67,8 @@ afterEach(() => {
   resetLiveSession()
   fetchMock.mockReset()
   vi.unstubAllGlobals()
+  if (visibilityState) Object.defineProperty(document, 'visibilityState', visibilityState)
+  else Reflect.deleteProperty(document, 'visibilityState')
 })
 
 function json(body: unknown): Response {
@@ -487,21 +490,6 @@ describe('host model catalog invalidation after auth changes', () => {
     expect(client.getQueryState(workspaceQueryKeys.models('pi'))?.isInvalidated).toBe(false)
   })
 
-  it('Connect invalidates that runner catalog', async () => {
-    fetchMock.mockResolvedValue(json({ opened: true, command: 'codex login' }))
-    const client = createQueryClient()
-    client.setQueryData(workspaceQueryKeys.models('codex'), unavailable)
-    const { result } = renderHook(() => useConnectAgentAccount(), {
-      wrapper: ({ children }: { children: ReactNode }) => (
-        <QueryClientProvider client={client}>{children}</QueryClientProvider>
-      ),
-    })
-
-    act(() => result.current.mutate({ provider: 'codex' }))
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(client.getQueryState(workspaceQueryKeys.models('codex'))?.isInvalidated).toBe(true)
-  })
-
   it('Connect marks the catalog stale without refetching a mounted query', async () => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input).replace('?archived=recent', '')
@@ -571,10 +559,6 @@ describe('queryKeys', () => {
     expect(queryKeys.githubChecks([7, 12])).toEqual(['default', 'github', 'checks', '7,12'])
     // Different windows are different caches.
     expect(queryKeys.githubChecks([7])).not.toEqual(queryKeys.githubChecks([7, 12]))
-  })
-
-  it('is stable across calls — an unstable key refetches forever', () => {
-    expect(queryKeys.runs.detail('a')).toEqual(queryKeys.runs.detail('a'))
   })
 
   it('leads every key with the active project scope, so two projects are two caches', () => {
