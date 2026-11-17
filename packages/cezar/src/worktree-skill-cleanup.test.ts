@@ -52,6 +52,24 @@ it('leaves durable records after a crash between removals and repeats safely', a
   expect(existsSync(manifest)).toBe(false);
 });
 
+it('keeps ignore files until skills are handled when an old manifest cleanup fails', async () => {
+  const { paths, manifest } = await seedOldSkills(worktree);
+  const saved = readFileSync(manifest, 'utf8');
+  expect(JSON.parse(saved).entries[0].kind).toBe('ignore-file');
+  let removed: string | undefined;
+  await removeProvisionedSkills(worktree, { faults: (boundary, path) => {
+    if (boundary === 'removed') { removed = path; throw new Error('filesystem interruption'); }
+  } });
+  expect(removed).toBe(paths[0]);
+  for (const path of paths) expect(existsSync(join(worktree, dirname(path), '.gitignore'))).toBe(true);
+  expect(execFileSync('git', ['check-ignore', `${paths[1]}/SKILL.md`], { cwd: worktree, encoding: 'utf8' }).trim())
+    .toBe(`${paths[1]}/SKILL.md`);
+  expect(readFileSync(manifest, 'utf8')).toBe(saved);
+  await removeProvisionedSkills(worktree);
+  expect(paths.some(path => existsSync(join(worktree, path)))).toBe(false);
+  expect(existsSync(manifest)).toBe(false);
+});
+
 it('keeps unverifiable legacy team copies excluded after their ignore file is removed', async () => {
   const { paths, manifest } = await seedOldSkills(worktree);
   const saved = JSON.parse(readFileSync(manifest, 'utf8'));

@@ -14,7 +14,8 @@ export async function seedOldSkills(worktree: string): Promise<{ paths: string[]
     const ignore = `${dirname(path)}/.gitignore`;
     writeFileSync(join(worktree, ignore), `${PROVISION_IGNORE_MARK}\n/.gitignore\n/old-copy\n`);
     entries.push({ path, writer: 'skills', kind: 'generated', skill: 'old-copy', identity: (await identityOf(join(worktree, path)))! });
-    entries.push({ path: ignore, writer: 'skills', kind: 'ignore-file', identity: (await identityOf(join(worktree, ignore)))! });
+    // The old installer recorded all ignore files before installing any skill.
+    entries.unshift({ path: ignore, writer: 'skills', kind: 'ignore-file', identity: (await identityOf(join(worktree, ignore)))! });
   }
   const gitDir = execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: worktree, encoding: 'utf8' }).trim();
   const manifest = join(gitDir, MANIFEST_FILE);
