@@ -2,7 +2,7 @@ import './turn-boundary.types.testkit.ts';
 import { expect, it } from 'vitest';
 import type { AgentSession } from '../../core/agent-runner.ts';
 import { createActiveRun } from '../active-run.ts';
-import { createBoundaryGroup, transitionTurnBoundary } from './turn-boundary.ts';
+import { transitionTurnBoundary } from './turn-boundary.ts';
 
 const unused = (): never => { throw new Error('unused boundary capability'); };
 function session(): AgentSession {
@@ -11,22 +11,11 @@ function session(): AgentSession {
     holdsHumanInput: unused, end: unused, interrupt: unused };
 }
 const replace = (target: object, key: string, value: unknown) => Object.assign(target, { [key]: value });
-const define = (target: object, key: string, value: unknown) => Reflect.defineProperty(target, key, { value });
-const set = (target: object, key: string, value: unknown) => Reflect.set(target, key, value);
 
-it('locks the boundary slot, getter surface and prototype without freezing the runner', () => {
+it('owns a frozen completion record without freezing the runner', () => {
   const state = createActiveRun({ cwd: '.', pendingHumanAsk: false, autonomous: true });
   const wire = session();
   const group = state.boundary;
-  expect(Object.isFrozen(state)).toBe(true);
-  expect(set(state, 'forged', 1)).toBe(false);
-  expect(Object.getOwnPropertyDescriptor(state, 'boundary')).toMatchObject({ writable: false, configurable: false });
-  expect(Object.isFrozen(group)).toBe(true);
-  expect(Object.isFrozen(Object.getPrototypeOf(group))).toBe(true);
-  expect(() => replace(state, 'boundary', createBoundaryGroup(false, false))).toThrow(TypeError);
-  expect(() => replace(group, 'doneAtBoundary', wire)).toThrow(TypeError);
-  expect(define(group, 'pendingHumanAsk', true)).toBe(false);
-  expect(set(group, 'autonomous', false)).toBe(false);
   transitionTurnBoundary(state, { kind: 'turn-end', phase: 'record-done', session: wire, done: true, request: { summary: 'done' }, keepClose: true });
   expect(group.doneClose).toEqual({ via: 'cezar_done', summary: 'done' });
   expect(Object.isFrozen(group.doneClose)).toBe(true);

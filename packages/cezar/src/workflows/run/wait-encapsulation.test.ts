@@ -7,17 +7,33 @@ const define = (target: object, key: string, value: unknown) => Reflect.definePr
 const set = (target: object, key: string, value: unknown) => Reflect.set(target, key, value);
 const prototype = (target: object, value: object | null) => Reflect.setPrototypeOf(target, value);
 
-it('locks the wait identity slot and keeps its getter live through owner commands', () => {
+it.each([
+  ['waitIdentity', 'ciTurnId'],
+  ['autosave', 'autosaveTimer'],
+  ['boundary', 'doneAtBoundary'],
+  ['liveSession', 'session'],
+  ['inputState', 'agentInputError'],
+  ['usage', 'usageInvocation'],
+] as const)('locks the %s slot, getter surface and prototype', (slot, getter) => {
   const state = createActiveRun({ cwd: '/task', pendingHumanAsk: false, autonomous: false });
-  const group = state.waitIdentity;
-  expect(Object.getOwnPropertyDescriptor(state, 'waitIdentity')).toMatchObject({ writable: false, configurable: false });
+  const group = state[slot];
+  expect(Object.isFrozen(state)).toBe(true);
+  expect(set(state, 'forged', 1)).toBe(false);
+  expect(Object.getOwnPropertyDescriptor(state, slot)).toMatchObject({ writable: false, configurable: false });
   expect(Object.isFrozen(group)).toBe(true);
   expect(Object.isFrozen(Object.getPrototypeOf(group))).toBe(true);
-  expect(() => replace(state, 'waitIdentity', createWaitGroup())).toThrow(TypeError);
-  expect(() => replace(group, 'ciTurnId', 'forged')).toThrow(TypeError);
-  expect(define(group, 'ciTurnId', 'forged')).toBe(false);
-  expect(set(group, 'ciTurnId', 'forged')).toBe(false);
+  expect(() => replace(state, slot, {})).toThrow(TypeError);
+  expect(() => replace(group, getter, 'forged')).toThrow(TypeError);
+  expect(define(group, getter, 'forged')).toBe(false);
+  expect(set(group, getter, 'forged')).toBe(false);
+  expect(Reflect.deleteProperty(state, slot)).toBe(false);
   expect(prototype(group, null)).toBe(false);
+  expect(state[slot]).toBe(group);
+});
+
+it('keeps wait identity live through owner commands', () => {
+  const state = createActiveRun({ cwd: '/task', pendingHumanAsk: false, autonomous: false });
+  const group = state.waitIdentity;
   expect(group.ciTurnId).toBeUndefined();
   const first = group.ensureCiTurn();
   expect(first).toMatch(/^[0-9a-f-]{36}$/);
