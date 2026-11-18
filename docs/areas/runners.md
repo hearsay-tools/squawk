@@ -4,7 +4,7 @@
 
 ## Read first
 
-`AGENT_PROTOCOL.md` (the contract and the new-runner checklist), then `packages/cezar/src/core/agent-runner.ts`, `packages/cezar/src/core/runner-factory.ts` and the changed backend's `packages/cezar/src/core/*-runner.ts`
+`AGENT_PROTOCOL.md` (the contract and the new-runner checklist), then `packages/cezar/src/core/agent-runner.ts`, `packages/cezar/src/core/runner-registry.ts`, the changed backend's `packages/cezar/src/runners/<id>/` folder and its `packages/cezar/src/core/*-runner.ts`
 
 ## Rules
 
@@ -29,7 +29,8 @@ coverage to a separate issue. Where the fix lives decides where its row runs
   scenario runner shows one value of each. Every other declared value names the
   unit tests that drive shared code with it, in `FACT_VALUE_TESTS`. A fix whose
   behavior depends on such a value adds or extends one of those unit tests.
-- **A new runner** declares its facts in `RUNNER_FACTS`, its cockpit facts in
+- **A new runner** declares its facts in `runners/<id>/facts.ts`, its definition in
+  `runners/<id>/definition.ts` and one line in `runners/built-in.ts`; its cockpit facts in
   `RUNNER_COCKPIT_FACTS` and its terminal command in `RUNNER_CLI`. When it adds a value
   that no runner declared before, it also adds that value's unit tests to
   `FACT_VALUE_TESTS`.
@@ -82,8 +83,9 @@ that one runner. `core/runner-fact-exemptions.test.ts` swaps facts rows and chec
 that the exemptions follow (hearsay-tools/squawk#3642).
 
 A per-runner parity file loads only its own adapter. It picks its runner with
-`useRunners(onlyRunner(...))`. The testkits it reaches import a kit's `-core` file, never
-`runner-factory.ts` or a kit's plain name (`fixture-cleanup`, `worker-wait`, `harness-parity`,
+`useRunners(onlyRunner(definition, make))`, which registers only that runner's definition. The
+testkits it reaches import a kit's `-core` file, never `runners/built-in.ts`, another runner's
+definition or a kit's plain name (`fixture-cleanup`, `worker-wait`, `harness-parity`,
 `workflow-parity`), which chooses every adapter. A wait parity file also loads the Claude
 adapter for its workers, and an owned-workflows file the next runner for R14's mixed chain. `core/runner-closure.test.ts` enforces this
 (hearsay-tools/cezarion#2939).

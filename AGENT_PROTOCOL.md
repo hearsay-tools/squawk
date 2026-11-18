@@ -12,8 +12,8 @@ Every runner emits two event streams together: v1 `AgentEvent` (§2) and v2 `UiE
 
 The types in `agent-runner.ts` and their doc comments are the contract: `AgentRunner`,
 `AgentSession`, `SessionOptions`, `AgentRunSpec`, `InputDelivery` and `SystemPromptOnResume`.
-`RUNNER_FACTS` in `core/runner-facts.ts` holds what each runner's wire can do, one row per
-runner id. `RUNNER_COCKPIT_FACTS` in `packages/contract/src/runner-facts.ts` holds what the
+`RUNNER_FACTS` in `core/runner-facts.ts` reads what each runner's wire can do from the
+registered definitions; each runner declares it in `runners/<id>/facts.ts`. `RUNNER_COCKPIT_FACTS` in `packages/contract/src/runner-facts.ts` holds what the
 cockpit and the server both read: the display name, the model catalog delivery, the effort
 levels, the model id scope and the input mode. `RUNNER_CLI` in `core/runner-cli.ts` holds how
 a terminal starts and resumes each runner's CLI. Each runner's `*_SPEC_SUPPORT` constant, next to its class, says which
@@ -311,7 +311,7 @@ then name most of the missing pieces. The items below are the steps that they do
 force, or force only in part. The item numbers are stable: code cites them.
 
 1. **Runner** — `core/<runner>-runner.ts` implements `AgentRunner` / `AgentSession`.
-   Declare `specSupport` and the `RUNNER_FACTS` row from what the wire does, not from a
+   Declare `specSupport` and its facts (`runners/<id>/facts.ts`) from what the wire does, not from a
    similar runner. Probe mid-turn input live for `inputDelivery`. Probe a resumed session
    for `systemPromptOnResume`; when you cannot, declare `resent`. A wire that can raise a
    permission request after its turn ended declares `nativePermission: 'after-turn'` and
@@ -319,8 +319,9 @@ force, or force only in part. The item numbers are stable: code cites them.
    `prependSystemPrompt` when the backend has no system-prompt channel. For a fork of an
    existing runner's wire, read the fork's own protocol documents for the turn boundary,
    the session id and the tool flags before you copy code.
-2. **Factory** — the compiler and the guard tests name each place: the `case` in
-   `createRunner`, `runnerSchema` (`packages/contract/src/health.ts`), and `UiBackend` in
+2. **Definition** — `runners/<id>/definition.ts` with its facts and `loadAdapter`, and one line
+   in `runners/built-in.ts`. The compiler and the guard tests name each other place:
+   `runnerSchema` (`packages/contract/src/health.ts`), and `UiBackend` in
    `ui-events.ts` and in its api-client copy (§3).
 3. **Detection** — add the runner's probe to `RUNNER_PROBES` (`core/backend-detect.ts`).
    An absent CLI never fails the boot.
