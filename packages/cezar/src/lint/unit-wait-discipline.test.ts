@@ -769,6 +769,14 @@ describe('a bound the scan computes, and one it leaves to the caller', () => {
       'while (Date.now() - start < cfg["limit"]) await sleep(10)',
     )).toEqual([3, 5, 7, 10, 12, 14, 16, 17])
   })
+
+  it('reads TypeScript-only class members as types: an overload declares no outside name, an abstract field does', () => {
+    const budgetFor = 'function budgetFor(_target: unknown) { return 10 }'
+    const overload = 'class { run(x: number): void; run(x: number) {} }'
+    expect(rules(budgetFor, `await vi.waitFor(() => {}, { timeout: budgetFor(${overload}) })`)).toEqual(['short-bound'])
+    expect(rules(budgetFor, `for (let i = 0; i < 5; i++) await sleep(budgetFor(${overload}))`)).toEqual(['poll-deadline'])
+    expect(rules(budgetFor, 'await vi.waitFor(() => {}, { timeout: budgetFor(class { static { abstract class Inner { abstract field: number } } }) })')).toEqual([])
+  })
 })
 
 describe('// bound: <reason>', () => {

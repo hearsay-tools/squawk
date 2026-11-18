@@ -70,9 +70,10 @@ node text and parsed comments to visitors. The typed env, home and runner-fact
 engines collect facts in oxlint's visitors and decide at `Program:exit`, without reparsing
 source or scanning whole-file text. `lint/ast-tree.ts` holds their shared helpers, and the scan
 that runs a rule's visitors through oxlint's `RuleTester` for repository checks and tests,
-outside oxlint. The cockpit wait engine reads a plain
-babel-shaped copy instead (`lint/wait-babel-tree.ts`): oxlint wraps `WeakMap`, so the cached
-view cost more than the rule itself on every test file. Runner checks still read their
+outside oxlint. The cockpit wait engine reads
+oxlint's nodes in place, with no copy: `lint/unit-wait-tree.ts` walks them and keeps the node
+meanings its checks were written for (a method is one function node, an optional chain link is no
+plain call or member). Runner checks still read their
 explicit baseline and reader-list inputs. CSS remains a runner check.
 
 ## The `cez` rules
