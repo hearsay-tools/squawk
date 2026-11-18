@@ -132,8 +132,8 @@ and an orchestrator keeps a whole queue of them moving.
   in-process from the cockpit. After a failure, Continue tells the agent which
   step failed and gives its saved error before your message. Restart recovery
   also explains the restart when replaying a saved message. The agent is told that
-  background work from the stopped process, such as subagents and shell commands,
-  stopped with it. The cockpit shows this notice beside your message.
+  subagents from the stopped process stopped with it and that its shell commands
+  may have stopped. The cockpit shows this notice beside your message.
 - 🔀 **Locked into one agent vendor.** Most tools wed you to a single CLI. Squawk
   drives **Claude Code, Codex, OpenCode, pi and OMP** (OpenCode, pi and OMP
   experimental) through one runner seam — set a

@@ -55,7 +55,7 @@ export function resumeNotice(message: RunRecord['continuationMessage']): string 
     // the saved error, or the human text that follows it.
     parts.push(`The previous ${stepId ? `step ${JSON.stringify(stepId)}` : 'turn'} failed: ${error.replace(/[\r\n\u2028\u2029]+/g, ' ')}`);
   }
-  parts.push('The previous agent process stopped. Background work it started, such as subagents and shell commands, stopped with it. Check its state before you wait on it or restart it.');
+  parts.push('The previous agent process stopped. Subagents it started stopped with it. Shell commands it started may have stopped. Check their state before you wait on them or restart them.');
   return parts.join(' ');
 }
 

@@ -13,10 +13,10 @@ describe('resume notice (hearsay-tools/squawk#3882)', () => {
   const checkpoint = { id: 'continue-1', text: 'Continue.', createdAt: '2026-11-18T00:00:00Z',
     resumeContext: { failure: { stepId: 'continue-4', error: 'Credit balance is too low' } } };
 
-  it('tells the agent that subagents and shell commands stopped, without naming a runner', () => {
+  it('tells the agent that subagents stopped and shell commands may have, without naming a runner', () => {
     const notice = resumeNotice(checkpoint)!;
     expect(notice).toContain('The previous step "continue-4" failed: Credit balance is too low');
-    expect(notice).toContain('Background work it started, such as subagents and shell commands, stopped with it.');
+    expect(notice).toContain('Subagents it started stopped with it. Shell commands it started may have stopped.');
     for (const runner of RUNNER_IDS) expect(notice).not.toMatch(new RegExp(`\\b${runner}\\b`, 'i'));
     expect(withResumeContext('Continue.', checkpoint)).toBe(`${notice}\nContinue.`);
   });
