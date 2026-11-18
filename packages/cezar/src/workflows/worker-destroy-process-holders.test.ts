@@ -86,7 +86,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       // every materialized worker's next generation, so Continue never worked there.
       Object.defineProperty(process, 'platform', { ...platform, value: 'win32' });
       try {
-        expect(() => store.commitWorkerExecutionStart(w.id)).toThrow(`processes ${recorded.pid} still hold the worker's worktree or scratch`);
+        expect(() => store.commitWorkerExecutionStart(w.id)).toThrow(`live processes of the previous session ${recorded.pid} prevent a new execution`);
         recorded.kill('SIGKILL'); await exited;
         expect(store.commitWorkerExecutionStart(w.id)).not.toBe(generation);
       } finally { Object.defineProperty(process, 'platform', platform); }
@@ -165,6 +165,28 @@ console.log(String(m.pid)); ${opts.leader === 'exit' ? "m.unref(); process.stdin
       const delegation = new DelegationService(workerCleanups()); delegation.registerProject({ home: testHome(), id: 'p', root, store: projectStore, manager: projectManager });
       return delegation;
     };
+
+    it.skipIf(process.platform === 'win32')('destroy stops a running worker, waits up to 30 seconds, stops its scope, then removes the workspace', async () => {
+      const { w, member } = await groupedWorker({ member: 'group', leader: 'stay' });
+      expect(manager.isActive(w.id)).toBe(true);
+      const stop = vi.spyOn(manager, 'requestWorkerStop');
+      const termination = vi.spyOn(manager, 'awaitRunTermination');
+      const stopScope = store.scopes.stop.bind(store.scopes);
+      const scope = vi.spyOn(store.scopes, 'stop').mockImplementation(async (...args) => {
+        expect(store.readWorkerExecution(w.id)?.phase).toBe('complete');
+        expect(existsSync(workspace(w).path)).toBe(true);
+        return stopScope(...args);
+      });
+      expect(await service(store, manager).destroyForHuman('p', w.id)).toMatchObject({ state: 'complete', remaining: [] });
+      expect(stop).toHaveBeenCalledWith(w.id);
+      expect(termination).toHaveBeenCalledWith(w.id, 30_000, { reapOrphans: true });
+      expect(scope).toHaveBeenCalledWith(w.id, 30_000);
+      expect(stop.mock.invocationCallOrder[0]).toBeLessThan(termination.mock.invocationCallOrder[0]!);
+      expect(termination.mock.invocationCallOrder[0]).toBeLessThan(scope.mock.invocationCallOrder[0]!);
+      expect(alive(member)).toBe(false);
+      expect(existsSync(workspace(w).path)).toBe(false);
+      expect(branchExists(workspace(w).branch)).toBe(false);
+    });
 
     it.skipIf(process.platform === 'win32')("destroy ends a finished worker's leftover in its process group", async () => {
       const { w, member } = await groupedWorker({ member: 'group', leader: 'exit' });

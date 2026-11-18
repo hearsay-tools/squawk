@@ -1,5 +1,12 @@
 import { delegationStateSchema, type WorkerDestroyView, type WorkerOutcome } from '@open-mercato/cezar-contract/delegation';
 import type { RunRecord } from './store.ts';
+import type { WorkerExecution } from './worker-execution.ts';
+
+/** Public terminal intent and private termination proof must agree at the observation boundary. */
+export function workerSettled(run: RunRecord, execution: WorkerExecution | undefined): boolean {
+  return run.delegation?.role === 'worker' &&
+    ['review', 'done', 'failed', 'cancelled'].includes(run.status) && execution?.phase === 'complete';
+}
 
 /** Malformed authority quarantines only this record, never the whole index or into an eligible root. */
 export const storedDelegationStateSchema = delegationStateSchema.optional().catch({ role: 'invalid' });

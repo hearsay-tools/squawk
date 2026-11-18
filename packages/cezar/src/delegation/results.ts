@@ -8,6 +8,7 @@ import type { RunEvent, RunRecord, RunStore } from '../runs/store.ts';
 import { isAttachmentFileName, resolveAttachmentPath } from '../workflows/attachment-path.ts';
 import { workspaceKindOf } from './workspace-kinds.ts';
 import { artifactDirectory, listArtifacts, readArtifact } from '../artifacts/store.ts';
+import { workerSettled } from '../runs/delegation-state.ts';
 
 export const workerRevision = (run: RunRecord): number => run.delegation?.role === 'worker' ? run.delegation.executionRevision ?? 0 : 0;
 
@@ -31,10 +32,10 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
   const summary = run.status === 'failed' && run.error?.trim() ? failureSummary(run.error, events) : latestAssistantSummary(events);
   const destroyed = delegation.destroy?.phase === 'complete';
   const workspaceRemoved = !!delegation.destroy && !delegation.destroy.remaining.includes('worktree');
-  const { lastExecutionOutcome, settled } = executionOutcome(store, run);
   const head = await readWorkerHead(repoRoot, run, previous, workspaceRemoved);
   const { diff, diffSnapshot } = await readWorkerDiff(repoRoot, store, run, delegation, { destroyed, workspaceRemoved });
   const artifacts = await listWorkerArtifacts(store.sourceDataDir(run.id), run, delegation, allEvents);
+  const { lastExecutionOutcome, settled } = executionOutcome(store, run);
   return { result: {
     workerId: run.id, parentRunId: delegation.parentRunId, revision: workerRevision(run), observedAt: new Date().toISOString(),
     status: run.status, outcome: destroyed ? 'destroyed' : lastExecutionOutcome, lastExecutionOutcome,
@@ -67,7 +68,7 @@ function failureSummary(error: string, events: RunEvent[]): WorkerCollectedResul
 function executionOutcome(store: RunStore, run: RunRecord): { lastExecutionOutcome: WorkerCollectedResult['lastExecutionOutcome']; settled: boolean } {
   const lastExecutionOutcome = run.status === 'review' ? 'review-ready' : run.status === 'done' ? 'completed'
     : run.status === 'failed' ? 'failed' : run.status === 'cancelled' ? 'cancelled' : 'running';
-  const settled = lastExecutionOutcome !== 'running' && store.readWorkerExecution(run.id)?.phase === 'complete';
+  const settled = workerSettled(run, store.readWorkerExecution(run.id));
   return { lastExecutionOutcome, settled };
 }
 
