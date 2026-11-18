@@ -46,9 +46,10 @@ const snapshotTest = path => /^(packages\/.+)\/__snapshots__\/([^/]+\.test\.tsx?
 export function readInputs(cwd) {
   const file = join(cwd, 'squeal.config.json');
   if (!existsSync(file)) return [];
-  const inputs = JSON.parse(readFileSync(file, 'utf8')).inputs ?? {};
-  return Object.entries(inputs).map(([test, globs]) => ({ test, globs }));
+  return inputRows(JSON.parse(readFileSync(file, 'utf8')).inputs);
 }
+
+const inputRows = (inputs = {}) => Object.entries(inputs).map(([test, globs]) => ({ test, globs }));
 
 const IMPORT = /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)['"]([^'"]+)['"]/g;
 
@@ -185,7 +186,8 @@ export function nodeTestReaders(paths, cwd) {
   const listed = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
     { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024 }).split('\0');
   const tests = listed.filter(path => project.include.some(glob => matchesGlob(path, glob)) && existsSync(join(cwd, path)));
-  const rows = readInputs(cwd).filter(({ globs }) => paths.some(path => globs.some(glob => matchesGlob(path, glob))));
+  // One read of the configuration: the project and the input rows come from the same snapshot.
+  const rows = inputRows(config.inputs).filter(({ globs }) => paths.some(path => globs.some(glob => matchesGlob(path, glob))));
   const files = tests.filter(test => paths.includes(test) || rows.some(row => matchesGlob(test, row.test)));
   return { argv: project.argv ?? [], files: [...new Set(files)].sort() };
 }

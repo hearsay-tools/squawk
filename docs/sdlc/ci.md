@@ -168,12 +168,11 @@ not a final gate. `.ai/agentic.config.json` records CI's complete final command 
 
 **A wait for a verdict has a bound.** Squeal's skill says to wait again when
 `squeal status --wait` returns on timeout. In this repo, do not wait again. `npm run prepr`
-waits at most 2 minutes for the changed files and for lint, then names the files
-with no result (the first ten and a count when more) and passes when none failed.
+waits at most 2 minutes for the changed files, then names the files with no result (the
+first ten and a count when more) and fails. Lint that has not finished runs as `npm run lint`.
 
-Record the named files and their Squeal state in the PR's Verification. A missing verdict
-is covered by CI's shards, which give the full verdict; a failing verdict is never
-covered, and the PR does not merge until the shards pass. To get one test file's verdict
+Get the named files' verdicts, then run `npm run prepr` again before the push. A missing
+verdict is not a pass, and CI's shards do not replace it before the push. To get one test file's verdict
 now, run `squeal run tests <file> --wait 60000` (`run-loop` for a parity or worker file);
 for one test in it, `squeal status --wait 60000 <file> --check '<name>'`, and confirm it
 lists passed tests, not only skipped ones. With no daemon, run `squeal start` first.

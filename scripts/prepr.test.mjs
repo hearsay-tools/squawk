@@ -114,7 +114,15 @@ function fakeIo({ responses = {}, files = 'scripts/x.mjs\0', numstat = '1\t0\tsc
 
 test('squealChecks reports no daemon when squeal is missing or not alive', async () => {
   assert.deepEqual(await squealChecks(['a.ts'], 1000, fakeIo({ responses: { squeal: { code: 127, out: '', err: '' } } })), { daemon: false });
-  assert.deepEqual(await squealChecks(['a.ts'], 1000, fakeIo({ responses: { squeal: ok('not json') } })), { daemon: false });
+});
+
+test('an unreadable squeal status is an unknown result that fails, not an absent daemon', async () => {
+  const r = await squealChecks(['a.ts'], 1000, fakeIo({ responses: { squeal: { code: 143, out: 'not json', err: 'killed' } } }));
+  assert.deepEqual([r.daemon, r.state, r.exit], [true, 'unreadable', 143]);
+  const [line] = squealLines(r, 1000);
+  assert.equal(line.ok, false);
+  assert.match(line.text, /exited 143 without a readable result[^]*killed/);
+  assert.deepEqual(await squealChecks(['a.ts'], 1000, fakeIo({ responses: { squeal: ok(JSON.stringify({ available: false })) } })), { daemon: false });
 });
 
 test('squealChecks returns a passing verdict from one wait', async () => {

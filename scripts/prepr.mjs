@@ -103,7 +103,10 @@ export async function squealChecks(paths, waitMs, io = realIo) {
   const wait = await io.run('squeal', ['status', '--wait', String(waitMs), '--json', ...paths], { timeout: waitMs + KILL_GRACE_MS });
   let status;
   try { status = JSON.parse(wait.out); } catch { status = undefined; }
-  if (wait.code === 127 || !daemonAlive(status)) return { daemon: false };
+  if (wait.code === 127) return { daemon: false };
+  // Output that is not Squeal's JSON (a timeout kill, a crash) is an unknown result, not an absent daemon.
+  if (status === undefined) return { daemon: true, state: 'unreadable', exit: wait.code, output: tail(wait.out + wait.err, 5) };
+  if (!daemonAlive(status)) return { daemon: false };
   return { daemon: true, ...judgeSqueal(wait.code, status, ignore, lintExpected) };
 }
 
@@ -129,6 +132,9 @@ export function squealLines(squeal, waitMs) {
   if (squeal.state === 'pass') {
     const lint = lintUnfinished(squeal.lint) ? '' : '; lint clean';
     return [entry(true, `Squeal: ${squeal.count} affected test file(s) current and passing${lint}`)];
+  }
+  if (squeal.state === 'unreadable') {
+    return [entry(false, `Squeal: \`squeal status --wait\` exited ${squeal.exit} without a readable result, so the test and lint results are unknown. Run \`squeal status\`, then prepr again.${squeal.output ? `\n${squeal.output}` : ''}`)];
   }
   const lines = [];
   if (squeal.state === 'fail') {
