@@ -66,7 +66,6 @@ import {
   getRepoCommit,
   getRun,
   getRunRelationships,
-  destroyWorker,
   getRunChanges,
   getRunDiff,
   getRunFile,
@@ -105,6 +104,7 @@ import {
   putAgentConfigFile,
   retryProviderAuth,
 } from './client'
+import { destroyWorker } from './worker-destroy'
 import { ARCHIVED_RUNS_PAGE_MAX } from '@open-mercato/cezar-api-client/contract/run-limits'
 import { queryScope } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { REFERENCE_STATUS_MAX } from '@open-mercato/cezar-api-client/contract/github'

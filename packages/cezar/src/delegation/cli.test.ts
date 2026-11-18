@@ -292,7 +292,7 @@ describe('bundled worker CLI', { timeout: 20_000 }, () => {
     const real = globalThis.fetch;
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((url, init) => real(url, init));
     const workerId = randomUUID();
-    const destroyBody = () => JSON.parse(String(fetchMock.mock.calls.findLast(call => String(call[0]).endsWith(`${workerId}/destroy`))?.[1]?.body));
+    const destroyBody = () => JSON.parse(String(fetchMock.mock.calls.filter(([url]) => String(url).endsWith(`${workerId}/destroy`)).at(-1)?.[1]?.body));
     await runWorkerCommand(['destroy', workerId], env);
     expect(destroyBody()).toEqual({});
     await runWorkerCommand(['destroy', workerId, '--discard-work'], env);

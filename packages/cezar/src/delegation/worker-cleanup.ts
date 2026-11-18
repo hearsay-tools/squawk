@@ -37,6 +37,12 @@ export function failedBeforeFirstStep(store: DelegationProject['store'], run: Ru
     !run.steps.some(step => step.startedAt) && store.readWorkerExecution(run.id)?.phase === 'complete';
 }
 
+/** Whether a destroy attempt may delete work: an explicit attempt of it allowed that now or
+ * earlier, and the pending destroy keeps the approval (hearsay-tools/squawk#3553). */
+function discardsWork(worker: RunRecord, options: DestroyOptions | undefined): boolean {
+  return options?.discardWork === true || (worker.delegation?.role === 'worker' && worker.delegation.destroy?.discardWork === true);
+}
+
 /** Tests pass shorter cadences and termination waits through these constructor options. */
 export type WorkerCleanupOptions = {
   now?: () => number;
@@ -227,18 +233,31 @@ export class WorkerCleanup {
     let result: WorkerDestroyResult;
     // The answer budget starts when the request arrives, so time queued behind another attempt counts.
     const requestedAt = this.now();
-    try { result = await this.serialized(`worker:${project.id}:${workerId}`, () => this.destroyAttempt(project, workerId, check, 'manual', requestedAt, options)); }
+    try {
+      result = await this.serialized(`worker:${project.id}:${workerId}`, async () =>
+        await this.workRefusal(project, workerId, check, options) ?? this.destroyAttempt(project, workerId, check, 'manual', requestedAt, options));
+    }
     finally { rearm(); }
     // A busy lock clears by itself: say when the next automatic attempt runs (hearsay-tools/squawk#3817).
     const due = this.destroyRetryDue.get(project.id)?.get(workerId);
     return result.error?.startsWith(WORKTREE_LOCK_BUSY_PREFIX) && due !== undefined
       ? { ...result, error: `${result.error}; ${productName('Cezar')} retries automatically at ${new Date(due).toISOString()}` } : result;
   }
+  /** hearsay-tools/squawk#3553: an explicit destroy that would delete work refuses, naming it,
+   * before it changes anything, so the parent can still resume or collect the worker. A failed
+   * read leaves the decision to the checked removal, which reads the work again under the lock. */
+  private async workRefusal(project: DelegationProject, workerId: string, check: () => RunRecord, options: DestroyOptions): Promise<WorkerDestroyResult | undefined> {
+    const worker = check();
+    if (worker.delegation?.role !== 'worker' || discardsWork(worker, options)) return undefined;
+    const kind = workspaceKind(worker.delegation.workspace);
+    const work = await kind.work(project.root, worker.delegation.workspace).catch(() => undefined);
+    if (!work) return undefined;
+    return { workerId, state: 'incomplete', remaining: worker.delegation.destroy?.remaining ?? ['process', ...kind.destroyResources], work, error: describeWork(workerId, work) };
+  }
   /** One full destroy attempt; the caller holds the worker's serialization key. A manual attempt
-   * clears the run's `destroyRetry`, which resets the backoff; a completed destroy drops it. Once
-   * an explicit attempt allows the discard of work, every later attempt of that destroy keeps it. */
+   * clears the run's `destroyRetry`, which resets the backoff; a completed destroy drops it. */
   private async destroyAttempt(project: DelegationProject, workerId: string, check: () => RunRecord, mode: 'manual' | 'scheduled',
-    startedAt: number, options: DestroyOptions = {}): Promise<WorkerDestroyResult> {
+    startedAt: number, options?: DestroyOptions): Promise<WorkerDestroyResult> {
     const assertAttached = () => {
       if (this.projects.get(project.id) !== project) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     };
@@ -257,15 +276,7 @@ export class WorkerCleanup {
     const kind = workspaceKind(workspace);
     const requestedAt = worker.delegation.destroy?.requestedAt ?? new Date().toISOString();
     const resources = (worker.delegation.destroy?.remaining ?? kind.destroyResources).filter((resource): resource is WorkspaceResource => resource !== 'process');
-    const discardWork = options.discardWork === true || worker.delegation.destroy?.discardWork === true;
-    if (mode === 'manual' && !discardWork) {
-      // hearsay-tools/squawk#3553: work the destroy would delete refuses before anything stops, so
-      // the parent can still resume or collect the worker. A failed read leaves the decision to the
-      // checked removal, which reads it again under the worktree lock.
-      const work = await kind.work(project.root, workspace).catch(() => undefined);
-      assertAttached();
-      if (work) return { workerId, state: 'incomplete', remaining: worker.delegation.destroy?.remaining ?? ['process', ...kind.destroyResources], work, error: describeWork(workerId, work) };
-    }
+    const discardWork = discardsWork(worker, options);
     const persist = (phase: WorkerDestroy['phase'], remaining: WorkerDestroy['remaining'], error?: string) => {
       assertAttached();
       worker = project.store.getRun(workerId)!;
