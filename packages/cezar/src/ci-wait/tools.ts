@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import type { SquawkAskAnswer, SquawkWaitAnswer } from '@open-mercato/cezar-contract/waits';
 import type { ScheduleTaskAnswer, ScheduledTasksAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { squawkToolDefinitions, waitToolDefinition, askToolDefinition, cancelWaitToolDefinition, doneToolDefinition, previewToolDefinition, previewStopToolDefinition, scheduleTaskToolDefinition, automationToolDefinition, scheduledTasksToolDefinition } from './tool-catalog.ts';
@@ -23,7 +22,7 @@ export type SquawkTool = {
  * they cut from a rejected card as sent. Both hints say where that context belongs: `context`.
  */
 export function askAnswerHint(answer: SquawkAskAnswer): string {
-  if (answer.ok) return `Asked. ${productName('Cezar')} shows the context and question card to the user. End your turn; the user's answer wakes you.`;
+  if (answer.ok) return `Asked. Squawk shows the context and question card to the user. End your turn; the user's answer wakes you.`;
   if (answer.code === 'invalid_request') return 'Not asked. The user never sees a rejected call. Fix the call from the message: put the detail in context and keep each question short.';
   return 'Not asked. Fix the call from the message, or continue without asking.';
 }
@@ -55,8 +54,8 @@ export async function invokeCancelWaitTool(input: unknown) {
 export async function invokeDoneTool(input: unknown) {
   const answer = await callSquawkDone(input);
   const hint = !answer.ok ? 'Not finished. Do what the message says, then call cezar_done again.'
-    : answer.completes === 'step' ? `Accepted. End your turn; ${productName('Cezar')} completes this step at its end and starts "${answer.next_step}".`
-    : `Accepted. End your turn; ${productName('Cezar')} finishes the task at its end.`;
+    : answer.completes === 'step' ? `Accepted. End your turn; Squawk completes this step at its end and starts "${answer.next_step}".`
+    : `Accepted. End your turn; Squawk finishes the task at its end.`;
   return { content: [{ type: 'text' as const, text: `${JSON.stringify(answer)}\n${hint}` }], isError: !answer.ok, details: answer };
 }
 
@@ -69,7 +68,7 @@ export async function invokePreviewStopTool(input: unknown) {
   const result = await callPreviewStop(input);
   return { content: [{ type: 'text' as const, text: `${JSON.stringify(result)}\n${result.hint}` }], isError: !result.ok, details: result };
 }
-const PREVIEW_STOP_TOOL: SquawkTool = { definition: previewStopToolDefinition, trigger: `load when your ${productName('Cezar')}-started preview server needs stopping or restarting.`, label: 'Stop live preview', invoke: invokePreviewStopTool };
+const PREVIEW_STOP_TOOL: SquawkTool = { definition: previewStopToolDefinition, trigger: `load when your Squawk-started preview server needs stopping or restarting.`, label: 'Stop live preview', invoke: invokePreviewStopTool };
 
 function scheduleHint(answer: ScheduleTaskAnswer | ScheduledTasksAnswer): string {
   if (answer.ok) return 'Done. due_at is UTC: tell the user that time in their time zone, and name the zone.';
@@ -109,7 +108,7 @@ export function squawkTools(env: NodeJS.ProcessEnv = process.env): SquawkTool[] 
 
 export function squawkServerInstructions(env: NodeJS.ProcessEnv = process.env): string {
   return [
-    `The interface to ${productName('Cezarion')}, the orchestrator running this session. Load a tool below when its situation comes up.`,
+    `The interface to Squawk, the orchestrator running this session. Load a tool below when its situation comes up.`,
     ...squawkTools(env).map(tool => `- ${tool.definition.name}: ${tool.trigger}`),
   ].join('\n');
 }

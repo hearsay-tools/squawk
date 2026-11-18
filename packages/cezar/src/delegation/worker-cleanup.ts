@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { randomUUID } from 'node:crypto';
 import type { WorkerDestroy, WorkerDestroyResult } from '@open-mercato/cezar-contract/delegation';
 import type { RunRecord } from '../runs/store.ts';
@@ -241,7 +240,7 @@ export class WorkerCleanup {
     // A busy lock clears by itself: say when the next automatic attempt runs (hearsay-tools/squawk#3817).
     const due = this.destroyRetryDue.get(project.id)?.get(workerId);
     return result.error?.startsWith(WORKTREE_LOCK_BUSY_PREFIX) && due !== undefined
-      ? { ...result, error: `${result.error}; ${productName('Cezar')} retries automatically at ${new Date(due).toISOString()}` } : result;
+      ? { ...result, error: `${result.error}; Squawk retries automatically at ${new Date(due).toISOString()}` } : result;
   }
   /** hearsay-tools/squawk#3553: an explicit destroy that would delete work refuses, naming it,
    * before it changes anything, so the parent can still resume or collect the worker. A failed

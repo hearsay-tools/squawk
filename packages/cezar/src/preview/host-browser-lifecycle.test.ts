@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { ChromiumError } from './chromium.ts';
@@ -104,6 +103,6 @@ describe('PreviewHost browser lifecycle', () => {
     const viewer = fakeViewer();
     await host.open(ctx, viewer, { port: 5173 });
     await host.close();
-    expect(viewer.closed).toEqual([{ code: 1001, reason: `${productName('cezar')} is shutting down` }]);
+    expect(viewer.closed).toEqual([{ code: 1001, reason: `Squawk is shutting down` }]);
   });
 });

@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 /**
  * Shared turn-end decision for initial sessions, Continue and late input ACKs. Owed input
  * defers; done and waits take precedence. Every agent step completes only on a done
@@ -83,7 +82,7 @@ export function stepScopedNudge(text: string, stepScope: boolean): string {
 }
 
 export const STEP_NUDGE_SUFFIX =
-  `In this workflow step, the done signal completes this step's own work, and ${productName('Cezar')} then starts the next step.`;
+  `In this workflow step, the done signal completes this step's own work, and Squawk then starts the next step.`;
 
 export function decideTurnEnd(facts: TurnEndFacts): TurnEndDecision {
   if (!facts.sessionOpen) return { kind: 'closed' };

@@ -1,4 +1,3 @@
-import { logPrefix, productName } from './home/display.ts';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { AgentHomePaths } from './agent-config/catalog.ts';
@@ -17,8 +16,8 @@ export function assertSquawkHomeWriteIsSandboxed(path: string, _env: NodeJS.Proc
     || Object.keys(process.env).some((key) => key.startsWith('STRYKER_'));
   if (!testing) return;
   assertOutsideAccountHome(path, () => new Error(
-    `${logPrefix()} refusing to write ${path} from a test run — CEZ_HOME is not pinned to a sandbox. ` +
-      `Pin it to a test sandbox so the suite never touches the real ${productName('cezar')} home.`,
+    `[hsq] refusing to write ${path} from a test run — CEZ_HOME is not pinned to a sandbox. ` +
+      `Pin it to a test sandbox so the suite never touches the real Squawk home.`,
   ));
 }
 

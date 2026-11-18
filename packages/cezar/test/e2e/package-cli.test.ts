@@ -1,5 +1,4 @@
 import { projectPaths } from '../../src/project-paths.ts';
-import { productName } from '../../src/home/display.ts';
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { CiProbeScenario } from '../fixtures/installed-ci-probe.ts';
 import { emitProbe } from '../fixtures/emit-probe.ts';
@@ -92,7 +91,7 @@ await probe({ Client, StdioClientTransport, CiToolController, createRunner, piEx
       cwd: consumerDir,
       maxBuffer: 10 * 1024 * 1024,
     });
-    assert.ok(help.stdout.includes(`${productName('cezar')} — local cockpit`));
+    assert.ok(help.stdout.includes(`Squawk — local cockpit`));
     assert.match(help.stdout, /cez run "<task>"/);
     assert.match(help.stdout, /projects remove\|rm <id>/);
     assert.match(help.stdout, /projects tag <id> \[<tag>…\]/);

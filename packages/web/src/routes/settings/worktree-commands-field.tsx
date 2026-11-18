@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
@@ -137,7 +136,7 @@ export function WorktreeCommandsField({ config, copy }: { config: ConfigResponse
       title={copy.title}
       hint={copy.hint}
     >
-      <RemoteSettingsNotice risk={`These commands run on the machine running ${productName('Cezarion')}`} />
+      <RemoteSettingsNotice risk={`These commands run on the machine running Squawk`} />
       <WorktreeCommandsStatus
         copy={copy}
         savedCommandCount={savedCommands.length}

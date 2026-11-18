@@ -3,7 +3,6 @@ import { closeSync, fstatSync, fsyncSync, linkSync, openSync, readFileSync, rena
 import { dirname, join } from 'node:path';
 
 import { anotherCockpitOwner } from '../server/cockpit-ownership.ts';
-import { productName } from '../home/display.ts';
 
 /**
  * Read and back up exact legacy-index bytes. Refuse import for a foreign live cockpit or changed
@@ -141,7 +140,7 @@ export class LegacyWriterError extends Error {
 export function assertNoLegacyCockpit(dataDir: string): void {
   const owner = anotherCockpitOwner(dataDir);
   if (owner) {
-    throw new LegacyWriterError('cockpit', `An older ${productName('cezar')} (pid ${owner.pid}${owner.url ? ` at ${owner.url}` : ''}) still serves this project and writes ${LEGACY_INDEX_FILE}. Stop it, then restart ${productName('cezar')}: ${LEGACY_INDEX_FILE} is imported once, while nothing else writes it.`);
+    throw new LegacyWriterError('cockpit', `An older Squawk (pid ${owner.pid}${owner.url ? ` at ${owner.url}` : ''}) still serves this project and writes ${LEGACY_INDEX_FILE}. Stop it, then restart Squawk: ${LEGACY_INDEX_FILE} is imported once, while nothing else writes it.`);
   }
 }
 
@@ -158,6 +157,6 @@ export function assertNoLegacyWriter(dataDir: string, snapshot: LegacyIndexSnaps
   const same = now === undefined ? read === undefined
     : read !== undefined && now.dev === read.dev && now.ino === read.ino && now.size === read.size && now.mtimeMs === read.mtimeMs;
   if (!same) {
-    throw new LegacyWriterError('changed', `${LEGACY_INDEX_FILE} changed while ${productName('cezar')} was importing it: an older ${productName('cezar')} process still writes it. Stop every older ${productName('cezar')} process for this project, then restart ${productName('cezar')}.`);
+    throw new LegacyWriterError('changed', `${LEGACY_INDEX_FILE} changed while Squawk was importing it: an older Squawk process still writes it. Stop every older Squawk process for this project, then restart Squawk.`);
   }
 }

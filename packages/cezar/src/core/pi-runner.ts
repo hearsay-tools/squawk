@@ -37,7 +37,6 @@ import { squawkToolNames } from '../ci-wait/tool-catalog.js';
 import { readNdjson } from './ndjson.js';
 import { createPiUiState, mapPiRpcMessage, piFlushProviderError, piProviderErrorMessage, piTurnStarted } from './pi-ui-mapper.js';
 import { boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } from './runner-runtime.js';
-import { productName } from '../home/display.ts';
 
 export interface PiRunnerOptions {
   /** Override the binary name/path; defaults to `pi` on PATH (`CEZ_PI_BIN`). */
@@ -76,7 +75,7 @@ export const PI_SPEC_SUPPORT: AgentRunSpecSupport = {
   userPrompt: { honored: true, via: 'RPC prompt message' },
   images: { honored: true, via: 'RPC prompt images' },
   cwd: { honored: true, via: 'spawn cwd' },
-  toolGrant: { honored: true, via: `mapped through piTools: the default list sends --no-builtin-tools and names its built-ins to the default-tools extension; a narrowed list, or one naming a tool outside the pi default set, sends --tools; a list that maps to nothing sends --tools with the ${productName('Cezar')} tools only, or --no-tools; a bashAllowlist has no prefix equivalent, so it narrows the list to --tools without bash (fail closed); unset sends no tool flags` },
+  toolGrant: { honored: true, via: `mapped through piTools: the default list sends --no-builtin-tools and names its built-ins to the default-tools extension; a narrowed list, or one naming a tool outside the pi default set, sends --tools; a list that maps to nothing sends --tools with the Squawk tools only, or --no-tools; a bashAllowlist has no prefix equivalent, so it narrows the list to --tools without bash (fail closed); unset sends no tool flags` },
   restrictCrossSessionMessaging: { honored: false, reason: 'pi 1.4.0 has no built-in cross-session tool, and an extension\'s name cannot be discovered as messaging; the subagent extension stays (hearsay-tools/cezarion#2279)' },
   minimal: { honored: true, via: `${PI_MINIMAL_ARGS.join(' ')}, and no project-skills extension; explicit --extension paths (the Squawk tools, the retry extension) still load` },
   additionalDirectories: { honored: false, reason: 'pi has no extra-root flag' },

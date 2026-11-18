@@ -1,5 +1,3 @@
-import { productName } from '../home/display.ts';
-import { logPrefix } from '../home/display.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CiToolController, ToolsUnavailableError } from './controller.ts';
 import { acquireCiResources } from './resources.ts';
@@ -17,7 +15,7 @@ describe('the shared tool controller', () => {
     const resources = acquireCiResources({});
     try {
       await expect(resources.controller()).rejects.toBe(failure);
-      expect(warn).toHaveBeenCalledWith(`${logPrefix()} ${failure.message}`);
+      expect(warn).toHaveBeenCalledWith(`[hsq] ${failure.message}`);
       const controller = await resources.controller();
       expect(controller).toBeInstanceOf(CiToolController);
       expect(await resources.controller()).toBe(controller);
@@ -43,7 +41,7 @@ describe('the shared tool controller', () => {
     vi.stubEnv('TMPDIR', '/nonexistent-cez-2397');
     try {
       await expect(CiToolController.start()).rejects.toThrow(
-        new RegExp(String.raw`^${productName('Cezar')} tools could not start: ENOENT: no such file or directory, mkdtemp '\/nonexistent-cez-2397\/cez-ci-\w+'\. .*Free space in \/nonexistent-cez-2397 `));
+        new RegExp(String.raw`^Squawk tools could not start: ENOENT: no such file or directory, mkdtemp '\/nonexistent-cez-2397\/cez-ci-\w+'\. .*Free space in \/nonexistent-cez-2397 `));
     } finally {
       vi.unstubAllEnvs();
     }
@@ -51,9 +49,9 @@ describe('the shared tool controller', () => {
 
   it('names the cause and the fix', () => {
     expect(new ToolsUnavailableError("EACCES: permission denied, mkdtemp '/tmp/cez-ci-XXXXXX'", '/tmp').message).toBe(
-      `${productName('Cezar')} tools could not start: EACCES: permission denied, mkdtemp '/tmp/cez-ci-XXXXXX'. Every agent session needs a private socket directory in /tmp. Free space in /tmp or fix its permissions, then Continue the task.`);
+      `Squawk tools could not start: EACCES: permission denied, mkdtemp '/tmp/cez-ci-XXXXXX'. Every agent session needs a private socket directory in /tmp. Free space in /tmp or fix its permissions, then Continue the task.`);
     expect(new ToolsUnavailableError('the server stopped', undefined).message).toBe(
-      `${productName('Cezar')} tools could not start: the server stopped. Every agent session needs a private named pipe. Fix the cause, then Continue the task.`);
+      `Squawk tools could not start: the server stopped. Every agent session needs a private named pipe. Fix the cause, then Continue the task.`);
   });
 });
 

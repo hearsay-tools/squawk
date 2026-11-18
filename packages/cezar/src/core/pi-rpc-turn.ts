@@ -8,7 +8,6 @@ import { AUTO_END_DELAY_MS } from './runner-runtime.js';
 import { signalSession } from './session-process.js';
 import type { SkillInputIdentity, UiEvent } from './ui-events.js';
 import { V1TextCoalescer } from './v1-text-coalescer.js';
-import { productName } from '../home/display.ts';
 
 /**
  * Turn and input bookkeeping that the Pi-family RPC runners share: pi (`pi-runner.ts`) and its
@@ -453,7 +452,7 @@ function reportPiFamilyExit(exit: PiFamilyExit): void {
   if (exit.terminatedBySquawk && (isSignalTerminationExit(exitCode) || (exitCode === null && signalCode !== null))) {
     onEvent?.({
       type: 'note',
-      message: `${cli} CLI did not exit on its own after close; terminated by ${productName('Cezar')} (${exitCode === null ? signalCode : `code ${exitCode}`})`,
+      message: `${cli} CLI did not exit on its own after close; terminated by Squawk (${exitCode === null ? signalCode : `code ${exitCode}`})`,
     });
   } else if (exitCode === null && signalCode !== null) {
     const message = `${cli} CLI was killed by signal ${signalCode}`;

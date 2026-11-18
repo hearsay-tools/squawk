@@ -6,7 +6,6 @@ import { adoptFallbackControl, protectFallbackRun, runArtifactDirectory } from '
 import { deleteSavedWorkflow } from './workflow-files.ts';
 import { projectPaths, fallbackProjectWriteError } from '../project-paths.ts';
 import { productIdentity } from '../home/identity.ts';
-import { productName, logPrefix } from '../home/display.ts';
 import { productEnv } from '../core/product-env.ts';
 import { reportsRoutes } from './reports-api.ts';
 import { writeMergedConfig } from './config-merge.ts';
@@ -477,7 +476,7 @@ export function projectRouteManifest(app: Hono): ProjectRouteInfo[] {
 const AUTOMATIONS_OFF = 'Automations are disabled — unset CEZ_AUTOMATIONS or set it to 1 and restart to enable them';
 
 /** 404 body for a run whose row is in runs.db but whose record this Squawk cannot decode (#779). */
-const UNREADABLE_RUN_ERROR = `this run could not be read by this ${productName('cezar')}: its record in runs.db does not fit this version (a newer ${productName('cezar')} may have written it). It is left in the database untouched.`;
+const UNREADABLE_RUN_ERROR = `this run could not be read by this Squawk: its record in runs.db does not fit this version (a newer Squawk may have written it). It is left in the database untouched.`;
 
 // These response shapes belong to the contract; keep the server's existing type exports.
 export type { ProjectsResponse, RegisterProjectResponse, RemoveProjectResponse, UpdateProjectResponse } from '@open-mercato/cezar-contract';
@@ -960,7 +959,7 @@ export function createApp(deps: ServerDeps) {
       // page instead of the app — the legacy fallback UI was deleted in R7.
       if (!hintLogged) {
         hintLogged = true;
-        console.log(`${productName('cezar')}: web/dist is missing — run \`npm run build:web\` to build the cockpit`);
+        console.log(`Squawk: web/dist is missing — run \`npm run build:web\` to build the cockpit`);
       }
       return new Response(BUILD_HINT_HTML, {
         headers: { 'content-type': HTML_TYPE },
@@ -1374,7 +1373,7 @@ export function createApp(deps: ServerDeps) {
         return c.json({ error: row.hint ?? 'Authentication could not be verified. Try again.', command }, 409);
       }
       if (!capabilities().localHandoff) {
-        return c.json({ error: `Run this command on the machine hosting ${productName('cezar')}.`, command }, 409);
+        return c.json({ error: `Run this command on the machine hosting Squawk.`, command }, 409);
       }
       let opened = false;
       try {
@@ -1829,7 +1828,7 @@ export function createApp(deps: ServerDeps) {
       if (id === bootId) {
         return c.json(
           {
-            error: `${productName('cezar')} is serving ${entry.name} right now — it re-registers itself at every start, so it cannot be removed from here`,
+            error: `Squawk is serving ${entry.name} right now — it re-registers itself at every start, so it cannot be removed from here`,
           },
           409,
         );
@@ -2221,7 +2220,7 @@ export function createApp(deps: ServerDeps) {
       return {
         status: 400,
         body: {
-          error: `not a project folder: ${spelled} is your home directory or a ${productName('cezar')} task worktree`,
+          error: `not a project folder: ${spelled} is your home directory or a Squawk task worktree`,
         },
       };
     }
@@ -4273,7 +4272,7 @@ export function createApp(deps: ServerDeps) {
     });
 
   /** #917, hearsay-tools/squawk#914: setup and teardown commands run on the host. */
-  const WORKTREE_COMMANDS_HOSTED_ERROR = `Worktree setup and teardown commands are read-only on this remote cockpit. To allow remote edits, run \`${productIdentity().command} remote-settings enable\` on the machine running ${productName('cezar')}.`;
+  const WORKTREE_COMMANDS_HOSTED_ERROR = `Worktree setup and teardown commands are read-only on this remote cockpit. To allow remote edits, run \`${productIdentity().command} remote-settings enable\` on the machine running Squawk.`;
 
   // The Settings → Agents knobs in one read (R6 Step 1.5) — an ADDITIVE
   // sibling of PUT /api/config below; /api/health keeps its protected shape.
@@ -4529,7 +4528,7 @@ export function createApp(deps: ServerDeps) {
     try {
       return read();
     } catch (error) {
-      console.warn(`${logPrefix()} runs of project ${projectId} could not be read for the workspace run index: ${error instanceof Error ? error.message : String(error)}`);
+      console.warn(`[hsq] runs of project ${projectId} could not be read for the workspace run index: ${error instanceof Error ? error.message : String(error)}`);
       return { runs: [], truncated: false };
     }
   };

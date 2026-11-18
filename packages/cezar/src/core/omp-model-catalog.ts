@@ -1,4 +1,3 @@
-import { logPrefix } from '../home/display.ts';
 import type { ModelDiscoveryOptions } from './model-discovery-options.ts';
 import { productEnv } from './product-env.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -143,7 +142,7 @@ export function parseOmpModels(stdout: string): ModelOption[] {
     const modelId = `${provider}/${id}`;
     if (ids.has(modelId)) continue;
     if (models.length >= MAX_MODELS) {
-      console.warn(`${logPrefix()} OMP lists more than ${MAX_MODELS} models; the picker keeps the first ${MAX_MODELS} in OMP's order`);
+      console.warn(`[hsq] OMP lists more than ${MAX_MODELS} models; the picker keeps the first ${MAX_MODELS} in OMP's order`);
       break;
     }
     ids.add(modelId);

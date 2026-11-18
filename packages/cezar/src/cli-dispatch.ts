@@ -1,4 +1,3 @@
-import { productName } from './home/display.ts';
 import { commandText, oldCommandNotice } from './home/command.ts';
 import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
@@ -27,7 +26,7 @@ export type CliDeps = typeof defaultCliDeps & {
 };
 
 function cliHelp(): string {
-  return `${productName('cezar')} — local cockpit for AI agent tasks in your repo
+  return `Squawk — local cockpit for AI agent tasks in your repo
 
 Usage:
   cez                       start the cockpit (server + GUI) for the current repo
@@ -46,7 +45,7 @@ Usage:
   cez webhook               list and send to the project webhooks open to agents (see: webhook --help)
   cez artifact publish <path> publish a local task artifact (see: artifact --help)
   cez job start <name> -- <cmd> run a long command that outlives the agent session (see: job --help)
-  cez server-install        interactive wizard to host ${productName('cezar')} on a server
+  cez server-install        interactive wizard to host Squawk on a server
   cez server-deploy         redeploy a new version (reload the service) + verify
   cez server-uninstall      reverse a server-install
   hsq migrate [--dry-run]  migrate the legacy home into the split layout
@@ -60,7 +59,7 @@ Options:
       --repo <dir>            repo to operate on (default: cwd)
       --workflow <name>       workflow for \`run\` (default: quick-task)
       --model <model>         model override for \`run\`
-      --no-workers            \`run\`: the task cannot start or resume ${productName('Cezar')} workers
+      --no-workers            \`run\`: the task cannot start or resume Squawk workers
       --no-messaging          \`run\`: no new peer-task messages; worker messages and replies stay
       --no-open               don't open the browser
       --platform <id>         server-install target (ubuntu-vps | macosx-ngrok)
@@ -74,7 +73,7 @@ Options:
       --bind-host <host>      host the cockpit binds (default 127.0.0.1). Use with
                               --external-proxy when the proxy runs in a container and
                               cannot reach loopback (e.g. docker bridge 172.17.0.1).
-                              ${productName('cezar')} has NO built-in auth — never expose this publicly.
+                              Squawk has NO built-in auth — never expose this publicly.
       --yes                   server-install: accept safe defaults (never auto-sudo)
       --reconfigure <ids>     server-install: force re-run of step id(s), comma-separated
       --reinstall             server-install: force re-run of every step (full reinstall)

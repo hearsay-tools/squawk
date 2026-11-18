@@ -11,7 +11,6 @@
  * mismatch returns `'changed'` so the compressor can retry; ineligible or missing plain returns `'skipped'`.
  */
 import { runDataDir } from '../legacy-runs.ts';
-import { logPrefix } from '../home/display.ts';
 import { randomBytes } from 'node:crypto';
 import {
   closeSync,
@@ -314,13 +313,13 @@ function tryDecompressSync(encoded: Buffer): Buffer | undefined {
 function warnUndecodable(path: string, extra = ''): void {
   if (warnedUndecodable.has(path)) return;
   warnedUndecodable.add(path);
-  console.warn(`${logPrefix()} ignoring undecodable compressed transcript ${path}${extra}`);
+  console.warn(`[hsq] ignoring undecodable compressed transcript ${path}${extra}`);
 }
 
 function warnOrphaned(path: string): void {
   if (warnedOrphaned.has(path)) return;
   warnedOrphaned.add(path);
-  console.warn(`${logPrefix()} keeping non-prefix compressed transcript as ${path}`);
+  console.warn(`[hsq] keeping non-prefix compressed transcript as ${path}`);
 }
 
 function isDecodedPrefix(decoded: Buffer, plain: Buffer): boolean {

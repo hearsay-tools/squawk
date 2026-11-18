@@ -1,4 +1,4 @@
-import { productCommand, productName } from './product'
+import { productCommand } from './product'
 import type { ChildProcess } from 'node:child_process'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -76,7 +76,7 @@ describe('remote settings administration', () => {
     expect(browser.waitForValue(agentConfigReadOnly, value => value === null)).toBeNull()
     openSection('worktrees')
     expect(browser.waitForValue(commandsReadOnly, value => value === false)).toBe(false)
-    expect(browser.waitForValue(notice, value => typeof value === 'string')).toContain(`These commands run on the machine running ${productName('Cezarion')}`)
+    expect(browser.waitForValue(notice, value => typeof value === 'string')).toContain(`These commands run on the machine running Squawk`)
     browser.fill('[data-slot="worktree-setup-commands"]', 'npm ci')
     browser.click('[data-action="worktree-setup-save"]')
     expect(browser.waitForValue(`document.querySelector('[data-action="worktree-setup-save"]')?.disabled`, value => value === true)).toBe(true)

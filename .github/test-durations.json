@@ -1241,7 +1241,6 @@
     "packages/cezar/src/home/display-extra.test.ts": 15,
     "packages/cezar/src/home/display-server.test.ts": 91,
     "packages/cezar/src/home/display-surfaces.test.ts": 46,
-    "packages/cezar/src/home/display.test.ts": 16,
     "packages/cezar/src/home/entry-points.test.ts": 255,
     "packages/cezar/src/home/entry-seeding.test.ts": 588,
     "packages/cezar/src/home/entry.test.ts": 2605,

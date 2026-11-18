@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import type { CdpConnection, CdpMessage } from './cdp.ts';
 
 /**
@@ -99,14 +98,14 @@ export class AgentCdpLink {
   }
 
   private refusal(method: string, params: unknown, named: string | undefined): string | undefined {
-    if (BROWSER_ENDING.has(method)) return `${productName('cezar')} refuses ${method}: the owner's preview pane shares this browser.`;
-    if (method === TUNNEL) return `${productName('cezar')} refuses ${TUNNEL}: use flat sessions (attach with flatten: true).`;
+    if (BROWSER_ENDING.has(method)) return `Squawk refuses ${method}: the owner's preview pane shares this browser.`;
+    if (method === TUNNEL) return `Squawk refuses ${TUNNEL}: use flat sessions (attach with flatten: true).`;
     const p = (params ?? {}) as { targetId?: unknown; sessionId?: unknown };
     if (CLOSES_TARGET.has(method) && this.protectedTargetId !== undefined && p.targetId === this.protectedTargetId) {
-      return `${productName('cezar')} refuses ${method} on the page the owner's preview pane shows.`;
+      return `Squawk refuses ${method} on the page the owner's preview pane shows.`;
     }
     if (CLOSES_PAGE.has(method) && named !== undefined && this.owned.get(named) === this.protectedTargetId && this.protectedTargetId !== undefined) {
-      return `${productName('cezar')} refuses ${method} on the page the owner's preview pane shows.`;
+      return `Squawk refuses ${method} on the page the owner's preview pane shows.`;
     }
     // Only this link's sessions: a foreign id could be Squawk's own page session.
     if (method === 'Target.detachFromTarget' && typeof p.sessionId === 'string' && !this.owned.has(p.sessionId)) {

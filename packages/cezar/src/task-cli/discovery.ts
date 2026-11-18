@@ -1,5 +1,4 @@
 import { productIdentity } from '../home/identity.ts';
-import { productName } from '../home/display.ts';
 import { productEnv } from '../core/product-env.ts';
 import { realpath } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
@@ -90,7 +89,7 @@ export async function discoverCockpit(options: DiscoverOptions): Promise<Cockpit
       throw new TaskCliError(64, { code: 'invalid_input', error: `invalid cockpit url: ${options.url}` });
     }
     const found = await probe(origin, Math.max(timeoutMs, 5_000), options.signal);
-    if (!found) throw new TaskCliError(2, { code: 'no-cockpit', error: `no ${productName('cezar')} cockpit answered at ${origin}`, hint });
+    if (!found) throw new TaskCliError(2, { code: 'no-cockpit', error: `no Squawk cockpit answered at ${origin}`, hint });
     // A remote cockpit's roots are its own paths, so no match is the ordinary case there.
     const match = found.projects.find((entry) => entry.root === root);
     const id = match?.id ?? found.bootProject;

@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { renderHandoffRecords } from '../../handoff.ts';
-import { productName } from '../../home/display.ts';
 import { buildPrBody } from './github.ts';
 
-const FOOTER = `\n\n---\n\n🤖 made with ${productName('cezar')}`;
+const FOOTER = `\n\n---\n\n🤖 made with Squawk`;
 const journal = (goal: string, log: string) => `# Handoff\n\n## Goal\n\n${goal}\n\n## Progress log\n\n${log}\n## Resume notes\n\nnext: review\n`;
 
 describe('buildPrBody', () => {

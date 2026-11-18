@@ -62,6 +62,18 @@ export function ownedWorkspace(workspace: WorkerWorkspace): OwnedWorkerWorkspace
 /** The text every refused directory action of such a worker starts with. */
 export const SHARED_WORKSPACE_REFUSAL = 'this worker runs in its parent\'s worktree';
 
+/**
+ * What a task may spawn: the workspace kinds it may start, how many outstanding workers it may
+ * have itself, and the grant each worker it starts gets. No `children` means its workers may spawn
+ * nothing. Absent on a stored record, the grant is the default of the record's role.
+ */
+export const spawnGrantSchema = z.strictObject({
+  kinds: z.array(z.enum(['owned-isolated', 'shared'])).max(2).refine(kinds => new Set(kinds).size === kinds.length),
+  live: z.number().int().min(0).max(32),
+  get children() { return spawnGrantSchema.optional(); },
+});
+export type SpawnGrant = z.infer<typeof spawnGrantSchema>;
+
 export const workerOutcomeSchema = z.object({
   workerId: z.uuid(),
   status: z.enum(['review', 'done', 'failed', 'cancelled']),
@@ -254,6 +266,7 @@ export const delegationStateSchema = z.discriminatedUnion('role', [
     role: z.literal('root'),
     conversation: conversationStateSchema.optional(),
     permissions: permissionsSchema,
+    spawnGrant: spawnGrantSchema.optional(),
     // #816: bounded by the creation ceiling (WORKER_CREATION_LIMIT), not by capacity.
     receipts: z.array(workerCreationReceiptSchema).max(1_024).refine(receipts =>
       new Set(receipts.map(receipt => receipt.requestId)).size === receipts.length &&
@@ -274,6 +287,7 @@ export const delegationStateSchema = z.discriminatedUnion('role', [
     wait: workerWaitSchema.optional(),
     lastWait: workerWaitSchema.optional(),
     permissions: permissionsSchema,
+    spawnGrant: spawnGrantSchema.optional(),
     parentRunId: z.uuid(),
     workspace: workerWorkspaceSchema,
     destroy: workerDestroySchema.optional(),

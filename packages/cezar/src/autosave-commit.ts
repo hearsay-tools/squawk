@@ -1,4 +1,3 @@
-import { logPrefix } from './home/display.ts';
 import { fallbackProjectWriteError } from './project-paths.ts';
 import { withAutosaveGit, type AutosaveGitResult, type AutosaveOptions } from './autosave-git.ts';
 import { realpathSync } from 'node:fs';
@@ -112,7 +111,7 @@ async function pendingAutosaveOperation(dir: string, reason: AutosaveReason, git
   for (const pending of ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD']) {
     const found = await git(dir, ['rev-parse', '--verify', '-q', pending]);
     if (found.ok) {
-      console.warn(`${logPrefix()} skipping ${reason} autosave in ${dir}: ${pending} is set, the operation is not concluded`);
+      console.warn(`[hsq] skipping ${reason} autosave in ${dir}: ${pending} is set, the operation is not concluded`);
       return 'refused';
     }
     if (found.code !== 1) return 'failed';
@@ -248,7 +247,7 @@ async function publishAutosaveCommit(
  */
 export async function autosaveCommit(dir: string, reason: AutosaveReason, options: AutosaveCommitOptions = {}): Promise<AutosaveResult> {
   if (fallbackProjectWriteError(dir)) {
-    console.info(`${logPrefix()} Autosave skipped 1 read-only fallback worktree under .ai/squawk/.`);
+    console.info(`[hsq] Autosave skipped 1 read-only fallback worktree under .ai/squawk/.`);
     return 'skipped';
   }
   let key = resolve(dir);
@@ -282,7 +281,7 @@ export async function autosaveCommit(dir: string, reason: AutosaveReason, option
       // does not build. For the periodic and turn-end flushes the next one picks
       // the work up once the merge resolves; the pre-PR flush has no next one,
       // which is why callers get `refused` rather than a bare `false`.
-      console.warn(`${logPrefix()} skipping ${reason} autosave in ${dir}: ${unresolved}`);
+      console.warn(`[hsq] skipping ${reason} autosave in ${dir}: ${unresolved}`);
       return 'refused';
     }
     if (taskBranch !== undefined) {

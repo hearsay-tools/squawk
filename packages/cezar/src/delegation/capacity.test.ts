@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { WorkerDestroy } from '@open-mercato/cezar-contract';
 import { runRecordSchema, type RunRecord } from '../runs/store.ts';
-import { capacityError, workerCapacity, WORKER_CAPACITY, WORKER_CREATION_LIMIT } from './capacity.ts';
+import { DEFAULT_GRANTS } from '../runs/task-rights.ts';
+import { capacityError, supervisedOutstanding, workerCapacity, WORKER_CAPACITY, WORKER_CREATION_LIMIT } from './capacity.ts';
 
 const now = '2026-10-04T12:00:00.000Z';
 const parentId = randomUUID();
@@ -54,6 +55,23 @@ describe('workerCapacity', () => {
   it('reports zero usage for a run that is not a delegation root', () => {
     const run = worker(randomUUID(), 'running');
     expect(workerCapacity(run, () => undefined)).toEqual({ outstanding: 0, limit: 32, created: 0, creationLimit: 1024 });
+  });
+});
+
+describe('supervisedOutstanding', () => {
+  it('counts for a root what the family count holds, so its own limit is the family limit', () => {
+    const destroyed = worker(randomUUID(), 'done', destroy('complete'));
+    const live = worker(randomUUID(), 'running');
+    const byId = new Map([destroyed, live].map(run => [run.id, run]));
+    const family = parent([receipt(destroyed.id), receipt(live.id), receipt(randomUUID()), receipt(randomUUID(), 'complete')]);
+    expect(supervisedOutstanding(family, family, id => byId.get(id))).toBe(workerCapacity(family, id => byId.get(id)).outstanding);
+    expect(DEFAULT_GRANTS.root.spawn?.live).toBe(WORKER_CAPACITY);
+  });
+
+  it('leaves out a worker that another task supervises, and keeps one whose record is gone', () => {
+    const live = worker(randomUUID(), 'running');
+    const family = parent([receipt(live.id), receipt(randomUUID())]);
+    expect(supervisedOutstanding(family, live, id => id === live.id ? live : undefined)).toBe(1);
   });
 });
 

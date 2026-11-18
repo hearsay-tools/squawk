@@ -4,11 +4,11 @@ import { MAX_CONVERSATION_REQUEST_SECONDS } from '@open-mercato/cezar-contract/c
 import { messagingAllowed } from '@open-mercato/cezar-contract/task-options';
 import type { RunRecord } from '../runs/store.ts';
 import type { DelegationProject } from './service.ts';
-import { finishing, notDeliveredInstruction } from './conversations.ts';
+import { finishing } from '../runs/task-rights.ts';
+import { notDeliveredInstruction, type ResolvedPair } from './conversations.ts';
 import { DelegationPolicyError } from './policy.ts';
 
-export type ConversationPair = { project: DelegationProject; sender: RunRecord; recipient: RunRecord } &
-  ({ relationship: 'peer' } | { relationship: 'family'; root: RunRecord; worker: RunRecord });
+export type ConversationPair = { project: DelegationProject } & ResolvedPair;
 
 export function sendRequestContext(state: ConversationState, request: ConversationSendRequest, sender: RunRecord, recipient: RunRecord) {
   assertReplyDirection(state, request, sender, recipient);
@@ -28,7 +28,7 @@ export function assertReplyDirection(state: ConversationState, request: Conversa
   if (original) throw new DelegationPolicyError('incompatible_state',
     commandText(`Cannot reply to your own request. Use cez message follow-up ${recipient.id} "<text>" --id <new-message-UUID> --request-id ${original.id}; for a new request, use cez message request ${recipient.id} "<text>" --id <new-message-UUID>.`));
 }
-export function sendAdmission(pair: ConversationPair, root: RunRecord, request: ConversationSendRequest) {
+export function sendAdmission(pair: ConversationPair, request: ConversationSendRequest) {
   const { recipient, relationship } = pair;
   const peer = relationship === 'peer';
   const destroyed = recipient.delegation?.role === 'worker' && recipient.delegation.destroy?.phase === 'complete';
@@ -45,7 +45,7 @@ export function sendAdmission(pair: ConversationPair, root: RunRecord, request: 
   assertSendResume(recipient, resume, destroyed);
   const instruction = destroyed ? 'Not delivered: this worker was destroyed. Spawn a new worker for further work.'
     : closed ? 'Not delivered: this task does not accept task messages.'
-    : resumable && !resume ? notDeliveredInstruction(pair, root) : undefined;
+    : resumable && !resume ? notDeliveredInstruction(pair) : undefined;
   return { destroyed, resumable, resume, instruction };
 }
 /** A cancelled worker resumes like a settled one (hearsay-tools/squawk#3337); destroy is the permanent end. */

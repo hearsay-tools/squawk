@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts'
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -667,7 +666,7 @@ describe('the branch classifier (issue 08 §A)', () => {
           deleted: [],
           refused: [
             { name: 'main', reason: 'in use — a live or reviewable task, a checkout, or the base branch' },
-            { name: 'mine', reason: `not a ${productName("cezar")} task branch` },
+            { name: 'mine', reason: `not a Squawk task branch` },
             { name: 'missing', reason: 'no such local branch' },
             { name: 'cez/aaaaaaaa', reason: 'has 2 commit(s) not on main — delete it on its own, with confirmation' },
           ],
@@ -693,7 +692,7 @@ describe('the branch classifier (issue 08 §A)', () => {
         await git(root, 'branch', name);
         await git(root, 'worktree', 'add', '-q', '--detach', path, 'main');
         expect(await deleteBranches(input(), [name])).toEqual({
-          deleted: [], refused: [{ name, reason: `not a ${productName("cezar")} task branch` }],
+          deleted: [], refused: [{ name, reason: `not a Squawk task branch` }],
         });
       });
 

@@ -1,5 +1,4 @@
 import type { RunnerSkillList } from '@open-mercato/cezar-api-client/contract/runner-skills'
-import { productName } from '@/lib/product-name'
 import type { ProjectAddress, RunAddress } from './run-address'
 import { defined } from '@open-mercato/cezar-api-client/contract/defined'
 import { invalidateLiveReads } from './live-coordinator'
@@ -348,7 +347,7 @@ export async function unwrap<R extends ClientResponse<unknown, number, ResponseF
   if (!res.ok) throw errorFor(res.status, res.statusText, body)
   const parsed = parseJson(body)
   if (parsed === undefined) {
-    throw new ApiError(res.status, `the ${productName('cezar')} server answered ${label} with a non-JSON body`)
+    throw new ApiError(res.status, `the Squawk server answered ${label} with a non-JSON body`)
   }
   return parsed as OkJson<R>
 }
@@ -387,7 +386,7 @@ async function unwrapValidated<R extends ClientResponse<unknown, number, Respons
   const parsed = await unwrap(res, label)
   const result = schema.safeParse(parsed)
   if (!result.success) {
-    throw new ApiError(status, `the ${productName('cezar')} server answered ${label} with an unexpected body`)
+    throw new ApiError(status, `the Squawk server answered ${label} with an unexpected body`)
   }
   return result.data
 }
@@ -404,7 +403,7 @@ async function fetchOrThrow(url: string, init?: RequestInit): Promise<Response> 
     return response
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === 'AbortError') throw cause
-    throw new ApiError(0, `cannot reach the ${productName('cezar')} server (${url})`, { cause })
+    throw new ApiError(0, `cannot reach the Squawk server (${url})`, { cause })
   }
 }
 
@@ -707,11 +706,11 @@ export async function pullRepo(
   }
   if (!transport.ok) throw errorFor(transport.status, transport.statusText, body)
   if (parsed === undefined) {
-    throw new ApiError(transport.status, `the ${productName('cezar')} server answered /repo/pull with a non-JSON body`)
+    throw new ApiError(transport.status, `the Squawk server answered /repo/pull with a non-JSON body`)
   }
   const result = repoPullResponseSchema.safeParse(parsed)
   if (!result.success) {
-    throw new ApiError(transport.status, `the ${productName('cezar')} server answered /repo/pull with an unexpected body`)
+    throw new ApiError(transport.status, `the Squawk server answered /repo/pull with an unexpected body`)
   }
   return result.data
 }
@@ -1180,7 +1179,7 @@ export async function registerProject(root: string): Promise<RegisterProjectResp
     return parsed as RegisterProjectResponse
   }
   if (!res.ok) throw errorFor(res.status, res.statusText, body)
-  throw new ApiError(res.status, `the ${productName('cezar')} server answered ${path} without a project`)
+  throw new ApiError(res.status, `the Squawk server answered ${path} without a project`)
 }
 
 /**

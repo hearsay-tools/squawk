@@ -1,5 +1,6 @@
 import type { WorkerCollectedResult } from '@open-mercato/cezar-contract';
 import type { RunRecord } from '../runs/store.ts';
+import { isFamilyRecord, supervisorIdOf } from '../runs/task-rights.ts';
 import { workerRevision } from './results.ts';
 
 /** Status alone never attests process exit, and collecting live output never
@@ -7,10 +8,10 @@ import { workerRevision } from './results.ts';
 export function parentReadiness(parent: RunRecord, observations: ReadonlyArray<{
   workerId: string; run?: RunRecord | undefined; terminated: boolean; result?: WorkerCollectedResult | undefined;
 }>): Array<{ workerId: string; reason: 'outstanding' | 'uncollected' }> {
-  if (parent.delegation?.role !== 'root') return [];
+  if (!isFamilyRecord(parent)) return [];
   return observations.flatMap<{ workerId: string; reason: 'outstanding' | 'uncollected' }>(({ workerId, run, terminated, result }) => {
     if (!run) return result?.settled && result.cleanup === 'complete' ? [] : [{ workerId, reason: 'outstanding' as const }];
-    if (run.delegation?.role !== 'worker' || run.delegation.parentRunId !== parent.id ||
+    if (supervisorIdOf(run) !== parent.id ||
       !['review', 'done', 'failed', 'cancelled'].includes(run.status) || !terminated) {
       return [{ workerId, reason: 'outstanding' as const }];
     }

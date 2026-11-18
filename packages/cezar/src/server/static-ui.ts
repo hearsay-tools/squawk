@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 /** Which browser UI a request for `/` gets.
  *
  *  The React cockpit built to `web/dist` is the only web UI — the legacy
@@ -60,7 +59,7 @@ export const BUILD_HINT_HTML = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${productName('cezar')} — build the cockpit</title>
+<title>Squawk — build the cockpit</title>
 <style>
   body { margin: 0; display: grid; place-items: center; min-height: 100dvh;
          font: 15px/1.6 system-ui, sans-serif; background: #101014; color: #e8e8ea; }

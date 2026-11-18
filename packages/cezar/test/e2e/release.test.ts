@@ -13,8 +13,8 @@ const execFile = promisify(execFileCallback);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const script = join(repoRoot, 'scripts', 'release.mjs');
 
-// The orchestrator imports packages/cezar/dist/release/stable.js, so this suite (like the
-// snapshot e2e) runs after `npm run build`.
+// The orchestrator imports packages/cezar/src/release/stable.ts from source; Node strips
+// the types, so the release runs without a build.
 
 /** A miniature of the real workspace: the three publishable manifests, in their real
  *  directories, with the same intra-release dependency edges the pipeline has to re-pin. */
