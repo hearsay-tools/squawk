@@ -18,6 +18,7 @@ import { retireDoneAccepted, type TurnSettler } from './turn-settler.ts';
 import { factsAtDone, owedAtDone } from './done-accepted.ts';
 import type { TurnNudges } from './turn-nudges.ts';
 import type { RunLine } from './run-line.ts';
+import { isFamilyRecord } from '../../runs/task-rights.ts';
 
 interface RunFinishHost {
   move(id: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>, call?: ExitCall): RunRecord | undefined;
@@ -100,7 +101,7 @@ export class RunFinish {
    *  queued for a closed session, or a pending human question that parks for the user. */
   completionGate(runId: string): 'accept' | 'held' | CompletionRefusal {
     let parent = this.context.store.getRun(runId);
-    if (parent?.delegation?.role !== 'root') return 'accept';
+    if (!isFamilyRecord(parent)) return 'accept';
     // A late success callback has no authority to reopen a stopped/reviewing root.
     if (['done', 'review', 'failed', 'cancelled'].includes(parent.status)) return 'held';
     const state = this.completionGateHost.active.get(runId);
@@ -112,7 +113,7 @@ export class RunFinish {
       this.context.store.commitDelegation([{ id: runId, delegation }]);
       parent = { ...parent, delegation };
     }
-    if (parent.delegation?.role !== 'root') return 'accept';
+    if (!isFamilyRecord(parent)) return 'accept';
     const refusal = pendingAsk ? undefined : this.completionRefusal(runId);
     if (refusal && state?.liveSession.session?.open) return refusal;
     // A legacy accepted Finish takes the same path as a done: its refusal reopens the session.
@@ -225,7 +226,7 @@ export class RunFinish {
   /** Persist the human's authority before settling obligations or closing a live session. */
   private acceptRootRequestFinish(runId: string): void {
     const run = this.context.store.getRun(runId);
-    if (run?.delegation?.role !== 'root' || !openCompletionRequests(this.context.store, runId).sent.length) return;
+    if (!isFamilyRecord(run) || !openCompletionRequests(this.context.store, runId).sent.length) return;
     this.context.store.commitDelegation([{ id: runId, delegation: { ...run.delegation, finishRequestedAt: new Date().toISOString() } }]);
     this.host.reconcileWorkerWaits(runId);
   }

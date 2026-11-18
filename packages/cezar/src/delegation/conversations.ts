@@ -1,9 +1,9 @@
 import { productName } from '../home/display.ts';
 import { createHash } from 'node:crypto';
 import type { AgentInput, ConversationMessage, ConversationSendRequest, ConversationState, DelegationState, RequestOutcome } from '@open-mercato/cezar-contract';
-import { workerOperationSchema } from '@open-mercato/cezar-contract/delegation';
 import { deliveryReceipts } from '../runs/outcome-commit.ts';
 import { ConversationIdInUseError, RunWriteRefusedError, type RunRecord, type RunStore } from '../runs/store.ts';
+import { conversationOf, DEFAULT_GRANTS, familyRecordIdOf, familyRecordOf, finishing, historyDeleting, holdsOperation, messageRelation, receiptsOf, type Lookup } from '../runs/task-rights.ts';
 import { DelegationPolicyError } from './policy.ts';
 import { reservedReplies } from './questions.ts';
 
@@ -16,8 +16,8 @@ import { reservedReplies } from './questions.ts';
  */
 export function reconcileConversationState(root: RunRecord, lookup: (id: string) => RunRecord | undefined, now: string, isSettled: (run: RunRecord) => boolean,
   unreadable: (id: string) => boolean = () => false): ConversationState | undefined {
-  if (root.delegation?.role !== 'root' || !root.delegation.conversation) return undefined;
-  const state = root.delegation.conversation;
+  const state = conversationOf(root);
+  if (!state) return undefined;
   const outcomes = [...state.outcomes];
   for (const request of state.messages) {
     if (request.kind !== 'request' || request.state !== 'accepted' || outcomes.some(outcome => outcome.requestId === request.id)) continue;
@@ -25,17 +25,12 @@ export function reconcileConversationState(root: RunRecord, lookup: (id: string)
     const status = request.relationship === 'peer' ? peerRecipientSettlement(recipient, isSettled, unreadable(request.recipientRunId)) : familyRecipientSettlement(root, request, recipient, isSettled);
     const closed = (run: RunRecord | undefined) => run && ['done', 'failed', 'cancelled'].includes(run.status) && isSettled(run);
     const sender = lookup(request.senderRunId);
-    const humanFinished = finishedByHuman(sender);
+    const humanFinished = finishing(sender);
     const settled = (humanFinished ? 'sender-closed' : status) ?? (closed(root) || closed(lookup(request.senderRunId)) ? 'sender-closed'
       : request.deadline && request.deadline <= now ? 'timed-out' : undefined);
     if (settled) outcomes.push({ requestId: request.id, status: settled, observedAt: now });
   }
   return outcomes.length === state.outcomes.length ? state : { ...state, outcomes };
-}
-
-/** Finish closes the sender's obligations, including when its result rests at review. */
-function finishedByHuman(sender: RunRecord | undefined): boolean {
-  return sender?.delegation?.role === 'root' && !!sender.delegation.finishRequestedAt;
 }
 
 /** A peer recipient settles the request when it is deleted, rests at `review` (no peer can resume
@@ -49,8 +44,7 @@ function peerRecipientSettlement(recipient: RunRecord | undefined, isSettled: (r
 
 /** A family recipient: a destroyed worker, or a closed one. Review is not completion: its parent can resume it. */
 function familyRecipientSettlement(root: RunRecord, request: ConversationMessage, recipient: RunRecord | undefined, isSettled: (run: RunRecord) => boolean): RequestOutcome['status'] | undefined {
-  const receipts = root.delegation?.role === 'root' ? root.delegation.receipts : [];
-  const deletedRecipient = !recipient && receipts.some(receipt => receipt.workerId === request.recipientRunId && receipt.deletion?.phase === 'complete');
+  const deletedRecipient = !recipient && receiptsOf(root).some(receipt => receipt.workerId === request.recipientRunId && receipt.deletion?.phase === 'complete');
   if (deletedRecipient || (recipient?.delegation?.role === 'worker' && recipient.delegation.destroy?.phase === 'complete')) return 'destroyed';
   if (!recipient || !['done', 'failed', 'cancelled'].includes(recipient.status) || !isSettled(recipient)) return undefined;
   // A worker's question ends with its parent like any request; it never moves to a human
@@ -62,8 +56,8 @@ function familyRecipientSettlement(root: RunRecord, request: ConversationMessage
  *  history is being deleted projects nothing: its events would recreate deleted transcripts
  *  (hearsay-tools/cezarion#1990 review). */
 export function projectConversationEvents(store: import('../runs/store.ts').RunStore, root: RunRecord): void {
-  if (root.delegation?.role !== 'root' || !root.delegation.conversation || root.delegation.historyDeletion) return;
-  const state = root.delegation.conversation;
+  const state = conversationOf(root);
+  if (!state || historyDeleting(root)) return;
   const outcomes = new Map(state.outcomes.map(outcome => [outcome.requestId, outcome]));
   for (const message of state.messages) {
     for (const runId of [message.senderRunId, message.recipientRunId]) {
@@ -102,62 +96,51 @@ function projectOutcome(store: Pick<import('../runs/store.ts').RunStore, 'append
 }
 
 /** The record that makes a run a root task: every worker operation, no receipts yet. */
-export const rootDelegation = (): DelegationState => ({ role: 'root', permissions: [...workerOperationSchema.options], receipts: [] });
-
-/** A root task: a root delegation record, or a top-level run with no record yet, which has not
- *  opened a delegation session yet (spec 2026-10-27-task-communication-protocol § 2). */
-export function isRootTask(run: RunRecord | undefined): run is RunRecord {
-  return !!run && (run.delegation?.role === 'root' || run.delegation === undefined);
-}
+export const rootDelegation = (): DelegationState => ({ role: 'root', permissions: [...DEFAULT_GRANTS.root.operate], receipts: [] });
 
 const denyScope = (): never => { throw new DelegationPolicyError('denied_scope', 'Worker scope denied'); };
 
-/** Two root tasks of one project (spec § 2), neither family deleting its history; a sender of a new
- *  message is live. Undefined when the two are not both root tasks. */
-export function peerPair(sender: RunRecord | undefined, recipient: RunRecord | undefined, send: boolean) {
-  if (sender?.delegation?.role !== 'root' || !isRootTask(recipient) || sender.id === recipient.id) return undefined;
-  if (sender.delegation.historyDeletion || (recipient.delegation?.role === 'root' && recipient.delegation.historyDeletion)) denyScope();
-  if (send && (!['running', 'waiting'].includes(sender.status) || sender.delegation.finishRequestedAt)) throw new DelegationPolicyError('incompatible_state', 'Sender session is not active');
-  return { relationship: 'peer' as const, sender, recipient };
+export type ResolvedPair = { sender: RunRecord; recipient: RunRecord } &
+  ({ relationship: 'peer' } | { relationship: 'family'; relation: 'supervisor' | 'supervised'; root: RunRecord; worker: RunRecord });
+
+/**
+ * The relationship resolver (spec 2026-10-27-task-communication-protocol § 2): `peer` for two root
+ * tasks of one project, `family` for a task and the worker it supervises, in either direction, and
+ * `denied_scope` with one text for everything else. A family pair names its `root`, the run that
+ * holds the family's ledger, and the direction: `supervised` when the sender supervises the
+ * recipient. `send` asks for the live sender a new message needs.
+ */
+export function resolvePair(sender: RunRecord | undefined, recipient: RunRecord | undefined, getRun: Lookup, send: boolean): ResolvedPair {
+  const lookup: Lookup = id => [sender, recipient].find(run => run?.id === id) ?? getRun(id);
+  const relation = messageRelation(sender, recipient, lookup);
+  if (!relation || !sender || !recipient) return denyScope();
+  if (relation === 'peer') {
+    if (send) assertLiveSender(sender);
+    return { relationship: 'peer', sender, recipient };
+  }
+  const worker = relation === 'supervised' ? recipient : sender;
+  const root = familyRecordOf(worker, lookup);
+  if (!root) return denyScope();
+  // A supervisor sends a new message under its `steer` grant.
+  if (send && relation === 'supervised' && !holdsOperation(sender, 'steer')) denyScope();
+  if (send) assertLiveSender(sender);
+  return { relationship: 'family', relation, sender, recipient, root, worker };
 }
 
-/** A root and its direct owned worker, in either direction; anything else is `denied_scope`. */
-export function familyPair(sender: RunRecord | undefined, recipient: RunRecord | undefined): { root: RunRecord; worker: RunRecord } {
-  const root = sender?.delegation?.role === 'root' ? sender : recipient;
-  const worker = sender?.delegation?.role === 'worker' ? sender : recipient;
-  if (!sender || !recipient || sender.id === recipient.id || !root || !worker || !ownsWorker(root, worker)) return denyScope();
-  return { root, worker };
-}
-
-/** The root owns the worker by a live receipt, and no history deletion is pending on the family. */
-function ownsWorker(root: RunRecord, worker: RunRecord): boolean {
-  return root.delegation?.role === 'root' && worker.delegation?.role === 'worker' && worker.delegation.parentRunId === root.id &&
-    worker.delegation.workspace.ownerRunId === worker.id && !root.delegation.historyDeletion &&
-    root.delegation.receipts.some(receipt => receipt.workerId === worker.id && !receipt.deletion);
-}
-
-/** A family sender of a new message: a parent holding `steer`, live and not finishing; a worker live and not being destroyed. */
-export function assertFamilySender(sender: RunRecord, root: RunRecord, send: boolean): void {
-  if (!send) return;
-  const parent = root.delegation?.role === 'root' ? root.delegation : undefined;
-  if (sender.id === root.id && !parent?.permissions.includes('steer')) denyScope();
-  if (!['running', 'waiting'].includes(sender.status) || (sender.id === root.id && parent?.finishRequestedAt) ||
+/** A sender of a new message is live, not finishing and not being destroyed. */
+function assertLiveSender(sender: RunRecord): void {
+  if (!['running', 'waiting'].includes(sender.status) || finishing(sender) ||
     (sender.delegation?.role === 'worker' && sender.delegation.destroy)) throw new DelegationPolicyError('incompatible_state', 'Sender session is not active');
 }
 
-/** A root whose human pressed Finish, which has not settled yet. */
-export function finishing(run: RunRecord): boolean {
-  return run.delegation?.role === 'root' && !!run.delegation.finishRequestedAt;
-}
-
 /** Why a send to a run that cannot take it now was not delivered, and the next step. */
-export function notDeliveredInstruction(pair: { relationship: 'family' | 'peer'; sender: RunRecord; recipient: RunRecord }, root: RunRecord): string {
-  const { sender, recipient } = pair;
+export function notDeliveredInstruction(pair: ResolvedPair): string {
+  const { recipient } = pair;
   if (recipient.delegation?.role === 'worker' && (recipient.status === 'cancelled' || recipient.stopping || recipient.delegation.destroy)) {
     return 'Not delivered: this worker was stopped or is being destroyed. Spawn a new worker for further work.';
   }
   if (pair.relationship === 'peer') return `Not delivered: task is ${recipient.stopping ? 'stopping' : finishing(recipient) ? 'finishing' : recipient.status}. Only its human can continue it.`;
-  return sender.id === root.id
+  return pair.relation === 'supervised'
     ? `Not delivered: worker is ${recipient.status}. To resume it with a new instruction, run worker resume ${recipient.id} "<instruction>" --id <new-message-UUID>; use a new message ID. Retrying this rejected ID will not deliver it.`
     : `Not delivered: parent is ${recipient.status}. A worker cannot resume its parent; the parent must be continued by its owner.`;
 }
@@ -182,7 +165,7 @@ export function assertConversationCapacity(state: ConversationState, pair: { rel
  *  which its reply will fill. */
 export function inboxSlotsUsed(run: RunRecord): number {
   const undelivered = (run.agentInputs ?? []).filter(input => !input.deliveredAt).length;
-  const state = run.delegation?.role === 'root' ? run.delegation.conversation : undefined;
+  const state = conversationOf(run);
   const reserved = state?.messages.filter(message => message.relationship === 'peer' && message.kind === 'request' && message.state === 'accepted' &&
     message.senderRunId === run.id && !state.outcomes.some(outcome => outcome.requestId === message.id)).length ?? 0;
   return undelivered + reserved;
@@ -250,7 +233,7 @@ export function commitNewMessage(store: Pick<RunStore, 'commitConversation'>,
  *  caller still holds (spec 2026-10-27-task-communication-protocol § 2, records level). */
 export function takesPart(self: RunRecord, other: RunRecord | undefined, otherId: string): boolean {
   const between = (message: ConversationMessage) => { return message.relationship === 'peer' && [message.senderRunId, message.recipientRunId].includes(otherId) && [message.senderRunId, message.recipientRunId].includes(self.id); };
-  const ledger = (run: RunRecord | undefined) => { return run?.delegation?.role === 'root' ? run.delegation.conversation?.messages ?? [] : []; };
+  const ledger = (run: RunRecord | undefined) => conversationOf(run)?.messages ?? [];
   return ledger(self).some(between) || ledger(other).some(between) ||
     !!self.agentInputs?.some(input => input.conversation?.relationship === 'peer' && input.conversation.senderRunId === otherId);
 }
@@ -262,7 +245,7 @@ export function rootsAwaitingPeer(store: Pick<RunStore, 'listConversationRootIds
   // Only ledgers that name the run are read: the store narrows the candidates before decoding any.
   return store.listConversationRootIds(runId).filter(id => {
     const root = store.writeRefusal(id) ? undefined : store.getRun(id);
-    const state = root?.delegation?.role === 'root' ? root.delegation.conversation : undefined;
+    const state = conversationOf(root);
     return !!state?.messages.some(message => message.relationship === 'peer' && message.kind === 'request' && message.state === 'accepted' &&
       message.recipientRunId === runId && !state.outcomes.some(outcome => outcome.requestId === message.id));
   });
@@ -271,6 +254,7 @@ export function rootsAwaitingPeer(store: Pick<RunStore, 'listConversationRootIds
 /** The families a settled run's reconcile covers: a worker's parent, or a root's own family and
  *  every root that awaits it as a peer (`rootsAwaitingPeer`). */
 export function settledRunFamilies(store: Pick<RunStore, 'listConversationRootIds' | 'getRun' | 'writeRefusal'>, run: RunRecord): string[] {
-  if (run.delegation?.role === 'worker') return [run.delegation.parentRunId];
-  return run.delegation?.role === 'root' ? [run.id, ...rootsAwaitingPeer(store, run.id)] : [];
+  const family = familyRecordIdOf(run);
+  if (family === undefined) return [];
+  return family === run.id ? [run.id, ...rootsAwaitingPeer(store, run.id)] : [family];
 }

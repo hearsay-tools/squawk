@@ -789,12 +789,6 @@
     },
     {
       "file": "packages/cezar/src/workflows/wait-scope.ts",
-      "target": "packages/cezar/src/delegation/conversations.ts",
-      "count": 1,
-      "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/workflows/wait-scope.ts",
       "target": "packages/cezar/src/delegation/input.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"

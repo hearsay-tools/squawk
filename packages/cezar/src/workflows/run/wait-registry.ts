@@ -90,8 +90,8 @@ export class WaitRegistry {
     const state = this.host.active(runId)!;
     if (!run.delegation || run.delegation.role === 'invalid') throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     const getRun = (id: string) => this.context.store.getRun(id);
-    if (request.workerIds) assertOwnedWorkerWaitScope(runId, run.delegation, request.workerIds, getRun);
-    else assertRequestWaitScope(run, run.delegation, request.requestIds ?? [], getRun);
+    if (request.workerIds) assertOwnedWorkerWaitScope(run, request.workerIds, getRun);
+    else assertRequestWaitScope(run, request.requestIds ?? [], getRun);
     const repeated = WAIT_KINDS.worker.duplicateWorker(run.waits ?? [], request);
     if (repeated && WAIT_KINDS.worker.hasDeadline(repeated)) return repeatRegistration(this.context.store, runId, repeated, request.timeoutSeconds, registration) as DeadlinedWorkerWaitEntry;
     if (!this.host.waitEngine.hasRoom(run)) throw waitCapacityPolicyError();

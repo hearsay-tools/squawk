@@ -2,9 +2,9 @@ import { WAIT_KINDS } from './run/wait-kinds.ts';
 import { assertWaitCapacity, WaitCapacityError } from '../runs/wait-capacity.ts';
 import type { AgentInput, SquawkWaitRequest, PeerWaitEntry, PeerWaitResult, RunRecord, Wait, WaitErrorCode } from '@open-mercato/cezar-contract';
 import { WAIT_LIMIT } from '@open-mercato/cezar-contract/waits';
-import { peerPair } from '../delegation/conversations.ts';
 import { hasLiveInboxClaim } from '../delegation/input.ts';
 import { DelegationPolicyError, MessagingOffError } from '../delegation/policy.ts';
+import { conversationOf, familyRecordOf, holdsOperation, isFamilyRecord, mayOperate, messageRelation } from '../runs/task-rights.ts';
 import { identicalPeerWait, openWaits } from './waits.ts';
 
 /**
@@ -14,27 +14,25 @@ import { identicalPeerWait, openWaits } from './waits.ts';
  * `DelegationPolicyError`. RunManager owns the commit, the arming and the park.
  */
 type GetRun = (id: string) => RunRecord | undefined;
-type Delegation = Exclude<NonNullable<RunRecord['delegation']>, { role: 'invalid' }>;
 const LIVE = ['queued', 'running', 'waiting'];
 
-/** Scope of a wait on workers: only a parent holding `wait` may select, and only workers it owns. */
-export function assertOwnedWorkerWaitScope(runId: string, delegation: Delegation, workerIds: readonly string[], getRun: GetRun): void {
-  if (delegation.role !== 'root' || !delegation.permissions.includes('wait')) throw new DelegationPolicyError('denied_scope', 'Only a parent may wait for owned workers');
+/** Scope of a wait on workers: only a task holding `wait` may select, and only workers it supervises. */
+export function assertOwnedWorkerWaitScope(run: RunRecord, workerIds: readonly string[], getRun: GetRun): void {
+  if (!holdsOperation(run, 'wait')) throw new DelegationPolicyError('denied_scope', 'Only a parent may wait for owned workers');
   for (const id of workerIds) {
-    const worker = getRun(id);
-    if (worker?.delegation?.role !== 'worker' || worker.delegation.parentRunId !== runId ||
-      worker.delegation.workspace.ownerRunId !== id) throw new DelegationPolicyError('denied_scope', 'not an owned worker');
+    if (!mayOperate(run, getRun(id), 'wait')) throw new DelegationPolicyError('denied_scope', 'not an owned worker');
   }
 }
 
-/** Scope of a wait on replies: the caller's own accepted requests, read from its family root's conversation. */
-export function assertRequestWaitScope(run: RunRecord, delegation: Delegation, requestIds: readonly string[], getRun: GetRun): void {
-  const root = delegation.role === 'root' ? run : getRun(delegation.parentRunId);
-  if (root?.delegation?.role !== 'root' || (delegation.role === 'root' && !delegation.permissions.includes('wait'))) {
+/** Scope of a wait on replies: the caller's own accepted requests, read from its family record's
+ *  conversation. The task that holds that record needs the `wait` grant. */
+export function assertRequestWaitScope(run: RunRecord, requestIds: readonly string[], getRun: GetRun): void {
+  const root = familyRecordOf(run, getRun);
+  if (!root || (isFamilyRecord(run) && !holdsOperation(run, 'wait'))) {
     throw new DelegationPolicyError('denied_scope', 'Request wait scope denied');
   }
   for (const id of requestIds) {
-    if (!root.delegation.conversation?.messages.some(message => message.id === id && message.kind === 'request' &&
+    if (!conversationOf(root)?.messages.some(message => message.id === id && message.kind === 'request' &&
       message.state === 'accepted' && message.senderRunId === run.id)) throw new DelegationPolicyError('denied_scope', 'Request wait scope denied');
   }
 }
@@ -55,12 +53,12 @@ export function waitCapacityPolicyError(): DelegationPolicyError {
 
 /**
  * A new `peer` wait (spec 2026-10-27-task-communication-protocol § 7), or the open one the same
- * peers repeat. Every name must pass the relationship resolver as a peer (`peerPair`), else
+ * peers repeat. Every name must pass the relationship resolver as a peer (`messageRelation`), else
  * `denied_scope`, so a worker cannot register one. A full wait list is `capacity_limit`.
  */
 export function peerWaitEntry(run: RunRecord, request: { peerIds: string[]; timeoutSeconds: number }, via: 'cezar_wait' | 'cez-message-wait',
   turnId: () => string, getRun: GetRun): PeerWaitEntry {
-  for (const id of request.peerIds) if (!peerPair(run, getRun(id), false)) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
+  for (const id of request.peerIds) if (messageRelation(run, getRun(id), getRun) !== 'peer') throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
   const repeated = identicalPeerWait(run.waits ?? [], request.peerIds);
   if (repeated) return repeated;
   try { assertWaitCapacity(run); }
