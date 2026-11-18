@@ -885,6 +885,23 @@ that leave the workflow files unchanged do not invalidate the proof.
 
 CI never requests a model review or resolves findings. A flaky verification failure uses **Re-run failed jobs**, which retains successful jobs and reruns every failed job with `verify`. A rerun keeps the workflow definition of its run. An open PR whose last CI run predates a workflow change on `main` needs a new run: push a new head or update the branch.
 
+Under GitHub degradation, CI can fail in ways that Re-run failed jobs cannot fix. Before you change the PR, diagnose its native run:
+
+```bash
+node .github/scripts/ci-recovery.cjs --pr <number>
+```
+
+The script makes read-only `gh` calls from your host, so it works while Actions is degraded. It reads the PR head's latest `pull_request_target` CI run and prints the case and its recovery command:
+
+| Case | Check that confirms it | Recovery |
+| --- | --- | --- |
+| A flaky job failed | The failing job's log | `gh run rerun <run-id> --failed` (Re-run failed jobs) |
+| A needed job ended `abandoned` | A gate job's error names a job that `was never created (abandoned)`, or a completed run has no `Review preflight` or `Unit, build, E2E, and package` job | A full rerun, without `--failed`: `gh run rerun <run-id>`. If that attempt fails the same way, push a new head |
+| `startup_failure` with 0 jobs on `pull_request_target` | `gh run list --event pull_request_target --limit 20`: other PRs' runs in the last 2 h also ended `startup_failure`. The cause is GitHub-side; do not change the PR. If no other PR failed, the cause is this PR or a repository setting | GitHub cannot re-run it. Wait until another PR's run starts, then `gh pr close <number> && gh pr reopen <number>` |
+| A job queued for more than 15 minutes; the run may be marked failed and "cannot be retried" | `gh api repos/hearsay-tools/squawk/actions/runs/<run-id>/attempts/<n>/jobs`: a job still `queued` 15 minutes after its `created_at`. A job normally starts within seconds | `gh pr close <number> && gh pr reopen <number>`: the reopened event starts a fresh native run on the same head. Push a new head only if that run also stays queued. Do not push an empty commit |
+
+Other PRs' runs confirm a GitHub-side incident, not githubstatus.com: on 2026-11-09 the status page showed no incident for the two hours of PR startup failures. A diagnostic dispatch is not a recovery: it does not produce the native required check.
+
 ### Board sync and the review signal
 
 `pr-readiness.yml` uses default-branch code and no PR checkout. Its only secret is the optional release App key for the read and board tokens (see readiness under [CI verification](#ci-verification)), and it has no write permission on the repository. It reacts to native CI completion, completion of **Review signal** (`review-signal.yml`), and the pull-request events the board follows (opened, reopened, synchronize, ready for review, converted to draft). Review/comment events run that no-permission, no-checkout signal in PR merge-ref context. The signal debounces per PR (hearsay-tools/squawk#3453): its job has a per-PR concurrency group that cancels an earlier run and settles for 30 s, so a burst of review comments ends in one completed run; a cancelled or skipped signal run wakes nothing only when a newer signal run names the same PR, and a lone one still wakes the board sync. The trusted consumer validates official workflow identity, native event and same-repository signal association. The association selects a stable PR number; the per-PR job reads the exact live PR head. Signal success, artifacts and comment bodies grant no authority. Missing signal associations fail closed; use manual recovery.
