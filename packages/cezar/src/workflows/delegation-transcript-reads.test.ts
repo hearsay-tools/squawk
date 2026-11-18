@@ -14,7 +14,10 @@ import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import { seedSettledFamily } from './delegation-reconcile.testkit.ts';
 import { delegatingParent, manager as liveManager, store as liveStore, until, useWorkerWaitFixture, worker } from './worker-wait.testkit.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const questions = [{ header: 'Pick', question: 'Which one?', options: [{ label: 'A' }, { label: 'B' }] }];
 

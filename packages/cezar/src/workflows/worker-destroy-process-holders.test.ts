@@ -14,7 +14,7 @@ import { agentTmpDir } from '../runs/agent-tmpdir.ts';
 import { ensureOwnedWorkspace } from '../delegation/workspace.ts';
 import { installIdentityFileStore } from '../delegation/identity-file-store.ts';
 import { posixIdentityFileStore } from '../delegation/posix-workspace-identity.ts';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
@@ -22,9 +22,12 @@ import { DelegationService } from '../delegation/service.ts';
 import { processesWithCwdUnder } from '../delegation/process-liveness.ts';
 import { signalSession, spawnSessionLeader } from '../core/session-process.ts';
 import { until, root, store, manager, releases, worker, workspace, useWorkerDestroyFixture } from './worker-destroy.testkit.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
 import { setHostScope } from '../worker-scope/worker-scopes.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 describe('worker termination barrier', { timeout: 30_000 }, () => {
   useWorkerDestroyFixture();
@@ -136,7 +139,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
 console.log(String(m.pid)); ${opts.leader === 'exit' ? "m.unref(); process.stdin.on('end', () => process.exit(0)).resume();" : 'setInterval(()=>{},1000);'}`;
       let leader: ChildProcessWithoutNullStreams | undefined; let ready!: (pid: number) => void;
       const memberPid = new Promise<number>(resolve => { ready = resolve; });
-      vi.spyOn(runners, 'createRunner').mockReturnValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined,
+      vi.spyOn(runners, 'createRunner').mockResolvedValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined,
         run: async () => { throw Error('unused'); }, startSession: () => {
           const proc = spawnSessionLeader(process.execPath, ['-e', script], { cwd: workspace(w).path, env: process.env });
           leader = proc;

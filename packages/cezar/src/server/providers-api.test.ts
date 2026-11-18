@@ -18,8 +18,11 @@ import { RunManager } from '../workflows/run.ts';
 import { ProjectContexts } from './project-context.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { WorkspaceEventBus, createApp } from './server.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */
 const HANG_GUARD_MS = 15_000;

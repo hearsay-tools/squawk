@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { ensureDataGitignore } from '../data-gitignore.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { createOwnedWorkspace } from '../delegation/workspace.ts';
 import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
 import { Home } from '../home/home.ts';
@@ -23,6 +23,9 @@ import { migrateProject, resumeProjectMigration } from './engine.ts';
 import { planProjectMigration } from './plan.ts';
 import { buildMigrationProject, git, projectSnapshot, removeMigrationProject, TASK, WORKER, type MigrationProject } from './project-migration.testkit.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * The write root of a moved project (hearsay-tools/cezarion#3150): the completed migration's marker makes `projectPaths` write `.ai/squawk/`

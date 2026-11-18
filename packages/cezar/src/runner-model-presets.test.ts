@@ -8,9 +8,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUNNER_IDS, type AgentRunner, type RunnerId } from './core/agent-runner.ts';
 import { planChain } from './planner.ts';
 import { generateRunName } from './runs/auto-name.ts';
+import { registerBuiltInRunners } from './runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const run = vi.fn(async () => ({ text: '' }));
-const runners = (): AgentRunner => ({ run }) as unknown as AgentRunner;
+const runners = async (): Promise<AgentRunner> => ({ run }) as unknown as AgentRunner;
 
 /** `plannerModel` and `namerModel` are Claude model aliases: only the Claude runner gets them. */
 const EXPECTED: Record<RunnerId, { planner: string | undefined; namer: string | undefined }> = {

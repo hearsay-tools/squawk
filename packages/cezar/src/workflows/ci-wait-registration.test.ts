@@ -9,11 +9,14 @@ import { CiWatcherSupervisor } from '../ci-wait/supervisor.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
 import { manager, store, root, parent, controlledWire, until, useWorkerWaitFixture, toolGenerationOf } from './worker-wait.testkit.ts';
 import type { AgentSession } from '../core/agent-runner.ts';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import { createActiveRun } from './active-run.ts';
 import { WaitRegistry } from './run/wait-registry.ts';
 import type { RunModuleContext } from './run/types.ts';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const pr = 'https://github.com/acme/repo/pull/12';
 const identity = { prUrl: pr, repository: 'acme/repo', prNumber: 12, headSha: 'a'.repeat(40) };
@@ -32,8 +35,8 @@ const moduleRow = (code: GuardCode, duringLookup: boolean) =>
 function observeSession() {
   let session: AgentSession | undefined;
   const create = runners.createRunner;
-  vi.spyOn(runners, 'createRunner').mockImplementation((...args) => {
-    const runner = create(...args);
+  vi.spyOn(runners, 'createRunner').mockImplementation(async (...args) => {
+    const runner = await create(...args);
     if (runner.startSession) {
       const start = runner.startSession.bind(runner);
       vi.spyOn(runner, 'startSession').mockImplementation((...input) => {

@@ -1,7 +1,8 @@
 import { describeHarnessParity } from './harness-parity-pending-request.cells.testkit.ts';
 import { OmpRunner } from './omp-runner.ts';
 import { onlyRunner, useRunners } from './runners-under-test.testkit.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 
-useRunners(onlyRunner('omp', () => new OmpRunner()));
+useRunners(onlyRunner(ompRunner, () => new OmpRunner()));
 
 describeHarnessParity({ runner: 'omp', part: 'pending-request' });

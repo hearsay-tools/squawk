@@ -30,7 +30,8 @@ import { fileURLToPath } from 'node:url';
 import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { RUNNER_IDS, type AgentRunSpec, type AgentEvent, type AgentRunResult, type AgentSession, type RunnerId, type SessionOptions } from './agent-runner.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
-import { runnersWhere, type RunnerFacts } from './runner-facts.ts';
+import type { RunnerFacts } from './runner-facts.ts';
+import { factsWhere } from './runner-fact-rows.testkit.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
 
@@ -826,13 +827,13 @@ export const PARITY_EXEMPTIONS: readonly ParityExemption[] = [
  */
 function exemptWhere(criterion: string, kind: ExemptionKind, matches: (facts: RunnerFacts) => boolean,
   reason: (backend: RunnerId) => string): ParityExemption[] {
-  return runnersWhere(matches).map(backend => ({ criterion, backend, kind, reason: reason(backend) }));
+  return factsWhere(matches).map(backend => ({ criterion, backend, kind, reason: reason(backend) }));
 }
 
 /** The runners whose human-prompt hold ends when the wire reports the prompt read, before the
  *  prompt's acknowledgement (`humanPromptHold`). */
 export function humanPromptReadReleases(): RunnerId[] {
-  return runnersWhere(facts => facts.humanPromptHold === 'consumption');
+  return factsWhere(facts => facts.humanPromptHold === 'consumption');
 }
 
 /** Every runner but `live`: a protocol quirk that only one runner's wire carries. */
@@ -932,7 +933,7 @@ export async function driveSeam(
   let session: AgentSession | undefined;
   let pid: number | undefined;
   try {
-    session = runnersUnderTest()(backend).startSession(
+    session = (await runnersUnderTest()(backend)).startSession(
       {
         userPrompt: promptFor(backend, scenario),
         cwd,

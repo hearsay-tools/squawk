@@ -2,8 +2,10 @@ import { describeHarnessParity } from './harness-parity-owned-workflows.cells.te
 import { ClaudeCliRunner } from './claude-cli-runner.ts';
 import { CodexAppServerRunner } from './codex-app-server-runner.ts';
 import { onlyRunners, useRunners } from './runners-under-test.testkit.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
 
 // R14 runs a mixed-runner chain: its second step is the next runner in RUNNER_IDS.
-useRunners(onlyRunners({ claude: () => new ClaudeCliRunner(), codex: () => new CodexAppServerRunner() }));
+useRunners(onlyRunners([[claudeRunner, () => new ClaudeCliRunner()], [codexRunner, () => new CodexAppServerRunner()]]));
 
 describeHarnessParity({ runner: 'claude', part: 'owned-workflows' });

@@ -4,16 +4,19 @@ import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit'
 import { QUICK_TASK_WORKFLOW } from '../workflows/types.ts';
 import type { AgentRunResult } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import '../core/every-runner.testkit.ts';
 import { fixture } from './service.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 it('accepts a queued worker after release while two running parents fill the default slots', async () => {
 
   vi.stubEnv('CEZ_DRY_RUN', '1');
   vi.stubEnv('CEZ_AUTONAME', '0');
   let opened = 0;
-  vi.spyOn(runners, 'createRunner').mockImplementation(backend => ({
+  vi.spyOn(runners, 'createRunner').mockImplementation(async backend => ({
     backend: backend ?? 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
     interrupt: async () => {}, run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }),
     startSession: () => {

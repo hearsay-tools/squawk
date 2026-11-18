@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { RUN_STATUS, WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentRunResult, AgentRunSpec } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import '../core/every-runner.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { supervisedReceipts } from '../runs/task-rights.ts';
@@ -56,7 +56,7 @@ beforeEach(() => {
   onTestFinished(scopeFixtureProcesses());
   sessions.length = 0; onSession = () => {};
   f = fixture(workerCleanups());
-  vi.spyOn(runners, 'createRunner').mockImplementation(backend => ({
+  vi.spyOn(runners, 'createRunner').mockImplementation(async backend => ({
     backend: backend ?? 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
     interrupt: async () => {}, run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }),
     startSession: spec => {

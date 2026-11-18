@@ -7,8 +7,9 @@ import { driveSeam, waitFor } from './harness-parity-core.testkit.ts';
 import { PiRunner } from './pi-runner.ts';
 import { onlyRunner, useRunners } from './runners-under-test.testkit.ts';
 import { describeNativeSkillTriggers } from './runner-skill-trigger.testkit.ts';
+import { piRunner } from '../runners/pi/definition.ts';
 
-useRunners(onlyRunner('pi', () => new PiRunner()));
+useRunners(onlyRunner(piRunner, () => new PiRunner()));
 describeNativeSkillTriggers('pi');
 
 

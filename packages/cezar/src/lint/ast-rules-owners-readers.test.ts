@@ -187,7 +187,7 @@ ruleCases(AST_RULES.find(rule => rule.name === "run-search-field-list-outside-co
 ruleCases(AST_RULES.find(rule => rule.name === "runner-class-outside-factory")!, {
   "file": "packages/cezar/src/fixture.ts",
   "valid": [
-    "import { createRunner } from './core/runner-factory.ts'",
+    "import { createRunner } from './core/runner-registry.ts'",
     "import type { AgentSession } from '../../core/claude-cli-runner.ts'",
     "export type { AgentSession } from '../core/claude-cli-runner.ts'",
     "import { RUNNER_IDS, type RunnerFactory } from '../core/agent-runner.ts'",

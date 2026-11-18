@@ -17,7 +17,10 @@ import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.t
 import type { BranchForge } from './repo-branches.ts';
 import { createApp } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const exec = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];

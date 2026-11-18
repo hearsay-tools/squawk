@@ -3,21 +3,28 @@ import { runnerSchema } from '@open-mercato/cezar-contract/runner';
 import { RUNNER_COCKPIT_FACTS } from '@open-mercato/cezar-contract/runner-facts';
 import { inputDeliveryOf, RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { exemptionFor } from './harness-parity-core.testkit.ts';
-import { createRunner } from './runner-factory.ts';
+import { createRunner, runnerDefinition } from './runner-registry.ts';
 import { RUNNER_FACTS, runnersWhere } from './runner-facts.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 describe('declared runner facts (hearsay-tools/cezarion#2991)', () => {
-  it('gives every runner createRunner builds the table row for its id', () => {
-    for (const id of RUNNER_IDS) expect(createRunner(id).facts, id).toBe(RUNNER_FACTS[id]);
+  it('reads the facts of each runner from its registered definition', () => {
+    for (const id of RUNNER_IDS) expect(RUNNER_FACTS[id], id).toBe(runnerDefinition(id).facts);
+  });
+
+  it('gives every runner createRunner builds the table row for its id', async () => {
+    for (const id of RUNNER_IDS) expect((await createRunner(id)).facts, id).toBe(RUNNER_FACTS[id]);
     // The legacy id builds Claude's runner, so it carries Claude's row.
-    expect(createRunner('claude-cli').facts).toBe(RUNNER_FACTS.claude);
+    expect((await createRunner('claude-cli')).facts).toBe(RUNNER_FACTS.claude);
   });
 
   // Tests that must not load the runner classes read the turn-path facts from the table, so each
   // runner instance must carry exactly its row's values.
-  it('gives every runner instance the input delivery and resume prompt of its table row', () => {
+  it('gives every runner instance the input delivery and resume prompt of its table row', async () => {
     for (const id of RUNNER_IDS) {
-      const runner = createRunner(id);
+      const runner = await createRunner(id);
       expect(inputDeliveryOf(runner), id).toEqual(RUNNER_FACTS[id].inputDelivery);
       expect(runner.inputDelivery, id).toBe(RUNNER_FACTS[id].inputDelivery);
       expect(runner.systemPromptOnResume, id).toBe(RUNNER_FACTS[id].systemPromptOnResume);

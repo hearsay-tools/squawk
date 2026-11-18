@@ -12,7 +12,10 @@ import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract
 import { runRecordSchema } from '../runs/store.ts';
 import { workflowStepSchema } from '../workflows/types.ts';
 import type { AgentBackend, RunnerId } from './agent-runner.ts';
-import { createRunner } from './runner-factory.ts';
+import { createRunner } from './runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * Every backend id that shipped, with the runner it resolves to. Add a new id; never remove an
@@ -50,9 +53,9 @@ describe('shipped backend ids', () => {
     expect(parsed.steps[0]?.backend).toBe(runner);
   });
 
-  it.each(shipped)('createRunner builds the %s backend as the %s runner', (id, runner) => {
+  it.each(shipped)('createRunner builds the %s backend as the %s runner', async (id, runner) => {
     // An unknown id also falls back to Claude, so compare the built runner's own id.
-    expect(createRunner(id).backend).toBe(runner);
+    expect((await createRunner(id)).backend).toBe(runner);
   });
 
   // A workflow step never accepted the legacy id: nothing may ask for it (`runs/store.ts`).

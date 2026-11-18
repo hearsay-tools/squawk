@@ -11,7 +11,10 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { createApp } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { connectedProviderAuth } from './provider-auth.testkit.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * Idempotent `POST /runs` (#504, spec 2026-09-24-cez-task-cli). A real manager with no slots, so

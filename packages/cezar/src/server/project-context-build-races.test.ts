@@ -5,12 +5,15 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { seedRuns } from '../runs/run-store.testkit.ts';
 import { RunManager } from '../workflows/run.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts, ProjectContextsClosedError, type ProjectContextDeps } from './project-context.ts';
 import { createRunManager } from './run-manager.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /** Lets a test hold a build inside its migration step; open when `gate` is unset. */
 const preparing = vi.hoisted(() => ({ gate: undefined as Promise<void> | undefined, entered: () => {} }));

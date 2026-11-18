@@ -81,7 +81,7 @@ describe('runner-id-branch (hearsay-tools/cezarion#2991)', () => {
     ['packages/cezar/src/server/server.ts', true],
     ['packages/web/src/routes/new-task-form.ts', true],
     ['packages/web/src/routes/settings/dialog.tsx', true],
-    ['packages/cezar/src/core/runner-factory.ts', false],
+    ['packages/cezar/src/core/runner-registry.ts', false],
     ['packages/cezar/src/server/server.test.ts', false],
     ['packages/cezar/src/workflows/cells.testkit.ts', false],
     ['packages/web/src/test/render.tsx', false],

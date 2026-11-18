@@ -3,18 +3,19 @@ import { RUNNER_IDS } from './agent-runner.ts';
 import { exemptionFor, humanPromptReadReleases } from './harness-parity-core.testkit.ts';
 
 // Swap the declarations of three runners, so the test proves the parity exemptions read the
-// declared facts and not the runner ids (hearsay-tools/squawk#3642). `runnersWhere` reads the
-// swapped table, as every caller of the real one reads the real table.
-vi.mock('./runner-facts.ts', async (load) => {
-  const actual = await load<typeof import('./runner-facts.ts')>();
+// declared facts and not the runner ids (hearsay-tools/squawk#3642). The exemptions read the rows
+// of `runner-fact-rows.testkit.ts`, so `factsWhere` reads the swapped rows.
+vi.mock('./runner-fact-rows.testkit.ts', async (load) => {
+  const actual = await load<typeof import('./runner-fact-rows.testkit.ts')>();
   const { RUNNER_IDS: ids } = await import('./agent-runner.ts');
+  const rows = actual.factRows();
   const facts = {
-    ...actual.RUNNER_FACTS,
-    codex: { ...actual.RUNNER_FACTS.codex, hookEvents: 'none', childWork: 'none', transport: 'http', humanPromptHold: 'acknowledgement' },
-    pi: { ...actual.RUNNER_FACTS.pi, hookEvents: 'reported', childWork: 'nested', nativePermission: 'after-turn', humanPromptHold: 'consumption' },
-    opencode: { ...actual.RUNNER_FACTS.opencode, transport: 'stdio', nativePermission: 'none' },
+    ...rows,
+    codex: { ...rows.codex, hookEvents: 'none', childWork: 'none', transport: 'http', humanPromptHold: 'acknowledgement' },
+    pi: { ...rows.pi, hookEvents: 'reported', childWork: 'nested', nativePermission: 'after-turn', humanPromptHold: 'consumption' },
+    opencode: { ...rows.opencode, transport: 'stdio', nativePermission: 'none' },
   } as const;
-  return { ...actual, RUNNER_FACTS: facts, runnersWhere: (matches: (row: typeof facts[keyof typeof facts]) => boolean) =>
+  return { ...actual, factRows: () => facts, factsWhere: (matches: (row: typeof facts[keyof typeof facts]) => boolean) =>
     ids.filter(id => matches(facts[id])) };
 });
 

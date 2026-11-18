@@ -22,8 +22,11 @@ import {
   makeRunTitle,
   resolveExtraSystemPrompt,
 } from './run.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { RunMemory } from './run/run-memory.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 // Publication guidance is additive for both fresh sessions and Continue; the
 // full prompt assertions below must still pin the unchanged handoff contract.

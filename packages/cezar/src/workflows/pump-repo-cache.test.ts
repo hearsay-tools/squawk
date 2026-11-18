@@ -8,7 +8,10 @@ import * as git from '../server/git.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 describe('scheduler repository probe budget (#364)', () => {
   const fixtures: Array<{ root: string; store: RunStore; manager: RunManager }> = [];

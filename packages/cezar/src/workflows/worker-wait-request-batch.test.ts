@@ -4,10 +4,10 @@ import { manager, semaphore, store, useWorkerWaitFixture, waitOf, lastWaitOf } f
 import { conversationPair } from './worker-wait-conversations.testkit.ts';
 
 const runnerSessions = vi.hoisted(() => new Map<string, import('../core/agent-runner.ts').AgentSession>());
-vi.mock('../core/runner-factory.ts', async importOriginal => {
-  const actual = await importOriginal<typeof import('../core/runner-factory.ts')>();
-  return { ...actual, createRunner: (...args: Parameters<typeof actual.createRunner>) => {
-    const runner = actual.createRunner(...args);
+vi.mock('../core/runner-registry.ts', async importOriginal => {
+  const actual = await importOriginal<typeof import('../core/runner-registry.ts')>();
+  return { ...actual, createRunner: async (...args: Parameters<typeof actual.createRunner>) => {
+    const runner = await actual.createRunner(...args);
     const start = runner.startSession.bind(runner);
     runner.startSession = (spec, ...rest) => {
       const session = start(spec, ...rest);

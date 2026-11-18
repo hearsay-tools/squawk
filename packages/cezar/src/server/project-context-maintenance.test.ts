@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlink
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { processStartToken } from '../delegation/process-liveness.ts';
 import { projectMovedMarker, projectPaths } from '../project-paths.ts';
 import { RunDatabase, RUNS_DB_FILE } from '../runs/run-database.ts';
@@ -14,6 +14,9 @@ import { readPersistedRuns, seedRuns } from '../runs/run-store.testkit.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts, type ProjectContextSource } from './project-context.ts';
 import { createRunManager } from './run-manager.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const record = (id: string, extra: Record<string, unknown> = {}) => ({
   id, title: id, task: id, workflow: 'quick-task', steps: [], status: RUN_STATUS.done, tokensUsed: 0, archived: false,

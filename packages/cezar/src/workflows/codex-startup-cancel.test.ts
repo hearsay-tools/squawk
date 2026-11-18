@@ -14,7 +14,10 @@ import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import { TrackedWork } from './run/tracked-work.ts';
 import type { WorkflowDef } from './types.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const workflow: WorkflowDef = {
   name: 'startup-cancel', source: 'built-in',

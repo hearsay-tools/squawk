@@ -24,7 +24,7 @@ import type { RunManager } from './run.ts';
 import { noRunners, useRunners } from '../core/runners-under-test.testkit.ts';
 
 const hook = vi.hoisted(() => ({ runner: undefined as AgentRunner | undefined }));
-useRunners(() => hook.runner!);
+useRunners(async () => hook.runner!);
 
 function signal<T = void>() {
   let resolve!: (value: T) => void;

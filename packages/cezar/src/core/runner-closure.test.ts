@@ -39,7 +39,7 @@ async function closures(files: readonly string[]): Promise<Map<string, Set<strin
 }
 
 describe('per-runner test closures', () => {
-  it('hold their own adapter, no other runner adapter but the wait kit\'s Claude workers and R14\'s second runner, and not the production factory', async () => {
+  it('hold their own adapter, no other runner adapter or definition but the wait kit\'s Claude workers and R14\'s second runner, and not the built-in runner list', async () => {
     const files = perRunnerFiles();
     expect(new Set(files.map(entry => entry.runner))).toEqual(new Set(RUNNER_IDS));
     const byEntry = await closures(files.map(entry => entry.file));
@@ -47,7 +47,10 @@ describe('per-runner test closures', () => {
       const closure = byEntry.get(file) ?? new Set();
       const allowed = new Set<RunnerId>([runner, ...(file.startsWith('workflows/waits-') ? ['claude' as const] : []),
         ...(file.endsWith('-owned-workflows-parity.test.ts') ? [RUNNER_IDS[(RUNNER_IDS.indexOf(runner) + 1) % RUNNER_IDS.length]!] : [])]);
-      return { file, own: closure.has(ADAPTERS[runner]), others: [...RUNNER_IDS.filter(id => !allowed.has(id) && closure.has(ADAPTERS[id])), ...(closure.has('core/runner-factory.ts') ? ['factory'] : [])] };
+      const others = RUNNER_IDS.filter(id => !allowed.has(id));
+      return { file, own: closure.has(ADAPTERS[runner]), others: [...others.filter(id => closure.has(ADAPTERS[id])),
+        ...others.filter(id => closure.has(`runners/${id}/definition.ts`)).map(id => `${id} definition`),
+        ...(closure.has('runners/built-in.ts') ? ['built-in'] : [])] };
     });
     expect(loaded.filter(entry => !entry.own || entry.others.length)).toEqual([]);
   }, 60_000);

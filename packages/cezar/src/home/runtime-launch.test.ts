@@ -12,7 +12,10 @@ import { selectDelegationExecutionSettings } from '../delegation/execution-setti
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { AGENT_MODELS_LOCKED_ERROR } from '../core/agent-model-policy.ts';
 import { workerIdentity } from '../delegation/execution-identity.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 it('keeps accepted run pins on the selected model policy through RunManager', () => {
   const { root, selected } = runtimeHomes();

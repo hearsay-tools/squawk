@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUNS_DB_FILE } from '../runs/run-database.ts';
@@ -14,6 +14,9 @@ import { Crash, crashAt, crashThenRecover, disposers, fence, beforeRepair, moved
 import { readProjectMigrationJournal } from './journal.ts';
 import { projectSnapshot, removeMigrationProject, TASK, type MigrationProject } from './project-migration.testkit.ts';
 import { createRunManager } from '../server/run-manager.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /** Crash recovery of the project migration engine from its repair on (hearsay-tools/cezarion#3088): a
  *  crash at every fault point of the worktree repair, the receipts, the run store and the run files,

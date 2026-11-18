@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import type { DelegationController } from '../delegation/provision.ts';
 import { Home } from '../home/home.ts';
 import { testHome, useTestHome } from '../home/test-home.testkit.ts';
@@ -17,6 +17,9 @@ import { clearProjectProbeCache, listProjects, registerProject } from '../worksp
 import { ProjectContexts } from './project-context.ts';
 import { createRunManager } from './run-manager.testkit.ts';
 import { startServer } from './start-server.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 // bound: a hang guard only. Each awaited promise is the product's own signal and settles at once when it works.
 function bounded<T>(signal: Promise<T>, what: string): Promise<T> {

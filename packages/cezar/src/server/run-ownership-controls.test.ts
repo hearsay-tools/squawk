@@ -19,7 +19,10 @@ import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { connectedProviderAuth } from './provider-auth.testkit.ts';
 import { createApp, projectRouteManifest } from './server.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * Run controls when two Squawk processes share a project (#779, plan step 3). The other process is

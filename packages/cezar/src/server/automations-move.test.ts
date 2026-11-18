@@ -15,11 +15,14 @@ import { projectPaths } from '../project-paths.ts';
 import { registerProject, listProjects } from '../workspace/projects.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';
 import { ProjectContexts } from './project-context.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 import { startServer } from './start-server.ts';
 import { WorkspaceEventBus } from './server.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 const temporary: string[] = [];
 function directory(): string {

@@ -48,7 +48,7 @@ export const OWNED_INPUT_GROUPS = {
             // `steer` runner. A `boundary` runner holds it to the turn end, where the question is
             // already pending: the parent's instruction is no message beside it, so it waits for the
             // answer, on a native ask and on cezar_ask alike (hearsay-tools/squawk#2444).
-            const steer = inputDeliveryOf(runnersUnderTest()(backend)).mode === 'steer';
+            const steer = inputDeliveryOf(await runnersUnderTest()(backend)).mode === 'steer';
             const delivered = (id: string) => !!store.getRun(runId)?.agentInputs?.find(input => input.id === id)?.deliveredAt;
             // The opening turn's acknowledgement records the delivery.
             if (steer) await waitFor(() => delivered(first.id));

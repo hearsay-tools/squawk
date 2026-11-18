@@ -1,5 +1,5 @@
 import type { RunnerId } from '../core/agent-runner.ts';
-import { runnersWhere } from '../core/runner-facts.ts';
+import { factsWhere } from '../core/runner-fact-rows.testkit.ts';
 
 /**
  * The rows and exemptions of `waits-subagents-parity-cells.testkit.ts`, as plain data: that kit
@@ -24,8 +24,8 @@ const NEVER_SETTLES = (runner: string) => `${runner}'s parent turn never ends wh
 /** Rows a runner's wire cannot carry. A runner with no scenario is exempt from every row; which
  *  runners those are comes from their declared `nativeSubagents` (hearsay-tools/cezarion#2991). */
 export const SUBAGENT_EXEMPTIONS: ReadonlyArray<{ criterion: SubagentCriterion; runner: RunnerId; reason: string }> = [
-  ...runnersWhere(facts => facts.nativeSubagents === 'unreported').flatMap(runner => SUBAGENT_CRITERIA.map(({ id }) => ({ criterion: id, runner, reason: NO_SIGNAL(runner) }))),
-  ...runnersWhere(facts => facts.nativeSubagents === 'turn-held').flatMap(runner => SUBAGENT_CRITERIA.map(({ id }) => ({ criterion: id, runner, reason: NEVER_SETTLES(runner) }))),
+  ...factsWhere(facts => facts.nativeSubagents === 'unreported').flatMap(runner => SUBAGENT_CRITERIA.map(({ id }) => ({ criterion: id, runner, reason: NO_SIGNAL(runner) }))),
+  ...factsWhere(facts => facts.nativeSubagents === 'turn-held').flatMap(runner => SUBAGENT_CRITERIA.map(({ id }) => ({ criterion: id, runner, reason: NEVER_SETTLES(runner) }))),
   { criterion: 'U31', runner: 'codex', reason: 'Codex app-server never starts a parent turn by itself when a spawned child ends (live codex-cli 0.164.0 wire, watched for 2.5 minutes): the child\'s end reaches the parent only as a subAgentActivity item on the already-completed turn, so Squawk\'s grace wake is the only resume.' },
   ...(['U33', 'U34'] as const).map(criterion => ({ criterion, runner: 'codex' as const,
     reason: 'Codex app-server reports a child\'s end as subAgentActivity kind completed only; no failed, interrupted or cancelled child frame was observed on the live wire, so a child that fails is seen at the 30-minute deadline (U36).' })),

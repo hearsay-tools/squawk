@@ -14,9 +14,12 @@ import { ProjectContexts } from './project-context.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp, projectRouteManifest, type ProjectRouteInfo } from './server.ts';
 import { setRunStatus, seedRuns } from '../runs/run-store.testkit.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { createRunManager } from './run-manager.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * Alias parity for the mirrored project-route table (spec

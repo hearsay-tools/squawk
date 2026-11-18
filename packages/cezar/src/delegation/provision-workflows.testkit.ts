@@ -11,7 +11,8 @@ import { mkdirSync } from 'node:fs';
 import { onTestFinished, afterEach, beforeEach, expect, vi } from 'vitest';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import type { AgentRunResult, AgentRunSpec, AgentSession, AgentEvent } from '../core/agent-runner.ts';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { RunStore } from '../runs/store.ts';
 import { join } from 'node:path';
@@ -21,6 +22,8 @@ import { QUICK_TASK_WORKFLOW } from '../workflows/types.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import type { RunManager } from '../workflows/run.ts';
+
+registerBuiltInRunners();
 export function delegationToken(spec: AgentRunSpec): string {
   const token = spec.env?.CEZ_DELEGATION_TOKEN;
   expect(token).toBeDefined();
@@ -55,7 +58,7 @@ export function provisionWorkflowFixture() {
     toolSessions.clear(); observeTools(f.manager);
     onTestFinished(scopeFixtureProcesses());
     const home = join(f.root, 'default-claude'); mkdirSync(home); vi.stubEnv('CLAUDE_CONFIG_DIR', home);
-    vi.spyOn(runners, 'createRunner').mockImplementation(backend => ({ backend: backend ?? 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => {}, run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), startSession: (spec, emit) => {
+    vi.spyOn(runners, 'createRunner').mockImplementation(async backend => ({ backend: backend ?? 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => {}, run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), startSession: (spec, emit) => {
       let resolve!: (value: AgentRunResult) => void; let open = true;
       const result = new Promise<AgentRunResult>(done => { resolve = done; });
       const finish = (text = '') => { open = false; resolve({ text, toolCalls: [], tokensUsed: 0 }); };

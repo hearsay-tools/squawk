@@ -14,6 +14,7 @@ const MAP: LayerPath[] = [
   { layer: 'core', path: 'workflows/' },
   { layer: 'core', path: 'paths.ts' },
   { layer: 'runner', path: 'core/pi-*' },
+  { layer: 'runner', path: 'runners/' },
   { layer: 'shell', path: 'server/' },
   { layer: 'feature:workers', path: 'delegation/' },
   { layer: 'feature:skills', path: 'skills*' },
@@ -80,12 +81,14 @@ describe('layer-import (hearsay-tools/squawk#3706)', () => {
     expect(scan(source)).toEqual([`${target}: a core file imports ${layerOf(target, MAP)} (${target})`]);
   });
 
-  it('refuses a core import of a runner file outside the runner factory', () => {
+  it.each(['core/runner-cli.ts', 'core/runner-registry.ts'])('refuses a core import of a runner file, from %s too', (from) => {
     const source = "import { PiRunner } from './pi-runner.ts';";
-    expect(scan(source, 'packages/cezar/src/core/runner-cli.ts')).toEqual([
-      'core/pi-runner.ts: a core file imports the runner file core/pi-runner.ts; only core/runner-factory.ts builds runners',
+    expect(scan(source, `packages/cezar/src/${from}`)).toEqual([
+      'core/pi-runner.ts: a core file imports the runner file core/pi-runner.ts; the core builds runners only through core/runner-registry.ts',
     ]);
-    expect(scan(source, 'packages/cezar/src/core/runner-factory.ts')).toEqual([]);
+    expect(scan("import { piRunner } from '../runners/pi/definition.ts';", `packages/cezar/src/${from}`)).toEqual([
+      'runners/pi/definition.ts: a core file imports the runner file runners/pi/definition.ts; the core builds runners only through core/runner-registry.ts',
+    ]);
   });
 
   it.each([

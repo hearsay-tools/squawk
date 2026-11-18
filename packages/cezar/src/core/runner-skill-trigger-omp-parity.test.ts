@@ -7,8 +7,9 @@ import { driveSeam, waitFor } from './harness-parity-core.testkit.ts';
 import { OmpRunner } from './omp-runner.ts';
 import { onlyRunner, useRunners } from './runners-under-test.testkit.ts';
 import { describeNativeSkillTriggers } from './runner-skill-trigger.testkit.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
 
-useRunners(onlyRunner('omp', () => new OmpRunner()));
+useRunners(onlyRunner(ompRunner, () => new OmpRunner()));
 describeNativeSkillTriggers('omp');
 
 it('passes an omp mid-message skill token unchanged for native expansion', async () => {

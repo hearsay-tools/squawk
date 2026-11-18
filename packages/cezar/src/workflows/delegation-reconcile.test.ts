@@ -23,7 +23,10 @@ import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.te
 import { COMPLETION_NUDGE_NOTE, COMPLETION_WILL_WAIT, QUEUE_WATCHDOG_MS, RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import { cleanupCheckpoint, seedSettledFamily } from './delegation-reconcile.testkit.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 describe('terminal delegation checkpoint reconciliation (#661)', () => {
   let root: string;

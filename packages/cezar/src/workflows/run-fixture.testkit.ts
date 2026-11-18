@@ -11,7 +11,8 @@ import { IDLE_TIMEOUT_MS } from './run/constants.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { UiEvent } from '../core/ui-events.ts';
 import type { AgentRunner } from '../core/agent-runner.ts';
-import * as runnerFactory from '../core/runner-factory.ts';
+import * as runnerFactory from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
 import { useRunners } from '../core/runners-under-test.testkit.ts';
 import { RunStore, type RunRecord } from '../runs/store.ts';
 import { RunManager } from './run.ts';
@@ -24,8 +25,9 @@ import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 const hoistedRunnerHook = vi.hoisted(() => ({ runner: undefined as AgentRunner | undefined, ui: undefined as ((event: UiEvent) => void) | undefined }));
 
 const originalStarts = new WeakMap<AgentRunner, AgentRunner['startSession']>();
-useRunners((...args) => {
-  const runner = hoistedRunnerHook.runner ?? runnerFactory.createRunner(...args);
+registerBuiltInRunners();
+useRunners(async (...args) => {
+  const runner = hoistedRunnerHook.runner ?? await runnerFactory.createRunner(...args);
   const start = originalStarts.get(runner) ?? runner.startSession.bind(runner);
   originalStarts.set(runner, start);
   runner.startSession = (spec, ...rest) => {

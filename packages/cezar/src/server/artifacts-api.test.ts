@@ -15,8 +15,11 @@ import type { RunManager } from '../workflows/run.ts';
 import { ProjectContexts } from './project-context.ts';
 import { createApp } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
 import { createRunManager } from './run-manager.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 describe('task file links', () => {
   let root: string, working: string, dataDir: string, runId: string, store: RunStore;

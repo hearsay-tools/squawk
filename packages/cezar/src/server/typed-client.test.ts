@@ -12,7 +12,10 @@ import { clearProjectProbeCache, listProjects, registerProject } from '../worksp
 import { ProjectContexts } from './project-context.ts';
 import type { AppType } from './app-type.ts';
 import { createApp } from './server.ts';
-import { createRunner } from '../core/runner-factory.ts';
+import { createRunner } from '../core/runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * The typed client, end to end (spec 2026-07-23-independent-server-web-packages, Phase 1).

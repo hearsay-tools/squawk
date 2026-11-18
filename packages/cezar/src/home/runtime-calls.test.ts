@@ -9,7 +9,7 @@ import { createHostDiscovery } from '../discovery/catalog.ts';
 import { ProviderAuthService } from '../core/provider-auth.ts';
 
 const { run } = vi.hoisted(() => ({ run: vi.fn(async () => ({ text: '' })) }));
-const createRunner = vi.fn((_backend?: string) => ({ run }) as unknown as AgentRunner);
+const createRunner = vi.fn(async (_backend?: string) => ({ run }) as unknown as AgentRunner);
 afterEach(() => { vi.clearAllMocks(); });
 
 it('uses the selected config and account for planner calls', async () => {
@@ -45,3 +45,9 @@ it('applies selected provider preferences to host discovery', async () => {
   expect((await discovery.providers()).providers).toEqual([expect.objectContaining({ provider: 'claude', enabled: false })]);
 });
 import { Home } from './home.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+
+registerRunner(claudeRunner);
+registerRunner(codexRunner);

@@ -12,10 +12,10 @@ import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit'
 
 const runnerEvents = vi.hoisted(() => new Map<string, (event: UiEvent) => void>());
 const runnerTurnEvents = vi.hoisted(() => new Map<string, (event: AgentEvent) => void>());
-vi.mock('../core/runner-factory.ts', async importOriginal => {
-  const actual = await importOriginal<typeof import('../core/runner-factory.ts')>();
-  return { ...actual, createRunner: (...args: Parameters<typeof actual.createRunner>) => {
-    const runner = actual.createRunner(...args);
+vi.mock('../core/runner-registry.ts', async importOriginal => {
+  const actual = await importOriginal<typeof import('../core/runner-registry.ts')>();
+  return { ...actual, createRunner: async (...args: Parameters<typeof actual.createRunner>) => {
+    const runner = await actual.createRunner(...args);
     const start = runner.startSession.bind(runner);
     runner.startSession = (spec, ...rest) => {
       if (rest[0]) runnerTurnEvents.set(spec.cwd, rest[0]);

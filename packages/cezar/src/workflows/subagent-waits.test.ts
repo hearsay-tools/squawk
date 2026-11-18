@@ -1,5 +1,5 @@
 import { observationClock } from '../core/observation-clock.testkit.ts';
-import * as runners from '../core/runner-factory.ts';
+import * as runners from '../core/runner-registry.ts';
 import type { AgentSession, SessionOptions } from '../core/agent-runner.ts';
 import { randomUUID } from 'node:crypto';
 import { rmSync, writeFileSync } from 'node:fs';
@@ -14,6 +14,9 @@ import { IDLE_TIMEOUT_MS, MAX_AUTO_CONTINUES } from './run.ts';
 import { stateOf } from './run-states.ts';
 import { NO_WAIT_NUDGE_NOTE } from './turn-end.ts';
 import { controlledWire, manager, parent, restart, root, store, semaphore, work, toolGenerationOf, worker, until, useWorkerWaitFixture } from './worker-wait.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * Squawk's wait on native subagents (hearsay-tools/cezarion#2431): one test per `waiting:subagents`
@@ -33,8 +36,8 @@ function useSubagentFixture(options: Parameters<typeof useWorkerWaitFixture>[0])
     vi.spyOn(semaphore, 'maxMonitoringSessions').mockReturnValue(0);
     idleClock = observationClock(delay => delay === IDLE_TIMEOUT_MS && /armIdleTimer/.test(new Error().stack ?? ''));
     const create = runners.createRunner;
-    vi.spyOn(runners, 'createRunner').mockImplementation((...args) => {
-      const runner = create(...args);
+    vi.spyOn(runners, 'createRunner').mockImplementation(async (...args) => {
+      const runner = await create(...args);
       const start = runner.startSession.bind(runner);
       vi.spyOn(runner, 'startSession').mockImplementation((spec, event, options) => {
         callbacks.set(spec.env!.CEZ_TASK_ID!, options ?? {});
