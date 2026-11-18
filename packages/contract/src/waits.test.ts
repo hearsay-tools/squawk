@@ -636,7 +636,7 @@ describe('deadline-less cezar worker entries (hearsay-tools/cezarion#1301)', () 
     expect(completionWaitView({ waits: [bare] })).toBeUndefined();
     // The projection carries no deadline, and the legacy shape keeps requiring one.
     expect(workerCompletionWaitSchema.safeParse({ ...view, deadline: '2026-10-19T10:10:00.000Z' }).success).toBe(false);
-    const inspection = { workerId: W1, parentRunId: WORKER_WAIT_ID, status: RUN_STATUS.running,
+    const inspection = { workerId: W1, parentRunId: WORKER_WAIT_ID, settled: false, status: RUN_STATUS.running,
       workspace: { ownerRunId: W1, resourceId: W1, kind: 'owned-isolated', path: '/w', branch: 'cez/w', baselineSha: 'a'.repeat(40) } };
     expect(workerInspectionSchema.safeParse({ ...inspection, completionWait: view }).success).toBe(true);
     expect(workerInspectionSchema.safeParse({ ...inspection, wait: view }).success).toBe(false);

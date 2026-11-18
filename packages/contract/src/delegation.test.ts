@@ -385,7 +385,7 @@ describe('collected worker results', () => {
 describe('worker inspection, list and relationships', () => {
   const { deadline: _deadline, requestIds: _requestIds, requestOutcomes: _requestOutcomes, ...waitView } = workerWait;
   const inspection = {
-    workerId: U1, parentRunId: U2, status: RUN_STATUS.running, currentStepId: 'implement', workspace, backend: 'claude', model: 'm1', inputs: [input],
+    workerId: U1, parentRunId: U2, status: RUN_STATUS.running, settled: false, currentStepId: 'implement', workspace, backend: 'claude', model: 'm1', inputs: [input],
     wait: workerWait, completionWait: { ...waitView, via: WAIT_VIA.completion }, destroy: { ...destroy, retry: { attempts: 1, nextAt: T, needsAttention: true } },
     outcome,
   };

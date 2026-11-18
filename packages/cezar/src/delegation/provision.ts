@@ -106,6 +106,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `Omitting --effort or using --effort auto applies the same rules: same-runner workers inherit the parent's effort; workers on another runner leave effort to that runner. Omission and auto do not clear an inherited effort pin.`,
     `Accepted identity and grants remain fixed.`,
     `Use list to find every worker you own, including incomplete cleanup with remaining resources. Use inspect <worker-id>, collect <worker-id>, steer <worker-id> '<text>', stop <worker-id>, destroy <worker-id>, diff <worker-id>, or wait <worker-id>... --mode <one|any|all> --timeout-seconds <1-7200>.`,
+    `Destroy also accepts a running worker: it requests stop, waits up to 30 seconds for termination, stops the worker scope, then removes the worktree and branch. Without termination proof, cleanup stays incomplete and retains the workspace. On a scoped host, a detached descendant can survive.`,
     `Mode defaults to any; one requires one worker, all requires every selected worker to settle.`,
     `cancel-wait <wait-id> stops one wait, is safe to retry, and never touches workers.`,
     `Wait registers and returns immediately: end your turn to release capacity, then ${productName('Cezar')} resumes you on a selected terminal outcome or deadline (default 600 seconds).`,

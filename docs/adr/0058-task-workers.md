@@ -40,6 +40,15 @@ running; only a human Stop of the parent, or a parent that ends `done` or `revie
 `--resume` restarts a `cancelled` worker whose worktree and branch exist, in a fresh session when
 none was recorded. Destroy stays the permanent end.
 
+Destroy accepts a running worker. It requests stop, runs the project's worktree
+teardown, and waits up to 30 seconds for execution termination. Once termination
+is proven, it stops the worker scope, then removes the worktree and branch. If
+termination or scope shutdown cannot be proven, cleanup stays incomplete and
+retains the workspace for a later retry. On a scoped host, a descendant that left
+the worker's process groups can survive (ADR 0032). This behavior is unchanged by
+hearsay-tools/squawk#3901. A worker that fails before its first step still releases
+its resources automatically.
+
 ## Consequences
 
 AGENTS.md asks for features that widen exposure or cost to be opt-in behind an off-by-default

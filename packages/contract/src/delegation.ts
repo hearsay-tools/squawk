@@ -308,6 +308,7 @@ export type AgentInput = z.infer<typeof agentInputSchema>;
 
 export const workerInspectionSchema = z.object({
   workerId: z.uuid(),
+  settled: z.boolean(),
   parentRunId: z.uuid(),
   status: z.enum(['queued', 'running', 'waiting', ...workerOutcomeSchema.shape.status.options]),
   currentStepId: z.string().optional(),
