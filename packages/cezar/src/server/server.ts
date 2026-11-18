@@ -64,7 +64,7 @@ import { workspaceEventsQuerySchema, type RunsIndexResponse } from '@open-mercat
 import { automationListQuerySchema } from '@open-mercato/cezar-contract/automations';
 import { localTimeZone } from '@open-mercato/cezar-contract/zoned-time';
 import { DelegationService, type WorkerCleanupFactory } from '../delegation/service.ts';
-import { workerCapacity } from '../delegation/capacity.ts';
+import { runRelationships } from './run-relationships.ts';
 import type { DelegationController } from '../delegation/provision.ts';
 import { delegationFailure } from '../delegation/routes.ts';
 import { githubItemParamsSchema } from '@open-mercato/cezar-contract/github';
@@ -164,7 +164,6 @@ import {
   validateLiveCursor,
 } from '../runs/event-history.ts';
 import { readRunIndexFromDisk, searchRunIndexFromDisk } from '../runs/run-index.ts';
-import { workerDestroyView } from '../runs/delegation-state.ts';
 import { searchTokens } from '@open-mercato/cezar-contract/run-search';
 import { ownPullRequestNumbers } from '../runs/pull-requests.ts';
 import { ColdRepoHandles } from './cold-repo-handles.ts';
@@ -2865,35 +2864,7 @@ export function createApp(deps: ServerDeps) {
       const { store } = c.get('project');
       const run = store.getRun(c.req.valid('param').id);
       if (!run) return c.json({ error: 'not found' }, 404);
-      // Off the parent's receipts, not a scan of the project index (#659): archived/off-page
-      // workers still belong to this parent, and the cockpit asks on every run event, so the
-      // read has to cost O(workers) whatever the store holds — and nothing at all for the
-      // ordinary run that owns none, delegation on or off.
-      // Human reads use the bound project, never agent credentials or private evidence.
-      const ownedWorkers = store.listOwnedWorkers(run.id);
-      const workers = ownedWorkers.flatMap(worker => {
-        const owned = worker.delegation;
-        if (owned?.role !== 'worker') return [];
-        return [{ workerId: worker.id, parentRunId: run.id, status: worker.status, workspace: owned.workspace,
-          ...(worker.currentStepId === undefined ? {} : { currentStepId: worker.currentStepId }),
-          ...(owned.destroy ? { destroy: workerDestroyView(worker) } : {}),
-        }];
-      });
-      // #864: the titles of the runs this answer names, since the cockpit's run list no longer
-      // carries archived workers (or a parent past its archived window).
-      const parent = run.delegation?.role === 'worker' ? store.getRun(run.delegation.parentRunId) : undefined;
-      const titles = [...(parent ? [parent] : []), ...ownedWorkers].map((related) => ({
-        id: related.id, title: related.title,
-        ...(related.titleSummary === undefined ? {} : { titleSummary: related.titleSummary }),
-        ...(related.titleOrigin === undefined ? {} : { titleOrigin: related.titleOrigin }),
-      }));
-      // #816: every owned worker, bounded by the 1,024 creation ceiling rather than sliced, and
-      // the root's capacity from the same derivation the spawn policy enforces.
-      return c.json(runRelationshipsSchema.parse({
-        ...(run.delegation?.role === 'worker' ? { parentRunId: run.delegation.parentRunId } : {}), workers,
-        ...(titles.length > 0 ? { titles } : {}),
-        ...(run.delegation?.role === 'root' ? { capacity: workerCapacity(run, id => store.getRun(id)) } : {}),
-      }));
+      return c.json(runRelationshipsSchema.parse(runRelationships(store, run)));
     })
     .post('/runs/:id/worker-destroy', queryZodValidator(workerEmptyRequestSchema, { code: 'invalid_input', message: 'Invalid cleanup query' }), paramZodValidator(runIdParamSchema, { code: 'invalid_input', message: 'Invalid worker ID' }), jsonZodValidator(workerEmptyRequestSchema, { absent: {}, malformed: null, code: 'invalid_input', message: 'Invalid cleanup input' }), async c => {
       const project = c.get('project');

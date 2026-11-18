@@ -5,6 +5,7 @@ import { workerWaitRequestSchema, type WorkerWait } from '@open-mercato/cezar-co
 import { requestWaitRequestSchema, type RequestWaitRequest } from '@open-mercato/cezar-contract/conversations';
 import { workerWaitEntryToLegacy } from '@open-mercato/cezar-contract/waits';
 import { DelegationPolicyError, requireMessagingAllowed } from '../../delegation/policy.ts';
+import { supervisedByFamilyRecord, supervisedReceipts, familyRecordOf } from '../../runs/task-rights.ts';
 import { historyDeletionPending, rootFinishRequested, executionBlockedByRootFinish } from './run-guards.ts';
 import { assertOwnedWorkerWaitScope, assertRequestWaitScope, peerWaitEntry, peerWaitOf, waitCapacityPolicyError, workerWaitTarget } from '../wait-scope.ts';
 import { randomUUID } from 'node:crypto';
@@ -105,7 +106,9 @@ export class WaitRegistry {
   registerCompletionWait(runId: string, workerIds: string[], requestIds?: string[]): WorkerWaitEntry | undefined {
     if (!this.host.waitEngine.hasRoom(this.context.store.getRun(runId) ?? {})) return;
     const state = this.host.active(runId)!;
-    const ids = workerIds.filter(id => { const worker = this.context.store.getRun(id)?.delegation; return worker?.role === 'worker' && worker.parentRunId === runId; });
+    const getRun = (id: string) => this.context.store.getRun(id);
+    const started = new Set(supervisedReceipts(familyRecordOf(getRun(runId), getRun), runId).map(receipt => receipt.workerId));
+    const ids = workerIds.filter(id => started.has(id) && getRun(id)?.delegation?.role === 'worker');
     const entry = WAIT_KINDS.worker.completionEntry(state.waitIdentity.ensureCiTurn(),
       workerWaitTarget(requestIds?.length ? { requestIds } : { workerIds: ids }, id => this.context.store.getRun(id)));
     return this.host.waitEngine.open(runId, state, entry, { withdraw: false, park: false }).wait!;
@@ -164,7 +167,7 @@ export class WaitRegistry {
     const refuse = (code: WaitErrorCode | AskErrorCode): never => {
       // Fixed codes only: no tool arguments, credentials or provider diagnostics.
       warnRegistrationRefused(code);
-      throw Object.assign(new Error(code === 'autonomous_run' ? askErrorMessage(code) : waitErrorMessage(code)), { code });
+      throw Object.assign(new Error(code === 'autonomous_run' || code === 'supervisor_is_worker' ? askErrorMessage(code) : waitErrorMessage(code)), { code });
     };
     const assertCanRegister = () => {
       const refused = toolSessionRefusal(this.context.store.getRun(runId), state, this.host.active(runId), generation, capabilitySignal, this.context.disposed());
@@ -187,6 +190,8 @@ export class WaitRegistry {
     const card = askCardFields(squawkAskRequestSchema.parse(request));
     const { refuse, assertCanRegister } = this.registrationGate(runId, generation, capabilitySignal);
     const { state: active, run } = assertCanRegister();
+    // A question card goes to the task that holds the family record; a worker another worker started asks that worker by message.
+    if (run.delegation?.role === 'worker' && !supervisedByFamilyRecord(run)) refuse('supervisor_is_worker');
     const turnId = active.waitIdentity.ensureCiTurn();
     if (active.boundary.autonomous && this.host.countAutomaticWakes(runId) < this.maxAutoContinues) refuse('autonomous_run');
     // The question this turn's opening answers stays open only until the turn end settles it, so

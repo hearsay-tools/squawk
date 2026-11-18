@@ -5,6 +5,7 @@ import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
 import { fallbackProjectWriteError } from '../project-paths.ts';
 import { rematerializeReclaimedWorktree } from '../runs/retention.ts';
 import { hostsLiveSharedWorker, SHARED_HOST_REFUSAL } from '../runs/shared-hosts.ts';
+import { supervisedWorkers } from '../runs/supervised.ts';
 import { getStatus } from './git.ts';
 import { existsSync } from 'node:fs';
 import { autosaveCleanupBlocker } from '../autosave-cleanup.ts';
@@ -170,6 +171,8 @@ function removalRefusal(store: RunCheckoutHost['store'], run: RunRecord, id: str
     if (!store.canDeleteRun(id, 'worktree') || run.delegation?.role === 'worker') return 'owned resources require verified worker cleanup';
   } else {
     // Delete cleans up after itself: worktree + branch go with the run (spec 006).
+    const started = supervisedWorkers(store, run).map(worker => worker.id);
+    if (run.delegation?.role === 'worker' && started.length) return `this worker started workers whose history still exists — delete their history first: ${started.join(', ')}`;
     if (!store.canDeleteRun(id)) return 'owned resources require verified worker cleanup and explicit child history deletion first';
   }
   return undefined;

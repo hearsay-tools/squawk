@@ -12,6 +12,8 @@ import type { RunModuleContext } from './types.ts';
 import type { RunLine } from './run-line.ts';
 import type { WorkerExecutions } from './worker-executions.ts';
 import type { TurnNudges } from './turn-nudges.ts';
+import { familyWorkers, isLiveWorker, supervisedWorkers } from '../../runs/supervised.ts';
+import { isFamilyRecord } from '../../runs/task-rights.ts';
 
 interface RunCancelHost {
   waitEngine: WaitEngine;
@@ -110,11 +112,11 @@ export class RunCancel {
    * would start a session on it later; the run stays failed. A usage-limit hold is that failed run
    * waiting for its resume (hearsay-tools/cezarion#1236), and settles failed the same way. A failed
    * or held root keeps its live workers (hearsay-tools/squawk#3337) until a human stops it, which
-   * cancels them. False when there is nothing to stop.
+   * cancels the whole family. A stopped worker cancels the live workers it started. False when
+   * there is nothing to stop.
    */
   private stopFailedRun(run: RunRecord, hadWaits: boolean, retiredRefusal: boolean): boolean {
-    const liveWorkers = run.delegation?.role === 'root'
-      ? this.context.store.listWorkersOf(run.id).filter(child => ['queued', 'running', 'waiting'].includes(child.status)) : [];
+    const liveWorkers = (isFamilyRecord(run) ? familyWorkers(this.context.store, run) : supervisedWorkers(this.context.store, run)).filter(isLiveWorker);
     if (!hadWaits && !retiredRefusal && !liveWorkers.length) return false;
     if (hadWaits || retiredRefusal) this.context.store.appendEvent(run.id, { type: 'note', message: hadWaits ? WAITS_DISCARDED_NOTE : REFUSAL_DISCARDED_NOTE });
     this.host.cancelAutoResume(run.id);

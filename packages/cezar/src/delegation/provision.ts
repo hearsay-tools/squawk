@@ -10,6 +10,7 @@ import { CredentialRegistry } from './credentials.ts';
 import { messagingAllowed, workersAllowed } from '@open-mercato/cezar-contract/task-options';
 import { DelegationService, rootDelegation, type DelegationProject, type WorkerCleanupFactory } from './service.ts';
 import { WORKERS_OFF } from './policy.ts';
+import { maySpawn, supervisorIdOf } from '../runs/task-rights.ts';
 import { workspaceKind } from './workspace-kinds.ts';
 import { openCompletionRequests } from '../workflows/completion-policy.ts';
 import { createDelegationRoutes } from './routes.ts';
@@ -33,7 +34,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
   const invocation = bundledWorkerInvocation();
   const messaging = bundledWorkerInvocation('message');
   const conversationGuidance = [
-    `Use ${messaging} for task conversations. Root tasks can message peer root tasks in the same project and their owned workers; workers may address only their parent. Use ${messaging} tasks [--all] [--offset <n>] to discover peers (32 per page); workers cannot list peers. Peer review/terminal tasks need their human to continue them; messages never resume a peer.`,
+    `Use ${messaging} for task conversations. Root tasks can message peer root tasks in the same project and their owned workers; a worker may address only its parent and a worker it started. Use ${messaging} tasks [--all] [--offset <n>] to discover peers (32 per page); workers cannot list peers. Peer review/terminal tasks need their human to continue them; messages never resume a peer.`,
     `Use ${messaging} request <recipient-run-id> '<text>' --id <message-UUID> to request an explicit reply; use ${messaging} progress <recipient-run-id> '<text>' --id <message-UUID> for an update without an obligation.`,
     `Use ${messaging} follow-up <recipient-run-id> '<text>' --id <message-UUID> --request-id <request-UUID> to clarify your request, or ${messaging} reply <recipient-run-id> '<text>' --id <message-UUID> --request-id <request-UUID> to answer an incoming request.`,
     `A request's ID is its message ID. Reuse a message ID only for an exact retry, including timeout; changed payloads are rejected.`,
@@ -126,7 +127,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `Review is a human gate.`,
     `Destruction may be incomplete; inspect remaining resources and retry explicitly.`,
     `Credentials are supplied only in the environment: never read, echo, forward or include them in commands, messages, prompts, events or files.`,
-    `Workers cannot spawn ${productName('Cezar')} workers or message peers.`,
+    `A worker may start one shared-workspace worker of its own at a time. Workers cannot message peers.`,
     `This is cooperative local supervision, not process isolation.`,
   ] : [
     `Use native subagents for research, code reading and focused analysis.`,
@@ -144,10 +145,10 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     env: { ...productEnvEntries('DELEGATION_URL', options.url), ...productEnvEntries('DELEGATION_TOKEN', token) },
     instructions: run.delegation?.role === 'worker'
       ? [
-        `You are an owned ${productName('cezar')} worker. Your parent run ID is ${run.delegation.parentRunId}.`,
+        `You are an owned ${productName('cezar')} worker. Your parent run ID is ${supervisorIdOf(run)}.`,
         ...(workspaceKind(run.delegation.workspace).workerNotice ? [workspaceKind(run.delegation.workspace).workerNotice!] : []),
         conversationGuidance,
-        `You cannot spawn ${productName('Cezar')} workers. You cannot control peers, merge automatically, or accept your own review.`,
+        `${maySpawn(run) ? `You may start one shared-workspace ${productName('Cezar')} worker at a time; destroy it before you start the next. Run ${invocation} spawn --help first.` : `You cannot spawn ${productName('Cezar')} workers.`} You cannot control peers, merge automatically, or accept your own review.`,
         commandText(`Follow your assigned task and selected input context. Ask your parent with cez message request; any question you raise goes to your parent too, never to a human. Your parent answers or asks the human itself; do not wait for a human.`),
         `You may use native subagents for research, code reading and focused analysis.`,
         subagentMessaging,

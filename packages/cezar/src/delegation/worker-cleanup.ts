@@ -2,6 +2,9 @@ import { productName } from '../home/display.ts';
 import { randomUUID } from 'node:crypto';
 import type { WorkerDestroy, WorkerDestroyResult } from '@open-mercato/cezar-contract/delegation';
 import type { RunRecord } from '../runs/store.ts';
+import { hostsLiveSharedWorker, SHARED_HOST_REFUSAL } from '../runs/shared-hosts.ts';
+import { supervisedWorkers } from '../runs/supervised.ts';
+import { supervisorIdOf } from '../runs/task-rights.ts';
 import { collectWorkerEvidence } from './results.ts';
 import { DelegationPolicyError } from './policy.ts';
 import { describeProcesses, isCurrentProcess, recordedProcessLive } from './process-liveness.ts';
@@ -232,6 +235,27 @@ export class WorkerCleanup {
     return result.error?.startsWith(WORKTREE_LOCK_BUSY_PREFIX) && due !== undefined
       ? { ...result, error: `${result.error}; ${productName('Cezar')} retries automatically at ${new Date(due).toISOString()}` } : result;
   }
+  /**
+   * A worker's destroy first stops and destroys the workers it started, which work in its
+   * directory, and then asks whether a live worker still works there. Returns why the worker's own
+   * destroy cannot go on yet, or undefined.
+   */
+  private async destroySupervised(project: DelegationProject, workerId: string, mode: 'manual' | 'scheduled', startedAt: number): Promise<string | undefined> {
+    const worker = project.store.getRun(workerId);
+    for (const child of supervisedWorkers(project.store, worker)) {
+      const check = () => {
+        const current = project.store.getRun(child.id);
+        if (current?.delegation?.role !== 'worker' || supervisorIdOf(current) !== workerId) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
+        return current;
+      };
+      const destroyed = child.delegation?.role === 'worker' && child.delegation.destroy?.phase === 'complete' && !child.delegation.destroy.remaining.length;
+      const result = destroyed ? undefined : await this.serialized(`worker:${project.id}:${child.id}`, () => this.destroyAttempt(project, child.id, check, mode, startedAt));
+      if (result && result.state !== 'complete') return `Worker ${child.id}, which this worker started, is not destroyed yet${result.error ? `: ${result.error}` : ''}`.slice(0, 2_000);
+    }
+    const current = project.store.getRun(workerId);
+    return current && hostsLiveSharedWorker(current, rootId => project.store.listWorkersOf(rootId)) ? SHARED_HOST_REFUSAL : undefined;
+  }
+
   /** One full destroy attempt; the caller holds the worker's serialization key. A manual attempt
    * clears the run's `destroyRetry`, which resets the backoff; a completed destroy drops it. */
   private async destroyAttempt(project: DelegationProject, workerId: string, check: () => RunRecord, mode: 'manual' | 'scheduled',
@@ -347,7 +371,17 @@ export class WorkerCleanup {
         }
       } catch { /* the attempt's own error is the one to report */ }
     };
-    persist('requested', worker.delegation.destroy?.remaining ?? ['process', ...kind.destroyResources]);
+    // The recorded destroy keeps this worker from starting another one; the ones it started go first.
+    const heldBySupervised = async (): Promise<WorkerDestroyResult | undefined> => {
+      persist('requested', worker.delegation?.role === 'worker' && worker.delegation.destroy?.remaining || ['process', ...kind.destroyResources]);
+      const held = await this.destroySupervised(project, workerId, mode, startedAt);
+      assertAttached();
+      if (!held) return undefined;
+      persist('incomplete', ['process', ...resources], held);
+      return { workerId, state: 'incomplete', remaining: ['process', ...resources], error: held };
+    };
+    const held = await heldBySupervised();
+    if (held) return held;
     try {
       persist('terminating', ['process', ...resources]);
       project.manager.requestWorkerStop(workerId);

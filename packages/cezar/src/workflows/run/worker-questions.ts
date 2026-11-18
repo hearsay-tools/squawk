@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import type { RunModuleContext } from './types.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { RunRecord } from '../../runs/store.ts';
+import { familyWorkers } from '../../runs/supervised.ts';
+import { familyRecordIdOf, supervisedReceipts, supervisorIdOf } from '../../runs/task-rights.ts';
 import type { ConversationState, RequestOutcome } from '@open-mercato/cezar-contract';
 import type { ConversationMessage } from '@open-mercato/cezar-contract/conversations';
 import type { AgentInput } from '@open-mercato/cezar-contract/delegation';
@@ -135,7 +137,7 @@ export class WorkerQuestions {
     if (ask?.seq !== askSeq) return;
     const spent = this.host.countAutomaticWakes(workerId) + 1;
     if (this.isWorkerFallbackAsk(workerId, askSeq) || spent > this.maxAutoContinues) { this.closeQuestion(workerId, askSeq, 'undeliverable', reason); return; }
-    const parentId = run.delegation?.role === 'worker' ? run.delegation.parentRunId : workerId;
+    const parentId = supervisorIdOf(run) ?? workerId;
     const notice = `Not delivered to your parent task ${parentId}: ${reason}. Decide without its answer, ${commandText('or message your parent later with cez message request.')}`;
     const questions = askRequestOf(ask)?.questions;
     // One `Header: answer` line per question, as a native answer seam parses a parent's reply.
@@ -197,23 +199,39 @@ export class WorkerQuestions {
   noticeParkedWorker(workerId: string): void {
     const worker = this.context.store.getRun(workerId);
     if (worker?.delegation?.role !== 'worker' || worker.delegation.destroy || !this.parkedBeforeFinishing(worker)) return;
-    const parentId = worker.delegation.parentRunId;
-    const root = this.context.store.getRun(parentId);
-    if (root?.delegation?.role !== 'root' || !this.parentTakesMessages(root) ||
-      !root.delegation.receipts.some(receipt => receipt.workerId === workerId && !receipt.deletion)) return;
-    const state = root.delegation.conversation ?? { messages: [], outcomes: [] };
-    const wait = parkNoticeWait(workerId, root.waits ?? [], state.messages);
-    if (!wait) return;
+    const target = this.parkNoticeTarget(worker);
+    if (!target) return;
+    const { root, parent, parentId, state, wait } = target;
     const turn = parkingTurn(this.context.store.readEvents(workerId));
-    if (messagedParentSince(state.messages, workerId, parentId, turn.startedAt) || this.parkNoticeAtCapacity(workerId, wait.id, root, state)) return;
+    if (messagedParentSince(state.messages, workerId, parentId, turn.startedAt) || this.parkNoticeAtCapacity(workerId, wait.id, parent, state)) return;
     const now = new Date().toISOString();
     const message = parkNoticeMessage({ workerRunId: workerId, parentRunId: parentId, waitId: wait.id, waits: worker.waits ?? [],
       ...(turn.text === undefined ? {} : { lastText: turn.text }), now, redact: text => this.context.store.redactText(text) });
-    const input = { id: message.id, source: 'agent' as const, parentRunId: parentId, text: message.text, createdAt: now,
+    const input = { id: message.id, source: 'agent' as const, parentRunId: root.id, text: message.text, createdAt: now,
       conversation: { senderRunId: workerId, recipientRunId: parentId, kind: 'progress' as const } };
-    if (!commitNewMessage(this.context.store, parentId, { ...state, messages: [...state.messages, message] }, { recipientRunId: parentId, input }, () => parkNoticeIdInUse(this.context.store, workerId, wait.id))) return;
-    projectConversationEvents(this.context.store, this.context.store.getRun(parentId)!);
+    if (!commitNewMessage(this.context.store, root.id, { ...state, messages: [...state.messages, message] }, { recipientRunId: parentId, input }, () => parkNoticeIdInUse(this.context.store, workerId, wait.id))) return;
+    projectConversationEvents(this.context.store, this.context.store.getRun(root.id)!);
     this.host.deliverConversationInput(parentId);
+  }
+
+  /** Where a parked worker's notice goes: the task that started it, when that task waits on it and
+   *  can read it. The family record holds the ledger. */
+  private parkNoticeTarget(worker: RunRecord) {
+    const root = this.context.store.getRun(familyRecordIdOf(worker)!);
+    const parentId = supervisorIdOf(worker)!;
+    const parent = this.context.store.getRun(parentId);
+    if (root?.delegation?.role !== 'root' || !parent || !this.parentTakesMessages(root) || !this.supervisorTakesMessages(parent) ||
+      !supervisedReceipts(root, parentId).some(receipt => receipt.workerId === worker.id && !receipt.deletion)) return undefined;
+    const state = root.delegation.conversation ?? { messages: [], outcomes: [] };
+    const wait = parkNoticeWait(worker.id, parent.waits ?? [], state.messages);
+    return wait ? { root, parent, parentId, state, wait } : undefined;
+  }
+
+  /** The task that started a worker can still read a message from it: the root as
+   *  `parentTakesMessages` says, a worker while it runs and is not being stopped or destroyed. */
+  private supervisorTakesMessages(supervisor: RunRecord): boolean {
+    if (supervisor.delegation?.role !== 'worker') return true;
+    return ['queued', 'running', 'waiting'].includes(supervisor.status) && !supervisor.stopping && !supervisor.delegation.destroy;
   }
 
   /** A worker parked before finishing: waiting because its own turn parked it, not stopping, with no
@@ -229,8 +247,8 @@ export class WorkerQuestions {
 
   /** The ledger and the parent's inbox keep room as `service.send` counts it, beside open
    *  questions' replies. When either is full, the worker's log says so once per wait. */
-  parkNoticeAtCapacity(workerId: string, waitId: string, root: RunRecord, state: ConversationState): boolean {
-    if (state.messages.length + reservedReplies(state) < 1024 && inboxSlotsUsed(root) < 32) return false;
+  parkNoticeAtCapacity(workerId: string, waitId: string, parent: RunRecord, state: ConversationState): boolean {
+    if (state.messages.length + reservedReplies(state) < 1024 && inboxSlotsUsed(parent) < 32) return false;
     const projectionId = `park-notice-skipped:${waitId}`;
     if (!this.context.store.hasProjection(workerId, projectionId)) {
       this.context.store.appendEvent(workerId, { type: 'note', tone: 'warning', projectionId, message: 'Parked, but the parent conversation is at capacity: no park notice was sent.' });
@@ -248,9 +266,10 @@ export class WorkerQuestions {
     for (const run of families) this.host.noticeParkedWorker(run.id);
   }
 
-  /** `noticeParkedWorker` for every worker a family's root owns. */
-  noticeParkedWorkers(rootId: string): void {
-    for (const child of this.context.store.listWorkersOf(rootId)) this.host.noticeParkedWorker(child.id);
+  /** `noticeParkedWorker` for every worker of the family `runId` belongs to: each notice goes to
+   *  the task that started its worker. */
+  noticeParkedWorkers(runId: string): void {
+    for (const child of familyWorkers(this.context.store, this.context.store.getRun(runId))) this.host.noticeParkedWorker(child.id);
   }
 
   /** The worker's pending ask when it went to the parent (a legacy human fallback excluded). */

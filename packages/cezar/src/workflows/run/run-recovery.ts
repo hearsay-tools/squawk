@@ -14,6 +14,7 @@ import type { WorkerOrphans } from './worker-orphans.ts';
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
 import { ciWorkflowResumeStepIndex } from './workflow-position.ts';
 import type { RunRecord, RunStore } from '../../runs/store.ts';
+import { supervisedByFamilyRecord, supervisorIdOf } from '../../runs/task-rights.ts';
 import type { RunModuleContext } from './types.ts';
 import { familyOf, rootFinishRequested } from './run-guards.ts';
 import type { FamilyReconciler } from './family-reconciler.ts';
@@ -241,6 +242,12 @@ export class RunRecovery {
    *  closes its workers' questions: the workers recover and run on (hearsay-tools/squawk#3337). */
   private recoveryLeavesWorkerToRoot(run: RunRecord): boolean {
     if (run.delegation?.role !== 'worker') return false;
+    // A worker another worker started works in that worker's directory: it ends with it, whatever
+    // way that worker settled, and a supervisor whose record is gone supervises nothing.
+    if (!supervisedByFamilyRecord(run)) {
+      const supervisor = this.context.store.getRun(supervisorIdOf(run)!);
+      if (!supervisor || !['queued', 'running', 'waiting'].includes(supervisor.status)) { this.host.cancel(run.id); return true; }
+    }
     const parent = this.context.store.getRun(run.delegation.parentRunId);
     if (parent?.delegation?.role !== 'root') return false;
     if (parent.status === 'failed') {

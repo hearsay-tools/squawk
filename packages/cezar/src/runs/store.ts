@@ -88,6 +88,7 @@ import { archiveStoreFamily } from './archive-family.ts';
 import { claimStoreFamilies } from './claim-families.ts';
 import { createStoreOwnedRun } from './owned-run-create.ts';
 import { commitStoreWorkerResult } from './worker-result-commit.ts';
+import { supervisedWorkers } from './supervised.ts';
 import { claimOwnerLive, closeClaimSession, familyKey, foreignClaimedRunIds, liveForeignClaimedRunIds, openClaimSession, rowFamily, type ClaimOwner } from './run-claims.ts';
 import { assertProjectWritable, projectWriteRefused } from '../server/cockpit-ownership.ts';
 
@@ -497,8 +498,7 @@ function sortNewestFirst<T>(entries: Iterable<readonly [T, ListOrder]>): T[] {
   return [...entries].sort(([, a], [, b]) => newestFirst(a, b)).map(([item]) => item);
 }
 
-/** The delegation family a run belongs to, by its root's id: a root is its own, a worker its
- *  parent's. Workers cannot delegate, so a family is one root and its direct workers, never more. */
+/** The family a run belongs to, by its root's id. A worker a worker started is filed under the root too. */
 function familyRootOf(run: Pick<RunRecord, 'id' | 'delegation'>): string | undefined {
   if (run.delegation?.role === 'root') return run.id;
   if (run.delegation?.role === 'worker') return run.delegation.parentRunId;
@@ -773,9 +773,8 @@ export class RunStore extends EventEmitter {
   }
 
   /**
-   * Hold one delegation family: its root and the root's direct workers, read through the
-   * `parent_run_id` index. No recursion: workers cannot delegate, so a worker's own id never
-   * names a family. The caller has claimed it. `settle` settles its live rows instead of keeping
+   * Hold one delegation family: its root and every worker filed under it, read through the
+   * `parent_run_id` index. No recursion: a worker's own id never names a family. The caller has claimed it. `settle` settles its live rows instead of keeping
    * them for recovery (`settleOrphanedRun`); `stopId` is the run a Stop settles as cancelled.
    */
   private holdFamily(rootId: string, decode: (row: RunRow) => DecodedRun | undefined = (row) => decodeRunRow(row.data), settle = false, stopId?: string): void {
@@ -2913,7 +2912,7 @@ export class RunStore extends EventEmitter {
     if (autosaveCleanupBlocker(this.dataDir, id)) return false;
     const run = this.peek(id);
     if (run?.delegation?.role === 'invalid') return false;
-    if (run?.delegation?.role === 'worker') return this.workerDeletionEvidence(id);
+    if (run?.delegation?.role === 'worker') return supervisedWorkers(this, run).length === 0 && this.workerDeletionEvidence(id);
     const privateWorkers = workerEvidenceRunIds(this.dataDir);
     if (!privateWorkers || privateWorkers.includes(id)) return false;
     if (run?.delegation?.role === 'root') {

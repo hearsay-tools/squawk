@@ -6,7 +6,8 @@ import { randomUUID } from 'node:crypto';
 import type { DelegationState, RunRecord } from '@open-mercato/cezar-contract';
 import { delegationStateSchema, ownsDirectory, workerCreationReceiptSchema } from '@open-mercato/cezar-contract/delegation';
 import { workerExecutionIdentitySchema, type WorkerExecutionIdentity } from '../delegation/execution-identity.ts';
-import { capacityError, workerCapacity } from '../delegation/capacity.ts';
+import { spawnCapacityRefusal } from '../delegation/capacity.ts';
+import { maySpawn, receiptSupervisorId, supervisedReceipts, supervisorIdOf } from './task-rights.ts';
 import type { WorkerExecution } from './worker-execution.ts';
 
 type RootDelegation = Extract<DelegationState, { role: 'root' }>;
@@ -49,15 +50,34 @@ export function createStoreOwnedRun<TInput extends { worktree?: false | undefine
   // Validate retry identity independently of the newly proposed resource.
   const identity = workerCreationReceiptSchema.pick({ requestId: true, requestHash: true })
     .parse({ requestId, requestHash });
-  const receipt = authority.receipts.find((entry) => entry.requestId === identity.requestId);
+  const supervisorId = worker.role === 'worker' ? worker.supervisorRunId ?? parentId : parentId;
+  // A request ID is one supervisor's: another supervisor's same ID names its own worker.
+  const receipt = supervisedReceipts(parent, supervisorId).find((entry) => entry.requestId === identity.requestId);
   if (receipt) return existingOwnedRunReceipt(state, parentId, receipt, identity);
-  // #816: the same check the spawn policy makes, inside the receipt transaction, so no path
-  // writes a receipt past either limit.
-  const refusal = capacityError(workerCapacity(parent, (id) => state.peek(id)));
-  if (refusal) throw new Error(refusal);
   const metadata = parseOwnedWorkerMetadata(worker, parentId, input.worktree);
+  // The supervisor's liveness, its grant, its own limit and the family's limits (#816) are read
+  // here, in the step that writes the receipt, so no path writes a receipt past any of them.
+  const supervisor = liveSupervisor(state, parent, supervisorId);
+  if (!maySpawn(supervisor, metadata.workspace.kind)) throw new Error('invalid delegation supervisor');
+  const refusal = spawnCapacityRefusal(parent, supervisor, (id) => state.peek(id));
+  if (refusal) throw new Error(refusal);
   assertWorkerResourceFree(state, metadata.workspace);
   return publishOwnedRun(state, parentId, parent, authority, identity, metadata, input, executionIdentity);
+}
+
+/** The task that starts the worker: the family's root, or a worker of this family that still runs,
+ *  is not being destroyed and holds a live receipt. */
+function liveSupervisor(state: OwnedRunCreateLookup, parent: RunRecord, supervisorId: string): RunRecord {
+  if (supervisorId === parent.id) return parent;
+  const supervisor = state.peek(supervisorId);
+  const metadata = delegationStateSchema.safeParse(supervisor?.delegation);
+  if (!supervisor || !metadata.success || metadata.data.role !== 'worker' || metadata.data.parentRunId !== parent.id ||
+    metadata.data.workspace.ownerRunId !== supervisor.id || metadata.data.destroy || supervisor.stopping ||
+    !['running', 'waiting'].includes(supervisor.status) ||
+    !supervisedReceipts(parent, supervisorIdOf(supervisor)!).some((entry) => entry.workerId === supervisor.id && !entry.deletion)) {
+    throw new Error('invalid delegation supervisor');
+  }
+  return supervisor;
 }
 
 function resolveOwnedRunParent(
@@ -81,8 +101,10 @@ function existingOwnedRunReceipt(
   if (receipt.requestHash !== identity.requestHash) throw new Error('request ID payload conflict');
   const existing = state.peek(receipt.workerId);
   const metadata = delegationStateSchema.safeParse(existing?.delegation);
-  if (!existing || !metadata.success || metadata.data.role !== 'worker' ||
+  const parent = state.peek(parentId);
+  if (!existing || !parent || !metadata.success || metadata.data.role !== 'worker' ||
     metadata.data.parentRunId !== parentId || metadata.data.workspace.ownerRunId !== existing.id ||
+    supervisorIdOf(existing) !== receiptSupervisorId(parent, receipt) ||
     existing.id === parentId) throw new Error('invalid request receipt ownership');
   return existing;
 }
@@ -94,7 +116,8 @@ function parseOwnedWorkerMetadata(
 ): WorkerDelegation {
   const metadata = delegationStateSchema.parse(worker);
   if (metadata.role !== 'worker' || metadata.parentRunId !== parentId ||
-    metadata.workspace.ownerRunId === parentId || worktree === false) {
+    metadata.workspace.ownerRunId === parentId || metadata.supervisorRunId === metadata.workspace.ownerRunId ||
+    metadata.supervisorRunId === parentId || worktree === false) {
     throw new Error('invalid worker ownership');
   }
   return metadata;
@@ -150,7 +173,8 @@ function publishOwnedRun<TInput extends { worktree?: false | undefined }>(
   const workspace = metadata.workspace;
   const delegation = delegationStateSchema.parse({
     ...authority,
-    receipts: [...authority.receipts, { ...identity, workerId: workspace.ownerRunId }],
+    receipts: [...authority.receipts, { ...identity, workerId: workspace.ownerRunId,
+      ...(metadata.supervisorRunId === undefined ? {} : { supervisorRunId: metadata.supervisorRunId }) }],
   });
   const run = { ...state.buildRun(input, workspace.ownerRunId), delegation: metadata };
   // This transaction precedes materialization. Every launch must rotate this

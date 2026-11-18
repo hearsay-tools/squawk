@@ -11,6 +11,13 @@ export function directoryRunId(run: RunRecord): string {
   return run.delegation?.role === 'worker' && !ownsDirectory(run.delegation.workspace) ? run.delegation.workspace.hostRunId : run.id;
 }
 
+/** The directory a run works in, from its record: the host path a shared worker's workspace
+ *  records, else the worktree the engine recorded for the run (`worktreePath`), else the repository
+ *  root. Never the working directory of a live session. */
+export function recordedDirectory(run: RunRecord | undefined, repoRoot: string): string {
+  return run?.delegation?.role === 'worker' && !ownsDirectory(run.delegation.workspace) ? run.delegation.workspace.path : run?.worktreePath ?? repoRoot;
+}
+
 /**
  * Whether a live worker works in `run`'s directory: one whose workspace record names `run` as its
  * host (`hostRunId`) and that is queued, running, waiting or mid-destroy. Every path that removes
