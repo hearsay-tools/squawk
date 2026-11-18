@@ -135,11 +135,16 @@ One dispatch takes one **candidate commit** through every stage
    ([`full-suite.yml`](../.github/workflows/full-suite.yml), the merge-group jobs of
    `ci.yml`) on it first. The version comes from that commit's manifest. The plan
    then checks the [gates](#release-gates).
-2. **Stage.** The workflow publishes `<version>-rc.<n>` of the candidate under the
+2. **Build.** A job without `id-token: write` and without the `production`
+   environment installs and builds the release tooling from the dispatch commit and the
+   package from the candidate commit. It uploads the build outputs with a manifest of
+   their sha256 hashes, and passes the manifest's digest to later jobs as a job output.
+   See [The release build](#the-release-build).
+3. **Stage.** The workflow publishes `<version>-rc.<n>` of the candidate under the
    `next` dist-tag, with exact pins between the packages. The stable version is not
    staged: an alias that depends on its runtime with a caret range would match any
    stable version, whatever its dist-tag; a caret range does not match a prerelease.
-3. **Test the published candidate**
+4. **Test the published candidate**
    ([`release-candidate-tests.yml`](../.github/workflows/release-candidate-tests.yml)).
    [`scripts/release-smoke.mjs`](../scripts/release-smoke.mjs) waits up to 15 min until
    the registry serves the new version (npm processes a publish for minutes), then installs the candidate,
@@ -151,18 +156,22 @@ One dispatch takes one **candidate commit** through every stage
    It runs on Linux, macOS and Windows, on the `engines.node` floor and the current
    LTS. The browser specs run shuffled on the candidate's source commit: the published
    bundle has no e2e mode.
-4. **Promote.** The gates are checked again, so a blocker opened during the
+5. **Promote.** The gates are checked again, so a blocker opened during the
    candidate tests stops the release. Then `scripts/release.mjs` publishes the stable
-   version of the same commit under the planned stable tag (`latest`, or `latest-x.y` for
+   version of the same build under the planned stable tag (`latest`, or `latest-x.y` for
    a maintenance release below `latest`; intra-release dependencies keep a
    **caret** range, unlike the exact-pinned snapshots and candidates), checks that
-   every published name's stable dist-tag points to it, installs it through the alias
-   and boots it, opens a version-bump PR and cuts a GitHub Release
-   tagged `v<version>` at the candidate commit. The bump PR targets the dispatched
-   branch; the workflow never pushes to that branch.
+   every published name's stable dist-tag points to it.
+6. **Verify.** A read-only job installs the promoted version through the alias and
+   boots it. This install runs the published package's own scripts, so it runs outside
+   the job that holds the OIDC token.
+7. **Finalize.** After both checks pass, a job without the OIDC token opens a
+   version-bump PR and cuts a GitHub Release tagged `v<version>` at the candidate
+   commit. The bump PR targets the dispatched branch; the workflow never pushes to
+   that branch.
 
 The release scripts run from the dispatch commit; the package is built from the
-candidate commit in `source/`. Neither checkout keeps a token while dependencies install and the builds
+candidate commit in `source/`. No checkout keeps a token while dependencies install and the builds
 run; only the version-bump push gets one, with Git hooks off. Both publishing jobs are gated behind the `production`
 environment, so a release can require reviewer approval — and the trusted publisher
 on npmjs.com is pinned to that same environment name. Outside Actions, with neither
@@ -172,6 +181,34 @@ on npmjs.com is pinned to that same environment name. Outside Actions, with neit
 current `next` stages under `next-<major>.<minor>`, and a maintenance release below
 the current `latest` publishes under `latest-<major>.<minor>`. A release from `main`
 must be above `latest`: merge the pending version-bump PR first.
+
+### The release build
+
+Only `stage` and `release` hold `id-token: write`, which npm trusted publishing
+accepts. Neither job installs dependencies, restores a dependency cache or runs a
+build, so no install script or build step can request the token
+(hearsay-tools/squawk#3321). The `build` job does that work with read-only
+permissions. [`release-build.cjs`](../.github/scripts/release-build.cjs) `pack` copies
+its outputs into the `release-build` artifact:
+
+| Part | Files |
+|---|---|
+| `tooling/` | `packages/cezar/dist` of the dispatch commit, which `scripts/release.mjs` imports |
+| `source/` | `packages/cezar/dist`, `packages/cezar/web/dist` and the generated `packages/cezar/README.md` of the candidate commit |
+| `release-build.json` | the source and dispatch commits, and the sha256 of every file |
+
+Each publishing job checks out both commits, downloads the artifact and runs
+`release-build.cjs verify` before `scripts/release.mjs`. It stops before `npm publish`
+when the manifest's sha256 differs from the `build` job's `digest` output, a commit
+differs from the plan or from a checkout's `HEAD`, a file is changed, missing, extra,
+a link, or outside the parts above, or a required file is absent. Then it copies the
+outputs into the checkouts. Checked-in files (the manifests, `src` of `contract` and
+`api-client`, `alias-cezarion/`) come from the checkout of the planned commit, and
+`scripts/release.mjs` stamps the manifests there. `finalize` verifies the same
+artifact before it stamps the bump commit.
+
+A rerun of a failed publishing job reuses the build's artifact and digest. A new
+dispatch builds again.
 
 ### Release gates
 
