@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { complexityRun, daemonAlive, fallbackLines, focusedTests, gitIo, judgeSqueal, lintFallbackLine, lintUnfinished, patchLimitLines, prepr, SQUEAL_WAIT_MS, squealChecks, squealLines, testBudgetLines } from './prepr.mjs';
+import { complexityRun, daemonAlive, fallbackLines, focusedTests, gitIo, judgeSqueal, lintFallbackLine, loweredNotes, lintUnfinished, patchLimitLines, prepr, SQUEAL_WAIT_MS, squealChecks, squealLines, testBudgetLines } from './prepr.mjs';
 
 const { GITHUB_PATCH_LIMITS, numstatRows } = createRequire(import.meta.url)('../.github/scripts/missing-patches.cjs');
 
@@ -167,6 +167,14 @@ test('the lint fallback line names why it ran and carries the lint verdict', () 
   assert.match(finding.text, /^- FAIL: lint: Squeal's lint did not finish for 2 file\(s\), so prepr ran `npm run lint`\npackages\/a\/src\/x\.ts: no-unused-vars/);
   const clean = lintFallbackLine({ unfinished: 1, unavailable: 'no oxlint installed' }, ok(''));
   assert.deepEqual([clean.ok, clean.text], [true, "- pass: lint: Squeal's lint is unavailable (no oxlint installed), so prepr ran `npm run lint`"]);
+});
+
+test('a passing lint run keeps the baselines it lowered in the report, so the commit is not missed', () => {
+  const out = 'lowered: packages/cezar/src/file-length.baseline.json: a.ts: pinned at 1500, now 1480. Commit the baseline\nlint: repository checks passed\n';
+  assert.equal(loweredNotes(out), '\n  - lowered: packages/cezar/src/file-length.baseline.json: a.ts: pinned at 1500, now 1480. Commit the baseline');
+  assert.equal(loweredNotes('lint: repository checks passed\n'), '');
+  const clean = lintFallbackLine({ unfinished: 1 }, ok(out));
+  assert.match(clean.text, /^- pass: lint: .+`npm run lint`\n  - lowered: packages\/cezar\/src\/file-length\.baseline\.json: a\.ts/);
 });
 
 test('fallbackLines runs focused tests, node:test readers and lint, and reports their failures', async () => {

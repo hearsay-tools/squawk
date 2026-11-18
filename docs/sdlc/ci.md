@@ -615,14 +615,17 @@ CRAP is not part of this gate; CI reports it without failing (§ CRAP report for
 
 **File length.** `npm run lint` pins every non-test source file over 1,000 lines in
 `packages/cezar/src/file-length.baseline.json`. `npm run prepr` runs the budget even when Squeal supplies oxlint results. No unit test
-runs this repository-wide check. It fails when a pinned file grows, when another file passes 1,000 lines, and when a pin is
-stale. After you cut a file, lower its pin:
+runs this repository-wide check. It fails when a pinned file grows and when another file passes 1,000 lines.
+Make room by a verbatim move of whole functions to a sibling module; never join lines to fit. Print a
+file's lines left before you plan a change to it:
 
 ```bash
-FILE_LENGTH_UPDATE=1 npm run lint
+node packages/cezar/src/lint/file-length.ts headroom <path>...
 ```
 
-The update only lowers pins and drops entries. The `Reject baseline growth` step refuses a raised pin
+When a file gets smaller, a local `npm run lint` or `npm run prepr` lowers its pin and says so.
+Commit the baseline with the change. CI writes nothing and fails a pin that was not lowered
+([lint.md § Shrink-only baselines](lint.md#shrink-only-baselines)). A run only lowers pins and drops entries. The `Reject baseline growth` step refuses a raised pin
 or a new entry, and the same `baseline-growth` label approves one.
 
 A PR that edits `ci.yml` does not run its own definition (see § Proving a `ci.yml` change). A bare

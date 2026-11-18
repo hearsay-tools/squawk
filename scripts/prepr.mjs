@@ -129,6 +129,8 @@ export async function focusedTests(base, io = realIo) {
 
 const detail = r => (r.code ? `\n${r.whole ? (r.out + r.err).trim() : tail(r.out + r.err)}` : '');
 const entry = (ok, text) => ({ ok, text: `- ${ok ? 'pass' : 'FAIL'}: ${text}` });
+// A local lint run lowers a shrink-only baseline and prints a `lowered:` line; the report keeps it so the commit is not missed.
+export const loweredNotes = out => out.split('\n').filter(line => line.startsWith('lowered: ')).map(line => `\n  - ${line}`).join('');
 
 /** Report lines for a Squeal result: an array of { ok, text }. */
 export function squealLines(squeal, waitMs) {
@@ -161,7 +163,7 @@ const names = list => [...list.slice(0, 10), ...(list.length > 10 ? [`and ${list
 /** The report line for `npm run lint`, run because Squeal's lint did not finish. */
 export function lintFallbackLine(lint, r) {
   const why = lint.unavailable ? `is unavailable (${lint.unavailable})` : `did not finish for ${lint.unfinished} file(s)`;
-  return entry(r.code === 0, `lint: Squeal's lint ${why}, so prepr ran \`npm run lint\`${detail(r)}`);
+  return entry(r.code === 0, `lint: Squeal's lint ${why}, so prepr ran \`npm run lint\`${detail(r)}${loweredNotes(r.out)}`);
 }
 
 /** The root node:test files the changed paths select (squeal.config.json `inputs`), run with node --test. */
@@ -180,7 +182,7 @@ export async function fallbackLines(base, files, io = realIo) {
     tests.skipped ? { ok: true, text: `- skipped: focused tests: ${tests.skipped}` }
       : entry(tests.code === 0, `focused tests (\`npm run test:changed\`)${detail(tests)}`),
     nodeReaders,
-    entry(lint.code === 0, `lint (\`npm run lint\`)${detail(lint)}`),
+    entry(lint.code === 0, `lint (\`npm run lint\`)${detail(lint)}${loweredNotes(lint.out)}`),
   ];
 }
 
@@ -266,7 +268,7 @@ export async function prepr({ base = 'origin/main', waitMs = SQUEAL_WAIT_MS, io 
   const entries = squeal.daemon ? squealLines(squeal, waitMs) : await fallbackLines(base, files, io);
   if (squeal.daemon && lintUnfinished(squeal.lint)) entries.push(lintFallbackLine(squeal.lint, await io.run('npm', ['run', '--silent', 'lint'])));
   entries.push(...patchLimitLines(base, io), ...testBudgetLines(base, io));
-  for (const r of await Promise.all(directRuns)) entries.push(entry(r.code === 0, `${r.name}${detail(r)}`));
+  for (const r of await Promise.all(directRuns)) entries.push(entry(r.code === 0, `${r.name}${detail(r)}${loweredNotes(r.out)}`));
   if (docsOnly) entries.push({ ok: true, text: '- skipped: typecheck (docs-only change)' });
   const failed = entries.some(e => !e.ok);
   const head = io.git('rev-parse', '--short', 'HEAD').trim();
