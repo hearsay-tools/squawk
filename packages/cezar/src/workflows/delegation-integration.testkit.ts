@@ -311,7 +311,9 @@ if (group === 'failure-authority') {
     const p = await parent(); const failed = await spawn(p.id, 'codex', 'Exercise provider failure'); const stopped = await spawn(p.id, 'claude', 'Exercise explicit stop');
     expect(await command(failed, ['steer', stopped, 'Unauthorized peer steering'], 1)).toMatchObject({ code: 'denied_scope' });
     expect(store.getRun(stopped)?.agentInputs).toBeUndefined();
-    expect(await command(failed, ['spawn', '--baseline', 'parent-head', '--request-id', randomUUID(), 'Unauthorized nested worker'], 1)).toMatchObject({ code: 'denied_scope' });
+    // hearsay-tools/squawk#3819: a worker may start one shared worker; a worker with its own worktree stays outside its grant.
+    expect(await command(failed, ['spawn', '--workspace', 'isolated', '--baseline', 'parent-head', '--request-id', randomUUID(), 'Unauthorized nested worker'], 1))
+      .toMatchObject({ code: 'denied_scope', error: expect.stringContaining('Allowed: --workspace shared') });
     expect(store.listRuns()).toHaveLength(3);
     reply(p.id, 1); await until(() => monitoringPark(p.id), 'parent idle');
     const wait = await command<WorkerWaitResult>(p.id, ['wait', failed, stopped, '--mode', 'all']);

@@ -72,7 +72,11 @@ describe('authenticated delegation HTTP family', () => {
       { requestId: randomUUID(), workerId: foreign.id, requestHash: 'a'.repeat(64) }] } });
     expect(workerListResultSchema.parse(await (await request('/list')).json()).workers.map((entry: { workerId: string }) => entry.workerId)).toEqual([workerId]);
     const token = f.credentials.issue('project', workerId, randomUUID());
-    expect((await request('/list', undefined, { authorization: `Bearer ${token}` })).status).toBe(403);
+    // hearsay-tools/squawk#3819: a worker holds `inspect` for the workers it started; this one is queued, so its session is not active.
+    expect((await request('/list', undefined, { authorization: `Bearer ${token}` })).status).toBe(409);
+    setRunStatus(f.store, workerId, RUN_STATUS.running);
+    expect(workerListResultSchema.parse(await (await request('/list', undefined, { authorization: `Bearer ${token}` })).json()).workers).toEqual([]);
+    setRunStatus(f.store, workerId, RUN_STATUS.queued);
     const current = f.store.getRun(workerId)!;
     if (current.delegation?.role !== 'worker') throw Error('worker');
     f.store.updateRun(workerId, { delegation: { ...current.delegation,
@@ -320,7 +324,8 @@ describe('authenticated delegation HTTP family', () => {
     const token = kind === 'worker' ? f.credentials.issue('project', workerId, randomUUID())
       : kind === 'foreign' ? f.credentials.issue('elsewhere', parent.id, randomUUID()) : f.token;
     const before = structuredClone(f.store.listRuns());
-    expect((await request('/cancel-wait', { waitId }, { authorization: `Bearer ${token}` })).status).toBe(403);
+    // A worker holds `wait` for its own waits (hearsay-tools/squawk#3819): the parent's receipt is not one of them, so it is "no longer current" (409), unread.
+    expect((await request('/cancel-wait', { waitId }, { authorization: `Bearer ${token}` })).status).toBe(kind === 'worker' ? 409 : 403);
     expect(f.store.listRuns()).toEqual(before);
   });
 
