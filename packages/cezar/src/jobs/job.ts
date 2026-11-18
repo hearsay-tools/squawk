@@ -1,7 +1,8 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { constants, tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
+import { JOB_EXIT_SUFFIX, JOB_NAME, JOB_RECORD_SUFFIX } from '../process-wait/job-exit-file.ts';
 import { DatabaseSync } from 'node:sqlite';
 import { recordedProcessLive } from '../delegation/process-liveness.ts';
 import { processStartToken, startOwnedGroup } from '../detached-process.ts';
@@ -22,9 +23,9 @@ import { ownCommand } from './command.ts';
  * system drops a dead claimant's file lock, so nothing is ever taken over by age or by guess.
  */
 
-const RECORD_SUFFIX = '.job.db';
-const EXIT_SUFFIX = '.exit';
-const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const RECORD_SUFFIX = JOB_RECORD_SUFFIX;
+const EXIT_SUFFIX = JOB_EXIT_SUFFIX;
+const NAME = JOB_NAME;
 /** How long a start waits for its supervisor to claim the name before it gives up. */
 const READY_TIMEOUT_MS = 30_000;
 /** How long one claimant waits for another's transaction, which holds a few statements. */
@@ -109,23 +110,6 @@ export function jobStatus(dir: string, name: string): JobStatus {
   const exitCode = readExit(record);
   if (exitCode !== undefined) return { ...base, state: 'exited', exitCode };
   return running(record) ? { ...base, state: 'running' } : { ...base, state: 'exited' };
-}
-
-/**
- * Whether `exitFile` is the exit file of the job start whose supervisor is `pid` (hearsay-tools/squawk#3909):
- * its name is `<name>.<run>.exit` with `<run>` ending in that PID, and a job record for `<name>` sits
- * beside it. A later start of the name replaces the record but not the earlier start's file name, so
- * a process wait still open on the earlier start keeps its proof. An unreadable record proves nothing.
- */
-export function isJobExitFile(exitFile: string, pid: number): boolean {
-  const file = basename(exitFile);
-  if (!file.endsWith(EXIT_SUFFIX)) return false;
-  const stem = file.slice(0, -EXIT_SUFFIX.length);
-  const dot = stem.lastIndexOf('.');
-  const name = stem.slice(0, dot);
-  if (dot < 1 || !NAME.test(name) || !new RegExp(`^[0-9a-z]+-${pid}$`).test(stem.slice(dot + 1))) return false;
-  try { return readRecord({ record: join(dirname(exitFile), `${name}${RECORD_SUFFIX}`) }) !== undefined; }
-  catch { return false; }
 }
 
 /**

@@ -1,7 +1,7 @@
 import { productName } from '../home/display.ts';
 import { closeSync, constants, existsSync, fstatSync, openSync, readSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
-import { isJobExitFile } from '../jobs/job.ts';
+import { isJobExitFile } from './job-exit-file.ts';
 
 /**
  * A process wait's exit file (hearsay-tools/cezarion#1446, spec 2026-10-17-unified-waits § Process
