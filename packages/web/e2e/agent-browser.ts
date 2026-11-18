@@ -118,6 +118,7 @@ function nextBundleDir(): string {
 type FailureReason =
   | { kind: 'wait-selector'; action: 'click' | 'hover' | 'fill'; selector: string }
   | { kind: 'wait-fn'; predicate: string }
+  | { kind: 'wait-enabled'; action: 'click' | 'fill'; selector: string; state: string }
   | { kind: 'wait-value'; expression: string; lastValue: unknown; lastError?: string }
   | { kind: 'test' }
 
@@ -165,7 +166,7 @@ export const OPEN_OVERLAY_PROBE = `(() => {
  * them again would alter the session the spec's remaining tests share. The probe only reads.
  */
 function probeScript(reason: FailureReason): string {
-  const selector = reason.kind === 'wait-selector' ? JSON.stringify(reason.selector) : 'null'
+  const selector = reason.kind === 'wait-selector' || reason.kind === 'wait-enabled' ? JSON.stringify(reason.selector) : 'null'
   return `(() => {
     const path = (el) => {
       const parts = []
@@ -227,6 +228,48 @@ function probeScript(reason: FailureReason): string {
       }
     }
     return out
+  })()`
+}
+
+/** Options for `click` and `fill`. `allowDisabled` skips only the enabled check, for a spec
+ *  that acts on a disabled control on purpose. */
+export interface InteractOptions {
+  allowDisabled?: boolean
+}
+
+/** Provider snapshot refs (`@e2`) and XPath (`//button`) are not CSS selectors. */
+function isCssSelector(selector: string): boolean {
+  return !selector.startsWith('@') && !selector.startsWith('/')
+}
+
+/** The disabled state `click` and `fill` wait out: the target matches `:disabled` (a disabled
+ *  `<fieldset>` ancestor included), or the target itself has `aria-disabled="true"`. */
+const DISABLED_STATE = `target.matches(':disabled') ? 'disabled'
+      : target.getAttribute('aria-disabled') === 'true' ? 'aria-disabled="true"' : null`
+
+/** The `wait --fn` predicate of `click` and `fill`. False while the target is missing or, unless
+ *  `allowDisabled`, disabled. Once it can act, it scrolls a target that is not fully inside the
+ *  viewport to the centre, and leaves a fully visible target where it is, so a spec that
+ *  measures scroll positions keeps its numbers. */
+export function interactableExpression(selector: string, options: InteractOptions = {}): string {
+  return `(() => {
+    const target = document.querySelector(${JSON.stringify(selector)});
+    if (!target) return false;
+    if (${!options.allowDisabled} && (${DISABLED_STATE}) !== null) return false;
+    const box = target.getBoundingClientRect();
+    if (box.top < 0 || box.left < 0 || box.bottom > innerHeight || box.right > innerWidth) {
+      target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+    }
+    return true;
+  })()`
+}
+
+/** Names why `interactableExpression` stayed false, for the failure message. */
+export function disabledStateExpression(selector: string): string {
+  return `(() => {
+    const target = document.querySelector(${JSON.stringify(selector)});
+    if (!target) return 'detached';
+    return (${DISABLED_STATE}) ?? 'unknown';
   })()`
 }
 
@@ -820,9 +863,33 @@ export class AgentBrowser {
     }
   }
 
-  /** operation: interact (`fill`) — await the field, then replace its controlled value. */
-  fill(selector: string, value: string): void {
+  /** `click` and `fill` run this after `awaitTarget`: one `wait --fn` call that holds until the
+   *  target is enabled and then scrolls it into view (`interactableExpression`). agent-browser
+   *  refuses a `disabled` click at once, clicks an `aria-disabled` control and fills a disabled
+   *  field, so without this wait a spec has to remember to wait for the enabled state itself
+   *  (hearsay-tools/cezarion#2034, hearsay-tools/cezarion#2930). `allowDisabled` skips only the
+   *  enabled check. Provider snapshot refs (`@e2`) and XPath are not CSS selectors and skip it. */
+  private awaitInteractable(action: 'click' | 'fill', selector: string, options: InteractOptions): void {
+    if (!isCssSelector(selector)) return
+    try {
+      this.run(['wait', '--fn', interactableExpression(selector, options)], defaultWaitTimeoutMs() + 2_000)
+    } catch (cause) {
+      let state: string
+      try {
+        state = String(this.evaluate(disabledStateExpression(selector)))
+      } catch (readError) {
+        state = `unreadable: ${describeError(readError)}`
+      }
+      const bundle = this.captureFailure({ kind: 'wait-enabled', action, selector, state }, cause)
+      throw new Error(`cezar e2e: ${action} target stayed ${state}: ${selector} (failure bundle: ${bundle})`, { cause })
+    }
+  }
+
+  /** operation: interact (`fill`) — await an enabled field, then replace its controlled value.
+   *  Pass `{ allowDisabled: true }` only to fill a disabled field on purpose. */
+  fill(selector: string, value: string, options: InteractOptions = {}): void {
     this.awaitTarget('fill', selector)
+    this.awaitInteractable('fill', selector, options)
     clearField(this, selector)
     this.run(['fill', selector, value])
   }
@@ -1081,15 +1148,18 @@ export class AgentBrowser {
     this.run(['set', 'media', ...(colorScheme ? [colorScheme] : []), ...(reduced ? ['reduced-motion'] : [])])
   }
 
-  /** operation: interact (`click`). Waits for the target first; see `awaitTarget`.
+  /** operation: interact (`click`). Waits for the target first; see `awaitTarget`. Then waits
+   *  until it is enabled and scrolls it into view; see `awaitInteractable`. Pass
+   *  `{ allowDisabled: true }` only to click a disabled control on purpose.
    *  agent-browser v0.36.0 reads the target's centre once, then sends separate CDP
    *  `mouseMoved`, `mousePressed` and `mouseReleased` events at that same point. It performs
    *  an interception hit-test while resolving the centre, but no further hit-test before
    *  the press: a layout shift between the centre read and the press sends the press
    *  to whatever now occupies that point. Waiting for existence does not prevent this;
    *  wait for the layout-changing mount before clicking (hearsay-tools/cezarion#1255). */
-  click(selector: string): void {
+  click(selector: string, options: InteractOptions = {}): void {
     this.awaitTarget('click', selector)
+    this.awaitInteractable('click', selector, options)
     this.run(['click', selector])
   }
 

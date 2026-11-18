@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AgentBrowser, configureFailureCapture, OPEN_OVERLAY_PROBE } from '../../e2e/agent-browser'
+import { AgentBrowser, configureFailureCapture, interactableExpression, OPEN_OVERLAY_PROBE } from '../../e2e/agent-browser'
 import { resetBrowserPage } from '../../e2e/browser-page'
 import * as testEnvInputs from '../../../../.ai/scripts/test-env-inputs.mjs'
 
@@ -12,7 +12,7 @@ import * as testEnvInputs from '../../../../.ai/scripts/test-env-inputs.mjs'
  * Only the seam runs — no Chrome, no daemon — so what these prove is the command sequence the
  * seam emits per operation, which is the whole of the auto-wait contract (#405).
  */
-function fakeBrowser(opts: { waitFails?: boolean; tabTarget?: unknown; evalResult?: unknown; resolvedUrl?: string } = {}) {
+function fakeBrowser(opts: { waitFails?: boolean; waitFnFails?: boolean; tabTarget?: unknown; evalResult?: unknown; resolvedUrl?: string } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'cez-fake-agent-browser-'))
   const log = join(dir, 'calls.ndjson')
   const script = join(dir, 'fake.mjs')
@@ -25,6 +25,8 @@ function fakeBrowser(opts: { waitFails?: boolean; tabTarget?: unknown; evalResul
     if (args[2] === 'get' && args[3] === 'url') {
       process.stdout.write(JSON.stringify({ success: true, data: { url: ${JSON.stringify(opts.resolvedUrl)} ?? readFileSync(process.env.FAKE_LOG + '.url', 'utf8') } }))
     } else if (process.env.FAKE_WAIT_FAILS === '1' && args[2] === 'wait') {
+      process.stdout.write(JSON.stringify({ success: false, error: 'Wait timed out after 25000ms' }))
+    } else if (process.env.FAKE_WAIT_FN_FAILS === '1' && args[2] === 'wait' && args[3] === '--fn') {
       process.stdout.write(JSON.stringify({ success: false, error: 'Wait timed out after 25000ms' }))
     } else if (args[2] === 'tab' && args[3] === 'new') {
       process.stdout.write(JSON.stringify({ success: true, data: { targetId: ${JSON.stringify(opts.tabTarget === undefined ? 'target-two' : opts.tabTarget)} } }))
@@ -47,7 +49,11 @@ function fakeBrowser(opts: { waitFails?: boolean; tabTarget?: unknown; evalResul
       command: bin,
       version: 'fake',
       notes: '',
-      runtimeEnv: { FAKE_LOG: log, ...(opts.waitFails ? { FAKE_WAIT_FAILS: '1' } : {}) },
+      runtimeEnv: {
+        FAKE_LOG: log,
+        ...(opts.waitFails ? { FAKE_WAIT_FAILS: '1' } : {}),
+        ...(opts.waitFnFails ? { FAKE_WAIT_FN_FAILS: '1' } : {}),
+      },
     },
     'interact-test',
   )
@@ -71,7 +77,7 @@ afterEach(() => {
   configureFailureCapture({ root: undefined })
   vi.unstubAllEnvs()
 })
-function open(opts?: { waitFails?: boolean; tabTarget?: unknown; evalResult?: unknown; resolvedUrl?: string }) {
+function open(opts?: { waitFails?: boolean; waitFnFails?: boolean; tabTarget?: unknown; evalResult?: unknown; resolvedUrl?: string }) {
   const fake = fakeBrowser(opts)
   fakes.push(fake)
   return fake
@@ -215,17 +221,44 @@ describe('AgentBrowser auto-wait (#405)', () => {
 
   it.each([
     ['click', '[aria-label="Tools"]', undefined],
-    ['hover', '[data-slot="row"]', undefined],
     ['fill', '#automation-name', 'nightly'],
-  ] as const)('%s waits for the selector before the provider action', (action, selector, value) => {
+  ] as const)('%s waits for the selector, then for an enabled target, before the provider action', (action, selector, value) => {
     const { browser, commands } = open({ evalResult: '' })
     if (action === 'fill') browser.fill(selector, value!)
-    else browser[action](selector)
+    else browser.click(selector)
     const calls = action === 'fill' ? commands().filter(([command]) => command !== 'eval') : commands()
     expect(calls).toEqual([
       ['wait', selector],
+      ['wait', '--fn', interactableExpression(selector)],
       value === undefined ? [action, selector] : [action, selector, value],
     ])
+  })
+
+  it('hover waits for the selector only, so a disabled control can still show its tooltip', () => {
+    const { browser, commands } = open()
+    browser.hover('[data-slot="row"]')
+    expect(commands()).toEqual([['wait', '[data-slot="row"]'], ['hover', '[data-slot="row"]']])
+  })
+
+  it('allowDisabled drops the enabled check and keeps the scroll', () => {
+    const { browser, commands } = open({ evalResult: '' })
+    browser.click('[data-slot="send"]', { allowDisabled: true })
+    browser.fill('#name', 'x', { allowDisabled: true })
+    const waits = commands().filter(([command, flag]) => command === 'wait' && flag === '--fn')
+    expect(waits).toEqual([
+      ['wait', '--fn', interactableExpression('[data-slot="send"]', { allowDisabled: true })],
+      ['wait', '--fn', interactableExpression('#name', { allowDisabled: true })],
+    ])
+    expect(waits[0]![2]).not.toBe(interactableExpression('[data-slot="send"]'))
+  })
+
+  it('a click target that stays disabled fails naming the disabled state, and never clicks', () => {
+    const { browser, commands } = open({ waitFnFails: true, evalResult: 'aria-disabled="true"' })
+    expect(() => browser.click('[data-slot="send"]'))
+      .toThrow(/click target stayed aria-disabled="true": \[data-slot="send"\]/)
+    const actions = commands().map(([action]) => action)
+    expect(actions.slice(0, 3)).toEqual(['wait', 'wait', 'eval'])
+    expect(actions).not.toContain('click')
   })
 
   it('preserves provider snapshot refs when filling', () => {

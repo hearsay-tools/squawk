@@ -64,6 +64,7 @@ command lands. The seam closes that gap in two places:
 | Primitive | What it waits for | What it returns |
 | --- | --- | --- |
 | `click` / `hover` / `fill` | The selector is attached with a non-zero box (`wait <selector>`, #405) | nothing |
+| `click` / `fill` | Then the target is enabled: it does not match `:disabled` and has no `aria-disabled="true"`. Then a target not fully inside the viewport is scrolled to the centre. A target that stays disabled fails with a message that names its state. Pass `{ allowDisabled: true }` to act on a disabled control on purpose; the scroll still runs (hearsay-tools/squawk#3820) | nothing |
 | `setViewport` | An animation frame at the new size, so every native `matchMedia`/`resize` listener has run and its tree switch has committed (#794). `ResizeObserver`-driven state may still lag: wait on the DOM you read | nothing |
 | `waitForFunction(js)` | A predicate becomes truthy | nothing — **the read that follows is a second call** |
 | `waitForValue(js, matcher?)` | An expression yields a value the matcher accepts (#409) | **that sample** |
@@ -97,6 +98,25 @@ pencil's Tab started from the Columns trigger and landed on "New task" (#410).
 `dismissWithEscape(browser, { content, focus })` in `contrast.ts` presses Escape and waits for
 both the absence and the returned focus; use it wherever a keyboard step or a focus assertion
 follows a dismissal.
+
+## What the seam cannot do
+
+- **A scale factor set after load.** `setViewport(w, h, 2)` changes `devicePixelRatio`, but
+  it does not fire a `(resolution: …)` media query's `change` event, so a hook that follows
+  the ratio keeps the old value. Set the scale factor before `goto`, or reload the page after
+  you set it.
+- **Popups.** agent-browser attaches to each new tab, and it cannot drive a
+  `target="_blank" rel="noopener noreferrer"` popup opened from a sandboxed iframe: the
+  attach times out. Assert the link's `href`, `target` and `rel` instead of the opened tab.
+  The e2e Chrome also runs without a popup blocker, so a `window.open` without a user
+  gesture opens a real tab and agent-browser switches to it. A spec must not open a popup
+  without a click, and it cannot assert "no popup without a click".
+- **`evaluate` returns by value.** The result goes back as JSON. An expression must return
+  JSON-serializable data, never a DOM node or `window` ("Object reference chain is too
+  long"). Return a field of the node, or compare it (`… === window`).
+- **`scrollTop` inside a wheel listener.** Chrome applies the wheel before the listener reads
+  `scrollTop`, so the read already includes the delta. Read `scrollTop` immediately before
+  you dispatch the wheel, and compare `final === before + delta`.
 
 ## Diagnosing flake causes
 
