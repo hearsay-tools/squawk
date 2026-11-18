@@ -145,7 +145,7 @@ export const WAIT_KINDS: { readonly [K in Wait['kind']]: WaitKindRow<K> } = {
     chargesWake: false, refusesSpentBudget: false, holdsSession: false, cancellable: true, timersDisabled: false,
     failedResult: wait => !PR_SUCCESS.has((wait as PrWaitEntry).result?.outcome ?? 'deadline'),
     deadline: 'required', keepsSlot: true, cancels: ENDS_WAITS, resolves: [
-    { trigger: 'checks settle or the head changes; a merge wait: merged, closed or a conflict; merge_or_blocked also resolves when no merge remains pending', firedBy: 'watcher' },
+    { trigger: 'checks settle, stay queued for 15 observed minutes, or the head changes; a merge wait: merged, closed or a conflict; merge_or_blocked also resolves when no merge remains pending', firedBy: 'watcher' },
     { trigger: 'the deadline (1 to 7,200 s, default 1,800) or a fatal gh error', firedBy: 'watcher' },
   ] },
   timer: {

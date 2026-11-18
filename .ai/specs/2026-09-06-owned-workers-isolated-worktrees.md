@@ -9,12 +9,16 @@ Recorded status: Complete written spec approved by the owner on 2026-09-06.
 
 A parent agent can spawn, inspect, steer, stop, destroy, and read diffs for
 workers through a bundled CLI. Workers are ordinary Cezar runs, use the existing
-scheduler and event streams, and own isolated Git worktrees.
+scheduler and event streams, and own isolated Git worktrees. A worker spawned
+with `--workspace shared` is the exception: it runs in its parent's worktree
+and owns none (hearsay-tools/squawk#3819, 2026-11-18; `docs/workers.md` § Shared
+workspace).
 
 Stage 1 supports one generation and parent-to-worker steering. Worker terminal
 outcomes are lifecycle notifications, not conversational replies. No recursive
-delegation, peer messaging, shared workspaces, dirty snapshots, automatic merge,
-or automatic review acceptance. Issues hearsay-tools/cezarion#112–hearsay-tools/cezarion#115 own subsequent stages.
+delegation, peer messaging, dirty snapshots, automatic merge, or automatic review
+acceptance. Shared workspaces were excluded here until 2026-11-18; one kind,
+`shared`, now exists (hearsay-tools/squawk#3819). Issues hearsay-tools/cezarion#112–hearsay-tools/cezarion#115 own subsequent stages.
 
 ## Decisions approved in conversation
 

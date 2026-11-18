@@ -116,6 +116,7 @@ function ciWaitLabel(run: ApiRun, wait: CiWait, settled: boolean) {
   const merge = wait.until !== 'checks'
   const outcomes: Record<NonNullable<typeof result>['outcome'], string> = {
     passed: 'CI checks passed — observed checks only; not merge approval',
+    stuck: 'CI checks stuck in queue — inspect the PR checks',
     failed: 'CI checks failed — inspect the PR checks',
     conflicting: merge ? 'PR has merge conflicts — inspect the PR; not merged' : 'PR has merge conflicts — inspect the PR; not merge approval',
     cancelled: merge ? 'Merge wait cancelled' : 'CI wait cancelled',

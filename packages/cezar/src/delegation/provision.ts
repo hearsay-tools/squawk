@@ -10,6 +10,7 @@ import { CredentialRegistry } from './credentials.ts';
 import { messagingAllowed, workersAllowed } from '@open-mercato/cezar-contract/task-options';
 import { DelegationService, rootDelegation, type DelegationProject, type WorkerCleanupFactory } from './service.ts';
 import { WORKERS_OFF } from './policy.ts';
+import { workspaceKind } from './workspace-kinds.ts';
 import { openCompletionRequests } from '../workflows/completion-policy.ts';
 import { createDelegationRoutes } from './routes.ts';
 import { createDelegationApp, startDelegationTransport } from './transport.ts';
@@ -94,7 +95,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `Worker questions arrive as requests carrying a question; answer with ${messaging} reply <worker-id> '<answer>' --id <new-message-UUID> --request-id <question-id>, one '<header>: <answer>' line per question (an option's label, or your own words for a question without options), which the worker reads verbatim as its answer. If you cannot decide, ask the human with your own question, then reply. Progress and follow-ups never answer it, and you cannot finish while it is unanswered.`,
     `Use ${invocation} spawn --baseline parent-head --request-id <UUID> '<task>' (or an explicit committed ref).`,
     `Reuse the request ID only for the exact same task/baseline/context/runner/model/effort/workflow/skill on a retry.`,
-    `Optional spawn flags: --workflow <name> or --skill <name> (mutually exclusive), --context '<selected text>' or --context-file <local-UTF-8-file> (mutually exclusive), --attach <path> (repeatable; copies a git-ignored file from your worktree into the worker's worktree at the same relative path before it starts; tracked or unignored files and .gitignore are refused, commit those instead), --runner <${RUNNER_IDS.join('|')}>, --model <model>, --effort <low|medium|high|xhigh|max|auto>.`,
+    `Optional spawn flags: --workflow <name> or --skill <name> (mutually exclusive), --context '<selected text>' or --context-file <local-UTF-8-file> (mutually exclusive), --workspace shared (the worker runs in your worktree at your HEAD, with no worktree or branch of its own and no --baseline; see spawn --help), --attach <path> (repeatable; copies a git-ignored file from your worktree into the worker's worktree at the same relative path before it starts; tracked or unignored files and .gitignore are refused, commit those instead), --runner <${RUNNER_IDS.join('|')}>, --model <model>, --effort <low|medium|high|xhigh|max|auto>.`,
     `--workflow runs a catalog workflow (the built-in quick-task or a .ai/cezar/workflows/*.yaml name) inside the worker, agent and check steps alike; --skill runs one discovered skill as the worker task; omitting both means quick-task; a worker inherits your extra system prompt, never your selected skill.`,
     `--runner, --model and --effort fill only the steps that leave those fields unset; an unknown name fails. Agent steps may mix runners: each step is pinned to its own runner, account, model, effort and grants at spawn, and a step's agentProfile names its account explicitly.`,
     `Example: spawn --baseline parent-head --request-id <UUID> --runner codex --effort high --context 'Inspect only the parser' 'Review parser'. Use high here only when the selected model advertises it and overrides are allowed.`,
@@ -145,6 +146,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     instructions: run.delegation?.role === 'worker'
       ? [
         `You are an owned ${productName('cezar')} worker. Your parent run ID is ${run.delegation.parentRunId}.`,
+        ...(workspaceKind(run.delegation.workspace).workerNotice ? [workspaceKind(run.delegation.workspace).workerNotice!] : []),
         conversationGuidance,
         `You cannot spawn ${productName('Cezar')} workers. You cannot control peers, merge automatically, or accept your own review.`,
         commandText(`Follow your assigned task and selected input context. Ask your parent with cez message request; any question you raise goes to your parent too, never to a human. Your parent answers or asks the human itself; do not wait for a human.`),

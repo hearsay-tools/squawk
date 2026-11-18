@@ -21,6 +21,11 @@ import {
   workerWaitSchema,
   workerWorkspaceSchema,
   delegationErrorResponseSchema,
+  ownedWorkspace,
+  ownsDirectory,
+  workerChangeReportSchema,
+  workerCollectedResultSchema,
+  WORKER_CHANGED_PATHS_CAP,
 } from '@open-mercato/cezar-contract/delegation';
 import { workerOutcomeSchema } from '@open-mercato/cezar-contract/worker-outcome';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
@@ -120,6 +125,49 @@ describe('delegation schemas', () => {
       { baselineSha: 'abc123' }, { baselineSha: 'z'.repeat(40) },
     ]) expect(workerWorkspaceSchema.safeParse({ ...workspace, ...patch }).success).toBe(false);
     expect(workerWorkspaceSchema.safeParse({ ...workspace, baselineSha: 'a'.repeat(64) }).success).toBe(true);
+  });
+
+  it('accepts both workspace kinds and keeps a saved isolated record as it was (hearsay-tools/squawk#3819)', () => {
+    const { branch: _branch, ...withoutBranch } = workspace;
+    expect(workerWorkspaceSchema.safeParse(withoutBranch).success).toBe(false);
+    const saved = JSON.parse(JSON.stringify(worker()));
+    expect(delegationStateSchema.parse(saved)).toEqual(saved);
+    const shared = { ownerRunId: workerId, resourceId: workspace.resourceId, kind: 'shared' as const, path: '/managed/host', hostRunId: parentRunId, baselineSha };
+    expect(workerWorkspaceSchema.parse(shared)).toEqual(shared);
+    expect(delegationStateSchema.parse({ ...worker(), workspace: shared })).toMatchObject({ workspace: shared });
+    for (const patch of [{ branch: 'cez/x' }, { hostRunId: undefined }, { hostRunId: 'bad' }, { path: '' }, { baselineSha: 'abc' }]) {
+      expect(workerWorkspaceSchema.safeParse({ ...shared, ...patch }).success).toBe(false);
+    }
+    expect(ownsDirectory(workerWorkspaceSchema.parse(workspace))).toBe(true);
+    expect(ownsDirectory(workerWorkspaceSchema.parse(shared))).toBe(false);
+    expect(ownedWorkspace(workerWorkspaceSchema.parse(workspace)).branch).toBe(workspace.branch);
+    expect(() => ownedWorkspace(workerWorkspaceSchema.parse(shared))).toThrow('The workspace owns no worktree');
+  });
+
+  it('takes a workspace choice on spawn (hearsay-tools/squawk#3819)', () => {
+    expect(workerSpawnRequestSchema.parse({ task: 't', requestId, workspace: 'shared' })).toEqual({ task: 't', requestId, workspace: 'shared' });
+    expect(workerSpawnRequestSchema.safeParse({ task: 't', requestId, baseline: 'HEAD', workspace: 'isolated' }).success).toBe(true);
+    expect(workerSpawnRequestSchema.safeParse({ task: 't', requestId }).success).toBe(false);
+    expect(workerSpawnRequestSchema.safeParse({ task: 't', requestId, workspace: 'isolated' }).success).toBe(false);
+    expect(workerSpawnRequestSchema.safeParse({ task: 't', requestId, baseline: 'HEAD', workspace: 'owned-isolated' }).success).toBe(false);
+  });
+
+  it('bounds the change report and keeps it optional on a collected result (hearsay-tools/squawk#3819)', () => {
+    const changed = { state: 'changed' as const, paths: ['a.txt'], truncated: false, headMoved: false, branchMoved: false, indexMoved: false };
+    expect(workerChangeReportSchema.parse({ state: 'unchanged' })).toEqual({ state: 'unchanged' });
+    expect(workerChangeReportSchema.parse(changed)).toEqual(changed);
+    expect(workerChangeReportSchema.parse({ state: 'unavailable', reason: 'gone' })).toEqual({ state: 'unavailable', reason: 'gone' });
+    expect(workerChangeReportSchema.safeParse({ ...changed, paths: Array.from({ length: WORKER_CHANGED_PATHS_CAP + 1 }, (_, n) => `f${n}`) }).success).toBe(false);
+    expect(workerChangeReportSchema.safeParse({ state: 'changed', paths: [] }).success).toBe(false);
+    expect(workerChangeReportSchema.safeParse({ state: 'unchanged', paths: [] }).success).toBe(false);
+    const unavailable = { state: 'unavailable' as const, reason: 'missing' as const };
+    const result = { workerId, parentRunId, revision: 0, observedAt: now, status: RUN_STATUS.done, outcome: 'completed', lastExecutionOutcome: 'completed', partial: false, settled: true,
+      baselineSha, workspace: { ownerRunId: workerId, resourceId: workspace.resourceId, kind: 'shared', path: '/managed/host', hostRunId: parentRunId, baselineSha, state: 'available' },
+      cleanup: 'retained', summary: { state: 'unavailable', reason: 'no-assistant-output' }, head: unavailable,
+      diff: { state: 'unavailable', reason: 'unsupported', detail: 'a shared workspace has no diff of its own' }, artifacts: unavailable };
+    expect(workerCollectedResultSchema.parse(result).changes).toBeUndefined();
+    expect(workerCollectedResultSchema.parse({ ...result, changes: changed }).changes).toEqual(changed);
+    expect(workerCollectedResultSchema.safeParse({ ...result, workspace: { ...result.workspace, branch: 'cez/x' } }).success).toBe(false);
   });
 
   it('validates wait, terminal outcome, destruction phases and timestamps', () => {
@@ -516,10 +564,27 @@ describe('RunStore durable delegation', () => {
     for (const key of ['resourceId', 'path', 'branch'] as const) {
       const collision = worker(run.id, randomUUID());
       if (collision.role !== 'worker') throw new Error('fixture');
-      collision.workspace[key] = metadata.workspace[key];
+      ownedWorkspace(collision.workspace)[key] = ownedWorkspace(metadata.workspace)[key];
       expect(() => store.createOwnedRun(input, run.id, randomUUID(), collision, requestHash)).toThrow();
     }
     expect(store.listRuns()).toHaveLength(3);
+  });
+
+  it("accepts workers that share their host run's worktree, and still refuses a reused resource id (hearsay-tools/squawk#3819)", () => {
+    const run = parent();
+    store.updateRun(run.id, { worktreePath: '/managed/host', branch: 'cez/host' });
+    const sharedWorker = (resourceId: string = randomUUID()): DelegationState => {
+      const id = randomUUID();
+      return { role: 'worker', parentRunId: run.id, permissions: [],
+        workspace: { ownerRunId: id, resourceId, kind: 'shared', path: '/managed/host', hostRunId: run.id, baselineSha } };
+    };
+    const first = sharedWorker();
+    if (first.role !== 'worker') throw new Error('fixture');
+    const created = store.createOwnedRun(input, run.id, randomUUID(), first, requestHash);
+    expect(created.worktreePath).toBeUndefined(); expect(created.branch).toBeUndefined();
+    expect(store.createOwnedRun(input, run.id, randomUUID(), sharedWorker(), requestHash).delegation).toMatchObject({ workspace: { kind: 'shared', path: '/managed/host' } });
+    expect(() => store.createOwnedRun(input, run.id, randomUUID(), sharedWorker(first.workspace.resourceId), requestHash)).toThrow('worker resource ownership collision');
+    expect(store.getRun(run.id)).toMatchObject({ worktreePath: '/managed/host', branch: 'cez/host' });
   });
 
   // Exercise 33 real durable creations; this is not a 5s filesystem throughput assertion.

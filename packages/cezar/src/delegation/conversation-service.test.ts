@@ -31,6 +31,7 @@ import {
   inboxReserveResultSchema,
 } from '@open-mercato/cezar-contract/conversations';
 import { inboxClaimSchema } from '@open-mercato/cezar-contract/agent-input';
+import { ownedWorkspace } from '@open-mercato/cezar-contract/delegation';
 import { readPersistedText } from '../runs/run-store.testkit.ts';
 
 const INVALID_PENDING_RECEIPT_STATUS = 'pending';
@@ -270,7 +271,7 @@ describe('durable conversations', () => {
     await ensureOwnedWorkspace(f.root, f.store.getRun(w.id)!);
     const delegation = f.store.getRun(w.id)!.delegation;
     if (delegation?.role !== 'worker') throw new Error('expected a worker');
-    execFileSync('git', ['update-ref', '-d', `refs/heads/${delegation.workspace.branch}`], { cwd: f.root });
+    execFileSync('git', ['update-ref', '-d', `refs/heads/${ownedWorkspace(delegation.workspace).branch}`], { cwd: f.root });
     await expect(f.service.send(f.caller, { id: randomUUID(), recipientRunId: w.id, kind: 'progress', text: 'Work', timeoutSeconds: 600, resume: true }))
       .rejects.toMatchObject({ code: 'incompatible_state', message: expect.stringMatching(/branch .* is missing/) });
   });

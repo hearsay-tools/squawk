@@ -1,6 +1,7 @@
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { ownedWorkspace } from '@open-mercato/cezar-contract/delegation';
 import { createFixtureManager, fixtureWorkSettled, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
 import { scopeFixtureProcesses } from '../delegation/process-scope.testkit.ts';
 import { randomUUID } from 'node:crypto';
@@ -60,7 +61,7 @@ export async function worker(task = 'mock:hold') {
       role: 'worker', permissions: [], parentRunId: parent.id, workspace,
     }, 'a'.repeat(64));
   }
-export function workspace(run: RunRecord) { if (run.delegation?.role !== 'worker') throw Error('fixture'); return run.delegation.workspace; }
+export function workspace(run: RunRecord) { if (run.delegation?.role !== 'worker') throw Error('fixture'); return ownedWorkspace(run.delegation.workspace); }
 export function destroy(run: RunRecord) {
     if (run.delegation?.role !== 'worker') throw Error('fixture');
     store.commitDelegation([{ id: run.id, delegation: { ...run.delegation, destroy: { requestedAt: new Date().toISOString(), phase: 'requested', remaining: ['process', 'worktree', 'branch'] } } }]);

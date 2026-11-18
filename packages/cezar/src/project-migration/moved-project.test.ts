@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { ensureDataGitignore } from '../data-gitignore.ts';
 import { createRunner } from '../core/runner-factory.ts';
 import { createOwnedWorkspace } from '../delegation/workspace.ts';
@@ -29,7 +29,7 @@ import { createRunManager } from '../server/run-manager.testkit.ts';
  * and read `.ai/cezar/` as the fallback; an unmoved project keeps writing `.ai/cezar/`.
  */
 
-async function checkpoint(root: string, workspace: WorkerWorkspace): Promise<void> {
+async function checkpoint(root: string, workspace: OwnedWorkerWorkspace): Promise<void> {
   await removeOwnedWorkspace(root, workspace, undefined, async () => { throw new Error('stopped after the checkpoint'); }).catch(() => undefined);
 }
 

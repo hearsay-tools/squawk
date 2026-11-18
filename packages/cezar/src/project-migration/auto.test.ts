@@ -7,7 +7,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { createRunner } from '../core/runner-factory.ts';
 import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
 import { Home } from '../home/home.ts';
@@ -50,7 +50,7 @@ vi.mock('../server/project-context.ts', async (importOriginal) => {
   return { ...actual, sweepRegisteredPreviewLeftovers: vi.fn(actual.sweepRegisteredPreviewLeftovers) };
 });
 
-async function checkpoint(root: string, workspace: WorkerWorkspace): Promise<void> {
+async function checkpoint(root: string, workspace: OwnedWorkerWorkspace): Promise<void> {
   await removeOwnedWorkspace(root, workspace, undefined, async () => { throw new Error('stopped after the checkpoint'); }).catch(() => undefined);
 }
 

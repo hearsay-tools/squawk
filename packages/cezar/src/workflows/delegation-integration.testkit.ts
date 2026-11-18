@@ -1,6 +1,6 @@
 import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { workerCollectedResultSchema, workerInspectionSchema } from '@open-mercato/cezar-contract/delegation';
+import { ownedWorkspace, workerCollectedResultSchema, workerInspectionSchema } from '@open-mercato/cezar-contract/delegation';
 import { createFixtureManager, fixtureWorkSettled, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
 import { scopeFixtureProcesses } from '../delegation/process-scope.testkit.ts';
 import { execFile as execFileCallback, execFileSync } from 'node:child_process';
@@ -242,11 +242,11 @@ if (group === 'reviewed-integration') {
     expect(readFileSync(join(parentPath, 'shared.txt'), 'utf8')).toBe('alpha\n');
 
     // Actual Git CAS failure after worktree removal, not a stubbed cleanup result.
-    const branchLock = git(repo, 'rev-parse', '--git-path', `refs/heads/${resultA.workspace.branch}.lock`);
+    const branchLock = git(repo, 'rev-parse', '--git-path', `refs/heads/${ownedWorkspace(resultA.workspace).branch}.lock`);
     const lockPath = join(repo, branchLock); writeFileSync(lockPath, 'held by integration test');
     expect(await destroy(p.id, a, 1)).toMatchObject({ state: 'incomplete', remaining: ['branch'], deleted: [{ kind: 'worktree', path: firstA.cwd }] });
     expect(existsSync(firstA.cwd)).toBe(false);
-    expect(git(repo, 'rev-parse', `refs/heads/${resultA.workspace.branch}`)).toBe(resultA.head.sha);
+    expect(git(repo, 'rev-parse', `refs/heads/${ownedWorkspace(resultA.workspace).branch}`)).toBe(resultA.head.sha);
     expect(store.canDeleteRun(a)).toBe(false);
     expect(store.readWorkerResultDiff(p.id, a)).toContain('+alpha');
     expect(await destroy(p.id, b)).toMatchObject({ state: 'complete', remaining: [] });

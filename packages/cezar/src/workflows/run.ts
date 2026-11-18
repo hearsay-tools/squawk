@@ -23,7 +23,7 @@ import { NO_WAIT_NUDGE_NOTE, NO_WAIT_NOTE, NO_WAIT_NO_REPLY_NOTE, COMPLETION_NO_
 import { createActiveRun, type ActiveRun } from './active-run.ts';
 export { nativeTimerDelay, appendTurnText, classifyTurnEnd } from './run/turn-markers.ts';
 import { canProceedWithRun, executionBlockedByRootFinish, historyDeletionPending, rootFinishRequested, workerExecutionStopped } from './run/run-guards.ts';
-import { REPOSITORY_ROOT_LOCK_DISABLED_NOTE } from './run/run-workspace.ts';
+import { REPOSITORY_ROOT_LOCK_DISABLED_NOTE, runOwnsDirectory } from './run/run-workspace.ts';
 export { AUTO_RESUME_GRACE_MS, MAX_AUTO_RESUMES, AUTO_RESUME_MISSED_WINDOW_MS } from './run/auto-resume.ts';
 import { TrackedWork } from './run/tracked-work.ts';
 import type { RunModuleContext } from './run/types.ts';
@@ -679,6 +679,7 @@ export class RunManager {
       pendingHumanAsk: this.#hasPendingHumanAsk(runId),
       autonomous: record?.autonomous === true,
     });
+    if (!runOwnsDirectory(record)) state.liveSession.markSharedDirectory();
     this.#activate(runId, state);
     this.#modules.line.unmarkStarting(runId);
     return this.#modules.continuationSession.launchContinuation(runId, stepId, sessionId, backend, prompt,
@@ -716,7 +717,7 @@ export class RunManager {
     if (!launch) return;
     if (!(await this.#modules.stepLoop.prepareExecutionWorktree(execution, launch))) return;
 
-    if (state.liveSession.cwd === this.#repoRoot) {
+    if (state.liveSession.cwd === this.#repoRoot && !state.liveSession.sharesDirectory) {
       if (repositoryRootLockDisabled()) {
         emit({
           type: 'note',

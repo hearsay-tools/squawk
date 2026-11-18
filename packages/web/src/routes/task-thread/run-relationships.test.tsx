@@ -241,6 +241,16 @@ it('asks for confirmation before removing the worktree and branch, and cancel po
   fireEvent.click(confirm)
   await waitFor(() => expect(requests).toContain(`/api/v1/p/sample/runs/${workerId}/worker-destroy`))
 })
+it('promises no worktree or branch removal for a worker that runs in the parent\'s worktree (hearsay-tools/squawk#3819)', async () => {
+  const shared: WorkerInspection = { ...settled, workspace: { ownerRunId: workerId, resourceId: workerId, kind: 'shared', path: '/repo/.ai/squawk/worktrees/parent', hostRunId: parentId, baselineSha: 'a'.repeat(40) } }
+  const { requests } = setup(rootOf([shared]), async () => json({ workers: [shared], capacity: capacityOf(1) }))
+  const group = await section()
+  fireEvent.click(await within(group).findByRole('button', cleanUp(workerId)))
+  expect(within(group).getByText('Stops this worker and frees its slot. It runs in this task\'s worktree, so no worktree or branch is removed. Its result is saved first.')).toBeTruthy()
+  expect(within(group).queryByText(/Removes this worker's worktree and branch/)).toBeNull()
+  fireEvent.click(within(group).getByRole('button', { name: `Confirm clean up of worker ${workerId.slice(0, 8)}` }))
+  await waitFor(() => expect(requests).toContain(`/api/v1/p/sample/runs/${workerId}/worker-destroy`))
+})
 it('reports an incomplete cleanup in the server\'s words and keeps Clean up available (#816)', async () => {
   setup(rootOf([settled]), async () => json({ workers: [settled], capacity: capacityOf(1) }),
     async () => json({ workerId, state: 'incomplete', remaining: ['branch'], error: 'Branch is checked out' }, 409))

@@ -211,3 +211,60 @@ it.each(['pass', 'fail', 'pending', 'none'] as const)('resolves an initial confl
  await new Promise<void>(resolve => setImmediate(resolve)); started.controller.abort();
  expect(await started.result).toMatchObject({outcome:'conflicting',mergeable:'CONFLICTING',totalChecks:github.rows.length});
 });
+
+
+it('wakes before its deadline after observing queued checks for 15 minutes, even with an active workflow', async () => {
+ vi.useFakeTimers();const github=new ScriptedGithub();github.workflowActive=true;
+ github.rows=['build','lint'].map(name=>({name,state:'QUEUED',bucket:'pending',link:''}));
+ const started=start(github);let settled=false;void started.result.then(()=>{settled=true;});
+ await vi.advanceTimersByTimeAsync(899_999);expect(settled).toBe(false);
+ await vi.advanceTimersByTimeAsync(1);
+ // Cancellation bounds the pre-fix proof: a missing stuck outcome becomes an assertion failure.
+ started.controller.abort();
+ const result=await started.result;
+ expect(result).toMatchObject({outcome:'stuck',totalChecks:2});
+ expect(result.diagnostic).toContain('build (queued for at least 15 minutes)');expect(result.diagnostic).toContain('lint (queued for at least 15 minutes)');
+ expect(result.diagnostic).toContain('Close and reopen the PR');expect(result.diagnostic).toContain('the reopened event starts fresh pull_request and pull_request_target runs on the same head');
+ expect(result.diagnostic).toContain('Push a new head only if the new run also stays queued');expect(result.diagnostic).not.toMatch(/empty commit/i);
+ expect(result.diagnostic).toContain('clock starts when this wait first sees a queued check');expect(result.diagnostic).toContain('cockpit restart restarts it');
+ expect(github.watchers).toBe(0);
+});
+it.each(['IN_PROGRESS','WAITING','REQUESTED','PENDING','SUCCESS','FAILURE','CANCELLED'])('does not count %s time as queued', async state => {
+ vi.useFakeTimers();const github=new ScriptedGithub();github.workflowActive=true;
+ github.rows=[{name:'build',state,bucket:'pending',link:''}];
+ const started=start(github);let settled=false;void started.result.then(()=>{settled=true;});
+ await vi.advanceTimersByTimeAsync(1000_000);expect(settled).toBe(false);
+ started.controller.abort();expect((await started.result).outcome).toBe('cancelled');
+});
+it('caps a native watch at 15 observed queued minutes, reaps it, and confirms the current queued state', async () => {
+ vi.useFakeTimers();const github=new ScriptedGithub();
+ github.rows=[{name:'build',state:'QUEUED',bucket:'pending',link:''}];
+ const started=start(github);let settled=false;void started.result.then(()=>{settled=true;});
+ await vi.advanceTimersByTimeAsync(899_999);expect(settled).toBe(false);expect(github.snapshots).toBe(1);
+ await vi.advanceTimersByTimeAsync(1);started.controller.abort();
+ expect(await started.result).toMatchObject({outcome:'stuck'});expect(github.snapshots).toBe(2);expect(github.active).toBe(0);
+});
+it('uses the confirming snapshot when the queued check starts before the watch cap', async () => {
+ vi.useFakeTimers();const github=new ScriptedGithub();
+ github.rows=[{name:'build',state:'QUEUED',bucket:'pending',link:''}];
+ const started=start(github);let settled=false;void started.result.then(()=>{settled=true;});
+ await vi.advanceTimersByTimeAsync(899_999);
+ github.rows=[{name:'build',state:'IN_PROGRESS',bucket:'pending',link:''}];
+ await vi.advanceTimersByTimeAsync(1);
+ expect(settled).toBe(false);expect(github.snapshots).toBe(2);expect(github.active).toBe(1);
+ started.controller.abort();expect((await started.result).outcome).toBe('cancelled');
+});
+it.each(['head_changed','conflicting'] as const)('retains %s precedence when a queued check reaches the bound', async expected => {
+ vi.useFakeTimers();const github=new ScriptedGithub();github.workflowActive=true;
+ github.rows=[{name:'build',state:'QUEUED',bucket:'pending',link:''}];
+ const started=start(github);await vi.advanceTimersByTimeAsync(899_999);
+ if(expected==='head_changed')github.changedAt=github.headReads+2;else github.conflictAt=github.headReads+2;
+ await vi.advanceTimersByTimeAsync(1);expect((await started.result).outcome).toBe(expected);
+});
+it('keeps bounded stuck diagnostics valid for many hostile Unicode check names', async () => {
+ vi.useFakeTimers();const github=new ScriptedGithub();github.workflowActive=true;
+ github.rows=Array.from({length:100},(_,i)=>({name:'\x1b[31m'+ '🦜'.repeat(128)+i+'\x1b[0m',state:'QUEUED',bucket:'pending',link:''}));
+ const started=start(github);await vi.advanceTimersByTimeAsync(900_000);started.controller.abort();const result=await started.result;
+ expect(result.outcome).toBe('stuck');expect(Buffer.byteLength(result.diagnostic!)).toBeLessThanOrEqual(4096);
+ expect(result.diagnostic).toContain('list truncated');expect(result.diagnostic).not.toContain('\x1b');expect(result.diagnostic).toContain('Close and reopen');
+});

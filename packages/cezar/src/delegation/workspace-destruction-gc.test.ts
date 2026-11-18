@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { lstat, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { createOwnedWorkspace } from './workspace.ts';
 import { removeOwnedWorkspace } from './workspace-removal.ts';
 import { fixture, git, receiptPath, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
@@ -12,7 +12,7 @@ import { fixture, git, receiptPath, WORKSPACE_TEST_TIMEOUT_MS } from './workspac
 describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, () => {
   // hearsay-tools/cezarion#904: `git gc` expires every reflog by writing it to a lock file and
   // renaming that over the original. Kept entries survive byte-for-byte; the file is a new inode.
-  async function gcRewritesReflog(root: string, workspace: WorkerWorkspace) {
+  async function gcRewritesReflog(root: string, workspace: OwnedWorkerWorkspace) {
     const log = join(root, '.git/logs/refs/heads', workspace.branch);
     const before = await lstat(log); const content = await readFile(log);
     git(root, 'gc', '--quiet');

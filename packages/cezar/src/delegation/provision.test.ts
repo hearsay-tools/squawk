@@ -96,6 +96,16 @@ describe('session provisioning', () => {
     expect(instructions).toContain('(or cezar_wait with kind "request") to register a request wait');
     expect(instructions).toContain("except a named peer's message to a peer wait");
   });
+  it("tells a shared worker that it shares its parent's worktree, and the parent about --workspace shared (hearsay-tools/squawk#3819)", async () => {
+    const notice = "You share your parent's worktree: do not write there unless your task says so.";
+    const shared = await f.service.spawn(f.caller, { task: 'review', workspace: 'shared', requestId: randomUUID() });
+    const isolated = await f.service.spawn(f.caller, { task: 'build', baseline: 'HEAD', requestId: randomUUID() });
+    expect(provision(shared.workerId)!.instructions).toContain(`Your parent run ID is ${f.parent.id}. ${notice}`);
+    expect(provision(isolated.workerId)!.instructions).not.toContain(notice);
+    const root = provision()!.instructions;
+    expect(root).toContain('--workspace shared (the worker runs in your worktree at your HEAD, with no worktree or branch of its own and no --baseline; see spawn --help)');
+    expect(root).not.toContain(notice);
+  });
   it('never promotes invalid/worker records to roots', async () => {
     const ordinary = f.store.createRun({ title: 'ordinary', task: 'ordinary', workflow: 'quick-task', steps: [] });
     f.store.updateRun(ordinary.id, { delegation: { role: 'invalid' } });

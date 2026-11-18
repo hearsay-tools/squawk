@@ -6,8 +6,8 @@ import { createHash } from 'node:crypto';
 import { readdir, realpath } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
-import { workerWorkspaceSchema } from '@open-mercato/cezar-contract/delegation';
-import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
+import { ownedWorkspaceSchema } from '@open-mercato/cezar-contract/delegation';
+import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { branchFor } from '../git-worktree.ts';
 import { checkedGit, gitCommonDir } from './workspace-git.ts';
 
@@ -16,10 +16,10 @@ export const RECEIPT_CAP = 16_384;
 // Keep file/logFile fields for older strict checkpoint readers.
 const fileIdentitySchema = z.object({ dev: z.number(), ino: z.number(), birthtimeMs: z.number() }).strict();
 const branchIdentitySchema = z.object({ file: fileIdentitySchema, prefixBytes: z.number().int().min(1).max(4096), prefixHash: z.string().length(64) }).strict();
-const receiptSchema = z.object({ workspace: workerWorkspaceSchema, gitDir: z.string().min(1), branchIdentity: branchIdentitySchema.optional() }).strict();
+const receiptSchema = z.object({ workspace: ownedWorkspaceSchema, gitDir: z.string().min(1), branchIdentity: branchIdentitySchema.optional() }).strict();
 // `forced`: the destroy that wrote it removed the present checkout, so its branch goes at `sha`
 // whatever it holds (hearsay-tools/squawk#911); without it, every attempt proves no work is lost.
-export const cleanupSchema = z.object({ workspace: workerWorkspaceSchema, gitDir: z.string(), sha: workerWorkspaceSchema.shape.baselineSha,
+export const cleanupSchema = z.object({ workspace: ownedWorkspaceSchema, gitDir: z.string(), sha: ownedWorkspaceSchema.shape.baselineSha,
   logFile: fileIdentitySchema, logHash: z.string().length(64), phase: z.enum(['prepared', 'worktree-removed', 'complete']),
   forced: z.literal(true).optional() }).strict();
 export type Cleanup = z.infer<typeof cleanupSchema>;
@@ -31,8 +31,8 @@ export async function replaceIdentityFile(path: string, content: string, assertC
 
 export type Receipt = z.infer<typeof receiptSchema>;
 
-export async function validateIntent(repoRoot: string, value: WorkerWorkspace): Promise<WorkerWorkspace> {
-  const workspace = workerWorkspaceSchema.parse(value);
+export async function validateIntent(repoRoot: string, value: OwnedWorkerWorkspace): Promise<OwnedWorkerWorkspace> {
+  const workspace = ownedWorkspaceSchema.parse(value);
   const root = await realpath(repoRoot);
   if (!projectPaths(root).reads.some(directory => workspace.path === join(directory, 'worktrees', workspace.ownerRunId)) || workspace.branch !== branchFor(workspace.ownerRunId)) {
     throw new Error('Owned workspace identity does not match the managed resource');
@@ -48,7 +48,7 @@ export async function validateIntent(repoRoot: string, value: WorkerWorkspace): 
   return workspace;
 }
 
-export async function receiptLocation(repoRoot: string, workspace: WorkerWorkspace, create = false): Promise<string> {
+export async function receiptLocation(repoRoot: string, workspace: OwnedWorkerWorkspace, create = false): Promise<string> {
   return join(await receiptDirectory(repoRoot, create), `${workspace.resourceId}.json`);
 }
 async function receiptDirectory(repoRoot: string, create: boolean): Promise<string> {
@@ -65,8 +65,8 @@ export async function ownedWorkspaceRecordFiles(repoRoot: string): Promise<strin
 }
 /** Each readable receipt's workspace, and whether its cleanup checkpoint says the removal completed.
  *  An unreadable record is skipped: only an explicit destroy acts on it. */
-export async function ownedWorkspaceReceipts(repoRoot: string): Promise<Array<{ workspace: WorkerWorkspace; cleaned: boolean }>> {
-  const receipts: Array<{ workspace: WorkerWorkspace; cleaned: boolean }> = [];
+export async function ownedWorkspaceReceipts(repoRoot: string): Promise<Array<{ workspace: OwnedWorkerWorkspace; cleaned: boolean }>> {
+  const receipts: Array<{ workspace: OwnedWorkerWorkspace; cleaned: boolean }> = [];
   for (const path of await ownedWorkspaceRecordFiles(repoRoot)) {
     if (path.endsWith('.cleanup.json')) continue;
     try {
