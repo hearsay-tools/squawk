@@ -3,7 +3,7 @@ Status: active
 
 Step 1 of [the plugin core roadmap](2026-11-18-plugin-core-roadmap.md), epic
 hearsay-tools/squawk#3824. Baseline: `main` at `535ce2bdd`. The owner decided the four open
-points on 2026-11-18 in task def1eade. The [plan](2026-11-18-runner-definitions-plan.md) cuts
+points, and a fifth raised in review, on 2026-11-18 in task def1eade. The [plan](2026-11-18-runner-definitions-plan.md) cuts
 the work into slices.
 
 ## Goal
@@ -17,7 +17,8 @@ runners register through the same call that a later outside runner uses
   table keyed by runner id;
 - a fixture runner registers in a test, runs a task and passes the parity kit, with no edit to
   another source file;
-- `AGENT_PROTOCOL.md` §10, the new-runner checklist, names only files in the runner's folder.
+- `AGENT_PROTOCOL.md` §10, the new-runner checklist, names only the runner's folder, its mock
+  script and its line in `runners/built-in.ts`.
 
 This step changes no runner behavior. It moves declarations and the code that reads them.
 
@@ -52,8 +53,11 @@ and dynamic imports included, and fails when its closure reaches another runner'
 
 `runs/store.ts` reads a saved runner through `storedRunnerSchema`, which accepts the built-in
 ids and `claude-cli`. `runs/legacy-run-rows.ts` turns a run saved on a removed runner into a
-`removedRunner` run, for the ids in `REMOVED_RUNNER_IDS` (`cursor`) only. `cez/runner-id-branch` and `cez/runner-roster-literal` read `RUNNER_IDS`
-from the source text of `core/agent-runner.ts`.
+`removedRunner` run, for the ids in `REMOVED_RUNNER_IDS` (`cursor`) only.
+
+`cez/runner-id-branch` and `cez/runner-roster-literal` read `RUNNER_IDS` from the source text of
+`core/agent-runner.ts`. The service names `RunnerId` in 46 non-test files and `RUNNER_IDS` in 18;
+14 of those uses are `Record<RunnerId, …>` tables that this step moves into the definitions.
 
 ## Product decisions (owner, 2026-11-18)
 
@@ -62,7 +66,14 @@ from the source text of `core/agent-runner.ts`.
    requests, automation definitions, provider requests and workspace config. An unknown id gets
    the same refusal that the enum gives today. A run saved on an id that no runner has still
    opens and shows the "(removed)" label (`removedRunnerLabel`), as hearsay-tools/squawk#3715
-   made it for `cursor`; this step makes that path hold for any unregistered id. The service keeps a `RunnerId` type for the built-in ids, where the compiler helps.
+   made it for `cursor`; this step makes that path hold for any unregistered id.
+5. **The core holds no closed list of runner names** (owner, 2026-11-18, after review). A
+   built-in runner and an outside runner take the same path (ADR 0065, rule 1). `RunnerId` and
+   `RUNNER_IDS` leave the service; a runner id is a `string` checked against the registry. The
+   only list of built-in runners is `runners/built-in.ts`, one line for each runner. The
+   step 4 loader, which finds plugins by folder, may replace that list. The compiler no longer
+   catches a misspelled runner id in core code; the registry check at the request edge and
+   `cez/runner-id-branch` cover it.
 2. **The cockpit gets per-runner data from `GET /api/v1/runners`.** The route returns the
    registered runners in display order with their display data and model presets. The cockpit
    tables in [Evidence](#evidence) are removed. Runner pickers wait for this query, as other
@@ -148,19 +159,22 @@ before it reads config or runs a task: the two entries that import `createRunner
 (`serve-command.ts`, `headless-run.ts`), the CLI dispatch, and every other Node entry that reads
 runner data. The slice that adds the registry lists the entries and tests each one.
 
-`RUNNER_IDS` stays in `core/agent-runner.ts` as the list of built-in ids for the compiler, and
-`cez/runner-id-branch` and `cez/runner-roster-literal` keep reading it there. A test holds the
-ids of `runners/built-in.ts` equal to `RUNNER_IDS`. A new built-in runner therefore adds its id
-there and one line in `runners/built-in.ts`; an outside runner (step 4) only calls
-`registerRunner`.
+Until slice C1, `RUNNER_IDS` stays in `core/agent-runner.ts` and a test holds the ids of
+`runners/built-in.ts` equal to it. C1 removes `RUNNER_IDS` and `RunnerId` (decision 5); from
+then on `cez/runner-id-branch` and `cez/runner-roster-literal` read the ids from
+`runners/built-in.ts`. A new built-in runner adds its folder, its mock script and one line in
+`runners/built-in.ts`; an outside runner (step 4) only calls `registerRunner`.
 
 The lint rule `runner-class-outside-factory` lets a runner class be constructed only inside its
 own runner folder, and `runner-class-rule.test.ts` scans `runners/`.
 
 ### Saved runs
 
-`storedRunnerSchema` accepts any non-empty string. `legacy-run-rows.ts` treats every id that is
-not registered when the store reads the run as a removed runner, not only `cursor`. A run saved
+`storedRunnerSchema` accepts any non-empty string. `legacy-run-rows.ts` runs before the schema
+parse (`runs/store.ts`), so it first maps a legacy id (`claude-cli`) to its runner through the
+registry's legacy map, and only then treats an id that is still not registered as a removed
+runner, not only `cursor`. A run saved under `claude-cli` keeps its session id and transport, as
+today; a test pins it. A run saved
 on the fixture runner, read by a process that has not registered it, opens as a removed-runner
 run.
 
@@ -177,7 +191,9 @@ run.
   modelIdScope, icon, installHint, loginCommand, accountFolderExample, models: { suggested,
   known, retired }, agentConfig: { note, groups } }`. Each group carries `id`, `label`, `note`,
   `empty` and `showsUserMcp`. The file filter stays in the cockpit: it matches a file's
-  `runners` and `kind`, which the agent config route already sends.
+  `runners`, `kind` and `holdsMcp`, which the agent config route already sends, so a settings
+  file that holds MCP servers (Codex `config.toml`, OpenCode's config) still shows in the MCP
+  group.
 - `GET /api/v1/runners` is a workspace route. It reads the registry and never probes a CLI.
 - Each cockpit table keyed by runner id goes. A component reads the runner's entry from the
   route's query.

@@ -2,7 +2,7 @@
 Status: active
 
 Plan for [the runner definitions spec](2026-11-18-runner-definitions.md), epic
-hearsay-tools/squawk#3824. The spec holds the design and the owner's four decisions; this file
+hearsay-tools/squawk#3824. The spec holds the design and the owner's five decisions; this file
 says how the work is cut. Baseline: `main` at `535ce2bdd`. Ten slices, one pull request and
 one child issue each. Delete this file when slice D2 merges.
 
@@ -145,12 +145,16 @@ Breaking change: the PR title carries `!`.
   record keyed by string.
 - `UiBackend` in `core/ui-events.ts` and in `packages/api-client/src/protocol/ui-events.ts`
   becomes `string`.
+- `RunnerId` and `RUNNER_IDS` leave the service (spec decision 5): signatures take `string`, and
+  `cez/runner-id-branch` and `cez/runner-roster-literal` read the ids from
+  `runners/built-in.ts`. The A3 test that holds the two lists equal goes with them.
 - Server: `GET /api/v1/runners`; run requests, automation definitions, provider requests and
   config writes check the id with `isRegisteredRunner` and give the refusal that the enum gives
   today. `health`'s `checks` name a runner by a string.
 - Saved runs: `storedRunnerSchema` (`runs/store.ts`) accepts any non-empty string, and
-  `legacy-run-rows.ts` treats every unregistered id as a removed runner, in place of the
-  `REMOVED_RUNNER_IDS` list.
+  `legacy-run-rows.ts` maps legacy ids (`claude-cli`) first, then treats every id that is still
+  unregistered as a removed runner, in place of the `REMOVED_RUNNER_IDS` list. A test pins that
+  a `claude-cli` run keeps its session.
 - Reader sweep in the same slice, so every package compiles after it: each reader of
   `runnerSchema.options` (contract `delegation.ts`, `workflows.ts`, `workspace.ts`,
   `health.ts`, `automation-storage.ts`, `provider-requests.ts`, `run-requests.ts`; cockpit
@@ -162,7 +166,8 @@ Breaking change: the PR title carries `!`.
   `server/provider-action-gate.ts`; on `main` at `535ce2bdd`) reads the route or the registry.
 - The cockpit query for the route, with the pickers disabled until it answers.
 
-**Done when:** `runner-roster-literal.baseline.json` holds no entry; an unknown runner id on
+**Done when:** `runner-roster-literal.baseline.json` holds no entry; no non-test service file
+names `RunnerId` or `RUNNER_IDS`; an unknown runner id on
 each request route gets the same status and message as before the slice; a run saved on the
 fixture runner opens as a removed-runner run in a process that has not registered it; and
 `npm run typecheck` passes for every package.
@@ -195,7 +200,8 @@ fixture changed no file outside `runners/fixture/` and its mock script.
 ## D2. Docs, ADR, spec close-out
 
 - New ADR: each runner is one registered definition.
-- `AGENT_PROTOCOL.md` §10 names only files in `runners/<id>/` plus the mock script;
+- `AGENT_PROTOCOL.md` §10 names only `runners/<id>/`, the mock script and the runner's line in
+  `runners/built-in.ts`;
   `docs/areas/runners.md` describes the definition and the registry.
 - The spec gets an implementation record and `Status: done`; this plan file is deleted; the
   roadmap's step table says step 1 is done.
