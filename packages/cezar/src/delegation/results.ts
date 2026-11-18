@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { WorkerCollectedResult } from '@open-mercato/cezar-contract';
+import { isLiveStatus } from '@open-mercato/cezar-contract/run-predicates';
 import type { RunEvent, RunRecord, RunStore } from '../runs/store.ts';
 import { isAttachmentFileName, resolveAttachmentPath } from '../workflows/attachment-path.ts';
 import { workspaceDirectoryRemoved, workspaceKindOf } from './workspace-kinds.ts';
@@ -36,7 +37,7 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
   const observation = workerObservation(run, store.readWorkerExecution(run.id));
   const head = await readWorkerHead(repoRoot, run, previous, workspaceRemoved);
   const { diff, diffSnapshot } = await readWorkerDiff(repoRoot, store, run, delegation, { destroyed, workspaceRemoved });
-  const changes = await readWorkspaceChanges(store, run, observation.settled);
+  const changes = await readWorkspaceChanges(store, run);
   const artifacts = await listWorkerArtifacts(store.sourceDataDir(run.id), run, delegation, allEvents);
   return { result: {
     workerId: run.id, parentRunId: delegation.parentRunId, revision: workerRevision(run), observedAt: new Date().toISOString(),
@@ -49,9 +50,12 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
   }, ...(diffSnapshot === undefined ? {} : { diffSnapshot }) };
 }
 
-/** The kind's report of what changed in the workspace's directory, for the worker's current execution. */
-async function readWorkspaceChanges(store: RunStore, run: RunRecord, settled: boolean): Promise<Pick<WorkerCollectedResult, 'changes'>> {
-  const changes = await workspaceKindOf(run).changeReport(store.sourceDataDir(run.id), run, { generation: store.readWorkerExecution(run.id)?.generation, settled });
+/** The kind's report of what changed in the workspace's directory, for the worker's current execution.
+ *  Only a worker that is queued, running or waiting counts as still running: one that stopped in any
+ *  other way, with or without a complete execution record, is never compared with the directory as it is. */
+async function readWorkspaceChanges(store: RunStore, run: RunRecord): Promise<Pick<WorkerCollectedResult, 'changes'>> {
+  const changes = await workspaceKindOf(run).changeReport(store.sourceDataDir(run.id), run,
+    { generation: store.readWorkerExecution(run.id)?.generation, settled: !isLiveStatus(run.status) });
   return changes ? { changes } : {};
 }
 
