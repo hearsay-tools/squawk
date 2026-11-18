@@ -110,7 +110,8 @@ React component loads into the cockpit bundle.
 ## Evidence
 
 A review of the code at `6eedefca9` on 2026-11-16 rated each seam. Counts are from that commit;
-the counts of importers and callers come from text search and are approximate.
+the counts of importers and callers come from text search and are approximate. The count of test
+files is what Squeal reported in a worktree at that commit; the commit alone cannot repeat it.
 
 | Seam | State then | Step |
 | --- | --- | --- |
@@ -123,15 +124,15 @@ the counts of importers and callers come from text search and are approximate.
 | CLI commands | 20 commands behind two `switch` statements, one handler shape | 3 |
 | Forge | A `ForgeDriver` interface; 9 files called `gh` without it | 5 |
 | Run lifecycle | `RunStore` emitted 4 untyped events (`run`, `deleted`, `event`, `closed`) to about 12 listeners | 2 |
-| Run store | One class of 3,393 lines and 198 methods; at least 838 of 1,893 test files loaded `runs/store.ts` | 2 |
+| Run store | One class of 3,393 lines and 198 methods. Squeal reported that at least 838 of the 1,893 test files it covered load `runs/store.ts` | 2 |
 | HTTP API | `server/server.ts` built every route in 4,990 lines; the typed client is computed from it | 5 |
 | Cockpit | 84,000 lines with no place for outside UI | 6 |
 | Trust | No rule for when outside code may run | 4 |
 
 The service had 118,000 lines of non-test source at that commit.
 
-On 2026-11-18 at `1e22453b1`, `layer-import.baseline.json` holds 139 entries: 127 imports from
-core into features and 13 from core into runners.
+On 2026-11-18 at `1e22453b1`, `layer-import.baseline.json` holds 139 entries for 140 imports:
+127 from core into features and 13 from core into runners.
 
 ## Open decisions
 
