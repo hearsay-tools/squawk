@@ -219,6 +219,28 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       } finally { vi.useRealTimers(); other.dispose(); reopened.flush(); }
     });
 
+    it("tells the worker's workspace that the execution ended when it settles a crashed generation (hearsay-tools/squawk#3819)", async () => {
+      const w = await worker(); store.commitWorkerExecutionStart(w.id);
+      setRunStatus(store, w.id, RUN_STATUS.failed);
+      setController(w.id, { pid: await deadPid(), startToken: '1' });
+      const settle = vi.fn(async (_request: { run: { id: string }; repoRoot: string; dataDir: string }) => {});
+      const orphans = new WorkerOrphans({ createRunner: noRunners, home: testHome(), store, repoRoot: root, dataDir: join(root, '.ai/cezar'),
+        semaphore: new WorkspaceSemaphore({ home: testHome() }), work: fixtureWork(root), disposed: () => false }, {
+        holds: () => false, reapTerminalScratch: () => {},
+        workerWorkspaces: () => ({ openForLaunch: async () => { throw new Error('unused'); }, openForContinue: async () => { throw new Error('unused'); }, settle }),
+        settleOrphanedWorkerExecution: (id, options) => orphans.settleOrphanedWorkerExecution(id, options),
+      });
+      try {
+        expect(settle).not.toHaveBeenCalled();
+        expect(orphans.settleOrphanedWorkerExecution(w.id)).toBe(true);
+        expect(store.readWorkerExecution(w.id)?.phase).toBe('complete');
+        expect(settle).toHaveBeenCalledTimes(1);
+        expect(settle.mock.calls[0]![0]).toMatchObject({ run: { id: w.id }, repoRoot: root, dataDir: join(root, '.ai/cezar') });
+        expect(orphans.settleOrphanedWorkerExecution(w.id)).toBe(false);
+        expect(settle).toHaveBeenCalledTimes(1);
+      } finally { orphans.dispose(); }
+    });
+
     it('a recorded survivor is re-probed on the backoff cadence until it dies (hearsay-tools/cezarion#879)', async () => {
       const ids: string[] = []; const holders: Awaited<ReturnType<typeof spawnReady>>[] = [];
       for (let i = 0; i < 2; i++) {
@@ -232,7 +254,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       // This case owns one small module: only its retry cadence matters.
       const cadence = new WorkerOrphans({ createRunner: noRunners, home: testHome(), store, repoRoot: root, dataDir: join(root, '.ai/cezar'),
         semaphore: new WorkspaceSemaphore({ home: testHome() }), work: fixtureWork(root), disposed: () => false }, {
-        holds: () => false, reapTerminalScratch: () => {},
+        holds: () => false, reapTerminalScratch: () => {}, workerWorkspaces: () => undefined,
         settleOrphanedWorkerExecution: (id, options) => cadence.settleOrphanedWorkerExecution(id, options),
       });
       cadence.orphanBackoff = { fastMs: 400, fastCount: 2, capMs: 1_600 };

@@ -61,13 +61,14 @@ describe('the shared workspace kind', () => {
   it('records the end state at settlement, and drops it when the next session opens', async () => {
     const run = await workerRun();
     await shared.openForLaunch({ ...request(run), firstLaunch: true });
-    expect(await shared.changeReport(dataDir, run)).toEqual({ state: 'unchanged' });
+    expect(await shared.changeReport(dataDir, run, false)).toEqual({ state: 'unchanged' });
     writeFileSync(join(host, 'written.txt'), 'x\n');
     await shared.settle(request(run));
     expect(existsSync(dataFile('worker-workspace-end.json'))).toBe(true);
-    expect(await shared.changeReport(dataDir, run)).toMatchObject({ state: 'changed', paths: ['written.txt'] });
+    expect(await shared.changeReport(dataDir, run, true)).toMatchObject({ state: 'changed', paths: ['written.txt'] });
     await shared.openForContinue(request(run));
     expect(existsSync(dataFile('worker-workspace-end.json'))).toBe(false);
+    expect(await shared.changeReport(dataDir, run, true)).toEqual({ state: 'unavailable', reason: 'no workspace state was recorded when the worker settled' });
   });
 
   it('refuses a launch once the destroy began', async () => {

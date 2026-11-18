@@ -68,7 +68,7 @@ describe('the isolated workspace kind', () => {
   it('has a diff of its own, so it reports no change of a shared directory and does nothing at settlement', async () => {
     expect(isolated.noDiff).toBeUndefined();
     expect(isolated.workerNotice).toBeUndefined();
-    expect(await isolated.changeReport('/data', run)).toBeUndefined();
+    expect(await isolated.changeReport('/data', run, true)).toBeUndefined();
     await isolated.settle(request);
     expect(calls).toEqual([]);
   });

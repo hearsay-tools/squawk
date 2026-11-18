@@ -1,4 +1,6 @@
 import { isReclaimable, workerFamilyEnded } from '../../runs/retention.ts';
+import { hostsLiveSharedWorker } from '../../runs/shared-hosts.ts';
+import type { RunRecord } from '../../runs/store.ts';
 import type { RunModuleContext } from './types.ts';
 
 interface MaintenanceClaimsHost {
@@ -23,6 +25,11 @@ export class MaintenanceClaims {
     return () => { this.reclaiming.delete(runId); this.host.scheduleScratchCleanup(runId); };
   }
 
+  /** A directory a live worker works in is not reclaimed, and its branch is not deleted. */
+  private hostsLiveSharedWorker(run: RunRecord | undefined): boolean {
+    return !!run && hostsLiveSharedWorker(run, (rootId) => this.context.store.listWorkersOf(rootId));
+  }
+
   /**
    * Claim a run's worktree for a reclaim (#483, issue 08 §B4), or null when it is in use or no
    * longer reclaimable. The check and the claim are one synchronous step, and `continueRun`
@@ -32,7 +39,7 @@ export class MaintenanceClaims {
   claimWorktreeReclaim(runId: string): (() => void) | null {
     if (this.has(runId) || !!this.host.autosaveCleanupBlocker(runId) || this.host.isActive(runId) || this.context.store.writeRefusal(runId)) return null;
     const run = this.context.store.getRun(runId);
-    if (!run || !isReclaimable(run, (id) => this.context.store.getRun(id))) return null;
+    if (!run || !isReclaimable(run, (id) => this.context.store.getRun(id)) || this.hostsLiveSharedWorker(run)) return null;
     return this.host.holdForMaintenance([runId]);
   }
 
@@ -83,7 +90,7 @@ export class MaintenanceClaims {
       const run = lookup(id);
       return !!run && !['done', 'failed', 'cancelled'].includes(run.status) && !(run.status === 'review' && workerFamilyEnded(run, lookup));
     };
-    if (runIds.some((id) => this.has(id) || !!this.host.autosaveCleanupBlocker(id) || this.host.isActive(id) || unfinished(id) || this.context.store.writeRefusal(id))) return null;
+    if (runIds.some((id) => this.has(id) || !!this.host.autosaveCleanupBlocker(id) || this.host.isActive(id) || unfinished(id) || this.hostsLiveSharedWorker(lookup(id)) || this.context.store.writeRefusal(id))) return null;
     return this.host.holdForMaintenance(runIds);
   }
 

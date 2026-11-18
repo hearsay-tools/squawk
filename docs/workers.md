@@ -64,6 +64,8 @@ A shared worker has none of the things an isolated worker owns:
 | Commit, push, pull request and worktree removal on its task page, and a preview | Not offered. The server refuses commit, push, pull request and removal with `this worker runs in its parent's worktree`, and starts no preview |
 | A worktree and a branch that destroy removes, under the worktree mutation lock | Destroy stops its processes and ends with `remaining: []` and `deleted: []`. It takes no worktree mutation lock and touches no file or branch of the parent |
 
+While a shared worker is queued, running, waiting or being destroyed, Squawk does not reclaim or remove the directory it works in: retention skips its host task, and the cockpit refuses to remove that task's worktree or delete its branch until the worker has ended or is cleaned up. The worker's own task page reads its files, changes and transcript file links from that directory.
+
 Launch and Continue check that the recorded directory still exists and is a worktree of this repository. If it is not, the worker fails with the reason; Squawk creates nothing in its place.
 
 **Change report.** Squawk records the directory's state when the shared worker's first session starts and again each time the worker settles: the HEAD commit, the checked-out branch (or a detached HEAD), the content of the index, tracked changes and untracked files. Ignored files are not part of it; that includes Squawk's own run files in a repository root, which the `.gitignore` in its data directory ignores. `hsq worker collect` returns the comparison as `changes`:
@@ -72,7 +74,14 @@ Launch and Continue check that the recorded directory still exists and is a work
 - `{ "state": "changed", "paths": [...], "truncated": false, "headMoved": false, "branchMoved": false, "indexMoved": false }`: `paths` lists at most 100 changed paths, and `truncated` says that more changed.
 - `{ "state": "unavailable", "reason": "..." }`: Squawk could not record or read a state, for example because the worker never started a session.
 
-The comparison always starts at the first session, also after a Continue or a restart. While the worker runs, `collect` compares with the directory as it is at that moment.
+The comparison always starts at the first session, also after a Continue or a restart. While the worker runs, `collect` compares with the directory as it is at that moment. A settled worker is compared only with the state recorded when it settled; when Squawk could not record that state, `changes` is `unavailable`, so a later edit is never reported as part of the worker's run. A worker whose controller crashed gets its end state when Squawk finds that its processes are gone.
+
+Squawk compares content, with these limits:
+
+- A changed or untracked file of at most 8 MiB is compared by a hash of its content, up to 64 MiB of content for one recorded state. A file past either bound is compared by size, modification time and mode, so a same-size rewrite that restores the modification time does not show for it.
+- A submodule, or another nested repository, is compared by its own HEAD, index, changes and untracked files, three levels deep; a deeper one by its HEAD only.
+- A file that was changed and then changed back reads as unchanged.
+- One recorded state keeps 5,000 changed or untracked paths. When more exist, a change among the rest still reads as `changed`, with `truncated: true`.
 
 Squawk does not prevent a write, and the report does not say who made a change. **Two agents work in one worktree:** an edit, a commit or a checkout by the parent, by another shared worker or by a human during the worker's run shows as changed too. Give a shared worker a task that reads (a review, an analysis), and say in the task text when it may write. Its session prompt tells it that it shares the parent's worktree and must not write there unless its task says so. Do not change the same files in the parent while it runs.
 

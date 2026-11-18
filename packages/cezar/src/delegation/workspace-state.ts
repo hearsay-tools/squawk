@@ -1,7 +1,7 @@
 /** The recorded state of a directory a worker shares with its host, and the report of what changed
  *  between two states. Reads only: `--no-optional-locks` keeps `git status` from refreshing the index. */
 import { createHash } from 'node:crypto';
-import { lstat, readFile, rm, stat } from 'node:fs/promises';
+import { lstat, readFile, readlink, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { WORKER_CHANGED_PATHS_CAP, type WorkerChangeReport } from '@open-mercato/cezar-contract/delegation';
@@ -12,6 +12,12 @@ import { workerDataDirectory, writeWorkerDataFile } from './context.ts';
 /** How many status entries one recorded state keeps; the hash covers the rest. */
 export const STATE_ENTRY_CAP = 5_000;
 const STATE_FILE_BYTES = 4 * 1024 * 1024;
+/** A changed or untracked file up to this size is compared by content; a larger one by size, modification time and mode. */
+export const CONTENT_HASH_FILE_BYTES = 8 * 1024 * 1024;
+/** The content one recorded state hashes in total; files past it are compared by size, modification time and mode. */
+export const CONTENT_HASH_TOTAL_BYTES = 64 * 1024 * 1024;
+/** How deep a state follows nested repositories (submodules); a deeper one is compared by its HEAD only. */
+const NESTED_REPOSITORY_DEPTH = 3;
 const START_FILE = 'worker-workspace-start.json';
 const END_FILE = 'worker-workspace-end.json';
 
@@ -25,7 +31,7 @@ const stateSchema = z.object({
   index: z.string().length(64),
   /** SHA-256 of every status entry, also those past `STATE_ENTRY_CAP`. */
   status: z.string().length(64),
-  /** `[path, status code and file fingerprint]`, sorted by path. */
+  /** `[path, status code and content fingerprint]`, sorted by path. */
   entries: z.array(z.tuple([z.string(), z.string()])).max(STATE_ENTRY_CAP),
   entriesTruncated: z.boolean(),
 }).strict();
@@ -51,28 +57,50 @@ export function parseStatus(output: string): Array<[string, string]> {
   return entries;
 }
 
-/** Size, modification time and mode: a second edit of a file that was already changed shows here. */
-async function fingerprint(dir: string, path: string): Promise<string> {
-  const entry = await lstat(join(dir, path)).catch(() => undefined);
-  return entry ? `${entry.size}:${entry.mtimeMs}:${entry.mode}` : 'absent';
+type Budget = { bytes: number };
+
+/** What a status entry's path holds: the content hash of a file within the size bounds, a link's
+ *  target, or the whole state of a nested repository, so an edit inside a submodule that was
+ *  already dirty shows. A file past the bounds falls back to size, modification time and mode. */
+async function fingerprint(dir: string, path: string, budget: Budget, depth: number): Promise<string> {
+  const target = join(dir, path);
+  const entry = await lstat(target).catch(() => undefined);
+  if (!entry) return 'absent';
+  if (entry.isSymbolicLink()) return `link:${await readlink(target).catch(() => '')}`;
+  if (entry.isDirectory()) return nestedFingerprint(target, budget, depth);
+  if (!entry.isFile()) return `other:${entry.mode}`;
+  if (entry.size > CONTENT_HASH_FILE_BYTES || entry.size > budget.bytes) return `meta:${entry.size}:${entry.mtimeMs}:${entry.mode}`;
+  budget.bytes -= entry.size;
+  return `sha256:${createHash('sha256').update(await readFile(target)).digest('hex')}:${entry.mode & 0o111 ? 'x' : '-'}`;
 }
 
-export async function captureWorkspaceState(dir: string): Promise<WorkspaceState> {
+/** A directory in the status is a nested repository: a submodule, or an untracked clone. */
+async function nestedFingerprint(dir: string, budget: Budget, depth: number): Promise<string> {
+  const head = await git(dir, ['rev-parse', '--verify', 'HEAD^{commit}'], { timeout: 30_000 });
+  if (!head.ok || !await entryExists(join(dir, '.git'))) return 'directory';
+  if (depth >= NESTED_REPOSITORY_DEPTH) return `repository:${head.stdout.trim()}`;
+  const nested = await readWorkspaceState(dir, budget, depth + 1).catch(() => undefined);
+  return nested ? `repository:${nested.head}:${nested.index}:${nested.status}` : `repository:${head.stdout.trim()}:unreadable`;
+}
+
+async function readWorkspaceState(dir: string, budget: Budget, depth: number): Promise<WorkspaceState> {
   const head = (await gitOutput(dir, ['rev-parse', '--verify', 'HEAD^{commit}'])).trim();
   const branch = await git(dir, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { timeout: 30_000 });
   const index = sha256(await gitOutput(dir, ['ls-files', '-s', '-z']));
   const parsed = parseStatus(await gitOutput(dir, ['status', '--porcelain=v1', '-z', '--untracked-files=all']))
     .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
   const entries: Array<[string, string]> = [];
-  for (let offset = 0; offset < parsed.length; offset += 64) {
-    entries.push(...await Promise.all(parsed.slice(offset, offset + 64)
-      .map(async ([path, code]): Promise<[string, string]> => [path, `${code} ${await fingerprint(dir, path)}`])));
-  }
+  // In path order, one at a time: the byte budget is then spent the same way at the start and at the end.
+  for (const [path, code] of parsed) entries.push([path, `${code} ${await fingerprint(dir, path, budget, depth)}`]);
   return {
     head, branch: branch.ok ? branch.stdout.trim() : null, index,
     status: sha256(entries.map(([path, value]) => `${path}\0${value}\0`).join('')),
     entries: entries.slice(0, STATE_ENTRY_CAP), entriesTruncated: entries.length > STATE_ENTRY_CAP,
   };
+}
+
+export function captureWorkspaceState(dir: string): Promise<WorkspaceState> {
+  return readWorkspaceState(dir, { bytes: CONTENT_HASH_TOTAL_BYTES }, 0);
 }
 
 async function readState(path: string): Promise<WorkspaceState | undefined> {
@@ -99,7 +127,7 @@ export async function clearWorkspaceEnd(dataDir: string, workerId: string): Prom
 }
 
 /** Record the directory's state when the worker's execution ended. A failed read leaves no end
- *  record, so the report compares with the directory as it is. */
+ *  record, and the report of the settled worker is then unavailable. */
 export async function recordWorkspaceEnd(dataDir: string, workerId: string, dir: string): Promise<void> {
   const path = await stateFile(dataDir, workerId, END_FILE);
   await rm(path, { force: true });
@@ -131,14 +159,16 @@ export async function compareWorkspaceStates(dir: string, start: WorkspaceState,
   };
 }
 
-/** What changed in `dir` since the worker's first session started: up to its last settlement, or up
- *  to now while it runs. */
-export async function workspaceChangeReport(dataDir: string, workerId: string, dir: string): Promise<WorkerChangeReport> {
+/** What changed in `dir` since the worker's first session started, up to its last settlement. Only a
+ *  worker that still runs is compared with the directory as it is: a settled worker with no end
+ *  state gets no report, because a later change would not be from its run. */
+export async function workspaceChangeReport(dataDir: string, workerId: string, dir: string, settled: boolean): Promise<WorkerChangeReport> {
   try {
     const start = await readState(await stateFile(dataDir, workerId, START_FILE));
     if (!start) return { state: 'unavailable', reason: 'no workspace state was recorded: the worker started no session' };
-    const end = await readState(await stateFile(dataDir, workerId, END_FILE)) ?? await captureWorkspaceState(dir);
-    return await compareWorkspaceStates(dir, start, end);
+    const recorded = await readState(await stateFile(dataDir, workerId, END_FILE));
+    if (!recorded && settled) return { state: 'unavailable', reason: 'no workspace state was recorded when the worker settled' };
+    return await compareWorkspaceStates(dir, start, recorded ?? await captureWorkspaceState(dir));
   } catch (error) {
     return { state: 'unavailable', reason: (error instanceof Error ? error.message : String(error)).slice(0, 500) };
   }

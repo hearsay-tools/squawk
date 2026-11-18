@@ -18,7 +18,7 @@ function run(partial: {
   role?: 'worker' | 'invalid';
   destroying?: boolean;
 }): RunRecord {
-  // The selector reads only `role`, `parentRunId` and `destroy`, so a worker here is that much and
+  // The selector reads only `role`, `parentRunId`, `destroy` and the workspace kind, so a worker here is that much and
   // no more; the cast is the one loose field, and the record around it is typed.
   const delegation =
     partial.role === 'invalid'
@@ -28,6 +28,7 @@ function run(partial: {
             role: 'worker' as const,
             parentRunId: 'parent',
             permissions: [] as const,
+            workspace: { ownerRunId: partial.id, resourceId: partial.id, kind: 'owned-isolated' as const, path: process.cwd(), branch: `cez/${partial.id}`, baselineSha: 'a'.repeat(40) },
             ...(partial.destroying
               ? {
                   destroy: {
@@ -61,6 +62,20 @@ describe('selectReclaimableWorktrees (#483)', () => {
     ];
     // keep the 2 newest (d, c) → reclaim the 2 oldest (b, a).
     expect(selectReclaimableWorktrees(runs, 2).sort()).toEqual(['a', 'b']);
+  });
+
+  it('keeps the worktree of a run while a live worker works in it, and reclaims it once that worker ended (hearsay-tools/squawk#3819)', () => {
+    const host = { ...run({ id: 'host', status: RUN_STATUS.failed, finishedAt: '2026-07-01T00:00:00Z' }), delegation: { role: 'root', permissions: [], receipts: [] } } as RunRecord;
+    const newer = run({ id: 'newer', status: RUN_STATUS.done, finishedAt: '2026-07-02T00:00:00Z' });
+    const sharedWorker = (status: RunStatus, hostRunId = 'host') => makeRunRecord({ id: 'shared-worker', status, delegation: {
+      role: 'worker', parentRunId: 'host', permissions: [],
+      workspace: { ownerRunId: 'shared-worker', resourceId: 'resource', kind: 'shared', path: process.cwd(), hostRunId, baselineSha: 'a'.repeat(40) },
+    } as unknown as RunRecord['delegation'] });
+    const select = (worker: RunRecord) => selectReclaimableWorktrees([host, newer], 1, (id) => [host, newer].find(r => r.id === id), (rootId) => rootId === 'host' ? [worker] : []);
+    expect(select(sharedWorker(RUN_STATUS.running))).toEqual([]);
+    expect(select(sharedWorker(RUN_STATUS.waiting))).toEqual([]);
+    expect(select(sharedWorker(RUN_STATUS.done))).toEqual(['host']);
+    expect(select(sharedWorker(RUN_STATUS.running, 'another-run'))).toEqual(['host']);
   });
 
   it('orders by finishedAt, falling back to createdAt when finishedAt is absent', () => {

@@ -34,7 +34,7 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
   const { lastExecutionOutcome, settled } = executionOutcome(store, run);
   const head = await readWorkerHead(repoRoot, run, previous, workspaceRemoved);
   const { diff, diffSnapshot } = await readWorkerDiff(repoRoot, store, run, delegation, { destroyed, workspaceRemoved });
-  const changes = await workspaceKindOf(run).changeReport(store.sourceDataDir(run.id), run);
+  const changes = await workspaceKindOf(run).changeReport(store.sourceDataDir(run.id), run, settled);
   const artifacts = await listWorkerArtifacts(store.sourceDataDir(run.id), run, delegation, allEvents);
   return { result: {
     workerId: run.id, parentRunId: delegation.parentRunId, revision: workerRevision(run), observedAt: new Date().toISOString(),

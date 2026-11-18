@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { SHARED_ATTACH_REFUSAL, SHARED_BASELINE_REFUSAL } from '@open-mercato/cezar-contract/delegation';
@@ -242,6 +242,33 @@ describe('a worker in a shared workspace (hearsay-tools/squawk#3819)', { timeout
       outcome: 'destroyed', cleanup: 'complete', workspace: { kind: 'shared', state: 'available' }, head: { state: 'available', sha: hostHead },
       changes: { state: 'changed', paths: ['written-by-worker.txt'] },
     });
+  });
+
+  it('keeps a failed parent\'s worktree from being reclaimed while its shared worker runs, and frees it once the worker is destroyed', async () => {
+    const { workerId } = await f.service.spawn(f.caller, shared());
+    await f.releaseAdmission();
+    await until(() => sessions.length === 1);
+    setRunStatus(f.store, f.parent.id, RUN_STATUS.failed, { finishedAt: new Date().toISOString() });
+    const parent = () => f.store.getRun(f.parent.id)!;
+    expect(isReclaimable(parent(), id => f.store.getRun(id))).toBe(true);
+    expect(worker(workerId).status).toBe(RUN_STATUS.running);
+    expect(f.manager.claimWorktreeReclaim(f.parent.id)).toBeNull();
+    expect(f.manager.claimForBranchCleanup([f.parent.id])).toBeNull();
+    expect(existsSync(join(host, 'parent-work.txt'))).toBe(true);
+    sessions[0]!.finish();
+    expect(await f.manager.awaitRunTermination(workerId, 15_000)).toBe(true);
+    expect(await f.service.destroyForHuman('project', workerId)).toMatchObject({ state: 'complete' });
+    const release = f.manager.claimWorktreeReclaim(f.parent.id);
+    expect(release).toEqual(expect.any(Function));
+    release?.();
+  });
+
+  it('gives a settled worker no report when its end state is missing, instead of comparing with later edits', async () => {
+    const { workerId } = await f.service.spawn(f.caller, shared());
+    await runSession(workerId);
+    rmSync(join(f.root, '.ai/cezar/runs', `${workerId}-images`, 'worker-workspace-end.json'));
+    writeFileSync(join(host, 'edited-after-the-worker-ended.txt'), 'x\n');
+    expect((await f.service.collect(f.caller, { workerId })).changes).toEqual({ state: 'unavailable', reason: 'no workspace state was recorded when the worker settled' });
   });
 
   it('is never a reason for retention, the family end or history deletion to remove the parent\'s directory or branch', async () => {

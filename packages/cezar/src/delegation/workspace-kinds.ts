@@ -47,9 +47,10 @@ export interface WorkspaceKind {
   /** The commit the verified workspace is at. */
   readHead(repoRoot: string, run: RunRecord): Promise<string>;
   readDiff(repoRoot: string, run: RunRecord): Promise<WorkerDiff>;
-  /** Whether the workspace's directory changed during the worker's run. Undefined for a kind whose
-   *  worker has the directory to itself: its diff says what it changed. */
-  changeReport(dataDir: string, run: RunRecord): Promise<WorkerChangeReport | undefined>;
+  /** Whether the workspace's directory changed during the worker's run; `settled` says that its
+   *  execution ended. Undefined for a kind whose worker has the directory to itself: its diff says
+   *  what it changed. */
+  changeReport(dataDir: string, run: RunRecord, settled: boolean): Promise<WorkerChangeReport | undefined>;
   /** Runs `config`, the project's `worktreeTeardown` value, before a destroy. Returns why it failed, if it did. */
   teardown(repoRoot: string, config: unknown, workspace: WorkerWorkspace): Promise<string | undefined>;
   /** Removes the workspace's resources and reports the ones that remain. */
@@ -137,7 +138,7 @@ const shared: WorkspaceKind = {
   async assertResumable(repoRoot, run) { await verifySharedWorkspace(repoRoot, run); },
   readHead: readSharedHead,
   async readDiff() { throw new DelegationPolicyError('unavailable_diff', SHARED_NO_DIFF); },
-  async changeReport(dataDir, run) { return workspaceChangeReport(dataDir, run.id, workerDelegation(run).workspace.path); },
+  async changeReport(dataDir, run, settled) { return workspaceChangeReport(dataDir, run.id, workerDelegation(run).workspace.path, settled); },
   async teardown() { return undefined; },
   async remove(_repoRoot, workspace) { return { workerId: workspace.ownerRunId, state: 'complete', deleted: [], remaining: [] }; },
 };

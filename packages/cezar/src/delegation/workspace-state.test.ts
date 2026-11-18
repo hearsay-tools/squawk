@@ -5,14 +5,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WORKER_CHANGED_PATHS_CAP } from '@open-mercato/cezar-contract/delegation';
-import { captureWorkspaceState, clearWorkspaceEnd, compareWorkspaceStates, parseStatus, recordWorkspaceEnd, recordWorkspaceStart,
+import { CONTENT_HASH_FILE_BYTES, captureWorkspaceState, clearWorkspaceEnd, compareWorkspaceStates, parseStatus, recordWorkspaceEnd, recordWorkspaceStart,
   workspaceChangeReport } from './workspace-state.ts';
 
 let root: string, repo: string, dataDir: string;
 const workerId = randomUUID();
 const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: 'pipe' }).trim();
 const stateFile = (name: 'start' | 'end') => join(dataDir, 'runs', `${workerId}-images`, `worker-workspace-${name}.json`);
-const report = () => workspaceChangeReport(dataDir, workerId, repo);
+const report = (settled = true) => workspaceChangeReport(dataDir, workerId, repo, settled);
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'cez-workspace-state-'));
@@ -68,6 +68,49 @@ describe('the change report of a shared workspace', () => {
     expect(await report()).toMatchObject({ state: 'changed', paths: ['dirty.txt', 'tracked.txt'], indexMoved: false });
   });
 
+  it('compares content: a second edit that keeps the size and the modification time of a dirty file shows', async () => {
+    const dirty = join(repo, 'tracked.txt'), untracked = join(repo, 'untracked.txt');
+    const at = new Date('2026-11-01T00:00:00.000Z');
+    writeFileSync(dirty, 'aaaa\n'); writeFileSync(untracked, 'cccc\n');
+    utimesSync(dirty, at, at); utimesSync(untracked, at, at);
+    const before = [statSync(dirty), statSync(untracked)];
+    await recordWorkspaceStart(dataDir, workerId, repo);
+    writeFileSync(dirty, 'bbbb\n'); writeFileSync(untracked, 'dddd\n');
+    utimesSync(dirty, at, at); utimesSync(untracked, at, at);
+    expect([statSync(dirty), statSync(untracked)].map(entry => [entry.size, entry.mtimeMs])).toEqual(before.map(entry => [entry.size, entry.mtimeMs]));
+    await recordWorkspaceEnd(dataDir, workerId, repo);
+    expect(await report()).toMatchObject({ state: 'changed', paths: ['tracked.txt', 'untracked.txt'], indexMoved: false });
+  });
+
+  it('follows a submodule: an edit inside one that was already dirty shows as the submodule path', async () => {
+    const library = join(root, 'library');
+    mkdirSync(library);
+    const lib = (...args: string[]) => execFileSync('git', args, { cwd: library, encoding: 'utf8', stdio: 'pipe' }).trim();
+    lib('init', '-q', '-b', 'main'); lib('config', 'user.name', 'test'); lib('config', 'user.email', 'test@local');
+    writeFileSync(join(library, 'lib.txt'), 'v1\n'); lib('add', '.'); lib('commit', '-qm', 'lib');
+    git('-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', library, 'lib'); git('commit', '-qm', 'add submodule');
+    writeFileSync(join(repo, 'lib/lib.txt'), 'dirty before the worker\n');
+    await recordWorkspaceStart(dataDir, workerId, repo);
+    await recordWorkspaceEnd(dataDir, workerId, repo);
+    expect(await report()).toEqual({ state: 'unchanged' });
+    writeFileSync(join(repo, 'lib/lib.txt'), 'edited by the worker!!!\n');
+    await recordWorkspaceEnd(dataDir, workerId, repo);
+    expect(await report()).toMatchObject({ state: 'changed', paths: ['lib'], headMoved: false });
+  });
+
+  it('falls back to size, modification time and mode for a file over the content bound', async () => {
+    const large = join(repo, 'large.bin');
+    const at = new Date('2026-11-01T00:00:00.000Z');
+    writeFileSync(large, Buffer.alloc(CONTENT_HASH_FILE_BYTES + 1, 1)); utimesSync(large, at, at);
+    await recordWorkspaceStart(dataDir, workerId, repo);
+    writeFileSync(large, Buffer.alloc(CONTENT_HASH_FILE_BYTES + 1, 2)); utimesSync(large, at, at);
+    await recordWorkspaceEnd(dataDir, workerId, repo);
+    expect(await report()).toEqual({ state: 'unchanged' });
+    writeFileSync(large, Buffer.alloc(CONTENT_HASH_FILE_BYTES + 2, 2));
+    await recordWorkspaceEnd(dataDir, workerId, repo);
+    expect(await report()).toMatchObject({ state: 'changed', paths: ['large.bin'] });
+  });
+
   it('says that HEAD moved and names the committed paths', async () => {
     await recordWorkspaceStart(dataDir, workerId, repo);
     writeFileSync(join(repo, 'committed.txt'), 'x\n'); git('add', 'committed.txt'); git('commit', '-qm', 'worker commit');
@@ -120,18 +163,28 @@ describe('the change report of a shared workspace', () => {
     expect(await report()).toMatchObject({ state: 'changed', paths: ['during-first-session.txt'] });
   });
 
-  it('compares with the directory as it is while no end state is recorded', async () => {
+  it('compares a running worker with the directory as it is, and never a settled one', async () => {
     await recordWorkspaceStart(dataDir, workerId, repo);
     await recordWorkspaceEnd(dataDir, workerId, repo);
     writeFileSync(join(repo, 'after-settle.txt'), 'x\n');
-    expect(await report()).toEqual({ state: 'unchanged' });
+    expect(await report(true)).toEqual({ state: 'unchanged' });
     await clearWorkspaceEnd(dataDir, workerId);
-    expect(await report()).toMatchObject({ state: 'changed', paths: ['after-settle.txt'] });
+    expect(await report(false)).toMatchObject({ state: 'changed', paths: ['after-settle.txt'] });
+    expect(await report(true)).toEqual({ state: 'unavailable', reason: 'no workspace state was recorded when the worker settled' });
+  });
+
+  it('leaves a settled worker without a report when the end state could not be read', async () => {
+    await recordWorkspaceStart(dataDir, workerId, repo);
+    await recordWorkspaceEnd(dataDir, workerId, repo);
+    rmSync(join(repo, '.git'), { recursive: true, force: true });
+    await expect(recordWorkspaceEnd(dataDir, workerId, repo)).rejects.toThrow('failed in the shared workspace');
+    expect(existsSync(stateFile('end'))).toBe(false);
+    expect(await report(true)).toMatchObject({ state: 'unavailable', reason: 'no workspace state was recorded when the worker settled' });
   });
 
   it('is unavailable with the reason when the directory is gone', async () => {
     await recordWorkspaceStart(dataDir, workerId, repo);
     rmSync(repo, { recursive: true, force: true });
-    expect(await report()).toMatchObject({ state: 'unavailable', reason: expect.stringContaining('failed in the shared workspace') });
+    expect(await report(false)).toMatchObject({ state: 'unavailable', reason: expect.stringContaining('failed in the shared workspace') });
   });
 });
