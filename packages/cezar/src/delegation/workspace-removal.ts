@@ -4,10 +4,11 @@ import { headLeftTaskBranch } from '../task-branch-head.ts';
 import { entryExists as exists } from './entry-exists.ts';
 import { readdir, rmdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { WorkerDestroyResult, OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { WorkerDestroyResult, WorkerDestroyWork, OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { describeMutationHolder, withWorktreeMutation, WorktreeMutationLockTimeout, type MutationHolder } from '../git-worktree-lock.ts';
 import { branchLog, checkedGit, gitCommonDir, liveGitDir, worktreeEntries } from './workspace-git.ts';
 import { cleanupSchema, hash, readIdentityFile, readReceipt, RECEIPT_CAP, receiptLocation, replaceIdentityFile, validateIntent, type Cleanup, type Receipt } from './workspace-record.ts';
+import { describeWork, keepingRefs, uncommittedFiles, unlandedCommits, type BranchState } from './workspace-work.ts';
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -65,21 +66,32 @@ async function emptyDirectory(path: string): Promise<boolean> {
   try { return (await stat(path)).isDirectory() && (await readdir(path)).length === 0; } catch { return false; }
 }
 
+/** How long the removal waits for the worktree mutation lock, and whether it may delete work. */
+export interface RemovalOptions {
+  waitMs?: number;
+  /** Delete uncommitted changes and unlanded commits instead of refusing (hearsay-tools/squawk#3553). */
+  discardWork?: boolean;
+}
+
 /**
  * Checked cleanup after persisted destroy intent and a stopped worker scope. Keep the private
  * checkpoint beyond Git-directory removal; compare exact ref/reflog identity before retrying
  * deletion. Which processes use the worktree decides nothing: the worker's own were stopped with
- * its scope, and any other is not the worker's (ADR 0032).
+ * its scope, and any other is not the worker's (ADR 0032). Uncommitted changes and unlanded
+ * commits refuse by name unless `discardWork` allows their deletion (hearsay-tools/squawk#3553).
  */
 export async function removeOwnedWorkspace(repoRoot: string, value: OwnedWorkerWorkspace, assertCurrent?: () => void,
-  beforeRemove?: () => Promise<void>, assertUnheld?: () => void, lock: { waitMs?: number } = {}): Promise<WorkerDestroyResult> {
+  beforeRemove?: () => Promise<void>, assertUnheld?: () => void, options: RemovalOptions = {}): Promise<WorkerDestroyResult> {
   const refusal = fallbackProjectWriteError(value.path);
   if (refusal) return { workerId: value.ownerRunId, state: 'incomplete', remaining: ['worktree', 'branch'], error: refusal };
   let remaining: Array<'worktree' | 'branch'> = ['worktree', 'branch'];
   let provisioned = false; let lockBusy: { holder?: MutationHolder } | undefined;
   // A refusal that names its blocker and the step that clears it.
   let named: string | undefined;
+  // The work a refusal names; set only together with `named`.
+  let work: WorkerDestroyWork | undefined;
   const result = (): WorkerDestroyResult => ({ workerId: value.ownerRunId, state: remaining.length ? 'incomplete' : 'complete', remaining,
+    ...(remaining.length && work && !lockBusy ? { work } : {}),
     ...(remaining.length ? { error: lockBusy ? worktreeLockBusyError(lockBusy.holder)
       : named ?? 'Owned resources remain: resource identity or Git cleanup could not be verified. Check the worker worktree, Git lock and ownership receipt, then retry destroy after correcting the blocker' } : {}),
     ...(provisioned ? { deleted: [
@@ -89,6 +101,7 @@ export async function removeOwnedWorkspace(repoRoot: string, value: OwnedWorkerW
   });
   // Each early return names the check that stopped it (hearsay-tools/squawk#3817).
   const refuse = (reason: string) => { named ??= `Owned resources remain: ${reason}; retry destroy after correcting it`; };
+  const refuseWork = (found: WorkerDestroyWork) => { if (named) return; named = describeWork(value.ownerRunId, found); work = found; };
   try {
     return await withWorktreeMutation(repoRoot, async mutationGit => {
       assertCurrent?.();
@@ -187,6 +200,12 @@ export async function removeOwnedWorkspace(repoRoot: string, value: OwnedWorkerW
           refuse(`branch ${workspace.branch}'s tip or reflog changed since cleanup started`);
           return undefined;
         }
+        // Removing the checkout deletes its uncommitted changes, and the forced branch delete its
+        // unlanded commits: every attempt checks both again, after the worker stopped.
+        if (!options.discardWork) {
+          const found = { uncommittedFiles: await uncommittedFiles(workspace.path), commits: await unlandedCommits(args => mutationGit(repoRoot, args), workspace, current) };
+          if (found.uncommittedFiles || found.commits) { refuseWork(found); return undefined; }
+        }
         checkpoint ??= { workspace, gitDir: receipt.gitDir, sha: current.sha, logFile: current.log.file, logHash: hash(current.log.content), phase: 'prepared', forced: true };
         return checkpoint;
       }
@@ -234,39 +253,23 @@ export async function removeOwnedWorkspace(repoRoot: string, value: OwnedWorkerW
         remaining = ['branch'];
         if ((await registered()).includes(`branch refs/heads/${workspace.branch}`)) { refuse(`branch ${workspace.branch} is checked out at another worktree`); return undefined; }
         const current = await verifyBranch(repoRoot, workspace, receipt);
-        if (!await keepingRefs(current)) {
-          named = await strandedName(current.sha);
+        // An allowed discard deletes the stranded commits at this tip, as for a removed checkout.
+        if (!options.discardWork && !await keepers(current)) {
+          await refuseStranded(current);
           return undefined;
         }
         assertCurrent?.();
         await beforeRemove?.();
         assertCurrent?.();
-        return { workspace, gitDir: receipt.gitDir, sha: current.sha, logFile: current.log.file, logHash: hash(current.log.content), phase: 'prepared' };
+        return { workspace, gitDir: receipt.gitDir, sha: current.sha, logFile: current.log.file, logHash: hash(current.log.content), phase: 'prepared',
+          ...(options.discardWork ? { forced: true as const } : {}) };
       }
 
-      async function strandedName(tip: string): Promise<string> {
-        return tip !== workspace.baselineSha ? movedBranch(workspace.baselineSha, tip, 'its worker baseline')
-          : keepBranch('returned to its worker baseline after holding other commits');
-      }
+      function keepers(branch: BranchState) { return keepingRefs(args => mutationGit(repoRoot, args), workspace, branch); }
 
-      /** For the branch tip and each reflog entry that is not the baseline, a branch or
-       * remote-tracking ref that contains it, other than this branch and never an alias; undefined
-       * when one has none, or when one ref is seen at two tips. A tip's ref also keeps every commit
-       * under it. */
-      async function keepingRefs(branch: { sha: string; log: { content: Buffer } }): Promise<Array<{ ref: string; sha: string }> | undefined> {
-        const tip = branch.sha;
-        const tips = branch.log.content.toString('utf8').split('\n').filter(Boolean).map(entry => entry.split(' ')[1] ?? '');
-        const refs = new Map<string, string>();
-        for (const sha of new Set([tip, ...tips])) {
-          if (sha === workspace.baselineSha) continue;
-          if (sha !== tip && refs.size > 0 && (await mutationGit(repoRoot, ['merge-base', '--is-ancestor', sha, tip])).ok) continue;
-          const listed = await mutationGit(repoRoot, ['for-each-ref', '--contains', sha, '--format=%(refname)%00%(objectname)%00%(symref)', 'refs/heads', 'refs/remotes']);
-          const witness = listed.ok ? listed.stdout.split('\n').map(line => line.split('\0'))
-            .find(([ref, at, symref]) => ref && at && !symref && ref !== `refs/heads/${workspace.branch}`) : undefined;
-          if (!witness || (refs.has(witness[0]!) && refs.get(witness[0]!) !== witness[1])) return undefined;
-          refs.set(witness[0]!, witness[1]!);
-        }
-        return [...refs].map(([ref, sha]) => ({ ref, sha }));
+      /** Refuses by name: the branch holds commits no other ref reaches. */
+      async function refuseStranded(branch: BranchState): Promise<void> {
+        refuseWork({ uncommittedFiles: 0, commits: await unlandedCommits(args => mutationGit(repoRoot, args), workspace, branch) });
       }
 
       /** The refs the branch delete verifies. Unless the destroy removed the present checkout itself
@@ -275,8 +278,8 @@ export async function removeOwnedWorkspace(repoRoot: string, value: OwnedWorkerW
        * are read once more, last. Undefined when the proof fails or the branch changed. */
       async function deletionWitnesses(receipt: Receipt, checkpoint: Cleanup, current: Awaited<ReturnType<typeof verifyBranch>>) {
         if (checkpoint.forced) return [];
-        const witnesses = await keepingRefs(current);
-        if (!witnesses) { named = await strandedName(current.sha); return undefined; }
+        const witnesses = await keepers(current);
+        if (!witnesses) { await refuseStranded(current); return undefined; }
         const last = await verifyBranch(repoRoot, workspace, receipt);
         return last.sha === checkpoint.sha && hash(last.log.content) === checkpoint.logHash ? witnesses : undefined;
       }
@@ -313,7 +316,7 @@ export async function removeOwnedWorkspace(repoRoot: string, value: OwnedWorkerW
         await writeCleanup(checkpointPath, { ...checkpoint, phase: 'complete' }, assertCurrent);
         remaining = [];
       }
-    }, { waitMs: lock.waitMs ?? DEFAULT_DESTROY_LOCK_WAIT_MS, label: { operation: 'worker-destroy', owner: value.ownerRunId } });
+    }, { waitMs: options.waitMs ?? DEFAULT_DESTROY_LOCK_WAIT_MS, label: { operation: 'worker-destroy', owner: value.ownerRunId } });
   } catch (error) {
     // Ambiguous ownership and every failed Git/filesystem operation fail closed, naming what failed.
     if (error instanceof WorktreeMutationLockTimeout) lockBusy = { ...(error.holder ? { holder: error.holder } : {}) };

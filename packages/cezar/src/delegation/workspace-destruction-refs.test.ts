@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
 import { createOwnedWorkspace } from './workspace.ts';
 import { removeOwnedWorkspace } from './workspace-removal.ts';
+import { describeWork } from './workspace-work.ts';
 import { fixture, git, receiptPath, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
 
 describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, () => {
@@ -56,9 +57,8 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
       await strand(root, workspace, 'deleted and pruned');
       let released = 0;
       const result = await removeOwnedWorkspace(root, workspace, undefined, async () => { released += 1; });
-      expect(result).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
-      expect(result.error).toBe(`Owned branch ${workspace.branch} holds ${commits} commit${commits === 1 ? '' : 's'} beyond its worker baseline; ` +
-        'keep what you need, delete the branch, then retry destroy');
+      expect(result).toMatchObject({ state: 'incomplete', remaining: ['branch'], work: { uncommittedFiles: 0, commits } });
+      expect(result.error).toBe(describeWork(workspace.ownerRunId, { uncommittedFiles: 0, commits }));
       expect(released).toBe(0);
       expect(git(root, 'rev-parse', workspace.branch)).toBe(tip);
       expect(existsSync(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'))).toBe(false);
@@ -149,9 +149,8 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     expect(JSON.parse(await readFile(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'), 'utf8')))
       .toMatchObject({ sha: tip, phase: 'worktree-removed' });
     const retry = await removeOwnedWorkspace(root, workspace);
-    expect(retry).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
-    expect(retry.error).toBe(`Owned branch ${workspace.branch} holds 1 commit beyond its worker baseline; ` +
-      'keep what you need, delete the branch, then retry destroy');
+    expect(retry).toMatchObject({ state: 'incomplete', remaining: ['branch'], work: { uncommittedFiles: 0, commits: 1 } });
+    expect(retry.error).toBe(describeWork(workspace.ownerRunId, { uncommittedFiles: 0, commits: 1 }));
     expect(git(root, 'rev-parse', workspace.branch)).toBe(tip);
   });
 
@@ -164,9 +163,8 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     await strand(root, workspace, 'deleted and pruned');
     const reflog = await readFile(join(root, '.git/logs/refs/heads', workspace.branch), 'utf8');
     const result = await removeOwnedWorkspace(root, workspace);
-    expect(result).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
-    expect(result.error).toBe(`Owned branch ${workspace.branch} returned to its worker baseline after holding other commits; ` +
-      'keep what you need, delete the branch, then retry destroy');
+    expect(result).toMatchObject({ state: 'incomplete', remaining: ['branch'], work: { uncommittedFiles: 0, commits: 1 } });
+    expect(result.error).toBe(describeWork(workspace.ownerRunId, { uncommittedFiles: 0, commits: 1 }));
     expect(git(root, 'rev-parse', workspace.branch)).toBe(first);
     expect(await readFile(join(root, '.git/logs/refs/heads', workspace.branch), 'utf8')).toBe(reflog);
     expect(existsSync(receiptPath(root, workspace).replace(/\.json$/, '.cleanup.json'))).toBe(false);

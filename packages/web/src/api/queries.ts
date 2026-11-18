@@ -993,7 +993,7 @@ export function useProjectRuns(projectId: string, enabled = true, boot = false) 
 export function useDestroyWorker(parentRunId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (workerId: string) => destroyWorker(workerId),
+    mutationFn: ({ workerId, discardWork = false }: { workerId: string; discardWork?: boolean }) => destroyWorker(workerId, discardWork),
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.relationships(parentRunId) }),
   })
 }

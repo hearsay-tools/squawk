@@ -29,6 +29,7 @@ import {
   sharedSpawnRefusal,
   workerSpawnRequestSchema,
   workerSteerRequestSchema,
+  workerDestroyRequestSchema,
   workerWaitRequestSchema,
   workerSpawnResultSchema,
   workerInspectionSchema,
@@ -87,7 +88,7 @@ const WORKER_USAGE = { operations: [
   { name: 'inspect', positionals: 1 },
   { name: 'steer', positionals: 2 },
   { name: 'stop', positionals: 1 },
-  { name: 'destroy', positionals: 1 },
+  { name: 'destroy', positionals: 1, optional: ['--discard-work'] },
   { name: 'diff', positionals: 1 },
   { name: 'collect', positionals: 1 },
   { name: 'wait', positionals: 1, optional: ['--mode', '--timeout-seconds'] },
@@ -102,7 +103,7 @@ const WORKER_HELP: Record<string, { args: string; description: string }> = {
   inspect: { args: '<worker-id>', description: 'Show worker state and input locations.' },
   steer: { args: '<worker-id> "<text>"', description: 'Send instructions to a running worker.' },
   stop: { args: '<worker-id>', description: 'Stop a worker.' },
-  destroy: { args: '<worker-id>', description: 'Remove owned worker resources after collecting results.' },
+  destroy: { args: '<worker-id>', description: 'Remove owned worker resources after collecting results. Refuses, naming them, to delete uncommitted changes or unlanded commits.' },
   diff: { args: '<worker-id>', description: 'Show the bounded worker diff.' },
   collect: { args: '<worker-id>', description: 'Collect the latest worker results; does not merge changes.' },
   wait: { args: '<worker-id>...', description: 'Register a wait for owned workers, then end your turn. Several waits can be open at once (workers, CI, timers); messages wake you and close no wait.' },
@@ -127,6 +128,7 @@ const WORKER_FLAG_HELP: Record<string, string> = {
   '--request': '<UUID>                 Request to wait for; repeat for multiple requests.',
   '--id': '<UUID>                      Message ID; reuse only for an exact retry.',
   '--kind': '<request|progress>        Whether the message requires an explicit reply.',
+  '--discard-work': '                   Delete the uncommitted changes and unlanded commits a destroy refused to delete.',
   '--resume': '                         Resume an owned finished worker; request deadline defaults to 600 s, --timeout-seconds accepts up to 86400 s.',
 };
 function workerHelp(operation?: string): string {
@@ -431,7 +433,7 @@ const COMMAND_OPTIONS: Record<string, NonNullable<Parameters<typeof parseArgs>[0
     model: stringFlag, effort: stringFlag, context: stringFlag, 'context-file': stringFlag, attach: repeatedFlag },
   conversation: { before: stringFlag }, tasks: { all: { type: 'boolean' }, offset: stringFlag },
   send: { ...messageOptions, resume: { type: 'boolean' } }, progress: messageOptions, reply: messageOptions, 'follow-up': messageOptions,
-  wait: waitOptions, 'wait-requests': waitOptions,
+  wait: waitOptions, 'wait-requests': waitOptions, destroy: { 'discard-work': { type: 'boolean' } },
 };
 function cliInteger(operation: string, flag: string, value: CliValues[string]): number | undefined {
   if (value === undefined) return;
@@ -483,11 +485,13 @@ function waitPayload(operation: string, values: CliValues, positionals: string[]
     ...(requestWait ? { requestIds: requests ?? positionals } : { workerIds: positionals }), mode: values.mode,
     timeoutSeconds: cliInteger(operation, 'timeout-seconds', values['timeout-seconds']) });
 }
-function workerPayload(operation: string, positionals: string[]) {
+function workerPayload(operation: string, values: CliValues, positionals: string[]) {
   expectCount(operation, positionals, operation === 'steer' ? 2 : 1);
   const { workerId } = workerParamsSchema.parse({ workerId: positionals[0] });
   const path = operation === 'inspect' ? workerId : `${workerId}/${operation}`;
-  const body = operation === 'steer' ? workerSteerRequestSchema.parse({ text: positionals[1] }) : ['stop', 'destroy', 'collect'].includes(operation) ? {} : undefined;
+  const body = operation === 'steer' ? workerSteerRequestSchema.parse({ text: positionals[1] })
+    : operation === 'destroy' ? workerDestroyRequestSchema.parse(values['discard-work'] ? { discardWork: true } : {})
+    : ['stop', 'collect'].includes(operation) ? {} : undefined;
   return { path, body };
 }
 async function commandPayload(operation: string, values: CliValues, positionals: string[], argv: string[]): Promise<{ path: string; body?: unknown }> {
@@ -508,5 +512,5 @@ async function commandPayload(operation: string, values: CliValues, positionals:
     const body = operation === 'cancel-request' ? conversationCancelRequestSchema.parse({ requestId: positionals[0] }) : workerCancelWaitRequestSchema.parse({ waitId: positionals[0] });
     return { path: operation, body };
   }
-  return workerPayload(operation, positionals);
+  return workerPayload(operation, values, positionals);
 }

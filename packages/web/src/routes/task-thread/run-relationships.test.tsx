@@ -34,10 +34,11 @@ function Workers({ run }: { run: ApiRun }) {
 function setup(run: ApiRun, response: () => Promise<Response> = async () => json({ workers: [] }),
   destroyResponse: () => Promise<Response> = async () => json({ workerId, state: 'complete', remaining: [] })) {
   const requests: string[] = []
-  vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL) => {
+  const destroyBodies: unknown[] = []
+  vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
     const path = String(url).replace('?archived=recent', ''); requests.push(path)
     if (path.endsWith('/relationships')) return response()
-    if (path.endsWith('/worker-destroy')) return destroyResponse()
+    if (path.endsWith('/worker-destroy')) { destroyBodies.push(JSON.parse(String(init?.body ?? '{}'))); return destroyResponse() }
     if (path.endsWith('/run-summaries')) return json([])
     if (path.endsWith('/providers/status')) return json({ providers: [] })
     if (path.endsWith(`/runs/${parentId}`)) return json({ error: 'not found' }, 404)
@@ -53,7 +54,7 @@ function setup(run: ApiRun, response: () => Promise<Response> = async () => json
       </ProjectScopeProvider>
     </QueryClientProvider>,
   )
-  return { ...view, requests, client }
+  return { ...view, requests, destroyBodies, client }
 }
 afterEach(() => { cleanup(); onlineManager.setOnline(true); vi.unstubAllGlobals() })
 
@@ -259,6 +260,31 @@ it('reports an incomplete cleanup in the server\'s words and keeps Clean up avai
   fireEvent.click(within(group).getByRole('button', { name: `Confirm clean up of worker ${workerId.slice(0, 8)}` }))
   expect(await within(group).findByText('Cleanup did not finish: Branch is checked out')).toBeTruthy()
   expect((within(group).getByRole('button', cleanUp(workerId)) as HTMLButtonElement).disabled).toBe(false)
+})
+it('names the work a cleanup refused to delete and discards it only on a second click (hearsay-tools/squawk#3553)', async () => {
+  let answers = 0
+  const { destroyBodies } = setup(rootOf([settled]), async () => json({ workers: [settled], capacity: capacityOf(1) }),
+    async () => (answers++ === 0
+      ? json({ workerId, state: 'incomplete', remaining: ['process', 'worktree', 'branch'], work: { uncommittedFiles: 2, commits: 1 },
+        error: 'Worker 10000000 holds work destroy would delete' }, 409)
+      : json({ workerId, state: 'complete', remaining: [] })))
+  const group = await section()
+  fireEvent.click(await within(group).findByRole('button', cleanUp(workerId)))
+  fireEvent.click(within(group).getByRole('button', { name: `Confirm clean up of worker ${workerId.slice(0, 8)}` }))
+  expect(await within(group).findByText('Cleanup stopped: this worker holds 2 uncommitted files and 1 commit no other branch reaches. Land or commit what you need first, or discard it.')).toBeTruthy()
+  expect(destroyBodies).toEqual([{}])
+  fireEvent.click(within(group).getByRole('button', { name: `Discard work and clean up worker ${workerId.slice(0, 8)}` }))
+  await waitFor(() => expect(destroyBodies).toEqual([{}, { discardWork: true }]))
+  await waitFor(() => expect(within(group).queryByRole('button', { name: /^Discard work and clean up/ })).toBeNull())
+})
+it('offers no discard for a refusal that names no work (hearsay-tools/squawk#3553)', async () => {
+  setup(rootOf([settled]), async () => json({ workers: [settled], capacity: capacityOf(1) }),
+    async () => json({ workerId, state: 'incomplete', remaining: ['branch'], error: 'Branch is checked out' }, 409))
+  const group = await section()
+  fireEvent.click(await within(group).findByRole('button', cleanUp(workerId)))
+  fireEvent.click(within(group).getByRole('button', { name: `Confirm clean up of worker ${workerId.slice(0, 8)}` }))
+  await within(group).findByText('Cleanup did not finish: Branch is checked out')
+  expect(within(group).queryByRole('button', { name: /^Discard work and clean up/ })).toBeNull()
 })
 it('surfaces a refusal the user cannot fix by retrying Clean up (#816)', async () => {
   setup(rootOf([settled]), async () => json({ workers: [settled], capacity: capacityOf(1) }),

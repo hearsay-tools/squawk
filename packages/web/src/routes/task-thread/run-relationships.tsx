@@ -7,8 +7,9 @@ import { workerWaitLabel, workersWaitingLabel } from '@/lib/attention'
 import { completionWaitView, requestsToPeers, workerWaitView } from '@open-mercato/cezar-api-client/contract/waits'
 import { isLiveStatus } from '@open-mercato/cezar-api-client/contract/run-predicates'
 import { runTitle } from '@/lib/task-groups'
-import type { ApiRun, RunRelationships, WorkerCompletionWait, WorkerDestroyView, WorkerInspection } from '@open-mercato/cezar-api-client'
+import type { ApiRun, RunRelationships, WorkerCompletionWait, WorkerDestroyView, WorkerDestroyWork, WorkerInspection } from '@open-mercato/cezar-api-client'
 
+import { ApiError } from '@/api/client'
 import { useDestroyWorker, useRunRelationships, useRuns } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Link } from '@/lib/project-router'
@@ -262,7 +263,8 @@ const SETTLED = new Set<WorkerInspection['status']>(['review', 'done', 'failed',
  * worker's worktree AND branch — work a reviewer may not have read yet — so it takes an inline
  * confirmation. A worker that runs in its parent's worktree has neither, and the text says so. Its result is checkpointed first, and it never accepts a review gate. A refusal
  * is reported in the server's own words, because some (history deletion under way) cannot be
- * fixed by clicking again.
+ * fixed by clicking again. A refusal to delete uncommitted changes or unlanded commits names
+ * them and offers one more step that deletes them (hearsay-tools/squawk#3553).
  */
 function CleanUpWorker({ parentRunId, worker }: { parentRunId: string; worker: WorkerInspection }) {
   const destroy = useDestroyWorker(parentRunId)
@@ -271,6 +273,7 @@ function CleanUpWorker({ parentRunId, worker }: { parentRunId: string; worker: W
   const short = worker.workerId.slice(0, 8)
   // A destroy already under way retries on its own; this runs one now and restarts its backoff (hearsay-tools/cezarion#879).
   const retrying = !!worker.destroy && worker.destroy.phase !== 'complete'
+  const work = destroy.error instanceof ApiError ? destroy.error.work : undefined
   return <div className="flex min-w-0 flex-wrap items-center gap-2 px-1">
     {confirming ? <>
       <span className="break-words text-xs">{ownsDirectory(worker.workspace)
@@ -281,7 +284,7 @@ function CleanUpWorker({ parentRunId, worker }: { parentRunId: string; worker: W
         size="sm"
         className="min-h-11"
         aria-label={`Confirm clean up of worker ${short}`}
-        onClick={() => { setConfirming(false); destroy.mutate(worker.workerId) }}
+        onClick={() => { setConfirming(false); destroy.mutate({ workerId: worker.workerId }) }}
       >
         Clean up
       </Button>
@@ -296,8 +299,29 @@ function CleanUpWorker({ parentRunId, worker }: { parentRunId: string; worker: W
     >
       {destroy.isPending ? 'Cleaning up…' : retrying ? 'Retry clean up' : 'Clean up'}
     </Button>}
-    {destroy.isError && !confirming ? <span role="status" className="break-words text-xs">Cleanup did not finish: {destroy.error.message}</span> : null}
+    {destroy.isError && !confirming ? <span role="status" className="break-words text-xs">{work
+      ? `Cleanup stopped: this worker holds ${describeWork(work)}. Land or commit what you need first, or discard it.`
+      : `Cleanup did not finish: ${destroy.error.message}`}</span> : null}
+    {work && !confirming && !destroy.isPending ? <Button
+      variant="danger-ghost"
+      size="sm"
+      className="min-h-11"
+      aria-label={`Discard work and clean up worker ${short}`}
+      onClick={() => destroy.mutate({ workerId: worker.workerId, discardWork: true })}
+    >
+      Discard work and clean up
+    </Button> : null}
   </div>
+}
+
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`
+
+/** The work a refused cleanup would have deleted, as one phrase. */
+function describeWork(work: WorkerDestroyWork): string {
+  return [
+    ...(work.uncommittedFiles ? [plural(work.uncommittedFiles, 'uncommitted file', 'uncommitted files')] : []),
+    ...(work.commits ? [`${plural(work.commits, 'commit', 'commits')} no other branch reaches`] : []),
+  ].join(' and ')
 }
 
 /**

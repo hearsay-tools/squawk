@@ -127,6 +127,7 @@ import type {
   WorkspaceConfigResponse,
   WorkspaceUiState,
   WorkerDestroyResult,
+  WorkerDestroyWork,
 } from '@open-mercato/cezar-api-client'
 import { parseProviderStatusResponse } from '@/lib/provider-status'
 import {
@@ -197,11 +198,14 @@ export class ApiError extends Error {
   readonly command?: string | undefined
   /** `POST /api/workflows`: the file is already there — the caller may retry with `overwrite`. */
   readonly exists?: boolean | undefined
+  /** `POST /runs/:id/worker-destroy`: the work the cleanup refused to delete; a retry with
+   *  `discardWork` deletes it (hearsay-tools/squawk#3553). */
+  readonly work?: WorkerDestroyWork | undefined
 
   constructor(
     status: number,
     message: string,
-    extras: { manual?: string | undefined; command?: string | undefined; exists?: boolean | undefined; cause?: unknown } = {},
+    extras: { manual?: string | undefined; command?: string | undefined; exists?: boolean | undefined; work?: WorkerDestroyWork | undefined; cause?: unknown } = {},
   ) {
     super(message, extras.cause !== undefined ? { cause: extras.cause } : undefined)
     this.name = 'ApiError'
@@ -209,6 +213,7 @@ export class ApiError extends Error {
     this.manual = extras.manual
     this.command = extras.command
     this.exists = extras.exists
+    this.work = extras.work
   }
 }
 
@@ -249,7 +254,14 @@ function errorFor(status: number, statusText: string, body: string): ApiError {
     manual: str(json.manual),
     command: str(json.command),
     exists: typeof json.exists === 'boolean' ? json.exists : undefined,
+    work: destroyWork(json.work),
   })
+}
+
+function destroyWork(value: unknown): WorkerDestroyWork | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const { uncommittedFiles, commits } = value as Json
+  return typeof uncommittedFiles === 'number' && typeof commits === 'number' ? { uncommittedFiles, commits } : undefined
 }
 
 /**
@@ -1344,13 +1356,14 @@ export async function cancelRun(id: string): Promise<CancelResponse> {
 
 /** A human's verified cleanup of one owned worker (#816), freeing its capacity slot only when
  *  every resource is proven removed. An incomplete cleanup answers 409 and throws; the
- *  relationships refetch then shows what remains. */
-export async function destroyWorker(id: string): Promise<WorkerDestroyResult> {
+ *  relationships refetch then shows what remains. Without `discardWork`, a cleanup that would
+ *  delete uncommitted changes or unlanded commits refuses, and the error carries that `work`. */
+export async function destroyWorker(id: string, discardWork = false): Promise<WorkerDestroyResult> {
   return unwrap(
     await cez.api.v1.p[':projectId'].runs[':id']['worker-destroy'].$post({
       param: { projectId: queryScope(), id: encodeURIComponent(id) },
       query: {},
-      json: {},
+      json: discardWork ? { discardWork: true } : {},
     }),
     runPath(id, '/worker-destroy'),
   )

@@ -277,10 +277,12 @@ by the user or by history retention past its cap of 300 unarchived runs.
 
 A family has ended when its root is archived, settled (done, failed or cancelled) and not live,
 and no worker of the family is live or being destroyed. A worker at `review` counts as
-settled once its family has ended. Explicit `worker destroy` of
-C or U work keeps its behaviour: it removes the work. Its cleanup checkpoint records that it
-removed the present checkout (`forced`), so a retry deletes the branch at the tip it recorded; a
-moved tip is refused.
+settled once its family has ended. Explicit `worker destroy` of C or U work refuses and names
+the work in its result (`work`, with the uncommitted file and commit counts), before it stops the
+worker; `--discard-work` (the cockpit's **Discard work and clean up**) removes it
+(hearsay-tools/squawk#3553). Its cleanup checkpoint records that the destroy found no work in the
+present checkout or was allowed to discard it (`forced`), so a retry deletes the branch at the
+tip it recorded; a moved tip is refused.
 
 Safety invariant: never remove a worktree or a branch holding commits that no other ref reaches,
 nor a directory with uncommitted changes, and never delete a receipt before its branch is gone

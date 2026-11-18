@@ -288,6 +288,18 @@ describe('bundled worker CLI', { timeout: 20_000 }, () => {
     expect(json()).toMatchObject({ state: 'incomplete', remaining: ['process', 'worktree', 'branch'] });
     expect(JSON.stringify(output.mock.calls)).not.toContain(f.token);
   });
+  it('sends destroy --discard-work as discardWork, and a plain destroy without it (hearsay-tools/squawk#3553)', async () => {
+    const real = globalThis.fetch;
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((url, init) => real(url, init));
+    const workerId = randomUUID();
+    const destroyBody = () => JSON.parse(String(fetchMock.mock.calls.findLast(call => String(call[0]).endsWith(`${workerId}/destroy`))?.[1]?.body));
+    await runWorkerCommand(['destroy', workerId], env);
+    expect(destroyBody()).toEqual({});
+    await runWorkerCommand(['destroy', workerId, '--discard-work'], env);
+    expect(destroyBody()).toEqual({ discardWork: true });
+    expect(await runWorkerCommand(['stop', workerId, '--discard-work'], env)).toBe(1);
+    expect(json().error).toMatch(/--discard-work/);
+  });
   it('reads an explicit context document as UTF-8 text and rejects competing or oversize sources', async () => {
     const file = join(f.root, 'context.txt'); writeFileSync(file, 'Selected context: café');
     const args = ['spawn', '--baseline', 'parent-head', '--request-id', randomUUID(), '--backend', 'claude', '--model', 'sonnet', '--context-file', file, 'work'];
