@@ -5,8 +5,8 @@ import type { Home } from '../home/home.ts';
 import { assertReplyDirection, sendRequestContext, sendAdmission, sendMessage, sendInput, type ConversationPair } from './conversation-send.ts';
 import { discoverTasks } from './task-discovery.ts';
 import { discoveredRunners, missingModelChoices, type HostDiscovery } from '../discovery/choices.ts';
-import { assertConversationCapacity, assertFamilySender, byCreatedAtAndId, commitAccepted, familyPair, inboxEntryIn,
-  orphanedPeerMessage, peerPair, takesPart, projectConversationEvents, reconcileConversationState, replyOutcomes, type InboxEntry } from './conversations.ts';
+import { assertConversationCapacity, byCreatedAtAndId, commitAccepted, inboxEntryIn,
+  orphanedPeerMessage, resolvePair, takesPart, projectConversationEvents, reconcileConversationState, replyOutcomes, type InboxEntry } from './conversations.ts';
 export { rootDelegation } from './conversations.ts';
 import { collectWorkerEvidence, revalidateRetainedWorkerResult, workerRevision } from './results.ts';
 import { workerContextTask } from './context.ts';
@@ -70,6 +70,7 @@ import { completionWaitEntry, peerWaitView, workerCompletionWaitProjection, work
 import type { RunStore, RunRecord } from '../runs/store.ts';
 import { assertConversationIdFree, ConversationIdInUseError } from '../runs/conversation-identity.ts';
 import { workerDestroyView, workerOutcome, workerObservation } from '../runs/delegation-state.ts';
+import { childSpawnGrant, conversationOf, DEFAULT_GRANTS, familyRecordOf, grantsOf, historyDeleting, isFamilyRecord, receiptsOf, relationOf, supervisorIdOf } from '../runs/task-rights.ts';
 import type { RunManager } from '../workflows/run.ts';
 import type { DelegationExecutionSettings } from '../workflows/run/types.ts';
 import { QUICK_TASK_WORKFLOW, skillTaskSteps, plannedWorkflow, allowedToolsForStep, stepKind, type WorkflowDef, type WorkflowStepDef } from '../workflows/types.ts';
@@ -180,13 +181,12 @@ function spawnRequestHash(request: WorkerSpawnRequest): string {
   })).digest('hex');
 }
 
-function replayedSpawn(project: DelegationProject, parent: RunRecord, requestId: string, requestHash: string) {
-  if (parent.delegation?.role !== 'root') return;
-  const receipt = parent.delegation.receipts.find(r => r.requestId === requestId);
+function replayedSpawn(project: DelegationProject, family: RunRecord, parent: RunRecord, requestId: string, requestHash: string) {
+  const receipt = receiptsOf(family).find(r => r.requestId === requestId);
   if (!receipt) return;
   if (receipt.requestHash !== requestHash) throw new DelegationPolicyError('invalid_input', 'Request ID payload conflict');
   const worker = project.store.getRun(receipt.workerId);
-  if (worker?.delegation?.role !== 'worker' || worker.delegation.parentRunId !== parent.id || worker.delegation.workspace.ownerRunId !== worker.id) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
+  if (worker?.delegation?.role !== 'worker' || relationOf(parent, worker) !== 'supervised') throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
   return { workerId: worker.id, baselineSha: worker.delegation.workspace.baselineSha };
 }
 
@@ -210,18 +210,19 @@ type PreparedSpawnContext = Awaited<ReturnType<WorkspaceKind['prepareContext']>>
 type AcceptedSpawnIdentity = ReturnType<typeof acceptedWorkerIdentitySchema.parse>;
 
 async function acceptSpawnedWorker(args: {
-  project: DelegationProject; parent: RunRecord; request: WorkerSpawnRequest; catalog: WorkflowDef;
+  project: DelegationProject; parent: RunRecord; family: RunRecord; request: WorkerSpawnRequest; catalog: WorkflowDef;
   resolvedSteps: ResolvedSpawnStep[]; settings: DelegationExecutionSettings; identity: AcceptedSpawnIdentity;
   workspace: WorkerWorkspace; baselineSha: string; requestHash: string; prepared: PreparedSpawnContext | undefined;
   current: () => DelegationProject; caller: Caller;
 }): Promise<{ workerId: string; baselineSha: string }> {
-  const { project, parent, request, catalog, resolvedSteps, settings, identity, workspace, baselineSha, requestHash, prepared, caller } = args;
+  const { project, parent, family, request, catalog, resolvedSteps, settings, identity, workspace, baselineSha, requestHash, prepared, caller } = args;
   const context = prepared?.recipe;
   let accepted = false;
   try {
     // Ref resolution yields to Finish, revocation and project disposal; recheck before acceptance.
     if (args.current() !== project) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
-    authorizeSpawn(caller, project.store.getRun(parent.id), project.id, id => project.store.getRun(id));
+    authorizeSpawn(caller, project.store.getRun(parent.id), project.id, id => project.store.getRun(id), workspace.kind);
+    const spawnGrant = childSpawnGrant(parent);
     const workflowDef = boundSpawnWorkflow(catalog, resolvedSteps);
     const worker = project.store.createOwnedRun({
       title: request.task.slice(0, 200), task: context ? workerContextTask(request.task, context) : request.task, workflow: workflowDef.name,
@@ -229,7 +230,8 @@ async function acceptSpawnedWorker(args: {
       systemPrompt: settings.systemPrompt, workflowDef,
       autonomous: parent.autonomous,
       steps: workflowDef.steps.map(step => ({ id: step.id, name: step.name ?? step.id, kind: stepKind(step) })),
-    }, parent.id, request.requestId, { role: 'worker', permissions: [], parentRunId: parent.id, workspace, ...(context ? { context } : {}) }, requestHash, {
+    }, family.id, request.requestId, { role: 'worker', permissions: [...DEFAULT_GRANTS.worker.operate], ...(spawnGrant ? { spawnGrant } : {}),
+      parentRunId: family.id, workspace, ...(context ? { context } : {}) }, requestHash, {
       ...identity, ...(context ? { contextHash: workerContextHash(context) } : {}),
       // A named catalog chain or skill is bound like the context recipe; the default quick-task leaves the identity as before.
       ...(request.workflow === undefined && request.skill === undefined ? {} : { workflowHash: workerWorkflowHash(workflowDef) }),
@@ -257,7 +259,7 @@ export class DelegationService {
     // Discovery accompanies spawn authority, including roots persisted before this command existed.
     const callerRun = project.store.getRun(caller.runId);
     authorizeSpawnReplay(caller, callerRun, project.id);
-    requireWorkersAllowed(callerRun!);
+    requireWorkersAllowed(callerRun);
     if (!this.discovery) throw new DelegationPolicyError('unavailable_transport', 'Host discovery is unavailable');
     return request.kind === 'models' ? this.discovery.models.get(request.runner) : discoveredRunners(await this.discovery.providers());
   }
@@ -328,29 +330,18 @@ export class DelegationService {
     authorizeWorker(caller, worker, operation, parent, project.id);
     return { project, parent: parent!, worker: worker! };
   }
-  /**
-   * The relationship resolver (spec 2026-10-27-task-communication-protocol § 2): `family` for a
-   * root and its direct owned worker, `peer` for two root tasks of the caller's project, and
-   * `denied_scope` with one text for everything else. `send` asks for the live pair a new message
-   * needs; without it the pair is checked for reading. A peer's own durable records (history, its
-   * requests, its inbox) are read through `peerRecords` instead, which a deleted peer does not block.
-   */
+  /** The resolved pair (`resolvePair`). A peer's own durable records (history, its requests, its
+   *  inbox) are read through `peerRecords` instead, which a deleted peer does not block. */
   private conversationPair(caller: Caller, recipientRunId: string, send = false): ConversationPair {
     const project = this.context(caller);
-    const sender = project.store.getRun(caller.runId);
-    const recipient = project.store.getRun(recipientRunId);
-    const peer = peerPair(sender, recipient, send);
-    if (peer) return { project, ...peer };
-    const { root, worker } = familyPair(sender, recipient);
-    assertFamilySender(sender!, root, send);
-    return { project, relationship: 'family', sender: sender!, recipient: recipient!, root, worker };
+    return { project, ...resolvePair(project.store.getRun(caller.runId), project.store.getRun(recipientRunId), id => project.store.getRun(id), send) };
   }
-  /** The caller's own peer records need only its participation: a root task whose own history is
-   *  not being deleted. The record read names the counterpart; a deleted peer does not block it. */
+  /** The caller's own peer records need only its participation: a task that may message peers and
+   *  whose own history is not being deleted. The record read names the counterpart; a deleted peer does not block it. */
   private peerRecords(caller: Caller) {
     const project = this.context(caller);
     const self = project.store.getRun(caller.runId);
-    if (self?.delegation?.role !== 'root' || self.delegation.historyDeletion) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
+    if (!self || !grantsOf(self).message.includes('peer') || historyDeleting(self)) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     return { project, self };
   }
   /** The ledger a new message lands in (spec § 2, Which ledger holds a message): a new request or
@@ -359,22 +350,21 @@ export class DelegationService {
     if (pair.relationship === 'family') return pair.root;
     const ledger = request.kind === 'reply' ? pair.recipient : pair.sender;
     // A peer that never opened a session has no ledger, so it holds no request to reply to.
-    if (ledger.delegation?.role !== 'root') throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
+    if (!isFamilyRecord(ledger)) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     return ledger;
   }
   private currentConversation(project: DelegationProject, root: RunRecord): ConversationState {
     // A ledger whose history is being deleted is read as it stands: reconciliation would write to it.
-    if (root.delegation?.role === 'root' && root.delegation.historyDeletion) return root.delegation.conversation ?? { messages: [], outcomes: [] };
+    if (historyDeleting(root)) return conversationOf(root) ?? { messages: [], outcomes: [] };
     const state = reconcileConversationState(root, (id) => project.store.getRun(id), new Date().toISOString(), run => run.delegation?.role === 'worker'
       ? project.store.readWorkerExecution(run.id)?.phase === 'complete' : !project.manager.isActive(run.id), id => project.store.isUnreadable(id));
-    if (root.delegation?.role === 'root' && state && state !== root.delegation.conversation) project.store.commitConversation(root.id, state);
+    if (state && state !== conversationOf(root)) project.store.commitConversation(root.id, state);
     return state ?? { messages: [], outcomes: [] };
   }
   private conversationReceipt(project: DelegationProject, ledgerId: string, message: ConversationSendResult['message']): ConversationSendResult {
     const recipient = project.store.getRun(message.recipientRunId);
     const input = recipient?.agentInputs?.find(input => input.id === message.id);
-    const ledger = project.store.getRun(ledgerId);
-    const state = ledger?.delegation?.role === 'root' ? ledger.delegation.conversation : undefined;
+    const state = conversationOf(project.store.getRun(ledgerId));
     const outcome = state?.outcomes.find(outcome => outcome.requestId === (message.requestId ?? message.id));
     return { message, delivery: input?.consumedAt ? 'consumed' : input?.deliveredAt ? 'delivered' : input ? 'queued' : 'not-delivered', ...(outcome ? { outcome } : {}) };
   }
@@ -406,8 +396,8 @@ export class DelegationService {
     const pair = this.conversationPair(caller, request.recipientRunId, true);
     const { project, sender, recipient } = pair;
     const root = this.ledgerFor(pair, request);
-    this.assertSendScope(pair, root, request);
-    if (pair.relationship === 'peer' && sender.delegation?.role === 'root') assertReplyDirection(sender.delegation.conversation ?? { messages: [], outcomes: [] }, request, sender, recipient);
+    this.assertSendScope(pair, request);
+    if (pair.relationship === 'peer') assertReplyDirection(conversationOf(sender) ?? { messages: [], outcomes: [] }, request, sender, recipient);
     const requestHash = createHash('sha256').update(JSON.stringify({ senderRunId: sender.id, ...request })).digest('hex');
     const state = this.currentConversation(project, root);
     const existing = state.messages.find(message => message.id === request.id);
@@ -415,7 +405,7 @@ export class DelegationService {
     assertNewPeerSend(pair, request);
     const { original, settled } = sendRequestContext(state, request, sender, recipient);
     const now = new Date().toISOString();
-    const { destroyed, resumable, resume, instruction } = sendAdmission(pair, root, request);
+    const { destroyed, resumable, resume, instruction } = sendAdmission(pair, request);
     // A new continuation is new worker work: the parent's switch gates it (hearsay-tools/cezarion#2784).
     if (resume) requireWorkersAllowed(root);
     const message = sendMessage(pair, request, requestHash, now, settled, { destroyed, resumable, resume, instruction });
@@ -442,10 +432,9 @@ export class DelegationService {
     }
     return { ...this.conversationReceipt(project, root.id, message), effect: enqueue ? conversationSendEffectSchema.enum.applied : conversationSendEffectSchema.enum.refused };
   }
-  private assertSendScope(pair: ConversationPair, root: RunRecord, request: ConversationSendRequest): void {
-    const { project, sender, recipient, relationship } = pair;
-    const peer = relationship === 'peer';
-    if (request.resume && (peer || sender.id !== root.id || recipient.delegation?.role !== 'worker')) {
+  private assertSendScope(pair: ConversationPair, request: ConversationSendRequest): void {
+    const { project } = pair;
+    if (request.resume && !(pair.relationship === 'family' && pair.relation === 'supervised')) {
       throw new DelegationPolicyError('denied_scope', 'Only an active parent may use --resume for its owned worker');
     }
     if (project.store.containsSessionSecret(JSON.stringify(request))) throw new DelegationPolicyError('invalid_input', 'Credentials cannot be included in delegated input');
@@ -521,12 +510,12 @@ export class DelegationService {
     const { project, self } = this.peerRecords(caller);
     const other = project.store.getRun(otherId);
     if (!pair && !takesPart(self, other, otherId)) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
-    return { project, ledgers: [self, ...(other?.delegation?.role === 'root' ? [other] : [])], self: self.id, other: otherId };
+    return { project, ledgers: [self, ...(isFamilyRecord(other) ? [other] : [])], self: self.id, other: otherId };
   }
   async inbox(caller: Caller): Promise<InboxReserveResult> {
     const project = this.context(caller);
     const run = project.store.getRun(caller.runId);
-    if (!run || (run.delegation?.role !== 'root' && run.delegation?.role !== 'worker')) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
+    if (!run || !grantsOf(run).message.length) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     const selected: InboxEntry[] = [];
     let characters = 0;
     const states = new Map<string, ConversationState>();
@@ -556,10 +545,10 @@ export class DelegationService {
   /** A peer input addressed to the caller: its participation is the whole check (spec § 2, two
    *  levels). When the sender's ledger went with its deletion, the input still carries the message. */
   private peerInboxEntry(project: DelegationProject, run: RunRecord, input: AgentInput, ledgerState: (ledger: RunRecord) => ConversationState): InboxEntry | undefined {
-    if (run.delegation?.role !== 'root') return undefined;
+    if (!grantsOf(run).message.includes('peer')) return undefined;
     const ledger = project.store.getRun(input.parentRunId);
     if (!ledger) { const message = orphanedPeerMessage(input); return message && { message }; }
-    return ledger.delegation?.role === 'root' ? inboxEntryIn(ledgerState(ledger), input, run.id) : undefined;
+    return isFamilyRecord(ledger) ? inboxEntryIn(ledgerState(ledger), input, run.id) : undefined;
   }
   /** A family input: the pair must still be admitted, as before peers existed. */
   private familyInboxEntry(caller: Caller, run: RunRecord, input: AgentInput, ledgerState: (ledger: RunRecord) => ConversationState): InboxEntry | undefined {
@@ -599,8 +588,8 @@ export class DelegationService {
    *  record: wait and cancel still work after the peer's deletion (spec § 2). */
   private ownRequest(caller: Caller, requestId: string): { project: DelegationProject; root: RunRecord; message: ConversationMessage } {
     const project = this.context(caller); const sender = project.store.getRun(caller.runId);
-    const root = sender?.delegation?.role === 'root' ? sender : sender?.delegation?.role === 'worker' ? project.store.getRun(sender.delegation.parentRunId) : undefined;
-    const message = root?.delegation?.role === 'root' ? root.delegation.conversation?.messages.find(message => message.id === requestId && message.kind === 'request' && message.state === 'accepted' && message.senderRunId === caller.runId) : undefined;
+    const root = familyRecordOf(sender, id => project.store.getRun(id));
+    const message = conversationOf(root)?.messages.find(message => message.id === requestId && message.kind === 'request' && message.state === 'accepted' && message.senderRunId === caller.runId);
     if (!message) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     if (message.relationship === 'peer') return { ...this.peerRecords(caller), root: root!, message };
     const pair = this.conversationPair(caller, message.recipientRunId);
@@ -645,12 +634,14 @@ export class DelegationService {
       const project = this.context(caller);
       const parent = project.store.getRun(caller.runId);
       authorizeSpawnReplay(caller, parent, project.id);
-      if (parent?.delegation?.role !== 'root') throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
+      const family = familyRecordOf(parent, id => project.store.getRun(id));
+      if (!family) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
       if (project.store.containsSessionSecret(JSON.stringify(request))) throw new DelegationPolicyError('invalid_input', 'Credentials cannot be included in delegated input');
       const requestHash = spawnRequestHash(request);
-      const replayed = replayedSpawn(project, parent, request.requestId, requestHash);
+      const replayed = replayedSpawn(project, family, parent, request.requestId, requestHash);
       if (replayed) return replayed;
-      authorizeSpawn(caller, parent, project.id, id => project.store.getRun(id));
+      const kindId = WORKSPACE_CHOICES[request.workspace ?? DEFAULT_WORKSPACE_CHOICE];
+      authorizeSpawn(caller, parent, project.id, id => project.store.getRun(id), kindId);
       const catalog = await resolveSpawnWorkflow(project, request);
       const resolvedSteps = await resolveSpawnSteps(project.manager, parent.id, request, catalog, (step, settings) => this.validateModels(request, [{ step, settings }]));
       if (request.skill !== undefined) {
@@ -666,14 +657,14 @@ export class DelegationService {
       const identity = acceptedWorkerIdentitySchema.parse({ kind: 'accepted', ...stepIdentityFields(first),
         steps: resolvedSteps.map(entry => ({ stepId: entry.step.id, ...stepIdentityFields(entry) })) });
       const baselineSha = await resolveWorkerBaseline(project.root, settings.cwd, request.baseline ?? 'parent-head');
-      const kind = workspaceKinds[WORKSPACE_CHOICES[request.workspace ?? DEFAULT_WORKSPACE_CHOICE]];
+      const kind = workspaceKinds[kindId];
       const workspace = await kind.plan({ repoRoot: project.root, workerId: randomUUID(), baselineSha, hostRunId: parent.id, hostDirectory: settings.cwd });
       const prepared = request.context === undefined ? undefined : await kind.prepareContext({
         repoRoot: project.root, dataDir: projectPaths(project.root).write, parentId: parent.id, workspace,
         parentCwd: settings.cwd, context: request.context, containsSecret: text => project.store.containsSessionSecret(text),
       });
       return acceptSpawnedWorker({
-        project, parent, request, catalog, resolvedSteps, settings, identity, workspace, baselineSha, requestHash, prepared,
+        project, parent, family, request, catalog, resolvedSteps, settings, identity, workspace, baselineSha, requestHash, prepared,
         current: () => this.context(caller), caller,
       });
     });
@@ -682,15 +673,14 @@ export class DelegationService {
     const project = this.context(caller);
     const parent = project.store.getRun(caller.runId);
     authorizeWorkerList(caller, parent, project.id);
-    if (parent?.delegation?.role !== 'root') throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
+    const receipts = receiptsOf(familyRecordOf(parent, id => project.store.getRun(id)));
     const workers: WorkerListPage['workers'] = [];
     const offset = Number(query.offset ?? 0);
-    const end = Math.min(offset + 32, parent.delegation.receipts.length);
-    for (const receipt of parent.delegation.receipts.slice(offset, end)) {
+    const end = Math.min(offset + 32, receipts.length);
+    for (const receipt of receipts.slice(offset, end)) {
       const worker = project.store.getRun(receipt.workerId);
       // Deleted histories have no resources to supervise. Never expose an unrelated receipt target.
-      if (worker?.delegation?.role !== 'worker' || worker.delegation.parentRunId !== parent.id ||
-          worker.delegation.workspace.ownerRunId !== worker.id) continue;
+      if (worker?.delegation?.role !== 'worker' || relationOf(parent, worker) !== 'supervised') continue;
       const inspection = await this.inspect(caller, { workerId: worker.id });
       workers.push({ workerId: inspection.workerId, parentRunId: inspection.parentRunId,
         status: inspection.status, workspace: inspection.workspace,
@@ -698,7 +688,7 @@ export class DelegationService {
         settled: inspection.settled,
         destroyed: worker.delegation.destroy?.phase === 'complete' });
     }
-    return { workers, ...(end < parent.delegation.receipts.length ? { nextOffset: end } : {}) };
+    return { workers, ...(end < receipts.length ? { nextOffset: end } : {}) };
   }
   async inspect(caller: Caller, params: WorkerParams): Promise<WorkerInspection> {
     const { project, worker, parent } = this.target(caller, params, 'inspect');
@@ -706,7 +696,7 @@ export class DelegationService {
     project.manager.settleOrphanedWorkerExecution(worker.id); // #469: an orphan that died after recovery settles
     const outcome = workerOutcome(worker, new Date().toISOString());
     const wait = this.inspectedWait(parent, worker.id);
-    const completion = parent.delegation?.role === 'root' ? completionWaitEntry(parent.waits, worker.id) : undefined;
+    const completion = completionWaitEntry(parent.waits, worker.id);
     const completionWait = completion ? workerCompletionWaitProjection(completion, parent) : undefined;
     return { workerId: worker.id, parentRunId: parent.id, status: worker.status, workspace: worker.delegation.workspace,
       settled: workerObservation(worker, project.store.readWorkerExecution(worker.id)).settled,
@@ -721,7 +711,6 @@ export class DelegationService {
    *  deadline, which that shape requires, so inspection shows it as `completionWait`
    *  (hearsay-tools/cezarion#1301). */
   private inspectedWait(parent: RunRecord, workerId: string): WorkerWait | undefined {
-    if (parent.delegation?.role !== 'root') return undefined;
     const entry = (parent.waits ?? []).filter((wait): wait is DeadlinedWorkerWaitEntry => wait.kind === 'worker' && WAIT_KINDS.worker.hasDeadline(wait) && !!wait.workerIds?.includes(workerId)).at(-1);
     return entry ? workerWaitEntryToLegacy(entry) : undefined;
   }
@@ -739,7 +728,8 @@ export class DelegationService {
     }
     authorizeWorker(caller, worker, 'inspect', parent, project.id);
     project.manager.settleOrphanedWorkerExecution(workerId); // #469: before `settled` is computed
-    if (parent?.delegation?.role === 'root' && parent.delegation.receipts.some(receipt => receipt.workerId === workerId && receipt.deletion?.phase === 'pending')) {
+    const family = familyRecordOf(parent, id => project.store.getRun(id));
+    if (parent && receiptsOf(family).some(receipt => receipt.workerId === workerId && receipt.deletion?.phase === 'pending')) {
       const retained = project.store.readWorkerResult(parent.id, workerId);
       if (!retained || !project.store.canDeleteRun(workerId)) throw new DelegationPolicyError('incompatible_state', 'Worker history deletion evidence is unavailable');
       const evidence = await revalidateRetainedWorkerResult(project.root, retained, project.store.sourceDataDir(parent.id));
@@ -784,18 +774,19 @@ export class DelegationService {
     const { waitId } = workerCancelWaitRequestSchema.parse(value);
     const project = this.context(caller);
     const sender = project.store.getRun(caller.runId);
-    if (sender?.delegation?.role === 'worker') {
-      this.conversationPair(caller, sender.delegation.parentRunId);
-      // hearsay-tools/cezarion#1235: a worker's request wait is a list entry, open or settled.
-      const wait = [...sender.waits ?? [], ...sender.lastWaits ?? []].find(entry => entry.id === waitId && entry.kind === 'worker');
-      if (wait?.kind !== 'worker' || !wait.requestIds?.length) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
-      for (const requestId of wait.requestIds) this.ownRequest(caller, requestId);
-    } else {
-      authorizeCancelWait(caller, sender, project.id);
-      // A peer wait is cancelled through the list too (hearsay-tools/cezarion#1995).
-      if ([...sender?.waits ?? [], ...sender?.lastWaits ?? []].some(entry => entry.id === waitId && entry.kind === 'peer')) {
-        return { wait: peerWaitView(project.manager.cancelPeerWait(caller.runId, waitId)) };
-      }
+    const entries = [...sender?.waits ?? [], ...sender?.lastWaits ?? []];
+    const supervisorId = supervisorIdOf(sender);
+    // hearsay-tools/cezarion#1235: a supervised task's request wait is a list entry, open or settled,
+    // and is checked through its supervisor pair whatever operate grant the task holds.
+    const wait = supervisorId === undefined ? undefined : entries.find(entry => entry.id === waitId && entry.kind === 'worker');
+    const requestIds = wait?.kind === 'worker' ? wait.requestIds ?? [] : [];
+    if (supervisorId !== undefined) this.conversationPair(caller, supervisorId);
+    for (const requestId of requestIds) this.ownRequest(caller, requestId);
+    // Any other wait is on workers or peers: the `wait` grant covers it.
+    if (!requestIds.length) authorizeCancelWait(caller, sender, project.id);
+    // A peer wait is cancelled through the list too (hearsay-tools/cezarion#1995).
+    if (entries.some(entry => entry.id === waitId && entry.kind === 'peer')) {
+      return { wait: peerWaitView(project.manager.cancelPeerWait(caller.runId, waitId)) };
     }
     return { wait: project.manager.cancelWorkerWait(caller.runId, waitId) };
   }

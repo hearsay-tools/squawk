@@ -37,7 +37,7 @@ function worker(): RunRecord {
   } });
 }
 function authorize(operation: WorkerOperation, identity: Caller, parent: RunRecord | undefined, target: RunRecord | undefined = worker(), project = projectId): void {
-  if (operation === 'spawn') authorizeSpawn(identity, parent, project, () => undefined);
+  if (operation === 'spawn') authorizeSpawn(identity, parent, project, () => undefined, 'owned-isolated');
   else authorizeWorker(identity, target, operation, parent, project);
 }
 function denied(action: () => void, code = 'denied_scope'): void {
@@ -189,17 +189,17 @@ describe('parent-only delegation policy', () => {
     parent.delegation.receipts = Array.from({ length: 31 }, () => ({ requestId: randomUUID(), workerId: randomUUID(), requestHash: 'b'.repeat(64) }));
     const runs = new Map<string, RunRecord>();
     const getRun = (id: string) => runs.get(id);
-    expect(() => authorizeSpawn(caller(), parent, projectId, getRun)).not.toThrow();
+    expect(() => authorizeSpawn(caller(), parent, projectId, getRun, 'owned-isolated')).not.toThrow();
     parent.delegation.receipts.push({ requestId: randomUUID(), workerId, requestHash: 'c'.repeat(64) });
-    denied(() => authorizeSpawn(caller(), parent, projectId, getRun), 'capacity_limit');
+    denied(() => authorizeSpawn(caller(), parent, projectId, getRun, 'owned-isolated'), 'capacity_limit');
     expect(() => authorizeSpawnReplay(caller(), parent, projectId)).not.toThrow();
     // Incomplete cleanup keeps the slot; only a verified complete destroy releases it.
     const owned = worker();
     if (owned.delegation?.role !== 'worker') throw new Error('fixture');
     runs.set(workerId, { ...owned, status: RUN_STATUS.done, delegation: { ...owned.delegation, destroy: { requestedAt: now, phase: 'incomplete', remaining: ['branch'] } } });
-    denied(() => authorizeSpawn(caller(), parent, projectId, getRun), 'capacity_limit');
+    denied(() => authorizeSpawn(caller(), parent, projectId, getRun, 'owned-isolated'), 'capacity_limit');
     runs.set(workerId, { ...owned, status: RUN_STATUS.done, delegation: { ...owned.delegation, destroy: { requestedAt: now, phase: 'complete', remaining: [] } } });
-    expect(() => authorizeSpawn(caller(), runRecordSchema.parse(JSON.parse(JSON.stringify(parent))), projectId, getRun)).not.toThrow();
+    expect(() => authorizeSpawn(caller(), runRecordSchema.parse(JSON.parse(JSON.stringify(parent))), projectId, getRun, 'owned-isolated')).not.toThrow();
     expect(() => authorizeWorker(caller(), worker(), 'inspect', parent, projectId)).not.toThrow();
   });
 
@@ -208,7 +208,7 @@ describe('parent-only delegation policy', () => {
     if (parent.delegation?.role !== 'root') throw new Error('fixture');
     parent.delegation.receipts = Array.from({ length: 1024 }, () => ({ requestId: randomUUID(), workerId: randomUUID(), requestHash: 'b'.repeat(64),
       deletion: { phase: 'complete' as const, revision: 0, resourceId: randomUUID(), generation: randomUUID() } }));
-    expect(() => authorizeSpawn(caller(), parent, projectId, () => undefined))
+    expect(() => authorizeSpawn(caller(), parent, projectId, () => undefined, 'owned-isolated'))
       .toThrowError(expect.objectContaining({ code: 'capacity_limit', message: 'Parent reached 1,024 worker creations; start a new task to delegate further' }));
   });
 });
