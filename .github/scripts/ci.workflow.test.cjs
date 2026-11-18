@@ -1047,3 +1047,19 @@ test('unit groups and build/package run in parallel without changing suite membe
   assert.equal(scripts['test:unit:package'], 'npm run test:unit -w @wjarka/cezarion');
   assert.equal(scripts['test:unit:scripts'], 'node --import ./scripts/test-home-env.mjs --test .github/scripts/*.test.cjs scripts/*.test.mjs .ai/skills/*/scripts/*.test.mjs');
 });
+
+test('both gates name a full rerun for an abandoned need and stay silent otherwise', () => {
+  const ci = workflow();
+  const gates = [
+    [ci.jobs.verify.steps.find(step => step.name === 'Require every verification job'), 'PREFLIGHT_RESULT', 'Review preflight'],
+    [ci.jobs.preflight.steps.find(step => step.name === 'Require preflight checks'), 'TYPECHECK_RESULT', 'Typecheck'],
+  ];
+  for (const [gate, variable, job] of gates) {
+    const abandoned = runShell(gate.run, { [variable]: 'abandoned', GITHUB_RUN_ID: '42670804913' });
+    assert.notEqual(abandoned.status, 0, job);
+    assert.equal(abandoned.stdout, `::error::${job} was never created (abandoned). Re-run failed jobs cannot recreate it: run a full rerun (gh run rerun 42670804913) or push a new head.\n`);
+    const failed = runShell(gate.run, { [variable]: 'failure', GITHUB_RUN_ID: '42670804913' });
+    assert.notEqual(failed.status, 0, job);
+    assert.doesNotMatch(failed.stdout, /abandoned/);
+  }
+});

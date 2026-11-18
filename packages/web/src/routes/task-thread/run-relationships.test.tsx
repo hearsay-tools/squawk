@@ -22,7 +22,7 @@ const parentId = '10000000-0000-4000-8000-000000000001'
 const workerId = '10000000-0000-4000-8000-000000000002'
 const at = '2026-09-06T00:00:00.000Z'
 const workspace = { ownerRunId: workerId, resourceId: workerId, kind: 'owned-isolated' as const, path: '/managed/worker', branch: 'cez/worker', baselineSha: 'a'.repeat(40) }
-const worker: WorkerInspection = { workerId, parentRunId: parentId, status: workerInspectionSchema.shape.status.enum.failed, workspace, destroy: { requestedAt: at, phase: 'incomplete', remaining: ['branch'], error: 'Branch is checked out' } }
+const worker: WorkerInspection = { workerId, parentRunId: parentId, settled: true, status: workerInspectionSchema.shape.status.enum.failed, workspace, destroy: { requestedAt: at, phase: 'incomplete', remaining: ['branch'], error: 'Branch is checked out' } }
 const ordinary: ApiRun = { id: parentId, title: 'Parent', task: 'Do task', workflow: 'quick-task', status: RUN_STATUS.running, createdAt: at, tokensUsed: 0, archived: false, steps: [] }
 const root: ApiRun = { ...ordinary, delegation: { role: 'root', permissions: [], receipts: [{ requestId: workerId, workerId, requestHash: 'b'.repeat(64) }] } }
 const child: ApiRun = { ...ordinary, id: workerId, delegation: { role: 'worker', permissions: [], parentRunId: parentId, workspace } }
@@ -196,7 +196,7 @@ it('collapses worker navigation on phones and preserves its scoped links when re
 // #816: capacity is reclaimable, so history beyond the old 32 is listed in full.
 const workerAt = (n: number): WorkerInspection => {
   const id = `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`
-  return { workerId: id, parentRunId: parentId, status: workerInspectionSchema.shape.status.enum.done, workspace: { ...workspace, ownerRunId: id, resourceId: id }, destroy: { requestedAt: at, phase: 'complete', remaining: [] } }
+  return { workerId: id, parentRunId: parentId, settled: true, status: workerInspectionSchema.shape.status.enum.done, workspace: { ...workspace, ownerRunId: id, resourceId: id }, destroy: { requestedAt: at, phase: 'complete', remaining: [] } }
 }
 const rootOf = (workers: WorkerInspection[]): ApiRun => ({ ...ordinary, delegation: { role: 'root', permissions: [], receipts: workers.map(w => ({ requestId: w.workerId, workerId: w.workerId, requestHash: 'b'.repeat(64) })) } })
 const capacityOf = (outstanding: number, created = outstanding) => ({ outstanding, limit: 32, created, creationLimit: 1024 })

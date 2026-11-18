@@ -312,7 +312,7 @@ export class WaitRegistry {
     const roots = this.host.waitEngine.exitFileRoots(runId, run);
     let exitFile: string | undefined;
     if (request.exit_file !== undefined) {
-      const confined = confineExitFile(request.exit_file, roots);
+      const confined = confineExitFile(request.exit_file, roots, request.pid);
       if (!confined.ok) return refuse('exit_file_outside');
       exitFile = confined.path;
     }

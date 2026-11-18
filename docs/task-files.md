@@ -19,9 +19,15 @@ hsq job status bench
 
 The command keeps running after the agent's shell call, turn and session end. It prints the
 paths of its log file and its exit-code file, which are in the task's temp directory unless
-`--dir` names another one. When the task ends while the job runs, Squawk keeps that directory,
-so the log and exit code are still there after the job ends. The agent waits for it with a process wait. A second start of a
-name that still runs is refused.
+`--dir` names another one. Squawk keeps the task's temp directory across a Squawk restart and a
+host reboot while the task is live. When the task ends while the job runs, Squawk keeps that
+directory, so the log and exit code are still there after the job ends; it removes the directory
+at the next end once no job in it runs. Two cases lose it: the task ends with no job running, and
+a checkout so deep that the temp directory falls back to a `cez-agent-…` directory under the
+system temp directory, which a reboot can clear. For files that must outlive either, pass `--dir`
+with a directory you keep, for example a git-ignored directory under the project's
+`.ai/squawk/runs/`. The agent waits for the job with a process wait, which accepts the printed
+`exitFile` in any `--dir`. A second start of a name that still runs is refused.
 
 Squawk supplies the bundled command and task context to agent sessions automatically
 (`HSQ_TASK_ID` (`CEZ_TASK_ID` fallback) and `HSQ_ARTIFACTS_DIR` (`CEZ_ARTIFACTS_DIR` fallback); do not configure these yourself). The command

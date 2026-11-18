@@ -51,8 +51,8 @@ const workspace = {
   baselineSha: 'a'.repeat(40),
 }
 const workers: WorkerInspection[] = [
-  { workerId: doneWorkerId, parentRunId: parentId, status: workerInspectionSchema.shape.status.enum.done, workspace },
-  { workerId: cancelledWorkerId, parentRunId: parentId, status: workerInspectionSchema.shape.status.enum.cancelled, workspace },
+  { workerId: doneWorkerId, parentRunId: parentId, settled: true, status: workerInspectionSchema.shape.status.enum.done, workspace },
+  { workerId: cancelledWorkerId, parentRunId: parentId, settled: true, status: workerInspectionSchema.shape.status.enum.cancelled, workspace },
 ]
 
 const steps: StepState[] = [
@@ -438,7 +438,7 @@ describe('RunActivityDock — workers and the All complete claim', () => {
   const root = (extra: Partial<ApiRun> = {}) =>
     run({ status: RUN_STATUS.done, steps: settled, delegation: { role: 'root', permissions: [], receipts: [] }, ...extra } as Partial<ApiRun>)
   const statusText = () => document.querySelector('[data-slot="run-activity-status"]')?.textContent
-  const allDone: WorkerInspection[] = [{ workerId: doneWorkerId, parentRunId: parentId, status: workerInspectionSchema.shape.status.enum.done, workspace }]
+  const allDone: WorkerInspection[] = [{ workerId: doneWorkerId, parentRunId: parentId, settled: true, status: workerInspectionSchema.shape.status.enum.done, workspace }]
   /** A spawn receipt outlives a failed lookup, so the dock must judge its worker too. */
   const receipt = (workerId: string) => ({
     requestId: '20000000-0000-4000-8000-000000000001',
@@ -451,7 +451,7 @@ describe('RunActivityDock — workers and the All complete claim', () => {
   it.each(['running', 'waiting', 'review', 'failed'] as const)(
     'never claims completion while a linked worker is %s',
     async (status) => {
-      renderDock(root(), [], [{ workerId: doneWorkerId, parentRunId: parentId, status, workspace }])
+      renderDock(root(), [], [{ workerId: doneWorkerId, parentRunId: parentId, settled: status === 'review' || status === 'failed', status, workspace }])
       await waitFor(() => expect(document.querySelectorAll('[data-slot="worker-item"]')).toHaveLength(1))
       expect(statusText()).not.toContain('All complete')
     },
@@ -463,8 +463,8 @@ describe('RunActivityDock — workers and the All complete claim', () => {
   // "In progress" forever (#402 feedback).
   it('counts a cancelled worker as complete', async () => {
     renderDock(root(), [], [
-      { workerId: doneWorkerId, parentRunId: parentId, status: workerInspectionSchema.shape.status.enum.done, workspace },
-      { workerId: cancelledWorkerId, parentRunId: parentId, status: workerInspectionSchema.shape.status.enum.cancelled, workspace },
+      { workerId: doneWorkerId, parentRunId: parentId, settled: true, status: workerInspectionSchema.shape.status.enum.done, workspace },
+      { workerId: cancelledWorkerId, parentRunId: parentId, settled: true, status: workerInspectionSchema.shape.status.enum.cancelled, workspace },
     ])
     await waitFor(() => expect(statusText()).toContain('All complete'))
   })
@@ -472,7 +472,7 @@ describe('RunActivityDock — workers and the All complete claim', () => {
   // The other half of the same defect: when the run is over, the header reports an OUTCOME.
   // Withholding the green line is right; calling a finished run "In progress" is not.
   it('names a finished run with a failed worker as finished, not in progress', async () => {
-    renderDock(root(), [], [{ workerId: doneWorkerId, parentRunId: parentId, status: workerInspectionSchema.shape.status.enum.failed, workspace }])
+    renderDock(root(), [], [{ workerId: doneWorkerId, parentRunId: parentId, settled: true, status: workerInspectionSchema.shape.status.enum.failed, workspace }])
     await waitFor(() => expect(statusText()).toContain('Incomplete'))
     expect(statusText()).not.toContain('In progress')
     expect(statusText()).not.toContain('All complete')
@@ -480,7 +480,7 @@ describe('RunActivityDock — workers and the All complete claim', () => {
 
   // ...and a worker that really is still going keeps the progress wording, because it is true.
   it('still says in progress while a linked worker runs on', async () => {
-    renderDock(root(), [], [{ workerId: doneWorkerId, parentRunId: parentId, status: workerInspectionSchema.shape.status.enum.running, workspace }])
+    renderDock(root(), [], [{ workerId: doneWorkerId, parentRunId: parentId, settled: false, status: workerInspectionSchema.shape.status.enum.running, workspace }])
     await waitFor(() => expect(document.querySelectorAll('[data-slot="worker-item"]')).toHaveLength(1))
     expect(statusText()).toContain('In progress')
   })
@@ -512,7 +512,7 @@ describe('RunActivityDock — workers and the All complete claim', () => {
 
   it('drops the cleanup line from a worker whose teardown left nothing behind', async () => {
     renderDock(root(), [], [
-      { workerId: doneWorkerId, parentRunId: parentId, status: workerInspectionSchema.shape.status.enum.done, workspace, destroy: { requestedAt: at, phase: 'complete', remaining: [] } },
+      { workerId: doneWorkerId, parentRunId: parentId, settled: true, status: workerInspectionSchema.shape.status.enum.done, workspace, destroy: { requestedAt: at, phase: 'complete', remaining: [] } },
     ])
     await waitFor(() => expect(document.querySelectorAll('[data-slot="worker-item"]')).toHaveLength(1))
     expect(document.querySelector('[data-slot="run-activity-workers"]')?.textContent).not.toContain('Cleanup')

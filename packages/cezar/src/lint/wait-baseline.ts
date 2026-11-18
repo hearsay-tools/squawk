@@ -63,8 +63,8 @@ export function readBaseline<Rule extends string = string>(path: string): Baseli
  * Shrink the baseline to what the suite has now. Never grows it: a site the baseline does not
  * cover stays a failure, so the only way to land one is to wait on the product's signal or give
  * the bound a reason. A baseline that does not exist yet is written once from `actual`, which is
- * how a new rule lands its first list. Run through
- * `TEST_WAIT_DISCIPLINE_UPDATE=1 npm run lint`.
+ * how a new rule lands its first list. A local `npm run lint` runs it when an entry is stale; the
+ * first list needs `TEST_WAIT_DISCIPLINE_UPDATE=1` or `UNIT_WAIT_DISCIPLINE_UPDATE=1` (`lint/baseline-mode.ts`).
  */
 export function shrinkBaseline<Rule extends string>(actual: BaselineEntry<Rule>[], baseline: BaselineOptions): void {
   if (!existsSync(baseline.path)) {

@@ -359,6 +359,50 @@ force, or force only in part. The item numbers are stable: code cites them.
     lists a prefix for every provider that its model ids can name. Never widen another
     backend's entry.
 
+<a id="10a-removing-a-runner"></a>
+
+## 10a. Removing a runner
+
+Saved runs outlive the runner they ran on. A run saved on a removed runner still opens, lists,
+shows its transcript and can Continue on another runner (hearsay-tools/squawk#3715). Most
+readers of a saved runner id read the `runner`, `backend` or `removedRunner` field of any value,
+so a text search for the id does not find them. Run
+`node scripts/readers.mjs --runner <id>`: it lists the readers below, checks that each still
+holds its anchor, and adds every quoted use of the id.
+
+1. **Fold** — add the id to `REMOVED_RUNNER_IDS` in
+   `packages/cezar/src/runs/legacy-run-rows.ts`. That file folds the saved data at read time:
+   the run row with its steps and `workflowDef` steps (`upgradeRemovedRunner`), the stored
+   list summary (`upgradeRemovedRunnerSummary`) and the worker-result snapshot
+   (`upgradeRemovedRunnerResult`).
+2. **Load sites of the fold** — `packages/cezar/src/runs/store.ts` (run rows and worker
+   results) and `packages/cezar/src/runs/run-summary-page.ts` (stored summaries).
+3. **Record schema** — `packages/contract/src/runs.ts` keeps `removedRunner` and the step's
+   `removedBackend`; `runner` and `backend` accept only shipped ids.
+4. **Session selection** — `latestSession` and `removedRunnerStepAfter` in
+   `packages/contract/src/run-predicates.ts` choose the session for terminal hand-off and
+   Continue. The usage-limit account hold reads the next turn's account through them
+   (`packages/cezar/src/workflows/execution-account.ts`).
+5. **Queued and interrupted runs** — `packages/cezar/src/workflows/run/queued-revival.ts`
+   fails a revived run on a removed runner; `packages/cezar/src/workflows/run-scheduling.ts`
+   skips it; `packages/cezar/src/workflows/run.ts` refuses to start or resume it.
+6. **Continue** — admission in `packages/cezar/src/workflows/continuation-admission.ts`,
+   provenance by start time in `packages/cezar/src/workflows/run/launch-read-resolver.ts`,
+   worker identity in `packages/cezar/src/delegation/execution-identity.ts`, and the HTTP
+   Continue and checkout routes in `packages/cezar/src/server/server.ts`.
+7. **Cockpit** — `packages/web/src/routes/task-thread/run-actions.ts`,
+   `packages/web/src/routes/task-thread/run-agent-identity.ts`,
+   `packages/web/src/routes/task-thread/continuation-provider.ts` and
+   `packages/web/src/routes/task-thread/task-thread.tsx`.
+8. **Saved-data tests** — extend `runs/removed-runner-saved-data.test.ts` and
+   `workflows/removed-runner-continue.test.ts` with a run saved on the id.
+9. **Everything §10 added** — the class, its mapper, fixtures, parity rows, probes, presets,
+   model discovery and credential prefixes leave with the runner. Sweep each removed name
+   with `node scripts/readers.mjs <name…>`.
+
+A new reader of a saved runner id joins this list and `RUNNER_ID_READERS` in
+`scripts/readers.mjs`; `scripts/readers.test.mjs` keeps the two equal.
+
 <a id="11-the-plan-channel-pr-443"></a>
 
 ## 11. The plan channel (PR open-mercato/cezar#443)

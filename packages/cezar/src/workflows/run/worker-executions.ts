@@ -1,5 +1,5 @@
 import { logPrefix } from '../../home/display.ts';
-import type { AgentSession } from '../../core/claude-cli-runner.ts';
+import type { AgentSession } from '../../core/agent-runner.ts';
 import { sessionGroupOf } from '../../core/session-process.ts';
 import type { RunModuleContext } from './types.ts';
 import type { WorkerOrphans } from './worker-orphans.ts';
