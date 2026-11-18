@@ -9,6 +9,7 @@ import type { AgentRunResult, AgentRunSpec } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import * as runners from '../core/runner-factory.ts';
 import '../core/every-runner.testkit.ts';
+import { ensureDataGitignore } from '../data-gitignore.ts';
 import { projectPaths } from '../project-paths.ts';
 import { isReclaimable, reclaimWorktree } from '../runs/retention.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
@@ -172,6 +173,22 @@ describe('a worker in a shared workspace (hearsay-tools/squawk#3819)', { timeout
     expect(git(spec.cwd, 'status', '--porcelain')).toBe('');
     expect(git(spec.cwd, 'rev-parse', 'HEAD')).not.toBe(hostHead);
     expect((await f.service.collect(f.caller, { workerId })).changes).toBeUndefined();
+  });
+
+  it('runs in the repository root for a parent that runs in place, without waiting for the repository-root lease', async () => {
+    const rootDirectory = realpathSync(f.root);
+    // As a registered project has it: the run store and each run's files are ignored, so they are no part of the report.
+    ensureDataGitignore(f.root);
+    setRunStatus(f.store, f.parent.id, RUN_STATUS.running, { worktreePath: undefined, branch: undefined, worktree: false });
+    vi.mocked(f.manager.delegationExecutionSettings).mockReturnValue({ cwd: f.root, runner: 'claude', model: 'opus', effort: 'high', agentProfile: 'default',
+      accountBinding: { provider: 'claude', profileId: 'default', homePath: f.root, claudeLayout: { kind: 'relocated' } } });
+    const { workerId } = await f.service.spawn(f.caller, shared());
+    expect(worker(workerId).delegation).toMatchObject({ workspace: { kind: 'shared', path: rootDirectory, baselineSha: f.sha } });
+    const spec = await runSession(workerId, cwd => writeFileSync(join(cwd, 'written-in-place.txt'), 'x\n'));
+    expect(realpathSync(spec.cwd)).toBe(rootDirectory);
+    expect(notes(workerId).join('\n')).not.toContain('waiting for exclusive access to the repository working tree');
+    expect(worker(workerId).worktreePath).toBeUndefined();
+    expect((await f.service.collect(f.caller, { workerId })).changes).toMatchObject({ state: 'changed', paths: ['written-in-place.txt'] });
   });
 
   it('reports unchanged for a worker that only reads', async () => {
