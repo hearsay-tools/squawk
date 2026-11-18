@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { daemonAlive, fallbackLines, focusedTests, gitIo, judgeSqueal, patchLimitLines, prepr, SQUEAL_WAIT_MS, squealChecks, squealLines, testBudgetLines } from './prepr.mjs';
+import { complexityRun, daemonAlive, fallbackLines, focusedTests, gitIo, judgeSqueal, lintFallbackLine, lintUnfinished, patchLimitLines, prepr, SQUEAL_WAIT_MS, squealChecks, squealLines, testBudgetLines } from './prepr.mjs';
 
 const { GITHUB_PATCH_LIMITS, numstatRows } = createRequire(import.meta.url)('../.github/scripts/missing-patches.cjs');
 
@@ -30,13 +30,14 @@ test('a lint finding fails', () => {
   assert.equal(judgeSqueal(0, status([], { lint: { failing: 2 } })).state, 'fail');
 });
 
-test('missing results name the files and pass as incomplete', () => {
+test('missing results name the files and are incomplete', () => {
   const r = judgeSqueal(3, status([file('a.test.ts', 'current', 'pass'), file('b.test.ts', 'pending')]));
   assert.deepEqual([r.state, r.missing], ['incomplete', ['b.test.ts']]);
 });
 
-test('unfinished lint is incomplete, not a failure', () => {
-  assert.equal(judgeSqueal(0, status([], { lint: { failing: 0, pending: 3 } })).state, 'incomplete');
+test('unfinished lint leaves the tests\' verdict alone and marks lint unfinished', () => {
+  const r = judgeSqueal(0, status([], { lint: { failing: 0, pending: 3 } }));
+  assert.deepEqual([r.state, lintUnfinished(r.lint)], ['pass', true]);
 });
 
 test('only a live daemon counts', () => {
@@ -56,7 +57,11 @@ test('a skipped current file is not a failure', () => {
 
 test('an input that selects no test is named as missing', () => {
   const r = judgeSqueal(3, { ...status([]), selection: { testFiles: [], unmatched: ['src/x.ts'] } });
-  assert.deepEqual([r.state, r.missing], ['incomplete', ['src/x.ts (selects no test file)']]);
+  assert.deepEqual([r.state, r.missing, r.unmatched], ['incomplete', [], ['src/x.ts']]);
+  const [line] = squealLines(r, 1000);
+  assert.equal(line.ok, false);
+  assert.match(line.text, /src\/x\.ts\. Waiting does not change that: add a test .*`inputs`/);
+  assert.doesNotMatch(line.text, /squeal status --wait/);
 });
 
 test('a setup failure fails the gate', () => {
@@ -64,33 +69,34 @@ test('a setup failure fails the gate', () => {
   assert.equal(r.state, 'fail');
 });
 
-test('absent lint evidence is incomplete', () => {
-  assert.equal(judgeSqueal(0, { selection: { testFiles: [] } }).state, 'incomplete');
+test('absent lint evidence is unfinished lint', () => {
+  assert.equal(lintUnfinished(judgeSqueal(0, { selection: { testFiles: [] } }).lint), true);
 });
 
-test('lint that is off or failed is incomplete, not clean', () => {
+test('lint that is off or failed is unfinished, not clean', () => {
   for (const reason of [{ off: 'no oxlint installed' }, { failed: 'could not key lint inputs' }, { unreadable: 'x' }]) {
     const lint = { files: 0, failing: 0, pending: 0, stale: 0, unknown: 0, linting: { done: 0, total: 0 }, ...reason };
-    assert.equal(judgeSqueal(0, { selection: { testFiles: [] }, lint }).state, 'incomplete');
+    assert.equal(lintUnfinished(judgeSqueal(0, { selection: { testFiles: [] }, lint }).lint), true);
   }
 });
 
-test('lint that has not started is incomplete when a linted file changed', () => {
+test('lint that has not started is unfinished when a linted file changed', () => {
   const notStarted = { selection: { testFiles: [] }, lint: { failing: 0, linting: { done: 0, total: 0 } } };
-  assert.equal(judgeSqueal(0, notStarted, () => false, true).state, 'incomplete');
-  assert.equal(judgeSqueal(0, notStarted).state, 'pass');
+  assert.equal(lintUnfinished(judgeSqueal(0, notStarted, () => false, true).lint), true);
+  assert.equal(lintUnfinished(judgeSqueal(0, notStarted).lint), false);
 });
 
 test('finished lint omits the progress field and is clean', () => {
   const done = { selection: { testFiles: [] }, lint: { files: 2000, failing: 0, pending: 0, stale: 0, unknown: 0 } };
-  assert.equal(judgeSqueal(0, done, () => false, true).state, 'pass');
+  const r = judgeSqueal(0, done, () => false, true);
+  assert.deepEqual([r.state, lintUnfinished(r.lint)], ['pass', false]);
 });
 
 const ok = out => ({ code: 0, out, err: '' });
 const live = (testFiles, lint) => JSON.stringify({ available: true, daemon: { state: 'alive' }, selection: { testFiles }, lint });
 const doneLint = { failing: 0, pending: 0, stale: 0, unknown: 0 };
 
-function fakeIo({ responses = {}, files = 'scripts/x.mjs\0', numstat = '1\t0\tscripts/x.mjs\0', nameStatus = 'M\0scripts/x.mjs\0', patch = 'diff --git a/scripts/x.mjs b/scripts/x.mjs\n+small\n', clock = { t: 0 }, noBase = false } = {}) {
+function fakeIo({ responses = {}, files = 'scripts/x.mjs\0', numstat = '1\t0\tscripts/x.mjs\0', nameStatus = 'M\0scripts/x.mjs\0', patch = 'diff --git a/scripts/x.mjs b/scripts/x.mjs\n+small\n', noBase = false, nodeTests = { argv: [], files: [] } } = {}) {
   const calls = [];
   return {
     calls,
@@ -100,8 +106,7 @@ function fakeIo({ responses = {}, files = 'scripts/x.mjs\0', numstat = '1\t0\tsc
       const r = responses[key] ?? responses[cmd];
       return typeof r === 'function' ? r(args) : r ?? ok('');
     },
-    sleep: async ms => { clock.t += ms; },
-    now: () => clock.t,
+    nodeTests: () => nodeTests,
     git: (...a) => (a[0] === 'merge-base' ? (noBase ? '' : 'base123\n') : a[0] === 'diff' ? files : a[0] === 'status' ? '' : a[0] === 'rev-parse' ? 'abc1234\n' : ''),
     gitBytes: (...a) => Buffer.from(a.includes('--numstat') ? numstat : a.includes('--name-status') ? nameStatus : patch),
   };
@@ -109,7 +114,15 @@ function fakeIo({ responses = {}, files = 'scripts/x.mjs\0', numstat = '1\t0\tsc
 
 test('squealChecks reports no daemon when squeal is missing or not alive', async () => {
   assert.deepEqual(await squealChecks(['a.ts'], 1000, fakeIo({ responses: { squeal: { code: 127, out: '', err: '' } } })), { daemon: false });
-  assert.deepEqual(await squealChecks(['a.ts'], 1000, fakeIo({ responses: { squeal: ok('not json') } })), { daemon: false });
+});
+
+test('an unreadable squeal status is an unknown result that fails, not an absent daemon', async () => {
+  const r = await squealChecks(['a.ts'], 1000, fakeIo({ responses: { squeal: { code: 143, out: 'not json', err: 'killed' } } }));
+  assert.deepEqual([r.daemon, r.state, r.exit], [true, 'unreadable', 143]);
+  const [line] = squealLines(r, 1000);
+  assert.equal(line.ok, false);
+  assert.match(line.text, /exited 143 without a readable result[^]*killed/);
+  assert.deepEqual(await squealChecks(['a.ts'], 1000, fakeIo({ responses: { squeal: ok(JSON.stringify({ available: false })) } })), { daemon: false });
 });
 
 test('squealChecks returns a passing verdict from one wait', async () => {
@@ -119,25 +132,10 @@ test('squealChecks returns a passing verdict from one wait', async () => {
   assert.deepEqual(io.calls[0].slice(0, 4), ['squeal', 'status', '--wait', '1000']);
 });
 
-test('squealChecks polls lint until it finishes within the bound', async () => {
-  let polls = 0;
-  const io = fakeIo({ responses: { squeal: args => ok(args.includes('--wait') ? live([], { failing: 0, linting: { done: 0, total: 0 } })
-    : JSON.stringify({ lint: ++polls < 2 ? { failing: 0, linting: { done: 0, total: 0 } } : doneLint })) } });
+test('squealChecks waits once and does not poll lint that has not finished', async () => {
+  const io = fakeIo({ responses: { squeal: ok(live([], { failing: 0, linting: { done: 0, total: 0 } })) } });
   const r = await squealChecks(['packages/a/src/x.ts'], 10_000, io);
-  assert.equal(r.state, 'pass');
-  assert.equal(polls, 2);
-});
-
-test('squealChecks stops polling at the deadline and stays incomplete', async () => {
-  const stuck = { failing: 0, linting: { done: 0, total: 0 } };
-  const io = fakeIo({ responses: { squeal: args => ok(args.includes('--wait') ? live([], stuck) : JSON.stringify({ lint: stuck })) } });
-  assert.equal((await squealChecks(['packages/a/src/x.ts'], 5000, io)).state, 'incomplete');
-});
-
-test('squealChecks stops polling when a poll is unreadable', async () => {
-  const stuck = { failing: 0, linting: { done: 0, total: 0 } };
-  const io = fakeIo({ responses: { squeal: args => ok(args.includes('--wait') ? live([], stuck) : 'garbage') } });
-  assert.equal((await squealChecks(['packages/a/src/x.ts'], 5000, io)).state, 'incomplete');
+  assert.deepEqual([r.state, lintUnfinished(r.lint), io.calls.length], ['pass', true, 1]);
 });
 
 test('focusedTests skips a full or unreadable selection and runs a narrow one', async () => {
@@ -157,17 +155,36 @@ test('squealLines words each state', () => {
   assert.match(squealLines({ state: 'fail', failed: [], lint }, 1000)[0].text, /known test failures/);
   const missing = Array.from({ length: 12 }, (_, i) => `f${i}.test.ts`);
   const inc = squealLines({ state: 'incomplete', missing, lint: { unfinished: 3 } }, 120_000)[0];
-  assert.equal(inc.ok, true);
-  assert.match(inc.text, /120 s.*f9\.test\.ts, and 2 more, lint \(3 file/);
-  assert.match(squealLines({ state: 'pass', count: 4, failed: [], missing: [], lint }, 1000)[0].text, /4 affected/);
+  assert.equal(inc.ok, false);
+  assert.match(inc.text, /^- FAIL: Squeal had no test result within 120 s for: f0\.test\.ts.*f9\.test\.ts, and 2 more\. .*squeal run run-loop/);
+  assert.match(squealLines({ state: 'pass', count: 4, failed: [], missing: [], lint }, 1000)[0].text, /4 affected test file\(s\) current and passing; lint clean$/);
+  assert.doesNotMatch(squealLines({ state: 'pass', count: 4, failed: [], missing: [], lint: { unfinished: 2 } }, 1000)[0].text, /lint clean/);
 });
 
-test('fallbackLines runs focused tests and lint, and reports their failures', async () => {
+test('the lint fallback line names why it ran and carries the lint verdict', () => {
+  const finding = lintFallbackLine({ unfinished: 2 }, { code: 1, out: 'packages/a/src/x.ts: no-unused-vars', err: '' });
+  assert.equal(finding.ok, false);
+  assert.match(finding.text, /^- FAIL: lint: Squeal's lint did not finish for 2 file\(s\), so prepr ran `npm run lint`\npackages\/a\/src\/x\.ts: no-unused-vars/);
+  const clean = lintFallbackLine({ unfinished: 1, unavailable: 'no oxlint installed' }, ok(''));
+  assert.deepEqual([clean.ok, clean.text], [true, "- pass: lint: Squeal's lint is unavailable (no oxlint installed), so prepr ran `npm run lint`"]);
+});
+
+test('fallbackLines runs focused tests, node:test readers and lint, and reports their failures', async () => {
   const io = fakeIo({ responses: { node: ok('{"mode":"changed"}'), npm: { code: 1, out: 'bad', err: '' } } });
-  const lines = await fallbackLines('b', io);
+  const lines = await fallbackLines('b', ['docs/x.md'], io);
   assert.match(lines[0].text, /No Squeal daemon/);
+  assert.match(lines[2].text, /skipped: node:test readers/);
+  assert.equal(lines[3].ok, false);
+  assert.match(lines[3].text, /bad/);
+});
+
+test('fallbackLines runs the node:test readers that the changed paths select', async () => {
+  const selected = { argv: ['--import', './scripts/test-home-env.mjs'], files: ['.github/scripts/a.workflow.test.cjs', '.github/scripts/auto-merge-gates.test.cjs'] };
+  const io = fakeIo({ nodeTests: selected, responses: { node: args => (args.includes('--test') ? { code: 1, out: 'not ok 1', err: '' } : ok('{"mode":"skip"}')) } });
+  const lines = await fallbackLines('b', ['.github/workflows/ci.yml'], io);
+  assert.ok(io.calls.some(c => c.join(' ') === 'node --import ./scripts/test-home-env.mjs --test .github/scripts/a.workflow.test.cjs .github/scripts/auto-merge-gates.test.cjs'));
   assert.equal(lines[2].ok, false);
-  assert.match(lines[2].text, /bad/);
+  assert.match(lines[2].text, /node:test readers of the changed paths \(2 file\(s\)\)\nnot ok 1/);
 });
 
 test('prepr passes on a clean change and skips typecheck for docs only', async () => {
@@ -410,4 +427,108 @@ test('prepr prints the test budget line', async () => {
   const io = fakeIo({ numstat: '500\t0\tsrc/a.test.ts\0', responses: { squeal: ok(live([], doneLint)) } });
   const r = await prepr({ io, waitMs: 1000 });
   assert.match(r.report, /- note: test budget: \+500 net test lines/);
+});
+
+test('prepr fails on a missing test result and names the file', async () => {
+  const io = fakeIo({ responses: { squeal: { code: 3, out: live([file('a.test.ts', 'pending')], doneLint), err: '' } } });
+  const r = await prepr({ io, waitMs: 120_000 });
+  assert.equal(r.failed, true);
+  assert.match(r.report, /^prepr: FAIL/);
+  assert.match(r.report, /- FAIL: Squeal had no test result within 120 s for: a\.test\.ts/);
+});
+
+test('prepr runs npm run lint when Squeal lint has not finished, and fails on its finding', async () => {
+  const unfinished = { failing: 0, linting: { done: 0, total: 0 } };
+  const run = npm => fakeIo({ files: 'packages/a/src/x.ts\0', responses: { squeal: ok(live([], unfinished)), npm: args => (args[2] === 'lint' ? npm : ok('')) } });
+  const bad = run({ code: 1, out: 'packages/a/src/x.ts: no-unused-vars', err: '' });
+  const r = await prepr({ io: bad, waitMs: 1000 });
+  assert.equal(r.failed, true);
+  assert.ok(bad.calls.some(c => c.join(' ') === 'npm run --silent lint'));
+  assert.match(r.report, /FAIL: lint: Squeal's lint did not finish for 1 file\(s\), so prepr ran `npm run lint`\npackages\/a\/src\/x\.ts: no-unused-vars/);
+  const clean = await prepr({ io: run(ok('')), waitMs: 1000 });
+  assert.equal(clean.failed, false);
+  assert.match(clean.report, /- pass: lint: Squeal's lint did not finish/);
+});
+
+test('prepr does not run npm run lint when Squeal lint finished', async () => {
+  const io = fakeIo({ responses: { squeal: ok(live([], doneLint)) } });
+  await prepr({ io, waitMs: 1000 });
+  assert.ok(!io.calls.some(c => c.join(' ') === 'npm run --silent lint'));
+});
+
+const GATE = '.ai/skills/check-code-quality/scripts/complexity-gate.mjs';
+
+test('prepr fails on complexity growth with the gate\'s own report', async () => {
+  const io = fakeIo({ responses: {
+    squeal: ok(live([], doneLint)),
+    [`node ${GATE} --base`]: { code: 1, out: 'scripts/x.mjs: grow() complexity 23 (limit 20, was 18)', err: '' },
+  } });
+  const r = await prepr({ io, waitMs: 1000 });
+  assert.equal(r.failed, true);
+  assert.ok(io.calls.some(c => c.join(' ') === `node ${GATE} --base origin/main --head HEAD`));
+  assert.match(r.report, /- FAIL: complexity\nscripts\/x\.mjs: grow\(\) complexity 23/);
+});
+
+test('complexityRun allows growth only when the open PR carries the baseline-growth label', async () => {
+  const labels = (...names) => ok(JSON.stringify({ state: 'OPEN', labels: names.map(name => ({ name })) }));
+  const gate = async gh => {
+    const io = fakeIo({ responses: { gh } });
+    const r = await complexityRun('origin/main', io);
+    return [r.name, io.calls.at(-1).includes('--allow-growth')];
+  };
+  assert.deepEqual(await gate(labels('baseline-growth')), ['complexity (growth approved by the baseline-growth label)', true]);
+  assert.deepEqual(await gate(labels('bug')), ['complexity', false]);
+  assert.deepEqual(await gate(ok(JSON.stringify({ state: 'CLOSED', labels: [{ name: 'baseline-growth' }] }))), ['complexity', false]);
+  assert.deepEqual(await gate({ code: 1, out: '', err: 'no pull requests found for branch' }), ['complexity', false]);
+  assert.deepEqual(await gate({ code: 127, out: '', err: 'gh: not found' }), ['complexity', false]);
+});
+
+test('prepr fails on a spec without a status line', async () => {
+  const io = fakeIo({ responses: {
+    squeal: ok(live([], doneLint)),
+    node: args => (args[0] === '.github/scripts/check-spec-status.cjs' ? { code: 1, out: '.ai/specs/2026-11-18-x.md: no Status: line', err: '' } : ok('')),
+  } });
+  const r = await prepr({ io, waitMs: 1000 });
+  assert.equal(r.failed, true);
+  assert.match(r.report, /- FAIL: spec statuses\n\.ai\/specs\/2026-11-18-x\.md: no Status: line/);
+});
+
+test('a selection Squeal has not listed or synced is incomplete, even with current cached files', () => {
+  const unlisted = status([file('a.test.ts', 'current', 'pass')]);
+  unlisted.selection.verdict.unlisted = true;
+  const r = judgeSqueal(3, unlisted);
+  assert.equal(r.state, 'incomplete');
+  assert.match(r.missing[0], /test discovery: Squeal has not listed the test files of the current revision/);
+  for (const reason of ['unlisted', 'unsynced']) {
+    const none = status([file('a.test.ts', 'current', 'pass')]);
+    Object.assign(none.selection, { result: 'none', reason });
+    assert.equal(judgeSqueal(3, none).state, 'incomplete', reason);
+  }
+});
+
+test('prepr keeps the whole complexity report, so the function headline survives a long point list', async () => {
+  const points = Array.from({ length: 30 }, (_, i) => `  line ${i}: if`);
+  const report = ['1 changed function is over the complexity limit of 20:', '', 'scripts/x.mjs:3 grow: complexity 23 (was 18)', ...points].join('\n');
+  const io = fakeIo({ responses: { squeal: ok(live([], doneLint)), [`node ${GATE} --base`]: { code: 1, out: report, err: '' } } });
+  const r = await prepr({ io, waitMs: 1000 });
+  assert.match(r.report, /- FAIL: complexity\n1 changed function[^]*scripts\/x\.mjs:3 grow: complexity 23[^]*line 29: if/);
+});
+
+test('a failing Squeal result still names the files with no result and the unmatched paths', () => {
+  const st = { ...status([file('a.test.ts', 'current', 'fail'), file('b.test.ts', 'pending')]) };
+  st.selection.unmatched = ['src/x.ts'];
+  const r = judgeSqueal(1, st);
+  assert.deepEqual([r.state, r.missing, r.unmatched], ['fail', ['b.test.ts'], ['src/x.ts']]);
+  const text = squealLines(r, 1000).map(l => l.text).join('\n');
+  assert.match(text, /failing test files: a\.test\.ts[^]*no test result within 1 s for: b\.test\.ts[^]*select no test file: src\/x\.ts/);
+  const lintFail = judgeSqueal(0, status([file('c.test.ts', 'pending')], { lint: { failing: 2 } }));
+  assert.match(squealLines(lintFail, 1000).map(l => l.text).join('\n'), /2 lint finding[^]*for: c\.test\.ts/);
+});
+
+test('prepr reports an unreadable squeal status and runs npm run lint for the unknown lint result', async () => {
+  const io = fakeIo({ responses: { squeal: { code: 143, out: 'not json', err: 'killed' } } });
+  const r = await prepr({ io, waitMs: 1000 });
+  assert.equal(r.failed, true);
+  assert.match(r.report, /- FAIL: Squeal: `squeal status --wait` exited 143 without a readable result/);
+  assert.match(r.report, /- pass: lint: Squeal's lint is unavailable \(squeal status was unreadable\), so prepr ran `npm run lint`/);
 });

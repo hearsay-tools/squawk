@@ -46,9 +46,10 @@ const snapshotTest = path => /^(packages\/.+)\/__snapshots__\/([^/]+\.test\.tsx?
 export function readInputs(cwd) {
   const file = join(cwd, 'squeal.config.json');
   if (!existsSync(file)) return [];
-  const inputs = JSON.parse(readFileSync(file, 'utf8')).inputs ?? {};
-  return Object.entries(inputs).map(([test, globs]) => ({ test, globs }));
+  return inputRows(JSON.parse(readFileSync(file, 'utf8')).inputs);
 }
+
+const inputRows = (inputs = {}) => Object.entries(inputs).map(([test, globs]) => ({ test, globs }));
 
 const IMPORT = /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)['"]([^'"]+)['"]/g;
 
@@ -170,3 +171,23 @@ export function classify(paths, cwd) {
 
 // Keeps declared tests that exist, so a stale declaration selects nothing.
 export const existingTests = (cwd, tests) => tests.filter(test => existsSync(join(cwd, test)));
+
+/**
+ * The root node:test files that `paths` select, as Squeal selects them: a changed test file
+ * itself, and each test whose squeal.config.json `inputs` row (a file or a glob of files) has a
+ * glob matching a changed path. `argv` is the root node:test project's Node arguments; a config
+ * without a root project selects nothing.
+ */
+export function nodeTestReaders(paths, cwd) {
+  const file = join(cwd, 'squeal.config.json');
+  const config = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
+  const project = (config.nodeTest ?? []).find(entry => !entry.cwd);
+  if (!project) return { argv: [], files: [] };
+  const listed = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+    { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024 }).split('\0');
+  const tests = listed.filter(path => project.include.some(glob => matchesGlob(path, glob)) && existsSync(join(cwd, path)));
+  // One read of the configuration: the project and the input rows come from the same snapshot.
+  const rows = inputRows(config.inputs).filter(({ globs }) => paths.some(path => globs.some(glob => matchesGlob(path, glob))));
+  const files = tests.filter(test => paths.includes(test) || rows.some(row => matchesGlob(test, row.test)));
+  return { argv: project.argv ?? [], files: [...new Set(files)].sort() };
+}

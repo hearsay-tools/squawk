@@ -46,7 +46,7 @@ never a pass.
 | Where | How |
 | --- | --- |
 | CI | The required `Typecheck` job's `Lint` step. The job runs on every change surface, docs-only included, so no test selection skips lint |
-| Squeal | Edit-time oxlint diagnostics load `.oxlintrc.json` and the `cez` JS plugin. No unit test runs a repository-wide lint scan. `npm run prepr` reads Squeal’s oxlint result and always runs `node packages/cezar/src/lint/run.ts --repository-only` for file length, design CSS, wait discipline and stale entries. Without a daemon it also runs `npm run lint`. CI’s required Lint step remains the gate (hearsay-tools/cezarion#2426) |
+| Squeal | Edit-time oxlint diagnostics load `.oxlintrc.json` and the `cez` JS plugin. No unit test runs a repository-wide lint scan. `npm run prepr` reads Squeal’s oxlint result and always runs `node packages/cezar/src/lint/run.ts --repository-only` for file length, design CSS, wait discipline and stale entries. When Squeal’s lint has not finished for the changed files, or there is no daemon, it also runs `npm run lint`. CI’s required Lint step remains the gate (hearsay-tools/cezarion#2426) |
 | By hand | `npm run lint` from the repository root, about 5 s on an idle host |
 
 ## New safety guards

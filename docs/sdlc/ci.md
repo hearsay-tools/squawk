@@ -69,26 +69,36 @@ post-build package check.
 
 <a id="before-the-pr"></a>
 
-`npm run prepr` is the one local gate before a PR opens. It prints one verdict and the
+`npm run prepr` is the one local gate. Run it on the committed head before the PR opens
+and before every push after the PR opens. It prints one verdict and the
 evidence block for the PR body. It reads Squeal's results for the changed files and for
 oxlint, and always runs the lint runner’s repository-only checks (file length, design CSS,
-wait discipline and stale entries). It also runs typecheck (not for a docs-only change), citations, clones and the
+wait discipline and stale entries). It also runs typecheck (not for a docs-only change), citations, clones,
+spec statuses (`check-spec-status.cjs`), CI's function complexity ratchet and the
 [GitHub patch limits](#github-patch-limits). It reports the [test line budget](#test-line-budget)
-and never fails on it. Run it on the committed head. Its exit code
-is non-zero on a failing test, a lint finding, a type error, a bare citation, a new clone,
+and never fails on it. Its exit code
+is non-zero on a failing test, a missing test result, a lint finding, a type error, a bare citation, a new clone,
+a spec without a valid status, a changed function that grew over the complexity limit,
 or a committed file diff over the per-file patch limit or with a NUL byte.
 
-- The Squeal wait is bounded at 2 minutes (`--wait-ms`). When it ends with no failure,
-  the command names the files with no result and passes. CI runs them.
+- The Squeal wait is bounded at 2 minutes (`--wait-ms`). A changed file with no test result
+  when it ends fails the gate. The report names the files and the command that gets their
+  results. Get them, then run the gate again.
+- When Squeal's lint has not finished for the changed files, or is off, the command runs
+  `npm run lint` and takes its verdict.
+- The complexity check is CI's `complexity-gate.mjs` against the base. When the branch's
+  open PR has the `baseline-growth` label, the command passes `--allow-growth`, as CI does.
 - With no Squeal daemon for the worktree, the command says so and runs
-  `npm run test:changed` (unless its selection is the full suite, which is left to CI) and
+  `npm run test:changed` (unless its selection is the full suite, which is left to CI), the
+  node:test files that `squeal.config.json` `inputs` select for the changed paths, and
   `npm run lint`. Run `squeal start` and run the gate again instead.
 - Local parity, browser and coverage runs are not duties before a PR. CI runs them. To
   debug one, use `squeal run run-loop|browser <paths> --wait 60000`. With a daemon,
   `npm run test:parity` asks `squeal run run-loop` for the parity files and waits for
   their verdicts.
 - The changed-function check ([`check-code-quality`](../../.ai/skills/check-code-quality/SKILL.md))
-  is the complexity gate on the committed head. It reads no coverage and takes seconds.
+  is the complexity gate on the committed head, and the command runs it. It reads no
+  coverage and takes seconds.
   CRAP is reported in CI (§ CRAP report for changed functions).
 - Regression proof ([regression-proof.md](regression-proof.md)) stays: it is part of
   writing the test.
@@ -113,7 +123,7 @@ runs these files when the agent ends its turn, and their verdicts arrive with th
 prompt. Between edits, no message about these files is not a pass, and
 `squeal status --wait` does not hold for them. `squeal run run-loop <path>... --wait 60000`
 runs the group's files that the paths select now. `npm run prepr` names these files
-as files with no result when the agent has not paused since the change; CI runs them.
+as files with no result, and fails, when the agent has not paused since the change.
 This is a three-day trial (hearsay-tools/squawk#3551); revert the group to return to edit-time runs.
 
 The final six-command gate and full-suite runs belong in CI. Do not run the
@@ -158,12 +168,11 @@ not a final gate. `.ai/agentic.config.json` records CI's complete final command 
 
 **A wait for a verdict has a bound.** Squeal's skill says to wait again when
 `squeal status --wait` returns on timeout. In this repo, do not wait again. `npm run prepr`
-waits at most 2 minutes for the changed files and for lint, then names the files
-with no result (the first ten and a count when more) and passes when none failed.
+waits at most 2 minutes for the changed files, then names the files with no result (the
+first ten and a count when more) and fails. Lint that has not finished runs as `npm run lint`.
 
-Record the named files and their Squeal state in the PR's Verification. A missing verdict
-is covered by CI's shards, which give the full verdict; a failing verdict is never
-covered, and the PR does not merge until the shards pass. To get one test file's verdict
+Get the named files' verdicts, then run `npm run prepr` again before the push. A missing
+verdict is not a pass, and CI's shards do not replace it before the push. To get one test file's verdict
 now, run `squeal run tests <file> --wait 60000` (`run-loop` for a parity or worker file);
 for one test in it, `squeal status --wait 60000 <file> --check '<name>'`, and confirm it
 lists passed tests, not only skipped ones. With no daemon, run `squeal start` first.
