@@ -379,7 +379,7 @@ export const askErrorCodeSchema = z.enum([
   'invalid_request', 'capacity', 'persistence', 'unavailable', 'unauthorized', 'autonomous_run',
   'manager_disposed', 'capability_revoked', 'run_missing', 'run_not_running', 'run_stopping', 'session_replaced',
   'session_closed', 'run_cancelled', 'finish_requested', 'generation_mismatch', 'worker_wait_pending',
-  'worker_execution_stopped', 'root_finish_pending',
+  'worker_execution_stopped', 'root_finish_pending', 'supervisor_is_worker',
 ]);
 export type AskErrorCode = z.infer<typeof askErrorCodeSchema>;
 
