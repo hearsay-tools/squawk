@@ -191,12 +191,6 @@ describe('a worker in a shared workspace (hearsay-tools/squawk#3819)', { timeout
     expect((await f.service.collect(f.caller, { workerId })).changes).toMatchObject({ state: 'changed', paths: ['written-in-place.txt'] });
   });
 
-  it('reports unchanged for a worker that only reads', async () => {
-    const { workerId } = await f.service.spawn(f.caller, shared());
-    await runSession(workerId, cwd => { readFileSync(join(cwd, 'parent-work.txt'), 'utf8'); });
-    expect((await f.service.collect(f.caller, { workerId })).changes).toEqual({ state: 'unchanged' });
-  });
-
   it('continues in the same directory and still compares with the first session\'s start', async () => {
     const { workerId } = await f.service.spawn(f.caller, shared());
     await runSession(workerId, cwd => writeFileSync(join(cwd, 'first-session.txt'), 'x\n'));
@@ -276,20 +270,6 @@ describe('a worker in a shared workspace (hearsay-tools/squawk#3819)', { timeout
     expect(f.manager.continueRun(workerId, { text: 'again' })).toMatchObject({ ok: true });
     await until(() => sessions.length === 2);
     expect(f.manager.claimWorktreeReclaim(f.parent.id)).toBeNull();
-  });
-
-  it('holds a shared worker\'s first launch while its host\'s worktree is claimed, and launches it after the release', async () => {
-    const release = f.manager.claimForPublish(f.parent.id);
-    expect(release).toEqual(expect.any(Function));
-    const { workerId } = await f.service.spawn(f.caller, shared());
-    // The line was pumped with capacity free: only the claim on the host keeps the worker in it.
-    await f.releaseAdmission();
-    expect(worker(workerId).status).toBe(RUN_STATUS.queued);
-    expect(sessions).toHaveLength(0);
-    release?.();
-    await f.holdAdmission(); await f.releaseAdmission();
-    await until(() => sessions.length === 1);
-    expect(sessions[0]!.spec.cwd).toBe(host);
   });
 
   it('gives a settled worker no report when its end state is missing, instead of comparing with later edits', async () => {

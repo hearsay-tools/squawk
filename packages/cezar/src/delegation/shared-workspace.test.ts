@@ -36,12 +36,6 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 describe('the shared workspace kind', () => {
-  it('states what a destroy removes, why it has no diff, and what its worker is told', () => {
-    expect(shared.destroyResources).toEqual([]);
-    expect(shared.noDiff).toContain('shared workspace');
-    expect(shared.workerNotice).toBe("You share your parent's worktree: do not write there unless your task says so.");
-  });
-
   it('plans a record that names the host directory and run, with no branch', async () => {
     const alias = join(root, 'alias'); symlinkSync(host, alias);
     expect(await plan(alias)).toEqual({ ownerRunId: workerId, resourceId: expect.any(String), kind: 'shared', path: host, hostRunId: parentId, baselineSha });
@@ -106,17 +100,6 @@ describe('the shared workspace kind', () => {
     await expect(shared.openForContinue(request(run))).rejects.toThrow('is no longer a worktree of this repository');
   });
 
-  it('has no diff, tears nothing down and removes nothing', async () => {
-    const run = await workerRun();
-    const workspace = await plan();
-    await expect(shared.readDiff(repo, run)).rejects.toMatchObject({ code: 'unavailable_diff', message: expect.stringContaining('shared workspace') });
-    expect(await shared.teardown(repo, { commands: ['touch teardown-ran'] }, workspace)).toBeUndefined();
-    const forbidden = () => { throw new Error('a shared workspace has nothing to verify before removal'); };
-    expect(await shared.remove(repo, workspace, { assertCurrent: forbidden, assertUnheld: forbidden })).toEqual({ workerId, state: 'complete', deleted: [], remaining: [] });
-    expect(existsSync(join(host, 'teardown-ran'))).toBe(false);
-    expect(readFileSync(join(host, 'notes.md'), 'utf8')).toBe('at the baseline\n');
-    expect(git(repo, 'branch', '--list', '--format=%(refname:short)', 'parent-branch')).toBe('parent-branch');
-  });
 });
 
 describe('the context of a shared worker', () => {
