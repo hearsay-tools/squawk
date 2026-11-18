@@ -12,7 +12,6 @@ import { ciOpenCodeEnv } from '../ci-wait/injection.ts';
 import { allowedToolsForStep } from '../workflows/types.ts';
 import { askAnswerHint, askToolDefinition, cancelWaitToolDefinition, squawkServerInstructions, waitToolDefinition } from '../ci-wait/tools.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import { productName } from '../home/display.ts';
 
 const descriptor = { name: 'cezar_ci_test', command: process.execPath, args: ['/installed/dist/ci-wait/mcp.js'] };
 const spec = { cwd: '/tmp', userPrompt: 'task', squawkTools: descriptor };
@@ -50,7 +49,7 @@ describe('wait tool definitions', () => {
     expect(JSON.stringify(schema)).not.toMatch(/"(?:oneOf|anyOf|allOf)"/);
     expect(askToolDefinition.description).toContain('leave the options out to let the user type the answer');
     // hearsay-tools/cezarion#1458: the content goes in context, the tested text (research 77dfb5c4).
-    expect(askToolDefinition.description).toMatch(new RegExp(String.raw`^Ask the user for a decision or missing input\. Put the full draft, findings, evidence and option meanings needed for the decision in context\. ${productName('Cezar')} renders context as Markdown above the question card\. The user cannot see your reasoning or rejected tool calls\. The question is a short choice, not the place for supporting detail\. `));
+    expect(askToolDefinition.description).toMatch(new RegExp(String.raw`^Ask the user for a decision or missing input\. Put the full draft, findings, evidence and option meanings needed for the decision in context\. Squawk renders context as Markdown above the question card\. The user cannot see your reasoning or rejected tool calls\. The question is a short choice, not the place for supporting detail\. `));
     expect(askToolDefinition.description).toMatch(/Then end your turn; the user's answer wakes you\.$/);
     expect(askToolDefinition.description).not.toContain('assistant text');
     expect(askToolDefinition.description).toContain('a header of at most 12 characters, a short question of at most 400 characters');
@@ -62,7 +61,7 @@ describe('wait tool definitions', () => {
   it('tells a rejected cezar_ask to put the detail it cuts in context before it retries', () => {
     expect(askAnswerHint({ ok: false, code: 'invalid_request', message: 'too long' })).toBe('Not asked. The user never sees a rejected call. Fix the call from the message: put the detail in context and keep each question short.');
     expect(askAnswerHint({ ok: false, code: 'autonomous_run', message: 'continue', open_waits: [] })).toBe('Not asked. Fix the call from the message, or continue without asking.');
-    expect(askAnswerHint({ ok: true, wait_id: 'w', open_waits: [] })).toBe(`Asked. ${productName('Cezar')} shows the context and question card to the user. End your turn; the user's answer wakes you.`);
+    expect(askAnswerHint({ ok: true, wait_id: 'w', open_waits: [] })).toBe(`Asked. Squawk shows the context and question card to the user. End your turn; the user's answer wakes you.`);
   });
 });
 
@@ -263,7 +262,7 @@ describe('U0 wait tools on every native wire', () => {
         if (tool === 'cezar_ask') {
           expect(calls).toEqual([['ask', { context, questions }]]);
           expect(JSON.parse(json)).toEqual({ ok: true, wait_id: humanId, open_waits: humanOpen });
-          expect(hint).toBe(`Asked. ${productName('Cezar')} shows the context and question card to the user. End your turn; the user's answer wakes you.`);
+          expect(hint).toBe(`Asked. Squawk shows the context and question card to the user. End your turn; the user's answer wakes you.`);
         } else if (tool === 'cezar_wait') {
           expect(calls).toEqual([['wait', { ...args, operation_id: expect.any(String), timeout_seconds: 1800, until: 'checks', wake_on_conflict: true }, 'cezar_wait']]);
           expect(JSON.parse(json)).toEqual({ ok: true, wait_id: wait.id, kind: WAIT_KIND.pr, deadline: wait.deadline, open_waits: openWaits });
@@ -271,7 +270,7 @@ describe('U0 wait tools on every native wire', () => {
         } else if (tool === 'cezar_done') {
           expect(calls).toEqual([['done', {}]]);
           expect(JSON.parse(json)).toEqual({ ok: true, finishes: 'at_turn_end', completes: 'task', open_waits: openWaits });
-          expect(hint).toBe(`Accepted. End your turn; ${productName('Cezar')} finishes the task at its end.`);
+          expect(hint).toBe(`Accepted. End your turn; Squawk finishes the task at its end.`);
         } else {
           expect(calls).toEqual([['cancel', args]]);
           expect(JSON.parse(json)).toEqual({ cancelled: true, wait_id: wait.id, open_waits: [] });

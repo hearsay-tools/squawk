@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { commandText } from '../home/command.ts';
 import { productEnvEntries } from '../core/product-env.ts';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
@@ -10,6 +9,7 @@ import { CredentialRegistry } from './credentials.ts';
 import { messagingAllowed, workersAllowed } from '@open-mercato/cezar-contract/task-options';
 import { DelegationService, rootDelegation, type DelegationProject, type WorkerCleanupFactory } from './service.ts';
 import { WORKERS_OFF } from './policy.ts';
+import { workspaceKind } from './workspace-kinds.ts';
 import { openCompletionRequests } from '../workflows/completion-policy.ts';
 import { createDelegationRoutes } from './routes.ts';
 import { createDelegationApp, startDelegationTransport } from './transport.ts';
@@ -53,7 +53,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
   const subagentOnly = `You may use native subagents and message them with your runner's tools. No agent channel to another task exists: tell the user instead.`;
   const subagentMessaging = [
     `You may message your own native subagents with your runner's tools.`,
-    `Reach another ${productName('Cezar')} task only through ${messaging}; never use your runner's native tools for that.`,
+    `Reach another Squawk task only through ${messaging}; never use your runner's native tools for that.`,
   ].join(' ');
 
   const worker = run.delegation?.role === 'worker';
@@ -69,7 +69,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
   // back to the cockpit, as it does for any partial credential.
   if (!worker && !workersOn && !messagingOn && !owned && !owesRequests) {
     return { restrictCrossSessionMessaging: true, env: { ...productEnvEntries('DELEGATION_URL', options.url) }, revoke: () => {},
-      instructions: `${productName('Cezar')} workers and task messaging are off for this task; a human can turn them on in the task menu, and they reach you at your next session. ${subagentOnly}` };
+      instructions: `Squawk workers and task messaging are off for this task; a human can turn them on in the task menu, and they reach you at your next session. ${subagentOnly}` };
   }
   // Root authority is durable before a token exists. The switches never edit it: they are read per call.
   if (!run.delegation) options.store.commitDelegation([{ id: run.id, delegation: rootDelegation() }]);
@@ -77,9 +77,9 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
   const rootInstructions = (): string[] => workersOn ? [
     `Use native subagents for work that needs no separate worktree: research, code reading and focused analysis.`,
     `For example, a subagent reads the parser and summarizes how it handles errors.`,
-    `Use ${productName('Cezar')} workers for work that needs its own worktree, its own commits or a lifecycle ${productName('Cezar')} tracks.`,
-    `Also use a ${productName('Cezar')} worker when the task needs a model available only through another runner, even if the work is research or analysis.`,
-    `Native subagents need no ${productName('Cezar')} worker, worktree, collection or destruction.`,
+    `Use Squawk workers for work that needs its own worktree, its own commits or a lifecycle Squawk tracks.`,
+    `Also use a Squawk worker when the task needs a model available only through another runner, even if the work is research or analysis.`,
+    `Native subagents need no Squawk worker, worktree, collection or destruction.`,
     subagentMessaging,
     `Owned workers are available through the bundled command ${invocation}.`,
     `Commands return JSON.`,
@@ -94,7 +94,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `Worker questions arrive as requests carrying a question; answer with ${messaging} reply <worker-id> '<answer>' --id <new-message-UUID> --request-id <question-id>, one '<header>: <answer>' line per question (an option's label, or your own words for a question without options), which the worker reads verbatim as its answer. If you cannot decide, ask the human with your own question, then reply. Progress and follow-ups never answer it, and you cannot finish while it is unanswered.`,
     `Use ${invocation} spawn --baseline parent-head --request-id <UUID> '<task>' (or an explicit committed ref).`,
     `Reuse the request ID only for the exact same task/baseline/context/runner/model/effort/workflow/skill on a retry.`,
-    `Optional spawn flags: --workflow <name> or --skill <name> (mutually exclusive), --context '<selected text>' or --context-file <local-UTF-8-file> (mutually exclusive), --attach <path> (repeatable; copies a git-ignored file from your worktree into the worker's worktree at the same relative path before it starts; tracked or unignored files and .gitignore are refused, commit those instead), --runner <${RUNNER_IDS.join('|')}>, --model <model>, --effort <low|medium|high|xhigh|max|auto>.`,
+    `Optional spawn flags: --workflow <name> or --skill <name> (mutually exclusive), --context '<selected text>' or --context-file <local-UTF-8-file> (mutually exclusive), --workspace shared (the worker runs in your worktree at your HEAD, with no worktree or branch of its own and no --baseline; see spawn --help), --attach <path> (repeatable; copies a git-ignored file from your worktree into the worker's worktree at the same relative path before it starts; tracked or unignored files and .gitignore are refused, commit those instead), --runner <${RUNNER_IDS.join('|')}>, --model <model>, --effort <low|medium|high|xhigh|max|auto>.`,
     `--workflow runs a catalog workflow (the built-in quick-task or a .ai/cezar/workflows/*.yaml name) inside the worker, agent and check steps alike; --skill runs one discovered skill as the worker task; omitting both means quick-task; a worker inherits your extra system prompt, never your selected skill.`,
     `--runner, --model and --effort fill only the steps that leave those fields unset; an unknown name fails. Agent steps may mix runners: each step is pinned to its own runner, account, model, effort and grants at spawn, and a step's agentProfile names its account explicitly.`,
     `Example: spawn --baseline parent-head --request-id <UUID> --runner codex --effort high --context 'Inspect only the parser' 'Review parser'. Use high here only when the selected model advertises it and overrides are allowed.`,
@@ -109,14 +109,14 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `Destroy also accepts a running worker: it requests stop, waits up to 30 seconds for termination, stops the worker scope, then removes the worktree and branch. Without termination proof, cleanup stays incomplete and retains the workspace. On a scoped host, a detached descendant can survive.`,
     `Mode defaults to any; one requires one worker, all requires every selected worker to settle.`,
     `cancel-wait <wait-id> stops one wait, is safe to retry, and never touches workers.`,
-    `Wait registers and returns immediately: end your turn to release capacity, then ${productName('Cezar')} resumes you on a selected terminal outcome or deadline (default 600 seconds).`,
+    `Wait registers and returns immediately: end your turn to release capacity, then Squawk resumes you on a selected terminal outcome or deadline (default 600 seconds).`,
     `Your other waits stay open beside it; timeout/cancellation reports partial outcomes and unresolved workers. The same wait is open to you as cezar_wait with kind "worker".`,
-    `When a worker you wait on parks before finishing, ${productName('Cezar')} sends you a notice from it naming what it waits on, at most one per wait; like any message it wakes you and closes no wait.`,
+    `When a worker you wait on parks before finishing, Squawk sends you a notice from it naming what it waits on, at most one per wait; like any message it wakes you and closes no wait.`,
     `collect returns revision/status/settled plus typed summary/head/diff/artifacts availability and records the latest evidence under the parent.`,
     `An available diff.path points to a JSON result file: read its diffSnapshot field for the bounded patch, not the file as a raw patch.`,
     `Running output is partial.`,
     `Collect the latest settled revision of every worker before completing; Continue invalidates older readiness.`,
-    `A done while workers are live or uncollected is refused once with what to do first; done again while workers are live makes ${productName('Cezar')} wait on them for you and wake you when they have all settled, never silently finishing.`,
+    `A done while workers are live or uncollected is refused once with what to do first; done again while workers are live makes Squawk wait on them for you and wake you when they have all settled, never silently finishing.`,
     `If a parent is already under review, Continue the parent first, then the worker.`,
     `Review changes and deliberately integrate desired worker commits with Git before cleanup; no automatic merge or review acceptance.`,
     `Collect/integrate desired results, destroy owned resources, explicitly delete child histories through the cockpit/API, then delete parent history.`,
@@ -126,7 +126,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `Review is a human gate.`,
     `Destruction may be incomplete; inspect remaining resources and retry explicitly.`,
     `Credentials are supplied only in the environment: never read, echo, forward or include them in commands, messages, prompts, events or files.`,
-    `Workers cannot spawn ${productName('Cezar')} workers or message peers.`,
+    `Workers cannot spawn Squawk workers or message peers.`,
     `This is cooperative local supervision, not process isolation.`,
   ] : [
     `Use native subagents for research, code reading and focused analysis.`,
@@ -144,14 +144,15 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     env: { ...productEnvEntries('DELEGATION_URL', options.url), ...productEnvEntries('DELEGATION_TOKEN', token) },
     instructions: run.delegation?.role === 'worker'
       ? [
-        `You are an owned ${productName('cezar')} worker. Your parent run ID is ${run.delegation.parentRunId}.`,
+        `You are an owned Squawk worker. Your parent run ID is ${run.delegation.parentRunId}.`,
+        ...(workspaceKind(run.delegation.workspace).workerNotice ? [workspaceKind(run.delegation.workspace).workerNotice!] : []),
         conversationGuidance,
-        `You cannot spawn ${productName('Cezar')} workers. You cannot control peers, merge automatically, or accept your own review.`,
+        `You cannot spawn Squawk workers. You cannot control peers, merge automatically, or accept your own review.`,
         commandText(`Follow your assigned task and selected input context. Ask your parent with cez message request; any question you raise goes to your parent too, never to a human. Your parent answers or asks the human itself; do not wait for a human.`),
         `You may use native subagents for research, code reading and focused analysis.`,
         subagentMessaging,
         `Commit reviewed work before your parent deliberately integrates it; report the summary, commits, tests and remaining concerns.`,
-        `When you park before finishing while your parent waits on you, ${productName('Cezar')} tells your parent what you wait on and quotes your last message: end such a turn by saying what you wait on and what you have done.`,
+        `When you park before finishing while your parent waits on you, Squawk tells your parent what you wait on and quotes your last message: end such a turn by saying what you wait on and what you have done.`,
       ].join(' ')
       : rootInstructions().join(' '),
     revoke: () => options.credentials.revoke(run.id, generation),

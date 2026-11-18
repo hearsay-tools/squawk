@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { useState } from 'react'
 import { ArrowUpRightIcon, CircleCheckIcon, CircleIcon, CircleSlashIcon, CircleXIcon, GitBranchIcon } from '@/components/design-icons'
 import { LoaderCircleIcon } from 'lucide-react'
@@ -17,6 +16,7 @@ import { relativeIn } from '@/lib/automation-format'
 import { useNow } from '@/lib/use-now'
 
 import { ActivityRow } from './run-activity-row'
+import { ownsDirectory } from '@open-mercato/cezar-api-client/contract/delegation'
 
 /** The run's own delegation metadata, and the wait note's half of it — read off `ApiRun` so the
  *  Workers section and dock header never drift from whichever schema the record actually carries. */
@@ -226,7 +226,7 @@ function WaitNote({ wait, dependencyLabel }: { wait: DelegationWait; dependencyL
       : wait.phase === 'parked' ? 'Waiting on workers' : wait.phase === 'wake-pending'
       ? 'Worker update queued for the parent' : 'Worker wait registered — the agent is finishing its turn'}.
     {'deadline' in wait ? <>{' '}Deadline: <time dateTime={wait.deadline}>{wait.deadline}</time></>
-      : ` No deadline: ${productName('Cezar')} wakes this task when they have all settled.`}
+      : ` No deadline: Squawk wakes this task when they have all settled.`}
   </p>
 }
 
@@ -259,7 +259,7 @@ const SETTLED = new Set<WorkerInspection['status']>(['review', 'done', 'failed',
  * Verified cleanup of one settled worker through the human destroy route (#816). Offered only
  * once the worker has stopped and until its cleanup is proven complete. Cleanup removes the
  * worker's worktree AND branch — work a reviewer may not have read yet — so it takes an inline
- * confirmation. Its result is checkpointed first, and it never accepts a review gate. A refusal
+ * confirmation. A worker that runs in its parent's worktree has neither, and the text says so. Its result is checkpointed first, and it never accepts a review gate. A refusal
  * is reported in the server's own words, because some (history deletion under way) cannot be
  * fixed by clicking again.
  */
@@ -272,7 +272,9 @@ function CleanUpWorker({ parentRunId, worker }: { parentRunId: string; worker: W
   const retrying = !!worker.destroy && worker.destroy.phase !== 'complete'
   return <div className="flex min-w-0 flex-wrap items-center gap-2 px-1">
     {confirming ? <>
-      <span className="break-words text-xs">Removes this worker's worktree and branch. Its result is saved first.</span>
+      <span className="break-words text-xs">{ownsDirectory(worker.workspace)
+        ? 'Removes this worker\'s worktree and branch. Its result is saved first.'
+        : 'Stops this worker and frees its slot. It runs in this task\'s worktree, so no worktree or branch is removed. Its result is saved first.'}</span>
       <Button
         variant="danger-ghost"
         size="sm"

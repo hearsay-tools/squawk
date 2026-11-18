@@ -1,6 +1,5 @@
 import { isSignalTerminationExit } from './agent-runner.ts';
 import type { CodexAppServerMessage } from './codex-app-server-transport.ts';
-import { productName } from '../home/display.ts';
 
 /** Pure reads of native Codex app-server frames, for the session's stdout reader. */
 
@@ -89,7 +88,7 @@ export function sessionExitEvent(exit: SessionExit): { event: 'error' | 'note'; 
   // teardown Squawk asked for, not a codex failure (#703).
   if (exit.terminatedBySquawk && squawkAskedForExit(exit.exitCode, exit.signalCode)) {
     const how = exit.exitCode === null ? exit.signalCode : `code ${exit.exitCode}`;
-    return { event: 'note', message: `codex app-server did not exit on its own after close; terminated by ${productName('Cezar')} (${how})` };
+    return { event: 'note', message: `codex app-server did not exit on its own after close; terminated by Squawk (${how})` };
   }
   if (exit.exitCode === null && exit.signalCode !== null) return { failure: `codex app-server was killed by signal ${exit.signalCode}` };
   if (exit.exitCode !== 0 && exit.exitCode !== null) {

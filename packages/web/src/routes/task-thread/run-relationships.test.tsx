@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { workerInspectionSchema } from '@open-mercato/cezar-api-client/contract/delegation'
 import { useState } from 'react'
 import { QueryClientProvider, onlineManager } from '@tanstack/react-query'
@@ -158,7 +157,7 @@ it('shows a parent parked on Cezar\'s completion wait, which has no deadline', (
     kind: WAIT_KIND.worker, id: '10000000-0000-4000-8000-000000000003', source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion, registeredAt: at,
     phase: WAIT_PHASE.open, turnId: 'turn-1', mode: 'all', workerIds: [workerId], revisions: [], outcomes: [],
   }] });
-  expect(screen.getByText(`Waiting on 1 worker. No deadline: ${productName("Cezar")} wakes this task when they have all settled.`)).toBeTruthy();
+  expect(screen.getByText(`Waiting on 1 worker. No deadline: Squawk wakes this task when they have all settled.`)).toBeTruthy();
   expect(screen.queryByText(/Deadline:/)).toBeNull();
 });
 
@@ -239,6 +238,16 @@ it('asks for confirmation before removing the worktree and branch, and cancel po
   fireEvent.click(within(group).getByRole('button', cleanUp(workerId)))
   const confirm = within(group).getByRole('button', { name: `Confirm clean up of worker ${workerId.slice(0, 8)}` })
   fireEvent.click(confirm)
+  await waitFor(() => expect(requests).toContain(`/api/v1/p/sample/runs/${workerId}/worker-destroy`))
+})
+it('promises no worktree or branch removal for a worker that runs in the parent\'s worktree (hearsay-tools/squawk#3819)', async () => {
+  const shared: WorkerInspection = { ...settled, workspace: { ownerRunId: workerId, resourceId: workerId, kind: 'shared', path: '/repo/.ai/squawk/worktrees/parent', hostRunId: parentId, baselineSha: 'a'.repeat(40) } }
+  const { requests } = setup(rootOf([shared]), async () => json({ workers: [shared], capacity: capacityOf(1) }))
+  const group = await section()
+  fireEvent.click(await within(group).findByRole('button', cleanUp(workerId)))
+  expect(within(group).getByText('Stops this worker and frees its slot. It runs in this task\'s worktree, so no worktree or branch is removed. Its result is saved first.')).toBeTruthy()
+  expect(within(group).queryByText(/Removes this worker's worktree and branch/)).toBeNull()
+  fireEvent.click(within(group).getByRole('button', { name: `Confirm clean up of worker ${workerId.slice(0, 8)}` }))
   await waitFor(() => expect(requests).toContain(`/api/v1/p/sample/runs/${workerId}/worker-destroy`))
 })
 it('reports an incomplete cleanup in the server\'s words and keeps Clean up available (#816)', async () => {

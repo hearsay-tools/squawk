@@ -1,4 +1,4 @@
-import { productName, productCommand } from '@/lib/product-name'
+import { productCommand } from '@/lib/product-name'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
@@ -233,7 +233,7 @@ describe('Project settings → Worktrees: worktree setup commands (#917)', () =>
     await waitFor(() => expect(commandsBox()).not.toBeNull())
     const readonly = document.querySelector('[data-slot="worktree-setup-readonly"]')?.textContent
     expect(readonly).toContain('/host/other project/.ai/cezar/config.json')
-    expect(readonly).toContain(`on the machine running ${productName("Cezarion")}`)
+    expect(readonly).toContain(`on the machine running Squawk`)
     expect(screen.queryByText('/host/boot/.ai/cezar/config.json')).toBeNull()
   })
 
@@ -304,7 +304,7 @@ describe('Project settings → Worktrees: worktree setup commands (#917)', () =>
     expect(commandsBox()!.readOnly).toBe(false)
     expect(document.querySelector('[data-slot="worktree-setup-readonly"]')).toBeNull()
     expect(document.querySelector('[data-slot="remote-settings-notice"]')?.textContent).toContain(
-      `These commands run on the machine running ${productName("Cezarion")}`,
+      `These commands run on the machine running Squawk`,
     )
     fireEvent.change(commandsBox()!, { target: { value: 'npm ci\npnpm build' } })
     fireEvent.click(saveSetup()!)

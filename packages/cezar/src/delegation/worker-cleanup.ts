@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { randomUUID } from 'node:crypto';
 import type { WorkerDestroy, WorkerDestroyResult } from '@open-mercato/cezar-contract/delegation';
 import type { RunRecord } from '../runs/store.ts';
@@ -6,7 +5,7 @@ import { collectWorkerEvidence } from './results.ts';
 import { controllerRefusal } from '../runs/worker-execution.ts';
 import { DelegationPolicyError } from './policy.ts';
 import { describeProcesses, isCurrentProcess, recordedProcessLive } from './process-liveness.ts';
-import { workspaceKind, type WorkspaceResource } from './workspace-kinds.ts';
+import { workspaceDirectoryRemoved, workspaceKind, type WorkspaceResource } from './workspace-kinds.ts';
 import { loadConfig } from '../config.ts';
 import { DESTROY_ATTENTION_ATTEMPTS, DESTROY_BACKOFF, retryDelayMs, type Backoff } from './retry-backoff.ts';
 import { WORKTREE_LOCK_BUSY_PREFIX } from './workspace-removal.ts';
@@ -231,7 +230,7 @@ export class WorkerCleanup {
     // A busy lock clears by itself: say when the next automatic attempt runs (hearsay-tools/squawk#3817).
     const due = this.destroyRetryDue.get(project.id)?.get(workerId);
     return result.error?.startsWith(WORKTREE_LOCK_BUSY_PREFIX) && due !== undefined
-      ? { ...result, error: `${result.error}; ${productName('Cezar')} retries automatically at ${new Date(due).toISOString()}` } : result;
+      ? { ...result, error: `${result.error}; Squawk retries automatically at ${new Date(due).toISOString()}` } : result;
   }
   /** One full destroy attempt; the caller holds the worker's serialization key. A manual attempt
    * clears the run's `destroyRetry`, which resets the backoff; a completed destroy drops it. */
@@ -328,7 +327,7 @@ export class WorkerCleanup {
       assertAttached();
       persist(result.state, result.remaining, result.error);
       // Preserve the captured bytes even if Git removal was only partially successful.
-      const removed = !result.remaining.includes('worktree');
+      const removed = workspaceDirectoryRemoved(workspace, result.remaining);
       project.store.commitWorkerResult(evidence.result.parentRunId, { ...evidence.result, observedAt: new Date().toISOString(),
         cleanup: result.state, outcome: result.state === 'complete' ? 'destroyed' : evidence.result.lastExecutionOutcome,
         workspace: { ...workspace, state: removed ? 'deleted' : evidence.result.workspace.state },

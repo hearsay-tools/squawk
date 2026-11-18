@@ -250,7 +250,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
   modules.line = new RunLine(modules.memory, context, {
     activeSize: () => host.active.size, activeHas: id => host.active.has(id),
     withExecutionAccount: run => modules.wakeAdmission.withExecutionAccount(run),
-    maintenance: id => modules.claims.has(id) || !!host.autosaveCleanupBlocker(id),
+    maintenance: id => modules.claims.blocksStart(id) || !!modules.claims.autosaveStartBlocker(id),
     admitted: id => modules.workerExecutions.admitted(id), workerExecutionStopped: id => host.workerExecutionStopped(id),
     recovering: () => modules.recovery.recovering, recoveringRun: run => modules.recovery.recoveringRun(run),
     reconcileAutoResumes: () => modules.autoResumeScheduler.reconcileAutoResumes(), cancel: id => host.cancel(id),
@@ -360,11 +360,11 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
       settleOrphanedWorkerExecution: (id, opts) => host.settleOrphanedWorkerExecution(id, opts) },
   );
   modules.workerExecutions = new WorkerExecutions(context, modules.orphans,
-    { maintenance: id => modules.claims.has(id) || !!host.autosaveCleanupBlocker(id),
+    { maintenance: id => modules.claims.blocksStart(id) || !!modules.claims.autosaveStartBlocker(id),
       settleOrphanedWorkerExecution: (id, opts) => host.settleOrphanedWorkerExecution(id, opts),
       reapTerminalScratch: id => modules.runSettlement.reapTerminalScratch(id), queueWaitWake: id => modules.wakeAdmission.queueWaitWake(id),
       retryWaitAdmission: id => modules.retries.retryWaitAdmission(id), releaseSlot: () => modules.line.releaseSlot(),
-      releaseRunMemory },
+      releaseRunMemory, workerWorkspaces: () => host.workerWorkspaces() },
     modules.memory,
   );
   modules.automationToolsSlot = new AutomationToolsSlot(context,

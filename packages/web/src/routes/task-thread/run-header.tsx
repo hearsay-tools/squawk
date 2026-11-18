@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import './run-header.css'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AppWindowIcon, FileTextIcon, MailIcon, PencilIcon, PinOffIcon } from 'lucide-react'
@@ -63,6 +62,7 @@ import { TaskFileScope } from './task-file-scope'
 import { archiveInComposer, resumeHint, runActionFlags } from './run-actions'
 import { useWorkersLive } from './run-relationships'
 import { CompactParentTaskLink, ParentTaskLink } from './parent-task-link'
+import { ownsDirectory } from '@open-mercato/cezar-api-client/contract/delegation'
 
 /**
  * The run header (spec §"Task thread" → Header): editable title + status pill, the meta line,
@@ -667,10 +667,10 @@ function TaskAccessItems({ run, patch }: { run: ApiRun; patch: ReturnType<typeof
       <DropdownMenuCheckboxItem data-slot="allow-workers" className="min-h-11" checked={workersAllowed(run)} disabled={patch.isPending}
         aria-describedby={`${workersHelpId} ${sessionHelpId}`}
         onCheckedChange={(allowWorkers) => patch.mutate({ allowWorkers }, { onError })}>
-        Allow {productName('cezar')} workers
+        Allow Squawk workers
       </DropdownMenuCheckboxItem>
       <p id={workersHelpId} className="text-xs text-muted-foreground [padding-inline:0.5rem] [padding-block-end:0.5rem]">
-        Agents in this task can start {productName('Cezar')} workers. Each worker is a separate paid agent session. Worker limits cap resources, not spending.
+        Agents in this task can start Squawk workers. Each worker is a separate paid agent session. Worker limits cap resources, not spending.
       </p>
       <DropdownMenuCheckboxItem data-slot="allow-messaging" className="min-h-11" checked={messagingAllowed(run)} disabled={patch.isPending}
         aria-describedby={`${messagingHelpId} ${sessionHelpId}`}
@@ -699,7 +699,7 @@ function ConfirmDialog({ run, actions }: { run: ApiRun; actions: RunActions }) {
               <>
                 Delete “
                 <span className="font-medium text-foreground" title={runTitle(run)}>{runTitle(run)}</span>
-                ” and its transcript, worktree and branch. This cannot be undone.
+                ” and its transcript{run.delegation?.role === 'worker' && !ownsDirectory(run.delegation.workspace) ? '' : ', worktree and branch'}. This cannot be undone.
               </>
           </AlertDialogDescription>
         </AlertDialogHeader>

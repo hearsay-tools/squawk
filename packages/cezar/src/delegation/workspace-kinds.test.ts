@@ -31,15 +31,15 @@ vi.mock('./worktree-teardown.ts', () => ({
 const runGit = vi.hoisted(() => vi.fn());
 vi.mock('../git-command.ts', () => ({ runGit }));
 
-const { DEFAULT_WORKSPACE_KIND, workerWorkspacePort, workspaceKind, workspaceKindOf, workspaceKinds } = await import('./workspace-kinds.ts');
+const { DEFAULT_WORKSPACE_CHOICE, workerWorkspacePort, workspaceKind, workspaceKindOf, workspaceKinds } = await import('./workspace-kinds.ts');
 const isolated = workspaceKinds['owned-isolated'];
 
 beforeEach(() => { calls.length = 0; runGit.mockReset(); });
 
 describe('the workspace kind table', () => {
   it('has one definition for each kind a workspace record can name', () => {
-    expect(Object.keys(workspaceKinds)).toEqual(['owned-isolated']);
-    expect(DEFAULT_WORKSPACE_KIND).toBe('owned-isolated');
+    expect(Object.keys(workspaceKinds)).toEqual(['owned-isolated', 'shared']);
+    expect(DEFAULT_WORKSPACE_CHOICE).toBe('isolated');
   });
 
   it('returns the definition a workspace record or a worker run names', () => {
@@ -59,7 +59,7 @@ describe('the isolated workspace kind', () => {
   });
 
   it('plans, prepares context and reads the diff through the owned-workspace functions', async () => {
-    expect(await isolated.plan('/repo', workspace.ownerRunId, workspace.baselineSha)).toBe(workspace);
+    expect(await isolated.plan({ repoRoot: '/repo', workerId: workspace.ownerRunId, baselineSha: workspace.baselineSha, hostRunId: 'parent', hostDirectory: '/parent' })).toBe(workspace);
     await isolated.prepareContext({ repoRoot: '/repo', dataDir: '/data', parentId: 'parent', workspace, parentCwd: '/parent', context: {}, containsSecret: () => false });
     expect(await isolated.readDiff('/repo', run)).toMatchObject({ diff: 'patch' });
     expect(calls).toEqual([`plan ${JSON.stringify(['/repo', workspace.ownerRunId, workspace.baselineSha])}`, 'prepare parent', `diff /repo ${run.id}`]);
@@ -118,6 +118,11 @@ describe('the worker workspace port', () => {
     expect(await workerWorkspacePort.openForLaunch({ ...request, firstLaunch: false })).toMatchObject({ path: workspace.path });
     expect(await workerWorkspacePort.openForContinue(request)).toBe(workspace.path);
     expect(calls.map(call => call.split(' ')[0])).toEqual(['ensure', 'verify-context', 'verify', 'verify-context']);
+  });
+
+  it('sends a settlement to the definition the run names, and never throws', async () => {
+    await expect(workerWorkspacePort.settle({ ...request, generation: 'g1' })).resolves.toBeUndefined();
+    await expect(workerWorkspacePort.settle({ ...request, generation: 'g1', run: { id: 'root' } as RunRecord })).resolves.toBeUndefined();
   });
 
   it('rejects a run that is no worker', async () => {

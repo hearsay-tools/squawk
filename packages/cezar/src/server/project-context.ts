@@ -1,5 +1,4 @@
 import { reportsIndex } from '../artifacts/reports-index.ts';
-import { logPrefix } from '../home/display.ts';
 import { noticeLegacyProject, projectPaths } from '../project-paths.ts';
 import { productEnv } from '../core/product-env.ts';
 import type { Home } from '../home/home.ts';
@@ -352,7 +351,7 @@ export class ProjectContexts {
         }
         // Removed from the registry after this list was read: nothing to prepare, nothing to say.
         if (err instanceof ProjectContextError && err.reason === 'unknown-project') continue;
-        console.warn(`${logPrefix()} project ${project.id} could not be prepared in the background: ${err instanceof Error ? err.message : String(err)}`);
+        console.warn(`[hsq] project ${project.id} could not be prepared in the background: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
     return warmed;

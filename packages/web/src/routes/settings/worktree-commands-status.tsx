@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import type { ReactNode } from 'react'
 
 import { REMOTE_SETTINGS_ENABLE_COMMAND } from './remote-settings-notice'
@@ -35,7 +34,7 @@ export function WorktreeCommandsStatus({
           ) : (
             <code className="break-all">{configPath}</code>
           )}{' '}
-          on the machine running {productName('Cezarion')}. {copy.fileEditApplies} No restart is needed. To edit
+          on the machine running Squawk. {copy.fileEditApplies} No restart is needed. To edit
           here, the host operator runs <code>{REMOTE_SETTINGS_ENABLE_COMMAND}</code>.
         </p>
       ) : null}

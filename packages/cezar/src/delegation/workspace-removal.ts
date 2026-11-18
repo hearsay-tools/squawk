@@ -4,14 +4,14 @@ import { headLeftTaskBranch } from '../task-branch-head.ts';
 import { entryExists as exists } from './entry-exists.ts';
 import { readdir, rmdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { WorkerDestroyResult, WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { WorkerDestroyResult, OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { describeMutationHolder, withWorktreeMutation, WorktreeMutationLockTimeout, type MutationHolder } from '../git-worktree-lock.ts';
 import { branchLog, checkedGit, gitCommonDir, liveGitDir, worktreeEntries } from './workspace-git.ts';
 import { cleanupSchema, hash, readIdentityFile, readReceipt, RECEIPT_CAP, receiptLocation, replaceIdentityFile, validateIntent, type Cleanup, type Receipt } from './workspace-record.ts';
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
-async function verifyBranch(repoRoot: string, workspace: WorkerWorkspace, receipt: Receipt) {
+async function verifyBranch(repoRoot: string, workspace: OwnedWorkerWorkspace, receipt: Receipt) {
   if (!receipt.branchIdentity) throw new Error('Branch creation identity absent');
   const log = await branchLog(repoRoot, workspace);
   const initial = receipt.branchIdentity;
@@ -25,7 +25,7 @@ async function writeCleanup(path: string, value: Cleanup, assertCurrent?: () => 
 
 /** Whether any linked worktree's admin directory still carries this resource's identity marker.
  * An unsafe or unreadable marker throws, so the caller fails closed. */
-async function markerRemains(repoRoot: string, workspace: WorkerWorkspace): Promise<boolean> {
+async function markerRemains(repoRoot: string, workspace: OwnedWorkerWorkspace): Promise<boolean> {
   const admin = join(await gitCommonDir(repoRoot), 'worktrees');
   if (!await exists(admin)) return false;
   for (const entry of await readdir(admin)) {
@@ -37,7 +37,7 @@ async function markerRemains(repoRoot: string, workspace: WorkerWorkspace): Prom
 
 /** Whether `value` is still the worktree its receipt and identity marker name, at its own real path:
  * only then may destroy stop what runs there. Any doubt answers false. */
-export async function ownedWorktreePresent(repoRoot: string, value: WorkerWorkspace): Promise<boolean> {
+export async function ownedWorktreePresent(repoRoot: string, value: OwnedWorkerWorkspace): Promise<boolean> {
   try {
     const workspace = await validateIntent(repoRoot, value);
     const receipt = await readReceipt(await receiptLocation(repoRoot, workspace));
@@ -71,7 +71,7 @@ async function emptyDirectory(path: string): Promise<boolean> {
  * deletion. Which processes use the worktree decides nothing: the worker's own were stopped with
  * its scope, and any other is not the worker's (ADR 0032).
  */
-export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorkspace, assertCurrent?: () => void,
+export async function removeOwnedWorkspace(repoRoot: string, value: OwnedWorkerWorkspace, assertCurrent?: () => void,
   beforeRemove?: () => Promise<void>, assertUnheld?: () => void, lock: { waitMs?: number } = {}): Promise<WorkerDestroyResult> {
   const refusal = fallbackProjectWriteError(value.path);
   if (refusal) return { workerId: value.ownerRunId, state: 'incomplete', remaining: ['worktree', 'branch'], error: refusal };

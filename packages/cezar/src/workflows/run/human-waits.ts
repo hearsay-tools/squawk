@@ -1,4 +1,3 @@
-import { logPrefix } from '../../home/display.ts';
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
@@ -38,7 +37,7 @@ export function yieldAnsweredSlot(store: Pick<RunStore, 'getRun' | 'commitOutcom
   const answered = WAIT_KINDS.human.selectOpen(run.waits ?? []).find(wait => !isSquawkHumanWait(wait) && wait.askSeq === answering);
   if (!answered) return run;
   try { store.commitOutcome(runId, { kind: 'answered', waitIds: [answered.id], askSeq: answering }); }
-  catch (error) { console.warn(`${logPrefix()} human wait checkpoint failed: ${error instanceof Error ? error.message : String(error)}`); }
+  catch (error) { console.warn(`[hsq] human wait checkpoint failed: ${error instanceof Error ? error.message : String(error)}`); }
   return store.getRun(runId);
 }
 
@@ -111,7 +110,7 @@ export class HumanWaits {
       : this.context.store.getRun(runId);
     if (!this.host.waitEngine.hasRoom(latest ?? {})) return undefined;
     const wait = WAIT_KINDS.human.aliasEntry(source, via, state?.waitIdentity.ciTurnId ?? via, card ? askCardFields(card) : undefined);
-    return this.host.waitEngine.open(runId, state, wait, { withdraw: false, onCommitFailure: { log: `${logPrefix()} human wait checkpoint failed` }, park: false }).wait;
+    return this.host.waitEngine.open(runId, state, wait, { withdraw: false, onCommitFailure: { log: `[hsq] human wait checkpoint failed` }, park: false }).wait;
   }
 
   /** The pending question's `askSeq`, unless the answer this turn opened with answers it. */
@@ -129,7 +128,7 @@ export class HumanWaits {
     const { questions: _questions, context: _context, ...kept } = latest;
     const card = shownCard ?? humanWaitCard(latest);
     try { this.context.store.commitWait(runId, { ...kept, ...(card ? askCardFields(card) : {}), askSeq }); }
-    catch (error) { console.warn(`${logPrefix()} human wait checkpoint failed: ${error instanceof Error ? error.message : String(error)}`); }
+    catch (error) { console.warn(`[hsq] human wait checkpoint failed: ${error instanceof Error ? error.message : String(error)}`); }
   }
 
   /**
@@ -173,7 +172,7 @@ export class HumanWaits {
     const latest = WAIT_KINDS.human.select(run?.waits ?? []).find(entry => entry.id === wait.id);
     if (!latest || latest.phase !== 'open' || latest.askSeq !== undefined) return;
     try { this.context.store.commitWait(runId, { ...latest, askSeq: shown.seq }); }
-    catch (error) { console.warn(`${logPrefix()} human wait checkpoint failed: ${error instanceof Error ? error.message : String(error)}`); }
+    catch (error) { console.warn(`[hsq] human wait checkpoint failed: ${error instanceof Error ? error.message : String(error)}`); }
   }
 
   /** Squawk waited on the user only because the agent had nothing to wait on: the agent's own wait
@@ -182,7 +181,7 @@ export class HumanWaits {
   withdrawSquawkHumanWaits(runId: string): void {
     const ids = openWaits(this.context.store.getRun(runId) ?? {}).filter(isSquawkHumanWait).map(wait => wait.id);
     if (!ids.length) return;
-    this.host.waitEngine.cancel(runId, ids, { onCommitFailure: 'skip', log: `${logPrefix()} human wait checkpoint failed` });
+    this.host.waitEngine.cancel(runId, ids, { onCommitFailure: 'skip', log: `[hsq] human wait checkpoint failed` });
   }
 
   /** Whether a closing session leaves the run waits to park on. Squawk's own human waits end with the

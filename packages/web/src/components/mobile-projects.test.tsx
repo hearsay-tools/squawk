@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -156,7 +155,7 @@ describe('mobile drawer', () => {
     renderShell('/p/cezarion/', nav())
     fireEvent.click(menuButton())
     const identity = drawer().querySelector('[data-slot="drawer-identity"]') as HTMLElement
-    expect(identity.textContent).toContain(`${productName("Cezarion")}`)
+    expect(identity.textContent).toContain(`Squawk`)
     expect(identity.textContent).toContain('v0.14.9')
     expect(within(identity).getByRole('button', { name: 'Close menu' })).toBeTruthy()
 

@@ -1,4 +1,3 @@
-import { productName } from './home/display.ts';
 import type { detectEnvironment } from './core/backend-detect.ts';
 import type { DelegationController } from './delegation/provision.ts';
 import type { startServer } from './server/start-server.ts';
@@ -79,7 +78,7 @@ export function warnServeBind(bindHost: string | undefined, port: number): void 
   // auth (see `server-install --external-proxy`). Say so, loudly, every start.
   if (bindHost && !['127.0.0.1', 'localhost', '::1'].includes(bindHost)) {
     console.log(
-      `\n  ⚠ binding ${bindHost}:${port} — ${productName('cezar')} has no built-in auth.\n` +
+      `\n  ⚠ binding ${bindHost}:${port} — Squawk has no built-in auth.\n` +
         `    Only do this behind a reverse proxy that enforces authentication,\n` +
         `    and make sure this interface is not reachable from the internet.\n`,
     );
@@ -134,7 +133,7 @@ export function printServeBanner(
   checks: Awaited<ReturnType<typeof detectEnvironment>>,
   url: string,
 ): void {
-  console.log(`\n  ${productName('cezar')} v${version} — ${repoRoot}`);
+  console.log(`\n  Squawk v${version} — ${repoRoot}`);
   console.log(`  ${repo ? `branch ${repo.branch}` : 'not a git repository (tasks run in place, one at a time; repo view is empty)'}`);
   for (const check of checks) {
     const mark = check.available ? '✓' : '✗';

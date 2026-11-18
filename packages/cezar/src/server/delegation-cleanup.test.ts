@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { onTestFinished, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from './server.ts';
 import { fixture } from '../delegation/service.testkit.ts';
-import { workerDestroyResultSchema } from '@open-mercato/cezar-contract/delegation';
+import { ownedWorkspace, workerDestroyResultSchema } from '@open-mercato/cezar-contract/delegation';
 import { workerCleanups } from '../delegation/worker-cleanup.ts';
 
 describe('human owned-worker cleanup', () => {
@@ -45,7 +45,7 @@ describe('human owned-worker cleanup', () => {
     await f.service.destroy(f.caller, { workerId });
     const worker = f.store.getRun(workerId)!;
     if (worker.delegation?.role !== 'worker') throw Error('fixture');
-    const { path, branch } = worker.delegation.workspace;
+    const { path, branch } = ownedWorkspace(worker.delegation.workspace);
     execFileSync('git', ['worktree', 'add', '-qb', branch, path, 'HEAD'], { cwd: f.root });
     writeFileSync(join(path, 'unrelated.txt'), 'keep me');
     f.store.updateRun(workerId, { worktreePath: path, branch });

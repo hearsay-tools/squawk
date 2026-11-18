@@ -1,10 +1,10 @@
-import { logPrefix } from '../../home/display.ts';
 import type { AgentSession } from '../../core/agent-runner.ts';
 import { sessionGroupOf } from '../../core/session-process.ts';
 import type { RunModuleContext } from './types.ts';
 import type { WorkerOrphans } from './worker-orphans.ts';
 import type { RunMemory } from './run-memory.ts';
 import { WorkerAdmissionRefusal } from '../../runs/worker-execution.ts';
+import type { WorkerWorkspacePort } from './worker-workspace-port.ts';
 
 interface WorkerExecutionsHost {
   maintenance(id: string): boolean;
@@ -15,6 +15,7 @@ interface WorkerExecutionsHost {
   releaseSlot(): void;
   /** The execution left: the run's memory goes if the run has ended (`runMemoryReleases`). */
   releaseRunMemory(id: string): void;
+  workerWorkspaces(): WorkerWorkspacePort | undefined;
 }
 
 export class WorkerExecutions {
@@ -70,6 +71,7 @@ export class WorkerExecutions {
     await Promise.allSettled([...execution.sessions]);
     await Promise.allSettled([...execution.turns]);
     await Promise.allSettled([...execution.deliveries]);
+    await this.settleWorkspace(runId, execution.generation);
     // Every wrapper settles after runner result, workflow and final filesystem work.
     // A disposed manager cannot attest to the recovered generation's state.
     if (!this.context.disposed()) {
@@ -84,6 +86,16 @@ export class WorkerExecutions {
     if (!this.context.disposed() && this.context.store.getRun(runId)?.stopping) this.context.store.updateRun(runId, { stopping: undefined });
     if (!this.context.disposed()) this.host.releaseSlot();
     if (!this.context.disposed()) this.host.releaseRunMemory(runId);
+  }
+
+  /** Tell the worker's workspace that this execution ended, before it is recorded complete. */
+  private async settleWorkspace(runId: string, generation: string): Promise<void> {
+    const port = this.host.workerWorkspaces();
+    if (!port || this.context.disposed()) return;
+    let run;
+    try { run = this.context.store.getRun(runId); } catch { return; }
+    if (run?.delegation?.role !== 'worker') return;
+    await port.settle({ repoRoot: this.context.repoRoot, dataDir: this.context.dataDir, run, generation }).catch(() => undefined);
   }
 
   /** Capture every returned process result before setup can throw. A setup
@@ -109,8 +121,8 @@ export class WorkerExecutions {
   recordWorkerProcess(runId: string, pid: number): void {
     const generation = this.executions.get(runId)?.generation;
     if (!generation) return;
-    try { if (!this.context.store.appendWorkerProcess(runId, generation, pid, sessionGroupOf(pid))) console.warn(`${logPrefix()} worker ${runId} process record unavailable; its scope still holds the process`); }
-    catch { console.warn(`${logPrefix()} worker ${runId} process record write failed; its scope still holds the process`); }
+    try { if (!this.context.store.appendWorkerProcess(runId, generation, pid, sessionGroupOf(pid))) console.warn(`[hsq] worker ${runId} process record unavailable; its scope still holds the process`); }
+    catch { console.warn(`[hsq] worker ${runId} process record write failed; its scope still holds the process`); }
   }
 
   async proveRunTermination(runId: string, timeoutMs: number, opts: { reapOrphans?: boolean }): Promise<boolean> {

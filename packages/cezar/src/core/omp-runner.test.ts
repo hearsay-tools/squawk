@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 import type { ChildProcess } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { explicitToolGrant, UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import { productName } from '../home/display.ts';
 
 // Pass-through: every test spawns the real child; a test that needs the child's own streams
 // (to fail one) reads it from here.
@@ -834,7 +833,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     });
     expect(lines('commands.ndjson').at(-1)).toEqual({ type: 'abort' });
     expect(events.filter(event => event.type === 'error')).toEqual([]);
-    expect(events).toContainEqual({ type: 'note', message: expect.stringMatching(new RegExp(String.raw`terminated by ${productName('Cezar')} \(code 143\)`)) });
+    expect(events).toContainEqual({ type: 'note', message: expect.stringMatching(new RegExp(String.raw`terminated by Squawk \(code 143\)`)) });
     expect(events.at(-1)).toEqual({ type: 'done' });
   });
 
@@ -1313,8 +1312,8 @@ await import(${JSON.stringify(MOCK)});
     expect(turnEnds(events)).toBe(1);
     // Two grace periods and auto-end must beat the mock's 12 s backstop.
     expect(Date.now() - started).toBeLessThan(8_000);
-    expect(events.filter(event => event.type === 'note' && event.message.includes(`terminated by ${productName('Cezar')}`))).toEqual([
-      { type: 'note', message: `omp CLI did not exit on its own after close; terminated by ${productName('Cezar')} (SIGKILL)` },
+    expect(events.filter(event => event.type === 'note' && event.message.includes(`terminated by Squawk`))).toEqual([
+      { type: 'note', message: `omp CLI did not exit on its own after close; terminated by Squawk (SIGKILL)` },
     ]);
     expect(events.filter(event => event.type === 'error')).toEqual([]);
     expect(events.at(-1)).toEqual({ type: 'done' });

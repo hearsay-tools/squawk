@@ -1,4 +1,3 @@
-import { productName } from '../../home/display.ts';
 import { z } from 'zod';
 import { githubProjectSchema, type GithubProject } from '@open-mercato/cezar-contract/github';
 import type { GraphqlRunner } from './github.ts';
@@ -31,10 +30,10 @@ function projectFailureReason(error: unknown): string {
     return 'GitHub is rate-limiting project board requests. Wait a few minutes, then refresh.';
   }
   if (/read:project|INSUFFICIENT_SCOPES/i.test(message)) {
-    return `GitHub project read access is missing. Run gh auth refresh -s read:project, then refresh. If ${productName('cezar')} uses GH_TOKEN or GITHUB_TOKEN, grant that token project read access instead.`;
+    return `GitHub project read access is missing. Run gh auth refresh -s read:project, then refresh. If Squawk uses GH_TOKEN or GITHUB_TOKEN, grant that token project read access instead.`;
   }
   if (/resource not accessible|forbidden|HTTP 403/i.test(message)) {
-    return `GitHub credentials cannot access project boards. Grant project read access to the account or token used by ${productName('cezar')}, then refresh.`;
+    return `GitHub credentials cannot access project boards. Grant project read access to the account or token used by Squawk, then refresh.`;
   }
   if (/timed out|ETIMEDOUT/i.test(message) || (error instanceof Error && 'killed' in error && error.killed === true)) {
     return 'Project board lookup timed out. Refresh to try again.';

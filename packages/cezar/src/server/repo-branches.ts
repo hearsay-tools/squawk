@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import type { Home } from '../home/home.ts';
 /**
  * Server-owned branch classification and cleanup policy. Reclassify before deletion:
@@ -740,7 +739,7 @@ function deletionVerdicts(
         refused.push({ name, reason: 'in use — a live or reviewable task, a checkout, or the base branch' });
         break;
       case 'other':
-        refused.push({ name, reason: `not a ${productName('cezar')} task branch` });
+        refused.push({ name, reason: `not a Squawk task branch` });
         break;
       case 'not-landed':
       case 'orphan':
@@ -841,7 +840,7 @@ export async function deleteBranches(
           // `--no-deref`, and a symbolic ref refused outright: the transaction may only ever remove the
           // exact ref that was classified and named, never one an alias points at.
           if ((await lockedGit(input.root, ['symbolic-ref', '-q', `refs/heads/${name}`])).ok) {
-            refused.push({ name, reason: `not a ${productName('cezar')} task branch` });
+            refused.push({ name, reason: `not a Squawk task branch` });
             continue;
           }
           const verified = await deleteVerifies((args) => lockedGit(input.root, args), name, released.get(name),

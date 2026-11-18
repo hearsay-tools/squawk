@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { commandText } from '../home/command.ts';
 import { WAIT_KINDS } from '../workflows/run/wait-kinds.ts';
 import { projectPaths } from '../project-paths.ts';
@@ -42,6 +41,8 @@ import {
   type RequestOutcome,
 } from '@open-mercato/cezar-contract/conversations';
 import {
+  WORKSPACE_CHOICES,
+  sharedSpawnRefusal,
   workerSpawnRequestSchema,
   workerSteerRequestSchema,
   workerWaitRequestSchema,
@@ -80,7 +81,7 @@ import { isAuthenticatedCaller } from './credentials.ts';
 import { parseDelegationEffort } from './effort.ts';
 import { authorizeWorkerList, authorizeSpawn, authorizeSpawnReplay, authorizeWorker, authorizeCancelWait, authorizeRetainedResult, DelegationPolicyError, MessagingOffError, requireWorkersAllowed } from './policy.ts';
 import { resolveWorkerBaseline } from './workspace.ts';
-import { DEFAULT_WORKSPACE_KIND, workerWorkspacePort, workspaceKindOf, workspaceKinds, type WorkspaceKind } from './workspace-kinds.ts';
+import { DEFAULT_WORKSPACE_CHOICE, workerWorkspacePort, workspaceKindOf, workspaceKinds, type WorkspaceKind } from './workspace-kinds.ts';
 
 export type DelegationManager = Pick<RunManager,
   | 'acknowledgeInbox' | 'awaitRunTermination' | 'canClaimInboxInput'
@@ -175,6 +176,7 @@ function spawnRequestHash(request: WorkerSpawnRequest): string {
     ...(effortPin === undefined ? {} : { effort: effortPin }),
     ...(request.workflow === undefined ? {} : { workflow: request.workflow }),
     ...(request.skill === undefined ? {} : { skill: request.skill }),
+    ...((request.workspace ?? DEFAULT_WORKSPACE_CHOICE) === DEFAULT_WORKSPACE_CHOICE ? {} : { workspace: request.workspace }),
   })).digest('hex');
 }
 
@@ -506,7 +508,7 @@ export class DelegationService {
       inputs.some(input => input.id === message.id && !input.deliveredAt));
     return { messages, outcomes,
       ...(merged.length > messages.length ? { nextBefore: encodeConversationCursor(messages[0]!) } : {}),
-      ...(unread ? { hint: commandText(`This history includes unread messages. Run cez message inbox to receive and mark them delivered. Inbox will show them again intentionally; after acknowledgement, ${productName('Cezar')} will not queue them again for normal end-of-turn delivery.`) } : {}) };
+      ...(unread ? { hint: commandText(`This history includes unread messages. Run cez message inbox to receive and mark them delivered. Inbox will show them again intentionally; after acknowledgement, Squawk will not queue them again for normal end-of-turn delivery.`) } : {}) };
   }
   /** The ledgers a history read covers: the family's one, or each peer root's own while it exists.
    *  A peer whose history is being deleted, or is deleted, stays readable to a participant (spec § 2). */
@@ -624,7 +626,7 @@ export class DelegationService {
     for (const id of request.requestIds) this.ownRequest(caller, id);
     const project = this.context(caller);
     const wait = project.manager.registerRequestWait(caller.runId, request);
-    return { wait, instruction: `Wait ${wait.id} registered until ${wait.deadline}. End your turn now to release capacity. ${productName('Cezar')} resumes you when ${wait.mode === 'all' ? 'every selected request settles' : 'a selected request settles'} or at the deadline. Messages also wake you and keep this wait open; end your turn to keep waiting. Your other waits stay open beside it.` };
+    return { wait, instruction: `Wait ${wait.id} registered until ${wait.deadline}. End your turn now to release capacity. Squawk resumes you when ${wait.mode === 'all' ? 'every selected request settles' : 'a selected request settles'} or at the deadline. Messages also wake you and keep this wait open; end your turn to keep waiting. Your other waits stay open beside it.` };
   }
   /** `cez message wait --peer` (hearsay-tools/cezarion#1995): the manager checks each peer through
    *  the relationship resolver, so a worker or a non-peer is `denied_scope`. */
@@ -632,10 +634,12 @@ export class DelegationService {
     const request = peerWaitRequestSchema.parse(value);
     const project = this.context(caller);
     const wait = project.manager.registerPeerWait(caller.runId, request, 'cez-message-wait');
-    return { wait: peerWaitView(wait), instruction: `Wait ${wait.id} registered until ${wait.deadline}. End your turn now to release capacity. ${productName('Cezar')} resumes you when a selected task messages you or settles, or at the deadline. Human and worker messages also wake you and keep this wait open; end your turn to keep waiting. Your other waits stay open beside it.` };
+    return { wait: peerWaitView(wait), instruction: `Wait ${wait.id} registered until ${wait.deadline}. End your turn now to release capacity. Squawk resumes you when a selected task messages you or settles, or at the deadline. Human and worker messages also wake you and keep this wait open; end your turn to keep waiting. Your other waits stay open beside it.` };
   }
   async spawn(caller: Caller, value: WorkerSpawnRequest) {
     const request = workerSpawnRequestSchema.parse(value);
+    const refusal = sharedSpawnRefusal(request);
+    if (refusal) throw new DelegationPolicyError('invalid_input', refusal);
     const initial = this.context(caller);
     return this.serialized(`parent:${initial.id}:${caller.runId}`, async () => {
       const project = this.context(caller);
@@ -661,9 +665,9 @@ export class DelegationService {
       const settings = first.settings;
       const identity = acceptedWorkerIdentitySchema.parse({ kind: 'accepted', ...stepIdentityFields(first),
         steps: resolvedSteps.map(entry => ({ stepId: entry.step.id, ...stepIdentityFields(entry) })) });
-      const baselineSha = await resolveWorkerBaseline(project.root, settings.cwd, request.baseline);
-      const kind = workspaceKinds[DEFAULT_WORKSPACE_KIND];
-      const workspace = await kind.plan(project.root, randomUUID(), baselineSha);
+      const baselineSha = await resolveWorkerBaseline(project.root, settings.cwd, request.baseline ?? 'parent-head');
+      const kind = workspaceKinds[WORKSPACE_CHOICES[request.workspace ?? DEFAULT_WORKSPACE_CHOICE]];
+      const workspace = await kind.plan({ repoRoot: project.root, workerId: randomUUID(), baselineSha, hostRunId: parent.id, hostDirectory: settings.cwd });
       const prepared = request.context === undefined ? undefined : await kind.prepareContext({
         repoRoot: project.root, dataDir: projectPaths(project.root).write, parentId: parent.id, workspace,
         parentCwd: settings.cwd, context: request.context, containsSecret: text => project.store.containsSessionSecret(text),
@@ -774,7 +778,7 @@ export class DelegationService {
     for (const workerId of request.workerIds) this.target(caller, { workerId }, 'wait');
     const project = this.context(caller);
     const wait = project.manager.registerWorkerWait(caller.runId, request);
-    return { wait, instruction: `Wait ${wait.id} registered until ${wait.deadline}. End your turn now to release capacity. ${productName('Cezar')} resumes you when ${wait.mode === 'all' ? 'all selected workers settle' : 'a selected worker settles'} or at the deadline. Messages also wake you and keep this wait open; end your turn to keep waiting. Your other waits stay open beside it.` };
+    return { wait, instruction: `Wait ${wait.id} registered until ${wait.deadline}. End your turn now to release capacity. Squawk resumes you when ${wait.mode === 'all' ? 'all selected workers settle' : 'a selected worker settles'} or at the deadline. Messages also wake you and keep this wait open; end your turn to keep waiting. Your other waits stay open beside it.` };
   }
   async cancelWait(caller: Caller, value: WorkerCancelWaitRequest) {
     const { waitId } = workerCancelWaitRequestSchema.parse(value);

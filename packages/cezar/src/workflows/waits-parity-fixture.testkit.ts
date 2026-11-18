@@ -22,7 +22,6 @@ import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { ciNativeMessages, toolCall, gate, thenSay } from './waits-parity.testkit.ts';
 import { acquireCiResources } from '../ci-wait/resources.ts';
 import { type WaitParityPart, type WaitCells, type WaitPartScope, waitPartModule, type WaitFold, type WaitFoldScope, waitFoldModule, foldCells, fileFamilies, rowFamily, type FamilyPart } from './waits-parity-catalog.testkit.ts';
-import { productName } from '../home/display.ts';
 
 // hearsay-tools/cezarion#1233: every runner opens, cancels and survives CI and timer waits on its
 // own native wire. The production tool controller, bundled tool, runner, store and scheduler stay
@@ -167,7 +166,7 @@ export const conversationOf = (id: string): ConversationMessage[] => {
 };
 /** Squawk's park notices from a worker to its parent (hearsay-tools/cezarion#1327): progress the worker never sent itself. */
 export const parkNotices = (parentId: string, workerId: string) => conversationOf(parentId).filter(message =>
-  message.senderRunId === workerId && message.kind === 'progress' && message.text.startsWith(`${productName('Cezar')} notice: `));
+  message.senderRunId === workerId && message.kind === 'progress' && message.text.startsWith(`Squawk notice: `));
 /** A root parent on `runner`'s native wire, parked after its opening turn. */
 export async function parentOn(runner: RunnerId) {
   nativeWire(runner);

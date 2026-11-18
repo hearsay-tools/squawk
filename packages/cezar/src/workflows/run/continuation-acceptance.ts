@@ -20,7 +20,6 @@ import type { WorktreeAutosave } from './worktree-autosave.ts';
 import type { WorkerQuestions } from './worker-questions.ts';
 import { historyDeletionPending } from './run-guards.ts';
 import { admissionRefusal } from '../../runs/worker-execution.ts';
-import { logPrefix } from '../../home/display.ts';
 import * as workflowPosition from './workflow-position.ts';
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
 
@@ -70,8 +69,8 @@ export class ContinuationAcceptance {
   ): continuation.ContinuationResult {
     const admitted = new continuation.ContinuationChecks(runId, this.context.repoRoot, opts, deferForCapacity, conversation, {
       active: () => this.host.isActive(runId),
-      autosaveBlocker: () => this.worktreeAutosave.autosaveCleanupBlocker(runId),
-      reclaiming: () => this.claims.has(runId),
+      autosaveBlocker: () => this.claims.autosaveStartBlocker(runId),
+      reclaiming: () => this.claims.blocksStart(runId),
       run: () => this.context.store.getRun(runId),
       historyDeletionPending: () => historyDeletionPending(this.context.store, runId),
       parentStatus: parentId => this.context.store.getRun(parentId)?.status,
@@ -175,7 +174,7 @@ export class ContinuationAcceptance {
         // No session exists yet. Release the private reservation through execution finalization.
         void this.host.finishWorkerExecution(runId);
         const cause = error instanceof Error && error.message ? error.message : String(error);
-        console.warn(`${logPrefix()} worker ${runId} continuation was not saved: ${cause}`);
+        console.warn(`[hsq] worker ${runId} continuation was not saved: ${cause}`);
         return { ok: false, error: `the resume could not be saved (${cause})`, next: 'retry the same command' };
       }
     } else this.context.store.move(runId, exit, acceptedPatch);

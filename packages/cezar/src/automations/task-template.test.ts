@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { execFileSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
@@ -277,7 +276,7 @@ describe('automation task templates', () => {
       expect(automations.latestReceipts().get(key)).toMatchObject({ status: 'launch-error' });
       await vi.waitFor(() => {
         expect(automations.logs({ automationId: 'nightly' })).toEqual([
-          expect.objectContaining({ result: 'failed', receiptId: 'lost', revision: 2, reason: expect.stringContaining(`${productName('Cezar')} restarted before run creation completed`) }),
+          expect.objectContaining({ result: 'failed', receiptId: 'lost', revision: 2, reason: expect.stringContaining(`Squawk restarted before run creation completed`) }),
         ]);
         expect(automations.logs({ automationId: 'one' })).toEqual([
           expect.objectContaining({ result: 'failed', receiptId: 'lost-poll', event: 'issue.opened', githubNumber: 7, githubUrl: candidate.url }),

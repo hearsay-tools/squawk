@@ -4,7 +4,6 @@ import { autosaveCommit, type AutosaveOutcome, type AutosaveReason } from '../..
 import { recordHandoffAutosave, recordHandoffPeriodicAutosave } from '../../handoff.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { RunModuleContext } from './types.ts';
-import { productName } from '../../home/display.ts';
 
 interface WorktreeAutosaveHost {
   holdForMaintenance(runIds: readonly string[]): (() => void) | null;
@@ -52,11 +51,11 @@ function autosaveReportLine(reason: AutosaveReason, outcome: AutosaveOutcome, ta
   const where = outcome.branch ?? 'detached HEAD';
   if (outcome.result === 'committed') {
     const what = outcome.sha ? `${outcome.sha} on ${where}` : `on ${where} (sha unavailable)`;
-    return `${reason}: ${productName('Cezar')} autosave committed ${what}; ` +
+    return `${reason}: Squawk autosave committed ${what}; ` +
       `to fold it into your own commits while it is HEAD, run \`git reset --soft ${outcome.sha ?? 'HEAD'}~1\``;
   }
   return `${reason}: ${outcome.changedPaths} changed path(s) left uncommitted on ${where}; ` +
-    `${productName('Cezar')} does not autosave on a branch other than the task branch ${taskBranch ?? '(unrecorded)'}`;
+    `Squawk does not autosave on a branch other than the task branch ${taskBranch ?? '(unrecorded)'}`;
 }
 
 export class WorktreeAutosave {
@@ -82,7 +81,7 @@ export class WorktreeAutosave {
   }
 
   private async saveWorktreeWork(runId: string, state: ActiveRun, reason: AutosaveReason): Promise<void> {
-    if (state.liveSession.cwd === this.context.repoRoot) return;
+    if (state.liveSession.cwd === this.context.repoRoot || state.liveSession.sharesDirectory) return;
     for (;;) {
       const previous = this.autosaveTasks.get(runId);
       if (!previous) break;
@@ -158,7 +157,7 @@ export class WorktreeAutosave {
    *  Opt-in via CEZ_AUTOSAVE=1 (open-mercato/cezar#471) — see periodicAutosaveEnabled. */
   armAutosave(runId: string, state: ActiveRun): void {
     if (!periodicAutosaveEnabled()) return;
-    if (state.liveSession.cwd === this.context.repoRoot || state.autosave.autosaveTimer) return;
+    if (state.liveSession.cwd === this.context.repoRoot || state.autosave.autosaveTimer || state.liveSession.sharesDirectory) return;
     state.autosave.armAutosave(() => {
       const task = this.host.saveWorktree(runId, state, 'periodic');
       this.host.trackTurn(runId, task);

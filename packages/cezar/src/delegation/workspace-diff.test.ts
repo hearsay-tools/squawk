@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { workerDiffSchema } from '@open-mercato/cezar-contract/delegation';
+import { ownedWorkspace, workerDiffSchema } from '@open-mercato/cezar-contract/delegation';
 import { createOwnedWorkspace, ensureOwnedWorkspace, readOwnedDiff } from './workspace.ts';
 import { fixture, durableRun, git, WORKSPACE_TEST_TIMEOUT_MS } from './workspace-fixture.testkit.ts';
 
@@ -65,7 +65,7 @@ describe('readOwnedDiff', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, () => {
     expect(await ensureOwnedWorkspace(root, run)).toEqual(workspace);
     const diff = await readOwnedDiff(root, run);
     expect(diff.diff).toContain('+worker on feature'); expect(diff.diff).not.toContain('prior.txt');
-    expect(run.delegation?.role === 'worker' && run.delegation.workspace.branch).toBe(workspace.branch);
+    expect(run.delegation?.role === 'worker' && ownedWorkspace(run.delegation.workspace).branch).toBe(workspace.branch);
   });
 
   it.each([30_000, 100_000])('returns explicit truncation at 400000 characters for %i input lines, including process-buffer overflow', async (lines) => {

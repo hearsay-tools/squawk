@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -96,20 +95,30 @@ describe('session provisioning', () => {
     expect(instructions).toContain('(or cezar_wait with kind "request") to register a request wait');
     expect(instructions).toContain("except a named peer's message to a peer wait");
   });
+  it("tells a shared worker that it shares its parent's worktree, and the parent about --workspace shared (hearsay-tools/squawk#3819)", async () => {
+    const notice = "You share your parent's worktree: do not write there unless your task says so.";
+    const shared = await f.service.spawn(f.caller, { task: 'review', workspace: 'shared', requestId: randomUUID() });
+    const isolated = await f.service.spawn(f.caller, { task: 'build', baseline: 'HEAD', requestId: randomUUID() });
+    expect(provision(shared.workerId)!.instructions).toContain(`Your parent run ID is ${f.parent.id}. ${notice}`);
+    expect(provision(isolated.workerId)!.instructions).not.toContain(notice);
+    const root = provision()!.instructions;
+    expect(root).toContain('--workspace shared (the worker runs in your worktree at your HEAD, with no worktree or branch of its own and no --baseline; see spawn --help)');
+    expect(root).not.toContain(notice);
+  });
   it('never promotes invalid/worker records to roots', async () => {
     const ordinary = f.store.createRun({ title: 'ordinary', task: 'ordinary', workflow: 'quick-task', steps: [] });
     f.store.updateRun(ordinary.id, { delegation: { role: 'invalid' } });
     expect(provision(ordinary.id)).toBeUndefined();
     const { workerId } = await f.service.spawn(f.caller, { task: 'worker', baseline: 'HEAD', requestId: randomUUID() });
-    const worker = provision(workerId)!; expect(worker.instructions).toContain(`You cannot spawn ${productName('Cezar')} workers`); expect(worker.instructions).toContain('wait --request'); expect(worker.instructions).toContain(f.parent.id); expect(worker.instructions).toContain('message reply');
+    const worker = provision(workerId)!; expect(worker.instructions).toContain(`You cannot spawn Squawk workers`); expect(worker.instructions).toContain('wait --request'); expect(worker.instructions).toContain(f.parent.id); expect(worker.instructions).toContain('message reply');
     // #505: a worker's questions go to its parent, which replies or asks the human.
     expect(worker.instructions).toContain('Ask your parent with hsq message request; any question you raise goes to your parent too, never to a human.');
     expect(worker.instructions).not.toContain('cezar_ask');
     // hearsay-tools/cezarion#1327: a park notice quotes the worker's last message to its waiting parent.
-    expect(worker.instructions).toContain(`${productName('Cezar')} tells your parent what you wait on and quotes your last message`);
-    expect(worker.instructions).not.toContain(`${productName('Cezar')} sends you a notice`);
+    expect(worker.instructions).toContain(`Squawk tells your parent what you wait on and quotes your last message`);
+    expect(worker.instructions).not.toContain(`Squawk sends you a notice`);
     const root = provision()!;
-    expect(root.instructions).toContain(`${productName('Cezar')} sends you a notice from it naming what it waits on, at most one per wait; like any message it wakes you and closes no wait`);
+    expect(root.instructions).toContain(`Squawk sends you a notice from it naming what it waits on, at most one per wait; like any message it wakes you and closes no wait`);
     expect(root.instructions).not.toContain('Cezar tells your parent');
     expect(root.instructions).toContain('Worker questions arrive as requests carrying a question');
     expect(root.instructions).toContain('--request-id <question-id>');
@@ -126,15 +135,15 @@ describe('session provisioning', () => {
     const root = provision()!.instructions;
     expect(root).toContain('Use native subagents for work that needs no separate worktree: research, code reading and focused analysis.');
     expect(root).toContain('For example, a subagent reads the parser and summarizes how it handles errors.');
-    expect(root).toContain(`Use ${productName('Cezar')} workers for work that needs its own worktree, its own commits or a lifecycle ${productName('Cezar')} tracks.`);
-    expect(root).toContain(`Also use a ${productName('Cezar')} worker when the task needs a model available only through another runner, even if the work is research or analysis.`);
-    expect(root).toContain(`Native subagents need no ${productName('Cezar')} worker, worktree, collection or destruction.`);
+    expect(root).toContain(`Use Squawk workers for work that needs its own worktree, its own commits or a lifecycle Squawk tracks.`);
+    expect(root).toContain(`Also use a Squawk worker when the task needs a model available only through another runner, even if the work is research or analysis.`);
+    expect(root).toContain(`Native subagents need no Squawk worker, worktree, collection or destruction.`);
     expect(worker).toContain('You may use native subagents for research, code reading and focused analysis.');
-    expect(worker).toContain(`You cannot spawn ${productName('Cezar')} workers.`);
-    expect(worker).not.toContain(`Also use a ${productName('Cezar')} worker`);
+    expect(worker).toContain(`You cannot spawn Squawk workers.`);
+    expect(worker).not.toContain(`Also use a Squawk worker`);
     for (const text of [root, worker]) {
       expect(text).toContain('You may message your own native subagents with your runner\'s tools.');
-      expect(text).toMatch(new RegExp(String.raw`Reach another ${productName('Cezar')} task only through .* message; never use your runner's native tools for that\.`));
+      expect(text).toMatch(new RegExp(String.raw`Reach another Squawk task only through .* message; never use your runner's native tools for that\.`));
     }
   });
   it('always starts the listener; one failed listener leaves ordinary execution unprovisioned and logs once without secrets', async () => {
@@ -160,7 +169,7 @@ describe('session provisioning', () => {
     it('workers off keeps messaging and teaches no spawn', () => {
       const session = provision(root({ allowWorkers: false, allowMessaging: true }).id)!;
       expect(session.env.CEZ_DELEGATION_TOKEN).toBeTypeOf('string');
-      expect(session.instructions).toContain(`${productName('Cezar')} workers are off for this task. A human can turn them on in the task menu.`);
+      expect(session.instructions).toContain(`Squawk workers are off for this task. A human can turn them on in the task menu.`);
       expect(session.instructions).not.toContain(' spawn --baseline parent-head');
       expect(session.instructions).not.toContain('You still manage the workers you own');
       expect(session.instructions).toContain('wait --peer <task-id>');
@@ -177,7 +186,7 @@ describe('session provisioning', () => {
       // The endpoint without a token: discovery refuses rather than reach the cockpit.
       expect(session).toMatchObject({ restrictCrossSessionMessaging: true, env: { CEZ_DELEGATION_URL: 'http://127.0.0.1:12345/api/v1/delegation' } });
       expect(session.env).not.toHaveProperty('CEZ_DELEGATION_TOKEN');
-      expect(session.instructions).toContain(`${productName('Cezar')} workers and task messaging are off for this task`);
+      expect(session.instructions).toContain(`Squawk workers and task messaging are off for this task`);
       expect(session.instructions).toContain('they reach you at your next session');
       expect(session.instructions).not.toMatch(/index\.[jt]s' message/);
       expect(f.store.getRun(run.id)?.delegation).toBeUndefined();
@@ -197,7 +206,7 @@ describe('session provisioning', () => {
       const session = provision()!;
       expect(session.env.CEZ_DELEGATION_TOKEN).toBeTypeOf('string');
       expect(session.instructions).toContain('You still manage the workers you own');
-      expect(session.instructions).toContain(`${productName('Cezar')} workers are off for this task.`);
+      expect(session.instructions).toContain(`Squawk workers are off for this task.`);
     });
   });
 });

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { makeProcessWait, makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { artifactDirectory, publishArtifact } from '../artifacts/store.ts';
 import { retainAutosaveCleanup } from '../autosave-cleanup.ts';
 import { ensureDataGitignore } from '../data-gitignore.ts';
@@ -48,21 +48,21 @@ export interface MigrationProject {
   dataDir: string;
   newDir: string;
   taskPath: string;
-  worker: WorkerWorkspace;
-  checkpointed: WorkerWorkspace;
+  worker: OwnedWorkerWorkspace;
+  checkpointed: OwnedWorkerWorkspace;
   /** In a linked layout: an owned workspace of the main checkout's own project, sharing the receipt directory. */
-  other?: WorkerWorkspace;
+  other?: OwnedWorkerWorkspace;
   artifactId: string;
   restore(): void;
 }
 
-function workerRecord(workspace: WorkerWorkspace, extra: Record<string, unknown> = {}) {
+function workerRecord(workspace: OwnedWorkerWorkspace, extra: Record<string, unknown> = {}) {
   return makeRunRecord({ id: workspace.ownerRunId, status: RUN_STATUS.done, archived: true, worktreePath: workspace.path, branch: workspace.branch,
     delegation: { role: 'worker', parentRunId: PARENT, permissions: [], workspace }, ...extra } as never);
 }
 
 /** `checkpoint` writes a real cleanup checkpoint for a workspace and keeps the worktree in place. */
-export async function buildMigrationProject(options: { linked: boolean; checkpoint: (root: string, workspace: WorkerWorkspace) => Promise<void> }): Promise<MigrationProject> {
+export async function buildMigrationProject(options: { linked: boolean; checkpoint: (root: string, workspace: OwnedWorkerWorkspace) => Promise<void> }): Promise<MigrationProject> {
   const base = mkdtempSync(join(realpathSync(tmpdir()), 'cez-project-migration-'));
   const work = join(base, 'work');
   const repo = join(work, 'repo');

@@ -1,4 +1,4 @@
-import type { WorkerDestroyResult, WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { WorkerDestroyResult, OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { removeOwnedWorkspace } from './workspace-removal.ts';
 import type { PreviewHostLike } from '../preview/registration.ts';
 
@@ -7,7 +7,7 @@ import type { PreviewHostLike } from '../preview/registration.ts';
 export async function releaseThenRemoveOwnedWorkspace(
   deps: { previewHost?: Pick<PreviewHostLike, 'release'> | undefined },
   repoRoot: string,
-  workspace: WorkerWorkspace,
+  workspace: OwnedWorkerWorkspace,
   assertCurrent?: () => void,
   assertUnheld?: () => void,
   lock: { waitMs?: number } = {},

@@ -9,7 +9,6 @@ import type { ExitCall, RunExitId } from '../../runs/run-exits.ts';
 import type { RunModuleContext } from './types.ts';
 import { LivenessTimers } from './liveness-timers.ts';
 import { atContinue } from './launch-read-resolver.ts';
-import { productName } from '../../home/display.ts';
 
 interface AutoResumeHost {
   move(runId: string, exit: RunExitId, patch: Omit<Parameters<RunStore['updateRun']>[1], 'status'>, call?: ExitCall): RunRecord | undefined;
@@ -47,11 +46,11 @@ const AUTO_RESUME_PROMPT =
   'The provider usage limit that interrupted this task has reset. Read the handoff file (HSQ_HANDOFF_FILE (CEZ_HANDOFF_FILE fallback)) to recover context, then continue the task from where you left off.';
 
 const PROVIDER_RETRY_PROMPT =
-  `A provider error interrupted this task, and ${productName('Cezar')} retried it after a wait. Read the handoff file (HSQ_HANDOFF_FILE (CEZ_HANDOFF_FILE fallback)) to recover context, then continue the task from where you left off.`;
+  `A provider error interrupted this task, and Squawk retried it after a wait. Read the handoff file (HSQ_HANDOFF_FILE (CEZ_HANDOFF_FILE fallback)) to recover context, then continue the task from where you left off.`;
 
 /** A provider error before the step's first session: the retry starts one, so it carries the step's prompt. */
 const freshRetryPrompt = (prompt: string) =>
-  `A provider error stopped this step before its agent session started, and ${productName('Cezar')} retried it after a wait. Read the handoff file (HSQ_HANDOFF_FILE (CEZ_HANDOFF_FILE fallback)) for any context. Your instructions:\n\n${prompt}`;
+  `A provider error stopped this step before its agent session started, and Squawk retried it after a wait. Read the handoff file (HSQ_HANDOFF_FILE (CEZ_HANDOFF_FILE fallback)) for any context. Your instructions:\n\n${prompt}`;
 
 /**
  * What a resume says. A provider retry always carries the held step's own prompt: a native runner

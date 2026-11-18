@@ -7,7 +7,6 @@ import type { AgentEvent } from './agent-runner.js';
 import { KILL_GRACE_MS } from './runner-runtime.js';
 import { CodexAppServerRunner, codexTurnStartExtras } from './codex-app-server-runner.js';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import { productName } from '../home/display.ts';
 
 /** Only the escalation tests below swap the child out; every other test in this
  *  file keeps spawning the real mock app-server through the untouched `spawn`. */
@@ -59,7 +58,7 @@ describe('a teardown Squawk initiated (codex app-server)', () => {
     expect(events.some((e) => e.type === 'error')).toBe(false);
     expect(events.at(-1)).toEqual({ type: 'done' });
     expect(
-      events.some((e) => e.type === 'note' && e.message.includes(`terminated by ${productName('Cezar')} (code 143)`)),
+      events.some((e) => e.type === 'note' && e.message.includes(`terminated by Squawk (code 143)`)),
     ).toBe(true);
   }, 15_000);
 

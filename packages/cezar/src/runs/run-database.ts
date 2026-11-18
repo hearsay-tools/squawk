@@ -421,8 +421,12 @@ export class RunDatabase {
           start_token = excluded.start_token, generation = excluded.generation`),
       releaseClaims: db.prepare('DELETE FROM run_claims WHERE session = ? AND family IN (SELECT value FROM json_each(?))'),
       releaseSessionClaims: db.prepare('DELETE FROM run_claims WHERE session = ?'),
-      listForeignClaimedIds: db.prepare(`SELECT r.id AS id, c.family AS family FROM run_claims c JOIN runs r
-        ON r.id = c.family OR r.parent_run_id = c.family WHERE c.session <> ?`),
+      // Two key lookups, not one OR join, which scans runs (hearsay-tools/squawk#3395). CROSS JOIN
+      // keeps run_claims outside, so each half searches runs by id or by runs_parent_run_id.
+      listForeignClaimedIds: db.prepare(`SELECT r.id AS id, c.family AS family FROM run_claims c CROSS JOIN runs r
+          ON r.id = c.family WHERE c.session <> ?1
+        UNION ALL SELECT r.id, c.family FROM run_claims c CROSS JOIN runs r
+          ON r.parent_run_id = c.family WHERE c.session <> ?1`),
       insertConflict: db.prepare(`INSERT INTO run_conflicts (run_id, detected_at, session, reason, base_revision, base_data,
           local_data, local_deleted, current_revision, current_data)
         VALUES (:runId, :detectedAt, :session, :reason, :baseRevision, :baseData, :localData, :localDeleted,
@@ -656,7 +660,8 @@ export class RunDatabase {
 
   /** Bounded keyset walk. Include worker-only PR roots without decoding history. */
   listArchiveOnMergeCandidates(afterSeq: number, limit: number): Array<{ id: string; seq: number }> {
-    return this.run(() => this.db.prepare(`SELECT id, seq FROM runs
+    // Without statistics the planner picks runs_archived_roots and sorts (hearsay-tools/squawk#3395).
+    return this.run(() => this.db.prepare(`SELECT id, seq FROM runs INDEXED BY runs_archive_on_merge
       WHERE archived = 0 AND live = 0 AND parent_run_id IS NULL
         AND status IN ('review', 'done', 'failed', 'cancelled') AND seq > ?
       ORDER BY seq LIMIT ?`).all(afterSeq, Math.max(1, Math.min(64, limit))))
