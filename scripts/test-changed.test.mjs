@@ -198,6 +198,20 @@ test('full fallback propagates a failing npm test exit code', t => {
   assert.match(result.stdout, /full:/);
 });
 
+test('--ci passes the changed paths to Vitest in VITEST_CHANGED_FILES', t => {
+  const { cwd, put } = fixture(t);
+  const print = 'const f = process.env.VITEST_CHANGED_FILES; process.stdout.write(f ? "list:" + require("fs").readFileSync(f, "utf8") : "no list")';
+  put('package.json', JSON.stringify({ scripts: { test: `node -e ${JSON.stringify(print)}` } }));
+  put('packages/web/src/slow.test.ts', 'test("x", () => {});');
+  const env = { ...process.env, VITEST_CHANGED_FILES: '' };
+  const ci = spawnSync(process.execPath, [script, '--ci'], { cwd, encoding: 'utf8', env });
+  assert.equal(ci.status, 0, ci.stderr);
+  assert.match(ci.stdout, /list:package\.json\npackages\/web\/src\/slow\.test\.ts\n/);
+  const local = spawnSync(process.execPath, [script], { cwd, encoding: 'utf8', env });
+  assert.equal(local.status, 0, local.stderr);
+  assert.match(local.stdout, /no list/);
+});
+
 test('clean changes skip without invoking the test command', t => {
   const { cwd, git, put } = fixture(t);
   put('package.json', JSON.stringify({ scripts: { test: 'node -e "process.exit(23)"' } }));
