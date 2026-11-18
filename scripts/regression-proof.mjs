@@ -105,31 +105,31 @@ export function applyEdits(text, edits) {
   return edits.reduce((current, edit) => applyEdit(current, edit), text);
 }
 
-function headReader(cwd) {
+function headReader(cwd, head = 'HEAD') {
   return (file) => {
-    try { return gitRaw(cwd, ['show', `HEAD:${file}`]); } catch { return null; }
+    try { return gitRaw(cwd, ['show', `${head}:${file}`]); } catch { return null; }
   };
 }
 
-/** Run `fn` with a temporary index that starts as HEAD's tree; returns fn's result. */
-function withHeadIndex(cwd, fn) {
+/** Run `fn` with a temporary index that starts as `head`'s tree; returns fn's result. */
+function withHeadIndex(cwd, head, fn) {
   const dir = mkdtempSync(join(tmpdir(), 'regression-proof-'));
   const env = { ...process.env, GIT_INDEX_FILE: join(dir, 'index') };
   try {
-    git(cwd, ['read-tree', 'HEAD'], { env });
+    git(cwd, ['read-tree', head], { env });
     return fn(env, dir);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 }
 
-function recipeTree(cwd, recipe) {
-  const read = headReader(cwd);
-  return withHeadIndex(cwd, (env) => {
+function recipeTree(cwd, head, recipe) {
+  const read = headReader(cwd, head);
+  return withHeadIndex(cwd, head, (env) => {
     for (const [file, edits] of editsByFile(recipe.break)) {
       const text = read(file);
       if (text === null) throw new ProofError(`${file}: not in HEAD`);
-      const mode = git(cwd, ['ls-tree', 'HEAD', '--', file]).split(/\s/)[0];
+      const mode = git(cwd, ['ls-tree', head, '--', file]).split(/\s/)[0];
       const blob = git(cwd, ['hash-object', '-w', '--stdin'], { input: applyEdits(text, edits) });
       git(cwd, ['update-index', '--cacheinfo', `${mode},${blob},${file}`], { env });
     }
@@ -137,30 +137,31 @@ function recipeTree(cwd, recipe) {
   });
 }
 
-function patchTree(cwd, patch) {
-  return withHeadIndex(cwd, (env) => {
+function patchTree(cwd, head, patch) {
+  return withHeadIndex(cwd, head, (env) => {
     try { git(cwd, ['apply', '--cached', resolve(patch)], { env }); }
     catch (error) { throw new ProofError(`${patch} does not apply to HEAD: ${error.stderr?.trim() || error.message}`); }
     return git(cwd, ['write-tree'], { env });
   });
 }
 
-function revertTree(cwd, commit) {
+function revertTree(cwd, head, commit) {
   const parents = git(cwd, ['rev-list', '--parents', '-n', '1', commit]).split(' ').slice(1);
   if (parents.length !== 1) throw new ProofError(`${commit} has ${parents.length} parents; --revert takes one non-merge commit`);
-  const result = spawnSync('git', ['merge-tree', '--write-tree', '--name-only', `--merge-base=${commit}`, 'HEAD', parents[0]], { cwd, encoding: 'utf8' });
+  const result = spawnSync('git', ['merge-tree', '--write-tree', '--name-only', `--merge-base=${commit}`, head, parents[0]], { cwd, encoding: 'utf8' });
   if (result.status !== 0) throw new ProofError(`reverting ${commit} on HEAD conflicts:\n${result.stdout.trim()}`);
   return result.stdout.split('\n')[0].trim();
 }
 
-/** Build the break commit over HEAD from one source; returns its id. */
-export function buildBreak(cwd, source) {
+/** Build the break commit over one pinned `head` commit from one source; returns its id.
+ * Every read uses `head`, so a commit that lands meanwhile (an autosave) cannot mix in. */
+export function buildBreak(cwd, source, head = git(cwd, ['rev-parse', 'HEAD^{commit}'])) {
   let tree;
-  if (source.recipe) tree = recipeTree(cwd, source.recipe);
-  else if (source.patch) tree = patchTree(cwd, source.patch);
-  else tree = revertTree(cwd, source.revert);
-  if (tree === git(cwd, ['rev-parse', 'HEAD^{tree}'])) throw new ProofError('the break changes nothing at HEAD');
-  return git(cwd, ['commit-tree', tree, '-p', 'HEAD', '-m', `regression-proof break: ${source.label}`]);
+  if (source.recipe) tree = recipeTree(cwd, head, source.recipe);
+  else if (source.patch) tree = patchTree(cwd, head, source.patch);
+  else tree = revertTree(cwd, head, source.revert);
+  if (tree === git(cwd, ['rev-parse', `${head}^{tree}`])) throw new ProofError('the break changes nothing at HEAD');
+  return git(cwd, ['commit-tree', tree, '-p', head, '-m', `regression-proof break: ${source.label}`]);
 }
 
 function plural(count, word) { return `${count} ${word}${count === 1 ? '' : 's'}`; }
@@ -255,8 +256,11 @@ export function main(argv, cwd = process.cwd(), out = console) {
   if (options.mode === 'check') return checkAll(root, out);
   const { source, tests } = sourceFor(root, options);
   if (git(root, ['status', '--porcelain', '--untracked-files=no'])) out.error('Note: uncommitted changes are not part of the proof; it runs over committed HEAD.');
-  const breakCommit = buildBreak(root, source);
+  const head = git(root, ['rev-parse', 'HEAD^{commit}']);
+  const breakCommit = buildBreak(root, source, head);
   const { report, status } = runSquealProof(root, breakCommit, tests, options.timeout);
+  // Squeal reads HEAD itself: a commit between the two reads proves a different pair.
+  if (report.head !== head || report.base !== breakCommit) throw new ProofError(`HEAD moved from ${head.slice(0, 12)} to ${String(report.head).slice(0, 12)} during the proof; run it again`);
   out.log(summarize(report, source.label));
   return status;
 }

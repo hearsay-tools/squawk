@@ -33,7 +33,8 @@ function fakeSqueal(t, report, status = 0) {
   const bin = mkdtempSync(join(tmpdir(), 'regression-proof-bin-'));
   t.after(() => rmSync(bin, { recursive: true, force: true }));
   writeFileSync(join(bin, 'report.json'), JSON.stringify(report));
-  writeFileSync(join(bin, 'squeal'), `#!/bin/sh\nprintf '%s\\n' "$@" > "${bin}/args"\ncat "${bin}/report.json"\nexit ${status}\n`);
+  // The report's base reads __BASE__ until the fake fills in the --base it was given.
+  writeFileSync(join(bin, 'squeal'), `#!/bin/sh\nprintf '%s\\n' "$@" > "${bin}/args"\nbase=; prev=\nfor arg in "$@"; do [ "$prev" = --base ] && base=$arg; prev=$arg; done\nsed "s/__BASE__/$base/g" "${bin}/report.json"\nexit ${status}\n`);
   chmodSync(join(bin, 'squeal'), 0o755);
   return { bin, args: () => readFileSync(join(bin, 'args'), 'utf8').trim().split('\n') };
 }
@@ -143,7 +144,7 @@ test('the CLI passes the break and the tests to squeal proof, prints the counts 
   put('src/guard.ts', 'export function guard() {\n  return check();\n}\n');
   git('commit', '-am', 'fix');
   const fix = git('rev-parse', 'HEAD');
-  const report = proofReport('b'.repeat(40), fix, [['src/guard.test.ts', 'proven', ['guard rejects', 'guard rejects twice']]]);
+  const report = proofReport('__BASE__', fix, [['src/guard.test.ts', 'proven', ['guard rejects', 'guard rejects twice']]]);
   const squeal = fakeSqueal(t, report);
   const result = run(cwd, ['--revert', fix, '--test', 'src/guard.test.ts', '--timeout', '90'], squeal.bin);
   assert.equal(result.status, 0, result.stderr);
@@ -153,10 +154,30 @@ test('the CLI passes the break and the tests to squeal proof, prints the counts 
   assert.deepEqual(args.slice(4), ['--case', 'source', '--json', '--timeout', '90']);
   assert.match(result.stdout, /proven: src\/guard\.test\.ts\n {4}red: fail, 2 failing tests; green: pass\n {6}assertion: guard rejects\n/);
   assert.match(result.stdout, /proven 1\/1$/m);
-  const notRed = fakeSqueal(t, proofReport('b'.repeat(40), fix, [['src/guard.test.ts', 'not red']]), 1);
+  const notRed = fakeSqueal(t, proofReport('__BASE__', fix, [['src/guard.test.ts', 'not red']]), 1);
   const second = run(cwd, ['--revert', fix, '--test', 'src/guard.test.ts'], notRed.bin);
   assert.equal(second.status, 1);
   assert.match(second.stdout, /red: pass; green: pass\nproven 0\/1/);
+});
+
+test('the break is built over the pinned head, and a proof over another HEAD is refused', (t) => {
+  const { cwd, git, put } = fixture(t);
+  const pinned = git('rev-parse', 'HEAD');
+  put('src/guard.ts', 'export function guard() {\n  return true; // later\n}\n');
+  put('src/later.ts', 'export {};\n');
+  git('add', '.');
+  git('commit', '-m', 'autosave');
+  const commit = buildBreak(cwd, { recipe, label: recipe.name }, pinned);
+  assert.equal(git('rev-parse', `${commit}^`), pinned);
+  assert.equal(git('show', `${commit}:src/guard.ts`), 'export function guard() {\n  return false;\n}');
+  assert.equal(git('ls-tree', '--name-only', commit, '--', 'src/later.ts'), '');
+  put('src/guard.ts', 'export function guard() {\n  return check();\n}\n');
+  git('commit', '-am', 'fix');
+  const fix = git('rev-parse', 'HEAD');
+  const squeal = fakeSqueal(t, proofReport('__BASE__', 'c'.repeat(40), [['src/guard.test.ts', 'proven', ['x']]]));
+  const moved = run(cwd, ['--revert', fix, '--test', 'src/guard.test.ts'], squeal.bin);
+  assert.equal(moved.status, 2);
+  assert.match(moved.stderr, /HEAD moved from .* during the proof/);
 });
 
 test('the CLI exits 2 without squeal, on a break that does not apply, and on bad arguments', (t) => {
