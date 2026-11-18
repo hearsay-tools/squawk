@@ -441,12 +441,6 @@
     },
     {
       "file": "packages/cezar/src/workflows/run/input-delivery.ts",
-      "target": "packages/cezar/src/core/claude-cli-runner.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/input-delivery.ts",
       "target": "packages/cezar/src/delegation/input.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
@@ -644,34 +638,10 @@
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
     {
-      "file": "packages/cezar/src/workflows/run/steps.ts",
-      "target": "packages/cezar/src/core/claude-cli-runner.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/turn-markers.ts",
-      "target": "packages/cezar/src/core/claude-cli-runner.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/turn-nudges.ts",
-      "target": "packages/cezar/src/core/claude-cli-runner.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
       "file": "packages/cezar/src/workflows/run/turn-nudges.ts",
       "target": "packages/cezar/src/delegation/input.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/turn-settler.ts",
-      "target": "packages/cezar/src/core/claude-cli-runner.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
     },
     {
       "file": "packages/cezar/src/workflows/run/types.ts",
@@ -744,12 +714,6 @@
       "target": "packages/cezar/src/delegation/retry-backoff.ts",
       "count": 1,
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
-    },
-    {
-      "file": "packages/cezar/src/workflows/run/worker-executions.ts",
-      "target": "packages/cezar/src/core/claude-cli-runner.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
     },
     {
       "file": "packages/cezar/src/workflows/run/worker-orphans.ts",

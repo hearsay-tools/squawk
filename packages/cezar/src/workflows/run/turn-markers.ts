@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { HumanWaitEntry } from '@open-mercato/cezar-contract/waits';
 import { defined } from '../../core/defined.ts';
 import { uiAskQuestions, type AskRequest } from '../../core/ask.ts';
-import type { AgentSession } from '../../core/claude-cli-runner.ts';
+import type { AgentSession } from '../../core/agent-runner.ts';
 import type { AgentEvent, RunnerId } from '../../core/agent-runner.ts';
 import { RUNNER_FACTS } from '../../core/runner-facts.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
