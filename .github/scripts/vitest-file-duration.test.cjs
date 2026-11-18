@@ -7,6 +7,10 @@ const { pathToFileURL } = require('node:url');
 const { spawnSync } = require('node:child_process');
 
 const reporterUrl = pathToFileURL(join(__dirname, 'vitest-file-duration.mjs')).href;
+// Failure fixtures must not publish synthetic cap failures to a real Actions job summary or read
+// a real changed-file list; tests that need either set it themselves.
+delete process.env.GITHUB_STEP_SUMMARY;
+delete process.env.VITEST_CHANGED_FILES;
 
 async function reporter(options = {}) {
   const { default: Reporter } = await import(reporterUrl);
@@ -78,9 +82,8 @@ test('the step summary carries the cap line when Actions provides one', async t 
   const dir = mkdtempSync(join(tmpdir(), 'cap-summary-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const summary = join(dir, 'summary.md');
-  const previous = process.env.GITHUB_STEP_SUMMARY;
   process.env.GITHUB_STEP_SUMMARY = summary;
-  t.after(() => { if (previous === undefined) delete process.env.GITHUB_STEP_SUMMARY; else process.env.GITHUB_STEP_SUMMARY = previous; });
+  t.after(() => { delete process.env.GITHUB_STEP_SUMMARY; });
   assertFailure(await completed(61_000), /hooks\.test\.ts/);
   assert.match(readFileSync(summary, 'utf8'), /^### Vitest file duration cap failed\n\n- hooks\.test\.ts: 61000 ms .*hard limit 60000 ms/);
 });
