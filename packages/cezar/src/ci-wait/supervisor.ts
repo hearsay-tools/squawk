@@ -4,6 +4,7 @@ import { githubRequestGate, RequestPermits } from '../server/forge/github-reques
 import { CiGithubError, GithubCiClient, type GithubCheck, type GithubPrMergeState, type GithubPrMetadata } from './github.ts';
 import type { GithubMergeRequest } from './merge-progress.ts';
 import { CiProgressRegistry } from './progress.ts';
+import { QueuedCheckClock } from './queued-checks.ts';
 import { stripTerminal } from './text.ts';
 
 export const CI_WATCHER_LIMIT = 4;
@@ -171,7 +172,7 @@ export class CiWatcherSupervisor {
 
   /** Own one gh checks watcher until it exits, including abort cleanup, while probing PR changes. */
   private async watchChecks(wait: CiWait, signal: AbortSignal, snapshot: () => Promise<CiWaitResult | undefined>,
-    probe: () => Promise<CiWaitResult | undefined>): Promise<CiWaitResult | undefined> {
+    probe: () => Promise<CiWaitResult | undefined>, queuedDeadline: number): Promise<CiWaitResult | undefined> {
     const watchAbort = new AbortController();
     const watchSignal = AbortSignal.any([signal, watchAbort.signal]);
     // Attach a rejection handler immediately; the watcher may finish during a head probe.
@@ -179,10 +180,12 @@ export class CiWatcherSupervisor {
     try {
       while (!signal.aborted) {
         const tick = new AbortController();
-        const next = await Promise.race([watcher, delay(CI_PROBE_MS, { done: false as const },
+        const next = await Promise.race([watcher, delay(Math.min(CI_PROBE_MS, Math.max(0, queuedDeadline - Date.now())), { done: false as const },
           { signal: AbortSignal.any([signal, tick.signal]) }).catch(() => ({ done: false as const }))]);
         tick.abort();
         signal.throwIfAborted();
+        // Reap the owned child before the outer loop takes the confirming snapshot.
+        if (Date.now() >= queuedDeadline) return undefined;
         if (next.done) {
           if ('error' in next) throw next.error;
           const final = await snapshot();
@@ -216,6 +219,7 @@ export class CiWatcherSupervisor {
     let metadata: GithubPrMetadata | undefined;
     const observe = (result: CiWaitResult['outcome'], extra: Partial<Pick<CiWaitResult, 'observedHeadSha' | 'diagnostic'>> = {}) =>
       observation(wait, result, rows, { ...(metadata ? { mergeable: metadata.mergeable, mergeStateStatus: metadata.mergeStateStatus } : {}), ...extra });
+    const queued = new QueuedCheckClock();
     const readMetadata = async () => {
       const value = await this.github.metadata(wait, signal);
       signal.throwIfAborted();
@@ -245,6 +249,9 @@ export class CiWatcherSupervisor {
       this.progress.publish(wait.id, observed);
       const conflicting = conflict();
       if (conflicting) return conflicting;
+      queued.observe(rows);
+      const diagnostic = queued.diagnostic();
+      if (diagnostic) return observe('stuck', {diagnostic});
       const settled = workflowActive ? undefined : outcome(rows);
       return settled ? observe(settled) : undefined;
     };
@@ -272,7 +279,7 @@ export class CiWatcherSupervisor {
             const conflicting = conflict();
             if (!conflicting) this.startProgressRead(wait, signal);
             return conflicting;
-          });
+          }, queued.deadline());
           if (final) return final;
         } catch (error) {
           if (signal.aborted) return stopped();
