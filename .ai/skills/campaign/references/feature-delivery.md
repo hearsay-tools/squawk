@@ -52,6 +52,27 @@ requests to it before the first push that needs them. Open the PR ready, not
 draft. Read auto-merge before opening the PR; owner-merge mode
 requires owner review, and this worker leaves landing to the coordinator/owner.
 
+Review round: after implement-issue's verification passes and before its push
+and PR step, commit and run one review round on the committed head. Run the
+worker spawn command of the pre-PR review rule in your prompt as it is, with a
+new request id. From a worker it starts a shared-workspace worker in this
+worktree. The task names the branch, the head SHA from git rev-parse HEAD and
+the base. It says that no PR exists yet, to read commits with git show and
+never check out, to change no file, and to send the full report to its parent
+and then call cezar_done. Do not edit the worktree while the round runs.
+Register worker wait <id>, end your turn, then run worker collect <id> and
+read changes: only unchanged makes the round valid; on changed or unavailable,
+find the cause and run the round again. Run worker destroy <id> before the
+next spawn: you may have one outstanding worker. A finding scored 5 or more:
+fix it, commit, and run one round on the fix only. Findings scored 4 or lower
+do not block; list them in the PR body (.ai/skills/auto-merge/SKILL.md § Arm it
+only after the review). When the spawn is refused or fails twice, run the same
+prompt in a native subagent of your runner and say so in the PR body.
+worker spawn --help lists the flags; docs/workers.md § Run a review round from
+a worker has the commands. Then send the release request for the reviewed
+head; push and open the PR only after the coordinator's reply. Commit
+attribution follows your runner's own prompt; this brief adds none.
+
 Deliver: <acceptance criteria and evidence checks>.
 Preserve: <existing guarantees>.
 Intentional changes: <approved old-to-new behavior>.

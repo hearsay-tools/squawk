@@ -50,7 +50,10 @@ job. A type error or cheap-gate failure fails the required aggregate even though
 heavy jobs run. `verify` is the only required check.
 
 CI runs no automated reviewer. The local pre-PR review that agents run before they
-open a PR is the only automated review, and CI cannot prove that it ran. The
+open a PR is the only automated review, and CI cannot prove that it ran. A
+root task starts a worker for it. A worker starts one too, in its own worktree, and
+reads the change report of that round
+([Run a review round from a worker](../workers.md#run-a-review-round-from-a-worker)). The
 `Protect main` ruleset requires every review thread resolved, so GitHub refuses
 queue entry while a thread is open.
 

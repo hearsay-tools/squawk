@@ -54,20 +54,47 @@ Before the PR, in this order:
    same-named delegator stays behind; tell the coordinator about any function
    over 20.
 6. <kind section below>
+7. Run git fetch origin main, then npm run prepr; it covers steps 2 and 3.
+   A complexity gate failure blocks the PR. Commit what it changes.
+8. Review round, on the committed head. Run the worker spawn command of the
+   pre-PR review rule in your prompt as it is, with a new request id. From a
+   worker it starts a shared-workspace worker in this worktree. The task
+   names the branch, the head SHA from git rev-parse HEAD and the base. It
+   says that no PR exists yet, to read commits with git show and never check
+   out, to change no file, and to send the full report to its parent and then
+   call cezar_done. worker spawn --help lists the flags; docs/workers.md § Run
+   a review round from a worker has the commands.
+   Do not edit the worktree while the round runs. Register worker wait <id>,
+   end your turn, then run worker collect <id> and read changes. Only
+   unchanged makes the round valid. On changed or unavailable, find the
+   cause and run the round again.
+   Run worker destroy <id> before the next spawn: you may have one outstanding
+   worker.
+   A finding scored 5 or more: fix it, commit, and run one round on the fix
+   only. Findings scored 4 or lower do not block; list them in the PR body
+   (.ai/skills/auto-merge/SKILL.md § Arm it only after the review).
+   When the spawn is refused (workers off for the task, the limit, a runner
+   that is not available) or fails twice: run the same prompt in a native
+   subagent of your runner, and say in the PR body that the round ran that way.
+9. Release request: send the coordinator the reviewed head from
+   git rev-parse HEAD, the round's result and the readiness evidence. Push
+   and open the PR only after its reply for that head (PR-opening gate above).
 Read auto-merge before opening the PR. The campaign's owner-merge control
 requires owner review; leave automatic merging off in that case. Workers
 leave the merge action to the coordinator/owner under the recorded authority.
-Run git fetch origin main, then npm run prepr before the push; it covers steps 2 and 3. Repeat the steps
-after any later code change. Leave full suites to Squeal and CI. A complexity
-gate failure blocks the PR.
+Repeat the steps after any later code change; step 8 then covers the new
+commits only. Leave full suites to Squeal and CI. Commit attribution follows
+your runner's own prompt; this brief adds none.
 
-PR: git push, then gh pr create --base main (ready, not draft). Title in Conventional
-Commits, for example refactor(<area>): <what moved>. Write the body in
+PR, after the coordinator's release: git push, then gh pr create --base main
+(ready, not draft). Title in Conventional Commits, for example
+refactor(<area>): <what moved>. Write the body in
 .ai/qa/<N>/pr-body.md with: Closes hearsay-tools/cezarion#<N>; Summary (at most
 3 sentences); Changed names (against the issue's list, and the reason for every
 extra); Seams kept (each with the test that needs it); Orders preserved (for any
 non-verbatim change); Verification (command and result lines); Left undone (or
-"Nothing"); Merge authority (copy the authority above).
+"Nothing"); Review round (the reviewed head, how the round ran, and each
+finding that does not block); Merge authority (copy the authority above).
 
 After the PR: send the coordinator a progress message (PR, head SHA, changed
 names, length pins, out-of-scope findings) and register one PR wait. Fix a red
