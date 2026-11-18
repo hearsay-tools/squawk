@@ -57,21 +57,29 @@ and PR step, commit and run one review round on the committed head. Run the
 worker spawn command of the pre-PR review rule in your prompt as it is, with a
 new request id. From a worker it starts a shared-workspace worker in this
 worktree. The task names the branch, the head SHA from git rev-parse HEAD and
-the base. It says that no PR exists yet, to read commits with git show and
-never check out, to change no file, and to send the full report to its parent
-and then call cezar_done. Do not edit the worktree while the round runs.
-Register worker wait <id>, end your turn, then run worker collect <id> and
-read changes: only unchanged makes the round valid; on changed or unavailable,
-find the cause and run the round again. Run worker destroy <id> before the
-next spawn: you may have one outstanding worker. A finding scored 5 or more:
-fix it, commit, and run one round on the fix only. Findings scored 4 or lower
-do not block; list them in the PR body (.ai/skills/auto-merge/SKILL.md § Arm it
-only after the review). When the spawn is refused or fails twice, run the same
-prompt in a native subagent of your runner and say so in the PR body.
-worker spawn --help lists the flags; docs/workers.md § Run a review round from
-a worker has the commands. Then send the release request for the reviewed
-head; push and open the PR only after the coordinator's reply. Commit
-attribution follows your runner's own prompt; this brief adds none.
+the base. It names the PR when one exists; else it says that none exists yet.
+It says to read commits with git show and never check out, to change no file,
+and to send the full report to its parent and then call cezar_done. Do not
+edit the worktree while the round runs. Register worker wait <id> and end your
+turn. A wake on the deadline or on a message is not the end of the round:
+register the wait again.
+A round is valid only when all three hold: worker collect <id> says settled
+true and partial false; the reviewer's full report has arrived as a message
+(the collected summary is not the report); and changes says unchanged. A
+reviewer that failed, was cancelled, or settled with no report, and a round
+with changes changed or unavailable, is not a round: run worker destroy <id>
+and run the round again. Run worker destroy <id> before every next spawn: you
+may have one outstanding worker.
+A finding scored 5 or more: fix it, commit, and run one round on the fix only.
+Findings scored 4 or lower do not block; list them in the PR body
+(.ai/skills/auto-merge/SKILL.md § Arm it only after the review). When the
+spawn is refused or the round fails twice, run the same prompt in a native
+subagent of your runner and say so in the PR body. docs/workers.md § Run a
+review round from a worker has the commands and the detail. Then send the
+release request for the reviewed head; push and open the PR only after the
+coordinator's reply. Run the round again on the new commits after any later
+code change. Commit attribution follows your runner's own prompt; this brief
+adds none.
 
 Deliver: <acceptance criteria and evidence checks>.
 Preserve: <existing guarantees>.

@@ -121,29 +121,34 @@ A worker reviews its own committed change before it pushes: it starts one worker
    hsq worker spawn --baseline parent-head --request-id <UUID> --runner <runner> --model <model> --effort <effort> --context-file <review-prompt> '<task>'
    ```
 
-   The task text names the branch, the head SHA from `git rev-parse HEAD` and the base. It says that no pull request exists yet, to read commits with `git show` and never check out, to change no file, and to send the full report to its parent and then call `cezar_done`. From a worker the command starts a shared-workspace worker in the caller's worktree, and `--baseline parent-head` changes nothing there ([A worker that starts a worker](#a-worker-that-starts-a-worker)).
+   The task text names the branch, the head SHA from `git rev-parse HEAD` and the base. It names the pull request when one exists; else it says that none exists yet. It says to read commits with `git show` and never check out, to change no file, and to send the full report to its parent and then call `cezar_done`. From a worker the command starts a shared-workspace worker in the caller's worktree, and `--baseline parent-head` changes nothing there ([A worker that starts a worker](#a-worker-that-starts-a-worker)).
 2. Register the wait and end the turn. Do not edit the worktree while the round runs.
 
    ```sh
    hsq worker wait <worker-id> --mode one --timeout-seconds <1-7200>
    ```
 
-3. Collect the result and read `changes` ([Change report](#shared-workspace)).
+   The wait also ends on its deadline, and a message wakes the turn without closing the wait. Neither is the end of the round: register the wait again, or end the turn again.
+3. Collect the result.
 
    ```sh
    hsq worker collect <worker-id>
    ```
 
-   - `unchanged`: the worktree stayed as it was at the committed head. The round is valid.
-   - `changed`: a file, the index, HEAD or the branch moved during the round. The round is not valid. Read `paths`, find the cause and run the round again.
-   - `unavailable`: Squawk has no comparison, for example after a crashed session. The round is not valid. Run it again.
+   A round is valid only when all three hold:
+
+   - **The worker has settled.** The result says `"settled": true` and `"partial": false`. A result of a running worker is partial, and its `changes` compares with the directory at that moment: wait again.
+   - **The full report has arrived.** The worker sends it as a message to its parent before `cezar_done`. The collected `summary` holds at most the last assistant text, cut at 4,000 characters; it is not the report.
+   - **`changes` says `unchanged`** ([Change report](#shared-workspace)). `changed` means that a file, the index, HEAD or the branch moved during the round: read `paths` and find the cause. `unavailable` means that Squawk has no comparison, for example after a crashed session.
+
+   A worker that failed, was cancelled, or settled with no report, and a round whose `changes` is `changed` or `unavailable`, is not a round: destroy the worker and run the round again.
 4. Destroy the worker. A worker may have one outstanding worker, so the next round starts only after this.
 
    ```sh
    hsq worker destroy <worker-id>
    ```
 
-After a fix, commit and run the next round on the fix only. When the spawn is refused (**Allow Squawk workers** is off for the task, the limit is reached, the runner is not available) or fails twice, run the same prompt in a native subagent and say in the pull request body that the round ran that way.
+After a fix, commit and run the next round on the fix only. When the spawn is refused (**Allow Squawk workers** is off for the task, the limit is reached, the runner is not available) or the round fails twice, run the same prompt in a native subagent and say in the pull request body that the round ran that way.
 
 ### What destroy stops
 
