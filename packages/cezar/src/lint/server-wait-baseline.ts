@@ -40,7 +40,7 @@ export interface Baseline {
 
 export const baselineTail =
   'Keyed by file, rule and the line text so a moved line does not churn it. ' +
-  'This list only shrinks: fix a site, then run TEST_WAIT_DISCIPLINE_UPDATE=1 npm run lint. ' +
+  'This list only shrinks: fix a site, and npm run lint shrinks it; commit this file then. ' +
   'Rules: AGENTS.md § Validation.';
 
 export const baselines: readonly Baseline[] = [

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -41,20 +41,20 @@ describe('wait discipline runner guarantees on synthetic trees', () => {
     for (const file of ['test-wait-discipline.test.ts', '__fixtures__/a.test.ts', 'node_modules/a.test.ts']) {
       writeFileSync(join(root, file), 'const broken = "never closed');
     }
-    expect(serverWaitProblems(false, root, lists)).toEqual([]);
+    expect(serverWaitProblems('report', root, lists)).toEqual([]);
     rmSync(join(root, 'core/harness-parity.testkit.ts'));
-    expect(serverWaitProblems(false, root, lists)).toEqual([expect.stringContaining('scan scope changed')]);
+    expect(serverWaitProblems('report', root, lists)).toEqual([expect.stringContaining('scan scope changed')]);
   });
 
-  it.each([0, 1])('reports stale server baseline %i and only lowers it in update mode', index => {
+  it.each([0, 1])('reports stale server baseline %i and only lowers it outside report mode', index => {
     const { root, lists } = fixture();
     const rule = index === 0 ? 'sleep' : 'poll-deadline';
     writeFileSync(lists[index]!.path, JSON.stringify({ sites: [{ ...entry, rule }] }));
-    expect(serverWaitProblems(false, root, lists)).toEqual([
-      expect.stringMatching(/baseline\.json:1:1 cez\/test-wait-discipline: stale entry .+TEST_WAIT_DISCIPLINE_UPDATE=1 npm run lint/),
+    expect(serverWaitProblems('report', root, lists)).toEqual([
+      expect.stringMatching(/baseline\.json:1:1 cez\/test-wait-discipline: stale entry .+run npm run lint locally, which shrinks .+, and commit it$/),
     ]);
     writeFileSync(join(root, 'new.test.ts'), 'await sleep(5);\nwhile (!ready) await sleep(5);');
-    expect(serverWaitProblems(true, root, lists)).toEqual([]);
+    expect(serverWaitProblems('write', root, lists)).toEqual([]);
     expect(JSON.parse(readFileSync(lists[index]!.path, 'utf8')).sites).toEqual([]);
   });
 
@@ -66,8 +66,8 @@ describe('wait discipline runner guarantees on synthetic trees', () => {
     writeFileSync(lists[0]!.path, JSON.stringify({ sites: [sleep('a.test.ts', 'await sleep(5);', 3), sleep('b.test.ts', 'await delay(5);', 1), sleep('gone.test.ts', 'await pause(5);', 1)] }));
     const whole = compareToBaseline(tally(scanSuite(root).filter(site => lists[0]!.rules.includes(site.rule))), readBaseline(lists[0]!.path)).stale;
     expect(whole.map(entry => entry.file)).toEqual(['a.test.ts', 'gone.test.ts']);
-    expect(serverWaitProblems(false, root, lists)).toEqual(whole.map(entry => expect.stringContaining(`stale entry ${entry.file} [${entry.rule}] ×${entry.count}`)));
-    expect(serverWaitProblems(true, root, lists)).toEqual([]);
+    expect(serverWaitProblems('report', root, lists)).toEqual(whole.map(entry => expect.stringContaining(`stale entry ${entry.file} [${entry.rule}] ×${entry.count}`)));
+    expect(serverWaitProblems('write', root, lists)).toEqual([]);
     expect(readBaseline(lists[0]!.path)).toEqual([sleep('a.test.ts', 'await sleep(5);', 2), sleep('b.test.ts', 'await delay(5);', 1)]);
   });
 
@@ -76,27 +76,54 @@ describe('wait discipline runner guarantees on synthetic trees', () => {
     writeFileSync(join(root, 'a.test.ts'), 'await sleep(5);\n');
     writeFileSync(join(root, 'b.test.ts'), 'while (!ready()) await sleep(5);\n');
     for (const baseline of lists) rmSync(baseline.path);
-    expect(serverWaitProblems(true, root, lists)).toEqual([]);
+    expect(serverWaitProblems('write', root, lists)).toEqual([]);
     expect(readBaseline(lists[0]!.path)).toEqual([{ file: 'a.test.ts', rule: 'sleep', site: 'await sleep(5);', count: 1 }]);
     expect(readBaseline(lists[1]!.path)).toEqual([{ file: 'b.test.ts', rule: 'poll-deadline', site: 'while (!ready()) await sleep(5);', count: 1 }]);
     const { root: cockpit } = fixture();
     mkdirSync(join(cockpit, 'routes'));
     writeFileSync(join(cockpit, 'routes/a.test.tsx'), 'await sleep(5)\n');
     const path = join(cockpit, 'unit.baseline.json');
-    expect(unitWaitProblems(true, cockpit, path)).toEqual([]);
+    expect(unitWaitProblems('write', cockpit, path)).toEqual([]);
     expect(readBaseline(path)).toEqual(tally(scanTree(cockpit)));
     expect(readBaseline(path)).toEqual([{ file: 'routes/a.test.tsx', rule: 'sleep', site: 'await sleep(5)', count: 1 }]);
   });
 
-  it('reports a stale cockpit entry and only lowers it in update mode', () => {
+  it('reports a stale cockpit entry and only lowers it outside report mode', () => {
     const { root } = fixture();
     const path = join(root, 'unit.baseline.json');
     writeFileSync(path, JSON.stringify({ sites: [entry] }));
-    expect(unitWaitProblems(false, root, path)).toEqual([
-      expect.stringMatching(/unit\.baseline\.json:1:1 cez\/unit-wait-discipline: stale entry .+UNIT_WAIT_DISCIPLINE_UPDATE=1 npm run lint/),
+    expect(unitWaitProblems('report', root, path)).toEqual([
+      expect.stringMatching(/unit\.baseline\.json:1:1 cez\/unit-wait-discipline: stale entry .+run npm run lint locally, which shrinks .+, and commit it$/),
     ]);
     writeFileSync(join(root, 'new.test.ts'), 'await sleep(5);');
-    expect(unitWaitProblems(true, root, path)).toEqual([]);
+    expect(unitWaitProblems('write', root, path)).toEqual([]);
     expect(JSON.parse(readFileSync(path, 'utf8')).sites).toEqual([]);
+  });
+
+  it('lowers a stale entry on a local run without the variable, and says so', () => {
+    const { root, lists } = fixture();
+    writeFileSync(lists[0]!.path, JSON.stringify({ sites: [entry] }));
+    const path = join(root, 'unit.baseline.json');
+    writeFileSync(path, JSON.stringify({ sites: [entry] }));
+    const lowered: string[] = [];
+    expect(serverWaitProblems('lower', root, lists, line => lowered.push(line))).toEqual([]);
+    expect(unitWaitProblems('lower', root, path, line => lowered.push(line))).toEqual([]);
+    expect(readBaseline(lists[0]!.path)).toEqual([]);
+    expect(readBaseline(path)).toEqual([]);
+    expect(lowered).toEqual([
+      expect.stringMatching(/0\.baseline\.json: 1 stale entry lowered or dropped\. Commit the baseline$/),
+      expect.stringMatching(/unit\.baseline\.json: 1 stale entry lowered or dropped\. Commit the baseline$/),
+    ]);
+  });
+
+  it('leaves a current baseline untouched and a missing one unwritten on a local run', () => {
+    const { root, lists } = fixture();
+    writeFileSync(join(root, 'a.test.ts'), 'await sleep(5);\n');
+    rmSync(lists[0]!.path);
+    const lowered: string[] = [];
+    expect(serverWaitProblems('lower', root, lists, line => lowered.push(line))).toEqual([]);
+    expect(existsSync(lists[0]!.path)).toBe(false);
+    expect(readFileSync(lists[1]!.path, 'utf8')).toBe(JSON.stringify({ sites: [] }));
+    expect(lowered).toEqual([]);
   });
 });
