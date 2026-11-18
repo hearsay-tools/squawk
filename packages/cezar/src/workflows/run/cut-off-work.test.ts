@@ -57,7 +57,18 @@ describe('recordCutOffWork', () => {
   it('a first restart with no checkpoint still names the work; an existing name list stays', () => {
     const log = logOf([turn, tool('prepr', 'running')]);
     expect(withCutOff(log, 'run', { restarted: true })).toEqual({ restarted: true, cutOff: { tools: ['Bash: Ran prepr'] } });
-    expect(withCutOff(logOf([turn, tool('x', 'running')]), 'run', { restarted: true, cutOff: { tools: ['kept'] } })).toEqual({ restarted: true, cutOff: { tools: ['kept'] } });
+    expect(withCutOff(logOf([turn, tool('x', 'completed')]), 'run', { restarted: true, cutOff: { tools: ['kept'] } })).toEqual({ restarted: true, cutOff: { tools: ['kept'] } });
     expect(withCutOff(logOf([turn, tool('x', 'running')]), 'run', {})).toEqual({});
   });
+});
+
+it('a second crash in the resumed turn replaces the names the checkpoint still holds', () => {
+  const events: unknown[] = [turn, tool('a', 'running')];
+  const log = { readEvents: () => [...events], appendEvent: (_runId: string, event: { type: string }) => { events.push(event); return event; } };
+  const first = withCutOff(log, 'run', { restarted: true as const });
+  expect(first.cutOff).toEqual({ tools: ['Bash: Ran a'] });
+  // The same restart's second call finds the items closed and keeps the names.
+  expect(withCutOff(log, 'run', first)).toEqual(first);
+  events.push(turn, tool('b', 'running'));
+  expect(withCutOff(log, 'run', first).cutOff).toEqual({ tools: ['Bash: Ran b'] });
 });

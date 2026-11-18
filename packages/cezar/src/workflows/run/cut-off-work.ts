@@ -83,9 +83,14 @@ export function cutOffSentence(work: CutOffWork | undefined): string | undefined
   return parts.join(' ');
 }
 
-/** A restart's resume context with the cut-off work it has not named yet. */
+/**
+ * A restart's resume context with the work this restart cut off. Every restart scans, since a
+ * resumed turn can start new work and crash again before its checkpoint clears; found work replaces
+ * the earlier names. A scan that finds nothing (closed already, as on the second call within one
+ * restart) keeps them.
+ */
 export function withCutOff<T extends { restarted?: true | undefined; cutOff?: CutOffWork | undefined }>(log: CutOffLog, runId: string, context: T): T {
-  if (!context.restarted || context.cutOff) return context;
+  if (!context.restarted) return context;
   const cutOff = recordCutOffWork(log, runId);
   return cutOff ? { ...context, cutOff } : context;
 }
