@@ -1,7 +1,8 @@
 // Squawk's no-wait nudge (hearsay-tools/cezarion#1234). Every native mock answers it the way an agent
 // should, by rewriting it into the mocks' own scenario prompts after the prompt is recorded: it
 // calls cezar_ask with a card (`mock:cezar-tool`). CEZ_MOCK_NUDGE_REPLY=plain answers in plain text instead, so a
-// test can reach the no-wait fallback. CEZ_MOCK_COMPLETION_REPLY, when set, is the mock prompt that
+// test can reach the no-wait fallback. CEZ_MOCK_NUDGE_REPLY=done calls cezar_done, so a resumed session, whose
+// prompt no longer repeats the task (hearsay-tools/squawk#3882), can still finish. CEZ_MOCK_COMPLETION_REPLY, when set, is the mock prompt that
 // answers Squawk's completion refusal nudge (hearsay-tools/cezarion#1301), so a test can choose the
 // reply turn; unset, the refusal gets the mocks' ordinary reply. `mock:ack-only` is a reply every
 // native mock understands: the harness acknowledges the prompt on its own wire (and reports it read
@@ -31,6 +32,7 @@ export function answerNudge(prompt) {
   if (completion) return completion;
   if (!prompt.includes(NUDGE) || silentTailOpened()) return prompt;
   if (process.env.CEZ_MOCK_NUDGE_REPLY === 'plain') return messages(['Nothing more to add.']);
+  if (process.env.CEZ_MOCK_NUDGE_REPLY === 'done') return 'mock:cezar-done the task is complete';
   return `mock:cezar-tool cezar_ask ${base64url(JSON.stringify({ context: CONTEXT, questions: QUESTIONS }))} mock:then ${base64url('I asked how to continue.')}`;
 }
 

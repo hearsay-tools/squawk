@@ -34,12 +34,12 @@ import {
 import {
   automationIdOf,
   stepStateSchema as contractStepStateSchema,
-  queuedMessageSchema,
   toRunSummary,
   runRecordSchema as contractRunRecordSchema,
   runPullRequestSchema,
   mergedPullRequestSchema,
 } from '@open-mercato/cezar-contract/runs';
+import { queuedMessageSchema } from '@open-mercato/cezar-contract/queued-messages';
 import { previewServerSchema } from '@open-mercato/cezar-contract/preview';
 import {
   isUsageLimitHold,

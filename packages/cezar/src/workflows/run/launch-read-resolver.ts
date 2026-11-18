@@ -29,7 +29,7 @@ import { QUICK_TASK_WORKFLOW, chainStepNote, stepKind, stepToolGrant, type Workf
 import { agentInputOutcomeText } from './input-batch.ts';
 import type { LaunchContextHost } from './launch-context.ts';
 import type { OpeningHost } from './opening.ts';
-import { applyTemplate, resolveExtraSystemPrompt } from './prompts.ts';
+import { applyTemplate, resolveExtraSystemPrompt, resumeNotice } from './prompts.ts';
 import type { PendingJob } from './run-line.ts';
 import type { QueuedRevivalHost } from './queued-revival.ts';
 import type { ContinuationOpening, Execution, PendingContinuation, RunModuleContext, StartRunInput, StepModel, StepProfile } from './types.ts';
@@ -255,9 +255,10 @@ function hydrateQueuedContinuation(context: RunModuleContext, readAttachments: A
       return { ...continuation, persistedImages: [], persistedAttachments: [] };
     }
     const stack = (run.queuedMessages ?? []).filter(message => !message.replayAfterOpen);
-    const amendedTask = foldQueuedTask(run.task, stack);
-    const openingPrompt = run.continuationMessage?.text ?? continuation.prompt;
-    const prompt = queuedContinuationPrompt(openingPrompt, amendedTask);
+    const checkpoint = run.continuationMessage;
+    // The session already holds the task it started with; repeat it only after an edit.
+    const editedTask = checkpoint?.task !== undefined && run.task.trim() !== checkpoint.task.trim() ? run.task : '';
+    const prompt = queuedContinuationPrompt(checkpoint?.text ?? continuation.prompt, editedTask, stack);
     const persisted = readAttachments(
       runId,
       stack.flatMap((message) => message.images ?? []),
@@ -307,12 +308,20 @@ function readPersistedAttachments(context: RunModuleContext,
   }
 
 function foldQueuedTask(task: string, stack: QueuedMessage[]): string {
-  return [task, ...stack.map(message => message.text)]
-    .map(part => part.trim()).filter(part => part.length > 0).join('\n\n');
+  return joinedParts([task, ...stack.map(message => message.text)]);
 }
 
-function queuedContinuationPrompt(openingPrompt: string, amendedTask: string): string {
-  return amendedTask ? `${openingPrompt}\n\nCurrent task and queued updates:\n\n${amendedTask}` : openingPrompt;
+function queuedContinuationPrompt(openingPrompt: string, editedTask: string, stack: QueuedMessage[]): string {
+  const messages = joinedParts(stack.map(message => message.text));
+  return [
+    openingPrompt,
+    ...(editedTask.trim() ? [`The task was edited while it waited. Current task:\n\n${editedTask.trim()}`] : []),
+    ...(messages ? [`Messages sent while this task waited:\n\n${messages}`] : []),
+  ].join('\n\n');
+}
+
+function joinedParts(parts: string[]): string {
+  return parts.map(part => part.trim()).filter(part => part.length > 0).join('\n\n');
 }
 
 
@@ -348,6 +357,9 @@ function continuationOpening(
     imageCount: openingImages.filter((b) => b.type === 'image').length,
     ...(attachments.length ? { images: attachments.map((saved) => saved.url) } : {}),
   });
+  // Delivery puts this notice in front of the prompt; show the human what the agent receives.
+  const notice = resumeNotice(checkpoint);
+  if (notice) store.appendEvent(runId, { type: 'note', stepId, message: `Sent to the agent with this Continue: ${notice}` });
   return { prompt, checkpoint, ...(answerSource ? { answerSource } : {}), openingImages, attachments };
 }
 

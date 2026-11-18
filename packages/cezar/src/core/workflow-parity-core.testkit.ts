@@ -213,16 +213,6 @@ function trackTurnBookkeeping(manager: RunManager): () => Promise<void> {
 
 /** An owned worker, using real disk/Git state and the native wire mocks for `RUNNER_IDS`. */
 /**
- * A parent's answer reopens a closed worker session through a continuation that waits for capacity,
- * and that continuation carries the current task (`hydrateQueuedContinuation`). A native mock picks
- * its scenario from anywhere in the prompt, so a task such as `mock:ask` would replace the answer's
- * own scenario. Call this before such an answer: the task keeps its meaning and loses the marker.
- */
-export function withoutTaskScenario(store: RunStore, runId: string): void {
-  store.updateRun(runId, { task: 'worker task' });
-}
-
-/**
  * The owning parent answers the worker's pending question (hearsay-tools/cezarion#2410): the reply is
  * committed with its outcome as `service.send` does, and goes to the worker through the answer seam a
  * human answer used before. A worker's question has one addressee, so no human answers it.

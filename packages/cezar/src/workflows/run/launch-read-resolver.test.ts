@@ -69,10 +69,31 @@ it('reads replacement bytes and omits removed persisted attachments at hydration
 });
 
 it('refreshes queued Continue text without replacing accepted session or backend pins', () => {
-  store.updateRun(id, { task: 'edited task', queuedMessages: [message('amended')], continuationMessage: { ...message('edited opening'), id: 'continued' } });
+  store.updateRun(id, { task: 'edited task', queuedMessages: [message('amended')], continuationMessage: { ...message('edited opening'), id: 'continued', task: 'original' } });
   const accepted = { stepId: 'continued', sessionId: 'accepted-session', backend: 'codex' as const, prompt: 'old opening', images: [], lineJoinedAt: 12 };
   const hydrated = atContinue.hydrateQueuedContinuation(context, attachments, id, accepted);
-  expect(hydrated).toEqual({ ...accepted, prompt: 'edited opening\n\nCurrent task and queued updates:\n\nedited task\n\namended', persistedImages: [], persistedAttachments: [] });
+  expect(hydrated).toEqual({ ...accepted, prompt: 'edited opening\n\nThe task was edited while it waited. Current task:\n\nedited task\n\nMessages sent while this task waited:\n\namended', persistedImages: [], persistedAttachments: [] });
+});
+
+// hearsay-tools/squawk#3882: the session already holds its first prompt.
+it.each([
+  ['no queued message and no edit', 'original', [], 'Continue.'],
+  ['a legacy checkpoint with no recorded task', undefined, [], 'Continue.'],
+  ['queued messages in order', 'original', [message('first'), { ...message('second'), id: 'q2' }, { ...message('replayed'), id: 'q3', replayAfterOpen: true as const }],
+    'Continue.\n\nMessages sent while this task waited:\n\nfirst\n\nsecond'],
+] as const)('delivers a queued Continue without the first prompt: %s', (_case, task, queued, expected) => {
+  store.updateRun(id, { queuedMessages: [...queued], continuationMessage: { ...message('Continue.'), id: 'continued', ...(task === undefined ? {} : { task }) } });
+  const accepted = { stepId: 'continued', sessionId: 'session', backend: 'codex' as const, prompt: 'Continue.', images: [], lineJoinedAt: 1 };
+  expect(atContinue.hydrateQueuedContinuation(context, attachments, id, accepted).prompt).toBe(expected);
+});
+
+it('delivers queued message attachments with a queued Continue', () => {
+  const url = imageFile('queued.png', 'bytes');
+  store.updateRun(id, { queuedMessages: [message('see this', [url])], continuationMessage: { ...message('Continue.'), id: 'continued', task: 'original' } });
+  const hydrated = atContinue.hydrateQueuedContinuation(context, attachments, id, { stepId: 'continued', sessionId: 'session', backend: 'codex' as const, prompt: 'Continue.', images: [], lineJoinedAt: 1 });
+  expect(hydrated.prompt).toBe('Continue.\n\nMessages sent while this task waited:\n\nsee this');
+  expect(hydrated.persistedAttachments.map(saved => saved.url)).toEqual([url]);
+  expect(hydrated.persistedImages).toHaveLength(1);
 });
 
 it('does not read checkpoint attachments during Continue hydration', () => {
