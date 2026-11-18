@@ -3,6 +3,7 @@
 //
 //   node scripts/readers.mjs <name…>              every reader of each name, grouped by tree
 //   node scripts/readers.mjs --runner <id> [name…]  also the saved-run readers of a runner id
+//   node scripts/readers.mjs -- --old-flag          a name that starts with `-` follows `--`
 //
 // It searches every tracked and untracked, not ignored, file of the checkout with `git grep`,
 // so no tree is left out by hand. A name that holds a `/` is a path: the sweep also searches
@@ -78,7 +79,8 @@ export function specifierOf(name) {
 }
 
 function grep(root, patterns) {
-  const args = ['grep', '-n', '-I', '-F', '--untracked', ...patterns.flatMap(pattern => ['-e', pattern]), '--', '.'];
+  // --no-color and -z keep the output parseable whatever the user's Git config or file names.
+  const args = ['grep', '--no-color', '-z', '-n', '-I', '-F', '--untracked', ...patterns.flatMap(pattern => ['-e', pattern]), '--', '.'];
   try {
     return execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
   } catch (error) {
@@ -89,8 +91,8 @@ function grep(root, patterns) {
 
 function parseHits(output) {
   return output.split('\n').filter(Boolean).map(line => {
-    const match = /^(.*?):(\d+):(.*)$/.exec(line);
-    return match ? { file: match[1], line: Number(match[2]), text: match[3].trim() } : undefined;
+    const [file, number, ...text] = line.split('\0');
+    return file && /^\d+$/.test(number ?? '') ? { file, line: Number(number), text: text.join('\0').trim() } : undefined;
   }).filter(Boolean);
 }
 
@@ -148,7 +150,10 @@ export function parseArgs(argv) {
   let runner;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === '--runner') {
+    if (arg === '--') {
+      names.push(...argv.slice(index + 1));
+      break;
+    } else if (arg === '--runner') {
       runner = argv[index + 1];
       index += 1;
       if (!runner || runner.startsWith('-')) throw new Error('--runner needs a runner id');

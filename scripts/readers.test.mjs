@@ -97,6 +97,7 @@ test('the command rejects a call without names and reports from the repository r
   assert.throws(() => parseArgs([]), /Usage/);
   assert.throws(() => parseArgs(['--runner']), /runner id/);
   assert.throws(() => parseArgs(['--names']), /Unknown option/);
+  assert.deepEqual(parseArgs(['--runner', 'retired', '--', '--force', '-x']), { names: ['--force', '-x'], runner: 'retired' });
 
   const root = fixtureRepo(t, { 'packages/web/scripts/fixture-server.mjs': 'new ProjectContexts();\n' });
   mkdirSync(join(root, 'packages/cezar/src'), { recursive: true });
@@ -105,4 +106,12 @@ test('the command rejects a call without names and reports from the repository r
   assert.match(run.stdout, /^packages\/web\/scripts: 1$/m);
   assert.match(run.stdout, /^ {2}packages\/web\/scripts\/fixture-server\.mjs:1: new ProjectContexts\(\);$/m);
   assert.equal(spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8' }).status, 2);
+});
+
+test('a sweep reads Git output the same under a colouring config and a file name with a colon', (t) => {
+  const root = fixtureRepo(t, { 'scripts/a:1:b.mjs': 'removedExport();\n' });
+  const env = { ...process.env, GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'color.grep', GIT_CONFIG_VALUE_0: 'always' };
+  const run = spawnSync(process.execPath, [script, 'removedExport'], { cwd: root, env, encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /^ {2}scripts\/a:1:b\.mjs:1: removedExport\(\);$/m);
 });
