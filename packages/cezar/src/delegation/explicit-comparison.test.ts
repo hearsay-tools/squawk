@@ -49,7 +49,11 @@ it('keeps owned-worker comparison explicit from spawn through collection, integr
   // Choosing a commit alone does not erase the other worker's result.
   expect(existsSync(workers[1]!.path)).toBe(true);
   for (const worker of workers) {
-    expect(await f.service.destroy(f.caller, { workerId: worker.id })).toMatchObject({ state: 'complete', remaining: [] });
+    // A cherry-pick copies the commit, so no other ref reaches either worker's commit: a plain
+    // destroy names it, and the parent that chose discards it (hearsay-tools/squawk#3553).
+    expect(await f.service.destroy(f.caller, { workerId: worker.id })).toMatchObject({ state: 'incomplete', work: { uncommittedFiles: 0, commits: 1 } });
+    expect(existsSync(worker.path)).toBe(true);
+    expect(await f.service.destroy(f.caller, { workerId: worker.id }, { discardWork: true })).toMatchObject({ state: 'complete', remaining: [] });
     expect(existsSync(worker.path)).toBe(false);
     expect(f.store.getRun(worker.id)).toBeDefined();
   }

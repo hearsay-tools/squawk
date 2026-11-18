@@ -235,8 +235,8 @@ export class WorkerCleanup {
       ? { ...result, error: `${result.error}; ${productName('Cezar')} retries automatically at ${new Date(due).toISOString()}` } : result;
   }
   /** One full destroy attempt; the caller holds the worker's serialization key. A manual attempt
-   * clears the run's `destroyRetry`, which resets the backoff; a completed destroy drops it. A
-   * manual attempt sets whether work may be deleted; a scheduled one keeps what the last set. */
+   * clears the run's `destroyRetry`, which resets the backoff; a completed destroy drops it. Once
+   * an explicit attempt allows the discard of work, every later attempt of that destroy keeps it. */
   private async destroyAttempt(project: DelegationProject, workerId: string, check: () => RunRecord, mode: 'manual' | 'scheduled',
     startedAt: number, options: DestroyOptions = {}): Promise<WorkerDestroyResult> {
     const assertAttached = () => {
@@ -257,7 +257,7 @@ export class WorkerCleanup {
     const kind = workspaceKind(workspace);
     const requestedAt = worker.delegation.destroy?.requestedAt ?? new Date().toISOString();
     const resources = (worker.delegation.destroy?.remaining ?? kind.destroyResources).filter((resource): resource is WorkspaceResource => resource !== 'process');
-    const discardWork = mode === 'manual' ? options.discardWork === true : worker.delegation.destroy?.discardWork === true;
+    const discardWork = options.discardWork === true || worker.delegation.destroy?.discardWork === true;
     if (mode === 'manual' && !discardWork) {
       // hearsay-tools/squawk#3553: work the destroy would delete refuses before anything stops, so
       // the parent can still resume or collect the worker. A failed read leaves the decision to the

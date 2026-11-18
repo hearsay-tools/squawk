@@ -290,7 +290,8 @@ it.each(RESTART_RUNNERS.r47)('%s settles a same-boot crash as gone once recorded
       const timer = setTimeout(() => release(), 15_000);
       const locks = vi.spyOn(worktreeLock, 'withWorktreeMutation');
       try {
-        expect(await service.destroyForHuman('project', w.id)).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'], error: expect.stringMatching(/lock.*busy|lock.*timed out/i) });
+        // The holders write `holder-writes` into the worktree: uncommitted work these destroys discard (hearsay-tools/squawk#3553).
+        expect(await service.destroyForHuman('project', w.id, { discardWork: true })).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'], error: expect.stringMatching(/lock.*busy|lock.*timed out/i) });
         expect(released).toBe(false);
         // The destroy asks for the lock with its own bounded budget, never the default two minutes.
         expect(locks.mock.calls.map(([, , options]) => options?.waitMs)).toEqual([1_000]);
@@ -300,7 +301,7 @@ it.each(RESTART_RUNNERS.r47)('%s settles a same-boot crash as gone once recorded
       // Timed-out cleanup must withdraw, so unlocking cannot run it later.
       expect(existsSync(workspace.path)).toBe(true);
       await ambient.write();
-      expect(await service.destroyForHuman('project', w.id)).toMatchObject({ state: 'complete', remaining: [] });
+      expect(await service.destroyForHuman('project', w.id, { discardWork: true })).toMatchObject({ state: 'complete', remaining: [] });
       expect(existsSync(workspace.path)).toBe(false);
       expect(ambient.running).toBe(true); // its cwd is gone, but nothing signalled it
       const settled = await service.collect(caller, { workerId: w.id });

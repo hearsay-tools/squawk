@@ -113,8 +113,8 @@ export const workerDestroySchema = z.object({
   phase: z.enum(['requested', 'terminating', 'cleaning', 'complete', 'incomplete']),
   remaining: remainingSchema,
   error: errorSchema.optional(),
-  /** The explicit destroy that started or last retried this one allowed it to delete uncommitted
-   * changes and unlanded commits, so its automatic retries may too (hearsay-tools/squawk#3553). */
+  /** An explicit attempt of this destroy allowed it to delete uncommitted changes and unlanded
+   * commits, so every later attempt, automatic or explicit, may too (hearsay-tools/squawk#3553). */
   discardWork: z.literal(true).optional(),
 }).strict();
 export type WorkerDestroy = z.infer<typeof workerDestroySchema>;

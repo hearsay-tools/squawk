@@ -77,7 +77,8 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     const workspace = await createOwnedWorkspace(root, randomUUID(), first);
     await writeFile(join(workspace.path, 'tracked.txt'), 'worker commit');
     git(workspace.path, 'commit', '-qam', 'worker');
-    const result = await removeOwnedWorkspace(root, workspace);
+    // The commit is the worker's own work, so this destroy allows its discard (hearsay-tools/squawk#3553).
+    const result = await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, { discardWork: true });
     expect(result).toEqual({ workerId: workspace.ownerRunId, state: 'complete', remaining: [], deleted: [
       { kind: 'worktree', path: workspace.path }, { kind: 'branch', ref: `refs/heads/${workspace.branch}` },
     ] });
