@@ -1,10 +1,9 @@
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { agentAccountsPath } from '../paths.ts';
+import { join } from 'node:path';
 import type { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RunStore } from '../runs/store.ts';
@@ -29,7 +28,6 @@ describe('POST /api/v1/runs/:id/continue override', () => {
     runner?: string;
     model?: string;
     effort?: string;
-    agentProfile?: string;
   };
   let captured: { id: string; opts: ContinueOpts } | undefined;
   let home: string;
@@ -69,21 +67,6 @@ describe('POST /api/v1/runs/:id/continue override', () => {
     else useTestHome(savedHome ? Home.sandbox(savedHome) : undefined);
   });
 
-  /** One stored Claude login beside the discovered account. */
-  const writeAccounts = () => {
-    const path = agentAccountsPath(testHome());
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(
-      path,
-      JSON.stringify({
-        accounts: [
-          { id: 'klaudiusz', provider: 'claude', configDir: '~/.claude-klaudiusz', label: 'Klaudiusz' },
-        ],
-      }),
-      'utf8',
-    );
-  };
-
   const post = (body: unknown) =>
     apiRequest(app, `/api/v1/runs/${runId}/continue`, {
       method: 'POST',
@@ -98,13 +81,12 @@ describe('POST /api/v1/runs/:id/continue override', () => {
     expect(captured?.opts.model).toBe('gpt-5.1-codex');
   });
 
-  it('an empty POST keeps the current backend, model, effort and account', async () => {
+  it('an empty POST keeps the current backend, model and effort', async () => {
     const res = await post({});
     expect(res.status).toBe(200);
     expect(captured?.opts.runner).toBeUndefined();
     expect(captured?.opts.model).toBeUndefined();
     expect(captured?.opts.effort).toBeUndefined();
-    expect(captured?.opts.agentProfile).toBeUndefined();
   });
 
   it('plumbs an effort override through to the manager (#45)', async () => {
@@ -166,42 +148,6 @@ describe('POST /api/v1/runs/:id/continue override', () => {
 
   it('rejects an unknown runner with a 400 and never reaches the manager', async () => {
     const res = await post({ runner: 'gemini' });
-    expect(res.status).toBe(400);
-    expect(captured).toBeUndefined();
-  });
-
-  /* Agent accounts (spec 2026-07-29-agent-profiles): the follow-up pill can name which login
-     reopens the session, on the same terms `POST /runs` takes one at creation. */
-
-  it('plumbs the picked agent account through to the manager', async () => {
-    writeAccounts();
-    const res = await post({ agentProfile: 'klaudiusz' });
-    expect(res.status).toBe(200);
-    expect(captured?.opts.agentProfile).toBe('klaudiusz');
-  });
-
-  it('takes `default` explicitly — the discovered account, whatever the project is set to', async () => {
-    const res = await post({ agentProfile: 'default' });
-    expect(res.status).toBe(200);
-    expect(captured?.opts.agentProfile).toBe('default');
-  });
-
-
-  it('rejects an account that no longer exists with a 400, and never reaches the manager', async () => {
-    // A USER just picked this from a menu, so "unknown account" is honest and actionable —
-    // quietly reopening the session on another login would cross a billing boundary.
-    writeAccounts();
-    const res = await post({ agentProfile: 'deleted-one' });
-    expect(res.status).toBe(400);
-    expect(await res.json()).toMatchObject({ error: 'unknown claude account: deleted-one' });
-    expect(captured).toBeUndefined();
-  });
-
-  it('resolves the account against the runner the continuation will USE', async () => {
-    // The claude login is unknown to codex, so a switch that carries it is refused rather than
-    // silently ignored.
-    writeAccounts();
-    const res = await post({ runner: 'codex', agentProfile: 'klaudiusz' });
     expect(res.status).toBe(400);
     expect(captured).toBeUndefined();
   });

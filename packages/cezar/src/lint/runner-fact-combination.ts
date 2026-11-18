@@ -4,7 +4,7 @@ import { parse } from '@babel/parser';
 import type { Node } from '@babel/types';
 import { lineAt, repoRoot } from './source-rule.ts';
 import { child, children, stringOf, type AstRule, type EsNode, type Visitors } from './ast-rule.ts';
-import { eachChild, field, reportNode, scanSource } from './ast-tree.ts';
+import { eachChild, field, methodValue, reportNode, scanSource, viewOrder } from './ast-tree.ts';
 
 /**
  * Shared parity rows run on one runner, and unit tests drive every other value of each turn-path
@@ -162,17 +162,12 @@ function typeRefName(node: EsNode): string | undefined {
   return typeName?.type === 'TSQualifiedName' ? child(typeName, 'right')?.name as string | undefined : undefined;
 }
 
-interface Scope { node: EsNode; name: string; source: boolean; facts: Set<string>; children: Scope[] }
+/** A function. `path` holds its enclosing classes and functions; `name` is set at the end, when every repeat is known. */
+interface Scope { node: EsNode; own: string | undefined; path: readonly (string | Scope)[]; name: string; source: boolean; facts: Set<string>; children: Scope[] }
 
 /** A method signature with no body: an overload or an abstract method. It opens no scope. */
 function declaredMethod(node: EsNode): boolean {
   return node.type === 'TSAbstractMethodDefinition' || (node.type === 'MethodDefinition' && child(node, 'value')?.type === 'TSEmptyBodyFunctionExpression');
-}
-
-/** Whether `node` is a method's function: the method itself is the scope. */
-function methodValue(node: EsNode): boolean {
-  const owner = node.parent;
-  return !!owner && owner.value === node && (owner.type === 'MethodDefinition' || (owner.type === 'Property' && owner.method === true));
 }
 
 const CLASS_FIELDS = new Set(['PropertyDefinition', 'TSAbstractPropertyDefinition']);
@@ -201,17 +196,10 @@ function combinationVisitors(keys: () => Set<string>): { visitors: Visitors; sco
   let names: Names = { values: new Set(), types: new Set(), namespaces: new Set() };
   const open: Scope[] = [];
   const roots: Scope[] = [];
-  const path: string[] = [];
-  const seen = new Map<string, number>();
+  const path: (string | Scope)[] = [];
+  const order = viewOrder<Scope>();
   let moduleSource = false;
   let imports = 0;
-  /** A function's name qualified by its enclosing classes and functions (`Runner>settle>inner`); repeats are numbered in order. */
-  const qualifiedName = (own: string | undefined): string => {
-    const base = [...path, own ?? '(anonymous function)'].join('>');
-    const count = (seen.get(base) ?? 0) + 1;
-    seen.set(base, count);
-    return count === 1 ? base : `${base}#${count}`;
-  };
   const credit = (source: boolean, key: string | undefined) => {
     const scope = open.at(-1);
     if (!scope) { if (source) moduleSource = true; return; }
@@ -223,10 +211,11 @@ function combinationVisitors(keys: () => Set<string>): { visitors: Visitors; sco
   };
   const enter = (node: EsNode) => {
     if (imports > 0 || methodValue(node) || declaredMethod(node) || (node.type === 'Property' && node.method !== true)) return;
-    const scope: Scope = { node, name: qualifiedName(ownName(node)), source: false, facts: new Set(), children: [] };
+    const scope: Scope = { node, own: ownName(node), path: [...path], name: '', source: false, facts: new Set(), children: [] };
     (open.at(-1)?.children ?? roots).push(scope);
+    order.add(scope);
     open.push(scope);
-    path.push(scope.name.split('>').at(-1)!);
+    path.push(scope);
   };
   const leave = (node: EsNode) => {
     const scope = open.at(-1);
@@ -274,9 +263,11 @@ function combinationVisitors(keys: () => Set<string>): { visitors: Visitors; sco
     visitors[type] = enter;
     visitors[`${type}:exit`] = leave;
   }
+  let named = false;
   return {
-    visitors,
+    visitors: order.wrap(visitors),
     scopes() {
+      if (!named) { nameScopes(order.items()); named = true; }
       const found: Scope[] = [];
       const qualifying = (scope: Scope) => {
         if ((scope.source || moduleSource) && scope.facts.size >= 2) found.push(scope);
@@ -286,6 +277,22 @@ function combinationVisitors(keys: () => Set<string>): { visitors: Visitors; sco
       return found;
     },
   };
+}
+
+/**
+ * Each function's name qualified by its enclosing classes and functions (`Runner>settle>inner`), so
+ * an exception names one function. An unnamed function or a repeated name is numbered in `scopes`
+ * order, which puts an enclosing function first.
+ */
+function nameScopes(scopes: readonly Scope[]): void {
+  const seen = new Map<string, number>();
+  for (const scope of scopes) {
+    const segments = scope.path.map(entry => typeof entry === 'string' ? entry : entry.name.slice(entry.name.lastIndexOf('>') + 1));
+    const base = [...segments, scope.own ?? '(anonymous function)'].join('>');
+    const count = (seen.get(base) ?? 0) + 1;
+    seen.set(base, count);
+    scope.name = count === 1 ? base : `${base}#${count}`;
+  }
 }
 
 export interface FactCombination { name: string; line: number; facts: string[] }

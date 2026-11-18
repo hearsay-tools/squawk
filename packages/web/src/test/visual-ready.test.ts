@@ -1,15 +1,32 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as readiness from '../../e2e/visual-ready'
 import type { AgentBrowser } from '../../e2e/agent-browser'
 import { hoverVisiblePoint } from '../../e2e/contrast'
 const { visualSampleExpression } = readiness
 
-afterEach(() => { document.body.innerHTML = ''; vi.restoreAllMocks(); vi.unstubAllGlobals() })
+let restoreDocument: () => void
+beforeEach(() => {
+  const fonts = Object.getOwnPropertyDescriptor(document, 'fonts')
+  const point = Object.getOwnPropertyDescriptor(document, 'elementFromPoint')
+  const idle = Object.getOwnPropertyDescriptor(window, '__cezIdle')
+  const appearance = document.documentElement.getAttribute('class')
+  restoreDocument = () => {
+    for (const [target, key, descriptor] of [[document, 'fonts', fonts], [document, 'elementFromPoint', point], [window, '__cezIdle', idle]] as const) {
+      if (descriptor) Object.defineProperty(target, key, descriptor)
+      else Reflect.deleteProperty(target, key)
+    }
+    if (appearance === null) document.documentElement.removeAttribute('class')
+    else document.documentElement.setAttribute('class', appearance)
+  }
+  Object.defineProperty(document, 'fonts', { configurable: true, value: { status: 'loaded' } })
+})
+afterEach(() => { document.body.innerHTML = ''; restoreDocument(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 Object.defineProperty(Element.prototype, 'getAnimations', { configurable: true, value: () => [] })
 // jsdom has no renderer; tests supply the native Chrome visibility result.
 Object.defineProperty(Element.prototype, 'checkVisibility', { configurable: true, value: () => true })
 const sample = (options = {}) => window.eval(visualSampleExpression('main', options))
 it('waits for the target, intended appearance and fonts rather than just elapsed time', () => {
+  document.documentElement.classList.remove('light', 'dark')
   expect(sample()).toBeNull()
   document.body.innerHTML = '<main>Loaded route</main>'
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ x: 1, y: 2, width: 200, height: 100, top: 2, left: 1, right: 201, bottom: 102, toJSON() {} })
@@ -35,7 +52,6 @@ it('waits out finite animations but permits a deliberately held request and infi
 
 it('holds layout around a spinner without requiring its intentionally moving ink to stop', () => {
   document.body.innerHTML = '<main><span class="spinner"><i></i></span><p>Loading</p></main>'
-  Object.defineProperty(document, 'fonts', { configurable: true, value: { status: 'loaded' } })
   let frame = 0
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const moving = this.matches('.spinner, .spinner *')
@@ -51,7 +67,6 @@ it('holds layout around a spinner without requiring its intentionally moving ink
 // change checkVisibility. A readiness probe must observe visibility FIRST.
 it('rejects a skipped target before any geometry read can render it', () => {
   document.body.innerHTML = '<main><code>lazy fence</code></main>'
-  Object.defineProperty(document, 'fonts', { configurable: true, value: { status: 'loaded' } })
   const visible = vi.spyOn(Element.prototype, 'checkVisibility').mockReturnValue(false)
   const geometry = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(() => {
     visible.mockReturnValue(true)
@@ -64,7 +79,6 @@ it('rejects a skipped target before any geometry read can render it', () => {
 
 it('does not force geometry for skipped descendants or hidden controls', () => {
   document.body.innerHTML = '<main><p>visible</p><code>skipped</code><button hidden>hidden</button></main>'
-  Object.defineProperty(document, 'fonts', { configurable: true, value: { status: 'loaded' } })
   vi.spyOn(Element.prototype, 'checkVisibility').mockImplementation(function (this: Element) {
     return !this.matches('code, [hidden]')
   })
@@ -78,7 +92,6 @@ it('does not force geometry for skipped descendants or hidden controls', () => {
 
 it('keeps focus identity and geometry in the held signature, independent of a false assertion sample', () => {
   document.body.innerHTML = '<main><button id="a">A</button><button id="b">B</button></main>'
-  Object.defineProperty(document, 'fonts', { configurable: true, value: { status: 'loaded' } })
   vi.spyOn(Element.prototype, 'checkVisibility').mockReturnValue(true)
   let x = 0
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(() => ({ x, y: 0, width: 200, height: 100 } as DOMRect))
@@ -134,7 +147,6 @@ it('scrolls a skipped hover target and waits for native rendering before rects',
 // has happened. A hidden measured result must stay false after the commit too.
 it('waits for the disclosure commit, then measures visibility independently', () => {
   document.body.innerHTML = '<button aria-expanded="false"></button><section id="details"></section>'
-  Object.defineProperty(document, 'fonts', { configurable: true, value: { status: 'loaded' } })
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, width: 200, height: 20 } as DOMRect)
   let visible = false
   vi.spyOn(Element.prototype, 'checkVisibility').mockImplementation(function (this: Element) {

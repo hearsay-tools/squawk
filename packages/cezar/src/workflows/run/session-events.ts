@@ -6,7 +6,6 @@ import { askPayloadOf, askRequestOf } from '@open-mercato/cezar-contract/pending
 import type { RunRecord, RunStore } from '../../runs/store.ts';
 import { AgentTempDirError } from '../../runs/agent-tmpdir.ts';
 import { ToolsUnavailableError } from '../../ci-wait/errors.ts';
-import { AgentAccountUnavailableError } from '../../workspace/agent-profiles.ts';
 import { artifactInstructions } from '../../artifacts/lifecycle.ts';
 import { jobInstructions } from '../../jobs/command.ts';
 import { handoffInstructions } from '../../handoff.ts';
@@ -172,8 +171,7 @@ export function markTurnBoundary(context: RunModuleContext, host: SessionHelperH
 /**
  * The account a step's session spawns under, resolved together with the temp-directory preflight
  * (#785): the step fails with a named, actionable error instead of spawning a backend whose shell
- * would return empty output. An account that would open another folder than its own fails the
- * same way (#1283). Returns the profile, or that error's message.
+ * would return empty output. Returns the profile, or that error's message.
  */
 export async function stepProfileFor(context: RunModuleContext, host: SessionHelperHost,
   runId: string,
@@ -183,7 +181,7 @@ export async function stepProfileFor(context: RunModuleContext, host: SessionHel
   try {
     return await host.agentEnvForStep(runId, stepBackend, options);
   } catch (err) {
-    if (err instanceof AgentTempDirError || err instanceof AgentAccountUnavailableError) return err.message;
+    if (err instanceof AgentTempDirError) return err.message;
     throw err;
   }
 }

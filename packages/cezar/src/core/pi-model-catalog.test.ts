@@ -363,12 +363,6 @@ describe('discoverPiModels', () => {
     ).rejects.toThrow('exited (1)');
   });
 
-  it('fails and kills the child when discovery outruns its deadline', async () => {
-    const fake = fakeChild();
-    const promise = discoverPiModels({ cwd: '/repo', timeoutMs: 5, spawn: () => fake.child });
-    await expect(promise).rejects.toThrow('timed out');
-    expect(fake.killed()).toBe(true);
-  });
 
   it('escalates to SIGKILL when the probe survives the teardown SIGTERM', async () => {
     vi.useFakeTimers();

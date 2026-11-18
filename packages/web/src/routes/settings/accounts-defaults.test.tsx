@@ -15,14 +15,11 @@ import { AppRoutes } from '@/routes'
 
 /**
  * Global settings → Agent accounts, "Defaults for new projects" (spec 2026-07-29-agent-profiles):
- * the agent, account and models a project uses when it has chosen none, so a second login is set up
- * once rather than per repo. It lives on the accounts page because it is the same subject — a
- * separate page would mean adding an account here and going elsewhere to say "use it".
+ * the agent and models a project uses when it has chosen none. An account is a project's own
+ * choice, so this block offers none.
  *
- * What this pins is the STORES. One click answers one question but writes two files — the runner and
- * the models to `~/.cezar/config.json`, the account to `~/.cezar/agent-accounts.json` — and neither
- * may ever reach the per-repo `/api/v1/config`, which is committable. A regression there would
- * publish which login someone works under.
+ * What this pins is the STORE: the runner and the models go to the workspace config and never
+ * reach the per-repo `/api/v1/config`, which is committable.
  */
 
 let requests: Array<{ method: string; url: string; body?: unknown }> = []
@@ -31,7 +28,6 @@ const ACCOUNTS: AgentProfilesResponse = {
   editable: true,
   profileCapableProviders: ['claude', 'codex'],
   selections: {},
-  defaults: {},
   profiles: [
     {
       id: 'default',
@@ -42,7 +38,6 @@ const ACCOUNTS: AgentProfilesResponse = {
       exists: true,
       looksValid: true,
       isDefault: true,
-      files: [],
     },
     {
       id: 'klaudiusz',
@@ -53,7 +48,6 @@ const ACCOUNTS: AgentProfilesResponse = {
       exists: true,
       looksValid: true,
       isDefault: false,
-      files: [],
     },
   ],
 }
@@ -68,13 +62,7 @@ const PROVIDERS = {
   ],
 }
 
-function serve({
-  agentDefaults = {},
-  accounts = ACCOUNTS,
-}: {
-  agentDefaults?: WorkspaceConfigResponse['agentDefaults']
-  accounts?: AgentProfilesResponse
-} = {}) {
+function serve({ agentDefaults = {} }: { agentDefaults?: WorkspaceConfigResponse['agentDefaults'] } = {}) {
   requests = []
   const state: WorkspaceConfigResponse = {
     browseRoot: '~/',
@@ -98,7 +86,6 @@ function serve({
     },
     agentDefaults,
   }
-  let accountState = accounts
   const json = (payload: unknown, status = 200) =>
     new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } })
   vi.stubGlobal(
@@ -117,15 +104,7 @@ function serve({
         }
         return json(state)
       }
-      if (url === '/api/v1/workspace/agent-profiles' && method === 'GET') return json(accountState)
-      if (url === '/api/v1/workspace/agent-profiles/selection' && method === 'PUT') {
-        const { provider, profileId } = body as { provider: string; profileId: string | null }
-        const defaults = { ...accountState.defaults }
-        if (profileId === null) delete defaults[provider as 'claude']
-        else defaults[provider as 'claude'] = profileId
-        accountState = { ...accountState, defaults }
-        return json({ selections: accountState.selections, defaults })
-      }
+      if (url === '/api/v1/workspace/agent-profiles' && method === 'GET') return json(ACCOUNTS)
       if (url === '/api/v1/providers/status' && method === 'GET') return json(PROVIDERS)
       // The accounts page also paints per-agent facts from health; an empty answer is a real state
       // (it renders "Checking…") and keeps this file about the defaults block.
@@ -157,10 +136,8 @@ function renderAccounts() {
 }
 
 const rows = () => [...document.querySelectorAll('[data-slot="agents-runner"] [role="radio"]')]
-const rowFor = (runner: string, account = '') =>
-  document.querySelector<HTMLButtonElement>(
-    `[data-slot="agents-runner"] [data-value="${runner}"][data-account="${account}"]`,
-  )
+const rowFor = (runner: string) =>
+  document.querySelector<HTMLButtonElement>(`[data-slot="agents-runner"] [data-value="${runner}"]`)
 const configPuts = () => requests.filter((r) => r.method === 'PUT' && r.url === '/api/v1/workspace/config')
 const selections = () =>
   requests.filter((r) => r.url === '/api/v1/workspace/agent-profiles/selection')
@@ -180,7 +157,6 @@ describe('Agent accounts → Defaults for new projects', () => {
     // boundary — one place a missing key becomes the empty answer it means — so this guards the
     // whole class rather than the one line that happened to blow up.
     serve()
-    const older = { ...ACCOUNTS }
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -209,7 +185,7 @@ describe('Agent accounts → Defaults for new projects', () => {
             // …and no `agentDefaults`.
           })
         }
-        if (url === '/api/v1/workspace/agent-profiles') return json(older)
+        if (url === '/api/v1/workspace/agent-profiles') return json(ACCOUNTS)
         if (url === '/api/v1/providers/status') return json(PROVIDERS)
         if (url === '/api/v1/health') return json({ checks: [], bootProject: 'boot' })
         if (url.startsWith('/api/v1/open-targets')) return json({ targets: [] })
@@ -218,82 +194,32 @@ describe('Agent accounts → Defaults for new projects', () => {
     )
     renderAccounts()
 
-    await waitFor(() => expect(rows()).toHaveLength(6))
+    await waitFor(() => expect(rows()).toHaveLength(runnerSchema.options.length))
     // The built-in fallback, rendered rather than thrown.
-    expect(rowFor('claude', '')?.getAttribute('aria-checked')).toBe('true')
+    expect(rowFor('claude')?.getAttribute('aria-checked')).toBe('true')
   })
 
-  it('lists agents and logins as one flat list, same as everywhere else', async () => {
+  it('offers one row per agent, even for an agent with two accounts', async () => {
     serve()
     renderAccounts()
 
-    await waitFor(() => expect(rows()).toHaveLength(6))
-    expect(rows().map((r) => r.getAttribute('data-value'))).toEqual(['claude', ...runnerSchema.options])
-    expect(rows()[1]?.textContent).toContain('~/.claude-klaudiusz')
-  })
-
-  it('shows claude checked when the machine has no opinion — what an unconfigured repo runs', async () => {
-    serve()
-    renderAccounts()
-
-    await waitFor(() => expect(rows()).toHaveLength(6))
-    expect(rowFor('claude', '')?.getAttribute('aria-checked')).toBe('true')
+    await waitFor(() => expect(rows()).toHaveLength(runnerSchema.options.length))
+    expect(rows().map((r) => r.getAttribute('data-value'))).toEqual(runnerSchema.options)
+    // No machine opinion: claude is checked, which is what an unconfigured repo runs.
+    expect(rowFor('claude')?.getAttribute('aria-checked')).toBe('true')
   })
 
   it('writes the runner to the WORKSPACE config, never the committable repo one', async () => {
     serve()
     renderAccounts()
 
-    await waitFor(() => expect(rows()).toHaveLength(6))
+    await waitFor(() => expect(rows()).toHaveLength(runnerSchema.options.length))
     fireEvent.click(rowFor('codex')!)
 
     await waitFor(() => expect(configPuts()).toHaveLength(1))
     expect(configPuts()[0]?.body).toEqual({ agentDefaults: { runner: 'codex' } })
-    // codex has one login, so nothing is written to the accounts store.
     expect(selections()).toHaveLength(0)
     expect(repoConfigWrites()).toHaveLength(0)
-  })
-
-  it('writes the account to the accounts store with projectId null — the machine default', async () => {
-    serve()
-    renderAccounts()
-
-    await waitFor(() => expect(rows()).toHaveLength(6))
-    fireEvent.click(rowFor('claude', 'klaudiusz')!)
-
-    await waitFor(() => expect(selections()).toHaveLength(1))
-    // `null` is what makes this the machine-wide default rather than one repo's selection.
-    expect(selections()[0]?.body).toEqual({
-      projectId: null,
-      provider: 'claude',
-      profileId: 'klaudiusz',
-    })
-    // claude was already the effective runner, so the workspace config needed no write…
-    expect(configPuts()).toHaveLength(0)
-    // …and the repo config is not touched from this pane at all.
-    expect(repoConfigWrites()).toHaveLength(0)
-  })
-
-  it('starts on the account the machine default already names', async () => {
-    serve({ accounts: { ...ACCOUNTS, defaults: { claude: 'klaudiusz' } } })
-    renderAccounts()
-
-    await waitFor(() => expect(rowFor('claude', 'klaudiusz')?.getAttribute('aria-checked')).toBe('true'))
-  })
-
-  it('clears an account back to the discovered one with null, never the reserved id', async () => {
-    serve({ accounts: { ...ACCOUNTS, defaults: { claude: 'klaudiusz' } } })
-    renderAccounts()
-
-    await waitFor(() => expect(rows()).toHaveLength(6))
-    fireEvent.click(rowFor('claude', '')!)
-
-    await waitFor(() => expect(selections()).toHaveLength(1))
-    expect(selections()[0]?.body).toEqual({
-      projectId: null,
-      provider: 'claude',
-      profileId: null,
-    })
   })
 
   it('saves a default model to the workspace config, and clears it with null', async () => {

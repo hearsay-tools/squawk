@@ -1,6 +1,6 @@
 import { productName, productCommand } from '@/lib/product-name'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationDefinition } from '@open-mercato/cezar-api-client'
@@ -9,7 +9,7 @@ import { AutomationEditor } from './editor'
 
 // Radix's Switch and the composer pills measure themselves; jsdom has no ResizeObserver.
 beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }) })
-afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals() })
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
 type Call = { path: string; method: string; body: unknown }
@@ -383,8 +383,9 @@ describe('one-time schedules', () => {
     setWhen('2020-01-15', '09', '00')
     expect(screen.getByText('the due time has passed; choose a later time or use Run now')).not.toBeNull()
     expect((screen.getByLabelText('Date') as HTMLInputElement).validationMessage).toBe('the due time has passed; choose a later time or use Run now')
+    vi.useFakeTimers()
     fireEvent.click(screen.getByRole('button', { name: 'Save paused' }))
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await act(() => vi.advanceTimersByTimeAsync(0))
     expect(calls.filter((call) => call.method === 'POST')).toEqual([])
     expect(onSaved).not.toHaveBeenCalled()
     expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Weekly digest')

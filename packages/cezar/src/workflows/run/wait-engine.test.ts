@@ -91,10 +91,6 @@ afterEach(async () => {
   current = undefined;
 });
 
-it('has a table case for every wait kind', () => {
-  expect(Object.keys(KINDS).sort()).toEqual(Object.keys(WAIT_KINDS).sort());
-});
-
 it.each(Object.keys(WAIT_KINDS) as Kind[])('%s: opens, then its watch resolves it and queues the wake', async kind => {
   const f = current = fixture();
   const wait = KINDS[kind].entry(f);

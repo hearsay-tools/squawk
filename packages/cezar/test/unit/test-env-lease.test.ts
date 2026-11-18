@@ -278,7 +278,9 @@ test('Squeal daemon contention includes conditional result guidance in wait and 
   try {
     await once(child.stdout!, 'data');
     const messages: string[] = [];
-    await assert.rejects(acquireTestEnvLease(root, { timeoutMs: 5000, onWait: message => messages.push(message) }), error => {
+    // Cover the 2 s diagnostic budget and two 100 ms polls with 300 ms to spare.
+    // Windows keeps the sibling diagnostic test's allowance for process probes.
+    await assert.rejects(acquireTestEnvLease(root, { timeoutMs: process.platform === 'win32' ? 15_000 : 2500, onWait: message => messages.push(message) }), error => {
       assert.match((error as Error).message, /squeal\.mjs/);
       assert.match((error as Error).message, /If Squeal covers this spec.*squeal status --wait 60000/);
       return true;

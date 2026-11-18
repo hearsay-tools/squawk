@@ -61,11 +61,6 @@ describe('tasks overview — no tasks yet', () => {
     ).toBe('no-tasks')
     // And no table pretending otherwise.
     expect(browser.count('[data-slot="task-table-row"]')).toBe(0)
-    browser.click(`[data-slot="tasks-empty"] a[href="${scoped('/new')}"]`)
-    browser.waitForFunction(`location.pathname === '${scoped('/new')}' && document.querySelector('[data-route="new"]') !== null`)
-  })
-
-  it('carries the decorative backdrop, marked decorative', () => {
     const backdrop = browser.evaluate(`(() => {
       const el = document.querySelector('[data-slot="tasks-empty"] [data-slot="twinkle-backdrop"]')
       return el && { ariaHidden: el.getAttribute('aria-hidden') }
@@ -75,6 +70,8 @@ describe('tasks overview — no tasks yet', () => {
     expect(backdrop?.ariaHidden).toBe('true')
 
     browser.screenshot(`${artifactsDir}/tasks-empty-no-tasks.png`)
+    browser.click(`[data-slot="tasks-empty"] a[href="${scoped('/new')}"]`)
+    browser.waitForFunction(`location.pathname === '${scoped('/new')}' && document.querySelector('[data-route="new"]') !== null`)
   })
 })
 
@@ -84,13 +81,10 @@ describe('the 404 route', () => {
     browser.waitForFunction(`document.querySelector('[data-route="not-found"]') !== null`)
   })
 
-  it('tells the user the page was not found', () => {
+  it('explains the missing page and returns to the tasks overview', () => {
     expect(browser.text(`[data-route="not-found"] h1`)).toBe('Page not found')
 
     browser.screenshot(`${artifactsDir}/not-found.png`)
-  })
-
-  it('walks back to the tasks overview through the action', () => {
     browser.click(`[data-route="not-found"] a[href="${scoped('/')}"]`)
     browser.waitForFunction(`location.pathname === '${scoped('/')}' && document.querySelector('[data-route="tasks"]') !== null`)
     expect(browser.count('[data-route="tasks"]')).toBe(1)

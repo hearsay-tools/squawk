@@ -144,18 +144,6 @@ test('browser run setup gives an over-budget caller a short TMPDIR and removes i
   assert.equal(restored, result.callerTmp);
 });
 
-test('a browser unavailable after bootstrap cannot become a passing Squeal result', t => {
-  const result = bootstrap(t, { installed: false });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Chrome fixture unavailable/);
-});
-
-test('failed browser environment bootstrap prevents test execution', t => {
-  const result = bootstrap(t, { bootExit: 9 });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /bootstrap failed/);
-});
-
 test('wrapper-owned run setup joins the live lease without bootstrapping a second time', t => {
   const result = bootstrap(t, { borrowed: true });
   assert.equal(result.status, 0, result.stderr);

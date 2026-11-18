@@ -6,7 +6,8 @@ import { posix, resolve, win32 } from 'node:path';
 import { z } from 'zod';
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-contract/agent-profiles';
 import { PROVIDER_IDS, type ProviderId } from '../core/provider-auth.ts';
-import { ompProfileName, selectsByProfileName, supportsProfiles } from '../core/agent-profiles.ts';
+import { supportsProfiles } from '../core/agent-profiles.ts';
+import { loadWorkspaceConfigSync } from './config.ts';
 
 /**
  * Optional agent-account store with root-keyed selections. Preserve unknown keys and salvage
@@ -80,14 +81,7 @@ const agentAccountSchema = z
     label: z.string().max(200).catch(''),
     addedAt: z.string().max(64).catch(''),
   })
-  .passthrough()
-  // An omp account is an omp PROFILE: `OMP_PROFILE` takes a name, so a folder that is not
-  // `…/profiles/<name>` would resolve to `{}` and run on the default login — the provider lie
-  // above in another shape, dropped by the same salvage. Shape only; the route also checks the
-  // folder is under omp's current root (`ompProfileDirError`).
-  .refine((account) => !selectsByProfileName(account.provider) || ompProfileName(account.configDir) !== null, {
-    message: 'an omp account folder must be an omp profile: <omp root>/profiles/<name>',
-  });
+  .passthrough();
 
 export type AgentAccount = z.infer<typeof agentAccountSchema>;
 
@@ -132,15 +126,6 @@ export const storeSchema = z
      *  it yet; it exists so a future shape change has somewhere to say so. */
     version: z.number().int().min(0).default(1).catch(1),
     accounts: accountRowsSchema.transform((entries) => parseAgentAccountEntries(entries).accounts),
-    /**
-     * The per-provider account a repo with no selection of its own uses.
-     *
-     * A machine-wide answer to "which login do I work under", so a second account does not have to
-     * be re-chosen for every checkout. Consulted only where `selections` is silent for that repo
-     * and provider — a repo that HAS chosen keeps its choice, which is what makes this a default
-     * rather than an override.
-     */
-    defaults: selectionSchema.default(() => ({})).catch(() => ({})),
     /** Repo root → per-provider choice. Per-entry salvage: a bad row is dropped, the rest stay. */
     selections: z
       .record(z.string(), z.unknown())
@@ -175,23 +160,72 @@ export function defaultAgentAccountStore(): AgentAccountStore {
  * successful merge-write is what replaces it.
  */
 function loadAgentAccountsSync(home: Home): AgentAccountStore {
-  const path = home.agentAccounts;
+  const stored = readStoredAccounts(home);
+  // Absent — but accounts may predate this file (they lived in config.json on the branch that
+  // introduced them), so give those one chance to come across.
+  if (stored === 'absent') return importLegacyAccounts(home);
+  if (stored !== 'corrupt') return Object.hasOwn(stored, 'defaults') ? upgradeSavedDefaults(home, stored) : stored;
+  console.warn(`${logPrefix()} agent accounts ${home.agentAccounts} is corrupt — ignoring it (every project falls back to its default account)`);
+  return defaultAgentAccountStore();
+}
+
+/** The file as written, with no import and no upgrade. */
+function readStoredAccounts(home: Home): AgentAccountStore | 'absent' | 'corrupt' {
   let raw: string;
   try {
-    raw = readHomeFile(path);
+    raw = readHomeFile(home.agentAccounts);
   } catch {
-    // Absent — but accounts may predate this file (they lived in config.json on the branch that
-    // introduced them), so give those one chance to come across.
-    return importLegacyAccounts(home);
+    return 'absent';
   }
   try {
     const parsed = storeSchema.safeParse(JSON.parse(raw));
     if (parsed.success) return parsed.data;
   } catch {
-    // malformed JSON — fall through to the warning + defaults
+    // malformed JSON names no account
   }
-  console.warn(`${logPrefix()} agent accounts ${path} is corrupt — ignoring it (every project falls back to its default account)`);
-  return defaultAgentAccountStore();
+  return 'corrupt';
+}
+
+/**
+ * One-time upgrade of a saved machine-wide default, which this file no longer carries
+ * (hearsay-tools/squawk#3865). Each registered project with no choice of its own for a provider
+ * takes the saved one, so no project changes its login. A home that cannot be written keeps the
+ * upgraded store in memory. While the registry lists no project (it may be unreadable), the saved
+ * default stays in the file for a later load.
+ */
+function upgradeSavedDefaults(home: Home, store: AgentAccountStore): AgentAccountStore {
+  const roots = loadWorkspaceConfigSync(home.workspaceConfig).projects.map((project) => project.root);
+  if (roots.length === 0 && savedDefaults(store).length > 0) return store;
+  try {
+    const homeStore = new HomeStore(home);
+    return homeStore.transaction(() => {
+      const current = readStoredAccounts(home);
+      const next = foldSavedDefaults(typeof current === 'string' ? store : current, roots);
+      homeStore.writeJson(home.agentAccounts, next);
+      return next;
+    }, [home.agentAccounts]);
+  } catch {
+    return foldSavedDefaults(store, roots);
+  }
+}
+
+/** The saved machine-wide default as [provider, account id] pairs. */
+function savedDefaults(store: AgentAccountStore) {
+  const saved = selectionSchema.safeParse((store as { defaults?: unknown }).defaults);
+  return saved.success ? PROVIDER_IDS.flatMap((provider) => saved.data[provider] === undefined ? [] : [[provider, saved.data[provider]] as const]) : [];
+}
+
+function foldSavedDefaults(store: AgentAccountStore, roots: readonly string[]): AgentAccountStore {
+  const { defaults: _defaults, ...rest } = store as AgentAccountStore & { defaults?: unknown };
+  const selections = { ...rest.selections };
+  const chosen = savedDefaults(store);
+  for (const root of chosen.length > 0 ? roots : []) {
+    const selection = { ...selections[root] };
+    // A salvaged key holds undefined, which is no choice: it must not hide the saved default.
+    for (const [provider, id] of chosen) selection[provider] ??= id;
+    selections[root] = selection;
+  }
+  return { ...rest, selections };
 }
 
 /** Retain the async caller contract while transactions remain synchronous. */
@@ -311,20 +345,13 @@ function readLegacyAccounts(home: Home, persist: boolean): AgentAccountStore {
   return imported.data;
 }
 
-/**
- * The account `provider` uses for `repoRoot`, or undefined when nothing has an opinion.
- *
- * Repo first, then the machine-wide default. The order is the whole feature: a repo that chose is
- * never overruled by a later change to the default, and a repo that never chose follows it — so
- * adding a second login is a one-time act rather than one per checkout.
- */
+/** The account `provider` uses for `repoRoot`, or undefined when the repo has not chosen one. */
 export function selectionFor(
-  store: Pick<AgentAccountStore, 'selections' | 'defaults'>,
+  store: Pick<AgentAccountStore, 'selections'>,
   repoRoot: string | undefined,
   provider: ProviderId,
 ): string | undefined {
-  const chosen = repoRoot === undefined ? undefined : selectionForRoot(store, repoRoot)?.[provider];
-  return chosen ?? store.defaults[provider];
+  return repoRoot === undefined ? undefined : selectionForRoot(store, repoRoot)?.[provider];
 }
 
 /**

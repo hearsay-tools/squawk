@@ -168,8 +168,7 @@ Normal local boot uses this same migration path.
 
 An account directory inside the old home is copied to `<data>/accounts/<id>`
 when it is not in use. Accounts outside the old home keep their paths.
-In-use accounts are deferred until a later safe boot. OMP profile roots inside
-the old home are reported as not moved; do not delete their source. No cleanup
+In-use accounts are deferred until a later safe boot. No cleanup
 at the end of the window deletes the old home automatically.
 
 If migration reports an outside write or reset in the old home, inspect the

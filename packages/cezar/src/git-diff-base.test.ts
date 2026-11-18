@@ -243,10 +243,10 @@ describe('resolveTaskDiffBase — a repointed HEAD', () => {
 });
 
 describe('resolveTaskDiffBase — degradation', () => {
-  it('keeps the merge-base anchor when no task branch is supplied', async () => {
+  it.each([undefined, ''])('keeps the merge-base anchor for task branch %s', async taskBranch => {
     const { run, calls } = stubGit({ ...NO_REMOTE, [MERGE_BASE]: { ok: true, stdout: 'deadbeefdeadbeef\n' } });
 
-    expect(await resolveTaskDiffBase(run, 'main')).toEqual({ base: 'deadbeefdeadbeef' });
+    expect(await resolveTaskDiffBase(run, 'main', taskBranch === undefined ? undefined : { taskBranch })).toEqual({ base: 'deadbeefdeadbeef' });
     // Nothing to compare HEAD against, so HEAD is never even resolved.
     expect(calls).not.toContainEqual(['rev-parse', '--abbrev-ref', 'HEAD']);
   });
@@ -264,15 +264,6 @@ describe('resolveTaskDiffBase — degradation', () => {
         runStartedAt: STARTED_AT,
       }),
     ).toEqual({ base: 'deadbeefdeadbeef' });
-  });
-
-  it('ignores an empty task branch the same way an absent one is ignored', async () => {
-    const { run, calls } = stubGit({ ...NO_REMOTE, [MERGE_BASE]: { ok: true, stdout: 'deadbeefdeadbeef\n' } });
-
-    expect(await resolveTaskDiffBase(run, 'main', { taskBranch: '' })).toEqual({
-      base: 'deadbeefdeadbeef',
-    });
-    expect(calls).not.toContainEqual(['rev-parse', '--abbrev-ref', 'HEAD']);
   });
 
   it('never builds a remote probe out of an option-like base ref', async () => {

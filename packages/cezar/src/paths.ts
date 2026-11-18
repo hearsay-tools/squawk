@@ -2,7 +2,6 @@ import { logPrefix, productName } from './home/display.ts';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { AgentHomePaths } from './agent-config/catalog.ts';
-import { isOmpProfileName } from './core/agent-profiles.ts';
 import type { ProviderId } from './core/provider-auth.ts';
 
 import { assertOutsideAccountHome } from './home/protected-roots.ts';
@@ -168,13 +167,15 @@ function ompRootDir(env: NodeJS.ProcessEnv, home: string): string {
   return join(home, env.PI_CONFIG_DIR?.trim() || '.omp');
 }
 
-/**
- * Where omp keeps its named profiles, `~/<PI_CONFIG_DIR or .omp>/profiles`. A named omp account
- * is one folder in here: `OMP_PROFILE` takes a name, so a folder anywhere else could not be
- * selected (see `ompProfileDirError` in `workspace/agent-profiles.ts`).
- */
-export function ompProfilesDir(env: NodeJS.ProcessEnv = process.env): string {
-  return join(ompRootDir(env, env.HOME || env.USERPROFILE || homedir()), 'profiles');
+/** omp's own profile-name rule (omp 18.8.0, `packages/utils/src/dirs.ts`). */
+const OMP_PROFILE_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+/** Windows device names omp refuses as a profile, with or without an extension. */
+const OMP_RESERVED_NAME_RE = /^(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(?:\..*)?$/i;
+
+/** Whether omp accepts `name` as a profile of its own; `default` is omp's "no profile". */
+function isOmpProfileName(name: string): boolean {
+  return OMP_PROFILE_NAME_RE.test(name) && !name.endsWith('.') && name !== 'default'
+    && !OMP_RESERVED_NAME_RE.test(name);
 }
 
 /**

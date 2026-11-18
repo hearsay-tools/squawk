@@ -14,16 +14,12 @@ vi.mock('@/components/create-project-dialog', () => ({ CreateProjectDialog: () =
 afterEach(() => { cleanup(); vi.clearAllMocks(); mocks.allAvailable = false; vi.unstubAllGlobals() })
 
 describe('Workspace tools', () => {
-  it('opens both existing project flows from the shared workspace page', () => {
+  it('opens all three project flows from the shared workspace page', () => {
     render(<MemoryRouter><WorkspaceToolsRoute /></MemoryRouter>)
     fireEvent.click(screen.getByRole('button', { name: 'Open local folder' }))
     expect(screen.getByRole('dialog', { name: 'Choose local folder' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Clone from GitHub' }))
     expect(screen.getByRole('dialog', { name: 'Clone repository' })).toBeTruthy()
-  })
-
-  it('opens the New project flow from the shared workspace page', () => {
-    render(<MemoryRouter><WorkspaceToolsRoute /></MemoryRouter>)
     fireEvent.click(screen.getByRole('button', { name: 'New project' }))
     expect(screen.getByRole('dialog', { name: 'New project' })).toBeTruthy()
   })
@@ -39,32 +35,21 @@ describe('Workspace tools', () => {
     expect(screen.getByText('Not installed')).toBeTruthy()
   })
 
-  it('says whether each tool is installed and explains the missing one', () => {
-    const { container } = render(<MemoryRouter><WorkspaceToolsRoute /></MemoryRouter>)
+  it('explains tool status and offers setup inside valid diagnostic rows only for missing tools', () => {
+    const { container } = render(<MemoryRouter initialEntries={['/tools']}><WorkspaceToolsRoute /></MemoryRouter>)
     const git = container.querySelector('[data-slot="tool-row"][data-tool="git"]')!
     const codex = container.querySelector('[data-slot="tool-row"][data-tool="codex"]')!
     expect(git.textContent).toContain('Installed')
     expect(codex.textContent).toContain('Not installed')
     expect(codex.querySelector('[data-slot="tool-hint"]')?.textContent).toBe('Install the Codex CLI')
     expect(git.querySelector('[data-slot="tool-hint"]')).toBeNull()
-  })
-
-  it('keeps every row a valid definition list: only dt/dd inside, the link inside the state dd', () => {
-    const { container } = render(<MemoryRouter><WorkspaceToolsRoute /></MemoryRouter>)
     for (const row of container.querySelectorAll('[data-slot="tool-row"]')) {
       expect([...row.children].every((el) => el.tagName === 'DT' || el.tagName === 'DD')).toBe(true)
     }
-    const codex = container.querySelector('[data-slot="tool-row"][data-tool="codex"]')!
     expect(codex.querySelector('[data-slot="tool-setup"]')?.parentElement?.tagName).toBe('DD')
-  })
-
-  it('offers "Set up ›" only on unavailable rows, and both links go to Agents settings', () => {
-    // /tools is mounted at the workspace level only: the links carry no scope and
-    // LegacyPathRedirect sends them to the boot project, as the desktop menu's link does.
-    const { container } = render(<MemoryRouter initialEntries={['/tools']}><WorkspaceToolsRoute /></MemoryRouter>)
     const setups = screen.getAllByRole('link', { name: 'Set up ›' })
     expect(setups).toHaveLength(1)
-    expect(container.querySelector('[data-tool="codex"] [data-slot="tool-setup"]')).toBe(setups[0])
+    expect(codex.querySelector('[data-slot="tool-setup"]')).toBe(setups[0])
     expect(setups[0]!.getAttribute('href')).toBe('/settings/agents')
     expect(screen.getByRole('link', { name: 'Tool settings ›' }).getAttribute('href')).toBe('/settings/agents')
   })

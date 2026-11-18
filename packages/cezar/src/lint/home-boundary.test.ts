@@ -282,3 +282,15 @@ describe('test home selections keep their report spans', () => ruleCases(homeBou
     { code: "x; ({ ...process.env.CEZ_HOME } = s);", errors: [spanError("1:4-1:35", /^test-selection:/)] },
   ],
 }));
+
+// Inside a method, the rule once read the method's function before its decorators and key; oxlint
+// visits them first. Numbered names and aliases keep the old order (hearsay-tools/squawk#3806).
+describe('home-boundary keeps the old order inside methods', () => ruleCases(homeBoundary, {
+  file: product,
+  valid: [],
+  invalid: [
+    { code: "class K { [(() => { const a = b; return a(); })()]() { const b = os.homedir; } }", errors: [spanError("1:40-1:43", /^homedir:/)] },
+    { code: "class K { @d(() => { const a = b; return a(); }) m() { const b = os.homedir; } }", errors: [spanError("1:41-1:44", /^homedir:/)] },
+    { code: "class K { [(() => { const { homedir: a } = os; return a(); })()]() { const b = a; b(); } }", errors: [spanError("1:54-1:57", /^homedir:/)] },
+  ],
+}));

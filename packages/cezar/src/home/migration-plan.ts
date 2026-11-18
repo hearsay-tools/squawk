@@ -6,7 +6,7 @@ import { registryFiles } from './entry-authorization.ts';
 import { homeFileKind } from './file-location.ts';
 import { digest } from './version-log.ts';
 import { insideDirectory, migrationFiles } from './migration-files.ts';
-import { accountInUse, accountMigrationPolicy, migrationAccountInventory, type MigrationAccount } from './migration-accounts.ts';
+import { accountInUse, migrationAccountInventory, type MigrationAccount } from './migration-accounts.ts';
 import { migrationRoots, type MigrationFile, type MigrationRecord } from './migration-record.ts';
 
 export interface MigrationPlan {
@@ -51,16 +51,15 @@ export function planLegacyMigration(legacy: Home, target: Home): MigrationPlan {
     const bytes = stat.isSymbolicLink() ? Buffer.from(readlinkSync(from)) : readFileSync(from);
     let mapped = destination(path);
     if (!mapped) {
-      const account = accounts.find(account => accountMigrationPolicy(account) === 'copy' && insideDirectory(account.source, from));
+      const account = accounts.find(account => insideDirectory(account.source, from));
       if (account) mapped = { kind: 'data', path: `accounts/${account.id}/${relative(account.source, from).split(sep).join('/')}` };
     }
     return { path, hash: digest(bytes), mtimeMs: stat.mtimeMs, target: mapped };
   });
   return { legacyRoot, roots: migrationRoots(target), files, accounts,
-    deferredAccounts: accounts.filter(account => accountMigrationPolicy(account) === 'copy' && accountInUse(legacy, account.id))
+    deferredAccounts: accounts.filter(account => accountInUse(legacy, account.id))
       .map(account => ({ id: account.id, configDir: account.configDir })),
-    notMoved: [...notMoved, ...accounts.filter(account => accountMigrationPolicy(account) === 'keep')
-      .map(account => ({ id: account.id, configDir: account.configDir, reason: 'omp-profile-root-inside-legacy-home' as const }))],
+    notMoved,
     managedInstall: existsSync(legacy.versions),
     backup: join(target.backups, `legacy-cezar-home-${new Date().toISOString().replaceAll(':', '-')}.tar.gz`),
     empty: !registryFiles(legacy).some(path => existsSync(path)) && !existsSync(legacy.backups)

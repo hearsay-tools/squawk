@@ -56,7 +56,6 @@ describe('every mutating route carries a typed body into AppType', () => {
     Assert<HasTypedBody<'/api/v1/workspace/agent-profiles', '$post'>>,
     Assert<HasTypedBody<'/api/v1/workspace/agent-profiles/:id', '$patch'>>,
     Assert<HasTypedBody<'/api/v1/workspace/agent-profiles/selection', '$put'>>,
-    Assert<HasTypedBody<'/api/v1/workspace/agent-profiles/:id/open', '$post'>>,
     Assert<HasTypedBody<'/api/v1/workflows', '$post'>>,
     Assert<HasTypedBody<'/api/v1/workflows/parse', '$post'>>,
     Assert<HasTypedBody<'/api/v1/worktrees/reclaim', '$post'>>,

@@ -46,7 +46,6 @@ const PROJECT: ProjectListEntry = {
 
 /** One discovered profile per provider plus one extra Claude login. */
 const WITH_WORK_ACCOUNT: AgentProfilesResponse = {
-  defaults: {},
   editable: true,
   profileCapableProviders: ['claude', 'codex'],
   selections: {},
@@ -61,7 +60,6 @@ const WITH_WORK_ACCOUNT: AgentProfilesResponse = {
       looksValid: true,
       isDefault: true,
       status: { provider: 'claude', status: 'connected' },
-      files: [],
     },
     {
       id: 'klaudiusz',
@@ -73,7 +71,6 @@ const WITH_WORK_ACCOUNT: AgentProfilesResponse = {
       looksValid: true,
       isDefault: false,
       status: { provider: 'claude', status: 'connected', profileId: 'klaudiusz' },
-      files: [],
     },
   ],
 }
@@ -582,7 +579,6 @@ describe('the agents form', () => {
     it('stays exactly three rows when only the discovered profiles exist', async () => {
       serve({
         agentProfiles: {
-          defaults: {},
           editable: true,
           profileCapableProviders: ['claude', 'codex'],
           selections: {},

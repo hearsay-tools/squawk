@@ -41,6 +41,8 @@ describe('loadConfig systemPrompt', () => {
     expect(config.maxParallel).toBe(5);
     expect(config.defaultRunner).toBe('codex');
     expect(config.baseBranch).toBe('develop');
+    expect(config.defaultModels).toBeUndefined();
+    expect(config.worktreeRetention).toBe(10);
   });
 
   it('loads config.json with old skillsRepos and drops that key', async () => {
@@ -64,23 +66,19 @@ describe('loadConfig systemPrompt', () => {
     expect(config.maxParallel).toBe(3);
   });
 
-  it('degrades an over-long prompt (>20k) to unset per-key, keeping the rest', async () => {
-    write({ systemPrompt: 'x'.repeat(20_001), maxParallel: 4 });
+  it.each([
+    ['over-long', 'x'.repeat(20_001), 4],
+    ['wrong-typed', 42, 6],
+  ])('degrades a %s prompt to unset per-key, keeping the rest', async (_label, systemPrompt, maxParallel) => {
+    write({ systemPrompt, maxParallel });
     const config = await loadConfig(repoRoot, testHome());
     expect(config.systemPrompt).toBeUndefined();
-    expect(config.maxParallel).toBe(4);
+    expect(config.maxParallel).toBe(maxParallel);
   });
 
   it('accepts a prompt at exactly the 20k cap', async () => {
     write({ systemPrompt: 'x'.repeat(20_000) });
     expect((await loadConfig(repoRoot, testHome())).systemPrompt).toHaveLength(20_000);
-  });
-
-  it('degrades a wrong-typed prompt to unset per-key, keeping the rest', async () => {
-    write({ systemPrompt: 42, maxParallel: 6 });
-    const config = await loadConfig(repoRoot, testHome());
-    expect(config.systemPrompt).toBeUndefined();
-    expect(config.maxParallel).toBe(6);
   });
 
   it('malformed JSON degrades to the full default (never throws)', async () => {
@@ -92,13 +90,6 @@ describe('loadConfig systemPrompt', () => {
 
   /** `defaultModels?` (R6 1.5) rides the same additive-key rules as `systemPrompt`. */
   describe('defaultModels', () => {
-    it('is undefined when absent — old config files load unchanged', async () => {
-      write({ maxParallel: 5 });
-      const config = await loadConfig(repoRoot, testHome());
-      expect(config.defaultModels).toBeUndefined();
-      expect(config.maxParallel).toBe(5);
-    });
-
     it('round-trips per-runner presets, trimmed', async () => {
       write({ defaultModels: { claude: ' opus ', opencode: 'openai/gpt-5.1' } });
       expect((await loadConfig(repoRoot, testHome())).defaultModels).toEqual({
@@ -132,13 +123,6 @@ describe('loadConfig systemPrompt', () => {
   /** `worktreeRetention` (#483): count-based, always materialized (default 10),
    *  `.catch(10)` so a bad value degrades to the default. `0` = unlimited. */
   describe('worktreeRetention', () => {
-    it('defaults to 10 when absent (old config files load unchanged)', async () => {
-      write({ maxParallel: 5 });
-      const config = await loadConfig(repoRoot, testHome());
-      expect(config.worktreeRetention).toBe(10);
-      expect(config.maxParallel).toBe(5);
-    });
-
     it('round-trips a configured count', async () => {
       write({ worktreeRetention: 3 });
       expect((await loadConfig(repoRoot, testHome())).worktreeRetention).toBe(3);
@@ -149,16 +133,11 @@ describe('loadConfig systemPrompt', () => {
       expect((await loadConfig(repoRoot, testHome())).worktreeRetention).toBe(0);
     });
 
-    it('degrades a bad value to the default (10) via .catch', async () => {
-      write({ worktreeRetention: -4, maxParallel: 6 });
+    it.each([-4, 'lots'])('degrades invalid retention %s to 10 without changing other keys', async worktreeRetention => {
+      write({ worktreeRetention, maxParallel: 6 });
       const config = await loadConfig(repoRoot, testHome());
       expect(config.worktreeRetention).toBe(10);
       expect(config.maxParallel).toBe(6);
-    });
-
-    it('degrades a wrong-typed value to the default (10)', async () => {
-      write({ worktreeRetention: 'lots' });
-      expect((await loadConfig(repoRoot, testHome())).worktreeRetention).toBe(10);
     });
   });
 });

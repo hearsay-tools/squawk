@@ -37,18 +37,12 @@ function fakeGh({ listings, created = 0 }) {
   return { gh, calls, verbs: () => calls.map(args => args.slice(0, 2).join(' ')) };
 }
 
-test('the inbox lists issues under the repository\'s canonical name, so it finds the day issue', t => {
-  assert.equal(INBOX.repo, CANONICAL);
-  const fake = fakeGh({ listings: [[{ number: 5, title: TITLE }]] });
-  assert.equal(post({ bodyFile: finding(t), gh: fake.gh, now: NOW }).issue, 5);
-  assert.deepEqual(fake.verbs(), ['issue list', 'issue comment']);
-});
-
 test('the inbox title carries the UTC date', () => {
   assert.equal(inboxTitle(new Date('2026-10-25T23:30:00-02:00')), 'Friction inbox 2026-10-26');
 });
 
 test('a finding goes to the existing inbox for today without creating one', t => {
+  assert.equal(INBOX.repo, CANONICAL);
   const fake = fakeGh({ listings: [[{ number: 4, title: 'Friction inbox 2026-10-24' }, { number: 5, title: TITLE }]] });
   const result = post({ bodyFile: finding(t), gh: fake.gh, now: NOW });
   assert.deepEqual(result, { issue: 5, url: `https://github.com/${CANONICAL}/issues/5#issuecomment-1` });

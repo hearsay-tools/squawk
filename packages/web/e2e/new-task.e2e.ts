@@ -324,7 +324,7 @@ describe('the full-screen /new against a live dry-run server', () => {
     ])
 
     // The source is recorded as lastTask — a record of what ran, not a preselection for the
-    // next task (see the next spec, and `resolveSource`).
+    // next task (see `resolveSource`).
     // Delayed-save failure bundle: https://github.com/hearsay-tools/cezarion/pull/841#discussion_r4185080127
     let lastTask: unknown
     const uiState = await pollFor(async signal => {
@@ -338,15 +338,6 @@ describe('the full-screen /new against a live dry-run server', () => {
 
     // The thread really rendered (the run parks at waiting under the dry-run mock).
     browser.waitForFunction(`document.querySelector('[data-route="task-thread"] [data-slot="composer"] textarea') !== null`)
-  }, 90_000)
-
-  it('back on /new the skill is gone with the task it ran; iPhone hero screenshot', () => {
-    pickSpecWriter()
-    browser.waitForFunction(`document.querySelector('[data-slot="source-menu"]') === null`)
-    browser.fill('[data-slot="composer"] textarea', 'Draft a spec for the new-task hero e2e.')
-    browser.click('[aria-label="Start task"]')
-    browser.waitForFunction(`location.pathname.startsWith('${scoped('/tasks/')}')`)
-    browser.waitForFunction(`document.querySelector('[data-route="task-thread"]') !== null && document.querySelector('[data-route="new"]') === null`)
     browser.click(`[data-slot="sidebar"] a[href="${scoped('/new')}"]`)
     // The started skill does NOT follow the user into the next task — the whole point of the
     // empty state. A fresh composer picks nothing and shows the invitation. Waiting on the
@@ -366,7 +357,7 @@ describe('the full-screen /new against a live dry-run server', () => {
     browser.waitForFunction(`document.querySelector('[data-route="new"]') !== null`)
     browser.screenshot(`${artifactsDir}/new-task-hero-iphone.png`, { viewport: true })
     browser.setViewport(1440, 900)
-  })
+  }, 90_000)
 
   it('picking a WORKFLOW from the menu labels the pill, and Start posts it (#263)', async () => {
     // The reported gap, end-to-end: the row under the Workflows group, the pill taking its

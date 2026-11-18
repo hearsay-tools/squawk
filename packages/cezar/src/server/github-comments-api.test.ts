@@ -42,17 +42,13 @@ describe('the github comments API', () => {
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
-  it('returns a dry-run thread for a valid issue request', async () => {
-    const res = await apiRequest(app, '/api/v1/github/comments/issue/142');
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as ForgeCommentsData;
-    expect(body.available).toBe(true);
-    expect(body.comments.length).toBeGreaterThan(0);
-  });
-
-  it('includes a merge event for a PR but not for an issue', async () => {
+  it('returns issue and PR threads with a merge event only for the PR', async () => {
+    const issueResponse = await apiRequest(app, '/api/v1/github/comments/issue/142');
+    expect(issueResponse.status).toBe(200);
+    const issue = (await issueResponse.json()) as ForgeCommentsData;
+    expect(issue.available).toBe(true);
+    expect(issue.comments.length).toBeGreaterThan(0);
     const pr = (await (await apiRequest(app, '/api/v1/github/comments/pr/137')).json()) as ForgeCommentsData;
-    const issue = (await (await apiRequest(app, '/api/v1/github/comments/issue/142')).json()) as ForgeCommentsData;
     expect(pr.events!.some((e) => e.kind === 'merged')).toBe(true);
     expect(issue.events!.some((e) => e.kind === 'merged')).toBe(false);
   });

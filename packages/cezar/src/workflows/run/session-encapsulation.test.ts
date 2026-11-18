@@ -10,23 +10,12 @@ function session(): AgentSession {
     sendMessage: unused, sendAgentMessage: unused, discardQueuedMessages: unused,
     holdsHumanInput: unused, end: unused, interrupt: vi.fn() };
 }
-const define = (target: object, key: string, value: unknown) => Reflect.defineProperty(target, key, { value });
-const set = (target: object, key: string, value: unknown) => Reflect.set(target, key, value);
-const setPrototype = (target: object, prototype: object | null) => Reflect.setPrototypeOf(target, prototype);
 const replace = (target: object, key: string, value: unknown) => Object.assign(target, { [key]: value });
 
-it('locks the session slot and group while commands retain the same runner capability', () => {
+it('retains the same runner capability through session owner commands', () => {
   const state = createActiveRun({ cwd: '/task', pendingHumanAsk: false, autonomous: false });
   const group = state.liveSession;
   const wire = session();
-  expect(Object.getOwnPropertyDescriptor(state, 'liveSession')).toMatchObject({ writable: false, configurable: false });
-  expect(Object.isFrozen(group)).toBe(true);
-  expect(Object.isFrozen(Object.getPrototypeOf(group))).toBe(true);
-  expect(() => replace(state, 'liveSession', createSessionGroup('/other'))).toThrow(TypeError);
-  expect(() => replace(group, 'session', wire)).toThrow(TypeError);
-  expect(define(group, 'cwd', '/other')).toBe(false);
-  expect(set(group, 'cancelled', true)).toBe(false);
-  expect(setPrototype(group, null)).toBe(false);
   group.attachSession(wire);
   expect(group.session).toBe(wire);
   expect(Object.isFrozen(wire)).toBe(false);

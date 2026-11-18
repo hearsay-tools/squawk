@@ -8,7 +8,7 @@ import type { RunnerId } from '../core/agent-runner.ts';
 import { runnerDisplayName } from '@open-mercato/cezar-contract/runner-facts';
 import { terminalExecutable, type resumeCommand } from '../core/runner-cli.ts';
 import type { RunRecord } from '../runs/store.ts';
-import { AgentAccountUnavailableError, resolveProfileEnvForRoot } from '../workspace/agent-profiles.ts';
+import { resolveProfileEnvForRoot } from '../workspace/agent-profiles.ts';
 import { readWorktreePath } from './git-changes.ts';
 import type { openFileInDefaultApp, openInApp } from './open-in-app.ts';
 import type { openInTerminal } from './open-in-terminal.ts';
@@ -123,11 +123,8 @@ export async function freshCliHandoff(cliRunner: RunnerId, repoRoot: string, hom
   if (command === null) {
     return { error: `the configured ${runnerDisplayName(cliRunner)} executable cannot be used in a terminal command` };
   }
-  const account = await resolveProfileEnvForRoot(repoRoot, cliRunner, undefined, process.env, home).then(({ env }) => ({ env }), (err: unknown) => {
-    if (err instanceof AgentAccountUnavailableError) return { error: err.message };
-    throw err;
-  });
-  return { command, ...account };
+  const { env } = await resolveProfileEnvForRoot(repoRoot, cliRunner, undefined, process.env, home);
+  return { command, env };
 }
 
 /** Editors, the file manager and a plain terminal all open the same selected directory. */

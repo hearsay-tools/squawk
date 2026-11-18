@@ -31,7 +31,6 @@ const profile = (over: Partial<AgentProfile> & Pick<AgentProfile, 'id'>): AgentP
   looksValid: true,
   isDefault: false,
   status: { provider: 'claude', status: 'connected' },
-  files: [],
   ...over,
 })
 
@@ -45,13 +44,10 @@ const DEFAULTS: AgentProfile[] = [
     path: '/home/u/.codex',
     isDefault: true,
     status: { provider: 'codex', status: 'disconnected' },
-    files: [],
   }),
 ]
 
 let requests: Array<{ method: string; url: string; body?: unknown }> = []
-/** Every `…/details` GET — used to prove none happens until the row is expanded. */
-let detailReads: string[] = []
 /** Every `…/status` GET — the listing must never carry auth, so each row asks for its own. */
 let statusReads: string[] = []
 
@@ -62,15 +58,10 @@ function serve(
     deleteError?: string
     createStatus?: number
     createError?: string
-    details?: unknown
-    openStatus?: number
-    openError?: string
-    targets?: unknown
     status?: unknown | undefined
   } = {},
 ) {
   requests = []
-  detailReads = []
   statusReads = []
   let state = response
   const json = (payload: unknown, status = 200) =>
@@ -111,28 +102,9 @@ function serve(
         state = { ...state, profiles: [...state.profiles, created] }
         return json({ profile: created }, 201)
       }
-      if (url.includes('/agent-profiles/') && url.endsWith('/details') && method === 'GET') {
-        detailReads.push(url)
-        return json(options.details ?? { available: true, fields: [
-          { label: 'Email', value: 'me@example.com' },
-          { label: 'Organization', value: "me@example.com's Organization" },
-        ] })
-      }
-      if (url.includes('/agent-profiles/') && url.endsWith('/open') && method === 'POST') {
-        if (options.openStatus) return json({ error: options.openError }, options.openStatus)
-        return json({ opened: true, path: '/home/u/.claude/settings.json' })
-      }
       if (url.includes('/agent-profiles/') && url.includes('/status') && method === 'GET') {
         statusReads.push(url)
         return json({ status: options.status ?? { provider: 'claude', status: 'connected' } })
-      }
-      if (url.endsWith('/open-targets') && method === 'GET') {
-        return json({ targets: options.targets ?? [
-          { id: 'finder', label: 'Finder', icon: 'folder' },
-          { id: 'terminal', label: 'Terminal', icon: 'terminal' },
-          { id: 'vscode', label: 'VS Code', icon: 'vscode' },
-          { id: 'cli:claude', label: 'Claude CLI', icon: 'claude' },
-        ] })
       }
       if (url.startsWith('/api/v1/fs/browse') && method === 'GET') {
         return json({
@@ -198,20 +170,15 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-/** Identity details remain opt-in; card management never needs this fetch. */
-const openDetails = async (id: string) => {
-  const row = await waitFor(() => {
+const waitForRow = (id: string) =>
+  waitFor(() => {
     expect(rowFor(id)).not.toBeNull()
     return rowFor(id)!
   })
-  fireEvent.click(row.querySelector('[data-action="account-details-toggle"]')!)
-  await waitFor(() => expect(row.querySelector('[data-slot="account-details"]')).not.toBeNull())
-  return row
-}
 
 describe('the agent accounts section', () => {
   it('does not invent a discovered login when the selected provider has no account rows', async () => {
-    serve({ editable: true, profileCapableProviders: ['claude', 'codex'], defaults: {}, selections: {}, profiles: [] })
+    serve({ editable: true, profileCapableProviders: ['claude', 'codex'], selections: {}, profiles: [] })
     renderAccounts()
     await waitFor(() => expect(document.querySelector('.settings-account-count')?.textContent).toBe('0 accounts (0 discovered, 0 added)'))
     expect(rows()).toHaveLength(0)
@@ -219,15 +186,12 @@ describe('the agent accounts section', () => {
 
   it('lists the discovered account with no edit controls at all', async () => {
     serve({ editable: true, profileCapableProviders: ['claude', 'codex'],
-      defaults: {},
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
 
     // One tab at a time, so only the ACTIVE agent's rows are in the DOM.
     await waitFor(() => expect(rows()).toHaveLength(1))
-    // The discovered profile is what Squawk found — a Rename or Remove would imply a setting. Checked
-    // with the panel OPEN, since that is now the only place either could appear.
-    await openDetails('default')
+    // The discovered profile is what Squawk found — a Rename or Remove would imply a setting.
     expect(document.querySelector('[data-slot="account-manage"]')).toBeNull()
     expect(document.querySelector('[data-action="account-rename"]')).toBeNull()
     expect(document.querySelector('[data-action="account-remove"]')).toBeNull()
@@ -235,7 +199,6 @@ describe('the agent accounts section', () => {
 
   it('shows an extra account with its folder as the user wrote it', async () => {
     serve({
-      defaults: {},
       editable: true,
       profileCapableProviders: ['claude', 'codex'],
       selections: {},
@@ -254,7 +217,6 @@ describe('the agent accounts section', () => {
 
   it('says a not-yet-created folder is fine, rather than showing it as broken', async () => {
     serve({
-      defaults: {},
       editable: true,
       profileCapableProviders: ['claude', 'codex'],
       selections: {},
@@ -270,7 +232,6 @@ describe('the agent accounts section', () => {
 
   it('flags an unrecognised folder without refusing it', async () => {
     serve({
-      defaults: {},
       editable: true,
       profileCapableProviders: ['claude', 'codex'],
       selections: {},
@@ -281,8 +242,7 @@ describe('the agent accounts section', () => {
     await waitFor(() => expect(rowFor('odd')).not.toBeNull())
     expect(rowFor('odd')!.querySelector('[data-slot="account-unrecognised"]')).not.toBeNull()
     // Still fully usable — the flow is add → Connect → the CLI writes the folder.
-    const row = await openDetails('odd')
-    expect(row.querySelector('[data-action="account-remove"]')).not.toBeNull()
+    expect(rowFor('odd')!.querySelector('[data-action="account-remove"]')).not.toBeNull()
   })
 
   /**
@@ -296,7 +256,6 @@ describe('the agent accounts section', () => {
         editable: true,
         profileCapableProviders: ['claude', 'codex'],
         selections: {},
-        defaults: {},
         profiles: [...DEFAULTS, profile({
           id: 'klaudiusz',
           label: 'Klaudiusz',
@@ -325,7 +284,6 @@ describe('the agent accounts section', () => {
         editable: true,
         profileCapableProviders: ['claude', 'codex'],
         selections: {},
-        defaults: {},
         profiles: [profile({
           id: 'default',
           label: 'Default',
@@ -352,7 +310,6 @@ describe('the agent accounts section', () => {
         editable: true,
         profileCapableProviders: ['claude', 'codex'],
         selections: {},
-        defaults: {},
         profiles: [...DEFAULTS, profile({
           id: 'klaudiusz',
           status: { provider: 'claude', status: 'connected' },
@@ -375,7 +332,6 @@ describe('the agent accounts section', () => {
         editable: true,
         profileCapableProviders: ['claude', 'codex'],
         selections: {},
-        defaults: {},
         profiles: [...DEFAULTS, profile({ id: 'klaudiusz' })],
       })
       renderAccounts()
@@ -391,27 +347,19 @@ describe('the agent accounts section', () => {
     })
   })
 
-  it('offers card actions without fetching identity and keeps them when details close', async () => {
-    serve({ defaults: {}, editable: true, profileCapableProviders: ['claude', 'codex'],
+  it('offers Rename and Remove on an added account, and no details control', async () => {
+    serve({ editable: true, profileCapableProviders: ['claude', 'codex'],
       selections: {}, profiles: [...DEFAULTS, profile({ id: 'klaudiusz', label: 'Klaudiusz' })] })
     renderAccounts()
-    const row = await waitFor(() => {
-      expect(rowFor('klaudiusz')).not.toBeNull()
-      return rowFor('klaudiusz')!
-    })
+    const row = await waitForRow('klaudiusz')
     expect(row.querySelector('[data-action="account-remove"]')).not.toBeNull()
     expect(row.querySelector('[data-action="account-rename"]')).not.toBeNull()
-    expect(row.querySelector('[data-slot="account-details"]')).toBeNull()
-    expect(detailReads).toHaveLength(0)
-    await openDetails('klaudiusz')
-    fireEvent.click(row.querySelector('[data-action="account-details-toggle"]')!)
-    await waitFor(() => expect(row.querySelector('[data-slot="account-details"]')).toBeNull())
-    expect(row.querySelector('[data-slot="account-manage"]')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull()
+    expect(requests.some((r) => r.url.endsWith('/details'))).toBe(false)
   })
 
   it('renames without touching the folder', async () => {
     serve({
-      defaults: {},
       editable: true,
       profileCapableProviders: ['claude', 'codex'],
       selections: {},
@@ -419,7 +367,7 @@ describe('the agent accounts section', () => {
     })
     renderAccounts()
 
-    const row = await openDetails('klaudiusz')
+    const row = await waitForRow('klaudiusz')
     fireEvent.click(row.querySelector('[data-action="account-rename"]')!)
     fireEvent.change(screen.getByLabelText('Name for Klaudiusz'), { target: { value: 'Client A' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -430,7 +378,6 @@ describe('the agent accounts section', () => {
 
   it('confirms a removal by saying what is NOT deleted', async () => {
     serve({
-      defaults: {},
       editable: true,
       profileCapableProviders: ['claude', 'codex'],
       selections: {},
@@ -438,7 +385,7 @@ describe('the agent accounts section', () => {
     })
     renderAccounts()
 
-    const row = await openDetails('klaudiusz')
+    const row = await waitForRow('klaudiusz')
     fireEvent.click(row.querySelector('[data-action="account-remove"]')!)
 
     const confirm = await waitFor(() => document.querySelector('[data-slot="accounts-remove-confirm"]')!)
@@ -454,7 +401,6 @@ describe('the agent accounts section', () => {
   it("surfaces a refused removal in the server's own words", async () => {
     serve(
       {
-        defaults: {},
         editable: true,
         profileCapableProviders: ['claude', 'codex'],
       selections: {},
@@ -464,7 +410,7 @@ describe('the agent accounts section', () => {
     )
     renderAccounts()
 
-    const row = await openDetails('klaudiusz')
+    const row = await waitForRow('klaudiusz')
     fireEvent.click(row.querySelector('[data-action="account-remove"]')!)
     fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
 
@@ -520,169 +466,10 @@ describe('the agent accounts section', () => {
     })
   })
 
-  describe('Show details', () => {
-    const CLAUDE_FILES = [
-      { id: 'claude.user.settings', label: 'settings.json', path: '/home/u/.claude/settings.json', exists: true },
-      { id: 'claude.user.memory', label: 'CLAUDE.md', path: '/home/u/.claude/CLAUDE.md', exists: false },
-    ]
-    const withFiles = () => ({
-      editable: true as const,
-      profileCapableProviders: ['claude', 'codex'] as const,
-      selections: {},
-      profiles: [profile({ id: 'default', label: 'Default', isDefault: true, files: CLAUDE_FILES })],
-    })
-    const toggle = () => document.querySelector<HTMLButtonElement>('[data-action="account-details-toggle"]')!
-
-    it('fetches NOTHING until asked — hidden means absent, not merely unrendered', async () => {
-      serve(withFiles() as never)
-      renderAccounts()
-
-      await waitFor(() => expect(rows()).toHaveLength(1))
-      expect(detailReads).toEqual([])
-      expect(document.querySelector('[data-slot="account-details"]')).toBeNull()
-      // …and the listing itself never carried an identity to leak.
-      expect(JSON.stringify(withFiles())).not.toContain('@example.com')
-    })
-
-    it('reveals the identity on demand, and hides it again', async () => {
-      serve(withFiles() as never)
-      renderAccounts()
-      await waitFor(() => expect(rows()).toHaveLength(1))
-
-      fireEvent.click(toggle())
-      await waitFor(() =>
-        expect(document.querySelector('[data-slot="account-identity"]')?.textContent).toContain(
-          'me@example.com',
-        ),
-      )
-      expect(detailReads).toHaveLength(1)
-      // Addressed as `default:<provider>`, since every discovered account shares `id: "default"`.
-      expect(detailReads[0]).toContain('default%3Aclaude')
-
-      fireEvent.click(toggle())
-      await waitFor(() => expect(document.querySelector('[data-slot="account-details"]')).toBeNull())
-    })
-
-    it('says WHY there is nothing rather than showing an empty panel', async () => {
-      serve(withFiles() as never, {
-        details: { available: false, reason: 'Not signed in on this account yet — use Connect.', fields: [] },
-      })
-      renderAccounts()
-      await waitFor(() => expect(rows()).toHaveLength(1))
-
-      fireEvent.click(toggle())
-      await waitFor(() =>
-        expect(
-          document.querySelector('[data-slot="account-identity-unavailable"]')?.textContent,
-        ).toContain('Not signed in'),
-      )
-    })
-
-    const fileMenus = () => [...document.querySelectorAll('[data-slot="account-open-file"]')]
-    /** Radix opens on pointerdown; then pick an item by its target id. */
-    const pickFrom = async (trigger: Element, target: string) => {
-      fireEvent.pointerDown(trigger)
-      await waitFor(() => expect(document.querySelector(`[data-target="${target}"]`)).not.toBeNull())
-      fireEvent.click(document.querySelector(`[data-target="${target}"]`)!)
-    }
-    const openBody = () => requests.find((r) => r.url.endsWith('/open'))?.body
-
-    it('offers each of the account\'s own config files, and its folder', async () => {
-      serve(withFiles() as never)
-      renderAccounts()
-      await waitFor(() => expect(rows()).toHaveLength(1))
-      fireEvent.click(toggle())
-
-      await waitFor(() => expect(fileMenus()).toHaveLength(2))
-      expect(fileMenus().map((b) => b.textContent)).toEqual(['settings.json', 'CLAUDE.md'])
-      // A file the agent has not written yet is still offered, and says so on hover.
-      expect(fileMenus()[1]?.getAttribute('title')).toContain('not created yet')
-      expect(document.querySelector('[data-slot="account-open-folder"]')).not.toBeNull()
-    })
-
-    it('opens with the system default by ID — never by a path the client composed', async () => {
-      serve(withFiles() as never)
-      renderAccounts()
-      await waitFor(() => expect(rows()).toHaveLength(1))
-      fireEvent.click(toggle())
-      await waitFor(() => expect(fileMenus()).toHaveLength(2))
-
-      await pickFrom(fileMenus()[0]!, 'system')
-      await waitFor(() => expect(openBody()).toBeDefined())
-      // No `target` at all is what "system default" means on the wire.
-      expect(openBody()).toEqual({ file: 'claude.user.settings' })
-      // The path is the server's to resolve; nothing path-shaped is sent.
-      expect(JSON.stringify(openBody())).not.toContain('/')
-    })
-
-    it('lets you pick a detected editor instead of the system default', async () => {
-      serve(withFiles() as never)
-      renderAccounts()
-      await waitFor(() => expect(rows()).toHaveLength(1))
-      fireEvent.click(toggle())
-      await waitFor(() => expect(fileMenus()).toHaveLength(2))
-
-      await pickFrom(fileMenus()[0]!, 'vscode')
-      await waitFor(() => expect(openBody()).toBeDefined())
-      expect(openBody()).toEqual({ file: 'claude.user.settings', target: 'vscode' })
-    })
-
-    it('never offers a target that cannot act on a FILE', async () => {
-      serve(withFiles() as never)
-      renderAccounts()
-      await waitFor(() => expect(rows()).toHaveLength(1))
-      fireEvent.click(toggle())
-      await waitFor(() => expect(fileMenus()).toHaveLength(2))
-
-      fireEvent.pointerDown(fileMenus()[0]!)
-      await waitFor(() => expect(document.querySelector('[data-target="vscode"]')).not.toBeNull())
-      // `terminal` would `cd` into the file; a `cli:` handoff would start an agent session in the
-      // config folder. The route refuses both — the menu must not offer them either.
-      expect(document.querySelector('[data-target="terminal"]')).toBeNull()
-      expect(document.querySelector('[data-target="cli:claude"]')).toBeNull()
-      expect(document.querySelector('[data-target="finder"]')).toBeNull()
-    })
-
-    it('does offer the file manager and a terminal for the FOLDER', async () => {
-      serve(withFiles() as never)
-      renderAccounts()
-      await waitFor(() => expect(rows()).toHaveLength(1))
-      fireEvent.click(toggle())
-      await waitFor(() =>
-        expect(document.querySelector('[data-slot="account-open-folder"]')).not.toBeNull(),
-      )
-
-      fireEvent.pointerDown(document.querySelector('[data-slot="account-open-folder"]')!)
-      await waitFor(() => expect(document.querySelector('[data-target="finder"]')).not.toBeNull())
-      expect(document.querySelector('[data-target="terminal"]')).not.toBeNull()
-      // Still never an agent CLI: that opens a task worktree, not a config folder.
-      expect(document.querySelector('[data-target="cli:claude"]')).toBeNull()
-    })
-
-    it("surfaces the server's refusal when a file is not there yet", async () => {
-      serve(withFiles() as never, {
-        openStatus: 409,
-        openError: 'this account has no CLAUDE.md yet',
-      })
-      renderAccounts()
-      await waitFor(() => expect(rows()).toHaveLength(1))
-      fireEvent.click(toggle())
-      await waitFor(() => expect(fileMenus()).toHaveLength(2))
-
-      await pickFrom(fileMenus()[1]!, 'system')
-      await waitFor(() =>
-        expect(document.querySelector('[data-slot="toast"]')?.textContent).toContain(
-          'no CLAUDE.md yet',
-        ),
-      )
-    })
-  })
-
   /**
    * A cockpit newer than the server it is talking to — routine in development, where Vite serves
    * this bundle while `dist/` or a separate process serves the API. An additive field the server
-   * has never heard of must degrade, not crash: `account.files.map` of undefined took the whole
-   * pane down with a white screen.
+   * has never heard of must degrade, not crash.
    */
   it('survives a server that answers without the additive collections', async () => {
     serve({
@@ -697,26 +484,18 @@ describe('the agent accounts section', () => {
         looksValid: true,
         isDefault: true,
         status: { provider: 'claude', status: 'connected' },
-        // No `files` — the field this pane crashed on.
       }],
       // No `profileCapableProviders`, no `selections` either.
     } as never)
     renderAccounts()
 
     await waitFor(() => expect(rows()).toHaveLength(1))
-    fireEvent.click(document.querySelector('[data-action="account-details-toggle"]')!)
-
-    // The panel renders, with no file buttons and the folder action still usable.
-    await waitFor(() => expect(document.querySelector('[data-slot="account-details"]')).not.toBeNull())
-    expect([...document.querySelectorAll('[data-slot="account-open-file"]')]).toHaveLength(0)
-    expect(document.querySelector('[data-slot="account-open-folder"]')).not.toBeNull()
-    // …and no Add button, because the server never said which providers can carry one.
+    // No Add button, because the server never said which providers can carry one.
     expect(document.querySelector('[data-action="accounts-add"]')).toBeNull()
   })
 
   it('withholds every path in hosted mode', async () => {
     serve({ editable: false, profileCapableProviders: ['claude', 'codex'],
-      defaults: {},
       selections: {}, profiles: [] })
     renderAccounts()
 
@@ -731,7 +510,6 @@ describe('the agent accounts section', () => {
 
   it('gives every agent a tab, including one that cannot carry a second account', async () => {
     serve({ editable: true, profileCapableProviders: ['claude', 'codex'],
-      defaults: {},
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
 
@@ -747,7 +525,6 @@ describe('the agent accounts section', () => {
 
   it('offers no Add on an agent that cannot carry a second account, and says why', async () => {
     serve({ editable: true, profileCapableProviders: ['claude', 'codex'],
-      defaults: {},
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
 
@@ -758,7 +535,6 @@ describe('the agent accounts section', () => {
 
   it('reports what the MACHINE has for the active agent, not per account', async () => {
     serve({ editable: true, profileCapableProviders: ['claude', 'codex'],
-      defaults: {},
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
 
@@ -771,7 +547,6 @@ describe('the agent accounts section', () => {
 
   it('names the install command for an agent that is not on this machine', async () => {
     serve({ editable: true, profileCapableProviders: ['claude', 'codex'],
-      defaults: {},
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
 
@@ -801,7 +576,6 @@ describe('the add-account dialog', () => {
 
   it('accepts a hand-typed `~` folder that does not exist yet', async () => {
     serve({ editable: true, profileCapableProviders: ['claude', 'codex'],
-      defaults: {},
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
     await openDialog()
@@ -822,7 +596,6 @@ describe('the add-account dialog', () => {
 
   it('refuses an empty folder without sending anything', async () => {
     serve({ editable: true, profileCapableProviders: ['claude', 'codex'],
-      defaults: {},
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
     await openDialog()
@@ -834,7 +607,6 @@ describe('the add-account dialog', () => {
 
   it('asks the browser for HIDDEN folders — otherwise it lists no candidate at all', async () => {
     serve({ editable: true, profileCapableProviders: ['claude', 'codex'],
-      defaults: {},
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
     await openDialog()
@@ -851,7 +623,6 @@ describe('the add-account dialog', () => {
 
   it('browsing FILLS the folder field rather than replacing it as a hidden selection', async () => {
     serve({ editable: true, profileCapableProviders: ['claude', 'codex'],
-      defaults: {},
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
     await openDialog()
@@ -870,7 +641,6 @@ describe('the add-account dialog', () => {
 
   it('opens on the agent whose own Add button was clicked', async () => {
     serve({ editable: true, profileCapableProviders: ['claude', 'codex'],
-      defaults: {},
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
     await openDialog('codex')
@@ -881,39 +651,19 @@ describe('the add-account dialog', () => {
     expect(dirField().placeholder).toBe('~/.codex-second')
   })
 
-  it('offers pi and omp an Add of their own, with a folder example of their own', async () => {
-    serve({ editable: true, profileCapableProviders: ['claude', 'codex', 'pi', 'omp'],
-      defaults: {},
+  it('offers pi an Add of its own, with a folder example of its own', async () => {
+    serve({ editable: true, profileCapableProviders: ['claude', 'codex', 'pi'],
       selections: {}, profiles: DEFAULTS })
     renderAccounts()
 
     await openDialog('pi')
     expect(screen.getByLabelText<HTMLSelectElement>('Agent').value).toBe('pi')
     expect(dirField().placeholder).toBe('~/.pi-second/agent')
-    // pi takes any folder, like Claude and Codex, so it carries no omp rule.
-    expect(document.querySelector('[data-slot="add-account-folder-hint"]')).toBeNull()
-  })
-
-  it('tells an omp user the folder is an omp profile, before the server has to', async () => {
-    serve({ editable: true, profileCapableProviders: ['claude', 'codex', 'pi', 'omp'],
-      defaults: {},
-      selections: {}, profiles: DEFAULTS })
-    renderAccounts()
-
-    await openDialog('omp')
-    expect(dirField().placeholder).toBe('~/.omp/profiles/second')
-    expect(document.querySelector('[data-slot="add-account-folder-hint"]')?.textContent).toContain('~/.omp/profiles/')
-
-    // Switching agent inside the dialog takes the rule away with it.
-    fireEvent.change(screen.getByLabelText<HTMLSelectElement>('Agent'), { target: { value: 'claude' } })
-    expect(document.querySelector('[data-slot="add-account-folder-hint"]')).toBeNull()
-    expect(dirField().placeholder).toBe('~/.claude-second')
   })
 
   it("shows the server's refusal verbatim", async () => {
     serve(
       { editable: true, profileCapableProviders: ['claude', 'codex'],
-        defaults: {},
       selections: {}, profiles: DEFAULTS },
       { createStatus: 409, createError: "that is already this agent's default folder" },
     )

@@ -28,6 +28,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => resetToasts())
   cleanup()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -896,7 +897,7 @@ describe('the follow-up prompt draft (open-mercato/cezar#408 item 4)', () => {
     await waitFor(() => expect(promptValue()).toBe('do not lose me'))
   })
 
-  it('a successful run spends that item’s draft', async () => {
+  it('a successful run spends the draft immediately and after remount', async () => {
     stubFetch()
     await openDetail()
     fireEvent.change(promptField(), { target: { value: 'spend me' } })
@@ -904,27 +905,15 @@ describe('the follow-up prompt draft (open-mercato/cezar#408 item 4)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
     await waitFor(() => expect(document.querySelector('[data-slot="gh-queued"]')).not.toBeNull())
+
+    await waitFor(() => expect(promptValue()).toBe(BASE))
+    expect(readFollowupPrompt(ISSUE_142.url)).toBe('')
 
     cleanup()
     stubFetch()
     await openDetail()
     // Spent → back to the untouched pre-fill, not to an empty box.
     expect(promptValue()).toBe(BASE)
-  })
-
-  it('spending the draft clears the textarea THERE AND THEN, not only on the next mount', async () => {
-    stubFetch()
-    await openDetail()
-    fireEvent.change(promptField(), { target: { value: 'spend me' } })
-    await waitFor(() => expect(promptValue()).toBe('spend me'))
-
-    fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
-    await waitFor(() => expect(document.querySelector('[data-slot="gh-queued"]')).not.toBeNull())
-
-    // Storage and UI must agree without a remount: leaving the text on screen while the entry is
-    // gone from storage means it silently vanishes the next time you come back.
-    await waitFor(() => expect(promptValue()).toBe(BASE))
-    expect(readFollowupPrompt(ISSUE_142.url)).toBe('')
   })
 })
 
@@ -960,32 +949,19 @@ describe('⌘/Ctrl+Enter submits the follow-up composer (open-mercato/cezar#408 
     )
   })
 
-  it('a bare Enter does NOT submit — it is a multi-line instructions box', async () => {
+  it.each([
+    { name: 'bare Enter', modifiers: {} },
+    { name: 'Shift+Ctrl+Enter', modifiers: { ctrlKey: true, shiftKey: true } },
+  ])('$name does not submit the multiline instructions', async ({ modifiers }) => {
     const sent = stubFetch()
     await openDetail()
-
-    const textarea = screen.getByLabelText('Custom prompt')
-    fireEvent.keyDown(textarea, { key: 'Enter' })
-
-    // Give any (wrongly) scheduled submit a tick to happen before asserting its absence.
-    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
-    expect(sent.some((request) => request.method === 'POST' && request.path === '/api/v1/runs')).toBe(
-      false,
-    )
+    await waitForAgentRunEnabled()
+    vi.useFakeTimers()
+    fireEvent.keyDown(screen.getByLabelText('Custom prompt'), { key: 'Enter', ...modifiers })
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(sent.some((request) => request.method === 'POST' && request.path === '/api/v1/runs')).toBe(false)
   })
 
-  it('Shift+Ctrl+Enter does not submit — Shift wins, same rule as the thread composer', async () => {
-    const sent = stubFetch()
-    await openDetail()
-
-    const textarea = screen.getByLabelText('Custom prompt')
-    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true, shiftKey: true })
-
-    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
-    expect(sent.some((request) => request.method === 'POST' && request.path === '/api/v1/runs')).toBe(
-      false,
-    )
-  })
 })
 
 

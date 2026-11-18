@@ -177,7 +177,8 @@ describe('applyRunSummary', () => {
 
   it('updates title, status, references, tokens and archive in place — one run stays one row', () => {
     const list: RunSummary[] = [summary('r1', { status: RUN_STATUS.queued }), summary('r2')]
-    const next = applyRunSummary(list, summary('r1', {
+    const running = applyRunSummary(list, summary('r1', { status: RUN_STATUS.running }))
+    const next = applyRunSummary(running, summary('r1', {
       status: RUN_STATUS.done, tokensUsed: 99, titleSummary: 'Renamed', prNumber: 12, issueNumber: 7, archived: true,
     }))
 
@@ -186,14 +187,6 @@ describe('applyRunSummary', () => {
     expect(next?.[0]).toMatchObject({ status: RUN_STATUS.done, tokensUsed: 99, titleSummary: 'Renamed', prNumber: 12, issueNumber: 7, archived: true })
   })
 
-  it('does not duplicate a row however many events one run emits', () => {
-    let list: RunSummary[] | undefined = []
-    for (const status of ['queued', 'running', 'review', 'done'] as const) {
-      list = applyRunSummary(list, summary('r1', { status }))
-    }
-    expect(list).toHaveLength(1)
-    expect(list?.[0]?.status).toBe('done')
-  })
 
   it('inserts a new run by createdAt descending, matching the server order', () => {
     const list: RunSummary[] = [

@@ -76,12 +76,10 @@ describe('RunManager workflow restart', () => {
 
   it('does not mistake a legacy workflow step named continue-1 for a synthetic continuation', async () => {
     const clock = observeIdleClose(fixture.store);
-    const record = fixture.manager.startRun(SINGLE_STEP, { task: 'mock:cezar-ask choose', worktree: false });
+    const record = fixture.manager.startRun({ ...SINGLE_STEP, steps: [{ ...SINGLE_STEP.steps[0]!, id: 'continue-1' }] }, { task: 'mock:cezar-ask choose', worktree: false });
     fixture.currentId = record.id;
     await waitFor(record.id, (candidate) => candidate?.status === 'waiting');
     await idleClose(clock, record.id, fixture.manager, fixture.store, predicate => waitFor(record.id, predicate));
-    const persisted = fixture.store.getRun(record.id)!;
-    persisted.steps[0]!.id = 'continue-1';
     fixture.store.addStep(record.id, { id: 'later', name: 'Later', kind: STEP_KIND.check });
     fixture.store.updateRun(record.id, { currentStepId: 'continue-1', workflowDef: undefined });
 

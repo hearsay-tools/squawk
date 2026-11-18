@@ -135,11 +135,14 @@ export async function runHeadless(
     deps.process.exitCode = final === 'done' || final === 'review' ? 0 : 1;
   } finally {
     deps.process.off('SIGINT', onSigint); deps.process.off('SIGTERM', onSigterm); deps.process.off('SIGHUP', onSighup);
-    await delegation.close();
-    // A slow GitHub child must not keep a completed headless task alive. Any handle that
-    // already arrived has repaired the store; an unfinished lookup remains unknown.
-    repoHandleController.abort();
-    store.close();
+    try {
+      await delegation.close();
+    } finally {
+      // A slow GitHub child must not keep a completed headless task alive. Any handle that
+      // already arrived has repaired the store; an unfinished lookup remains unknown.
+      repoHandleController.abort();
+      store.close();
+    }
   }
 }
 

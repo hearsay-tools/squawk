@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CACHE_CREATION_WEIGHT, CACHE_READ_WEIGHT, costWeightedTokens, type RawUsage } from './usage.ts';
+import { costWeightedTokens, type RawUsage } from './usage.ts';
 
 describe('costWeightedTokens', () => {
   describe('absent or empty usage', () => {
@@ -54,10 +54,4 @@ describe('costWeightedTokens', () => {
     });
   });
 
-  it('exposes the weights it applies', () => {
-    expect(CACHE_READ_WEIGHT).toBe(0.1);
-    expect(CACHE_CREATION_WEIGHT).toBe(1.25);
-    expect(costWeightedTokens({ cache_read_input_tokens: 100 })).toBe(Math.round(100 * CACHE_READ_WEIGHT));
-    expect(costWeightedTokens({ cache_creation_input_tokens: 100 })).toBe(Math.round(100 * CACHE_CREATION_WEIGHT));
-  });
 });

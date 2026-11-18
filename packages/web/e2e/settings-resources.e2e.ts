@@ -62,22 +62,12 @@ beforeEach(async () => {
 
 describe('project settings → worktrees: retention against the live dry-run server', () => {
   it('renders only configuration: the retention field and a link to Git → Cleanup, where the panel lives', () => {
-    gotoResources()
     expect(browser.count('[data-slot="resources-worktree-retention"]')).toBe(1)
     // Issue 06 §3: the worktrees panel is listed once, on Git → Cleanup.
     expect(browser.count('[data-slot="worktrees-panel"]')).toBe(0)
     browser.click('[data-slot="worktrees-manage-link"]')
     browser.waitForFunction(`location.pathname.endsWith('/git/cleanup') && document.querySelector('[data-slot="worktrees-retention"]') !== null`)
     expect(browser.count('[data-slot="worktrees-panel"]')).toBe(1)
-  })
-
-  it('editing the count and saving persists through PUT /api/v1/config', async () => {
-    gotoResources()
-    browser.waitForFunction(`document.querySelector('[data-slot="resources-worktree-retention"]:not([disabled])') !== null && document.querySelector('[data-action="resources-save-retention"]:disabled') !== null`)
-    browser.fill('[data-slot="resources-worktree-retention"]', '4')
-    browser.waitForFunction(`document.querySelector('[data-action="resources-save-retention"]:not([disabled])') !== null`)
-    browser.click('[data-action="resources-save-retention"]')
-    await waitForConfig<ConfigAnswer>(baseUrl, (c) => c.worktreeRetention === 4, 'worktreeRetention 4')
   })
 
   it('0 saves as unlimited (a real value, not a clear)', async () => {

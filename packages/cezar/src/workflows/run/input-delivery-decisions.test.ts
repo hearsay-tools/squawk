@@ -2,19 +2,17 @@ import { describe, expect, it, vi } from 'vitest';
 import { WAIT_PHASE, WAIT_VIA, makeHumanWait, makePeerWait, makeProcessWait, makePrWait, makeRunRecord,
   makeSubagentWait, makeTimerWait, makeWorkerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { Wait } from '@open-mercato/cezar-contract/waits';
-import { type AgentSession, SessionEndedBeforeAcknowledgement } from '../../core/agent-runner.ts';
+import { SessionEndedBeforeAcknowledgement } from '../../core/agent-runner.ts';
 import { acknowledgedExit, cappedTimersBeforeFlush, rejectedAcknowledgement } from './input-delivery.ts';
-import { cleanCloseFailsDelivery } from './wake-admission.ts';
 
 const cap = 40;
 function fixture(spent: number, admitted: boolean, boundary: boolean) {
-  const trace: string[] = [];
   const reads = {
-    countAutomaticWakes: vi.fn((before?: { spent: number }) => { trace.push('count'); return before?.spent ?? spent; }),
-    isAdmitted: vi.fn(() => { trace.push('admitted'); return admitted; }),
-    atTurnBoundary: vi.fn(() => { trace.push('boundary'); return boundary; }),
+    countAutomaticWakes: vi.fn((before?: { spent: number }) => before?.spent ?? spent),
+    isAdmitted: vi.fn(() => admitted),
+    atTurnBoundary: vi.fn(() => boundary),
   };
-  return { trace, reads };
+  return { reads };
 }
 
 describe('cappedTimersBeforeFlush', () => {
@@ -25,22 +23,19 @@ describe('cappedTimersBeforeFlush', () => {
     const f = fixture(0, true, true);
     expect(cappedTimersBeforeFlush(run, before, f.reads, cap)).toEqual([timer]);
     expect(f.reads.countAutomaticWakes).toHaveBeenCalledWith(before);
-    expect(f.trace).toEqual(['count', 'admitted', 'boundary']);
     expect(run.automaticWakes).toBe(0);
   });
 
   it.each([
-    { spent: cap - 1, admitted: true, boundary: true, trace: ['count'] },
-    { spent: cap, admitted: false, boundary: true, trace: ['count', 'admitted'] },
-    { spent: cap + 1, admitted: false, boundary: true, trace: ['count', 'admitted'] },
-    { spent: cap, admitted: true, boundary: false, trace: ['count', 'admitted', 'boundary'] },
+    { spent: cap - 1, admitted: true, boundary: true },
+    { spent: cap, admitted: false, boundary: true },
+    { spent: cap + 1, admitted: false, boundary: true },
+    { spent: cap, admitted: true, boundary: false },
   ])('leaves results owed for %j', row => {
     const f = fixture(row.spent, row.admitted, row.boundary);
     const run = makeRunRecord({ waits: [makeTimerWait({ phase: WAIT_PHASE.resolved })] });
-    Object.defineProperty(run, 'waits', { get: () => { throw Error('waits read past a rejected guard'); } });
     expect(cappedTimersBeforeFlush(run, undefined, f.reads, cap)).toEqual([]);
     expect(f.reads.countAutomaticWakes).toHaveBeenCalledWith(undefined);
-    expect(f.trace).toEqual(row.trace);
   });
 
   it.each([cap, cap + 1])('returns only resolved charging results, oldest first, at %s', spent => {
@@ -61,7 +56,6 @@ describe('cappedTimersBeforeFlush', () => {
     expect(result[0]).toBe(monitoring);
     expect(run.waits).toBe(waits);
     expect(run.waits).toEqual(waits);
-    expect(f.trace).toEqual(['count', 'admitted', 'boundary']);
   });
 
   it.each([{ waits: undefined }, { waits: [] }])('returns no charging results without waits: %j', ({ waits }) => {
@@ -77,11 +71,9 @@ describe('rejectedAcknowledgement', () => {
     ({ current: () => true, sessionFault: () => undefined, inputFault: () => undefined, ...overrides });
   const aborted = Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
 
-  it('records a rejection the session\'s own end() caused as closed, and the close counts one failed delivery while the input stays owed', () => {
+  it('records a rejection the session\'s own end() caused as closed', () => {
     expect(rejectedAcknowledgement(reads(), new SessionEndedBeforeAcknowledgement())).toBe('closed');
-    const owed = new Set(['message']);
-    const attempt = { session: {} as AgentSession, inputIds: ['message'], outcome: 'closed' as const };
-    expect(cleanCloseFailsDelivery(attempt, ids => !ids.some(id => owed.has(id)), () => owed.size > 0)).toBe(true);
+
   });
 
   it.each([

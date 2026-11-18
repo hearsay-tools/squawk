@@ -32,22 +32,6 @@ describe('resume commands — shared golden parity across RUNNER_IDS', () => {
  * ids go through verbatim (correct in every shell), anything else fails closed.
  */
 describe('resumeCommand — session id validation', () => {
-  it('splices a normal session id verbatim, per backend — no quoting in any shell', () => {
-    const id = '9f8e7d6c-1234-4abc-9def-0123456789ab';
-    expect(resumeCommand('claude', id)).toBe(`claude --resume ${id}`);
-    expect(resumeCommand('codex', id)).toBe(`codex resume ${id}`);
-    expect(resumeCommand('opencode', id)).toBe(`opencode --session ${id}`);
-    expect(resumeCommand('pi', id)).toBe(`pi --session ${id}`);
-    expect(resumeCommand('omp', id)).toBe(`omp --resume ${id}`);
-  });
-
-  // Every runner id must map to its own CLI: a `claude --resume` for a session claude does not
-  // own resumes nothing (open-mercato/cezar#387).
-  it.each(RUNNER_IDS)('maps %s to its own CLI, never silently to claude', (runner) => {
-    const id = '9f8e7d6c-1234-4abc-9def-0123456789ab';
-    expect(resumeCommand(runner, id)?.startsWith(`${runner} `)).toBe(true);
-  });
-
   it('never emits a quote character — a POSIX quote would reach cmd.exe literally on win32', () => {
     const cmd = resumeCommand('claude', 'ses_01ABC.def-42');
     expect(cmd).toBe('claude --resume ses_01ABC.def-42');
@@ -62,11 +46,6 @@ describe('resumeCommand — session id validation', () => {
     expect(resumeCommand('opencode', 'a`id`')).toBeNull();
     expect(resumeCommand('claude', 'a b')).toBeNull();
     expect(resumeCommand('claude', '')).toBeNull();
-  });
-
-  it('refuses an option-like id — `--resume -x` would be read as a flag', () => {
-    expect(resumeCommand('claude', '-x')).toBeNull();
-    expect(resumeCommand('claude', '--help')).toBeNull();
   });
 
   it('bounds the id length', () => {

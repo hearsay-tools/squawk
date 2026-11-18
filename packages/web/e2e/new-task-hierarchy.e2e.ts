@@ -156,22 +156,25 @@ describe('New Task hierarchy (#168)', () => {
         return window.hierarchyFetch(input, init);
       };
     })()`)
-    browser.click('[aria-label="Start task"]')
-    browser.waitForFunction(`document.querySelector('${prompt}').readOnly`)
-    expect(browser.evaluate(`document.querySelector('${disclosure}').closest('[inert]') !== null`)).toBe(true)
-    expect(browser.evaluate(`document.querySelector('[aria-label="Start task"]').disabled`)).toBe(true)
-    browser.press('Control+Enter')
-    // Read the attempt count after the composer settles, so a second submit has had time to land.
-    expect(waitForSettledSample(browser, `document.querySelector('${composer}').getBoundingClientRect().height`)).toBe(height)
-    expect(browser.evaluate('window.hierarchyAttempts')).toBe(1)
-    browser.evaluate('window.hierarchyFail()')
-    browser.waitForFunction(`document.querySelector('${composer} [role="alert"]') !== null`)
-    expect(browser.text(`${composer} [role="alert"]`)).toContain('Check Tasks')
-    expect(browser.evaluate(`document.querySelector('${prompt}').value`)).toBe('Retain this failed task')
-    expect(browser.evaluate(`document.querySelector('${disclosure}').closest('[inert]')`)).toBe(null)
-    expect(waitForSettledSample(browser, `document.querySelector('${composer}').getBoundingClientRect().height`)).toBe(height)
-    browser.screenshot(`${artifactsDir}/hierarchy-submission-failure.png`)
-    browser.evaluate('window.fetch = window.hierarchyFetch')
+    try {
+      browser.click('[aria-label="Start task"]')
+      browser.waitForFunction(`document.querySelector('${prompt}').readOnly`)
+      expect(browser.evaluate(`document.querySelector('${disclosure}').closest('[inert]') !== null`)).toBe(true)
+      expect(browser.evaluate(`document.querySelector('[aria-label="Start task"]').disabled`)).toBe(true)
+      browser.press('Control+Enter')
+      // Read the attempt count after the composer settles, so a second submit has had time to land.
+      expect(waitForSettledSample(browser, `document.querySelector('${composer}').getBoundingClientRect().height`)).toBe(height)
+      expect(browser.evaluate('window.hierarchyAttempts')).toBe(1)
+      browser.evaluate('window.hierarchyFail()')
+      browser.waitForFunction(`document.querySelector('${composer} [role="alert"]') !== null`)
+      expect(browser.text(`${composer} [role="alert"]`)).toContain('Check Tasks')
+      expect(browser.evaluate(`document.querySelector('${prompt}').value`)).toBe('Retain this failed task')
+      expect(browser.evaluate(`document.querySelector('${disclosure}').closest('[inert]')`)).toBe(null)
+      expect(waitForSettledSample(browser, `document.querySelector('${composer}').getBoundingClientRect().height`)).toBe(height)
+      browser.screenshot(`${artifactsDir}/hierarchy-submission-failure.png`)
+    } finally {
+      browser.evaluate('window.fetch = window.hierarchyFetch; window.hierarchyFail?.()')
+    }
   })
 
   it('keeps the same prompt, attachment, and option nodes through disclosure and viewport changes', () => {

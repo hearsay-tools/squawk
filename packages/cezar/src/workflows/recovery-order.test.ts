@@ -45,8 +45,8 @@ describe('recover() with tied runs in a one-slot project', () => {
 
   it('continues them in runs.json order: the first takes the slot, the second queues', async () => {
     // File order is not id order: by id, the second would go first.
-    const first = 'cccccccc-1111-4222-8333-dddddddddddd';
-    const second = 'eeeeeeee-1111-4222-8333-ffffffffffff';
+    const first = 'eeeeeeee-1111-4222-8333-ffffffffffff';
+    const second = 'cccccccc-1111-4222-8333-dddddddddddd';
     writeFileSync(join(repoRoot, '.ai/cezar/runs.json'), JSON.stringify([record(first), record(second)]));
     store = RunStore.open(join(repoRoot, '.ai/cezar'), { keepLive: true });
     const manager = createFixtureManager(store, repoRoot, { home: testHome(), semaphore: new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 1 } }) });

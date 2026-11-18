@@ -34,6 +34,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
         const session = sessionOf(p.id);
         await until(() => currentUsage(p.id) !== undefined);
         manager.dispose();
+        expect(store.getRun(w.id)?.status).toBe('queued');
         const snapshot = JSON.stringify(store.getRun(p.id));
         if (completion === 'error') session.sendMessage([{ type: 'text', text: 'mock:request-error' }]);
         else session.end();
@@ -41,6 +42,7 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
         expect(store.getRun(p.id)?.status).toBe('waiting');
         expect(waitOf(store.getRun(p.id))?.id).toBe(wait.id);
         expect(JSON.stringify(store.getRun(p.id))).toBe(snapshot);
+        expect(store.getRun(w.id)?.status).toBe('queued');
         expect(currentUsage(p.id)).toBeUndefined();
         store.flush();
         reopenRuntime();
@@ -74,32 +76,17 @@ describe('worker waits through RunManager', { timeout: 30_000 }, () => {
     }
   });
 
-  for (const intent of ['cancel'] as const) {
-    it(`explicit ${intent} before disposal is not resurrected on restart`, async () => {
-      const p = await parent(); const w = await worker(p.id);
-      register(p.id, [w.id]); await until(() => waitOf(store.getRun(p.id))?.phase === 'parked');
-      manager[intent](p.id); manager.dispose();
-      await Promise.all(executions.splice(0));
-      expect(store.getRun(p.id)?.status).toBe(intent === 'cancel' ? 'cancelled' : 'done');
-      await Promise.all(bookkeeping.splice(0));
-      store.flush();
-      reopenRuntime();
-      await manager.recover();
-      expect(store.getRun(w.id)?.status).toBe('cancelled');
-      expect(waitOf(store.getRun(p.id))).toBeUndefined();
-    });
-  }
-
-  it('controller disposal does not cascade or clear durable waits', async () => {
-    const p = await parent(); const w = await worker(p.id); const wait = register(p.id, [w.id]);
-    await until(() => waitOf(store.getRun(p.id))?.phase === 'parked');
-    // Stop fixture processes only AFTER disposal; disposal itself must not mutate records.
-    const sessions = [...work.liveSessions];
-    manager.dispose();
-    expect(waitOf(store.getRun(p.id))?.id).toBe(wait.id); expect(store.getRun(w.id)?.status).toBe('queued');
-    for (const session of sessions) session?.interrupt();
+  it('explicit cancel before disposal is not resurrected on restart', async () => {
+    const p = await parent(); const w = await worker(p.id);
+    register(p.id, [w.id]); await until(() => waitOf(store.getRun(p.id))?.phase === 'parked');
+    manager.cancel(p.id); manager.dispose();
     await Promise.all(executions.splice(0));
-    expect(store.getRun(p.id)?.status).toBe('waiting');
-    expect(store.getRun(w.id)?.status).toBe('queued');
+    expect(store.getRun(p.id)?.status).toBe('cancelled');
+    await Promise.all(bookkeeping.splice(0));
+    store.flush();
+    reopenRuntime();
+    await manager.recover();
+    expect(store.getRun(w.id)?.status).toBe('cancelled');
+    expect(waitOf(store.getRun(p.id))).toBeUndefined();
   });
 });

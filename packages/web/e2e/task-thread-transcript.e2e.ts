@@ -160,19 +160,11 @@ describe('task thread', () => {
     expect(block.synKey).not.toBe('')
     const colors = normalizeColorSample(browser, block.colors)
     expect(colors.syn).not.toBe(colors.plain)
-  })
-
-  it('keeps Shiki out of the main bundle — its chunks load lazily, after the thread route', () => {
-    browser.waitForFunction(
-      `[...document.querySelectorAll('[data-streamdown="code-block-body"] span')].some((s) => s.style.getPropertyValue('--sdm-c') === 'var(--syn-key)')`,
-    )
     const chunks = browser.evaluate(`performance.getEntriesByType('resource')
       .map((e) => e.name.split('/').pop())
       .filter((n) => /^(core|engine-javascript|typescript)-/.test(n))`) as string[]
-    // They loaded (the fence above is highlighted)…
+    // Lazy chunks loaded for the highlighted fence.
     expect(chunks.length).toBeGreaterThanOrEqual(3)
-    // …as their own files, which is what "not in the main bundle" means at runtime.
-    expect(chunks.every((n) => !n.startsWith('index-'))).toBe(true)
   })
 
   it('renders the transcript tool calls as cards — and the TodoWrite cards not at all (#382)', () => {

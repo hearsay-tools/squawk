@@ -4,6 +4,7 @@ import { createFixtureManager } from './fixture-cleanup.testkit.ts';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { monitoringTimerWait } from './waits.testkit.ts';
 import { resolveAgentTmpDir } from '../runs/agent-tmpdir.ts';
 describe('RunManager idle close', () => {
   const fixture = setupMonitoringFixture();
@@ -13,6 +14,7 @@ describe('RunManager idle close', () => {
     { mode, delegation, name: 'cezar_ask wait', task: 'mock:cezar-ask choose' },
   ])))('idle-closes a $mode $delegation $name without completing it, matching restart recovery (#280)', async ({ mode, delegation, task }) => {
     const clock = observeIdleClose(fixture.store);
+    const idle = fixture.observeIdleTimers();
     const record = fixture.manager.startRun(SINGLE_STEP, {
       task: mode === 'fresh' ? task : 'just do the thing',
       worktree: false,
@@ -32,6 +34,10 @@ describe('RunManager idle close', () => {
       await waitFor(record.id, (candidate) => candidate?.status === 'waiting');
     }
 
+    if (mode === 'fresh' && delegation === 'zero-config' && task === 'just do the thing') {
+      expect(idle.pending).toBe(1);
+      expect(fixture.store.readEvents(record.id).some(event => event.type === 'ask.requested')).toBe(false);
+    }
     const session = sessionOf(record.id);
 
     // Resolved, not hand-built: a deep sandbox checkout falls back to the short
@@ -44,6 +50,7 @@ describe('RunManager idle close', () => {
     expect(session.open).toBe(false); // the runner CLI is still terminated
     expect(idleClosed?.status).toBe('waiting');
     expect(idleClosed?.finishedAt).toBeUndefined();
+    if (task === 'just do the thing') expect(monitoringTimerWait(idleClosed)).toBeUndefined();
     const waitingStep = idleClosed?.steps.find((step) => step.id === idleClosed.currentStepId);
     expect(waitingStep?.status).toBe('waiting');
     expect(waitingStep?.finishedAt).toBeUndefined();

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { repoRoot } from './source-rule.ts';
 import { child, children, stringOf, type AstRule, type EsNode, type Visitors } from './ast-rule.ts';
-import { bare, field, item, reportNode, scanSource } from './ast-tree.ts';
+import { bare, field, item, reportNode, scanSource, viewOrder } from './ast-tree.ts';
 
 export const homeReadersFile = 'packages/cezar/src/lint/home-readers.baseline.json';
 export interface HomeReader { file: string; kind: 'homedir'; calls: number; reason: string }
@@ -56,6 +56,9 @@ export function property(node: EsNode | undefined): string | undefined {
 }
 
 const isMember = (node: EsNode | undefined): node is EsNode => node?.type === 'MemberExpression';
+
+/** An alias set that holds every name: whether a value can be a home reader at all. */
+const ANY_ALIAS = { has: () => true } as unknown as Set<string>;
 
 /** The identifier a reference ends at without a match yet: an alias declared later can still match it. */
 let unresolved: string | undefined;
@@ -129,7 +132,10 @@ type Site = HomeSite & { node: EsNode; order: number };
  * `selectionsOnly`, only test home selections: a test file reports nothing else.
  */
 function homeSiteVisitors(selectionsOnly: boolean): { visitors: Visitors; sites(): Site[] } {
-  const aliases = new Set(['homedir']);
+  // Aliases every order agrees on: `homedir`, its imports and its destructured names. A declared
+  // alias depends on the aliases before it, so it waits for the end, in the rule's old order.
+  const known = new Set(['homedir']);
+  const declared = viewOrder<{ name: string; init?: EsNode }>();
   const found: Site[] = [];
   // A call whose callee ends at a name that is no alias yet: an alias declared later still counts.
   const pending: { node: EsNode; alias: string; order: number }[] = [];
@@ -154,7 +160,7 @@ function homeSiteVisitors(selectionsOnly: boolean): { visitors: Visitors; sites(
       order++;
       if (!selectionsOnly) {
         unresolved = undefined;
-        if (callsHomedir(node, aliases)) add('homedir', node);
+        if (callsHomedir(node, known)) add('homedir', node);
         else if (unresolved !== undefined) pending.push({ node, alias: unresolved, order: order++ });
       }
       if (selectsHomeCall(node)) add('test-selection', node);
@@ -162,7 +168,7 @@ function homeSiteVisitors(selectionsOnly: boolean): { visitors: Visitors; sites(
   };
   if (selectionsOnly) return { visitors, sites: () => found };
   return {
-    visitors: {
+    visitors: declared.wrap({
       ...visitors,
       Identifier: named,
       // A private name reads as its identifier (`#resolveHome`), as the rule always read it.
@@ -173,20 +179,27 @@ function homeSiteVisitors(selectionsOnly: boolean): { visitors: Visitors; sites(
         if (member === 'cezarHomeDir' || member === 'resolveHome') add(member, node);
       },
       ImportSpecifier(node) {
-        if (name(field(node, 'imported')) === 'homedir') aliases.add(field(node, 'local')!.name as string);
+        if (name(field(node, 'imported')) !== 'homedir') return;
+        known.add(field(node, 'local')!.name as string);
+        declared.add({ name: field(node, 'local')!.name as string });
       },
       VariableDeclarator(node) {
         const id = field(node, 'id')!;
         if (id.type === 'ObjectPattern') {
           for (const entry of children(id, 'properties')) {
             const value = field(entry, 'value');
-            if (entry.type === 'Property' && name(field(entry, 'key')) === 'homedir' && value?.type === 'Identifier') aliases.add(value.name as string);
+            if (entry.type !== 'Property' || name(field(entry, 'key')) !== 'homedir' || value?.type !== 'Identifier') continue;
+            known.add(value.name as string);
+            declared.add({ name: value.name as string });
           }
         }
-        if (id.type === 'Identifier' && homedirRef(field(node, 'init'), aliases)) aliases.add(id.name as string);
+        const init = field(node, 'init');
+        if (id.type === 'Identifier' && init && homedirRef(init, ANY_ALIAS)) declared.add({ name: id.name as string, init });
       },
-    },
+    }),
     sites() {
+      const aliases = new Set(['homedir']);
+      for (const alias of declared.items()) if (!alias.init || homedirRef(alias.init, aliases)) aliases.add(alias.name);
       for (const call of pending) if (aliases.has(call.alias)) found.push({ kind: 'homedir', offset: call.node.start as number, node: call.node, order: call.order });
       return found.sort((a, b) => a.offset - b.offset || a.order - b.order);
     },

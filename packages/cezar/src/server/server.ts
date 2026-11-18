@@ -13,7 +13,7 @@ import { writeMergedConfig } from './config-merge.ts';
 import { applyWorkspaceConfigPatch } from './workspace-config-patch.ts';
 import { retryAutomationLogReceipt } from './automation-log-retry.ts';
 import { automationCreateSchema, automationUpdateSchema, automationCheckRequestSchema, automationLogQuerySchema } from '@open-mercato/cezar-contract/automation-requests';
-import { providerConnectSchema, createAgentProfileSchema, openAgentAccountFileSchema, updateAgentProfileSchema, selectAgentProfileSchema, providerEnabledSchema, providerRetrySchema, providerRouteParamsSchema, agentProfileRouteParamsSchema } from '@open-mercato/cezar-contract/provider-requests';
+import { providerConnectSchema, createAgentProfileSchema, updateAgentProfileSchema, selectAgentProfileSchema, providerEnabledSchema, providerRetrySchema, providerRouteParamsSchema, agentProfileRouteParamsSchema } from '@open-mercato/cezar-contract/provider-requests';
 import { planSchema, parseWorkflowSchema } from '@open-mercato/cezar-contract/workflow-requests';
 import { uiStateBody } from '@open-mercato/cezar-contract/ui-state-requests';
 import { queuedMessagePatchSchema, continueSchema, archiveSchema, openInSchema } from '@open-mercato/cezar-contract/run-requests';
@@ -199,11 +199,10 @@ import {
 } from './git-changes.ts';
 import { healthConfig, loadConfig, resolveWorktreeRetention, type CezConfig } from '../config.ts';
 import { reportWorktreeCommands } from '../worktree-setup.ts';
-import { readConfigFile, statConfigPath, writeConfigFile } from '../agent-config/files.ts';
+import { readConfigFile, writeConfigFile } from '../agent-config/files.ts';
 import { readAgentModelDefaults } from '../agent-config/models.ts';
 import { listAgentConfig } from '../agent-config/service.ts';
-import { findConfigFile, listConfigFiles, type AgentHomePaths } from '../agent-config/catalog.ts';
-import { readAccountIdentity } from '../agent-config/account-identity.ts';
+import { findConfigFile } from '../agent-config/catalog.ts';
 import {
   defaultWorkspaceConfig,
   loadWorkspaceConfig,
@@ -226,14 +225,12 @@ import {
 import {
   defaultAgentProfile,
   listAgentProfiles,
-  namedAccountUnavailable,
-  ompProfileDirError,
   profileDirState,
   resolveStoredProfile,
   sameProfileDir,
   type ResolvedAgentProfile,
 } from '../workspace/agent-profiles.ts';
-import { PROFILE_CAPABLE_PROVIDERS, profileAgentDir, profileEnv, selectsByProfileName, supportsProfiles } from '../core/agent-profiles.ts';
+import { PROFILE_CAPABLE_PROVIDERS, profileEnv, supportsProfiles } from '../core/agent-profiles.ts';
 import { shellQuote, withEnvPrefix } from '../core/shell-env.ts';
 import { resumeCommand } from '../core/runner-cli.ts';
 import {
@@ -254,7 +251,7 @@ import { createWorkspaceRunFeed } from './workspace-run-feed.ts';
 import { ProjectContexts, type ProjectContext, type RunManagerFactory } from './project-context.ts';
 
 import { mergeWriteProjectUiState, readUiState } from '../ui-state.ts';
-import { AGENT_HOME_SLOT, agentHomePaths, expandTilde } from '../paths.ts';
+import { expandTilde } from '../paths.ts';
 import { isLoopbackHostHeader, normalizeHostname, resolveCapabilities } from './capabilities.ts';
 import type { SocketHub, WsUpgradeVerdict } from './ws.ts';
 import type { PreviewHost } from '../preview/host.ts';
@@ -383,8 +380,8 @@ export interface ServerDeps extends ActivityServerDeps {
   providerRuntimeAuth?: ProviderRuntimeAuthObserver;
   /** Local terminal handoff for provider-owned login. */
   openTerminal?: typeof openInTerminal | undefined;
-  /** Hand a local FILE (or folder) to the OS default app. Injected so the account-file open route
-   *  is testable without actually launching an editor. */
+  /** Hand a local FILE (or folder) to the OS default app. Injected so the open routes are
+   *  testable without actually launching an editor. */
   openFile?: typeof openFileInDefaultApp;
   /** Hand a folder to a detected app by target id — editor, file manager, or `terminal`, which
    *  reaches `openInTerminal`. Injected for the same reason as the two above: a test that reaches
@@ -1168,8 +1165,6 @@ export function createApp(deps: ServerDeps) {
     const store = await loadAgentAccounts(deps.home).catch(() => defaultAgentAccountStore());
     for (const account of listAgentProfiles(store, PROVIDER_IDS)) {
       if (account.isDefault) continue; // covered by `status()` above
-      // Probing it would sign in or report on another folder (#1283); its status route says why.
-      if (namedAccountUnavailable(account.provider, account.path) !== null) continue;
       await providerAuth
         .profileStatus(account.provider, { id: account.id, configDir: account.path })
         .catch(() => {});
@@ -1245,9 +1240,7 @@ export function createApp(deps: ServerDeps) {
       return { error: `this session belongs to an account that no longer exists (${profileId})` };
     }
     const { profile } = resolved;
-    if (profile.isDefault) return { env: {} };
-    const unavailable = namedAccountUnavailable(provider, profile.path);
-    return unavailable !== null ? { error: unavailable } : { env: profileEnv(provider, profile.path) };
+    return { env: profile.isDefault ? {} : profileEnv(provider, profile.path) };
   };
 
   /** The copy-paste fallback shown when no terminal could be opened — same account, spelled for
@@ -1347,9 +1340,6 @@ export function createApp(deps: ServerDeps) {
       const resolved = await resolveWorkspaceProfile(provider, body.data.profileId);
       if ('error' in resolved) return c.json({ error: resolved.error }, 400);
       const { profile } = resolved;
-      // A login aimed at a folder the agent would not open signs in another account (#1283).
-      const unavailable = profile.isDefault ? null : namedAccountUnavailable(provider, profile.path);
-      if (unavailable !== null) return c.json({ error: unavailable }, 409);
       const command = providerAuth.loginCommand(provider, profile.isDefault ? null : profile.path);
       // Fail closed: a config dir that cannot be embedded safely in this platform's shell has no
       // safe degradation. Running the bare command would sign the user into a DIFFERENT account
@@ -1413,32 +1403,6 @@ export function createApp(deps: ServerDeps) {
   // points an agent at a directory on the host, and the listing echoes absolute paths carrying
   // the username — the same disclosure `/api/v1/health` trims in hosted mode (#431).
 
-  /**
-   * This agent's own USER-scope config files, resolved inside ONE account's folder.
-   *
-   * Straight from the catalog — the single home of config-file vendor knowledge — with an
-   * `AgentHomePaths` whose slot for this provider is the account's dir. That is what makes a second
-   * login's `settings.json` the file you open rather than the default account's, and it keeps the
-   * ids opaque and stable so the open route below never takes a path from the client.
-   */
-  const accountFiles = async (profile: ResolvedAgentProfile) => {
-    // A discovered default is already an agent dir; a named account may keep its config in a
-    // subfolder of its folder (omp's `agent/`).
-    const home: AgentHomePaths = {
-      ...agentHomePaths(),
-      [AGENT_HOME_SLOT[profile.provider]]: profile.isDefault ? profile.path : profileAgentDir(profile.provider, profile.path),
-    };
-    const defs = listConfigFiles().filter(
-      (def) => def.scope === 'user' && def.runners.includes(profile.provider),
-    );
-    return Promise.all(
-      defs.map(async (def) => {
-        const path = def.resolve(bootRoot, home);
-        return { id: def.id, label: basename(path), path, exists: (await statConfigPath(path)).exists };
-      }),
-    );
-  };
-
   /** Build the wire row for one resolved profile: its dir state plus whatever auth is cached. */
   const agentProfileBody = async (profile: ResolvedAgentProfile) => ({
     id: profile.id,
@@ -1466,7 +1430,6 @@ export function createApp(deps: ServerDeps) {
         : providerAuth.peekProfileStatus(profile.provider, profile.id);
       return cached ? { status: cached } : {};
     })(),
-    files: await accountFiles(profile),
   });
 
   /**
@@ -1496,17 +1459,14 @@ export function createApp(deps: ServerDeps) {
   };
 
   /** Validate a client-supplied config dir. Returns the error text, or null when it is usable. */
-  const checkProfileDir = async (configDir: string, provider?: ProviderId): Promise<string | null> => {
+  const checkProfileDir = (configDir: string): string | null => {
     if (CONTROL_CHARS_RE.test(configDir)) return 'folder must not contain control characters';
     const expanded = expandTilde(configDir);
     // Absolute after expansion: a relative dir would resolve against whatever cwd the agent
     // happens to be spawned in, which for a task is a throwaway worktree. Through
     // `isAbsoluteConfigDir`, never a leading-`/` test — see its note: a string test refuses every
     // real Windows path, and this is the only gate the Add-account dialog has.
-    if (!isAbsoluteConfigDir(expanded)) return `folder must be an absolute path: ${configDir}`;
-    // An omp account is selected by profile NAME, so only a folder in omp's profiles dir can be one.
-    if (selectsByProfileName(provider)) return ompProfileDirError(expanded);
-    return null;
+    return isAbsoluteConfigDir(expanded) ? null : `folder must be an absolute path: ${configDir}`;
   };
 
   /** Refuse a dir that is already some other account's (or the default's), compared through
@@ -1518,9 +1478,7 @@ export function createApp(deps: ServerDeps) {
     path: string,
     exceptId?: string,
   ): Promise<string | null> => {
-    // Compared as agent dirs: the discovered omp account is one (a host `OMP_PROFILE=work` makes it
-    // `…/profiles/work/agent`), while a named omp account is the profile folder holding it.
-    if (await sameProfileDir(profileAgentDir(provider, path), defaultAgentProfile(provider).path)) {
+    if (await sameProfileDir(path, defaultAgentProfile(provider).path)) {
       return 'that is already this agent\'s default folder';
     }
     for (const candidate of profiles) {
@@ -1560,9 +1518,6 @@ export function createApp(deps: ServerDeps) {
         // Which account each project uses, keyed by repo root. Served here rather than on the
         // project registry because it lives in the same file as the accounts it names.
         selections: editable ? store.selections : {},
-        /** The machine-wide fallback, for repos that have chosen nothing. Withheld in hosted mode
-         *  on the same terms as the rest of this family. */
-        defaults: editable ? store.defaults : {},
       });
     })
 
@@ -1572,7 +1527,7 @@ export function createApp(deps: ServerDeps) {
       if (!supportsProfiles(provider)) {
         return c.json({ error: `${provider} cannot carry more than one account` }, 400);
       }
-      const dirError = await checkProfileDir(configDir, provider);
+      const dirError = checkProfileDir(configDir);
       if (dirError) return c.json({ error: dirError }, 400);
 
       // Read-first, exactly like `POST /projects`: the duplicate check needs `realpath`, and the
@@ -1627,7 +1582,7 @@ export function createApp(deps: ServerDeps) {
         const id = c.req.param('id');
         const { label, configDir } = c.req.valid('json');
         if (configDir !== undefined) {
-          const dirError = await checkProfileDir(configDir);
+          const dirError = checkProfileDir(configDir);
           if (dirError) return c.json({ error: dirError }, 400);
         }
 
@@ -1642,9 +1597,6 @@ export function createApp(deps: ServerDeps) {
         const current = existing.find((a) => a.id === id);
         if (!current) return c.json({ error: `unknown account: ${id}` }, 404);
         if (configDir !== undefined) {
-          // The provider's own folder rule needs the account, so it runs once the id is known.
-          const dirError = await checkProfileDir(configDir, current.provider);
-          if (dirError) return c.json({ error: dirError }, 400);
           const conflict = await conflictingProfile(existing, current.provider, expandTilde(configDir), id);
           if (conflict !== null) return c.json({ error: conflict }, 409);
         }
@@ -1703,12 +1655,6 @@ export function createApp(deps: ServerDeps) {
           const row = all.providers.find((candidate) => candidate.provider === account.provider);
           return c.json({ status: row ?? { provider: account.provider, status: 'unknown' as const } });
         }
-        // A probe of an account the agent would not open reports on another folder (#1283), so the
-        // row says why instead, without a spawn.
-        const unavailable = namedAccountUnavailable(account.provider, account.path);
-        if (unavailable !== null) {
-          return c.json({ status: { provider: account.provider, status: 'unknown' as const, hint: unavailable, profileId: account.id } });
-        }
         // "Check again" re-probes THIS account only — the other accounts' warm answers are not
         // invalidated by asking about this one.
         if (refresh) providerAuth.forgetProfileStatus(account.provider, account.id);
@@ -1721,76 +1667,6 @@ export function createApp(deps: ServerDeps) {
       },
     )
 
-    /**
-     * Local-only account details, fetched separately on request. Keep identity out of normal
-     * listings, logs and run persistence.
-     */
-    .get(
-      '/workspace/agent-profiles/:id/details',
-      paramZodValidator(agentProfileRouteParamsSchema),
-      async (c) => {
-        const account = await localAccount(c);
-        if (account instanceof Response) return account;
-        return c.json(await readAccountIdentity(account.provider, account.path));
-      },
-    )
-
-    /**
-     * Open one of this account's own config files — or its folder — in a local app.
-     *
-     * `file` is a catalog ID from the account's own `files`, never a path: the client cannot name a
-     * location, so there is no traversal surface here at all (the same rule
-     * `/api/v1/agent-config/:id` follows). `folder` is the one extra keyword, and it resolves to
-     * the account's dir rather than anything the caller spelled.
-     */
-    .post(
-      '/workspace/agent-profiles/:id/open',
-      paramZodValidator(agentProfileRouteParamsSchema),
-      jsonZodValidator(() => openAgentAccountFileSchema),
-      async (c) => {
-        const account = await localAccount(c);
-        if (account instanceof Response) return account;
-        const { file, target } = c.req.valid('json');
-
-        let path: string;
-        if (file === 'folder') {
-          path = account.path;
-        } else {
-          const match = (await accountFiles(account)).find((f) => f.id === file);
-          if (!match) return c.json({ error: `unknown file: ${file}` }, 404);
-          path = match.path;
-        }
-        // A file the agent has not written yet has nothing to open; say so rather than hand the OS
-        // a missing path and report success.
-        if (!(await statConfigPath(path)).exists && file !== 'folder') {
-          return c.json({ error: `this account has no ${basename(path)} yet` }, 409);
-        }
-        // `target` names a detected app; absent means the OS default handler. Either way the PATH
-        // came from the catalog, so an editor is only ever pointed inside this account's folder.
-        //
-        // Which targets APPLY is checked here rather than left to the UI, because two of them are
-        // actively wrong rather than merely useless: `terminal` runs `cd <path>`, which fails on a
-        // file, and a `cli:<runner>` handoff would start an agent session inside the config folder.
-        // A route is a surface of its own; it refuses what it cannot do correctly.
-        if (target !== undefined) {
-          if (agentCliRunner(target) !== null) {
-            return c.json({ error: 'agent CLIs open a task worktree, not a config folder' }, 400);
-          }
-          if (target === 'terminal' && file !== 'folder') {
-            return c.json({ error: 'a terminal opens a folder, not a file' }, 400);
-          }
-          if (!detectOpenTargets().some((candidate) => candidate.id === target)) {
-            return c.json({ error: `no such app on this machine: ${target}` }, 400);
-          }
-        }
-        const opened = target === undefined
-          ? await openFile(path)
-          : await openApp(target, path);
-        if (!opened) return c.json({ error: `could not open ${basename(path)}`, path }, 409);
-        return c.json({ opened: true as const, path });
-      },
-    )
-
     // Which account a PROJECT uses. On the accounts family rather than `PATCH /api/v1/projects`
     // because the selection is stored beside the accounts it names — one file, one atomic write,
     // and nothing about it can be dropped by a Squawk version that never heard of accounts.
@@ -1800,18 +1676,12 @@ export function createApp(deps: ServerDeps) {
       async (c) => {
         if (!capabilities().localHandoff) return c.json(hostedProfileRefusal, 409);
         const { projectId, provider, profileId } = c.req.valid('json');
-        // `null` writes the MACHINE-WIDE default instead of one repo's selection: the account any
-        // repo that has chosen nothing uses, so a second login is set up once rather than per
-        // checkout. No project to resolve, and therefore no 404 path.
-        let root: string | null = null;
-        if (projectId !== null) {
-          const resolvedId = await workspaceProjects.canonicalProjectId(projectId);
-          // Keyed by repo ROOT, so the selection survives the registry being rebuilt and needs no
-          // cross-reference into config.json. An unknown project is a 404 rather than an orphan
-          // entry nobody will ever read.
-          root = await projectRootFor(resolvedId);
-          if (root === null) return c.json({ error: `unknown project: ${projectId}` }, 404);
-        }
+        const resolvedId = await workspaceProjects.canonicalProjectId(projectId);
+        // Keyed by repo ROOT, so the selection survives the registry being rebuilt and needs no
+        // cross-reference into config.json. An unknown project is a 404 rather than an orphan
+        // entry nobody will ever read.
+        const root = await projectRootFor(resolvedId);
+        if (root === null) return c.json({ error: `unknown project: ${projectId}` }, 404);
         // A user naming an account that does not exist gets told so — the opposite of how RUN
         // resolution treats a dangling stored id, and deliberately: a run has no better answer
         // than the default, a person does.
@@ -1822,28 +1692,18 @@ export function createApp(deps: ServerDeps) {
         let store: AgentAccountStore;
         try {
           store = await mergeWriteAgentAccounts((current) => {
-            // One rule, two targets: the machine default is the same per-provider shape as a repo's
-            // selection, so it clears the same way rather than growing its own spelling.
-            const selection = root === null ? current.defaults : current.selections[root] ?? {};
+            const selection = current.selections[root] ?? {};
             // `null` and the reserved `default` both mean "back to the discovered account", which
             // is stored as ABSENCE — the default id is never written to the file.
             if (profileId === null || profileId === DEFAULT_AGENT_ACCOUNT_ID) delete selection[provider];
             else selection[provider] = profileId;
-            // The machine default keeps an emptied object where a repo selection is deleted, and
-            // that asymmetry is the schema's, not an oversight: `defaults` is one FIXED field with
-            // `.default(() => ({}))`, so `mergeWriteAgentAccounts` re-materializes it on the next
-            // write no matter what this one omits (verified). `selections` is a growing MAP, where
-            // an emptied entry is a row per repo ever touched that says nothing. The rule stated
-            // for `agentDefaults.models` — "absence is the same answer" — applies there because
-            // that key is `.optional()`, so deleting it actually sticks.
-            if (root === null) current.defaults = selection;
-            else if (Object.keys(selection).length === 0) delete current.selections[root];
+            if (Object.keys(selection).length === 0) delete current.selections[root];
             else current.selections[root] = selection;
           }, deps.home);
         } catch (err) {
           return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
         }
-        return c.json({ selections: store.selections, defaults: store.defaults });
+        return c.json({ selections: store.selections });
       },
     )
 
@@ -3406,14 +3266,6 @@ export function createApp(deps: ServerDeps) {
         : [provider];
       const blocked = await providerActionError(required);
       if (blocked) return c.json({ error: blocked }, 409);
-      // The follow-up pill names an account the user just picked, so an id that has been deleted
-      // since the thread loaded is answered honestly — the same asymmetry `POST /runs` keeps: a
-      // USER can act on "unknown account", and reopening the session on another login silently
-      // would cross the very billing boundary accounts exist to draw.
-      if (parsed.data.agentProfile !== undefined) {
-        const account = await resolveWorkspaceProfile(provider, parsed.data.agentProfile);
-        if ('error' in account) return c.json({ error: account.error }, 400);
-      }
       const result = manager.continueRun(id, {
         text: parsed.data.text,
         images: parsed.data.images?.map(toPastedContent),
@@ -3421,7 +3273,6 @@ export function createApp(deps: ServerDeps) {
         ...(untouched ? { originalRunner: originalProvider } : {}),
         model: parsed.data.model,
         effort: parsed.data.effort,
-        agentProfile: parsed.data.agentProfile,
       });
       if (!result.ok) return c.json({ error: result.error }, 409);
       return c.json({ continued: true });

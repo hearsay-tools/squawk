@@ -5,7 +5,7 @@ import { CpuIcon, GaugeIcon, TerminalIcon } from '@/components/design-icons'
 import { useMutation } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 
-import { hasAccountChoice, useAgentAccounts } from '@/api/agent-accounts'
+import { useAgentAccounts } from '@/api/agent-accounts'
 import { ApiError, continueRun } from '@/api/client'
 import { useConfig, useRunnerModels } from '@/api/queries'
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client/contract/agent-profiles'
@@ -73,33 +73,15 @@ function resolveContinueModel(
   return { models, model, effortOptions, effort, mustClearStoredEffort }
 }
 
-function resolveContinueAccount(
-  run: ApiRun, runner: Runner, currentRunner: Runner, runnerChanged: boolean,
-  { accounts, repoAccount }: ContinueAccounts, pickedAccount: string | null,
-) {
-  // Agent accounts (spec 2026-07-29-agent-profiles): rows of the RUNNER pill, exactly as the /new
-  // composer offers them — `claude · Default` / `claude · Klaudiusz` / `codex`. Without them a
-  // thread could switch agent but not login, so "continue this on my other Claude account" was
-  // unsayable anywhere except at task creation.
-  // Which account this run is ON: the STEP that spawned, never the project's current selection —
-  // `sessionId` and `profileId` are a pair, so that step is the account a resume reattaches to and
-  // therefore the row that is selected until the user picks another. A run from before accounts
-  // existed recorded none and ran under the discovered one.
+/**
+ * The account this Continue runs on, for the skill list. A Continue names no account: it stays on
+ * the STEP that spawned the session (`sessionId` and `profileId` are a pair), and a runner switch
+ * falls back to what the project resolves to for THAT agent.
+ */
+function resolveContinueAccount(run: ApiRun, runner: Runner, runnerChanged: boolean, repoAccount: ContinueAccounts['repoAccount']) {
   const sessionStep = latestSessionStep(run.steps)
-  const runAccount =
-    sessionStep?.profileId
-    ?? run.agentProfile
-    ?? DEFAULT_AGENT_ACCOUNT_ID
-  // The run's own account stands in for the project's selection only while the runner is
-  // unchanged; switching backend falls back to what the project resolves to for THAT agent, since
-  // an account belongs to one agent (same rule the model pill above follows).
-  const accountDefaults = runnerChanged ? repoAccount : { ...repoAccount, [currentRunner]: runAccount }
-  // A pick belonging to ANOTHER runner is dropped rather than sent: switching runner must not
-  // silently carry the previous runner's login along (the composer's guard, verbatim).
-  const account = accounts.some((choice) => choice.provider === runner && choice.id === pickedAccount)
-    ? pickedAccount
-    : null
-  return { sessionStep, accountDefaults, account }
+  const runAccount = sessionStep?.profileId ?? run.agentProfile ?? DEFAULT_AGENT_ACCOUNT_ID
+  return { sessionStep, account: runnerChanged ? repoAccount?.[runner] ?? DEFAULT_AGENT_ACCOUNT_ID : runAccount }
 }
 
 type ContinueModel = ReturnType<typeof resolveContinueModel>
@@ -108,7 +90,7 @@ function continueRequestBody(
   text: string, images: AttachmentInput[], runnerOverride: Runner | undefined,
   modelsLocked: boolean, runnerChanged: boolean,
   pickedModel: string | null, pickedEffort: string | null,
-  { model, effort, mustClearStoredEffort }: ContinueModel, account: string | null,
+  { model, effort, mustClearStoredEffort }: ContinueModel,
 ) {
   return {
     // An empty draft posts no `text` at all, so the server's default opening prompt
@@ -134,20 +116,16 @@ function continueRequestBody(
         : mustClearStoredEffort
           ? ''
           : undefined,
-    // Only a login the user actually picked rides the request. Omitted, the run keeps the
-    // account it is on — and the reopened session still resumes, which an explicit switch
-    // deliberately does not (a session id lives inside ONE account's config dir).
-    agentProfile: account ?? undefined,
   }
 }
 
 function continueStartsNewConversation(
   run: ApiRun, sessionStep: ReturnType<typeof resolveContinueAccount>['sessionStep'],
-  runner: Runner, account: string | null,
+  runner: Runner,
 ) {
   return !!sessionStep && (
     runner !== sessionRunner(sessionStep, run) ||
-    (account ?? run.agentProfile ?? sessionStep.profileId ?? DEFAULT_AGENT_ACCOUNT_ID) !==
+    (run.agentProfile ?? sessionStep.profileId ?? DEFAULT_AGENT_ACCOUNT_ID) !==
       (sessionStep.profileId ?? DEFAULT_AGENT_ACCOUNT_ID)
   )
 }
@@ -173,22 +151,20 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   const writer = useRunCacheWriter()
   const available = runActionFlags(run).continueRun
   const config = useConfig()
-  // null = "not touched": the pills fall back to the run's current backend/model/account, so an
+  // null = "not touched": the pills fall back to the run's current backend/model, so an
   // untouched Continue behaves exactly as before this feature existed.
   const [pickedRunner, setPickedRunner] = useState<Runner | null>(null)
   const [pickedModel, setPickedModel] = useState<string | null>(null)
   const [pickedEffort, setPickedEffort] = useState<string | null>(null)
-  const [pickedAccount, setPickedAccount] = useState<string | null>(null)
   // The task route reuses this view across parameter changes, so a pick from run A must not
-  // stick when the user opens cached run B. Reset every pill on `run.id` — effort, model,
-  // runner, and account all leak the same way.
+  // stick when the user opens cached run B. Reset every pill on `run.id` — effort, model
+  // and runner all leak the same way.
   const [pickedRunId, setPickedRunId] = useState(run.id)
   if (pickedRunId !== run.id) {
     setPickedRunId(run.id)
     setPickedRunner(null)
     setPickedModel(null)
     setPickedEffort(null)
-    setPickedAccount(null)
   }
 
   const continuation = useContinuationProvider(run, pickedRunner)
@@ -205,11 +181,7 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   )
   const { models, model, effortOptions, effort } = modelSelection
   const { modelLabel, effortLabel } = continueLabels(modelSelection)
-  const accountChoices = useAgentAccounts()
-  const { accounts } = accountChoices
-  const { sessionStep, accountDefaults, account } = resolveContinueAccount(
-    run, runner, currentRunner, runnerChanged, accountChoices, pickedAccount,
-  )
+  const { sessionStep, account } = resolveContinueAccount(run, runner, runnerChanged, useAgentAccounts().repoAccount)
 
   const mutation = useMutation({
     mutationFn: ({ text, images }: { text: string; images: AttachmentInput[] }) => {
@@ -218,7 +190,7 @@ export function useContinueAction(run: ApiRun): ContinueAction {
       }
       return continueRun(runAddress(run.id), continueRequestBody(
         text, images, continuation.runnerOverride, modelsLocked, runnerChanged,
-        pickedModel, pickedEffort, modelSelection, account,
+        pickedModel, pickedEffort, modelSelection,
       ))
     },
     // Capture the run's project at the start: navigation must not retarget the refresh.
@@ -233,33 +205,24 @@ export function useContinueAction(run: ApiRun): ContinueAction {
 
   return {
     skillRunner: runner,
-    skillAccount: account ?? accountDefaults?.[runner] ?? DEFAULT_AGENT_ACCOUNT_ID,
+    skillAccount: account,
     available,
     canContinue,
-    startsNewConversation: continueStartsNewConversation(run, sessionStep, runner, account),
+    startsNewConversation: continueStartsNewConversation(run, sessionStep, runner),
     reason: continuation.reason,
     providerPending: continuation.providerPending,
     pills: (
       <div data-slot="follow-up-engine" className="session-engine-controls">
 <PickerPillGroup>
-        {/* Shown when there is a choice to make: more than one runner, or more than one login for
-            one of them. A host with neither sees no pill, exactly as before. */}
-        {runners.length > 1 || runners.some((id) => hasAccountChoice(accounts, id)) ? (
+        {/* Shown when there is a choice to make. A host with one runner sees no pill. */}
+        {runners.length > 1 ? (
           <RunnerPill
             icon={<TerminalIcon aria-hidden="true" className="size-[18px] shrink-0 text-accent-text" />}
             fieldLabel
             runners={runners}
             value={runner}
-            accounts={accounts}
-            account={account}
-            repoAccount={accountDefaults}
-            onPick={(next, picked) => {
-              setPickedAccount(picked)
-              // Picking another LOGIN of the agent already in force is not a backend choice, so it
-              // must not become one: recording it would put a `runner` on the wire that the run is
-              // already on. Changing the AGENT does invalidate the model pick — presets are
-              // per-runner — while an account switch keeps it, the catalog being the same either
-              // way.
+            onPick={(next) => {
+              // Changing the AGENT invalidates the model pick: presets are per-runner.
               if (next !== runner) {
                 setPickedRunner(next)
                 setPickedModel(null)

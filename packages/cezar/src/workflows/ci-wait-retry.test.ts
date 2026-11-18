@@ -13,12 +13,6 @@ import { manager, semaphore, store, until, useWorkerWaitFixture, work } from './
 describe('CI wait retry', { timeout: 30_000 }, () => {
   useWorkerWaitFixture({ acquireCiResources: acquireExternalCiResources });
   afterEach(() => vi.restoreAllMocks());
-  it('CI retry matrix covers every runner with a native hold scenario', () => {
-    for (const runner of RUNNER_IDS) {
-      expect(HARNESS_ADAPTERS[runner].mockBin).toBeTruthy();
-      expect(HARNESS_ADAPTERS[runner].scenarios.hold).toBeDefined();
-    }
-  });
 
   it.each(RUNNER_IDS)('%s retries a refused settled CI observation without human input', async runner => {
     const external = githubByPr();

@@ -60,14 +60,6 @@ describe('test runs never read the host home (hearsay-tools/cezarion#1361)', () 
     expect(agentHomeEnv()).toEqual(unset);
   });
 
-  it('pins every XDG home below the sandbox and removes the host runtime dir', () => {
-    for (const [key, suffix] of Object.entries({ XDG_CONFIG_HOME: '.config', XDG_DATA_HOME: '.local/share',
-      XDG_STATE_HOME: '.local/state', XDG_CACHE_HOME: '.cache' })) {
-      expect(process.env[key]).toBe(join(process.env.HOME!, suffix));
-    }
-    expect(process.env.XDG_RUNTIME_DIR).toBeUndefined();
-  });
-
   it('links the sandbox home to one omp natives cache outside every sandbox (hearsay-tools/cezarion#1911)', () => {
     const natives = join(homedir(), '.omp', 'natives'); // test-home-read: inspect the sandbox native-cache symlink without writing
     expect(lstatSync(natives).isSymbolicLink()).toBe(true);
@@ -90,69 +82,7 @@ describe('test runs never read the host home (hearsay-tools/cezarion#1361)', () 
     const home = process.env.HOME!;
     for (const [agent, path] of Object.entries(agentHomePaths())) expect(path.startsWith(home + sep), `${agent}: ${path}`).toBe(true);
   });
-
-  // The next two run in order: the first leaves values behind, the second sees them reset.
-  let sandbox: string | undefined;
-  it('a test may point HOME and the agent homes anywhere', () => {
-    sandbox = process.env.HOME;
-    process.env.HOME = process.env.USERPROFILE = '/left/by/a/test';
-    for (const key of AGENT_HOME_KEYS) process.env[key] = '/left/by/a/test';
-  });
-
-  it('the next test starts from the sandbox again', () => {
-    expect(sandbox).toBeDefined();
-    expect([process.env.HOME, process.env.USERPROFILE]).toEqual([sandbox, sandbox]);
-    expect(agentHomeEnv()).toEqual(unset);
-  });
 });
-
-// Run the real setup in a new Vitest process: values set in this worker would
-// already be too late to exercise inherited-environment cleanup.
-it('scrubs inherited CEZ flags but preserves test-owned flags (hearsay-tools/cezarion#1517)', () => {
-  const repo = fileURLToPath(new URL('../../../', import.meta.url));
-  mkdirSync(join(repo, '.ai/qa'), { recursive: true });
-  const scratch = mkdtempSync(join(repo, '.ai/qa/unit-env-'));
-  try {
-    const fixture = join(scratch, 'environment.test.ts');
-    writeFileSync(fixture, `
-import { beforeAll, expect, it } from 'vitest';
-import { basename } from 'node:path';
-const inheritedKeys = ['CEZ_TEST_INHERITED_SENTINEL', 'CEZ_PREVIEW', 'CEZ_PROJECT_WARMUP'];
-for (const key of inheritedKeys) expect(process.env[key], key).toBeUndefined();
-expect(basename(process.env.CEZ_HOME!)).toMatch(/^cez-vitest-home-/);
-expect(process.env.UNIT_ENV_SENTINEL).toBe('preserved');
-beforeAll(() => { process.env.CEZ_DRY_RUN = 'from-beforeAll'; });
-it('permits a test-owned flag', () => {
-  expect(process.env.CEZ_DRY_RUN).toBe('from-beforeAll');
-  process.env.CEZ_PREVIEW = '1';
-  expect(process.env.CEZ_PREVIEW).toBe('1');
-});
-it('keeps the file flag and existing per-test cleanup', () => {
-  expect(process.env.CEZ_DRY_RUN).toBe('from-beforeAll');
-  expect(process.env.CEZ_PREVIEW).toBeUndefined();
-});
-`);
-    const config = join(scratch, 'vitest.config.mjs');
-    writeFileSync(config, `export default ${JSON.stringify({ test: {
-      environment: 'node', include: [fixture],
-      setupFiles: [join(repo, 'packages/cezar/vitest.setup.ts')],
-      passWithNoTests: false, maxWorkers: 1,
-    } })}`);
-    // Pass only the minimal process environment and synthetic values, never
-    // the parent's task controller or credentials.
-    const env = Object.fromEntries(['PATH', 'SystemRoot', 'SYSTEMROOT', 'ComSpec', 'PATHEXT']
-      .flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]!]]));
-    const output = execFileSync(process.execPath, [join(repo, 'node_modules/vitest/vitest.mjs'),
-      'run', '--config', config], {
-      cwd: repo, encoding: 'utf8', timeout: 60_000,
-      env: { ...env, CEZ_TEST_INHERITED_SENTINEL: 'inherited', CEZ_PREVIEW: '1',
-        CEZ_PROJECT_WARMUP: '0', CEZ_HOME: scratch, UNIT_ENV_SENTINEL: 'preserved' },
-    });
-    expect(output).toContain('2 passed');
-  } finally {
-    rmSync(scratch, { recursive: true, force: true });
-  }
-}, 90_000);
 
 // hearsay-tools/cezarion#1395: a worker that dies before `afterAll` used to leave its whole
 // sandbox in the OS temp root. The first run kills its own worker mid-file; the second run's

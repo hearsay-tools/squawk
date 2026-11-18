@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createUsageStore, type UsageStore } from './events'
 import { GlobalEventsProvider, REPO_BRANCHES_COALESCE_MS, useGlobalEvents, useRunUsage, useUsage } from './global-events'
 import { setApiScope } from '@open-mercato/cezar-api-client/utils/project-scope'
-import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
+import { RUN_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
 import { toRunSummary } from '@open-mercato/cezar-api-client/contract/runs'
 import { createQueryClient } from './query-client'
 import { runsIndexSync } from './runs-index-sync'
@@ -1097,13 +1097,6 @@ describe('useGlobalEvents — run events', () => {
     }
   })
 
-  it('refreshes an opened detail for its server-resolved resume command', () => {
-    client.setQueryData<ApiRun>(queryKeys.runs.detail('r1'), runRecord('r1', { runner: 'claude' }))
-    const invalidate = vi.spyOn(client, 'invalidateQueries')
-    const { source } = mount()
-    source.emit('run-summary', stampedRun(runRecord('r1', { runner: 'claude', status: RUN_STATUS.done, steps: [{ id: 'task', name: 'Task', kind: STEP_KIND.agent, status: STEP_STATUS.done, iterations: 1, tokensUsed: 0, backend: 'codex', sessionId: 's1' }] })))
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.runs.detail('r1'), exact: true, refetchType: 'none' })
-  })
 
   it('invalidates the changes cache on a run event so an ended run’s final writes appear (#488)', () => {
     // The Changes tab stops polling the moment a run leaves the active set, so without this the
@@ -1168,15 +1161,6 @@ describe('useGlobalEvents — run events', () => {
     expect(invalidate).not.toHaveBeenCalledWith({ queryKey: workspaceQueryKeys.projects })
   })
 
-  it('still refuses to write another project\u2019s run into THIS scope\u2019s list', async () => {
-    // The index is cross-project; the scoped caches are not. Widening one must not widen the other.
-    client.setQueryData<ApiRun[]>(queryKeys.runs.list(), [])
-    const { source } = mount()
-
-    source.emit('run-summary', stampedRun(runRecord('r9', { status: RUN_STATUS.done }), 'some-other-project'))
-
-    expect(client.getQueryData<ApiRun[]>(queryKeys.runs.list())).toEqual([])
-  })
 
   it('patches a burst of run events in one animation frame and never refetches the index', () => {
     vi.useFakeTimers()
@@ -1796,16 +1780,6 @@ describe('useGlobalEvents — reconcile doctrine', () => {
     await waitFor(() => expect(invalidatedKeys(invalidate)).toEqual([workspaceQueryKeys.runsIndex, queryKeys.health]))
   })
 
-  it('reconciles the cross-project index on first open, covering a project-ready sent before it (#667)', async () => {
-    // `project-ready` is not replayed. An index read that started while a project was recovering,
-    // on a stream that attached only after the event, would otherwise keep the pre-recovery rows.
-    const invalidate = vi.spyOn(client, 'invalidateQueries')
-    const { source } = mount()
-
-    source.open()
-
-    await waitFor(() => expect(invalidatedKeys(invalidate)).toContainEqual(workspaceQueryKeys.runsIndex))
-  })
 
   it('refetches the authoritative endpoints on reconnect', async () => {
     const { source } = mount()

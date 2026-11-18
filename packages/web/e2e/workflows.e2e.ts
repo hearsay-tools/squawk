@@ -138,21 +138,10 @@ describe('workflow builder against the live dry-run server', () => {
     browser.evaluate(`${grip}.focus()`)
     browser.waitForFunction(`document.activeElement === ${grip}`)
     browser.press('Space')
-    browser.waitForFunction(`${grip}.getAttribute('aria-pressed') === 'true'`)
-    // An arrow pressed before the lift's measuring pass settles is swallowed, and dropping
-    // before the move settles resolves the collision against stale coordinates — both land the
-    // item back where it started. Drive it like a user: press, watch dnd-kit's live region for
-    // the settled move-over announcement, retry a swallowed press. Two items — no overshoot.
-    const overBeta = () =>
-      String(
-        browser.evaluate(`[...document.querySelectorAll('[aria-live]')].map((n) => n.textContent).join(' ')`),
-      ).includes(`was moved over droppable area ${BETA}`)
-    let moved = false
-    for (let press = 0; press < 5 && !moved; press++) {
-      browser.press('ArrowDown')
-      for (let poll = 0; poll < 10 && !moved; poll++) moved = overBeta()
-    }
-    expect(moved).toBe(true)
+    // The keyboard sensor attaches after the lift; hold it as README §dnd-kit describes.
+    browser.waitForStable(`${grip}.getAttribute('aria-pressed') === 'true'`, { holdMs: 150 })
+    browser.press('ArrowDown')
+    browser.waitForFunction(`[...document.querySelectorAll('[aria-live]')].some(n => n.textContent.includes('was moved over droppable area ${BETA}'))`)
     browser.press('Space')
     browser.waitForFunction(`${stepIdsJs} === '${BETA},${ALPHA}'`)
     // Order is execution order — the YAML preview follows the move.

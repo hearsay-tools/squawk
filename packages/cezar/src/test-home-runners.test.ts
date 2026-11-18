@@ -14,9 +14,17 @@ it.each(['cezar', 'web'])('%s workers isolate inherited home paths before a test
   try {
     const fixture = join(scratch, 'isolation.test.ts');
     writeFileSync(fixture, `
-import { it, expect } from 'vitest';
+import { beforeAll, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { join, relative, isAbsolute } from 'node:path';
+import { basename, join, relative, isAbsolute } from 'node:path';
+${project === 'cezar' ? `
+const agentHomeKeys = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'PI_CODING_AGENT_DIR', 'PI_CONFIG_DIR', 'OMP_PROFILE', 'PI_PROFILE'];
+const sandbox = process.env.HOME;
+for (const key of ['CEZ_TEST_INHERITED_SENTINEL', 'CEZ_PREVIEW', 'CEZ_PROJECT_WARMUP']) expect(process.env[key], key).toBeUndefined();
+expect(basename(process.env.CEZ_HOME!)).toMatch(/^cez-vitest-home-/);
+expect(process.env.UNIT_ENV_SENTINEL).toBe('preserved');
+beforeAll(() => { process.env.CEZ_DRY_RUN = 'from-beforeAll'; });
+` : ''}
 it('loads one pinned test home', () => {
   const home = process.env.HOME!;
   expect(home).not.toBe('/host/user');
@@ -33,7 +41,24 @@ it('loads one pinned test home', () => {
     expect(isAbsolute(relative(home, process.env[key]!))).toBe(false);
     expect(relative(home, process.env[key]!).startsWith('..')).toBe(false);
   }
+${project === 'cezar' ? `
+  expect(process.env.CEZ_DRY_RUN).toBe('from-beforeAll');
+  process.env.CEZ_PREVIEW = '1';
+  expect(process.env.CEZ_PREVIEW).toBe('1');
+  process.env.HOME = process.env.USERPROFILE = '/left/by/a/test';
+  for (const key of agentHomeKeys) process.env[key] = '/left/by/a/test';
+` : ''}
 });
+${project === 'cezar' ? `
+// This whole fixture runs together; selecting an outer test cannot skip its setup scenario.
+it('resets the homes and per-test flag while keeping the file flag', () => {
+  expect(sandbox).toBeDefined();
+  expect([process.env.HOME, process.env.USERPROFILE]).toEqual([sandbox, sandbox]);
+  for (const key of agentHomeKeys) expect(process.env[key], key).toBeUndefined();
+  expect(process.env.CEZ_DRY_RUN).toBe('from-beforeAll');
+  expect(process.env.CEZ_PREVIEW).toBeUndefined();
+});
+` : ''}
 `);
     const config = join(scratch, 'vitest.config.mjs');
     writeFileSync(config, `export default ${JSON.stringify({
@@ -46,9 +71,11 @@ it('loads one pinned test home', () => {
     const output = execFileSync(process.execPath, [join(repo, 'node_modules/vitest/vitest.mjs'), 'run', '--config', config], {
       cwd: repo, encoding: 'utf8', timeout: 90_000, env: { ...env, HOME: '/host/user', USERPROFILE: '/host/user',
         CEZ_HOME: '/host/live', CEZ_TASK_ID: 'host-task', CEZ_REMOTE: '1', XDG_RUNTIME_DIR: '/host/run',
+        ...(project === 'cezar' ? { CEZ_TEST_INHERITED_SENTINEL: 'inherited', CEZ_PREVIEW: '1',
+          CEZ_PROJECT_WARMUP: '0', UNIT_ENV_SENTINEL: 'preserved' } : {}),
         ...Object.fromEntries(['XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME'].map(key => [key, '/host/' + key])) },
     });
-    expect(output).toContain('1 passed');
+    expect(output).toContain(project === 'cezar' ? '2 passed' : '1 passed');
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

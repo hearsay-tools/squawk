@@ -54,29 +54,11 @@ describe('the github checks API', () => {
     expect(body.checks[124]).toBe('failing');
   });
 
-  it('400s when the prs query is missing', async () => {
-    const res = await apiRequest(app, '/api/v1/github/checks');
-    expect(res.status).toBe(400);
-  });
-
-  it('400s on a non-numeric prs entry', async () => {
-    const res = await apiRequest(app, '/api/v1/github/checks?prs=12,abc');
-    expect(res.status).toBe(400);
-  });
-
-  it('400s on an empty prs list', async () => {
-    const res = await apiRequest(app, '/api/v1/github/checks?prs=');
-    expect(res.status).toBe(400);
-  });
-
-  it('400s when more than 100 PRs are requested', async () => {
+  it('rejects missing, malformed and over-limit PR lists', async () => {
     const many = Array.from({ length: 101 }, (_, i) => i + 1).join(',');
-    const res = await apiRequest(app, `/api/v1/github/checks?prs=${many}`);
-    expect(res.status).toBe(400);
-  });
-
-  it('rejects a zero or negative PR number', async () => {
-    expect((await apiRequest(app, '/api/v1/github/checks?prs=0')).status).toBe(400);
-    expect((await apiRequest(app, '/api/v1/github/checks?prs=-3')).status).toBe(400);
+    for (const query of ['', '?prs=12,abc', '?prs=', `?prs=${many}`, '?prs=0', '?prs=-3']) {
+      const res = await apiRequest(app, `/api/v1/github/checks${query}`);
+      expect(res.status, query).toBe(400);
+    }
   });
 });

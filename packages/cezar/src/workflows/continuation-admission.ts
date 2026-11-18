@@ -25,7 +25,6 @@ export type ContinueRunOptions = {
   model?: string | undefined;
   /** Omitted keeps the pin; empty string clears it. */
   effort?: string | undefined;
-  agentProfile?: string | undefined;
   /** The parent reply this continuation delivers as the answer to a routed question. */
   answerInputId?: string;
   /** A provider-error retry of a run that never recorded a session starts a fresh one
@@ -75,7 +74,6 @@ export function stoppingRefusal(run: RunRecord): ContinuationRefusal | undefined
 
 export function identityRefusal(identity: WorkerStepIdentity | undefined, opts: ContinueRunOptions): ContinuationRefusal | undefined {
   if (identity && ((opts.runner !== undefined && opts.runner !== identity.account.provider) ||
-    (opts.agentProfile !== undefined && opts.agentProfile !== identity.account.profileId) ||
     (opts.model !== undefined && opts.model !== identity.model) ||
     (opts.effort !== undefined && opts.effort !== identity.effort))) {
     return { ok: false, error: 'Accepted worker execution identity cannot change' };
@@ -112,13 +110,13 @@ export function sessionAffinity(run: RunRecord, opts: ContinueRunOptions, identi
   const sessionBackend = sessionRunner(sessionStep, run);
   const sessionAccount = sessionStep?.profileId ?? DEFAULT_AGENT_ACCOUNT_ID;
   // A provider retry keeps the held step's account, as it keeps its runner (hearsay-tools/squawk#3337).
-  const accountSwitched = (opts.agentProfile ?? identity?.account.profileId ?? (opts.retryRunner ? undefined : run.agentProfile) ?? sessionAccount) !== sessionAccount;
+  const accountSwitched = (identity?.account.profileId ?? (opts.retryRunner ? undefined : run.agentProfile) ?? sessionAccount) !== sessionAccount;
   const resume = sessionBackend === targetRunner && !accountSwitched;
   return { originalRunner, targetRunner, resume };
 }
 
 export function hasOverrides(opts: ContinueRunOptions): boolean {
-  return opts.runner !== undefined || opts.model !== undefined || opts.effort !== undefined || opts.agentProfile !== undefined;
+  return opts.runner !== undefined || opts.model !== undefined || opts.effort !== undefined;
 }
 
 export function modelRefusal(opts: ContinueRunOptions, targetRunner: RunnerId): ContinuationRefusal | undefined {
@@ -130,13 +128,12 @@ export function modelRefusal(opts: ContinueRunOptions, targetRunner: RunnerId): 
 /** Clear foreign inherited presets/accounts on a switch; keep custom model ids and effort. */
 export function overridePatch(run: RunRecord, opts: ContinueRunOptions, targetRunner: RunnerId, originalRunner: RunnerId) {
   const inheritedPinIsForeign = opts.model === undefined && run.model !== undefined && modelConflictsWithRunner(run.model, targetRunner);
-  const inheritedAccountIsForeign = opts.agentProfile === undefined && run.agentProfile !== undefined && targetRunner !== originalRunner;
+  const inheritedAccountIsForeign = run.agentProfile !== undefined && targetRunner !== originalRunner;
   return {
     ...(opts.runner !== undefined ? { runner: opts.runner, removedRunner: undefined } : {}),
     ...(opts.model !== undefined ? { model: opts.model === '' ? undefined : opts.model }
       : inheritedPinIsForeign ? { model: undefined } : {}),
-    ...(opts.agentProfile !== undefined ? { agentProfile: opts.agentProfile }
-      : inheritedAccountIsForeign ? { agentProfile: undefined } : {}),
+    ...(inheritedAccountIsForeign ? { agentProfile: undefined } : {}),
     ...(opts.effort !== undefined ? { effort: opts.effort === '' ? undefined : opts.effort } : {}),
   };
 }

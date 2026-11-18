@@ -1,9 +1,9 @@
 import { execFile } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   branchFor,
   createWorktree,
@@ -181,33 +181,8 @@ describe('createWorktree recovery (real git)', () => {
 });
 
 describe('worktreeShortstat (real git)', () => {
-  let repo: string;
-
-  beforeAll(async () => {
-    repo = mkdtempSync(join(tmpdir(), 'cez-shortstat-'));
-    await run('git', ['init', '-q', '-b', 'main'], { cwd: repo });
-    writeFileSync(join(repo, 'a.txt'), 'one\ntwo\nthree\n');
-    await run('git', ['add', '-A'], { cwd: repo });
-    await run('git', [...GIT_ID, 'commit', '-q', '-m', 'base'], { cwd: repo });
-    await run('git', ['checkout', '-q', '-b', 'work'], { cwd: repo });
-  });
-
-  afterAll(() => {
-    rmSync(repo, { recursive: true, force: true });
-  });
-
-  it('counts modified + untracked (intent-to-add) files against the base', async () => {
-    writeFileSync(join(repo, 'a.txt'), 'one\nTWO\nthree\n'); // 1 add, 1 del
-    writeFileSync(join(repo, 'new.txt'), 'x\ny\n'); // 2 adds, untracked
-    const stat = await worktreeShortstat(repo, 'main');
-    expect(stat).toEqual({ adds: 3, dels: 1, files: 2 });
-  });
-
   it('answers all zeros for a clean tree, not null', async () => {
-    await run('git', ['checkout', '-q', '--', '.'], { cwd: repo });
-    rmSync(join(repo, 'new.txt'), { force: true });
-    // Drop the intent-to-add entry the previous test staged.
-    await run('git', ['reset', '-q'], { cwd: repo });
+    const repo = await fixtureRepo('cez-shortstat-clean-');
     const stat = await worktreeShortstat(repo, 'main');
     expect(stat).toEqual({ adds: 0, dels: 0, files: 0 });
   });
@@ -237,22 +212,21 @@ describe('worktreeShortstat (real git)', () => {
   // hearsay-tools/cezarion#1088: a plain copy of the index is newer than every entry, so git's
   // racy check skipped the content read and a same-size, same-second edit vanished from the stat.
   it('counts a same-size edit made in the same second as the index write', async () => {
-    let r = '';
-    for (let attempt = 0; attempt < 5 && !r; attempt += 1) {
-      const candidate = await fixtureRepo('cez-racy-index-');
-      writeFileSync(join(candidate, 'a.txt'), 'one\ntwo\nthree\n');
-      await run('git', ['add', 'a.txt'], { cwd: candidate });
-      await run('git', [...GIT_ID, 'commit', '-q', '-m', 'a'], { cwd: candidate });
-      writeFileSync(join(candidate, 'a.txt'), 'one\nTWO\nthree\n'); // same size
-      const second = (path: string): number => Math.floor(statSync(path).mtimeMs / 1000);
-      // Racy only when the edit and the index write share a second; retry the rare straddle.
-      if (second(join(candidate, 'a.txt')) === second(join(candidate, '.git', 'index'))) r = candidate;
-    }
-    expect(r).not.toBe('');
-    const indexSecond = Math.floor(statSync(join(r, '.git', 'index')).mtimeMs / 1000);
-    // A copy made in a later second is what hid the edit; wait out the second rather than guess.
-    // bound: the wall clock leaves the second of the index write within 1 s.
-    while (Math.floor(Date.now() / 1000) <= indexSecond) await new Promise((resolve) => setTimeout(resolve, 20));
+    const r = await fixtureRepo('cez-racy-index-');
+    const file = join(r, 'a.txt');
+    const index = join(r, '.git', 'index');
+    const pastSecond = Math.floor(Date.now() / 1000) - 60;
+    // Isolate Git's mtime check: a changed ctime must not independently reveal the edit.
+    await run('git', ['config', 'core.trustctime', 'false'], { cwd: r });
+    writeFileSync(file, 'one\ntwo\nthree\n');
+    utimesSync(file, pastSecond, pastSecond);
+    await run('git', ['add', 'a.txt'], { cwd: r });
+    await run('git', [...GIT_ID, 'commit', '-q', '-m', 'a'], { cwd: r });
+    writeFileSync(file, 'one\nTWO\nthree\n'); // same size
+    // Match the entry's recorded mtime and make it racy against the real index.
+    // A plain index copy gets today's mtime and would incorrectly hide this edit.
+    utimesSync(file, pastSecond, pastSecond);
+    utimesSync(index, pastSecond, pastSecond);
     expect(await worktreeShortstat(r, 'main')).toEqual({ adds: 1, dels: 1, files: 1 });
   });
 

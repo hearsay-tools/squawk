@@ -626,25 +626,6 @@ describe('POST /api/v1/projects/checkout', () => {
     expect((await listProjectsViaApi()).projects.map((p) => p.name).sort()).toEqual(['one', 'two']);
   });
 
-  it('a checkout that duplicates an ALREADY-registered root answers 200 with the existing entry (hearsay-tools/squawk#1086)', async () => {
-    // Reachable when the folder was removed from disk but its registry row was
-    // not: the clone succeeds, and registration recognises the realpath.
-    await useCheckoutRoot();
-    mkdirSync(checkoutRoot, { recursive: true });
-    const target = join(checkoutRoot, 'cezar');
-    mkdirSync(target, { recursive: true });
-    const existing = await registerProject(target, 'local', testHome());
-    rmSync(target, { recursive: true, force: true });
-    clearProjectProbeCache();
-
-    const { status, body } = await post({ url: 'open-mercato/cezar' });
-    expect(status).toBe(200);
-    expect(body.error).toBeUndefined();
-    expect(body.project?.id).toBe(existing.id);
-    expect(existsSync(join(target, '.git'))).toBe(true);
-    expect((await listProjectsViaApi()).projects.map((p) => p.id)).toEqual([existing.id]);
-  });
-
   it('a re-clone after the registry saw the root missing answers the fresh status, and the project opens', async () => {
     await useCheckoutRoot();
     mkdirSync(checkoutRoot, { recursive: true });
@@ -658,6 +639,9 @@ describe('POST /api/v1/projects/checkout', () => {
     const { status, body } = await post({ url: 'open-mercato/cezar' });
     expect(status).toBe(200);
     expect(body.project).toMatchObject({ id: existing.id, status: 'ok' });
+    expect(body.error).toBeUndefined();
+    expect(existsSync(join(target, '.git'))).toBe(true);
+    expect((await listProjectsViaApi()).projects.map((p) => p.id)).toEqual([existing.id]);
     const contexts = new ProjectContexts({ createRunner, createManager: createRunManager, home: testHome(), listProjects: () => listProjects(testHome()) });
     try {
       expect((await apiRequest(makeApp({ contexts }), `/api/v1/p/${existing.id}/ui-state`)).status).toBe(200);

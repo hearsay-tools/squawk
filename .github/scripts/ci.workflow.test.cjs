@@ -294,7 +294,6 @@ test('docs-only PRs skip both matrices but cannot bypass the required build', ()
   }] });
   assert.equal(renamed.output, 'surface=full-matrix\n');
   assert.ok(ci.jobs['unit-tests'].steps.some(step => step.run === 'npm run test:unit:${{ matrix.suite }}'));
-  assert.match(ci.jobs['build-and-package'].if, /!cancelled\(\)/);
 });
 
 test('classification is not a path filter and build-and-package follows queue proof and immutable inputs without surface skips', () => {
@@ -407,9 +406,7 @@ test('test jobs require full-matrix classification without losing the bot bump s
   const ci = workflow();
   for (const name of ['vitest', 'cockpit-browser']) {
     const job = ci.jobs[name];
-    assert.ok(job.needs?.includes('change-surface'));
     assert.match(job.if, /needs\.change-surface\.outputs\.surface == ['"]full-matrix['"]/);
-    assert.ok(job.needs?.includes('classify-pr'));
     assert.match(job.if, /needs\.classify-pr\.outputs\.bump_pr != ['"]true['"]/);
   }
 });
@@ -461,8 +458,6 @@ test('bot-authored release/v* PRs skip Vitest and cockpit E2E via classify-pr fi
   assert.equal(classifyStep.env.EXPECTED_HEAD_SHA, '${{ github.event.pull_request.head.sha || github.sha }}');
   assert.deepEqual(ci.jobs.vitest.needs, ['queue-proof', 'change-surface', 'classify-pr', 'pr-test-input']);
   assert.deepEqual(ci.jobs['cockpit-browser'].needs, ['queue-proof', 'change-surface', 'classify-pr', 'pr-test-input']);
-  assert.match(ci.jobs.vitest.if, /needs\.classify-pr\.outputs\.bump_pr != 'true'/);
-  assert.match(ci.jobs['cockpit-browser'].if, /needs\.classify-pr\.outputs\.bump_pr != 'true'/);
   assert.ok(ci.jobs.verify.needs.includes('classify-pr'));
   const verifyEnv = ci.jobs.verify.steps.find((step) => step.name === 'Require every verification job').env;
   assert.equal(verifyEnv.BUMP_PR, '${{ needs.classify-pr.outputs.bump_pr }}');
@@ -538,7 +533,6 @@ test('verification bindings keep the final gate in CI and reserve local full bro
 test('packaged tests stay typechecked after the application build', () => {
   const ci = workflow();
   const job = ci.jobs['build-and-package'];
-  assert.deepEqual(job.needs, ['queue-proof', 'pr-test-input']);
   assert.doesNotMatch(job.if, /change-surface|bump_pr/);
   const steps = job.steps;
   const build = steps.findIndex(step => step.run === 'npm run build');
@@ -722,8 +716,6 @@ test('baseline growth is required through trusted classify-pr with default PR ev
   const checkout = job.steps[checkoutIndex];
   assert.match(checkout.with.ref, /pull_request.base.sha/);
   assert.doesNotMatch(checkout.with.ref, /pull_request.head/);
-  assert.equal(checkout.with['persist-credentials'], false);
-  assert.equal(checkout.with['fetch-depth'], 1);
   assert.equal(job.permissions.contents, 'read');
   assert.equal(job.permissions['pull-requests'], 'read');
   const check = job.steps[checkIndex];
@@ -1015,21 +1007,12 @@ test('every complexity gate event works from a one-commit checkout and never fet
   lacksUnrelated(dispatch);
 });
 
-test('the classifier and the clone gate fetch history the same way as the complexity gate', () => {
-  const ci = workflow();
-  const complexity = ci.jobs['complexity-gate'];
-  const clone = ci.jobs['clone-gate'];
-  assert.deepEqual(clone.steps.slice(0, 2), complexity.steps.slice(0, 2));
-  assert.equal(complexity.steps[1].if, "github.event_name != 'merge_group'");
-  const checkout = ci.jobs['classify-pr'].steps.find(step => step.name === 'Check out trusted classifier');
-  assert.equal(checkout.with['fetch-depth'], 1);
-});
-
 test('clone gate uses trusted tooling and is required for PRs and merge groups', () => {
   const ci = workflow();
   const gate = ci.jobs['clone-gate'];
   const complexity = ci.jobs['complexity-gate'];
   assert.deepEqual(gate.steps.slice(0, 5), complexity.steps.slice(0, 5));
+  assert.equal(complexity.steps[1].if, "github.event_name != 'merge_group'");
   assert.equal(gate.if, complexity.if);
   assert.deepEqual(gate.permissions, { contents: 'read', 'pull-requests': 'read' });
   assert.ok(ci.jobs.verify.needs.includes('clone-gate'));

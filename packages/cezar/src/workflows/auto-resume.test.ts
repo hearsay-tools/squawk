@@ -805,23 +805,10 @@ describe('a run stopped by a usage limit resumes itself', () => {
     expect([...manager.accountHolds().deadline]).toContain('claude:default');
   }, 40_000);
 
-  it('treats a human message during the hold as the user\'s own Continue', async () => {
-    manager = createFixtureManager(store, repoRoot);
-    const record = manager.startRun(workflow, { task: 'mock:limit ship it', worktree: false });
-    await settle(record.id);
-    store.updateRun(record.id, { task: 'mock:cezar-done ship it' });
-
-    // The limited run has no session, so the cockpit's message is a Continue, as on a failed run.
-    expect(manager.continueRun(record.id, { text: 'mock:cezar-done carry on' })).toEqual({ ok: true });
-    expect(store.getRun(record.id)?.autoResumeAt).toBeUndefined();
-    await expect
-      .poll(() => store.getRun(record.id)?.steps.find((step) => step.id === 'continue-1')?.status, { timeout: 20_000 })
-      .toBe('done');
-  }, 40_000);
 
   // Table B row B7 (.ai/specs/2026-11-03-run-store-owns-exits.md): the Continue that joins the line
   // writes continue-line once. A second write repeated the first.
-  it('writes continue-line once for a human Continue on the hold', async () => {
+  it('treats a human message during the hold as the user: writes continue-line once for a human Continue on the hold', async () => {
     manager = createFixtureManager(store, repoRoot);
     const record = manager.startRun(workflow, { task: 'mock:limit ship it', worktree: false });
     await settle(record.id);
@@ -830,6 +817,7 @@ describe('a run stopped by a usage limit resumes itself', () => {
     try {
       expect(manager.continueRun(record.id, { text: 'mock:cezar-done carry on' })).toEqual({ ok: true });
       expect(move.mock.calls.filter(([id, exit]) => id === record.id && exit === 'continue-line')).toHaveLength(1);
+      expect(store.getRun(record.id)?.autoResumeAt).toBeUndefined();
     } finally { move.mockRestore(); }
     expect(store.getRun(record.id)?.status).toBe(RUN_STATUS.queued);
     await expect

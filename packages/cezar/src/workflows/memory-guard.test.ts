@@ -92,6 +92,7 @@ describe('RunManager memory guard', () => {
     const id = await start();
     vi.mocked(session.end).mockImplementation(() => {});
     sample(id);
+    sample(id);
     expect(session.end).toHaveBeenCalledOnce();
     expect(session.open).toBe(true);
     expect(pauses(id)).toMatchObject([{ message: 'paused — memory limit exceeded (20 MiB > 10 MiB)' }]);
@@ -117,16 +118,6 @@ describe('RunManager memory guard', () => {
     expect(session.open).toBe(false);
     settle();
     await waitForProduct(f.manager, f.store, () => !f.manager.isActive(id));
-    expect(pauses(id)).toHaveLength(1);
-  });
-
-  it('does not pause twice while the first session exit is pending', async () => {
-    const id = await start();
-    vi.mocked(session.end).mockImplementation(() => {});
-    sample(id);
-    sample(id);
-    expect(session.open).toBe(true);
-    expect(session.end).toHaveBeenCalledOnce();
     expect(pauses(id)).toHaveLength(1);
   });
 

@@ -51,18 +51,21 @@ describe('main dispatch', () => {
     expect(f.deps.serveCommand).toHaveBeenCalledWith(f.home, '/work', 4321, true, undefined);
   });
 
-  it.each(['--help', '-h'])('prints help for %s before repo access or Home preparation', async (flag) => {
+  it.each([['--help', 'cez'], ['-h', 'cez'], ['--help', 'hsq']] as const)('prints help for %s as %s before repo access or Home preparation', async (flag, name) => {
     const f = fixture([flag]);
+    f.processStub.argv[1] = `/bin/${name}`;
+    f.deps.resolveCliHome.mockImplementation(() => { throw new Error('No home directory'); });
     await f.run();
     const help = f.deps.console.log.mock.calls[0]![0];
     expect(help).toContain(`${productName('cezar')} — local cockpit for AI agent tasks in your repo\n\nUsage:`);
-    expect(help).toContain('  cez run "<task>"          run a task headless in the terminal');
+    expect(help).toContain(`  ${name} run "<task>"          run a task headless in the terminal`);
     expect(help).toContain('      --no-workers');
     expect(help).toContain('      --no-messaging');
     expect(f.deps.getRepoInfo).not.toHaveBeenCalled();
     expect(f.deps.resolveCliHome).not.toHaveBeenCalled();
     expect(f.deps.prepareOperatorHome).not.toHaveBeenCalled();
     expect(f.processStub.exitCode).toBeUndefined();
+    expect(f.deps.console.error.mock.calls).toEqual(name === 'hsq' ? [] : [["[cez] 'cez' is deprecated; use 'hsq' instead."]]);
   });
 
   it('uses the current directory and shipped serve defaults without a positional command', async () => {
@@ -220,17 +223,5 @@ describe('CLI metadata', () => {
       expect(f.deps.resolveCliHome).not.toHaveBeenCalled();
       expect(f.deps.getRepoInfo).not.toHaveBeenCalled();
     }
-  });
-
-  it('prints help without resolving Home, so a host without one still gets it', async () => {
-    const f = fixture(['--help']);
-    f.processStub.argv[1] = '/bin/hsq';
-    f.deps.resolveCliHome.mockImplementation(() => { throw new Error('No home directory'); });
-    await main(f.deps as unknown as CliDeps);
-    expect(f.deps.console.log.mock.calls[0]?.[0]).toContain('Usage:');
-    expect(f.processStub.exitCode ?? 0).toBe(0);
-    expect(f.deps.resolveCliHome).not.toHaveBeenCalled();
-    expect(f.deps.prepareOperatorHome).not.toHaveBeenCalled();
-    expect(f.deps.console.error).not.toHaveBeenCalled();
   });
 });

@@ -26,6 +26,20 @@ function context(): InstallContext {
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); roots.splice(0).forEach(root => rmSync(root, { recursive: true, force: true })); });
 
 describe('exact npm launch ownership', () => {
+  // Preserve the VPS systemd launch shapes alongside the shared ownership cases.
+  it.each([
+    ['/home/u/.nvm/versions/node/v24/bin/npx --yes cezarion serve --no-open --port 4321', true, false],
+    ['/usr/bin/node /home/cezar/cezar/dist/index.js serve --no-open --port 4321', false, false],
+    ['/usr/bin/node /usr/bin/cezarion serve --no-open --port 4321', false, false],
+    ['/n/npx --yes cezar-cli serve --no-open --port 4321', false, true],
+    ['/n/npx --yes cezarion serve --no-open --port 4321', true, false],
+    ['/usr/bin/node /home/cezar/cezar/dist/index.js serve --port 4321', false, false],
+    ['/usr/bin/node /usr/bin/cezarion serve --port 4321', false, false],
+    ['/usr/bin/node /home/u/.npm/_npx/ab/node_modules/cezarion/dist/index.js', false, false],
+  ] as const)('classifies VPS launch %s (owned %s, foreign %s)', (command, owned, foreign) => {
+    expect(isNpxExecStart(command)).toBe(owned);
+    expect(isForeignNpxExecStart(command)).toBe(foreign);
+  });
   it.each(NPM_LAUNCH_PACKAGES)('recognizes %s and refreshes only its matching cache', pkg => {
     const ctx = context();
     const cache = join(ctx.home.root, 'npm');

@@ -122,7 +122,9 @@ describe('prepareReport', () => {
   it('makes relative and script links inert and counts the relative ones', () => {
     const { srcdoc, blocked } = prepareReport('<a href="other.html">Next</a><a href="/api/v1/health">Api</a><a href="javascript:steal()">JS</a><area href="sub/x.html">')
     const doc = parse(srcdoc)
-    expect([...doc.querySelectorAll('a, area')].filter(link => link.hasAttribute('href'))).toEqual([])
+    expect([...doc.querySelectorAll('a, area')].map(link => [link.localName, link.getAttribute('href')])).toEqual([
+      ['a', null], ['a', null], ['a', null], ['area', null],
+    ])
     expect(blocked.relative).toBe(3)
   })
 

@@ -60,16 +60,6 @@ describe('recover() reads legacy generated-inbox records — hearsay-tools/cezar
     return id;
   };
 
-  it('reads and recovers an old true record without a live session', async () => {
-    const id = queuedRun(true);
-    expect(store.getRun(id)?.generateFollowups).toBe(true); // the pre-restart truth
-
-    await createFixtureManager(store, repoRoot, { home: testHome(), semaphore: frozen() }).recover();
-
-    // Preserve historical data without using it to control generation.
-    expect(store.getRun(id)?.generateFollowups).toBe(true);
-    expect(store.getRun(id)?.status).toBe('queued');
-  });
 
   it.each([true, false, undefined])('recovers the legacy %s preference', async (preference) => {
     const id = queuedRun(preference);
@@ -80,11 +70,4 @@ describe('recover() reads legacy generated-inbox records — hearsay-tools/cezar
     expect(store.getRun(id)?.status).toBe('queued');
   });
 
-  it('recovers a legacy false record', async () => {
-    const id = queuedRun(false);
-
-    await createFixtureManager(store, repoRoot, { home: testHome(), semaphore: frozen() }).recover();
-
-    expect(store.getRun(id)?.generateFollowups).toBe(false);
-  });
 });

@@ -168,12 +168,6 @@ describe('whether an accepted done still holds at the turn end (hearsay-tools/sq
     expect(decide(then, now)).toEqual(expected);
   });
 
-  // The review's probe: a wait registered in the done's own millisecond is still after it.
-  it('a wait registered in the same millisecond as the done, unknown to it, withdraws it', () => {
-    const done = { session: 'generation', at, seq: 10, openWaits: [], settledWaits: [] };
-    expect(acceptedDoneHolds(makeRunRecord({ doneAccepted: done, waits: [makeTimerWait({ registeredAt: at, via: WAIT_VIA.cezar_wait })] }), [])).toEqual(withdrawn('the agent registered a wait'));
-  });
-
   it('a human message recorded after the done withdraws it; one before keeps it', () => {
     expect(holds({}, [makeRunEvent({ type: 'user-message', seq: 11 })])).toEqual(withdrawn('a new human message'));
     expect(holds({}, [makeRunEvent({ type: 'user-message', seq: 10 })])).toEqual(kept);

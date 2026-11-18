@@ -98,7 +98,7 @@ function startDictation() {
 }
 
 describe('the thread composer against a live waiting session', () => {
-  it('waiting state: paused hint above an enabled composer', () => {
+  it('completes a skill, sends the reply and returns to an enabled waiting composer', async () => {
     expect(browser.text('[data-slot="paused-hint"]')).toContain(
       'The agent is paused, waiting for your reply',
     )
@@ -106,9 +106,6 @@ describe('the thread composer against a live waiting session', () => {
     // Chrome has the Web Speech API — the labeled mic must be there, left of send.
     expect(browser.isVisible('[aria-label="Start dictation"]')).toBe(true)
     browser.screenshot(`${artifactsDir}/composer-idle.png`)
-  })
-
-  it('typing /lin opens the skills menu with the project skill first and emphasized (#380)', () => {
     browser.click('[data-slot="composer"] textarea')
     browser.fill('[data-slot="composer"] textarea', 'Please run /lin')
     browser.waitForFunction(
@@ -122,11 +119,6 @@ describe('the thread composer against a live waiting session', () => {
     expect(first.text).toContain('Fix lint findings')
     expect(first.emphasized).toBe('true')
     browser.screenshot(`${artifactsDir}/composer-autocomplete.png`)
-  })
-
-  it('Enter inserts /lint-fix at the caret and closes the menu', () => {
-    browser.fill('[data-slot="composer"] textarea', 'Please run /lin')
-    browser.waitForFunction(`document.querySelector('[data-slot="composer-menu-item"]') !== null`)
     // `press` targets the focused element — make sure that is still the textarea.
     browser.evaluate(`document.querySelector('[data-slot="composer"] textarea').focus() ?? true`)
     browser.press('Enter')
@@ -135,10 +127,6 @@ describe('the thread composer against a live waiting session', () => {
     )
     // The popover animates out — wait for the unmount rather than sampling mid-exit.
     browser.waitForFunction(`document.querySelector('[data-slot="composer-menu"]') === null`)
-  })
-
-  it('send delivers the reply — the transcript grows with the new user bubble over SSE', () => {
-    browser.fill('[data-slot="composer"] textarea', 'Please run /lint-fix ')
     const bubblesBefore = browser.count('[data-slot="user-bubble"]')
     browser.click('[aria-label="Send"]')
     // The optimistic clear is immediate…
@@ -151,12 +139,6 @@ describe('the thread composer against a live waiting session', () => {
     expect(
       browser.evaluate(`[...document.querySelectorAll('[data-slot="user-bubble"]')].at(-1).querySelector('[data-slot="ask-answers"] blockquote').textContent`),
     ).toBe('Please run /lint-fix')
-  })
-
-  it('the mock answers the reply and the run parks at waiting again', async () => {
-    browser.fill('[data-slot="composer"] textarea', 'Please run /lint-fix ')
-    browser.click('[aria-label="Send"]')
-    browser.waitForFunction(`document.querySelectorAll('[data-slot="user-bubble"]').length === 2`)
     await waitForStatus(baseUrl, runId, ['waiting'])
     // The agent's answer to our message rendered — the round trip is complete.
     browser.waitForFunction(`document.querySelector('[data-slot="paused-hint"]') !== null`)

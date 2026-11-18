@@ -28,6 +28,7 @@ describe('TasksOverviewRoute — wired to the app', () => {
     cleanup()
     resetToasts()
     fetchMock.mockReset()
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -207,6 +208,7 @@ describe('TasksOverviewRoute — wired to the app', () => {
   it('keeps a tab switched while the typed search is still on its way to the URL (hearsay-tools/cezarion#1616)', async () => {
     renderApp([run({ id: 'act', title: 'Needle act', status: RUN_STATUS.running }), run({ id: 'arc', title: 'Needle arc', status: RUN_STATUS.done, archived: true })])
     await waitFor(() => expect(tableRow('act')).not.toBeNull())
+    vi.useFakeTimers()
     fireEvent.change(screen.getByRole('textbox', { name: 'Search tasks' }), { target: { value: 'Needle' } })
     fireEvent.click(overviewTab('archived'))
     expect(overviewTab('archived').getAttribute('aria-pressed')).toBe('true')
@@ -215,7 +217,7 @@ describe('TasksOverviewRoute — wired to the app', () => {
     const seen: (string | null)[] = []
     const observer = new MutationObserver(() => seen.push(overviewTab('archived').getAttribute('aria-pressed')))
     observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] })
-    await act(() => new Promise((resolve) => setTimeout(resolve, 800))) // bound: several 250 ms search debounces
+    await act(() => vi.advanceTimersByTimeAsync(800))
     observer.disconnect()
     expect(seen.filter((pressed) => pressed !== 'true')).toEqual([])
     expect(overviewTab('archived').getAttribute('aria-pressed')).toBe('true')

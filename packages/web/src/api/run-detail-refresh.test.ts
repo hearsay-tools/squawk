@@ -1,3 +1,4 @@
+import { waitFor } from '@testing-library/react'
 import { QueryObserver } from '@tanstack/react-query'
 import { RUN_STATUS } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
 import type { ApiRun } from '@open-mercato/cezar-api-client'
@@ -39,14 +40,12 @@ function setup() {
   return { client, responses, reads: () => reads, enable }
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
-
 describe('a pre-event fetch of a detail without an enabled reader (hearsay-tools/cezarion#2730)', () => {
   it('stays stale after the old response, so a reader enabled later fetches once', async () => {
     const { client, responses, reads, enable } = setup()
     expect(client.getQueryState(key)?.isInvalidated).toBe(true)
     responses[0]!.resolve(run(null))
-    await settle()
+    await waitFor(() => expect(client.getQueryState(key)?.fetchStatus).toBe('idle'))
     // The old response lands without its verdict, and the detail is still stale.
     expect(client.getQueryData<ApiRun>(key)?.finishBlocked).toBeUndefined()
     expect(client.getQueryState(key)?.isInvalidated).toBe(true)
@@ -54,8 +53,7 @@ describe('a pre-event fetch of a detail without an enabled reader (hearsay-tools
     enable()
     expect(reads()).toBe(2)
     responses[1]!.resolve(run('Wait for the worker.'))
-    await settle()
-    expect(client.getQueryData<ApiRun>(key)?.finishBlocked).toBe('Wait for the worker.')
+    await waitFor(() => expect(client.getQueryData<ApiRun>(key)?.finishBlocked).toBe('Wait for the worker.'))
   })
 
   it('fetches once more when its reader is enabled before the old response settles', async () => {
@@ -64,12 +62,10 @@ describe('a pre-event fetch of a detail without an enabled reader (hearsay-tools
     // The old fetch is still in flight: the enabled reader shares it rather than starting another.
     expect(reads()).toBe(1)
     responses[0]!.resolve(run(null))
-    await settle()
-    expect(reads()).toBe(2)
+    await waitFor(() => expect(reads()).toBe(2))
     expect(client.getQueryData<ApiRun>(key)?.finishBlocked).toBeUndefined()
     responses[1]!.resolve(run(null))
-    await settle()
-    expect(client.getQueryData<ApiRun>(key)?.finishBlocked).toBeNull()
+    await waitFor(() => expect(client.getQueryData<ApiRun>(key)?.finishBlocked).toBeNull())
     expect(reads()).toBe(2)
   })
 })

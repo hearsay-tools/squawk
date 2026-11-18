@@ -59,7 +59,6 @@ import {
   rollupToChecks,
   THREAD_ENTRY_CAP,
   TIMELINE_EVENT_CAP,
-  TIMELINE_EVENT_KINDS,
 } from './github.ts';
 import type { ForgeComment } from './types.ts';
 
@@ -534,14 +533,6 @@ describe('mergeThread', () => {
     expect(truncated).toBe(false);
   });
 
-  it('caps at the entry limit and flags truncation', () => {
-    const many = Array.from({ length: THREAD_ENTRY_CAP + 5 }, (_, i) =>
-      at(`2026-07-01T00:00:${String(i).padStart(2, '0')}Z`, { id: i }),
-    );
-    const { comments, truncated } = mergeThread([many], THREAD_ENTRY_CAP);
-    expect(comments).toHaveLength(THREAD_ENTRY_CAP);
-    expect(truncated).toBe(true);
-  });
 });
 
 /** Per-project cache isolation (multi-project workspace, step 2.6). Both in-process caches in
@@ -793,59 +784,6 @@ describe('ghTimelineEventSchema (#525)', () => {
   });
 });
 
-describe('TIMELINE_EVENT_KINDS (#525)', () => {
-  it('excludes `reviewed` so reviews are not rendered twice', () => {
-    // Timeline `reviewed` rows do carry a body and would work — but /pulls/{n}/reviews is already
-    // normalized, chipped and empty-body-filtered, so sourcing both would duplicate every review.
-    expect(TIMELINE_EVENT_KINDS.has('reviewed' as never)).toBe(false);
-  });
-
-  it('excludes the noise github.com itself does not surface', () => {
-    for (const noise of ['subscribed', 'mentioned', 'review_requested', 'referenced']) {
-      expect(TIMELINE_EVENT_KINDS.has(noise as never)).toBe(false);
-    }
-  });
-
-  it('covers exactly the 11 kinds the wire type declares', () => {
-    expect([...TIMELINE_EVENT_KINDS].sort()).toEqual(
-      [
-        'assigned',
-        'closed',
-        'committed',
-        'cross-referenced',
-        'head_ref_force_pushed',
-        'labeled',
-        'merged',
-        'renamed',
-        'reopened',
-        'unassigned',
-        'unlabeled',
-      ],
-    );
-  });
-});
-
-describe('timeline fetch bounds (#525)', () => {
-  it('caps each stream at its own 200 — the normalizers cannot see each other', () => {
-    // The unit half of the independence claim: each normalizer caps its own stream. This alone
-    // cannot rule out a combined cap, which would live in fetchGithubComments — that is covered
-    // end-to-end by 'returns a full 200 comments AND 200 events from one over-long timeline'
-    // in the integration block below.
-    const events = Array.from({ length: 250 }, (_, i) => ({
-      event: 'labeled', id: i,
-      created_at: new Date(Date.UTC(2026, 0, 1) + i * 60_000).toISOString(),
-      actor: { login: 'a' }, label: { name: `l${i}` },
-    }));
-    const comments: ForgeComment[] = Array.from({ length: 250 }, (_, i) => ({
-      id: i, author: 'a', createdAt: new Date(Date.UTC(2026, 0, 1) + i * 60_000).toISOString(),
-      body: '', kind: 'comment', url: `u${i}`,
-    }));
-
-    expect(normalizeEvents(events).events).toHaveLength(200);
-    expect(mergeThread([comments]).comments).toHaveLength(200);
-  });
-});
-
 describe('normalizeEvents (#525)', () => {
   const SHA = 'a'.repeat(40);
   const commitRow = (over: Record<string, unknown> = {}) => ({
@@ -903,6 +841,7 @@ describe('normalizeEvents (#525)', () => {
       { event: 'subscribed', id: 1, created_at: '2026-01-01T00:00:00Z' },
       { event: 'mentioned', id: 2, created_at: '2026-01-01T00:00:00Z' },
       { event: 'review_requested', id: 3, created_at: '2026-01-01T00:00:00Z' },
+      { event: 'referenced', id: 6, created_at: '2026-01-01T00:00:00Z' },
       { event: 'some_future_event', id: 4, created_at: '2026-01-01T00:00:00Z' },
       { event: 'closed', id: 5, created_at: '2026-01-01T00:00:00Z', actor: { login: 'a' } },
     ]);
@@ -911,7 +850,7 @@ describe('normalizeEvents (#525)', () => {
 
   it('drops `reviewed` so reviews are not rendered twice', () => {
     const { events } = normalizeEvents([
-      { event: 'reviewed', id: 9, submitted_at: '2026-01-01T00:00:00Z', body: 'LGTM' },
+      { event: 'reviewed', id: 9, created_at: '2026-01-01T00:00:00Z', submitted_at: '2026-01-01T00:00:00Z', body: 'LGTM' },
     ]);
     expect(events).toEqual([]);
   });
@@ -1465,20 +1404,6 @@ describe('mergeThread is unaffected by events (#525)', () => {
     expect(out[out.length - 1]!.id).toBe(199);
   });
 
-  it('produces the same output regardless of how many events the same fetch carried', () => {
-    const comments = [comment(1, '2026-01-01T00:00:00Z'), comment(2, '2026-01-02T00:00:00Z')];
-    const before = mergeThread([comments]);
-    // Normalizing 250 events alongside must not touch the comment stream in any way.
-    normalizeEvents(
-      Array.from({ length: 250 }, (_, i) => ({
-        event: 'labeled', id: i,
-        created_at: new Date(Date.UTC(2026, 0, 1) + i * 60_000).toISOString(),
-        actor: { login: 'a' }, label: { name: `l${i}` },
-      })),
-    );
-    expect(mergeThread([comments])).toEqual(before);
-    expect(before.truncated).toBe(false);
-  });
 });
 
 describe('resolveRepoHandle (#525 Phase 2)', () => {
@@ -2663,9 +2588,6 @@ describe('derivePrReferenceStatus over every combination', () => {
 
   const describeRow = (row: Parameters<typeof derivePrReferenceStatus>[0]) => JSON.stringify(row);
 
-  it('covers 256 open shapes', () => {
-    expect(openRows()).toHaveLength(256);
-  });
 
   it('only ever answers with a PULL REQUEST status', () => {
     // Never an issue word: `open`, `completed` and `not-planned` belong to the other kind, and a

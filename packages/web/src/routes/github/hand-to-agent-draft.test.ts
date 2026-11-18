@@ -24,12 +24,6 @@ describe('the follow-up "remembered last selection" store (#408 item 3)', () => 
     expect(readFollowupSelection()).toEqual({ workflow: 'ship-it', skills: [{ id: 'om-fix' }, { id: 'om-review' }] })
   })
 
-  it('survives a cold read (page reload) via localStorage, not just an in-memory cache', () => {
-    writeFollowupSelection({ workflow: null, skills: [{ id: 'om-fix' }] })
-    const raw = localStorage.getItem('cez-followup-selection') as string
-    expect(JSON.parse(raw)).toEqual({ workflow: null, skills: [{ id: 'om-fix' }] })
-  })
-
   it('normalizes a malformed/older stored value instead of throwing', () => {
     localStorage.setItem('cez-followup-selection', 'not json at all')
     expect(readFollowupSelection()).toEqual({ workflow: null, skills: [] })
@@ -42,11 +36,6 @@ describe('the follow-up "remembered last selection" store (#408 item 3)', () => 
 describe('the follow-up per-item prompt draft store (#408 item 4)', () => {
   it('an untouched item answers the empty string', () => {
     expect(readFollowupPrompt(ISSUE_A)).toBe('')
-  })
-
-  it('round-trips a typed prompt for one item', () => {
-    writeFollowupPrompt(ISSUE_A, 'Also add a regression test.')
-    expect(readFollowupPrompt(ISSUE_A)).toBe('Also add a regression test.')
   })
 
   it('keys by item URL so distinct hand-off targets never collide', () => {

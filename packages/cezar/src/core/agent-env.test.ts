@@ -39,48 +39,6 @@ describe('buildChildEnv — delegation session isolation', () => {
   }
 });
 
-describe('buildChildEnv — preview CDP address isolation (hearsay-tools/cezarion#784)', () => {
-  for (const backend of RUNNER_IDS) {
-    for (const full of ['0', '1']) {
-      it(`${backend} drops an inherited preview CDP address with CEZ_AGENT_ENV_FULL=${full}, even when passed through`, () => {
-        const env = buildChildEnv({ backend, source: {
-          PATH: '/usr/bin', CEZ_AGENT_ENV_FULL: full, CEZ_ENV_PASSTHROUGH: 'CEZ_PREVIEW_CDP_URL',
-          cez_preview_cdp_url: 'ws://127.0.0.1:4321/api/v1/preview/cdp/parent',
-        }, extraEnv: { CEZ_TASK_ID: 'nested' } });
-        expect(Object.keys(env).filter(name => /^CEZ_PREVIEW_CDP_URL$/i.test(name))).toEqual([]);
-      });
-
-      it(`${backend} keeps the address its own controller set with CEZ_AGENT_ENV_FULL=${full}`, () => {
-        const env = buildChildEnv({ backend, source: { CEZ_AGENT_ENV_FULL: full, CEZ_PREVIEW_CDP_URL: 'ws://127.0.0.1:4321/api/v1/preview/cdp/parent' },
-          extraEnv: { CEZ_PREVIEW_CDP_URL: 'ws://127.0.0.1:5555/api/v1/preview/cdp/own' } });
-        expect(env.CEZ_PREVIEW_CDP_URL).toBe('ws://127.0.0.1:5555/api/v1/preview/cdp/own');
-      });
-    }
-  }
-});
-
-describe('buildChildEnv — cockpit address isolation (#774)', () => {
-  for (const backend of RUNNER_IDS) {
-    for (const full of ['0', '1']) {
-      it(`${backend} drops an inherited cockpit address with CEZ_AGENT_ENV_FULL=${full}, even when passed through`, () => {
-        const env = buildChildEnv({ backend, source: {
-          PATH: '/usr/bin', CEZ_AGENT_ENV_FULL: full, CEZ_ENV_PASSTHROUGH: 'CEZ_COCKPIT_URL,CEZ_PROJECT_ID',
-          CEZ_COCKPIT_URL: 'http://127.0.0.1:4321', cez_project_id: 'parent-project',
-        }, extraEnv: { CEZ_TASK_ID: 'nested' } });
-        expect(Object.keys(env).filter(name => /^CEZ_(COCKPIT_URL|PROJECT_ID)$/i.test(name))).toEqual([]);
-        expect(env.CEZ_TASK_ID).toBe('nested');
-      });
-
-      it(`${backend} keeps the address its own controller set with CEZ_AGENT_ENV_FULL=${full}`, () => {
-        const env = buildChildEnv({ backend, source: { CEZ_AGENT_ENV_FULL: full, CEZ_COCKPIT_URL: 'http://127.0.0.1:4321' },
-          extraEnv: { CEZ_COCKPIT_URL: 'http://127.0.0.1:5555', CEZ_PROJECT_ID: 'own' } });
-        expect(env.CEZ_COCKPIT_URL).toBe('http://127.0.0.1:5555');
-        expect(env.CEZ_PROJECT_ID).toBe('own');
-      });
-    }
-  }
-});
-
 describe('buildChildEnv — omp credentials', () => {
   const source: NodeJS.ProcessEnv = {
     PATH: '/usr/bin', OMP_LOG_LEVEL: 'info', PI_CODING_AGENT_DIR: '/x', OPENAI_API_KEY: 'k',

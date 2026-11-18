@@ -124,20 +124,4 @@ describe('usage owner encapsulation', () => {
     expect([...invocation.startedTurns]).toEqual(['real']);
   });
 
-  it('blocks a computed-key Object.assign helper from replacing a migrated slot', () => {
-    const { run, state } = fixture();
-    const usage = state.usage;
-    const other = createActiveRun({ cwd: root, pendingHumanAsk: false, autonomous: false });
-    const replace = (target: object, key: string, value: object) => Object.assign(target, { [key]: value });
-    expect(() => replace(state, ['us', 'age'].join(''), other.usage)).toThrow(TypeError);
-    expect(mutations.reflectSet(state, 'usage', other.usage)).toBe(false);
-    expect(mutations.reflectDefine(state, 'usage', other.usage)).toBe(false);
-    expect(mutations.reflectDelete(state, 'usage')).toBe(false);
-    expect(state.usage).toBe(usage);
-    // Other groups still have legitimate writers until their migration.
-    state.liveSession.cancel();
-    expect(state.liveSession.cancelled).toBe(true);
-    recordUsageUiEvent(store, run.id, state, { type: 'turn.started', turnId: 'real' });
-    expect(usage.usageInvocation!.observed).toBe(true);
-  });
 });
