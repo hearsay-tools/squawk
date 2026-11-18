@@ -12,6 +12,7 @@ export class SessionGroup {
   #finishRequested: boolean | undefined;
   #interrupt: () => void = () => undefined;
   #cwd: string;
+  #sharesDirectory = false;
   #session: AgentSession | undefined;
   #pendingPermissions = new Set<string>();
   #permissionsView = new ReadonlySetView(this.#pendingPermissions);
@@ -56,6 +57,11 @@ export class SessionGroup {
   requestFinish(): void { this.#finishRequested = true; }
   installInterrupt(interrupt: () => void): void { this.#interrupt = interrupt; }
   changeWorkingDirectory(cwd: string): void { this.#cwd = cwd; }
+  /** The run works in another run's directory. Recorded once, where the engine opens the workspace
+   *  with the run's record in hand; autosave, worktree setup and the repository-root lease read it
+   *  here and never look the record up again. */
+  markSharedDirectory(): void { this.#sharesDirectory = true; }
+  get sharesDirectory(): boolean { return this.#sharesDirectory; }
   attachSession(session: AgentSession): void { this.#session = session; }
   retireSession(): void { this.#session = undefined; }
   markSessionOpened(): void { this.#sessionEverOpened = true; }

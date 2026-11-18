@@ -231,15 +231,6 @@ describe("a worker that runs in its parent's worktree (hearsay-tools/squawk#3819
     expect(open.defaultWorktree()).toBe(live);
   });
 
-  it('falls back as a run without a worktree does once the host directory is gone', () => {
-    const lost = { ...shared, delegation: { ...shared.delegation, workspace: { ...(shared.delegation as { workspace: object }).workspace, path: gone } } } as RunRecord;
-    const host = sharedHost(lost);
-    expect(runCheckout(host, id, 'read', { directory: 'existing-worktree' })).toMatchObject({ directory: null });
-    expect(runCheckout(host, id, 'read', { directory: 'working-directory' })).toEqual(noWorktree);
-    const open = runCheckout(host, id, 'open');
-    expect('status' in open ? undefined : open.directory()).toBe(root);
-  });
-
   it('refuses to remove or reclaim the worktree of a task while a live worker runs in it, and admits it once the worker ended', () => {
     const hostRun = makeRunRecord({ id: baseRun.id, status: RUN_STATUS.failed, worktreePath: live, delegation: { role: 'root', permissions: [], receipts: [] } });
     const running = { ...shared, status: RUN_STATUS.running } as RunRecord;

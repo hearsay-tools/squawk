@@ -27,7 +27,7 @@ const sha256 = (text: string) => createHash('sha256').update(text).digest('hex')
 
 type Entry = {
   path: string;
-  /** The status code, with the source path of a rename or copy. */
+  /** The status code, with the source path of a rename or copy, then what the index holds for the path. */
   code: string;
   /** Size, modification time and mode; `absent` for a path with nothing at it. Always recorded. */
   meta: string;
@@ -106,6 +106,19 @@ export async function boundedContentHash(path: string, limit: number): Promise<{
   } catch { return { read: 0 }; } finally { await handle.close(); }
 }
 
+/** What the index holds for each path, from `git ls-files -s -z`: mode, object id and stage of each
+ *  of its entries. A status entry carries it, so a staging change that keeps the status code shows. */
+function indexIdentities(staged: string): Map<string, string> {
+  const identities = new Map<string, string>();
+  for (const record of staged.split('\0')) {
+    const tab = record.indexOf('\t');
+    if (tab < 0) continue;
+    const path = record.slice(tab + 1), identity = record.slice(0, tab);
+    identities.set(path, identities.has(path) ? `${identities.get(path)},${identity}` : identity);
+  }
+  return identities;
+}
+
 type Capture = { root: string; budget: number };
 const inside = (root: string, path: string) => path === root || path.startsWith(root.endsWith(sep) ? root : root + sep);
 
@@ -139,14 +152,16 @@ async function captureNested(dir: string, capture: Capture, depth: number): Prom
 async function captureState(dir: string, capture: Capture, depth: number): Promise<WorkspaceState> {
   const head = (await gitOutput(dir, ['rev-parse', '--verify', 'HEAD^{commit}'])).trim();
   const branch = await git(dir, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { timeout: 30_000 });
-  const index = sha256(await gitOutput(dir, ['ls-files', '-s', '-z']));
+  const staged = await gitOutput(dir, ['ls-files', '-s', '-z']);
+  const index = sha256(staged);
+  const stagedIds = indexIdentities(staged);
   const parsed = parseStatus(await gitOutput(dir, ['status', '--porcelain=v1', '-z', '--untracked-files=all']))
     .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
   const entries: Entry[] = [];
   const overflow = createHash('sha256');
   for (const [position, [path, code]] of parsed.entries()) {
     const kept = position < STATE_ENTRY_CAP;
-    const entry = await captureEntry(dir, path, code, capture, depth, kept);
+    const entry = await captureEntry(dir, path, `${code} ${stagedIds.get(path) ?? '-'}`, capture, depth, kept);
     if (kept) entries.push(entry); else overflow.update(`${path}\0${code}\0${entry.meta}\0`);
   }
   return { head, branch: branch.ok ? branch.stdout.trim() : null, index, entries,
@@ -217,24 +232,27 @@ export async function recordWorkspaceEnd(dataDir: string, workerId: string, dir:
   await writeWorkerDataFile(join(directory, name), Buffer.from(JSON.stringify({ generation, state })));
 }
 
-/** Paths that differ between two states, and paths two commits differ in. */
-async function changedPaths(dir: string, start: WorkspaceState, end: WorkspaceState): Promise<string[]> {
+/** Paths that differ between two states, and paths two commits differ in. `complete` is false when
+ *  the commits could not be compared: the list then misses what only they changed. */
+async function changedPaths(dir: string, start: WorkspaceState, end: WorkspaceState): Promise<{ paths: string[]; complete: boolean }> {
   const paths = new Set(differingPaths(start, end));
+  let complete = true;
   if (start.head !== end.head) {
     const committed = await git(dir, ['diff', '--name-only', '-z', '--no-renames', start.head, end.head, '--'], { timeout: 30_000 });
+    complete = committed.ok;
     if (committed.ok) for (const path of committed.stdout.split('\0')) if (path) paths.add(path);
   }
-  return [...paths].sort();
+  return { paths: [...paths].sort(), complete };
 }
 
 export async function compareWorkspaceStates(dir: string, start: WorkspaceState, end: WorkspaceState): Promise<WorkerChangeReport> {
   const headMoved = start.head !== end.head, branchMoved = start.branch !== end.branch, indexMoved = start.index !== end.index;
   const overflowMoved = start.overflow !== end.overflow;
-  const paths = await changedPaths(dir, start, end);
+  const { paths, complete } = await changedPaths(dir, start, end);
   if (!headMoved && !branchMoved && !indexMoved && !overflowMoved && paths.length === 0) return { state: 'unchanged' };
   return {
     state: 'changed', paths: paths.slice(0, WORKER_CHANGED_PATHS_CAP),
-    truncated: paths.length > WORKER_CHANGED_PATHS_CAP || overflowMoved,
+    truncated: paths.length > WORKER_CHANGED_PATHS_CAP || overflowMoved || !complete,
     headMoved, branchMoved, indexMoved,
   };
 }

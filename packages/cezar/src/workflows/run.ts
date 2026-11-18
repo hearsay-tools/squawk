@@ -683,6 +683,7 @@ export class RunManager {
       pendingHumanAsk: this.#hasPendingHumanAsk(runId),
       autonomous: record?.autonomous === true,
     });
+    if (!runOwnsDirectory(record)) state.liveSession.markSharedDirectory();
     this.#activate(runId, state);
     this.#modules.line.unmarkStarting(runId);
     return this.#modules.continuationSession.launchContinuation(runId, stepId, sessionId, backend, prompt,
@@ -720,7 +721,7 @@ export class RunManager {
     if (!launch) return;
     if (!(await this.#modules.stepLoop.prepareExecutionWorktree(execution, launch))) return;
 
-    if (state.liveSession.cwd === this.#repoRoot && runOwnsDirectory(this.#store.getRun(runId))) {
+    if (state.liveSession.cwd === this.#repoRoot && !state.liveSession.sharesDirectory) {
       if (repositoryRootLockDisabled()) {
         emit({
           type: 'note',

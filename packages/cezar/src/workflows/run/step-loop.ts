@@ -150,6 +150,7 @@ export class StepLoop {
       const wt = await openExecutionWorktree(this.context.store, this.context.repoRoot, this.context.dataDir, execution, launch, base, this.host.workerWorkspaces());
       state.liveSession.changeWorkingDirectory(wt.path);
       const ownsDirectory = runOwnsDirectory(ownedRun);
+      if (!ownsDirectory) state.liveSession.markSharedDirectory();
       this.context.store.updateRun(runId, {
         ...(ownsDirectory ? { worktreePath: wt.path } : {}),
         ...(wt.branch === undefined ? {} : { branch: wt.branch }),
@@ -200,7 +201,7 @@ export class StepLoop {
     trigger: 'start' | 'rematerialized' | 'resume',
   ): Promise<string | undefined> {
     const record = this.context.store.getRun(runId);
-    if (!record || state.liveSession.cwd === this.context.repoRoot || !runOwnsDirectory(record)) return undefined;
+    if (!record || state.liveSession.cwd === this.context.repoRoot || state.liveSession.sharesDirectory) return undefined;
     const plan = resolveWorktreeSetup(raw);
     const interrupted = record.worktreeSetup?.status === 'running';
     if (plan.kind === 'none') {

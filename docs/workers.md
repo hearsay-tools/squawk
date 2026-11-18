@@ -74,7 +74,7 @@ Launch and Continue check that the recorded directory still exists and is a work
 - `{ "state": "changed", "paths": [...], "truncated": false, "headMoved": false, "branchMoved": false, "indexMoved": false }`: `paths` lists at most 100 changed paths, and `truncated` says that more changed.
 - `{ "state": "unavailable", "reason": "..." }`: Squawk could not record or read a state, for example because the worker never started a session.
 
-The comparison always starts at the first session, also after a Continue or a restart. While the worker runs, `collect` compares with the directory as it is at that moment. A settled worker is compared only with the state recorded when it settled; when Squawk could not record that state, `changes` is `unavailable`, so a later edit is never reported as part of the worker's run. A worker whose controller crashed gets its end state when Squawk finds that its processes are gone.
+The comparison always starts at the first session, also after a Continue or a restart. While the worker runs, `collect` compares with the directory as it is at that moment. A settled worker is compared only with the state recorded when it settled; when Squawk could not record that state, `changes` is `unavailable`, so a later edit is never reported as part of the worker's run. A worker whose session crashed with its controller has no change report: Squawk learns of its end only later, so `changes` is `unavailable` for it.
 
 Squawk compares content, with these limits:
 
