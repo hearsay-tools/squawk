@@ -6,6 +6,7 @@ import { createFixtureManager } from './fixture-cleanup.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import type { AgentEvent, AgentRunResult } from '../core/agent-runner.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';
 import {
   RUN_STATUS,
   STEP_KIND,
@@ -167,7 +168,7 @@ describe('the completion gate outside a turn end', () => {
       store.commitConversation(rootId, { messages: [request], outcomes: [] });
       vi.mocked(gateHost.parentCompletionBlockers).mockReturnValue([]);
       expect(finish.completionGate(id)).toMatchObject({ code: 'requests_outstanding', requestIds: [request.id] });
-      store.commitConversation(rootId, { messages: [request], outcomes: [{ requestId: request.id, status: 'cancelled', observedAt: new Date().toISOString() }] });
+      store.commitConversation(rootId, { messages: [request], outcomes: [{ requestId: request.id, status: requestOutcomeSchema.shape.status.enum.cancelled, observedAt: new Date().toISOString() }] });
       expect(finish.completionGate(id)).toBe('accept');
     });
 
