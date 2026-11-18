@@ -86,6 +86,24 @@ test('a break keeps the file\'s final newline and mode', (t) => {
   assert.equal(execFileSync('git', ['cat-file', 'blob', `${commit}:bin/tool.sh`], { cwd, encoding: 'utf8' }), '#!/bin/sh\nexit 1\n');
 });
 
+test('several edits to one file all reach the break commit, in recipe order', (t) => {
+  const { cwd, git, put } = fixture(t);
+  put('src/flags.ts', 'export const first = true;\nexport const second = true;\n');
+  git('add', '.');
+  git('commit', '-m', 'flags');
+  const edits = [
+    { file: 'src/flags.ts', find: 'first = true', replace: 'first = false' },
+    { file: 'src/flags.ts', find: 'second = true', replace: 'second = false' },
+    { file: 'src/flags.ts', find: 'first = false', replace: 'first = null' },
+  ];
+  const twoEdits = { ...recipe, break: edits };
+  const commit = buildBreak(cwd, { recipe: twoEdits, label: 'flags' });
+  assert.equal(git('show', `${commit}:src/flags.ts`), 'export const first = null;\nexport const second = false;');
+  const read = (file) => readFileSync(join(cwd, file), 'utf8');
+  assert.deepEqual(recipeProblems({ ...twoEdits, tests: ['src/guard.test.ts'] }, read), []);
+  assert.match(recipeProblems({ ...twoEdits, break: [...edits, edits[0]], tests: ['src/guard.test.ts'] }, read)[0], /occurs 0 times/);
+});
+
 test('a break text found zero or two times is refused', () => {
   assert.throws(() => applyEdit('a\n', { file: 'f', find: 'b', replace: 'c' }), /occurs 0 times/);
   assert.throws(() => applyEdit('b b\n', { file: 'f', find: 'b', replace: 'c' }), /occurs 2 times/);

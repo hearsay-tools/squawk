@@ -18,7 +18,8 @@ const USAGE = `Usage:
   node scripts/regression-proof.mjs --list | --check | --help
 
 A recipe is scripts/regression-proofs/<recipe>.json: { description, fixedBy, break, tests }.
-Each break entry replaces one exact text, found exactly once at HEAD, in one file.
+Each break entry replaces one exact text, found exactly once, in one file; entries for
+the same file apply in order, each to the text the earlier ones left.
 --revert reverts one non-merge commit on top of HEAD. --patch applies a patch file that
 introduces the break. The break commit is HEAD plus the break; it is never checked out.
 \`squeal proof <tests> --base <break> --case source\` then runs red (the tests over the break)
@@ -84,12 +85,24 @@ export function loadRecipe(name, dir = RECIPES_DIR) {
 export function recipeProblems(recipe, read) {
   const problems = [];
   for (const test of recipe.tests) if (read(test) === null) problems.push(`${recipe.name}: test file ${test} does not exist`);
-  for (const edit of recipe.break) {
-    const text = read(edit.file);
-    if (text === null) { problems.push(`${recipe.name}: ${edit.file} does not exist`); continue; }
-    try { applyEdit(text, edit); } catch (error) { problems.push(`${recipe.name}: ${error.message}`); }
+  for (const [file, edits] of editsByFile(recipe.break)) {
+    const text = read(file);
+    if (text === null) { problems.push(`${recipe.name}: ${file} does not exist`); continue; }
+    try { applyEdits(text, edits); } catch (error) { problems.push(`${recipe.name}: ${error.message}`); }
   }
   return problems;
+}
+
+/** The recipe's edits grouped by file, in recipe order. */
+function editsByFile(edits) {
+  const byFile = new Map();
+  for (const edit of edits) byFile.set(edit.file, [...(byFile.get(edit.file) ?? []), edit]);
+  return byFile;
+}
+
+/** Apply a file's edits in order, each to the text the earlier ones left. */
+export function applyEdits(text, edits) {
+  return edits.reduce((current, edit) => applyEdit(current, edit), text);
 }
 
 function headReader(cwd) {
@@ -113,12 +126,12 @@ function withHeadIndex(cwd, fn) {
 function recipeTree(cwd, recipe) {
   const read = headReader(cwd);
   return withHeadIndex(cwd, (env) => {
-    for (const edit of recipe.break) {
-      const text = read(edit.file);
-      if (text === null) throw new ProofError(`${edit.file}: not in HEAD`);
-      const mode = git(cwd, ['ls-tree', 'HEAD', '--', edit.file]).split(/\s/)[0];
-      const blob = git(cwd, ['hash-object', '-w', '--stdin'], { input: applyEdit(text, edit) });
-      git(cwd, ['update-index', '--cacheinfo', `${mode},${blob},${edit.file}`], { env });
+    for (const [file, edits] of editsByFile(recipe.break)) {
+      const text = read(file);
+      if (text === null) throw new ProofError(`${file}: not in HEAD`);
+      const mode = git(cwd, ['ls-tree', 'HEAD', '--', file]).split(/\s/)[0];
+      const blob = git(cwd, ['hash-object', '-w', '--stdin'], { input: applyEdits(text, edits) });
+      git(cwd, ['update-index', '--cacheinfo', `${mode},${blob},${file}`], { env });
     }
     return git(cwd, ['write-tree'], { env });
   });
