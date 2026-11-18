@@ -86,5 +86,7 @@ An already-queued check starts its clock when the wait first sees it. A cockpit
 restart starts a new clock. Activity progress and native `gh pr checks --watch`
 keep their reads; a timer caps the watch at the oldest observed queued check's
 bound, reaps the child, then uses the next snapshot to confirm its current state.
+A check that becomes QUEUED only during a native watch starts its clock at the
+next snapshot; metadata probes and activity progress do not start it.
 In-progress checks never trigger this wake. See
 `.ai/specs/2026-11-18-stuck-pr-waits-plan.md` for cases.

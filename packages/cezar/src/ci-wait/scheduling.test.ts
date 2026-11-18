@@ -224,7 +224,7 @@ it('wakes before its deadline after observing queued checks for 15 minutes, even
  const result=await started.result;
  expect(result).toMatchObject({outcome:'stuck',totalChecks:2});
  expect(result.diagnostic).toContain('build (queued for at least 15 minutes)');expect(result.diagnostic).toContain('lint (queued for at least 15 minutes)');
- expect(result.diagnostic).toContain('Close and reopen the PR');expect(result.diagnostic).toContain('reopened starts a fresh pull_request_target run on the same head');
+ expect(result.diagnostic).toContain('Close and reopen the PR');expect(result.diagnostic).toContain('the reopened event starts fresh pull_request and pull_request_target runs on the same head');
  expect(result.diagnostic).toContain('Push a new head only if the new run also stays queued');expect(result.diagnostic).not.toMatch(/empty commit/i);
  expect(result.diagnostic).toContain('clock starts when this wait first sees a queued check');expect(result.diagnostic).toContain('cockpit restart restarts it');
  expect(github.watchers).toBe(0);

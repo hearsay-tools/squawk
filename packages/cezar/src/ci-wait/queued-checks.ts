@@ -22,7 +22,7 @@ export class QueuedCheckClock {
     const now = Date.now();
     const stuck = Array.from(this.checks.values()).filter(check => now - check.since >= CI_QUEUED_BOUND_MS);
     if (!stuck.length) return undefined;
-    const recovery = ' Close and reopen the PR: reopened starts a fresh pull_request_target run on the same head. Push a new head only if the new run also stays queued. The clock starts when this wait first sees a queued check; a cockpit restart restarts it.';
+    const recovery = ' Close and reopen the PR: the reopened event starts fresh pull_request and pull_request_target runs on the same head. Push a new head only if the new run also stays queued. The clock starts when this wait first sees a queued check; a cockpit restart restarts it.';
     let names = 'Checks still queued: ';
     let included = 0;
     for (const check of stuck) {

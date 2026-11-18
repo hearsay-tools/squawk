@@ -24,7 +24,10 @@ During an active workflow the existing 30-second snapshot loop checks the age.
 During gh --watch, a timer caps the phase at the earliest observed queued
 time plus 15 minutes. The child is aborted and reaped before
 the normal snapshot confirms current state. Metadata-only probes are unchanged.
-No stale cached check state decides `stuck`.
+No stale cached check state decides `stuck`. If a check becomes QUEUED only
+while the native watch runs and no queued check was present at entry, its clock
+starts at the next snapshot. Metadata-only probes and progress-only reads do not
+start a clock or decide an outcome. That snapshot can be the watch's exit read.
 
 ## Transitions out
 
@@ -43,7 +46,7 @@ No stale cached check state decides `stuck`.
 | Any active wait | Cancellation / deadline / query error | Existing supervisor authority | Existing outcomes; no deadline extension |
 
 Wake text names sanitized check names and observed queued minutes and both clock limitations. It tells the agent to
-close and reopen the PR to start a fresh pull_request_target run on the same
+close and reopen the PR to start fresh pull_request and pull_request_target runs on the same
 head, and to push a new head only if the fresh run also stays queued. It never
 suggests an empty commit. The diagnostic retains the contract's 4096-byte bound.
 
