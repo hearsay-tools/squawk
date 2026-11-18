@@ -62,7 +62,8 @@ export type WorkersVerdict = 'complete' | 'pending' | 'unknown' | 'issue'
 
 export function useWorkersVerdict(run: ApiRun): WorkersVerdict {
   const metadata = run.delegation
-  const delegated = metadata?.role === 'root'
+  // Every run that shows a Workers section is judged by the workers it lists.
+  const delegated = listsWorkers(run)
   const query = useRunRelationships(run.id, { enabled: delegated })
   if (!delegated || !metadata) return 'complete'
   if (!query.isSuccess) return query.isError || query.fetchStatus === 'paused' ? 'unknown' : 'pending'

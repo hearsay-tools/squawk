@@ -1,5 +1,5 @@
 import type { RunRecord, RunStore } from './store.ts';
-import { familyRecordIdOf, inspectableReceipts, supervisorIdOf } from './task-rights.ts';
+import { familyRecordIdOf, inspectableReceipts, supervisedReceipts, supervisorIdOf } from './task-rights.ts';
 
 /**
  * The two sets a lifecycle walk can mean by "the workers of this run" (hearsay-tools/squawk#3819).
@@ -27,6 +27,12 @@ export function supervisedWorkers(store: Reads, run: RunRecord | undefined): Run
 export function completionWorkerIds(store: Reads, run: RunRecord, family: RunRecord | undefined): string[] {
   const records = family?.id === run.id ? familyWorkers(store, run) : supervisedWorkers(store, run);
   return [...new Set([...inspectableReceipts(run, family).map(receipt => receipt.workerId), ...records.map(worker => worker.id)])];
+}
+
+/** The completion gate holds a task that holds a family record, and a worker that started a
+ *  worker: the same gate, with the same reads, for every supervisor. `family` is the run's family record. */
+export function holdsCompletionGate(run: RunRecord | undefined, family: RunRecord | undefined): run is RunRecord {
+  return !!run && !!family && (family.id === run.id || supervisedReceipts(family, run.id).length > 0);
 }
 
 export function isLiveWorker(worker: RunRecord): boolean {

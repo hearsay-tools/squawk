@@ -5,7 +5,8 @@ import { WAIT_PHASE, WAIT_KIND, WAIT_SOURCE, WAIT_VIA, RUN_STATUS } from '@open-
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
 import type { RunnerId } from '../core/agent-runner.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
-import { delegatingParent, checkpoint, until, store, timeline, spendWorkerBudget, manager, fixtureUpdateRun, restart, root } from './worker-wait-core.testkit.ts';
+import { delegatingParent, checkpoint, until, store, timeline, spendWorkerBudget, manager, fixtureUpdateRun, restart, root, worker } from './worker-wait-core.testkit.ts';
+import { workerOperationSchema } from '@open-mercato/cezar-contract/delegation';
 import { timed } from './waits.testkit.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { toolCall } from './waits-parity.testkit.ts';
@@ -60,6 +61,31 @@ export function completionCells(runners: RunnerId[], it: typeof registerTest = r
       expect(inputsFor(p.id, entry.id)).toHaveLength(1);
       expect(prompted(runner, workerWake(entry))).toHaveLength(1);
       await until(() => store.getRun(p.id)?.status === 'waiting');
+    });
+
+    it(`${runner} U21s a worker that started a worker gets the same gate: an ignored refusal parks it off the pool on a Squawk worker wait, and its worker's settlement wakes it and not the root`, async () => {
+      const reply = repliesDoneAgain();
+      const r = await workerParent(runner);
+      // W: a worker of the root with the grant to start workers, parked after its opening turn.
+      const w = await worker(r.id, HARNESS_ADAPTERS[runner].scenarios.baseline!, runner);
+      store.commitDelegation([{ id: w.id, delegation: { ...w.delegation!, permissions: [...workerOperationSchema.options], spawnGrant: { kinds: ['shared'], live: 2 } } as never }]);
+      spendWorkerBudget(w.id);
+      manager.enqueueOwnedRun(w.id);
+      await until(() => store.getRun(w.id)?.status === 'waiting' && !!store.getRun(w.id)?.worktreePath, () => timeline(w.id));
+      // The first done is refused once; the reply's done parks W on Squawk's wait on the worker it started.
+      const { second: c, entry } = await ignoreRefusal(runner, w.id, reply, () => workerWaits(w.id)[0]?.phase === 'open');
+      expect(store.getRun(c.id)?.delegation).toMatchObject({ parentRunId: r.id, supervisorRunId: w.id });
+      expect(store.getRun(w.id)?.waits).toEqual([entry]);
+      expect(entry).toMatchObject({ kind: WAIT_KIND.worker, source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion, mode: 'all', workerIds: [c.id], phase: WAIT_PHASE.open });
+      await expectPoolCapacity(runner, w.id, false);
+      const rootInputs = store.getRun(r.id)?.agentInputs?.length ?? 0;
+      fixtureUpdateRun(c.id, { status: RUN_STATUS.done });
+      await until(() => settled(w.id, entry.id)?.phase === 'delivered' && prompted(runner, workerWake(entry)).length > 0);
+      expect(settled(w.id, entry.id)).toMatchObject({ result: { reason: 'outcome' } });
+      expect(inputsFor(w.id, entry.id)).toHaveLength(1);
+      expect(workerWaits(r.id)).toEqual([]);
+      expect(store.getRun(r.id)?.agentInputs?.length ?? 0).toBe(rootInputs);
+      expect(store.getRun(r.id)?.status).toBe('waiting');
     });
 
     it(`${runner} U21r after a restart, a deadline-less completion wait resolves on the worker's settlement and wakes the parent once`, async () => {

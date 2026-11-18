@@ -159,6 +159,22 @@ describe('the completion gate outside a turn end', () => {
         message: expect.stringContaining(`Workers are still live: ${childId}. Wait for them (\`worker wait ${childId}\`, then end your turn)`) });
       expect(finish.completionGate(childId)).toBe('accept');
     });
+
+    it('refuses the supervisor\'s done while a request it sent is open, as the root gate does', () => {
+      const rootId = store.getRun(id)!.delegation!.role === 'worker' ? (store.getRun(id)!.delegation as { parentRunId: string }).parentRunId : '';
+      const request = { id: randomUUID(), senderRunId: id, recipientRunId: childId, kind: 'request' as const, text: 'q', createdAt: new Date().toISOString(),
+        deadline: new Date(Date.now() + 600_000).toISOString(), requestHash: 'a'.repeat(64), state: 'accepted' as const };
+      store.commitConversation(rootId, { messages: [request], outcomes: [] });
+      vi.mocked(gateHost.parentCompletionBlockers).mockReturnValue([]);
+      expect(finish.completionGate(id)).toMatchObject({ code: 'requests_outstanding', requestIds: [request.id] });
+      store.commitConversation(rootId, { messages: [request], outcomes: [{ requestId: request.id, status: 'cancelled', observedAt: new Date().toISOString() }] });
+      expect(finish.completionGate(id)).toBe('accept');
+    });
+
+    it('names a worker that another worker started among the root\'s live blockers, the set its completion wait takes', () => {
+      const rootId = (store.getRun(id)!.delegation as { parentRunId: string }).parentRunId;
+      expect(finish.completionRefusal(rootId)).toMatchObject({ code: 'workers_outstanding', liveWorkerIds: expect.arrayContaining([childId]) });
+    });
   });
 
   const queueInput = () => store.commitAgentInputs(id, [{ id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId: randomUUID(), text: 'Read this first', createdAt: new Date().toISOString() }]);

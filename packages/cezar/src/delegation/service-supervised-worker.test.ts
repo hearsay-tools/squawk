@@ -204,12 +204,19 @@ describe('a worker that supervises a worker (hearsay-tools/squawk#3819)', { time
     expect(await f.service.stop(f.caller, { workerId: live.id })).toMatchObject({ workerId: live.id });
   });
 
-  it('keeps the family\'s live workers when the root fails', async () => {
+  it('keeps the family\'s live workers when the root fails, and their requests to each other open', async () => {
     const W = await supervisor();
     const C = await child(W.w);
     setRunStatus(f.store, f.parent.id, RUN_STATUS.failed);
     f.manager.reconcileWorkerWaits(f.parent.id);
     expect([W.id, C.id].map(id => run(id).status)).toEqual([RUN_STATUS.running, RUN_STATUS.running]);
+    // The failed root only stores the ledger: a request between the two live workers stays open, and its reply resolves it.
+    const [question, answer] = [randomUUID(), randomUUID()];
+    expect(await f.service.send(W.w, { id: question, recipientRunId: C.id, kind: 'request', text: 'still there?', timeoutSeconds: 600 })).toMatchObject({ message: { state: 'accepted' } });
+    f.manager.reconcileWorkerWaits(f.parent.id);
+    expect((await f.service.conversation(W.w, { recipientRunId: C.id })).outcomes).toEqual([]);
+    expect(await f.service.reply(C.c, { id: answer, recipientRunId: W.id, kind: 'reply', requestId: question, text: 'yes', timeoutSeconds: 600 }))
+      .toMatchObject({ outcome: { requestId: question, status: 'replied', replyId: answer } });
   });
 
   it('destroys the child before the worker, and deletes the worker\'s history only after the child\'s', async () => {

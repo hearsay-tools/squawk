@@ -5,7 +5,7 @@ import { workerWaitRequestSchema, type WorkerWait } from '@open-mercato/cezar-co
 import { requestWaitRequestSchema, type RequestWaitRequest } from '@open-mercato/cezar-contract/conversations';
 import { workerWaitEntryToLegacy } from '@open-mercato/cezar-contract/waits';
 import { DelegationPolicyError, requireMessagingAllowed } from '../../delegation/policy.ts';
-import { supervisedByFamilyRecord, supervisorIdOf } from '../../runs/task-rights.ts';
+import { supervisedByFamilyRecord } from '../../runs/task-rights.ts';
 import { historyDeletionPending, rootFinishRequested, executionBlockedByRootFinish } from './run-guards.ts';
 import { assertOwnedWorkerWaitScope, assertRequestWaitScope, peerWaitEntry, peerWaitOf, waitCapacityPolicyError, workerWaitTarget } from '../wait-scope.ts';
 import { randomUUID } from 'node:crypto';
@@ -102,11 +102,15 @@ export class WaitRegistry {
     return this.host.waitEngine.open(runId, state, entry, { withdraw: true, receipt: registration, onCommitFailure: { capacity: waitCapacityPolicyError }, park: true }).wait!;
   }
 
-  /** Squawk waits on live workers or open requests without adding a deadline of its own. */
+  /** Squawk waits on live workers or open requests without adding a deadline of its own. The
+   *  workers are the ones the completion gate named as blocking this run's done (`liveWorkerIds`):
+   *  this method applies no ownership rule of its own, so the gate and the wait cannot disagree.
+   *  A blocker whose record is gone has nothing to observe; with no target left, no wait opens. */
   registerCompletionWait(runId: string, workerIds: string[], requestIds?: string[]): WorkerWaitEntry | undefined {
     if (!this.host.waitEngine.hasRoom(this.context.store.getRun(runId) ?? {})) return;
     const state = this.host.active(runId)!;
-    const ids = workerIds.filter(id => supervisorIdOf(this.context.store.getRun(id)) === runId);
+    const ids = workerIds.filter(id => this.context.store.getRun(id)?.delegation?.role === 'worker');
+    if (!requestIds?.length && !ids.length) return;
     const entry = WAIT_KINDS.worker.completionEntry(state.waitIdentity.ensureCiTurn(),
       workerWaitTarget(requestIds?.length ? { requestIds } : { workerIds: ids }, id => this.context.store.getRun(id)));
     return this.host.waitEngine.open(runId, state, entry, { withdraw: false, park: false }).wait!;

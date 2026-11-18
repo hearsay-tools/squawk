@@ -16,7 +16,7 @@ import {
   WAIT_SOURCE,
   WAIT_VIA,
 } from '@open-mercato/cezar-api-client/contract/test-factories.testkit'
-import { WorkerActivitySection, WorkerWaitDetails, hasWorkerWaitDetails } from './run-relationships'
+import { WorkerActivitySection, WorkerWaitDetails, hasWorkerWaitDetails, useWorkersVerdict } from './run-relationships'
 
 const parentId = '10000000-0000-4000-8000-000000000001'
 const workerId = '10000000-0000-4000-8000-000000000002'
@@ -294,6 +294,22 @@ it('marks a worker that another worker started with its supervisor, and lists a 
   cleanup()
   setup(supervisor)
   expect(await within(await section()).findByText('No workers')).toBeTruthy()
+})
+
+// The dock's verdict reads the same list the section shows, for every run that shows one.
+it('judges a worker that started a worker by that worker, and an ordinary worker as complete', async () => {
+  const failed = { ...workerAt(2), status: workerInspectionSchema.shape.status.enum.failed, supervisorRunId: workerAt(1).workerId }
+  const supervisor: ApiRun = { ...ordinary, id: workerAt(1).workerId, delegation: { role: 'worker', permissions: [], parentRunId: parentId, workspace, spawnGrant: { kinds: ['shared'], live: 1 } } }
+  const Verdict = ({ run }: { run: ApiRun }) => <output>{useWorkersVerdict(run)}</output>
+  const show = (run: ApiRun) => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ parentRunId: parentId, workers: [failed] })))
+    const client = createQueryClient(); client.setDefaultOptions({ queries: { retry: false } })
+    return render(<QueryClientProvider client={client}><ProjectScopeProvider projectId="sample"><Verdict run={run} /></ProjectScopeProvider></QueryClientProvider>)
+  }
+  const view = show(supervisor)
+  await waitFor(() => expect(view.container.textContent).toBe('issue'))
+  view.unmount()
+  expect(show(child).container.textContent).toBe('complete')
 })
 
 it('says when a stuck cleanup needs attention, when it checks next, and how to try now (hearsay-tools/cezarion#879)', async () => {

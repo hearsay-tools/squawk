@@ -4,8 +4,10 @@ import { workerOperationSchema } from '@open-mercato/cezar-contract/delegation';
 import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { askErrorMessage } from '../ci-wait/errors.ts';
 import { recordedDirectory } from '../runs/shared-hosts.ts';
-import { completionWorkerIds, familyWorkers, supervisedWorkers } from '../runs/supervised.ts';
+import { completionWorkerIds, familyWorkers, holdsCompletionGate, supervisedWorkers } from '../runs/supervised.ts';
 import { runRelationships } from '../server/run-relationships.ts';
+import { reconcileConversationState } from '../delegation/conversations.ts';
+import { openCompletionRequests } from './completion-policy.ts';
 import { settledParentRefusalError } from './continuation-admission.ts';
 import { SUPERVISOR_IS_WORKER, workerQuestionRouting } from './question-routing.ts';
 import { assertOwnedWorkerWaitScope, assertRequestWaitScope } from './wait-scope.ts';
@@ -90,6 +92,28 @@ describe('a family where a worker supervises a worker', () => {
     expect(forWorker.supervisorRunId).toBeUndefined(); expect(forWorker.capacity).toBeUndefined();
     expect(runRelationships(store, store.getRun(C)!)).toMatchObject({ parentRunId: R, supervisorRunId: W, workers: [], titles: [{ id: R }, { id: W }] });
     expect(runRelationships(store, store.getRun(S)!)).toEqual({ parentRunId: R, workers: [], titles: [{ id: R, title: 'root' }] });
+  });
+
+  it('settles a request by its two participants, never by the run that stores the ledger', () => {
+    const now = '2026-11-18T13:00:00.000Z';
+    const outcomes = (...runs: RunRecord[]) => reconcileConversationState(runs[0]!, family(...runs).getRun, now, () => true)!.outcomes.map(outcome => [outcome.requestId, outcome.status]);
+    // The root has failed; W and C run on. Only the request the root sent closes.
+    expect(outcomes(root({ status: RUN_STATUS.failed }), isolated(W), isolated(S), child())).toEqual([[ASKED_BY_R, 'sender-closed']]);
+    // W has ended: the request it sent closes as its sender's, the one sent to it as its recipient's.
+    expect(outcomes(root(), isolated(W, { status: RUN_STATUS.cancelled }), isolated(S), child())).toEqual([[ASKED_BY_W, 'sender-closed'], [ASKED_BY_R, 'cancelled']]);
+    // C has ended: W's request to it settles by its recipient.
+    expect(outcomes(root(), isolated(W), isolated(S), child({ status: RUN_STATUS.done }))).toEqual([[ASKED_BY_W, 'completed-without-reply']]);
+    expect(outcomes(root(), isolated(W), isolated(S), child())).toEqual([]);
+  });
+
+  it('reads for a supervising worker the requests the root gate reads, and none for a worker that supervises nobody', () => {
+    const store = { ...family(), listConversationRootIds: () => [], writeRefusal: () => undefined } as never;
+    const ids = (runId: string) => { const open = openCompletionRequests(store, runId); return [open.sent.map(message => message.id), open.incoming.map(message => message.id)]; };
+    expect(ids(R)).toEqual([[ASKED_BY_R], []]);
+    expect(ids(W)).toEqual([[ASKED_BY_W], [ASKED_BY_R]]);
+    expect(ids(S)).toEqual([[], []]);
+    expect(ids(C)).toEqual([[], []]);
+    expect([R, W, S, C].map(id => holdsCompletionGate(family().getRun(id), family().getRun(R)))).toEqual([true, true, false, false]);
   });
 
   it('keeps the refusal of a Continue beside a settled root as it was', () => {

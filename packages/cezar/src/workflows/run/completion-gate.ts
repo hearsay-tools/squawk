@@ -4,8 +4,8 @@ import type { RunRecord } from '../../runs/store.ts';
 import type { RunModuleContext } from './types.ts';
 import { hasRegisteredRunProcess } from '../../core/process-usage.ts';
 import { parentReadiness } from '../../delegation/readiness.ts';
-import { familyRecordOf, finishing, isFamilyRecord, isRootTask, receiptsOf, supervisedReceipts, supervisorIdOf } from '../../runs/task-rights.ts';
-import { completionWorkerIds } from '../../runs/supervised.ts';
+import { familyRecordOf, finishing, isFamilyRecord, isRootTask, receiptsOf, supervisorIdOf } from '../../runs/task-rights.ts';
+import { completionWorkerIds, holdsCompletionGate } from '../../runs/supervised.ts';
 import { openWaits } from '../waits.ts';
 import { openCompletionRequests, rootCompletionRefusal, type CompletionRefusal } from '../completion-policy.ts';
 import { hasPendingHumanAsk } from './pending-ask-facts.ts';
@@ -23,8 +23,7 @@ export interface CompletionGateHost {
 /** The completion gate holds a task that holds a family record, and a worker that started a
  *  worker: the same gate for every supervisor. */
 export function gatesCompletion(context: RunModuleContext, run: RunRecord | undefined): run is RunRecord {
-  if (isFamilyRecord(run)) return true;
-  return !!run && supervisedReceipts(familyRecordOf(run, id => context.store.getRun(id)), run.id).length > 0;
+  return holdsCompletionGate(run, familyRecordOf(run, id => context.store.getRun(id)));
 }
 
 export function completionRefusal(context: RunModuleContext, host: CompletionGateHost, runId: string): CompletionRefusal | undefined {

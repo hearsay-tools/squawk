@@ -220,7 +220,7 @@ export class WorkerQuestions {
     const root = this.context.store.getRun(familyRecordIdOf(worker)!);
     const parentId = supervisorIdOf(worker)!;
     const parent = this.context.store.getRun(parentId);
-    if (root?.delegation?.role !== 'root' || !parent || !this.parentTakesMessages(root) || !this.supervisorTakesMessages(parent) ||
+    if (root?.delegation?.role !== 'root' || !parent || !this.supervisorTakesMessages(parent) ||
       !supervisedReceipts(root, parentId).some(receipt => receipt.workerId === worker.id && !receipt.deletion)) return undefined;
     const state = root.delegation.conversation ?? { messages: [], outcomes: [] };
     const wait = parkNoticeWait(worker.id, parent.waits ?? [], state.messages);
@@ -228,10 +228,12 @@ export class WorkerQuestions {
   }
 
   /** The task that started a worker can still read a message from it: the root as
-   *  `parentTakesMessages` says, a worker while it runs and is not being stopped or destroyed. */
+   *  `parentTakesMessages` says; a worker while it runs, is not being stopped or destroyed, and its
+   *  family's history is not being deleted. A root that has ended does not stop a live worker's notice. */
   private supervisorTakesMessages(supervisor: RunRecord): boolean {
-    if (supervisor.delegation?.role !== 'worker') return true;
-    return ['queued', 'running', 'waiting'].includes(supervisor.status) && !supervisor.stopping && !supervisor.delegation.destroy;
+    if (supervisor.delegation?.role !== 'worker') return this.parentTakesMessages(supervisor);
+    return ['queued', 'running', 'waiting'].includes(supervisor.status) && !supervisor.stopping && !supervisor.delegation.destroy &&
+      !historyDeletionPending(this.context.store, supervisor.id);
   }
 
   /** A worker parked before finishing: waiting because its own turn parked it, not stopping, with no

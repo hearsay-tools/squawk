@@ -1,9 +1,7 @@
-import { execFileSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { workerOperationSchema } from '@open-mercato/cezar-contract/delegation';
-import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
 import { manager, parent, restart, root, store, until, useWorkerWaitFixture, worker } from './worker-wait-claude.testkit.ts';
 
@@ -24,13 +22,7 @@ describe('restart recovery of a worker whose supervisor has settled', { timeout:
     await until(() => store.getRun(w.id)?.status === RUN_STATUS.running && !!store.getRun(w.id)?.worktreePath);
     // The grant a root's worker gets at its creation; the kit's worker record has none.
     store.commitDelegation([{ id: w.id, delegation: { ...store.getRun(w.id)!.delegation!, permissions: [...workerOperationSchema.options], spawnGrant: { kinds: ['shared'], live: 1 } } as never }]);
-    const id = randomUUID();
-    const directory = store.getRun(w.id)!.worktreePath!;
-    const child = store.createOwnedRun({ title: 'child', task: 'mock:hold', workflow: 'quick-task', runner: 'claude', steps: [{ id: 'task', kind: STEP_KIND.agent, name: 'Task' }] }, p.id, randomUUID(), {
-      role: 'worker', permissions: [], parentRunId: p.id, supervisorRunId: w.id,
-      workspace: { ownerRunId: id, resourceId: randomUUID(), kind: 'shared', path: directory, hostRunId: w.id,
-        baselineSha: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: directory, encoding: 'utf8' }).trim() },
-    }, 'a'.repeat(64));
+    const child = await worker(w.id);
     manager.enqueueOwnedRun(child.id);
     await until(() => store.getRun(child.id)?.status === RUN_STATUS.running);
     store.flush();
