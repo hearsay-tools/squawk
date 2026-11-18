@@ -139,9 +139,17 @@ golden fixture paths, `.ai/scripts/` catalogs that list parity files, and the do
 `runner-class-rule.test.ts` scans, and the seam of `cez/runner-id-branch`
 (`lint/runner-id-branch.ts`, which today skips only `core/`), so it also skips `runners/`.
 
+`file-length.baseline.json` pins two adapters by path:
+`core/codex-app-server-runner.ts` (1,238 lines) and `core/opencode-server-runner.ts` (1,680).
+The move renames both keys, and the baseline-growth gate reads a renamed key as a new entry. No
+slice cuts these files below 1,000 lines, because this step changes no behavior. So B4 needs the
+owner's `baseline-growth` approval ([CI rules](../../docs/sdlc/ci.md)): its PR body names the two
+renamed pins, each with the same line count, and the owner adds the label and merges the PR.
+
 **Done when:** no file under `core/` starts with a runner id, the moved tests pass, the closure
-guard and the runner-class guard find the moved files, and `layer-import.baseline.json` and
-`runner-roster-literal.baseline.json` change no entry.
+guard and the runner-class guard find the moved files, `layer-import.baseline.json` and
+`runner-roster-literal.baseline.json` change no entry, and `file-length.baseline.json` differs
+only by the two renamed keys with unchanged counts.
 
 ## C1. Runners route and open runner id
 
