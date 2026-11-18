@@ -434,7 +434,7 @@ A manual dispatch defaults to `dry_run: true`; branch dispatches and PR proofs
 cannot publish. Use `gh workflow run refresh-test-durations.yml --ref <branch>`
 for a read-only proof, and cite the run summary. Required checks never depend
 on this maintenance workflow.
-The Vitest sequencer assigns discovered tests to shards by measured duration using `.github/test-durations.json`. New files receive the upper-quartile known duration and are always included; deleted files are ignored. The manifest affects balancing only, never discovery. Refreshing its durations can improve balance as the suite changes. Ordinary `npm test` still runs every suite without sharding.
+The Vitest sequencer assigns discovered tests to shards by measured duration using `.github/test-durations.json`. New files receive the upper-quartile known duration and are always included; deleted files are ignored. The manifest affects balancing and the per-file duration scaling below, never discovery. Refreshing its durations can improve balance as the suite changes. Ordinary `npm test` still runs every suite without sharding.
 
 When a PR adds or splits a Vitest unit test file taking longer than about one
 minute on CI, add or update its repository-relative path and measured duration
@@ -475,6 +475,36 @@ keeps read-only permissions and the required aggregate name stays unchanged.
 CI and review recognize the configured `RELEASE_APP_BOT_LOGIN`
 as well as legacy `github-actions[bot]` bumps, with the same file and version
 checks. See [release App setup](../publishing.md#release-app-setup).
+
+### Per-file duration limits
+
+`.github/scripts/vitest-file-duration.mjs` owns both limits. Each Vitest shard step sets
+`VITEST_FILE_DURATION_CAP=1`, so `vitest.config.ts` adds the reporter.
+
+| Limit | Constant | Runs in | A file at or over it |
+|---|---|---|---|
+| Hard, 60,000 ms | `FILE_DURATION_LIMIT_MS` | Every Vitest shard run | Fails the shard |
+| Soft, 45,000 ms | `FILE_DURATION_SOFT_LIMIT_MS` | The selected PR run only | Fails the shard when the PR changes the test file itself; any other file gets a warning |
+
+- The reporter compares each file's time after it divides that time by the shard's
+  slowdown. The slowdown is the median of measured time / `durationsMs` weight in
+  `.github/test-durations.json`, over the files of the shard run that have a weight.
+  With fewer than 10 such files the slowdown is 1. It is clamped to 1–3, so a fast VM
+  never makes a limit stricter and a broken VM cannot pass every file.
+- The PR run learns the changed paths from `scripts/test-changed.mjs --ci`, which
+  writes them to the file named by `VITEST_CHANGED_FILES`. Without that variable the
+  soft limit is off.
+- Each failed file gets an `::error` annotation and each warning a `::warning`
+  annotation, with the file path. The check summary therefore names the file. The
+  failed step's log, and the job summary, carry the cap block:
+
+  ```
+  Vitest file duration cap failed:
+  <path>: <ms> ms (<scaled> ms at shard slowdown x<f>); hard limit 60000 ms (FILE_DURATION_LIMIT_MS in .github/scripts/vitest-file-duration.mjs)
+  ```
+
+  `failure-diagnostics.cjs` reads each cap line as one cause per file and limit.
+- A file near a limit is split or made faster. Do not raise a limit for one file.
 
 ### Pinned actions
 
@@ -1123,7 +1153,7 @@ hearsay-tools/cezarion#3290).
   (`node_modules/.vite/vitest/`, or `packages/web/e2e/node_modules/.vite/vitest/` for the
   browser config). Vitest's sequencer runs cached failures first and orders the other
   files by cached duration, so without the cache the rerun keeps the first run's order.
-  A file over the per-file duration cap passed its tests, so the cache does not mark it
+  A file over a [per-file duration limit](#per-file-duration-limits) passed its tests, so the cache does not mark it
   failed: the cap reporter (`.github/scripts/vitest-file-duration.mjs`) writes such files
   to `node_modules/.vite/vitest/file-duration-cap.txt`, and the reset adds them to the
   list and deletes that file.

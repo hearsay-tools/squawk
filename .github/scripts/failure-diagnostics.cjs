@@ -79,6 +79,15 @@ function causesForStep({run, job, step, log}) {
     if (diagnostic) tests[i].key += ':' + normalizeIdentity(diagnostic);
     tests[i].hasDiagnostic = Boolean(diagnostic);
   }
+  // The Vitest file-duration reporter (vitest-file-duration.mjs) prints one line per file under
+  // its header. Its milliseconds vary per run, so the file and the crossed limit key the cause.
+  const capHeader = lines.findIndex(line => /\bVitest file duration cap failed:/.test(line));
+  const caps = capHeader < 0 ? [] : lines.slice(capHeader + 1).flatMap((line, offset) => {
+    const match = line.match(/^(\S+\.(?:test|spec)\.[cm]?[jt]sx?): .*; (hard|soft) limit (\d+) ms\b/);
+    if (!match) return [];
+    const title = `Vitest file duration cap: ${match[1]} at or over the ${match[2]} limit ${match[3]} ms`;
+    return [{key:`duration-cap:${match[1]}:${match[2]}`,title,index:capHeader + 1 + offset,kind:'error',failureIdentity:title}];
+  });
   const candidates = tests.length ? [] : lines.flatMap((line, index) => {
     if (!/(?:\b\w*Error:|npm (?:ERR!|error) |##\[error\])/.test(line)) return [];
     if (/Process completed with exit code|command failed|exit status/i.test(line)) return [];
@@ -90,7 +99,8 @@ function causesForStep({run, job, step, log}) {
   // A refused step files nothing, even when a GitHub quota line precedes its refusal.
   if (candidates.some(item => isRefusal(run, item))) return [];
   const errors = candidates.slice(0, 1);
-  const found = tests.length ? tests.filter(item => item.hasDiagnostic || !tests.some(other => other.testKey === item.testKey && other.hasDiagnostic)) : errors;
+  const failedTests = tests.filter(item => item.hasDiagnostic || !tests.some(other => other.testKey === item.testKey && other.hasDiagnostic));
+  const found = [...(tests.length ? failedTests : caps.length ? [] : errors), ...caps];
   // Workflow, job and step identify a cause the log does not, so each run of the same
   // unrecognized failure adds an occurrence to one issue (hearsay-tools/squawk#1447).
   // Digits differ between matrix shards of one job ("Vitest shard 4/8").

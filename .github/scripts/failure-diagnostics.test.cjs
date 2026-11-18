@@ -161,3 +161,19 @@ test('non-quota signatures stay exactly as before quota filtering, so replays fi
  const [testCause]=causesForStep({run:{id:1,run_attempt:1},job:{id:2},step:{number:8,name:'Run unit tests'},log:'FAIL src/a.test.ts > formats 2026-11-12T18:10:53Z\nAssertionError: expected 0x1f after 12ms'});
  assert.equal(testCause.signature,'64a6c7691f8b8ac74558237bf32bf2a7a924d6f1a013cfe27fc55a4cdea0753e');
 });
+test('a Vitest file duration cap line is one cause per file and limit, independent of its milliseconds', () => {
+  const step = {name: 'Run server and cockpit unit suites', number: 9, started_at: '2026-11-18T10:00:00Z', completed_at: '2026-11-18T10:05:00Z'};
+  const input = ms => ({run: {id: 1, name: 'CI', run_attempt: 1}, job: {id: 2, name: 'Vitest shard 3/8'}, step, log: [
+    '2026-11-18T10:04:00.0000000Z ##[error]packages/a.test.ts: 61000 ms (cap annotation)',
+    '2026-11-18T10:04:01.0000000Z Vitest file duration cap failed:',
+    `2026-11-18T10:04:01.0000000Z packages/a.test.ts: ${ms} ms (${ms} ms at shard slowdown x1.00); hard limit 60000 ms (FILE_DURATION_LIMIT_MS in .github/scripts/vitest-file-duration.mjs)`,
+    '2026-11-18T10:04:01.0000000Z packages/b.test.ts: 46000 ms (46000 ms at shard slowdown x1.00); soft limit 45000 ms (FILE_DURATION_SOFT_LIMIT_MS in .github/scripts/vitest-file-duration.mjs); the PR changes this file',
+  ].join('\n')});
+  const a = causesForStep(input(61000)), b = causesForStep(input(75000));
+  assert.deepEqual(a.map(cause => cause.title), [
+    'Vitest file duration cap: packages/a.test.ts at or over the hard limit 60000 ms',
+    'Vitest file duration cap: packages/b.test.ts at or over the soft limit 45000 ms',
+  ]);
+  assert.deepEqual(a.map(cause => cause.signature), b.map(cause => cause.signature));
+  assert.match(a[0].excerpt, /hard limit 60000 ms/);
+});

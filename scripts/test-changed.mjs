@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Iteration feedback only: never substitutes for the final validation gate.
 import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { unitFiles } from './ci-test-selection.mjs';
 import { classify, existingTests } from './test-inputs.mjs';
@@ -24,7 +27,8 @@ Selection rules:
   also resolves the test files.
   --ci resolves test files first and prints the specific reason when it runs
   full Vitest. With --ci, arguments after -- go to Vitest (including shard and
-  coverage flags).
+  coverage flags), and VITEST_CHANGED_FILES names a file listing the changed
+  paths, for CI's per-file duration soft limit.
   Inspect --plan before running tests. If it selects the full suite, choose
   focused checks and leave full verification to CI.
 
@@ -128,9 +132,18 @@ else {
   console.log(`[test:changed] ${selection.mode}: ${selection.reason}`);
   console.log(options.ci ? '[test:changed] PR selection; the merge queue runs the full suite.' : '[test:changed] Iteration feedback only; the final validation gate is unchanged.');
   if (selection.mode !== 'skip') {
+    // CI's Vitest file-duration reporter fails a changed test file at its soft limit
+    // and only warns for any other file (.github/scripts/vitest-file-duration.mjs).
+    const changedDir = options.ci ? mkdtempSync(join(tmpdir(), 'test-changed-')) : undefined;
+    const env = { ...process.env };
+    if (changedDir) {
+      env.VITEST_CHANGED_FILES = join(changedDir, 'changed-files.txt');
+      writeFileSync(env.VITEST_CHANGED_FILES, (selection.files ?? []).map(file => `${file}\n`).join(''));
+    }
     const result = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', selection.args, {
-      cwd: selection.cwd, stdio: 'inherit', shell: process.platform === 'win32',
+      cwd: selection.cwd, env, stdio: 'inherit', shell: process.platform === 'win32',
     });
+    if (changedDir) rmSync(changedDir, { recursive: true, force: true });
     if (result.error) console.error(result.error.message);
     process.exitCode = result.status ?? 1;
   }
