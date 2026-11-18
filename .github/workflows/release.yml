@@ -10,7 +10,7 @@ name: Release
 # hearsay-tools/cezarion#3212; docs/publishing.md § Stable releases):
 #   plan     → the candidate commit, the versions, and the gates (24 hours, blockers, rehearsal)
 #   suite    → the full suite, for a release/** head no merge queue verified
-#   build    → install and build the tooling and the candidate, without the OIDC token
+#   build    → install and build the candidate, without the OIDC token
 #   stage    → `<version>-rc.<n>` of that build under `next`
 #   candidate→ tests of the published candidate (release-candidate-tests.yml)
 #   release  → the gates again, then `<version>` of the same build under `latest`
@@ -141,7 +141,9 @@ jobs:
   # Installs and builds hold no OIDC token: this job has no environment and no
   # `id-token`, and the publishing jobs below install and build nothing
   # (hearsay-tools/squawk#3321). They publish the outputs this job uploads, after
-  # `release-build.cjs verify` matched them to its digest output and the planned commits.
+  # `release-build.cjs verify` matched them to its digest output and the planned commit.
+  # The artifact is package data only; `scripts/release.mjs` loads its tooling from the
+  # dispatch checkout's TypeScript source, so nothing this job wrote runs with the token.
   build:
     name: Build ${{ needs.plan.outputs.version }} for publication
     needs: [plan, suite]
@@ -180,11 +182,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: Build release tooling
-        run: |
-          pnpm install --frozen-lockfile
-          npm run build:server
-
       - name: Build the candidate
         working-directory: source
         run: |
@@ -195,7 +192,6 @@ jobs:
         id: pack
         env:
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
-          DISPATCH_SHA: ${{ needs.plan.outputs.dispatch_sha }}
           BUILD_DIR: ${{ runner.temp }}/release-build
         run: node .github/scripts/release-build.cjs pack
 
@@ -252,7 +248,6 @@ jobs:
       - name: Check the release build
         env:
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
-          DISPATCH_SHA: ${{ needs.plan.outputs.dispatch_sha }}
           BUILD_DIR: ${{ runner.temp }}/release-build
           BUILD_DIGEST: ${{ needs.build.outputs.digest }}
         run: node .github/scripts/release-build.cjs verify
@@ -385,7 +380,6 @@ jobs:
       - name: Check the release build
         env:
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
-          DISPATCH_SHA: ${{ needs.plan.outputs.dispatch_sha }}
           BUILD_DIR: ${{ runner.temp }}/release-build
           BUILD_DIGEST: ${{ needs.build.outputs.digest }}
         run: node .github/scripts/release-build.cjs verify
@@ -479,7 +473,7 @@ jobs:
   # failed check files a blocker; a rerun finishes the release. The summary always runs.
   finalize:
     name: Record ${{ needs.plan.outputs.version }}
-    needs: [plan, build, release, verify]
+    needs: [plan, release, verify]
     if: ${{ always() && needs.release.outputs.version != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -515,22 +509,6 @@ jobs:
         with:
           node-version-file: .node-version
           token: ''
-
-      - name: Download the release build
-        if: ${{ needs.release.outputs.published == 'true' && needs.verify.result == 'success' && needs.plan.outputs.record_bump == 'true' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: release-build
-          path: ${{ runner.temp }}/release-build
-
-      - name: Check the release build
-        if: ${{ needs.release.outputs.published == 'true' && needs.verify.result == 'success' && needs.plan.outputs.record_bump == 'true' }}
-        env:
-          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
-          DISPATCH_SHA: ${{ needs.plan.outputs.dispatch_sha }}
-          BUILD_DIR: ${{ runner.temp }}/release-build
-          BUILD_DIGEST: ${{ needs.build.outputs.digest }}
-        run: node .github/scripts/release-build.cjs verify
 
       - name: Create release PR token
         id: release_app

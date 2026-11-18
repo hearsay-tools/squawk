@@ -1,12 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { MANIFEST, REQUIRED, packBuild, verifyBuild } = require('./release-build.cjs');
 
 const SOURCE = 'a'.repeat(40);
-const DISPATCH = 'b'.repeat(40);
+const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 
 function write(root, rel, text = rel) {
   fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
@@ -16,58 +17,47 @@ function write(root, rel, text = rel) {
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'release-build-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const tooling = path.join(root, 'tooling');
   const source = path.join(root, 'source');
-  for (const file of REQUIRED.tooling) write(tooling, file);
-  for (const file of REQUIRED.source) write(source, file);
+  for (const file of REQUIRED) write(source, file);
   write(source, 'packages/cezar/web/dist/assets/app.js');
   write(source, 'packages/cezar/package.json', 'checked in, not built');
-  const heads = { [tooling]: DISPATCH, [source]: SOURCE };
+  const heads = { [source]: SOURCE };
   const head = (dir) => heads[dir];
   const out = path.join(root, 'artifact');
-  const digest = packBuild({ toolingRoot: tooling, sourceRoot: source, sourceSha: SOURCE, dispatchSha: DISPATCH, out, head });
-  // The publishing job starts from clean checkouts: no build outputs.
-  const pubTooling = path.join(root, 'pub-tooling');
-  const pubSource = path.join(root, 'pub-source');
-  fs.mkdirSync(pubTooling);
-  fs.mkdirSync(pubSource);
-  heads[pubTooling] = DISPATCH;
-  heads[pubSource] = SOURCE;
-  const verify = (change = {}) => verifyBuild({
-    dir: out, digest, toolingRoot: pubTooling, sourceRoot: pubSource, sourceSha: SOURCE, dispatchSha: DISPATCH, head, ...change,
-  });
-  return { root, tooling, source, out, digest, heads, head, pubTooling, pubSource, verify };
+  const digest = packBuild({ sourceRoot: source, sourceSha: SOURCE, out, head });
+  // The publishing job starts from a clean checkout: no build outputs.
+  const publish = path.join(root, 'publish');
+  fs.mkdirSync(publish);
+  heads[publish] = SOURCE;
+  const verify = (change = {}) => verifyBuild({ dir: out, digest, sourceRoot: publish, sourceSha: SOURCE, head, ...change });
+  return { root, source, out, digest, heads, head, publish, verify };
 }
 
-test('a verified artifact puts the built outputs into both publishing checkouts', (t) => {
+test('a verified artifact puts the built outputs into the publishing checkout', (t) => {
   const f = fixture(t);
   const manifest = JSON.parse(fs.readFileSync(path.join(f.out, MANIFEST), 'utf8'));
   assert.equal(manifest.sourceSha, SOURCE);
-  assert.equal(manifest.dispatchSha, DISPATCH);
   assert.ok(!manifest.files.some((file) => file.path.endsWith('package.json')), 'checked-in files come from the checkout');
   assert.deepEqual(f.verify(), { files: manifest.files.length });
-  assert.equal(fs.readFileSync(path.join(f.pubSource, 'packages/cezar/web/dist/assets/app.js'), 'utf8'), 'packages/cezar/web/dist/assets/app.js');
-  for (const file of REQUIRED.tooling) assert.ok(fs.existsSync(path.join(f.pubTooling, file)), file);
-  for (const file of REQUIRED.source) assert.ok(fs.existsSync(path.join(f.pubSource, file)), file);
+  assert.equal(fs.readFileSync(path.join(f.publish, 'packages/cezar/web/dist/assets/app.js'), 'utf8'), 'packages/cezar/web/dist/assets/app.js');
+  for (const file of REQUIRED) assert.ok(fs.existsSync(path.join(f.publish, file)), file);
 });
 
 test('the build job refuses an incomplete build or a checkout at another commit', (t) => {
   const f = fixture(t);
-  const pack = (change = {}) => packBuild({
-    toolingRoot: f.tooling, sourceRoot: f.source, sourceSha: SOURCE, dispatchSha: DISPATCH, out: path.join(f.root, 'again'), head: f.head, ...change,
-  });
+  const pack = (change = {}) => packBuild({ sourceRoot: f.source, sourceSha: SOURCE, out: path.join(f.root, 'again'), head: f.head, ...change });
   fs.rmSync(path.join(f.source, 'packages/cezar/web/dist/index.html'));
-  assert.throws(() => pack(), /the source build has no packages\/cezar\/web\/dist\/index\.html/);
+  assert.throws(() => pack(), /the build has no packages\/cezar\/web\/dist\/index\.html/);
   assert.throws(() => pack({ sourceSha: 'c'.repeat(40) }), /the source checkout is at a{40}, not the planned source commit c{40}/);
-  assert.throws(() => pack({ sourceSha: 'main' }), /full SHAs/);
+  assert.throws(() => pack({ sourceSha: 'main' }), /full SHA/);
 });
 
 const rejections = [
-  ['a changed file', (f) => fs.appendFileSync(path.join(f.out, 'source/packages/cezar/dist/index.js'), 'evil'), /source\/packages\/cezar\/dist\/index\.js differs from the artifact manifest/],
-  ['a missing file', (f) => fs.rmSync(path.join(f.out, 'tooling/packages/cezar/dist/release/stable.js')), /has no tooling\/packages\/cezar\/dist\/release\/stable\.js/],
-  ['an extra file', (f) => write(f.out, 'source/packages/cezar/dist/extra.js'), /holds source\/packages\/cezar\/dist\/extra\.js, which its manifest does not list/],
-  ['an extra top-level entry', (f) => write(f.out, 'package.json'), /holds package\.json/],
-  ['a link', (f) => fs.symlinkSync('/etc/passwd', path.join(f.out, 'source/packages/cezar/dist/link.js')), /is a link/],
+  ['a changed file', (f) => fs.appendFileSync(path.join(f.out, 'packages/cezar/dist/index.js'), 'evil'), /packages\/cezar\/dist\/index\.js differs from the artifact manifest/],
+  ['a missing file', (f) => fs.rmSync(path.join(f.out, 'packages/cezar/dist/hsq.js')), /has no packages\/cezar\/dist\/hsq\.js/],
+  ['an extra file', (f) => write(f.out, 'packages/cezar/dist/extra.js'), /holds packages\/cezar\/dist\/extra\.js, which its manifest does not list/],
+  ['an extra file outside the outputs', (f) => write(f.out, 'scripts/release.mjs'), /holds scripts\/release\.mjs/],
+  ['a link', (f) => fs.symlinkSync('/etc/passwd', path.join(f.out, 'packages/cezar/dist/link.js')), /is a link/],
   ['a changed manifest', (f) => fs.appendFileSync(path.join(f.out, MANIFEST), ' '), /does not match the digest of the build job/],
 ];
 
@@ -76,8 +66,7 @@ for (const [name, change, error] of rejections) {
     const f = fixture(t);
     change(f);
     assert.throws(() => f.verify(), error);
-    assert.deepEqual(fs.readdirSync(f.pubSource), []);
-    assert.deepEqual(fs.readdirSync(f.pubTooling), []);
+    assert.deepEqual(fs.readdirSync(f.publish), []);
   });
 }
 
@@ -85,25 +74,25 @@ test('verification stops on a manifest that lists a path outside the build outpu
   const f = fixture(t);
   const file = path.join(f.out, MANIFEST);
   const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
-  write(f.out, 'source/packages/cezar/package.json', '{}');
-  manifest.files.push({ path: 'source/packages/cezar/package.json', sha256: require('node:crypto').createHash('sha256').update('{}').digest('hex') });
+  write(f.out, 'scripts/release.mjs', 'injected');
+  manifest.files.push({ path: 'scripts/release.mjs', sha256: sha256('injected') });
   const text = JSON.stringify(manifest);
   fs.writeFileSync(file, text);
-  const digest = require('node:crypto').createHash('sha256').update(text).digest('hex');
-  assert.throws(() => f.verify({ digest }), /lists source\/packages\/cezar\/package\.json, outside the build outputs/);
+  assert.throws(() => f.verify({ digest: sha256(text) }), /lists scripts\/release\.mjs, outside the build outputs/);
+  assert.deepEqual(fs.readdirSync(f.publish), []);
 });
 
 test('verification stops on another commit than the plan names', (t) => {
   const f = fixture(t);
   assert.throws(() => f.verify({ sourceSha: 'c'.repeat(40) }), /built from a{40}, not the planned source commit c{40}/);
-  assert.throws(() => f.verify({ dispatchSha: 'c'.repeat(40) }), /tooling was built from b{40}, not the dispatch commit c{40}/);
-  f.heads[f.pubSource] = 'd'.repeat(40);
+  f.heads[f.publish] = 'd'.repeat(40);
   assert.throws(() => f.verify(), /the source checkout is at d{40}/);
   assert.throws(() => f.verify({ digest: '' }), /passed no artifact digest/);
 });
 
-test('the required tooling files are exactly the compiled modules scripts/release.mjs imports', () => {
+test('the release tooling loads from the dispatch checkout source, never from a build', () => {
   const script = fs.readFileSync(path.join(__dirname, '..', '..', 'scripts', 'release.mjs'), 'utf8');
-  const imports = [...script.matchAll(/from '\.\.\/(packages\/cezar\/dist\/[^']+)'/g)].map((match) => match[1]);
-  assert.deepEqual([...new Set(imports)].sort(), [...REQUIRED.tooling].sort());
+  const imports = [...script.matchAll(/from '(\.[^']+)'/g)].map((match) => match[1]);
+  assert.ok(imports.length > 0);
+  for (const specifier of imports) assert.match(specifier, /^\.\.\/packages\/cezar\/src\/.+\.ts$/, specifier);
 });

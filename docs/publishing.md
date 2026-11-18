@@ -136,8 +136,8 @@ One dispatch takes one **candidate commit** through every stage
    `ci.yml`) on it first. The version comes from that commit's manifest. The plan
    then checks the [gates](#release-gates).
 2. **Build.** A job without `id-token: write` and without the `production`
-   environment installs and builds the release tooling from the dispatch commit and the
-   package from the candidate commit. It uploads the build outputs with a manifest of
+   environment installs and builds the package from the candidate commit. It uploads
+   the build outputs with a manifest of
    their sha256 hashes, and passes the manifest's digest to later jobs as a job output.
    See [The release build](#the-release-build).
 3. **Stage.** The workflow publishes `<version>-rc.<n>` of the candidate under the
@@ -189,23 +189,24 @@ accepts. Neither job installs dependencies, restores a dependency cache or runs 
 build, so no install script or build step can request the token
 (hearsay-tools/squawk#3321). The `build` job does that work with read-only
 permissions. [`release-build.cjs`](../.github/scripts/release-build.cjs) `pack` copies
-its outputs into the `release-build` artifact:
+the candidate's `packages/cezar/dist`, `packages/cezar/web/dist` and generated
+`packages/cezar/README.md` into the `release-build` artifact, with `release-build.json`:
+the source commit and the sha256 of every file.
 
-| Part | Files |
-|---|---|
-| `tooling/` | `packages/cezar/dist` of the dispatch commit, which `scripts/release.mjs` imports |
-| `source/` | `packages/cezar/dist`, `packages/cezar/web/dist` and the generated `packages/cezar/README.md` of the candidate commit |
-| `release-build.json` | the source and dispatch commits, and the sha256 of every file |
+The artifact is package data only. Nothing in it runs in a publishing job:
+`scripts/release.mjs` imports its modules from `packages/cezar/src` of the dispatch
+checkout, and Node strips their types, so no install script or build step could have
+changed the code that runs with the token.
 
 Each publishing job checks out both commits, downloads the artifact and runs
 `release-build.cjs verify` before `scripts/release.mjs`. It stops before `npm publish`
-when the manifest's sha256 differs from the `build` job's `digest` output, a commit
-differs from the plan or from a checkout's `HEAD`, a file is changed, missing, extra,
-a link, or outside the parts above, or a required file is absent. Then it copies the
-outputs into the checkouts. Checked-in files (the manifests, `src` of `contract` and
-`api-client`, `alias-cezarion/`) come from the checkout of the planned commit, and
-`scripts/release.mjs` stamps the manifests there. `finalize` verifies the same
-artifact before it stamps the bump commit.
+when the manifest's sha256 differs from the `build` job's `digest` output, the commit
+differs from the plan or from the `source/` checkout's `HEAD`, a file is changed,
+missing, extra, a link, or outside the build outputs, or a required file is absent. Then
+it copies the outputs into `source/`. Checked-in files (the manifests, `src` of
+`contract` and `api-client`, `alias-cezarion/`) come from the checkout of the planned
+commit, and `scripts/release.mjs` stamps the manifests there. `finalize` stamps the bump
+commit with the same source tooling.
 
 A rerun of a failed publishing job reuses the build's artifact and digest. A new
 dispatch builds again.
@@ -519,7 +520,7 @@ prereleases are inert).
 |---|---|
 | `packages/cezar/src/release/snapshot.ts` | pure decisions: channel/version/dist-tag, install lines (unit-tested) |
 | `packages/cezar/src/release/manifests.ts` | the shared stamper: which manifests exist, and how each pins the next (unit-tested) |
-| `scripts/release.mjs` | stable orchestrator: stamps manifests, `npm publish` of a planned candidate (`next`) or stable version (`latest`) via OIDC, no `--provenance`; `--stamp-only` for a rollback's bump PR (e2e-tested) |
+| `scripts/release.mjs` | stable orchestrator: stamps manifests, `npm publish` of a planned candidate (`next`) or stable version (`latest`) via OIDC, no `--provenance`; `--stamp-only` for the bump PR; loads its modules from `packages/cezar/src`, so it needs no build (e2e-tested) |
 | `.github/scripts/release-plan.cjs` | the candidate commit, the versions and dist-tags, and the release gates (unit-tested) |
 | `.github/scripts/release-blocker.cjs` | the `release-blocker` issue of a failed candidate, promotion or rehearsal |
 | `scripts/release-smoke.mjs` | install a published version from the registry, boot it, load the cockpit, upgrade from `latest` |

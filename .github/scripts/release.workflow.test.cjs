@@ -47,9 +47,9 @@ test('no job that holds the OIDC token installs dependencies or builds', async (
   // The build job installs and builds both commits, with read-only permissions.
   assert.deepEqual(jobs.build.permissions, { contents: 'read' });
   assert.equal(jobs.build.environment, undefined);
-  const build = jobs.build.steps.map(runs).join('\n');
-  assert.match(build, /pnpm install --frozen-lockfile\s+npm run build:server/);
-  assert.equal(jobs.build.steps.find(step => step.name === 'Build the candidate')['working-directory'], 'source');
+  const candidate = jobs.build.steps.find(step => step.name === 'Build the candidate');
+  assert.equal(candidate['working-directory'], 'source');
+  assert.match(candidate.run, /pnpm install --frozen-lockfile\s+npm run build/);
   const pack = jobs.build.steps.find(step => step.id === 'pack');
   assert.equal(pack.run, 'node .github/scripts/release-build.cjs pack');
   assert.equal(pack.env.SOURCE_SHA, '${{ needs.plan.outputs.source_sha }}');
@@ -59,10 +59,14 @@ test('no job that holds the OIDC token installs dependencies or builds', async (
   assert.equal(upload.with.path, pack.env.BUILD_DIR);
 });
 
-test('each job that runs the release script first verifies the build artifact', async () => {
+test('each publishing job verifies the build artifact before the release script', async () => {
   const { jobs } = await parsed();
   const pack = jobs.build.steps.find(step => step.id === 'pack');
-  for (const name of ['stage', 'release', 'finalize']) {
+  // The artifact is package data; the tooling the token-holding jobs run comes from their
+  // own checkout of the dispatch commit (release-build.test.cjs checks release.mjs imports).
+  assert.equal(pack.env.DISPATCH_SHA, undefined);
+  assert.ok(!jobs.finalize.steps.some(step => /download-artifact/.test(String(step.uses))), 'finalize stamps with source tooling, not the artifact');
+  for (const name of ['stage', 'release']) {
     const steps = jobs[name].steps;
     assert.ok(jobs[name].needs.includes('build'), name);
     const names = steps.map(step => step.name);
@@ -75,7 +79,6 @@ test('each job that runs the release script first verifies the build artifact', 
     assert.equal(check.run, 'node .github/scripts/release-build.cjs verify');
     assert.equal(check.env.BUILD_DIGEST, '${{ needs.build.outputs.digest }}', `${name} checks the digest the build job passed`);
     assert.equal(check.env.SOURCE_SHA, '${{ needs.plan.outputs.source_sha }}');
-    assert.equal(check.env.DISPATCH_SHA, '${{ needs.plan.outputs.dispatch_sha }}');
     assert.equal(check.env.BUILD_DIR, pack.env.BUILD_DIR);
     assert.equal(check.if, download.if, `${name} downloads and checks together`);
     const script = names.findIndex((_, index) => /scripts\/release\.mjs/.test(steps[index].run ?? ''));
