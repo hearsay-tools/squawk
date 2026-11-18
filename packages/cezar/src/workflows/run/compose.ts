@@ -357,7 +357,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
   modules.orphans = new WorkerOrphans(context,
     { holds: (id, admitting) => modules.workerExecutions.has(id) || host.active.has(id) || modules.line.hasStarting(id) || (!admitting && modules.line.hasQueued(id)),
       reapTerminalScratch: id => modules.runSettlement.reapTerminalScratch(id),
-      settleOrphanedWorkerExecution: (id, opts) => host.settleOrphanedWorkerExecution(id, opts), workerWorkspaces: () => host.workerWorkspaces() },
+      settleOrphanedWorkerExecution: (id, opts) => host.settleOrphanedWorkerExecution(id, opts) },
   );
   modules.workerExecutions = new WorkerExecutions(context, modules.orphans,
     { maintenance: id => modules.claims.blocksStart(id) || !!host.autosaveCleanupBlocker(id),

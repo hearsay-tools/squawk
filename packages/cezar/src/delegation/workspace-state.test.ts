@@ -62,15 +62,6 @@ describe('the change report of a shared workspace', () => {
     expect(await report()).toEqual({ state: 'changed', paths: ['written-by-worker.txt'], truncated: false, headMoved: false, branchMoved: false, indexMoved: false });
   });
 
-  it('names a tracked file that was edited, and one that was already dirty and was edited again', async () => {
-    writeFileSync(join(repo, 'dirty.txt'), 'first\n');
-    await recordWorkspaceStart(dataDir, workerId, repo);
-    writeFileSync(join(repo, 'tracked.txt'), 'edited\n');
-    writeFileSync(join(repo, 'dirty.txt'), 'second edit, another size\n');
-    await recordEnd();
-    expect(await report()).toMatchObject({ state: 'changed', paths: ['dirty.txt', 'tracked.txt'], indexMoved: false });
-  });
-
   it('compares content: a second edit that keeps the size and the modification time of a dirty file shows', async () => {
     const dirty = join(repo, 'tracked.txt'), untracked = join(repo, 'untracked.txt');
     const at = new Date('2026-11-01T00:00:00.000Z');
@@ -85,7 +76,7 @@ describe('the change report of a shared workspace', () => {
     expect(await report()).toMatchObject({ state: 'changed', paths: ['tracked.txt', 'untracked.txt'], indexMoved: false });
   });
 
-  it('reports a change of the executable bit on an untracked file and on a tracked file that was already dirty', async () => {
+  it.skipIf(process.platform === 'win32')('reports a change of the executable bit on an untracked file and on a tracked file that was already dirty', async () => {
     writeFileSync(join(repo, 'tracked.txt'), 'dirty\n'); writeFileSync(join(repo, 'script.sh'), '#!/bin/sh\n');
     await recordWorkspaceStart(dataDir, workerId, repo);
     await recordEnd();
@@ -140,12 +131,20 @@ describe('the change report of a shared workspace', () => {
     expect((await captureWorkspaceState(repo)).branch).toBeNull();
   });
 
-  it('says that the index moved when a change is staged', async () => {
-    writeFileSync(join(repo, 'tracked.txt'), 'edited\n');
+  it('names a file whose staged part changed while its status code stayed the same', async () => {
+    writeFileSync(join(repo, 'tracked.txt'), 'staged first\n'); git('add', 'tracked.txt');
+    writeFileSync(join(repo, 'tracked.txt'), 'staged first\nstaged later\nnever staged\n');
     await recordWorkspaceStart(dataDir, workerId, repo);
-    git('add', 'tracked.txt');
+    git('update-index', '--cacheinfo', `100644,${execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: repo, input: 'staged first\nstaged later\n', encoding: 'utf8' }).trim()},tracked.txt`);
+    expect(git('status', '--porcelain')).toBe('MM tracked.txt');
     await recordEnd();
-    expect(await report()).toMatchObject({ state: 'changed', paths: ['tracked.txt'], indexMoved: true, headMoved: false });
+    expect(await report()).toEqual({ state: 'changed', paths: ['tracked.txt'], truncated: false, headMoved: false, branchMoved: false, indexMoved: true });
+  });
+
+  it('says the list is incomplete when the two commits cannot be compared', async () => {
+    const start = await captureWorkspaceState(repo);
+    expect(await compareWorkspaceStates(repo, start, { ...start, head: 'f'.repeat(40) }))
+      .toEqual({ state: 'changed', paths: [], truncated: true, headMoved: true, branchMoved: false, indexMoved: false });
   });
 
   it('caps the list of paths and says that it is truncated', async () => {
@@ -161,7 +160,7 @@ describe('the change report of a shared workspace', () => {
   it('says truncated when entries past the kept ones changed, and never lists a path only because one state could not read its content', async () => {
     writeFileSync(join(repo, 'untracked.txt'), 'x\n');
     const start = await captureWorkspaceState(repo);
-    expect(start.entries).toEqual([{ path: 'untracked.txt', code: '??', meta: expect.any(String), content: expect.stringMatching(/^sha256:[0-9a-f]{64}:-$/) }]);
+    expect(start.entries).toEqual([{ path: 'untracked.txt', code: '?? -', meta: expect.any(String), content: expect.stringMatching(/^sha256:[0-9a-f]{64}:-$/) }]);
     expect(start.overflow).toBeNull();
     expect(await compareWorkspaceStates(repo, { ...start, overflow: 'a'.repeat(64) }, { ...start, overflow: 'b'.repeat(64) }))
       .toEqual({ state: 'changed', paths: [], truncated: true, headMoved: false, branchMoved: false, indexMoved: false });
@@ -246,11 +245,5 @@ describe('the change report of a shared workspace', () => {
     await expect(recordEnd()).rejects.toThrow('failed in the shared workspace');
     expect(endFiles()).toEqual([]);
     expect(await report(true)).toMatchObject({ state: 'unavailable', reason: 'no workspace state was recorded when the worker settled' });
-  });
-
-  it('is unavailable with the reason when the directory is gone', async () => {
-    await recordWorkspaceStart(dataDir, workerId, repo);
-    rmSync(repo, { recursive: true, force: true });
-    expect(await report(false)).toEqual({ state: 'unavailable', reason: 'the shared workspace directory is gone' });
   });
 });

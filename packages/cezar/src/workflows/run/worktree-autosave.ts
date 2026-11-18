@@ -4,7 +4,6 @@ import { autosaveCommit, type AutosaveOutcome, type AutosaveReason } from '../..
 import { recordHandoffAutosave, recordHandoffPeriodicAutosave } from '../../handoff.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { RunModuleContext } from './types.ts';
-import { runOwnsDirectory } from './run-workspace.ts';
 import { productName } from '../../home/display.ts';
 
 interface WorktreeAutosaveHost {
@@ -67,11 +66,6 @@ export class WorktreeAutosave {
    *  in `RunMemory`: cleanup evidence that outlives an execution. */
   private readonly autosaveTasks = new Map<string, { settlement: Promise<void>; blocker?: string }>();
 
-  /** A closed store keeps the old rule: the run is taken to own its directory. */
-  private ownsDirectory(runId: string): boolean {
-    try { return runOwnsDirectory(this.context.store.getRun(runId)); } catch { return true; }
-  }
-
   /** Cleanup evidence survives manager disposal and store close/reopen. */
   autosaveCleanupBlocker(runId: string): string | undefined {
     return this.autosaveTasks.get(runId)?.blocker ?? autosaveCleanupBlocker(this.context.dataDir, runId);
@@ -88,7 +82,7 @@ export class WorktreeAutosave {
   }
 
   private async saveWorktreeWork(runId: string, state: ActiveRun, reason: AutosaveReason): Promise<void> {
-    if (state.liveSession.cwd === this.context.repoRoot || !this.ownsDirectory(runId)) return;
+    if (state.liveSession.cwd === this.context.repoRoot || state.liveSession.sharesDirectory) return;
     for (;;) {
       const previous = this.autosaveTasks.get(runId);
       if (!previous) break;
@@ -164,7 +158,7 @@ export class WorktreeAutosave {
    *  Opt-in via CEZ_AUTOSAVE=1 (open-mercato/cezar#471) — see periodicAutosaveEnabled. */
   armAutosave(runId: string, state: ActiveRun): void {
     if (!periodicAutosaveEnabled()) return;
-    if (state.liveSession.cwd === this.context.repoRoot || state.autosave.autosaveTimer || !this.ownsDirectory(runId)) return;
+    if (state.liveSession.cwd === this.context.repoRoot || state.autosave.autosaveTimer || state.liveSession.sharesDirectory) return;
     state.autosave.armAutosave(() => {
       const task = this.host.saveWorktree(runId, state, 'periodic');
       this.host.trackTurn(runId, task);

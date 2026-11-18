@@ -23,6 +23,7 @@ import { autosaveCleanupBlocker } from '../autosave-cleanup.ts';
 import { processStartToken } from '../delegation/process-liveness.ts';
 import { createOwnedWorkspace } from '../delegation/workspace.ts';
 import { createWorktree } from '../git-worktree.ts';
+import { reclaimWorktrees } from '../runs/retention.ts';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { createApp } from './server.ts';
@@ -125,6 +126,23 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
     expect(byRun[doneId]!.branch).toMatch(/^cez\//);
     expect(typeof byRun[doneId]!.sizeBytes).toBe('number');
     expect(body.totalBytes).not.toBeNull();
+  });
+
+  it('lists a task whose worktree a live shared worker works in as the enforcer treats it: not reclaimable, not past keep (hearsay-tools/squawk#3819)', async () => {
+    writeFileSync(join(repoRoot, '.ai/cezar/config.json'), JSON.stringify({ worktreeRetention: 1 }), 'utf8');
+    const hostId = await seed('44444444-4444-4444-8444-444444444444', 'done', '2026-07-01T00:00:00Z');
+    await seed('55555555-5555-4555-8555-555555555555', 'done', '2026-07-02T00:00:00Z');
+    store.commitDelegation([{ id: hostId, delegation: { role: 'root', permissions: [], receipts: [] } }]);
+    const workerId = randomUUID();
+    store.createOwnedRun({ title: 'shared', task: 'shared', workflow: 'quick-task', steps: [] }, hostId, randomUUID(), { role: 'worker', permissions: [], parentRunId: hostId,
+      workspace: { ownerRunId: workerId, resourceId: randomUUID(), kind: 'shared', path: store.getRun(hostId)!.worktreePath!, hostRunId: hostId, baselineSha: 'a'.repeat(40) } }, 'b'.repeat(64));
+    const host = async () => (await getWorktrees()).worktrees.find((w) => w.runId === hostId)!;
+    expect(store.getRun(workerId)?.status).toBe(RUN_STATUS.queued);
+    expect(await host()).toMatchObject({ reclaimable: false, pastKeep: false });
+    expect(await reclaimWorktrees(repoRoot, store, 1)).toEqual([]);
+    expect((await apiRequest(app, `/api/v1/worktrees/${hostId}/reclaim`, { method: 'POST' })).status).toBe(409);
+    setRunStatus(store, workerId, RUN_STATUS.done);
+    expect(await host()).toMatchObject({ reclaimable: true, pastKeep: true });
   });
 
   it('inherits the workspace default when the repo sets no retention of its own', async () => {

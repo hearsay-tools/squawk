@@ -3,14 +3,12 @@ import { noJitter, ORPHAN_BACKOFF, retryDelayMs, type Backoff } from '../../dele
 import { isCurrentProcess, recordedProcessLive, type WorkerProcessRecord } from '../../delegation/process-liveness.ts';
 import { productName } from '../../home/display.ts';
 import { WorkerAdmissionRefusal } from '../../runs/worker-execution.ts';
-import type { WorkerWorkspacePort } from './worker-workspace-port.ts';
 
 type OrphanOptions = { admitting?: boolean; fresh?: boolean };
 interface WorkerOrphansHost {
   holds(runId: string, admitting: boolean): boolean;
   reapTerminalScratch(runId: string): void;
   settleOrphanedWorkerExecution(runId: string, opts?: OrphanOptions): boolean;
-  workerWorkspaces(): WorkerWorkspacePort | undefined;
 }
 
 /** What still runs of a crashed generation: its live recorded controller, else its live recorded
@@ -76,17 +74,7 @@ export class WorkerOrphans {
     this.orphanBlockers.delete(runId); this.reportedOrphanBlockers.delete(runId); this.orphanDue.delete(runId);
     this.context.store.appendEvent(runId, { type: 'lifecycle', message: "the interrupted worker's processes are gone; its execution was finalized" });
     this.host.reapTerminalScratch(runId);
-    this.settleWorkspace(runId, orphan.generation);
     return true;
-  }
-
-  /** The crashed generation's end is first seen now: its workspace is told off this sync path. The
-   *  settlement names the generation, so one that lands after a newer execution began is not its end. */
-  private settleWorkspace(runId: string, generation: string): void {
-    const port = this.host.workerWorkspaces();
-    const run = this.context.store.getRun(runId);
-    if (!port || run?.delegation?.role !== 'worker') return;
-    void this.context.work.track('settleWorkerWorkspace', port.settle({ repoRoot: this.context.repoRoot, dataDir: this.context.dataDir, run, generation }));
   }
 
   // The orphan maps stay here, not in `RunMemory`: each entry describes one worker generation and

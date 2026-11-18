@@ -52,7 +52,7 @@ export class MaintenanceClaims {
   claimWorktreeReclaim(runId: string): (() => void) | null {
     if (this.has(runId) || !!this.host.autosaveCleanupBlocker(runId) || this.host.isActive(runId) || this.context.store.writeRefusal(runId)) return null;
     const run = this.context.store.getRun(runId);
-    if (!run || !isReclaimable(run, (id) => this.context.store.getRun(id)) || this.hostsLiveSharedWorker(run)) return null;
+    if (!run || !isReclaimable(run, (id) => this.context.store.getRun(id), (rootId) => this.context.store.listWorkersOf(rootId))) return null;
     return this.host.holdForMaintenance([runId]);
   }
 

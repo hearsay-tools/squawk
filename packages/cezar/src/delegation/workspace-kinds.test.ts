@@ -65,14 +65,6 @@ describe('the isolated workspace kind', () => {
     expect(calls).toEqual([`plan ${JSON.stringify(['/repo', workspace.ownerRunId, workspace.baselineSha])}`, 'prepare parent', `diff /repo ${run.id}`]);
   });
 
-  it('has a diff of its own, so it reports no change of a shared directory and does nothing at settlement', async () => {
-    expect(isolated.noDiff).toBeUndefined();
-    expect(isolated.workerNotice).toBeUndefined();
-    expect(await isolated.changeReport('/data', run, { generation: 'g1', settled: true })).toBeUndefined();
-    await isolated.settle({ ...request, generation: 'g1' });
-    expect(calls).toEqual([]);
-  });
-
   it('opens a first launch: ensures the workspace, verifies the context, then places the attachments', async () => {
     expect(await isolated.openForLaunch({ ...request, firstLaunch: true })).toEqual({ path: workspace.path, branch: workspace.branch, baseBranch: workspace.baselineSha });
     expect(calls).toEqual([
