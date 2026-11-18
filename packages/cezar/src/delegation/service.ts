@@ -68,7 +68,7 @@ import { messagingAllowed } from '@open-mercato/cezar-contract/task-options';
 import { completionWaitEntry, peerWaitView, workerCompletionWaitProjection, workerWaitEntryToLegacy, type DeadlinedWorkerWaitEntry } from '@open-mercato/cezar-contract/waits';
 import type { RunStore, RunRecord } from '../runs/store.ts';
 import { assertConversationIdFree, ConversationIdInUseError } from '../runs/conversation-identity.ts';
-import { workerDestroyView, workerOutcome, workerSettled } from '../runs/delegation-state.ts';
+import { workerDestroyView, workerOutcome, workerObservation } from '../runs/delegation-state.ts';
 import type { RunManager } from '../workflows/run.ts';
 import type { DelegationExecutionSettings } from '../workflows/run/types.ts';
 import { QUICK_TASK_WORKFLOW, skillTaskSteps, plannedWorkflow, allowedToolsForStep, stepKind, type WorkflowDef, type WorkflowStepDef } from '../workflows/types.ts';
@@ -705,7 +705,7 @@ export class DelegationService {
     const completion = parent.delegation?.role === 'root' ? completionWaitEntry(parent.waits, worker.id) : undefined;
     const completionWait = completion ? workerCompletionWaitProjection(completion, parent) : undefined;
     return { workerId: worker.id, parentRunId: parent.id, status: worker.status, workspace: worker.delegation.workspace,
-      settled: workerSettled(worker, project.store.readWorkerExecution(worker.id)),
+      settled: workerObservation(worker, project.store.readWorkerExecution(worker.id)).settled,
       ...(worker.runner === undefined ? {} : { backend: worker.runner }), ...(worker.model === undefined ? {} : { model: worker.model }),
       ...(worker.delegation.context === undefined ? {} : { inputs: worker.delegation.context.inputs }),
       ...(worker.currentStepId === undefined ? {} : { currentStepId: worker.currentStepId }),
@@ -751,9 +751,8 @@ export class DelegationService {
       throw new DelegationPolicyError('incompatible_state', 'Worker changed during collection; collect the current execution again');
     }
     // Private completion can arrive during evidence I/O without changing the public revision.
-    const settled = workerSettled(current.worker, project.store.readWorkerExecution(workerId));
-    return project.store.commitWorkerResult(parent!.id, { ...evidence.result, settled,
-      partial: !settled || current.worker.status === 'failed' || current.worker.status === 'cancelled' }, evidence.diffSnapshot);
+    const observation = workerObservation(current.worker, project.store.readWorkerExecution(workerId));
+    return project.store.commitWorkerResult(parent!.id, { ...evidence.result, ...observation }, evidence.diffSnapshot);
   }
   async steer(caller: Caller, params: WorkerParams, value: WorkerSteerRequest) {
     const request = workerSteerRequestSchema.parse(value);

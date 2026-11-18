@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts'
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA, WORKER_OUTCOME_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -128,7 +127,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
           error: expect.stringContaining(`another live controller ${foreign.proc.pid}`),
           next: 'wait for that controller to end the worker execution, then retry the same command' });
         expect(await service.destroyForHuman('reopened', w.id)).toMatchObject({ state: 'incomplete', remaining: expect.arrayContaining(['process']),
-          error: `Worker termination is not proven: the worker is still controlled by a live ${productName("cezar")} (pid ${foreign.proc.pid}); retry cleanup later` });
+          error: expect.stringContaining(`Worker termination is not proven: another live controller ${foreign.proc.pid}`) });
         expect(existsSync(workspace(w).path)).toBe(true);
         expect(foreign.proc.exitCode).toBeNull(); expect(foreign.proc.signalCode).toBeNull();
         expect(reopened.readWorkerExecution(w.id)).toEqual(prior);

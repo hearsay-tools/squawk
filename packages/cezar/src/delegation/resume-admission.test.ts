@@ -25,6 +25,9 @@ describe('resume with worker services (hearsay-tools/squawk#3901)', () => {
     setHostScope({ backend: 'groups', reason: 'test' });
     f = fixture();
     const { workerId } = await f.service.spawn(f.caller, { task: 'work', baseline: 'HEAD', requestId: randomUUID() });
+    f.manager.requestWorkerStop(workerId);
+    // bound: drain the accepted scheduler entry before seeding a completed prior session.
+    expect(await f.manager.awaitRunTermination(workerId, 8_000)).toBe(true);
     const run = f.store.getRun(workerId)!;
     const generation = f.store.commitWorkerExecutionStart(workerId);
     const workspace = await ensureOwnedWorkspace(f.root, run);
@@ -36,7 +39,8 @@ describe('resume with worker services (hearsay-tools/squawk#3901)', () => {
     setRunStatus(f.store, workerId, RUN_STATUS.review);
     f.store.commitWorkerExecutionComplete(workerId, generation);
     expect(f.store.scopes.empty(workerId)).toBe(false);
-    expect(f.manager.continueRun(workerId, { text: 'Continue the work' })).toMatchObject({ ok: true });
+    await expect(f.service.send(f.caller, { id: randomUUID(), recipientRunId: workerId,
+      kind: 'request', text: 'Continue the work', resume: true, timeoutSeconds: 600 })).resolves.toMatchObject({ effect: 'applied' });
     expect(f.store.readWorkerExecution(workerId)?.generation).not.toBe(generation);
     expect(sleeper.exitCode).toBeNull();
     expect(sleeper.signalCode).toBeNull();
@@ -46,6 +50,9 @@ describe('resume with worker services (hearsay-tools/squawk#3901)', () => {
   it.skipIf(process.platform === 'win32').each(['controller', 'session'] as const)('names the live %s rule and executable in a resume refusal', async kind => {
     f = fixture();
     const { workerId } = await f.service.spawn(f.caller, { task: 'work', baseline: 'HEAD', requestId: randomUUID() });
+    f.manager.requestWorkerStop(workerId);
+    // bound: drain the accepted scheduler entry before seeding a completed prior session.
+    expect(await f.manager.awaitRunTermination(workerId, 8_000)).toBe(true);
     const generation = f.store.commitWorkerExecutionStart(workerId);
     await ensureOwnedWorkspace(f.root, f.store.getRun(workerId)!);
     sleeper = spawn(process.execPath, ['-e', "console.log('ready'); setInterval(() => {}, 1000)"], { stdio: ['ignore', 'pipe', 'ignore'] });
@@ -56,7 +63,7 @@ describe('resume with worker services (hearsay-tools/squawk#3901)', () => {
       processes: kind === 'session' ? [processEntry] : [] }));
     setRunStatus(f.store, workerId, RUN_STATUS.review);
     f.store.commitWorkerExecutionComplete(workerId, generation);
-    const refusal = f.manager.continueRun(workerId, { text: 'Continue the work' });
+    const refusal = f.manager.continueRun(workerId, { text: 'Continue the work', freshSession: true });
     expect(refusal).toMatchObject({ ok: false, error: expect.stringContaining(`${sleeper.pid} (node`), next: expect.stringContaining('retry the same command') });
     expect(refusal).toMatchObject({ error: expect.stringContaining(kind === 'controller' ? 'another live controller' : 'live processes of the previous session') });
   });

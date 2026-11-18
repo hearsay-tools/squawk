@@ -205,7 +205,7 @@ console.log(String(m.pid)); ${opts.leader === 'exit' ? "m.unref(); process.stdin
       releases.push(() => { try { other.kill('SIGKILL'); } catch { /* gone */ } });
       writeFileSync(recordPath(w.id), JSON.stringify({ ...readRecord(w.id), controller: { pid: other.pid!, startToken: processStartToken(other.pid!) } }));
       expect(await service(store, manager).destroyForHuman('p', w.id)).toMatchObject({ state: 'incomplete',
-        remaining: ['process', 'worktree', 'branch'], error: expect.stringMatching(/still controlled by a live .* \(pid \d+\)/) });
+        remaining: ['process', 'worktree', 'branch'], error: expect.stringMatching(/another live controller \d+ \(sleep\)/) });
       expect(alive(member)).toBe(true);
       expect(existsSync(workspace(w).path)).toBe(true);
     });

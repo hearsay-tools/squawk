@@ -8,7 +8,7 @@ import type { RunEvent, RunRecord, RunStore } from '../runs/store.ts';
 import { isAttachmentFileName, resolveAttachmentPath } from '../workflows/attachment-path.ts';
 import { workspaceKindOf } from './workspace-kinds.ts';
 import { artifactDirectory, listArtifacts, readArtifact } from '../artifacts/store.ts';
-import { workerSettled } from '../runs/delegation-state.ts';
+import { workerObservation } from '../runs/delegation-state.ts';
 
 export const workerRevision = (run: RunRecord): number => run.delegation?.role === 'worker' ? run.delegation.executionRevision ?? 0 : 0;
 
@@ -32,14 +32,14 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
   const summary = run.status === 'failed' && run.error?.trim() ? failureSummary(run.error, events) : latestAssistantSummary(events);
   const destroyed = delegation.destroy?.phase === 'complete';
   const workspaceRemoved = !!delegation.destroy && !delegation.destroy.remaining.includes('worktree');
+  const { lastExecutionOutcome } = executionOutcome(run);
   const head = await readWorkerHead(repoRoot, run, previous, workspaceRemoved);
   const { diff, diffSnapshot } = await readWorkerDiff(repoRoot, store, run, delegation, { destroyed, workspaceRemoved });
   const artifacts = await listWorkerArtifacts(store.sourceDataDir(run.id), run, delegation, allEvents);
-  const { lastExecutionOutcome, settled } = executionOutcome(store, run);
   return { result: {
     workerId: run.id, parentRunId: delegation.parentRunId, revision: workerRevision(run), observedAt: new Date().toISOString(),
     status: run.status, outcome: destroyed ? 'destroyed' : lastExecutionOutcome, lastExecutionOutcome,
-    partial: !settled || run.status === 'failed' || run.status === 'cancelled', settled,
+    ...workerObservation(run, store.readWorkerExecution(run.id)),
     ...(run.error ? { error: run.error.slice(0, 2000) } : {}),
     ...(run.runner ? { backend: run.runner } : {}), ...(run.model ? { model: run.model } : {}),
     baselineSha: delegation.workspace.baselineSha, workspace: { ...delegation.workspace, state: workspaceRemoved ? 'deleted' : head.state === 'available' ? 'available' : 'unavailable' }, cleanup: delegation.destroy?.phase ?? 'retained',
@@ -64,12 +64,11 @@ function failureSummary(error: string, events: RunEvent[]): WorkerCollectedResul
   return { state: 'available', text: text.slice(0, 4000), source: 'failure', seq: events.at(-1)?.seq ?? 0, truncated: text.length > 4000 };
 }
 
-/** The public status as an execution outcome; settled only once the private execution record is complete. */
-function executionOutcome(store: RunStore, run: RunRecord): { lastExecutionOutcome: WorkerCollectedResult['lastExecutionOutcome']; settled: boolean } {
+/** The public status as an execution outcome. Settlement also needs private termination proof. */
+function executionOutcome(run: RunRecord): { lastExecutionOutcome: WorkerCollectedResult['lastExecutionOutcome'] } {
   const lastExecutionOutcome = run.status === 'review' ? 'review-ready' : run.status === 'done' ? 'completed'
     : run.status === 'failed' ? 'failed' : run.status === 'cancelled' ? 'cancelled' : 'running';
-  const settled = workerSettled(run, store.readWorkerExecution(run.id));
-  return { lastExecutionOutcome, settled };
+  return { lastExecutionOutcome };
 }
 
 /** The owned workspace's verified HEAD. A failed read keeps the last collected SHA: `unverified`, or `deleted` once the worktree is removed. */
