@@ -3,7 +3,7 @@
     {
       "file": "packages/cezar/src/paths.ts",
       "kind": "homedir",
-      "calls": 5,
+      "calls": 4,
       "reason": "Expand user-authored tilde paths and locate vendor config beneath the OS user home."
     },
     {

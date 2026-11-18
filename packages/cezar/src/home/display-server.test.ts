@@ -7,20 +7,15 @@ import type { InstallContext } from '../server-install/types.ts';
 import { testHome } from './test-home.testkit.ts';
 import { productIdentity } from './identity.ts';
 import { apiRequest } from '../server/loopback-request.testkit.ts';
-import { readAccountIdentity } from '../agent-config/account-identity.ts';
 import { createUbuntuVps } from '../server-install/platforms/ubuntu-vps.ts';
 import { previewRefusal } from '../ci-wait/errors.ts';
 import { listAgentConfig } from '../agent-config/service.ts';
 import { RunStore } from '../runs/store.ts';
 import { createApp } from '../server/server.ts';
 
-it('names the product in an API refusal, account hint and installer label without changing their contracts', async () => {
+it('names the product in an API refusal and installer label without changing their contracts', async () => {
   const { displayName: name, command } = productIdentity();
   const refusedRoot = homedir(); // test-home-read: the API must reject the pinned OS home, not an arbitrary sandbox folder.
-  expect(await readAccountIdentity('opencode', '/unused')).toEqual({
-    available: false, fields: [],
-    reason: `OpenCode keeps its login outside its config folder, so ${name} cannot read it.`,
-  });
   const step = createUbuntuVps().steps({ state: {} } as InstallContext).find(step => step.id === 'autostart');
   expect(step?.title).toBe(`Run ${name} as a service (systemd — starts now + on boot)`);
   expect(previewRefusal('headless').message).toBe(`No cockpit is attached to this run (\`${command} run\`).`);

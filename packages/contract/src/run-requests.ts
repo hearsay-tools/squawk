@@ -15,7 +15,7 @@ export const queuedMessagePatchSchema = z
   });
 
 // "Continue"/"Send back" body (spec 003 / legacy reference 401): every field optional, so an empty POST reopens
-// the last session on the run's current backend (backward compat). A runner/model/account override
+// the last session on the run's current backend (backward compat). A runner/model override
 // lets the follow-up composer choose which engine handles the continuation. `text` stays bounded
 // like the live-session message `text` (legacy reference 429), and `images` like a live-session message's — the
 // follow-up composer is a full composer, so a screenshot pasted into it must reach the reopened
@@ -27,9 +27,6 @@ export const continueSchema = z.object({
   model: z.string().max(200).optional(),
   /** Reasoning-effort pin (legacy reference 45). Omitted keeps the run's pin; empty string clears it. */
   effort: z.string().max(32).optional(),
-  /** Agent account for the reopened session (spec 2026-07-29-agent-profiles). Bound mirrors
-   *  `POST /runs`' own `agentProfile`. Omitted = keep the account the run is already on. */
-  agentProfile: z.string().max(64).optional(),
 });
 
 // `POST /api/runs/:id/archive` (legacy reference 429) — no body archives; `{archived:false}`

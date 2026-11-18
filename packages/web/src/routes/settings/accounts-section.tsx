@@ -1,24 +1,20 @@
 import { productName } from '@/lib/product-name'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ExternalLinkIcon, IdCardIcon } from 'lucide-react'
+import { IdCardIcon } from 'lucide-react'
 import { CpuIcon } from '@/components/design-icons'
-import { Fragment, useState } from 'react'
+import { useState } from 'react'
 
 import { ApiError, putWorkspaceConfig } from '@/api/client'
 
 import {
-  useAgentAccountDetails,
   useAgentProfiles,
   useHealth,
   useAgentAccountStatus,
   useConnectAgentAccount,
   useRecheckAgentAccount,
-  useOpenAgentAccountFile,
-  useOpenTargets,
   useProviderStatus,
   useRemoveAgentProfile,
   useRunnerModelCatalogs,
-  useSelectAgentProfile,
   useUpdateAgentProfile,
   useWorkspaceConfig,
   workspaceQueryKeys,
@@ -52,8 +48,6 @@ import { Button } from '@/components/ui/button'
 import { StatusDot, type StatusDotTone } from '@/components/status-dot'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toaster'
-import { OpenInMenu, cliTargetRunner } from '@/components/open-in-menu'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { agentPickerRows } from '@/components/default-agent-picker'
 import { modelCatalogStatus, modelsForRunner, RUNNERS } from '@/routes/new-task-form'
 import { AddAccountDialog } from './add-account-dialog'
@@ -70,18 +64,9 @@ import { SettingsAgentPicker } from './settings-agent-picker'
  * Global, for the same reason Projects and Resources are: a config dir describes the person and
  * the machine, never a repo.
  *
- * ## Identity is opt-in, and "hidden" means absent
- *
- * "Show details" reveals the email, organization and plan an account is signed in as. That is a
- * deliberate, narrow exception to the boundary `provider-auth.ts` keeps — "credentials, account
- * identity, and raw CLI output never cross this boundary" — so it is built to stay narrow: the data
- * is NOT a field on the accounts listing, it comes from its own on-demand route
- * (`useAgentAccountDetails`, `enabled` only once the row is expanded), and it is refused in hosted
- * mode. Nothing fetches it until a person asks, which is what makes "hidden by default" mean the
- * data is absent from the page rather than merely unrendered.
- *
- * Rename and Remove live in the account card's action row. They do not request account identity;
- * "Show details" remains the only identity read, and Remove still requires confirmation.
+ * Rename and Remove live in the account card's action row. Remove requires confirmation. The
+ * page shows no account identity: who a login is signed in as never crosses the boundary
+ * `provider-auth.ts` keeps.
  *
  * ## Three decisions worth reading
  *
@@ -192,7 +177,6 @@ function AccountsPane({ data }: { data: AgentProfilesResponse }) {
               check={health.data?.checks?.find((c) => c.name === provider)}
               accounts={data.profiles.filter((p) => p.provider === provider)}
               canCarryAccounts={data.profileCapableProviders.includes(provider)}
-              defaultAccountId={data.defaults[provider] ?? null}
               onAdd={() => setAdding(provider)}
               onRemove={setConfirming}
             />
@@ -200,7 +184,7 @@ function AccountsPane({ data }: { data: AgentProfilesResponse }) {
         ))}
       </Tabs>
 
-      <DefaultsForNewProjects profiles={data} />
+      <DefaultsForNewProjects />
 
       {/* Keyed by provider so reopening under a different agent starts from a clean form rather
           than the previous agent's half-typed folder. */}
@@ -257,7 +241,6 @@ function AgentTab({
   check,
   accounts,
   canCarryAccounts,
-  defaultAccountId,
   onAdd,
   onRemove,
 }: {
@@ -266,7 +249,6 @@ function AgentTab({
   check: BackendCheck | undefined
   accounts: AgentProfile[]
   canCarryAccounts: boolean
-  defaultAccountId: string | null
   onAdd: () => void
   onRemove: (account: AgentProfile) => void
 }) {
@@ -289,8 +271,8 @@ function AgentTab({
       </div>
 
       <ul className="bg-card">
-        {[...accounts].sort((a, b) => Number(b.id === defaultAccountId) - Number(a.id === defaultAccountId)).map((account) => (
-          <AccountRow key={account.id} account={account} isMachineDefault={defaultAccountId === account.id || (defaultAccountId === null && account.isDefault)} onRemove={() => onRemove(account)} />
+        {accounts.map((account) => (
+          <AccountRow key={account.id} account={account} onRemove={() => onRemove(account)} />
         ))}
       </ul>
 
@@ -312,31 +294,17 @@ function AgentTab({
 }
 
 /**
- * What a project that has chosen nothing runs (spec 2026-07-29-agent-profiles).
- *
- * Lives on THIS page rather than one of its own: it is the same subject — the logins on this
- * machine — and a second page would mean setting up an account here and then going elsewhere to say
- * "use it". Below the account cards because it is a cross-agent answer; splitting it into the per-agent tabs
- * would mean visiting all three to read one fact.
- *
- * DEFAULTS, never overrides. A project's own `.ai/cezar/config.json` still wins key by key, and a
- * project that has already picked an account keeps it — so changing these can never quietly
- * re-point work someone already configured onto another subscription. The copy says so, because
- * "default" alone does not distinguish the two.
- *
- * Two stores for one click, the same split the rest of the feature makes: the runner and models go
- * to `~/.cezar/config.json`, the account to `~/.cezar/agent-accounts.json`. Neither is committable —
- * that is the point of them being here rather than in a repo's settings.
+ * The runner and model a project that has chosen nothing runs. On this page because it is the same
+ * subject as the agents above. DEFAULTS, never overrides: a project's own `.ai/cezar/config.json`
+ * still wins key by key. Which account a project uses is that project's own setting.
  */
-function DefaultsForNewProjects({ profiles }: { profiles: AgentProfilesResponse }) {
+function DefaultsForNewProjects() {
   const [modelRunner, setModelRunner] = useState<Runner | null>(null)
   const queryClient = useQueryClient()
   const config = useWorkspaceConfig()
   const providerStatus = useProviderStatus()
   // Keep each host catalog available while the model-agent chooser switches (#794).
   const catalogs = useRunnerModelCatalogs()
-  const select = useSelectAgentProfile()
-
   const save = useMutation({
     mutationFn: (patch: SetWorkspaceConfigInput) => putWorkspaceConfig(patch),
     onSuccess: (result) => queryClient.setQueryData(workspaceQueryKeys.config, result),
@@ -345,7 +313,8 @@ function DefaultsForNewProjects({ profiles }: { profiles: AgentProfilesResponse 
 
   if (config.data === undefined) return null
 
-  const rows = agentPickerRows(profiles.profiles)
+  // One row per agent: an account is a project's choice, never a machine-wide one.
+  const rows = agentPickerRows([])
   // Absent means "no opinion", and the built-in fallback is claude — the same answer a project with
   // no config gets today. Showing it checked is honest: it IS what an unconfigured project runs.
   const runner = config.data.agentDefaults.runner ?? 'claude'
@@ -364,21 +333,11 @@ function DefaultsForNewProjects({ profiles }: { profiles: AgentProfilesResponse 
       <SettingsAgentPicker
         rows={rows}
         runner={runner}
-        accountFor={(id) => profiles.defaults[id] ?? null}
+        accountFor={() => null}
         providerStatus={providerStatus}
         disabled={save.isPending}
-        accountDisabled={select.isPending}
-        onPick={(picked, account, hasAccountChoice) => {
+        onPick={(picked) => {
           if (picked !== runner) save.mutate({ agentDefaults: { runner: picked } })
-          // `projectId: null` targets the machine-wide default rather than one repo. Only for an
-          // agent that HAS a choice of accounts: a single-login agent must not write a selection,
-          // or the store fills up with rows that say nothing.
-          if (hasAccountChoice) {
-            select.mutate(
-              { projectId: null, provider: picked, profileId: account },
-              { onError: (error: Error) => toast(error.message, { tone: 'danger' }) },
-            )
-          }
         }}
       />
 
@@ -430,8 +389,7 @@ function DefaultsForNewProjects({ profiles }: { profiles: AgentProfilesResponse 
   )
 }
 
-function AccountRow({ account, isMachineDefault, onRemove }: { account: AgentProfile; isMachineDefault: boolean; onRemove: () => void }) {
-  const [showDetails, setShowDetails] = useState(false)
+function AccountRow({ account, onRemove }: { account: AgentProfile; onRemove: () => void }) {
   const routeId = agentAccountRouteId(account)
   const connect = useConnectAgentAccount()
   const recheck = useRecheckAgentAccount()
@@ -458,7 +416,6 @@ function AccountRow({ account, isMachineDefault, onRemove }: { account: AgentPro
               </Badge>
             ) : null}
           </div>
-          {isMachineDefault && <p className="settings-account-default-note">Default account for new projects. Credentials are not displayed.</p>}
           <div className="settings-account-readout settings-readout">
           <p
             data-slot="account-path"
@@ -529,128 +486,9 @@ function AccountRow({ account, isMachineDefault, onRemove }: { account: AgentPro
             Check again
           </Button>
           <AccountManagement account={account} onRemove={onRemove} />
-          {/* Identity is opt-in: nothing is requested until this is pressed, so an email is absent
-              from the page rather than merely unrendered. */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-action="account-details-toggle"
-            aria-expanded={showDetails}
-            onClick={() => setShowDetails((on) => !on)}
-          >
-            {showDetails ? 'Hide details' : 'Show details'}
-          </Button>
         </div>
       </div>
-
-      {showDetails ? (
-        <AccountDetails account={account} routeId={routeId} />
-      ) : null}
     </li>
-  )
-}
-
-/** The opt-in half of a row: who this login is and its own config files. */
-function AccountDetails({
-  account,
-  routeId,
-}: {
-  account: AgentProfile
-  routeId: string
-}) {
-  const details = useAgentAccountDetails(routeId, true)
-  const open = useOpenAgentAccountFile()
-  const targets = useOpenTargets()
-
-  // Which detected apps can actually act on each thing — the same rule the route enforces, so the
-  // menu never offers something that would come back a 400. A `cli:<runner>` handoff opens a task
-  // worktree, not a config folder; a terminal runs `cd <path>`, which is meaningless for a file.
-  const detected = targets.data?.targets ?? []
-  const fileChoices = detected
-    .filter((t) => cliTargetRunner(t.id) === undefined && t.id !== 'terminal' && t.id !== 'finder')
-    .map((target) => ({ target }))
-  const folderChoices = detected
-    .filter((t) => cliTargetRunner(t.id) === undefined)
-    .map((target) => ({ target }))
-
-  const openPath = (file: string, label: string, target?: string) =>
-    open.mutate(
-      { routeId, file, ...(target ? { target } : {}) },
-      {
-        // The server's own words: "this account has no settings.json yet", "could not open …".
-        onError: (error) => toast(error.message, { tone: 'danger' }),
-        onSuccess: () => toast(`Opened ${label}`),
-      },
-    )
-
-  return (
-    <div data-slot="account-details" className="rounded-md border border-border/60 bg-muted/30 p-3">
-      {details.isPending ? (
-        <p className="text-xs text-muted-foreground">Reading account details…</p>
-      ) : details.isError ? (
-        <p data-slot="account-details-error" className="text-xs text-danger">
-          {details.error.message}
-        </p>
-      ) : details.data.available ? (
-        <dl data-slot="account-identity" className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
-          {details.data.fields.map((field) => (
-            <Fragment key={field.label}>
-              <dt className="text-muted-foreground">{field.label}</dt>
-              <dd className="min-w-0 truncate text-foreground" title={field.value}>
-                {field.value}
-              </dd>
-            </Fragment>
-          ))}
-        </dl>
-      ) : (
-        // Honest about WHY there is nothing, rather than an empty panel.
-        <p data-slot="account-identity-unavailable" className="text-xs text-muted-foreground">
-          {details.data.reason ?? 'No account details to show.'}
-        </p>
-      )}
-
-      <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-2.5">
-        <span className="mr-1 text-xs text-muted-foreground">Config files</span>
-        {account.files.map((file) => (
-          <OpenInMenu
-            key={file.id}
-            slot="account-open-file"
-            label={file.label}
-            triggerVariant="outline"
-            disabled={open.isPending}
-            // A file the agent has not written yet is offered but says so, because "Connect then
-            // it appears" is the normal path and a hidden button would look like a missing feature.
-            title={file.exists ? file.path : `${file.path} — not created yet`}
-            choices={fileChoices}
-            onPick={(target) => openPath(file.id, file.label, target)}
-            leading={
-              <DropdownMenuItem
-                data-target="system"
-                onSelect={() => openPath(file.id, file.label)}
-              >
-                <ExternalLinkIcon aria-hidden="true" />
-                System default
-              </DropdownMenuItem>
-            }
-          />
-        ))}
-        <OpenInMenu
-          slot="account-open-folder"
-          label="Folder"
-          disabled={open.isPending}
-          title={account.path}
-          choices={folderChoices}
-          onPick={(target) => openPath('folder', 'folder', target)}
-          leading={
-            <DropdownMenuItem data-target="system" onSelect={() => openPath('folder', 'folder')}>
-              <ExternalLinkIcon aria-hidden="true" />
-              System default
-            </DropdownMenuItem>
-          }
-        />
-      </div>
-    </div>
   )
 }
 

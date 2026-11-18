@@ -372,10 +372,7 @@ function DefaultAgentField({
   // already answers for the ACTIVE project.
   const projectId = scope.projectId ?? 'default'
   const repoRoot = repo.data?.info?.root
-  // Repo first, then the machine-wide default — the same order the server resolves in, so the
-  // checked row is the account a task would really run under rather than a guess.
   const selection = repoRoot ? profiles.data?.selections[repoRoot] : undefined
-  const machine = profiles.data?.defaults
   const rows = agentPickerRows(profiles.data?.profiles ?? [])
   const hasAccounts = hasAgentAccounts(rows)
 
@@ -387,7 +384,7 @@ function DefaultAgentField({
       <SettingsAgentPicker
         rows={rows}
         runner={defaultRunner}
-        accountFor={(id) => selection?.[id] ?? machine?.[id] ?? null}
+        accountFor={(id) => selection?.[id] ?? null}
         providerStatus={providerStatus}
         disabled={saving}
         // The account half needs a project to write against; the runner half does not, so only an

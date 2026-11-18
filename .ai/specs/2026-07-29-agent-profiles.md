@@ -8,6 +8,18 @@ Status: done
 
 Recorded status: implemented · 2026-07-29
 
+### Removed on 2026-11-18 (hearsay-tools/squawk#3865)
+
+Five parts of this design no longer exist. The sections below are edited to match.
+
+- Named omp accounts. omp keeps its discovered default; a host `OMP_PROFILE` still moves it.
+- The account details route (`…/:id/details`) and its "Show details" panel.
+- The route that opened an account's config files (`…/:id/open`) and the `files` list on a row.
+- The machine-wide default account (`defaults` in `agent-accounts.json`). On first load a saved
+  default is folded into the selection of each registered project that had no choice of its own.
+- The account override on Continue. A Continue stays on the account of the step that owns the
+  session.
+
 ### `default` on the wire is not the same as sending nothing
 
 The flat list needs to say three different things, and two of them look alike:
@@ -52,7 +64,7 @@ is the reason the design looks the way it does; re-verify before changing any of
 | `CODEX_HOME` relocates Codex's identity too | `auth.json` lives inside `~/.codex`, beside `config.toml` and `sessions` |
 | OpenCode has **no** single home var | `OPENCODE_CONFIG_DIR`/`OPENCODE_CONFIG` move config only. Corrected 2026-10-19 (hearsay-tools/cezarion#1283, OpenCode 1.18.35 `core/src/global.ts`, `database.ts`): provider credentials live in `$XDG_DATA_HOME/opencode/auth.json` (plus `mcp-auth.json`), not in `opencode.db`, and `OPENCODE_DB` moves only the session database (tested) |
 | `PI_CODING_AGENT_DIR` relocates pi's whole home, credentials included | 2026-10-19 (hearsay-tools/cezarion#1283), pi 1.0.4: `pi --help` documents it; after one real turn a fresh dir held `auth.json`, `models-store.json` and `sessions/`, and `~/.pi/agent` was untouched. `~/.agents/skills` is still read. A session does not resume from another dir ("No session found") |
-| omp's `OMP_PROFILE` (same as `--profile`) moves the credential store | 2026-10-19 (hearsay-tools/cezarion#1283), omp 18.8.0: it created `~/.omp/profiles/<name>/{agent/agent.db,agent/sessions,logs,run,cache}`, and `agent.db` holds `auth_credentials`. The value is a NAME matching `^[a-z0-9][a-z0-9._-]{0,63}$`; `default` means no profile. The profile entry may be a symlink. Under a profile omp ignores `PI_CODING_AGENT_DIR`; `~/.omp/natives`, `~/.claude/plugins` and `~/.agents/skills` stay shared |
+| omp selects a login by profile NAME (`OMP_PROFILE`), not by folder | omp 18.8.0 resolves the name under its own root, `~/<PI_CONFIG_DIR or .omp>/profiles/<name>`, which moves with `HOME` and `PI_CONFIG_DIR`. cezar therefore carries no named omp accounts; a host `OMP_PROFILE` (or `PI_PROFILE`) moves omp's discovered default |
 
 `claude --settings <file>` is **not** a substitute: it merges a settings file and relocates
 nothing — not credentials, not sessions, not projects. `--add-dir` is unrelated (extra working
@@ -157,56 +169,18 @@ precisely what this feature exists to prevent. Revisit if OpenCode documents a s
 variable. `XDG_CONFIG_HOME` is rejected regardless: it is machine-wide and would relocate every
 other XDG-aware tool the agent's own Bash calls touch.
 
-### pi and omp (added 2026-10-20, hearsay-tools/cezarion#1283)
+### pi (added 2026-10-20, hearsay-tools/cezarion#1283)
 
 **pi** works like Claude and Codex: an account is any absolute folder, spawned with
 `PI_CODING_AGENT_DIR=<folder>`.
 
-**omp** accounts are omp profiles. `OMP_PROFILE` takes a NAME, and omp resolves it under its own
-root, `~/<PI_CONFIG_DIR or .omp>/profiles/<name>`. So an omp account folder must be exactly that,
-and cezar spawns it with `OMP_PROFILE=<name>`. The route refuses any other folder with a 400 that
-names the profiles dir, and the store's schema drops a row of the wrong shape, because `profileEnv`
-emits nothing for it and the account would run on the default login. A profile somewhere else is
-reached through the user's own symlink in the profiles dir, which omp follows. cezar writes nothing
-into `~/.omp` itself. The named account's folder is the profile folder; its config files resolve
-from `<folder>/agent`, while the discovered default stays an agent dir (`agentHomePaths().omp`).
+**omp carries no named accounts.** It selects a login by profile name under a root that moves with
+`HOME` and `PI_CONFIG_DIR`, so a stored folder cannot name one reliably. `agent-env.ts` still
+passes `OMP_*`/`PI_*` to omp, so a host `OMP_PROFILE` moves omp's discovered default.
 
-**A host that exports the variable.** `agent-env.ts` passes `PI_*` to pi and `OMP_*`/`PI_*` to
-omp, so a value the cezar process carries reaches every default session. The default is the
-discovered account, so discovery follows it: `PI_CODING_AGENT_DIR` moves pi's default, and
-`OMP_PROFILE` (or `PI_PROFILE` when `OMP_PROFILE` is unset) makes that profile omp's default, with
-`PI_CODING_AGENT_DIR` moving omp's default only while no profile is selected. A named account's
-variable is applied after the allowlist and replaces the host value for its session. Adding the
-default's own folder or profile as a named account is refused. `PI_CONFIG_DIR` moves omp's root,
-and with it the profiles dir that named omp folders must be in.
-
-**omp's root can move after an account is added.** omp resolves the name under the root it computes
-at spawn from `HOME` and `PI_CONFIG_DIR`. Once either changes, `OMP_PROFILE=<name>` would open
-`<new root>/profiles/<name>`, another login or a fresh empty one, while Settings still shows the
-stored folder. So every spawn of a named omp account re-checks the folder against the root the child
-will use (`namedAccountUnavailable`) and refuses rather than spawning bare:
-
-| Path | At a moved root |
-| --- | --- |
-| Step and Continue | `resolveProfileEnvForRoot` throws `AgentAccountUnavailableError`; the step fails before spawning with the message |
-| Owned worker launch | `boundWorkerAccountEnv` checks the child env and throws `WorkerIdentityError` |
-| Worker selection | the error becomes a `DelegationPolicyError` for the spawning parent |
-| Planner | takes its one-step fallback with no model call; the auto-namer keeps its heuristic title |
-| Terminal handoff, Connect | 409 with the message |
-| Account status | an `unknown` row whose hint says why, with no probe; the boot warm-up skips the account |
-
-Pinning `PI_CONFIG_DIR` per spawn instead was rejected: omp also uses that value as the name of the
-project-local folder (`<project>/<PI_CONFIG_DIR>/plugins/installed_plugins.json`), so a pin would
-change what a session reads in the project.
-
-**Owned workers** pin a named pi or omp account's folder like any other. A named omp account pins
-its profile entry with only the parent resolved: the entry's realpath would name no profile and run
-the worker on the default. The discovered pi or omp account binds no folder and spawns bare, as it
-did before they carried accounts: pinning requires the folder to exist at launch, and a machine
-where the agent has never run has none. Evidence accepted before this change has the same shape.
-
-**Downgrade.** A cezar from before this change drops pi and omp rows when it parses
-`agent-accounts.json`, and its next write of the file persists the drop.
+**Owned workers** pin a named pi account's folder like any other. The discovered pi or omp account
+binds no folder and spawns bare: pinning requires the folder to exist at launch, and a machine
+where the agent has never run has none.
 
 ## Surface
 
@@ -214,22 +188,22 @@ where the agent has never run has none. Evidence accepted before this change has
 | --- | --- |
 | `packages/cezar/src/core/agent-profiles.ts` | `PROFILE_ENV_VAR`, `profileEnv`, `looksLikeProfileDir` — the vendor knowledge, pure. Sibling of `agent-config/catalog.ts`, which owns config-FILE knowledge. |
 | `packages/cezar/src/core/shell-env.ts` | Rendering the variable into a shell command, per platform, refusing rather than guessing. |
-| `packages/cezar/src/workspace/agent-profiles.ts` | Resolution against the workspace config, and `namedAccountUnavailable`, the spawn-time check that omp would still open a named account's profile. |
+| `packages/cezar/src/workspace/agent-profiles.ts` | Resolution against the workspace config. |
 | `packages/cezar/src/workspace/agent-accounts.ts` | `~/.cezar/agent-accounts.json` — the store, its house rules, and the one-time import from `config.json`. `config.json`'s own schema is untouched by this feature. |
 | `packages/contract/src/agent-profiles.ts` | The wire shapes. |
 | `GET/POST /api/v1/workspace/agent-profiles`, `PATCH/DELETE …/:id` | Workspace-level, single-mount, `localHandoff`-gated. |
 | `PUT /api/v1/workspace/agent-profiles/selection` | Which account a project uses. On the accounts family, so `PATCH /api/v1/projects` and the project registry are untouched. |
 | `POST /api/v1/runs` | Gains `agentProfile` — the composer's per-task override. |
-| `POST /api/v1/runs/:id/continue` | Gains `agentProfile` too — the same override, after the task has started. Omitted means "keep the account this run is on", which is what an untouched Continue sends. A switch does NOT resume: the session id lives inside the previous account's config dir, so it starts a fresh session exactly as switching runner does. Persisted on the record before scheduling, next to the runner/model pair — and a runner switch that names no account CLEARS the previous one, since an account belongs to one agent. |
+| `POST /api/v1/runs/:id/continue` | Carries no account. The continuation runs on the account of the step that owns the session; a runner switch uses the project's selection for the new agent. |
 | Settings → Agent accounts (global) | One TAB per agent: install state + version from `/api/v1/health`, then that agent's logins. Every agent gets a tab, including OpenCode — the tab is where "is it installed?" is answered. |
 | Settings → Agents (per project) | "Default agent" is ONE control, the same flat list the composer uses: `claude · Default`, `claude · Klaudiusz`, `codex`. The repo's default agent and its account are the same decision — "what does this repo run by default" — so splitting them meant reading two fields to learn one fact. Each row names the FOLDER it resolves to (the labels are cezar's invention; the folder is the account), and a folder that does not exist yet is called out, since a run under it fails on auth by design. An agent with a single login stays a single row, so a machine with no extra accounts sees the control it always saw — still titled "Default runner", since no account is in play. |
-| Settings → Agent accounts, "Defaults for new projects" | The same flat control, plus per-agent default models, answering "what does a project run when it has chosen nothing" — so a second login is set up ONCE instead of per checkout. On the accounts page rather than one of its own: it is the same subject, and a separate page would mean adding an account in one place and going elsewhere to say "use it". Above the per-agent tabs, because it is a cross-agent answer. Written to `~/.cezar/config.json` (`agentDefaults.runner`, `agentDefaults.models`) and `~/.cezar/agent-accounts.json` (`defaults`). |
-| Defaults, never overrides | The resolution order is task override → repo choice → machine default → discovered. A repo that has chosen is NEVER moved by a later change to the machine default; the default only fills silence. That is the whole safety property: changing a global setting must not quietly re-point work someone already configured onto another subscription. Applied to the RAW config object before parsing, because `defaultRunner`'s `.default('claude')` materializes the key — after a parse there is no telling "chose claude" from "said nothing" — and `models` merges per RUNNER so pinning one repo's claude model cannot discard the machine's codex preset. |
+| Settings → Agent accounts, "Defaults for new projects" | The default runner and per-agent default models for a project that has chosen nothing. It sets no account: which account a project uses is that project's own setting. |
+| Resolution order | Task override → repo choice → discovered. |
 | The task header's agent badge | Reads `claude · Klaudiusz · opus` beside the bot icon, with the labelled breakdown still in its menu. Visible text rather than icon-only: #416 moved runner/model out of the loose dot-list to cut noise, and that holds — they are not separate chips — but an icon alone made "which agent, account and model produced this?" unanswerable without knowing to click, which is the one question the badge exists for. The account comes from the STEP that spawned (`steps[].profileId`), never the run's composer override or the project's current selection: the override is absent whenever the run simply followed the project, and the selection can have changed since — either would name an account the run may never have touched. A run from before accounts existed shows no account line rather than claiming the discovered one; a removed account is shown as `<id> (removed)`, because the id is the only remaining pointer to the folder its sessions live in. |
 | Signing a second account in | The account row carries **Connect** (hidden once that account is connected) and **Check again**. Connect posts `{provider, profileId}` to `POST /api/v1/providers/connect`, which renders `CLAUDE_CONFIG_DIR=… claude /login` for that account and fails closed rather than running the bare command. Without this the pane told the user three times to press Connect and offered none: the engine was complete and unreachable, and an added account had no in-product way to log in. Two rules the route now keeps for a NAMED account: it evicts that account's cached status first, so Connect after a terminal `/logout` cannot answer "already connected" out of the ten-minute window; and it refuses in hosted mode **before** resolving anything, so no host path is built and a wrong id is not an enumeration oracle for ids the hosted listing withholds. |
 | One click, two stores | That row writes `defaultRunner` to the repo's committable config and the account to `~/.cezar/agent-accounts.json`. The split is the point: the runner is a team decision, the account is personal and per-machine — committing it would publish which login someone works under. The copy says so, because every other field in that pane is shared. Picking an agent with one login writes NO selection: recording a choice the user was never offered would be state nobody asked for. |
 | The composer's runner pill | The per-task override is not a pill of its own; the runner pill lists every agent-and-login as one FLAT row — `claude · Default`, `claude · Klaudiusz`, `codex`. Every row is a concrete thing that can run this task, so what will happen is readable at a glance instead of assembled from a runner choice plus a nested account choice. An agent with a single login stays a single row, so a host with no extra accounts sees the list it always saw. The row the repo resolves to is the one selected until the user picks another; on a host with ONE runner the pill appears whenever a second login exists, because a single runner is not a choice but a second login is. |
-| The thread's Continue pill | The SAME control, on the same terms — a task that has started must be able to change login, not only agent. One difference, and it follows from `sessionId`/`profileId` being a pair: the row selected until the user picks another is the account the RUN is on (`steps[].profileId`), not the project's current selection, which may have moved since. Switching agent falls back to what the project resolves to for that agent, because the account belonged to the previous one. `useAgentAccounts` is where both surfaces read the logins and the selection, so the two pills cannot drift into looking alike and picking differently. |
+| The thread's Continue pill | Lists agents only. A started task cannot change login; it can change agent, which starts a fresh session. |
 | Both | Hidden entirely when no extra account exists. |
 
 ## The listing never shells out
@@ -321,51 +295,6 @@ Two details worth keeping:
   mismatches AGENTS.md names, and `contract-parity` catches it.
 - "Checking…" is a distinct state from every probe RESULT. Rendering `unknown` for an answer that
   has not arrived would claim a verification that never ran.
-
-## Identity is opt-in, and "hidden" means absent
-
-"Show details" reveals the email, organization and plan an account is signed in as, read from the
-account's own files: Claude's `.claude.json` `oauthAccount`, Codex's `auth.json` `id_token` claims.
-
-That is a deliberate exception to the boundary `provider-auth.ts` keeps — *credentials, account
-identity, and raw CLI output never cross this boundary* — so it is built to stay a narrow one:
-
-- **Its own on-demand route**, not a field on the listing. Had the listing carried an email, hiding
-  it in the UI would be theatre: it would already be in the response, the query cache and devtools.
-  The route is fetched only once a row is expanded, so until someone asks, the data is absent from
-  the page rather than merely unrendered.
-- **Named fields only, never pass-through.** `auth.json` holds `OPENAI_API_KEY`, `access_token` and
-  `refresh_token` right beside the claims, and `.claude.json` holds far more than `oauthAccount`.
-  Every reader picks fields by name and builds a fresh object, so a key a vendor adds tomorrow
-  cannot leak through. Tested by asserting credential-shaped values never appear in the answer.
-- **localHandoff-gated** like the rest of the family, and never logged or persisted.
-
-Version and install state are shown separately, once per agent, because they describe the *binary*
-and come from the existing health probe — every login of one CLI shares them.
-
-## Opening an account's own config files
-
-Each account lists its agent's USER-scope config files, resolved inside **that** account's folder,
-so a second login's `settings.json` is the one you open. They come straight from
-`agent-config/catalog.ts` — the single home of config-file vendor knowledge — with an
-`AgentHomePaths` whose slot for that provider is the account's dir.
-
-`POST …/:id/open` takes a **catalog id** (or the keyword `folder`), never a path: the client cannot
-name a location, so the route has no traversal surface at all, which is the same rule
-`/api/v1/agent-config/:id` follows. A file the agent has not written yet answers 409 rather than
-handing the OS a missing path and reporting success.
-
-An optional `target` names a detected app (`GET /api/v1/open-targets`); absent means the OS default
-handler. Which targets APPLY is enforced by the route, not left to the UI, because two families are
-actively wrong rather than merely useless: `terminal` runs `cd <path>`, which fails on a file, and a
-`cli:<runner>` handoff would start an agent session inside the config folder. Both are 400s, as is
-an app this machine does not have.
-
-The menu is the task thread's own **Open in…** component, extracted to
-`packages/web/src/components/open-in-menu.tsx` when this pane needed the same question answered —
-one menu, one icon table, one place where an unrecognised target degrades to a generic glyph. What
-stays with each caller is anything about *what* is being opened: the run header keeps its resume
-item and agent-availability filtering, this pane keeps its per-file target filter.
 
 ## Not in this cut
 

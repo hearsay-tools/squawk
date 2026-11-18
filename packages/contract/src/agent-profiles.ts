@@ -28,23 +28,6 @@ import { providerIdSchema, providerStatusSchema } from './workspace.ts';
 export const DEFAULT_AGENT_ACCOUNT_ID = 'default';
 
 /**
- * One of the agent's OWN config files, resolved against THIS account's folder.
- *
- * Addressed by the catalog's stable, opaque `id` — never a path the client composes, which is what
- * makes the open route traversal-proof by construction (the same rule `/api/v1/agent-config/:id`
- * follows).
- */
-export const agentAccountFileSchema = z.object({
-  id: z.string(),
-  /** e.g. `settings.json` — the file's own name, since the folder is shown once on the account. */
-  label: z.string(),
-  /** Absolute, resolved inside this account's config folder. */
-  path: z.string(),
-  exists: z.boolean(),
-});
-export type AgentAccountFile = z.infer<typeof agentAccountFileSchema>;
-
-/**
  * One account, as the cockpit sees it.
  *
  * A CLOSED object, on the same terms as `projectListEntrySchema`: `.passthrough()` on the
@@ -76,18 +59,15 @@ export const agentProfileSchema = z.object({
    *  serves a cached forge answer. Absent means "not determined yet" — NOT `unknown`, which is a
    *  real probe result — and the cockpit fills it in from `…/:id/status`. */
   status: providerStatusSchema.optional(),
-  /** This agent's own user-scope config files, resolved inside THIS account's folder — so a
-   *  second login's `settings.json` is the one you open, not the default account's. */
-  files: z.array(agentAccountFileSchema),
 });
 export type AgentProfile = z.infer<typeof agentProfileSchema>;
 
 /**
- * How to address one account in the per-account routes (`…/:id/details`, `…/:id/open`).
+ * How to address one account in the per-account status route (`…/:id/status`).
  *
  * Every DISCOVERED account shares `id: "default"` — that spelling is load-bearing in the selection
  * routes, where it means "back to the discovered account" — so it cannot identify which agent's
- * default is meant. These two routes therefore take `default:<provider>` for a discovered account
+ * default is meant. That route therefore takes `default:<provider>` for a discovered account
  * and the stored slug otherwise. Defined once, here, so the client and the server cannot disagree
  * about the encoding; still opaque, still not a path.
  */
@@ -110,8 +90,8 @@ export const agentProfilesResponseSchema = z.object({
   editable: z.boolean(),
   profiles: z.array(agentProfileSchema),
   /** Providers that can carry more than one account at all — what "Add account" is offered for.
-   *  OpenCode is absent: its credentials live in a SQLite DB behind a separate `OPENCODE_DB`, so
-   *  a config-dir profile would swap settings while still billing the other account. */
+   *  OpenCode and omp are absent: no folder variable moves their credentials, so a config-dir
+   *  profile would swap settings while still billing the other account. */
   profileCapableProviders: z.array(providerIdSchema),
   /** Which account each project uses, keyed by the project's realpath'd ROOT.
    *
@@ -120,8 +100,6 @@ export const agentProfilesResponseSchema = z.object({
    *  reference to it is one atomic write, and neither can be dropped by a Squawk version that never
    *  heard of accounts. Empty in hosted mode, where the whole family is withheld. */
   selections: z.record(z.string(), agentAccountSelectionSchema),
-  /** The machine-wide fallback account per provider, used by any repo that has chosen none. */
-  defaults: agentAccountSelectionSchema,
 });
 export type AgentProfilesResponse = z.infer<typeof agentProfilesResponseSchema>;
 
@@ -133,14 +111,8 @@ export type AgentProfilesResponse = z.infer<typeof agentProfilesResponseSchema>;
  * degraded, because a typo the route accepted would quietly run the project on the wrong account.
  */
 export const selectAgentProfileInputSchema = z.object({
-  /**
-   * Registry slug, or the reserved `default` boot alias. Resolved to a root server-side.
-   *
-   * `null` targets the MACHINE-WIDE default instead of one repo — the account a repo that has
-   * chosen nothing uses, so a second login is set up once rather than per checkout. A repo's own
-   * choice always wins over it, which is what keeps this a default and not an override.
-   */
-  projectId: z.string().min(1).max(64).nullable(),
+  /** Registry slug, or the reserved `default` boot alias. Resolved to a root server-side. */
+  projectId: z.string().min(1).max(64),
   provider: providerIdSchema,
   profileId: z.string().max(64).nullable(),
 });
@@ -149,8 +121,6 @@ export type SelectAgentProfileInput = z.infer<typeof selectAgentProfileInputSche
 /** The selection map after the write — the same shape the listing carries. */
 export const agentProfileSelectionsResponseSchema = z.object({
   selections: z.record(z.string(), agentAccountSelectionSchema),
-  /** The machine-wide fallback, for repos with no selection of their own. */
-  defaults: agentAccountSelectionSchema,
 });
 export type AgentProfileSelectionsResponse = z.infer<typeof agentProfileSelectionsResponseSchema>;
 
@@ -160,42 +130,6 @@ export type AgentProfileSelectionsResponse = z.infer<typeof agentProfileSelectio
  *  load pays no CLI spawn. */
 export const agentAccountStatusResponseSchema = z.object({ status: providerStatusSchema });
 export type AgentAccountStatusResponse = z.infer<typeof agentAccountStatusResponseSchema>;
-
-/**
- * On-demand local account details, separate from ordinary listings. fields contains only
- * explicitly selected display values; available:false includes a reason.
- */
-export const agentAccountDetailsResponseSchema = z.object({
-  available: z.boolean(),
-  reason: z.string().optional(),
-  fields: z.array(z.object({ label: z.string(), value: z.string() })),
-});
-export type AgentAccountDetailsResponse = z.infer<typeof agentAccountDetailsResponseSchema>;
-
-/**
- * `POST /api/v1/workspace/agent-profiles/:id/open` — hand one of this account's config files (or
- * the folder itself) to a local app.
- *
- * `file` is a catalog id from the account's own `files`, or `folder` for the config dir. `target`
- * is an `/api/v1/open-targets` id — an editor, or the file manager for `folder` — and omitted means
- * the OS default handler.
- *
- * Two target families are refused with a 400 rather than silently misbehaving: `terminal` for a
- * FILE (it would `cd` into it) and any `cli:<runner>` handoff (it would start an agent session
- * inside the config folder). An unknown/undetected target is a 400 too.
- */
-export const openAgentAccountFileInputSchema = z.object({
-  file: z.string().min(1).max(200),
-  target: z.string().min(1).max(64).optional(),
-});
-export type OpenAgentAccountFileInput = z.infer<typeof openAgentAccountFileInputSchema>;
-
-/** `POST …/open` — what was opened, so the UI can say so rather than guess. */
-export const openAgentAccountFileResponseSchema = z.object({
-  opened: z.literal(true),
-  path: z.string(),
-});
-export type OpenAgentAccountFileResponse = z.infer<typeof openAgentAccountFileResponseSchema>;
 
 /** `POST /api/v1/workspace/agent-profiles` — the id is allocated server-side from the label. */
 export const createAgentProfileInputSchema = z.object({

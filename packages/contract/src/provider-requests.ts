@@ -19,12 +19,6 @@ export const createAgentProfileSchema = z.object({
   configDir: z.string().trim().min(1).max(4096),
 }).strict();
 
-/** `POST …/agent-profiles/:id/open` — a catalog id (or `folder`) plus an optional open target. */
-export const openAgentAccountFileSchema = z.object({
-  file: z.string().min(1).max(200),
-  target: z.string().min(1).max(64).optional(),
-}).strict();
-
 export const updateAgentProfileSchema = z.object({
   label: z.string().trim().max(200).optional(),
   configDir: z.string().trim().min(1).max(4096).optional(),
@@ -36,8 +30,7 @@ export const updateAgentProfileSchema = z.object({
 /** `PUT …/agent-profiles/selection` — which account a project uses for one provider. `null`
  *  clears it back to the discovered account. */
 export const selectAgentProfileSchema = z.object({
-  /** `null` targets the machine-wide default rather than one repo. */
-  projectId: z.string().min(1).max(64).nullable(),
+  projectId: z.string().min(1).max(64),
   provider: z.enum(PROVIDER_IDS),
   profileId: z.string().max(64).nullable(),
 }).strict();

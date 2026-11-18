@@ -1,13 +1,13 @@
 import type { Home } from '../home/home.ts';
 import { createHash } from 'node:crypto';
 import { workerInputRecipeSchema, type WorkerInputRecipe } from '@open-mercato/cezar-contract/delegation';
-import { basename, dirname, isAbsolute, join } from 'node:path';
+import { isAbsolute } from 'node:path';
 import { realpathSync, statSync } from 'node:fs';
 import { z } from 'zod';
 import { latestSessionStep, removedRunnerStepAfter } from '@open-mercato/cezar-contract/run-predicates';
-import { ACCOUNT_LAYOUT, profileEnv, selectsByProfileName, supportsProfiles } from '../core/agent-profiles.ts';
+import { ACCOUNT_LAYOUT, profileEnv, supportsProfiles } from '../core/agent-profiles.ts';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
-import { namedAccountUnavailable, type ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
+import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
 import { AGENT_HOME_SLOT, agentHomePaths, claudeStateFilePath } from '../paths.ts';
 import { workflowDefSchema, QUICK_TASK_WORKFLOW, stepKind, type WorkflowDef, type WorkflowStepDef } from '../workflows/types.ts';
 import type { RunRecord, RunStore } from '../runs/store.ts';
@@ -28,7 +28,7 @@ export const workerAccountBindingSchema = z.object({
   ]).optional(),
 }).strict().refine(binding => binding.homePath !== undefined
   ? supportsProfiles(binding.provider)
-  // A default that binds no home spawns bare; evidence accepted before hearsay-tools/cezarion#1283 has this shape.
+  // A default that binds no home spawns bare.
   : binding.profileId === 'default' && !ACCOUNT_LAYOUT[binding.provider].defaultBindsHome)
   .refine(binding => ACCOUNT_LAYOUT[binding.provider].stateFile === 'beside-home'
     ? binding.claudeLayout !== undefined && (binding.claudeLayout.kind !== 'native' || binding.profileId === 'default')
@@ -94,11 +94,7 @@ export function captureWorkerAccount(profile: ResolvedAgentProfile, env: NodeJS.
   const childHome = agentHomePaths(env)[AGENT_HOME_SLOT[profile.provider]];
   let homePath = layout.stateFile === 'beside-home' ? childHome : profile.path;
   try {
-    // A named profile-name account is selected by its profile entry's NAME, and the entry may be a
-    // symlink the CLI follows itself: resolving it would leave a path that names no profile. Pin the parent.
-    homePath = isProfileNameBinding(profile.provider, profile.id)
-      ? join(realpathSync(dirname(homePath)), basename(homePath))
-      : realpathSync(homePath);
+    homePath = realpathSync(homePath);
   } catch { /* The owned consumer still requires it to exist. */ }
   const claudeLayout = layout.stateFile !== 'beside-home' ? undefined
     : env.CLAUDE_CONFIG_DIR?.trim() ? { kind: 'relocated' as const }
@@ -110,22 +106,9 @@ export function captureWorkerAccount(profile: ResolvedAgentProfile, env: NodeJS.
 
 export function boundWorkerAccountEnv(binding: WorkerAccountBinding, env: NodeJS.ProcessEnv = process.env): Record<string, string> {
   if (binding.homePath === undefined) return {};
-  const namedProfile = isProfileNameBinding(binding.provider, binding.profileId);
-  const pinned = namedProfile ? dirname(binding.homePath) : binding.homePath;
   try {
-    if (!statSync(binding.homePath).isDirectory() || realpathSync(pinned) !== pinned) throw new Error();
+    if (!statSync(binding.homePath).isDirectory() || realpathSync(binding.homePath) !== binding.homePath) throw new Error();
   } catch { throw new WorkerIdentityError('Accepted worker account identity is unavailable'); }
-  if (selectsByProfileName(binding.provider)) {
-    // The discovered omp account is spawned bare, so it keeps whatever profile the host selects.
-    if (!namedProfile) return {};
-    const selected = profileEnv(binding.provider, binding.homePath);
-    if (Object.keys(selected).length === 0) throw new WorkerIdentityError('Accepted omp account names no omp profile');
-    // omp resolves the name under the root it computes from the CHILD's HOME and PI_CONFIG_DIR,
-    // which may have changed since acceptance; a moved root would select another profile.
-    const unavailable = namedAccountUnavailable(binding.provider, binding.homePath, env);
-    if (unavailable !== null) throw new WorkerIdentityError(unavailable);
-    return selected;
-  }
   if (binding.claudeLayout?.kind === 'native') {
     const nativeHome = agentHomePaths(env).claude;
     try {
@@ -135,11 +118,6 @@ export function boundWorkerAccountEnv(binding: WorkerAccountBinding, env: NodeJS
     return {};
   }
   return profileEnv(binding.provider, binding.homePath);
-}
-
-/** A named account of a profile-name provider (omp): a profile, selected by name rather than by folder. */
-function isProfileNameBinding(provider: string, profileId: string): boolean {
-  return selectsByProfileName(provider) && profileId !== 'default';
 }
 
 /** Canonical schema order makes equivalent persisted object ordering immaterial. */

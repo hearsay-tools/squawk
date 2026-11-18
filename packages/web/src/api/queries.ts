@@ -41,7 +41,6 @@ import {
   createAgentProfile,
   getAgentConfig,
   getAgentConfigFile,
-  getAgentAccountDetails,
   getAgentAccountStatus,
   getAgentProfiles,
   getConfig,
@@ -97,7 +96,6 @@ import {
   testOneProjectWebhook,
   removeQueuedMessage,
   registerProject,
-  openAgentAccountFile,
   removeAgentProfile,
   removeProject,
   selectAgentProfile,
@@ -123,7 +121,6 @@ import type {
   Runner,
   PatchRunInput,
   ProviderId,
-  OpenAgentAccountFileInput,
   ProjectListEntry,
   ProjectsResponse,
   GithubData,
@@ -278,10 +275,6 @@ export const workspaceQueryKeys = {
   /** Agent accounts via `GET /api/v1/workspace/agent-profiles` (spec 2026-07-29-agent-profiles).
    *  Workspace-led like the registry: an account describes the machine, not a repo. */
   agentProfiles: ['workspace', 'agent-profiles'] as const,
-  /** One account's identity, keyed by its route id. A child of `agentProfiles` so removing an
-   *  account drops any details cached for it in the same invalidation. */
-  agentAccountDetails: (routeId: string) =>
-    ['workspace', 'agent-profiles', 'details', routeId] as const,
   /** One account's auth state — a child of `agentProfiles`, so removing an account drops it too. */
   agentAccountStatus: (routeId: string) =>
     ['workspace', 'agent-profiles', 'status', routeId] as const,
@@ -693,23 +686,6 @@ export function useSelectAgentProfile() {
 }
 
 /**
- * Who an account is signed in as — fetched ONLY once `enabled` (the row's "Show details").
- *
- * `enabled: false` is the whole point: identity is not in the accounts listing, so until the user
- * asks, no request carries it and nothing caches it. `staleTime: 0` so re-opening the row after a
- * re-login shows the new answer rather than a remembered one.
- */
-export function useAgentAccountDetails(routeId: string, enabled: boolean) {
-  return useQuery({
-    queryKey: workspaceQueryKeys.agentAccountDetails(routeId),
-    queryFn: ({ signal }) => getAgentAccountDetails(routeId, { signal }),
-    enabled,
-    staleTime: 0,
-    retry: false,
-  })
-}
-
-/**
  * One account's auth state — the GAP-FILLER, not the normal path.
  *
  * The listing carries a status whenever the server has one cached, which after the boot warm is
@@ -774,18 +750,6 @@ export function useRecheckAgentAccount() {
         void invalidateRunnerModels(queryClient, answer.status.provider)
       }
     },
-  })
-}
-
-/** Hand one of an account's config files to a local app. Nothing to invalidate — opening a file
- *  changes no Squawk state, so this deliberately does NOT go through the shared mutation helper. */
-export function useOpenAgentAccountFile() {
-  return useMutation({
-    mutationFn: (variables: { routeId: string } & OpenAgentAccountFileInput) => {
-      const { routeId, ...input } = variables
-      return openAgentAccountFile(routeId, input)
-    },
-    retry: false,
   })
 }
 

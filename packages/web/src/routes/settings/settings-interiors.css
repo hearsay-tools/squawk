@@ -224,7 +224,6 @@
 .settings-panel [data-slot=account-row] { padding-block: 24px 0; padding-inline: 0; border-block-start: 1px solid var(--border); margin-block-start: 20px; }
 .settings-account-card { display: flex; flex-direction: column; gap: 20px; }
 .settings-account-card > div:first-child > div:first-child > span:first-child { font-size: 14px; font-weight: 400; }
-.settings-account-default-note { margin-block-start: 8px; font-size: 12px; color: var(--muted-foreground); }
 .settings-account-readout { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block-start: 8px; }
 .settings-account-readout [data-slot=account-path] { order: 1; margin: 0; font-family: inherit; font-size: 13px; white-space: normal; overflow-wrap: anywhere; }
 .settings-account-readout > div { margin: 0; font-size: 13px; }

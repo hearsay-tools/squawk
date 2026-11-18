@@ -7,7 +7,6 @@ import {
   agentHomePaths,
   claudeStateFilePath,
   instanceSlug,
-  ompProfilesDir,
   serverLockPath,
   serverStatePath,
 } from './paths.ts';
@@ -82,13 +81,6 @@ describe('agentHomePaths', () => {
     expect(omp({ OMP_PROFILE: ' ', PI_PROFILE: 'other' })).toBe('/home/u/.omp/agent');
     // A name omp would refuse selects nothing Squawk can describe; fall through to the plain home.
     expect(omp({ OMP_PROFILE: 'Bad Name' })).toBe('/home/u/.omp/agent');
-  });
-
-  it('puts named OMP profiles under the OMP root, which PI_CONFIG_DIR moves', () => {
-    expect(ompProfilesDir({ HOME: '/home/u' } as NodeJS.ProcessEnv)).toBe('/home/u/.omp/profiles');
-    expect(ompProfilesDir({ HOME: '/home/u', PI_CONFIG_DIR: '.omp-alt' } as NodeJS.ProcessEnv)).toBe(
-      '/home/u/.omp-alt/profiles',
-    );
   });
 
   it('honors agent-specific home overrides', () => {

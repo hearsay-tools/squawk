@@ -360,7 +360,6 @@ export async function planTask(text = 'Tighten the flaky suite') {
 }
 
 export const ACCOUNTS: AgentProfilesResponse = {
-  defaults: {},
   editable: true,
   profileCapableProviders: ['claude', 'codex'],
   selections: {},
@@ -375,7 +374,6 @@ export const ACCOUNTS: AgentProfilesResponse = {
       looksValid: true,
       isDefault: true,
       status: { provider: 'claude', status: 'connected' },
-      files: [],
     },
     {
       id: 'klaudiusz',
@@ -387,7 +385,6 @@ export const ACCOUNTS: AgentProfilesResponse = {
       looksValid: true,
       isDefault: false,
       status: { provider: 'claude', status: 'connected', profileId: 'work' },
-      files: [],
     },
   ],
 }

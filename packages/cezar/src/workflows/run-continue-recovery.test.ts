@@ -1,4 +1,4 @@
-import { setRunStatus, crashStore } from '../runs/run-store.testkit.ts';
+import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { runnerHook, run, GIT_ID, waitForProduct, setupMonitoringFixture, FINISHED_RUN_STATUSES } from './run-fixture.testkit.ts';
 import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
@@ -63,30 +63,6 @@ describe('RunManager.continueRun override', () => {
     return record.id;
   }
 
-  it.each([
-    ['immediate', 'account-a', 'account-b'],
-    ['capacity', 'account-a', 'account-b'],
-    ['immediate', 'default', 'account-b'],
-    ['capacity', 'account-a', 'default'],
-  ])('preserves account switching through %s Continue recovery (%s to %s)', async (mode, before, after) => {
-    const id = resumableRun();
-    store.updateRun(id, { agentProfile: before });
-    store.updateStep(id, 's1', { profileId: before, backend: 'claude' });
-    expect(manager.continueRun(id, {
-      text: 'read this with the chosen account', agentProfile: after,
-      images: [{ type: 'file', mediaType: 'application/pdf', data: 'YQ==' }],
-    }, mode === 'capacity')).toEqual({ ok: true });
-    // A crash right after the Continue was accepted: nothing still pending is written.
-    manager.dispose(); crashStore(store);
-    store = RunStore.open(join(repoRoot, '.ai/cezar'), { keepLive: true });
-    manager = createFixtureManager(store, repoRoot);
-    await manager.recover();
-    await waitForProduct(manager, store, () => launches.length === 1);
-    expect(launches[0]?.userPrompt).toContain('read this with the chosen account');
-    expect(launches[0]?.resume).not.toBe(true);
-    expect(store.getRun(id)?.agentProfile).toBe(after);
-  });
-
   it.each([true, false, undefined])('human Continue preserves saved autonomous=%s (#458)', (autonomous) => {
     const id = resumableRun();
     store.updateRun(id, { autonomous });
@@ -110,7 +86,6 @@ describe('RunManager.continueRun override', () => {
     { name: 'same runner keeps model', options: { runner: 'claude' }, expected: { model: 'sonnet' } },
     { name: 'legacy runner refuses foreign preset', seed: { runner: undefined, model: undefined }, options: { model: 'gpt-5.1-codex' }, error: "model 'gpt-5.1-codex' is not a claude model", expected: { model: undefined } },
     { name: 'free-form model is accepted', options: { model: 'my-custom-alias' }, expected: { model: 'my-custom-alias' } },
-    { name: 'picked account persists independently', options: { agentProfile: 'klaudiusz' }, expected: { agentProfile: 'klaudiusz', runner: 'claude', model: 'sonnet' } },
     { name: 'omitted account keeps the pin', seed: { agentProfile: 'klaudiusz' }, options: { text: 'keep going' }, expected: { agentProfile: 'klaudiusz' } },
     { name: 'runner switch clears foreign account', seed: { agentProfile: 'klaudiusz' }, options: { runner: 'codex' }, expected: { agentProfile: undefined } },
     { name: 'same runner keeps account', seed: { agentProfile: 'klaudiusz' }, options: { runner: 'claude' }, expected: { agentProfile: 'klaudiusz' } },
@@ -125,11 +100,11 @@ describe('RunManager.continueRun override', () => {
   it.each([
     { name: 'different backend', step: {}, options: { runner: 'codex' }, resume: false, backend: 'codex' },
     { name: 'same backend', step: { backend: 'claude' }, options: { runner: 'claude' }, resume: true, backend: 'claude' },
-    { name: 'different account', step: { backend: 'claude', profileId: 'default' }, options: { agentProfile: 'klaudiusz' }, resume: false, backend: 'claude' },
-    { name: 'owning account', step: { backend: 'claude', profileId: 'klaudiusz' }, options: { agentProfile: 'klaudiusz' }, resume: true, backend: 'claude' },
-    { name: 'legacy default account', step: { backend: 'claude' }, options: { agentProfile: 'default' }, resume: true, backend: 'claude' },
-  ] as const)('resumes only on the owning backend and account: $name', async ({ step, options, resume, backend }) => {
+    { name: 'owning account', step: { backend: 'claude', profileId: 'klaudiusz' }, agentProfile: 'klaudiusz', options: {}, resume: true, backend: 'claude' },
+    { name: 'legacy default account', step: { backend: 'claude' }, agentProfile: 'default', options: {}, resume: true, backend: 'claude' },
+  ] as const)('resumes only on the owning backend and account: $name', async ({ step, options, resume, backend, ...run }) => {
     const id = resumableRun();
+    if ('agentProfile' in run) store.updateRun(id, { agentProfile: run.agentProfile });
     store.updateStep(id, 's1', step);
     expect(manager.continueRun(id, options)).toEqual({ ok: true });
     await waitForProduct(manager, store, () => launches.length === 1);

@@ -1,5 +1,9 @@
 # Expose account details only on demand
 
+**Withdrawn** on 2026-11-18 (hearsay-tools/squawk#3865): the details route and its readers were
+removed, so no route answers account identity. This record describes the removed model. Its
+implementation and coverage paths refer to that historical snapshot.
+
 Showing an account email only after a click is insufficient if the normal listing already
 contains it. Identity details therefore have a separate local-only route. Readers select named
 fields from native files and construct a fresh response; they never forward the parsed credential

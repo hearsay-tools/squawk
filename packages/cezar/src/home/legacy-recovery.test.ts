@@ -279,19 +279,19 @@ it('refuses Import before replacement when a required backup fails, but lets Ign
   expect(row(home)).toBeUndefined();
 });
 
-it.each(['claude', 'omp'])('keeps the migration account path policy when importing a changed %s entry', provider => {
+it('keeps the migration account path when importing a changed entry', () => {
   const legacy = Home.sandbox(storeRoot(), { layout: 'legacy' });
   const home = Home.sandbox(storeRoot(), { layout: 'split' });
-  const configDir = join(legacy.root, 'credentials', ...(provider === 'omp' ? ['profiles', 'work'] : ['work']));
+  const configDir = join(legacy.root, 'credentials', 'work');
   mkdirSync(configDir, { recursive: true });
   writeFileSync(join(configDir, 'auth.json'), '{}');
-  const account = { id: 'work', provider, configDir, label: 'Original' };
+  const account = { id: 'work', provider: 'claude', configDir, label: 'Original' };
   Home.seed(legacy, legacy.agentAccounts, { accounts: [account] });
   migrateLegacyHome(legacy, home);
   writeFileSync(legacy.agentAccounts, JSON.stringify({ accounts: [{ ...account, label: 'Imported' }] }));
   importHomeRecovery(home, 'agent-accounts.json', row(home, 'agent-accounts.json').detectedAt);
   expect(JSON.parse(readFileSync(home.agentAccounts, 'utf8')).accounts).toEqual([{ ...account, label: 'Imported',
-    configDir: provider === 'omp' ? configDir : join(home.data, 'accounts', 'work') }]);
+    configDir: join(home.data, 'accounts', 'work') }]);
 });
 
 it('refuses a new legacy-internal account with no relocation and leaves Ignore available', () => {

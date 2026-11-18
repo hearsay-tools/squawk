@@ -365,7 +365,6 @@ Imported account entries retain completed step-7 relocations into
 `<data>/accounts/<id>`. The migration's file mappings (or an empty account's original
 entry and created destination) prove relocation; deferred accounts do not. An imported
 legacy-internal account without relocation refuses Import and names the account.
-Accounts recorded as intentionally unmoved omp profiles retain their original path.
 Remote sessions see the global banner read-only, with the existing host instruction.
 
 Legacy grant rows remain read-only in every cockpit. The host operator resolves

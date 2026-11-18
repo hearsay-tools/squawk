@@ -16,19 +16,17 @@ import { loadAgentAccounts } from '../workspace/agent-accounts.ts';
 import { migrationFixture, rawJson, json } from './migration.testkit.ts';
 import { cleanStoreRoots, storeRoot } from './store.testkit.ts';
 import { planLegacyMigration } from './migration-plan.ts';
-import { accountMigrationPolicy } from './migration-accounts.ts';
-import { RUNNER_IDS } from '../core/agent-runner.ts';
 import * as privateFiles from './private-files.ts';
 import * as migrationRecord from './migration-record.ts';
 
 afterEach(() => { vi.restoreAllMocks(); cleanStoreRoots(); });
 
-function accountFixture(provider = 'claude') {
+function accountFixture() {
   const fixture = migrationFixture();
-  const configDir = join(fixture.legacy.root, 'credentials', ...(provider === 'omp' ? ['profiles', 'work'] : ['work']));
+  const configDir = join(fixture.legacy.root, 'credentials', 'work');
   rawJson(join(configDir, 'auth.json'), { secret: 'old-credentials' });
   writeFileSync(join(configDir, 'settings.json'), '{ // vendor JSONC\n "settings": true,\n}');
-  const account = { id: 'work', provider, configDir };
+  const account = { id: 'work', provider: 'claude', configDir };
   Home.seed(fixture.legacy, fixture.legacy.agentAccounts, { accounts: [account], unknown: 'kept' });
   return { ...fixture, account };
 }
@@ -221,17 +219,6 @@ it('step 7: accounts outside the legacy realpath keep their configDir', () => {
   expect(existsSync(join(target.data, 'accounts'))).toBe(false);
 });
 
-it('step 7: an internal omp account stays in place, records notMoved, warns, and is visible in dry-run', () => {
-  const { legacy, target, account } = accountFixture('omp');
-  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
-  expect(planLegacyMigration(legacy, target).notMoved).toEqual([{ id: account.id, configDir: account.configDir, reason: 'omp-profile-root-inside-legacy-home' }]);
-  expect(migrateLegacyHome(legacy, target).status).toBe('migrated');
-  expect(json(target.agentAccounts).accounts[0].configDir).toBe(account.configDir);
-  expect(readMigrationRecord(target)!.notMoved).toHaveLength(1);
-  expect(warning).toHaveBeenCalledWith(expect.stringContaining('work stays at'));
-  expect(warning).toHaveBeenCalledWith(expect.stringContaining('PI_CONFIG_DIR'));
-});
-
 it('a custom CEZ_HOME migrates in place into one-root kind directories', () => {
   const { legacy } = migrationFixture();
   const target = resolveHome({ purpose: 'cli', env: { CEZ_HOME: legacy.root }, layout: 'split' }); // test-home-read: injected sandbox root.
@@ -324,10 +311,3 @@ it.skipIf(process.platform === 'win32').each(['no managed install', 'no marked P
     expect(readFileSync(profile, 'utf8')).toBe(before);
     expect(statSync(profile)).toMatchObject({ ino: stat.ino, mode: stat.mode });
   });
-
-// omp selects an account by profile name, so moving its folder cannot redirect omp; every other
-// provider, and a provider this version does not know, is copied.
-it.each([...RUNNER_IDS, 'claude-cli', 'unknown'])('migration policy for a %s account', (provider) => {
-  const account = { id: 'work', configDir: '/old/work', source: '/old/work', target: '/new/accounts/work', provider };
-  expect(accountMigrationPolicy(account)).toBe(provider === 'omp' ? 'keep' : 'copy');
-});
