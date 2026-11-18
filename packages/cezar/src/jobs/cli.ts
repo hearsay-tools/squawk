@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { parseArgs } from 'node:util';
 import { commandText } from '../home/command.ts';
 import { JobError, SUPERVISE, jobDirectory, jobStatus, startJob, superviseJob, tellStarter } from './job.ts';
@@ -16,10 +15,10 @@ status  Print JSON: "state" is "running" or "exited", with "pid", "log",
         "exitFile", and "exitCode" when the exit file holds one.
 
 --dir <dir>  Where the job's files live. Default: $TMPDIR, the task's temp
-             directory. ${productName('Cezar')} keeps it across its own restart while the
+             directory. Squawk keeps it across its own restart while the
              task is live. A job that still runs when the task ends keeps it, so
-             the log and exit code outlive the task. ${productName('Cezar')} removes it at the
-             task's next end, its archive or ${productName('Cezar')}'s next start, once no job
+             the log and exit code outlive the task. Squawk removes it at the
+             task's next end, its archive or Squawk's next start, once no job
              in it runs, and at once when the task's history is deleted. For
              files that must outlive the task, or a $TMPDIR under the system
              temp directory, which a reboot can clear, pass a directory you

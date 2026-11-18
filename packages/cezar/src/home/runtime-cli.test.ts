@@ -1,6 +1,5 @@
 import { projectPaths } from '../project-paths.ts';
 import { productIdentity } from './identity.ts';
-import { productName } from './display.ts';
 import { expect, it, vi } from 'vitest';
 import * as homes from './resolve.ts';
 
@@ -10,7 +9,7 @@ it('prints global CLI help without preparing a Home', async () => {
   let printed!: () => void;
   const help = new Promise<void>(done => { printed = done; });
   const log = vi.spyOn(console, 'log').mockImplementation(message => {
-    if (String(message).startsWith(`${productName('cezar')} —`)) printed();
+    if (String(message).startsWith(`Squawk —`)) printed();
   });
   process.argv = [process.execPath, 'cez', '--help'];
   try {

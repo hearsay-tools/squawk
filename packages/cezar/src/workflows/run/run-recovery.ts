@@ -1,4 +1,3 @@
-import { logPrefix } from '../../home/display.ts';
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
 import { atContinue } from './launch-read-resolver.ts';
@@ -20,7 +19,6 @@ import { familyOf, rootFinishRequested } from './run-guards.ts';
 import type { FamilyReconciler } from './family-reconciler.ts';
 import type { WorkerQuestions } from './worker-questions.ts';
 import type { AutoResumeScheduler } from './auto-resume.ts';
-import { productName } from '../../home/display.ts';
 
 interface RunRecoveryHost {
   waitEngine: WaitEngine;
@@ -276,7 +274,7 @@ export class RunRecovery {
     this.host.humanWaits.withdrawSquawkHumanWaits(runId);
     if (WAIT_KINDS.human.select(openWaits(this.context.store.getRun(runId) ?? {})).length) return false;
     return this.host.waitEngine.open(runId, undefined, WAIT_KINDS.human.recoveredEntry(askSeq), {
-      withdraw: false, onCommitFailure: { log: `${logPrefix()} human wait checkpoint failed` }, park: false,
+      withdraw: false, onCommitFailure: { log: `[hsq] human wait checkpoint failed` }, park: false,
     }).status === 'opened';
   }
 
@@ -292,7 +290,7 @@ export class RunRecovery {
     try {
       return this.context.store.commitOutcome(runId, { kind: 'answered', waitIds: legacy.map(wait => wait.id) }).answered.length > 0;
     } catch (error) {
-      console.warn(`${logPrefix()} human wait checkpoint failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.warn(`[hsq] human wait checkpoint failed: ${error instanceof Error ? error.message : String(error)}`);
       return false;
     }
   }
@@ -371,7 +369,7 @@ export class RunRecovery {
       const resumed = this.host.continueRun(run.id, { text: this.restartContinuationPrompt }, true);
       this.context.store.appendEvent(run.id, { type: 'lifecycle', message: resumed.ok
         ? 'cezar restarted — resuming the worker CI recovery from its last session'
-        : `${productName('Cezar')} restarted — could not resume worker CI recovery (${resumed.error ?? 'unknown'})` });
+        : `Squawk restarted — could not resume worker CI recovery (${resumed.error ?? 'unknown'})` });
       return undefined;
     }
     const finishedAt = new Date().toISOString();
@@ -412,7 +410,7 @@ export class RunRecovery {
       type: 'lifecycle',
       message: resumed.ok
         ? 'cezar restarted — resuming the interrupted task from its last session'
-        : `${productName('Cezar')} restarted — could not resume the interrupted task (${resumed.error ?? 'unknown'})`,
+        : `Squawk restarted — could not resume the interrupted task (${resumed.error ?? 'unknown'})`,
     });
   }
 

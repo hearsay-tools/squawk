@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { scheduleTaskRequestSchema, scheduledTaskSchema, type ScheduleTaskAnswer } from '@open-mercato/cezar-contract/scheduled-tasks';
 import { squawkDoneRequestSchema, squawkWaitRequestSchema, type SquawkDoneAnswer, type SquawkWaitAnswer } from '@open-mercato/cezar-contract/waits';
-import { productName } from '../home/display.ts';
 import { callScheduleTask, callSquawkDone, callSquawkWait } from './client.ts';
 import { invokeDoneTool, invokeScheduleTaskTool, invokeWaitTool } from './tools.ts';
 
@@ -27,8 +26,8 @@ describe('Squawk tool answers', () => {
   const accepted = { ok: true as const, finishes: 'at_turn_end' as const, open_waits: [] };
   it.each<[string, SquawkDoneAnswer, string]>([
     ['a refused finish', { ok: false, code: 'workers_outstanding', message: 'One worker still runs.' }, 'Not finished. Do what the message says'],
-    ['an accepted step', { ...accepted, completes: 'step', next_step: 'review' }, `${productName('Cezar')} completes this step at its end and starts "review".`],
-    ['an accepted task', { ...accepted, completes: 'task' }, `${productName('Cezar')} finishes the task at its end.`],
+    ['an accepted step', { ...accepted, completes: 'step', next_step: 'review' }, `Squawk completes this step at its end and starts "review".`],
+    ['an accepted task', { ...accepted, completes: 'task' }, `Squawk finishes the task at its end.`],
   ])('cezar_done answers %s with the hint for it', async (_name, answer, hint) => {
     vi.mocked(callSquawkDone).mockResolvedValue(answer);
     expect(shown(await invokeDoneTool(done))).toEqual({ parts: 1, type: 'text', answer, hint: expect.stringContaining(hint), isError: !answer.ok, details: answer });

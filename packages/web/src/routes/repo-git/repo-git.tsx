@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import './repo-git.css'
 import { GitBranchIcon, TriangleAlertIcon } from '@/components/design-icons'
 
@@ -73,7 +72,7 @@ export function RepoGitRoute({ section, index = false }: {
           icon={<GitBranchIcon size={16} />}
           tone="neutral"
           title="Not a git repository"
-          subtitle={`${productName('cezar')} is running outside a git repository — start it inside one to browse changes, commits and branches.`}
+          subtitle={`Squawk is running outside a git repository — start it inside one to browse changes, commits and branches.`}
         />
       </div>
     )

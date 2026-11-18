@@ -1,4 +1,3 @@
-import { logPrefix } from './home/display.ts';
 import { dataReadDirs, pathPresent } from './project-paths.ts';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFileSync } from 'node:fs';
@@ -97,7 +96,7 @@ export function projectWriteRefused(dataDir: string): boolean {
   }
   if (!writeSkipsLogged.has(lock)) {
     writeSkipsLogged.add(lock);
-    console.warn(`${logPrefix()} A write to ${dataDir} was skipped: ${refusal.message}`);
+    console.warn(`[hsq] A write to ${dataDir} was skipped: ${refusal.message}`);
   }
   return true;
 }

@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -73,7 +72,7 @@ describe('ProjectRail layout', () => {
     renderRail()
     const nav = screen.getByRole('navigation', { name: 'Projects' })
     expect(nav.getAttribute('data-expanded')).toBe('false')
-    expect(within(nav).getByAltText(`${productName("Cezarion")} v0.15.0`)).toBeTruthy()
+    expect(within(nav).getByAltText(`Squawk v0.15.0`)).toBeTruthy()
     expect([...document.querySelectorAll('[data-slot="rail-project"]')].map((el) => el.getAttribute('data-project-id'))).toEqual([
       'toolkit-dev',
       'open_mercato',
@@ -86,7 +85,7 @@ describe('ProjectRail layout', () => {
 
   it('names the app without a version until health has one', () => {
     renderRail({ version: null })
-    expect(screen.getByAltText(`${productName("Cezarion")}`)).toBeTruthy()
+    expect(screen.getByAltText(`Squawk`)).toBeTruthy()
   })
 
   it('shows two lower-case letters per project and links each mark to its project', () => {
@@ -318,7 +317,7 @@ describe('ProjectRail expanded rows (#711)', () => {
   it('shows the identity, a labelled Add project and the labelled bottom rows', () => {
     renderExpanded()
     const rail = screen.getByRole('navigation', { name: 'Projects' })
-    expect(within(rail).getByText(`${productName("Cezarion")}`)).toBeTruthy()
+    expect(within(rail).getByText(`Squawk`)).toBeTruthy()
     expect(within(rail).getByText('v0.15.0')).toBeTruthy()
     expect(within(rail).getByRole('button', { name: 'Add project' }).textContent).toBe('Add project')
     expect(within(rail).getByRole('link', { name: 'All projects' }).textContent).toBe('All projects')

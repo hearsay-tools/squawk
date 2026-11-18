@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { zonedParts } from '@open-mercato/cezar-contract/zoned-time';
 import { loadWorkflows } from '../workflows/load.ts';
 import { stepsIssue, type WorkflowDef } from '../workflows/types.ts';
@@ -216,7 +215,7 @@ export function reconcileAutomationReceipts(automationStore: AutomationStore, ru
   const byReceipt = runStore.findRunIdsByAutomationReceipt(leftovers.map((receipt) => receipt.receiptId));
   for (const receipt of leftovers) {
     const runId = byReceipt.get(receipt.receiptId);
-    const error = `${productName('Cezar')} restarted before run creation completed; explicit retry is available.`;
+    const error = `Squawk restarted before run creation completed; explicit retry is available.`;
     // A one-time schedule whose launch was lost is Failed, which has no automatic exit
     // (hearsay-tools/cezarion#1465). The stop lands before the receipt, as in the launcher: a crash
     // between them leaves `reserved`, which the next reconciliation settles again.

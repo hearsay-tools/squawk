@@ -1,5 +1,4 @@
 import type { RunRecord } from '../../runs/store.ts';
-import { productName } from '../../home/display.ts';
 import { cutOffSentence } from './cut-off-work.ts';
 
 /**
@@ -49,7 +48,7 @@ export function resumeNotice(message: RunRecord['continuationMessage']): string 
   const context = message?.resumeContext;
   if (!context?.failure && !context?.restarted) return undefined;
   const parts: string[] = [];
-  if (context.restarted) parts.push(`The ${productName('Cezar')} process restarted while you were working on this task. Read the handoff file (HSQ_HANDOFF_FILE (CEZ_HANDOFF_FILE fallback)) to recover context.`);
+  if (context.restarted) parts.push(`The Squawk process restarted while you were working on this task. Read the handoff file (HSQ_HANDOFF_FILE (CEZ_HANDOFF_FILE fallback)) to recover context.`);
   if (context.failure) {
     const { stepId, error } = context.failure;
     // Error messages can contain newlines; keep the diagnostic on one line without changing

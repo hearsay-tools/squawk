@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -14,23 +13,23 @@ describe('documentTitleOf', () => {
       name: 'project and page',
       projectName: 'Storefront',
       pageLabel: 'Tasks',
-      expected: `Storefront — Tasks · ${productName("cezar")}`,
+      expected: `Storefront — Tasks · Squawk`,
     },
     {
       name: 'project only',
       projectName: 'Storefront',
       pageLabel: null,
-      expected: `Storefront · ${productName("cezar")}`,
+      expected: `Storefront · Squawk`,
     },
     {
       name: 'page only',
       projectName: null,
       pageLabel: 'Settings',
-      expected: `Settings · ${productName("cezar")}`,
+      expected: `Settings · Squawk`,
     },
-    { name: 'neither part', projectName: null, pageLabel: null, expected: `${productName("cezar")}` },
-    { name: 'empty project', projectName: '', pageLabel: 'Tasks', expected: `Tasks · ${productName("cezar")}` },
-    { name: 'blank parts', projectName: '  ', pageLabel: '\t', expected: `${productName("cezar")}` },
+    { name: 'neither part', projectName: null, pageLabel: null, expected: `Squawk` },
+    { name: 'empty project', projectName: '', pageLabel: 'Tasks', expected: `Tasks · Squawk` },
+    { name: 'blank parts', projectName: '  ', pageLabel: '\t', expected: `Squawk` },
   ])('formats $name', ({ projectName, pageLabel, expected }) => {
     expect(documentTitleOf({ projectName, pageLabel })).toBe(expected)
   })
@@ -38,7 +37,7 @@ describe('documentTitleOf', () => {
 
 describe('useDocumentTitle', () => {
   beforeEach(() => {
-    document.title = `${productName("cezar")}`
+    document.title = `Squawk`
   })
 
   it('updates the existing writer when its truthful inputs change', () => {
@@ -51,8 +50,8 @@ describe('useDocumentTitle', () => {
       { initialProps },
     )
 
-    expect(document.title).toBe(`Storefront — Tasks · ${productName("cezar")}`)
+    expect(document.title).toBe(`Storefront — Tasks · Squawk`)
     rerender({ projectName: 'Back office', pageLabel: null })
-    expect(document.title).toBe(`Back office · ${productName("cezar")}`)
+    expect(document.title).toBe(`Back office · Squawk`)
   })
 })

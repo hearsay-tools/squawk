@@ -15,7 +15,6 @@ vi.mock('./product-name', async importOriginal => {
   return {
     ...actual,
     productCommand: () => actual.productCommand(state.identity),
-    productName: (legacy: 'cezar' | 'Cezar' | 'Cezarion') => actual.productName(legacy, state.identity),
   }
 })
 

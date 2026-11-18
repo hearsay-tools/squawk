@@ -1,4 +1,3 @@
-import { logPrefix } from '../home/display.ts';
 import { CiToolController } from './controller.ts';
 import { CiProgressRegistry } from './progress.ts';
 import type { CiWatcherSupervisor } from './supervisor.ts';
@@ -56,7 +55,7 @@ export function acquirePooledCiResources<Supervisor extends CiSupervisorLike>(
       shared.controller = starting;
       starting.catch((error: unknown) => {
         if (shared.controller === starting) shared.controller = undefined;
-        console.warn(`${logPrefix()} ${error instanceof Error ? error.message : String(error)}`);
+        console.warn(`[hsq] ${error instanceof Error ? error.message : String(error)}`);
       });
       return starting;
     },

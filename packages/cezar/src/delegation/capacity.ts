@@ -1,6 +1,5 @@
 import type { WorkerCapacity } from '@open-mercato/cezar-contract';
 import type { RunRecord } from '../runs/store.ts';
-import { productName } from '../home/display.ts';
 import { grantsOf, hasSpawnRoom, receiptsOf, supervisedReceipts, type Lookup } from '../runs/task-rights.ts';
 
 /**
@@ -43,7 +42,7 @@ export function capacityError(capacity: WorkerCapacity): string | undefined {
 }
 
 /** What a refused creation says when the caller holds no spawn grant. */
-export const NO_SPAWN_GRANT = `This task cannot spawn ${productName('Cezar')} workers.`;
+export const NO_SPAWN_GRANT = `This task cannot spawn Squawk workers.`;
 
 /** What a refused creation says when the caller's own limit is full. */
 export function ownLimitRefusal(outstanding: number, limit: number): string {

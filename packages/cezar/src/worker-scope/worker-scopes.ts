@@ -2,7 +2,6 @@
  * `spawnScope`, Continue after a crash calls `kill`, destroy calls `stop`. The host's backend is
  * picked once per controller and never changes inside it; a backend error fails the operation
  * that met it, never falls back to another mechanism (ADR 0032). */
-import { logPrefix } from '../home/display.ts';
 import type { RecordedProcess } from '../core/process-stat.ts';
 import type { RunRecord } from '@open-mercato/cezar-contract';
 import type { WorkerProcessRecord } from '../delegation/process-liveness.ts';
@@ -20,7 +19,7 @@ let host: HostScope | undefined;
 export function hostScope(): HostScope {
   if (host) return host;
   host = detectHost();
-  console.info(`${logPrefix()} worker scope: ${host.backend === 'cgroup' ? `cgroup (contained) under ${host.base}`
+  console.info(`[hsq] worker scope: ${host.backend === 'cgroup' ? `cgroup (contained) under ${host.base}`
     : host.backend === 'job' ? 'Windows Job Object (contained)'
     : `process groups (scoped: a detached descendant can outlive destroy) — ${host.reason}`}`);
   return host;

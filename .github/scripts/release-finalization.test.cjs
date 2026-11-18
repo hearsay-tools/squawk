@@ -154,12 +154,15 @@ process.exit(out.status ?? 1);
     if (expr === 'needs.plan.outputs.source_sha' || expr === 'needs.plan.outputs.bump_sha') return sha;
     if (expr === 'needs.plan.outputs.bump_dir') return cwd;
     if (expr === "needs.plan.outputs.record_bump == 'true' && inputs.bump || 'existing'") return outputs.bump ?? 'patch';
+    // `finalize` reads the publish step's outputs through the release job's outputs.
+    const job = expr.match(/^needs\.release\.outputs\.(.+)$/);
+    if (job) return outputs.release[job[1].replace(/_(.)/g, (_, letter) => letter.toUpperCase())] ?? '';
     const match = expr.match(/^steps\.([^.]+)\.outputs\.(.+)$/);
     if (match) return outputs[match[1]]?.[match[2]] ?? '';
     throw new Error(`Unsupported expression: ${expr}`);
   });
   const run = async (name) => {
-    const step = workflow.jobs.release.steps.find((s) => s.name === name);
+    const step = workflow.jobs.finalize.steps.find((s) => s.name === name);
     assert.ok(step, `step ${name} exists`);
     const prior = process.cwd();
     const env = { ...process.env };
@@ -329,7 +332,7 @@ test('PR permission failure leaves release finalization available and reports ea
   assert.match(f.errors.join('\n'), /pull-requests: write/);
   assert.match(f.errors.join('\n'), /Allow GitHub Actions to create and approve pull requests/);
   assert.match(f.errors.join('\n'), /https:\/\/github.com\/example\/project\/compare\/main\.\.\.release%2Fv0\.12\.1\?expand=1/);
-  const step = f.workflow.jobs.release.steps.find((s) => s.name === releaseStep);
+  const step = f.workflow.jobs.finalize.steps.find((s) => s.name === releaseStep);
   assert.match(step.if, /!cancelled\(\)|always\(\)/, 'release must override the implicit success gate');
   await f.run(releaseStep);
   await f.run(summaryStep);

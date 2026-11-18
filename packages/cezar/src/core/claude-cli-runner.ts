@@ -21,7 +21,6 @@ import type {
   ToolGrant,
 } from './agent-runner.ts';
 import { RUNNER_FACTS } from './runner-facts.ts';
-import { productName } from '../home/display.ts';
 
 // Re-exported for backends and the run manager that still import them from here.
 export type { AgentSession, SessionOptions } from './agent-runner.ts';
@@ -625,7 +624,7 @@ export class ClaudeCliRunner implements AgentRunner {
       if (terminatedBySquawk && (isSignalTerminationExit(exitCode) || (exitCode === null && child.signalCode !== null))) {
         onEvent?.({
           type: 'note',
-          message: `claude CLI did not exit on its own after close; terminated by ${productName('Cezar')} (${exitCode === null ? child.signalCode : `code ${exitCode}`})`,
+          message: `claude CLI did not exit on its own after close; terminated by Squawk (${exitCode === null ? child.signalCode : `code ${exitCode}`})`,
         });
         onEvent?.({ type: 'done' });
         return { text, toolCalls, tokensUsed, sessionId: spec.sessionId };

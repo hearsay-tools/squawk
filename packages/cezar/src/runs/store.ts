@@ -1,7 +1,6 @@
 import { legacyIndexRows, upgradeLegacyRunRow, upgradeRemovedRunnerResult } from './legacy-run-rows.ts';
 import { dataReadDirs, runDataDir } from '../project-paths.ts';
 import { addRunSource, copyFallbackFamily, fallbackRunSource, bindWorkerResultPath, fallbackRunDeleteError, workerResultsDirectory } from './project-run-sources.ts';
-import { productName, logPrefix } from '../home/display.ts';
 import { productEnv } from '../core/product-env.ts';
 import { registeredWaitRecord, registeredReceiptRecord } from './wait-registration-write.ts';
 import { stageCommit, stageLoaded, stageDurableUpdate, stageDebouncedUpdate, stageConversation, stageArchiveFields, stagePullRequests, stageStepUpdate, redactPatch, redactText, clearPin, type RecordPatch } from './record-write-rules.ts';
@@ -349,8 +348,8 @@ function importLegacyIndex(db: RunDatabase, dataDir: string): void {
   // Told once, by the import that committed: the marker means no later open reads runs.json again.
   if (commit.skipped || backup === undefined) return;
   const kept = `Its exact bytes are kept in ${join(dataDir, backup)}; https://github.com/hearsay-tools/squawk/blob/main/docs/run-history-recovery.md says how to import it after a repair.`;
-  if (!parsed) console.warn(`${logPrefix()} ${LEGACY_INDEX_FILE} could not be read; no run was imported, and this project starts with an empty history. ${kept}`);
-  else if (skipped > 0) console.warn(`${logPrefix()} ${skipped} of ${parsed.total} runs in ${LEGACY_INDEX_FILE} could not be read and were not imported. ${kept}`);
+  if (!parsed) console.warn(`[hsq] ${LEGACY_INDEX_FILE} could not be read; no run was imported, and this project starts with an empty history. ${kept}`);
+  else if (skipped > 0) console.warn(`[hsq] ${skipped} of ${parsed.total} runs in ${LEGACY_INDEX_FILE} could not be read and were not imported. ${kept}`);
 }
 
 /**
@@ -405,9 +404,9 @@ export type RunPinHolder = 'active' | 'continue' | 'cleanup' | 'maintenance';
 export type RunOwnership = 'held' | 'free' | 'orphaned' | 'foreign' | 'quarantined' | 'fallback';
 
 /** The one answer every control gives for a run another Squawk process owns (`409 { error }`). */
-export const RUN_IN_USE_ELSEWHERE = `run is in use by another ${productName('cezar')} process`;
+export const RUN_IN_USE_ELSEWHERE = `run is in use by another Squawk process`;
 /** The answer for a run this process stopped writing after a conflicting write. */
-export const RUN_QUARANTINED = `run changed under this ${productName('cezar')} process — restart ${productName('cezar')} to reload it`;
+export const RUN_QUARANTINED = `run changed under this Squawk process — restart Squawk to reload it`;
 
 /** A write this store must not make: another process owns the run, its owner died with work
  *  still live (adopt it first), or a conflict quarantined it. Nothing was changed. */
@@ -415,7 +414,7 @@ export class RunWriteRefusedError extends Error {
   constructor(readonly runId: string, readonly ownership: Exclude<RunOwnership, 'held' | 'free'>, fallbackError?: string) {
     super(ownership === 'fallback' ? fallbackError ?? `run ${runId} is read only in the fallback project directory`
       : ownership === 'quarantined' ? `${RUN_QUARANTINED}: ${runId}`
-      : ownership === 'orphaned' ? `run ${runId} belongs to a ${productName('cezar')} process that exited; take it over before writing it`
+      : ownership === 'orphaned' ? `run ${runId} belongs to a Squawk process that exited; take it over before writing it`
         : `${RUN_IN_USE_ELSEWHERE}: ${runId}`);
     this.name = 'RunWriteRefusedError';
   }
@@ -749,7 +748,7 @@ export class RunStore extends EventEmitter {
     }
     for (const rootId of this.anchoredFamilies()) this.holdFamily(rootId, decode);
     this.releaseUnheldClaims();
-    if (unreadable > 0) console.warn(`${logPrefix()} ${unreadable} run(s) in ${RUNS_DB_FILE} could not be read; they are left in the database untouched.`);
+    if (unreadable > 0) console.warn(`[hsq] ${unreadable} run(s) in ${RUNS_DB_FILE} could not be read; they are left in the database untouched.`);
   }
 
   /** Normalize a record just read from `row` (see `reconcileLoadedRun`) and hold it. Marks the row
@@ -1764,7 +1763,7 @@ export class RunStore extends EventEmitter {
     try { this.commitIndex(new Map([[id, staged.next]])); }
     catch (error) {
       if (!opts.bestEffort) throw error;
-      console.warn(`${logPrefix()} outcome checkpoint failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.warn(`[hsq] outcome checkpoint failed: ${error instanceof Error ? error.message : String(error)}`);
       const live = this.record(id);
       if (!live) return { committed: false, answered: staged.answered, settled: staged.settled };
       for (const key of Object.keys(live) as Array<keyof RunRecord>) if (!(key in staged.next)) delete live[key];
@@ -3121,7 +3120,7 @@ export class RunStore extends EventEmitter {
       return run && !this.hasFallbackRun(id) && RETENTION_RUN_RULE.matches(run) ? [id] : [];
     });
     const skipped = overflow.filter(id => this.hasFallbackRun(id)).length;
-    if (skipped) console.info(`${logPrefix()} Retention skipped ${skipped} read-only fallback run(s) under ${dataReadDirs(this.dataDir)[1]}.`);
+    if (skipped) console.info(`[hsq] Retention skipped ${skipped} read-only fallback run(s) under ${dataReadDirs(this.dataDir)[1]}.`);
     const cold = overflow.filter((id) => !this.held.has(id) && !this.hasFallbackRun(id));
     if (cold.length > 0) {
       // Another process's runs are its own to keep or archive (#779, plan step 3).
@@ -3280,7 +3279,7 @@ export class RunStore extends EventEmitter {
       seqs = this.db.recordConflicts(this.owner.session, evidence);
     } catch (evidenceError) {
       const message = evidenceError instanceof Error ? evidenceError.message : String(evidenceError);
-      console.error(`${logPrefix()} ${RUNS_DB_FILE}: could not record the conflicting write on ${unexpected.map((c) => c.id).join(', ')}; it stays pending: ${message}`);
+      console.error(`[hsq] ${RUNS_DB_FILE}: could not record the conflicting write on ${unexpected.map((c) => c.id).join(', ')}; it stays pending: ${message}`);
       return;
     }
     unexpected.forEach((conflict, index) => {
@@ -3313,7 +3312,7 @@ export class RunStore extends EventEmitter {
         this.base.delete(conflict.id);
         this.emit('deleted', conflict.id);
       }
-      console.error(`${logPrefix()} run ${conflict.id} was changed by another writer (${conflict.reason}); this process will not write it again until ${productName('cezar')} restarts. Evidence: ${join(this.dataDir, RUNS_DB_FILE)}, table run_conflicts, seq ${seqs[index]}.`);
+      console.error(`[hsq] run ${conflict.id} was changed by another writer (${conflict.reason}); this process will not write it again until Squawk restarts. Evidence: ${join(this.dataDir, RUNS_DB_FILE)}, table run_conflicts, seq ${seqs[index]}.`);
     });
     this.scheduleSave();
   }
@@ -3332,7 +3331,7 @@ export class RunStore extends EventEmitter {
         // failures. The rows stay pending (and held), so the next save or commit retries them.
         if (existsSync(this.dataDir)) {
           const message = err instanceof Error ? err.message : String(err);
-          console.error(`${logPrefix()} failed to save ${RUNS_DB_FILE}: ${message}`);
+          console.error(`[hsq] failed to save ${RUNS_DB_FILE}: ${message}`);
         }
         break;
       }

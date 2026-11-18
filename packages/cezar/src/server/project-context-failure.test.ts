@@ -1,4 +1,3 @@
-import { logPrefix } from '../home/display.ts';
 import { Home } from '../home/home.ts';
 import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
@@ -96,7 +95,7 @@ describe('project context failures over HTTP and live feeds', () => {
     // Each path logs the original failure; no public answer carries its detail.
     expect(log).toHaveBeenCalledTimes(3);
     for (const call of log.mock.calls) {
-      expect(call[0]).toBe(`${logPrefix()} project ${otherId} context build failed:`);
+      expect(call[0]).toBe(`[hsq] project ${otherId} context build failed:`);
       expect(call[1]).toBe(cause);
     }
   });

@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { Fragment, useId } from 'react'
 
 import { Switch } from '@/components/ui/switch'
@@ -13,8 +12,8 @@ const ROWS = [
   {
     key: 'allowWorkers',
     slot: 'workers',
-    label: `Allow ${productName('cezar')} workers`,
-    help: `Agents in this task can start ${productName('Cezar')} workers. Each worker is a separate paid agent session. Worker limits cap resources, not spending.`,
+    label: `Allow Squawk workers`,
+    help: `Agents in this task can start Squawk workers. Each worker is a separate paid agent session. Worker limits cap resources, not spending.`,
   },
   {
     key: 'allowMessaging',

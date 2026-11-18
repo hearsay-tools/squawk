@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { closeSync, constants, existsSync, fstatSync, openSync, readSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { isJobExitFile } from './job-exit-file.ts';
@@ -56,7 +55,7 @@ export function confineExitFile(path: string, roots: ExitFileRoots, pid?: number
  */
 export function readExitCode(path: string, roots: ExitFileRoots, pid?: number): { present: false } | { present: true; exitCode?: number } {
   if (!existsSync(path)) return { present: false };
-  if (!confineExitFile(path, roots, pid).ok) throw new Error(`the exit file now resolves outside the worktree and the ${productName('Cezar')} temp directory, and no job record beside it names it`);
+  if (!confineExitFile(path, roots, pid).ok) throw new Error(`the exit file now resolves outside the worktree and the Squawk temp directory, and no job record beside it names it`);
   // Non-blocking: a FIFO with no writer would block a plain open, and this runs on the server's
   // event loop. The opened descriptor, not a path stat, decides, so a file swapped in between
   // the two cannot slip past.

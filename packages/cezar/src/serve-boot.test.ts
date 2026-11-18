@@ -1,4 +1,3 @@
-import { productName } from './home/display.ts';
 import { testHome } from './home/test-home.testkit.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_WORKTREE_RETENTION } from './config.ts';
@@ -127,7 +126,7 @@ describe('warnServeBind', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     warnServeBind('0.0.0.0', 4321);
     expect(log).toHaveBeenCalledWith(
-      `\n  ⚠ binding 0.0.0.0:4321 — ${productName('cezar')} has no built-in auth.\n` +
+      `\n  ⚠ binding 0.0.0.0:4321 — Squawk has no built-in auth.\n` +
       '    Only do this behind a reverse proxy that enforces authentication,\n' +
       '    and make sure this interface is not reachable from the internet.\n',
     );
@@ -145,7 +144,7 @@ describe('printServeBanner', () => {
     ] as Awaited<ReturnType<typeof detectEnvironment>>;
     printServeBanner('1.2.3', '/repo', repo as Awaited<ReturnType<typeof getRepoInfo>>, checks, 'http://localhost:4321');
     expect(log.mock.calls).toEqual([
-      [`\n  ${productName('cezar')} v1.2.3 — /repo`],
+      [`\n  Squawk v1.2.3 — /repo`],
       [repo ? '  branch main' : '  not a git repository (tasks run in place, one at a time; repo view is empty)'],
       ['  ✓ claude v1'], ['  ✓ codex  ok'], ['  ✗ git    install it'], ['  ✗ gh     missing'],
       ['\n  cockpit → http://localhost:4321\n'],
