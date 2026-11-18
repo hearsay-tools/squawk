@@ -4,7 +4,7 @@ import { WAIT_KINDS } from './wait-kinds.ts';
 import { transitionTurnBoundary, type BoundaryCarry, type BoundaryCarrierEffects, type DoneRequest } from './turn-boundary.ts';
 import { nudgeRefusedAt, retireNudge } from './turn-nudges.ts';
 import { TIMER_MIN_SECONDS, type HumanWaitEntry, type WaitVia } from '@open-mercato/cezar-contract/waits';
-import type { AgentSession } from '../../core/claude-cli-runner.ts';
+import type { AgentSession } from '../../core/agent-runner.ts';
 import type { ContentBlock } from '../../core/agent-runner.ts';
 import type { AskRequest } from '../../core/ask.ts';
 import type { UiEventSink } from '../../runs/ui-event-sink.ts';
