@@ -86,8 +86,11 @@ function failureContext(runner: RunnerId, it: typeof registerTest = registerTest
         expect(line).toContain('subagents and shell commands, stopped with it');
         expect(body.join('\n')).toBe(text || 'Continue.');
         // The cockpit shows the notice the agent received beside the Continue's own message.
-        const notice = store.readEvents(id).filter(event => event.type === 'note' && event.stepId === disk.continuationMessage.id).at(-1);
-        expect(notice?.message).toMatch(/^Sent to the agent with this Continue: .*failed: .*subagents and shell commands, stopped with it/);
+        const notices = store.readEvents(id).filter(event => event.type === 'note' && event.stepId === disk.continuationMessage.id
+          && String(event.message).startsWith('Sent to the agent with this Continue: '));
+        expect(notices).toHaveLength(1);
+        expect(notices[0]!.message).toContain(`failed: ${failed.error}`);
+        expect(notices[0]!.message).toContain('subagents and shell commands, stopped with it');
         if (text) await until(() => store.getRun(id)?.status === RUN_STATUS.failed && !manager.isActive(id));
       }
     }, 60_000);
