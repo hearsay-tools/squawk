@@ -34,14 +34,25 @@ inventory; this section keeps the counts that the acceptance criteria name.
 | Non-test files in the `runner` layer (`lint/layers.json`) | 47, plus `core/host-skill-catalog.ts` |
 | Service files with a table that has one row for each runner | 18, plus `DESCRIPTORS` (`core/provider-auth.ts`), `hostSkillCatalogAdapters`, `MOCKS` (`core/skill-probe.ts`) and `specSupport` on each runner class |
 | Contract files with such a table | 3: `runner-facts.ts` (`RUNNER_COCKPIT_FACTS`), `per-runner-optional-strings.ts`, `workspace.ts` |
-| Cockpit tables keyed by runner id | `MODELS_BY_RUNNER` and `RETIRED_MODEL_IDS` (`routes/new-task-form.ts`), `PROVIDER_INSTALL` (`accounts-section.tsx`), `FOLDER_EXAMPLE` and `FOLDER_HINT` (`add-account-dialog.tsx`), the map in `provider-settings.tsx`, the icon map in `open-in-menu.tsx`, `RUNNER_NAMES` (`tools-menu.tsx`), `AGENT_DESCRIPTORS` (`agent-descriptors.ts`) |
+| Cockpit tables keyed by runner id | `MODELS_BY_RUNNER` and `RETIRED_MODEL_IDS` (`routes/new-task-form.ts`), `PROVIDER_INSTALL` (`accounts-section.tsx`), `FOLDER_EXAMPLE` (`add-account-dialog.tsx`), `PROVIDERS` with login commands and `providerWriteState` (`provider-settings.tsx`), the icon map in `open-in-menu.tsx`, `RUNNER_NAMES` (`tools-menu.tsx`), `AGENT_DESCRIPTORS` (`agent-descriptors.ts`) |
 | Hand-written runner lists | `RUNNER_IDS`, the `switch` in `createRunner`, `runnerSchema` (contract), `UiBackend` in `core/ui-events.ts` and in `packages/api-client/src/protocol/ui-events.ts` |
 | Parity test files that name one runner (`harness-<runner>-*`, `waits-<runner>-*`) | 105, each a short call into the shared kit |
 | Steps in `AGENT_PROTOCOL.md` §10 | 12 |
 
-`createRunner` has three callers: `workflows/run/step-session.ts` (through `RunnerFactory`),
-`planner.ts` and `runs/auto-name.ts`. `cez/layer-import` lets only `core/runner-factory.ts`
-import a runner file. `cez/runner-id-branch` and `cez/runner-roster-literal` read `RUNNER_IDS`
+Two process entries import `createRunner` and pass it on as a `RunnerFactory`:
+`serve-command.ts` and `headless-run.ts`. Four places call the factory:
+`workflows/run/step-session.ts`, `workflows/run/launch-read-resolver.ts` (the Continue path,
+through `launch-settings.ts` into `continuation-session.ts`), `planner.ts` and
+`runs/auto-name.ts`. `cez/layer-import` lets only `core/runner-factory.ts` import a runner
+file. The lint rule `runner-class-outside-factory` (`lint/owner-policies.ts`) lets only code
+under `core/` construct a runner class, and `runner-class-rule.test.ts` scans `core/` for the
+classes. `core/runner-closure.test.ts` bundles each per-runner parity file with esbuild, static
+and dynamic imports included, and fails when its closure reaches another runner's adapter
+(hearsay-tools/cezarion#2939).
+
+`runs/store.ts` reads a saved runner through `storedRunnerSchema`, which accepts the built-in
+ids and `claude-cli`. `runs/legacy-run-rows.ts` turns a run saved on a removed runner into a
+`removedRunner` run, for the ids in `REMOVED_RUNNER_IDS` (`cursor`) only. `cez/runner-id-branch` and `cez/runner-roster-literal` read `RUNNER_IDS`
 from the source text of `core/agent-runner.ts`.
 
 ## Product decisions (owner, 2026-11-18)
@@ -51,15 +62,18 @@ from the source text of `core/agent-runner.ts`.
    requests, automation definitions, provider requests and workspace config. An unknown id gets
    the same refusal that the enum gives today. A run saved on an id that no runner has still
    opens and shows the "(removed)" label (`removedRunnerLabel`), as hearsay-tools/squawk#3715
-   made it. The service keeps a `RunnerId` type for the built-in ids, where the compiler helps.
+   made it for `cursor`; this step makes that path hold for any unregistered id. The service keeps a `RunnerId` type for the built-in ids, where the compiler helps.
 2. **The cockpit gets per-runner data from `GET /api/v1/runners`.** The route returns the
    registered runners in display order with their display data and model presets. The cockpit
    tables in [Evidence](#evidence) are removed. Runner pickers wait for this query, as other
    pickers wait for `health`. `GET /api/v1/health` stays as it is: its `checks` still report
    which CLIs are installed.
 3. **The model preset lists live in the definition.** `KNOWN_PRESETS_BY_RUNNER` (service),
-   `MODELS_BY_RUNNER` and `RETIRED_MODEL_IDS` (cockpit) become one list in each definition. The
-   service reads it from the registry; the cockpit reads it from the route.
+   `MODELS_BY_RUNNER` and `RETIRED_MODEL_IDS` (cockpit) move into each definition's `models`
+   part. The lists keep their roles: the cockpit's picker suggestions and the service's known
+   ids differ today (Codex suggests only `auto` but knows three ids), so the part holds
+   `suggested`, `known` and `retired` as separate lists with today's values. The service reads
+   them from the registry; the cockpit reads them from the route.
 4. **A definition is one object whose costly parts load on demand.** Plain data is in the
    object. The adapter and the catalogs load through dynamic `import()`. `createRunner` becomes
    async.
@@ -82,14 +96,14 @@ definition names its mock script. `lint/layers.json` maps `runners/` to the `run
 | --- | --- | --- |
 | `id` | The runner id | The `RUNNER_IDS` entry |
 | `facts` | The wire and turn facts | The `RUNNER_FACTS` row |
-| `display` | Display name, model list name, model id scope, icon name, install hint, account folder example and hint | `RUNNER_COCKPIT_FACTS` and the cockpit tables |
+| `display` | Display name, model list name, model id scope, icon name, install hint, login command, account folder example | `RUNNER_COCKPIT_FACTS`, `PROVIDERS`, `PROVIDER_INSTALL`, `FOLDER_EXAMPLE`, the icon map, `RUNNER_NAMES` |
 | `detection` | How to probe the CLI and read its version | The `RUNNER_PROBES` row |
 | `cli` | The executable and how to open it; the server installer's source | `RUNNER_CLI`, `AGENT_CLI_SOURCE` |
 | `login` | Login and auth status | The `DESCRIPTORS` entry in `core/provider-auth.ts` |
-| `accounts` | Account folder layout, profile markers, home slot, identity source | `ACCOUNT_LAYOUT`, `PROFILE_DIR_MARKERS`, `AGENT_HOME_SLOT`, `IDENTITY_SOURCE` |
+| `accounts` | Account folder layout, profile markers, home slot | `ACCOUNT_LAYOUT`, `PROFILE_DIR_MARKERS`, `AGENT_HOME_SLOT` |
 | `env` | The environment allow-list prefixes | The `BACKEND_ALLOW_PREFIXES` row |
-| `models` | Known presets, retired ids, the model id map, how a default model is written to native config | `KNOWN_PRESETS_BY_RUNNER`, `MODELS_BY_RUNNER`, `RETIRED_MODEL_IDS`, `BACKEND_MODEL_MAP`, `MODEL_SETTINGS_STRATEGIES` |
-| `configFiles` | The native config files that Settings → Agent config shows | The row in `agent-config/catalog.ts` |
+| `models` | `suggested` (picker presets), `known` (ids that conflict with another runner), `retired`, the model id map, how the native default model is read | `MODELS_BY_RUNNER`, `KNOWN_PRESETS_BY_RUNNER`, `RETIRED_MODEL_IDS`, `BACKEND_MODEL_MAP`, `MODEL_SETTINGS_STRATEGIES` |
+| `configFiles` | The native config files that Settings → Agent config shows, and the pane's groups: label, note, empty-state text, whether the MCP group shows the user-level MCP listing | The row in `agent-config/catalog.ts`, the `AGENT_DESCRIPTORS` entry |
 | `extraTools` | Extra tool grants | The `HARNESS_EXTRA_TOOLS` row |
 | `toolInjection` | How Squawk's tool server reaches the runner, where the runner needs more than the default | The OpenCode branch in `ci-wait/injection.ts` |
 | `specSupport` | Which `AgentRunSpec` fields the wire honors | `specSupport` on the runner class |
@@ -99,9 +113,16 @@ definition names its mock script. `lint/layers.json` maps `runners/` to the `run
 | `loadSkillCatalog()` | `import()` of the skill list adapter | `hostSkillCatalogAdapters` |
 
 A definition module imports only types and data. The adapter, the catalogs and their
-dependencies load only through the `load*` functions, so a test that drives one runner still
-loads only that adapter (hearsay-tools/cezarion#2939). A test holds this: loading the registry
-loads no adapter module.
+dependencies load only through the `load*` functions. esbuild follows a dynamic `import()`
+(`core/runner-closure.test.ts` bundles with it), so a module that imports a definition reaches
+its adapter in the import graph. The
+closure property of hearsay-tools/cezarion#2939 therefore rests on who imports definitions, not
+on lazy loading:
+
+- No `core` file imports a definition or `runners/built-in.ts`. The `cez/layer-import`
+  exception for `core/runner-factory.ts` goes; no core file imports a runner file.
+- A per-runner test imports its own runner's definition and registers it.
+- `core/runner-closure.test.ts` stays the guard, with its paths moved to `runners/<id>/`.
 
 The parts that the cockpit needs are plain JSON data. The route sends them as they are.
 
@@ -111,29 +132,52 @@ The parts that the cockpit needs are plain JSON data. The route sends them as th
 
 - `registerRunner(definition)` adds one definition. A second definition with the same id is an
   error.
-- `runnerDefinition(id)`, `registeredRunners()` and `isRegisteredRunner(id)` read it.
+- `runnerDefinition(id)`, `registeredRunners()` and `isRegisteredRunner(id)` read it. A read of
+  an empty registry throws an error that names the missing registration, so a process entry that
+  forgot it fails at once instead of falling back to Claude.
 - `createRunner(id)` is async: it resolves the legacy id `claude-cli` to `claude`, picks the
   definition and awaits its `loadAdapter()`. An unknown id gets the Claude runner, as the
-  `switch` gives today.
+  `switch` gives today. Every factory caller awaits it, the Continue path in
+  `launch-read-resolver.ts` included.
 - The default runner (`claude`) and the legacy ids live here, not in about 14 call sites that
   write `'claude'` by hand.
 
-`runners/built-in.ts` lists the five built-in definitions and registers each through
-`registerRunner`. The registry imports it once, on first read. `core/runner-registry.ts` takes
-the place of `core/runner-factory.ts` as the one core file that may import a runner file
-(`cez/layer-import`).
+`runners/built-in.ts` lists the five built-in definitions and exports
+`registerBuiltInRunners()`, which passes each to `registerRunner`. Each process entry calls it
+before it reads config or runs a task: the two entries that import `createRunner` today
+(`serve-command.ts`, `headless-run.ts`), the CLI dispatch, and every other Node entry that reads
+runner data. The slice that adds the registry lists the entries and tests each one.
 
-`RUNNER_IDS` stays as the list of built-in ids for the compiler, derived from the built-in list.
-`cez/runner-id-branch` and `cez/runner-roster-literal` read the ids from `runners/built-in.ts`.
+`RUNNER_IDS` stays in `core/agent-runner.ts` as the list of built-in ids for the compiler, and
+`cez/runner-id-branch` and `cez/runner-roster-literal` keep reading it there. A test holds the
+ids of `runners/built-in.ts` equal to `RUNNER_IDS`. A new built-in runner therefore adds its id
+there and one line in `runners/built-in.ts`; an outside runner (step 4) only calls
+`registerRunner`.
+
+The lint rule `runner-class-outside-factory` lets a runner class be constructed only inside its
+own runner folder, and `runner-class-rule.test.ts` scans `runners/`.
+
+### Saved runs
+
+`storedRunnerSchema` accepts any non-empty string. `legacy-run-rows.ts` treats every id that is
+not registered when the store reads the run as a removed runner, not only `cursor`. A run saved
+on the fixture runner, read by a process that has not registered it, opens as a removed-runner
+run.
 
 ### The contract and the cockpit
 
 - `runnerSchema` becomes `z.string().min(1)`. `UiBackend` in both copies becomes `string`.
+  Every reader of `runnerSchema.options` (contract `delegation.ts`, `workflows.ts`,
+  `workspace.ts`, `health.ts`; cockpit `lib/provider-status.ts`; the e2e specs) and of
+  `RUNNER_COCKPIT_FACTS` (`new-task-form.ts` and the others) changes in the same slice, so the
+  cockpit compiles after it.
   `RUNNER_COCKPIT_FACTS` leaves the contract; `runnerDisplayName` and `runnerModelListName`
   read the route's data in the cockpit and the registry in the service.
 - The contract gains `runnersResponseSchema`: a list of `{ id, displayName, modelListName,
-  modelIdScope, icon, installHint, accountFolderExample, accountFolderHint, models: { presets,
-  retired } }`.
+  modelIdScope, icon, installHint, loginCommand, accountFolderExample, models: { suggested,
+  known, retired }, agentConfig: { note, groups } }`. Each group carries `id`, `label`, `note`,
+  `empty` and `showsUserMcp`. The file filter stays in the cockpit: it matches a file's
+  `runners` and `kind`, which the agent config route already sends.
 - `GET /api/v1/runners` is a workspace route. It reads the registry and never probes a CLI.
 - Each cockpit table keyed by runner id goes. A component reads the runner's entry from the
   route's query.

@@ -60,10 +60,14 @@ scripts stay in `packages/cezar/scripts/`.
 
 Update every import, the Vitest and Squeal path selections that name `core/<id>-*`, the
 golden fixture paths, `.ai/scripts/` catalogs that list parity files, and the doc links
-(`docs/areas/runners.md`, `AGENT_PROTOCOL.md`).
+(`docs/areas/runners.md`, `AGENT_PROTOCOL.md`). Also move the guards that name `core/`:
+`core/runner-closure.test.ts` (`ADAPTERS` and `perRunnerFiles` read the new folders), the
+`runner-class-outside-factory` ignores in `lint/owner-policies.ts`, and the folder that
+`runner-class-rule.test.ts` scans.
 
-**Done when:** no file under `core/` starts with a runner id, the moved tests pass, and the
-`runner` baseline entries name the new paths.
+**Done when:** no file under `core/` starts with a runner id, the moved tests pass, the closure
+guard and the runner-class guard find the moved files, and the `runner` baseline entries name
+the new paths.
 
 ## A3. Definition type, registry, built-in list
 
@@ -71,23 +75,29 @@ golden fixture paths, `.ai/scripts/` catalogs that list parity files, and the do
   `defineRunner`. Later slices add parts.
 - `runners/<id>/definition.ts` for each built-in runner, with its `facts` (moved from
   `RUNNER_FACTS`) and `loadAdapter`.
-- `runners/built-in.ts`: the five definitions in display order, each passed to
-  `registerRunner`.
+- `runners/built-in.ts`: the five definitions in display order and
+  `registerBuiltInRunners()`. A test holds its ids equal to `RUNNER_IDS`.
 - `core/runner-registry.ts`: `registerRunner`, `runnerDefinition`, `registeredRunners`,
   `isRegisteredRunner`, the default runner, the legacy id map (`claude-cli`), and async
-  `createRunner`. It replaces `core/runner-factory.ts`. `RunnerFactory` returns
-  `Promise<AgentRunner>`; `step-session.ts`, `planner.ts` and `runs/auto-name.ts` await it.
-- `RUNNER_FACTS` and `runnersWhere` read the registry; `RUNNER_IDS` derives from
-  `runners/built-in.ts`.
-- `cez/layer-import` allows `core/runner-registry.ts`, not `core/runner-factory.ts`.
-  `cez/runner-id-branch` and `cez/runner-roster-literal` read the ids from
-  `runners/built-in.ts`.
+  `createRunner`. It replaces `core/runner-factory.ts`. A read of an empty registry throws.
+- `RunnerFactory` returns `Promise<AgentRunner>`. Every caller awaits it:
+  `workflows/run/step-session.ts`, `workflows/run/launch-read-resolver.ts` with
+  `launch-settings.ts` and `continuation-session.ts` (Continue), `planner.ts`,
+  `runs/auto-name.ts`, and the testkits that build a factory.
+- Process entries call `registerBuiltInRunners()` before they read config or run a task:
+  `serve-command.ts`, `headless-run.ts`, the CLI dispatch, and each other Node entry that reads
+  runner data. List them in the PR and test each one.
+- `RUNNER_FACTS` and `runnersWhere` read the registry. Tests that read runner data register
+  the definitions they use. No shared setup file registers every built-in runner, so the
+  closure guard holds.
+- `cez/layer-import` drops its exception: no core file imports a runner file.
+  `runner-class-outside-factory` allows construction only inside `runners/<id>/`.
 - `runnerIdOf` and the about 14 sites that write `'claude'` as the fallback read the
   registry's default.
 
-**Tests:** the registry refuses a duplicate id; an unknown id gets the Claude runner; loading
-the registry loads no adapter module (hearsay-tools/cezarion#2939); `runner-facts.test.ts`
-reads the definitions.
+**Tests:** the registry refuses a duplicate id; an unknown id gets the Claude runner; an empty
+registry throws; `core/runner-closure.test.ts` passes unchanged in what it asserts;
+`runner-facts.test.ts` reads the definitions; a Continue on each runner still starts.
 
 ## B1. Facts, spec support, detection, CLI, install source
 
@@ -101,8 +111,7 @@ and `AGENT_CLI_SOURCE` (`server-install/steps.ts`).
 ## B2. Login, accounts, home paths, identity, environment
 
 Move into the definition: the `DESCRIPTORS` entry (`core/provider-auth.ts`), `ACCOUNT_LAYOUT`
-and `PROFILE_DIR_MARKERS` (`core/agent-profiles.ts`), `AGENT_HOME_SLOT` (`paths.ts`),
-`IDENTITY_SOURCE` (`agent-config/account-identity.ts`), `BACKEND_ALLOW_PREFIXES`
+and `PROFILE_DIR_MARKERS` (`core/agent-profiles.ts`), `AGENT_HOME_SLOT` (`paths.ts`), `BACKEND_ALLOW_PREFIXES`
 (`core/agent-env.ts`), and the per-runner keys in `config.ts`, `workspace/config.ts` and
 `workspace/agent-accounts.ts`. Config keys that are an object with one key per runner become a
 record keyed by a registered id, checked against the registry when config loads. A saved key
@@ -113,9 +122,11 @@ loads with the same values.
 
 ## B3. Models, skills, config files, extra tools, tool injection
 
-Move into the definition: `KNOWN_PRESETS_BY_RUNNER` (`core/model-presets.ts`),
+Move into the definition's `models` part: `KNOWN_PRESETS_BY_RUNNER` (`core/model-presets.ts`)
+as `known`, with `suggested` and `retired` copied from the cockpit's `MODELS_BY_RUNNER` and
+`RETIRED_MODEL_IDS` with their current values. Also move
 `BACKEND_MODEL_MAP` (`core/model-identity.ts`), `MODEL_SETTINGS_STRATEGIES`
-(`agent-config/models.ts`), the native config file rows (`agent-config/catalog.ts`),
+(`agent-config/models.ts`, which reads the native default model), the native config file rows (`agent-config/catalog.ts`),
 `HARNESS_EXTRA_TOOLS` (`workflows/types.ts`), and the OpenCode tool injection
 (`ci-wait/injection.ts`, as `toolInjection`). `core/host-model-catalog.ts` and
 `core/host-skill-catalog.ts` call `loadModelCatalog` and `loadSkillCatalog`;
@@ -137,16 +148,31 @@ Breaking change: the PR title carries `!`.
 - Server: `GET /api/v1/runners`; run requests, automation definitions, provider requests and
   config writes check the id with `isRegisteredRunner` and give the refusal that the enum gives
   today. `health`'s `checks` name a runner by a string.
-- The cockpit reads `runnerDisplayName` and `runnerModelListName` from the route.
+- Saved runs: `storedRunnerSchema` (`runs/store.ts`) accepts any non-empty string, and
+  `legacy-run-rows.ts` treats every unregistered id as a removed runner, in place of the
+  `REMOVED_RUNNER_IDS` list.
+- Reader sweep in the same slice, so every package compiles after it: each reader of
+  `runnerSchema.options` (contract `delegation.ts`, `workflows.ts`, `workspace.ts`,
+  `health.ts`, `automation-storage.ts`, `provider-requests.ts`, `run-requests.ts`; cockpit
+  `lib/provider-status.ts`; the e2e specs `new-task`, `settings-agent-config`, `tools-menu`) and
+  each reader of `RUNNER_COCKPIT_FACTS`, `runnerDisplayName` and `runnerModelListName`
+  (cockpit `new-task-form.ts`, `provider-auth-alert.ts`, `accounts-section.tsx`, `skills.tsx`,
+  `active-provider.ts`, `thread-items.tsx`, `open-in-menu.tsx`, `thread-fold-state.ts`;
+  service `core/runner-model-catalog.ts`, `server/open-in-targets.ts`,
+  `server/provider-action-gate.ts`; on `main` at `535ce2bdd`) reads the route or the registry.
+- The cockpit query for the route, with the pickers disabled until it answers.
 
-**Done when:** `runner-roster-literal.baseline.json` holds no entry and an unknown runner id on
-each request route gets the same status and message as before the slice.
+**Done when:** `runner-roster-literal.baseline.json` holds no entry; an unknown runner id on
+each request route gets the same status and message as before the slice; a run saved on the
+fixture runner opens as a removed-runner run in a process that has not registered it; and
+`npm run typecheck` passes for every package.
 
 ## C2. The cockpit reads the route
 
 Remove `MODELS_BY_RUNNER`, `RETIRED_MODEL_IDS`, `PROVIDER_INSTALL`, `FOLDER_EXAMPLE`,
-`FOLDER_HINT`, the map in `provider-settings.tsx`, the icon map in `open-in-menu.tsx`,
-`RUNNER_NAMES` and the runner rows of `AGENT_DESCRIPTORS`. Each reader takes the runner's entry
+`PROVIDERS` and `providerWriteState` in `provider-settings.tsx`, the icon map in
+`open-in-menu.tsx`, `RUNNER_NAMES` and the runner rows of `AGENT_DESCRIPTORS` (labels, notes,
+empty-state text and `showsUserMcp` come from the route's `agentConfig`). Each reader takes the runner's entry
 from the route's query. The pickers stay disabled until the query answers. The
 [state restore cases](2026-11-18-runner-definitions.md#state-restore-cases) hold.
 
