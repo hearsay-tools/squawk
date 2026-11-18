@@ -35,7 +35,12 @@ async function groupMembers(): Promise<number[] | undefined> {
   if (!entries) return undefined;
   for (const entry of entries) {
     if (!/^\d+$/.test(entry) || Number(entry) === process.pid) continue;
-    const stat = await fs.readFile(`/proc/${entry}/stat`, 'utf8').catch(() => '');
+    let stat: string;
+    try { stat = await fs.readFile(`/proc/${entry}/stat`, 'utf8'); } catch (error) {
+      // Only a process that is gone has no stat; any other failure leaves its group unknown.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT' || (error as NodeJS.ErrnoException).code === 'ESRCH') continue;
+      return undefined;
+    }
     // Fields after the parenthesised command name: state, ppid, pgrp.
     const pgrp = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2]);
     if (pgrp === process.pid) members.push(Number(entry));
@@ -244,11 +249,12 @@ async function keepWorktreeLock(): Promise<void> {
         if (keepClaim) throw new Error('Git child processes of a timed-out command may still be running');
         await write(ticket, true);
         const result = await runGitCommand(message);
-        await write(ticket);
         // Their claim outlives this keeper: the group probe frees it once every member is gone
-        // (readMutationClaim). Windows has no such probe; a claim kept there could never be freed, so
-        // it is released as before and only the rollback and retry are skipped.
+        // (readMutationClaim). Set before the next write, so a failed write cannot release it. Windows
+        // has no such probe; a claim kept there could never be freed, so it is released as before and
+        // only the rollback and retry are skipped.
         if (result.childrenRunning && process.platform !== 'win32') keepClaim = true;
+        await write(ticket);
         send({ kind: 'result', id: message.id, result });
       }).catch(error => {
         send({ kind: 'error', error: `worktree mutation command failed: ${String(error)}` });

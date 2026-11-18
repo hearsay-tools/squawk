@@ -224,7 +224,9 @@ export class WorkerCleanup {
       this.scheduleDestroyRetry(project, workerId);
     };
     let result: WorkerDestroyResult;
-    try { result = await this.serialized(`worker:${project.id}:${workerId}`, () => this.destroyAttempt(project, workerId, check, 'manual')); }
+    // The answer budget starts when the request arrives, so time queued behind another attempt counts.
+    const requestedAt = this.now();
+    try { result = await this.serialized(`worker:${project.id}:${workerId}`, () => this.destroyAttempt(project, workerId, check, 'manual', requestedAt)); }
     finally { rearm(); }
     // A busy lock clears by itself: say when the next automatic attempt runs (hearsay-tools/squawk#3817).
     const due = this.destroyRetryDue.get(project.id)?.get(workerId);
@@ -233,8 +235,8 @@ export class WorkerCleanup {
   }
   /** One full destroy attempt; the caller holds the worker's serialization key. A manual attempt
    * clears the run's `destroyRetry`, which resets the backoff; a completed destroy drops it. */
-  private async destroyAttempt(project: DelegationProject, workerId: string, check: () => RunRecord, mode: 'manual' | 'scheduled'): Promise<WorkerDestroyResult> {
-    const startedAt = this.now();
+  private async destroyAttempt(project: DelegationProject, workerId: string, check: () => RunRecord, mode: 'manual' | 'scheduled',
+    startedAt = this.now()): Promise<WorkerDestroyResult> {
     const assertAttached = () => {
       if (this.projects.get(project.id) !== project) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     };

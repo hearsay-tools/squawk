@@ -63,7 +63,10 @@ exec ${JSON.stringify(real)} "$@"
 const branchExists = async (repo: string) => (await exec('git', ['for-each-ref', '--format=%(refname)', 'refs/heads/cez/66666666'], { cwd: repo })).stdout
   .split('\n').includes('refs/heads/cez/66666666');
 
-it('retries a worker worktree add that timed out once, after removing what it made (hearsay-tools/squawk#3817)', async () => {
+// Only Linux can prove a timed-out add's children gone; elsewhere the add neither rolls back nor retries.
+const provesChildrenGone = process.platform === 'linux';
+
+it.runIf(provesChildrenGone)('retries a worker worktree add that timed out once, after removing what it made (hearsay-tools/squawk#3817)', async () => {
   const { repo, adds } = await slowGit(['slow', 'pass']);
   const info = await createWorktree(repo, WORKER, 'main', { freshOnly: true, addTimeoutMs: 3_000 });
   expect(info.branch).toBe('cez/66666666');
@@ -73,7 +76,7 @@ it('retries a worker worktree add that timed out once, after removing what it ma
   expect(existsSync(join(info.path, '.git'))).toBe(true);
 });
 
-it('reports a second timeout with its bound and leaves no worktree, registration or branch', async () => {
+it.runIf(provesChildrenGone)('reports a second timeout with its bound and leaves no worktree, registration or branch', async () => {
   const { repo } = await slowGit(['slow', 'slow']);
   await expect(createWorktree(repo, WORKER, 'main', { freshOnly: true, addTimeoutMs: 3_000 }))
     .rejects.toThrow(/^git worktree add failed: timed out after 3 s/);
