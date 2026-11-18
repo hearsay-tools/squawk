@@ -3,6 +3,7 @@ import type { ArchiveOnMergeSnapshot, RunStore } from '../runs/store.ts';
 import { pullRequestKey } from '../runs/pull-requests.ts';
 import { projectPaths } from '../project-paths.ts';
 import { withProjectAdmission } from './cockpit-ownership.ts';
+import { GithubRateLimitedError } from './forge/github-request-gate.ts';
 
 export interface ArchiveProject { id: string; root: string; status?: string }
 export interface ArchiveOnMergeDeps {
@@ -86,7 +87,10 @@ export class ArchiveOnMergeCoordinator {
       if (!current()) return;
       await this.applyMergeObservations(project, snapshots, observed, repoBase, current);
       this.failures.delete(project.id);
-    } catch {
+    } catch (error) {
+      // A rate limit is a pause, not a failure: no blocker and no failure count. The gate refuses
+      // lookups until the pause ends, so the next tick after it retries.
+      if (error instanceof GithubRateLimitedError) return;
       await this.recordProjectFailure(project, roots, current);
     }
   }

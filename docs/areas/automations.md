@@ -47,6 +47,14 @@ them, and a backed-off skip keeps the last real error. From
 `AUTOMATION_FAILURE_NOTICE_AFTER` (3) consecutive failures, `automationFailureNotice`
 gives the cockpit card's alert and the `failing` key of `hsq automation list`.
 
+A GitHub rate limit is a pause, not a failure. The poller's requests go through the
+shared GitHub request gate (see [GitHub integration § One request gate for the
+pollers](github.md#one-request-gate-for-the-pollers)). During a pause the gate refuses a
+check at once. The check logs `rate-limited` and moves `nextCheckAt` to the end of the
+pause. It adds no failure count, no `backoffUntil` and no `lastError`. A pause that stops a launch
+before the task exists releases the item's receipt, so the next check launches it. The
+repository-name lookup of a poll goes through the gate too.
+
 ## Project directory log reads
 
 Both log sources and both receipt sources merge through `mergeAppendOnly`
