@@ -70,7 +70,7 @@ export class ContinuationAcceptance {
   ): continuation.ContinuationResult {
     const admitted = new continuation.ContinuationChecks(runId, this.context.repoRoot, opts, deferForCapacity, conversation, {
       active: () => this.host.isActive(runId),
-      autosaveBlocker: () => this.worktreeAutosave.autosaveCleanupBlocker(runId),
+      autosaveBlocker: () => this.claims.autosaveStartBlocker(runId),
       reclaiming: () => this.claims.blocksStart(runId),
       run: () => this.context.store.getRun(runId),
       historyDeletionPending: () => historyDeletionPending(this.context.store, runId),

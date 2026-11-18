@@ -204,6 +204,7 @@ describe('RunWaitDetails', () => {
     ['conflicting', 'PR has merge conflicts — inspect the PR; not merge approval'],
     ['deadline', 'CI wait timed out — inspect the PR checks'],
     ['error', 'CI wait unavailable — inspect access and the PR checks'],
+    ['stuck', 'CI checks stuck in queue — inspect the PR checks'],
     ['head_changed', 'CI head changed — 1234567 → fedcba9'],
   ] as const)('shows the last settled CI observation when nothing is open (%s)', (outcome, label) => {
     renderWaits(run('done', { lastWaits: [ciEntry({ phase: WAIT_PHASE.delivered, result: observed(outcome) })] }))

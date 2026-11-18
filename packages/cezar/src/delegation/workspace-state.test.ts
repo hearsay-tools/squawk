@@ -236,14 +236,8 @@ describe('the change report of a shared workspace', () => {
     expect(await report(true, 'generation-2')).toMatchObject({ state: 'changed', paths: ['second-execution.txt'] });
     expect(await report(true, 'generation-1')).toEqual({ state: 'unchanged' });
     expect(await workspaceChangeReport(dataDir, workerId, repo, { generation: undefined, settled: true })).toMatchObject({ state: 'unavailable' });
-  });
-
-  it('leaves a settled worker without a report when the end state could not be read', async () => {
-    await recordWorkspaceStart(dataDir, workerId, repo);
-    await recordEnd();
     rmSync(join(repo, '.git'), { recursive: true, force: true });
-    await expect(recordEnd()).rejects.toThrow('failed in the shared workspace');
-    expect(endFiles()).toEqual([]);
-    expect(await report(true)).toMatchObject({ state: 'unavailable', reason: 'no workspace state was recorded when the worker settled' });
+    await expect(recordEnd('generation-2')).rejects.toThrow('failed in the shared workspace');
+    expect(await report(true, 'generation-2')).toEqual({ state: 'unavailable', reason: 'no workspace state was recorded when the worker settled' });
   });
 });

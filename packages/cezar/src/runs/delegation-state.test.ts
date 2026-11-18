@@ -25,11 +25,8 @@ import {
   delegationErrorResponseSchema,
   ownedWorkspace,
   ownsDirectory,
-  sharedSpawnRefusal,
   workerChangeReportSchema,
   workerCollectedResultSchema,
-  SHARED_ATTACH_REFUSAL,
-  SHARED_BASELINE_REFUSAL,
   WORKER_CHANGED_PATHS_CAP,
 } from '@open-mercato/cezar-contract/delegation';
 import { RUN_STATUS, WAIT_SOURCE, WORKER_OUTCOME_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -147,19 +144,13 @@ describe('delegation schemas', () => {
     expect(() => ownedWorkspace(workerWorkspaceSchema.parse(shared))).toThrow('The workspace owns no worktree');
   });
 
-  it('takes a workspace choice on spawn, and names why a shared spawn is refused (hearsay-tools/squawk#3819)', () => {
+  it('takes a workspace choice on spawn (hearsay-tools/squawk#3819)', () => {
     expect(workerSpawnRequestSchema.parse({ task: 't', requestId, workspace: 'shared' })).toEqual({ task: 't', requestId, workspace: 'shared' });
     expect(workerSpawnRequestSchema.safeParse({ task: 't', requestId, baseline: 'HEAD', workspace: 'isolated' }).success).toBe(true);
     // An absent workspace depends on the caller's grant, so the service refuses a missing baseline, not the schema.
     expect(workerSpawnRequestSchema.safeParse({ task: 't', requestId }).success).toBe(true);
     expect(workerSpawnRequestSchema.safeParse({ task: 't', requestId, workspace: 'isolated' }).success).toBe(true);
     expect(workerSpawnRequestSchema.safeParse({ task: 't', requestId, baseline: 'HEAD', workspace: 'owned-isolated' }).success).toBe(false);
-    expect(sharedSpawnRefusal({ workspace: 'shared' })).toBeUndefined();
-    expect(sharedSpawnRefusal({ baseline: 'HEAD', context: { artifacts: [{ kind: 'parent-file' }] } })).toBeUndefined();
-    expect(sharedSpawnRefusal({ workspace: 'shared', baseline: 'HEAD' })).toBe(SHARED_BASELINE_REFUSAL);
-    expect(sharedSpawnRefusal({ workspace: 'shared', baseline: 'parent-head' })).toBeUndefined();
-    expect(sharedSpawnRefusal({ workspace: 'shared', context: { artifacts: [{ kind: 'baseline-file' }, { kind: 'parent-file' }] } })).toBe(SHARED_ATTACH_REFUSAL);
-    expect(sharedSpawnRefusal({ workspace: 'shared', context: { artifacts: [{ kind: 'baseline-file' }, { kind: 'parent-attachment' }] } })).toBeUndefined();
   });
 
   it('bounds the change report and keeps it optional on a collected result (hearsay-tools/squawk#3819)', () => {

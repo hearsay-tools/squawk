@@ -87,3 +87,12 @@ uses the same local-only and host-CLI grant guards. Import performs a three-way 
 through HomeStore and requires its backup to succeed. `/accept` means Ignore for a
 legacy row: it keeps the live file and records the observed legacy hash and next merge
 base. Deleted legacy files are Ignore-only.
+
+## PR wait observations
+
+The `ci-wait` contract includes `stuck` for a checks wait that has observed a check run
+as QUEUED for at least the built-in 15-minute bound. The diagnostic names the
+checks and observed queued minutes, then gives the close-and-reopen recovery.
+The clock starts at first observation and resets after a cockpit restart. Head changes
+and conflicts retain precedence. Merge waits and in-progress checks do not use
+this outcome. The result uses the existing bounded diagnostic and checks fields.
