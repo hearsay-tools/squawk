@@ -4,7 +4,7 @@ import { createFixtureManager, drainFixtureManagers } from './fixture-claude.tes
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 
@@ -22,7 +22,7 @@ describe('recover() with tied runs in a one-slot project', () => {
   const savedDryRun = process.env.CEZ_DRY_RUN;
 
   const record = (id: string) => ({
-    id, title: `run ${id}`, workflow: 'quick-task', task: 'mock:cezar-done pick me up', status: RUN_STATUS.running,
+    id, title: `run ${id}`, workflow: 'quick-task', task: 'pick me up', status: RUN_STATUS.running,
     createdAt: '2026-07-30T00:00:00.000Z', startedAt: '2026-07-30T00:00:01.000Z', tokensUsed: 0, archived: false,
     worktree: false, currentStepId: 'work',
     workflowDef: { name: 'quick-task', source: 'built-in', steps: [{ id: 'work', name: 'Work', prompt: '{{task}}' }] },
@@ -31,6 +31,9 @@ describe('recover() with tied runs in a one-slot project', () => {
 
   beforeEach(() => {
     process.env.CEZ_DRY_RUN = '1';
+    // The restart Continue does not repeat the task (hearsay-tools/squawk#3882); the resumed turn
+    // answers the no-wait nudge with cezar_done, so the first run frees the slot.
+    vi.stubEnv('CEZ_MOCK_NUDGE_REPLY', 'done');
     repoRoot = mkdtempSync(join(tmpdir(), 'cez-recovery-order-'));
     mkdirSync(join(repoRoot, '.ai/cezar'), { recursive: true });
   });
@@ -39,6 +42,7 @@ describe('recover() with tied runs in a one-slot project', () => {
     await drainFixtureManagers(repoRoot);
     store.flush();
     rmSync(repoRoot, { recursive: true, force: true });
+    vi.unstubAllEnvs();
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
     else process.env.CEZ_DRY_RUN = savedDryRun;
   });

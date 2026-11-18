@@ -8,9 +8,9 @@ import {
 } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { createFixtureManager, drainFixtureManagers, fixtureWorkSettled, fixtureWork } from './fixture-claude.testkit.ts';
 import { execFile } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore, type RunRecord } from '../runs/store.ts';
@@ -25,6 +25,7 @@ import {
 } from './run.ts';
 import type { WorkflowDef } from './types.ts';
 import { AutoResumeScheduler } from './run/auto-resume.ts';
+import { createFailureControl } from '../../scripts/mock-failure-control.mjs';
 
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
@@ -67,6 +68,23 @@ describe('a run stopped by a usage limit resumes itself', () => {
     }
   }
 
+  const controlDirs: string[] = [];
+  /** The resumed turn, which no longer repeats the task (hearsay-tools/squawk#3882), answers
+   *  Squawk's no-wait nudge with cezar_done. */
+  function resumedTurnFinishes(): void {
+    vi.stubEnv('CEZ_MOCK_NUDGE_REPLY', 'done');
+  }
+
+  /** Every turn whose prompt names the usage limit meets it: the first turn's task and the
+   *  auto-resume prompt both do. */
+  function limitEveryTurn(): void {
+    // Outside the repository, so no run sees the control file in its tree.
+    const dir = join(repoRoot, '..', `${basename(repoRoot)}-control`);
+    mkdirSync(dir, { recursive: true });
+    controlDirs.push(dir);
+    vi.stubEnv('CEZ_MOCK_FAILURE_CONTROL', createFailureControl(dir, { mode: 'persistent', opening: 'usage limit', failure: 'usage-limit' }).path);
+  }
+
   // hearsay-tools/cezarion#974: full Node 24.15 setup exceeded the default 10s
   // hook at 10222ms before the watchdog cell ran. Five serial Git processes
   // now each have a 10s deadline; cover their 50s budget plus 5s local setup.
@@ -92,6 +110,8 @@ describe('a run stopped by a usage limit resumes itself', () => {
   afterEach(async () => {
     await drainFixtureManagers(repoRoot);
     vi.useRealTimers();
+    vi.unstubAllEnvs();
+    for (const dir of controlDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
     manager?.dispose();
     manager = undefined;
     for (const [key, value] of Object.entries(savedEnv)) {
@@ -136,14 +156,16 @@ describe('a run stopped by a usage limit resumes itself', () => {
   }, 30_000);
 
   it('schedules the next window when the resumed turn hits the limit again, and counts up', async () => {
+    // A resumed turn no longer repeats the task (hearsay-tools/squawk#3882): every turn that names
+    // the usage limit, the first and the resume, meets it again.
+    limitEveryTurn();
     const first = createFixtureManager(store, repoRoot);
-    const record = first.startRun(workflow, { task: 'mock:limit ship it', worktree: false });
+    const record = first.startRun(workflow, { task: 'ship it within the usage limit', worktree: false });
     await settle(record.id);
     first.dispose();
 
-    // The task text stays `mock:limit`, so the resumed turn walks straight back into a limit —
-    // the pathological shape the cap exists for. It must schedule the NEXT window rather than
-    // give up or spin.
+    // The resumed turn walks straight back into a limit — the pathological shape the cap exists
+    // for. It must schedule the NEXT window rather than give up or spin.
     store.updateRun(record.id, { autoResumeAt: new Date(Date.now() - 1_000).toISOString() });
     manager = createFixtureManager(store, repoRoot);
     await manager.recover();
@@ -263,10 +285,8 @@ describe('a run stopped by a usage limit resumes itself', () => {
     await settle(record.id);
     first.dispose(); // drops the timer, keeps the record
 
-    store.updateRun(record.id, {
-      autoResumeAt: new Date(Date.now() - 1_000).toISOString(),
-      task: 'mock:cezar-done ship it',
-    });
+    store.updateRun(record.id, { autoResumeAt: new Date(Date.now() - 1_000).toISOString() });
+    resumedTurnFinishes();
     // A manager that never runs `recover()` — the reconcile rides the ordinary pump.
     manager = createFixtureManager(store, repoRoot);
     manager.startRun(workflow, { task: 'mock:cezar-done unrelated', worktree: false });
@@ -435,15 +455,11 @@ describe('a run stopped by a usage limit resumes itself', () => {
       (current) => current.status === 'waiting' && current.autoResumeAt !== undefined)));
     first.dispose();
 
-    // Both windows reopen together — the exact state the live deadlock started from. The task
-    // text is swapped so the resumed turns can finish instead of re-limiting (that loop is
-    // covered above); what is under test is whether they run AT ALL.
-    for (const run of runs) {
-      store.updateRun(run.id, {
-        autoResumeAt: new Date(Date.now() - 1_000).toISOString(),
-        task: 'mock:cezar-done pair',
-      });
-    }
+    // Both windows reopen together — the exact state the live deadlock started from. The resumed
+    // turns finish instead of re-limiting (that loop is covered above); what is under test is
+    // whether they run AT ALL.
+    for (const run of runs) store.updateRun(run.id, { autoResumeAt: new Date(Date.now() - 1_000).toISOString() });
+    resumedTurnFinishes();
     manager = createFixtureManager(store, repoRoot, { home: testHome(), semaphore });
     await manager.recover();
 
@@ -588,11 +604,12 @@ describe('a run stopped by a usage limit resumes itself', () => {
     // One slot, so "who got to spawn" is unambiguous. Two scheduled runs have to be built in
     // sequence, because the hold — correctly — stops the second from ever starting otherwise.
     const semaphore = new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 1 } });
+    limitEveryTurn();
     const first = createFixtureManager(store, repoRoot, { home: testHome(), semaphore });
-    const a = first.startRun(workflow, { task: 'mock:limit probe a' });
+    const a = first.startRun(workflow, { task: 'probe a within the usage limit' });
     await settle(a.id);
     first.cancelAutoResume(a.id); // release the hold so b can take its turn
-    const b = first.startRun(workflow, { task: 'mock:limit probe b' });
+    const b = first.startRun(workflow, { task: 'probe b within the usage limit' });
     await settle(b.id);
     first.dispose();
 
@@ -767,14 +784,10 @@ describe('a run stopped by a usage limit resumes itself', () => {
     first.dispose();
 
     // Squawk was down when the window reopened — the deadline is already in the past, which the
-    // re-arm floors to "fire now". The task text is swapped because a continuation carries the
-    // run's own task back into the prompt (`hydrateQueuedContinuation`), and the mock replies to
-    // `mock:limit` wherever it appears — this test is about the resume completing, not looping
-    // (which the case below covers).
-    store.updateRun(record.id, {
-      autoResumeAt: new Date(Date.now() - 1_000).toISOString(),
-      task: 'mock:cezar-done ship it',
-    });
+    // re-arm floors to "fire now". This test is about the resume completing, not looping (which
+    // the case below covers).
+    store.updateRun(record.id, { autoResumeAt: new Date(Date.now() - 1_000).toISOString() });
+    resumedTurnFinishes();
     manager = createFixtureManager(store, repoRoot);
     await manager.recover();
 
