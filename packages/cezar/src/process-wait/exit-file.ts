@@ -1,12 +1,15 @@
 import { productName } from '../home/display.ts';
 import { closeSync, constants, existsSync, fstatSync, openSync, readSync, realpathSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { isJobExitFile } from './job-exit-file.ts';
 
 /**
  * A process wait's exit file (hearsay-tools/cezarion#1446, spec 2026-10-17-unified-waits § Process
  * wait decisions). The agent's own shell writes the command's exit code to it, since Squawk cannot
  * read a non-child's status. It must sit in the run's worktree or its Squawk temp directory, no
- * symlink may lead out of them, and only an integer first line ever leaves it.
+ * symlink may lead out of them, and only an integer first line ever leaves it. The one exception
+ * is an `hsq job` exit file in any `--dir`: its name carries the waited PID and a job record sits
+ * beside it (hearsay-tools/squawk#3909).
  */
 export type ExitFileRoots = { worktree: string; tmpDir?: string };
 
@@ -28,12 +31,20 @@ function rootsOf(roots: ExitFileRoots): string[] {
   return [roots.worktree, ...(roots.tmpDir === undefined ? [] : [roots.tmpDir])];
 }
 
-/** Resolve `path` (absolute, or relative to the worktree) and check it stays inside a root. */
-export function confineExitFile(path: string, roots: ExitFileRoots): { ok: true; path: string } | { ok: false; allowed: string[] } {
+/** Whether `absolute` is the exit file of the `hsq job` whose supervisor is `pid`. Its last name
+ *  must not be a symlink: the job's supervisor writes the file itself. */
+function jobExitFile(absolute: string, pid: number): boolean {
+  if (realThroughAncestors(absolute) !== join(real(dirname(absolute)), basename(absolute))) return false;
+  return isJobExitFile(absolute, pid);
+}
+
+/** Resolve `path` (absolute, or relative to the worktree) and check it stays inside a root, or is
+ *  the exit file of the job `pid` names. */
+export function confineExitFile(path: string, roots: ExitFileRoots, pid?: number): { ok: true; path: string } | { ok: false; allowed: string[] } {
   const absolute = isAbsolute(path) ? resolve(path) : resolve(roots.worktree, path);
   const resolved = realThroughAncestors(absolute);
   const inside = rootsOf(roots).map(real).some(root => resolved === root || resolved.startsWith(root + sep));
-  return inside ? { ok: true, path: absolute } : { ok: false, allowed: rootsOf(roots) };
+  return inside || (pid !== undefined && jobExitFile(absolute, pid)) ? { ok: true, path: absolute } : { ok: false, allowed: rootsOf(roots) };
 }
 
 /**
@@ -43,9 +54,9 @@ export function confineExitFile(path: string, roots: ExitFileRoots): { ok: true;
  * outside the roots (a symlink swapped in after registration), so the caller reports an error
  * instead of reading it.
  */
-export function readExitCode(path: string, roots: ExitFileRoots): { present: false } | { present: true; exitCode?: number } {
+export function readExitCode(path: string, roots: ExitFileRoots, pid?: number): { present: false } | { present: true; exitCode?: number } {
   if (!existsSync(path)) return { present: false };
-  if (!confineExitFile(path, roots).ok) throw new Error(`the exit file now resolves outside the worktree and the ${productName('Cezar')} temp directory`);
+  if (!confineExitFile(path, roots, pid).ok) throw new Error(`the exit file now resolves outside the worktree and the ${productName('Cezar')} temp directory, and no job record beside it names it`);
   // Non-blocking: a FIFO with no writer would block a plain open, and this runs on the server's
   // event loop. The opened descriptor, not a path stat, decides, so a file swapped in between
   // the two cannot slip past.

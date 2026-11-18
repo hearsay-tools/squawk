@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { confineExitFile, readExitCode } from './exit-file.ts';
+import { superviseJob } from '../jobs/job.ts';
+import { readdirSync } from 'node:fs';
 
 // hearsay-tools/cezarion#1446: the exit file is the one thing Squawk reads for a process wait. It
 // must sit in the worktree or the run's temp directory, and only an integer leaves it.
@@ -33,6 +35,44 @@ describe('confineExitFile', () => {
     writeFileSync(join(outside, 'secret'), '0\n');
     symlinkSync(join(outside, 'secret'), join(worktree, 'secret.exit'));
     expect(confineExitFile('secret.exit', { worktree, tmpDir }).ok).toBe(false);
+  });
+});
+
+// hearsay-tools/squawk#3909: a job started with `--dir` outside both roots keeps a waitable exit file.
+describe('confineExitFile — an hsq job exit file in its own --dir', () => {
+  const node = (script: string) => [process.execPath, '-e', script];
+  // The supervisor runs in this process, so its PID, recorded in the exit file name, is ours.
+  const jobExit = async () => {
+    expect(await superviseJob(outside, 'build', node('process.exit(4)'))).toBe(4);
+    return join(outside, readdirSync(outside).find(file => file.endsWith('.exit'))!);
+  };
+
+  it('accepts the exit file for the job PID, and reads its code', async () => {
+    const exitFile = await jobExit();
+    expect(confineExitFile(exitFile, { worktree, tmpDir }, process.pid)).toEqual({ ok: true, path: exitFile });
+    expect(readExitCode(exitFile, { worktree, tmpDir }, process.pid)).toEqual({ present: true, exitCode: 4 });
+  });
+
+  it('refuses it for another PID or with no PID', async () => {
+    const exitFile = await jobExit();
+    expect(confineExitFile(exitFile, { worktree, tmpDir }, process.pid + 1).ok).toBe(false);
+    expect(confineExitFile(exitFile, { worktree, tmpDir }).ok).toBe(false);
+    expect(() => readExitCode(exitFile, { worktree, tmpDir })).toThrow(/no job record/);
+  });
+
+  it('refuses a path outside both roots that no job record proves', async () => {
+    writeFileSync(join(outside, `other.abc-${process.pid}.exit`), '0\n');
+    expect(confineExitFile(join(outside, `other.abc-${process.pid}.exit`), { worktree, tmpDir }, process.pid).ok).toBe(false);
+    writeFileSync(join(outside, 'plain.exit'), '0\n');
+    expect(confineExitFile(join(outside, 'plain.exit'), { worktree, tmpDir }, process.pid).ok).toBe(false);
+  });
+
+  it('refuses a symlink named like the job exit file', async () => {
+    const exitFile = await jobExit();
+    writeFileSync(join(root, 'secret'), '0\n');
+    const forged = exitFile.replace(/\.exit$/, '').replace(/-\d+$/, '') + `x-${process.pid}.exit`;
+    symlinkSync(join(root, 'secret'), forged);
+    expect(confineExitFile(forged, { worktree, tmpDir }, process.pid).ok).toBe(false);
   });
 });
 

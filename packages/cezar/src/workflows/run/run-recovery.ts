@@ -124,6 +124,7 @@ export class RunRecovery {
       this.recoveryInFlight = undefined;
       settled();
     }
+    this.familyReconciler.reapDeferredScratch();
     // Only a family with a live member has anyone left to route to or fall back from.
     this.workerQuestions.recoverWorkerMessages(familyRootId === undefined ? this.familyReconciler.liveFamilyMembers() : this.familyReconciler.familyMembers(familyRootId), familyRootId);
     // A parent reply accepted just before the crash still answers its worker (#505), and only a
