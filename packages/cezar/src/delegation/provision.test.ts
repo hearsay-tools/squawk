@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../core/every-runner.testkit.ts';
 import { fixture } from './service.testkit.ts';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { provisionDelegationSession, DelegationController } from './provision.ts';
 import { buildChildEnv } from '../core/agent-env.ts';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
@@ -110,7 +112,11 @@ describe('session provisioning', () => {
     f.store.updateRun(ordinary.id, { delegation: { role: 'invalid' } });
     expect(provision(ordinary.id)).toBeUndefined();
     const { workerId } = await f.service.spawn(f.caller, { task: 'worker', baseline: 'HEAD', requestId: randomUUID() });
-    const worker = provision(workerId)!; expect(worker.instructions).toContain(`You cannot spawn ${productName('Cezar')} workers`); expect(worker.instructions).toContain('wait --request'); expect(worker.instructions).toContain(f.parent.id); expect(worker.instructions).toContain('message reply');
+    const worker = provision(workerId)!;
+    // hearsay-tools/squawk#3819: a root's worker may start one shared worker; a worker with no spawn grant keeps the old sentence.
+    expect(worker.instructions).toMatch(new RegExp(String.raw`You may start one shared-workspace ${productName('Cezar')} worker at a time; destroy it before you start the next\. Run .* worker spawn --help first\. You cannot control peers`));
+    expect(worker.instructions).not.toContain('You cannot spawn');
+    expect(worker.instructions).toContain('wait --request'); expect(worker.instructions).toContain(f.parent.id); expect(worker.instructions).toContain('message reply');
     // #505: a worker's questions go to its parent, which replies or asks the human.
     expect(worker.instructions).toContain('Ask your parent with hsq message request; any question you raise goes to your parent too, never to a human.');
     expect(worker.instructions).not.toContain('cezar_ask');
@@ -124,8 +130,15 @@ describe('session provisioning', () => {
     expect(root.instructions).toContain('--request-id <question-id>');
     // hearsay-tools/cezarion#1234: an open question takes the parent's own words.
     expect(root.instructions).toContain("one '<header>: <answer>' line per question (an option's label, or your own words for a question without options)");
-    expect(f.store.getRun(workerId)?.delegation).toMatchObject({ role: 'worker', permissions: [] });
-    await expect(f.service.spawn(f.credentials.authenticate(worker.env.CEZ_DELEGATION_TOKEN!)!, { task: 'no', baseline: 'HEAD', requestId: randomUUID() })).rejects.toMatchObject({ code: 'denied_scope' });
+    const granted = f.store.getRun(workerId)!.delegation!;
+    expect(granted).toMatchObject({ role: 'worker', spawnGrant: { kinds: ['shared'], live: 1 } });
+    expect(root.instructions).toContain('A worker may start one shared-workspace worker of its own at a time. Workers cannot message peers.');
+    setRunStatus(f.store, workerId, RUN_STATUS.running);
+    await expect(f.service.spawn(f.credentials.authenticate(worker.env.CEZ_DELEGATION_TOKEN!)!, { task: 'no', workspace: 'isolated', baseline: 'HEAD', requestId: randomUUID() }))
+      .rejects.toMatchObject({ code: 'denied_scope', message: expect.stringContaining('Allowed: --workspace shared') });
+    const { spawnGrant: _grant, ...ungranted } = granted as typeof granted & { spawnGrant?: unknown };
+    f.store.commitDelegation([{ id: workerId, delegation: ungranted as typeof granted }]);
+    expect(provision(workerId)!.instructions).toContain(`You cannot spawn ${productName('Cezar')} workers. You cannot control peers`);
   });
   // hearsay-tools/cezarion#2279: both roles may use native subagents; each mechanism has its own
   // purpose, and `cez message` is the only channel to another Squawk task.
@@ -139,7 +152,6 @@ describe('session provisioning', () => {
     expect(root).toContain(`Also use a ${productName('Cezar')} worker when the task needs a model available only through another runner, even if the work is research or analysis.`);
     expect(root).toContain(`Native subagents need no ${productName('Cezar')} worker, worktree, collection or destruction.`);
     expect(worker).toContain('You may use native subagents for research, code reading and focused analysis.');
-    expect(worker).toContain(`You cannot spawn ${productName('Cezar')} workers.`);
     expect(worker).not.toContain(`Also use a ${productName('Cezar')} worker`);
     for (const text of [root, worker]) {
       expect(text).toContain('You may message your own native subagents with your runner\'s tools.');

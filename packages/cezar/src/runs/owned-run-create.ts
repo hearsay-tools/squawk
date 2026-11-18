@@ -7,7 +7,7 @@ import type { DelegationState, RunRecord } from '@open-mercato/cezar-contract';
 import { delegationStateSchema, ownsDirectory, workerCreationReceiptSchema } from '@open-mercato/cezar-contract/delegation';
 import { workerExecutionIdentitySchema, type WorkerExecutionIdentity } from '../delegation/execution-identity.ts';
 import { spawnCapacityRefusal } from '../delegation/capacity.ts';
-import { maySpawn, receiptSupervisorId, supervisedReceipts, supervisorIdOf } from './task-rights.ts';
+import { receiptSupervisorId, supervisedReceipts, supervisorIdOf } from './task-rights.ts';
 import type { WorkerExecution } from './worker-execution.ts';
 
 type RootDelegation = Extract<DelegationState, { role: 'root' }>;
@@ -55,10 +55,10 @@ export function createStoreOwnedRun<TInput extends { worktree?: false | undefine
   const receipt = supervisedReceipts(parent, supervisorId).find((entry) => entry.requestId === identity.requestId);
   if (receipt) return existingOwnedRunReceipt(state, parentId, receipt, identity);
   const metadata = parseOwnedWorkerMetadata(worker, parentId, input.worktree);
-  // The supervisor's liveness, its grant, its own limit and the family's limits (#816) are read
-  // here, in the step that writes the receipt, so no path writes a receipt past any of them.
+  // The supervisor's liveness, its own limit and the family's limits (#816) are read here, in the
+  // step that writes the receipt, so no path writes a receipt past any of them. The spawn policy
+  // checks the grant's kinds in the same synchronous step, before this call.
   const supervisor = liveSupervisor(state, parent, supervisorId);
-  if (!maySpawn(supervisor, metadata.workspace.kind)) throw new Error('invalid delegation supervisor');
   const refusal = spawnCapacityRefusal(parent, supervisor, (id) => state.peek(id));
   if (refusal) throw new Error(refusal);
   assertWorkerResourceFree(state, metadata.workspace);

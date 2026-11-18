@@ -20,7 +20,7 @@ import { TurnSettler } from './run/turn-settler.ts';
 import { TrackedWork } from './run/tracked-work.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { RunModuleContext } from './run/types.ts';
-import type { CompletionGateHost } from './run/completion-gate.ts';
+import { parentCompletionBlockers, type CompletionGateHost } from './run/completion-gate.ts';
 import { DONE_RECONSIDERED_NOTE, type TurnEndOutcome } from './turn-end.ts';
 import { clearIdleTimer } from './run/input-timers.ts';
 import { createActiveRun, type ActiveRun } from './active-run.ts';
@@ -135,6 +135,30 @@ describe('the completion gate outside a turn end', () => {
     });
 
 
+  });
+
+  // hearsay-tools/squawk#3819: the same gate holds a worker that started a worker; one that started none passes.
+  describe('the gate of a worker that supervises', () => {
+    const workspace = (ownerRunId: string) => ({ ownerRunId, resourceId: randomUUID(), kind: 'shared' as const, path: root, hostRunId: randomUUID(), baselineSha: 'a'.repeat(40) });
+    const receipt = (ownerRunId: string, supervisorRunId?: string) => ({ requestId: randomUUID(), workerId: ownerRunId, requestHash: 'a'.repeat(64), ...(supervisorRunId ? { supervisorRunId } : {}) });
+    let childId: string;
+    beforeEach(() => {
+      const rootId = store.createRun({ title: 'root', task: 'work', workflow: 'quick-task', steps: [] }).id;
+      childId = store.createRun({ title: 'child', task: 'work', workflow: 'quick-task', steps: [] }).id;
+      setRunStatus(store, rootId, RUN_STATUS.running); setRunStatus(store, childId, RUN_STATUS.running);
+      store.commitDelegation([
+        { id: rootId, delegation: { role: 'root', permissions: ['wait'], receipts: [receipt(id), receipt(childId, id)] } },
+        { id, delegation: { role: 'worker', permissions: ['wait'], parentRunId: rootId, workspace: workspace(id) } },
+        { id: childId, delegation: { role: 'worker', permissions: [], parentRunId: rootId, supervisorRunId: id, workspace: workspace(childId) } },
+      ]);
+      vi.mocked(gateHost.parentCompletionBlockers).mockImplementation(runId => parentCompletionBlockers({ store } as RunModuleContext, gateHost, runId));
+    });
+
+    it('refuses the supervisor\'s done while its child is live, and names the child and the wait', () => {
+      expect(finish.completionGate(id)).toMatchObject({ code: 'workers_outstanding', liveWorkerIds: [childId],
+        message: expect.stringContaining(`Workers are still live: ${childId}. Wait for them (\`worker wait ${childId}\`, then end your turn)`) });
+      expect(finish.completionGate(childId)).toBe('accept');
+    });
   });
 
   const queueInput = () => store.commitAgentInputs(id, [{ id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId: randomUUID(), text: 'Read this first', createdAt: new Date().toISOString() }]);
