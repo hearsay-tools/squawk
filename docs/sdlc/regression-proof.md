@@ -1,50 +1,79 @@
-# Regression proof recipes
+# Regression proofs
 
 [Changing working behavior](../../CODE_REVIEW.md#changing-working-behavior) says when a
-regression test needs proof that it fails without the fix. This page holds the
-recipes. Each keeps the task's tracked files in place, so Squeal never runs a
-swapped version, and none uses the shared git stash stack.
+regression test needs proof that it fails without the fix. This page says how to get it.
+
+Every proof runs through `squeal proof`. It runs the red side and the green side in its own
+temporary checkout, reads a side from Squeal's store when a result exists, and tells an
+assertion failure apart from an import or setup error. The task's work tree, its index and
+the stash stay untouched, so no test runner runs by hand in a Squeal-watched worktree
+(AGENTS.md § Validation). `squeal proof` reads committed `HEAD`: commit the test and the
+fix first. It covers Vitest server and web tests, node:test files and browser specs. Run
+`squeal --help` for every flag.
+
+A proof's evidence is the red line, the green line and the task-worktree Squeal verdict of
+the same test file (`squeal status --json <test file>`, `.selection.testFiles`). Put all
+three in one place: the PR body, or the one reply that answers a review thread.
 
 ## Source fix
 
-For a **source fix**, run the new regression test against the old source in a
-disposable worktree. From the repo root, replace the example commit and paths:
+Run the new regression test over the code from before the fix:
 
 ```bash
-proof_base=<pre-fix-commit>
-proof_repo=$(git rev-parse --show-toplevel)
-proof_dir=$(mktemp -d "${TMPDIR:-/tmp}/cezar-red-proof.XXXXXX")
-git worktree add --detach "$proof_dir/tree" "$proof_base"
-(cd "$proof_dir/tree" && pnpm install --frozen-lockfile)
-# Copy the current regression test, plus any new test helpers/fixtures it needs.
-
-cp packages/cezar/src/path/to/regression.test.ts \
-  "$proof_dir/tree/packages/cezar/src/path/to/regression.test.ts"
-(cd "$proof_dir/tree" && npm test -- --passWithNoTests=false packages/cezar/src/path/to/regression.test.ts)
-# Inspect the failure: it must show the reported defect, not a broken import/setup.
-
-# Copy only the fixed source files into the scratch tree; keep the same test.
-
-cp packages/cezar/src/path/to/source.ts \
-  "$proof_dir/tree/packages/cezar/src/path/to/source.ts"
-(cd "$proof_dir/tree" && npm test -- --passWithNoTests=false packages/cezar/src/path/to/regression.test.ts)
-# After saving the evidence, clean up even if setup or a test failed.
-
-git -C "$proof_repo" worktree remove --force "$proof_dir/tree"
-rmdir "$proof_dir"
+squeal proof packages/cezar/src/path/to/regression.test.ts --base <commit before the fix>
 ```
 
-Create destination directories for new test paths as needed. Keep the package's
-setup and environment; a scratch worktree needs its own dependency installation,
-not a symlink to another checkout's workspace packages. Do not start Squeal in
-this disposable tree. These recipes are one of the exceptions in AGENTS.md § Validation
-that let a test runner run by hand. Read the fixed test's verdict in the task worktree
-through Squeal too, so the proof does not replace normal verification.
+Red is the test at `HEAD` over the code at `--base`. Green is the test and the code at
+`HEAD`. The verdict must be `proven`, with a red failure that shows the reported defect.
+`red for another reason` (an import or setup error) and `not comparable` are not proof.
 
-## Mutant report instead of the scratch worktree
+A browser spec usually fails by a wait that times out, not by an assertion, so its red side
+reads `red for another reason` even when the break caused it. Such a side counts as red
+only when its failure text names the broken behavior, for example
+`predicate never became truthy: document.body.textContent.includes('Automations are off')`
+for a break that renames that title. An error in setup, the build or the browser launch is
+not proof. Squeal stores no green side for a red it cannot judge: read the green
+verdict from the task worktree (`squeal run browser <spec> --wait 60000`).
 
-The **Mutation report** comment on a pull request can stand in for the **source fix** recipe above,
-and for no other recipe. The job
+### A fix that spans several commits
+
+When the fix for one thread or issue spans several commits, prove each fixed case on its
+own. Take as `--base` the parent of the commit that introduced the fix for that case, not
+the parent of the first commit and not the merge base. A base that already holds an earlier
+fix commit can turn a real proof into `not red` or hide one case behind another. Report
+each case with its own red line, green line and Squeal verdict, in the same reply.
+
+## A named break on `HEAD`
+
+To prove that today's tests still catch an old bug, apply a named break to `HEAD` and
+run the tests over it:
+
+```bash
+node scripts/regression-proof.mjs <recipe>
+node scripts/regression-proof.mjs --revert <commit> --test <test file>...
+node scripts/regression-proof.mjs --patch <file> --test <test file>...
+```
+
+The script builds the break as a commit object over `HEAD` (a temporary index, never
+checked out), runs `squeal proof <tests> --base <break> --case source`, and prints each
+file's verdict, its failing tests and `proven X/Y`. Its exit code is Squeal's: 0 when
+every file is proven. `--revert` reverts one non-merge commit on top of `HEAD` and stops
+when the revert conflicts. `--patch` applies a patch that introduces the break.
+
+A **recipe** is `scripts/regression-proofs/<name>.json`: a `description`, `fixedBy` (the
+commit that fixed the bug), `break` (entries of `file`, `find` and `replace`, where `find`
+occurs exactly once in the file) and `tests`. Check in a recipe for a bug that a parity
+row, a contract row or another shared test must keep catching. `--list` names the
+recipes; `--check` validates them at `HEAD`. `scripts/regression-proof.test.mjs` fails
+any change that moves a recipe's break text or test file: update the recipe in that
+change.
+
+Cite a proof by its command and its `proven X/Y` line, beside the Squeal verdict.
+
+## Mutant report instead of `squeal proof`
+
+The **Mutation report** comment on a pull request can stand in for the **source fix** proof above,
+and for no other proof. The job
 ([`mutation-report.yml`](../../.github/workflows/mutation-report.yml)) makes small edits to the lines
 the pull request changes, called mutants, and runs the package's own unit tests against each one. A
 mutant that makes a test fail is **killed**. It is advisory: it never blocks a merge, and it posts one
@@ -56,7 +85,7 @@ A mutant that restores the behavior from before the fix can only be killed by a 
 adds or changes, because every older test passed against the pre-fix code on `main`. A killed
 mutant of that kind is the red proof, found by the job and not by hand.
 
-The report stands in for the recipe when all of these hold:
+The report stands in for the proof when all of these hold:
 
 1. The comment names the commit you pushed, and the package that holds the fix shows no `Skipped`,
    `Stopped` or `Failed` line. A package is skipped above the limits in
@@ -74,7 +103,7 @@ Cite the comment in the PR body: the commit, then the file, line and mutator of 
 The report does **not** stand in when the fix is outside `packages/*/src` (scripts, workflows,
 configuration, documents), when the change only deletes code or only edits a module-level constant
 (the job skips static mutants), when the change is test-only or removes a hidden dependency, when the
-test pins timing or load, or when no pull request exists yet. Use the matching recipe then. To run
+test pins timing or load, or when no pull request exists yet. Use the matching proof then. To run
 the job by hand, do it in a standalone scratch clone where Squeal does not run, because Stryker edits
 files in place: `STRYKER_PROJECT=<package> pnpm exec stryker run --mutate 'packages/<package>/src/<file>.ts:<from>-<to>'`.
 Never use a linked worktree for it: a mutant can run the real dependency in place of the injected
@@ -150,62 +179,32 @@ score. Give it a tier, or leave it out. The weekly run closes an open issue for 
 entry with a comment that states this rule. The whole-file command prints `Tier: none` for such a
 file and no target lines. A contract file still prints its consumer-test PASS or FAIL line.
 
-## Test-only change that removes a hidden dependency
-
-A **test-only change that removes a hidden dependency** needs this proof even
-when no failure has been observed. This includes dependence on a catalog, a host
-setting or a default the test did not write. Run the old test with that dependency
-absent and confirm it fails for that reason, then run the fixed test under the
-same conditions and confirm it passes. Cite the evidence in the PR body, in the
-[E2E form](../../packages/web/e2e/README.md#the-rules-the-ratchet-enforces); for
-non-browser tests, cite the runner output instead of a bundle.
-
 ## Test-only fix
 
-For a **test-only fix**, reproduce the old test's defect under the same conditions
-as the fixed test. There is no source fix to remove. Keep both versions out of the
-watched test paths: create an ignored scratch copy with `git show`, then select it
-with an explicit scratch Vitest config. For a server test, from the repo root:
+For a **test-only fix**, run the old test over the current code, repeated as often as
+the defect needs to show:
 
 ```bash
-proof_base=<pre-fix-commit>
-mkdir -p .ai/qa
-proof_dir=$(mktemp -d .ai/qa/red-proof.XXXXXX)
-git check-ignore "$proof_dir/before.test.ts"
-git show "$proof_base:packages/cezar/src/path/to/test.test.ts" > "$proof_dir/before.test.ts"
+squeal proof packages/cezar/src/path/to/test.test.ts --base <commit before the fix> --case test --repeat 20
 ```
 
-In that directory, write `vitest.config.ts` with this content:
+Red is the test at `--base` over the code at `HEAD`. A load-related failure needs its
+original load or a controlled reproduction. An ordinary passing red side is not proof.
 
-```typescript
-import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vitest/config'
-import server from '../../../packages/cezar/vitest.config.ts'
+## Test-only change that removes a hidden dependency
 
-export default defineConfig({
-  ...server,
-  root: fileURLToPath(new URL('../../../packages/cezar/', import.meta.url)),
-  test: {
-    ...server.test,
-    include: [fileURLToPath(new URL('./before.test.ts', import.meta.url))],
-    passWithNoTests: false,
-  },
-})
+A **test-only change that removes a hidden dependency** needs this proof even when no
+failure has been observed. This includes dependence on a catalog, a host setting or a
+default the test did not write. Name the dependency as a condition on both sides:
+
+```bash
+squeal proof <test file> --base <commit before the fix> --case dependency \
+  --without <path> --env NAME=
 ```
 
-Adapt the package config for other workspaces. In the scratch test, adjust relative
-imports and fixture paths to their original absolute locations; account for uses
-of `import.meta.url` and colocated mocks too. Preserve the assertions and the
-reproduction conditions. Run `npm test -- --config "$proof_dir/vitest.config.ts"`.
-Inspect the failure, then replace only the scratch test with the fixed version,
-apply the same path adjustments, and run the same command for green. A load-related
-failure needs its original load or a controlled reproduction; an unrelated import
-error, empty test selection or ordinary passing run is not red proof. Scratch tests
-outside a package root can lose `console.log` output; use assertion failures and
-captured runner output as evidence, not the presence or absence of a log line.
-Remove the scratch test and config after saving the evidence (`rm -r "$proof_dir"`).
-
-These recipes leave the task's tracked source and test files in place, so Squeal
-never runs a temporarily swapped version. Ignoring a scratch file alone does not
-exclude it from a test runner: keep it outside the package's test include patterns
-and use the explicit scratch config only for the manual proof.
+`--without` hides a path in the repository or under `HOME` (with `--home-keep` for files
+the run still needs). `--env NAME=` unsets a variable, and `--env NAME=value` sets one. The
+old test must fail for that reason, and the new test must pass under the same conditions.
+Cite the evidence in the PR body, in the
+[E2E form](../../packages/web/e2e/README.md#the-rules-the-ratchet-enforces); for
+non-browser tests, cite the runner output instead of a bundle.
