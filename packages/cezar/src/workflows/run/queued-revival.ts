@@ -9,7 +9,7 @@ import { stepKind, type WorkflowDef } from '../types.ts';
 import type { PastedContent } from '../pasted-content.ts';
 import type { PendingJob } from './run-line.ts';
 import type { RunModuleContext, PendingContinuation, StartRunInput } from './types.ts';
-import { cutOffWork, type CutOffWork } from './cut-off-work.ts';
+import { withCutOff } from './cut-off-work.ts';
 
 export interface QueuedRevivalHost {
   move(runId: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): RunRecord | undefined;
@@ -29,13 +29,6 @@ export interface QueuedRevivalHost {
   checkpointRestartContext(run: RunRecord, queuedStepId?: string): RunRecord;
 }
 
-/** What the restart cut off, from the event log; a log that cannot be read names nothing. */
-function cutOffOf(context: RunModuleContext, run: RunRecord): { cutOff?: CutOffWork } {
-  let work: CutOffWork | undefined;
-  try { work = cutOffWork(context.store.readEvents(run.id)); } catch { work = undefined; }
-  return work ? { cutOff: work } : {};
-}
-
 /** Save restart evidence before queue admission or the next startup await. */
 export function checkpointRestartContext(context: RunModuleContext, host: QueuedRevivalHost, run: RunRecord, queuedStepId?: string): RunRecord {
   const message = atContinue.checkpoint(run) ?? (queuedStepId ? {
@@ -45,7 +38,7 @@ export function checkpointRestartContext(context: RunModuleContext, host: Queued
   const updated = context.store.updateRun(run.id, { continuationMessage: {
     ...message,
     ...(message.origin === 'lifecycle' && message.text === host.restartContinuationPrompt ? { text: 'Continue.' } : {}),
-    resumeContext: { ...message.resumeContext, restarted: true, ...cutOffOf(context, run) },
+    resumeContext: withCutOff(context.store, run.id, { ...message.resumeContext, restarted: true }),
   } }) ?? run;
   context.store.flush();
   return updated;

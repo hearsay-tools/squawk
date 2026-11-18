@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cutOffWork } from './cut-off-work.ts';
+import { cutOffWork, recordCutOffWork, withCutOff } from './cut-off-work.ts';
 
 // hearsay-tools/squawk#3909: the resume after a restart names the work the restart cut off, from
 // Squawk's own event log, the same on every runner.
@@ -32,5 +32,32 @@ describe('cutOffWork', () => {
     const long = cutOffWork([turn, tool('x', 'running', { title: 'y'.repeat(300) })])!.tools![0]!;
     expect(long.length).toBe(120);
     expect(long.endsWith('…')).toBe(true);
+  });
+});
+
+describe('recordCutOffWork', () => {
+  const logOf = (events: unknown[]) => ({
+    readEvents: () => [...events],
+    appendEvent: (_runId: string, event: { type: string }) => { events.push(event); return event; },
+  });
+
+  it('ends each cut-off item as declined, so a later restart names nothing again', () => {
+    const events: unknown[] = [tool('agent', 'running', { name: 'Agent', title: 'Docs sweep', background: true }), turn, { ...tool('prepr', 'running'), stepId: 'task' }];
+    const log = logOf(events);
+    expect(recordCutOffWork(log, 'run')).toEqual({ tools: ['Bash: Ran prepr'], subagents: ['Agent: Docs sweep'] });
+    expect(events.slice(3)).toEqual([
+      { type: 'item.completed', stepId: 'task', item: expect.objectContaining({ id: 'prepr', status: 'declined' }) },
+      { type: 'item.completed', item: expect.objectContaining({ id: 'agent', status: 'declined', background: true }) },
+    ]);
+    // A second restart, after a new turn of a new process.
+    events.push(turn);
+    expect(recordCutOffWork(log, 'run')).toBeUndefined();
+  });
+
+  it('a first restart with no checkpoint still names the work; an existing name list stays', () => {
+    const log = logOf([turn, tool('prepr', 'running')]);
+    expect(withCutOff(log, 'run', { restarted: true })).toEqual({ restarted: true, cutOff: { tools: ['Bash: Ran prepr'] } });
+    expect(withCutOff(logOf([turn, tool('x', 'running')]), 'run', { restarted: true, cutOff: { tools: ['kept'] } })).toEqual({ restarted: true, cutOff: { tools: ['kept'] } });
+    expect(withCutOff(logOf([turn, tool('x', 'running')]), 'run', {})).toEqual({});
   });
 });
