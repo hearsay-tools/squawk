@@ -16,7 +16,7 @@ import { fixtureWork } from '../workflows/fixture-manager.testkit.ts';
 import { inputDeliveryOf } from './agent-runner.ts';
 import { promptFor, waitFor } from './harness-parity-core.testkit.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
-import { withOwnedInputRun, withoutTaskScenario } from './workflow-parity-core.testkit.ts';
+import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
 
 export const agentInput = (parentRunId: string, text = '/owned-skill mock:agent-echo parent steering'): AgentInput => ({
   id: randomUUID(), source: agentInputSchema.shape.source.enum.agent, parentRunId, text, createdAt: new Date().toISOString(),
@@ -147,7 +147,6 @@ export const OWNED_INPUT_GROUPS = {
             expect(manager.continueRun(runId).ok).toBe(false);
             expect(manager.continueRun(runId, { text: 'Vitest' }).ok).toBe(false);
             expect(store.readEvents(runId).filter(e => e.type === 'user-message')).toEqual([]);
-            withoutTaskScenario(store, runId);
             await fixture.answer('Vitest');
             await waitFor(() => store.getRun(runId)?.agentInputs?.[0]?.deliveredAt !== undefined);
             await waitFor(() => store.readEvents(runId).some(e => e.type === 'text' && String(e.text).includes('parent steering')));
@@ -175,7 +174,6 @@ export const OWNED_INPUT_GROUPS = {
             expect(hasPendingAsk(store, runId)).toBe(true);
             const input = agentInput(parentRunId);
             expect(manager.steerWorker(runId, input)).toBe('queued');
-            withoutTaskScenario(store, runId);
             const recovered = await fixture.restart();
             // Recovery delivers the parent's accepted answer; no human answers it.
             expect(recovered.manager.continueRun(runId).ok).toBe(false);

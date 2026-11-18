@@ -172,8 +172,11 @@ export function opening(message: QueuedMessage, recovered: RunRecord['continuati
 
 export function acceptedMessage(message: QueuedMessage, stepId: string, prompt: string,
   resumeContext: ReturnType<typeof opening>['resumeContext'],
-  recovered: RunRecord['continuationMessage'], conversation: ContinuationConversation, opts: ContinueRunOptions, defer: boolean) {
-  return { ...message, id: stepId, text: prompt,
+  recovered: RunRecord['continuationMessage'], conversation: ContinuationConversation, opts: ContinueRunOptions, defer: boolean,
+  task: string) {
+  // A recovered checkpoint keeps the task its session started with, across repeated restarts.
+  const startedTask = recovered ? recovered.task : task;
+  return { ...message, id: stepId, text: prompt, ...(startedTask === undefined ? {} : { task: startedTask }),
     ...(resumeContext ? { resumeContext } : {}),
     ...(conversation ? { agentInputId: conversation.input.id } : opts.answerInputId ? { agentInputId: opts.answerInputId } : {}),
     // A parent's answer answers the ask exactly like a human's.

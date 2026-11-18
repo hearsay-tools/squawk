@@ -7,6 +7,7 @@ import { previewServerSchema } from './preview.ts';
 import { isAttachmentMediaType } from './attachments.ts';
 import { runWorkflowLabel } from './run-labels.ts';
 import { ARCHIVED_RUNS_PAGE_MAX } from './run-limits.ts';
+import { continuationMessageSchema, queuedMessageSchema } from './queued-messages.ts';
 // The chain shapes belong to the workflows family; the run record embeds one, so this file
 // consumes them rather than redeclaring. One-way on purpose — see the header of `./workflows.ts`.
 import { workflowDefSchema, workflowStepDefSchema } from './workflows.ts';
@@ -113,31 +114,6 @@ export const diffStatSchema = z.object({
   repointed: z.boolean().optional(),
 });
 export type DiffStat = z.infer<typeof diffStatSchema>;
-
-/** One prompt message stacked onto a run while it waits for a free agent slot (#472). */
-export const queuedMessageSchema = z.object({
-  replayAfterOpen: z.literal(true).optional(), // NativeSkillInputQueue sets; launch hydration excludes; QueuedInput replays after open.
-  id: z.string(),
-  text: z.string(),
-  /** `/api/v1/runs/:id/images/…` URLs — attachments are persisted, never inlined. Images and
-   *  files share this one list; read `isImageAttachmentName` on the file name to tell them apart. */
-  images: z.array(z.string()).optional(),
-  createdAt: z.string(),
-});
-export type QueuedMessage = z.infer<typeof queuedMessageSchema>;
-
-/** Optional for legacy records; only explicit human origin can acknowledge a delegated ask. */
-export const continuationMessageSchema = queuedMessageSchema.extend({
-  origin: z.enum(['human', 'lifecycle']).optional(),
-  /** An attributed parent message used as the opening prompt, never a human answer. */
-  agentInputId: z.uuid().optional(),
-  /** Captured before clearing the run error. Keep generated context separate from human
-   * text so repeated restart recovery never accumulates diagnostic prefixes. */
-  resumeContext: z.object({
-    failure: z.object({ stepId: z.string().optional(), error: z.string() }).optional(),
-    restarted: z.literal(true).optional(),
-  }).optional(),
-});
 
 /** One aggregated sample of a run's live process tree (`src/core/process-usage.ts`). */
 export const processUsageSchema = z.object({

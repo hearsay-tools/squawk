@@ -1,10 +1,11 @@
 # Core layer map (hearsay-tools/squawk#3706)
 Status: active
 
-Step 0 of the plan that makes Squawk a small core with features built as plugins. This step
-writes the line down and stops new leaks. It moves no code. The rule and its three binding rules
-are in [ADR 0065](../../docs/adr/0065-define-the-core-by-a-layer-map.md). This spec keeps the
-layers, the owner's layer calls and the measurement.
+Step 0 of [the plan](2026-11-18-plugin-core-roadmap.md) that makes Squawk a small core with
+features built as plugins. This step writes the line down and stops new leaks. It moves no code.
+The rule and its three binding rules are in
+[ADR 0065](../../docs/adr/0065-define-the-core-by-a-layer-map.md). This spec keeps the layers,
+the owner's layer calls and the measurement.
 
 ## Goal
 
@@ -101,6 +102,8 @@ This step:
 - [`docs/sdlc/lint.md`](../../docs/sdlc/lint.md): the rule, its static scope, and how to update
   the map and the baseline.
 
-Later steps, each its own issue: a plugin API and loader (steps 1 to 4), then moving features
-behind it, which shrinks the baseline. Rules between two features, rules for `shell` files, and
-layers for `packages/web`, `packages/contract` and `packages/api-client` are follow-ups.
+Later steps, each its own issue, are in the
+[plugin core roadmap](2026-11-18-plugin-core-roadmap.md): a plugin API and loader (steps 1 to
+4), then moving features behind it, which shrinks the baseline. Rules between two features,
+rules for `shell` files, and layers for `packages/web`, `packages/contract` and
+`packages/api-client` are follow-ups.

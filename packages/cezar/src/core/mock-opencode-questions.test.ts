@@ -91,7 +91,7 @@ describe('mock OpenCode questions', () => {
 
   it('answers a reopened session that opens with the answer instead of asking again', async () => {
     const { replies, route, types, answerText } = harness();
-    const reopened = body('Library: Vitest\n\nCurrent task and queued updates:\n\nmock:ask mock:resume-cezar-done');
+    const reopened = body('Library: Vitest\n\nMessages sent while this task waited:\n\nmock:ask mock:resume-cezar-done');
     await route(reopened)!(reopened);
     expect(replies.pendingQuestions).toEqual([]);
     expect(answerText()?.text).toBe(`human answer: ${reopened} [done]`);

@@ -973,9 +973,10 @@ describe('RunManager queued-stack mutators (#472)', () => {
     await semaphore.release();
     await waitForProduct(manager, store, () => !!delivered);
     expect(delivered?.userPrompt).toContain(
-      'restart recovery\n\nCurrent task and queued updates:\n\n' +
-        'amended recovery goal\n\nalso verify the queue',
+      'restart recovery\n\nThe task was edited while it waited. Current task:\n\namended recovery goal' +
+        '\n\nMessages sent while this task waited:\n\nalso verify the queue',
     );
+    expect(delivered?.userPrompt).not.toContain('original recovery goal');
     expect(delivered?.images).toEqual([image()]);
     expect(delivered?.userPrompt).toContain(join(imagesDir(r.id), 'pasted-1.png'));
     expect(delivered?.userPrompt).toContain(join(imagesDir(r.id), 'pasted-2.md'));

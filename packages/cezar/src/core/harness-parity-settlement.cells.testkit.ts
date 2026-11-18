@@ -332,7 +332,9 @@ export const SETTLEMENT_GROUPS = {
               const closedWhileAsking = { active: manager.isActive(runId), status: store.getRun(runId)?.status, pendingAsk: hasPendingAsk(store, runId) };
               idle.restore();
               const answerSeq = store.readEvents(runId).length;
-              await answer(ask.answer);
+              // The reopened session does not hear its task again (hearsay-tools/squawk#3882), so the
+              // answer carries the mock's plan to finish once answered.
+              await answer(`${ask.answer}\n\nmock:resume-cezar-done`);
               // bound: the answer reopens the session, whose turn ends the run.
               await waitFor(() => !manager.isActive(runId) && ['done', 'review', 'failed'].includes(store.getRun(runId)?.status ?? ''), 30_000);
               const events = store.readEvents(runId);

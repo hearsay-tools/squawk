@@ -42,10 +42,11 @@ export function agentDirectories(runsDir: string, env: Record<string, string>): 
   return env.TMPDIR ? [runsDir, env.TMPDIR] : [runsDir];
 }
 
-/** Compose only at delivery. The durable continuation retains its original text/attachments. */
-export function withResumeContext(prompt: string, message: RunRecord['continuationMessage']): string {
+/** The notice a Continue's checkpoint adds in front of its prompt, or undefined. The cockpit shows
+ *  the same text as a note beside the Continue's message (hearsay-tools/squawk#3882). */
+export function resumeNotice(message: RunRecord['continuationMessage']): string | undefined {
   const context = message?.resumeContext;
-  if (!context?.failure && !context?.restarted) return prompt;
+  if (!context?.failure && !context?.restarted) return undefined;
   const parts: string[] = [];
   if (context.restarted) parts.push(`The ${productName('Cezar')} process restarted while you were working on this task. Read the handoff file (HSQ_HANDOFF_FILE (CEZ_HANDOFF_FILE fallback)) to recover context.`);
   if (context.failure) {
@@ -54,8 +55,14 @@ export function withResumeContext(prompt: string, message: RunRecord['continuati
     // the saved error, or the human text that follows it.
     parts.push(`The previous ${stepId ? `step ${JSON.stringify(stepId)}` : 'turn'} failed: ${error.replace(/[\r\n\u2028\u2029]+/g, ' ')}`);
   }
-  parts.push('Background commands from that session may have stopped; verify their state before restarting them.');
-  return `${parts.join(' ')}\n${prompt}`;
+  parts.push('The previous agent process stopped. Subagents it started stopped with it. Shell commands it started may have stopped. Check their state before you wait on them or restart them.');
+  return parts.join(' ');
+}
+
+/** Compose only at delivery. The durable continuation retains its original text/attachments. */
+export function withResumeContext(prompt: string, message: RunRecord['continuationMessage']): string {
+  const notice = resumeNotice(message);
+  return notice ? `${notice}\n${prompt}` : prompt;
 }
 
 export function applyTemplate(template: string, task: string): string {

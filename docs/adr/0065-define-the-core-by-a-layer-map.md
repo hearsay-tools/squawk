@@ -28,7 +28,8 @@ layer calls.
 
 A source file with no layer fails `npm run lint`, so each new file gets a deliberate place. The
 imports that exist today are in `layer-import.baseline.json`, each with a reason. The list only
-shrinks: each later step of the plugin plan removes entries.
+shrinks: each later step of the [plugin plan](../../.ai/specs/2026-11-18-plugin-core-roadmap.md)
+removes entries.
 
 Three rules bind the later steps:
 

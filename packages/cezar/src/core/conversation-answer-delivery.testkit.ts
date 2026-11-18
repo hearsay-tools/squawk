@@ -13,7 +13,7 @@ import type { RunManager } from '../workflows/run.ts';
 import { inputDeliveryOf, RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { createRunner } from './runner-factory.ts';
 import { ANSWER_DELIVERY_CRITERIA, HARNESS_ADAPTERS, exemptionFor, promptFor, waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun, withoutTaskScenario } from './workflow-parity.testkit.ts';
+import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 
 // hearsay-tools/cezarion#935: a Continue executing an answer keeps that answer's checkpoint until
 // turn-end for crash recovery. The checkpoint must not hold worker conversation input arriving
@@ -43,7 +43,6 @@ async function withAnsweredWorker(backend: RunnerId, env: Record<string, string>
     // Native question turns stay open, so a restart is the session close every wire shares.
     let { store, manager } = await fixture.restart();
     expect(manager.isActive(runId)).toBe(false);
-    withoutTaskScenario(store, runId);
     const credentials = new CredentialRegistry();
     const caller = credentials.authenticate(credentials.issue('project', parentRunId, randomUUID()))!;
     const service = new DelegationService();
