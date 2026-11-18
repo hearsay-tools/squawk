@@ -1,10 +1,17 @@
 import { chmodSync, existsSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { setRunStatus } from '../runs/run-store.testkit.ts';
+import { RunStore } from '../runs/store.ts';
+import { RunManager } from '../workflows/run.ts';
+import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
+import { createRunner } from '../core/runner-factory.ts';
+import { testHome } from '../home/test-home.testkit.ts';
+import { DelegationService } from './service.ts';
+import { workerCleanups } from './worker-cleanup.ts';
 import { workerCapacity } from './capacity.ts';
 import { cadence, destroyOf, f, input, linux, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
 
@@ -71,5 +78,20 @@ describe('a worker that failed before its first step (hearsay-tools/squawk#3817)
     const later = await failStart();
     await vi.waitFor(() => expect(destroyOf(later.workerId)?.phase).toBe('complete'), { timeout: 15_000 });
     expect(destroyOf(workerId)).toBeUndefined();
+  });
+
+  it.runIf(linux)('is released after a restart when it settled while no cleanup ran', async () => {
+    // The default fixture has no cleanup, so nothing releases the worker before the restart.
+    const { workerId } = await failStart();
+    f.manager.dispose(); f.store.close();
+    const reopened = RunStore.open(join(f.root, '.ai/cezar'));
+    const manager = new RunManager(reopened, f.root, { acquireCiResources: acquireInertCiResources, createRunner, home: testHome() });
+    const service = new DelegationService(workerCleanups({ backoff: { fastMs: 200, fastCount: 10, capMs: 2_000 } }));
+    const detach = service.registerProject({ home: testHome(), id: 'reopened', root: f.root, store: reopened, manager });
+    try {
+      expect(reopened.listRuns().map(run => run.id)).not.toContain(workerId);
+      service.armDestroyRetries('reopened');
+      await vi.waitFor(() => expect(reopened.getRun(workerId)?.delegation).toMatchObject({ destroy: { phase: 'complete', remaining: [] } }), { timeout: 15_000 });
+    } finally { detach(); manager.dispose(); reopened.flush(); }
   });
 });

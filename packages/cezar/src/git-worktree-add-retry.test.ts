@@ -19,9 +19,10 @@ afterEach(async () => {
 /**
  * A repository, and a `git` on PATH that runs the real one except for `worktree add`: there it
  * records its arguments, then acts as `script` says for that attempt (`slow` sleeps past any test
- * bound, `fail` prints a reason and exits 1, `pass` runs the real command).
+ * bound, `fail` prints a reason and exits 1, `symref` also turns the new branch into a symbolic ref to
+ * `main` before failing, `pass` runs the real command).
  */
-async function slowGit(script: Array<'slow' | 'fail' | 'pass'>) {
+async function slowGit(script: Array<'slow' | 'fail' | 'pass' | 'symref'>) {
   const root = await mkdtemp(join(tmpdir(), 'cezar-worktree-add-'));
   roots.push(root);
   await exec('git', ['init', '-q', '-b', 'main', join(root, 'repo')]);
@@ -39,6 +40,10 @@ if [ "$1" = worktree ] && [ "$2" = add ]; then
   ${JSON.stringify(real)} "$@" || exit $?
   [ "$action" = slow ] && exec sleep 30
   [ "$action" = fail ] && { echo "fatal: example failure" >&2; exit 1; }
+  if [ "$action" = symref ]; then
+    ${JSON.stringify(real)} worktree remove --force "$7" && ${JSON.stringify(real)} symbolic-ref refs/heads/cez/66666666 refs/heads/main
+    echo "fatal: example failure" >&2; exit 1
+  fi
   exit 0
 fi
 exec ${JSON.stringify(real)} "$@"
@@ -94,4 +99,11 @@ it('waits in the lock queue while another task holds the lock, with a claim that
     }, { timeout: 15_000 });
   } finally { release(); await held; }
   expect((await created).branch).toBe('cez/66666666');
+});
+
+it('leaves a branch that became a symbolic ref, and the branch it names, in place', async () => {
+  const { repo } = await slowGit(['symref']);
+  await expect(createWorktree(repo, WORKER, 'main', { freshOnly: true })).rejects.toThrow('git worktree add failed: fatal: example failure');
+  expect((await exec('git', ['symbolic-ref', 'refs/heads/cez/66666666'], { cwd: repo })).stdout.trim()).toBe('refs/heads/main');
+  await expect(exec('git', ['rev-parse', '--verify', 'refs/heads/main'], { cwd: repo })).resolves.toBeDefined();
 });

@@ -103,8 +103,12 @@ export class WorkerCleanup {
 
   armAfterRecovery(): void {
     this.armDestroyRetries(this.project.id);
-    // A fail-start that settled while no controller ran is released now.
-    for (const run of this.project.store.listRuns()) if (failedBeforeFirstStep(this.project.store, run)) this.releaseFailedStart(run.id);
+    // A fail-start that settled while no controller ran is released now. `listRuns` holds only live
+    // runs, and a settled failed worker is not one: read every worker.
+    for (const id of this.project.store.listWorkerIds()) {
+      const run = this.project.store.getRun(id);
+      if (run && failedBeforeFirstStep(this.project.store, run)) this.releaseFailedStart(id);
+    }
   }
 
   detach(): void {

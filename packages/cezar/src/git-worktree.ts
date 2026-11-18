@@ -153,7 +153,7 @@ async function createFreshOwnedWorktree(
     failure = worktreeAddFailure(created, addTimeoutMs);
     // Still under the lock, the path and branch this call proved absent are its own: remove them,
     // so a retry, or a destroy after the worker fails, finds nothing left behind.
-    if (!await rollBackFreshWorktree(repoRoot, absolutePath, branchRef, git)) break;
+    if (!await rollBackFreshWorktree(repoRoot, absolutePath, branchRef, base, git)) break;
   }
   throw new Error(`git worktree add failed: ${failure}`);
 }
@@ -169,14 +169,19 @@ function worktreeAddFailure(result: WorktreeGitResult, timeoutMs: number): strin
 
 /** Undo a failed fresh `worktree add`: its registration, its new branch and the reserved directory.
  * False when any of them stays, which leaves them for a destroy to report. */
-async function rollBackFreshWorktree(repoRoot: string, absolutePath: string, branchRef: string, git: WorktreeGit): Promise<boolean> {
+async function rollBackFreshWorktree(repoRoot: string, absolutePath: string, branchRef: string, base: string, git: WorktreeGit): Promise<boolean> {
   const listed = await git(repoRoot, ['worktree', 'list', '--porcelain', '-z'], 30_000);
   if (!listed.ok) return false;
   const registered = listed.stdout.split('\0').some(entry => entry.startsWith('worktree ') && canonicalPath(entry.slice(9)) === canonicalPath(absolutePath));
   if (registered && !(await git(repoRoot, ['worktree', 'remove', '--force', absolutePath], 30_000)).ok) return false;
   await rm(absolutePath, { recursive: true, force: true });
-  if ((await git(repoRoot, ['show-ref', '--verify', '--quiet', branchRef], 30_000)).ok &&
-    !(await git(repoRoot, ['update-ref', '-d', branchRef], 30_000)).ok) return false;
+  if ((await git(repoRoot, ['show-ref', '--verify', '--quiet', branchRef], 30_000)).ok) {
+    // Only the branch this add made: a plain ref at the base commit. --no-deref never follows a
+    // symbolic ref to delete its target, and the expected value refuses a branch that moved.
+    if ((await git(repoRoot, ['symbolic-ref', '--quiet', branchRef], 30_000)).ok) return false;
+    const baseSha = await git(repoRoot, ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`], 30_000);
+    if (!baseSha.ok || !(await git(repoRoot, ['update-ref', '--no-deref', '-d', branchRef, baseSha.stdout.trim()], 30_000)).ok) return false;
+  }
   return !existsSync(absolutePath);
 }
 
