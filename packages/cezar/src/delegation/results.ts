@@ -6,9 +6,8 @@ import { join } from 'node:path';
 import type { WorkerCollectedResult } from '@open-mercato/cezar-contract';
 import type { RunEvent, RunRecord, RunStore } from '../runs/store.ts';
 import { isAttachmentFileName, resolveAttachmentPath } from '../workflows/attachment-path.ts';
-import { readOwnedDiff, verifyOwnedWorkspace } from './workspace.ts';
+import { workspaceKindOf } from './workspace-kinds.ts';
 import { artifactDirectory, listArtifacts, readArtifact } from '../artifacts/store.ts';
-import { runGit } from '../git-command.ts';
 
 export const workerRevision = (run: RunRecord): number => run.delegation?.role === 'worker' ? run.delegation.executionRevision ?? 0 : 0;
 
@@ -77,8 +76,7 @@ async function readWorkerHead(repoRoot: string, run: RunRecord, previous: Worker
   const historicalSha = previous?.head && 'sha' in previous.head ? previous.head.sha : undefined;
   let head: WorkerCollectedResult['head'] = { state: workspaceRemoved ? 'deleted' : 'unavailable', reason: 'missing', ...(historicalSha ? { sha: historicalSha } : {}) };
   try {
-    const workspace = await verifyOwnedWorkspace(repoRoot, run);
-    const sha = (await runGit(['rev-parse', '--verify', 'HEAD^{commit}'], { cwd: workspace.path, timeout: 30_000, maxBuffer: 1024 })).stdout.trim();
+    const sha = await workspaceKindOf(run).readHead(repoRoot, run);
     if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(sha)) throw Error('invalid HEAD');
     head = { state: 'available', sha };
   } catch { if (!workspaceRemoved) head = { state: 'unavailable', reason: 'unverified', ...(historicalSha ? { sha: historicalSha } : {}) }; }
@@ -92,7 +90,7 @@ async function readWorkerDiff(repoRoot: string, store: RunStore, run: RunRecord,
   let diff: WorkerCollectedResult['diff'] = { state: cleanup.workspaceRemoved ? 'deleted' : 'unavailable', reason: 'missing' };
   let diffSnapshot: string | undefined;
   try {
-    const observation = await readOwnedDiff(repoRoot, run);
+    const observation = await workspaceKindOf(run).readDiff(repoRoot, run);
     diffSnapshot = observation.diff;
     const snapshotId = randomUUID();
     diff = { state: 'available', snapshotId, path: store.workerResultSnapshotPath(delegation.parentRunId, run.id, snapshotId), truncated: observation.truncated };

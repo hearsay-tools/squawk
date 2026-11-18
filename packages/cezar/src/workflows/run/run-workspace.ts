@@ -1,13 +1,17 @@
 import { atTaskHead } from './launch-read-resolver.ts';
 import { createWorktree, resolveBaseRef } from '../../git-worktree.ts';
 import { getRepoInfo } from '../../server/git.ts';
-import { ensureOwnedWorkspace, verifyOwnedWorkspace } from '../../delegation/workspace.ts';
-import { placeWorkerAttachments, verifyWorkerContext } from '../../delegation/context.ts';
 import type { RunRecord, RunStore } from '../../runs/store.ts';
 import type { Execution, ExecutionLaunch, WorkerDelegationRecord } from './types.ts';
+import { requireWorkerWorkspaces, type WorkerWorkspaceOpened, type WorkerWorkspacePort } from './worker-workspace-port.ts';
 
 export const REPOSITORY_ROOT_LOCK_DISABLED_NOTE =
   'repository-root lock disabled by CEZ_DISABLE_REPO_LOCK=1 (shared checkout is unsafe)';
+
+/** The directory a worker's parent works in: its worktree, else the repository root. */
+function parentCwd(store: RunStore, repoRoot: string, delegation: WorkerDelegationRecord): string {
+  return store.getRun(delegation.parentRunId)?.worktreePath ?? repoRoot;
+}
 
 /** Verify an owned worker's Continue workspace without recreating it. The caller settles refusal. */
 export async function ownedContinuationWorkspace(
@@ -16,12 +20,10 @@ export async function ownedContinuationWorkspace(
   dataDir: string,
   record: RunRecord,
   delegation: WorkerDelegationRecord,
+  workspaces: WorkerWorkspacePort | undefined,
 ): Promise<string> {
   if (delegation.destroy) throw new Error('Worker destruction has begun');
-  const cwd = (await verifyOwnedWorkspace(repoRoot, record)).path;
-  await verifyWorkerContext({ dataDir, parentId: delegation.parentRunId, workspace: delegation.workspace, context: delegation.context,
-    parentCwd: store.getRun(delegation.parentRunId)?.worktreePath ?? repoRoot });
-  return cwd;
+  return requireWorkerWorkspaces(workspaces).openForContinue({ repoRoot, dataDir, run: record, parentCwd: parentCwd(store, repoRoot, delegation) });
 }
 
 /** An explicit worker attachment takes precedence over the project's personal config copy. */
@@ -66,7 +68,8 @@ export async function executionBaseRef(
   return base;
 }
 
-/** The task's worktree: an owned worker's verified workspace, or a new worktree forked from `base`. */
+/** The task's worktree: an owned worker's verified workspace, or a new worktree forked from `base`.
+ *  A worker never gets an ordinary task worktree: without a registered port its launch throws. */
 export async function openExecutionWorktree(
   store: RunStore,
   repoRoot: string,
@@ -74,16 +77,11 @@ export async function openExecutionWorktree(
   execution: Execution,
   launch: ExecutionLaunch,
   base: string,
-): Promise<{ path: string; branch: string; baseBranch: string }> {
+  workspaces: WorkerWorkspacePort | undefined,
+): Promise<WorkerWorkspaceOpened> {
   const { runId, startAt } = execution;
-  const { owned, ownedRun } = launch;
-  const ownedWorkspace = owned && ownedRun ? await ensureOwnedWorkspace(repoRoot, ownedRun) : undefined;
-  if (ownedRun?.delegation?.role === 'worker') await verifyWorkerContext({ dataDir, parentId: ownedRun.delegation.parentRunId, workspace: ownedRun.delegation.workspace, context: ownedRun.delegation.context,
-    parentCwd: store.getRun(ownedRun.delegation.parentRunId)?.worktreePath ?? repoRoot });
-  // First launch only (hearsay-tools/cezarion#1149): a worker re-queued past its first step and
-  // runContinuation never re-place attachments the worker may have edited or deleted.
-  if (ownedRun?.delegation?.role === 'worker' && startAt === 0) await placeWorkerAttachments({ dataDir, workspace: ownedRun.delegation.workspace, context: ownedRun.delegation.context });
-  return ownedWorkspace
-    ? { path: ownedWorkspace.path, branch: ownedWorkspace.branch, baseBranch: ownedWorkspace.baselineSha }
-    : await createWorktree(repoRoot, runId, base);
+  const delegation = launch.ownedRun?.delegation;
+  if (!launch.ownedRun || delegation?.role !== 'worker') return createWorktree(repoRoot, runId, base);
+  return requireWorkerWorkspaces(workspaces).openForLaunch({ repoRoot, dataDir, run: launch.ownedRun,
+    parentCwd: parentCwd(store, repoRoot, delegation), firstLaunch: startAt === 0 });
 }

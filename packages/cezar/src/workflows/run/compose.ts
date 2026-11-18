@@ -60,6 +60,7 @@ import type { CiWatcherSupervisor } from '../../ci-wait/supervisor.ts';
 import type { SquawkToolHandlers } from '../../ci-wait/controller.ts';
 import { type WorkerAccountBinding } from '../../delegation/execution-identity.ts';
 import type { DelegationProvisioner } from '../../delegation/provision.ts';
+import type { WorkerWorkspacePort } from './worker-workspace-port.ts';
 import { replaceRunProcess } from '../../core/process-usage.ts';
 import { WorkerScratchCleanup } from '../../delegation/scratch-cleanup.ts';
 import type { RunnerId } from '../../core/agent-runner.ts';
@@ -133,6 +134,7 @@ export interface FacadeHost {
   ciResources: CiResources;
   squawkToolHandlers(runId: string, generation: string): SquawkToolHandlers;
   delegationProvisioner?: DelegationProvisioner | undefined;
+  workerWorkspaces(): WorkerWorkspacePort | undefined;
   move(runId: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>, call?: ExitCall): RunRecord | undefined;
   isActive(runId: string): boolean;
   workerExecutionStopped(runId: string): boolean;
@@ -499,7 +501,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     prepareWorktree: (...args) => modules.stepLoop.prepareWorktree(...args),
     workerStep: (...args) => launchContext.workerStep(context, ...args),
     latchAgentInputError: (...args) => modules.inputDelivery.latchAgentInputError(...args),
-    reconcileWorkerWaits: () => host.reconcileWorkerWaits(),
+    reconcileWorkerWaits: () => host.reconcileWorkerWaits(), workerWorkspaces: () => host.workerWorkspaces(),
     holdContinuationForRootFinish: (...args) => modules.runFinish.holdContinuationForRootFinish(...args),
   }, modules.line, modules.sessionHelperHost, modules.repoRootLease, modules.worktreeAutosave, modules.runSkills,
   sessionEventHost(), launchPreambleHost(), modules.inputReceiptHost, modules.inputReceiptSteps,
@@ -509,7 +511,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
     active: host.active, move: (id, exit, patch, call) => host.move(id, exit, patch, call), dropActive: id => host.dropActive(id),
     closingWakeDecision: (id, holds, cancelled, error) => modules.wakeAdmission.closingWakeDecision(id, holds, cancelled, error),
     cleanCloseFailsDelivery: (id, state) => modules.wakeAdmission.cleanCloseFailsDelivery(id, state),
-    workerExecutionStopped: id => host.workerExecutionStopped(id),
+    workerExecutionStopped: id => host.workerExecutionStopped(id), workerWorkspaces: () => host.workerWorkspaces(),
     executionBlockedByRootFinish: run => host.executionBlockedByRootFinish(run),
   }, modules.line, modules.worktreeAutosave, modules.humanWaits, modules.runSettlement, modules.stepSession,
   modules.completionGateHost, WAKE_SESSION_CLOSED_ERROR);

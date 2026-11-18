@@ -10,7 +10,7 @@ import { assertConversationCapacity, assertFamilySender, byCreatedAtAndId, commi
   orphanedPeerMessage, peerPair, takesPart, projectConversationEvents, reconcileConversationState, replyOutcomes, type InboxEntry } from './conversations.ts';
 export { rootDelegation } from './conversations.ts';
 import { collectWorkerEvidence, revalidateRetainedWorkerResult, workerRevision } from './results.ts';
-import { prepareWorkerContext, workerContextTask } from './context.ts';
+import { workerContextTask } from './context.ts';
 import { acceptedWorkerIdentitySchema, workerContextHash, workerWorkflowHash } from './execution-identity.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import {
@@ -79,8 +79,8 @@ import type { Caller } from './credentials.ts';
 import { isAuthenticatedCaller } from './credentials.ts';
 import { parseDelegationEffort } from './effort.ts';
 import { authorizeWorkerList, authorizeSpawn, authorizeSpawnReplay, authorizeWorker, authorizeCancelWait, authorizeRetainedResult, DelegationPolicyError, MessagingOffError, requireWorkersAllowed } from './policy.ts';
-import { planOwnedWorkspace, readOwnedDiff, resolveWorkerBaseline, verifyOwnedWorkspace } from './workspace.ts';
-import { runGit } from '../git-command.ts';
+import { resolveWorkerBaseline } from './workspace.ts';
+import { DEFAULT_WORKSPACE_KIND, workerWorkspacePort, workspaceKindOf, workspaceKinds, type WorkspaceKind } from './workspace-kinds.ts';
 
 export type DelegationManager = Pick<RunManager,
   | 'acknowledgeInbox' | 'awaitRunTermination' | 'canClaimInboxInput'
@@ -88,7 +88,7 @@ export type DelegationManager = Pick<RunManager,
   | 'deliverConversationInput' | 'enqueueOwnedRun' | 'isActive' | 'pauseWorkerCleanup'
   | 'previewHost' | 'reconcileWorkerWaits' | 'recoverWorkerCleanup' | 'registerPeerWait'
   | 'runnerSkills' | 'registerRequestWait' | 'registerWorkerWait' | 'releaseInbox' | 'requestWorkerStop'
-  | 'reserveInboxInputs' | 'selectDelegationExecutionSettings' | 'settleOrphanedWorkerExecution'
+  | 'reserveInboxInputs' | 'selectDelegationExecutionSettings' | 'setWorkerWorkspaces' | 'settleOrphanedWorkerExecution'
   | 'steerWorker' | 'takeWorkerTerminationBlocker'>;
 
 export type DelegationProject = { home: Home; id: string; root: string; store: RunStore; manager: DelegationManager };
@@ -204,7 +204,7 @@ function boundSpawnWorkflow(catalog: WorkflowDef, resolvedSteps: ResolvedSpawnSt
   }) };
 }
 
-type PreparedSpawnContext = Awaited<ReturnType<typeof prepareWorkerContext>>;
+type PreparedSpawnContext = Awaited<ReturnType<WorkspaceKind['prepareContext']>>;
 type AcceptedSpawnIdentity = ReturnType<typeof acceptedWorkerIdentitySchema.parse>;
 
 async function acceptSpawnedWorker(args: {
@@ -289,6 +289,8 @@ export class DelegationService {
     this.cleanups.get(project.id)?.detach();
     existing?.manager.pauseWorkerCleanup();
     this.projects.set(project.id, project);
+    // The port stays for the manager's life: a manager whose project detached still settles the worker runs it holds.
+    project.manager.setWorkerWorkspaces(workerWorkspacePort);
     if (this.cleanup) this.cleanups.set(project.id, this.cleanup(project, () => this.projects.get(project.id) === project,
       (key, operation) => this.serialized(key, operation)));
     return () => { if (this.projects.get(project.id) === project) { this.cleanups.get(project.id)?.detach(); project.manager.pauseWorkerCleanup(); this.projects.delete(project.id); this.cleanups.delete(project.id); } };
@@ -392,10 +394,7 @@ export class DelegationService {
     if (recipient.delegation?.role !== 'worker' || recipient.delegation.destroy || !freshWorkerSession(recipient) && recipient.status !== 'cancelled') return;
     if (['queued', 'running', 'waiting'].includes(recipient.status)) return;
     try {
-      const workspace = await verifyOwnedWorkspace(project.root, recipient);
-      // The branch is the work a fresh session reads from (its notice says `git log`): prove its ref too.
-      await runGit(['rev-parse', '--verify', '--quiet', `refs/heads/${workspace.branch}^{commit}`], { cwd: project.root, timeout: 30_000 })
-        .catch(() => { throw new Error(`branch ${workspace.branch} is missing`); });
+      await workspaceKindOf(recipient).assertResumable(project.root, recipient);
     } catch (error) {
       throw new DelegationPolicyError('incompatible_state', `Worker worktree or branch is gone (${error instanceof Error ? error.message : String(error)}); --resume cannot restart it. Spawn a new worker with the follow-up instruction`);
     }
@@ -663,8 +662,9 @@ export class DelegationService {
       const identity = acceptedWorkerIdentitySchema.parse({ kind: 'accepted', ...stepIdentityFields(first),
         steps: resolvedSteps.map(entry => ({ stepId: entry.step.id, ...stepIdentityFields(entry) })) });
       const baselineSha = await resolveWorkerBaseline(project.root, settings.cwd, request.baseline);
-      const workspace = await planOwnedWorkspace(project.root, randomUUID(), baselineSha);
-      const prepared = request.context === undefined ? undefined : await prepareWorkerContext({
+      const kind = workspaceKinds[DEFAULT_WORKSPACE_KIND];
+      const workspace = await kind.plan(project.root, randomUUID(), baselineSha);
+      const prepared = request.context === undefined ? undefined : await kind.prepareContext({
         repoRoot: project.root, dataDir: projectPaths(project.root).write, parentId: parent.id, workspace,
         parentCwd: settings.cwd, context: request.context, containsSecret: text => project.store.containsSessionSecret(text),
       });
@@ -764,7 +764,7 @@ export class DelegationService {
   }
   async diff(caller: Caller, params: WorkerParams) {
     const { project, worker } = this.target(caller, params, 'diff');
-    return readOwnedDiff(project.root, worker);
+    return workspaceKindOf(worker).readDiff(project.root, worker);
   }
   async wait(caller: Caller, value: WorkerWaitRequest) {
     const request = workerWaitRequestSchema.parse(value);

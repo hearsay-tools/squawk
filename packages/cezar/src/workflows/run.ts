@@ -47,6 +47,7 @@ import type { CiWatcherSupervisor } from '../ci-wait/supervisor.ts';
 import type { SquawkToolHandlers } from '../ci-wait/controller.ts';
 import type { WorkerAccountBinding } from '../delegation/execution-identity.ts';
 import type { DelegationProvisioner } from '../delegation/provision.ts';
+import type { WorkerWorkspacePort } from './run/worker-workspace-port.ts';
 import { onUsage, type ProcessUsage } from '../core/process-usage.ts';
 import type { RunnerFactory, RunnerId } from '../core/agent-runner.ts';
 import { seedHandoffFile } from '../handoff.ts';
@@ -193,6 +194,7 @@ export class RunManager {
       squawkToolHandlers: (...args) => this.squawkToolHandlers(...args),
       get delegationProvisioner() { return facade.#delegationProvisioner; },
       set delegationProvisioner(value) { facade.#delegationProvisioner = value; },
+      workerWorkspaces: () => this.#workerWorkspaces,
       claimWorktreeReclaim: (...args) => this.claimWorktreeReclaim(...args),
       move: (...args) => this.#move(...args),
       isActive: (...args) => this.isActive(...args),
@@ -280,6 +282,7 @@ export class RunManager {
     this.#modules.subagentWaits.dispose();
     this.#ciResources.release();
     this.#delegationProvisioner = undefined;
+    this.#workerWorkspaces = undefined;
     this.#modules.orphans.dispose();
     this.#modules.workerExecutions.dispose();
     this.#store.off('run', this.#onDelegationRun);
@@ -361,6 +364,10 @@ export class RunManager {
 
   #delegationProvisioner: DelegationProvisioner | undefined;
   setDelegationProvisioner(provisioner: DelegationProvisioner): () => void { return launchContext.setDelegationProvisioner(this.#modules.launchSettingsHost, provisioner); }
+
+  #workerWorkspaces: WorkerWorkspacePort | undefined;
+  /** Registers what opens a worker's workspace. Without it a worker's launch and Continue fail. */
+  setWorkerWorkspaces(port: WorkerWorkspacePort): void { this.#workerWorkspaces = port; }
 
   /**
    * The trusted callbacks behind one session's Squawk tools (hearsay-tools/cezarion#1233). Both
