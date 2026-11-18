@@ -29,7 +29,7 @@ export const ciPrIdentitySchema = z.object({
   headSha: sha,
 }).strict();
 export type CiPrIdentity = z.infer<typeof ciPrIdentitySchema>;
-export const ciWaitOutcomeSchema = z.enum(['passed', 'failed', 'cancelled', 'skipped', 'no_checks', 'head_changed', 'conflicting', 'deadline', 'error', 'merged', 'closed', 'blocked']);
+export const ciWaitOutcomeSchema = z.enum(['passed', 'failed', 'cancelled', 'skipped', 'no_checks', 'stuck', 'head_changed', 'conflicting', 'deadline', 'error', 'merged', 'closed', 'blocked']);
 export const ciWaitErrorCodeSchema = z.enum(['invalid_request', 'unsupported_host', 'gh_missing', 'authentication', 'inaccessible_pr', 'malformed_data', 'output_limit', 'query_timeout', 'command_failed', 'wait_conflict', 'capacity', 'unavailable', 'unauthorized', 'persistence',
   'manager_disposed', 'capability_revoked', 'run_missing', 'run_not_running', 'run_stopping',
   'session_replaced', 'session_closed', 'run_cancelled', 'finish_requested', 'generation_mismatch',
