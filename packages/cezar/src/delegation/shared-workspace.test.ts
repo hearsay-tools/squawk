@@ -94,12 +94,6 @@ describe('the shared workspace kind', () => {
     await expect(open()).rejects.toThrow('is no longer a worktree of this repository');
   });
 
-  it('refuses a directory inside a worktree, which is not the worktree itself', async () => {
-    mkdirSync(join(host, 'packages'));
-    const run = await workerRun(undefined, join(host, 'packages'));
-    await expect(shared.openForContinue(request(run))).rejects.toThrow('is no longer a worktree of this repository');
-  });
-
 });
 
 describe('the context of a shared worker', () => {

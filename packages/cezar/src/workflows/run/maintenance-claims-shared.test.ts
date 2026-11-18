@@ -15,10 +15,10 @@ const runs = new Map<string, RunRecord>([
   [ISOLATED, workerOf(ISOLATED, { ownerRunId: ISOLATED, resourceId: ISOLATED, kind: 'owned-isolated', path: '/repo/.ai/squawk/worktrees/isolated', branch: 'cez/10000000', baselineSha })],
 ]);
 
-function claims(): MaintenanceClaims {
+function claims(autosaveBlocked?: string): MaintenanceClaims {
   const store = { getRun: (id: string) => runs.get(id), pin: () => true, unpin: () => undefined, writeRefusal: () => undefined, listWorkersOf: () => [] };
   const instance: MaintenanceClaims = new MaintenanceClaims({ store, disposed: () => false } as unknown as RunModuleContext, {
-    isActive: () => false, autosaveCleanupBlocker: () => undefined, hasExecution: () => false, scheduleScratchCleanup: () => undefined,
+    isActive: () => false, autosaveCleanupBlocker: id => id === autosaveBlocked ? 'autosave cleanup pending' : undefined, hasExecution: () => false, scheduleScratchCleanup: () => undefined,
     holdForMaintenance: ids => instance.holdForMaintenance(ids),
   });
   return instance;
@@ -36,6 +36,9 @@ describe('a claim on a run whose directory a shared worker works in (hearsay-too
     expect(held.blocksStart('10000000-0000-4000-8000-00000000ffff')).toBe(false);
     release?.();
     expect(held.blocksStart(SHARED)).toBe(false);
+    // Autosave cleanup evidence on the host's worktree holds the shared worker off it too, and is no claim.
+    expect([SHARED, ISOLATED, HOST].map(id => claims(HOST).autosaveStartBlocker(id))).toEqual(['autosave cleanup pending', undefined, 'autosave cleanup pending']);
+    expect([claims(SHARED).autosaveStartBlocker(SHARED), claims(SHARED).autosaveStartBlocker(HOST), claims(HOST).blocksStart(SHARED)]).toEqual(['autosave cleanup pending', undefined, false]);
   });
 
   it("is no claim on the shared worker's own resources: its scratch cleanup is scheduled when it settles meanwhile", () => {

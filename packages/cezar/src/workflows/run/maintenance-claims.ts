@@ -25,7 +25,6 @@ export class MaintenanceClaims {
    *  exclude each other: the claim side asks `hostsLiveSharedWorker` in its own step. */
   blocksStart(runId: string): boolean {
     if (this.reclaiming.has(runId)) return true;
-    if (this.reclaiming.size === 0) return false;
     let run: RunRecord | undefined;
     try { run = this.context.store.getRun(runId); } catch { return false; }
     return !!run && this.reclaiming.has(directoryRunId(run));
@@ -36,6 +35,19 @@ export class MaintenanceClaims {
     if (this.context.disposed() || this.has(runId) || !!this.host.autosaveCleanupBlocker(runId) || this.host.isActive(runId) || this.host.hasExecution(runId)) return undefined;
     this.reclaiming.add(runId);
     return () => { this.reclaiming.delete(runId); this.host.scheduleScratchCleanup(runId); };
+  }
+
+  /** Why autosave cleanup evidence holds the run off a start: its own, or that of the run whose
+   *  directory it works in, which marks that directory unsafe to reuse. The start paths ask this
+   *  beside `blocksStart`; a read about the run's own scratch or execution asks for its own id. */
+  autosaveStartBlocker(runId: string): string | undefined {
+    const own = this.host.autosaveCleanupBlocker(runId);
+    if (own) return String(own);
+    let run: RunRecord | undefined;
+    try { run = this.context.store.getRun(runId); } catch { return undefined; }
+    const directory = run ? directoryRunId(run) : runId;
+    const hosted = directory === runId ? undefined : this.host.autosaveCleanupBlocker(directory);
+    return hosted ? String(hosted) : undefined;
   }
 
   /** A directory a live worker works in is not reclaimed, and its branch is not deleted. */

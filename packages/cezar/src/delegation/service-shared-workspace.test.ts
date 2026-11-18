@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { SHARED_ATTACH_REFUSAL, SHARED_BASELINE_REFUSAL } from '@open-mercato/cezar-contract/delegation';
@@ -8,6 +8,7 @@ import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit'
 import type { AgentRunResult, AgentRunSpec } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import * as runners from '../core/runner-factory.ts';
+import { clearAutosaveCleanup, retainAutosaveCleanup } from '../autosave-cleanup.ts';
 import '../core/every-runner.testkit.ts';
 import { ensureDataGitignore } from '../data-gitignore.ts';
 import { projectPaths } from '../project-paths.ts';
@@ -272,15 +273,37 @@ describe('a worker in a shared workspace (hearsay-tools/squawk#3819)', { timeout
     expect(f.manager.claimWorktreeReclaim(f.parent.id)).toBeNull();
   });
 
-  it('gives a settled worker no report when its end state is missing, instead of comparing with later edits', async () => {
+  it('holds a shared worker off its host\'s worktree while autosave cleanup evidence marks it unsafe: no launch, and a Continue refused in the host\'s words', async () => {
+    const dataDir = join(f.root, '.ai/cezar'), blocker = 'autosave unsuccessful in the host worktree; worktree reuse blocked';
+    const { workerId: settled } = await f.service.spawn(f.caller, shared());
+    await runSession(settled);
+    await f.holdAdmission();
+    retainAutosaveCleanup(dataDir, f.parent.id, host, blocker, { processes: [], groups: [], uncertain: true });
+    expect(f.manager.continueRun(settled, { text: 'again' })).toEqual({ ok: false, error: blocker });
+    const { workerId: queued } = await f.service.spawn(f.caller, shared());
+    const isolated = await f.service.spawn(f.caller, { task: 'isolated', baseline: 'parent-head', requestId: randomUUID() });
+    // The line was pumped with capacity free: the isolated worker left it, the shared one did not.
+    await f.releaseAdmission();
+    await until(() => sessions.length === 2);
+    expect(sessions[1]!.spec.cwd).toBe(worker(isolated.workerId).worktreePath);
+    expect(worker(queued).status).toBe(RUN_STATUS.queued);
+    clearAutosaveCleanup(dataDir, f.parent.id);
+    await f.holdAdmission(); await f.releaseAdmission();
+    await until(() => sessions.length === 3);
+    expect(sessions[2]!.spec.cwd).toBe(host);
+  });
+
+  it('compares only a queued, running or waiting worker with the directory as it is: a failed or cancelled one without a complete execution gets no report', async () => {
     const { workerId } = await f.service.spawn(f.caller, shared());
-    await runSession(workerId);
-    const files = join(f.root, '.ai/cezar/runs', `${workerId}-images`);
-    const ends = readdirSync(files).filter(name => name.startsWith('worker-workspace-end.'));
-    expect(ends).toHaveLength(1);
-    rmSync(join(files, ends[0]!));
-    writeFileSync(join(host, 'edited-after-the-worker-ended.txt'), 'x\n');
-    expect((await f.service.collect(f.caller, { workerId })).changes).toEqual({ state: 'unavailable', reason: 'no workspace state was recorded when the worker settled' });
+    await f.releaseAdmission();
+    await until(() => sessions.length === 1);
+    writeFileSync(join(host, 'written-while-running.txt'), 'x\n');
+    expect((await f.service.collect(f.caller, { workerId })).changes).toMatchObject({ state: 'changed', paths: ['written-while-running.txt'] });
+    for (const status of [RUN_STATUS.failed, RUN_STATUS.cancelled]) {
+      setRunStatus(f.store, workerId, status);
+      expect(await f.service.collect(f.caller, { workerId }), status).toMatchObject({ settled: false, changes: { state: 'unavailable', reason: 'no workspace state was recorded when the worker settled' } });
+    }
+    setRunStatus(f.store, workerId, RUN_STATUS.running);
   });
 
   it('is never a reason for retention, the family end or history deletion to remove the parent\'s directory or branch', async () => {
