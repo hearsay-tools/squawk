@@ -81,7 +81,7 @@ export class WorktreeAutosave {
   }
 
   private async saveWorktreeWork(runId: string, state: ActiveRun, reason: AutosaveReason): Promise<void> {
-    if (state.liveSession.cwd === this.context.repoRoot) return;
+    if (state.liveSession.cwd === this.context.repoRoot || state.liveSession.sharesDirectory) return;
     for (;;) {
       const previous = this.autosaveTasks.get(runId);
       if (!previous) break;
@@ -157,7 +157,7 @@ export class WorktreeAutosave {
    *  Opt-in via CEZ_AUTOSAVE=1 (open-mercato/cezar#471) — see periodicAutosaveEnabled. */
   armAutosave(runId: string, state: ActiveRun): void {
     if (!periodicAutosaveEnabled()) return;
-    if (state.liveSession.cwd === this.context.repoRoot || state.autosave.autosaveTimer) return;
+    if (state.liveSession.cwd === this.context.repoRoot || state.autosave.autosaveTimer || state.liveSession.sharesDirectory) return;
     state.autosave.armAutosave(() => {
       const task = this.host.saveWorktree(runId, state, 'periodic');
       this.host.trackTurn(runId, task);

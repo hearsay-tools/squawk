@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { projectPaths, isFallbackProjectPath } from './project-paths.ts';
 import { git } from './git-command.ts';
-import { workerWorkspaceSchema } from '@open-mercato/cezar-contract/delegation';
+import { ownedWorkspaceSchema } from '@open-mercato/cezar-contract/delegation';
 import { existsSync, realpathSync, type Dirent } from 'node:fs';
 import { lstat, mkdir, readdir, readFile, rm, rmdir } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -340,7 +340,7 @@ async function collectOwnedReceipts(receipts: string, sets: OwnedCleanupSets): P
     if (!info.isFile() || info.isSymbolicLink() || info.size > 16_384) return true;
     const receipt: unknown = JSON.parse(await readFile(path, 'utf8'));
     if (!receipt || typeof receipt !== 'object' || !('workspace' in receipt)) return true;
-    const parsed = workerWorkspaceSchema.safeParse(receipt.workspace);
+    const parsed = ownedWorkspaceSchema.safeParse(receipt.workspace);
     if (!parsed.success) return true;
     const workspace = parsed.data;
     if (workspace.branch !== branchFor(workspace.ownerRunId) ||

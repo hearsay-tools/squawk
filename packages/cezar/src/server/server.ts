@@ -3709,7 +3709,7 @@ export function createApp(deps: ServerDeps) {
       // so a live `worktree: false` parent is not treated as gone (#570 honesty).
       const runs = withWorktree.filter((r) => r.worktreePath && existsSync(r.worktreePath));
       // The rows the enforcer would reclaim right now: reclaimable AND past the newest `keep`.
-      const pastKeep = new Set(selectReclaimableWorktrees(withWorktree, keep, (id) => store.getRun(id)));
+      const pastKeep = new Set(selectReclaimableWorktrees(withWorktree, keep, (id) => store.getRun(id), (id) => store.listWorkersOf(id)));
       const worktrees = await Promise.all(
         runs.map(async (r) => ({
           runId: r.id,
@@ -3719,7 +3719,7 @@ export function createApp(deps: ServerDeps) {
           // POSIX `du` — degrades to null (Windows / du missing / error); never blocks.
           sizeBytes: await worktreeSizeBytes(r.worktreePath as string),
           finishedAt: r.finishedAt ?? null,
-          reclaimable: isReclaimable(r, (id) => store.getRun(id)),
+          reclaimable: isReclaimable(r, (id) => store.getRun(id), (id) => store.listWorkersOf(id)),
           pastKeep: pastKeep.has(r.id),
         })),
       );

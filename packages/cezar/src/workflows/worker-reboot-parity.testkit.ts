@@ -1,7 +1,7 @@
 import { ABSENT_PROCESS_PID } from '../delegation/process-enumeration.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
-import { workerCollectedResultSchema } from '@open-mercato/cezar-contract/delegation';
+import { ownedWorkspace, workerCollectedResultSchema } from '@open-mercato/cezar-contract/delegation';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { execFileSync } from 'node:child_process';
 import fs, { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -61,7 +61,7 @@ describe.runIf(process.platform === 'linux')('R43 reboot orphan settlement (hear
     // Restore only crash evidence, not a forged completion: native children have really exited.
     writeFileSync(join(files, `${orphan.id}.execution.json`), JSON.stringify(proof));
     writeFileSync(join(files, `${orphan.id}.processes.json`), JSON.stringify({ ...processes, controller: { pid: ABSENT_PROCESS_PID, startToken: '11111111-1111-4111-8111-111111111111:100' } }));
-    const workspace = orphan.delegation?.role === 'worker' ? orphan.delegation.workspace : undefined;
+    const workspace = orphan.delegation?.role === 'worker' ? ownedWorkspace(orphan.delegation.workspace) : undefined;
     if (!workspace) throw Error('missing workspace');
     const scratch = agentTmpDir(join(root, '.ai/cezar'), orphan.id);
     mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, 'retained'), 'scratch');

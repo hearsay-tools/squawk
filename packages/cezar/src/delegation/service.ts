@@ -41,6 +41,8 @@ import {
   type RequestOutcome,
 } from '@open-mercato/cezar-contract/conversations';
 import {
+  WORKSPACE_CHOICES,
+  sharedSpawnRefusal,
   workerSpawnRequestSchema,
   workerSteerRequestSchema,
   workerWaitRequestSchema,
@@ -79,7 +81,7 @@ import { isAuthenticatedCaller } from './credentials.ts';
 import { parseDelegationEffort } from './effort.ts';
 import { authorizeWorkerList, authorizeSpawn, authorizeSpawnReplay, authorizeWorker, authorizeCancelWait, authorizeRetainedResult, DelegationPolicyError, MessagingOffError, requireWorkersAllowed } from './policy.ts';
 import { resolveWorkerBaseline } from './workspace.ts';
-import { DEFAULT_WORKSPACE_KIND, workerWorkspacePort, workspaceKindOf, workspaceKinds, type WorkspaceKind } from './workspace-kinds.ts';
+import { DEFAULT_WORKSPACE_CHOICE, workerWorkspacePort, workspaceKindOf, workspaceKinds, type WorkspaceKind } from './workspace-kinds.ts';
 
 export type DelegationManager = Pick<RunManager,
   | 'acknowledgeInbox' | 'awaitRunTermination' | 'canClaimInboxInput'
@@ -174,6 +176,7 @@ function spawnRequestHash(request: WorkerSpawnRequest): string {
     ...(effortPin === undefined ? {} : { effort: effortPin }),
     ...(request.workflow === undefined ? {} : { workflow: request.workflow }),
     ...(request.skill === undefined ? {} : { skill: request.skill }),
+    ...((request.workspace ?? DEFAULT_WORKSPACE_CHOICE) === DEFAULT_WORKSPACE_CHOICE ? {} : { workspace: request.workspace }),
   })).digest('hex');
 }
 
@@ -635,6 +638,8 @@ export class DelegationService {
   }
   async spawn(caller: Caller, value: WorkerSpawnRequest) {
     const request = workerSpawnRequestSchema.parse(value);
+    const refusal = sharedSpawnRefusal(request);
+    if (refusal) throw new DelegationPolicyError('invalid_input', refusal);
     const initial = this.context(caller);
     return this.serialized(`parent:${initial.id}:${caller.runId}`, async () => {
       const project = this.context(caller);
@@ -660,9 +665,9 @@ export class DelegationService {
       const settings = first.settings;
       const identity = acceptedWorkerIdentitySchema.parse({ kind: 'accepted', ...stepIdentityFields(first),
         steps: resolvedSteps.map(entry => ({ stepId: entry.step.id, ...stepIdentityFields(entry) })) });
-      const baselineSha = await resolveWorkerBaseline(project.root, settings.cwd, request.baseline);
-      const kind = workspaceKinds[DEFAULT_WORKSPACE_KIND];
-      const workspace = await kind.plan(project.root, randomUUID(), baselineSha);
+      const baselineSha = await resolveWorkerBaseline(project.root, settings.cwd, request.baseline ?? 'parent-head');
+      const kind = workspaceKinds[WORKSPACE_CHOICES[request.workspace ?? DEFAULT_WORKSPACE_CHOICE]];
+      const workspace = await kind.plan({ repoRoot: project.root, workerId: randomUUID(), baselineSha, hostRunId: parent.id, hostDirectory: settings.cwd });
       const prepared = request.context === undefined ? undefined : await kind.prepareContext({
         repoRoot: project.root, dataDir: projectPaths(project.root).write, parentId: parent.id, workspace,
         parentCwd: settings.cwd, context: request.context, containsSecret: text => project.store.containsSessionSecret(text),

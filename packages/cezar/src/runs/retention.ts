@@ -7,6 +7,7 @@ import { isFallbackProjectPath, projectPaths } from '../project-paths.ts';
 // is pure and unit-testable; the enforcer never throws (helper discipline).
 import { existsSync } from 'node:fs';
 import { autosaveCleanupBlocker } from '../autosave-cleanup.ts';
+import { hostsLiveSharedWorker } from './shared-hosts.ts';
 import { collectWorkerEvidence } from '../delegation/results.ts';
 import { createWorktree } from '../git-worktree.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
@@ -40,9 +41,12 @@ export function workerFamilyEnded(run: RunRecord, lookup: (id: string) => RunRec
  *  and its branch kept, and only a clean directory goes. A live parent, or one at `review`, may
  *  still collect or diff from it. A worker at `review` counts once its family has ended. Live
  *  runs, `review`, `invalid`, and workers mid-destroy do not. `lookup` finds the parent by id
- *  (the store's `getRun`; a parent need not have a worktree of its own). */
-export function isReclaimable(run: RunRecord, lookup: (id: string) => RunRecord | undefined = () => undefined): boolean {
+ *  (the store's `getRun`; a parent need not have a worktree of its own). With `workersOf`, a run
+ *  whose directory a live worker works in does not count either (`hostsLiveSharedWorker`). */
+export function isReclaimable(run: RunRecord, lookup: (id: string) => RunRecord | undefined = () => undefined,
+  workersOf?: (rootId: string) => readonly RunRecord[]): boolean {
   if (run.delegation?.role === 'invalid') return false;
+  if (workersOf && hostsLiveSharedWorker(run, workersOf)) return false;
   if (run.delegation?.role === 'worker' && run.delegation.destroy) return false;
   // The record's own fields first: a store lookup decodes the parent's whole record.
   if (!FINISHED.has(run.status) && run.status !== 'review') return false;
@@ -67,7 +71,8 @@ function once<T>(fn: (id: string) => T): (id: string) => T {
  * Given the runs with a worktree and the keep-count `keep`, return the ids of the finished
  * worktrees whose *directory* should be reclaimed: every worker of an ended family, then, of the rest, keep the `keep` most-recently-finished reclaimable
  * worktrees and reclaim the others. `lookup` finds an owned worker's parent; without it, the
- * parent is looked for among `runs`. A worker whose family has a live or destroying worker is kept.
+ * parent is looked for among `runs`. A worker whose family has a live or destroying worker is kept,
+ * and so is a run whose directory a live worker works in (`hostsLiveSharedWorker`).
  * `workersOf` lists a parent's workers; without it, among `runs`.
  *
  * `keep === 0` means "unlimited — never auto-reclaim" and returns `[]`.
@@ -81,9 +86,9 @@ export function selectReclaimableWorktrees(
     runs.filter((run) => run.delegation?.role === 'worker' && run.delegation.parentRunId === parentId),
 ): string[] {
   if (!Number.isFinite(keep) || keep <= 0) return [];
-  const parentOf = once(lookup), familyLive = once((parentId) => workersOf(parentId).some(isLiveRecord));
+  const parentOf = once(lookup), family = once(workersOf), familyLive = once((parentId) => family(parentId).some(isLiveRecord));
   // A family with a live or destroying worker keeps every directory, inside the budget and past it.
-  const reclaimable = runs.filter((run) => isReclaimable(run, parentOf) &&
+  const reclaimable = runs.filter((run) => isReclaimable(run, parentOf, family) &&
     !(run.delegation?.role === 'worker' && familyLive(run.delegation.parentRunId)));
   const ended = new Set(reclaimable.filter((run) => workerFamilyEnded(run, parentOf)));
   const budgeted = reclaimable.filter((run) => !ended.has(run))

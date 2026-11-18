@@ -1,3 +1,4 @@
+import { ownsDirectory } from '@open-mercato/cezar-contract/delegation';
 import { atTaskHead } from './launch-read-resolver.ts';
 import { createWorktree, resolveBaseRef } from '../../git-worktree.ts';
 import { getRepoInfo } from '../../server/git.ts';
@@ -7,6 +8,15 @@ import { requireWorkerWorkspaces, type WorkerWorkspaceOpened, type WorkerWorkspa
 
 export const REPOSITORY_ROOT_LOCK_DISABLED_NOTE =
   'repository-root lock disabled by CEZ_DISABLE_REPO_LOCK=1 (shared checkout is unsafe)';
+
+/** Whether the run owns the directory it works in. A worker in its host's directory does not: it
+ *  gets no recorded worktree or branch, no autosave commit, no worktree setup, no agent-config
+ *  seeding and no repository-root lease, whatever that directory is. Asked once, where the engine
+ *  opens the run's workspace with its record in hand; the answer is kept on the live session
+ *  (`markSharedDirectory`), so no later step depends on reading the record again. */
+export function runOwnsDirectory(run: RunRecord | undefined): boolean {
+  return run?.delegation?.role !== 'worker' || ownsDirectory(run.delegation.workspace);
+}
 
 /** The directory a worker's parent works in: its worktree, else the repository root. */
 function parentCwd(store: RunStore, repoRoot: string, delegation: WorkerDelegationRecord): string {

@@ -150,7 +150,7 @@ export class ContinuationSession {
   /** The repository-root lease of a Continue that runs in the repository root. Returns undefined
    *  when no lease is needed, so that path does not yield, else whether the lease was granted. */
   private continuationRepoRootLease(runId: string, state: ActiveRun): Promise<boolean> | undefined {
-    if (state.liveSession.cwd !== this.context.repoRoot) return undefined;
+    if (state.liveSession.cwd !== this.context.repoRoot || state.liveSession.sharesDirectory) return undefined;
     if (this.host.repositoryRootLockDisabled()) {
       this.context.store.appendEvent(runId, {
         type: 'note',

@@ -302,3 +302,9 @@ it.each([
   expect(result.success).toBe(false);
   expect(waitInvalidInput(result.success ? undefined : result.error)).toBe('`timeout_seconds` must be an integer between 1 and 7200 (kind "pr", "process", "worker", "request" or "peer").');
 });
+
+it('accepts stuck observations and advertises the fixed queued-check bound', () => {
+ expect(ciWaitResultSchema.safeParse({outcome:'stuck',headSha:'a'.repeat(40),observedAt:new Date().toISOString(),checks:[],totalChecks:0,truncated:false,diagnostic:'build queued for 16 min'}).success).toBe(true);
+ expect(waitToolDefinition.description).toContain('"stuck"');
+ expect(waitToolDefinition.description).toContain('at least 15 minutes');
+});

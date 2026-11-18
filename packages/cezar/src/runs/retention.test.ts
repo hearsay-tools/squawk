@@ -18,7 +18,7 @@ function run(partial: {
   role?: 'worker' | 'invalid';
   destroying?: boolean;
 }): RunRecord {
-  // The selector reads only `role`, `parentRunId` and `destroy`, so a worker here is that much and
+  // The selector reads only `role`, `parentRunId`, `destroy` and the workspace kind, so a worker here is that much and
   // no more; the cast is the one loose field, and the record around it is typed.
   const delegation =
     partial.role === 'invalid'
@@ -28,6 +28,7 @@ function run(partial: {
             role: 'worker' as const,
             parentRunId: 'parent',
             permissions: [] as const,
+            workspace: { ownerRunId: partial.id, resourceId: partial.id, kind: 'owned-isolated' as const, path: process.cwd(), branch: `cez/${partial.id}`, baselineSha: 'a'.repeat(40) },
             ...(partial.destroying
               ? {
                   destroy: {

@@ -67,7 +67,8 @@ function finishedRun(
     worktreePath: path,
     steps: [],
     ...(role === 'worker'
-      ? { delegation: { role: 'worker', parentRunId: 'parent', permissions: [] } }
+      ? { delegation: { role: 'worker', parentRunId: 'parent', permissions: [],
+          workspace: { ownerRunId: id, resourceId: id, kind: 'owned-isolated', path, branch: `cez/${id.slice(0, 8)}`, baselineSha: 'a'.repeat(40) } } }
       : {}),
   } as unknown as RunRecord;
 }

@@ -25,6 +25,7 @@ import {
   delegationCancelWaitResultSchema,
   workerOperationSchema,
   workerParamsSchema,
+  sharedSpawnRefusal,
   workerSpawnRequestSchema,
   workerSteerRequestSchema,
   workerWaitRequestSchema,
@@ -59,7 +60,7 @@ const responseSchemas = { tasks: discoveredTasksSchema, list: workerListResultSc
   stop: workerStopResultSchema, destroy: workerDestroyResultSchema, diff: workerDiffSchema, wait: delegationWaitResultSchema, 'cancel-wait': delegationCancelWaitResultSchema };
 const RESPONSE_BYTES = 3_145_728;
 const CLI_FLAG: Record<string, string> = {
-  requestId: '--request-id', baseline: '--baseline', backend: '--runner', model: '--model', effort: '--effort', workflow: '--workflow', skill: '--skill',
+  requestId: '--request-id', baseline: '--baseline', workspace: '--workspace', backend: '--runner', model: '--model', effort: '--effort', workflow: '--workflow', skill: '--skill',
   timeoutSeconds: '--timeout-seconds', mode: '--mode', kind: '--kind', id: '--id', context: '--context',
   requestIds: '--request', peerIds: '--peer', workerIds: 'worker-id', workerId: 'worker-id', waitId: 'wait-id', recipientRunId: 'recipient-run-id',
   task: 'task', text: 'text',
@@ -80,7 +81,7 @@ function attachIssue(error: z.ZodError, operation: string, typed: string[]): str
 }
 const WORKER_USAGE = { operations: [
   { name: 'resume', positionals: 2, required: ['--id'], optional: ['--timeout-seconds'] },
-  { name: 'spawn', positionals: 1, required: ['--baseline', '--request-id'], optional: ['--workflow', '--skill', '--runner', '--backend', '--model', '--effort', '--context', '--context-file', '--attach'] },
+  { name: 'spawn', positionals: 1, required: ['--request-id'], optional: ['--baseline', '--workspace', '--workflow', '--skill', '--runner', '--backend', '--model', '--effort', '--context', '--context-file', '--attach'] },
   { name: 'list', positionals: 0 },
   { name: 'inspect', positionals: 1 },
   { name: 'steer', positionals: 2 },
@@ -95,7 +96,7 @@ const WORKER_USAGE = { operations: [
 ] };
 const WORKER_HELP: Record<string, { args: string; description: string }> = {
   resume: { args: '<worker-id> "<instruction>" --id <UUID>', description: 'Resume a settled owned worker with a request; --timeout-seconds accepts 1-86400.' },
-  spawn: { args: '"<task>" --baseline <ref> --request-id <UUID>', description: 'Create an owned worker from a committed baseline.' },
+  spawn: { args: '"<task>" --request-id <UUID> (--baseline <ref> | --workspace shared)', description: 'Create an owned worker: in its own worktree from a committed baseline, or in your worktree with --workspace shared.' },
   list: { args: '', description: 'List your owned workers, execution revisions and remaining cleanup resources.' },
   inspect: { args: '<worker-id>', description: 'Show worker state and input locations.' },
   steer: { args: '<worker-id> "<text>"', description: 'Send instructions to a running worker.' },
@@ -108,7 +109,8 @@ const WORKER_HELP: Record<string, { args: string; description: string }> = {
 
 };
 const WORKER_FLAG_HELP: Record<string, string> = {
-  '--baseline': '<ref>                 Committed ref or parent-head; excludes dirty edits.',
+  '--baseline': '<ref>                 Committed ref or parent-head; excludes dirty edits. Required unless --workspace shared.',
+  '--workspace': '<isolated|shared>    isolated (default): own worktree and branch. shared: the worker runs in your worktree at your HEAD, with no worktree, branch or diff of its own; collect reports whether the worktree changed. Not with --baseline or --attach.',
   '--request-id': '<UUID>              Spawn retry ID, or request being followed up/replied to.',
   '--runner': `<name>                  ${RUNNER_IDS.join(' | ')}.`,
   '--backend': '<name>                 Alias of --runner.',
@@ -424,7 +426,7 @@ const repeatedFlag = { type: 'string', multiple: true } as const;
 const messageOptions = { id: stringFlag, kind: stringFlag, 'request-id': stringFlag, 'timeout-seconds': stringFlag };
 const waitOptions = { request: repeatedFlag, peer: repeatedFlag, 'timeout-seconds': stringFlag, mode: stringFlag };
 const COMMAND_OPTIONS: Record<string, NonNullable<Parameters<typeof parseArgs>[0]>['options']> = {
-  spawn: { baseline: stringFlag, 'request-id': stringFlag, workflow: stringFlag, skill: stringFlag, runner: stringFlag, backend: stringFlag,
+  spawn: { baseline: stringFlag, workspace: stringFlag, 'request-id': stringFlag, workflow: stringFlag, skill: stringFlag, runner: stringFlag, backend: stringFlag,
     model: stringFlag, effort: stringFlag, context: stringFlag, 'context-file': stringFlag, attach: repeatedFlag },
   conversation: { before: stringFlag }, tasks: { all: { type: 'boolean' }, offset: stringFlag },
   send: { ...messageOptions, resume: { type: 'boolean' } }, progress: messageOptions, reply: messageOptions, 'follow-up': messageOptions,
@@ -453,9 +455,13 @@ async function spawnPayload(values: CliValues, positionals: string[], argv: stri
   const text = values['context-file'] === undefined ? values.context
     : new TextDecoder('utf-8', { fatal: true }).decode(await readBoundedContextFile(String(values['context-file']), 400_000));
   const typed = (values.attach as string[] | undefined) ?? [];
+  const refusal = sharedSpawnRefusal({ workspace: values.workspace as string | undefined, baseline: values.baseline as string | undefined,
+    context: { artifacts: typed.map(() => ({ kind: 'parent-file' })) } });
+  if (refusal) throw new WorkerCliError(`spawn refused: ${refusal}`);
   const attached = await attachPaths(typed);
   const context = { text, artifacts: attached.length ? attached.map(path => ({ kind: 'parent-file' as const, path })) : undefined };
-  const parsed = workerSpawnRequestSchema.safeParse({ task: positionals[0], baseline: values.baseline, requestId: values['request-id'], backend: runner,
+  if (values.workspace !== 'shared' && values.baseline === undefined) throw new WorkerCliError('spawn is missing --baseline');
+  const parsed = workerSpawnRequestSchema.safeParse({ task: positionals[0], baseline: values.baseline, workspace: values.workspace, requestId: values['request-id'], backend: runner,
     model: values.model, effort: values.effort, workflow: values.workflow, skill: values.skill,
     context: text === undefined && !attached.length ? undefined : context });
   if (!parsed.success) throw new WorkerCliError(attachIssue(parsed.error, 'spawn', typed) ?? formatWorkerCliError(parsed.error, argv));

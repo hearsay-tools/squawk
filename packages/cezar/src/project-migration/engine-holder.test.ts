@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
 import { RUNS_DB_FILE } from '../runs/run-database.ts';
 import { projectAdmissionRefusal } from '../server/cockpit-ownership.ts';
@@ -15,7 +15,7 @@ import { buildMigrationProject, git, removeMigrationProject, type MigrationProje
  *  that stops on an unexpected value, a redirect placed after planning, directory modes, worktree
  *  locks the user set. */
 /** A real cleanup checkpoint: the removal stops right after writing it, with the worktree in place. */
-async function checkpoint(root: string, workspace: WorkerWorkspace): Promise<void> {
+async function checkpoint(root: string, workspace: OwnedWorkerWorkspace): Promise<void> {
   await removeOwnedWorkspace(root, workspace, undefined, async () => { throw new Error('stopped after the checkpoint'); }).catch(() => undefined);
 }
 
