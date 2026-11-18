@@ -4,7 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { DelegationState, RunRecord } from '@open-mercato/cezar-contract';
-import { delegationStateSchema, workerCreationReceiptSchema } from '@open-mercato/cezar-contract/delegation';
+import { delegationStateSchema, ownsDirectory, workerCreationReceiptSchema } from '@open-mercato/cezar-contract/delegation';
 import { workerExecutionIdentitySchema, type WorkerExecutionIdentity } from '../delegation/execution-identity.ts';
 import { capacityError, workerCapacity } from '../delegation/capacity.ts';
 import type { WorkerExecution } from './worker-execution.ts';
@@ -115,16 +115,21 @@ function assertHeldResourcesFree(held: ReadonlyMap<string, RunRecord>, workspace
   }
 }
 
+/** A resource id is unique among workers of every kind. A directory and a branch collide only
+ *  between workspaces that own theirs: a worker in its host's directory claims neither. */
 function heldResourceCollides(run: RunRecord, workspace: WorkerWorkspace): boolean {
-  const owned = run.delegation?.role === 'worker' ? run.delegation.workspace : undefined;
-  return Boolean((owned && (owned.resourceId === workspace.resourceId || owned.path === workspace.path ||
-    owned.branch === workspace.branch)) || run.worktreePath === workspace.path || run.branch === workspace.branch);
+  const held = run.delegation?.role === 'worker' ? run.delegation.workspace : undefined;
+  if (held?.resourceId === workspace.resourceId) return true;
+  if (!ownsDirectory(workspace)) return false;
+  return Boolean((held && ownsDirectory(held) && (held.path === workspace.path || held.branch === workspace.branch)) ||
+    run.worktreePath === workspace.path || run.branch === workspace.branch);
 }
 
 function assertStoredResourcesFree(
   state: OwnedRunCreateLookup,
   workspace: WorkerWorkspace,
 ): void {
+  if (!ownsDirectory(workspace)) return;
   // Runs not in memory answer through the branch and worktree columns. A worker's planned
   // branch is its `branch` column; its path and resource id derive from its own run id, which
   // the id check above already proved unused.

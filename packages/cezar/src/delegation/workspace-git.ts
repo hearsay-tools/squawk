@@ -2,7 +2,7 @@
 import { constants } from 'node:fs';
 import { open, realpath } from 'node:fs/promises';
 import { join, normalize } from 'node:path';
-import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { git } from '../git-command.ts';
 
 // Git for Windows emits forward slashes even for native absolute paths.
@@ -10,7 +10,7 @@ export function worktreeEntries(listed: string): string[] {
   return listed.split('\0').map(entry => entry.startsWith('worktree ') ? `worktree ${normalize(entry.slice(9))}` : entry);
 }
 
-export async function branchLog(repoRoot: string, workspace: WorkerWorkspace) {
+export async function branchLog(repoRoot: string, workspace: OwnedWorkerWorkspace) {
   const common = await gitCommonDir(repoRoot);
   const path = join(common, 'logs/refs/heads', workspace.branch);
   if (await realpath(path) !== path) throw new Error('Branch reflog redirected');
@@ -37,7 +37,7 @@ export async function checkedGit(cwd: string, args: string[], index?: string): P
 export async function gitCommonDir(cwd: string): Promise<string> {
   return realpath(await checkedGit(cwd, ['rev-parse', '--path-format=absolute', '--git-common-dir']));
 }
-export async function liveGitDir(repoRoot: string, workspace: WorkerWorkspace): Promise<string> {
+export async function liveGitDir(repoRoot: string, workspace: OwnedWorkerWorkspace): Promise<string> {
   if (await realpath(workspace.path) !== workspace.path) throw new Error('Owned workspace path is redirected');
   const rootCommon = await gitCommonDir(repoRoot);
   if (await gitCommonDir(workspace.path) !== rootCommon) throw new Error('Owned workspace repository changed');

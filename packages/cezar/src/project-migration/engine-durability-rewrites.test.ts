@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
 import { crashThenCheckDurability, beforeRepair, recordedMigration, TIMEOUT } from './engine.testkit.ts';
 import { removeMigrationProject, type MigrationProject } from './project-migration.testkit.ts';
@@ -8,7 +8,7 @@ import { removeMigrationProject, type MigrationProject } from './project-migrati
  *  from every fault point of the worktree repair, the receipts, the run store and the run files. */
 
 /** A real cleanup checkpoint: the removal stops right after writing it, with the worktree in place. */
-async function checkpoint(root: string, workspace: WorkerWorkspace): Promise<void> {
+async function checkpoint(root: string, workspace: OwnedWorkerWorkspace): Promise<void> {
   await removeOwnedWorkspace(root, workspace, undefined, async () => { throw new Error('stopped after the checkpoint'); }).catch(() => undefined);
 }
 

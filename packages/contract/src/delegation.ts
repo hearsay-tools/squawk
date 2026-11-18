@@ -20,7 +20,8 @@ const remainingSchema = z.array(z.enum(['process', 'worktree', 'branch'])).max(3
   .refine(resources => new Set(resources).size === resources.length);
 const errorSchema = z.string().max(2_000);
 
-export const workerWorkspaceSchema = z.object({
+/** A worker's own worktree and branch, forked from the baseline commit. */
+export const ownedWorkspaceSchema = z.object({
   ownerRunId: z.uuid(),
   resourceId: z.uuid(),
   kind: z.literal('owned-isolated'),
@@ -29,7 +30,37 @@ export const workerWorkspaceSchema = z.object({
   branch: z.string().min(1),
   baselineSha: commitShaSchema,
 }).strict();
+export type OwnedWorkerWorkspace = z.infer<typeof ownedWorkspaceSchema>;
+/** Another run's directory, which the worker works in. It has no worktree and no branch of its own. */
+export const sharedWorkspaceSchema = z.object({
+  ownerRunId: z.uuid(),
+  resourceId: z.uuid(),
+  kind: z.literal('shared'),
+  /** The host run's directory when the worker was spawned. */
+  path: z.string().min(1),
+  /** The run whose directory `path` is. */
+  hostRunId: z.uuid(),
+  /** The host directory's HEAD when the worker was spawned. */
+  baselineSha: commitShaSchema,
+}).strict();
+export type SharedWorkerWorkspace = z.infer<typeof sharedWorkspaceSchema>;
+export const workerWorkspaceSchema = z.discriminatedUnion('kind', [ownedWorkspaceSchema, sharedWorkspaceSchema]);
 export type WorkerWorkspace = z.infer<typeof workerWorkspaceSchema>;
+
+/** Whether a worker of each kind owns the directory it works in. An owner has its own branch,
+ *  autosave commits, worktree setup and teardown commands, agent-config seeding, preview, publish
+ *  and removal. A worker that owns none works in its host's directory and gets none of them. */
+const OWNS_DIRECTORY: Readonly<Record<WorkerWorkspace['kind'], boolean>> = { 'owned-isolated': true, shared: false };
+export function ownsDirectory(workspace: WorkerWorkspace): workspace is OwnedWorkerWorkspace {
+  return OWNS_DIRECTORY[workspace.kind];
+}
+/** The workspace of a worker that owns its directory. Throws for one that does not. */
+export function ownedWorkspace(workspace: WorkerWorkspace): OwnedWorkerWorkspace {
+  if (!ownsDirectory(workspace)) throw new Error('The workspace owns no worktree');
+  return workspace;
+}
+/** The text every refused directory action of such a worker starts with. */
+export const SHARED_WORKSPACE_REFUSAL = 'this worker runs in its parent\'s worktree';
 
 export const workerOutcomeSchema = z.object({
   workerId: z.uuid(),
@@ -146,7 +177,7 @@ export const workerInputRecipeSchema = z.object({
 export type WorkerInputRecipe = z.infer<typeof workerInputRecipeSchema>;
 
 /** Bounded result evidence; unavailable identifiers never promise retained bytes. */
-const unavailableEvidenceSchema = z.object({ state: z.literal('unavailable'), reason: z.enum(['no-assistant-output', 'missing', 'unreadable', 'unverified']), detail: errorSchema.optional() }).strict();
+const unavailableEvidenceSchema = z.object({ state: z.literal('unavailable'), reason: z.enum(['no-assistant-output', 'missing', 'unreadable', 'unverified', 'unsupported']), detail: errorSchema.optional() }).strict();
 const deletedEvidenceSchema = z.object({ state: z.literal('deleted'), reason: z.literal('missing') }).strict();
 const executionOutcomeSchema = z.enum(['running', 'review-ready', 'completed', 'failed', 'cancelled']);
 const workerArtifactSchema = z.discriminatedUnion('state', [
@@ -154,13 +185,37 @@ const workerArtifactSchema = z.discriminatedUnion('state', [
   unavailableEvidenceSchema.extend({ id: z.string().max(255), path: z.string().max(8192) }),
   deletedEvidenceSchema.extend({ id: z.string().max(255), path: z.string().max(8192) }),
 ]);
+const workspaceStateSchema = z.enum(['available', 'unavailable', 'deleted']);
+/** How many changed paths a change report names. */
+export const WORKER_CHANGED_PATHS_CAP = 100;
+/**
+ * Whether the host directory of a shared worker changed between the worker's first session start
+ * and its last settlement; a worker that still runs is compared with the directory as it is.
+ * The report covers HEAD, the checked-out branch, the index, tracked changes and untracked files;
+ * ignored files are out. It does not say who made a change.
+ */
+export const workerChangeReportSchema = z.discriminatedUnion('state', [
+  z.object({ state: z.literal('unchanged') }).strict(),
+  z.object({
+    state: z.literal('changed'),
+    paths: z.array(z.string().max(8192)).max(WORKER_CHANGED_PATHS_CAP),
+    /** More paths changed than `paths` names. */
+    truncated: z.boolean(),
+    headMoved: z.boolean(), branchMoved: z.boolean(), indexMoved: z.boolean(),
+  }).strict(),
+  z.object({ state: z.literal('unavailable'), reason: errorSchema }).strict(),
+]);
+export type WorkerChangeReport = z.infer<typeof workerChangeReportSchema>;
 export const workerCollectedResultSchema = z.object({
   workerId: z.uuid(), parentRunId: z.uuid(), revision: z.number().int().nonnegative(), observedAt: z.iso.datetime(),
   status: runStatusSchema,
   outcome: z.enum(['running', 'review-ready', 'completed', 'failed', 'cancelled', 'destroyed']),
   lastExecutionOutcome: executionOutcomeSchema, partial: z.boolean(), settled: z.boolean(), error: errorSchema.optional(),
   backend: workerBackendSchema.optional(), model: z.string().max(512).optional(), baselineSha: commitShaSchema,
-  workspace: workerWorkspaceSchema.extend({ state: z.enum(['available', 'unavailable', 'deleted']).optional() }),
+  workspace: z.discriminatedUnion('kind', [
+    ownedWorkspaceSchema.extend({ state: workspaceStateSchema.optional() }),
+    sharedWorkspaceSchema.extend({ state: workspaceStateSchema.optional() }),
+  ]),
   cleanup: z.enum(['retained', 'requested', 'terminating', 'cleaning', 'complete', 'incomplete']),
   summary: z.discriminatedUnion('state', [
     // `failure`: the worker failed, and the text names the runner's failure reason (hearsay-tools/squawk#3337).
@@ -176,6 +231,8 @@ export const workerCollectedResultSchema = z.object({
     z.object({ state: z.literal('available'), snapshotId: z.uuid(), path: z.string().min(1).max(8192), truncated: z.boolean() }).strict(),
     unavailableEvidenceSchema, deletedEvidenceSchema,
   ]),
+  /** Present for a worker that works in its host's directory. */
+  changes: workerChangeReportSchema.optional(),
   artifacts: z.discriminatedUnion('state', [
     z.object({ state: z.literal('available'), items: z.array(workerArtifactSchema).max(32), truncated: z.boolean() }).strict(),
     unavailableEvidenceSchema, deletedEvidenceSchema,
@@ -244,9 +301,24 @@ export const runDelegationSummarySchema = z.discriminatedUnion('role', [
 ]);
 export type RunDelegationSummary = z.infer<typeof runDelegationSummarySchema>;
 
+/** What `--workspace` takes, and the stored kind each choice plans. */
+export const WORKSPACE_CHOICES = { isolated: 'owned-isolated', shared: 'shared' } as const satisfies Record<string, WorkerWorkspace['kind']>;
+export const workerWorkspaceChoiceSchema = z.enum(['isolated', 'shared']);
+export const SHARED_BASELINE_REFUSAL = '--baseline cannot be used with --workspace shared: a shared worker runs at its parent\'s HEAD';
+export const SHARED_ATTACH_REFUSAL = '--attach cannot be used with --workspace shared: the worker runs in your worktree, so the file is already there';
+/** Why a spawn into a shared workspace is refused, or undefined. The schema accepts the request, so
+ *  the service and the CLI answer with these words instead of a generic validation error. */
+export function sharedSpawnRefusal(request: { workspace?: string | undefined; baseline?: string | undefined; context?: { artifacts?: ReadonlyArray<{ kind: string }> | undefined } | undefined }): string | undefined {
+  if (request.workspace !== 'shared') return undefined;
+  if (request.baseline !== undefined) return SHARED_BASELINE_REFUSAL;
+  return request.context?.artifacts?.some(artifact => artifact.kind === 'parent-file') ? SHARED_ATTACH_REFUSAL : undefined;
+}
 export const workerSpawnRequestSchema = z.object({
   task: z.string().min(1).max(100_000),
-  baseline: z.string().min(1).max(1_024),
+  /** Required for an isolated workspace; refused for a shared one, which runs at its host's HEAD. */
+  baseline: z.string().min(1).max(1_024).optional(),
+  /** `isolated` when absent. */
+  workspace: workerWorkspaceChoiceSchema.optional(),
   requestId: z.uuid(),
   context: workerContextSchema.optional(),
   backend: workerBackendSchema.optional(),
@@ -256,7 +328,8 @@ export const workerSpawnRequestSchema = z.object({
   workflow: z.string().trim().min(1).max(200).optional(),
   /** Discovered skill to run as a one-step task, mutually exclusive with workflow (#778). */
   skill: z.string().trim().min(1).max(200).optional(),
-}).strict().refine(request => request.skill === undefined || request.workflow === undefined, { message: '--skill and --workflow cannot be used together' }).refine(request => request.task.length + (request.context?.text?.length ?? 0) <= 100_000, { message: 'Combined task and context exceed 100000 characters' });
+}).strict().refine(request => request.skill === undefined || request.workflow === undefined, { message: '--skill and --workflow cannot be used together' })
+  .refine(request => request.workspace === 'shared' || request.baseline !== undefined, { path: ['baseline'], message: '--baseline is required' }).refine(request => request.task.length + (request.context?.text?.length ?? 0) <= 100_000, { message: 'Combined task and context exceed 100000 characters' });
 export type WorkerSpawnRequest = z.infer<typeof workerSpawnRequestSchema>;
 
 export const workerSteerRequestSchema = z.object({

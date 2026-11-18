@@ -8,7 +8,7 @@ import { directoriesDown, durable } from './durable.ts';
 import { migrateProject, resumeProjectMigration } from './engine.ts';
 import { readProjectMigrationJournal, type ProjectMigrationJournal } from './journal.ts';
 import { buildMigrationProject, projectSnapshot, type MigrationProject } from './project-migration.testkit.ts';
-import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 
 /** Shared helpers of the project migration engine tests (hearsay-tools/cezarion#3088). */
 
@@ -108,7 +108,7 @@ export const moved = (project: MigrationProject, path: string) => path.replace(p
 export const beforeRepair = (point: string): boolean => /^(?:journal|lock-worktrees|move):/.test(point);
 
 /** A main-checkout project, every fault point of an uninterrupted migration, and its final snapshot. */
-export async function recordedMigration(checkpoint: (root: string, workspace: WorkerWorkspace) => Promise<void>): Promise<{
+export async function recordedMigration(checkpoint: (root: string, workspace: OwnedWorkerWorkspace) => Promise<void>): Promise<{
   project: MigrationProject; points: string[]; reference: Record<string, string>;
 }> {
   const project = await buildMigrationProject({ linked: false, checkpoint });

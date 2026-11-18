@@ -6,7 +6,7 @@ import { collectWorkerEvidence } from './results.ts';
 import { controllerRefusal } from '../runs/worker-execution.ts';
 import { DelegationPolicyError } from './policy.ts';
 import { describeProcesses, isCurrentProcess, recordedProcessLive } from './process-liveness.ts';
-import { workspaceKind, type WorkspaceResource } from './workspace-kinds.ts';
+import { workspaceDirectoryRemoved, workspaceKind, type WorkspaceResource } from './workspace-kinds.ts';
 import { loadConfig } from '../config.ts';
 import { DESTROY_ATTENTION_ATTEMPTS, DESTROY_BACKOFF, retryDelayMs, type Backoff } from './retry-backoff.ts';
 import { WORKTREE_LOCK_BUSY_PREFIX } from './workspace-removal.ts';
@@ -328,7 +328,7 @@ export class WorkerCleanup {
       assertAttached();
       persist(result.state, result.remaining, result.error);
       // Preserve the captured bytes even if Git removal was only partially successful.
-      const removed = !result.remaining.includes('worktree');
+      const removed = workspaceDirectoryRemoved(workspace, result.remaining);
       project.store.commitWorkerResult(evidence.result.parentRunId, { ...evidence.result, observedAt: new Date().toISOString(),
         cleanup: result.state, outcome: result.state === 'complete' ? 'destroyed' : evidence.result.lastExecutionOutcome,
         workspace: { ...workspace, state: removed ? 'deleted' : evidence.result.workspace.state },

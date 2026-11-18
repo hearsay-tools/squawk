@@ -40,6 +40,16 @@ running; only a human Stop of the parent, or a parent that ends `done` or `revie
 `--resume` restarts a `cancelled` worker whose worktree and branch exist, in a fresh session when
 none was recorded. Destroy stays the permanent end.
 
+Workspace kinds (hearsay-tools/squawk#3819, amended 2026-11-18). A worker's workspace has a kind.
+`owned-isolated` is the worktree and branch every worker had until then. `shared` is a worker that
+runs in the directory its parent works in, at the parent's HEAD: it has no worktree, no branch and
+takes no worktree mutation lock, and Squawk reports whether that directory changed during its run
+instead of a diff. This lifts the "shared workspaces" exclusion of the
+[2026-09-06 spec](../../.ai/specs/2026-09-06-owned-workers-isolated-worktrees.md) for this one
+kind. The settings above gate both kinds alike, and both count toward the same worker limits.
+Squawk does not prevent a shared worker's writes; the guide
+([docs/workers.md § Shared workspace](../workers.md#shared-workspace)) says so.
+
 Destroy accepts a running worker. It requests stop, runs the project's worktree
 teardown, and waits up to 30 seconds for execution termination. Once termination
 is proven, it stops the worker scope, then removes the worktree and branch. If

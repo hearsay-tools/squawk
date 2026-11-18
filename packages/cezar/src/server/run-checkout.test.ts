@@ -82,7 +82,7 @@ function fakeHost({ run, claimHeld, foreignOwner }: State): RunCheckoutHost {
     store: {
       getRun: vi.fn(() => run), sourceDataDir: vi.fn(() => join(root, 'source')),
       updateRun: forbidden, writeRefusal: vi.fn(() => foreignOwner ? RUN_IN_USE_ELSEWHERE : undefined),
-      fallbackDeleteError: forbidden, canDeleteRun: forbidden,
+      fallbackDeleteError: forbidden, canDeleteRun: forbidden, listWorkersOf: forbidden,
     },
     manager: { isActive: forbidden, claimForPublish: vi.fn(claimHeld ? () => null : forbidden), claimWorktreeReclaim: vi.fn(claimHeld ? () => null : forbidden) },
   };
@@ -170,7 +170,7 @@ function claimedHost(state: State) {
     root,
     store: {
       getRun: vi.fn(() => { calls.push('lookup'); return state.run; }),
-      updateRun: vi.fn(), sourceDataDir: vi.fn(),
+      updateRun: vi.fn(), sourceDataDir: vi.fn(), listWorkersOf: vi.fn(() => []),
       canDeleteRun: vi.fn(() => { calls.push('can-delete'); return state.run?.delegation?.role !== 'worker'; }),
       fallbackDeleteError: vi.fn(() => { calls.push('fallback'); return state.run?.worktreePath ? fallbackProjectWriteError(state.run.worktreePath) : undefined; }),
       writeRefusal: vi.fn(() => { calls.push('owner'); return state.foreignOwner ? RUN_IN_USE_ELSEWHERE : undefined; }),
@@ -186,6 +186,68 @@ function claimedHost(state: State) {
   };
   return { host, calls, release };
 }
+
+describe("a worker that runs in its parent's worktree (hearsay-tools/squawk#3819)", () => {
+  const id = '5b0c8d3a-41c5-4b0e-9c57-3f0a1c2d4e5f';
+  const shared = makeRunRecord({ id, status: RUN_STATUS.done, baseBranch: 'a'.repeat(40), delegation: { role: 'worker', permissions: [], parentRunId: baseRun.id,
+    workspace: { ownerRunId: id, resourceId: '0d0e7a51-7a35-4c53-8a5c-0c7f5f9d2b11', kind: 'shared', path: live, hostRunId: baseRun.id, baselineSha: 'a'.repeat(40) } } });
+  const refusal = (action: string) => ({ status: 409, body: { error: `this worker runs in its parent's worktree — ${action}` } });
+  function sharedHost(run: RunRecord = shared, workers: RunRecord[] = []): RunCheckoutHost {
+    return { root, store: { getRun: vi.fn(() => run), updateRun: vi.fn(), sourceDataDir: vi.fn(() => root), writeRefusal: vi.fn(() => undefined),
+      fallbackDeleteError: vi.fn(() => undefined), canDeleteRun: vi.fn(() => true), listWorkersOf: vi.fn(() => workers) },
+      manager: { isActive: vi.fn(() => false), claimForPublish: vi.fn(() => () => undefined), claimWorktreeReclaim: vi.fn(() => () => undefined) } };
+  }
+
+  it('refuses commit, push, the pull request, worktree removal and reclaim in one text family, and claims nothing', () => {
+    const host = sharedHost();
+    vi.mocked(autosaveCleanupBlocker).mockReset();
+    expect(runCheckout(host, id, 'mutate')).toEqual(refusal('commit and push from the parent task'));
+    expect(runCheckout(host, id, 'publish')).toEqual(refusal('open the pull request from the parent task'));
+    expect(runCheckout(host, id, 'remove', { claim: 'publish', checksActive: true, deletion: 'worktree', nullClaimError: 'pending' }))
+      .toEqual(refusal('it has no worktree or branch to remove'));
+    expect(runCheckout(host, id, 'remove', { claim: 'reclaim', checksActive: false, deletion: 'inline', nullClaimError: 'in use' }))
+      .toEqual(refusal('it has no worktree or branch to remove'));
+    expect(host.manager.claimForPublish).not.toHaveBeenCalled();
+    expect(host.manager.claimWorktreeReclaim).not.toHaveBeenCalled();
+    expect(host.store.updateRun).not.toHaveBeenCalled();
+  });
+
+  it('still admits history deletion, and reads no worktree of its own', () => {
+    const host = sharedHost();
+    expect(runCheckout(host, id, 'remove', { claim: 'publish', checksActive: true, deletion: 'record', nullClaimError: 'pending' }))
+      .toEqual({ run: shared, release: expect.any(Function) });
+  });
+
+  it('reads from the recorded host directory: changes, a transcript file link and open-in-cli', () => {
+    const host = sharedHost();
+    expect(shared.worktreePath).toBeUndefined();
+    for (const directory of ['existing-worktree', 'working-directory', 'recorded-path-or-root'] as const) {
+      expect(runCheckout(host, id, 'read', { directory }), directory).toMatchObject({ run: shared, directory: live });
+    }
+    const open = runCheckout(host, id, 'open');
+    if ('status' in open) throw new Error('open refused');
+    expect(open.directory()).toBe(live);
+    expect(open.worktree).toBe(live);
+    expect(open.defaultWorktree()).toBe(live);
+  });
+
+  it('refuses to remove or reclaim the worktree of a task while a live worker runs in it, and admits it once the worker ended', () => {
+    const hostRun = makeRunRecord({ id: baseRun.id, status: RUN_STATUS.failed, worktreePath: live, delegation: { role: 'root', permissions: [], receipts: [] } });
+    const running = { ...shared, status: RUN_STATUS.running } as RunRecord;
+    const removal = { claim: 'publish', checksActive: true, deletion: 'worktree', nullClaimError: 'pending' } as const;
+    const reclaim = { claim: 'reclaim', checksActive: false, deletion: 'inline', nullClaimError: 'in use' } as const;
+    const busy = sharedHost(hostRun, [running]);
+    const refused = { status: 409, body: { error: "a worker runs in this task's worktree — stop it or clean it up first" } };
+    expect(runCheckout(busy, hostRun.id, 'remove', removal)).toEqual(refused);
+    expect(runCheckout(busy, hostRun.id, 'remove', reclaim)).toEqual(refused);
+    expect(busy.manager.claimForPublish).not.toHaveBeenCalled();
+    expect(busy.manager.claimWorktreeReclaim).not.toHaveBeenCalled();
+    expect(busy.store.listWorkersOf).toHaveBeenCalledWith(hostRun.id);
+    const free = sharedHost(hostRun, [shared]);
+    expect(runCheckout(free, hostRun.id, 'remove', removal)).toEqual({ run: hostRun, release: expect.any(Function) });
+    expect(runCheckout(free, hostRun.id, 'remove', reclaim)).toEqual({ run: hostRun, release: expect.any(Function) });
+  });
+});
 
 function admitClaimed(host: RunCheckoutHost, route: typeof claimedRoutes[number]) {
   return route.intent === 'publish'

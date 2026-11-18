@@ -11,7 +11,7 @@ import { runGit } from '../git-command.ts';
 
 export const WORKER_CONTEXT_BYTES = 8 * 1024 * 1024;
 const hash = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex');
-const invalid = () => new DelegationPolicyError('invalid_input', 'Worker context input is missing, redirected, changed, or exceeds its limit');
+export const invalidContext = () => new DelegationPolicyError('invalid_input', 'Worker context input is missing, redirected, changed, or exceeds its limit');
 
 /** Fixed-size read, regular files only; neither a FIFO nor a growing file can evade the bound. */
 export async function readBoundedContextFile(path: string, limit: number): Promise<Buffer> {
@@ -23,7 +23,7 @@ async function readBoundedFile(path: string, limit: number): Promise<{ bytes: Bu
   const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const before = await file.stat();
-    if (!before.isFile() || before.size > limit) throw invalid();
+    if (!before.isFile() || before.size > limit) throw invalidContext();
     const bytes = Buffer.alloc(limit + 1);
     let count = 0;
     while (count < bytes.length) {
@@ -32,62 +32,64 @@ async function readBoundedFile(path: string, limit: number): Promise<{ bytes: Bu
       count += next.bytesRead;
     }
     const after = await file.stat();
-    if (count > limit || count !== before.size || after.size !== before.size || after.mtimeMs !== before.mtimeMs) throw invalid();
+    if (count > limit || count !== before.size || after.size !== before.size || after.mtimeMs !== before.mtimeMs) throw invalidContext();
     return { bytes: bytes.subarray(0, count), stat: after };
   } finally { await file.close(); }
 }
 
-async function canonicalFile(path: string): Promise<Stats> {
-  if (await realpath(path) !== path) throw invalid();
+export async function canonicalFile(path: string): Promise<Stats> {
+  if (await realpath(path) !== path) throw invalidContext();
   const entry = await lstat(path);
-  if (!entry.isFile()) throw invalid();
+  if (!entry.isFile()) throw invalidContext();
   return entry;
 }
 /** Bind bounded bytes to the canonical path, even if an ancestor was redirected only during open. */
 async function readCanonicalFile(
   path: string, limit: number, canonical: () => Promise<Stats>,
-  changed: (error?: NodeJS.ErrnoException) => Error = invalid,
+  changed: (error?: NodeJS.ErrnoException) => Error = invalidContext,
 ): Promise<Buffer> {
   const read = await readBoundedFile(path, limit).catch((error: NodeJS.ErrnoException) => { throw changed(error); });
   const entry = await canonical();
   if (entry.dev !== read.stat.dev || entry.ino !== read.stat.ino) throw changed();
   return read.bytes;
 }
-async function inputDirectory(dataDir: string, workerId: string): Promise<string> {
+/** The worker's own data directory: its copied inputs and what Squawk records about its workspace. */
+export async function workerDataDirectory(dataDir: string, workerId: string): Promise<string> {
   // A worker the project move left in `.ai/cezar/` keeps its inputs there (`legacy-runs.ts`).
   const root = await realpath(runDataDir(dataDir, workerId));
   const runs = join(root, 'runs');
-  if (await realpath(runs) !== runs) throw invalid();
+  if (await realpath(runs) !== runs) throw invalidContext();
   return join(runs, `${workerId}-images`);
 }
 function copyName(index: number) { return `worker-context-${index}.input`; }
 /** Where a `parent-file` input's owned snapshot lives; its recipe `path` names the worker worktree copy instead. */
 export async function parentFileSnapshotPath(dataDir: string, workspace: WorkerWorkspace, index: number): Promise<string> {
-  return join(await inputDirectory(dataDir, workspace.ownerRunId), copyName(index));
+  return join(await workerDataDirectory(dataDir, workspace.ownerRunId), copyName(index));
 }
-async function writeCopy(path: string, bytes: Buffer): Promise<void> {
+/** Write one file of the worker's data directory through a temporary name; a redirected directory is refused. */
+export async function writeWorkerDataFile(path: string, bytes: Buffer): Promise<void> {
   const dir = dirname(path);
   await mkdir(dir, { recursive: true, mode: 0o700 });
-  if (await realpath(dir) !== dir) throw invalid();
+  if (await realpath(dir) !== dir) throw invalidContext();
   const temporary = join(dir, `.context-${randomUUID()}.tmp`);
   const file = await open(temporary, 'wx', 0o600);
   try { await file.writeFile(bytes); await file.sync(); } finally { await file.close(); }
   try {
-    if (await realpath(dir) !== dir) throw invalid();
+    if (await realpath(dir) !== dir) throw invalidContext();
     await rename(temporary, path);
   } finally { await rm(temporary, { force: true }); }
 }
 async function attachmentBytes(dataDir: string, parentId: string, id: string, limit: number) {
   const source = resolveAttachmentPath(dataDir, parentId, id);
   const expected = join(await realpath(runDataDir(dataDir, parentId)), 'runs', `${parentId}-images`, id);
-  if (!source || source !== expected) throw invalid();
+  if (!source || source !== expected) throw invalidContext();
   await canonicalFile(source);
   return readCanonicalFile(source, limit, () => canonicalFile(source));
 }
 
-const refuse = (message: string) => new DelegationPolicyError('invalid_input', message);
+export const refuseContext = (message: string) => new DelegationPolicyError('invalid_input', message);
 const attachmentDetail = (error: unknown) => error instanceof Error ? error.message : String(error);
-const attachmentNotIgnored = (path: string) => refuse(`--attach path is not ignored by the worker baseline: ${path}; commit it and spawn from that commit instead of attaching it`);
+const attachmentNotIgnored = (path: string) => refuseContext(`--attach path is not ignored by the worker baseline: ${path}; commit it and spawn from that commit instead of attaching it`);
 type PlacedAttachment = { source: string; dir: string; path: string; dev: number; ino: number };
 /**
  * Read a regular parent-worktree file without symlink components. Revalidate the open
@@ -99,17 +101,17 @@ async function parentFile(parentCwd: string, path: string): Promise<{ read(limit
   const notFound = (error: NodeJS.ErrnoException) => error.code === 'ENOENT' || error.code === 'ENOTDIR';
   const canonical = async () => {
     const [real, entry] = await Promise.all([realpath(source), lstat(source)]).catch((error: NodeJS.ErrnoException) => {
-      throw notFound(error) ? refuse(`--attach path not found: ${path}`) : refuse(`--attach path is not a regular file inside the parent worktree: ${path}`);
+      throw notFound(error) ? refuseContext(`--attach path not found: ${path}`) : refuseContext(`--attach path is not a regular file inside the parent worktree: ${path}`);
     });
-    if (real !== source || !entry.isFile()) throw refuse(`--attach path is not a regular file inside the parent worktree: ${path}`);
+    if (real !== source || !entry.isFile()) throw refuseContext(`--attach path is not a regular file inside the parent worktree: ${path}`);
     return entry;
   };
   const checked = await canonical();
   return { async read(limit) {
-    if (checked.size > limit) throw invalid();
+    if (checked.size > limit) throw invalidContext();
     // It was a regular file at the canonical path a moment ago: any read failure is a change.
     return readCanonicalFile(source, limit, canonical, error => error && notFound(error)
-      ? refuse(`--attach path not found: ${path}`) : refuse(`--attach path changed while it was read: ${path}`));
+      ? refuseContext(`--attach path not found: ${path}`) : refuseContext(`--attach path changed while it was read: ${path}`));
   } };
 }
 async function ignoredByGit(cwd: string, path: string): Promise<boolean> {
@@ -119,15 +121,61 @@ async function ignoredByGit(cwd: string, path: string): Promise<boolean> {
   });
 }
 
-/** Accept only pinned Git files, attachments in this parent's canonical owned directory, and ignored parent-worktree files. */
-export async function prepareWorkerContext(options: {
+type PrepareContextOptions = {
   repoRoot: string; dataDir: string; parentId: string; workspace: WorkerWorkspace;
   /** The parent's working directory: the worktree `parent-file` references are relative to. */
   parentCwd: string;
   context: NonNullable<WorkerSpawnRequest['context']>;
   containsSecret(text: string): boolean;
-}): Promise<{ recipe: WorkerInputRecipe; discard(): Promise<void> }> {
-  const { repoRoot, dataDir, parentId, workspace, context } = options;
+};
+type WorkspaceSource<Kind extends WorkerInput['source']['kind']> = {
+  options: PrepareContextOptions; index: number; source: Extract<WorkerInput['source'], { kind: Kind }>;
+  /** Copy bytes into the worker's data directory; refuses a secret. */
+  snapshot(bytes: Buffer): Promise<{ path: string; bytes: number; sha256: string }>;
+  /** The copy budget left. */
+  remaining(): number;
+};
+/** How a workspace kind takes the two sources that name a file of a worktree. */
+export type WorkspaceContextSources = {
+  baselineFile(input: WorkspaceSource<'baseline-file'>): Promise<WorkerInput>;
+  parentFile(input: WorkspaceSource<'parent-file'>): Promise<WorkerInput>;
+};
+
+/** The blob a regular file has at the pinned baseline commit. */
+export async function baselineBlob(repoRoot: string, baselineSha: string, path: string): Promise<string> {
+  const { stdout } = await runGit(['ls-tree', '-z', baselineSha, '--', path], { cwd: repoRoot, maxBuffer: 16_384, timeout: 30_000 });
+  const match = /^(100644|100755) blob ([0-9a-f]{40,64})\t([^\0]+)\0$/.exec(stdout);
+  if (!match || match[3] !== path) throw invalidContext();
+  return match[2]!;
+}
+export const baselineFileHash = (blobId: string) => hash(blobId);
+
+/** A worker with its own worktree reads a baseline file in it, and gets an ignored parent file copied to the same path. */
+const worktreeSources: WorkspaceContextSources = {
+  async baselineFile({ options: { repoRoot, workspace }, source }) {
+    const blob = await baselineBlob(repoRoot, workspace.baselineSha, source.path);
+    const size = await runGit(['cat-file', '-s', blob], { cwd: repoRoot, maxBuffer: 1024, timeout: 30_000 });
+    return { source, path: join(workspace.path, source.path), bytes: Number(size.stdout.trim()), sha256: baselineFileHash(blob) };
+  },
+  async parentFile({ options: { repoRoot, workspace, parentCwd }, source, snapshot, remaining }) {
+    // Only an ignored file may enter the worker worktree: anything else would come back
+    // through its diff and autosave commits. Confinement is checked before `check-ignore`,
+    // which dies outright on a path beyond a symlink.
+    const refusal = parentFileRefusal(source.path);
+    if (refusal) throw refuseContext(refusal);
+    const { stdout } = await runGit(['ls-tree', '-z', workspace.baselineSha, '--', source.path], { cwd: repoRoot, maxBuffer: 16_384, timeout: 30_000 });
+    if (stdout) throw refuseContext(`--attach path is tracked by git: ${source.path}; commit your changes and spawn from that commit instead of attaching it`);
+    const file = await parentFile(parentCwd, source.path);
+    if (!await ignoredByGit(parentCwd, source.path)) throw refuseContext(`--attach path is not ignored by git: ${source.path}; commit it and spawn from that commit instead of attaching it`);
+    const copy = await snapshot(await file.read(remaining()));
+    return { source, path: join(workspace.path, source.path), bytes: copy.bytes, sha256: copy.sha256 };
+  },
+};
+
+/** Accept only pinned Git files, attachments in this parent's canonical owned directory, and what
+ *  `sources` takes of the parent's worktree files. */
+export async function prepareWorkerContext(options: PrepareContextOptions, sources: WorkspaceContextSources = worktreeSources): Promise<{ recipe: WorkerInputRecipe; discard(): Promise<void> }> {
+  const { dataDir, parentId, workspace, context } = options;
   const inputs: WorkerInput[] = [];
   let copied = 0;
   let owned: { path: string; dev: number; ino: number } | undefined;
@@ -139,47 +187,30 @@ export async function prepareWorkerContext(options: {
     }
   };
   const snapshot = async (index: number, bytes: Buffer) => {
-    if (options.containsSecret(bytes.toString('utf8'))) throw invalid();
+    if (options.containsSecret(bytes.toString('utf8'))) throw invalidContext();
     copied += bytes.length;
-    const dir = await inputDirectory(dataDir, workspace.ownerRunId);
+    const dir = await workerDataDirectory(dataDir, workspace.ownerRunId);
     if (!owned) {
       await mkdir(dir, { mode: 0o700 }); // exclusive: never adopt an unrelated existing store
       const stat = await lstat(dir); owned = { path: dir, dev: stat.dev, ino: stat.ino };
     }
     const path = join(dir, copyName(index));
-    await writeCopy(path, bytes);
+    await writeWorkerDataFile(path, bytes);
     return { path, bytes: bytes.length, sha256: hash(bytes) };
   };
+  const remaining = () => WORKER_CONTEXT_BYTES - copied;
   try {
     for (const [index, source] of (context.artifacts ?? []).entries()) {
-      if (source.kind === 'baseline-file') {
-        const { stdout } = await runGit(['ls-tree', '-z', workspace.baselineSha, '--', source.path], { cwd: repoRoot, maxBuffer: 16_384, timeout: 30_000 });
-        const match = /^(100644|100755) blob ([0-9a-f]{40,64})\t([^\0]+)\0$/.exec(stdout);
-        if (!match || match[3] !== source.path) throw invalid();
-        const size = await runGit(['cat-file', '-s', match[2]!], { cwd: repoRoot, maxBuffer: 1024, timeout: 30_000 });
-        inputs.push({ source, path: join(workspace.path, source.path), bytes: Number(size.stdout.trim()), sha256: hash(match[2]!) });
-      } else if (source.kind === 'parent-file') {
-        // Only an ignored file may enter the worker worktree: anything else would come back
-        // through its diff and autosave commits. Confinement is checked before `check-ignore`,
-        // which dies outright on a path beyond a symlink.
-        const refusal = parentFileRefusal(source.path);
-        if (refusal) throw refuse(refusal);
-        const { stdout } = await runGit(['ls-tree', '-z', workspace.baselineSha, '--', source.path], { cwd: repoRoot, maxBuffer: 16_384, timeout: 30_000 });
-        if (stdout) throw refuse(`--attach path is tracked by git: ${source.path}; commit your changes and spawn from that commit instead of attaching it`);
-        const file = await parentFile(options.parentCwd, source.path);
-        if (!await ignoredByGit(options.parentCwd, source.path)) throw refuse(`--attach path is not ignored by git: ${source.path}; commit it and spawn from that commit instead of attaching it`);
-        const copy = await snapshot(index, await file.read(WORKER_CONTEXT_BYTES - copied));
-        inputs.push({ source, path: join(workspace.path, source.path), bytes: copy.bytes, sha256: copy.sha256 });
-      } else {
-        const bytes = await attachmentBytes(dataDir, parentId, source.id, WORKER_CONTEXT_BYTES - copied);
-        inputs.push({ source, ...await snapshot(index, bytes) });
-      }
+      const placed = { options, index, snapshot: (bytes: Buffer) => snapshot(index, bytes), remaining };
+      if (source.kind === 'baseline-file') inputs.push(await sources.baselineFile({ ...placed, source }));
+      else if (source.kind === 'parent-file') inputs.push(await sources.parentFile({ ...placed, source }));
+      else inputs.push({ source, ...await snapshot(index, await attachmentBytes(dataDir, parentId, source.id, remaining())) });
     }
     return { recipe: { ...(context.text === undefined ? {} : { text: context.text }), inputs }, discard };
   } catch (error) {
     await discard();
     // A named `--attach` refusal tells the parent which path to fix; everything else stays generic.
-    throw error instanceof DelegationPolicyError ? error : invalid();
+    throw error instanceof DelegationPolicyError ? error : invalidContext();
   }
 }
 
@@ -188,6 +219,9 @@ export async function verifyWorkerContext(options: {
   dataDir: string; parentId: string; workspace: WorkerWorkspace; context?: WorkerInputRecipe | undefined;
   /** The parent's worktree, the only source a missing `parent-file` snapshot may be rebuilt from. */
   parentCwd?: string;
+}, verifyBaselineFile: (input: WorkerInput, index: number) => Promise<void> = async input => {
+  if (input.source.kind !== 'baseline-file' || input.path !== join(options.workspace.path, input.source.path)) throw invalidContext();
+  await canonicalFile(input.path);
 }): Promise<void> {
   const { dataDir, parentId, workspace, context, parentCwd } = options;
   if (!context) return;
@@ -195,17 +229,16 @@ export async function verifyWorkerContext(options: {
   try {
     for (const [index, input] of context.inputs.entries()) {
       if (input.source.kind === 'baseline-file') {
-        if (input.path !== join(workspace.path, input.source.path)) throw invalid();
-        await canonicalFile(input.path);
+        await verifyBaselineFile(input, index);
         continue;
       }
       const { source } = input;
       // A parent-file recipe names the worker worktree copy, which the worker may edit or delete:
       // only the owned snapshot is verified.
       const path = await parentFileSnapshotPath(dataDir, workspace, index);
-      if (input.path !== (source.kind === 'parent-file' ? join(workspace.path, source.path) : path)) throw invalid();
+      if (input.path !== (source.kind === 'parent-file' ? join(workspace.path, source.path) : path)) throw invalidContext();
       copied += input.bytes;
-      if (copied > WORKER_CONTEXT_BYTES) throw invalid();
+      if (copied > WORKER_CONTEXT_BYTES) throw invalidContext();
       let bytes: Buffer;
       try {
         await canonicalFile(path);
@@ -218,19 +251,19 @@ export async function verifyWorkerContext(options: {
           if (failure.code !== 'ENOENT') throw failure;
           return undefined;
         });
-        if (entry) throw invalid();
+        if (entry) throw invalidContext();
         if (source.kind === 'parent-file') {
-          if (parentCwd === undefined) throw invalid();
+          if (parentCwd === undefined) throw invalidContext();
           bytes = await (await parentFile(parentCwd, source.path)).read(input.bytes);
         } else bytes = await attachmentBytes(dataDir, parentId, source.id, input.bytes);
-        if (bytes.length !== input.bytes || hash(bytes) !== input.sha256) throw invalid();
-        await writeCopy(path, bytes);
+        if (bytes.length !== input.bytes || hash(bytes) !== input.sha256) throw invalidContext();
+        await writeWorkerDataFile(path, bytes);
       }
-      if (bytes.length !== input.bytes || hash(bytes) !== input.sha256) throw invalid();
+      if (bytes.length !== input.bytes || hash(bytes) !== input.sha256) throw invalidContext();
     }
   } catch (error) {
     // As at spawn: a named `--attach` refusal tells the parent which path to repair.
-    throw error instanceof DelegationPolicyError ? error : invalid();
+    throw error instanceof DelegationPolicyError ? error : invalidContext();
   }
 }
 
@@ -247,7 +280,7 @@ async function walkAttachDir(root: string, components: string[], sourcePath: str
     if (!entry) await mkdir(dir).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'EEXIST') throw error; });
     const current = entry ?? await lstat(dir);
     if (current.isSymbolicLink() || !current.isDirectory()) {
-      throw refuse(`--attach path has a component that is not a directory in the worker worktree: ${sourcePath}`);
+      throw refuseContext(`--attach path has a component that is not a directory in the worker worktree: ${sourcePath}`);
     }
   }
   return dir;
@@ -263,8 +296,8 @@ async function placeParentFileAttachment(options: {
   await walkAttachDir(root, components, sourcePath, false);
   if (!await ignoredByGit(root, sourcePath)) throw attachmentNotIgnored(sourcePath);
   const bytes = await (async () => readBoundedContextFile(await parentFileSnapshotPath(dataDir, workspace, index), input.bytes))()
-    .catch((error: unknown) => { throw refuse(`--attach snapshot is missing or changed: ${sourcePath} (${attachmentDetail(error)})`); });
-  if (bytes.length !== input.bytes || hash(bytes) !== input.sha256) throw refuse(`--attach snapshot is missing or changed: ${sourcePath}`);
+    .catch((error: unknown) => { throw refuseContext(`--attach snapshot is missing or changed: ${sourcePath} (${attachmentDetail(error)})`); });
+  if (bytes.length !== input.bytes || hash(bytes) !== input.sha256) throw refuseContext(`--attach snapshot is missing or changed: ${sourcePath}`);
   const dir = (await walkAttachDir(root, components, sourcePath, true))!;
   const destination = join(dir, name);
   let file;
@@ -280,7 +313,7 @@ async function placeParentFileAttachment(options: {
     // A directory swapped for a symlink since the walk: the file is elsewhere, and unlinking
     // through the redirected path could remove someone else's. Leave it, write nothing.
     if (await realpath(dir).catch(() => undefined) !== dir || entry?.dev !== opened.dev || entry.ino !== opened.ino) {
-      throw refuse(`--attach path leaves the worker worktree: ${sourcePath}`);
+      throw refuseContext(`--attach path leaves the worker worktree: ${sourcePath}`);
     }
     created.push({ source: sourcePath, dir, path: destination, dev: opened.dev, ino: opened.ino });
     await file.writeFile(bytes);
@@ -294,7 +327,7 @@ async function recheckAttachedIgnoreRules(root: string, attached: string[]): Pro
   const result = await runGit(['check-ignore', '-z', '--stdin'], { cwd: root, maxBuffer: 1024 * 1024, timeout: 30_000, input })
     .then(({ stdout }) => stdout, (error: { code?: unknown; message?: string }) => {
       if (error.code === 1) return '';
-      throw refuse(`--attach paths could not be checked against the worker baseline: ${attached[0]} (${attachmentDetail(error)})`);
+      throw refuseContext(`--attach paths could not be checked against the worker baseline: ${attached[0]} (${attachmentDetail(error)})`);
     });
   const ignored = new Set(result.split('\0'));
   const offending = attached.find(path => !ignored.has(path));
@@ -313,7 +346,7 @@ async function discardPlacedAttachments(created: PlacedAttachment[], error: unkn
     } catch (failure) { leftovers.push(`${copy.source} (${attachmentDetail(failure)})`); }
   }
   if (!leftovers.length) throw error;
-  throw refuse(`${attachmentDetail(error)}; could not remove the attached copies made before the failure: ${leftovers.join(', ')}`);
+  throw refuseContext(`${attachmentDetail(error)}; could not remove the attached copies made before the failure: ${leftovers.join(', ')}`);
 }
 
 /**
@@ -324,7 +357,7 @@ async function discardPlacedAttachments(created: PlacedAttachment[], error: unkn
 export async function placeWorkerAttachments(options: { dataDir: string; workspace: WorkerWorkspace; context?: WorkerInputRecipe | undefined }): Promise<void> {
   const { dataDir, workspace, context } = options;
   const refusal = fallbackProjectWriteError(workspace.path);
-  if (refusal) throw refuse(refusal);
+  if (refusal) throw refuseContext(refusal);
   const root = await realpath(workspace.path);
   const attached: string[] = [];
   const created: PlacedAttachment[] = [];
@@ -336,7 +369,7 @@ export async function placeWorkerAttachments(options: { dataDir: string; workspa
       try {
         await placeParentFileAttachment({ dataDir, workspace, root, input, index, sourcePath: source.path, created });
       } catch (error) {
-        throw error instanceof DelegationPolicyError ? error : refuse(`--attach path could not be placed in the worker worktree: ${source.path} (${attachmentDetail(error)})`);
+        throw error instanceof DelegationPolicyError ? error : refuseContext(`--attach path could not be placed in the worker worktree: ${source.path} (${attachmentDetail(error)})`);
       }
     }
     await recheckAttachedIgnoreRules(root, attached);
