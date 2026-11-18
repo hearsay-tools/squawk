@@ -14,7 +14,7 @@ export type WorkspaceRemoval = {
   previewHost?: { release(runId: string): Promise<void> } | undefined;
   assertCurrent?: (() => void) | undefined;
   assertUnheld?: (() => void) | undefined;
-  /** How long the removal may wait for a lock it needs. Left out: it does not wait. */
+  /** How long the removal may wait for a lock it needs. Left out: the kind's default wait. */
   waitMs?: number;
 };
 

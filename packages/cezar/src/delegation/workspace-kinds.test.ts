@@ -104,10 +104,11 @@ describe('the isolated workspace kind', () => {
     const previewHost = { release: async () => {} };
     const assertCurrent = () => {};
     const assertUnheld = () => {};
-    expect(await isolated.remove('/repo', workspace, { previewHost, assertCurrent, assertUnheld }))
-      .toMatchObject({ state: 'complete', args: [{ previewHost }, '/repo', workspace, assertCurrent, assertUnheld, {}] });
-    expect(await isolated.remove('/repo', workspace, { waitMs: 250 }))
-      .toMatchObject({ args: [{ previewHost: undefined }, '/repo', workspace, undefined, undefined, { waitMs: 250 }] });
+    const removed = await isolated.remove('/repo', workspace, { previewHost, assertCurrent, assertUnheld }) as unknown as { state: string; args: unknown[] };
+    expect(removed.state).toBe('complete');
+    expect(removed.args).toStrictEqual([{ previewHost }, '/repo', workspace, assertCurrent, assertUnheld, {}]);
+    const waited = await isolated.remove('/repo', workspace, { waitMs: 250 }) as unknown as { args: unknown[] };
+    expect(waited.args).toStrictEqual([{ previewHost: undefined }, '/repo', workspace, undefined, undefined, { waitMs: 250 }]);
     expect(calls).toEqual([`teardown ${JSON.stringify(['/repo', ['stop'], workspace])}`, 'remove', 'remove']);
   });
 });
