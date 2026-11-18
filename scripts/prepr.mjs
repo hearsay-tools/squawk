@@ -24,23 +24,23 @@ export function judgeSqueal(exitCode, status, ignorePath = () => false, lintExpe
   const unmatched = (selection.unmatched ?? []).map(u => u?.path ?? String(u)).filter(p => !ignorePath(p));
   const failed = files.filter(f => f.state === 'current' && !['pass', 'skip'].includes(f.verdict)).map(f => f.path);
   const failures = selection.verdict?.failures ?? {};
-  if (exitCode === 1 || failed.length || failures.tests || failures.testFiles || failures.setups) {
-    return { state: 'fail', failed, missing: [], lint: lintOf(status, lintExpected) };
-  }
-  const missing = missingResults(selection, files, unmatched);
+  const missing = missingResults(selection, files);
   const lint = lintOf(status, lintExpected);
-  if (lint.failing) return { state: 'fail', failed: [], missing, lint };
+  // A failure keeps the files with no result and the unmatched paths, so the report names them too.
+  if (exitCode === 1 || failed.length || failures.tests || failures.testFiles || failures.setups || lint.failing) {
+    return { state: 'fail', failed, missing, unmatched, lint };
+  }
   // Lint that has not finished is not judged here: prepr runs `npm run lint` for it.
-  return { state: missing.length ? 'incomplete' : 'pass', failed: [], missing, lint, count: files.length };
+  return { state: missing.length || unmatched.length ? 'incomplete' : 'pass', failed: [], missing, unmatched, lint, count: files.length };
 }
 
-/** What has no result yet: test discovery, test files that are not current, and paths that select no test. */
-function missingResults(selection, files, unmatched) {
+/** What has no result yet: test discovery and the selected test files that are not current. */
+function missingResults(selection, files) {
   // Before Squeal lists the revision's test files, current cached files are not the whole selection.
   const unlisted = selection.verdict?.unlisted === true || (selection.result === 'none' && ['unlisted', 'unsynced'].includes(selection.reason));
   return [
     ...(unlisted ? [`test discovery: Squeal has not listed the test files of the current revision (${selection.reason ?? 'unlisted'})`] : []),
-    ...files.filter(f => f.state !== 'current').map(f => f.path), ...unmatched.map(p => `${p} (selects no test file)`)];
+    ...files.filter(f => f.state !== 'current').map(f => f.path)];
 }
 
 // lintExpected: a changed file is one Squeal lints, so a lint run that has not started is not a clean one.
@@ -126,20 +126,28 @@ const entry = (ok, text) => ({ ok, text: `- ${ok ? 'pass' : 'FAIL'}: ${text}` })
 
 /** Report lines for a Squeal result: an array of { ok, text }. */
 export function squealLines(squeal, waitMs) {
+  if (squeal.state === 'pass') {
+    const lint = lintUnfinished(squeal.lint) ? '' : '; lint clean';
+    return [entry(true, `Squeal: ${squeal.count} affected test file(s) current and passing${lint}`)];
+  }
+  const lines = [];
   if (squeal.state === 'fail') {
     const what = squeal.failed.length ? `failing test files: ${squeal.failed.join(', ')}`
       : squeal.lint.failing ? `${squeal.lint.failing} lint finding(s)` : 'known test failures';
-    return [entry(false, `Squeal: ${what} (\`squeal failures\`, \`squeal status\`)`)];
+    lines.push(entry(false, `Squeal: ${what} (\`squeal failures\`, \`squeal status\`)`));
   }
-  if (squeal.state === 'incomplete') {
-    const more = squeal.missing.length > 10 ? [`and ${squeal.missing.length - 10} more`] : [];
-    const names = [...squeal.missing.slice(0, 10), ...more];
-    return [entry(false, `Squeal had no test result within ${Math.round(waitMs / 1000)} s for: ${names.join(', ')}. `
-      + 'Get the results with `squeal status --wait 60000 <paths>` (parity and worker tests: `squeal run run-loop <paths> --wait 60000`), then run prepr again.')];
+  if (squeal.missing?.length) {
+    lines.push(entry(false, `Squeal had no test result within ${Math.round(waitMs / 1000)} s for: ${names(squeal.missing)}. `
+      + 'Get the results with `squeal status --wait 60000 <paths>` (parity and worker tests: `squeal run run-loop <paths> --wait 60000`), then run prepr again.'));
   }
-  const lint = lintUnfinished(squeal.lint) ? '' : '; lint clean';
-  return [entry(true, `Squeal: ${squeal.count} affected test file(s) current and passing${lint}`)];
+  if (squeal.unmatched?.length) {
+    lines.push(entry(false, `these changed paths select no test file: ${names(squeal.unmatched)}. `
+      + 'Waiting does not change that: add a test that reads each path, or declare its reader in `squeal.config.json` `inputs`.'));
+  }
+  return lines;
 }
+
+const names = list => [...list.slice(0, 10), ...(list.length > 10 ? [`and ${list.length - 10} more`] : [])].join(', ');
 
 /** The report line for `npm run lint`, run because Squeal's lint did not finish. */
 export function lintFallbackLine(lint, r) {
@@ -169,8 +177,12 @@ export async function fallbackLines(base, files, io = realIo) {
 
 /** True when the branch's open PR carries the owner's baseline-growth label. Any failed read is false. */
 async function growthApproved(io) {
-  const r = await io.run('gh', ['pr', 'view', '--json', 'labels']);
-  try { return r.code === 0 && JSON.parse(r.out).labels.some(l => l.name === 'baseline-growth'); } catch { return false; }
+  const r = await io.run('gh', ['pr', 'view', '--json', 'state,labels']);
+  // `gh pr view` falls back to a closed PR of the branch: only an open PR's label counts.
+  try {
+    const pr = JSON.parse(r.out);
+    return r.code === 0 && pr.state === 'OPEN' && pr.labels.some(l => l.name === 'baseline-growth');
+  } catch { return false; }
 }
 
 /** CI's complexity ratchet on the committed head, with --allow-growth when the owner approved growth. */

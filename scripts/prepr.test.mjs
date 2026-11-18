@@ -57,7 +57,11 @@ test('a skipped current file is not a failure', () => {
 
 test('an input that selects no test is named as missing', () => {
   const r = judgeSqueal(3, { ...status([]), selection: { testFiles: [], unmatched: ['src/x.ts'] } });
-  assert.deepEqual([r.state, r.missing], ['incomplete', ['src/x.ts (selects no test file)']]);
+  assert.deepEqual([r.state, r.missing, r.unmatched], ['incomplete', [], ['src/x.ts']]);
+  const [line] = squealLines(r, 1000);
+  assert.equal(line.ok, false);
+  assert.match(line.text, /src\/x\.ts\. Waiting does not change that: add a test .*`inputs`/);
+  assert.doesNotMatch(line.text, /squeal status --wait/);
 });
 
 test('a setup failure fails the gate', () => {
@@ -427,7 +431,7 @@ test('prepr fails on a missing test result and names the file', async () => {
 
 test('prepr runs npm run lint when Squeal lint has not finished, and fails on its finding', async () => {
   const unfinished = { failing: 0, linting: { done: 0, total: 0 } };
-  const run = npm => fakeIo({ files: 'packages/a/src/x.ts\0', responses: { squeal: ok(live([], unfinished)), 'npm run --silent': npm } });
+  const run = npm => fakeIo({ files: 'packages/a/src/x.ts\0', responses: { squeal: ok(live([], unfinished)), npm: args => (args[2] === 'lint' ? npm : ok('')) } });
   const bad = run({ code: 1, out: 'packages/a/src/x.ts: no-unused-vars', err: '' });
   const r = await prepr({ io: bad, waitMs: 1000 });
   assert.equal(r.failed, true);
@@ -458,7 +462,7 @@ test('prepr fails on complexity growth with the gate\'s own report', async () =>
 });
 
 test('complexityRun allows growth only when the open PR carries the baseline-growth label', async () => {
-  const labels = (...names) => ok(JSON.stringify({ labels: names.map(name => ({ name })) }));
+  const labels = (...names) => ok(JSON.stringify({ state: 'OPEN', labels: names.map(name => ({ name })) }));
   const gate = async gh => {
     const io = fakeIo({ responses: { gh } });
     const r = await complexityRun('origin/main', io);
@@ -466,6 +470,7 @@ test('complexityRun allows growth only when the open PR carries the baseline-gro
   };
   assert.deepEqual(await gate(labels('baseline-growth')), ['complexity (growth approved by the baseline-growth label)', true]);
   assert.deepEqual(await gate(labels('bug')), ['complexity', false]);
+  assert.deepEqual(await gate(ok(JSON.stringify({ state: 'CLOSED', labels: [{ name: 'baseline-growth' }] }))), ['complexity', false]);
   assert.deepEqual(await gate({ code: 1, out: '', err: 'no pull requests found for branch' }), ['complexity', false]);
   assert.deepEqual(await gate({ code: 127, out: '', err: 'gh: not found' }), ['complexity', false]);
 });
@@ -499,4 +504,15 @@ test('prepr keeps the whole complexity report, so the function headline survives
   const io = fakeIo({ responses: { squeal: ok(live([], doneLint)), [`node ${GATE} --base`]: { code: 1, out: report, err: '' } } });
   const r = await prepr({ io, waitMs: 1000 });
   assert.match(r.report, /- FAIL: complexity\n1 changed function[^]*scripts\/x\.mjs:3 grow: complexity 23[^]*line 29: if/);
+});
+
+test('a failing Squeal result still names the files with no result and the unmatched paths', () => {
+  const st = { ...status([file('a.test.ts', 'current', 'fail'), file('b.test.ts', 'pending')]) };
+  st.selection.unmatched = ['src/x.ts'];
+  const r = judgeSqueal(1, st);
+  assert.deepEqual([r.state, r.missing, r.unmatched], ['fail', ['b.test.ts'], ['src/x.ts']]);
+  const text = squealLines(r, 1000).map(l => l.text).join('\n');
+  assert.match(text, /failing test files: a\.test\.ts[^]*no test result within 1 s for: b\.test\.ts[^]*select no test file: src\/x\.ts/);
+  const lintFail = judgeSqueal(0, status([file('c.test.ts', 'pending')], { lint: { failing: 2 } }));
+  assert.match(squealLines(lintFail, 1000).map(l => l.text).join('\n'), /2 lint finding[^]*for: c\.test\.ts/);
 });
