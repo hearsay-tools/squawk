@@ -143,17 +143,22 @@ async function createFreshOwnedWorktree(
   const branchExists = await git(repoRoot, ['show-ref', '--verify', '--quiet', branchRef], 30_000);
   if (pathExists || branchExists.ok) throw new Error('owned worktree path or branch already exists');
   await mkdir(dirname(absolutePath), { recursive: true });
+  // One commit for the add and for its rollback's compare-and-swap, even if `base` moves meanwhile.
+  const resolved = await git(repoRoot, ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`], 30_000);
+  if (!resolved.ok) throw new Error(`cannot resolve worktree base ${base}: ${resolved.stderr.trim()}`);
+  const baseSha = resolved.stdout.trim();
   let failure = '';
   for (let attempt = 0; attempt < 2; attempt += 1) {
     // Reserve the previously absent path exclusively; Git accepts our empty directory.
     await mkdir(absolutePath);
     // --quiet: without it, git's stderr is its checkout progress, not the reason it failed.
-    const created = await git(repoRoot, ['worktree', 'add', '--quiet', '--no-track', '-b', branch, absolutePath, base], addTimeoutMs);
+    const created = await git(repoRoot, ['worktree', 'add', '--quiet', '--no-track', '-b', branch, absolutePath, baseSha], addTimeoutMs);
     if (created.ok) return worktreeInfo(absolutePath, branch, base);
     failure = worktreeAddFailure(created, addTimeoutMs);
     // Still under the lock, the path and branch this call proved absent are its own: remove them,
     // so a retry, or a destroy after the worker fails, finds nothing left behind.
-    if (!await rollBackFreshWorktree(repoRoot, absolutePath, branchRef, base, git)) break;
+    const kept = await rollBackFreshWorktree(repoRoot, absolutePath, branchRef, baseSha, git).catch((error: unknown) => String(error));
+    if (kept) { failure += `; rollback stopped: ${kept}`; break; }
   }
   throw new Error(`git worktree add failed: ${failure}`);
 }
@@ -167,22 +172,36 @@ function worktreeAddFailure(result: WorktreeGitResult, timeoutMs: number): strin
   return stderr.slice(-2000) || 'git exited without an error message';
 }
 
+const firstLine = (result: WorktreeGitResult) => result.stderr.trim().split('\n')[0]?.slice(0, 300) || 'git failed';
+
 /** Undo a failed fresh `worktree add`: its registration, its new branch and the reserved directory.
- * False when any of them stays, which leaves them for a destroy to report. */
-async function rollBackFreshWorktree(repoRoot: string, absolutePath: string, branchRef: string, base: string, git: WorktreeGit): Promise<boolean> {
+ * Undefined when nothing is left; otherwise why it stopped, leaving the rest for a destroy to report. */
+async function rollBackFreshWorktree(repoRoot: string, absolutePath: string, branchRef: string, baseSha: string, git: WorktreeGit): Promise<string | undefined> {
   const listed = await git(repoRoot, ['worktree', 'list', '--porcelain', '-z'], 30_000);
-  if (!listed.ok) return false;
+  if (!listed.ok) return `cannot list worktrees: ${firstLine(listed)}`;
   const registered = listed.stdout.split('\0').some(entry => entry.startsWith('worktree ') && canonicalPath(entry.slice(9)) === canonicalPath(absolutePath));
-  if (registered && !(await git(repoRoot, ['worktree', 'remove', '--force', absolutePath], 30_000)).ok) return false;
-  await rm(absolutePath, { recursive: true, force: true });
-  if ((await git(repoRoot, ['show-ref', '--verify', '--quiet', branchRef], 30_000)).ok) {
+  if (registered) {
+    const removed = await git(repoRoot, ['worktree', 'remove', '--force', absolutePath], 30_000);
+    if (!removed.ok) return `cannot remove the registered worktree: ${firstLine(removed)}`;
+  } else {
+    // Unregistered, the path holds only what this call reserved, unless something else wrote there:
+    // remove it only while it is empty.
+    try { await rmdir(absolutePath); } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return `${absolutePath} is not empty`;
+    }
+  }
+  // A lookup that fails is not absence: only a listing that succeeded proves the branch is gone.
+  const refs = await git(repoRoot, ['for-each-ref', '--format=%(refname)%00%(symref)%00%(objectname)', branchRef], 30_000);
+  if (!refs.ok) return `cannot read ${branchRef}: ${firstLine(refs)}`;
+  const entry = refs.stdout.split('\n').map(line => line.split('\0')).find(([ref]) => ref === branchRef);
+  if (entry) {
     // Only the branch this add made: a plain ref at the base commit. --no-deref never follows a
     // symbolic ref to delete its target, and the expected value refuses a branch that moved.
-    if ((await git(repoRoot, ['symbolic-ref', '--quiet', branchRef], 30_000)).ok) return false;
-    const baseSha = await git(repoRoot, ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`], 30_000);
-    if (!baseSha.ok || !(await git(repoRoot, ['update-ref', '--no-deref', '-d', branchRef, baseSha.stdout.trim()], 30_000)).ok) return false;
+    if (entry[1]) return `${branchRef} is a symbolic ref`;
+    const deleted = await git(repoRoot, ['update-ref', '--no-deref', '-d', branchRef, baseSha], 30_000);
+    if (!deleted.ok) return `cannot delete ${branchRef}: ${firstLine(deleted)}`;
   }
-  return !existsSync(absolutePath);
+  return existsSync(absolutePath) ? `${absolutePath} still exists` : undefined;
 }
 
 function registeredWorktreeInfo(

@@ -20,9 +20,10 @@ afterEach(async () => {
  * A repository, and a `git` on PATH that runs the real one except for `worktree add`: there it
  * records its arguments, then acts as `script` says for that attempt (`slow` sleeps past any test
  * bound, `fail` prints a reason and exits 1, `symref` also turns the new branch into a symbolic ref to
- * `main` before failing, `pass` runs the real command).
+ * `main` before failing, `litter` writes a file into the reserved path and fails before Git runs,
+ * `pass` runs the real command).
  */
-async function slowGit(script: Array<'slow' | 'fail' | 'pass' | 'symref'>) {
+async function slowGit(script: Array<'slow' | 'fail' | 'pass' | 'symref' | 'litter'>) {
   const root = await mkdtemp(join(tmpdir(), 'cezar-worktree-add-'));
   roots.push(root);
   await exec('git', ['init', '-q', '-b', 'main', join(root, 'repo')]);
@@ -36,6 +37,7 @@ if [ "$1" = worktree ] && [ "$2" = add ]; then
   echo "$*" >> ${JSON.stringify(log)}
   n=$(wc -l < ${JSON.stringify(log)})
   case "$n" in ${script.map((action, index) => `${index + 1}) action=${action};;`).join(' ')} *) action=pass;; esac
+  [ "$action" = litter ] && { echo kept > "$7/kept"; echo "fatal: example failure" >&2; exit 1; }
   # The real command first: a slow or failing add has already made its branch and registration.
   ${JSON.stringify(real)} "$@" || exit $?
   [ "$action" = slow ] && exec sleep 30
@@ -53,7 +55,9 @@ exec ${JSON.stringify(real)} "$@"
   return { repo: join(root, 'repo'), adds: async () => (await readFile(log, 'utf8')).trim().split('\n') };
 }
 
-const branchExists = (repo: string) => exec('git', ['show-ref', '--verify', '--quiet', 'refs/heads/cez/66666666'], { cwd: repo }).then(() => true, () => false);
+/** Whether the worker branch exists; a git that fails rejects, so it never reads as absent. */
+const branchExists = async (repo: string) => (await exec('git', ['for-each-ref', '--format=%(refname)', 'refs/heads/cez/66666666'], { cwd: repo })).stdout
+  .split('\n').includes('refs/heads/cez/66666666');
 
 it('retries a worker worktree add that timed out once, after removing what it made (hearsay-tools/squawk#3817)', async () => {
   const { repo, adds } = await slowGit(['slow', 'pass']);
@@ -106,4 +110,11 @@ it('leaves a branch that became a symbolic ref, and the branch it names, in plac
   await expect(createWorktree(repo, WORKER, 'main', { freshOnly: true })).rejects.toThrow('git worktree add failed: fatal: example failure');
   expect((await exec('git', ['symbolic-ref', 'refs/heads/cez/66666666'], { cwd: repo })).stdout.trim()).toBe('refs/heads/main');
   await expect(exec('git', ['rev-parse', '--verify', 'refs/heads/main'], { cwd: repo })).resolves.toBeDefined();
+});
+
+it('keeps an unregistered path that something else wrote into, and does not retry', async () => {
+  const { repo, adds } = await slowGit(['litter', 'pass']);
+  await expect(createWorktree(repo, WORKER, 'main', { freshOnly: true })).rejects.toThrow(/fatal: example failure; rollback stopped: .* is not empty/);
+  expect(await readFile(join(worktreePathFor(repo, WORKER), 'kept'), 'utf8')).toBe('kept\n');
+  expect(await adds()).toHaveLength(1);
 });
