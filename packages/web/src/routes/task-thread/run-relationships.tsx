@@ -138,7 +138,7 @@ export function WorkerActivitySection({ run, open, onToggle }: { run: ApiRun; op
                     <WorkerGlyph status={worker?.status} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{record ? runTitle(record) : `Worker ${id.slice(0, 8)}`}</span>
-                      {worker?.supervisorRunId ? <span data-slot="worker-supervisor" className="block truncate text-xs text-muted-foreground">Started by {titleOf(worker.supervisorRunId)}</span> : null}
+                      {worker?.supervisorRunId && worker.supervisorRunId !== run.id ? <span data-slot="worker-supervisor" className="block truncate text-xs text-muted-foreground">Started by {titleOf(worker.supervisorRunId)}</span> : null}
                     </span>
                     <span className={cn('max-w-[45%] shrink-0 truncate text-xs', statusTone(worker?.status))}>{status}</span>
                     <ArrowUpRightIcon aria-hidden className="size-3.5 shrink-0 text-soft-foreground" />

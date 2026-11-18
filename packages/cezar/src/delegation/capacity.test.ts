@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { WorkerDestroy } from '@open-mercato/cezar-contract';
 import { runRecordSchema, type RunRecord } from '../runs/store.ts';
 import { DEFAULT_GRANTS } from '../runs/task-rights.ts';
-import { capacityError, OUTSTANDING_REFUSAL, ownLimitRefusal, spawnCapacityRefusal, supervisedOutstanding, workerCapacity, WORKER_CAPACITY, WORKER_CREATION_LIMIT } from './capacity.ts';
+import { capacityError, NO_SPAWN_GRANT, OUTSTANDING_REFUSAL, ownLimitRefusal, spawnCapacityRefusal, supervisedOutstanding, workerCapacity, WORKER_CAPACITY, WORKER_CREATION_LIMIT } from './capacity.ts';
 
 const now = '2026-10-04T12:00:00.000Z';
 const parentId = randomUUID();
@@ -87,6 +87,7 @@ describe('supervisedOutstanding', () => {
     expect(ownLimitRefusal(1, 1)).toMatch(/^You have 1 outstanding worker of the 1 you may have at a time .*destroy a finished worker \(worker destroy <worker-id>\) before you start another$/);
     const family = parent(Array.from({ length: 32 }, () => receipt(randomUUID())));
     expect(spawnCapacityRefusal(family, supervisor, getRun)).toBe(OUTSTANDING_REFUSAL);
+    expect(spawnCapacityRefusal(parent([]), worker(randomUUID(), 'running'), getRun)).toBe(NO_SPAWN_GRANT);
   });
 });
 

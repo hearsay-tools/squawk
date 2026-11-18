@@ -6,7 +6,8 @@ import { messagingAllowed, workersAllowed } from '@open-mercato/cezar-contract/t
 import type { RunRecord } from '../runs/store.ts';
 import { familyRecordOf, finishing, grantsOf, historyDeleting, holdsOperation, mayOperate, maySpawn, receiptsOf, receiptSupervisorId, type Lookup } from '../runs/task-rights.ts';
 import { isAuthenticatedCaller, type Caller } from './credentials.ts';
-import { spawnCapacityRefusal } from './capacity.ts';
+import { NO_SPAWN_GRANT, spawnCapacityRefusal } from './capacity.ts';
+export { NO_SPAWN_GRANT } from './capacity.ts';
 
 export type { WorkerOperation } from '@open-mercato/cezar-contract';
 
@@ -29,7 +30,6 @@ export class MessagingOffError extends DelegationPolicyError {
 export function requireWorkersAllowed(family: RunRecord): void {
   if (!workersAllowed(family)) throw new DelegationPolicyError('incompatible_state', WORKERS_OFF);
 }
-export const NO_SPAWN_GRANT = `This task cannot spawn ${productName('Cezar')} workers.`;
 type WorkspaceChoice = keyof typeof WORKSPACE_CHOICES;
 /** The `--workspace` word of a stored kind. */
 export function workspaceChoiceOf(kind: WorkerWorkspace['kind']): WorkspaceChoice {

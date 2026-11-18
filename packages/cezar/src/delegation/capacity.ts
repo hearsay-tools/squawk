@@ -1,5 +1,6 @@
 import type { WorkerCapacity } from '@open-mercato/cezar-contract';
 import type { RunRecord } from '../runs/store.ts';
+import { productName } from '../home/display.ts';
 import { grantsOf, hasSpawnRoom, receiptsOf, supervisedReceipts, type Lookup } from '../runs/task-rights.ts';
 
 /**
@@ -41,6 +42,9 @@ export function capacityError(capacity: WorkerCapacity): string | undefined {
   return capacity.outstanding >= capacity.limit ? OUTSTANDING_REFUSAL : undefined;
 }
 
+/** What a refused creation says when the caller holds no spawn grant. */
+export const NO_SPAWN_GRANT = `This task cannot spawn ${productName('Cezar')} workers.`;
+
 /** What a refused creation says when the caller's own limit is full. */
 export function ownLimitRefusal(outstanding: number, limit: number): string {
   return `You have ${outstanding} outstanding ${outstanding === 1 ? 'worker' : 'workers'} of the ${limit} you may have at a time (accepted, live, or not verifiably destroyed). Collect its result, then destroy a finished worker (worker destroy <worker-id>) before you start another`;
@@ -51,7 +55,9 @@ export function ownLimitRefusal(outstanding: number, limit: number): string {
  * in both: the family record (32 outstanding, 1,024 creations) and the supervisor's own limit.
  */
 export function spawnCapacityRefusal(family: RunRecord, supervisor: RunRecord, getRun: Lookup): string | undefined {
+  const grant = grantsOf(supervisor).spawn;
+  if (!grant) return NO_SPAWN_GRANT;
   const outstanding = supervisedOutstanding(family, supervisor, getRun);
   return capacityError(workerCapacity(family, getRun)) ??
-    (hasSpawnRoom(supervisor, outstanding) ? undefined : ownLimitRefusal(outstanding, grantsOf(supervisor).spawn?.live ?? 0));
+    (hasSpawnRoom(supervisor, outstanding) ? undefined : ownLimitRefusal(outstanding, grant.live));
 }
