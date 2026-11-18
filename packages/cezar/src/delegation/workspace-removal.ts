@@ -139,7 +139,12 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
           !await branchExists() && !await markerRemains(repoRoot, workspace);
         // A spawn that failed in `git worktree add` before its rollback existed left only the empty
         // directory it reserved: nothing Git knows, nothing to lose.
-        if (await emptyDirectory(workspace.path) && !(await registered()).includes(`worktree ${workspace.path}`)) await rmdir(workspace.path).catch(() => undefined);
+        if (await emptyDirectory(workspace.path) && !(await registered()).includes(`worktree ${workspace.path}`)) {
+          // The same checks as every other removal, after the last read and right before it.
+          assertCurrent?.();
+          assertUnheld?.();
+          await rmdir(workspace.path).catch(() => undefined);
+        }
         if (!await absent()) {
           refuse(`worktree path ${workspace.path}, its registration or branch ${workspace.branch} exists, but no ownership receipt proves the worker made it; remove what you do not need by hand`);
           return;
@@ -152,8 +157,10 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
 
       async function inspectCompletedCleanup(receipt: Receipt): Promise<void> {
         remaining = [];
+        // Cleanup completed earlier; anything here now came back after it and is not deleted.
         if (await exists(workspace.path) || (await registered()).includes(`worktree ${workspace.path}`) || await exists(receipt.gitDir)) remaining.push('worktree');
         if (await branchExists()) remaining.push('branch');
+        if (remaining.length) refuse(`cleanup completed earlier, but ${remaining.map(kind => kind === 'worktree' ? `worktree ${workspace.path}` : `branch ${workspace.branch}`).join(' and ')} exists again; it is not the worker's, so remove it by hand if you do not need it`);
       }
 
       async function preparePresentWorktree(receipt: Receipt): Promise<Cleanup | undefined> {
@@ -207,7 +214,7 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
         const worktreeGone = async () => !await exists(workspace.path) && !await exists(receipt.gitDir) &&
           !(await registered()).includes(`worktree ${workspace.path}`);
         if (!await worktreeGone()) {
-          refuse(`worktree path ${workspace.path} is gone, but its Git registration or admin directory remains; run git worktree prune`);
+          refuse(`worktree path ${workspace.path} is gone, but its Git registration or admin directory remains; check \`git worktree list\` for a lock or a moved checkout, and prune it only once you know it is stale`);
           return undefined;
         }
         if (!await branchExists()) {
