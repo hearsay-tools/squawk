@@ -96,7 +96,7 @@ export class WorkerCleanup {
     setImmediate(() => {
       void this.serialized(`worker:${project.id}:${workerId}`, async () => {
         if (!failedBeforeFirstStep(project.store, check())) return;
-        await this.serialized(`destroy-retries:${project.id}`, () => this.destroyAttempt(project, workerId, check, 'scheduled'));
+        await this.serialized(`destroy-retries:${project.id}`, () => this.destroyAttempt(project, workerId, check, 'scheduled', this.now()));
       }).catch(() => undefined).finally(() => {
         this.failStartReleases.delete(workerId);
         this.scheduleDestroyRetry(project, workerId);
@@ -194,7 +194,7 @@ export class WorkerCleanup {
       check();
       // One automatic attempt at a time per project: attempts that coincide (every pending destroy
       // after a restart) would otherwise contend for the worktree mutation lock.
-      await this.serialized(`destroy-retries:${project.id}`, () => this.destroyAttempt(project, workerId, check, 'scheduled')).catch(() => undefined);
+      await this.serialized(`destroy-retries:${project.id}`, () => this.destroyAttempt(project, workerId, check, 'scheduled', this.now())).catch(() => undefined);
       if (this.projects.get(project.id) !== project) return;
       const current = project.store.getRun(workerId);
       if (current?.delegation?.role !== 'worker' || !current.delegation.destroy || current.delegation.destroy.phase === 'complete') return;
@@ -236,7 +236,7 @@ export class WorkerCleanup {
   /** One full destroy attempt; the caller holds the worker's serialization key. A manual attempt
    * clears the run's `destroyRetry`, which resets the backoff; a completed destroy drops it. */
   private async destroyAttempt(project: DelegationProject, workerId: string, check: () => RunRecord, mode: 'manual' | 'scheduled',
-    startedAt = this.now()): Promise<WorkerDestroyResult> {
+    startedAt: number): Promise<WorkerDestroyResult> {
     const assertAttached = () => {
       if (this.projects.get(project.id) !== project) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     };
