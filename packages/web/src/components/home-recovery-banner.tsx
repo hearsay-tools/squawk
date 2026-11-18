@@ -1,4 +1,4 @@
-import { productCommand, productName } from '@/lib/product-name'
+import { productCommand } from '@/lib/product-name'
 import type { HomeRecoveryFile } from '@open-mercato/cezar-api-client/contract/home-recovery'
 import { useAcceptHomeRecovery, useHomeRecovery, useImportHomeRecovery, useRestoreHomeRecovery } from '@/api/home-recovery'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,7 @@ function recoveryMessage(file: HomeRecoveryFile): string {
   if (file.reason === 'legacy-change') return file.canImport
     ? `${file.file} changed in the old home. Import keeps live-only changes. Old-home changes win when both homes changed the same key or entry.`
     : `${file.file} changed in the old home. Import is unavailable. Ignore keeps the live file and skips these old-home changes.`
-  if (file.reason === 'outside-write') return `${file.file} changed outside ${productName('Cezar')}. Restore the previous version or accept the file as found.`
+  if (file.reason === 'outside-write') return `${file.file} changed outside Squawk. Restore the previous version or accept the file as found.`
   return file.file === 'config.json'
     ? 'The project registry was reset. Restore the previous projects?'
     : 'The account list was reset. Restore the previous accounts?'

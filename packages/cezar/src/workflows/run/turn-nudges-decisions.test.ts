@@ -1,4 +1,3 @@
-import { logPrefix } from '../../home/display.ts';
 import { testHome } from '../../home/test-home.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -207,7 +206,7 @@ describe('closed-session refusal effects through public recovery', () => {
       expect(gate.trace).toEqual(['warning', 'park', 'flush', 'charge']);
       expect(store.getRun(id)?.agentInputs ?? []).toEqual([]);
       expect(store.getRun(id)?.automaticWakes).toBe(7);
-      expect(console.warn).toHaveBeenCalledWith(`${logPrefix()} completion refusal not queued: owned outcome checkpoint failure`);
+      expect(console.warn).toHaveBeenCalledWith(`[hsq] completion refusal not queued: owned outcome checkpoint failure`);
     } else {
       expect(store.getRun(id)?.agentInputs).toEqual([expect.objectContaining({ text: expect.stringContaining(`Workers are still live: ${workerId}.`), purpose: 'completion-refusal' })]);
       expect(store.getRun(id)?.automaticWakes).toBe(8);

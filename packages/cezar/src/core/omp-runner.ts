@@ -48,7 +48,6 @@ import {
 } from './omp-ui-mapper.js';
 import { summarizeRunnerStderr } from './runner-stderr.ts';
 import { boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } from './runner-runtime.js';
-import { productName } from '../home/display.ts';
 
 /**
  * OMP's built-in tool names at the pinned version (`src/tools/builtin-names.ts`, oh-my-pi
@@ -99,7 +98,7 @@ export const OMP_MINIMAL_ARGS = ['--no-extensions', '--no-skills', '--no-rules',
  * support). Held against the mock's recorded argv and RPC by the harness parity matrix.
  */
 export const OMP_SPEC_SUPPORT: AgentRunSpecSupport = {
-  squawkTools: { honored: true, via: `explicit CI --extension; the ${productName('Cezar')} tools admitted when --tools is set` },
+  squawkTools: { honored: true, via: `explicit CI --extension; the Squawk tools admitted when --tools is set` },
   ...SQUAWK_SIDE_SPEC_SUPPORT,
   systemPrompt: { honored: true, via: '--append-system-prompt' },
   skill: { honored: true, via: 'RPC prompt /skill:id args' },

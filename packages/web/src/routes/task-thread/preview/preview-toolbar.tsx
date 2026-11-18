@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -372,7 +371,7 @@ function ToolbarAddress({ props, input, draft, setDraft, focused, setFocused }: 
       {adopted && !focused ? (
         <span className="pointer-events-none absolute right-2 inline-flex h-6 items-center gap-1 rounded-full border border-border bg-card px-2 text-xs font-semibold text-muted-foreground">
           <Link2Icon className="size-3" aria-hidden="true" />
-          Not started by {productName('cezar')}
+          Not started by Squawk
         </span>
       ) : null}
     </div>
@@ -489,7 +488,7 @@ function ToolbarMore({ props, compact, crowded }: { props: PreviewToolbarProps; 
                 <span className="flex flex-col gap-0.5">
                   <span className="text-muted-foreground">{`Stop server · ${current.label} :${current.port}`}</span>
                   <span className="text-xs whitespace-normal text-muted-foreground">
-                    {productName('cezar')} didn't start this server, so it won't stop it. Stop it where it was started.
+                    Squawk didn't start this server, so it won't stop it. Stop it where it was started.
                   </span>
                 </span>
               </DropdownMenuItem>

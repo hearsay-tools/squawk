@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const state = vi.hoisted(() => ({ displayName: '', command: '', npx: '' }))
 vi.mock('./product-name', async importOriginal => {
   const actual = await importOriginal<typeof import('./product-name')>()
-  return { ...actual, productCommand: () => actual.productCommand(state), productName: (legacy: 'cezar' | 'Cezar' | 'Cezarion') => actual.productName(legacy, state) }
+  return { ...actual, productCommand: () => actual.productCommand(state) }
 })
 
 vi.mock('@/api/queries', () => ({ useHealth: () => ({ data: { capabilities: { remoteSettingsAdmin: true } } }) }))

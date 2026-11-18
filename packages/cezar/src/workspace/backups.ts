@@ -1,4 +1,3 @@
-import { logPrefix } from '../home/display.ts';
 import type { Home } from '../home/home.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { linkSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -215,5 +214,5 @@ function warn(path: string, error: unknown): void {
   if (warned.has(path)) return;
   warned.add(path);
   const code = (error as NodeJS.ErrnoException).code ?? (error instanceof Error ? error.message : 'unavailable');
-  console.warn(`${logPrefix()} backups for ${path} are unavailable (${code}); continuing the write`);
+  console.warn(`[hsq] backups for ${path} are unavailable (${code}); continuing the write`);
 }

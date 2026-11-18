@@ -1,5 +1,4 @@
 import { automationToolAnswerSchema, type AutomationToolAnswer } from '@open-mercato/cezar-contract/automation-tool';
-import { productName } from '../home/display.ts';
 import { AUTOMATION_TOOL_CLIENT_TIMEOUT_MS } from '../core/github-request-limits.ts';
 import { productEnv } from '../core/product-env.ts';
 import { randomUUID } from 'node:crypto';
@@ -11,7 +10,7 @@ import { SCHEDULED_TASK_LIMITS, scheduleTaskAnswerSchema, scheduledTasksAnswerSc
 import { previewServeResultSchema, previewStopResultSchema, type PreviewStopResult, type PreviewServeResult } from '@open-mercato/cezar-contract/preview';
 
 const UNAVAILABLE = 'CI tool unavailable: the owning session is closed or the private IPC connection failed.';
-const SCHEDULE_UNAVAILABLE = `${productName('Cezar')} could not reach its scheduler: the owning session is closed or the private IPC connection failed.`;
+const SCHEDULE_UNAVAILABLE = `Squawk could not reach its scheduler: the owning session is closed or the private IPC connection failed.`;
 /**
  * #781: posts the arguments unparsed, so the server names the failing field in its hint. Every
  * transport failure, refusal or unreadable answer becomes the typed `unavailable` result; this

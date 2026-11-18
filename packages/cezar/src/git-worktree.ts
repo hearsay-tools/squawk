@@ -1,4 +1,3 @@
-import { logPrefix } from './home/display.ts';
 import { execFile } from 'node:child_process';
 import { projectPaths, isFallbackProjectPath } from './project-paths.ts';
 import { git } from './git-command.ts';
@@ -672,7 +671,7 @@ async function pruneOrphansLocked(repoRoot: string, validIds: ReadonlySet<string
   }
   const fallbackEntries = await readdir(join(projectPaths(repoRoot).reads[1]!, 'worktrees'), { withFileTypes: true }).catch(() => []);
   const skipped = fallbackEntries.filter(entry => entry.isDirectory() && !validIds.has(entry.name)).length;
-  if (skipped) console.info(`${logPrefix()} Orphan cleanup skipped ${skipped} read-only fallback worktree(s) under ${projectPaths(repoRoot).reads[1]}.`);
+  if (skipped) console.info(`[hsq] Orphan cleanup skipped ${skipped} read-only fallback worktree(s) under ${projectPaths(repoRoot).reads[1]}.`);
   // A missing run record alone never permits a delete (hearsay-tools/cezarion#2272): the store may
   // simply have been reset. A directory goes only on the reclaim rule (clean, HEAD kept by a ref),
   // and its branch goes only when another ref holds its tip, as the branch sweep's `empty` rule

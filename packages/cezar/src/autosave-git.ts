@@ -1,4 +1,3 @@
-import { logPrefix } from './home/display.ts';
 import { productEnvEntries } from './core/product-env.ts';
 import { spawnGit } from './git-command.ts';
 import { autosaveGroupExists, autosaveGroupSnapshotAlive, groupInspectionFailed } from './autosave-group.ts';
@@ -91,7 +90,7 @@ export async function withAutosaveGit<T>(cwd: string, options: AutosaveOptions, 
     cwd, marker, options, holders: NO_HOLDERS, stopping: false, blocked: false,
     warn: (label, message) => {
       const text = `${label} in ${cwd}: ${message}`;
-      console.warn(`${logPrefix()} ${text}`);
+      console.warn(`[hsq] ${text}`);
       try { options.onWarning?.(text); } catch { /* Reporting must not interrupt shutdown. */ }
     },
     report: (label, message, reported) => {

@@ -20,7 +20,6 @@ import type { WorktreeAutosave } from './worktree-autosave.ts';
 import type { WorkerQuestions } from './worker-questions.ts';
 import { historyDeletionPending } from './run-guards.ts';
 import { admissionRefusal } from '../../runs/worker-execution.ts';
-import { logPrefix } from '../../home/display.ts';
 import * as workflowPosition from './workflow-position.ts';
 import { hasPendingHumanAsk, pendingHumanAskSeq } from './pending-ask-facts.ts';
 
@@ -175,7 +174,7 @@ export class ContinuationAcceptance {
         // No session exists yet. Release the private reservation through execution finalization.
         void this.host.finishWorkerExecution(runId);
         const cause = error instanceof Error && error.message ? error.message : String(error);
-        console.warn(`${logPrefix()} worker ${runId} continuation was not saved: ${cause}`);
+        console.warn(`[hsq] worker ${runId} continuation was not saved: ${cause}`);
         return { ok: false, error: `the resume could not be saved (${cause})`, next: 'retry the same command' };
       }
     } else this.context.store.move(runId, exit, acceptedPatch);

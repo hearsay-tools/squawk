@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { useState } from 'react'
 import { ArrowUpRightIcon, CircleCheckIcon, CircleIcon, CircleSlashIcon, CircleXIcon, GitBranchIcon } from '@/components/design-icons'
 import { LoaderCircleIcon } from 'lucide-react'
@@ -226,7 +225,7 @@ function WaitNote({ wait, dependencyLabel }: { wait: DelegationWait; dependencyL
       : wait.phase === 'parked' ? 'Waiting on workers' : wait.phase === 'wake-pending'
       ? 'Worker update queued for the parent' : 'Worker wait registered — the agent is finishing its turn'}.
     {'deadline' in wait ? <>{' '}Deadline: <time dateTime={wait.deadline}>{wait.deadline}</time></>
-      : ` No deadline: ${productName('Cezar')} wakes this task when they have all settled.`}
+      : ` No deadline: Squawk wakes this task when they have all settled.`}
   </p>
 }
 

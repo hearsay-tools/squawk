@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
@@ -87,7 +86,7 @@ describe('cezar_done tool contract', () => {
       expect(squawkServerInstructions(env)).toContain('- cezar_done: load when the task is complete and verified.');
       expect(squawkServerInstructions(env)).toContain('- cezar_ask: load for a user decision or missing input');
     }
-    expect(doneToolDefinition.description).toBe(`Finish the task, or in a workflow step that is not the last, finish that step. Call it when the goal is fully achieved and verified and you have no question for the user; end your turn after it answers. ${productName('Cezar')} closes the session at the end of this turn and cancels every open wait; after a step, ${productName('Cezar')} starts the next step, and the answer names it. It refuses, naming what to do first, while owned workers are live or uncollected, a worker question is unanswered, your question to the user is still pending, or input for you is still to be delivered (input_pending, listed in owed). A result or message that arrives after it is accepted is delivered with a note, and the task still finishes when that turn ends; a new message from the user, a new request or instruction, a failed result, or a wait or question you register withdraws it, so call cezar_done again when the task is complete.`);
+    expect(doneToolDefinition.description).toBe(`Finish the task, or in a workflow step that is not the last, finish that step. Call it when the goal is fully achieved and verified and you have no question for the user; end your turn after it answers. Squawk closes the session at the end of this turn and cancels every open wait; after a step, Squawk starts the next step, and the answer names it. It refuses, naming what to do first, while owned workers are live or uncollected, a worker question is unanswered, your question to the user is still pending, or input for you is still to be delivered (input_pending, listed in owed). A result or message that arrives after it is accepted is delivered with a note, and the task still finishes when that turn ends; a new message from the user, a new request or instruction, a failed result, or a wait or question you register withdraws it, so call cezar_done again when the task is complete.`);
     expect(doneToolDefinition.inputSchema).toMatchObject({ type: 'object', additionalProperties: false, properties: { summary: { type: 'string', maxLength: 2000 } } });
     expect(doneToolDefinition.inputSchema).not.toHaveProperty('required');
   });
@@ -225,8 +224,8 @@ it('cezar_wait advertises the process fields and tells the agent how to write th
   // The tool list also loads inside omp, a standalone binary: the description names no path of its own.
   expect(description).toContain('`hsq job start <name> -- <command> [args...]` (your instructions give the full command for this session under "Long commands")');
   expect(description).toContain('pass the `pid` and `exitFile` it prints as `pid` and `exit_file`');
-  expect(description).toContain(`the job outlives this session; ${productName('Cezar')} does not stop it.`);
-  expect(description).toContain(`Its files are in $TMPDIR, the task's temp directory, which ${productName('Cezar')} keeps across its own restart and, after the task ends, while a job in it runs, so \`hsq job status <name>\` still finds the job after a Continue.`);
+  expect(description).toContain(`the job outlives this session; Squawk does not stop it.`);
+  expect(description).toContain(`Its files are in $TMPDIR, the task's temp directory, which Squawk keeps across its own restart and, after the task ends, while a job in it runs, so \`hsq job status <name>\` still finds the job after a Continue.`);
   expect(description).toContain('For files that must outlive the task, pass `--dir` with a directory you keep; a process wait accepts that job\'s `exitFile` too.');
   expect(description).toContain('Do not start a long command with `&`, `nohup`, `setsid` or your own background-task tool');
   // An agent whose batch wrote its exit file outside $TMPDIR started a watcher to copy it in.

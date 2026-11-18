@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { useEffect } from 'react'
 
 export interface DocumentTitleParts {
@@ -16,10 +15,10 @@ export function documentTitleOf({ projectName, pageLabel }: DocumentTitleParts):
   const project = titlePart(projectName)
   const page = titlePart(pageLabel)
 
-  if (project && page) return `${project} — ${page} · ${productName('cezar')}`
-  if (project) return `${project} · ${productName('cezar')}`
-  if (page) return `${page} · ${productName('cezar')}`
-  return productName('cezar')
+  if (project && page) return `${project} — ${page} · Squawk`
+  if (project) return `${project} · Squawk`
+  if (page) return `${page} · Squawk`
+  return 'Squawk'
 }
 
 /** The cockpit's single runtime document-title writer. */

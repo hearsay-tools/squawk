@@ -2,7 +2,6 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { productName } from '../home/display.ts';
 
 // Delay only delivery of a real native exit, without changing its status or wire.
 const lateExit = vi.hoisted(() => ({ enabled: false }));
@@ -1194,7 +1193,7 @@ describe('Pi signal teardown (#73)', () => {
     );
     await expect(session.result).resolves.toBeDefined();
     expect(events.filter((e) => e.type === 'error')).toEqual([]);
-    expect(events).toContainEqual({ type: 'note', message: expect.stringMatching(new RegExp(String.raw`terminated by ${productName('Cezar')}.*143`)) });
+    expect(events).toContainEqual({ type: 'note', message: expect.stringMatching(new RegExp(String.raw`terminated by Squawk.*143`)) });
     expect(JSON.stringify(events)).not.toContain('no selector found');
     expect(events.filter((e) => e.type === 'done')).toHaveLength(1);
     expect(ui.filter((e) => e.type === 'session.ended')).toHaveLength(1);
@@ -1209,7 +1208,7 @@ describe('Pi signal teardown (#73)', () => {
         event => events.push(event),
       );
       await expect(session.result).rejects.toThrow('pi CLI exited with code 143');
-      expect(events.some(event => event.type === 'note' && event.message.includes(`terminated by ${productName('Cezar')}`))).toBe(false);
+      expect(events.some(event => event.type === 'note' && event.message.includes(`terminated by Squawk`))).toBe(false);
       expect(events.some(event => event.type === 'done')).toBe(false);
     } finally {
       lateExit.enabled = false;

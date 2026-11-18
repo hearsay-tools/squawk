@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { occurrencesBetween, onceInstant, type NormalizedSchedule } from '@open-mercato/cezar-api-client/contract/automation-schedule'
 
 import { dayTime, onceResolved, relativeIn } from '@/lib/automation-format'
@@ -28,7 +27,7 @@ export function NextRunsPreview({ schedule, timeZone, now = Date.now() }: { sche
           ))}
         </ol>
       )}
-      <p className="mt-3 text-xs text-muted-foreground">Times are in {timeZone}, the zone this {productName('cezar')} runs in.</p>
+      <p className="mt-3 text-xs text-muted-foreground">Times are in {timeZone}, the zone this Squawk runs in.</p>
     </section>
   )
 }
@@ -51,7 +50,7 @@ function OnceRun({ schedule, now }: { schedule: NormalizedSchedule; now: number 
       )}
       {wall?.note ? <p className="mt-2 text-sm break-words">{wall.note}</p> : null}
       {instant !== null && instant <= now ? <p className="mt-2 text-sm text-destructive">The due time has passed.</p> : null}
-      <p className="mt-3 text-xs break-words text-muted-foreground">{`Times are in ${schedule.timeZone ?? 'UTC'}. ${productName('Cezarion')} must be running then; afterwards the schedule is archived with its task.`}</p>
+      <p className="mt-3 text-xs break-words text-muted-foreground">{`Times are in ${schedule.timeZone ?? 'UTC'}. Squawk must be running then; afterwards the schedule is archived with its task.`}</p>
     </section>
   )
 }

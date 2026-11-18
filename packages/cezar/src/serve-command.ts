@@ -1,7 +1,6 @@
 import { RunnerSkillCatalog } from './core/runner-skill-catalog.ts';
 import { hostSkillCatalogAdapters } from './core/host-skill-catalog.ts';
 import { projectPaths } from './project-paths.ts';
-import { productName } from './home/display.ts';
 import { npmPackageIdentity, scopedNpxCommand } from './home/identity.ts';
 import { once } from 'node:events';
 import { createHostDiscovery } from './discovery/catalog.ts';
@@ -163,7 +162,7 @@ async function bootServe(
   void deps.checkForUpdate(version).then((latest) => {
     if (!latest) return;
     update.latest = latest;
-    deps.console.log(`\n  ⬆ ${productName('cezar')} ${latest} is available (running ${version}) — restart with: ${restartCommand(pkgName)}\n`);
+    deps.console.log(`\n  ⬆ Squawk ${latest} is available (running ${version}) — restart with: ${restartCommand(pkgName)}\n`);
   });
 
   const port = preferredPort;

@@ -1,6 +1,5 @@
 import { runDataDir } from '../legacy-runs.ts';
 import { fallbackProjectWriteError } from '../project-paths.ts';
-import { productName } from '../home/display.ts';
 import type { Home } from '../home/home.ts';
 import { randomBytes } from 'node:crypto';
 import { rmSync } from 'node:fs';
@@ -977,7 +976,7 @@ export class PreviewHost implements PreviewHostLike {
     entry.viewer = undefined;
     if (!viewer) return;
     if (notify) viewer.send({ t: 'state', stage: 'worktree-removed' });
-    else viewer.close(1001, `${productName('cezar')} is shutting down`);
+    else viewer.close(1001, `Squawk is shutting down`);
   }
 
   private tell(entry: RunEntry, msg: PreviewServerMessage): void {

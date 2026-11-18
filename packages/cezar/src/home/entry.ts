@@ -1,4 +1,3 @@
-import { logPrefix } from './display.ts';
 import { commandText } from './command.ts';
 import { productEnv } from '../core/product-env.ts';
 import { existsSync, readdirSync } from 'node:fs';
@@ -40,7 +39,7 @@ export function prepareOperatorHome(home: Home, command: string | undefined, env
       prepareHome(home, command as HomeEntry, env, beforeWrite);
     }
   } catch (error) {
-    console.warn(`${logPrefix()} home registry unavailable (${error instanceof Error ? error.message : String(error)}) — continuing without it`);
+    console.warn(`[hsq] home registry unavailable (${error instanceof Error ? error.message : String(error)}) — continuing without it`);
   }
   return home;
 }

@@ -1,4 +1,3 @@
-import { logPrefix } from '../../home/display.ts';
 import type { AgentSession } from '../../core/agent-runner.ts';
 import { sessionGroupOf } from '../../core/session-process.ts';
 import type { RunModuleContext } from './types.ts';
@@ -109,8 +108,8 @@ export class WorkerExecutions {
   recordWorkerProcess(runId: string, pid: number): void {
     const generation = this.executions.get(runId)?.generation;
     if (!generation) return;
-    try { if (!this.context.store.appendWorkerProcess(runId, generation, pid, sessionGroupOf(pid))) console.warn(`${logPrefix()} worker ${runId} process record unavailable; its scope still holds the process`); }
-    catch { console.warn(`${logPrefix()} worker ${runId} process record write failed; its scope still holds the process`); }
+    try { if (!this.context.store.appendWorkerProcess(runId, generation, pid, sessionGroupOf(pid))) console.warn(`[hsq] worker ${runId} process record unavailable; its scope still holds the process`); }
+    catch { console.warn(`[hsq] worker ${runId} process record write failed; its scope still holds the process`); }
   }
 
   async proveRunTermination(runId: string, timeoutMs: number, opts: { reapOrphans?: boolean }): Promise<boolean> {

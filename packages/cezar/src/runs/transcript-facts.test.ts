@@ -1,4 +1,3 @@
-import { logPrefix } from '../home/display.ts';
 import { WORKER_OUTCOME_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -251,7 +250,7 @@ describe('transcript facts sidecar', () => {
     expect(loaded?.facts.archive).toEqual({ size: 10, mtimeMs: statSync(compressed).mtimeMs, ino: statSync(compressed).ino });
     expect(existsSync(factsPath())).toBe(false);
     expect(JSON.stringify(new TranscriptFactsIndex(dataDir).get(id))).toBe(JSON.stringify(loaded?.facts));
-    expect(warning).toHaveBeenCalledExactlyOnceWith(`${logPrefix()} ignoring undecodable compressed transcript ${compressed}`);
+    expect(warning).toHaveBeenCalledExactlyOnceWith(`[hsq] ignoring undecodable compressed transcript ${compressed}`);
   });
 
   it.each(['size', 'mtimeMs', 'ino'] as const)('shared reader rejects a mismatched archive %s', async (field) => {

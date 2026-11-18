@@ -1,5 +1,4 @@
 import { projectPaths } from './project-paths.ts';
-import { productName } from './home/display.ts';
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import { serveCommand, defaultServeDeps, type ServeDeps } from './serve-command.ts';
@@ -289,12 +288,12 @@ describe('serveCommand', () => {
     const f = fixture();
     f.effects.checkForUpdate.mockResolvedValue('2.0.0');
     await f.run();
-    expect(f.effects.console.log).toHaveBeenCalledWith(`\n  ⬆ ${productName('cezar')} 2.0.0 is available (running 1.2.3) — restart with: npx @wjarka/cezarion@latest\n`);
+    expect(f.effects.console.log).toHaveBeenCalledWith(`\n  ⬆ Squawk 2.0.0 is available (running 1.2.3) — restart with: npx @wjarka/cezarion@latest\n`);
     const squawk = fixture();
     squawk.effects.readOwnName.mockReturnValue('@hearsay-tools/squawk');
     squawk.effects.checkForUpdate.mockResolvedValue('2.0.0');
     await squawk.run();
-    expect(squawk.effects.console.log).toHaveBeenCalledWith(`\n  ⬆ ${productName('cezar')} 2.0.0 is available (running 1.2.3) — restart with: npx -p @hearsay-tools/squawk@latest hsq\n`);
+    expect(squawk.effects.console.log).toHaveBeenCalledWith(`\n  ⬆ Squawk 2.0.0 is available (running 1.2.3) — restart with: npx -p @hearsay-tools/squawk@latest hsq\n`);
     expect(f.effects.startServer).toHaveBeenCalledWith(expect.objectContaining({ update: { latest: '2.0.0' } }), 0, f.listener);
     const pending = fixture();
     pending.effects.checkForUpdate.mockReturnValue(new Promise(() => {}));

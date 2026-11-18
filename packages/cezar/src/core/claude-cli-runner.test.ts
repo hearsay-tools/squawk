@@ -14,7 +14,6 @@ import { autoEndObservationClock } from './observation-clock.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import { TOOL_GRANT_CASES } from './tool-grant-parity-cells.testkit.ts';
-import { productName } from '../home/display.ts';
 
 /** Only the escalation tests below swap the child out; every other test in this
  *  file keeps spawning its real stub binary through the untouched `spawn`. */
@@ -304,7 +303,7 @@ describe('a teardown Squawk initiated', () => {
     });
     expect(events.at(-1)).toEqual({ type: 'done' });
     expect(
-      events.some((e) => e.type === 'note' && e.message.includes(`terminated by ${productName('Cezar')} (code 143)`)),
+      events.some((e) => e.type === 'note' && e.message.includes(`terminated by Squawk (code 143)`)),
     ).toBe(true);
   }, 15_000);
 });

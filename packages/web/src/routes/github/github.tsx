@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import './github-layout.css'
 import { useQueryClient } from '@tanstack/react-query'
 import { LoaderCircleIcon } from 'lucide-react'
@@ -584,7 +583,7 @@ function GithubUnavailable({ reason, refreshing, onRetry }: {
         <p className="text-xs leading-relaxed text-soft-foreground">
           The tab needs the <span className="font-mono">gh</span> CLI, logged in (
           <span className="font-mono">gh auth login</span>), and a repo with a GitHub remote.
-          Everything else in {productName('cezar')} works without it.
+          Everything else in Squawk works without it.
         </p>
       </CenteredState>
     </div>
