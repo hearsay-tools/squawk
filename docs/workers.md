@@ -51,7 +51,7 @@ Destroy and worker spawn share one worktree mutation lock per repository. An exp
 
 `hsq worker spawn --workspace shared` starts a worker in the directory its parent works in: the parent's worktree, or the repository root for a parent that runs in place. The default, `--workspace isolated`, gives the worker its own worktree and branch as before.
 
-A shared worker starts at the parent's HEAD, and its record keeps that commit as `baselineSha`. `--baseline` is refused with `--workspace shared`. `--attach` is refused too: the file is already in the directory the worker runs in. Text context and baseline files work; Squawk copies each baseline file from its commit into the worker's own data directory, never into the parent's worktree, and `hsq worker inspect` reports those paths.
+A shared worker starts at the parent's HEAD, and its record keeps that commit as `baselineSha`. With `--workspace shared`, `--baseline parent-head` is accepted and changes nothing, because that is the commit a shared worker starts at; any other `--baseline` value is refused. `--attach` is refused too: the file is already in the directory the worker runs in. Text context and baseline files work; Squawk copies each baseline file from its commit into the worker's own data directory, never into the parent's worktree, and `hsq worker inspect` reports those paths.
 
 A shared worker has none of the things an isolated worker owns:
 
@@ -101,7 +101,7 @@ hsq worker collect <worker-id>
 hsq worker destroy <worker-id>
 ```
 
-- **No flag is needed.** A spawn that names no `--workspace` uses the first kind the caller may start: `isolated` for a root task, `shared` for a worker. `--workspace isolated` from a worker is refused, and the answer names the allowed kinds. `--baseline` and `--attach` are refused as for every shared worker.
+- **No flag is needed.** A spawn that names no `--workspace` uses the first kind the caller may start: `isolated` for a root task, `shared` for a worker. `--workspace isolated` from a worker is refused, and the answer names the allowed kinds. `--attach` and a `--baseline` other than `parent-head` are refused as for every shared worker, so `hsq worker spawn --baseline parent-head ...` works from a root and from a worker alike.
 - **One at a time.** A worker may have one outstanding worker. It destroys the finished one before it starts the next; destroy of a shared worker is immediate. A second spawn while the first is outstanding answers `capacity_limit` and says so. The worker that was started this way cannot start a worker.
 - **The family stays flat.** The root task holds every receipt, every message and every limit: 32 outstanding workers and 1,024 creations count the workers of its workers too. Each worker record names its **supervisor**, the task that started it.
 - **Messages follow the supervisor.** A worker and the worker it started message each other with `hsq message`; "your parent" in a worker's prompt is its supervisor. The root and a worker's worker cannot message each other. A worker that another worker started gets no question card: `cezar_ask` tells it to send a request message to its supervisor instead.

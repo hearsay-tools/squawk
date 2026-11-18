@@ -325,19 +325,21 @@ export type RunDelegationSummary = z.infer<typeof runDelegationSummarySchema>;
 /** What `--workspace` takes, and the stored kind each choice plans. */
 export const WORKSPACE_CHOICES = { isolated: 'owned-isolated', shared: 'shared' } as const satisfies Record<string, WorkerWorkspace['kind']>;
 export const workerWorkspaceChoiceSchema = z.enum(['isolated', 'shared']);
-export const SHARED_BASELINE_REFUSAL = '--baseline cannot be used with --workspace shared: a shared worker runs at its parent\'s HEAD';
+/** `parent-head` names what a shared worker already runs at, so it is accepted; any other ref is refused. */
+export const SHARED_BASELINE = 'parent-head';
+export const SHARED_BASELINE_REFUSAL = '--baseline cannot be used with --workspace shared: a shared worker runs at its parent\'s HEAD; leave --baseline out or pass parent-head';
 export const ISOLATED_BASELINE_REFUSAL = '--baseline is required for an isolated workspace';
 export const SHARED_ATTACH_REFUSAL = '--attach cannot be used with --workspace shared: the worker runs in your worktree, so the file is already there';
 /** Why a spawn into a shared workspace is refused, or undefined. The schema accepts the request, so
  *  the service and the CLI answer with these words instead of a generic validation error. */
 export function sharedSpawnRefusal(request: { workspace?: string | undefined; baseline?: string | undefined; context?: { artifacts?: ReadonlyArray<{ kind: string }> | undefined } | undefined }): string | undefined {
   if (request.workspace !== 'shared') return undefined;
-  if (request.baseline !== undefined) return SHARED_BASELINE_REFUSAL;
+  if (request.baseline !== undefined && request.baseline !== SHARED_BASELINE) return SHARED_BASELINE_REFUSAL;
   return request.context?.artifacts?.some(artifact => artifact.kind === 'parent-file') ? SHARED_ATTACH_REFUSAL : undefined;
 }
 export const workerSpawnRequestSchema = z.object({
   task: z.string().min(1).max(100_000),
-  /** Required for an isolated workspace; refused for a shared one, which runs at its host's HEAD.
+  /** Required for an isolated workspace. A shared one runs at its host's HEAD: only `parent-head` is accepted.
    *  The service decides, since an absent `workspace` depends on the caller's grant. */
   baseline: z.string().min(1).max(1_024).optional(),
   /** Absent: the first kind the caller's spawn grant allows. */

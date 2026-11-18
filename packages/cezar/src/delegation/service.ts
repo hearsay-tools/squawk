@@ -174,7 +174,8 @@ function stepIdentityFields({ settings, grants }: ResolvedSpawnStep) {
 /** `choice` is the workspace the request resolved to: named, or the first kind of the caller's grant. */
 function spawnRequestHash(request: WorkerSpawnRequest, choice: keyof typeof WORKSPACE_CHOICES): string {
   const effortPin = parseDelegationEffort(request.effort);
-  return createHash('sha256').update(JSON.stringify({ task: request.task, baseline: request.baseline,
+  // A shared worker runs at its host's HEAD with or without `--baseline parent-head`: one request either way.
+  return createHash('sha256').update(JSON.stringify({ task: request.task, baseline: choice === 'shared' ? undefined : request.baseline,
     ...(request.context === undefined ? {} : { context: request.context }),
     ...(request.backend === undefined ? {} : { backend: request.backend }),
     ...(request.model === undefined ? {} : { model: request.model }),

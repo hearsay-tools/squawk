@@ -324,7 +324,7 @@ describe('bundled worker CLI', { timeout: 20_000 }, () => {
     expect(spawn.mock.calls[0]?.[1]).toMatchObject({ workspace: 'shared', task: 'review' });
     expect(spawn.mock.calls[0]?.[1].baseline).toBeUndefined();
     expect(f.store.getRun(json().workerId)?.delegation).toMatchObject({ workspace: { kind: 'shared' } });
-    expect(await runWorkerCommand(['spawn', '--workspace', 'shared', '--baseline', 'parent-head', '--request-id', randomUUID(), 'review'], env)).toBe(1);
+    expect(await runWorkerCommand(['spawn', '--workspace', 'shared', '--baseline', 'main', '--request-id', randomUUID(), 'review'], env)).toBe(1);
     expect(json()).toEqual({ code: 'invalid_input', error: `spawn refused: ${SHARED_BASELINE_REFUSAL}` });
     expect(await runWorkerCommand(['spawn', '--workspace', 'shared', '--attach', 'no-such-file', '--request-id', randomUUID(), 'review'], env)).toBe(1);
     expect(json()).toEqual({ code: 'invalid_input', error: `spawn refused: ${SHARED_ATTACH_REFUSAL}` });

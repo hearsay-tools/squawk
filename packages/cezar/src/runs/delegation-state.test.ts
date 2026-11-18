@@ -157,6 +157,7 @@ describe('delegation schemas', () => {
     expect(sharedSpawnRefusal({ workspace: 'shared' })).toBeUndefined();
     expect(sharedSpawnRefusal({ baseline: 'HEAD', context: { artifacts: [{ kind: 'parent-file' }] } })).toBeUndefined();
     expect(sharedSpawnRefusal({ workspace: 'shared', baseline: 'HEAD' })).toBe(SHARED_BASELINE_REFUSAL);
+    expect(sharedSpawnRefusal({ workspace: 'shared', baseline: 'parent-head' })).toBeUndefined();
     expect(sharedSpawnRefusal({ workspace: 'shared', context: { artifacts: [{ kind: 'baseline-file' }, { kind: 'parent-file' }] } })).toBe(SHARED_ATTACH_REFUSAL);
     expect(sharedSpawnRefusal({ workspace: 'shared', context: { artifacts: [{ kind: 'baseline-file' }, { kind: 'parent-attachment' }] } })).toBeUndefined();
   });

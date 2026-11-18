@@ -110,8 +110,8 @@ const WORKER_HELP: Record<string, { args: string; description: string }> = {
 
 };
 const WORKER_FLAG_HELP: Record<string, string> = {
-  '--baseline': '<ref>                 Committed ref or parent-head; excludes dirty edits. Required for an isolated workspace.',
-  '--workspace': '<isolated|shared>    Default: the first kind you may start (a task: isolated; a worker: shared, its only kind). isolated: own worktree and branch. shared: the worker runs in your worktree at your HEAD, with no worktree, branch or diff of its own; collect reports whether the worktree changed. Not with --baseline or --attach.',
+  '--baseline': '<ref>                 Committed ref or parent-head; excludes dirty edits. Required for an isolated workspace. A shared workspace takes only parent-head, or none.',
+  '--workspace': '<isolated|shared>    Default: the first kind you may start (a task: isolated; a worker: shared, its only kind). isolated: own worktree and branch. shared: the worker runs in your worktree at your HEAD, with no worktree, branch or diff of its own; collect reports whether the worktree changed. Not with --attach; of --baseline only parent-head.',
   '--request-id': '<UUID>              Spawn retry ID, or request being followed up/replied to.',
   '--runner': `<name>                  ${RUNNER_IDS.join(' | ')}.`,
   '--backend': '<name>                 Alias of --runner.',
