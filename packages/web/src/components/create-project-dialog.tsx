@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { useCallback, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 
@@ -377,7 +376,7 @@ export function CreateProjectDialog({
         <DialogHeader className="flex-none">
           <DialogTitle>New project</DialogTitle>
           <DialogDescription>
-            {productName('cezar')} creates a git repository with one empty commit in your checkout root and adds it as a project.
+            Squawk creates a git repository with one empty commit in your checkout root and adds it as a project.
           </DialogDescription>
         </DialogHeader>
 

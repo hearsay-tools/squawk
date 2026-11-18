@@ -16,7 +16,7 @@ export function readProductEnvBaseline(path = join(repoRoot, productEnvBaselineF
   return (JSON.parse(readFileSync(path, 'utf8')) as { entries: EnvReadAllowance[] }).entries;
 }
 
-const productName = (name: string | undefined): boolean => /^(CEZ|HSQ)_[A-Z0-9_]+$/.test(name ?? '');
+const productEnvName = (name: string | undefined): boolean => /^(CEZ|HSQ)_[A-Z0-9_]+$/.test(name ?? '');
 
 type EnvReference = 'global' | 'process' | 'env';
 type EnvBindings = Map<string, EnvReference>;
@@ -114,7 +114,7 @@ function patternReads(pattern: EsNode | undefined, owner: EnvReference | undefin
     }
     const key = field(entry, 'key');
     const name = entry.computed && key?.type === 'Identifier' ? undefined : property(key);
-    const reads: Site[] = (owner === 'env' && productName(name)) || (owner !== undefined && name === undefined)
+    const reads: Site[] = (owner === 'env' && productEnvName(name)) || (owner !== undefined && name === undefined)
       ? [{ form: name === undefined ? 'computed' : 'destructure', name: name ?? '*', offset: entry.start as number, node: entry }] : [];
     return [...reads, ...patternReads(field(entry, 'value'), childReference(owner, name), aliases, bind)];
   });
@@ -282,7 +282,7 @@ function envReadVisitors(source: string): { visitors: Visitors; reads(program: E
       if (writes.has(node)) return;
       const name = property(node);
       if (name === undefined && node.computed) events.add({ kind: 'computed', node });
-      else if (productName(name)) events.add({ kind: 'read', site: memberSite(node, name, source) });
+      else if (productEnvName(name)) events.add({ kind: 'read', site: memberSite(node, name, source) });
     },
     CallExpression(node) {
       if (!helpers.has(property(unwrapped(field(node, 'callee')!)) ?? '')) return;
@@ -309,7 +309,7 @@ function envReadVisitors(source: string): { visitors: Visitors; reads(program: E
         if (event.kind !== 'computed') continue;
         const key = field(event.node, 'property')!;
         const name = key.type === 'Identifier' ? staticNames.get(key.name as string) : undefined;
-        if (productName(name) || (name === undefined && reference(field(event.node, 'object'), aliases) === 'env')) sites.push(memberSite(event.node, name, source));
+        if (productEnvName(name) || (name === undefined && reference(field(event.node, 'object'), aliases) === 'env')) sites.push(memberSite(event.node, name, source));
       }
       for (const event of ordered) if (event.kind === 'dynamic') sites.push(event.site);
       return sites.sort((a, b) => a.offset - b.offset);
@@ -327,7 +327,7 @@ function namesConstant(node: EsNode, constants: Map<string, EsNode>, aliases: En
   const key = field(node, 'property')!;
   const value = key.type === 'Identifier' ? constants.get(key.name as string) : undefined;
   const literal = value && literalEnvKey(value, constants);
-  return literal !== undefined && (productName(literal) || reference(field(node, 'object'), aliases) === 'env');
+  return literal !== undefined && (productEnvName(literal) || reference(field(node, 'object'), aliases) === 'env');
 }
 
 /** AST scanning avoids strings/comments, supports env arguments, brackets, aliases and destructuring. */

@@ -33,24 +33,6 @@
   },
   {
     "file": "packages/cezar/src/server/repo-branches.ts",
-    "function": "deletionVerdicts",
-    "mutator": "StringLiteral",
-    "original": "'cezar'",
-    "replacement": "\"\"",
-    "reason": "productName ignores its argument and returns the build's display name, so an empty literal renders the same text; remove this entry when hearsay-tools/squawk#3509 replaces productName calls with literals.",
-    "site": "refused.push({ name, reason: `not a ${productName("
-  },
-  {
-    "file": "packages/cezar/src/server/repo-branches.ts",
-    "function": "deleteBranches",
-    "mutator": "StringLiteral",
-    "original": "'cezar'",
-    "replacement": "\"\"",
-    "reason": "productName ignores its argument and returns the build's display name, so an empty literal renders the same text; remove this entry when hearsay-tools/squawk#3509 replaces productName calls with literals.",
-    "site": "refused.push({ name, reason: `not a ${productName("
-  },
-  {
-    "file": "packages/cezar/src/server/repo-branches.ts",
     "function": "deleteBranches",
     "mutator": "ObjectLiteral",
     "original": "{ diffStats: false }",
@@ -395,14 +377,6 @@
     "original": "mode === 'uninstall'",
     "replacement": "true",
     "reason": "ServerCommandMode has three values and install and deploy with a complete status take the two earlier branches, so the third branch sees a complete status only in uninstall."
-  },
-  {
-    "file": "packages/cezar/src/ci-wait/tools.ts",
-    "function": "invokeDoneTool",
-    "mutator": "StringLiteral",
-    "original": "'Cezar'",
-    "replacement": "\"\"",
-    "reason": "productName ignores its argument (_legacy) and returns productIdentity().displayName, so the hint text is the same for any argument."
   },
   {
     "file": "packages/cezar/src/server/start-server.ts",

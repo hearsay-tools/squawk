@@ -1,4 +1,3 @@
-import { logPrefix } from '../home/display.ts';
 import { ReportsWatch, reportMetadataKey } from './reports-watch.ts';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -75,7 +74,7 @@ export class ReportsIndex {
         // Closing the last shelf must not cancel the existing terminal reconciliation guarantee.
         if (this.settlements.size) {
           this.settlements.clear();
-          void this.reconcile(false).catch(error => console.warn(`${logPrefix()} Reports settlement failed:`, error));
+          void this.reconcile(false).catch(error => console.warn(`[hsq] Reports settlement failed:`, error));
         }
       },
     );
@@ -97,13 +96,13 @@ export class ReportsIndex {
     this.changes.run(run, live || wasLive, this.db.reports.forRun(run.id).length > 0);
     if (live) { this.live.add(run.id); return; }
     const settled = this.live.delete(run.id);
-    if (this.started && settled && !this.changes.watching()) void this.reconcile(false, run.id).catch(error => console.warn(`${logPrefix()} Reports reconciliation failed:`, error));
+    if (this.started && settled && !this.changes.watching()) void this.reconcile(false, run.id).catch(error => console.warn(`[hsq] Reports reconciliation failed:`, error));
   };
 
   /** Only the post-listen boot hook and already-served lazy contexts call this. */
   start(): void {
     this.started = true;
-    void this.backfill().catch(error => console.warn(`${logPrefix()} Reports backfill failed:`, error));
+    void this.backfill().catch(error => console.warn(`[hsq] Reports backfill failed:`, error));
   }
   /** Settles once the scans queued so far end. */
   idle(): Promise<void> { return this.queue; }
@@ -147,7 +146,7 @@ export class ReportsIndex {
     const revision = this.db.revisionOf(runId);
     const scan = await this.storage(runId, directory => scanArtifactsForIndex(directory, runId));
     if (scan.state === 'indeterminate') {
-      console.warn(`${logPrefix()} Report scan could not be completed: ${runId}`, scan.error);
+      console.warn(`[hsq] Report scan could not be completed: ${runId}`, scan.error);
       if (this.closed) return false;
       this.db.reports.retry(runId, revision);
       return false;
@@ -156,7 +155,7 @@ export class ReportsIndex {
     const uncertain = scan.state === 'read' ? scan.value.indeterminate : [];
     for (const cached of previous) if (uncertain.includes(cached.id)) artifacts.push(cached);
     const complete = uncertain.length === 0;
-    if (!complete) console.warn(`${logPrefix()} Report read could not be completed: ${runId}`);
+    if (!complete) console.warn(`[hsq] Report read could not be completed: ${runId}`);
     if (this.closed) return false;
     this.db.reports.replace(runId, artifacts, revision, complete);
     const current = this.db.reports.forRun(runId);
@@ -169,7 +168,7 @@ export class ReportsIndex {
       else this.changes.seed(runId);
     } else this.changes.forget(runId);
     const kept = new Set(artifacts.map(a => a.id));
-    for (const missing of previous) if (!kept.has(missing.id)) console.warn(`${logPrefix()} Report missing or deleted: ${runId}/${missing.id}`);
+    for (const missing of previous) if (!kept.has(missing.id)) console.warn(`[hsq] Report missing or deleted: ${runId}/${missing.id}`);
     return complete;
   }
   private async present(row: ReportRow): Promise<boolean | null> {
@@ -177,14 +176,14 @@ export class ReportsIndex {
     const check = await this.storage(row.runId, directory => checkArtifactContentForIndex(directory, row.runId, row.id, row.size));
     if (check.state === 'indeterminate') {
       this.db.reports.retry(row.runId, this.db.revisionOf(row.runId));
-      console.warn(`${logPrefix()} Report content could not be checked: ${row.runId}/${row.id}`, check.error);
+      console.warn(`[hsq] Report content could not be checked: ${row.runId}/${row.id}`, check.error);
       return null;
     }
     if (check.state === 'read' && check.value) return true;
     this.db.reports.drop(row.id);
     if (!this.db.reports.forRun(row.runId).length) this.changes.forget(row.runId);
     this.changes.content();
-    console.warn(`${logPrefix()} Report missing or deleted: ${row.runId}/${row.id}`);
+    console.warn(`[hsq] Report missing or deleted: ${row.runId}/${row.id}`);
     return false;
   }
   private matchingRows(q: string): ReportRow[] {
@@ -193,7 +192,7 @@ export class ReportsIndex {
     for (const row of this.db.reports.summaries()) {
       const summary = parseStoredSummary(row.summary);
       if (!summary) {
-        if (!warned.has(row.runId)) console.warn(`${logPrefix()} Report source task could not be read: ${row.runId}`);
+        if (!warned.has(row.runId)) console.warn(`[hsq] Report source task could not be read: ${row.runId}`);
         warned.add(row.runId);
         continue;
       }

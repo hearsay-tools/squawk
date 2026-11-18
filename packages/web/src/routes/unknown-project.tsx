@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { FolderSearchIcon } from 'lucide-react'
 import { Link } from 'react-router'
 
@@ -33,7 +32,7 @@ export function UnknownProjectRoute({
         icon={<FolderSearchIcon />}
         tone="neutral"
         title={`“${projectId}” isn’t registered here`}
-        subtitle={`This ${productName('cezar')} doesn’t serve a project by that id. The link may come from another machine’s workspace — these are the projects registered on this one:`}
+        subtitle={`This Squawk doesn’t serve a project by that id. The link may come from another machine’s workspace — these are the projects registered on this one:`}
       >
         <ul data-slot="registered-projects" className="mx-auto flex w-full max-w-xs flex-col gap-1.5 text-left">
           {projects.map((project) => (

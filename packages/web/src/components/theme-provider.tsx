@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import * as React from 'react'
 
 import {
@@ -64,6 +63,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
 export function useTheme(): ThemeContextValue {
   const context = React.useContext(ThemeContext)
-  if (!context) throw new Error(`${productName('cezar')}: useTheme() must be called inside <ThemeProvider>`)
+  if (!context) throw new Error(`Squawk: useTheme() must be called inside <ThemeProvider>`)
   return context
 }

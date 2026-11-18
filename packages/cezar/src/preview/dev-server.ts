@@ -1,4 +1,3 @@
-import { productName } from '../home/display.ts';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, realpathSync, rmSync, statSync, truncateSync, appendFileSync, writeFileSync, fstatSync } from 'node:fs';
@@ -146,7 +145,7 @@ export class DevServer extends EventEmitter {
     // A worker's server starts in its scope; a scope that refuses (its destroy has begun) or cannot
     // record the process starts nothing (ADR 0032).
     const refuse = (error: unknown) => {
-      try { appendFileSync(this.logPath, `${productName('cezar')} could not start the command: ${(error as Error).message}\n`); } catch { /* log is best effort */ }
+      try { appendFileSync(this.logPath, `Squawk could not start the command: ${(error as Error).message}\n`); } catch { /* log is best effort */ }
       closeSync(logFd);
       this.finish('exited');
     };
@@ -176,7 +175,7 @@ export class DevServer extends EventEmitter {
     this.child = child;
     this.childExited = new Promise<void>(resolveExit => {
       child.once('error', error => {
-        try { appendFileSync(this.logPath, `${productName('cezar')} could not start the command: ${error.message}\n`); } catch { /* log is best effort */ }
+        try { appendFileSync(this.logPath, `Squawk could not start the command: ${error.message}\n`); } catch { /* log is best effort */ }
         resolveExit();
         this.finish('exited');
       });

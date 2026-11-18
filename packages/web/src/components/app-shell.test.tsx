@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { Link as RouterLink, MemoryRouter, useLocation, useNavigate, type NavigateFunction } from 'react-router'
@@ -328,8 +327,8 @@ describe('AppShell', () => {
     })
 
     it('renders the repo chip and version chip from props', () => {
-      renderShell('/', { repo: { name: `${productName("cezar")}`, branch: 'main' }, version: '1.2.3' })
-      expect(within(sidebar()).getByText(`${productName("cezar")}`)).toBeTruthy()
+      renderShell('/', { repo: { name: `Squawk`, branch: 'main' }, version: '1.2.3' })
+      expect(within(sidebar()).getByText(`Squawk`)).toBeTruthy()
       // The chip prefixes the raw semver from /api/v1/health — `v1.2.3`, mono, muted.
       expect(within(sidebar()).getByText('v1.2.3')).toBeTruthy()
     })

@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { SettingsIcon } from '@/components/design-icons'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link as RouterLink, useNavigate } from 'react-router'
@@ -143,7 +142,7 @@ export function CloneProjectDialog({
         <DialogHeader>
           <DialogTitle>Clone from GitHub</DialogTitle>
           <DialogDescription>
-            {productName('cezar')} clones with <code>gh</code> into your checkout root and adds the result as a project.
+            Squawk clones with <code>gh</code> into your checkout root and adds the result as a project.
           </DialogDescription>
         </DialogHeader>
 

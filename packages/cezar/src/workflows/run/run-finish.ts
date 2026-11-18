@@ -1,4 +1,3 @@
-import { logPrefix } from '../../home/display.ts';
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
 import { squawkDoneRequestSchema, type SquawkDoneRequest, type SquawkDoneAnswer, type DoneErrorCode, type DoneOwedInput } from '@open-mercato/cezar-contract/waits';
@@ -51,7 +50,7 @@ export class RunFinish {
     const open_waits = openWaitList(this.context.store.getRun(runId)?.waits ?? []);
     const refuse = (code: DoneErrorCode, message: string, workers: { worker_id: string; reason: 'outstanding' | 'uncollected' | 'question' }[] = [], owed: DoneOwedInput[] = []): SquawkDoneAnswer => {
       // Fixed codes only, as for wait registration.
-      console.warn(`${logPrefix()} cezar_done refused: ${code}`);
+      console.warn(`[hsq] cezar_done refused: ${code}`);
       return { ok: false, code, message, ...(workers.length ? { workers: workers.slice(0, 64) } : {}), open_waits, ...(owed.length ? { owed } : {}) };
     };
     const session = toolSessionRefusal(this.context.store.getRun(runId), state, this.completionGateHost.active.get(runId), generation, signal, this.context.disposed());
@@ -164,7 +163,7 @@ export class RunFinish {
       this.host.reconcileWorkerWaits(runId);
       await this.runSettlement.settleSuccess(runId, true);
     }
-    catch { console.warn(`${logPrefix()} parent finish checkpoint failed; intent retained for retry`); }
+    catch { console.warn(`[hsq] parent finish checkpoint failed; intent retained for retry`); }
   }
 
   /** Close the open session gracefully — the run then completes as `done`

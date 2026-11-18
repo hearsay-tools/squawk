@@ -1,4 +1,3 @@
-import { productName } from '../../home/display.ts';
 import { type InstallContext } from '../types.ts';
 import { StepAborted, sudoStep } from '../steps.ts';
 
@@ -93,7 +92,7 @@ export async function restartSystemService(
   let restartCode: number | undefined;
   try {
     await sudoStep(ctx, {
-      description: `Reload systemd and restart the ${productName('cezar')} service.`,
+      description: `Reload systemd and restart the Squawk service.`,
       command: `systemctl daemon-reload && systemctl restart ${unit}`,
       verify: async (c, commandCode) => {
         restartCode = commandCode;

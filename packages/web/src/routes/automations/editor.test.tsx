@@ -1,4 +1,4 @@
-import { productName, productCommand } from '@/lib/product-name'
+import { productCommand } from '@/lib/product-name'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
@@ -80,12 +80,12 @@ it('starts task access on and sends an explicit off on create (hearsay-tools/cez
   const onSaved = mount()
   fill()
   expect(screen.getByRole('group', { name: 'Task access' })).toBeTruthy()
-  for (const name of [`Allow ${productName("cezar")} workers`, 'Allow task messaging']) {
+  for (const name of [`Allow Squawk workers`, 'Allow task messaging']) {
     const control = screen.getByRole('switch', { name })
     expect(control.getAttribute('aria-checked')).toBe('true')
     expect(control.getAttribute('aria-describedby')).toBeTruthy()
   }
-  fireEvent.click(screen.getByRole('switch', { name: `Allow ${productName("cezar")} workers` }))
+  fireEvent.click(screen.getByRole('switch', { name: `Allow Squawk workers` }))
   fireEvent.click(screen.getByRole('button', { name: 'Save paused' }))
   await waitFor(() => expect(onSaved).toHaveBeenCalled())
   const body = calls.find(call => call.method === 'POST')?.body as { task: Record<string, unknown> } | undefined
@@ -101,7 +101,7 @@ it('turns task access back on for an automation saved with it off', async () => 
   }
   const calls = stubFetch(() => json({ automation }))
   const onSaved = mount({ automation })
-  for (const name of [`Allow ${productName("cezar")} workers`, 'Allow task messaging']) {
+  for (const name of [`Allow Squawk workers`, 'Allow task messaging']) {
     const control = screen.getByRole('switch', { name })
     expect(control.getAttribute('aria-checked')).toBe('false')
     fireEvent.click(control)
@@ -363,7 +363,7 @@ describe('one-time schedules', () => {
     for (const label of ['Date', 'Hour', 'Minute', 'Time zone', 'Latest start']) expect(screen.getByLabelText(label)).not.toBeNull()
     expect((screen.getByLabelText('Time zone') as HTMLInputElement).value).toBe('Europe/Warsaw')
     setWhen('2030-01-15', '09', '30')
-    expect(screen.getByText(`Runs once at 09:30 on Tue 15 Jan 2030 (Europe/Warsaw). ${productName("Cezarion")} must be running then.`)).not.toBeNull()
+    expect(screen.getByText(`Runs once at 09:30 on Tue 15 Jan 2030 (Europe/Warsaw). Squawk must be running then.`)).not.toBeNull()
     expect(screen.queryByText(/^Cron:/)).toBeNull()
   })
 
@@ -372,7 +372,7 @@ describe('one-time schedules', () => {
     mount()
     chooseOnce()
     setWhen('2027-03-28', '02', '30')
-    expect(screen.getByText(`Runs once at 01:30 on Sun 28 Mar 2027 (Europe/Warsaw). 02:30 does not exist on Sun 28 Mar 2027 in Europe/Warsaw. ${productName("Cezarion")} must be running then.`)).not.toBeNull()
+    expect(screen.getByText(`Runs once at 01:30 on Sun 28 Mar 2027 (Europe/Warsaw). 02:30 does not exist on Sun 28 Mar 2027 in Europe/Warsaw. Squawk must be running then.`)).not.toBeNull()
   })
 
   it('a past time blocks save and keeps the draft', async () => {

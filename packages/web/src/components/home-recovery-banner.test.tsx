@@ -1,4 +1,4 @@
-import { productName, productCommand } from '@/lib/product-name'
+import { productCommand } from '@/lib/product-name'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { HomeRecoveryFile } from '@open-mercato/cezar-api-client/contract/home-recovery'
@@ -59,7 +59,7 @@ it('shows each reset with its approved copy and both recovery actions', () => {
 it('names the outside-written file and leaves accept available when no restore target is readable', () => {
   state([file('ui-state.json', 'outside-write', false)])
   render(<HomeRecoveryBanner />)
-  expect(screen.getByText(`ui-state.json changed outside ${productName("Cezar")}. Restore the previous version or accept the file as found.`)).toBeTruthy()
+  expect(screen.getByText(`ui-state.json changed outside Squawk. Restore the previous version or accept the file as found.`)).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Restore' }).hasAttribute('disabled')).toBe(true)
   expect(screen.getByRole('button', { name: 'Accept as found' }).hasAttribute('disabled')).toBe(false)
   fireEvent.click(screen.getByRole('button', { name: 'Accept as found' }))

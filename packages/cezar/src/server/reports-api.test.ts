@@ -1,4 +1,3 @@
-import { logPrefix } from '../home/display.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import * as fs from 'node:fs/promises';
@@ -163,7 +162,7 @@ describe('project reports', () => {
       const result = await page('?limit=1');
       expect(result.reports).toEqual([expect.objectContaining({ id: artifact.id, taskTitle: 'Readable' })]);
       expect(result.total).toBe(1); expect(result.nextCursor).toBeNull();
-      expect(warning).toHaveBeenCalledExactlyOnceWith(`${logPrefix()} Report source task could not be read: ${broken.id}`);
+      expect(warning).toHaveBeenCalledExactlyOnceWith(`[hsq] Report source task could not be read: ${broken.id}`);
       expect(raw.prepare('SELECT id FROM artifacts WHERE id = ?').get(cached.id)).toBeTruthy();
       raw.prepare('UPDATE runs SET summary = ? WHERE id = ?').run(summary!, broken.id);
       const open = vi.spyOn(fs, 'open');

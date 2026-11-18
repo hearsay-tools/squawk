@@ -1,4 +1,3 @@
-import { logPrefix } from '../home/display.ts';
 import { productEnv } from '../core/product-env.ts';
 import { isAbsoluteHostPath } from '../core/host-path.ts';
 import type { Home } from '../home/home.ts';
@@ -361,12 +360,12 @@ export function loadWorkspaceConfigSync(path: string, recovery?: { base?: Buffer
   if (restored) {
     const cause = raw === null ? 'is missing' : 'is empty or corrupt';
     console.warn(
-      `${logPrefix()} workspace config ${path} ${cause} — restored ${restored.projects.length} project(s) from ${workspaceConfigBackupPath(path)}`,
+      `[hsq] workspace config ${path} ${cause} — restored ${restored.projects.length} project(s) from ${workspaceConfigBackupPath(path)}`,
     );
     return restored;
   }
   if (raw === null) return defaultWorkspaceConfig();
-  console.warn(`${logPrefix()} workspace config ${path} is corrupt — using defaults (registry rebuilds)`);
+  console.warn(`[hsq] workspace config ${path} is corrupt — using defaults (registry rebuilds)`);
   return defaultWorkspaceConfig();
 }
 
@@ -424,5 +423,5 @@ const warnedSnapshots = new Set<string>();
 function warnSnapshot(path: string, error: unknown): void {
   if (warnedSnapshots.has(path)) return;
   warnedSnapshots.add(path);
-  console.warn(`${logPrefix()} workspace backup ${path} unavailable (${error instanceof Error ? error.message : String(error)}); continuing the write`);
+  console.warn(`[hsq] workspace backup ${path} unavailable (${error instanceof Error ? error.message : String(error)}); continuing the write`);
 }

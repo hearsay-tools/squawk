@@ -1,4 +1,3 @@
-import { productName } from '../../home/display.ts';
 import { fallbackProjectWriteError } from '../../project-paths.ts';
 import { productEnv } from '../../core/product-env.ts';
 import { withoutHomeEnv } from '../../core/agent-env.ts';
@@ -107,7 +106,7 @@ export function buildPrBody(handoffText: string, task: string): string {
   const progress = section(handoffText, '## Progress log').split('\n').filter((l) => l.trim()).slice(0, PROGRESS_LINES_MAX).join('\n');
   const parts = ['## Goal', '', goal];
   if (progress) parts.push('', '## Progress log', '', progress);
-  parts.push('', '---', '', `🤖 made with ${productName('cezar')}`);
+  parts.push('', '---', '', `🤖 made with Squawk`);
   return parts.join('\n');
 }
 

@@ -1,4 +1,3 @@
-import { productName } from '@/lib/product-name'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 
@@ -80,7 +79,7 @@ export function AddProjectDialog({
         <DialogHeader>
           <DialogTitle>Open local folder</DialogTitle>
           <DialogDescription>
-            Pick the folder {productName('cezar')} should run in. Git repos are marked; any folder works.
+            Pick the folder Squawk should run in. Git repos are marked; any folder works.
           </DialogDescription>
         </DialogHeader>
 
