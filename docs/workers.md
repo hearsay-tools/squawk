@@ -64,7 +64,7 @@ A shared worker has none of the things an isolated worker owns:
 | Commit, push, pull request and worktree removal on its task page, and a preview | Not offered. The server refuses commit, push, pull request and removal with `this worker runs in its parent's worktree`, and starts no preview |
 | A worktree and a branch that destroy removes, under the worktree mutation lock | Destroy stops its processes and ends with `remaining: []` and `deleted: []`. It takes no worktree mutation lock and touches no file or branch of the parent |
 
-While a shared worker is queued, running, waiting or being destroyed, Squawk does not reclaim or remove the directory it works in: retention skips its host task, and the cockpit refuses to remove that task's worktree or delete its branch until the worker has ended or is cleaned up. The worker's own task page reads its files, changes and transcript file links from that directory.
+While a shared worker is queued, running, waiting or being destroyed, Squawk does not reclaim or remove the directory it works in: retention skips its host task, and the cockpit refuses to remove that task's worktree or delete its branch until the worker has ended or is cleaned up. The other direction holds too: while such a removal or reclaim runs, a Continue of the shared worker is refused and a queued one stays in the queue. The worker's own task page reads its files, changes and transcript file links from that directory.
 
 Launch and Continue check that the recorded directory still exists and is a worktree of this repository. If it is not, the worker fails with the reason; Squawk creates nothing in its place.
 
@@ -78,10 +78,12 @@ The comparison always starts at the first session, also after a Continue or a re
 
 Squawk compares content, with these limits:
 
-- A changed or untracked file of at most 8 MiB is compared by a hash of its content, up to 64 MiB of content for one recorded state. A file past either bound is compared by size, modification time and mode, so a same-size rewrite that restores the modification time does not show for it.
+- A changed or untracked file of at most 8 MiB is compared by a hash of its content, up to 64 MiB of content for one recorded state. A file past either bound is compared by size, modification time and mode, so a same-size rewrite that restores the modification time does not show for it. Where both states hold the content hash, a change of the modification time alone does not show.
+- Squawk reads content only inside the worker's directory and follows no link. A symbolic link is compared by its target path. A file under a directory that was replaced by a link to a place outside is compared by size, modification time and mode.
 - A submodule, or another nested repository, is compared by its own HEAD, index, changes and untracked files, three levels deep; a deeper one by its HEAD only.
 - A file that was changed and then changed back reads as unchanged.
-- One recorded state keeps 5,000 changed or untracked paths. When more exist, a change among the rest still reads as `changed`, with `truncated: true`.
+- One recorded state keeps 5,000 changed or untracked paths with content. The rest are compared together by size, modification time and mode; a change among them reads as `changed` with `truncated: true` and no path.
+- An end state belongs to one execution of the worker. After a Continue, the end state of the earlier execution is not used.
 
 Squawk does not prevent a write, and the report does not say who made a change. **Two agents work in one worktree:** an edit, a commit or a checkout by the parent, by another shared worker or by a human during the worker's run shows as changed too. Give a shared worker a task that reads (a review, an analysis), and say in the task text when it may write. Its session prompt tells it that it shares the parent's worktree and must not write there unless its task says so. Do not change the same files in the parent while it runs.
 

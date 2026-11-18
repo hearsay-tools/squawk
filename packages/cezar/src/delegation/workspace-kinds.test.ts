@@ -68,8 +68,8 @@ describe('the isolated workspace kind', () => {
   it('has a diff of its own, so it reports no change of a shared directory and does nothing at settlement', async () => {
     expect(isolated.noDiff).toBeUndefined();
     expect(isolated.workerNotice).toBeUndefined();
-    expect(await isolated.changeReport('/data', run, true)).toBeUndefined();
-    await isolated.settle(request);
+    expect(await isolated.changeReport('/data', run, { generation: 'g1', settled: true })).toBeUndefined();
+    await isolated.settle({ ...request, generation: 'g1' });
     expect(calls).toEqual([]);
   });
 
@@ -129,8 +129,8 @@ describe('the worker workspace port', () => {
   });
 
   it('sends a settlement to the definition the run names, and never throws', async () => {
-    await expect(workerWorkspacePort.settle(request)).resolves.toBeUndefined();
-    await expect(workerWorkspacePort.settle({ ...request, run: { id: 'root' } as RunRecord })).resolves.toBeUndefined();
+    await expect(workerWorkspacePort.settle({ ...request, generation: 'g1' })).resolves.toBeUndefined();
+    await expect(workerWorkspacePort.settle({ ...request, generation: 'g1', run: { id: 'root' } as RunRecord })).resolves.toBeUndefined();
   });
 
   it('rejects a run that is no worker', async () => {

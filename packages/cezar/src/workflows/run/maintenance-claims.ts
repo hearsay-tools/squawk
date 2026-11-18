@@ -1,5 +1,5 @@
 import { isReclaimable, workerFamilyEnded } from '../../runs/retention.ts';
-import { hostsLiveSharedWorker } from '../../runs/shared-hosts.ts';
+import { directoryRunId, hostsLiveSharedWorker } from '../../runs/shared-hosts.ts';
 import type { RunRecord } from '../../runs/store.ts';
 import type { RunModuleContext } from './types.ts';
 
@@ -16,7 +16,16 @@ export class MaintenanceClaims {
    *  from its grant to the release callback its holder calls, so `dispose` keeps it. */
   readonly reclaiming = new Set<string>();
   constructor(private readonly context: RunModuleContext, private readonly host: MaintenanceClaimsHost) {}
-  has(runId: string): boolean { return this.reclaiming.has(runId); }
+  /** Whether the run is claimed, or the run whose directory it works in is. Every admission and
+   *  execution start asks this, so a claim on a host's directory and the start of a worker in that
+   *  directory exclude each other: the claim side asks `hostsLiveSharedWorker` in its own step. */
+  has(runId: string): boolean {
+    if (this.reclaiming.has(runId)) return true;
+    if (this.reclaiming.size === 0) return false;
+    let run: RunRecord | undefined;
+    try { run = this.context.store.getRun(runId); } catch { return false; }
+    return !!run && this.reclaiming.has(directoryRunId(run));
+  }
 
   /** Hold off every admission path until destructive work (including async Git) completes. */
   claimWorkerCleanup(runId: string): (() => void) | undefined {

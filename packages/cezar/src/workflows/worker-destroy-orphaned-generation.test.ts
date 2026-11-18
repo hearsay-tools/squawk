@@ -220,10 +220,10 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
     });
 
     it("tells the worker's workspace that the execution ended when it settles a crashed generation (hearsay-tools/squawk#3819)", async () => {
-      const w = await worker(); store.commitWorkerExecutionStart(w.id);
+      const w = await worker(); const generation = store.commitWorkerExecutionStart(w.id);
       setRunStatus(store, w.id, RUN_STATUS.failed);
       setController(w.id, { pid: await deadPid(), startToken: '1' });
-      const settle = vi.fn(async (_request: { run: { id: string }; repoRoot: string; dataDir: string }) => {});
+      const settle = vi.fn(async (_request: { run: { id: string }; repoRoot: string; dataDir: string; generation: string }) => {});
       const orphans = new WorkerOrphans({ createRunner: noRunners, home: testHome(), store, repoRoot: root, dataDir: join(root, '.ai/cezar'),
         semaphore: new WorkspaceSemaphore({ home: testHome() }), work: fixtureWork(root), disposed: () => false }, {
         holds: () => false, reapTerminalScratch: () => {},
@@ -235,7 +235,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         expect(orphans.settleOrphanedWorkerExecution(w.id)).toBe(true);
         expect(store.readWorkerExecution(w.id)?.phase).toBe('complete');
         expect(settle).toHaveBeenCalledTimes(1);
-        expect(settle.mock.calls[0]![0]).toMatchObject({ run: { id: w.id }, repoRoot: root, dataDir: join(root, '.ai/cezar') });
+        expect(settle.mock.calls[0]![0]).toMatchObject({ run: { id: w.id }, repoRoot: root, dataDir: join(root, '.ai/cezar'), generation });
         expect(orphans.settleOrphanedWorkerExecution(w.id)).toBe(false);
         expect(settle).toHaveBeenCalledTimes(1);
       } finally { orphans.dispose(); }

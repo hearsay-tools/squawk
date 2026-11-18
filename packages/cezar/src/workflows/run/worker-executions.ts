@@ -72,7 +72,7 @@ export class WorkerExecutions {
     await Promise.allSettled([...execution.sessions]);
     await Promise.allSettled([...execution.turns]);
     await Promise.allSettled([...execution.deliveries]);
-    await this.settleWorkspace(runId);
+    await this.settleWorkspace(runId, execution.generation);
     // Every wrapper settles after runner result, workflow and final filesystem work.
     // A disposed manager cannot attest to the recovered generation's state.
     if (!this.context.disposed()) {
@@ -90,13 +90,13 @@ export class WorkerExecutions {
   }
 
   /** Tell the worker's workspace that this execution ended, before it is recorded complete. */
-  private async settleWorkspace(runId: string): Promise<void> {
+  private async settleWorkspace(runId: string, generation: string): Promise<void> {
     const port = this.host.workerWorkspaces();
     if (!port || this.context.disposed()) return;
     let run;
     try { run = this.context.store.getRun(runId); } catch { return; }
     if (run?.delegation?.role !== 'worker') return;
-    await port.settle({ repoRoot: this.context.repoRoot, dataDir: this.context.dataDir, run }).catch(() => undefined);
+    await port.settle({ repoRoot: this.context.repoRoot, dataDir: this.context.dataDir, run, generation }).catch(() => undefined);
   }
 
   /** Capture every returned process result before setup can throw. A setup

@@ -4,12 +4,12 @@ import type { WorkerChangeReport, WorkerDestroy, WorkerDestroyResult, WorkerDiff
 import { ownedWorkspace, type WORKSPACE_CHOICES } from '@open-mercato/cezar-contract/delegation';
 import { runGit } from '../git-command.ts';
 import type { RunRecord } from '../runs/store.ts';
-import type { WorkerWorkspaceOpened, WorkerWorkspacePort, WorkerWorkspaceRequest } from '../workflows/run/worker-workspace-port.ts';
+import type { WorkerSettlement, WorkerWorkspaceOpened, WorkerWorkspacePort, WorkerWorkspaceRequest } from '../workflows/run/worker-workspace-port.ts';
 import { placeWorkerAttachments, prepareWorkerContext, verifyWorkerContext } from './context.ts';
 import { DelegationPolicyError } from './policy.ts';
 import { SHARED_NO_DIFF, planSharedWorkspace, readSharedHead, sharedContextSources, verifySharedContext, verifySharedWorkspace } from './shared-workspace.ts';
 import { ensureOwnedWorkspace, planOwnedWorkspace, readOwnedDiff, verifyOwnedWorkspace } from './workspace.ts';
-import { clearWorkspaceEnd, recordWorkspaceEnd, recordWorkspaceStart, workspaceChangeReport } from './workspace-state.ts';
+import { clearWorkspaceEnds, recordWorkspaceEnd, recordWorkspaceStart, workspaceChangeReport, type WorkspaceReportTarget } from './workspace-state.ts';
 
 export type WorkspaceResource = Exclude<WorkerDestroy['remaining'][number], 'process'>;
 
@@ -40,17 +40,17 @@ export interface WorkspaceKind {
   openForLaunch(request: WorkerWorkspaceRequest & { firstLaunch: boolean }): Promise<WorkerWorkspaceOpened>;
   /** The verified directory a Continue runs in. Never creates or replaces it. */
   openForContinue(request: WorkerWorkspaceRequest): Promise<string>;
-  /** The worker's execution ended; called before it is recorded complete. Never throws. */
-  settle(request: Omit<WorkerWorkspaceRequest, 'parentCwd'>): Promise<void>;
+  /** The worker's execution `generation` ended. */
+  settle(request: WorkerSettlement): Promise<void>;
   /** Throws, naming what is gone, when a fresh session could not restart from the workspace. */
   assertResumable(repoRoot: string, run: RunRecord): Promise<void>;
   /** The commit the verified workspace is at. */
   readHead(repoRoot: string, run: RunRecord): Promise<string>;
   readDiff(repoRoot: string, run: RunRecord): Promise<WorkerDiff>;
-  /** Whether the workspace's directory changed during the worker's run; `settled` says that its
-   *  execution ended. Undefined for a kind whose worker has the directory to itself: its diff says
+  /** Whether the workspace's directory changed during the worker's run; `target` names its current
+   *  execution and says whether that ended. Undefined for a kind whose worker has the directory to itself: its diff says
    *  what it changed. */
-  changeReport(dataDir: string, run: RunRecord, settled: boolean): Promise<WorkerChangeReport | undefined>;
+  changeReport(dataDir: string, run: RunRecord, target: WorkspaceReportTarget): Promise<WorkerChangeReport | undefined>;
   /** Runs `config`, the project's `worktreeTeardown` value, before a destroy. Returns why it failed, if it did. */
   teardown(repoRoot: string, config: unknown, workspace: WorkerWorkspace): Promise<string | undefined>;
   /** Removes the workspace's resources and reports the ones that remain. */
@@ -122,23 +122,23 @@ const shared: WorkspaceKind = {
     await verifySharedContext({ repoRoot, dataDir, parentId: delegation.parentRunId, workspace, context: delegation.context });
     // A failed read leaves no start state: the change report then says it is unavailable.
     if (firstLaunch) await recordWorkspaceStart(dataDir, run.id, workspace.path).catch(() => undefined);
-    await clearWorkspaceEnd(dataDir, run.id);
+    await clearWorkspaceEnds(dataDir, run.id);
     return { path: workspace.path, baseBranch: workspace.baselineSha };
   },
   async openForContinue({ repoRoot, dataDir, run }) {
     const workspace = await verifySharedWorkspace(repoRoot, run);
     const delegation = workerDelegation(run);
     await verifySharedContext({ repoRoot, dataDir, parentId: delegation.parentRunId, workspace, context: delegation.context });
-    await clearWorkspaceEnd(dataDir, run.id);
+    await clearWorkspaceEnds(dataDir, run.id);
     return workspace.path;
   },
-  async settle({ dataDir, run }) {
-    await recordWorkspaceEnd(dataDir, run.id, workerDelegation(run).workspace.path).catch(() => undefined);
+  async settle({ dataDir, run, generation }) {
+    await recordWorkspaceEnd(dataDir, run.id, workerDelegation(run).workspace.path, generation).catch(() => undefined);
   },
   async assertResumable(repoRoot, run) { await verifySharedWorkspace(repoRoot, run); },
   readHead: readSharedHead,
   async readDiff() { throw new DelegationPolicyError('unavailable_diff', SHARED_NO_DIFF); },
-  async changeReport(dataDir, run, settled) { return workspaceChangeReport(dataDir, run.id, workerDelegation(run).workspace.path, settled); },
+  async changeReport(dataDir, run, target) { return workspaceChangeReport(dataDir, run.id, workerDelegation(run).workspace.path, target); },
   async teardown() { return undefined; },
   async remove(_repoRoot, workspace) { return { workerId: workspace.ownerRunId, state: 'complete', deleted: [], remaining: [] }; },
 };

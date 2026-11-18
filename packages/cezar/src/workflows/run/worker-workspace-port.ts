@@ -3,6 +3,9 @@ import type { RunRecord } from '../../runs/store.ts';
 /** One worker run and where its files live. `parentCwd` is the directory its parent works in. */
 export type WorkerWorkspaceRequest = { repoRoot: string; dataDir: string; run: RunRecord; parentCwd: string };
 
+/** One ended execution of a worker run: `generation` is the id of that execution. */
+export type WorkerSettlement = { repoRoot: string; dataDir: string; run: RunRecord; generation: string };
+
 /** Where a launch runs. `branch` is the workspace's own branch; a workspace without one leaves it out. */
 export type WorkerWorkspaceOpened = { path: string; branch?: string; baseBranch: string };
 
@@ -13,8 +16,8 @@ export interface WorkerWorkspacePort {
   openForLaunch(request: WorkerWorkspaceRequest & { firstLaunch: boolean }): Promise<WorkerWorkspaceOpened>;
   /** The verified directory a Continue runs in. Never creates or replaces it. */
   openForContinue(request: WorkerWorkspaceRequest): Promise<string>;
-  /** The worker's execution ended; called before it is recorded complete. Never throws. */
-  settle(request: Omit<WorkerWorkspaceRequest, 'parentCwd'>): Promise<void>;
+  /** The worker's execution `generation` ended. Never throws. */
+  settle(request: WorkerSettlement): Promise<void>;
 }
 
 /** A worker run with no registered port has no workspace: the caller fails the run. */

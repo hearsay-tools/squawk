@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -58,17 +58,18 @@ describe('the shared workspace kind', () => {
     expect(git(host, 'status', '--porcelain')).toBe('');
   });
 
-  it('records the end state at settlement, and drops it when the next session opens', async () => {
+  it('records the end state of one execution at settlement, and drops it when the next session opens', async () => {
     const run = await workerRun();
+    const endFiles = () => readdirSync(join(dataDir, 'runs', `${workerId}-images`)).filter(name => name.startsWith('worker-workspace-end.'));
     await shared.openForLaunch({ ...request(run), firstLaunch: true });
-    expect(await shared.changeReport(dataDir, run, false)).toEqual({ state: 'unchanged' });
+    expect(await shared.changeReport(dataDir, run, { generation: 'g1', settled: false })).toEqual({ state: 'unchanged' });
     writeFileSync(join(host, 'written.txt'), 'x\n');
-    await shared.settle(request(run));
-    expect(existsSync(dataFile('worker-workspace-end.json'))).toBe(true);
-    expect(await shared.changeReport(dataDir, run, true)).toMatchObject({ state: 'changed', paths: ['written.txt'] });
+    await shared.settle({ ...request(run), generation: 'g1' });
+    expect(endFiles()).toHaveLength(1);
+    expect(await shared.changeReport(dataDir, run, { generation: 'g1', settled: true })).toMatchObject({ state: 'changed', paths: ['written.txt'] });
+    expect(await shared.changeReport(dataDir, run, { generation: 'g2', settled: true })).toEqual({ state: 'unavailable', reason: 'no workspace state was recorded when the worker settled' });
     await shared.openForContinue(request(run));
-    expect(existsSync(dataFile('worker-workspace-end.json'))).toBe(false);
-    expect(await shared.changeReport(dataDir, run, true)).toEqual({ state: 'unavailable', reason: 'no workspace state was recorded when the worker settled' });
+    expect(endFiles()).toEqual([]);
   });
 
   it('refuses a launch once the destroy began', async () => {

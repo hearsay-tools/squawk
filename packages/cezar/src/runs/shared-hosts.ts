@@ -5,6 +5,12 @@ import type { RunRecord } from './store.ts';
 /** What a refused removal of a hosting run's directory says. */
 export const SHARED_HOST_REFUSAL = 'a worker runs in this task\'s worktree — stop it or clean it up first';
 
+/** The run whose directory `run` works in: itself, or the host its workspace record names. A claim
+ *  on that run's directory holds `run` off, and `run` being live holds that claim off. */
+export function directoryRunId(run: RunRecord): string {
+  return run.delegation?.role === 'worker' && !ownsDirectory(run.delegation.workspace) ? run.delegation.workspace.hostRunId : run.id;
+}
+
 /**
  * Whether a live worker works in `run`'s directory: one whose workspace record names `run` as its
  * host (`hostRunId`) and that is queued, running, waiting or mid-destroy. Every path that removes
@@ -16,5 +22,5 @@ export function hostsLiveSharedWorker(run: RunRecord, workersOf: (rootId: string
   if (run.delegation?.role !== 'root' && run.delegation?.role !== 'worker') return false;
   const rootId = run.delegation.role === 'worker' ? run.delegation.parentRunId : run.id;
   return workersOf(rootId).some(worker => worker.delegation?.role === 'worker' && !ownsDirectory(worker.delegation.workspace) &&
-    worker.delegation.workspace.hostRunId === run.id && isLiveRecord(worker));
+    directoryRunId(worker) === run.id && isLiveRecord(worker));
 }

@@ -34,7 +34,7 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
   const { lastExecutionOutcome, settled } = executionOutcome(store, run);
   const head = await readWorkerHead(repoRoot, run, previous, workspaceRemoved);
   const { diff, diffSnapshot } = await readWorkerDiff(repoRoot, store, run, delegation, { destroyed, workspaceRemoved });
-  const changes = await workspaceKindOf(run).changeReport(store.sourceDataDir(run.id), run, settled);
+  const changes = await readWorkspaceChanges(store, run, settled);
   const artifacts = await listWorkerArtifacts(store.sourceDataDir(run.id), run, delegation, allEvents);
   return { result: {
     workerId: run.id, parentRunId: delegation.parentRunId, revision: workerRevision(run), observedAt: new Date().toISOString(),
@@ -43,8 +43,14 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
     ...(run.error ? { error: run.error.slice(0, 2000) } : {}),
     ...(run.runner ? { backend: run.runner } : {}), ...(run.model ? { model: run.model } : {}),
     baselineSha: delegation.workspace.baselineSha, workspace: { ...delegation.workspace, state: workspaceRemoved ? 'deleted' : head.state === 'available' ? 'available' : 'unavailable' }, cleanup: delegation.destroy?.phase ?? 'retained',
-    summary, head, diff, ...(changes ? { changes } : {}), artifacts,
+    summary, head, diff, ...changes, artifacts,
   }, ...(diffSnapshot === undefined ? {} : { diffSnapshot }) };
+}
+
+/** The kind's report of what changed in the workspace's directory, for the worker's current execution. */
+async function readWorkspaceChanges(store: RunStore, run: RunRecord, settled: boolean): Promise<Pick<WorkerCollectedResult, 'changes'>> {
+  const changes = await workspaceKindOf(run).changeReport(store.sourceDataDir(run.id), run, { generation: store.readWorkerExecution(run.id)?.generation, settled });
+  return changes ? { changes } : {};
 }
 
 /** The newest non-blank top-level assistant text of this execution, bounded to 4000 characters. */

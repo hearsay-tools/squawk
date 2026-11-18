@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { SHARED_ATTACH_REFUSAL, SHARED_BASELINE_REFUSAL } from '@open-mercato/cezar-contract/delegation';
@@ -263,10 +263,42 @@ describe('a worker in a shared workspace (hearsay-tools/squawk#3819)', { timeout
     release?.();
   });
 
+  it('refuses a Continue of the shared worker while its host\'s worktree is claimed for a reclaim, and admits it after the release', async () => {
+    const { workerId } = await f.service.spawn(f.caller, shared());
+    await runSession(workerId);
+    setRunStatus(f.store, f.parent.id, RUN_STATUS.failed, { finishedAt: new Date().toISOString() });
+    const release = f.manager.claimWorktreeReclaim(f.parent.id);
+    expect(release).toEqual(expect.any(Function));
+    expect(f.manager.continueRun(workerId, { text: 'again' })).toEqual({ ok: false, error: 'its worktree or branch is being cleaned up — retry in a moment' });
+    expect(worker(workerId).status).not.toBe(RUN_STATUS.running);
+    expect(sessions).toHaveLength(1);
+    release?.();
+    expect(f.manager.continueRun(workerId, { text: 'again' })).toMatchObject({ ok: true });
+    await until(() => sessions.length === 2);
+    expect(f.manager.claimWorktreeReclaim(f.parent.id)).toBeNull();
+  });
+
+  it('holds a shared worker\'s first launch while its host\'s worktree is claimed, and launches it after the release', async () => {
+    const release = f.manager.claimForPublish(f.parent.id);
+    expect(release).toEqual(expect.any(Function));
+    const { workerId } = await f.service.spawn(f.caller, shared());
+    // The line was pumped with capacity free: only the claim on the host keeps the worker in it.
+    await f.releaseAdmission();
+    expect(worker(workerId).status).toBe(RUN_STATUS.queued);
+    expect(sessions).toHaveLength(0);
+    release?.();
+    await f.holdAdmission(); await f.releaseAdmission();
+    await until(() => sessions.length === 1);
+    expect(sessions[0]!.spec.cwd).toBe(host);
+  });
+
   it('gives a settled worker no report when its end state is missing, instead of comparing with later edits', async () => {
     const { workerId } = await f.service.spawn(f.caller, shared());
     await runSession(workerId);
-    rmSync(join(f.root, '.ai/cezar/runs', `${workerId}-images`, 'worker-workspace-end.json'));
+    const files = join(f.root, '.ai/cezar/runs', `${workerId}-images`);
+    const ends = readdirSync(files).filter(name => name.startsWith('worker-workspace-end.'));
+    expect(ends).toHaveLength(1);
+    rmSync(join(files, ends[0]!));
     writeFileSync(join(host, 'edited-after-the-worker-ended.txt'), 'x\n');
     expect((await f.service.collect(f.caller, { workerId })).changes).toEqual({ state: 'unavailable', reason: 'no workspace state was recorded when the worker settled' });
   });
