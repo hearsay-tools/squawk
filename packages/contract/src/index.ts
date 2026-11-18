@@ -11,6 +11,7 @@ export * from './health.ts';
 export * from './runner-facts.ts';
 export { removedRunnerLabel, removedRunnerMessage } from './runner.ts';
 export * from './runs.ts';
+export * from './queued-messages.ts';
 export * from './task-options.ts';
 export * from './run-labels.ts';
 export * from './run-limits.ts';
