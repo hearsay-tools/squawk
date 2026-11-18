@@ -67,11 +67,11 @@ export const SHARED_WORKSPACE_REFUSAL = 'this worker runs in its parent\'s workt
  * have itself, and the grant each worker it starts gets. No `children` means its workers may spawn
  * nothing. Absent on a stored record, the grant is the default of the record's role.
  */
-export const spawnGrantSchema = z.object({
+export const spawnGrantSchema = z.strictObject({
   kinds: z.array(z.enum(['owned-isolated', 'shared'])).max(2).refine(kinds => new Set(kinds).size === kinds.length),
   live: z.number().int().min(0).max(32),
   get children() { return spawnGrantSchema.optional(); },
-}).strict();
+});
 export type SpawnGrant = z.infer<typeof spawnGrantSchema>;
 
 export const workerOutcomeSchema = z.object({
