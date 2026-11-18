@@ -31,7 +31,7 @@ vi.mock('./worktree-teardown.ts', () => ({
 const runGit = vi.hoisted(() => vi.fn());
 vi.mock('../git-command.ts', () => ({ runGit }));
 
-const { DEFAULT_WORKSPACE_CHOICE, workerWorkspacePort, workspaceKind, workspaceKindOf, workspaceKinds } = await import('./workspace-kinds.ts');
+const { workerWorkspacePort, workspaceKind, workspaceKindOf, workspaceKinds } = await import('./workspace-kinds.ts');
 const isolated = workspaceKinds['owned-isolated'];
 
 beforeEach(() => { calls.length = 0; runGit.mockReset(); });
@@ -39,7 +39,6 @@ beforeEach(() => { calls.length = 0; runGit.mockReset(); });
 describe('the workspace kind table', () => {
   it('has one definition for each kind a workspace record can name', () => {
     expect(Object.keys(workspaceKinds)).toEqual(['owned-isolated', 'shared']);
-    expect(DEFAULT_WORKSPACE_CHOICE).toBe('isolated');
   });
 
   it('returns the definition a workspace record or a worker run names', () => {

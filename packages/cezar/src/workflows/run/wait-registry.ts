@@ -5,7 +5,7 @@ import { workerWaitRequestSchema, type WorkerWait } from '@open-mercato/cezar-co
 import { requestWaitRequestSchema, type RequestWaitRequest } from '@open-mercato/cezar-contract/conversations';
 import { workerWaitEntryToLegacy } from '@open-mercato/cezar-contract/waits';
 import { DelegationPolicyError, requireMessagingAllowed } from '../../delegation/policy.ts';
-import { supervisedByFamilyRecord, supervisedReceipts, familyRecordOf } from '../../runs/task-rights.ts';
+import { supervisedByFamilyRecord, supervisorIdOf } from '../../runs/task-rights.ts';
 import { historyDeletionPending, rootFinishRequested, executionBlockedByRootFinish } from './run-guards.ts';
 import { assertOwnedWorkerWaitScope, assertRequestWaitScope, peerWaitEntry, peerWaitOf, waitCapacityPolicyError, workerWaitTarget } from '../wait-scope.ts';
 import { randomUUID } from 'node:crypto';
@@ -106,9 +106,7 @@ export class WaitRegistry {
   registerCompletionWait(runId: string, workerIds: string[], requestIds?: string[]): WorkerWaitEntry | undefined {
     if (!this.host.waitEngine.hasRoom(this.context.store.getRun(runId) ?? {})) return;
     const state = this.host.active(runId)!;
-    const getRun = (id: string) => this.context.store.getRun(id);
-    const started = new Set(supervisedReceipts(familyRecordOf(getRun(runId), getRun), runId).map(receipt => receipt.workerId));
-    const ids = workerIds.filter(id => started.has(id) && getRun(id)?.delegation?.role === 'worker');
+    const ids = workerIds.filter(id => supervisorIdOf(this.context.store.getRun(id)) === runId);
     const entry = WAIT_KINDS.worker.completionEntry(state.waitIdentity.ensureCiTurn(),
       workerWaitTarget(requestIds?.length ? { requestIds } : { workerIds: ids }, id => this.context.store.getRun(id)));
     return this.host.waitEngine.open(runId, state, entry, { withdraw: false, park: false }).wait!;

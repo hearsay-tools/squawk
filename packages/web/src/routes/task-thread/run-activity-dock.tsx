@@ -30,7 +30,7 @@ import { AgentList } from './agents-dock'
 import { PlanList, planCounts } from './plan-dock'
 import { collectSubagents, subagentCounts } from './subagent-dock'
 import { StepRail, activeStepIndex, railSteps, railVisual } from './step-rail'
-import { Cleanup, WorkerActivitySection, WorkerWaitDetails, hasCleanupDetails, hasWorkerWaitDetails, useWorkersVerdict, type WorkersVerdict } from './run-relationships'
+import { Cleanup, WorkerActivitySection, listsWorkers, WorkerWaitDetails, hasCleanupDetails, hasWorkerWaitDetails, useWorkersVerdict, type WorkersVerdict } from './run-relationships'
 import { ActivityRow, meterText } from './run-activity-row'
 import { ActivitySummary, type SummaryItem } from './activity-summary'
 import { ActivityReferences } from './activity-references'
@@ -464,9 +464,10 @@ function SubagentsSection({
   )
 }
 
-/** Only roots own workers. A worker's parent link is always visible in the task header. */
+/** A root lists its family; a worker that may start a worker lists the ones it started. A worker's
+ *  parent link is always visible in the task header. */
 function WorkersSection({ run, open, onToggle }: { run: ApiRun } & SectionDisclosure) {
-  if (run.delegation?.role !== 'root') return null
+  if (!listsWorkers(run)) return null
   return <WorkerActivitySection run={run} open={open} onToggle={onToggle} />
 }
 

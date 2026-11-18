@@ -24,6 +24,12 @@ import { ownsDirectory } from '@open-mercato/cezar-api-client/contract/delegatio
 type Delegation = NonNullable<ApiRun['delegation']>
 type DelegationWait = NonNullable<Exclude<Delegation, { role: 'invalid' }>['wait']> | WorkerCompletionWait
 
+/** Whether the run's page has a Workers section: a root, and a worker that holds a spawn grant. */
+export function listsWorkers(run: ApiRun): boolean {
+  const metadata = run.delegation
+  return metadata?.role === 'root' || (metadata?.role === 'worker' && !!metadata.spawnGrant?.kinds.length)
+}
+
 /** The worker ids this run is known to link, newest receipts first — the durable list that survives a
  *  failed or offline relationships lookup (a fetched-only list would blink the links away). */
 function workerIdsOf(metadata: Delegation | undefined, data: RunRelationships | undefined): string[] {
@@ -99,6 +105,9 @@ export function WorkerActivitySection({ run, open, onToggle }: { run: ApiRun; op
   // has no deadline, comes first, as it did from `delegation.wait` (hearsay-tools/cezarion#1301).
   const wait = completionWaitView(run) ?? workerWaitView(run)
   const dependencyLabel = wait ? workerDependencyLabel(run, wait) : undefined
+  // The run list carries only the newest archived runs (#864); the answer names the rest.
+  const recordOf = (id: string) => runs.data?.find(candidate => candidate.id === id) ?? query.data?.titles?.find(candidate => candidate.id === id)
+  const titleOf = (id: string) => { const record = recordOf(id); return record ? runTitle(record) : `worker ${id.slice(0, 8)}` }
   return (
     <ActivityRow
       slot="workers"
@@ -117,8 +126,7 @@ export function WorkerActivitySection({ run, open, onToggle }: { run: ApiRun; op
           <ul className="grid max-h-64 min-w-0 gap-0.5 overflow-y-auto">
             {ids.map(id => {
               const worker = workers.get(id)
-              // The run list carries only the newest archived runs (#864); the answer names the rest.
-              const record = runs.data?.find(candidate => candidate.id === id) ?? query.data?.titles?.find(candidate => candidate.id === id)
+              const record = recordOf(id)
               const status = worker ? workerStatusLabel(worker.status) : query.isSuccess ? 'Record unavailable or deleted' : 'Status unavailable'
               return (
                 <li key={id} data-slot="worker-item" data-status={worker?.status} className="min-w-0">
@@ -128,7 +136,10 @@ export function WorkerActivitySection({ run, open, onToggle }: { run: ApiRun; op
                     className="group flex min-h-11 min-w-0 items-center gap-2.5 rounded-md px-1 text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <WorkerGlyph status={worker?.status} />
-                    <span className="min-w-0 flex-1 truncate">{record ? runTitle(record) : `Worker ${id.slice(0, 8)}`}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{record ? runTitle(record) : `Worker ${id.slice(0, 8)}`}</span>
+                      {worker?.supervisorRunId ? <span data-slot="worker-supervisor" className="block truncate text-xs text-muted-foreground">Started by {titleOf(worker.supervisorRunId)}</span> : null}
+                    </span>
                     <span className={cn('max-w-[45%] shrink-0 truncate text-xs', statusTone(worker?.status))}>{status}</span>
                     <ArrowUpRightIcon aria-hidden className="size-3.5 shrink-0 text-soft-foreground" />
                   </Link>
@@ -138,7 +149,7 @@ export function WorkerActivitySection({ run, open, onToggle }: { run: ApiRun; op
               )
             })}
           </ul>
-        ) : metadata?.role === 'root' && query.isSuccess ? <p className="px-1 py-1">No workers</p> : null}
+        ) : query.isSuccess ? <p className="px-1 py-1">No workers</p> : null}
         {query.fetchStatus === 'paused' ? <p role="status" className="px-1 py-1">Offline — relationship details will refresh when connected.</p>
           : query.isPending ? <p role="status" className="px-1 py-1">Loading relationships…</p> : null}
         {query.isError ? <div className="flex flex-wrap items-center gap-2 px-1 py-1">

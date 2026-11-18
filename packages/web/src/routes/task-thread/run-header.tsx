@@ -171,14 +171,13 @@ function sessionKindLabel(delegation: ApiRun['delegation']): string {
   return delegation?.role === 'worker' ? 'Worker session' : delegation?.role === 'root' ? 'Parent session' : 'Task session'
 }
 
-/** A worker session links back to the parent run that spawned it — full-width under the title,
- *  compact inside the phone top bar (hearsay-tools/cezarion#621). */
+/** A worker session links back to the run that started it, its supervisor: the root task, or the
+ *  worker that started it. Full-width under the title, compact inside the phone top bar
+ *  (hearsay-tools/cezarion#621). */
 function WorkerParentLink({ run, compact = false }: { run: ApiRun; compact?: boolean }) {
-  return run.delegation?.role === 'worker'
-    ? compact
-      ? <CompactParentTaskLink id={run.delegation.parentRunId} />
-      : <ParentTaskLink id={run.delegation.parentRunId} />
-    : null
+  if (run.delegation?.role !== 'worker') return null
+  const id = run.delegation.supervisorRunId ?? run.delegation.parentRunId
+  return compact ? <CompactParentTaskLink id={id} /> : <ParentTaskLink id={id} />
 }
 
 /** #281: Archive out of the kebab row. The Session tab's composer carries it — within a

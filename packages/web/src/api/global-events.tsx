@@ -427,7 +427,7 @@ function createRelationshipsRefresher(queryClient: QueryClient): {
   onDeleted: (id: string) => void
   cancel: () => void
 } {
-  const seen = new Map<string, { shape: string; parentRunId?: string }>()
+  const seen = new Map<string, { shape: string; parentRunId?: string; supervisorRunId?: string }>()
   const pending = new Map<string, ReturnType<typeof setTimeout>>()
   /** `exact` keys refresh only when a reader has ever asked — an entry nobody holds has
    *  nothing to refetch. The prefix key of the family fallback matches nothing exactly. */
@@ -443,17 +443,20 @@ function createRelationshipsRefresher(queryClient: QueryClient): {
   return {
     onSummary(run, shape) {
       const parentRunId = run.delegation?.role === 'worker' ? run.delegation.parentRunId : undefined
+      // The worker that started this one lists it too: its Workers section refreshes with the root's.
+      const supervisorRunId = run.delegation?.role === 'worker' ? run.delegation.supervisorRunId : undefined
       const previous = seen.get(run.id)
-      seen.set(run.id, parentRunId === undefined ? { shape } : { shape, parentRunId })
+      seen.set(run.id, { shape, ...(parentRunId === undefined ? {} : { parentRunId }), ...(supervisorRunId === undefined ? {} : { supervisorRunId }) })
       if (previous?.shape === shape) return
       schedule(queryKeys.runs.relationships(run.id), true)
-      if (parentRunId !== undefined) schedule(queryKeys.runs.relationships(parentRunId), true)
+      for (const id of [parentRunId, supervisorRunId]) if (id !== undefined) schedule(queryKeys.runs.relationships(id), true)
     },
     onDeleted(id) {
       const previous = seen.get(id)
       seen.delete(id)
       // Gone server-side, like its detail and diff below: a reader left on it gets the 404.
       queryClient.removeQueries({ queryKey: queryKeys.runs.relationships(id) })
+      if (previous?.supervisorRunId !== undefined) schedule(queryKeys.runs.relationships(previous.supervisorRunId), true)
       if (previous?.parentRunId !== undefined) schedule(queryKeys.runs.relationships(previous.parentRunId), true)
       else schedule([...queryKeys.runs.all, 'relationships'], false)
     },
