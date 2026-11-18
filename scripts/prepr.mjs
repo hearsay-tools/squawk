@@ -105,7 +105,10 @@ export async function squealChecks(paths, waitMs, io = realIo) {
   try { status = JSON.parse(wait.out); } catch { status = undefined; }
   if (wait.code === 127) return { daemon: false };
   // Output that is not Squeal's JSON (a timeout kill, a crash) is an unknown result, not an absent daemon.
-  if (status === undefined) return { daemon: true, state: 'unreadable', exit: wait.code, output: tail(wait.out + wait.err, 5) };
+  if (status === undefined) {
+    const lint = { failing: 0, unfinished: 0, unavailable: 'squeal status was unreadable' };
+    return { daemon: true, state: 'unreadable', exit: wait.code, output: tail(wait.out + wait.err, 5), lint };
+  }
   if (!daemonAlive(status)) return { daemon: false };
   return { daemon: true, ...judgeSqueal(wait.code, status, ignore, lintExpected) };
 }

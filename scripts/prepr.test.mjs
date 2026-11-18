@@ -524,3 +524,11 @@ test('a failing Squeal result still names the files with no result and the unmat
   const lintFail = judgeSqueal(0, status([file('c.test.ts', 'pending')], { lint: { failing: 2 } }));
   assert.match(squealLines(lintFail, 1000).map(l => l.text).join('\n'), /2 lint finding[^]*for: c\.test\.ts/);
 });
+
+test('prepr reports an unreadable squeal status and runs npm run lint for the unknown lint result', async () => {
+  const io = fakeIo({ responses: { squeal: { code: 143, out: 'not json', err: 'killed' } } });
+  const r = await prepr({ io, waitMs: 1000 });
+  assert.equal(r.failed, true);
+  assert.match(r.report, /- FAIL: Squeal: `squeal status --wait` exited 143 without a readable result/);
+  assert.match(r.report, /- pass: lint: Squeal's lint is unavailable \(squeal status was unreadable\), so prepr ran `npm run lint`/);
+});
