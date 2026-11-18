@@ -12,12 +12,13 @@ import * as workerOutcome from './worker-outcome.ts';
  * value as the same binding.
  */
 describe('the modules split from delegation.ts and waits.ts', () => {
+  // Named keys: the title formats only the file names, never a module namespace.
   it.each([
-    ['delegation.ts', delegation, 'agent-input.ts', agentInput],
-    ['delegation.ts', delegation, 'worker-outcome.ts', workerOutcome],
-    ['waits.ts', waits, 'wait-limits.ts', waitLimits],
-    ['waits.ts', waits, 'waiting-on.ts', waitingOn],
-  ] as const)('%s re-exports every value of %s', (_old, oldModule, _moved, movedModule) => {
+    { old: 'delegation.ts', moved: 'agent-input.ts', oldModule: delegation, movedModule: agentInput },
+    { old: 'delegation.ts', moved: 'worker-outcome.ts', oldModule: delegation, movedModule: workerOutcome },
+    { old: 'waits.ts', moved: 'wait-limits.ts', oldModule: waits, movedModule: waitLimits },
+    { old: 'waits.ts', moved: 'waiting-on.ts', oldModule: waits, movedModule: waitingOn },
+  ])('$old re-exports every value of $moved', ({ oldModule, movedModule }) => {
     expect(Object.keys(movedModule).length).toBeGreaterThan(0);
     for (const [name, value] of Object.entries(movedModule)) expect((oldModule as Record<string, unknown>)[name], name).toBe(value);
   });
