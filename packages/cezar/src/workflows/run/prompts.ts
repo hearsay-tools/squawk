@@ -1,5 +1,6 @@
 import type { RunRecord } from '../../runs/store.ts';
 import { productName } from '../../home/display.ts';
+import { cutOffSentence } from './cut-off-work.ts';
 
 /**
  * The effective "extra" system prompt for a run (spec §protocol v2, R2 2.3):
@@ -56,6 +57,8 @@ export function resumeNotice(message: RunRecord['continuationMessage']): string 
     parts.push(`The previous ${stepId ? `step ${JSON.stringify(stepId)}` : 'turn'} failed: ${error.replace(/[\r\n\u2028\u2029]+/g, ' ')}`);
   }
   parts.push('The previous agent process stopped. Subagents it started stopped with it. Shell commands it started may have stopped. Check their state before you wait on them or restart them.');
+  const cutOff = cutOffSentence(context.cutOff);
+  if (cutOff) parts.push(cutOff);
   return parts.join(' ');
 }
 

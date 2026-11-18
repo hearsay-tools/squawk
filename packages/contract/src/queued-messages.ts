@@ -25,5 +25,10 @@ export const continuationMessageSchema = queuedMessageSchema.extend({
   resumeContext: z.object({
     failure: z.object({ stepId: z.string().optional(), error: z.string() }).optional(),
     restarted: z.literal(true).optional(),
+    /** What the restart cut off, named from the run's event log (hearsay-tools/squawk#3909). */
+    cutOff: z.object({
+      tools: z.array(z.string()).max(6).optional(),
+      subagents: z.array(z.string()).max(6).optional(),
+    }).optional(),
   }).optional(),
 });

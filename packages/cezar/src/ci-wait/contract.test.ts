@@ -226,7 +226,8 @@ it('cezar_wait advertises the process fields and tells the agent how to write th
   expect(description).toContain('`hsq job start <name> -- <command> [args...]` (your instructions give the full command for this session under "Long commands")');
   expect(description).toContain('pass the `pid` and `exitFile` it prints as `pid` and `exit_file`');
   expect(description).toContain(`the job outlives this session; ${productName('Cezar')} does not stop it.`);
-  expect(description).toContain(`Its files are in $TMPDIR, the task's temp directory, which ${productName('Cezar')} keeps after the task ends while a job in it runs, so \`hsq job status <name>\` still finds the job after a Continue.`);
+  expect(description).toContain(`Its files are in $TMPDIR, the task's temp directory, which ${productName('Cezar')} keeps across its own restart and, after the task ends, while a job in it runs, so \`hsq job status <name>\` still finds the job after a Continue.`);
+  expect(description).toContain('For files that must outlive the task, pass `--dir` with a directory you keep; a process wait accepts that job\'s `exitFile` too.');
   expect(description).toContain('Do not start a long command with `&`, `nohup`, `setsid` or your own background-task tool');
   // An agent whose batch wrote its exit file outside $TMPDIR started a watcher to copy it in.
   expect(description).toContain('For a command that is already running, or that writes its own status file somewhere else, pass only its `pid` and leave `exit_file` out.');
