@@ -8,6 +8,8 @@ import { attached, rememberReadiness, rememberRoute, rememberViewport } from './
 export { lastAttachedBrowser } from './browser-page'
 import { visualSampleExpression } from './visual-ready'
 import { clearField } from './clear-field'
+import { type FailureReason, layoutScript, probeScript } from './failure-probe'
+import { disabledStateExpression, type InteractOptions, interactableExpression, isCssSelector } from './interactable'
 import { tmpdirExceedsSocketBudget } from '../../../.ai/scripts/resolve-browser-launch.mjs'
 import { readTestEnvDescriptor } from '../../../.ai/scripts/test-env-inputs.mjs'
 import { defaultWaitTimeoutMs, pause, sameSample, summarize } from './wait-support'
@@ -114,14 +116,6 @@ function nextBundleDir(): string {
   }
 }
 
-
-type FailureReason =
-  | { kind: 'wait-selector'; action: 'click' | 'hover' | 'fill'; selector: string }
-  | { kind: 'wait-fn'; predicate: string }
-  | { kind: 'wait-enabled'; action: 'click' | 'fill'; selector: string; state: string }
-  | { kind: 'wait-value'; expression: string; lastValue: unknown; lastError?: string }
-  | { kind: 'test' }
-
 /**
  * What `waitForValue` throws when the matcher never passed. Carries the last sample so a helper
  * built on the primitive (`focusWithKeyboard`) can name what it saw — the element that took
@@ -155,164 +149,6 @@ export const OPEN_OVERLAY_PROBE = `(() => {
   }
   return null
 })()`
-
-/**
- * The in-page probe. Built as one expression so a single `eval` fetches everything, and
- * every branch is wrapped so a selector the CSS engine rejects (agent-browser also accepts
- * `text=` and `@ref`) records the rejection instead of failing the probe.
- *
- * A timed-out predicate is recorded in `probe.json`, never re-run here: specs put side effects
- * in predicates (`thread-scroll.e2e.ts` clicks a button inside one), and a capture that fired
- * them again would alter the session the spec's remaining tests share. The probe only reads.
- */
-function probeScript(reason: FailureReason): string {
-  const selector = reason.kind === 'wait-selector' || reason.kind === 'wait-enabled' ? JSON.stringify(reason.selector) : 'null'
-  return `(() => {
-    const path = (el) => {
-      const parts = []
-      for (let node = el; node && node.nodeType === 1 && parts.length < 12; node = node.parentElement) {
-        let part = node.tagName.toLowerCase()
-        if (node.id) part += '#' + node.id
-        else {
-          const cls = [...node.classList].slice(0, 3).join('.')
-          if (cls) part += '.' + cls
-          const parent = node.parentElement
-          if (parent) {
-            const siblings = [...parent.children].filter((c) => c.tagName === node.tagName)
-            if (siblings.length > 1) part += ':nth-of-type(' + (siblings.indexOf(node) + 1) + ')'
-          }
-        }
-        parts.unshift(part)
-      }
-      return parts.join(' > ')
-    }
-    const describe = (el) => {
-      const r = el.getBoundingClientRect()
-      const cs = getComputedStyle(el)
-      const cx = r.left + r.width / 2
-      const cy = r.top + r.height / 2
-      const under = document.elementFromPoint(cx, cy)
-      return {
-        path: path(el),
-        rect: { x: r.x, y: r.y, width: r.width, height: r.height },
-        inViewport: r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth,
-        style: {
-          display: cs.display, visibility: cs.visibility, opacity: cs.opacity,
-          pointerEvents: cs.pointerEvents, position: cs.position, zIndex: cs.zIndex,
-          transform: cs.transform, transition: cs.transition,
-        },
-        attributes: Object.fromEntries([...el.attributes].slice(0, 12).map((a) => [a.name, a.value.slice(0, 120)])),
-        text: (el.textContent || '').trim().slice(0, 120),
-        elementUnderCentre: under
-          ? { path: path(under), coversTarget: under !== el && !el.contains(under) }
-          : null,
-      }
-    }
-    const out = {
-      url: location.href,
-      title: document.title,
-      readyState: document.readyState,
-      viewport: { width: innerWidth, height: innerHeight, scrollX, scrollY },
-      activeElement: document.activeElement && document.activeElement !== document.body
-        ? describe(document.activeElement)
-        : null,
-      openDialogs: [...document.querySelectorAll('[role="dialog"], dialog[open]')].map(path),
-    }
-    const selector = ${selector}
-    if (selector !== null) {
-      try {
-        const nodes = [...document.querySelectorAll(selector)]
-        out.target = { count: nodes.length, matches: nodes.slice(0, 5).map(describe) }
-      } catch (error) {
-        out.target = { count: null, selectorError: String(error) }
-      }
-    }
-    return out
-  })()`
-}
-
-/** Options for `click` and `fill`. `allowDisabled` skips only the enabled check, for a spec
- *  that acts on a disabled control on purpose. */
-export interface InteractOptions {
-  allowDisabled?: boolean
-}
-
-/** Provider snapshot refs (`@e2`) and XPath (`//button`) are not CSS selectors. */
-function isCssSelector(selector: string): boolean {
-  return !selector.startsWith('@') && !selector.startsWith('/')
-}
-
-/** The disabled state `click` and `fill` wait out: the target matches `:disabled` (a disabled
- *  `<fieldset>` ancestor included), or the target itself has `aria-disabled="true"`. */
-const DISABLED_STATE = `target.matches(':disabled') ? 'disabled'
-      : target.getAttribute('aria-disabled') === 'true' ? 'aria-disabled="true"' : null`
-
-/** The `wait --fn` predicate of `click` and `fill`. False while the target is missing or, unless
- *  `allowDisabled`, disabled. Once it can act, it scrolls a target that is not fully inside the
- *  viewport to the centre, and leaves a fully visible target where it is, so a spec that
- *  measures scroll positions keeps its numbers. */
-export function interactableExpression(selector: string, options: InteractOptions = {}): string {
-  return `(() => {
-    const target = document.querySelector(${JSON.stringify(selector)});
-    if (!target) return false;
-    if (${!options.allowDisabled} && (${DISABLED_STATE}) !== null) return false;
-    const box = target.getBoundingClientRect();
-    if (box.top < 0 || box.left < 0 || box.bottom > innerHeight || box.right > innerWidth) {
-      target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
-    }
-    return true;
-  })()`
-}
-
-/** Names why `interactableExpression` stayed false, for the failure message. */
-export function disabledStateExpression(selector: string): string {
-  return `(() => {
-    const target = document.querySelector(${JSON.stringify(selector)});
-    if (!target) return 'detached';
-    return (${DISABLED_STATE}) ?? 'unknown';
-  })()`
-}
-
-/** Read-only geometry, sampled when the test asks, never by re-running its assertion. */
-function layoutScript(selectors: Record<string, string>): string {
-  return `(() => {
-    const rect = (el) => {
-      const r = el.getBoundingClientRect();
-      return { x: r.x, y: r.y, left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
-    };
-    const path = (el) => {
-      const parts = [];
-      for (let node = el; node && parts.length < 12; node = node.parentElement) {
-        parts.unshift(node.tagName.toLowerCase() + (node.id ? '#' + node.id : ''));
-        if (node.id) break;
-      }
-      return parts.join(' > ');
-    };
-    const clippingAncestor = (el) => {
-      for (let node = el.parentElement; node; node = node.parentElement) {
-        const style = getComputedStyle(node);
-        const axes = [];
-        if (/^(hidden|clip|scroll|auto)$/.test(style.overflowX)) axes.push('x');
-        if (/^(hidden|clip|scroll|auto)$/.test(style.overflowY)) axes.push('y');
-        if (axes.length) return { path: path(node), axes, rect: rect(node) };
-      }
-      return null;
-    };
-    const selectors = {};
-    for (const [name, selector] of Object.entries(${JSON.stringify(selectors)})) {
-      try {
-        const nodes = [...document.querySelectorAll(selector)];
-        selectors[name] = { selector, count: nodes.length, matches: nodes.map(el => ({
-          path: path(el), rect: rect(el),
-          scrollWidth: el.scrollWidth, clientWidth: el.clientWidth,
-          scrollHeight: el.scrollHeight, clientHeight: el.clientHeight,
-          clippingAncestor: clippingAncestor(el),
-        })) };
-      } catch (error) { selectors[name] = { selector, error: String(error) }; }
-    }
-    return { url: location.href, viewport: { width: innerWidth, height: innerHeight, scrollX, scrollY }, selectors };
-  })()`
-}
 
 type EnvDescriptor = {
   baseUrl: string

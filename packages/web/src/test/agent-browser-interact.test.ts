@@ -3,7 +3,8 @@ import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AgentBrowser, configureFailureCapture, interactableExpression, OPEN_OVERLAY_PROBE } from '../../e2e/agent-browser'
+import { AgentBrowser, configureFailureCapture, OPEN_OVERLAY_PROBE } from '../../e2e/agent-browser'
+import { interactableExpression } from '../../e2e/interactable'
 import { resetBrowserPage } from '../../e2e/browser-page'
 import * as testEnvInputs from '../../../../.ai/scripts/test-env-inputs.mjs'
 

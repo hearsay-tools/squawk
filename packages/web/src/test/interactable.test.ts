@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { disabledStateExpression, interactableExpression } from '../../e2e/agent-browser'
+import { disabledStateExpression, interactableExpression } from '../../e2e/interactable'
 
 /** Run the seam's page expressions in jsdom: the predicate `click` and `fill` wait on. */
 function mount(html: string): HTMLElement {
