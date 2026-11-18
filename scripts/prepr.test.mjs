@@ -479,3 +479,24 @@ test('prepr fails on a spec without a status line', async () => {
   assert.equal(r.failed, true);
   assert.match(r.report, /- FAIL: spec statuses\n\.ai\/specs\/2026-11-18-x\.md: no Status: line/);
 });
+
+test('a selection Squeal has not listed or synced is incomplete, even with current cached files', () => {
+  const unlisted = status([file('a.test.ts', 'current', 'pass')]);
+  unlisted.selection.verdict.unlisted = true;
+  const r = judgeSqueal(3, unlisted);
+  assert.equal(r.state, 'incomplete');
+  assert.match(r.missing[0], /test discovery: Squeal has not listed the test files of the current revision/);
+  for (const reason of ['unlisted', 'unsynced']) {
+    const none = status([file('a.test.ts', 'current', 'pass')]);
+    Object.assign(none.selection, { result: 'none', reason });
+    assert.equal(judgeSqueal(3, none).state, 'incomplete', reason);
+  }
+});
+
+test('prepr keeps the whole complexity report, so the function headline survives a long point list', async () => {
+  const points = Array.from({ length: 30 }, (_, i) => `  line ${i}: if`);
+  const report = ['1 changed function is over the complexity limit of 20:', '', 'scripts/x.mjs:3 grow: complexity 23 (was 18)', ...points].join('\n');
+  const io = fakeIo({ responses: { squeal: ok(live([], doneLint)), [`node ${GATE} --base`]: { code: 1, out: report, err: '' } } });
+  const r = await prepr({ io, waitMs: 1000 });
+  assert.match(r.report, /- FAIL: complexity\n1 changed function[^]*scripts\/x\.mjs:3 grow: complexity 23[^]*line 29: if/);
+});

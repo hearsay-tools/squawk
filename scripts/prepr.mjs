@@ -27,11 +27,20 @@ export function judgeSqueal(exitCode, status, ignorePath = () => false, lintExpe
   if (exitCode === 1 || failed.length || failures.tests || failures.testFiles || failures.setups) {
     return { state: 'fail', failed, missing: [], lint: lintOf(status, lintExpected) };
   }
-  const missing = [...files.filter(f => f.state !== 'current').map(f => f.path), ...unmatched.map(p => `${p} (selects no test file)`)];
+  const missing = missingResults(selection, files, unmatched);
   const lint = lintOf(status, lintExpected);
   if (lint.failing) return { state: 'fail', failed: [], missing, lint };
   // Lint that has not finished is not judged here: prepr runs `npm run lint` for it.
   return { state: missing.length ? 'incomplete' : 'pass', failed: [], missing, lint, count: files.length };
+}
+
+/** What has no result yet: test discovery, test files that are not current, and paths that select no test. */
+function missingResults(selection, files, unmatched) {
+  // Before Squeal lists the revision's test files, current cached files are not the whole selection.
+  const unlisted = selection.verdict?.unlisted === true || (selection.result === 'none' && ['unlisted', 'unsynced'].includes(selection.reason));
+  return [
+    ...(unlisted ? [`test discovery: Squeal has not listed the test files of the current revision (${selection.reason ?? 'unlisted'})`] : []),
+    ...files.filter(f => f.state !== 'current').map(f => f.path), ...unmatched.map(p => `${p} (selects no test file)`)];
 }
 
 // lintExpected: a changed file is one Squeal lints, so a lint run that has not started is not a clean one.
@@ -112,7 +121,7 @@ export async function focusedTests(base, io = realIo) {
   return io.run('node', ['scripts/test-changed.mjs', baseArg]);
 }
 
-const detail = r => (r.code ? `\n${tail(r.out + r.err)}` : '');
+const detail = r => (r.code ? `\n${r.whole ? (r.out + r.err).trim() : tail(r.out + r.err)}` : '');
 const entry = (ok, text) => ({ ok, text: `- ${ok ? 'pass' : 'FAIL'}: ${text}` });
 
 /** Report lines for a Squeal result: an array of { ok, text }. */
@@ -168,7 +177,8 @@ async function growthApproved(io) {
 export async function complexityRun(base, io = realIo) {
   const approved = await growthApproved(io);
   const r = await io.run('node', ['.ai/skills/check-code-quality/scripts/complexity-gate.mjs', '--base', base, '--head', 'HEAD', ...(approved ? ['--allow-growth'] : [])]);
-  return { ...r, name: approved ? 'complexity (growth approved by the baseline-growth label)' : 'complexity' };
+  // The whole report: each function's headline comes before its decision-point lines.
+  return { ...r, whole: true, name: approved ? 'complexity (growth approved by the baseline-growth label)' : 'complexity' };
 }
 
 function mergeBaseOf(base, io) {
