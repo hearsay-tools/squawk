@@ -19,13 +19,13 @@ const FORMAT = 1;
 // checkout. Checked-in files come from the publishing job's own checkout.
 const ROOTS = ['packages/cezar/dist', 'packages/cezar/web/dist', 'packages/cezar/README.md'];
 
-// Files the published package cannot work without.
-const REQUIRED = [
-  'packages/cezar/dist/index.js',
-  'packages/cezar/dist/hsq.js',
-  'packages/cezar/web/dist/index.html',
-  'packages/cezar/README.md',
-];
+// Files the published package cannot work without: every `bin` entry its own manifest
+// declares (a rollback candidate can predate an entry), the cockpit and the README.
+function requiredFiles(sourceRoot) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(sourceRoot, 'packages/cezar/package.json'), 'utf8'));
+  const bins = Object.values(manifest.bin ?? {}).map((bin) => path.posix.join('packages/cezar', bin));
+  return [...new Set([...bins, 'packages/cezar/web/dist/index.html', 'packages/cezar/README.md'])];
+}
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const gitHead = (root) => execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
@@ -57,7 +57,7 @@ function packBuild({ sourceRoot, sourceSha, out, head = gitHead }) {
   checkHead({ sourceRoot, sourceSha, head });
   fs.rmSync(out, { recursive: true, force: true });
   const listed = ROOTS.flatMap((root) => listFiles(sourceRoot, root));
-  const missing = REQUIRED.filter((file) => !listed.includes(file));
+  const missing = requiredFiles(sourceRoot).filter((file) => !listed.includes(file));
   if (missing.length) throw new Error(`release build: the build has no ${missing.join(', ')}.`);
   const files = [];
   for (const rel of listed) {
@@ -98,7 +98,7 @@ function verifyBuild({ dir, digest, sourceRoot, sourceSha, head = gitHead }) {
     if (!fs.lstatSync(full, { throwIfNoEntry: false })?.isFile()) throw new Error(`release build: the artifact has no ${file}.`);
     if (sha256(fs.readFileSync(full)) !== hash) throw new Error(`release build: ${file} differs from the artifact manifest.`);
   }
-  const missing = REQUIRED.filter((file) => !expected.has(file));
+  const missing = requiredFiles(sourceRoot).filter((file) => !expected.has(file));
   if (missing.length) throw new Error(`release build: the build has no ${missing.join(', ')}.`);
 
   for (const file of expected.keys()) {
@@ -136,4 +136,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { MANIFEST, REQUIRED, ROOTS, packBuild, verifyBuild };
+module.exports = { MANIFEST, ROOTS, packBuild, requiredFiles, verifyBuild };
