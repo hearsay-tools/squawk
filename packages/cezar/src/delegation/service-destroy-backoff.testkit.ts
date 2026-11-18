@@ -22,10 +22,10 @@ export const linux = process.platform === 'linux';
 
 export const input = () => ({ task: 'do work', baseline: 'parent-head', requestId: randomUUID() });
 
-/** Each fixture receives its test cadence at construction. */
-export const cadence = async (backoff = { fastMs: 40, fastCount: 3, capMs: 300 }, attention = 5) => {
+/** Each fixture receives its test cadence at construction; an explicit destroy waits `manualLockWaitMs` for the lock. */
+export const cadence = async (backoff = { fastMs: 40, fastCount: 3, capMs: 300 }, attention = 5, manualLockWaitMs = 500) => {
     await f.close();
-    f = fixture(workerCleanups({ backoff, attentionAttempts: attention }));
+    f = fixture(workerCleanups({ backoff, attentionAttempts: attention, manualLockWaitMs }));
   };
 
 /** A settled worker with a real worktree and complete execution, optionally blocked by a Git worktree

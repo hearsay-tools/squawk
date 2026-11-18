@@ -94,10 +94,16 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
         expect(result).toMatchObject({ state: 'complete', remaining: [] });
       }
       expect(reopened.getRun(w.id)?.delegation).toMatchObject({ destroy: { phase: 'complete', remaining: [] } });
-      // #878: absence must be total. A path or branch at the worker's name keeps it unverified.
+      // An empty reserved directory, as a failed `git worktree add` left it, holds nothing: it is
+      // removed and counts as absent (hearsay-tools/squawk#3817).
       mkdirSync(workspace(w).path, { recursive: true });
+      expect(await removeOwnedWorkspace(root, workspace(w))).toMatchObject({ state: 'complete', remaining: [] });
+      expect(existsSync(workspace(w).path)).toBe(false);
+      // #878: otherwise absence must be total. A path with content or a branch at the worker's name keeps it unverified.
+      mkdirSync(workspace(w).path, { recursive: true });
+      writeFileSync(join(workspace(w).path, 'kept'), '');
       expect(await removeOwnedWorkspace(root, workspace(w))).toMatchObject({ state: 'incomplete' });
-      expect(existsSync(workspace(w).path)).toBe(true);
+      expect(existsSync(join(workspace(w).path, 'kept'))).toBe(true);
       rmSync(workspace(w).path, { recursive: true });
       execFileSync('git', ['branch', workspace(w).branch], { cwd: root });
       expect(await removeOwnedWorkspace(root, workspace(w))).toMatchObject({ state: 'incomplete' });

@@ -121,7 +121,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `Collect/integrate desired results, destroy owned resources, explicitly delete child histories through the cockpit/API, then delete parent history.`,
     `Summary and bounded diff snapshots survive until parent deletion; general artifact bytes are not archived.`,
     `Branch/path strings and SHAs are historical descriptors after removal.`,
-    `At most 32 outstanding workers (accepted, live, or not yet verifiably destroyed) and 1,024 creations per parent; destroy finished workers to free capacity. These limits bound resources and runaway spawning, not spending; 32 undelivered steering messages per worker.`,
+    `At most 32 outstanding workers (accepted, live, or not yet verifiably destroyed) and 1,024 creations per parent; destroy finished workers to free capacity; a worker that fails before its first step frees its own slot. These limits bound resources and runaway spawning, not spending; 32 undelivered steering messages per worker.`,
     `Review is a human gate.`,
     `Destruction may be incomplete; inspect remaining resources and retry explicitly.`,
     `Credentials are supplied only in the environment: never read, echo, forward or include them in commands, messages, prompts, events or files.`,

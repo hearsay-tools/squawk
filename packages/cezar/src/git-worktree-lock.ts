@@ -3,22 +3,45 @@ import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gitEnv, runGit, type RunGitError } from './git-command.ts';
+import { MAX_QUEUED_WAIT_MS, type MutationHolder, type MutationLabel } from './git-worktree-lock-helper.ts';
 
-export interface WorktreeGitResult { ok: boolean; stdout: string; stderr: string }
+export type { MutationHolder, MutationLabel };
+
+/** `timedOut` is set when git was killed at the command's `timeout`; `childrenRunning` when Git
+ * children it started may still be running, which also holds the lock claim until they are gone. */
+export interface WorktreeGitResult { ok: boolean; stdout: string; stderr: string; timedOut?: true; childrenRunning?: true }
 /** `input` is written to git's stdin — what `update-ref --stdin` needs for a multi-ref transaction. */
 export type WorktreeGit = (cwd: string, args: string[], timeout?: number, input?: string) => Promise<WorktreeGitResult>;
 
-export class WorktreeMutationLockTimeout extends Error {
-  constructor() { super('timed out waiting for worktree mutation lock'); }
+/** The holder as one phrase: `worker-destroy for <id> (pid 42)`; a claim without a label is an unknown operation. */
+export function describeMutationHolder(holder: MutationHolder): string {
+  return `${holder.operation ?? 'an unknown operation'}${holder.owner ? ` for ${holder.owner}` : ''} (pid ${holder.pid})`;
 }
+
+export class WorktreeMutationLockTimeout extends Error {
+  constructor(readonly holder?: MutationHolder) {
+    super(`timed out waiting for worktree mutation lock${holder ? `; held by ${describeMutationHolder(holder)}` : ''}`);
+  }
+}
+
+/**
+ * How a caller waits for the lock. `waitMs` (at most 120 s, 120 s when absent) is the base budget;
+ * `perClaimMs` adds that much for each claim queued ahead at entry, up to 10 min in all. `label`
+ * names the caller in its claim, so a waiter that times out can say who holds the lock.
+ */
+export type WorktreeMutationOptions = { waitMs?: number; perClaimMs?: number; label?: MutationLabel };
 
 /**
  * Serialize mutations by canonical Git common directory. The keeper retains its claim until its
  * Git children exit, including after caller IPC closes.
  */
-export async function withWorktreeMutation<T>(repoRoot: string, operation: (git: WorktreeGit) => Promise<T>, options: { waitMs?: number } = {}): Promise<T> {
+export async function withWorktreeMutation<T>(repoRoot: string, operation: (git: WorktreeGit) => Promise<T>, options: WorktreeMutationOptions = {}): Promise<T> {
   const waitMs = options.waitMs ?? 120_000;
+  const perClaimMs = options.perClaimMs ?? 0;
   if (!Number.isSafeInteger(waitMs) || waitMs < 0 || waitMs > 120_000) throw new Error('invalid worktree mutation wait budget');
+  if (!Number.isSafeInteger(perClaimMs) || perClaimMs < 0 || perClaimMs > MAX_QUEUED_WAIT_MS) throw new Error('invalid worktree mutation wait budget');
+  // One deadline for finding the common directory and for the queue: `waitMs` bounds both together.
+  const startedAt = Date.now();
   const common = await runGit(['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: repoRoot, timeout: Math.max(1, Math.min(30_000, waitMs)) }).then(
     ({ stdout }) => stdout.trim(),
     (error: RunGitError) => { throw new Error(`cannot resolve Git common directory: ${error.stderr.trim() || error.message}`); },
@@ -26,7 +49,7 @@ export async function withWorktreeMutation<T>(repoRoot: string, operation: (git:
   const claims = join(await realpath(common), 'cezar-worktree-mutations');
   const source = import.meta.url.endsWith('.ts');
   const helper = fileURLToPath(new URL(source ? './git-worktree-lock-helper.ts' : './git-worktree-lock-helper.js', import.meta.url));
-  const keeper = spawn(process.execPath, [...(source ? ['--import', import.meta.resolve('tsx')] : []), helper, claims, String(waitMs)], {
+  const keeper = spawn(process.execPath, [...(source ? ['--import', import.meta.resolve('tsx')] : []), helper, claims, String(Math.max(0, waitMs - (Date.now() - startedAt))), String(perClaimMs), ...(options.label ? [JSON.stringify(options.label)] : [])], {
     stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
     // Establish the process group before a claim or Git child can exist.
     detached: process.platform !== 'win32',
@@ -48,9 +71,9 @@ export async function withWorktreeMutation<T>(repoRoot: string, operation: (git:
     pending.clear();
   };
   keeper.on('error', fail);
-  keeper.on('message', (message: { kind: string; id: number; result: WorktreeGitResult; error: string; code?: string }) => {
+  keeper.on('message', (message: { kind: string; id: number; result: WorktreeGitResult; error: string; code?: string; holder?: MutationHolder }) => {
     if (message.kind === 'ready') readyResolve();
-    else if (message.kind === 'error') fail(message.code === 'lock_timeout' ? new WorktreeMutationLockTimeout() : new Error(message.error));
+    else if (message.kind === 'error') fail(message.code === 'lock_timeout' ? new WorktreeMutationLockTimeout(message.holder) : new Error(message.error));
     else if (message.kind === 'result') {
       pending.get(message.id)?.resolve(message.result);
       pending.delete(message.id);

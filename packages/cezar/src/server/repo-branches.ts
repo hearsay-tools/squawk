@@ -861,7 +861,7 @@ export async function deleteBranches(
           deleted.push(name);
           if (commits) dropped = commits;
         }
-      });
+      }, { label: { operation: 'branch-delete' } });
     } catch {
       const done = new Set([...deleted, ...refused.map((r) => r.name)]);
       for (const { name } of candidates) {
