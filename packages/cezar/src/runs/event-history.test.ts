@@ -1,4 +1,4 @@
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import * as fsPromises from 'node:fs/promises';

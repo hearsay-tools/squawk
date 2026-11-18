@@ -1,7 +1,7 @@
 import type { ActivityPrProgress, ActivityWait, ConversationState, Wait, WorkerWaitEntry } from '@open-mercato/cezar-contract';
 import { ACTIVITY_TEXT_MAX } from '@open-mercato/cezar-contract/activity';
 import { isLiveStatus } from '@open-mercato/cezar-contract/run-predicates';
-import { asksQuestion, computeWaitingOn, workerWaitTargets } from '@open-mercato/cezar-contract/waits';
+import { asksQuestion, computeWaitingOn, workerWaitTargets } from '@open-mercato/cezar-contract/waiting-on';
 import type { RunRecord } from '../runs/store.ts';
 import { clampText } from './text.ts';
 

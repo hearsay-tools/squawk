@@ -1,5 +1,5 @@
 import { testHome } from '../home/test-home.testkit.ts';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { createActiveRun } from '../workflows/active-run.ts';
 import { InputDelivery } from '../workflows/run/input-delivery.ts';
 import { execFileSync } from 'node:child_process';

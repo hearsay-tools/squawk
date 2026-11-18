@@ -3,7 +3,8 @@ import { deriveAttention } from './attention.ts';
 import { engineOwnsRun, isSessionOpen, isSweepable, latestSession, latestSessionStep, sessionRunner } from './run-predicates.ts';
 import { runStatusSchema } from './run-status.ts';
 import type { ArchiveFinishedScope, RunStatus } from './runs.ts';
-import { computeWaitingOn, isUsageLimitHold } from './waits.ts';
+import { computeWaitingOn } from './waiting-on.ts';
+import { isUsageLimitHold } from './usage-limit-hold.ts';
 
 /** The run predicates (hearsay-tools/cezarion#1496), at every status with a resume time set and unset. */
 

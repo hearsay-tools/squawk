@@ -1,7 +1,7 @@
 import { WAIT_KINDS } from '../workflows/run/wait-kinds.ts';
 import type { AgentInput, Wait } from '@open-mercato/cezar-contract';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
-import { LAST_WAITS_LIMIT } from '@open-mercato/cezar-contract/waits';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
+import { LAST_WAITS_LIMIT } from '@open-mercato/cezar-contract/wait-limits';
 import { isSquawkHumanWait, waitInputId } from '../workflows/waits.ts';
 import { applyExit, type RunExitId } from './run-exits.ts';
 import type { RunRecord } from './store.ts';

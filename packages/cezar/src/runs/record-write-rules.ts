@@ -22,9 +22,10 @@ import { productEnv } from '../core/product-env.ts';
  */
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { agentInputSchema, delegationStateSchema } from '@open-mercato/cezar-contract/delegation';
+import { delegationStateSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { runPullRequestSchema } from '@open-mercato/cezar-contract/runs';
-import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import type { AgentInput, ConversationState, DelegationState, RunPullRequest } from '@open-mercato/cezar-contract';
 import { redactSecrets } from '../core/secret-redaction.ts';
 import { ConversationIdInUseError } from './conversation-identity.ts';

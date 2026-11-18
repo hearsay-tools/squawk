@@ -20,7 +20,7 @@ import {
 } from '@open-mercato/cezar-contract/runs';
 import { changesPayloadSchema } from '@open-mercato/cezar-contract/repo';
 import { pendingAskOf, type PendingAsk } from '@open-mercato/cezar-contract/pending-ask';
-import { asksQuestion } from '@open-mercato/cezar-contract/waits';
+import { asksQuestion } from '@open-mercato/cezar-contract/waiting-on';
 import { runHistoryContextSchema } from '@open-mercato/cezar-contract/events';
 import { runnerSkillListSchema } from '@open-mercato/cezar-contract/runner-skills';
 import { runnerSchema } from '@open-mercato/cezar-contract/runner';

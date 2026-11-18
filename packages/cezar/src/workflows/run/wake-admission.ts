@@ -1,8 +1,10 @@
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
-import type { AgentInput } from '@open-mercato/cezar-contract/delegation';
-import { computeWaitingOn, isUsageLimitHold, type Wait, type WaitingOn } from '@open-mercato/cezar-contract/waits';
+import type { AgentInput } from '@open-mercato/cezar-contract/agent-input';
+import type { Wait, WaitingOn } from '@open-mercato/cezar-contract/waits';
+import { computeWaitingOn } from '@open-mercato/cezar-contract/waiting-on';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import type { RunRecord } from '../../runs/store.ts';
 import type { RunOutcome } from '../../runs/outcome-commit.ts';
 import { rootsAwaitingPeer } from '../../delegation/conversations.ts';

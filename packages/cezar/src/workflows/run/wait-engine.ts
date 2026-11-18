@@ -1,5 +1,5 @@
 import { logPrefix } from '../../home/display.ts';
-import type { AgentInput } from '@open-mercato/cezar-contract/delegation';
+import type { AgentInput } from '@open-mercato/cezar-contract/agent-input';
 import { ciWaitResultSchema, type CiWaitResult } from '@open-mercato/cezar-contract/ci-wait';
 import type { Wait, WaitErrorCode, AskErrorCode, WorkerWaitEntry, PrWaitEntry, ProcessWaitEntry, ProcessWaitResult, PeerWaitEntry } from '@open-mercato/cezar-contract/waits';
 import type { ActiveRun } from '../active-run.ts';

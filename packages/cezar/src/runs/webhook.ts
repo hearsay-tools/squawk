@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { ApiRun, RunStatus, WebhookTrigger } from '@open-mercato/cezar-contract';
 import { DEFAULT_WEBHOOK_TRIGGERS, deriveWebhookState, type AttentionInput } from '@open-mercato/cezar-contract/attention';
 import { pendingAskOf, type PendingAsk } from '@open-mercato/cezar-contract/pending-ask';
-import { asksQuestion } from '@open-mercato/cezar-contract/waits';
+import { asksQuestion } from '@open-mercato/cezar-contract/waiting-on';
 import { projectStatus } from '../task-cli/projections.ts';
 import { registryEntry } from '../workspace/registry-entry.ts';
 import { taskWebhooks } from '../workspace/webhooks.ts';

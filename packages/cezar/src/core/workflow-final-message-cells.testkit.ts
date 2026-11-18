@@ -1,5 +1,5 @@
 import { testHome } from '../home/test-home.testkit.ts';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import { randomUUID } from 'node:crypto';

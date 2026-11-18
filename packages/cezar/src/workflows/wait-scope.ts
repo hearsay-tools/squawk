@@ -1,7 +1,7 @@
 import { WAIT_KINDS } from './run/wait-kinds.ts';
 import { assertWaitCapacity, WaitCapacityError } from '../runs/wait-capacity.ts';
 import type { AgentInput, SquawkWaitRequest, PeerWaitEntry, PeerWaitResult, RunRecord, Wait, WaitErrorCode } from '@open-mercato/cezar-contract';
-import { WAIT_LIMIT } from '@open-mercato/cezar-contract/waits';
+import { WAIT_LIMIT } from '@open-mercato/cezar-contract/wait-limits';
 import { peerPair } from '../delegation/conversations.ts';
 import { hasLiveInboxClaim } from '../delegation/input.ts';
 import { DelegationPolicyError, MessagingOffError } from '../delegation/policy.ts';

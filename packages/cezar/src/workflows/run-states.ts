@@ -10,7 +10,7 @@
  * idle-closed worker).
  */
 import type { RunRecord, RunStatus, Wait, WaitPhase } from '@open-mercato/cezar-contract';
-import { computeWaitingOn } from '@open-mercato/cezar-contract/waits';
+import { computeWaitingOn } from '@open-mercato/cezar-contract/waiting-on';
 import { WAIT_KINDS as WAIT_KIND_ROWS, type WaitKindSpec } from './run/wait-kinds.ts';
 import type { RunExitId } from '../runs/run-exits.ts';
 import { productName } from '../home/display.ts';

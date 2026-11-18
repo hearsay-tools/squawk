@@ -1,4 +1,4 @@
-import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import type { RunnerId } from '../core/agent-runner.ts';
 import type { RunRecord } from '../runs/store.ts';
 import type { AccountHolds } from '../workspace/semaphore.ts';

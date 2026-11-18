@@ -6,7 +6,8 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { WAIT_LIMIT, type Wait } from '@open-mercato/cezar-contract/waits';
+import type { Wait } from '@open-mercato/cezar-contract/waits';
+import { WAIT_LIMIT } from '@open-mercato/cezar-contract/wait-limits';
 
 import { controlledWire, manager, parent, root, semaphore, store, until, useWorkerWaitFixture } from './worker-wait-claude.testkit.ts';
 

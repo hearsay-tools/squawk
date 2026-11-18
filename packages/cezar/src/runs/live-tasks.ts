@@ -1,4 +1,4 @@
-import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import type { LiveProjectTask } from '../server/cockpit-ownership.ts';
 import { isLiveRecord } from './run-row.ts';
 import type { RunRecord, RunStore } from './store.ts';

@@ -27,7 +27,7 @@ import { createWorktree } from '../git-worktree.ts';
 import { resolveAttachmentPath } from './attachment-path.ts';
 import { registerRunProcess, unregisterRunProcess } from '../core/process-usage.ts';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
-import { asksQuestion } from '@open-mercato/cezar-contract/waits';
+import { asksQuestion } from '@open-mercato/cezar-contract/waiting-on';
 import { noRunners } from '../core/runners-under-test.testkit.ts';
 
 describe('appendTurnText', () => {

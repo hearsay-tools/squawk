@@ -2,7 +2,7 @@ import { logPrefix } from '../../home/display.ts';
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
 import { atContinue } from './launch-read-resolver.ts';
-import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { hasLiveInboxClaim } from '../../delegation/input.ts';
 import type { RunExitId } from '../../runs/run-exits.ts';
 import { holdsOwedResults, isSquawkHumanWait, openWaits } from '../waits.ts';

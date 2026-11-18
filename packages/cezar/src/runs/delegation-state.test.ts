@@ -7,7 +7,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  agentInputSchema,
   delegationStateSchema,
   runRelationshipsSchema,
   workerDestroySchema,
@@ -15,7 +14,6 @@ import {
   workerDiffSchema,
   workerInspectionSchema,
   workerOperationSchema,
-  workerOutcomeSchema,
   workerSpawnRequestSchema,
   workerSteerRequestSchema,
   workerStopResultSchema,
@@ -24,6 +22,8 @@ import {
   workerWorkspaceSchema,
   delegationErrorResponseSchema,
 } from '@open-mercato/cezar-contract/delegation';
+import { workerOutcomeSchema } from '@open-mercato/cezar-contract/worker-outcome';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { RUN_STATUS, WAIT_SOURCE, WORKER_OUTCOME_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { agentInputEventSchema } from '@open-mercato/cezar-contract/events';
 import type { DelegationState } from '@open-mercato/cezar-contract';

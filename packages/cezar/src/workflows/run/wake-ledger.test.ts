@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { makeHumanWait, makeRunRecord, makeTimerWait, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { owedWakeInputIds, owesWake } from './wake-ledger.ts';
 
 // The native-question gate must also hold after recovery, when no session exists.

@@ -3,7 +3,7 @@ import { atContinue, atTaskHead } from './launch-read-resolver.ts';
 import type { RunnerId } from '../../core/agent-runner.ts';
 import type { WorkerStepIdentity } from '../../delegation/execution-identity.ts';
 import type { RunOutcome } from '../../runs/outcome-commit.ts';
-import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import type { RunRecord, RunStore, StepState } from '../../runs/store.ts';
 import * as continuation from '../continuation-admission.ts';
 import type { ContinueRunOptions } from '../continuation-admission.ts';

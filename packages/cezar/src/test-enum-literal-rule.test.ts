@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { workerOutcomeSchema } from '@open-mercato/cezar-contract/delegation';
+import { workerOutcomeSchema } from '@open-mercato/cezar-contract/worker-outcome';
 import { runStatusSchema, stepStateSchema, stepStatusSchema } from '@open-mercato/cezar-contract/runs';
 import { timerWaitEntrySchema, waitPhaseSchema, waitSchema, waitViaSchema } from '@open-mercato/cezar-contract/waits';
 import { TEST_ENUM_VALUES, testEnumLiteral as rule } from './lint/test-enum-literal.ts';

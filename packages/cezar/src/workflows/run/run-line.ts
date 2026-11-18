@@ -1,5 +1,5 @@
 import { logPrefix } from '../../home/display.ts';
-import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import type { RunnerId } from '../../core/agent-runner.ts';
 import { atTaskHead } from './launch-read-resolver.ts';
 import type { RunRecord } from '../../runs/store.ts';

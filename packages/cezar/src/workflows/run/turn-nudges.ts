@@ -1,7 +1,7 @@
 import { logPrefix } from '../../home/display.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { randomUUID } from 'node:crypto';
-import type { AgentInput } from '@open-mercato/cezar-contract/delegation';
+import type { AgentInput } from '@open-mercato/cezar-contract/agent-input';
 import type { ContentBlock } from '../../core/agent-runner.ts';
 import type { AgentSession } from '../../core/agent-runner.ts';
 import type { RunRecord, RunStore } from '../../runs/store.ts';

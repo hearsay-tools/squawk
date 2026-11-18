@@ -1,6 +1,6 @@
 import type { LiveIndexCheck } from '../git-private-index.ts';
 import { engineOwnsRun } from '@open-mercato/cezar-contract/run-predicates';
-import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { fallbackProjectWriteError } from '../project-paths.ts';
 import { rematerializeReclaimedWorktree } from '../runs/retention.ts';
 import { getStatus } from './git.ts';
