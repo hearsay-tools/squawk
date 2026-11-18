@@ -16,7 +16,7 @@ import { isLiveRecord } from '../runs/run-row.ts';
 import type { RunRecord, RunStore } from '../runs/store.ts';
 import { ownedWorkspaceReceipts } from './workspace-record.ts';
 import { releaseThenRemoveWorktree } from '../git-worktree-release.ts';
-import { releaseThenRemoveOwnedWorkspace } from './owned-workspace-release.ts';
+import { workspaceKind } from './workspace-kinds.ts';
 
 export type FamilyEndStore = Pick<RunStore, 'getRun' | 'listWorkersOf' | 'commitDelegation' | 'readWorkerExecution' |
   'workerResourcesSafe' | 'sourceDataDir' | 'unavailable'>;
@@ -84,7 +84,7 @@ async function releaseBranch(repoRoot: string, store: FamilyEndStore, workspace:
       if (run ? !current || !endedWorkerBranch(current, store) : current) throw new Error('Worker changed');
       safe();
     };
-    const result = await releaseThenRemoveOwnedWorkspace({}, repoRoot, workspace, assertCurrent, assertCurrent);
+    const result = await workspaceKind(workspace).remove(repoRoot, workspace, { assertCurrent, assertUnheld: assertCurrent });
     if (result.state !== 'complete') return false;
     const current = run && store.getRun(run.id);
     if (current?.delegation?.role === 'worker' && !current.delegation.destroy) {

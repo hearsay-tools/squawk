@@ -2,11 +2,10 @@ import { productName } from '../home/display.ts';
 import { randomUUID } from 'node:crypto';
 import type { WorkerDestroy, WorkerDestroyResult } from '@open-mercato/cezar-contract/delegation';
 import type { RunRecord } from '../runs/store.ts';
-import { releaseThenRemoveOwnedWorkspace } from './owned-workspace-release.ts';
 import { collectWorkerEvidence } from './results.ts';
 import { DelegationPolicyError } from './policy.ts';
 import { describeProcesses, isCurrentProcess, recordedProcessLive } from './process-liveness.ts';
-import { runWorktreeTeardown } from './worktree-teardown.ts';
+import { workspaceKind, type WorkspaceResource } from './workspace-kinds.ts';
 import { loadConfig } from '../config.ts';
 import { DESTROY_ATTENTION_ATTEMPTS, DESTROY_BACKOFF, retryDelayMs, type Backoff } from './retry-backoff.ts';
 import type { DelegationProject, WorkerCleanupFactory } from './service.ts';
@@ -167,8 +166,9 @@ export class WorkerCleanup {
     worker = check();
     if (worker.delegation?.role !== 'worker') throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     const workspace = worker.delegation.workspace;
+    const kind = workspaceKind(workspace);
     const requestedAt = worker.delegation.destroy?.requestedAt ?? new Date().toISOString();
-    const resources = (worker.delegation.destroy?.remaining ?? ['worktree', 'branch']).filter((resource): resource is 'worktree' | 'branch' => resource !== 'process');
+    const resources = (worker.delegation.destroy?.remaining ?? kind.destroyResources).filter((resource): resource is WorkspaceResource => resource !== 'process');
     const persist = (phase: WorkerDestroy['phase'], remaining: WorkerDestroy['remaining'], error?: string) => {
       assertAttached();
       worker = project.store.getRun(workerId)!;
@@ -230,7 +230,7 @@ export class WorkerCleanup {
       try {
         assertCurrent();
         // #781: release preview before the final check immediately preceding removal.
-        result = await releaseThenRemoveOwnedWorkspace({ previewHost: project.manager.previewHost }, project.root, workspace, assertCurrent, assertSafe);
+        result = await kind.remove(project.root, workspace, { previewHost: project.manager.previewHost, assertCurrent, assertUnheld: assertSafe });
       } catch {
         result = { workerId, state: 'incomplete', remaining: resources, error: 'Worker resources could not be verified; cleanup will retry' };
       } finally { release?.(); }
@@ -260,12 +260,12 @@ export class WorkerCleanup {
         }
       } catch { /* the attempt's own error is the one to report */ }
     };
-    persist('requested', worker.delegation.destroy?.remaining ?? ['process', 'worktree', 'branch']);
+    persist('requested', worker.delegation.destroy?.remaining ?? ['process', ...kind.destroyResources]);
     try {
       persist('terminating', ['process', ...resources]);
       project.manager.requestWorkerStop(workerId);
       // Registered services stop gracefully while the worktree they run in still exists.
-      const teardownError = await runWorktreeTeardown(project.root, teardown, workspace);
+      const teardownError = await kind.teardown(project.root, teardown, workspace);
       // A project replaced during the teardown keeps its old manager alive: never reap through it.
       assertAttached();
       if (teardownError) project.store.appendEvent(workerId, { type: 'lifecycle', message: `worktree teardown failed: ${teardownError}` });
