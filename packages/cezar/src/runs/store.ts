@@ -2790,7 +2790,7 @@ export class RunStore extends EventEmitter {
     if (run?.delegation?.role !== 'worker' || run.delegation.destroy) throw new WorkerAdmissionRefusal('the worker is being destroyed', SPAWN_NEXT);
     const prior = admissibleExecution(this.readWorkerExecution(id));
     const holders = this.workerResourceHolders(id, prior.generation, run.delegation.workspace.resourceId, { admittingQueued: true });
-    if (holders !== 'safe') throw holderRefusal(holders);
+    if (holders !== 'safe') throw holderRefusal(holders, this.readWorkerProcesses(id, prior.generation));
     const generation = randomUUID();
     // #469: the controller is durable before `starting`, so a crash leaves a provable generation.
     this.writeWorkerProcesses(id, { generation, controller: { pid: process.pid, ...startToken(process.pid) }, processes: [] });

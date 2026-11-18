@@ -1,8 +1,7 @@
 import type { RunModuleContext, WorkerTerminationBlocker } from './types.ts';
 import { noJitter, ORPHAN_BACKOFF, retryDelayMs, type Backoff } from '../../delegation/retry-backoff.ts';
 import { isCurrentProcess, recordedProcessLive, type WorkerProcessRecord } from '../../delegation/process-liveness.ts';
-import { productName } from '../../home/display.ts';
-import { WorkerAdmissionRefusal } from '../../runs/worker-execution.ts';
+import { controllerRefusal, WorkerAdmissionRefusal } from '../../runs/worker-execution.ts';
 
 type OrphanOptions = { admitting?: boolean; fresh?: boolean };
 interface WorkerOrphansHost {
@@ -149,8 +148,7 @@ export class WorkerOrphans {
     const orphan = this.orphanedWorkerGeneration(runId, true);
     const probe = orphan && this.orphanProbes.get(runId);
     if (!probe || probe.generation !== orphan.generation || probe.probe.liveness !== 'alive' || probe.probe.controller === undefined) return undefined;
-    return new WorkerAdmissionRefusal(`the worker is still controlled by a live ${productName('Cezar')} (pid ${probe.probe.controller})`,
-      `retry the same command after that ${productName('Cezar')} ends the worker's execution`);
+    return controllerRefusal(probe.probe.controller);
   }
 
   /** Continue after a controller crash: end everything the worker's scope holds, then wait (up to

@@ -105,9 +105,9 @@ unless `worktreeSetup` already did.
   listed checks). A failure's diff, stack and console output:
   `squeal why '<check>' --include-logs` (names from `squeal failures <file>`). A failure
   you think load caused: `squeal retry <file> --reason load`. With no daemon, run
-  `squeal start`. Never run a test runner by hand. Exceptions: a
-  [red proof recipe](docs/sdlc/regression-proof.md) and a documented measurement,
-  reproduction or baseline tool; neither is a verdict. Follow the
+  `squeal start`. Never run a test runner by hand; a
+  [red proof](docs/sdlc/regression-proof.md) uses `squeal proof`. Exception: a
+  documented measurement or reproduction tool, not a verdict. Follow the
   [wait bound](docs/sdlc/ci.md#squeal-wait-bound).
 - CI owns the final gate and full-suite runs.
 - In a unit test, wait on the product's own signal. A timeout is only a hang guard, with a

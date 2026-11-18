@@ -19,7 +19,7 @@ export function probeProcessWait(request: ProcessWatchRequest, now: number): Pro
   const observedAt = new Date(now).toISOString();
   try {
     const fromExitFile = () => {
-      const read = request.exitFile === undefined ? { present: false as const } : readExitCode(request.exitFile, request.roots);
+      const read = request.exitFile === undefined ? { present: false as const } : readExitCode(request.exitFile, request.roots, request.pid);
       return read.present ? { outcome: 'exit_file' as const, observedAt, ...(read.exitCode === undefined ? { exitFileNote: 'not-an-exit-code' as const } : { exitCode: read.exitCode }) } : undefined;
     };
     const written = fromExitFile();

@@ -1,0 +1,16 @@
+{
+  "description": "A held human follow-up is not reported as held, so the run parks or nudges past it (870171a62, rows H1, H3, H4).",
+  "fixedBy": "870171a62",
+  "break": [
+    {
+      "file": "packages/cezar/src/workflows/run/input-timers.ts",
+      "find": "  return !state.inputState.heldHumanInputExpired && !!state.liveSession.session?.open && state.liveSession.session.holdsHumanInput();",
+      "replace": "  return false;"
+    }
+  ],
+  "tests": [
+    "packages/cezar/src/core/workflow-followup-turn-end-parity.test.ts",
+    "packages/cezar/src/core/workflow-followup-hold-parity.test.ts",
+    "packages/cezar/src/core/workflow-followup-late-start-fresh-parity.test.ts"
+  ]
+}

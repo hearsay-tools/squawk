@@ -35,7 +35,12 @@ export class FamilyReconciler {
     // Delegation metadata checkpoints do not change task status.
     // A republish changed nothing durable: there is nothing to reap, cancel or reconcile.
     if (source === 'live-release') return;
-    if (!this.context.disposed() && source === undefined) this.host.reapTerminalScratch(run.id);
+    // Restart recovery fails an interrupted turn just before it continues the task, so a reap
+    // waits until recovery ends and then reads the run again (hearsay-tools/squawk#3909).
+    if (!this.context.disposed() && source === undefined) {
+      if (this.host.recoveringRun(run)) this.deferredReaps.add(run.id);
+      else this.host.reapTerminalScratch(run.id);
+    }
     if (!this.context.disposed() && !['queued', 'running', 'waiting'].includes(run.status) && !holdsOwedResults(run)) this.host.waitEngine.cancelAll(run.id);
     if (run.delegation && !['queued', 'running', 'waiting'].includes(run.status)) this.host.active(run.id)?.liveSession.revokeDelegation?.();
     if (this.context.disposed() || this.host.recoveringRun(run)) return;
@@ -46,6 +51,17 @@ export class FamilyReconciler {
     }
     this.host.waitEngine.resolvePeerWaits(runsAwaitingPeer(run, () => this.context.store.listRuns())); // never in recovery: an interrupted peer fails, then continues
   };
+
+  /** Runs whose scratch reap waits for the recovery that holds them. */
+  private readonly deferredReaps = new Set<string>();
+  /** After recovery: reap the scratch of each held run that recovery left terminal. */
+  reapDeferredScratch(): void {
+    for (const id of [...this.deferredReaps]) {
+      if (this.host.recoveringRun(id)) continue;
+      this.deferredReaps.delete(id);
+      if (!this.context.disposed()) this.host.reapTerminalScratch(id);
+    }
+  }
 
   private reconcilingWorkers = false;
   private reconcilingFamily: string | undefined;

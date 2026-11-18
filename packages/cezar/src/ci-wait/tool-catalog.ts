@@ -46,7 +46,7 @@ function flatWaitInputSchema() {
       timeout_seconds: field('timeout_seconds', 'The deadline in seconds. kind "pr": 1–7200, default 1800. kind "worker", "request" or "peer": 1–7200, default 600 (the default shown is the pr one). kind "process": 1–7200, default 1800.'),
       seconds: field('seconds', 'kind "timer": seconds until the wake (60–7200).'),
       pid: field('pid', 'kind "process": the PID of the background command: the `pid` the job start command printed.'),
-      exit_file: field('exit_file', 'kind "process": optional. Only a file that your own wrapper writes the exit code to, in $TMPDIR or the worktree, with a new name for each command. Leave it out for a command that is already running or that writes its status file somewhere else.'),
+      exit_file: field('exit_file', 'kind "process": optional. The `exitFile` that `hsq job start` printed for this `pid`, in any `--dir`, or a file that your own wrapper writes the exit code to, in $TMPDIR or the worktree, with a new name for each command. Leave it out for a command that is already running or that writes its status file somewhere else.'),
       note: field('note', 'kind "timer" or "process": what to re-check, handed back to you at the wake.'),
     },
     required: ['kind'],
@@ -63,7 +63,8 @@ export const waitToolDefinition = {
     '`hsq job start <name> -- <command> [args...]` (your instructions give the full command for this session under "Long commands") ' +
     'and pass the `pid` and `exitFile` it prints as `pid` and `exit_file`, so the wake reports the exit code. ' +
     `It writes the command's output to the \`log\` file it prints, refuses a name that still runs, and the job outlives this session; ${productName('Cezar')} does not stop it. ` +
-    `Its files are in $TMPDIR, the task's temp directory, which ${productName('Cezar')} keeps after the task ends while a job in it runs, so \`hsq job status <name>\` still finds the job after a Continue. ` +
+    `Its files are in $TMPDIR, the task's temp directory, which ${productName('Cezar')} keeps across its own restart and, after the task ends, while a job in it runs, so \`hsq job status <name>\` still finds the job after a Continue. ` +
+    'For files that must outlive the task, pass `--dir` with a directory you keep; a process wait accepts that job\'s `exitFile` too. ' +
     'Do not start a long command with `&`, `nohup`, `setsid` or your own background-task tool: it can end with the shell call or the session, or leave you a PID that is not the command\'s. ' +
     // A batch that writes its exit file outside $TMPDIR made agents start a watcher to copy it in.
     'For a command that is already running, or that writes its own status file somewhere else, pass only its `pid` and leave `exit_file` out. ' +

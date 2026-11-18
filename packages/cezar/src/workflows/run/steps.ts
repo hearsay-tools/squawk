@@ -1,4 +1,4 @@
-import type { AgentSession } from '../../core/claude-cli-runner.ts';
+import type { AgentSession } from '../../core/agent-runner.ts';
 import type { ActiveRun } from '../active-run.ts';
 import type { WorkflowStepDef } from '../types.ts';
 

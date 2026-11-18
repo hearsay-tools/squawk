@@ -26,3 +26,20 @@ describe('resume notice (hearsay-tools/squawk#3882)', () => {
     expect(withResumeContext('Continue.', undefined)).toBe('Continue.');
   });
 });
+
+describe('restart resume names the cut-off work (hearsay-tools/squawk#3909)', () => {
+  const restarted = { id: 'continue-2', text: 'Continue.', createdAt: '2026-11-18T00:00:00Z',
+    resumeContext: { restarted: true as const, cutOff: { tools: ['Bash: Ran npm run prepr'], subagents: ['Agent: Docs sweep'] } } };
+
+  it('names each tool call without a result and each lost subagent', () => {
+    const notice = resumeNotice(restarted)!;
+    expect(notice).toContain('The restart cut off these tool calls, which have no result: Bash: Ran npm run prepr.');
+    expect(notice).toContain('These native subagents were still running and stopped: Agent: Docs sweep.');
+  });
+
+  it('keeps the general restart notice when nothing was cut off', () => {
+    const notice = resumeNotice({ ...restarted, resumeContext: { restarted: true } })!;
+    expect(notice).toContain('process restarted while you were working');
+    expect(notice).not.toContain('cut off');
+  });
+});

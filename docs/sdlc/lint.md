@@ -17,8 +17,11 @@ command, it fails closed, and it does not depend on which tests a change selects
    a match fails, so the lists only shrink to what the code still needs.
 
 3. **File length** (`file-length`, a runner check): every tracked non-test source file over 1,000 lines stays at or below its
-   pin in `packages/cezar/src/file-length.baseline.json`. Unpinned long files, grown pins and
-   stale pins fail. `FILE_LENGTH_UPDATE=1 npm run lint` only lowers or drops existing pins.
+   pin in `packages/cezar/src/file-length.baseline.json`. Unpinned long files and grown pins fail.
+   To make room, move whole functions verbatim to a sibling module. Never join lines or squeeze
+   statements to fit. Before you plan a change to a long file, print its lines left:
+   `node packages/cezar/src/lint/file-length.ts headroom <path>...`. The command measures a file under
+   a test path as production, because the file counts once it leaves that path.
 
 4. **Design guardian CSS**: the runner applies the same `cez/design-guardian` rule table to
    `packages/web/src/**/*.css` and `packages/web/e2e/**/*.css`, which oxlint cannot read. It also
@@ -32,9 +35,20 @@ command, it fails closed, and it does not depend on which tests a change selects
    Both use `lint/wait-baseline.ts` for the same shrink-only ratchet. The runner checks stale
    entries in the three baselines and the server scan scope. It reads only the files a baseline
    names, parsed by oxlint in process (`lint/wait-oxlint.ts`); a missing baseline is written once
-   from the whole suite. Update mode runs before oxlint: `TEST_WAIT_DISCIPLINE_UPDATE=1 npm run lint`
-   (both server baselines), `UNIT_WAIT_DISCIPLINE_UPDATE=1 npm run lint` (cockpit). Existing
-   allowances only shrink. The web host test separately pins `asyncUtilTimeout` in `vitest.setup.ts`.
+   from the whole suite with `TEST_WAIT_DISCIPLINE_UPDATE=1 npm run lint` (both server baselines) or
+   `UNIT_WAIT_DISCIPLINE_UPDATE=1 npm run lint` (cockpit). Existing allowances only shrink, as
+   [Shrink-only baselines](#shrink-only-baselines) says. The web host test separately pins
+   `asyncUtilTimeout` in `vitest.setup.ts`.
+
+<a id="shrink-only-baselines"></a>
+
+**Shrink-only baselines.** The file-length pins and the three wait-discipline baselines lower
+themselves (`lint/baseline-mode.ts`). A local `npm run lint` or `npm run prepr` lowers a pin or count
+that the code has fallen below. It passes and prints a `lowered:` line, and `npm run prepr` copies
+that line into its report. Commit the baseline with the change. CI (`CI=true`) writes nothing and
+fails a stale entry, so a lowering that was not committed cannot reach `main`. The `*_UPDATE=1`
+variables remain for one decision: writing a baseline that does not exist. They also lower in CI.
+A run never adds or raises an entry.
 
 A non-zero tool exit, unreadable tool output, a plugin that does not load, a config that turns on
 a category on, a missing built-in plugin, another rule count than all cez rules plus enabled
@@ -482,6 +496,8 @@ looped case). **Moved** cases now run in `npm run lint`; the scanner's fixture c
 42 cases moved; M04's call-presence case retired. Update modes moved with them:
 `FILE_LENGTH_UPDATE=1 npm run lint`,
 `TEST_WAIT_DISCIPLINE_UPDATE=1 npm run lint` and `UNIT_WAIT_DISCIPLINE_UPDATE=1 npm run lint`.
+Since hearsay-tools/squawk#3908, a local run lowers these baselines without the variable
+([Shrink-only baselines](#shrink-only-baselines)).
 
 
 ### Deferred

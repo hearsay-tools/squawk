@@ -2,7 +2,7 @@ import { legacyRunsBeside, runDataDir } from '../legacy-runs.ts';
 import { lstatSync, readdirSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { z } from 'zod';
-import { describeProcesses } from '../delegation/process-liveness.ts';
+import { describeProcesses, isCurrentProcess, type WorkerProcessRecord } from '../delegation/process-liveness.ts';
 
 /** Terminal task intent survives loss/quarantine of the public run index. Starting a new
  * generation replaces this entire checkpoint, so an old cleanup cannot authorize reuse. */
@@ -61,10 +61,18 @@ export function admissibleExecution(prior: WorkerExecution | undefined): WorkerE
 }
 
 /** The refusal for live holders of the worker's paths; no PID means the holder proof was unreadable. */
-export function holderRefusal(holders: readonly number[]): WorkerAdmissionRefusal {
+export function holderRefusal(holders: readonly number[], record?: WorkerProcessRecord | 'absent' | 'unknown'): WorkerAdmissionRefusal {
+  const controller = typeof record === 'object' ? record.controller : undefined;
+  if (controller && !isCurrentProcess(controller) && holders.includes(controller.pid)) return controllerRefusal(controller.pid);
   return holders.length
-    ? new WorkerAdmissionRefusal(`processes ${describeProcesses(holders)} still hold the worker's worktree or scratch`, 'end them, then retry the same command')
-    : new WorkerAdmissionRefusal("the worker's worktree or scratch is not proven free of processes", `retry the same command; if this repeats, ${SPAWN_NEXT}`);
+    ? new WorkerAdmissionRefusal(`live processes of the previous session ${describeProcesses(holders)} prevent a new execution`, 'wait for those session processes to end, then retry the same command')
+    : new WorkerAdmissionRefusal("ownership or termination of the worker's previous session is not proven", `retry the same command; if this repeats, ${SPAWN_NEXT}`);
+}
+
+/** Both orphan recovery and normal admission explain the same controller ownership rule. */
+export function controllerRefusal(pid: number): WorkerAdmissionRefusal {
+  return new WorkerAdmissionRefusal(`another live controller ${describeProcesses([pid])} still owns the worker's execution`,
+    'wait for that controller to end the worker execution, then retry the same command');
 }
 
 /** The refusal a failed admission returns: its own cause and next step. Only an error without

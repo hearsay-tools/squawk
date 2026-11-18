@@ -404,6 +404,7 @@ export type AgentInput = z.infer<typeof agentInputSchema>;
 
 export const workerInspectionSchema = z.object({
   workerId: z.uuid(),
+  settled: z.boolean(),
   /** The task that holds the family's receipts. */
   parentRunId: z.uuid(),
   /** The worker that supervises this one. Absent: `parentRunId` supervises it. */

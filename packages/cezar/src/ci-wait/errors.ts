@@ -74,7 +74,7 @@ const waitMessages: Partial<Record<WaitErrorCode, string>> = {
   messaging_off: MESSAGING_OFF,
   denied_scope: 'This run cannot wait on those workers or requests: wait only on workers you own (a parent with the wait permission), or on requests you sent that are still accepted.',
   // hearsay-tools/cezarion#1446: process waits.
-  exit_file_outside: `exit_file must be inside the task worktree or the ${productName('Cezar')} temp directory that $TMPDIR names, with no symlink leading out. If $TMPDIR is not under .ai/cezar or a cez-agent directory, use a git-ignored path in the worktree. For a command that writes its own status file somewhere else, leave exit_file out: wait on pid alone, and read that file after the wake.`,
+  exit_file_outside: `exit_file must be the \`exitFile\` that \`hsq job start\` printed for this pid, or inside the task worktree or the ${productName('Cezar')} temp directory that $TMPDIR names, with no symlink leading out. If $TMPDIR is not under .ai/cezar or a cez-agent directory, use a git-ignored path in the worktree. For a command that writes its own status file somewhere else, leave exit_file out: wait on pid alone, and read that file after the wake.`,
   process_not_allowed: `${productName('Cezar')} cannot wait on that PID: it is ${productName('Cezar')} itself or an agent session, which ends only with the session. Pass the \`pid\` that the job start command printed for the background command.`,
   process_not_owned: `That PID belongs to another user, so ${productName('Cezar')} cannot tell whether it is the process you started. Pass the PID of a command you started yourself.`,
 };

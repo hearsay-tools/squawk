@@ -1,10 +1,10 @@
 import type { RunRelationships } from '@open-mercato/cezar-contract/delegation';
 import { workerCapacity } from '../delegation/capacity.ts';
-import { workerDestroyView } from '../runs/delegation-state.ts';
+import { workerDestroyView, workerObservation } from '../runs/delegation-state.ts';
 import type { RunRecord, RunStore } from '../runs/store.ts';
 import { familyRecordOf, isFamilyRecord, supervisedReceipts, supervisorIdOf } from '../runs/task-rights.ts';
 
-type Reads = Pick<RunStore, 'getRun' | 'listOwnedWorkers'>;
+type Reads = Pick<RunStore, 'getRun' | 'listOwnedWorkers' | 'readWorkerExecution'>;
 
 /**
  * What the cockpit shows around one run: a root's whole family, each worker naming the worker that
@@ -30,6 +30,7 @@ export function runRelationships(store: Reads, run: RunRecord): RunRelationships
     return [{ workerId: worker.id, parentRunId: owned.parentRunId,
       ...(owned.supervisorRunId === undefined ? {} : { supervisorRunId: owned.supervisorRunId }),
       status: worker.status, workspace: owned.workspace,
+      settled: workerObservation(worker, store.readWorkerExecution(worker.id)).settled,
       ...(worker.currentStepId === undefined ? {} : { currentStepId: worker.currentStepId }),
       ...(owned.destroy ? { destroy: workerDestroyView(worker) } : {}),
     }];

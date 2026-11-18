@@ -220,7 +220,7 @@ describe('delegation schemas', () => {
   });
 
   it('describes bounded inspection, relationships, diff and explicit operation outcomes', () => {
-    const inspection = { workerId, parentRunId, status: workerInspectionSchema.shape.status.enum.done, workspace, outcome };
+    const inspection = { workerId, parentRunId, settled: true, status: workerInspectionSchema.shape.status.enum.done, workspace, outcome };
     expect(workerInspectionSchema.parse(inspection)).toEqual(inspection);
     expect(runRelationshipsSchema.parse({ workers: [inspection] })).toEqual({ workers: [inspection] });
     expect(runRelationshipsSchema.safeParse({ workers: Array(1024).fill(inspection) }).success).toBe(true);

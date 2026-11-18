@@ -6,6 +6,7 @@ import { hostsLiveSharedWorker, SHARED_HOST_REFUSAL } from '../runs/shared-hosts
 import { supervisedWorkers } from '../runs/supervised.ts';
 import { supervisorIdOf } from '../runs/task-rights.ts';
 import { collectWorkerEvidence } from './results.ts';
+import { controllerRefusal } from '../runs/worker-execution.ts';
 import { DelegationPolicyError } from './policy.ts';
 import { describeProcesses, isCurrentProcess, recordedProcessLive } from './process-liveness.ts';
 import { workspaceDirectoryRemoved, workspaceKind, type WorkspaceResource } from './workspace-kinds.ts';
@@ -28,7 +29,7 @@ function foreignControl(store: DelegationProject['store'], workerId: string): st
   const record = generation ? store.readWorkerProcesses(workerId, generation) : 'absent';
   if (record === 'unknown') return 'worker process record is unreadable';
   if (record === 'absent' || isCurrentProcess(record.controller) || !recordedProcessLive(record.controller)) return undefined;
-  return `the worker is still controlled by a live ${productName('cezar')} (pid ${record.controller.pid})`;
+  return controllerRefusal(record.controller.pid).message;
 }
 
 /** A worker that failed before any step started: no agent ran in it, so it holds no work, and its
@@ -291,7 +292,7 @@ export class WorkerCleanup {
       // #469: name what blocks a crashed generation; other causes keep the generic message.
       const taken = project.manager.takeWorkerTerminationBlocker(workerId);
       const reason = taken && (taken.blocker.kind === 'unreadable' ? 'worker process record is unreadable; termination cannot be proven'
-        : taken.blocker.kind === 'controller' ? `the worker is still controlled by a live ${productName('cezar')} (pid ${taken.blocker.pid})`
+        : taken.blocker.kind === 'controller' ? controllerRefusal(taken.blocker.pid).message
         : `the previous execution's ${taken.blocker.pids.length === 1 ? 'process' : 'processes'} ${describeProcesses(taken.blocker.pids)} still ${taken.blocker.pids.length === 1 ? 'runs' : 'run'}`);
       if (taken?.changed) project.store.appendEvent(workerId, { type: 'lifecycle', message: `destroy blocked: ${reason}` });
       const result: WorkerDestroyResult = { workerId, state: 'incomplete', remaining: ['process', ...resources], error: !taken ? 'Worker termination is not proven; retry cleanup later'

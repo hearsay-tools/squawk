@@ -3,7 +3,7 @@ import { transitionTurnBoundary } from './turn-boundary.ts';
 import { randomUUID } from 'node:crypto';
 import type { AgentInput } from '@open-mercato/cezar-contract/delegation';
 import type { ContentBlock } from '../../core/agent-runner.ts';
-import type { AgentSession } from '../../core/claude-cli-runner.ts';
+import type { AgentSession } from '../../core/agent-runner.ts';
 import type { RunRecord, RunStore } from '../../runs/store.ts';
 import { enqueueAgentInput, hasLiveInboxClaim } from '../../delegation/input.ts';
 import { recordRequestRefusal, type CompletionRefusal } from '../completion-policy.ts';
