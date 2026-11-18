@@ -11,9 +11,12 @@ import { loadConfig } from '../config.ts';
 import { DESTROY_ATTENTION_ATTEMPTS, DESTROY_BACKOFF, retryDelayMs, type Backoff } from './retry-backoff.ts';
 import { WORKTREE_LOCK_BUSY_PREFIX } from './workspace-removal.ts';
 
-/** How long an explicit destroy waits in the worktree mutation lock queue: within the CLI's 45 s
- * request bound, long enough for a settling worker's own Git work to finish (hearsay-tools/squawk#3817). */
+/** How long an explicit destroy waits in the worktree mutation lock queue: long enough for a
+ * settling worker's own Git work to finish (hearsay-tools/squawk#3817). */
 export const MANUAL_DESTROY_LOCK_WAIT_MS = 30_000;
+/** The part of the CLI's 45 s request bound an explicit destroy may use before its lock wait ends,
+ * so the caller reads the answer, holder and retry time included, instead of a transport timeout. */
+export const MANUAL_DESTROY_ANSWER_BY_MS = 40_000;
 import type { DelegationProject, WorkerCleanupFactory } from './service.ts';
 
 /** Why the worker's scope is not this controller's to stop: its current generation's record names
@@ -81,6 +84,12 @@ export class WorkerCleanup {
       const current = project.store.getRun(workerId);
       if (current?.delegation?.role !== 'worker' || current.delegation.workspace.ownerRunId !== workerId || current.status !== 'failed' ||
         current.delegation.destroy?.phase === 'complete') throw new DelegationPolicyError('incompatible_state', 'Worker is no longer a failed start');
+      // Until destroy intent is written, the worker must still be a failed start: a parent's resume
+      // can queue, run and fail it again while this release waits its turn. `destroyAttempt` calls
+      // this last with no await before it writes the intent; after that, a resume is refused.
+      if (!current.delegation.destroy && !failedBeforeFirstStep(project.store, current)) {
+        throw new DelegationPolicyError('incompatible_state', 'Worker is no longer a failed start');
+      }
       return current;
     };
     // Off the store's emit: the attempt writes runs itself.
@@ -195,6 +204,10 @@ export class WorkerCleanup {
       project.store.commitDestroyRetry(workerId, retry);
     });
   }
+  /** An explicit destroy's lock wait: what is left of its answer budget after termination, at least 1 s. */
+  private manualLockWait(startedAt: number): number {
+    return Math.max(1_000, Math.min(this.manualLockWaitMs, MANUAL_DESTROY_ANSWER_BY_MS - (this.now() - startedAt)));
+  }
   /** The project's raw `worktreeTeardown` value, read fresh at each attempt. */
   private async teardownConfig(project: DelegationProject): Promise<unknown> {
     return (await loadConfig(project.root, project.home)).worktreeTeardown;
@@ -221,6 +234,7 @@ export class WorkerCleanup {
   /** One full destroy attempt; the caller holds the worker's serialization key. A manual attempt
    * clears the run's `destroyRetry`, which resets the backoff; a completed destroy drops it. */
   private async destroyAttempt(project: DelegationProject, workerId: string, check: () => RunRecord, mode: 'manual' | 'scheduled'): Promise<WorkerDestroyResult> {
+    const startedAt = this.now();
     const assertAttached = () => {
       if (this.projects.get(project.id) !== project) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     };
@@ -300,7 +314,7 @@ export class WorkerCleanup {
         assertCurrent();
         // #781: release preview before the final check immediately preceding removal.
         result = await releaseThenRemoveOwnedWorkspace({ previewHost: project.manager.previewHost }, project.root, workspace, assertCurrent, assertSafe,
-          mode === 'manual' ? { waitMs: this.manualLockWaitMs } : {});
+          mode === 'manual' ? { waitMs: this.manualLockWait(startedAt) } : {});
       } catch (error) {
         result = { workerId, state: 'incomplete', remaining: resources,
           error: `Worker resources could not be verified: ${(error instanceof Error ? error.message : String(error)).slice(0, 300)}; cleanup will retry` };
