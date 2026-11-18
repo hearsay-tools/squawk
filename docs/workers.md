@@ -128,7 +128,13 @@ A worker reviews its own committed change before it pushes: it starts one worker
    hsq worker wait <worker-id> --mode one --timeout-seconds <1-7200>
    ```
 
-   The wait also ends on its deadline, and a message wakes the turn without closing the wait. Neither is the end of the round: register the wait again, or end the turn again.
+   One round has a total time limit of one hour, counted from the spawn. The limit is a rule of this procedure, not a Squawk timeout: a wait never stops its worker. Within the hour, register the wait again after a wake on a message or a deadline. When the hour has passed and the worker has not settled, stop it, destroy it and count a failed round:
+
+   ```sh
+   hsq worker stop <worker-id>
+   hsq worker destroy <worker-id>
+   ```
+
 3. Collect the result.
 
    ```sh
@@ -141,14 +147,14 @@ A worker reviews its own committed change before it pushes: it starts one worker
    - **The full report has arrived.** The worker sends it as a message to its parent before `cezar_done`. The collected `summary` holds at most the last assistant text, cut at 4,000 characters; it is not the report.
    - **`changes` says `unchanged`** ([Change report](#shared-workspace)). `changed` means that a file, the index, HEAD or the branch moved during the round: read `paths` and find the cause. `unavailable` means that Squawk has no comparison, for example after a crashed session.
 
-   A worker that failed, was cancelled, or settled with no report, and a round whose `changes` is `changed` or `unavailable`, is not a round: destroy the worker and run the round again.
+   A worker that failed, was cancelled, or settled with no report, and a round whose `changes` is `changed` or `unavailable`, is a failed round: destroy the worker and run the round again.
 4. Destroy the worker. A worker may have one outstanding worker, so the next round starts only after this.
 
    ```sh
    hsq worker destroy <worker-id>
    ```
 
-After a fix, commit and run the next round on the fix only. When the spawn is refused (**Allow Squawk workers** is off for the task, the limit is reached, the runner is not available) or the round fails twice, run the same prompt in a native subagent and say in the pull request body that the round ran that way.
+After a fix, commit and run the next round on the fix only. When the spawn is refused (**Allow Squawk workers** is off for the task, the limit is reached, the runner is not available) or after two failed rounds, run the same prompt in a native subagent and say in the pull request body that the round ran that way.
 
 ### What destroy stops
 
