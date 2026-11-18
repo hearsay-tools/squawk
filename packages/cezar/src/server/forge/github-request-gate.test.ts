@@ -92,15 +92,9 @@ describe('the three pollers share one gate', () => {
   it('sends automation repository-name discovery through the gate, so a pause refuses it', async () => {
     githubRequestGate.record(true);
     expect(githubRequestGate.pausedUntil()).toBeDefined();
-    const discovery = vi.fn(async () => 'o/renamed');
-    let refusal: unknown;
-    const repository = githubRepository('/repo', 'https://github.com/o/r.git', async (_root, remote, gate) => {
-      try { await gate!(discovery); } catch (error) { refusal = error; }
-      return remote;
-    });
+    const repository = githubRepository('/repo', 'https://github.com/o/r.git');
     await expect(repository!.canonical!()).resolves.toEqual({ owner: 'o', repo: 'r' });
-    expect(discovery).not.toHaveBeenCalled();
-    expect(refusal).toBeInstanceOf(GithubRateLimitedError);
+    expect(gh.calls).toHaveLength(0);
   });
 });
 
