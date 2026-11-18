@@ -185,7 +185,7 @@ it('names the holder, by its label and keeper PID, when a wait times out (hearsa
   try {
     const [claim] = await readdir(join(root, '.git/cezar-worktree-mutations'));
     const pid = Number(claim!.split('-')[0]);
-    const failure = await withWorktreeMutation(root, async () => {}, { waitMs: 0, label: { operation: 'worker-destroy', owner: 'worker-2' } }).catch((error: unknown) => error);
+    const failure = await withWorktreeMutation(root, async () => {}, { waitMs: 100, label: { operation: 'worker-destroy', owner: 'worker-2' } }).catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(WorktreeMutationLockTimeout);
     expect((failure as WorktreeMutationLockTimeout).holder).toEqual({ pid, operation: 'worker-spawn', owner: 'worker-1' });
     expect((failure as Error).message).toBe(`timed out waiting for worktree mutation lock; held by worker-spawn for worker-1 (pid ${pid})`);
