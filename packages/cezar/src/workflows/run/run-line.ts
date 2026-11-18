@@ -11,6 +11,7 @@ import type { WorkflowDef } from '../types.ts';
 import type { PendingContinuation, StartRunInput } from './types.ts';
 import { admissionRefusal } from '../../runs/worker-execution.ts';
 import type { RunMemory } from './run-memory.ts';
+import { DEFAULT_RUNNER_ID } from '../../core/runner-registry.ts';
 
 export type PendingJob = { workflow: WorkflowDef; input: StartRunInput; startAt?: number | undefined };
 
@@ -50,7 +51,7 @@ export function oldestEligibleWakeAt(entries: Iterable<string>, reads: {
     // not advertised while anything is held.
     const runnerless = holds.deadline.size + holds.inFlight.size > 0 && atTaskHead.runnerless(reads, id);
     if (runnerless && configuredDefaultRunner === undefined) continue;
-    if (!reads.canLeaveLine(id, holds, configuredDefaultRunner ?? 'claude')) continue;
+    if (!reads.canLeaveLine(id, holds, configuredDefaultRunner ?? DEFAULT_RUNNER_ID)) continue;
     oldest = at;
   }
   return oldest;
@@ -273,7 +274,7 @@ export class RunLine {
           // (hearsay-tools/cezarion#1236); a held one keeps its place in the queue rather than
           // being dequeued and re-queued (which would churn its position and its record).
           const next = nextLineEntry(this.entries(), (id) => this.wakeJoinedAt(id),
-            (id) => (capacity() || this.poolWakeQueued(id)) && this.canLeaveLine(id, anyHold ? holds : NO_HOLDS, defaultRunner ?? 'claude'));
+            (id) => (capacity() || this.poolWakeQueued(id)) && this.canLeaveLine(id, anyHold ? holds : NO_HOLDS, defaultRunner ?? DEFAULT_RUNNER_ID));
           if (next === -1) break; // every queued run has a durable reason to remain held
           const candidate = this.entries()[next]!;
           if (this.host.workerExecutionStopped(candidate)) { this.host.cancel(candidate); continue; }

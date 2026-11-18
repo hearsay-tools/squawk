@@ -5,6 +5,7 @@ import { unregisterRunProcess } from '../../core/process-usage.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
 import type { RunRecord, RunStore, StepState } from '../../runs/store.ts';
 import type { ActiveRun } from '../active-run.ts';
+import { DEFAULT_RUNNER_ID } from '../../core/runner-registry.ts';
 
 export interface UsageAccountingHost {
   isDisposedDelegatedRun(runId: string): boolean;
@@ -137,7 +138,7 @@ function restoreCumulativeSessionCost(
   }
   const sessionStepIds = new Set(run.steps.filter((candidate) => {
     // A step with no recorded backend ran on the default runner, Claude.
-    return RUNNER_FACTS[candidate.backend ?? 'claude'].costReport === 'cumulative' && (step.sessionId
+    return RUNNER_FACTS[candidate.backend ?? DEFAULT_RUNNER_ID].costReport === 'cumulative' && (step.sessionId
       ? candidate.sessionId === step.sessionId
       : candidate.id === step.id);
   }).map((candidate) => candidate.id));

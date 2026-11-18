@@ -42,9 +42,11 @@ import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
+import { registerBuiltInRunners } from '../src/runners/built-in.ts';
 
 // Workspace receipts and markers use the host's identity store (ADR 0032).
 installWindowsIdentityStore();
+registerBuiltInRunners();
 
 type RunManager = import('../src/workflows/run.ts').RunManager;
 type RunRecord = import('../src/runs/store.ts').RunRecord;
@@ -104,7 +106,7 @@ async function benchmark(argv: string[], cleanups: Array<() => unknown>): Promis
   const { ProjectContexts } = await import('../src/server/project-context.ts');
   const { RunManager: RealRunManager } = await import('../src/workflows/run.ts');
   const { acquireCiResources } = await import('../src/ci-wait/resources.ts');
-  const { createRunner } = await import('../src/core/runner-factory.ts');
+  const { createRunner } = await import('../src/core/runner-registry.ts');
   const { listProjects, registerProject, clearProjectProbeCache } = await import('../src/workspace/projects.ts');
   const { WorkspaceEventBus, createApp } = await import('../src/server/server.ts');
   const { apiRequest } = await import('../src/server/loopback-request.testkit.ts');

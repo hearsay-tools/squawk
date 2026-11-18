@@ -12,6 +12,7 @@ import { hasRegisteredRunProcess } from '../core/process-usage.ts';
 import { WorkerIdentityError, removedRunnerStepAfter } from '../delegation/execution-identity.ts';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
+import { DEFAULT_RUNNER_ID } from '../core/runner-registry.ts';
 
 /** What a Continue may carry (`RunManager.continueRun`). */
 export type ContinueRunOptions = {
@@ -104,7 +105,7 @@ export function sessionRefusal(sessionStep: StepState | undefined, untouched: bo
 /** Session ids belong to their provider and account, including mixed-chain worker steps. */
 export function sessionAffinity(run: RunRecord, opts: ContinueRunOptions, identity: WorkerStepIdentity | undefined,
   sessionStep: StepState | undefined, untouched: boolean) {
-  const originalRunner = identity?.account.provider ?? opts.retryRunner ?? run.runner ?? (untouched ? opts.originalRunner : undefined) ?? 'claude';
+  const originalRunner = identity?.account.provider ?? opts.retryRunner ?? run.runner ?? (untouched ? opts.originalRunner : undefined) ?? DEFAULT_RUNNER_ID;
   const targetRunner = opts.runner ?? originalRunner;
   // Legacy sessions without explicit affinity belong to the run's current runner/account.
   const sessionBackend = sessionRunner(sessionStep, run);

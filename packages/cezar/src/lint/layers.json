@@ -41,7 +41,8 @@
       "core/codex-*",
       "core/omp-*",
       "core/opencode-*",
-      "core/pi-*"
+      "core/pi-*",
+      "runners/"
     ],
     "shell": [
       "server/",

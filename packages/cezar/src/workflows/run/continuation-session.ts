@@ -395,7 +395,7 @@ export class ContinuationSession {
     if (state.liveSession.cancelled) { this.settleContinuationPrelaunchCancel(runId, stepId, state); return; }
     if (this.host.holdContinuationForRootFinish(runId, { stepId, sessionId, backend, prompt, images, lineJoinedAt: Date.now() }, state)) return;
     this.applyContinuationSettings(runId, stepId, state, backend, settings);
-    const { runner } = continuationRunner(backend, sessionId, settings.owningStep, this.context.createRunner);
+    const { runner } = await continuationRunner(backend, sessionId, settings.owningStep, this.context.createRunner);
     await cleanupTaskWorktreeSkills(state.liveSession.cwd, this.context.store.getRun(runId)?.worktreePath, this.context.repoRoot,
       message => this.context.store.appendEvent(runId, { type: 'note', message }));
     await this.runSkills.loadRunSkills(state, backend, settings.profile);

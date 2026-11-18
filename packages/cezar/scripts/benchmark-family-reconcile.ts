@@ -33,9 +33,11 @@ import type { ConversationMessage } from '@open-mercato/cezar-contract';
 // This benchmark reads settled runs and starts no runner.
 import { noRunners } from '../src/core/runners-under-test.testkit.ts';
 import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
+import { registerBuiltInRunners } from '../src/runners/built-in.ts';
 
 // Workspace receipts and markers use the host's identity store (ADR 0032).
 installWindowsIdentityStore();
+registerBuiltInRunners();
 
 process.env.HSQ_PROJECT_WARMUP = process.env.CEZ_PROJECT_WARMUP = '0';
 const ownHome = prepareBenchmarkEnv();

@@ -16,7 +16,8 @@ import { child, stringOf, type AstRule, type EsNode, type Report, type Visitors 
  * ones included), a literal `import()`, a literal `import('…')` type and an
  * `import x = require('…')`. It maps `.js` to `.ts` and reports
  * - an import of a `feature:<name>` file;
- * - an import of a `runner` file, except from `core/runner-factory.ts`.
+ * - an import of a `runner` file. The core builds runners only through the registry
+ *   (`core/runner-registry.ts`), which the entries fill from `runners/built-in.ts`.
  * It does not read package specifiers, a computed specifier or a re-export chain: a core file
  * that imports a core file that imports a feature is not reported at the first file. Imports from
  * `shell`, `tooling`, `runner` and `feature` files are out of its scope.
@@ -29,8 +30,6 @@ import { child, stringOf, type AstRule, type EsNode, type Report, type Visitors 
 export const layerMapFile = 'packages/cezar/src/lint/layers.json';
 export const layerImportBaselineFile = 'packages/cezar/src/lint/layer-import.baseline.json';
 const SRC = 'packages/cezar/src/';
-/** The one core file that builds runners. */
-const RUNNER_FACTORY = 'core/runner-factory.ts';
 const LAYER_NAME = /^(?:core|runner|shell|tooling|feature:[a-z][a-z0-9-]*)$/;
 
 /** One path of the map. */
@@ -113,7 +112,7 @@ export function crossing(file: string, target: string, map: readonly LayerPath[]
   if (layerOf(file, map) !== 'core') return undefined;
   const to = layerOf(target, map);
   if (to?.startsWith('feature:')) return `a core file imports ${to} (${target})`;
-  if (to === 'runner' && file !== RUNNER_FACTORY) return `a core file imports the runner file ${target}; only ${RUNNER_FACTORY} builds runners`;
+  if (to === 'runner') return `a core file imports the runner file ${target}; the core builds runners only through core/runner-registry.ts`;
   return undefined;
 }
 
@@ -248,7 +247,7 @@ export function layerImportVisitors(report: Report, file: string, map = (loadedM
 
 export const layerImport: AstRule = {
   name: 'layer-import',
-  description: 'A core file imports no feature file, and only core/runner-factory.ts imports a runner file (ADR 0065, hearsay-tools/squawk#3706).',
+  description: 'A core file imports no feature file and no runner file (ADR 0065, hearsay-tools/squawk#3706).',
   applies,
   create: (report, context) => layerImportVisitors(report, context.file),
 };

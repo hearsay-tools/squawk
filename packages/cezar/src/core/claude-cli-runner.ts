@@ -20,7 +20,7 @@ import type {
   InputDelivery,
   ToolGrant,
 } from './agent-runner.ts';
-import { RUNNER_FACTS } from './runner-facts.ts';
+import { CLAUDE_FACTS } from '../runners/claude/facts.ts';
 
 // Re-exported for backends and the run manager that still import them from here.
 export type { AgentSession, SessionOptions } from './agent-runner.ts';
@@ -96,9 +96,9 @@ export const CLAUDE_SPEC_SUPPORT: AgentRunSpecSupport = {
 export class ClaudeCliRunner implements AgentRunner {
   readonly backend = 'claude' as const;
   readonly specSupport = CLAUDE_SPEC_SUPPORT;
-  readonly systemPromptOnResume = RUNNER_FACTS.claude.systemPromptOnResume;
-  readonly facts = RUNNER_FACTS.claude;
-  readonly inputDelivery: InputDelivery = RUNNER_FACTS.claude.inputDelivery;
+  readonly systemPromptOnResume = CLAUDE_FACTS.systemPromptOnResume;
+  readonly facts = CLAUDE_FACTS;
+  readonly inputDelivery: InputDelivery = CLAUDE_FACTS.inputDelivery;
 
   private readonly bin: string;
   private readonly timeoutMs: number | undefined;

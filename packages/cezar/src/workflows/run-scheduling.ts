@@ -4,6 +4,7 @@ import type { RunRecord } from '../runs/store.ts';
 import type { AccountHolds } from '../workspace/semaphore.ts';
 import type { StartRunInput } from './run/types.ts';
 import type { WorkflowDef } from './types.ts';
+import { DEFAULT_RUNNER_ID } from '../core/runner-registry.ts';
 
 /**
  * A deadline hold blocks all work on its account. An in-flight resume holds fresh work only;
@@ -100,7 +101,7 @@ export function deriveAccountHolds(
     if (run.removedRunner !== undefined) continue;
     // A holding run always carries the runner it actually ran on, so the fallback is unused
     // here — it is spelled out rather than `!` so a future record shape degrades, not throws.
-    const key = () => runAccountKey(withExecutionAccount(run), run.runner ?? 'claude');
+    const key = () => runAccountKey(withExecutionAccount(run), run.runner ?? DEFAULT_RUNNER_ID);
     // A provider-error hold blocks no account (hearsay-tools/squawk#3337): its error may be one
     // model's, and a run that meets the same limit holds by itself.
     if (isUsageLimitHold(run) && run.autoResumeReason !== 'provider-error') {

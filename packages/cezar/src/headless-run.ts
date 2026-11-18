@@ -13,7 +13,7 @@ import type { RunStore } from './runs/store.ts';
 import type { Home } from './home/home.ts';
 import { RunManager } from './workflows/run.ts';
 import { acquireCiResources } from './ci-wait/resources.ts';
-import { createRunner } from './core/runner-factory.ts';
+import { createRunner } from './core/runner-registry.ts';
 import { loadWorkflows } from './workflows/load.ts';
 import { ProviderRuntimeAuthObserver } from './server/provider-auth-runtime.ts';
 import { providersRequiredByWorkflow, unavailableProviderMessage } from './server/provider-action-gate.ts';

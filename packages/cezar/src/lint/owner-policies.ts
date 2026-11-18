@@ -203,12 +203,17 @@ export const OWNER_POLICIES: Record<string, OwnerPolicy> = {
   },
   "runner-class-outside-factory": {
     "name": "runner-class-outside-factory",
-    "message": "Only createRunner in packages/cezar/src/core/runner-factory.ts constructs a runner class (hearsay-tools/cezarion#2939). Code outside packages/cezar/src/core/ takes a RunnerFactory (core/agent-runner.ts) and loads no concrete runner module at run time; use `import type` for a type.",
+    "message": "Only a runner's own folder, packages/cezar/src/runners/<id>/, constructs a runner class or loads a concrete runner module, through the definition's loadAdapter (hearsay-tools/cezarion#2939). Other code takes a RunnerFactory (core/agent-runner.ts) such as createRunner in core/runner-registry.ts; use `import type` for a type.",
     "files": [
       "packages/cezar/src/**/*.ts"
     ],
     "ignores": [
-      "packages/cezar/src/core/**",
+      "packages/cezar/src/runners/*/**",
+      "packages/cezar/src/core/claude-*",
+      "packages/cezar/src/core/codex-*",
+      "packages/cezar/src/core/omp-*",
+      "packages/cezar/src/core/opencode-*",
+      "packages/cezar/src/core/pi-*",
       "packages/cezar/src/**/*.test.ts",
       "packages/cezar/src/**/*.testkit.ts"
     ]

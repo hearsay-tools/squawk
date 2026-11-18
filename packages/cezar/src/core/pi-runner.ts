@@ -29,7 +29,7 @@ import type {
   SessionOptions,
   ToolGrant,
 } from './agent-runner.js';
-import { RUNNER_FACTS } from './runner-facts.js';
+import { PI_FACTS } from '../runners/pi/facts.js';
 import { SessionEndedBeforeAcknowledgement, SQUAWK_SIDE_SPEC_SUPPORT, unknownToolGrant } from './agent-runner.js';
 import { signalSession, spawnSessionLeader, waitForEofExit } from './session-process.js';
 import { buildChildEnv } from './agent-env.js';
@@ -90,9 +90,9 @@ export const PI_SPEC_SUPPORT: AgentRunSpecSupport = {
 export class PiRunner implements AgentRunner {
   readonly backend = 'pi' as const;
   readonly specSupport = PI_SPEC_SUPPORT;
-  readonly systemPromptOnResume = RUNNER_FACTS.pi.systemPromptOnResume;
-  readonly facts = RUNNER_FACTS.pi;
-  readonly inputDelivery: InputDelivery = RUNNER_FACTS.pi.inputDelivery;
+  readonly systemPromptOnResume = PI_FACTS.systemPromptOnResume;
+  readonly facts = PI_FACTS;
+  readonly inputDelivery: InputDelivery = PI_FACTS.inputDelivery;
   private readonly bin: string;
   private readonly timeoutMs: number | undefined;
   private lastSession: AgentSession | null = null;

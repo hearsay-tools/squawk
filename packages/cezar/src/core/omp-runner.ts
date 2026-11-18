@@ -30,7 +30,7 @@ import type {
   ToolGrant,
 } from './agent-runner.js';
 import { SessionEndedBeforeAcknowledgement, SQUAWK_SIDE_SPEC_SUPPORT } from './agent-runner.ts';
-import { RUNNER_FACTS } from './runner-facts.js';
+import { OMP_FACTS } from '../runners/omp/facts.js';
 import { ompRequestedTools } from './runner-tool-grants.ts';
 import { ownLookup } from './own-lookup.ts';
 import { signalSession, spawnSessionLeader } from './session-process.js';
@@ -247,9 +247,9 @@ export interface OmpRunnerOptions {
 export class OmpRunner implements AgentRunner {
   readonly backend = 'omp' as const;
   readonly specSupport = OMP_SPEC_SUPPORT;
-  readonly systemPromptOnResume = RUNNER_FACTS.omp.systemPromptOnResume;
-  readonly facts = RUNNER_FACTS.omp;
-  readonly inputDelivery: InputDelivery = RUNNER_FACTS.omp.inputDelivery;
+  readonly systemPromptOnResume = OMP_FACTS.systemPromptOnResume;
+  readonly facts = OMP_FACTS;
+  readonly inputDelivery: InputDelivery = OMP_FACTS.inputDelivery;
   private readonly bin: string;
   private readonly timeoutMs: number | undefined;
   private readonly killGraceMs: number | undefined;

@@ -11,6 +11,7 @@ import {
   resolveRuntimeAuthVerificationTarget,
   type RuntimeAuthVerificationTarget,
 } from '../workspace/agent-profiles.ts';
+import { DEFAULT_RUNNER_ID } from '../core/runner-registry.ts';
 
 const AUTH_ERROR_EVENT_TYPES = new Set(['error', 'session.error', 'note']);
 
@@ -50,7 +51,7 @@ export function watchProviderRuntimeAuthFailures(
     // backend ran under THAT backend's own default login, and asking the resolver for the runner's
     // profile under the wrong provider can only mis-answer the check or stall it unresolved.
     const profileId = step?.profileId
-      ?? (provider === (run.runner ?? 'claude') ? run.agentProfile : undefined);
+      ?? (provider === (run.runner ?? DEFAULT_RUNNER_ID) ? run.agentProfile : undefined);
     const report = providerAuth.reportRuntimeAuthFailure(provider);
     if (!report) return;
     if (report.transitioned) onProviderStatus(report.status);

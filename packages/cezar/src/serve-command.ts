@@ -18,7 +18,7 @@ import type { RunStore } from './runs/store.ts';
 import type { Home } from './home/home.ts';
 import { RunManager } from './workflows/run.ts';
 import { acquireCiResources } from './ci-wait/resources.ts';
-import { createRunner } from './core/runner-factory.ts';
+import { createRunner } from './core/runner-registry.ts';
 import { startServer } from './server/start-server.ts';
 import { cockpitOriginFor, WorkspaceEventBus } from './server/server.ts';
 import { ProviderRuntimeAuthObserver } from './server/provider-auth-runtime.ts';

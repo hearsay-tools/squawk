@@ -33,6 +33,7 @@ import { applyTemplate, resolveExtraSystemPrompt, resumeNotice } from './prompts
 import type { PendingJob } from './run-line.ts';
 import type { QueuedRevivalHost } from './queued-revival.ts';
 import type { ContinuationOpening, Execution, PendingContinuation, RunModuleContext, StartRunInput, StepModel, StepProfile } from './types.ts';
+import { DEFAULT_RUNNER_ID } from '../../core/runner-registry.ts';
 
 // This view adds no promise continuation before the caller's original post-config gate.
 function readLaunchConfig(repoRoot: string, home: Home): Promise<LaunchConfig> {
@@ -120,13 +121,13 @@ function continuationEffort(
 
 /** The Continue's runner, and whether it resumes into a thread that already holds the skill
  *  playbook. */
-function continuationRunner(
+async function continuationRunner(
   backend: RunnerId,
   sessionId: string | undefined,
   owningStep: RunRecord['steps'][number] | undefined,
   factory: RunnerFactory,
-): { runner: AgentRunner } {
-  const runner = factory(backend);
+): Promise<{ runner: AgentRunner }> {
+  const runner = await factory(backend);
   return { runner };
 }
 
@@ -455,7 +456,7 @@ async function agentEnvForStep(
   }
   const run = store.getRun(runId);
   const profileId = options.recordedProfileId
-    ?? (backend === (run?.runner ?? 'claude') ? run?.agentProfile : undefined);
+    ?? (backend === (run?.runner ?? DEFAULT_RUNNER_ID) ? run?.agentProfile : undefined);
   const resolved = await resolveProfileEnvForRoot(repoRoot, backend, profileId, process.env, home);
   const env = { ...host.agentEnv(runId), ...resolved.env };
   return {
@@ -590,7 +591,7 @@ function queuedResumeSession(context: RunModuleContext, host: QueuedRevivalHost,
   let resumeIdentity: WorkerStepIdentity | undefined;
   try { resumeIdentity = host.workerStep(run.id, continuationDefStep(context.store, run, sessionStep.sessionId)?.id); }
   catch (error) { if (!(error instanceof WorkerIdentityError)) throw error; }
-  const backend = resumeIdentity?.account.provider ?? retryInFlightRunner(run) ?? run.runner ?? 'claude';
+  const backend = resumeIdentity?.account.provider ?? retryInFlightRunner(run) ?? run.runner ?? DEFAULT_RUNNER_ID;
   const sessionBackend = sessionRunner(sessionStep, run);
   const sessionAccount = sessionStep.profileId ?? DEFAULT_AGENT_ACCOUNT_ID;
   // A provider retry keeps the held step's account, resolved as `sessionAccount` is (hearsay-tools/squawk#3337).
