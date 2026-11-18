@@ -8,8 +8,9 @@ the PR merges, closes, conflicts, or is neither queued nor scheduled for auto-me
 It includes any known queue-removal or auto-merge-disable reason. A pending queue
 slot or enabled auto-merge keeps it open. A queue removal because the PR merged also
 keeps it open: GitHub can read the PR as open for a moment after the queue merges it,
-so Squawk reads it again after 1, 5 and 15 seconds, then every 30 seconds, until it
-reads `merged`. The ordinary merge target ignores queue
+so while the PR still reads as open, Squawk reads it again after 1, 5 and 15 seconds,
+then every 30 seconds. The wait still ends on `merged`, a closure, a conflict or its
+deadline, whichever comes first. The ordinary merge target ignores queue
 removal; use `wake_on_conflict: false` for a dependency wait that also ignores
 conflicts. Only `merged` confirms success. The optional
 `timeout_seconds` defaults to 1,800 and accepts 1–7,200. With `kind: "timer"`,
