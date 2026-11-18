@@ -105,8 +105,10 @@ describe('the isolated workspace kind', () => {
     const assertCurrent = () => {};
     const assertUnheld = () => {};
     expect(await isolated.remove('/repo', workspace, { previewHost, assertCurrent, assertUnheld }))
-      .toMatchObject({ state: 'complete', args: [{ previewHost }, '/repo', workspace, assertCurrent, assertUnheld] });
-    expect(calls).toEqual([`teardown ${JSON.stringify(['/repo', ['stop'], workspace])}`, 'remove']);
+      .toMatchObject({ state: 'complete', args: [{ previewHost }, '/repo', workspace, assertCurrent, assertUnheld, {}] });
+    expect(await isolated.remove('/repo', workspace, { waitMs: 250 }))
+      .toMatchObject({ args: [{ previewHost: undefined }, '/repo', workspace, undefined, undefined, { waitMs: 250 }] });
+    expect(calls).toEqual([`teardown ${JSON.stringify(['/repo', ['stop'], workspace])}`, 'remove', 'remove']);
   });
 });
 

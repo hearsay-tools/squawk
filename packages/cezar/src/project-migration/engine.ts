@@ -81,7 +81,7 @@ async function runJournal(path: string, start: ProjectMigrationJournal, resumed:
   // Worktree locks, moves and repairs in one hold of the common directory's mutation lock, so no
   // cooperating process mutates worktree registrations in between; the Git locks cover a crash.
   if (journal.worktrees.length > 0 && GIT_MIGRATION_STEPS.some(step => !journal.done.includes(step))) {
-    await withWorktreeMutation(journal.repoRoot, async git => { for (const step of GIT_MIGRATION_STEPS) await run(step, git); });
+    await withWorktreeMutation(journal.repoRoot, async git => { for (const step of GIT_MIGRATION_STEPS) await run(step, git); }, { label: { operation: 'project-migration' } });
   }
   for (const step of PROJECT_MIGRATION_STEPS) await run(step);
   removeProjectMigrationJournal(path);

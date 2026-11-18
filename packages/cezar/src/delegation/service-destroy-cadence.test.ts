@@ -6,7 +6,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { describe, expect, it, vi } from 'vitest';
 
 import { scheduledDestroyAttempts, workerCleanupInternals } from './service.testkit.ts';
-import { WORKTREE_LOCK_BUSY_ERROR } from './workspace-removal.ts';
+import { WORKTREE_LOCK_BUSY_PREFIX } from './workspace-removal.ts';
 import { DelegationService } from './service.ts';
 
 import { f, linux, cadence, settled, destroyOf, betweenAttempts, useDestroyBackoffFixture } from './service-destroy-backoff.testkit.ts';
@@ -51,7 +51,7 @@ describe('destroy backoff cadence', { timeout: 30_000 }, () => {
       restarted.armDestroyRetries('project');
       await vi.waitFor(() => { for (const { workerId } of [a, b]) expect(destroyOf(workerId)?.retry?.attempts).toBeGreaterThanOrEqual(1); }, { timeout: 10_000 });
       expect(most).toBe(1);
-      for (const { workerId } of [a, b]) expect((await betweenAttempts(workerId, () => destroyOf(workerId), restarted))?.error).not.toBe(WORKTREE_LOCK_BUSY_ERROR);
+      for (const { workerId } of [a, b]) expect((await betweenAttempts(workerId, () => destroyOf(workerId), restarted))?.error ?? '').not.toContain(WORKTREE_LOCK_BUSY_PREFIX);
     } finally { detach(); }
   });
 

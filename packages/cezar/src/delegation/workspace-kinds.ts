@@ -14,6 +14,8 @@ export type WorkspaceRemoval = {
   previewHost?: { release(runId: string): Promise<void> } | undefined;
   assertCurrent?: (() => void) | undefined;
   assertUnheld?: (() => void) | undefined;
+  /** How long the removal may wait for a lock it needs. Left out: it does not wait. */
+  waitMs?: number;
 };
 
 export interface WorkspaceKind {
@@ -80,8 +82,9 @@ const isolated: WorkspaceKind = {
   async teardown(repoRoot, config, workspace) {
     return (await import('./worktree-teardown.ts')).runWorktreeTeardown(repoRoot, config, workspace);
   },
-  async remove(repoRoot, workspace, { previewHost, assertCurrent, assertUnheld }) {
-    return (await import('./owned-workspace-release.ts')).releaseThenRemoveOwnedWorkspace({ previewHost }, repoRoot, workspace, assertCurrent, assertUnheld);
+  async remove(repoRoot, workspace, { previewHost, assertCurrent, assertUnheld, waitMs }) {
+    return (await import('./owned-workspace-release.ts')).releaseThenRemoveOwnedWorkspace({ previewHost }, repoRoot, workspace, assertCurrent, assertUnheld,
+      waitMs === undefined ? {} : { waitMs });
   },
 };
 

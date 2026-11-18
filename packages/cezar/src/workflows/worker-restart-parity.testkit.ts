@@ -270,7 +270,8 @@ it.each(RESTART_RUNNERS.r47)('%s settles a same-boot crash as gone once recorded
       writeFileSync(join(files, `${w.id}.processes.json`), JSON.stringify({ ...ledger,
         processes: [...ledger.processes, { pid: ambient.pid, startToken: `${boot}:1` }] }));
       detach(); manager.dispose(); store.flush(); reopenRuntime(); await manager.recover();
-      service = new DelegationService(workerCleanups()); detach = service.registerProject({ home: testHome(), id: 'project', root, store, manager });
+      // An explicit destroy waits its own bounded time for the lock; 1 s here, so the hang guard below stays far off.
+      service = new DelegationService(workerCleanups({ manualLockWaitMs: 1_000 })); detach = service.registerProject({ home: testHome(), id: 'project', root, store, manager });
       // Exit proof, not abandonment: the generation completes and nothing cancels the task.
       expect(store.readWorkerExecution(w.id)).toMatchObject({ phase: 'complete', generation: proof.generation });
       expect(store.readWorkerExecution(w.id)?.abandoned).toBeUndefined();
@@ -290,7 +291,7 @@ it.each(RESTART_RUNNERS.r47)('%s settles a same-boot crash as gone once recorded
       try {
         expect(await service.destroyForHuman('project', w.id)).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'], error: expect.stringMatching(/lock.*busy|lock.*timed out/i) });
         expect(released).toBe(false);
-        // The destroy asks for the lock with its own short budget, never the default two minutes.
+        // The destroy asks for the lock with its own bounded budget, never the default two minutes.
         expect(locks.mock.calls.map(([, , options]) => options?.waitMs)).toEqual([1_000]);
         expect(existsSync(workspace.path)).toBe(true);
         expect(execFileSync('git', ['branch', '--list', '--format=%(refname:short)', workspace.branch], { cwd: root, encoding: 'utf8' }).trim()).toBe(workspace.branch);

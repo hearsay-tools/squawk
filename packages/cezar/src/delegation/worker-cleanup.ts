@@ -8,6 +8,14 @@ import { describeProcesses, isCurrentProcess, recordedProcessLive } from './proc
 import { workspaceKind, type WorkspaceResource } from './workspace-kinds.ts';
 import { loadConfig } from '../config.ts';
 import { DESTROY_ATTENTION_ATTEMPTS, DESTROY_BACKOFF, retryDelayMs, type Backoff } from './retry-backoff.ts';
+import { WORKTREE_LOCK_BUSY_PREFIX } from './workspace-removal.ts';
+
+/** How long an explicit destroy waits in the worktree mutation lock queue: long enough for a
+ * settling worker's own Git work to finish (hearsay-tools/squawk#3817). */
+export const MANUAL_DESTROY_LOCK_WAIT_MS = 30_000;
+/** The part of the CLI's 45 s request bound an explicit destroy may use before its lock wait ends,
+ * so the caller reads the answer, holder and retry time included, instead of a transport timeout. */
+export const MANUAL_DESTROY_ANSWER_BY_MS = 40_000;
 import type { DelegationProject, WorkerCleanupFactory } from './service.ts';
 
 /** Why the worker's scope is not this controller's to stop: its current generation's record names
@@ -20,12 +28,20 @@ function foreignControl(store: DelegationProject['store'], workerId: string): st
   return `the worker is still controlled by a live ${productName('cezar')} (pid ${record.controller.pid})`;
 }
 
+/** A worker that failed before any step started: no agent ran in it, so it holds no work, and its
+ * resources and cap slot are released without the parent asking (hearsay-tools/squawk#3817). */
+export function failedBeforeFirstStep(store: DelegationProject['store'], run: RunRecord): boolean {
+  return run.delegation?.role === 'worker' && run.status === 'failed' && !run.delegation.destroy &&
+    !run.steps.some(step => step.startedAt) && store.readWorkerExecution(run.id)?.phase === 'complete';
+}
+
 /** Tests pass shorter cadences and termination waits through these constructor options. */
 export type WorkerCleanupOptions = {
   now?: () => number;
   backoff?: Backoff;
   attentionAttempts?: number;
   terminationTimeoutMs?: number;
+  manualLockWaitMs?: number;
 };
 
 type Serialize = <T>(key: string, operation: () => Promise<T>) => Promise<T>;
@@ -48,6 +64,43 @@ export class WorkerCleanup {
     this.destroyBackoff = options.backoff ?? DESTROY_BACKOFF;
     this.destroyAttentionAttempts = options.attentionAttempts ?? DESTROY_ATTENTION_ATTEMPTS;
     this.terminationTimeoutMs = options.terminationTimeoutMs ?? 30_000;
+    this.manualLockWaitMs = options.manualLockWaitMs ?? MANUAL_DESTROY_LOCK_WAIT_MS;
+    project.store.on('run', this.onRun);
+  }
+
+  /** Every run change: a worker that just failed before its first step is destroyed in the background. */
+  private readonly onRun = (run: RunRecord): void => {
+    if (failedBeforeFirstStep(this.project.store, run)) this.releaseFailedStart(run.id);
+  };
+  private failStartReleases = new Set<string>();
+  /** One automatic destroy per fail-start worker; an incomplete one continues on the retry cadence. */
+  private releaseFailedStart(workerId: string): void {
+    const project = this.projects.get(this.project.id);
+    if (!project || this.failStartReleases.has(workerId)) return;
+    this.failStartReleases.add(workerId);
+    const check = () => {
+      if (this.projects.get(project.id) !== project) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
+      const current = project.store.getRun(workerId);
+      if (current?.delegation?.role !== 'worker' || current.delegation.workspace.ownerRunId !== workerId || current.status !== 'failed' ||
+        current.delegation.destroy?.phase === 'complete') throw new DelegationPolicyError('incompatible_state', 'Worker is no longer a failed start');
+      // Until destroy intent is written, the worker must still be a failed start: a parent's resume
+      // can queue, run and fail it again while this release waits its turn. `destroyAttempt` calls
+      // this last with no await before it writes the intent; after that, a resume is refused.
+      if (!current.delegation.destroy && !failedBeforeFirstStep(project.store, current)) {
+        throw new DelegationPolicyError('incompatible_state', 'Worker is no longer a failed start');
+      }
+      return current;
+    };
+    // Off the store's emit: the attempt writes runs itself.
+    setImmediate(() => {
+      void this.serialized(`worker:${project.id}:${workerId}`, async () => {
+        if (!failedBeforeFirstStep(project.store, check())) return;
+        await this.serialized(`destroy-retries:${project.id}`, () => this.destroyAttempt(project, workerId, check, 'scheduled', this.now()));
+      }).catch(() => undefined).finally(() => {
+        this.failStartReleases.delete(workerId);
+        this.scheduleDestroyRetry(project, workerId);
+      });
+    });
   }
 
   request(workerId: string, check: () => RunRecord): Promise<WorkerDestroyResult> {
@@ -56,10 +109,19 @@ export class WorkerCleanup {
     return this.destroySerialized(this.project, workerId, check);
   }
 
-  armAfterRecovery(): void { this.armDestroyRetries(this.project.id); }
+  armAfterRecovery(): void {
+    this.armDestroyRetries(this.project.id);
+    // A fail-start that settled while no controller ran is released now. `listRuns` holds only live
+    // runs, and a settled failed worker is not one: read every worker.
+    for (const id of this.project.store.listWorkerIds()) {
+      const run = this.project.store.getRun(id);
+      if (run && failedBeforeFirstStep(this.project.store, run)) this.releaseFailedStart(id);
+    }
+  }
 
   detach(): void {
     this.clearDestroyRetries(this.project.id);
+    this.project.store.off('run', this.onRun);
     this.detached = true;
   }
 
@@ -68,10 +130,14 @@ export class WorkerCleanup {
   private readonly destroyBackoff: Backoff;
   private readonly destroyAttentionAttempts: number;
   private readonly terminationTimeoutMs: number;
+  private readonly manualLockWaitMs: number;
+  /** When each armed automatic attempt is due, so an explicit destroy's answer can say when. */
+  private destroyRetryDue = new Map<string, Map<string, number>>();
   private clearDestroyRetries(projectId: string): void {
     for (const timer of this.destroyRetryTimers.get(projectId)?.values() ?? []) clearTimeout(timer);
     this.destroyRetryTimers.delete(projectId);
     this.destroyRetryInFlight.delete(projectId);
+    this.destroyRetryDue.delete(projectId);
   }
   /** Called only after manager recovery, when persisted destroy intents may be retried. */
   private armDestroyRetries(projectId: string): void {
@@ -94,8 +160,12 @@ export class WorkerCleanup {
     const { fastMs, capMs } = this.destroyBackoff;
     const nextAt = run.destroyRetry ? Date.parse(run.destroyRetry.nextAt) - this.now() : 0;
     const delay = Math.min(Math.max(fastMs, nextAt), capMs * 1.1);
+    let due = this.destroyRetryDue.get(project.id);
+    if (!due) { due = new Map(); this.destroyRetryDue.set(project.id, due); }
+    due.set(workerId, this.now() + delay);
     const timer = setTimeout(() => {
       timers.delete(workerId);
+      due.delete(workerId);
       if (this.projects.get(project.id) !== project) return;
       let inFlight = this.destroyRetryInFlight.get(project.id);
       if (!inFlight) { inFlight = new Set(); this.destroyRetryInFlight.set(project.id, inFlight); }
@@ -123,7 +193,7 @@ export class WorkerCleanup {
       check();
       // One automatic attempt at a time per project: attempts that coincide (every pending destroy
       // after a restart) would otherwise contend for the worktree mutation lock.
-      await this.serialized(`destroy-retries:${project.id}`, () => this.destroyAttempt(project, workerId, check, 'scheduled')).catch(() => undefined);
+      await this.serialized(`destroy-retries:${project.id}`, () => this.destroyAttempt(project, workerId, check, 'scheduled', this.now())).catch(() => undefined);
       if (this.projects.get(project.id) !== project) return;
       const current = project.store.getRun(workerId);
       if (current?.delegation?.role !== 'worker' || !current.delegation.destroy || current.delegation.destroy.phase === 'complete') return;
@@ -133,24 +203,39 @@ export class WorkerCleanup {
       project.store.commitDestroyRetry(workerId, retry);
     });
   }
+  /** An explicit destroy's lock wait: what is left of its answer budget after termination, at least 1 s. */
+  private manualLockWait(startedAt: number): number {
+    return Math.max(1_000, Math.min(this.manualLockWaitMs, MANUAL_DESTROY_ANSWER_BY_MS - (this.now() - startedAt)));
+  }
   /** The project's raw `worktreeTeardown` value, read fresh at each attempt. */
   private async teardownConfig(project: DelegationProject): Promise<unknown> {
     return (await loadConfig(project.root, project.home)).worktreeTeardown;
   }
   /** An explicit destroy (Clean up, `cez worker destroy`): always a full attempt, and it restarts the
    * backoff, so a timer armed for a later automatic attempt is dropped and re-armed at the fast cadence. */
-  private destroySerialized(project: DelegationProject, workerId: string, check: () => RunRecord) {
-    return this.serialized(`worker:${project.id}:${workerId}`, () => this.destroyAttempt(project, workerId, check, 'manual')).finally(() => {
+  private async destroySerialized(project: DelegationProject, workerId: string, check: () => RunRecord) {
+    const rearm = () => {
       // A replaced registration owns its own timers under the same project id: leave them alone.
       if (this.projects.get(project.id) !== project) return;
       const timers = this.destroyRetryTimers.get(project.id);
       clearTimeout(timers?.get(workerId)); timers?.delete(workerId);
+      this.destroyRetryDue.get(project.id)?.delete(workerId);
       this.scheduleDestroyRetry(project, workerId);
-    });
+    };
+    let result: WorkerDestroyResult;
+    // The answer budget starts when the request arrives, so time queued behind another attempt counts.
+    const requestedAt = this.now();
+    try { result = await this.serialized(`worker:${project.id}:${workerId}`, () => this.destroyAttempt(project, workerId, check, 'manual', requestedAt)); }
+    finally { rearm(); }
+    // A busy lock clears by itself: say when the next automatic attempt runs (hearsay-tools/squawk#3817).
+    const due = this.destroyRetryDue.get(project.id)?.get(workerId);
+    return result.error?.startsWith(WORKTREE_LOCK_BUSY_PREFIX) && due !== undefined
+      ? { ...result, error: `${result.error}; ${productName('Cezar')} retries automatically at ${new Date(due).toISOString()}` } : result;
   }
   /** One full destroy attempt; the caller holds the worker's serialization key. A manual attempt
    * clears the run's `destroyRetry`, which resets the backoff; a completed destroy drops it. */
-  private async destroyAttempt(project: DelegationProject, workerId: string, check: () => RunRecord, mode: 'manual' | 'scheduled'): Promise<WorkerDestroyResult> {
+  private async destroyAttempt(project: DelegationProject, workerId: string, check: () => RunRecord, mode: 'manual' | 'scheduled',
+    startedAt: number): Promise<WorkerDestroyResult> {
     const assertAttached = () => {
       if (this.projects.get(project.id) !== project) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     };
@@ -230,9 +315,11 @@ export class WorkerCleanup {
       try {
         assertCurrent();
         // #781: release preview before the final check immediately preceding removal.
-        result = await kind.remove(project.root, workspace, { previewHost: project.manager.previewHost, assertCurrent, assertUnheld: assertSafe });
-      } catch {
-        result = { workerId, state: 'incomplete', remaining: resources, error: 'Worker resources could not be verified; cleanup will retry' };
+        result = await kind.remove(project.root, workspace, { previewHost: project.manager.previewHost, assertCurrent, assertUnheld: assertSafe,
+          ...(mode === 'manual' ? { waitMs: this.manualLockWait(startedAt) } : {}) });
+      } catch (error) {
+        result = { workerId, state: 'incomplete', remaining: resources,
+          error: `Worker resources could not be verified: ${(error instanceof Error ? error.message : String(error)).slice(0, 300)}; cleanup will retry` };
       } finally { release?.(); }
       // An already-started checked Git operation may finish after detach. Its
       // checkpoint makes a new controller's retry safe; the old store must not

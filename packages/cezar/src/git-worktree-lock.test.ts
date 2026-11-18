@@ -7,8 +7,8 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createWorktree, pruneOrphans, removeWorktree } from './git-worktree.ts';
-import { withWorktreeMutation } from './git-worktree-lock.ts';
-import { keeperWaitBudget, readMutationClaim } from './git-worktree-lock-helper.ts';
+import { describeMutationHolder, withWorktreeMutation, WorktreeMutationLockTimeout } from './git-worktree-lock.ts';
+import { keeperLabel, keeperPerClaimBudget, keeperWaitBudget, queuedWaitBudget, readMutationClaim } from './git-worktree-lock-helper.ts';
 
 const exec = promisify(execFile);
 const roots: string[] = [];
@@ -173,4 +173,42 @@ it('reads the keeper wait budget from its argument and refuses one out of range'
   expect(keeperWaitBudget('0')).toBe(0);
   expect(keeperWaitBudget('120000')).toBe(120_000);
   for (const value of ['-1', '120001', '1.5', 'soon']) expect(() => keeperWaitBudget(value)).toThrow('invalid worktree mutation wait budget');
+});
+
+it('names the holder, by its label and keeper PID, when a wait times out (hearsay-tools/squawk#3817)', async () => {
+  const root = await repo();
+  let release!: () => void; let entered!: () => void;
+  const ready = new Promise<void>(resolve => { entered = resolve; });
+  const held = withWorktreeMutation(root, async () => { entered(); await new Promise<void>(resolve => { release = resolve; }); },
+    { label: { operation: 'worker-spawn', owner: 'worker-1' } });
+  await ready;
+  try {
+    const [claim] = await readdir(join(root, '.git/cezar-worktree-mutations'));
+    const pid = Number(claim!.split('-')[0]);
+    const failure = await withWorktreeMutation(root, async () => {}, { waitMs: 100, label: { operation: 'worker-destroy', owner: 'worker-2' } }).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(WorktreeMutationLockTimeout);
+    expect((failure as WorktreeMutationLockTimeout).holder).toEqual({ pid, operation: 'worker-spawn', owner: 'worker-1' });
+    expect((failure as Error).message).toBe(`timed out waiting for worktree mutation lock; held by worker-spawn for worker-1 (pid ${pid})`);
+  } finally { release(); await held; }
+});
+
+it('describes a holder whose claim carries no label as an unknown operation', () => {
+  expect(describeMutationHolder({ pid: 7 })).toBe('an unknown operation (pid 7)');
+  expect(describeMutationHolder({ pid: 7, operation: 'worktree-prune' })).toBe('worktree-prune (pid 7)');
+});
+
+it('adds the per-claim wait for each claim queued ahead, up to 10 minutes', () => {
+  expect(queuedWaitBudget(120_000, 60_000, 0)).toBe(120_000);
+  expect(queuedWaitBudget(120_000, 60_000, 3)).toBe(300_000);
+  expect(queuedWaitBudget(120_000, 60_000, 50)).toBe(600_000);
+  expect(queuedWaitBudget(1_000, 0, 50)).toBe(1_000);
+  expect(keeperPerClaimBudget(undefined)).toBe(0);
+  expect(keeperPerClaimBudget('60000')).toBe(60_000);
+  for (const value of ['-1', '600001', 'soon']) expect(() => keeperPerClaimBudget(value)).toThrow('invalid worktree mutation wait budget');
+});
+
+it('reads the keeper label argument and refuses a malformed one', () => {
+  expect(keeperLabel(undefined)).toBeUndefined();
+  expect(keeperLabel(JSON.stringify({ operation: 'worker-destroy', owner: 'w' }))).toEqual({ operation: 'worker-destroy', owner: 'w' });
+  for (const value of ['{}', JSON.stringify({ operation: 3 }), JSON.stringify({ operation: 'x', owner: 3 })]) expect(() => keeperLabel(value)).toThrow('invalid worktree mutation label');
 });

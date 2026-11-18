@@ -10,8 +10,9 @@ export async function releaseThenRemoveOwnedWorkspace(
   workspace: WorkerWorkspace,
   assertCurrent?: () => void,
   assertUnheld?: () => void,
+  lock: { waitMs?: number } = {},
 ): Promise<WorkerDestroyResult> {
   return removeOwnedWorkspace(repoRoot, workspace, assertCurrent, async () => {
     await deps.previewHost?.release(workspace.ownerRunId).catch(() => undefined);
-  }, assertUnheld);
+  }, assertUnheld, lock);
 }

@@ -96,10 +96,17 @@ export async function createWorktree(
   repoRoot: string,
   runId: string,
   baseBranch: string,
-  options: { freshOnly?: boolean } = {},
+  options: { freshOnly?: boolean; addTimeoutMs?: number } = {},
 ): Promise<WorktreeInfo> {
-  return withWorktreeMutation(repoRoot, git => createWorktreeLocked(repoRoot, runId, baseBranch, options, git));
+  // A worker's worktree waits longer when the queue is long: it is made in the background, so a
+  // queue under load delays the worker instead of failing it (hearsay-tools/squawk#3817).
+  return withWorktreeMutation(repoRoot, git => createWorktreeLocked(repoRoot, runId, baseBranch, options, git), options.freshOnly
+    ? { perClaimMs: WORKER_SPAWN_WAIT_PER_CLAIM_MS, label: { operation: 'worker-spawn', owner: runId } }
+    : { label: { operation: 'task-worktree-create', owner: runId } });
 }
+
+/** The extra lock wait a worker's worktree creation gets for each claim queued ahead of it. */
+export const WORKER_SPAWN_WAIT_PER_CLAIM_MS = 60_000;
 
 async function resolveWorktreeBase(
   repoRoot: string, baseBranch: string, git: WorktreeGit,
@@ -119,7 +126,7 @@ async function resolveWorktreeBase(
 }
 
 async function createFreshOwnedWorktree(
-  repoRoot: string, base: string, branch: string, absolutePath: string, branchRef: string, git: WorktreeGit,
+  repoRoot: string, base: string, branch: string, absolutePath: string, branchRef: string, git: WorktreeGit, addTimeoutMs: number,
 ): Promise<WorktreeInfo> {
   // Owned workers cannot inherit the legacy adoption/prune behavior. Even a stale
   // registration or an empty directory is a collision, not proof of ownership.
@@ -133,14 +140,74 @@ async function createFreshOwnedWorktree(
     if (err.code === 'ENOENT') return false;
     throw err;
   });
-  const branchExists = await git(repoRoot, ['show-ref', '--verify', '--quiet', branchRef], 30_000);
-  if (pathExists || branchExists.ok) throw new Error('owned worktree path or branch already exists');
+  // A lookup that fails is not absence: the rollback below deletes only a branch proven new here.
+  const refs = await git(repoRoot, ['for-each-ref', '--format=%(refname)', branchRef], 30_000);
+  if (!refs.ok) throw new Error(`cannot verify that ${branchRef} is absent: ${refs.stderr.trim()}`);
+  if (pathExists || refs.stdout.split('\n').includes(branchRef)) throw new Error('owned worktree path or branch already exists');
   await mkdir(dirname(absolutePath), { recursive: true });
-  // Reserve the previously absent path exclusively; Git accepts our empty directory.
-  await mkdir(absolutePath);
-  const created = await git(repoRoot, ['worktree', 'add', '--no-track', '-b', branch, absolutePath, base], 30_000);
-  if (!created.ok) throw new Error(`git worktree add failed: ${created.stderr.trim()}`);
-  return worktreeInfo(absolutePath, branch, base);
+  // One commit for the add and for its rollback's compare-and-swap, even if `base` moves meanwhile.
+  const resolved = await git(repoRoot, ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`], 30_000);
+  if (!resolved.ok) throw new Error(`cannot resolve worktree base ${base}: ${resolved.stderr.trim()}`);
+  const baseSha = resolved.stdout.trim();
+  let failure = '';
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    // Reserve the previously absent path exclusively; Git accepts our empty directory.
+    await mkdir(absolutePath);
+    // --quiet: without it, git's stderr is its checkout progress, not the reason it failed.
+    const created = await git(repoRoot, ['worktree', 'add', '--quiet', '--no-track', '-b', branch, absolutePath, baseSha], addTimeoutMs);
+    if (created.ok) return worktreeInfo(absolutePath, branch, base);
+    failure = worktreeAddFailure(created, addTimeoutMs);
+    // A checkout that may still be writing is not rolled back or retried; destroy names what it leaves.
+    if (created.childrenRunning) { failure += '; rollback skipped: its Git child processes may still be running'; break; }
+    // Still under the lock, the path and branch this call proved absent are its own: remove them,
+    // so a retry, or a destroy after the worker fails, finds nothing left behind.
+    const kept = await rollBackFreshWorktree(repoRoot, absolutePath, branchRef, baseSha, git).catch((error: unknown) => String(error));
+    if (kept) { failure += `; rollback stopped: ${kept}`; break; }
+  }
+  throw new Error(`git worktree add failed: ${failure}`);
+}
+
+/** The bound on one `git worktree add` of a worker's worktree; a large checkout on a loaded host takes a while. */
+export const OWNED_WORKTREE_ADD_TIMEOUT_MS = 120_000;
+
+function worktreeAddFailure(result: WorktreeGitResult, timeoutMs: number): string {
+  const stderr = result.stderr.trim();
+  if (result.timedOut) return `timed out after ${timeoutMs / 1000} s${stderr ? `: ${stderr.slice(-500)}` : ''}`;
+  return stderr.slice(-2000) || 'git exited without an error message';
+}
+
+const firstLine = (result: WorktreeGitResult) => result.stderr.trim().split('\n')[0]?.slice(0, 300) || 'git failed';
+
+/** Undo a failed fresh `worktree add`: its registration, its new branch and the reserved directory.
+ * Undefined when nothing is left; otherwise why it stopped, leaving the rest for a destroy to report. */
+async function rollBackFreshWorktree(repoRoot: string, absolutePath: string, branchRef: string, baseSha: string, git: WorktreeGit): Promise<string | undefined> {
+  const listed = await git(repoRoot, ['worktree', 'list', '--porcelain', '-z'], 30_000);
+  if (!listed.ok) return `cannot list worktrees: ${firstLine(listed)}`;
+  const registered = listed.stdout.split('\0').some(entry => entry.startsWith('worktree ') && canonicalPath(entry.slice(9)) === canonicalPath(absolutePath));
+  if (registered) {
+    const removed = await git(repoRoot, ['worktree', 'remove', '--force', absolutePath], 30_000);
+    if (!removed.ok) return `cannot remove the registered worktree: ${firstLine(removed)}`;
+  } else {
+    // Unregistered, the path holds only what this call reserved, unless something else wrote there:
+    // remove it only while it is empty.
+    try { await rmdir(absolutePath); } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOTEMPTY' || code === 'EEXIST') return `${absolutePath} is not empty`;
+      if (code !== 'ENOENT') return `cannot remove ${absolutePath}: ${(error as Error).message}`;
+    }
+  }
+  // A lookup that fails is not absence: only a listing that succeeded proves the branch is gone.
+  const refs = await git(repoRoot, ['for-each-ref', '--format=%(refname)%00%(symref)%00%(objectname)', branchRef], 30_000);
+  if (!refs.ok) return `cannot read ${branchRef}: ${firstLine(refs)}`;
+  const entry = refs.stdout.split('\n').map(line => line.split('\0')).find(([ref]) => ref === branchRef);
+  if (entry) {
+    // Only the branch this add made: a plain ref at the base commit. --no-deref never follows a
+    // symbolic ref to delete its target, and the expected value refuses a branch that moved.
+    if (entry[1]) return `${branchRef} is a symbolic ref`;
+    const deleted = await git(repoRoot, ['update-ref', '--no-deref', '-d', branchRef, baseSha], 30_000);
+    if (!deleted.ok) return `cannot delete ${branchRef}: ${firstLine(deleted)}`;
+  }
+  return existsSync(absolutePath) ? `${absolutePath} still exists` : undefined;
 }
 
 function registeredWorktreeInfo(
@@ -194,7 +261,7 @@ async function attachExistingTaskBranch(
 
 async function createWorktreeLocked(
   repoRoot: string, runId: string, baseBranch: string,
-  options: { freshOnly?: boolean }, git: WorktreeGit,
+  options: { freshOnly?: boolean; addTimeoutMs?: number }, git: WorktreeGit,
 ): Promise<WorktreeInfo> {
   const base = await resolveWorktreeBase(repoRoot, baseBranch, git);
   const branch = branchFor(runId);
@@ -202,7 +269,7 @@ async function createWorktreeLocked(
   const branchRef = `refs/heads/${branch}`;
 
   if (options.freshOnly) {
-    return createFreshOwnedWorktree(repoRoot, base, branch, absolutePath, branchRef, git);
+    return createFreshOwnedWorktree(repoRoot, base, branch, absolutePath, branchRef, git, options.addTimeoutMs ?? OWNED_WORKTREE_ADD_TIMEOUT_MS);
   }
 
   const protection = await ownedCleanupProtection(repoRoot);
@@ -341,7 +408,7 @@ export async function removeWorktree(
   branch?: string,
   opts?: RemoveWorktreeOptions,
 ): Promise<void> {
-  await withWorktreeMutation(repoRoot, git => removeWorktreeLocked(repoRoot, worktreePath, branch, opts, git)).catch(() => undefined);
+  await withWorktreeMutation(repoRoot, git => removeWorktreeLocked(repoRoot, worktreePath, branch, opts, git), { label: { operation: 'task-worktree-remove', owner: basename(worktreePath) } }).catch(() => undefined);
 }
 
 type OwnedCleanupProtection = { paths: Set<string>; branches: Set<string>; uncertain: boolean };
@@ -590,7 +657,7 @@ export async function pruneOrphans(
   repoRoot: string,
   validIds: ReadonlySet<string>,
 ): Promise<string[]> {
-  return withWorktreeMutation(repoRoot, git => pruneOrphansLocked(repoRoot, validIds, git)).catch(() => []);
+  return withWorktreeMutation(repoRoot, git => pruneOrphansLocked(repoRoot, validIds, git), { label: { operation: 'worktree-prune' } }).catch(() => []);
 }
 
 async function pruneOrphansLocked(repoRoot: string, validIds: ReadonlySet<string>, git: WorktreeGit): Promise<string[]> {
