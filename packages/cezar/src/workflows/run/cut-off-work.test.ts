@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cutOffWork, recordCutOffWork, withCutOff } from './cut-off-work.ts';
+import { cutOffWork, recordCutOffWork, withCutOff, type CutOffWork } from './cut-off-work.ts';
 
 // hearsay-tools/squawk#3909: the resume after a restart names the work the restart cut off, from
 // Squawk's own event log, the same on every runner.
@@ -65,7 +65,8 @@ describe('recordCutOffWork', () => {
 it('a second crash in the resumed turn replaces the names the checkpoint still holds', () => {
   const events: unknown[] = [turn, tool('a', 'running')];
   const log = { readEvents: () => [...events], appendEvent: (_runId: string, event: { type: string }) => { events.push(event); return event; } };
-  const first = withCutOff(log, 'run', { restarted: true as const });
+  const start: { restarted: true; cutOff?: CutOffWork } = { restarted: true };
+  const first = withCutOff(log, 'run', start);
   expect(first.cutOff).toEqual({ tools: ['Bash: Ran a'] });
   // The same restart's second call finds the items closed and keeps the names.
   expect(withCutOff(log, 'run', first)).toEqual(first);
