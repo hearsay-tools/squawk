@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, matchesGlob } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { NO_VITEST_READER, VITEST_TEST, classify, configurationClosure, existingTests, readInputs, SOURCE_PATHSPECS, testsReaching } from './test-inputs.mjs';
+import { NO_VITEST_READER, VITEST_TEST, classify, configurationClosure, existingTests, nodeTestReaders, readInputs, SOURCE_PATHSPECS, testsReaching } from './test-inputs.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
@@ -241,4 +241,41 @@ test('the tripwire checks each reading test file against its own declaration', t
 test('the tripwire finds the declared reader of .github/scripts/baseline-growth.cjs', () => {
   const source = readFileSync(join(repoRoot, 'packages/cezar/src/lint/home-boundary.test.ts'), 'utf8');
   assert.ok([...source.matchAll(TOKEN)].some(([, raw]) => raw.endsWith('.github/scripts/baseline-growth.cjs')));
+});
+
+test('node:test readers: a changed path selects the root tests whose inputs row matches it, and a changed test selects itself', t => {
+  const cwd = fixture(t, {
+    'squeal.config.json': JSON.stringify({
+      nodeTest: [
+        { name: 'package', cwd: 'packages/cezar', include: ['test/unit/*.test.ts'] },
+        { name: 'root', argv: ['--import', './scripts/test-home-env.mjs'], include: ['.github/scripts/*.test.cjs', 'scripts/*.test.mjs'] },
+      ],
+      inputs: { '.github/scripts/*.test.cjs': ['.github/workflows/**'], 'scripts/b.test.mjs': ['docs/b.md'] },
+    }),
+    '.github/scripts/a.workflow.test.cjs': '',
+    '.github/scripts/gates.test.cjs': '',
+    'scripts/b.test.mjs': '',
+    'scripts/c.test.mjs': '',
+  });
+  execFileSync('git', ['init', '-q'], { cwd });
+  const select = paths => nodeTestReaders(paths, cwd).files;
+  assert.deepEqual(nodeTestReaders(['.github/workflows/ci.yml'], cwd), {
+    argv: ['--import', './scripts/test-home-env.mjs'],
+    files: ['.github/scripts/a.workflow.test.cjs', '.github/scripts/gates.test.cjs'],
+  });
+  assert.deepEqual(select(['docs/b.md', 'scripts/c.test.mjs']), ['scripts/b.test.mjs', 'scripts/c.test.mjs']);
+  assert.deepEqual(select(['packages/cezar/src/x.ts']), []);
+});
+
+test('node:test readers: a config without a root node:test project selects nothing', t => {
+  const cwd = fixture(t, { 'squeal.config.json': JSON.stringify({ inputs: { 'scripts/a.test.mjs': ['**'] } }), 'scripts/a.test.mjs': '' });
+  execFileSync('git', ['init', '-q'], { cwd });
+  assert.deepEqual(nodeTestReaders(['scripts/a.test.mjs'], cwd), { argv: [], files: [] });
+});
+
+test('a workflow change selects the workflow registry tests in this repository', () => {
+  const { files } = nodeTestReaders(['.github/workflows/ci.yml'], repoRoot);
+  assert.ok(files.includes('.github/scripts/auto-merge-gates.test.cjs'));
+  assert.ok(files.includes('.github/scripts/ci-squeal-results.workflow.test.cjs'));
+  assert.ok(files.filter(file => file.endsWith('.workflow.test.cjs')).length > 1);
 });
