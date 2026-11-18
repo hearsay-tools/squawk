@@ -5,52 +5,54 @@
     "root": "packages/web/e2e",
     "runs": [
       {
-        "id": 44091595978,
-        "headSha": "3f60293d608b3cb4a32a49b83663fbfdb0ae2beb",
+        "id": 44304109761,
+        "headSha": "1bf3503b0330e53155c405c63f8aff40172794f3",
         "jobs": [
-          134068027736,
-          134068027775,
-          134068027839,
-          134068027929,
-          134068027944,
-          134068028029,
-          134068028124,
-          134068028206
+          134801211664,
+          134801211702,
+          134801211719,
+          134801211775,
+          134801211794,
+          134801211802,
+          134801211841,
+          134801211960
         ]
       },
       {
-        "id": 44074057316,
-        "headSha": "272b72a8d01e6dcd65ce86211807fe653ea927c5",
+        "id": 44304018610,
+        "headSha": "5035f8c9d8bd39485ee2c7e3ff3f6f259a137fc4",
         "jobs": [
-          134013739204,
-          134013739229,
-          134013739231,
-          134013739257,
-          134013739291,
-          134013739305,
-          134013739456,
-          134013739467
+          134800903625,
+          134800903669,
+          134800903722,
+          134800903724,
+          134800903752,
+          134800903760,
+          134800903771,
+          134800903974
         ]
       },
       {
-        "id": 44073918983,
-        "headSha": "07743ee380b5d1d3fc5a1e66bc64cb2006bb9c76",
+        "id": 44274156696,
+        "headSha": "535ce2bddc768d26fc8231b841ec4d88d10539d3",
         "jobs": [
-          134007273490,
-          134007273500,
-          134007273524,
-          134007273552,
-          134007273557,
-          134007273672,
-          134007273678,
-          134007273785
+          134698040497,
+          134698040513,
+          134698040521,
+          134698040552,
+          134698040569,
+          134698040590,
+          134698040833,
+          134698040920
         ]
       }
     ],
     "estimatedFiles": [],
-    "baselineCommit": "3f60293d608b3cb4a32a49b83663fbfdb0ae2beb",
+    "baselineCommit": "1bf3503b0330e53155c405c63f8aff40172794f3",
     "updatedFiles": [
-      "settings-skills.e2e.ts"
+      "composer.e2e.ts",
+      "live-preview.e2e.ts",
+      "review-gate.e2e.ts"
     ],
     "remainingChanges": 0
   },
@@ -69,7 +71,7 @@
     "commit-list.e2e.ts": 7205,
     "completion-controls.e2e.ts": 35434,
     "composer-defaults.e2e.ts": 11854,
-    "composer.e2e.ts": 26032,
+    "composer.e2e.ts": 14544,
     "create-project.e2e.ts": 7163,
     "diff-scroll.e2e.ts": 9350,
     "empty-states.e2e.ts": 3999,
@@ -88,7 +90,7 @@
     "index-workload.e2e.ts": 24319,
     "ios-sweep.e2e.ts": 14275,
     "issue-linked-tasks.e2e.ts": 6296,
-    "live-preview.e2e.ts": 23743,
+    "live-preview.e2e.ts": 15109,
     "markdown-preview.e2e.ts": 8727,
     "mobile-projects.e2e.ts": 14052,
     "mobile-tab-bar.e2e.ts": 26652,
@@ -112,7 +114,7 @@
     "repo-git.e2e.ts": 11300,
     "reports-workload.e2e.ts": 10600,
     "reports.e2e.ts": 17342,
-    "review-gate.e2e.ts": 18083,
+    "review-gate.e2e.ts": 9326,
     "run-header-ci-wait.e2e.ts": 17950,
     "screenshot-element.e2e.ts": 2087,
     "search-focus.e2e.ts": 27369,
