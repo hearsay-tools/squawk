@@ -140,8 +140,10 @@ async function createFreshOwnedWorktree(
     if (err.code === 'ENOENT') return false;
     throw err;
   });
-  const branchExists = await git(repoRoot, ['show-ref', '--verify', '--quiet', branchRef], 30_000);
-  if (pathExists || branchExists.ok) throw new Error('owned worktree path or branch already exists');
+  // A lookup that fails is not absence: the rollback below deletes only a branch proven new here.
+  const refs = await git(repoRoot, ['for-each-ref', '--format=%(refname)', branchRef], 30_000);
+  if (!refs.ok) throw new Error(`cannot verify that ${branchRef} is absent: ${refs.stderr.trim()}`);
+  if (pathExists || refs.stdout.split('\n').includes(branchRef)) throw new Error('owned worktree path or branch already exists');
   await mkdir(dirname(absolutePath), { recursive: true });
   // One commit for the add and for its rollback's compare-and-swap, even if `base` moves meanwhile.
   const resolved = await git(repoRoot, ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`], 30_000);
@@ -155,6 +157,8 @@ async function createFreshOwnedWorktree(
     const created = await git(repoRoot, ['worktree', 'add', '--quiet', '--no-track', '-b', branch, absolutePath, baseSha], addTimeoutMs);
     if (created.ok) return worktreeInfo(absolutePath, branch, base);
     failure = worktreeAddFailure(created, addTimeoutMs);
+    // A checkout that may still be writing is not rolled back or retried; destroy names what it leaves.
+    if (created.childrenRunning) { failure += '; rollback skipped: its Git child processes may still be running'; break; }
     // Still under the lock, the path and branch this call proved absent are its own: remove them,
     // so a retry, or a destroy after the worker fails, finds nothing left behind.
     const kept = await rollBackFreshWorktree(repoRoot, absolutePath, branchRef, baseSha, git).catch((error: unknown) => String(error));

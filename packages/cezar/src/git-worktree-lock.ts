@@ -7,8 +7,9 @@ import { MAX_QUEUED_WAIT_MS, type MutationHolder, type MutationLabel } from './g
 
 export type { MutationHolder, MutationLabel };
 
-/** `timedOut` is set when git was killed at the command's `timeout`. */
-export interface WorktreeGitResult { ok: boolean; stdout: string; stderr: string; timedOut?: true }
+/** `timedOut` is set when git was killed at the command's `timeout`; `childrenRunning` when Git
+ * children it started may still be running, which also holds the lock claim until they are gone. */
+export interface WorktreeGitResult { ok: boolean; stdout: string; stderr: string; timedOut?: true; childrenRunning?: true }
 /** `input` is written to git's stdin — what `update-ref --stdin` needs for a multi-ref transaction. */
 export type WorktreeGit = (cwd: string, args: string[], timeout?: number, input?: string) => Promise<WorktreeGitResult>;
 

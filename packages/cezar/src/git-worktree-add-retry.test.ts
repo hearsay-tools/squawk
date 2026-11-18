@@ -21,9 +21,9 @@ afterEach(async () => {
  * records its arguments, then acts as `script` says for that attempt (`slow` sleeps past any test
  * bound, `fail` prints a reason and exits 1, `symref` also turns the new branch into a symbolic ref to
  * `main` before failing, `litter` writes a file into the reserved path and fails before Git runs,
- * `pass` runs the real command).
+ * `stuck` leaves a child that ignores SIGTERM and then sleeps past the bound, `pass` runs the real command).
  */
-async function slowGit(script: Array<'slow' | 'fail' | 'pass' | 'symref' | 'litter'>) {
+async function slowGit(script: Array<'slow' | 'fail' | 'pass' | 'symref' | 'litter' | 'stuck'>) {
   const root = await mkdtemp(join(tmpdir(), 'cezar-worktree-add-'));
   roots.push(root);
   await exec('git', ['init', '-q', '-b', 'main', join(root, 'repo')]);
@@ -41,6 +41,7 @@ if [ "$1" = worktree ] && [ "$2" = add ]; then
   # The real command first: a slow or failing add has already made its branch and registration.
   ${JSON.stringify(real)} "$@" || exit $?
   [ "$action" = slow ] && exec sleep 30
+  if [ "$action" = stuck ]; then (trap '' TERM; sleep 60) & exec sleep 30; fi
   [ "$action" = fail ] && { echo "fatal: example failure" >&2; exit 1; }
   if [ "$action" = symref ]; then
     ${JSON.stringify(real)} worktree remove --force "$7" && ${JSON.stringify(real)} symbolic-ref refs/heads/cez/66666666 refs/heads/main
@@ -117,4 +118,22 @@ it('keeps an unregistered path that something else wrote into, and does not retr
   await expect(createWorktree(repo, WORKER, 'main', { freshOnly: true })).rejects.toThrow(/fatal: example failure; rollback stopped: .* is not empty/);
   expect(await readFile(join(worktreePathFor(repo, WORKER), 'kept'), 'utf8')).toBe('kept\n');
   expect(await adds()).toHaveLength(1);
+});
+
+it.runIf(process.platform === 'linux')('neither rolls back nor releases the lock while a timed-out add leaves Git children running', { timeout: 60_000 }, async () => {
+  const { repo, adds } = await slowGit(['stuck', 'pass']);
+  const claims = join(repo, '.git/cezar-worktree-mutations');
+  try {
+    await expect(createWorktree(repo, WORKER, 'main', { freshOnly: true, addTimeoutMs: 3_000 }))
+      .rejects.toThrow(/timed out after 3 s.*rollback skipped: its Git child processes may still be running/s);
+    expect(await adds()).toHaveLength(1);
+    // The checkout it left stays for a destroy to report, and the claim stays until its group is gone.
+    expect(existsSync(worktreePathFor(repo, WORKER))).toBe(true);
+    expect((await readdir(claims)).filter(entry => entry.endsWith('.json'))).toHaveLength(1);
+  } finally {
+    for (const entry of await readdir(claims).catch(() => [] as string[])) {
+      const pid = Number(entry.split('-')[0]);
+      if (pid > 0) try { process.kill(-pid, 'SIGKILL'); } catch { /* gone */ }
+    }
+  }
 });

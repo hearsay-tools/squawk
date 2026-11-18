@@ -10,7 +10,7 @@ export type MutationHolder = { pid: number; operation?: string; owner?: string }
 
 /** One IPC message the keeper accepts over its channel. */
 type KeeperMessage = { kind: string; id: number; cwd: string; args: string[]; timeout?: number; input?: string };
-type CommandResult = { ok: boolean; stdout: string; stderr: string; timedOut?: true };
+type CommandResult = { ok: boolean; stdout: string; stderr: string; timedOut?: true; childrenRunning?: true };
 
 /** Run one queued Git command; without input git sees an empty stdin, exactly as before. */
 async function runGitCommand(message: KeeperMessage): Promise<CommandResult> {
@@ -20,8 +20,8 @@ async function runGitCommand(message: KeeperMessage): Promise<CommandResult> {
       // A git killed at its bound says so: its stderr alone reads like any other failure.
       ...(error.killed && message.timeout ? { timedOut: true as const } : {}) }),
   );
-  if (result.timedOut && !await stopTimedOutChildren()) {
-    return { ...result, stderr: `${result.stderr}\nGit child processes of the timed-out command are still running`.trim() };
+  if (result.timedOut && await stopTimedOutChildren() !== 'stopped') {
+    return { ...result, childrenRunning: true, stderr: `${result.stderr}\nGit child processes of the timed-out command may still be running`.trim() };
   }
   return result;
 }
@@ -44,10 +44,11 @@ async function groupMembers(): Promise<number[] | undefined> {
  * A timed-out git is killed alone; a child it started (the checkout of `worktree add`) can keep
  * writing. Every Git child is in this keeper's process group (ADR 0003), and the keeper runs one
  * command at a time, so the group's other members are that command's. Stop them before the caller
- * sees the failure. False when some are still running after 10 s, where the host lets us see.
+ * sees the failure: `running` when some remain after 10 s, `unknown` where the host cannot list them.
  */
-async function stopTimedOutChildren(): Promise<boolean> {
-  if (process.platform === 'win32') return true;
+async function stopTimedOutChildren(): Promise<'stopped' | 'running' | 'unknown'> {
+  // Windows has no process groups to signal; its keeper claim is reclaimed only once idle (gitRunning false).
+  if (process.platform === 'win32') return 'stopped';
   // The keeper is in its own group too: it ignores this one signal until the wait ends.
   const ignore = () => undefined;
   process.on('SIGTERM', ignore);
@@ -55,10 +56,11 @@ async function stopTimedOutChildren(): Promise<boolean> {
     try { process.kill(-process.pid, 'SIGTERM'); } catch { /* no other member */ }
     for (let waited = 0; waited < 10_000; waited += 50) {
       const members = await groupMembers();
-      if (!members?.length) return true;
+      if (!members) return 'unknown';
+      if (!members.length) return 'stopped';
       await new Promise(resolve => setTimeout(resolve, 50));
     }
-    return false;
+    return 'running';
   } finally { process.off('SIGTERM', ignore); }
 }
 
@@ -208,6 +210,7 @@ async function keepWorktreeLock(): Promise<void> {
   const temporary = `${path}.tmp`;
   const wait = () => new Promise<void>(resolve => setTimeout(resolve, 25));
   let stopping = !process.connected;
+  let keepClaim = false;
   let stop!: () => void;
   const stopped = new Promise<void>(resolve => { stop = resolve; });
   let commands = Promise.resolve();
@@ -234,9 +237,13 @@ async function keepWorktreeLock(): Promise<void> {
     process.on('message', (message: KeeperMessage) => {
       if (stopping || message.kind !== 'git') return;
       commands = commands.then(async () => {
+        // A command whose children may still write admits no further mutation.
+        if (keepClaim) throw new Error('Git child processes of a timed-out command may still be running');
         await write(ticket, true);
         const result = await runGitCommand(message);
         await write(ticket);
+        // Their claim outlives this keeper: the group probe frees it once every member is gone (readMutationClaim).
+        if (result.childrenRunning) keepClaim = true;
         send({ kind: 'result', id: message.id, result });
       }).catch(error => {
         send({ kind: 'error', error: `worktree mutation command failed: ${String(error)}` });
@@ -250,7 +257,7 @@ async function keepWorktreeLock(): Promise<void> {
     send({ kind: 'error', error: `worktree mutation coordination failed: ${String(error)}` });
   } finally {
     await commands;
-    await fs.unlink(path).catch(() => undefined);
+    if (!keepClaim) await fs.unlink(path).catch(() => undefined);
     await fs.unlink(temporary).catch(() => undefined);
     if (process.connected) process.disconnect();
   }
