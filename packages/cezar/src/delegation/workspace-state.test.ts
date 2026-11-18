@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -85,6 +85,16 @@ describe('the change report of a shared workspace', () => {
     expect(await report()).toMatchObject({ state: 'changed', paths: ['tracked.txt', 'untracked.txt'], indexMoved: false });
   });
 
+  it('reports a change of the executable bit on an untracked file and on a tracked file that was already dirty', async () => {
+    writeFileSync(join(repo, 'tracked.txt'), 'dirty\n'); writeFileSync(join(repo, 'script.sh'), '#!/bin/sh\n');
+    await recordWorkspaceStart(dataDir, workerId, repo);
+    await recordEnd();
+    expect(await report()).toEqual({ state: 'unchanged' });
+    chmodSync(join(repo, 'tracked.txt'), 0o755); chmodSync(join(repo, 'script.sh'), 0o755);
+    await recordEnd();
+    expect(await report()).toMatchObject({ state: 'changed', paths: ['script.sh', 'tracked.txt'] });
+  });
+
   it('follows a submodule: an edit inside one that was already dirty shows as the submodule path', async () => {
     const library = join(root, 'library');
     mkdirSync(library);
@@ -151,7 +161,7 @@ describe('the change report of a shared workspace', () => {
   it('says truncated when entries past the kept ones changed, and never lists a path only because one state could not read its content', async () => {
     writeFileSync(join(repo, 'untracked.txt'), 'x\n');
     const start = await captureWorkspaceState(repo);
-    expect(start.entries).toEqual([{ path: 'untracked.txt', code: '??', meta: expect.any(String), content: expect.stringMatching(/^sha256:[0-9a-f]{64}$/) }]);
+    expect(start.entries).toEqual([{ path: 'untracked.txt', code: '??', meta: expect.any(String), content: expect.stringMatching(/^sha256:[0-9a-f]{64}:-$/) }]);
     expect(start.overflow).toBeNull();
     expect(await compareWorkspaceStates(repo, { ...start, overflow: 'a'.repeat(64) }, { ...start, overflow: 'b'.repeat(64) }))
       .toEqual({ state: 'changed', paths: [], truncated: true, headMoved: false, branchMoved: false, indexMoved: false });
@@ -173,7 +183,7 @@ describe('the change report of a shared workspace', () => {
     const state = await captureWorkspaceState(repo);
     const entry = (path: string) => state.entries.find(candidate => candidate.path === path);
     expect(entry('link.txt')).toMatchObject({ content: `link:${join(outside, 'secret.txt')}` });
-    expect(entry('plain.txt')?.content).toBe(`sha256:${createHash('sha256').update('inside\n').digest('hex')}`);
+    expect(entry('plain.txt')?.content).toBe(`sha256:${createHash('sha256').update('inside\n').digest('hex')}:-`);
     const redirected = state.entries.filter(candidate => candidate.path.startsWith('docs/'));
     expect(redirected.length).toBeGreaterThan(0);
     for (const candidate of redirected) expect(candidate.content, candidate.path).toBeUndefined();

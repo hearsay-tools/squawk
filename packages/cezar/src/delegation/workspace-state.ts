@@ -31,7 +31,7 @@ type Entry = {
   code: string;
   /** Size, modification time and mode; `absent` for a path with nothing at it. Always recorded. */
   meta: string;
-  /** The content: a file's hash, a link's target, a nested repository's HEAD. Left out when the
+  /** The content: a file's hash with its executable bit, a link's target, a nested repository's HEAD. Left out when the
    *  content was not read: the file is past a size bound, or its directory is outside the workspace. */
   content?: string | undefined;
   /** The state of a nested repository (a submodule). */
@@ -79,13 +79,16 @@ export function parseStatus(output: string): Array<[string, string]> {
 }
 
 /**
- * The SHA-256 of a regular file, read through a handle that follows no link, in chunks, and never
+ * The SHA-256 of a regular file whose last path component is no link, read in chunks, and never
  * past `limit` plus one chunk: a file that grew or was replaced after its size was read cannot make
  * the read larger. Undefined when the path is no regular file, cannot be opened, or holds more
  * than `limit` bytes. `read` is how many bytes were read.
  */
 export async function boundedContentHash(path: string, limit: number): Promise<{ hash?: string; read: number }> {
-  const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK).catch(() => undefined);
+  // Windows has no O_NOFOLLOW or O_NONBLOCK: there the check of the last component is this lstat alone.
+  const last = await lstat(path).catch(() => undefined);
+  if (!last?.isFile()) return { read: 0 };
+  const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)).catch(() => undefined);
   if (!handle) return { read: 0 };
   try {
     const info = await handle.stat();
@@ -120,7 +123,7 @@ async function captureEntry(dir: string, path: string, code: string, capture: Ca
   if (!info.isFile()) return entry;
   const { hash, read } = await boundedContentHash(target, Math.min(CONTENT_HASH_FILE_BYTES, capture.budget));
   capture.budget -= Math.min(read, capture.budget);
-  return hash === undefined ? entry : { ...entry, content: `sha256:${hash}` };
+  return hash === undefined ? entry : { ...entry, content: `sha256:${hash}:${info.mode & 0o111 ? 'x' : '-'}` };
 }
 
 /** A directory in the status is a nested repository: a submodule, or an untracked clone. */

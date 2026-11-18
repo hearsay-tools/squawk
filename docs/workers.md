@@ -78,8 +78,9 @@ The comparison always starts at the first session, also after a Continue or a re
 
 Squawk compares content, with these limits:
 
-- A changed or untracked file of at most 8 MiB is compared by a hash of its content, up to 64 MiB of content for one recorded state. A file past either bound is compared by size, modification time and mode, so a same-size rewrite that restores the modification time does not show for it. Where both states hold the content hash, a change of the modification time alone does not show.
+- A changed or untracked file of at most 8 MiB is compared by a hash of its content, up to 64 MiB of content for one recorded state. A file past either bound is compared by size, modification time and mode, so a same-size rewrite that restores the modification time does not show for it. Where both states hold the content hash, a change of the modification time alone does not show; a change of the executable bit does.
 - Squawk reads content only inside the worker's directory and follows no link. A symbolic link is compared by its target path. A file under a directory that was replaced by a link to a place outside is compared by size, modification time and mode.
+- The capture is not a security boundary. A directory that is swapped for a link while Squawk reads the state can make it hash a bounded number of bytes of another file; Squawk stores only the hash.
 - A submodule, or another nested repository, is compared by its own HEAD, index, changes and untracked files, three levels deep; a deeper one by its HEAD only.
 - A file that was changed and then changed back reads as unchanged.
 - One recorded state keeps 5,000 changed or untracked paths with content. The rest are compared together by size, modification time and mode; a change among them reads as `changed` with `truncated: true` and no path.

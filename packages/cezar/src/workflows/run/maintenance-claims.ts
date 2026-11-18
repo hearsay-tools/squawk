@@ -16,10 +16,14 @@ export class MaintenanceClaims {
    *  from its grant to the release callback its holder calls, so `dispose` keeps it. */
   readonly reclaiming = new Set<string>();
   constructor(private readonly context: RunModuleContext, private readonly host: MaintenanceClaimsHost) {}
-  /** Whether the run is claimed, or the run whose directory it works in is. Every admission and
-   *  execution start asks this, so a claim on a host's directory and the start of a worker in that
-   *  directory exclude each other: the claim side asks `hostsLiveSharedWorker` in its own step. */
-  has(runId: string): boolean {
+  /** Whether the run's own resources are claimed. */
+  has(runId: string): boolean { return this.reclaiming.has(runId); }
+
+  /** Whether a claim holds the run off a start: its own, or one on the run whose directory it
+   *  works in. Only the start paths ask this (Continue admission, leaving the line, the worker
+   *  execution start), so a claim on a host's directory and the start of a worker in that directory
+   *  exclude each other: the claim side asks `hostsLiveSharedWorker` in its own step. */
+  blocksStart(runId: string): boolean {
     if (this.reclaiming.has(runId)) return true;
     if (this.reclaiming.size === 0) return false;
     let run: RunRecord | undefined;
