@@ -40,6 +40,8 @@ export async function withWorktreeMutation<T>(repoRoot: string, operation: (git:
   const perClaimMs = options.perClaimMs ?? 0;
   if (!Number.isSafeInteger(waitMs) || waitMs < 0 || waitMs > 120_000) throw new Error('invalid worktree mutation wait budget');
   if (!Number.isSafeInteger(perClaimMs) || perClaimMs < 0 || perClaimMs > MAX_QUEUED_WAIT_MS) throw new Error('invalid worktree mutation wait budget');
+  // One deadline for finding the common directory and for the queue: `waitMs` bounds both together.
+  const startedAt = Date.now();
   const common = await runGit(['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: repoRoot, timeout: Math.max(1, Math.min(30_000, waitMs)) }).then(
     ({ stdout }) => stdout.trim(),
     (error: RunGitError) => { throw new Error(`cannot resolve Git common directory: ${error.stderr.trim() || error.message}`); },
@@ -47,7 +49,7 @@ export async function withWorktreeMutation<T>(repoRoot: string, operation: (git:
   const claims = join(await realpath(common), 'cezar-worktree-mutations');
   const source = import.meta.url.endsWith('.ts');
   const helper = fileURLToPath(new URL(source ? './git-worktree-lock-helper.ts' : './git-worktree-lock-helper.js', import.meta.url));
-  const keeper = spawn(process.execPath, [...(source ? ['--import', import.meta.resolve('tsx')] : []), helper, claims, String(waitMs), String(perClaimMs), ...(options.label ? [JSON.stringify(options.label)] : [])], {
+  const keeper = spawn(process.execPath, [...(source ? ['--import', import.meta.resolve('tsx')] : []), helper, claims, String(Math.max(0, waitMs - (Date.now() - startedAt))), String(perClaimMs), ...(options.label ? [JSON.stringify(options.label)] : [])], {
     stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
     // Establish the process group before a claim or Git child can exist.
     detached: process.platform !== 'win32',

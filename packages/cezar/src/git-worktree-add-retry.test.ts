@@ -23,7 +23,7 @@ afterEach(async () => {
  * `main` before failing, `litter` writes a file into the reserved path and fails before Git runs,
  * `stuck` leaves a child that ignores SIGTERM and then sleeps past the bound, `pass` runs the real command).
  */
-async function slowGit(script: Array<'slow' | 'fail' | 'pass' | 'symref' | 'litter' | 'stuck'>) {
+async function slowGit(script: Array<'slow' | 'fail' | 'pass' | 'symref' | 'litter' | 'stuck'>, options: { failLookup?: boolean } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'cezar-worktree-add-'));
   roots.push(root);
   await exec('git', ['init', '-q', '-b', 'main', join(root, 'repo')]);
@@ -32,7 +32,10 @@ async function slowGit(script: Array<'slow' | 'fail' | 'pass' | 'symref' | 'litt
   const bin = join(root, 'bin');
   await exec('mkdir', [bin]);
   const log = join(root, 'adds');
+  const failLookup = join(root, 'fail-lookup');
+  if (options.failLookup) await writeFile(failLookup, '');
   await writeFile(join(bin, 'git'), `#!/bin/sh
+if [ "$1" = for-each-ref ] && [ -e ${JSON.stringify(failLookup)} ]; then echo "fatal: example lookup failure" >&2; exit 1; fi
 if [ "$1" = worktree ] && [ "$2" = add ]; then
   echo "$*" >> ${JSON.stringify(log)}
   n=$(wc -l < ${JSON.stringify(log)})
@@ -136,4 +139,12 @@ it.runIf(process.platform === 'linux')('neither rolls back nor releases the lock
       if (pid > 0) try { process.kill(-pid, 'SIGKILL'); } catch { /* gone */ }
     }
   }
+});
+
+it('refuses to add when it cannot prove the worker branch absent, and keeps a branch that already exists', async () => {
+  const { repo, adds } = await slowGit([], { failLookup: true });
+  await exec('git', ['branch', 'cez/66666666', 'main'], { cwd: repo });
+  await expect(createWorktree(repo, WORKER, 'main', { freshOnly: true })).rejects.toThrow(/cannot verify that refs\/heads\/cez\/66666666 is absent: fatal: example lookup failure/);
+  await expect(readFile(join(repo, '.git/logs/refs/heads/cez/66666666'), 'utf8')).resolves.toBeTruthy();
+  await expect(adds()).rejects.toThrow();
 });
