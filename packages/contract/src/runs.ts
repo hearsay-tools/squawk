@@ -131,6 +131,9 @@ export const continuationMessageSchema = queuedMessageSchema.extend({
   origin: z.enum(['human', 'lifecycle']).optional(),
   /** An attributed parent message used as the opening prompt, never a human answer. */
   agentInputId: z.uuid().optional(),
+  /** The run's task when this Continue was accepted. A queued Continue repeats the task only
+   *  when the human edited it while waiting (hearsay-tools/squawk#3882). */
+  task: z.string().optional(),
   /** Captured before clearing the run error. Keep generated context separate from human
    * text so repeated restart recovery never accumulates diagnostic prefixes. */
   resumeContext: z.object({

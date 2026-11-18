@@ -83,8 +83,11 @@ function failureContext(runner: RunnerId, it: typeof registerTest = registerTest
         expect(line).toContain('failed');
         expect(line).toContain(failed.id);
         expect(line).toContain(failed.error);
-        expect(line).toContain('verify their state before restarting');
+        expect(line).toContain('subagents and shell commands, stopped with it');
         expect(body.join('\n')).toBe(text || 'Continue.');
+        // The cockpit shows the notice the agent received beside the Continue's own message.
+        const notice = store.readEvents(id).filter(event => event.type === 'note' && event.stepId === disk.continuationMessage.id).at(-1);
+        expect(notice?.message).toMatch(/^Sent to the agent with this Continue: .*failed: .*subagents and shell commands, stopped with it/);
         if (text) await until(() => store.getRun(id)?.status === RUN_STATUS.failed && !manager.isActive(id));
       }
     }, 60_000);
@@ -100,7 +103,7 @@ function failureContext(runner: RunnerId, it: typeof registerTest = registerTest
       const prompt = skillOpening(runner)!;
       expect(prompt).toContain('Provider unavailable Try later No retry was made.');
       expect(prompt).not.toContain(error);
-      expect(prompt).toContain('verify their state before restarting');
+      expect(prompt).toContain('subagents and shell commands, stopped with it');
       expect(prompt).not.toContain('Selected skill:');
       await until(() => store.readEvents(id).some(event => event.type === 'text' && String(event.text).includes('TRIGGER-FIXTURE')));
       expect(store.readEvents(id).filter(event => event.type === 'user-message').at(-1)?.text).toBe('/probe-project');
@@ -178,7 +181,7 @@ function restartContext(runner: RunnerId, it: typeof registerTest = registerTest
       await until(() => messages().length > before);
       const prompt = messages()[before]!;
       expect(prompt.match(/process restarted while you were working/g)).toHaveLength(1);
-      expect(prompt.split('\n')[0]).toContain('verify their state before restarting');
+      expect(prompt.split('\n')[0]).toContain('subagents and shell commands, stopped with it');
     }, 60_000);
 }
 

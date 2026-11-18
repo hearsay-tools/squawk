@@ -20,7 +20,7 @@ import { SEAM_CRITERIA } from './harness-parity-seam-tier.testkit.ts';
 import { parityRowId } from './parity-classes.testkit.ts';
 import { SEAM_CONTRACT_ROWS } from './seam-contract.testkit.ts';
 import { TOOL_GRANT_CASES } from './tool-grant-parity-cells.testkit.ts';
-import { withOwnedInputRun, withoutTaskScenario } from './workflow-parity-core.testkit.ts';
+import { withOwnedInputRun } from './workflow-parity-core.testkit.ts';
 import { CONTRACT_GROUPS, describeHarnessParity as describeContractParity } from './harness-parity-contract.cells.testkit.ts';
 import { describeHarnessParity as describeOwnedInputParity, OWNED_INPUT_GROUPS, agentInput } from './harness-parity-owned-input.cells.testkit.ts';
 import { describeHarnessParity as describeOwnedWorkflowsParity, OWNED_WORKFLOWS_GROUPS } from './harness-parity-owned-workflows.cells.testkit.ts';
@@ -108,7 +108,6 @@ function opencodeDurableInput(r: HarnessRegistrar): void {
           expect(fixture.manager.steerWorker(runId, input)).toBe('queued');
           const { store, manager } = await fixture.restart();
           const before = store.readEvents(runId).at(-1)!.seq;
-          withoutTaskScenario(store, runId);
           // The parent's answer reopens the closed session as its opening input (hearsay-tools/cezarion#2410).
           const reply = await fixture.answer(outcome === 'rejected' ? 'mock:reject-agent-post' : 'mock:hold');
           // The reopened session waits for capacity, so it may not have started yet.

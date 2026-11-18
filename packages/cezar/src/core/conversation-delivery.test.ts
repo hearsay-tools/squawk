@@ -6,7 +6,7 @@ import { projectConversationEvents } from '../delegation/conversations.ts';
 import { WORKER_FALLBACK_HEADER } from '../workflows/run.ts';
 import { RUNNER_IDS } from './agent-runner.ts';
 import { waitFor } from './harness-parity.testkit.ts';
-import { withOwnedInputRun, withoutTaskScenario } from './workflow-parity.testkit.ts';
+import { withOwnedInputRun } from './workflow-parity.testkit.ts';
 
 // R6/R7 already pin native/portable answer routing and queue recovery. This
 // integration adds the conversation-specific seam: durable structured identity
@@ -74,7 +74,6 @@ for (const backend of RUNNER_IDS) {
 
       // The worker's own question is its parent's to answer (hearsay-tools/cezarion#2410).
       expect(manager.continueRun(runId, { text: 'Vitest' }).ok).toBe(false);
-      withoutTaskScenario(store, runId);
       await fixture.answer('Vitest');
       await waitFor(() => store.getRun(runId)?.agentInputs?.every(input => !!input.deliveredAt) === true);
       await waitFor(() => store.getRun(runId)?.status === 'waiting');
