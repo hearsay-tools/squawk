@@ -2,17 +2,23 @@ import * as fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { runGit, type RunGitError } from './git-command.ts';
 
-type Claim = { pid: number; ticket: number; gitRunning: boolean };
+/** What a claim says about its owner, so a waiter that times out can name who holds the lock. */
+export type MutationLabel = { operation: string; owner?: string };
+type Claim = { pid: number; ticket: number; gitRunning: boolean; operation?: string; owner?: string };
+/** The claim a timed-out waiter names: the one whose turn it is. */
+export type MutationHolder = { pid: number; operation?: string; owner?: string };
 
 /** One IPC message the keeper accepts over its channel. */
 type KeeperMessage = { kind: string; id: number; cwd: string; args: string[]; timeout?: number; input?: string };
-type CommandResult = { ok: boolean; stdout: string; stderr: string };
+type CommandResult = { ok: boolean; stdout: string; stderr: string; timedOut?: true };
 
 /** Run one queued Git command; without input git sees an empty stdin, exactly as before. */
 function runGitCommand(message: KeeperMessage): Promise<CommandResult> {
   return runGit(message.args, { cwd: message.cwd, maxBuffer: 32 * 1024 * 1024, timeout: message.timeout, input: message.input ?? '' }).then(
     ({ stdout, stderr }) => ({ ok: true, stdout, stderr }),
-    (error: RunGitError) => ({ ok: false, stdout: error.stdout ?? '', stderr: error.stderr || error.message || '' }),
+    (error: RunGitError) => ({ ok: false, stdout: error.stdout ?? '', stderr: error.stderr || error.message || '',
+      // A git killed at its bound says so: its stderr alone reads like any other failure.
+      ...(error.killed && message.timeout ? { timedOut: true as const } : {}) }),
   );
 }
 
@@ -79,23 +85,67 @@ function hasPriority(claim: Claim, ticket: number, entry: string, name: string):
   return claim.ticket === 0 || claim.ticket < ticket || (claim.ticket === ticket && entry < name);
 }
 
-/** Wait for choosing peers and smaller (ticket, name) pairs, or give up. */
+/** The blocker whose turn it is: the smallest (ticket, name) pair; a peer still choosing (ticket 0) only when no other blocks. */
+function turnHolder(blockers: [{ claim: Claim; entry: string }, ...Array<{ claim: Claim; entry: string }>]): MutationHolder {
+  const order = (value: { claim: Claim }) => value.claim.ticket === 0 ? Number.MAX_SAFE_INTEGER : value.claim.ticket;
+  const first = blockers.reduce((best, next) => order(next) - order(best) < 0 || (order(next) === order(best) && next.entry < best.entry) ? next : best);
+  const { pid, operation, owner } = first.claim;
+  return { pid, ...(typeof operation === 'string' ? { operation } : {}), ...(typeof owner === 'string' ? { owner } : {}) };
+}
+
+/** Wait for choosing peers and smaller (ticket, name) pairs, or give up naming the claim whose turn it is. */
 async function waitForTurn(
   directory: string, name: string, ticket: number,
   options: { read: (entry: string) => Promise<Claim | undefined>; isStopping: () => boolean; deadline: number; wait: () => Promise<void> },
-): Promise<'ready' | 'timeout' | 'stopped'> {
+): Promise<{ turn: 'ready' | 'stopped' } | { turn: 'timeout'; holder?: MutationHolder }> {
   for (;;) {
-    if (options.isStopping()) return 'stopped';
-    let blocked = false;
+    if (options.isStopping()) return { turn: 'stopped' };
+    const late = Date.now() >= options.deadline;
+    const blockers: Array<{ claim: Claim; entry: string }> = [];
     for (const entry of await fs.readdir(directory)) {
       if (!entry.endsWith('.json') || entry === name) continue;
       const claim = await options.read(entry);
-      if (claim && hasPriority(claim, ticket, entry, name)) { blocked = true; break; }
+      if (claim && hasPriority(claim, ticket, entry, name)) blockers.push({ claim, entry });
+      // Before the deadline one blocker is enough; past it, read them all to name the right one.
+      if (blockers.length && !late) break;
     }
-    if (!blocked) return 'ready';
-    if (Date.now() >= options.deadline) return 'timeout';
+    const [head, ...rest] = blockers;
+    if (!head) return { turn: 'ready' };
+    if (late) return { turn: 'timeout', holder: turnHolder([head, ...rest]) };
     await options.wait();
   }
+}
+
+/** The claims queued ahead of a new ticket: every other visible claim, since the ticket is above all of theirs. */
+async function claimsAhead(directory: string, name: string, read: (entry: string) => Promise<Claim | undefined>): Promise<number> {
+  let ahead = 0;
+  for (const entry of await fs.readdir(directory)) {
+    if (entry.endsWith('.json') && entry !== name && await read(entry)) ahead += 1;
+  }
+  return ahead;
+}
+
+/** The longest any wait may last, its queue share included. */
+export const MAX_QUEUED_WAIT_MS = 600_000;
+
+/** The wait budget for a claim with `ahead` claims queued before it: the base, plus `perClaimMs` for each, at most 10 min. */
+export function queuedWaitBudget(waitMs: number, perClaimMs: number, ahead: number): number {
+  return Math.max(waitMs, Math.min(MAX_QUEUED_WAIT_MS, waitMs + perClaimMs * ahead));
+}
+
+/** The keeper's per-claim wait argument in ms: a whole number from 0 to 600 000, 0 when absent. */
+export function keeperPerClaimBudget(value: string | undefined): number {
+  const perClaimMs = Number(value ?? 0);
+  if (!Number.isSafeInteger(perClaimMs) || perClaimMs < 0 || perClaimMs > MAX_QUEUED_WAIT_MS) throw new Error('invalid worktree mutation wait budget');
+  return perClaimMs;
+}
+
+/** The keeper's label argument: JSON with a non-empty `operation` and an optional `owner`; none when absent. */
+export function keeperLabel(value: string | undefined): MutationLabel | undefined {
+  if (!value) return undefined;
+  const parsed = JSON.parse(value) as Partial<MutationLabel>;
+  if (typeof parsed.operation !== 'string' || !parsed.operation || (parsed.owner !== undefined && typeof parsed.owner !== 'string')) throw new Error('invalid worktree mutation label');
+  return { operation: parsed.operation.slice(0, 80), ...(parsed.owner ? { owner: parsed.owner.slice(0, 80) } : {}) };
 }
 
 /** The keeper's wait budget argument in ms: a whole number from 0 to 120 000, 120 000 when absent. */
@@ -120,8 +170,9 @@ async function keepWorktreeLock(): Promise<void> {
   let commands = Promise.resolve();
   process.on('disconnect', () => { stopping = true; stop(); });
   const send = (message: unknown) => { if (process.connected) process.send!(message, () => undefined); };
+  const label = keeperLabel(process.argv[5]);
   const write = async (ticket: number, gitRunning = false) => {
-    await fs.writeFile(temporary, JSON.stringify({ pid: process.pid, ticket, gitRunning }), { mode: 0o600 });
+    await fs.writeFile(temporary, JSON.stringify({ pid: process.pid, ticket, gitRunning, ...label }), { mode: 0o600 });
     await fs.rename(temporary, path);
   };
   const read = (entry: string) => readMutationClaim(join(directory, entry), process.platform, pid => { process.kill(pid, 0); });
@@ -133,10 +184,10 @@ async function keepWorktreeLock(): Promise<void> {
     await write(0);
     const ticket = await selectTicket(directory, name, read);
     await write(ticket);
-    const deadline = Date.now() + keeperWaitBudget(process.argv[3]);
-    const turn = await waitForTurn(directory, name, ticket, { read, isStopping: () => stopping, deadline, wait });
-    if (turn === 'timeout') send({ kind: 'error', code: 'lock_timeout', error: 'timed out waiting for worktree mutation lock' });
-    if (turn !== 'ready') return; // finally withdraws ONLY this queued claim; no mutation was admitted
+    const budget = queuedWaitBudget(keeperWaitBudget(process.argv[3]), keeperPerClaimBudget(process.argv[4]), await claimsAhead(directory, name, read));
+    const turn = await waitForTurn(directory, name, ticket, { read, isStopping: () => stopping, deadline: Date.now() + budget, wait });
+    if (turn.turn === 'timeout') send({ kind: 'error', code: 'lock_timeout', error: 'timed out waiting for worktree mutation lock', ...(turn.holder ? { holder: turn.holder } : {}) });
+    if (turn.turn !== 'ready') return; // finally withdraws ONLY this queued claim; no mutation was admitted
     process.on('message', (message: KeeperMessage) => {
       if (stopping || message.kind !== 'git') return;
       commands = commands.then(async () => {

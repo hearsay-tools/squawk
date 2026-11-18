@@ -2,10 +2,10 @@
 import { fallbackProjectWriteError } from '../project-paths.ts';
 import { headLeftTaskBranch } from '../task-branch-head.ts';
 import { entryExists as exists } from './entry-exists.ts';
-import { readdir } from 'node:fs/promises';
+import { readdir, rmdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { WorkerDestroyResult, WorkerWorkspace } from '@open-mercato/cezar-contract';
-import { withWorktreeMutation, WorktreeMutationLockTimeout } from '../git-worktree-lock.ts';
+import { describeMutationHolder, withWorktreeMutation, WorktreeMutationLockTimeout, type MutationHolder } from '../git-worktree-lock.ts';
 import { branchLog, checkedGit, gitCommonDir, liveGitDir, worktreeEntries } from './workspace-git.ts';
 import { cleanupSchema, hash, readIdentityFile, readReceipt, RECEIPT_CAP, receiptLocation, replaceIdentityFile, validateIntent, type Cleanup, type Receipt } from './workspace-record.ts';
 
@@ -46,9 +46,24 @@ export async function ownedWorktreePresent(repoRoot: string, value: WorkerWorksp
   } catch { return false; }
 }
 
-/** A removal that could not take the worktree mutation lock in time. Contention clears without
- * changing anything a destroy can observe, so a retry must not skip it (hearsay-tools/cezarion#879). */
-export const WORKTREE_LOCK_BUSY_ERROR = 'Owned resources retained: worktree mutation lock is busy; retry destroy later';
+/** How every answer for a removal that could not take the worktree mutation lock in time starts.
+ * Contention clears without changing anything a destroy can observe, so a retry must not skip it
+ * (hearsay-tools/cezarion#879). */
+export const WORKTREE_LOCK_BUSY_PREFIX = 'Owned resources retained: worktree mutation lock is busy';
+
+/** The lock-busy answer, naming the holder when the keeper read one (hearsay-tools/squawk#3817). */
+export function worktreeLockBusyError(holder: MutationHolder | undefined): string {
+  return `${WORKTREE_LOCK_BUSY_PREFIX}${holder ? `, held by ${describeMutationHolder(holder)}` : ''}; retry destroy later`;
+}
+
+/** How long a destroy waits for the lock unless its caller says otherwise: the automatic retries
+ * keep this short so they never hold the queue; an explicit destroy waits longer. */
+export const DEFAULT_DESTROY_LOCK_WAIT_MS = 1_000;
+
+/** A directory with no entries; false when absent, not a directory or unreadable. */
+async function emptyDirectory(path: string): Promise<boolean> {
+  try { return (await stat(path)).isDirectory() && (await readdir(path)).length === 0; } catch { return false; }
+}
 
 /**
  * Checked cleanup after persisted destroy intent and a stopped worker scope. Keep the private
@@ -57,21 +72,23 @@ export const WORKTREE_LOCK_BUSY_ERROR = 'Owned resources retained: worktree muta
  * its scope, and any other is not the worker's (ADR 0032).
  */
 export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorkspace, assertCurrent?: () => void,
-  beforeRemove?: () => Promise<void>, assertUnheld?: () => void): Promise<WorkerDestroyResult> {
+  beforeRemove?: () => Promise<void>, assertUnheld?: () => void, lock: { waitMs?: number } = {}): Promise<WorkerDestroyResult> {
   const refusal = fallbackProjectWriteError(value.path);
   if (refusal) return { workerId: value.ownerRunId, state: 'incomplete', remaining: ['worktree', 'branch'], error: refusal };
   let remaining: Array<'worktree' | 'branch'> = ['worktree', 'branch'];
-  let provisioned = false; let lockBusy = false;
+  let provisioned = false; let lockBusy: { holder?: MutationHolder } | undefined;
   // A refusal that names its blocker and the step that clears it.
   let named: string | undefined;
   const result = (): WorkerDestroyResult => ({ workerId: value.ownerRunId, state: remaining.length ? 'incomplete' : 'complete', remaining,
-    ...(remaining.length ? { error: lockBusy ? WORKTREE_LOCK_BUSY_ERROR
+    ...(remaining.length ? { error: lockBusy ? worktreeLockBusyError(lockBusy.holder)
       : named ?? 'Owned resources remain: resource identity or Git cleanup could not be verified. Check the worker worktree, Git lock and ownership receipt, then retry destroy after correcting the blocker' } : {}),
     ...(provisioned ? { deleted: [
       ...(!remaining.includes('worktree') ? [{ kind: 'worktree' as const, path: value.path }] : []),
       ...(!remaining.includes('branch') ? [{ kind: 'branch' as const, ref: `refs/heads/${value.branch}` }] : []),
     ] } : {}),
   });
+  // Each early return names the check that stopped it (hearsay-tools/squawk#3817).
+  const refuse = (reason: string) => { named ??= `Owned resources remain: ${reason}; retry destroy after correcting it`; };
   try {
     return await withWorktreeMutation(repoRoot, async mutationGit => {
       assertCurrent?.();
@@ -87,11 +104,11 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
         await completeWithoutReceipt();
         return result();
       }
-      if (!same(receipt.workspace, workspace)) return result();
+      if (!same(receipt.workspace, workspace)) { refuse(`the ownership receipt does not match worker ${workspace.ownerRunId}'s workspace record`); return result(); }
       provisioned = true;
       const checkpointPath = path.replace(/\.json$/, '.cleanup.json');
       let checkpoint = await exists(checkpointPath) ? cleanupSchema.parse(JSON.parse(await readIdentityFile(checkpointPath, RECEIPT_CAP))) : undefined;
-      if (checkpoint && (!same(checkpoint.workspace, workspace) || checkpoint.gitDir !== receipt.gitDir)) return result();
+      if (checkpoint && (!same(checkpoint.workspace, workspace) || checkpoint.gitDir !== receipt.gitDir)) { refuse('the cleanup checkpoint does not match the ownership receipt'); return result(); }
       if (checkpoint?.phase === 'complete') {
         await inspectCompletedCleanup(receipt);
         return result();
@@ -117,15 +134,20 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
       async function completeWithoutReceipt(): Promise<void> {
         // #878: without a receipt, the identity marker in a Git admin directory is the
         // only trace of a moved worktree. With path, registration, branch and marker all
-        // gone, finish bookkeeping; write no checkpoint and delete nothing.
+        // gone, finish bookkeeping; write no checkpoint and delete nothing but an empty reserved directory.
         const absent = async () => !await exists(workspace.path) && !(await registered()).includes(`worktree ${workspace.path}`) &&
           !await branchExists() && !await markerRemains(repoRoot, workspace);
-        if (await absent()) {
-          assertCurrent?.();
-          await beforeRemove?.();
-          assertCurrent?.();
-          if (await absent()) remaining = [];
+        // A spawn that failed in `git worktree add` before its rollback existed left only the empty
+        // directory it reserved: nothing Git knows, nothing to lose.
+        if (await emptyDirectory(workspace.path) && !(await registered()).includes(`worktree ${workspace.path}`)) await rmdir(workspace.path).catch(() => undefined);
+        if (!await absent()) {
+          refuse(`worktree path ${workspace.path}, its registration or branch ${workspace.branch} exists, but no ownership receipt proves the worker made it; remove what you do not need by hand`);
+          return;
         }
+        assertCurrent?.();
+        await beforeRemove?.();
+        assertCurrent?.();
+        if (await absent()) remaining = [];
       }
 
       async function inspectCompletedCleanup(receipt: Receipt): Promise<void> {
@@ -135,9 +157,12 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
       }
 
       async function preparePresentWorktree(receipt: Receipt): Promise<Cleanup | undefined> {
-        if (checkpoint?.phase === 'worktree-removed') return undefined;
+        if (checkpoint?.phase === 'worktree-removed') { refuse(`worktree path ${workspace.path} exists again after its removal was recorded`); return undefined; }
         if (await liveGitDir(repoRoot, workspace) !== receipt.gitDir ||
-            await readIdentityFile(join(receipt.gitDir, 'cezar-owned-resource'), 36, false) !== workspace.resourceId) return undefined;
+            await readIdentityFile(join(receipt.gitDir, 'cezar-owned-resource'), 36, false) !== workspace.resourceId) {
+          refuse(`the Git admin directory or identity marker of ${workspace.path} changed since the worker was made`);
+          return undefined;
+        }
         named = await headLeftTaskBranch(workspace.path, workspace.branch);
         if (named) return undefined;
         // Git permits duplicate checkouts with --force. Preserve both resources
@@ -145,10 +170,16 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
         let registeredPath: string | undefined;
         for (const entry of await registered()) {
           if (entry.startsWith('worktree ')) registeredPath = entry.slice('worktree '.length);
-          if (entry === `branch refs/heads/${workspace.branch}` && registeredPath !== workspace.path) return undefined;
+          if (entry === `branch refs/heads/${workspace.branch}` && registeredPath !== workspace.path) {
+            refuse(`branch ${workspace.branch} is also checked out at ${registeredPath ?? 'another worktree'}`);
+            return undefined;
+          }
         }
         const current = await verifyBranch(repoRoot, workspace, receipt);
-        if (checkpoint && (checkpoint.sha !== current.sha || checkpoint.logHash !== hash(current.log.content))) return undefined;
+        if (checkpoint && (checkpoint.sha !== current.sha || checkpoint.logHash !== hash(current.log.content))) {
+          refuse(`branch ${workspace.branch}'s tip or reflog changed since cleanup started`);
+          return undefined;
+        }
         checkpoint ??= { workspace, gitDir: receipt.gitDir, sha: current.sha, logFile: current.log.file, logHash: hash(current.log.content), phase: 'prepared', forced: true };
         return checkpoint;
       }
@@ -175,7 +206,10 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
       async function prepareMissingWorktree(receipt: Receipt): Promise<Cleanup | undefined> {
         const worktreeGone = async () => !await exists(workspace.path) && !await exists(receipt.gitDir) &&
           !(await registered()).includes(`worktree ${workspace.path}`);
-        if (!await worktreeGone()) return undefined;
+        if (!await worktreeGone()) {
+          refuse(`worktree path ${workspace.path} is gone, but its Git registration or admin directory remains; run git worktree prune`);
+          return undefined;
+        }
         if (!await branchExists()) {
           // Recorded identity already gone: finish bookkeeping. Do not delete a leftover path/gitDir/branch.
           assertCurrent?.();
@@ -191,7 +225,7 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
         // A branch reset back to its baseline may keep the worker's commits only in the reflog that
         // the delete would drop. Commits no other ref keeps are a human's call.
         remaining = ['branch'];
-        if ((await registered()).includes(`branch refs/heads/${workspace.branch}`)) return undefined;
+        if ((await registered()).includes(`branch refs/heads/${workspace.branch}`)) { refuse(`branch ${workspace.branch} is checked out at another worktree`); return undefined; }
         const current = await verifyBranch(repoRoot, workspace, receipt);
         if (!await keepingRefs(current)) {
           named = await strandedName(current.sha);
@@ -241,18 +275,21 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
       }
 
       async function removeBranch(receipt: Receipt, checkpoint: Cleanup): Promise<void> {
-        if (await exists(workspace.path) || await exists(receipt.gitDir) || (await registered()).includes(`worktree ${workspace.path}`)) return;
+        if (await exists(workspace.path) || await exists(receipt.gitDir) || (await registered()).includes(`worktree ${workspace.path}`)) {
+          refuse(`worktree path ${workspace.path}, its registration or its Git admin directory is still present after removal`);
+          return;
+        }
         remaining = ['branch'];
         checkpoint = { ...checkpoint, phase: 'worktree-removed' };
         await writeCleanup(checkpointPath, checkpoint, assertCurrent);
         if (await branchExists()) {
-          if ((await registered()).includes(`branch refs/heads/${workspace.branch}`)) return;
+          if ((await registered()).includes(`branch refs/heads/${workspace.branch}`)) { refuse(`branch ${workspace.branch} is checked out at another worktree`); return; }
           const current = await verifyBranch(repoRoot, workspace, receipt);
           // hearsay-tools/squawk#910: a tip that moved after the checkpoint is named like a stranded one.
           if (current.sha !== checkpoint.sha) { named = await movedBranch(checkpoint.sha, current.sha, 'the tip destroy recorded'); return; }
-          if (hash(current.log.content) !== checkpoint.logHash) return;
+          if (hash(current.log.content) !== checkpoint.logHash) { refuse(`branch ${workspace.branch}'s reflog changed since cleanup started`); return; }
           const witnesses = await deletionWitnesses(receipt, checkpoint, current);
-          if (!witnesses) return;
+          if (!witnesses) { refuse(`branch ${workspace.branch} changed while destroy checked which refs keep its commits`); return; }
           // Ref CAS: never delete a branch advanced after our verified snapshot.
           assertCurrent?.();
           assertUnheld?.();
@@ -261,15 +298,19 @@ export async function removeOwnedWorkspace(repoRoot: string, value: WorkerWorksp
           // (hearsay-tools/squawk#3619).
           const removed = await mutationGit(repoRoot, ['update-ref', '--no-deref', '--stdin'], undefined,
             [...witnesses.map(({ ref, sha }) => `verify ${ref} ${sha}`), `delete refs/heads/${workspace.branch} ${checkpoint.sha}`].join('\n') + '\n');
-          if (!removed.ok || await branchExists()) return;
+          if (!removed.ok || await branchExists()) {
+            refuse(`deleting branch ${workspace.branch} failed: ${removed.stderr.trim().split('\n')[0]?.slice(0, 300) || 'the branch still exists'}`);
+            return;
+          }
         }
         await writeCleanup(checkpointPath, { ...checkpoint, phase: 'complete' }, assertCurrent);
         remaining = [];
       }
-    }, { waitMs: 1_000 });
+    }, { waitMs: lock.waitMs ?? DEFAULT_DESTROY_LOCK_WAIT_MS, label: { operation: 'worker-destroy', owner: value.ownerRunId } });
   } catch (error) {
-    // Ambiguous ownership and every failed Git/filesystem operation fail closed.
-    lockBusy = error instanceof WorktreeMutationLockTimeout;
+    // Ambiguous ownership and every failed Git/filesystem operation fail closed, naming what failed.
+    if (error instanceof WorktreeMutationLockTimeout) lockBusy = { ...(error.holder ? { holder: error.holder } : {}) };
+    else refuse(`a destroy check failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 300)}`);
   }
   return result();
 }
