@@ -1,7 +1,7 @@
 /** The worker workspace kinds: one definition per `workspace.kind`. Delegation code and the run
  *  engine's port ask the definition; they never call a kind's own functions directly. */
 import type { WorkerChangeReport, WorkerDestroy, WorkerDestroyResult, WorkerDiff, WorkerWorkspace } from '@open-mercato/cezar-contract';
-import { ownedWorkspace, type WORKSPACE_CHOICES } from '@open-mercato/cezar-contract/delegation';
+import { ownedWorkspace } from '@open-mercato/cezar-contract/delegation';
 import { runGit } from '../git-command.ts';
 import type { RunRecord } from '../runs/store.ts';
 import type { WorkerSettlement, WorkerWorkspaceOpened, WorkerWorkspacePort, WorkerWorkspaceRequest } from '../workflows/run/worker-workspace-port.ts';

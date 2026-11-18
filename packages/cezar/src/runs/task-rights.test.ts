@@ -4,7 +4,7 @@ import { workerOperationSchema, type SpawnGrant } from '@open-mercato/cezar-cont
 import { runRecordSchema, type RunRecord } from './store.ts';
 import {
   childSpawnGrant, DEFAULT_GRANTS, defaultSpawnKind, familyRecordIdOf, familyRecordOf, grantsOf, hasSpawnRoom, inspectableReceipts, mayOperate, maySpawn,
-  messageRelation, relationOf, supervisedByFamilyRecord, supervisedReceipts, supervisorIdOf, type TaskRelation,
+  messageRelation, relationOf, supervisedByFamilyRecord, supervisedReceipts, supervisorIdOf,
 } from './task-rights.ts';
 
 const [ROOT, OTHER, WORKER, SIBLING, FOREIGN, PLAIN, CHILD] = ['1', '2', '3', '4', '5', '6', '7'].map(n => `00000000-0000-4000-8000-00000000000${n}`) as [string, string, string, string, string, string, string];

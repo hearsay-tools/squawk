@@ -277,6 +277,25 @@ it('names an archived worker the run list no longer carries from the relationshi
   expect(await within(group).findByText('Fixed the parser')).toBeTruthy()
 })
 
+// hearsay-tools/squawk#3819: a root lists its whole family and marks a worker that another worker started.
+it('marks a worker that another worker started with its supervisor, and lists a worker\'s own workers on its page', async () => {
+  const [first, second] = [workerAt(1), { ...workerAt(2), supervisorRunId: workerAt(1).workerId }]
+  const titles = [{ id: first.workerId, title: 'Build the parser' }, { id: second.workerId, title: 'Review the parser' }]
+  const view = setup(rootOf([first, second]), async () => json({ workers: [first, second], titles, capacity: capacityOf(2) }))
+  const items = within(await section()).getAllByRole('listitem')
+  expect((await within(items[0]!).findByText('Started by Build the parser')).getAttribute('data-slot')).toBe('worker-supervisor')
+  expect(within(items[1]!).queryByText(/Started by/)).toBeNull()
+  view.unmount()
+
+  const supervisor: ApiRun = { ...ordinary, id: first.workerId, delegation: { role: 'worker', permissions: [], parentRunId: parentId, workspace: first.workspace, spawnGrant: { kinds: ['shared'], live: 1 } } }
+  setup(supervisor, async () => json({ parentRunId: parentId, workers: [second], titles }))
+  expect((await within(await section()).findByRole('link', { name: `Worker task ${second.workerId}` })).textContent).toContain('Review the parser')
+  expect(within(await section()).queryByText(/Started by/)).toBeNull()
+  cleanup()
+  setup(supervisor)
+  expect(await within(await section()).findByText('No workers')).toBeTruthy()
+})
+
 it('says when a stuck cleanup needs attention, when it checks next, and how to try now (hearsay-tools/cezarion#879)', async () => {
   const nextAt = new Date(Date.now() + 42 * 60_000 + 30_000).toISOString()
   const stuck: WorkerInspection = { ...worker, status: workerInspectionSchema.shape.status.enum.done, destroy: { requestedAt: at, phase: 'incomplete', remaining: ['worktree', 'branch'],

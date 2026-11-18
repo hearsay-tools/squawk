@@ -149,7 +149,7 @@ export function WorkerActivitySection({ run, open, onToggle }: { run: ApiRun; op
               )
             })}
           </ul>
-        ) : query.isSuccess ? <p className="px-1 py-1">No workers</p> : null}
+        ) : listsWorkers(run) && query.isSuccess ? <p className="px-1 py-1">No workers</p> : null}
         {query.fetchStatus === 'paused' ? <p role="status" className="px-1 py-1">Offline — relationship details will refresh when connected.</p>
           : query.isPending ? <p role="status" className="px-1 py-1">Loading relationships…</p> : null}
         {query.isError ? <div className="flex flex-wrap items-center gap-2 px-1 py-1">
