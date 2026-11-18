@@ -137,7 +137,8 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
     store.createOwnedRun({ title: 'shared', task: 'shared', workflow: 'quick-task', steps: [] }, hostId, randomUUID(), { role: 'worker', permissions: [], parentRunId: hostId,
       workspace: { ownerRunId: workerId, resourceId: randomUUID(), kind: 'shared', path: store.getRun(hostId)!.worktreePath!, hostRunId: hostId, baselineSha: 'a'.repeat(40) } }, 'b'.repeat(64));
     const host = async () => (await getWorktrees()).worktrees.find((w) => w.runId === hostId)!;
-    expect(store.getRun(workerId)?.status).toBe(RUN_STATUS.queued);
+    // A worker in the middle of its run, as the selector and the claim read it from the store.
+    setRunStatus(store, workerId, RUN_STATUS.waiting);
     expect(await host()).toMatchObject({ reclaimable: false, pastKeep: false });
     expect(await reclaimWorktrees(repoRoot, store, 1)).toEqual([]);
     expect((await apiRequest(app, `/api/v1/worktrees/${hostId}/reclaim`, { method: 'POST' })).status).toBe(409);
