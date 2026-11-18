@@ -3,38 +3,18 @@ import { spawn } from 'node:child_process';
 import { z } from 'zod';
 import { matchesGithubPullRequest, mergedPullRequestObservations } from '../merge-observations.ts';
 import { mergeProgressArgs, mergeProgressResponseSchema, mergeRequestObservation, type GithubMergeRequest } from './merge-progress.ts';
+import { GITHUB_REQUEST_LIMIT, GithubRequestGate, isGithubRateLimit } from '../server/forge/github-request-gate.ts';
 import { ciPrIdentitySchema, ciWaitRequestSchema, type CiPrIdentity, type CiWaitErrorCode } from '@open-mercato/cezar-contract/ci-wait';
 
 export const CI_QUERY_TIMEOUT_MS = 10_000;
 /** `gh pr checks --watch --interval`, in seconds. Not the query timeout. */
 export const CI_WATCH_INTERVAL_SECONDS = 30;
-export const CI_QUERY_LIMIT = 4;
+export const CI_QUERY_LIMIT = GITHUB_REQUEST_LIMIT;
 export const CI_OUTPUT_LIMIT = 64 * 1024;
 export const CI_TERMINATE_MS = 2_000;
 
 export class CiGithubError extends Error {
   constructor(readonly code: CiWaitErrorCode, message: string, readonly transient = false) { super(message); }
-}
-
-/** FIFO permits; aborted queued requests never consume a slot. */
-export class CiSemaphore {
-  private active = 0;
-  private readonly queue: Array<() => void> = [];
-  constructor(private readonly limit: number) {}
-  async acquire(signal: AbortSignal): Promise<() => void> {
-    signal.throwIfAborted();
-    if (this.active >= this.limit) await new Promise<void>((resolve, reject) => {
-      const ready = () => { signal.removeEventListener('abort', abort); resolve(); };
-      const abort = () => { const i = this.queue.indexOf(ready); if (i >= 0) this.queue.splice(i, 1); reject(signal.reason); };
-      this.queue.push(ready); signal.addEventListener('abort', abort, { once: true });
-    });
-    else this.active++;
-    // A slot is transferred to the oldest waiter, not released and raced for.
-    if (signal.aborted) { this.release(); signal.throwIfAborted(); }
-    let released = false;
-    return () => { if (!released) { released = true; this.release(); } };
-  }
-  private release(): void { const next = this.queue.shift(); if (next) next(); else this.active--; }
 }
 
 // The helper owns gh's process group and observes the controller-owned stdin pipe.
@@ -129,10 +109,11 @@ const workflowPagesSchema = z.array(z.object({
 function parseJson<T>(text: string, schema: z.ZodType<T>): T {
   try { return schema.parse(JSON.parse(text)); } catch { throw new CiGithubError('malformed_data', 'GitHub returned malformed structured data; update gh and retry.'); }
 }
+const rateLimitedReply = (result: CiCommandResult): boolean => result.code !== 0 && isGithubRateLimit(result.stderr);
 function commandError(result: CiCommandResult): CiGithubError {
   // Only classify stderr: never forward potentially credential-bearing external diagnostics.
   if (result.code === 127) return new CiGithubError('gh_missing', 'GitHub CLI is unavailable; install gh and retry.');
-  if (/rate limit|429/i.test(result.stderr)) return new CiGithubError('command_failed', 'GitHub query was rate limited; wait and retry.', true);
+  if (isGithubRateLimit(result.stderr)) return new CiGithubError('command_failed', 'GitHub query was rate limited; wait and retry.', true);
   if (/401|403|auth|log.?in|token/i.test(result.stderr)) return new CiGithubError('authentication', 'GitHub authentication failed; run gh auth login with access to this repository.');
   if (/404|not found|could not resolve|no pull requests/i.test(result.stderr)) return new CiGithubError('inaccessible_pr', 'PR is inaccessible; verify its URL and repository access.');
   return new CiGithubError('command_failed', 'GitHub query failed; check connectivity and GitHub availability, then retry.', true);
@@ -157,27 +138,28 @@ export function parseActiveWorkflowRuns(text: string): boolean {
 }
 
 export class GithubCiClient {
-  private readonly queries = new CiSemaphore(CI_QUERY_LIMIT);
+  private readonly gate: GithubRequestGate;
   private readonly command: CiCommandOptions;
   private readonly env: NodeJS.ProcessEnv;
   private readonly cwd?: string | undefined;
-  constructor(options: { command?: CiCommandOptions; env?: NodeJS.ProcessEnv; cwd?: string | undefined } = {}) {
+  /** The supervisor passes the process-wide `githubRequestGate`; a client built alone gets its own. */
+  constructor(options: { command?: CiCommandOptions; env?: NodeJS.ProcessEnv; cwd?: string | undefined; gate?: GithubRequestGate } = {}) {
+    this.gate = options.gate ?? new GithubRequestGate();
     this.env = options.env ?? process.env;
     this.command = options.command ?? (productEnv('DRY_RUN', this.env) === '1' ? { file: process.execPath, args: ['-e', dryRunCommand] } : { file: 'gh', args: [] });
     this.cwd = options.cwd;
   }
   /**
-   * One bounded gh query. An outcome query waits for one of the shared query permits; a progress
-   * query (`permit: false`) takes none, and its caller bounds how many run.
+   * One bounded gh query through the GitHub request gate. An outcome query waits for one of the
+   * gate's permits; a progress query (`permit: false`) takes none, and its caller bounds how many
+   * run. A rate-limit pause is waited out before the ten-second bound starts.
    */
   private async query(args: string[], signal: AbortSignal, permit = true): Promise<CiCommandResult> {
+    (await this.gate.admit({ signal, permit: false }))();
     const bounded = AbortSignal.any([signal, AbortSignal.timeout(CI_QUERY_TIMEOUT_MS)]);
-    let release: (() => void) | undefined;
     try {
-      if (permit) release = await this.queries.acquire(bounded);
-      return await this.runCommand(args, bounded); }
+      return await this.gate.run(() => this.runCommand(args, bounded), { signal: bounded, permit, rateLimited: rateLimitedReply }); }
     catch (error) { if (!signal.aborted && bounded.aborted) throw new CiGithubError('query_timeout', 'GitHub query exceeded ten seconds; check connectivity and retry.', true); throw error; }
-    finally { release?.(); }
   }
   /** Run one gh command under a held query permit. */
   protected runCommand(args: string[], signal: AbortSignal): Promise<CiCommandResult> {
@@ -265,8 +247,10 @@ export class GithubCiClient {
     }
     return parseJson(result.stdout, githubChecksSchema);
   }
+  /** The long `--watch` passes the gate's pause but holds no permit: four watches must not starve every query. */
   async watch(pr: CiPrIdentity, signal: AbortSignal): Promise<void> {
-    const result = await runCiCommand({file:this.command.file,args:[...this.command.args, 'pr', 'checks', String(pr.prNumber), '--repo', `github.com/${pr.repository}`, '--watch', '--interval', String(CI_WATCH_INTERVAL_SECONDS)]}, signal, true, this.env, this.cwd);
+    const result = await this.gate.run(() => runCiCommand({file:this.command.file,args:[...this.command.args, 'pr', 'checks', String(pr.prNumber), '--repo', `github.com/${pr.repository}`, '--watch', '--interval', String(CI_WATCH_INTERVAL_SECONDS)]}, signal, true, this.env, this.cwd),
+      { signal, permit: false, rateLimited: rateLimitedReply });
     if (![0,1,8].includes(result.code) || result.stderr.trim()) throw commandError(result);
   }
 }

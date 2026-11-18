@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { ciWaitSchema, ciWaitResultSchema, type CiPrIdentity, type CiWait, type CiWaitResult } from '@open-mercato/cezar-contract/ci-wait';
-import { CiGithubError, CiSemaphore, GithubCiClient, type GithubCheck, type GithubPrMergeState, type GithubPrMetadata } from './github.ts';
+import { githubRequestGate, RequestPermits } from '../server/forge/github-request-gate.ts';
+import { CiGithubError, GithubCiClient, type GithubCheck, type GithubPrMergeState, type GithubPrMetadata } from './github.ts';
 import type { GithubMergeRequest } from './merge-progress.ts';
 import { CiProgressRegistry } from './progress.ts';
 import { stripTerminal } from './text.ts';
@@ -58,7 +59,7 @@ function observation(wait: CiWait, result: CiWaitResult['outcome'], rows: Github
 /** One shared instance per workspace; queues watchers FIFO without extending their deadlines. */
 export class CiWatcherSupervisor {
   private readonly lifetime = new AbortController();
-  private readonly slots = new CiSemaphore(CI_WATCHER_LIMIT);
+  private readonly slots = new RequestPermits(CI_WATCHER_LIMIT);
   private readonly github: GithubCiClient;
   private readonly current = new Map<string, Promise<CiWaitResult>>();
   /** The check progress of each watched wait, for the activity view. It never decides an outcome. */
@@ -66,7 +67,7 @@ export class CiWatcherSupervisor {
   /** The one extra checks read in flight across the supervisor, and its wait. */
   private progressRead: { waitId: string; abort: AbortController } | undefined;
   constructor(options: { github?: GithubCiClient; progress?: CiProgressRegistry } = {}) {
-    this.github = options.github ?? new GithubCiClient();
+    this.github = options.github ?? new GithubCiClient({ gate: githubRequestGate });
     this.progress = options.progress ?? new CiProgressRegistry();
   }
 

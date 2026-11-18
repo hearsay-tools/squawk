@@ -5,6 +5,7 @@ import { AutomationCandidateChangedError, type GithubCandidate, type GithubPolle
 import { readUnderCanonicalName, type GithubRepository } from './github-repository.ts';
 import { AutomationProjectUnavailableError, ScheduleRunner, type ScheduleLauncher } from './schedule-runner.ts';
 import { ProjectMigrationFencedError } from '../server/cockpit-ownership.ts';
+import { GithubRateLimitedError } from '../server/forge/github-request-gate.ts';
 import type { AutomationLease, AutomationStore } from './store.ts';
 import { isGithubAutomation, isScheduleAutomation, type AutomationDefinition, type AutomationRuntimeState, type GithubAutomationDefinition } from './types.ts';
 
@@ -189,6 +190,7 @@ export class ProjectAutomationScheduler {
     // Not a failure: nothing was launched or moved, and the timer retries at its floor.
     // A migration fence refusing a state write is a skip too: no failure count, no backoff.
     else if (error instanceof AutomationProjectUnavailableError || error instanceof ProjectMigrationFencedError) { /* see above */ }
+    else if (error instanceof GithubRateLimitedError) await this.recordRateLimit(definition, mode, error);
     else if (mode === 'execute') await this.recordFailure(definition, error);
     else await store.appendLog({ automationId: definition.id, revision: definition.revision, result: 'error', reason: error instanceof Error ? error.message : String(error) });
     throw error;
@@ -263,6 +265,18 @@ export class ProjectAutomationScheduler {
     const { store } = this.handle;
     await store.appendLog({ automationId: definition.id, revision: definition.revision, result: 'skipped', reason: error.message });
     // The lease owner may be writing state. The workspace retry floor handles our next attempt.
+    this.handle.onChange?.(definition.id, definition.revision);
+  }
+
+  /** A pause, not a failure: no failure count, no doubled delay, no last error. The next check waits for the pause to end. */
+  private async recordRateLimit(definition: GithubAutomationDefinition, mode: 'preview' | 'execute', error: GithubRateLimitedError): Promise<void> {
+    if (mode === 'execute') {
+      this.handle.store.setState(definition.id, (current) => ({
+        ...this.currentState(definition, current),
+        nextCheckAt: new Date(error.until).toISOString(),
+      }));
+    }
+    await this.handle.store.appendLog({ automationId: definition.id, revision: definition.revision, result: 'rate-limited', reason: error.message });
     this.handle.onChange?.(definition.id, definition.revision);
   }
 
@@ -444,7 +458,11 @@ export class WorkspaceAutomationScheduler {
       if (clock() < next.at) { void this.reschedule(); return; }
       void next.fire().then(
         () => { this.retryAfter.delete(next.key); },
-        () => { this.retryAfter.set(next.key, clock() + next.retryAfterMs); },
+        // A rate-limit pause already moved the check to the pause's end; no retry floor on top.
+        (error: unknown) => {
+          if (error instanceof GithubRateLimitedError) this.retryAfter.delete(next.key);
+          else this.retryAfter.set(next.key, clock() + next.retryAfterMs);
+        },
       ).finally(() => this.reschedule());
     }, Math.min(WORKSPACE_TIMER_CAP_MS, Math.max(0, next.at - clock())));
   }
