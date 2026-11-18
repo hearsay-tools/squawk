@@ -37,9 +37,13 @@ function outcome(checks: GithubCheck[]): CiWaitResult['outcome'] | undefined {
   return 'skipped';
 }
 type ObservationExtra = Partial<Pick<CiWaitResult, 'observedHeadSha' | 'diagnostic' | 'mergeable' | 'mergeStateStatus' | 'mergedAt' | 'mergeCommitSha' | 'mergeBlock'>>;
+/** The queue removed the PR because it merged; GitHub can still read the PR as `OPEN` for a moment. */
+function queueMerged(request: GithubMergeRequest): boolean {
+  return request.event?.kind === 'queue_removal' && request.event.reason?.toLowerCase() === 'merged';
+}
 function blockedMerge(state: GithubPrMergeState, request: GithubMergeRequest): ObservationExtra | undefined {
   const conflict = state.mergeable === 'CONFLICTING';
-  if (!conflict && (request.isInMergeQueue || request.autoMergeEnabled)) return undefined;
+  if (!conflict && (request.isInMergeQueue || request.autoMergeEnabled || queueMerged(request))) return undefined;
   return { mergeBlock: { ...request, reason: conflict ? 'conflict' : 'no_pending_merge' },
     diagnostic: conflict ? 'The initiated merge conflicts with its base. Inspect the PR before taking action.'
       : 'No merge is pending: the PR is neither queued nor scheduled for auto-merge. Inspect the external evidence before taking action.' };
@@ -90,13 +94,15 @@ export class CiWatcherSupervisor {
   /**
    * Poll a merge wait every `CI_PROBE_MS`, the first read at once, taking the client's query permit
    * per read and never a watcher slot. `MERGED` → `merged`, `CLOSED` → `closed`, a conflict →
-   * `conflicting` when the wait wakes on one; a head change and green checks keep it open.
+   * `conflicting` when the wait wakes on one; a head change and green checks keep it open. A queue
+   * removal for a merge reads again on the retry schedule until GitHub reports the merge.
    * Transient failures retry inside the deadline, which then names the last one.
    */
   private async runMerge(wait: CiWait, caller: AbortSignal, signal: AbortSignal): Promise<CiWaitResult> {
     let last: GithubPrMergeState | undefined;
     let lastQueryError: CiGithubError | undefined;
     let retry = 0;
+    let settle = 0;
     const observe = (result: CiWaitResult['outcome'], extra: ObservationExtra = {}) => observation(wait, result, [], {
       ...(last ? { mergeable: last.mergeable, mergeStateStatus: last.mergeStateStatus } : {}),
       ...(last && last.headSha !== wait.headSha ? { observedHeadSha: last.headSha } : {}),
@@ -120,7 +126,8 @@ export class CiWatcherSupervisor {
         if (wait.wakeOnConflict && last.mergeable === 'CONFLICTING') {
           return observe('conflicting', {diagnostic: 'The pull request conflicts with its base and cannot merge until someone resolves it.'});
         }
-        await delay(CI_PROBE_MS, undefined, { signal });
+        const settling = progress !== undefined && queueMerged(progress.mergeRequest);
+        await delay(settling ? CI_RETRY_MS[settle++] ?? CI_PROBE_MS : CI_PROBE_MS, undefined, { signal });
       } catch (error) {
         if (signal.aborted) return stopped();
         if (transientQuery(error)) {

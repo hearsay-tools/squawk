@@ -194,3 +194,43 @@ it('keeps a dependency merge wait independent from a rejected merge', async () =
   expect((await result).outcome).toBe('merged');
   expect(github.progressCalls).toBe(0);
 });
+
+/** hearsay-tools/squawk#3844 as GitHub reported it: the queue removed it with reason `merged` at
+ *  23:18:30Z, a read at 23:18:31.887Z still returned `OPEN`, and `mergedAt` is 23:18:31Z. */
+const queued: CiPrIdentity = { prUrl: 'https://github.com/hearsay-tools/squawk/pull/3844', repository: 'hearsay-tools/squawk',
+  prNumber: 3844, headSha: '4263aace10dd9e98ab662f502bc13aefcb12bbc7' };
+const recordedRead = (state: 'OPEN' | 'MERGED', reason: string) => JSON.stringify({ data: { repository: { pullRequest: {
+  url: queued.prUrl, number: queued.prNumber, headRefOid: queued.headSha, state, mergeable: 'UNKNOWN', mergeStateStatus: 'UNKNOWN',
+  mergedAt: state === 'MERGED' ? '2026-11-17T23:18:31Z' : null,
+  mergeCommit: state === 'MERGED' ? { oid: 'F645796E7D9B533CC3E9D98DF9556B78C80C7ACC' } : null,
+  isInMergeQueue: false, autoMergeRequest: null,
+  timelineItems: { nodes: [{ __typename: 'RemovedFromMergeQueueEvent', createdAt: '2026-11-17T23:18:30Z', reason }] } } } } });
+
+/** Replays recorded `gh api graphql` responses through the client's own parsing; the last one repeats. */
+class RecordedGithub extends GithubCiClient {
+  calls = 0;
+  constructor(private readonly responses: string[]) { super(); }
+  protected override async runCommand() {
+    return { code: 0, stdout: this.responses[Math.min(this.calls++, this.responses.length - 1)]!, stderr: '' };
+  }
+}
+
+it('reads again after a queue removal for a merge until GitHub reports the PR merged', async () => {
+  vi.useFakeTimers();
+  const github = new RecordedGithub([recordedRead('OPEN', 'merged'), recordedRead('OPEN', 'merged'), recordedRead('MERGED', 'merged')]);
+  const { result } = start(github, { ...queued, until: 'merge_or_blocked' });
+  let settled = false; void result.then(() => { settled = true; });
+  await vi.advanceTimersByTimeAsync(1); expect(github.calls).toBe(1);
+  await vi.advanceTimersByTimeAsync(1_000); expect(github.calls).toBe(2); expect(settled).toBe(false);
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(await result).toMatchObject({ outcome: 'merged', mergedAt: '2026-11-17T23:18:31Z',
+    mergeCommitSha: 'f645796e7d9b533cc3e9d98df9556b78c80c7acc' });
+  expect(github.calls).toBe(3);
+});
+
+it('blocks on the first read after a queue removal for any other reason', async () => {
+  const github = new RecordedGithub([recordedRead('OPEN', 'failed_checks')]);
+  expect(await start(github, { ...queued, until: 'merge_or_blocked' }).result).toMatchObject({ outcome: 'blocked',
+    mergeBlock: { reason: 'no_pending_merge', event: { kind: 'queue_removal', reason: 'failed_checks' } } });
+  expect(github.calls).toBe(1);
+});
