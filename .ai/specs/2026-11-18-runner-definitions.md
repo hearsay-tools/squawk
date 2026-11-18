@@ -57,7 +57,9 @@ ids and `claude-cli`. `runs/legacy-run-rows.ts` turns a run saved on a removed r
 
 `cez/runner-id-branch` and `cez/runner-roster-literal` read `RUNNER_IDS` from the source text of
 `core/agent-runner.ts`. The service names `RunnerId` in 46 non-test files and `RUNNER_IDS` in 18;
-14 of those uses are `Record<RunnerId, …>` tables that this step moves into the definitions.
+14 of those uses are `Record<RunnerId, …>` types; some are the per-runner tables this step
+moves, others are catalog options and partial maps that stay with their readers and take a
+`string` key.
 
 ## Product decisions (owner, 2026-11-18)
 
@@ -72,8 +74,10 @@ ids and `claude-cli`. `runs/legacy-run-rows.ts` turns a run saved on a removed r
    `RUNNER_IDS` leave the service; a runner id is a `string` checked against the registry. The
    only list of built-in runners is `runners/built-in.ts`, one line for each runner. The
    step 4 loader, which finds plugins by folder, may replace that list. The compiler no longer
-   catches a misspelled runner id in core code; the registry check at the request edge and
-   `cez/runner-id-branch` cover it.
+   catches a misspelled runner id in core code. The registry check covers ids that arrive in a
+   request; a misspelled literal inside the service is not caught, and `createRunner` gives it
+   the Claude runner, as an unknown id gets today. `cez/runner-id-branch` keeps code outside
+   `core/` from comparing runner ids, which leaves few such literals.
 2. **The cockpit gets per-runner data from `GET /api/v1/runners`.** The route returns the
    registered runners in display order with their display data and model presets. The cockpit
    tables in [Evidence](#evidence) are removed. Runner pickers wait for this query, as other
@@ -142,7 +146,8 @@ The parts that the cockpit needs are plain JSON data. The route sends them as th
 `core/runner-registry.ts` (core) holds the registered definitions in registration order:
 
 - `registerRunner(definition)` adds one definition. A second definition with the same id is an
-  error.
+  error, and so is a definition whose id is a legacy id (`claude-cli`): the legacy map resolves
+  that id to `claude` for saved runs, so no runner may take it.
 - `runnerDefinition(id)`, `registeredRunners()` and `isRegisteredRunner(id)` read it. A read of
   an empty registry throws an error that names the missing registration, so a process entry that
   forgot it fails at once instead of falling back to Claude.
