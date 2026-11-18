@@ -22,7 +22,7 @@ configuration unnecessary and avoid a shared config write.
 - **Read through the live index.** Retained only as a degraded fallback; normally it races staging and commits.
 - **Expire a mutation lock by heartbeat.** The keeper instead ties release to child completion, so a slow or stopped Git command cannot overlap a new mutation.
 
-Each claim names its operation and owner (task or worker id), so a waiter that times out names the holder; a caller may extend its wait by a fixed amount per claim queued ahead of it, up to 10 minutes (hearsay-tools/squawk#3817).
+A claim may name its operation and its owner (task or worker id). A waiter that times out names the holder by its keeper PID, with the operation and owner when the claim carries them; a caller may extend its wait by a fixed amount per claim queued ahead of it, up to 10 minutes (hearsay-tools/squawk#3817).
 
 Implementation: [git-index-copy.ts](../../packages/cezar/src/git-index-copy.ts), [git-worktree-lock.ts](../../packages/cezar/src/git-worktree-lock.ts), [git-worktree.ts](../../packages/cezar/src/git-worktree.ts).
 
