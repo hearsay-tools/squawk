@@ -118,10 +118,10 @@ A worker reviews its own committed change before it pushes: it starts one worker
 1. Commit the change. Then start the worker with the command of the review rule and a new request id:
 
    ```sh
-   hsq worker spawn --request-id <UUID> --runner <runner> --model <model> --effort <effort> --context-file <review-prompt> '<task>'
+   hsq worker spawn --baseline parent-head --request-id <UUID> --runner <runner> --model <model> --effort <effort> --context-file <review-prompt> '<task>'
    ```
 
-   The task text names the branch, the head SHA from `git rev-parse HEAD` and the base. It says that no pull request exists yet, to read commits with `git show` and never check out, to change no file, and to send the full report to its parent and then call `cezar_done`. From a worker the command starts a shared-workspace worker in the caller's worktree ([A worker that starts a worker](#a-worker-that-starts-a-worker)).
+   The task text names the branch, the head SHA from `git rev-parse HEAD` and the base. It says that no pull request exists yet, to read commits with `git show` and never check out, to change no file, and to send the full report to its parent and then call `cezar_done`. From a worker the command starts a shared-workspace worker in the caller's worktree, and `--baseline parent-head` changes nothing there ([A worker that starts a worker](#a-worker-that-starts-a-worker)).
 2. Register the wait and end the turn. Do not edit the worktree while the round runs.
 
    ```sh
