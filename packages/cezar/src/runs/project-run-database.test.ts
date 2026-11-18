@@ -65,6 +65,9 @@ describe('project database projection', () => {
       expect(readIds(db.listPeerSummaries({ all: true, excluded: [], offset: 0, limit: 10 }))).toEqual(roots);
       expect(readIds(db.searchRootSummaries(['runs']))).toEqual([legacyId]);
       expect(readIds(db.listWhere("runs.id = ? AND 'JOIN runs' <> ''", [workerId]))).toEqual([workerId]);
+      // A view has no index: the projection drops an index hint, with or without an alias before it.
+      expect(readIds(db.listWhere('id IN (SELECT r.id FROM runs AS r INDEXED BY runs_parent_run_id WHERE r.parent_run_id = ?)', [rootId])))
+        .toEqual([workerId]);
       expect(db.isFallback(workerId)).toBe(true);
       expect(db.isFallback(rootId)).toBe(false);
       expect(db.hasFallback(rootId)).toBe(true);
