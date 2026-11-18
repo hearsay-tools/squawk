@@ -213,3 +213,13 @@ describe('process waits', () => {
     expect(chargesBudget(ci())).toBe(false);
   });
 });
+
+// The diagnostic crosses the same wake-text boundary as existing CI outcomes.
+it('includes stuck checks and recovery in the model-facing wait result', () => {
+  const diagnostic = 'build queued for at least 15 minutes. Close and reopen the PR.';
+  const stuck = {...result,outcome:'stuck' as const,diagnostic};
+  const text = waitResultText(ci({phase:WAIT_PHASE.resolved,result:stuck}));
+  expect(text).toContain(JSON.stringify(stuck));
+  expect(text).toContain(diagnostic);
+  expect(text).toContain('not merge approval or task completion');
+});

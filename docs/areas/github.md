@@ -76,3 +76,15 @@ and its consumers.
 | Done, blocked action | Retry, disable, manual Archive, or Continue | Bounded coordinator or user | Opt-in work retries; reason stays visible |
 | Done, completed action | Continue, manual Archive, or Unarchive | User | Does not rearm on unrelated writes or restart |
 | Archived | Unarchive or Continue | User | No automatic exit; history and work remain recoverable |
+
+## Queued checks in PR waits
+
+A checks wait wakes with `stuck` when it has observed a check as QUEUED for at
+least 15 minutes. Each snapshot keeps its existing GitHub reads. A per-wait
+clock uses the check name and link; an absent check or another state resets it.
+An already-queued check starts its clock when the wait first sees it. A cockpit
+restart starts a new clock. Activity progress and native `gh pr checks --watch`
+keep their reads; a timer caps the watch at the oldest observed queued check's
+bound, reaps the child, then uses the next snapshot to confirm its current state.
+In-progress checks never trigger this wake. See
+`.ai/specs/2026-11-18-stuck-pr-waits-plan.md` for cases.
