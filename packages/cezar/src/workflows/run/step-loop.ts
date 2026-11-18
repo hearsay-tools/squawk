@@ -14,6 +14,7 @@ import { AgentTempDirError, agentTmpEnv } from '../../runs/agent-tmpdir.ts';
 import { resolveWorktreeSetup, runWorktreeSetup, worktreeSetupAgentNote, worktreeSetupEndNote, worktreeSetupEnv, worktreeSetupRecordError, worktreeSetupStartNote, type WorktreeSetupOutcome } from '../../worktree-setup.ts';
 import { taskModelIdentity } from './launch-settings.ts';
 import { executionBaseRef, openExecutionWorktree, executionSeedFiles } from './run-workspace.ts';
+import type { WorkerWorkspacePort } from './worker-workspace-port.ts';
 import { clearAutosaveTimer } from './input-timers.ts';
 import type { RunLine } from './run-line.ts';
 import type { WorktreeAutosave } from './worktree-autosave.ts';
@@ -44,6 +45,7 @@ interface StepLoopHost {
   move(id: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>, call?: ExitCall): RunRecord | undefined;
   dropActive(id: string): void;
   workerExecutionStopped(id: string): boolean;
+  workerWorkspaces(): WorkerWorkspacePort | undefined;
   executionBlockedByRootFinish(run: RunRecord): boolean;
 }
 
@@ -143,15 +145,15 @@ export class StepLoop {
     const { owned, ownedRun } = launch;
     try {
       if (this.host.workerExecutionStopped(runId)) { this.host.dropActive(runId); return false; }
-      const wt = await openExecutionWorktree(this.context.store, this.context.repoRoot, this.context.dataDir, execution, launch, base);
+      const wt = await openExecutionWorktree(this.context.store, this.context.repoRoot, this.context.dataDir, execution, launch, base, this.host.workerWorkspaces());
       state.liveSession.changeWorkingDirectory(wt.path);
       this.context.store.updateRun(runId, {
         worktreePath: wt.path,
-        branch: wt.branch,
+        ...(wt.branch === undefined ? {} : { branch: wt.branch }),
         baseBranch: wt.baseBranch,
         ...(owned ? { worktree: undefined } : {}),
       });
-      emit({ type: 'note', message: `worktree ready — branch ${wt.branch} (base ${wt.baseBranch})` });
+      emit({ type: 'note', message: `worktree ready — ${wt.branch === undefined ? '' : `branch ${wt.branch} `}(base ${wt.baseBranch})` });
       // Seed from this manager's project root: each multi-project context has
       // its own manager/repoRoot and must never copy another project's layer.
       // A worker's explicit `--attach` files win over the main checkout's copy (hearsay-tools/cezarion#1149).

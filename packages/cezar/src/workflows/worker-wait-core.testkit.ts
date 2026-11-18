@@ -30,6 +30,7 @@ import { CredentialRegistry, type Caller } from '../delegation/credentials.ts';
 import { DelegationService } from '../delegation/service.ts';
 import { collectWorkerEvidence } from '../delegation/results.ts';
 import { planOwnedWorkspace } from '../delegation/workspace.ts';
+import { workerWorkspacePort } from '../delegation/workspace-kinds.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { MAX_AUTO_CONTINUES, RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
@@ -85,6 +86,7 @@ export const bookkeeping: Promise<unknown>[] = [];
 export const executions: Promise<unknown>[] = [];
 export function track() {
   observeWaitTimers(manager, store);
+  manager.setWorkerWorkspaces(workerWorkspacePort);
   const handlers = manager.squawkToolHandlers.bind(manager);
   vi.spyOn(manager, 'squawkToolHandlers').mockImplementation((id, generation) => {
     toolGenerations.set(id, generation);

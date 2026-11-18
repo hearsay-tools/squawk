@@ -46,6 +46,7 @@ import { existsSync } from 'node:fs';
 import type { RunRecord, StepState } from '../../runs/store.ts';
 import { rematerializeReclaimedWorktree } from '../../runs/retention.ts';
 import { ownedContinuationWorkspace } from './run-workspace.ts';
+import type { WorkerWorkspacePort } from './worker-workspace-port.ts';
 import type { RunExitId, RunPatch } from '../../runs/run-exits.ts';
 import type { RunLine } from './run-line.ts';
 import type { RunModuleContext, WorkerDelegationRecord } from './types.ts';
@@ -65,6 +66,7 @@ export interface ContinuationSessionHost {
   workerStep(runId: string, stepId: string | undefined): WorkerStepIdentity | undefined;
   latchAgentInputError(runId: string, state: ActiveRun, session: AgentSession, message: string): void;
   reconcileWorkerWaits(): void;
+  workerWorkspaces(): WorkerWorkspacePort | undefined;
   holdContinuationForRootFinish(runId: string, item: PendingContinuation, state?: ActiveRun): boolean;
 }
 
@@ -118,7 +120,7 @@ export class ContinuationSession {
     delegation: WorkerDelegationRecord,
   ): Promise<string | undefined> {
     try {
-      return await ownedContinuationWorkspace(this.context.store, this.context.repoRoot, this.context.dataDir, record, delegation);
+      return await ownedContinuationWorkspace(this.context.store, this.context.repoRoot, this.context.dataDir, record, delegation, this.host.workerWorkspaces());
     } catch (error) {
       const message = `owned workspace unavailable: ${error instanceof Error ? error.message : String(error)}`;
       this.failWorkspace(runId, stepId, message);

@@ -5,6 +5,7 @@ import type { AgentSession, RunnerFactory } from '../core/agent-runner.ts';
 import type { RunStore } from '../runs/store.ts';
 import { runnersUnderTest } from '../core/runners-under-test.testkit.ts';
 import { RunManager } from './run.ts';
+import { workerWorkspacePort } from '../delegation/workspace-kinds.ts';
 import { TrackedWork } from './run/tracked-work.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 
@@ -39,6 +40,8 @@ export function createFixtureManager(...args: [store: RunStore, root: string, op
     skillCatalog: fixedSkillCatalog(), home: testHome(), createRunner: backend => runnersUnderTest()(backend), acquireCiResources: acquireInertCiResources,
     ...options, work: group.work,
   });
+  // Production registers the port when the project registers with the delegation service.
+  manager.setWorkerWorkspaces(workerWorkspacePort);
   managerWork.set(manager, group.work);
   group.managers.push({ manager, store });
   fixtures.set(root, group);
