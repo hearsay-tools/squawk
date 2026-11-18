@@ -50,8 +50,8 @@ async function groupMembers(): Promise<number[] | undefined> {
  * sees the failure: `running` when some remain after 10 s, `unknown` where the host cannot list them.
  */
 async function stopTimedOutChildren(): Promise<'stopped' | 'running' | 'unknown'> {
-  // Windows has no process groups to signal; its keeper claim is reclaimed only once idle (gitRunning false).
-  if (process.platform === 'win32') return 'stopped';
+  // Windows has no process groups to signal or list: its children may still run.
+  if (process.platform === 'win32') return 'unknown';
   // The keeper is in its own group too: it ignores this one signal until the wait ends.
   const ignore = () => undefined;
   process.on('SIGTERM', ignore);
@@ -245,8 +245,10 @@ async function keepWorktreeLock(): Promise<void> {
         await write(ticket, true);
         const result = await runGitCommand(message);
         await write(ticket);
-        // Their claim outlives this keeper: the group probe frees it once every member is gone (readMutationClaim).
-        if (result.childrenRunning) keepClaim = true;
+        // Their claim outlives this keeper: the group probe frees it once every member is gone
+        // (readMutationClaim). Windows has no such probe; a claim kept there could never be freed, so
+        // it is released as before and only the rollback and retry are skipped.
+        if (result.childrenRunning && process.platform !== 'win32') keepClaim = true;
         send({ kind: 'result', id: message.id, result });
       }).catch(error => {
         send({ kind: 'error', error: `worktree mutation command failed: ${String(error)}` });

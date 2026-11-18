@@ -42,7 +42,9 @@ describe('a worker that failed before its first step (hearsay-tools/squawk#3817)
     chmodSync(worktrees, 0o555);
     onTestFinished(() => { if (existsSync(worktrees)) chmodSync(worktrees, 0o755); });
     // A process with CAP_DAC_OVERRIDE writes through 0555, and then nothing fails the launch.
-    try { mkdirSync(join(worktrees, 'probe')); rmdirSync(join(worktrees, 'probe')); context.skip(); } catch { /* read-only: the launch fails */ }
+    let writable = false;
+    try { mkdirSync(join(worktrees, 'probe')); rmdirSync(join(worktrees, 'probe')); writable = true; } catch { /* read-only: the launch fails */ }
+    if (writable) context.skip();
     await f.releaseAdmission();
     await vi.waitFor(() => expect(f.store.getRun(workerId)).toMatchObject({ status: RUN_STATUS.failed, error: expect.stringContaining('worktree creation failed') }), { timeout: 15_000 });
     await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 15_000 });
