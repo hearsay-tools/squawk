@@ -38,7 +38,7 @@ an interface in the source, and the set is closed there. No step is a rewrite.
 | Step | What | State on 2026-11-18 |
 | --- | --- | --- |
 | 0 | Draw the line: define the core, add the layer map and `cez/layer-import` | Done: hearsay-tools/squawk#3706, ADR 0065 |
-| 1 | Runners become definitions that register themselves | Filed: epic hearsay-tools/squawk#3824 |
+| 1 | Runners become definitions that register themselves | Planned: epic hearsay-tools/squawk#3824, [spec](2026-11-18-runner-definitions.md) |
 | 2 | A typed run lifecycle, and a narrower run store | Not filed |
 | 3 | Open the small tables: agent tools, wait kinds, step kinds, CLI commands | Not filed |
 | 4 | Loader and package format | Not filed |
@@ -58,7 +58,8 @@ runner, and the package format of step 4 does not hold skills.
 One definition for each runner holds what the per-runner tables hold now. A registry replaces
 the `switch` in `core/runner-factory.ts`, and the built-in runners register through the same
 call. The contract and the cockpit read the registry. A fixture runner proves that a new runner
-needs no edit outside its own files. The epic has the inventory and the open points.
+needs no edit outside its own files. The [spec](2026-11-18-runner-definitions.md) records the
+owner's decisions; its plan cuts the work into ten slices.
 
 ### Step 2: typed lifecycle and store ports
 
@@ -140,7 +141,6 @@ The owner decides each of these in the spec of the step that needs it.
 
 | Decision | Needed by | Effect |
 | --- | --- | --- |
-| Is a runner id an open string in the contract; how the cockpit gets per-runner data; where model presets live | Step 1 | The epic's Agent context comment has a proposal for each |
 | Who writes plugins: only this team, or other people | Step 4 | Only this team: the plan ends after step 3 plus step 5 inside the repository, with no loader, trust gate or API promise |
 | Do plugins run inside the Squawk process or in a child process | Step 4 | pi runs an extension with all of pi's permissions. Squawk runs unattended and holds logins, so that answer does not transfer |
 | Is the cockpit part of the core | Step 6 | If not, the core is `hsq run` and the API, and the cockpit is the largest built-in plugin |
