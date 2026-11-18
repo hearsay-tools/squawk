@@ -2,7 +2,7 @@ import { legacyRunsBeside, runDataDir } from '../legacy-runs.ts';
 import { lstatSync, readdirSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { z } from 'zod';
-import { describeProcesses, isCurrentProcess, type RecordedProcess } from '../delegation/process-liveness.ts';
+import { describeProcesses, isCurrentProcess, type WorkerProcessRecord } from '../delegation/process-liveness.ts';
 
 /** Terminal task intent survives loss/quarantine of the public run index. Starting a new
  * generation replaces this entire checkpoint, so an old cleanup cannot authorize reuse. */
@@ -61,7 +61,8 @@ export function admissibleExecution(prior: WorkerExecution | undefined): WorkerE
 }
 
 /** The refusal for live holders of the worker's paths; no PID means the holder proof was unreadable. */
-export function holderRefusal(holders: readonly number[], controller?: RecordedProcess): WorkerAdmissionRefusal {
+export function holderRefusal(holders: readonly number[], record?: WorkerProcessRecord | 'absent' | 'unknown'): WorkerAdmissionRefusal {
+  const controller = typeof record === 'object' ? record.controller : undefined;
   if (controller && !isCurrentProcess(controller) && holders.includes(controller.pid)) return controllerRefusal(controller.pid);
   return holders.length
     ? new WorkerAdmissionRefusal(`live processes of the previous session ${describeProcesses(holders)} prevent a new execution`, 'wait for those session processes to end, then retry the same command')

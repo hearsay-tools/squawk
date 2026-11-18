@@ -164,7 +164,7 @@ import {
   validateLiveCursor,
 } from '../runs/event-history.ts';
 import { readRunIndexFromDisk, searchRunIndexFromDisk } from '../runs/run-index.ts';
-import { workerDestroyView } from '../runs/delegation-state.ts';
+import { workerDestroyView, workerObservation } from '../runs/delegation-state.ts';
 import { searchTokens } from '@open-mercato/cezar-contract/run-search';
 import { ownPullRequestNumbers } from '../runs/pull-requests.ts';
 import { ColdRepoHandles } from './cold-repo-handles.ts';
@@ -2865,16 +2865,16 @@ export function createApp(deps: ServerDeps) {
       const { store } = c.get('project');
       const run = store.getRun(c.req.valid('param').id);
       if (!run) return c.json({ error: 'not found' }, 404);
-      // Off the parent's receipts, not a scan of the project index (#659): archived/off-page
-      // workers still belong to this parent, and the cockpit asks on every run event, so the
-      // read has to cost O(workers) whatever the store holds — and nothing at all for the
-      // ordinary run that owns none, delegation on or off.
-      // Human reads use the bound project, never agent credentials or private evidence.
+      // Read the parent's receipts, not the project index (#659), including archived workers.
+      // The cockpit asks on every run event: cost stays O(workers), whatever the store holds.
+      // An ordinary run that owns none reads none, delegation on or off.
+      // Human reads use the bound project, never agent credentials.
       const ownedWorkers = store.listOwnedWorkers(run.id);
       const workers = ownedWorkers.flatMap(worker => {
         const owned = worker.delegation;
         if (owned?.role !== 'worker') return [];
         return [{ workerId: worker.id, parentRunId: run.id, status: worker.status, workspace: owned.workspace,
+          settled: workerObservation(worker, store.readWorkerExecution(worker.id)).settled,
           ...(worker.currentStepId === undefined ? {} : { currentStepId: worker.currentStepId }),
           ...(owned.destroy ? { destroy: workerDestroyView(worker) } : {}),
         }];

@@ -9,9 +9,17 @@ describe('worker settlement observations (hearsay-tools/squawk#3901)', () => {
   let f: ReturnType<typeof fixture>;
   afterEach(async () => { await f?.close(); vi.restoreAllMocks(); });
 
-  it('collect sees termination completed during its evidence read at the same revision as inspect and list', async () => {
+  async function worker() {
     f = fixture();
     const { workerId } = await f.service.spawn(f.caller, { task: 'work', baseline: 'HEAD', requestId: randomUUID() });
+    f.manager.cancel(workerId);
+    // bound: drain the scheduler entry before seeding a session's private completion state.
+    expect(await f.manager.awaitRunTermination(workerId, 8_000)).toBe(true);
+    return workerId;
+  }
+
+  it('collect sees termination completed during its evidence read at the same revision as inspect and list', async () => {
+    const workerId = await worker();
     const generation = f.store.commitWorkerExecutionStart(workerId);
     setRunStatus(f.store, workerId, RUN_STATUS.review);
     const run = f.store.getRun(workerId)!;
@@ -30,12 +38,12 @@ describe('worker settlement observations (hearsay-tools/squawk#3901)', () => {
   });
 
   it('keeps every observation unsettled until private termination is proven', async () => {
-    f = fixture();
-    const { workerId } = await f.service.spawn(f.caller, { task: 'work', baseline: 'HEAD', requestId: randomUUID() });
-    f.store.commitWorkerExecutionStart(workerId);
+    const workerId = await worker();
+    const generation = f.store.commitWorkerExecutionStart(workerId);
     setRunStatus(f.store, workerId, RUN_STATUS.cancelled);
     expect(await f.service.inspect(f.caller, { workerId })).toMatchObject({ settled: false });
     expect((await f.service.list(f.caller, {})).workers[0]).toMatchObject({ settled: false });
     expect(await f.service.collect(f.caller, { workerId })).toMatchObject({ settled: false, partial: true });
+    f.store.commitWorkerExecutionComplete(workerId, generation);
   });
 });
