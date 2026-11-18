@@ -31,7 +31,8 @@ async function failStart(options: { reservedDirectory?: boolean } = {}) {
 describe('a worker that failed before its first step (hearsay-tools/squawk#3817)', { timeout: 60_000 }, () => {
   useDestroyBackoffFixture();
 
-  it.runIf(linux)('is destroyed without being asked, frees its slot and keeps its failure readable', async () => {
+  // The launch fails on a read-only directory, which a process with CAP_DAC_OVERRIDE (root) writes anyway.
+  it.runIf(linux && process.getuid?.() !== 0)('is destroyed without being asked, frees its slot and keeps its failure readable', async () => {
     await cadence({ fastMs: 200, fastCount: 10, capMs: 2_000 });
     const { workerId } = await f.service.spawn(f.caller, input());
     const run = f.store.getRun(workerId)!;
@@ -92,6 +93,6 @@ describe('a worker that failed before its first step (hearsay-tools/squawk#3817)
       expect(reopened.listRuns().map(run => run.id)).not.toContain(workerId);
       service.armDestroyRetries('reopened');
       await vi.waitFor(() => expect(reopened.getRun(workerId)?.delegation).toMatchObject({ destroy: { phase: 'complete', remaining: [] } }), { timeout: 15_000 });
-    } finally { detach(); manager.dispose(); reopened.flush(); }
+    } finally { detach(); manager.dispose(); reopened.flush(); reopened.close(); }
   });
 });

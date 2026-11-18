@@ -47,13 +47,14 @@ describe('destroy backoff topology-repair', { timeout: 30_000 }, () => {
     const held = new Promise<void>(done => { unlock = done; }), ready = new Promise<void>(done => { locked = done; });
     const keeper = withWorktreeMutation(f.root, async () => { locked(); await held; }, { label: { operation: 'task-worktree-create', owner: 'holder-task' } });
     await ready;
-    const claims = join(await gitCommonDir(f.root), 'cezar-worktree-mutations');
-    const destroy = f.service.destroy(f.caller, { workerId });
+    let destroy: ReturnType<typeof f.service.destroy> | undefined;
     try {
+      const claims = join(await gitCommonDir(f.root), 'cezar-worktree-mutations');
+      destroy = f.service.destroy(f.caller, { workerId });
       // The product's own signal that the destroy is queued: its keeper's claim beside the holder's.
       await vi.waitFor(() => expect(readdirSync(claims).filter(entry => entry.endsWith('.json'))).toHaveLength(2), { timeout: 15_000 });
     } finally { unlock(); await keeper; }
-    expect(await destroy).toMatchObject({ state: 'complete', remaining: [] });
+    expect(await destroy!).toMatchObject({ state: 'complete', remaining: [] });
     expect(existsSync(workspace.path)).toBe(false);
   });
 
