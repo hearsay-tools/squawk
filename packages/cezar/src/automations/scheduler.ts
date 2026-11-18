@@ -249,8 +249,10 @@ export class ProjectAutomationScheduler {
         githubNumber: candidate.number, githubTitle: candidate.title, githubUrl: candidate.url,
       });
     } catch (error) {
-      const released = error instanceof AutomationCandidateChangedError;
+      // A rate-limit pause before the task exists releases the receipt too: the next check after the pause launches it.
+      const released = error instanceof AutomationCandidateChangedError || error instanceof GithubRateLimitedError;
       this.handle.store.appendReceipt({ ...receipt, status: released ? 'released' : 'launch-error', error: error instanceof Error ? error.message : String(error), updatedAt: new Date().toISOString() });
+      if (error instanceof GithubRateLimitedError) throw error;
       if (released) {
         await this.handle.store.appendLog({ automationId: definition.id, revision: definition.revision, event: candidate.event,
           result: 'skipped', reason: error.message, receiptId: receipt.receiptId,

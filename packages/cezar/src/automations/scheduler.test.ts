@@ -345,6 +345,18 @@ describe('ProjectAutomationScheduler', () => {
     expect(store.logs({ automationId: definition.id })).toContainEqual(expect.objectContaining({ result: 'rate-limited', reason: expect.stringContaining('GitHub rate limit') }));
   });
 
+  it('releases the receipt when a rate-limit pause stops the launch, so the next check launches the item', async () => {
+    const { store, definition } = await setup();
+    const poller = { poll: async () => ({ candidates: [candidate], truncated: false, pages: 1 }) } as never;
+    const launch = vi.fn().mockRejectedValueOnce(new GithubRateLimitedError(Date.now() + 60_000)).mockResolvedValueOnce({ runId: 'after-pause' });
+    const scheduler = new ProjectAutomationScheduler({ projectId: 'p', store, timeZone: 'UTC', github: { owner: 'acme', repo: 'demo', poller }, launch });
+    await expect(scheduler.check(definition)).rejects.toBeInstanceOf(GithubRateLimitedError);
+    expect([...store.latestReceipts().values()]).toEqual([expect.objectContaining({ status: 'released', eventId: candidate.eventId })]);
+    await scheduler.check(definition);
+    expect(launch).toHaveBeenCalledTimes(2);
+    expect(store.logs({ automationId: definition.id })).toContainEqual(expect.objectContaining({ result: 'launched', runId: 'after-pause' }));
+  });
+
   it('launches nothing and counts no failure while the project\'s run store cannot open (#779)', async () => {
     const { store, definition } = await setup();
     const launch = vi.fn(async () => { throw new Error('runs.db is damaged'); });

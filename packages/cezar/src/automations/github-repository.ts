@@ -1,5 +1,6 @@
 import { forgeKindOfRemote, parseRemote } from '../server/forge/index.ts';
 import { canonicalRepoRef, forgetRepoHandle, isRepositoryNameMiss } from '../server/forge/github-repo-handle.ts';
+import { githubRequestGate } from '../server/forge/github-request-gate.ts';
 
 export interface GithubRepositoryName { owner: string; repo: string }
 
@@ -26,7 +27,9 @@ export function githubRepository(
   const fallback = { owner: parsed.owner, repo: parsed.repo };
   return {
     ...fallback,
-    canonical: async () => (await resolve(root, fallback)) ?? fallback,
+    // A poller request: it goes through the shared gate. A refusal during a pause reads under
+    // the `origin` name, and the poll's own gated request then reports the pause.
+    canonical: async () => (await resolve(root, fallback, request => githubRequestGate.run(request, { whenPaused: 'throw' }))) ?? fallback,
     forget: () => forget(root),
   };
 }

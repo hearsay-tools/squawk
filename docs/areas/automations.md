@@ -51,7 +51,9 @@ A GitHub rate limit is a pause, not a failure. The poller's requests go through 
 shared GitHub request gate (see [GitHub integration § One request gate for the
 pollers](github.md#one-request-gate-for-the-pollers)). During a pause the gate refuses a
 check at once. The check logs `rate-limited` and moves `nextCheckAt` to the end of the
-pause. It adds no failure count, no `backoffUntil` and no `lastError`.
+pause. It adds no failure count, no `backoffUntil` and no `lastError`. A pause that stops a launch
+before the task exists releases the item's receipt, so the next check launches it. The
+repository-name lookup of a poll goes through the gate too.
 
 ## Project directory log reads
 

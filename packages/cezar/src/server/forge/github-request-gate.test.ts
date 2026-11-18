@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GithubCiClient, type CiCommandResult } from '../../ci-wait/github.ts';
 import { GithubPoller } from '../../automations/github-poller.ts';
 import { lookupMergedPullRequests } from './github.ts';
+import { githubRepository } from '../../automations/github-repository.ts';
 import {
   GITHUB_PAUSE_MAX_MS, GITHUB_PAUSE_MIN_MS, GITHUB_REQUEST_LIMIT, GithubRateLimitedError, GithubRequestGate,
   githubRequestGate, isGithubRateLimit,
@@ -88,6 +89,19 @@ describe('the three pollers share one gate', () => {
     await expect(query).resolves.toBe(false);
     expect(githubRequestGate.pausedUntil()).toBeUndefined();
   });
+  it('sends automation repository-name discovery through the gate, so a pause refuses it', async () => {
+    githubRequestGate.record(true);
+    expect(githubRequestGate.pausedUntil()).toBeDefined();
+    const discovery = vi.fn(async () => 'o/renamed');
+    let refusal: unknown;
+    const repository = githubRepository('/repo', 'https://github.com/o/r.git', async (_root, remote, gate) => {
+      try { await gate!(discovery); } catch (error) { refusal = error; }
+      return remote;
+    });
+    await expect(repository!.canonical!()).resolves.toEqual({ owner: 'o', repo: 'r' });
+    expect(discovery).not.toHaveBeenCalled();
+    expect(refusal).toBeInstanceOf(GithubRateLimitedError);
+  });
 });
 
 describe('GithubRequestGate', () => {
@@ -108,6 +122,17 @@ describe('GithubRequestGate', () => {
     for (let i = 0; i < 6; i++) { gate.record(true); pauses.push(gate.pausedUntil()! - now); now = gate.pausedUntil()!; }
     expect(pauses).toEqual([1, 2, 4, 8, 15, 15].map(minutes => Math.min(minutes * GITHUB_PAUSE_MIN_MS, GITHUB_PAUSE_MAX_MS)));
     gate.record(false);
+    gate.record(true);
+    expect(gate.pausedUntil()! - now).toBe(GITHUB_PAUSE_MIN_MS);
+  });
+
+  it('resets the escalation after a failed request that is not a rate limit', async () => {
+    let now = 0;
+    const gate = new GithubRequestGate({ now: () => now });
+    gate.record(true);
+    now = gate.pausedUntil()!;
+    const denied = Object.assign(new Error('Command failed'), { stderr: 'HTTP 403: Resource not accessible by integration' });
+    await expect(gate.run(async () => { throw denied; })).rejects.toBe(denied);
     gate.record(true);
     expect(gate.pausedUntil()! - now).toBe(GITHUB_PAUSE_MIN_MS);
   });

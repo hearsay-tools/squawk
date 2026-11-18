@@ -120,7 +120,7 @@ export class GithubRequestGate {
     try {
       let reply: T;
       try { reply = await request(); } catch (error) {
-        if (!isGithubRateLimit(failureText(error))) throw error;
+        if (!isGithubRateLimit(failureText(error))) { this.record(false); throw error; }
         this.record(true);
         throw new GithubRateLimitedError(this.until, { cause: error });
       }
