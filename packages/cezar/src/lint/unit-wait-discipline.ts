@@ -286,14 +286,14 @@ function testFiles(root: string, dir: string, only?: ReadonlySet<string>): Array
   })
 }
 
-/** Shrink the baseline through `UNIT_WAIT_DISCIPLINE_UPDATE=1 npm run lint`: a site it does not
+/** A local `npm run lint` shrinks the baseline (`lint/baseline-mode.ts`): a site it does not
  *  cover stays a failure. The first shrink writes the baseline from the sites the tests carry the day the ratchet lands. */
 export const unitBaseline = {
   path: baselinePath,
   comment:
     'Bare sleeps, short wait bounds and unbounded poll loops the cockpit unit tests carried when the ratchet landed (hearsay-tools/cezarion#1203). ' +
     'Keyed by file, rule and the line text so a moved line does not churn it. ' +
-    'This list only shrinks: fix a site, then run UNIT_WAIT_DISCIPLINE_UPDATE=1 npm run lint. ' +
+    'This list only shrinks: fix a site, and npm run lint shrinks it; commit this file then. ' +
     'Rules: AGENTS.md § Validation.',
 };
 

@@ -9,6 +9,7 @@ import { stepKind, type WorkflowDef } from '../types.ts';
 import type { PastedContent } from '../pasted-content.ts';
 import type { PendingJob } from './run-line.ts';
 import type { RunModuleContext, PendingContinuation, StartRunInput } from './types.ts';
+import { withCutOff } from './cut-off-work.ts';
 
 export interface QueuedRevivalHost {
   move(runId: string, exit: RunExitId, patch?: Omit<Parameters<RunStore['updateRun']>[1], 'status'>): RunRecord | undefined;
@@ -37,7 +38,7 @@ export function checkpointRestartContext(context: RunModuleContext, host: Queued
   const updated = context.store.updateRun(run.id, { continuationMessage: {
     ...message,
     ...(message.origin === 'lifecycle' && message.text === host.restartContinuationPrompt ? { text: 'Continue.' } : {}),
-    resumeContext: { ...message.resumeContext, restarted: true },
+    resumeContext: withCutOff(context.store, run.id, { ...message.resumeContext, restarted: true }),
   } }) ?? run;
   context.store.flush();
   return updated;

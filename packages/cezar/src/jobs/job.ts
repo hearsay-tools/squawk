@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { constants, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { JOB_EXIT_SUFFIX, JOB_NAME, JOB_RECORD_SUFFIX } from '../process-wait/job-exit-file.ts';
 import { DatabaseSync } from 'node:sqlite';
 import { recordedProcessLive } from '../delegation/process-liveness.ts';
 import { processStartToken, startOwnedGroup } from '../detached-process.ts';
@@ -22,8 +23,9 @@ import { ownCommand } from './command.ts';
  * system drops a dead claimant's file lock, so nothing is ever taken over by age or by guess.
  */
 
-const RECORD_SUFFIX = '.job.db';
-const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const RECORD_SUFFIX = JOB_RECORD_SUFFIX;
+const EXIT_SUFFIX = JOB_EXIT_SUFFIX;
+const NAME = JOB_NAME;
 /** How long a start waits for its supervisor to claim the name before it gives up. */
 const READY_TIMEOUT_MS = 30_000;
 /** How long one claimant waits for another's transaction, which holds a few statements. */
@@ -224,7 +226,7 @@ export async function superviseJob(dir: string, name: string, command: string[],
   // The run id is unique to this supervisor among the starts of one name in this directory.
   const run = `${startedAt.getTime().toString(36)}-${process.pid}`;
   const record: JobRecord = { name, pid: process.pid, ...(start === undefined ? {} : { start }), command, startedAt: startedAt.toISOString(),
-    log: join(dir, `${name}.${run}.log`), exitFile: join(dir, `${name}.${run}.exit`) };
+    log: join(dir, `${name}.${run}.log`), exitFile: join(dir, `${name}.${run}${EXIT_SUFFIX}`) };
   let answer: ClaimAnswer;
   try { answer = claimJob(paths, record); }
   catch (error) { answer = { claimed: false, error: error instanceof Error ? error.message : String(error) }; }

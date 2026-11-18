@@ -36,8 +36,10 @@ answers held across hearsay-tools/cezarion#2051:
   delegator on the facade (find the callers with grep).
 - A module-namespace `vi.spyOn` is process-wide: keep a per-instance facade seam
   when a fixture stubs one instance.
-- A length pin: `FILE_LENGTH_UPDATE=1` only lowers pins; after a rebase, start
-  from main's pin.
+- A length pin: make room by a verbatim move to a sibling module, never by
+  joining lines. `node packages/cezar/src/lint/file-length.ts headroom <path>`
+  prints the lines left. A local `npm run lint` lowers the pin; commit it. After
+  a rebase, start from main's pin.
 
 ## Scope acceptance
 

@@ -77,14 +77,16 @@ A regression test must fail without the fix: require
 may stay; say which is which.
 
 A change to a shared name, value or default finds and updates every reader, or
-states why a reader stays. Search source, browser e2e, package tests and scripts,
-including embedded child scripts, mock parity/final-message cells and records
-later automation runs read. Search both literal forms from the repository root:
+states why a reader stays. Sweep both literal forms with the reader script; it searches
+every file of the checkout that Git does not ignore, groups the readers by tree, and
+lists a reader that imports a path through a relative specifier:
 
 ```sh
-rg --hidden -n -F -e '<old form>' -e '<new form>' .
+node scripts/readers.mjs '<old form>' '<new form>'
 ```
 
+Removing a runner also runs `node scripts/readers.mjs --runner <id>`; see
+[AGENT_PROTOCOL.md § Removing a runner](AGENT_PROTOCOL.md#10a-removing-a-runner).
 Also search each reader's actual record paths, including paths outside the
 checkout. For ignored records, use a targeted `--no-ignore` search; for example:
 

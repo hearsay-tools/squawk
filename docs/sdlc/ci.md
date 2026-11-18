@@ -615,14 +615,17 @@ CRAP is not part of this gate; CI reports it without failing (§ CRAP report for
 
 **File length.** `npm run lint` pins every non-test source file over 1,000 lines in
 `packages/cezar/src/file-length.baseline.json`. `npm run prepr` runs the budget even when Squeal supplies oxlint results. No unit test
-runs this repository-wide check. It fails when a pinned file grows, when another file passes 1,000 lines, and when a pin is
-stale. After you cut a file, lower its pin:
+runs this repository-wide check. It fails when a pinned file grows and when another file passes 1,000 lines.
+Make room by a verbatim move of whole functions to a sibling module; never join lines to fit. Print a
+file's lines left before you plan a change to it:
 
 ```bash
-FILE_LENGTH_UPDATE=1 npm run lint
+node packages/cezar/src/lint/file-length.ts headroom <path>...
 ```
 
-The update only lowers pins and drops entries. The `Reject baseline growth` step refuses a raised pin
+When a file gets smaller, a local `npm run lint` or `npm run prepr` lowers its pin and says so.
+Commit the baseline with the change. CI writes nothing and fails a pin that was not lowered
+([lint.md § Shrink-only baselines](lint.md#shrink-only-baselines)). A run only lowers pins and drops entries. The `Reject baseline growth` step refuses a raised pin
 or a new entry, and the same `baseline-growth` label approves one.
 
 A PR that edits `ci.yml` does not run its own definition (see § Proving a `ci.yml` change). A bare
@@ -884,6 +887,23 @@ that leave the workflow files unchanged do not invalidate the proof.
 ### Re-running a failed job
 
 CI never requests a model review or resolves findings. A flaky verification failure uses **Re-run failed jobs**, which retains successful jobs and reruns every failed job with `verify`. A rerun keeps the workflow definition of its run. An open PR whose last CI run predates a workflow change on `main` needs a new run: push a new head or update the branch.
+
+Under GitHub degradation, CI can fail in ways that Re-run failed jobs cannot fix. Before you change the PR, diagnose its native run:
+
+```bash
+node .github/scripts/ci-recovery.cjs --pr <number>
+```
+
+The script makes read-only `gh` calls from your host, so it works while Actions is degraded. It reads the PR head's latest `pull_request_target` CI run and prints the case and its recovery command:
+
+| Case | Check that confirms it | Recovery |
+| --- | --- | --- |
+| A flaky job failed | The failing job's log | `gh run rerun <run-id> --failed` (Re-run failed jobs) |
+| A needed job ended `abandoned` | A gate job's error names a job that `was never created (abandoned)`, or a completed run has no `Review preflight` or `Unit, build, E2E, and package` job | A full rerun, without `--failed`: `gh run rerun <run-id>`. If that attempt fails the same way, push a new head |
+| `startup_failure` with 0 jobs on `pull_request_target` | `gh run list --event pull_request_target --limit 20`: other PRs' runs created within an hour of the failed run also ended `startup_failure`. The cause is GitHub-side; do not change the PR. If no other PR failed, the cause is this PR or a repository setting | GitHub cannot re-run it. Wait until another PR's run starts, then `gh pr close <number> && gh pr reopen <number>` |
+| A job queued for more than 15 minutes; the run may be marked failed and "cannot be retried" | `gh api repos/hearsay-tools/squawk/actions/runs/<run-id>/attempts/<n>/jobs`: a job still `queued` 15 minutes after its `created_at`. A job normally starts within seconds | `gh pr close <number> && gh pr reopen <number>`: the reopened event starts a fresh native run on the same head. Push a new head only if that run also stays queued. Do not push an empty commit |
+
+Other PRs' runs confirm a GitHub-side incident, not githubstatus.com: on 2026-11-09 the status page showed no incident for the two hours of PR startup failures. A diagnostic dispatch is not a recovery: it does not produce the native required check.
 
 ### Board sync and the review signal
 

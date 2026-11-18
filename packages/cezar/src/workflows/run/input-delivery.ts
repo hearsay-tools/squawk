@@ -8,7 +8,7 @@ import type { Wait } from '@open-mercato/cezar-contract/waits';
 import type { InputDelivery as InputDeliveryPolicy } from '../../core/agent-runner.ts';
 import { ReadonlySetView } from './readonly-collections.ts';
 import { type ContentBlock, SessionEndedBeforeAcknowledgement } from '../../core/agent-runner.ts';
-import type { AgentSession } from '../../core/claude-cli-runner.ts';
+import type { AgentSession } from '../../core/agent-runner.ts';
 import type { RunRecord } from '../../runs/store.ts';
 import type { ContinueRunOptions } from '../continuation-admission.ts';
 import type { ActiveRun } from '../active-run.ts';

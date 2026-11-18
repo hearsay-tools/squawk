@@ -1,3 +1,4 @@
+import { withCutOff } from './cut-off-work.ts';
 import { atContinue, atTaskHead } from './launch-read-resolver.ts';
 import type { RunnerId } from '../../core/agent-runner.ts';
 import type { WorkerStepIdentity } from '../../delegation/execution-identity.ts';
@@ -140,8 +141,11 @@ export class ContinuationAcceptance {
     if (run.delegation?.role !== 'worker') this.context.store.addStep(runId, continuationStep);
     const recovered = deferForCapacity && !conversation && !opts.answerInputId ? atContinue.checkpoint(run) : undefined;
     const message = recovered ?? this.queuedInput.toQueuedMessage(runId, continuation.content(opts));
-    const { prompt, resumeContext } = continuation.opening(message, recovered, deferForCapacity, conversation, opts,
+    const opened = continuation.opening(message, recovered, deferForCapacity, conversation, opts,
       this.restartContinuationPrompt, failure);
+    const prompt = opened.prompt;
+    // A first interrupted turn has no checkpoint to carry the cut-off work (hearsay-tools/squawk#3909).
+    const resumeContext = opened.resumeContext && withCutOff(this.context.store, runId, opened.resumeContext);
     // The recoverable status and original input must commit before startup can await anything.
     const acceptedPatch = {
       continuationMessage: continuation.acceptedMessage(message, stepId, prompt, resumeContext, recovered, conversation, opts, deferForCapacity, run.task),

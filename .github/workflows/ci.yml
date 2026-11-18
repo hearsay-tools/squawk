@@ -687,6 +687,18 @@ jobs:
           PROOF_RESULT: ${{ needs.queue-proof.result }}
           PROOF_VERIFIED: ${{ needs.queue-proof.outputs.verified }}
         run: |
+          # GitHub reports a needed job it never created as `abandoned`. Re-run failed jobs
+          # cannot recreate it (docs/sdlc/ci.md § Re-running a failed job).
+          for need in "Classify PR shape=$CLASSIFY_RESULT" \
+            "Classify pull request change surface=$SURFACE_RESULT" \
+            "Check function complexity=$COMPLEXITY_RESULT" \
+            "Check new code clones=$CLONE_RESULT" \
+            "Typecheck=$TYPECHECK_RESULT" \
+            "Verify exact queue CI evidence=$PROOF_RESULT"; do
+            if [ "${need#*=}" = abandoned ]; then
+              echo "::error::${need%%=*} was never created (abandoned). Re-run failed jobs cannot recreate it: run a full rerun (gh run rerun $GITHUB_RUN_ID) or push a new head."
+            fi
+          done
           test "$CANCELLED" = false
           test "$CLASSIFY_RESULT" = success
           test "$SURFACE_RESULT" = success
@@ -1648,6 +1660,24 @@ jobs:
           # classification, may leave Vitest and cockpit browser skipped.
           BUMP_PR: ${{ needs.classify-pr.outputs.bump_pr }}
         run: |
+          # GitHub reports a needed job it never created as `abandoned`. Re-run failed jobs
+          # cannot recreate it (docs/sdlc/ci.md § Re-running a failed job).
+          for need in "Review preflight=$PREFLIGHT_RESULT" \
+            "Validate reviewed queue entry=$QUEUE_ADMISSION_RESULT" \
+            "Verify exact queue CI evidence=$PROOF_RESULT" \
+            "Classify PR shape=$CLASSIFY_RESULT" \
+            "Classify pull request change surface=$SURFACE_RESULT" \
+            "Check new code clones=$CLONE_GATE_RESULT" \
+            "Check function complexity=$COMPLEXITY_GATE_RESULT" \
+            "Typecheck=$TYPECHECK_RESULT" \
+            "Unit tests=$UNIT_TESTS_RESULT" \
+            "Build and package=$BUILD_AND_PACKAGE_RESULT" \
+            "Vitest=$VITEST_RESULT" \
+            "Cockpit browser E2E=$COCKPIT_BROWSER_RESULT"; do
+            if [ "${need#*=}" = abandoned ]; then
+              echo "::error::${need%%=*} was never created (abandoned). Re-run failed jobs cannot recreate it: run a full rerun (gh run rerun $GITHUB_RUN_ID) or push a new head."
+            fi
+          done
           test "$CANCELLED" = false
           test "$PREFLIGHT_RESULT" = success
           # A queue entry merges only after queue admission; no other event runs it.
