@@ -71,7 +71,7 @@ import { completionWaitEntry, peerWaitView, workerCompletionWaitProjection, work
 import type { RunStore, RunRecord } from '../runs/store.ts';
 import { assertConversationIdFree, ConversationIdInUseError } from '../runs/conversation-identity.ts';
 import { workerDestroyView, workerOutcome } from '../runs/delegation-state.ts';
-import { childSpawnGrant, conversationOf, DEFAULT_GRANTS, familyRecordOf, grantsOf, historyDeleting, holdsOperation, isFamilyRecord, receiptsOf, relationOf, supervisorIdOf } from '../runs/task-rights.ts';
+import { childSpawnGrant, conversationOf, DEFAULT_GRANTS, familyRecordOf, grantsOf, historyDeleting, isFamilyRecord, receiptsOf, relationOf, supervisorIdOf } from '../runs/task-rights.ts';
 import type { RunManager } from '../workflows/run.ts';
 import type { DelegationExecutionSettings } from '../workflows/run/types.ts';
 import { QUICK_TASK_WORKFLOW, skillTaskSteps, plannedWorkflow, allowedToolsForStep, stepKind, type WorkflowDef, type WorkflowStepDef } from '../workflows/types.ts';
@@ -772,20 +772,19 @@ export class DelegationService {
     const { waitId } = workerCancelWaitRequestSchema.parse(value);
     const project = this.context(caller);
     const sender = project.store.getRun(caller.runId);
-    // Without the `wait` grant a task cancels only a wait on its own requests to its supervisor.
+    const entries = [...sender?.waits ?? [], ...sender?.lastWaits ?? []];
     const supervisorId = supervisorIdOf(sender);
-    if (sender && supervisorId !== undefined && !holdsOperation(sender, 'wait')) {
-      this.conversationPair(caller, supervisorId);
-      // hearsay-tools/cezarion#1235: a worker's request wait is a list entry, open or settled.
-      const wait = [...sender.waits ?? [], ...sender.lastWaits ?? []].find(entry => entry.id === waitId && entry.kind === 'worker');
-      if (wait?.kind !== 'worker' || !wait.requestIds?.length) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
-      for (const requestId of wait.requestIds) this.ownRequest(caller, requestId);
-    } else {
-      authorizeCancelWait(caller, sender, project.id);
-      // A peer wait is cancelled through the list too (hearsay-tools/cezarion#1995).
-      if ([...sender?.waits ?? [], ...sender?.lastWaits ?? []].some(entry => entry.id === waitId && entry.kind === 'peer')) {
-        return { wait: peerWaitView(project.manager.cancelPeerWait(caller.runId, waitId)) };
-      }
+    // hearsay-tools/cezarion#1235: a supervised task's request wait is a list entry, open or settled,
+    // and is checked through its supervisor pair whatever operate grant the task holds.
+    const wait = supervisorId === undefined ? undefined : entries.find(entry => entry.id === waitId && entry.kind === 'worker');
+    const requestIds = wait?.kind === 'worker' ? wait.requestIds ?? [] : [];
+    if (supervisorId !== undefined) this.conversationPair(caller, supervisorId);
+    for (const requestId of requestIds) this.ownRequest(caller, requestId);
+    // Any other wait is on workers or peers: the `wait` grant covers it.
+    if (!requestIds.length) authorizeCancelWait(caller, sender, project.id);
+    // A peer wait is cancelled through the list too (hearsay-tools/cezarion#1995).
+    if (entries.some(entry => entry.id === waitId && entry.kind === 'peer')) {
+      return { wait: peerWaitView(project.manager.cancelPeerWait(caller.runId, waitId)) };
     }
     return { wait: project.manager.cancelWorkerWait(caller.runId, waitId) };
   }
