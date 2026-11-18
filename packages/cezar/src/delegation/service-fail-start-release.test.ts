@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, rmdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
@@ -31,8 +31,7 @@ async function failStart(options: { reservedDirectory?: boolean } = {}) {
 describe('a worker that failed before its first step (hearsay-tools/squawk#3817)', { timeout: 60_000 }, () => {
   useDestroyBackoffFixture();
 
-  // The launch fails on a read-only directory, which a process with CAP_DAC_OVERRIDE (root) writes anyway.
-  it.runIf(linux && process.getuid?.() !== 0)('is destroyed without being asked, frees its slot and keeps its failure readable', async () => {
+  it.runIf(linux)('is destroyed without being asked, frees its slot and keeps its failure readable', async context => {
     await cadence({ fastMs: 200, fastCount: 10, capMs: 2_000 });
     const { workerId } = await f.service.spawn(f.caller, input());
     const run = f.store.getRun(workerId)!;
@@ -42,6 +41,8 @@ describe('a worker that failed before its first step (hearsay-tools/squawk#3817)
     mkdirSync(worktrees, { recursive: true });
     chmodSync(worktrees, 0o555);
     onTestFinished(() => { if (existsSync(worktrees)) chmodSync(worktrees, 0o755); });
+    // A process with CAP_DAC_OVERRIDE writes through 0555, and then nothing fails the launch.
+    try { mkdirSync(join(worktrees, 'probe')); rmdirSync(join(worktrees, 'probe')); context.skip(); } catch { /* read-only: the launch fails */ }
     await f.releaseAdmission();
     await vi.waitFor(() => expect(f.store.getRun(workerId)).toMatchObject({ status: RUN_STATUS.failed, error: expect.stringContaining('worktree creation failed') }), { timeout: 15_000 });
     await vi.waitFor(() => expect(destroyOf(workerId)).toMatchObject({ phase: 'complete', remaining: [] }), { timeout: 15_000 });
@@ -94,5 +95,23 @@ describe('a worker that failed before its first step (hearsay-tools/squawk#3817)
       service.armDestroyRetries('reopened');
       await vi.waitFor(() => expect(reopened.getRun(workerId)?.delegation).toMatchObject({ destroy: { phase: 'complete', remaining: [] } }), { timeout: 15_000 });
     } finally { detach(); manager.dispose(); reopened.flush(); reopened.close(); }
+  });
+
+  it.runIf(linux)('does not destroy a worker that was resumed and failed again while its release waited', async () => {
+    await cadence({ fastMs: 60_000, fastCount: 10, capMs: 60_000 });
+    const serialized = Reflect.get(f.service, 'serialized') as <T>(key: string, operation: () => Promise<T>) => Promise<T>;
+    const keys = vi.spyOn(f.service as unknown as { serialized: typeof serialized }, 'serialized');
+    let release!: () => void;
+    const held = serialized.call(f.service, 'destroy-retries:project', () => new Promise<void>(resolve => { release = resolve; }));
+    const { workerId } = await failStart();
+    // The release saw a failed start and now waits its turn for a destroy attempt.
+    await vi.waitFor(() => expect(keys.mock.calls.filter(([key]) => key === 'destroy-retries:project')).toHaveLength(1), { timeout: 15_000 });
+    // Meanwhile the parent resumed it: a step started, and it failed again.
+    const run = f.store.getRun(workerId)!;
+    f.store.updateStep(workerId, run.steps[0]!.id, { startedAt: new Date().toISOString() });
+    release(); await held;
+    // Queued behind the release on the same key, so it runs once the release has finished.
+    await serialized.call(f.service, 'destroy-retries:project', async () => undefined);
+    expect(destroyOf(workerId)).toBeUndefined();
   });
 });

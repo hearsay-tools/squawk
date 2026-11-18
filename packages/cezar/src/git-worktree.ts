@@ -191,7 +191,9 @@ async function rollBackFreshWorktree(repoRoot: string, absolutePath: string, bra
     // Unregistered, the path holds only what this call reserved, unless something else wrote there:
     // remove it only while it is empty.
     try { await rmdir(absolutePath); } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return `${absolutePath} is not empty`;
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOTEMPTY' || code === 'EEXIST') return `${absolutePath} is not empty`;
+      if (code !== 'ENOENT') return `cannot remove ${absolutePath}: ${(error as Error).message}`;
     }
   }
   // A lookup that fails is not absence: only a listing that succeeded proves the branch is gone.

@@ -30,7 +30,10 @@ async function runGitCommand(message: KeeperMessage): Promise<CommandResult> {
 async function groupMembers(): Promise<number[] | undefined> {
   if (process.platform !== 'linux') return undefined;
   const members: number[] = [];
-  for (const entry of await fs.readdir('/proc').catch(() => [] as string[])) {
+  // An unreadable /proc proves nothing: the caller reads undefined as unknown, never as exited.
+  const entries = await fs.readdir('/proc').catch(() => undefined);
+  if (!entries) return undefined;
+  for (const entry of entries) {
     if (!/^\d+$/.test(entry) || Number(entry) === process.pid) continue;
     const stat = await fs.readFile(`/proc/${entry}/stat`, 'utf8').catch(() => '');
     // Fields after the parenthesised command name: state, ppid, pgrp.
