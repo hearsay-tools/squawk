@@ -1,0 +1,14 @@
+{
+  "description": "Pi resumes a session without --append-system-prompt, so a continued skill loses its system prompt (625c88d82, seam row S42 resume).",
+  "fixedBy": "625c88d82",
+  "break": [
+    {
+      "file": "packages/cezar/src/core/pi-runner.ts",
+      "find": "  if (spec.systemPrompt) args.push('--append-system-prompt', spec.systemPrompt);",
+      "replace": "  if (spec.systemPrompt && !spec.resume) args.push('--append-system-prompt', spec.systemPrompt);"
+    }
+  ],
+  "tests": [
+    "packages/cezar/src/core/harness-pi-contract-parity.test.ts"
+  ]
+}

@@ -1,0 +1,197 @@
+import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { delimiter, dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { test } from 'node:test';
+import { applyEdit, buildBreak, listRecipes, parseArgs, ProofError, recipeProblems, summarize, validateRecipe } from './regression-proof.mjs';
+
+const script = fileURLToPath(new URL('./regression-proof.mjs', import.meta.url));
+const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+
+function fixture(t) {
+  const cwd = mkdtempSync(join(tmpdir(), 'regression-proof-test-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  const put = (path, text) => {
+    mkdirSync(dirname(join(cwd, path)), { recursive: true });
+    writeFileSync(join(cwd, path), text);
+  };
+  git('init', '-b', 'main');
+  git('config', 'user.email', 'test@example.invalid');
+  git('config', 'user.name', 'Test');
+  put('src/guard.ts', 'export function guard() {\n  return true;\n}\n');
+  put('src/guard.test.ts', 'test\n');
+  git('add', '.');
+  git('commit', '-m', 'base');
+  return { cwd, git, put };
+}
+
+/** A fake `squeal` on PATH that records its arguments and prints `report` with `status`. */
+function fakeSqueal(t, report, status = 0) {
+  const bin = mkdtempSync(join(tmpdir(), 'regression-proof-bin-'));
+  t.after(() => rmSync(bin, { recursive: true, force: true }));
+  writeFileSync(join(bin, 'report.json'), JSON.stringify(report));
+  writeFileSync(join(bin, 'squeal'), `#!/bin/sh\nprintf '%s\\n' "$@" > "${bin}/args"\ncat "${bin}/report.json"\nexit ${status}\n`);
+  chmodSync(join(bin, 'squeal'), 0o755);
+  return { bin, args: () => readFileSync(join(bin, 'args'), 'utf8').trim().split('\n') };
+}
+
+// A PATH with git but without the host's squeal, for the run that has no squeal.
+const gitOnly = dirname(execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim());
+
+function run(cwd, args, bin) {
+  const PATH = bin ? `${bin}${delimiter}${process.env.PATH}` : gitOnly;
+  return spawnSync(process.execPath, [script, ...args], { cwd, encoding: 'utf8', env: { ...process.env, PATH } });
+}
+
+function proofReport(base, head, verdicts) {
+  return {
+    version: 'squeal-proof/1', base, head,
+    files: verdicts.map(([path, verdict, failures = []]) => ({
+      path, verdict, reason: null,
+      red: { end: failures.length ? 'fail' : 'pass', failures: failures.map(name => ({ test: name, kind: 'assertion' })) },
+      green: { end: 'pass', failures: [] },
+    })),
+  };
+}
+
+const recipe = {
+  name: 'guard-false', description: 'guard returns false', fixedBy: 'abcdef1',
+  break: [{ file: 'src/guard.ts', find: '  return true;', replace: '  return false;' }],
+  tests: ['src/guard.test.ts'],
+};
+
+test('a recipe break becomes a commit over HEAD and leaves the work tree, index and branch alone', (t) => {
+  const { cwd, git } = fixture(t);
+  const head = git('rev-parse', 'HEAD');
+  const commit = buildBreak(cwd, { recipe, label: recipe.name });
+  assert.equal(git('rev-parse', `${commit}^`), head);
+  assert.equal(git('show', `${commit}:src/guard.ts`), 'export function guard() {\n  return false;\n}');
+  assert.equal(git('diff', '--name-only', head, commit), 'src/guard.ts');
+  assert.equal(git('status', '--porcelain'), '');
+  assert.equal(git('rev-parse', 'HEAD'), head);
+  assert.equal(readFileSync(join(cwd, 'src/guard.ts'), 'utf8'), 'export function guard() {\n  return true;\n}\n');
+});
+
+test('a break keeps the file\'s final newline and mode', (t) => {
+  const { cwd, git, put } = fixture(t);
+  put('bin/tool.sh', '#!/bin/sh\nexit 0\n');
+  chmodSync(join(cwd, 'bin/tool.sh'), 0o755);
+  git('add', '.');
+  git('commit', '-m', 'tool');
+  const commit = buildBreak(cwd, { recipe: { ...recipe, break: [{ file: 'bin/tool.sh', find: 'exit 0', replace: 'exit 1' }] }, label: 'tool' });
+  assert.match(git('ls-tree', commit, '--', 'bin/tool.sh'), /^100755 /);
+  assert.equal(execFileSync('git', ['cat-file', 'blob', `${commit}:bin/tool.sh`], { cwd, encoding: 'utf8' }), '#!/bin/sh\nexit 1\n');
+});
+
+test('a break text found zero or two times is refused', () => {
+  assert.throws(() => applyEdit('a\n', { file: 'f', find: 'b', replace: 'c' }), /occurs 0 times/);
+  assert.throws(() => applyEdit('b b\n', { file: 'f', find: 'b', replace: 'c' }), /occurs 2 times/);
+  assert.equal(applyEdit('a $& b\n', { file: 'f', find: 'b', replace: '$&$&' }), 'a $& $&$&\n');
+});
+
+test('--revert builds HEAD without the named commit, and refuses a revert that conflicts', (t) => {
+  const { cwd, git, put } = fixture(t);
+  put('src/guard.ts', 'export function guard() {\n  return check();\n}\n');
+  git('commit', '-am', 'fix');
+  const fix = git('rev-parse', 'HEAD');
+  put('src/other.ts', 'export {};\n');
+  git('add', '.');
+  git('commit', '-m', 'later');
+  const commit = buildBreak(cwd, { revert: fix, label: 'revert' });
+  assert.equal(git('show', `${commit}:src/guard.ts`), 'export function guard() {\n  return true;\n}');
+  assert.equal(git('show', `${commit}:src/other.ts`), 'export {};');
+  put('src/guard.ts', 'export function guard() {\n  return check() && ready();\n}\n');
+  git('commit', '-am', 'rewrite');
+  assert.throws(() => buildBreak(cwd, { revert: fix, label: 'revert' }), /conflicts/);
+});
+
+test('--patch applies a patch file to the break commit only', (t) => {
+  const { cwd, git, put } = fixture(t);
+  put('src/guard.ts', 'export function guard() {\n  return false;\n}\n');
+  writeFileSync(join(cwd, 'break.patch'), execFileSync('git', ['diff'], { cwd, encoding: 'utf8' }));
+  git('checkout', '--', 'src/guard.ts');
+  const commit = buildBreak(cwd, { patch: join(cwd, 'break.patch'), label: 'patch' });
+  assert.match(git('show', `${commit}:src/guard.ts`), /return false/);
+  assert.match(readFileSync(join(cwd, 'src/guard.ts'), 'utf8'), /return true/);
+  writeFileSync(join(cwd, 'bad.patch'), 'not a patch\n');
+  assert.throws(() => buildBreak(cwd, { patch: join(cwd, 'bad.patch'), label: 'bad' }), ProofError);
+});
+
+test('the CLI passes the break and the tests to squeal proof, prints the counts and returns its exit code', (t) => {
+  const { cwd, git, put } = fixture(t);
+  put('src/guard.ts', 'export function guard() {\n  return check();\n}\n');
+  git('commit', '-am', 'fix');
+  const fix = git('rev-parse', 'HEAD');
+  const report = proofReport('b'.repeat(40), fix, [['src/guard.test.ts', 'proven', ['guard rejects', 'guard rejects twice']]]);
+  const squeal = fakeSqueal(t, report);
+  const result = run(cwd, ['--revert', fix, '--test', 'src/guard.test.ts', '--timeout', '90'], squeal.bin);
+  assert.equal(result.status, 0, result.stderr);
+  const args = squeal.args();
+  assert.deepEqual([args[0], args[1], args[2]], ['proof', 'src/guard.test.ts', '--base']);
+  assert.equal(git('rev-parse', `${args[3]}^`), fix);
+  assert.deepEqual(args.slice(4), ['--case', 'source', '--json', '--timeout', '90']);
+  assert.match(result.stdout, /proven: src\/guard\.test\.ts\n {4}red: fail, 2 failing tests; green: pass\n {6}assertion: guard rejects\n/);
+  assert.match(result.stdout, /proven 1\/1$/m);
+  const notRed = fakeSqueal(t, proofReport('b'.repeat(40), fix, [['src/guard.test.ts', 'not red']]), 1);
+  const second = run(cwd, ['--revert', fix, '--test', 'src/guard.test.ts'], notRed.bin);
+  assert.equal(second.status, 1);
+  assert.match(second.stdout, /red: pass; green: pass\nproven 0\/1/);
+});
+
+test('the CLI exits 2 without squeal, on a break that does not apply, and on bad arguments', (t) => {
+  const { cwd, git, put } = fixture(t);
+  const root = git('rev-parse', 'HEAD');
+  put('src/guard.ts', 'export function guard() {\n  return check();\n}\n');
+  git('commit', '-am', 'fix');
+  const noSqueal = run(cwd, ['--revert', git('rev-parse', 'HEAD'), '--test', 'src/guard.test.ts']);
+  assert.equal(noSqueal.status, 2);
+  assert.match(noSqueal.stderr, /no squeal command on PATH/);
+  const squeal = fakeSqueal(t, proofReport('b', 'c', []));
+  const rootCommit = run(cwd, ['--revert', root, '--test', 'src/guard.test.ts'], squeal.bin);
+  assert.equal(rootCommit.status, 2);
+  assert.match(rootCommit.stderr, /has 0 parents/);
+  assert.equal(existsSync(join(squeal.bin, 'args')), false);
+  for (const [args, message] of [
+    [['--revert', 'HEAD'], /needs at least one --test/],
+    [['held-human-input', '--test', 'x'], /names its own tests/],
+    [['a', 'b'], /choose one of/],
+    [['--timeout', 'soon', 'a'], /whole seconds/],
+    [['--bogus'], /unknown option/],
+  ]) assert.throws(() => parseArgs(args), message);
+});
+
+test('summarize names files without a red side and failures past five', () => {
+  const report = proofReport('a'.repeat(40), 'b'.repeat(40), [['x.test.ts', 'proven', ['1', '2', '3', '4', '5', '6', '7']]]);
+  report.files.push({ path: 'y.test.ts', verdict: 'not comparable', reason: 'imports z.ts, absent at base', red: null, green: null });
+  report.files.push({ path: 'z.e2e.ts', verdict: 'red for another reason', reason: 'a test threw an error that is not an assertion',
+    red: { end: 'fail', failures: [{ test: 'shows the state', kind: 'error', text: '  Error: predicate never became truthy: ok\n    at wait' }] }, green: null });
+  const text = summarize(report, 'demo');
+  assert.match(text, /error: shows the state\n {8}Error: predicate never became truthy: ok\n/);
+  assert.doesNotMatch(text, /at wait/);
+  assert.match(text, /… and 2 more/);
+  assert.match(text, /red: not read; green: not read\n {4}reason: imports z\.ts, absent at base/);
+  assert.match(text, /proven 1\/3$/);
+});
+
+test('a recipe without its fields is refused', () => {
+  assert.throws(() => validateRecipe({ ...recipe, description: '' }, 'x'), /description/);
+  assert.throws(() => validateRecipe({ ...recipe, fixedBy: 'HEAD' }, 'x'), /fixedBy/);
+  assert.throws(() => validateRecipe({ ...recipe, break: [] }, 'x'), /break entry/);
+  assert.throws(() => validateRecipe({ ...recipe, break: [{ file: 'f', find: 'a', replace: 'a' }] }, 'x'), /are equal/);
+  assert.throws(() => validateRecipe({ ...recipe, tests: [] }, 'x'), /test files/);
+});
+
+// The checked-in recipes must still apply: a rename, a split test file or a rewritten line
+// fails here, in the change that causes it, not in the next proof that needs the recipe.
+test('every checked-in recipe applies to the current tree and names existing test files', () => {
+  const recipes = listRecipes();
+  assert.ok(recipes.length >= 3);
+  const read = (file) => {
+    const path = join(repoRoot, file);
+    return existsSync(path) ? readFileSync(path, 'utf8') : null;
+  };
+  assert.deepEqual(recipes.flatMap(entry => recipeProblems(entry, read)), []);
+});
