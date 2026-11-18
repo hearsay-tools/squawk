@@ -13,13 +13,53 @@ type KeeperMessage = { kind: string; id: number; cwd: string; args: string[]; ti
 type CommandResult = { ok: boolean; stdout: string; stderr: string; timedOut?: true };
 
 /** Run one queued Git command; without input git sees an empty stdin, exactly as before. */
-function runGitCommand(message: KeeperMessage): Promise<CommandResult> {
-  return runGit(message.args, { cwd: message.cwd, maxBuffer: 32 * 1024 * 1024, timeout: message.timeout, input: message.input ?? '' }).then(
-    ({ stdout, stderr }) => ({ ok: true, stdout, stderr }),
-    (error: RunGitError) => ({ ok: false, stdout: error.stdout ?? '', stderr: error.stderr || error.message || '',
+async function runGitCommand(message: KeeperMessage): Promise<CommandResult> {
+  const result = await runGit(message.args, { cwd: message.cwd, maxBuffer: 32 * 1024 * 1024, timeout: message.timeout, input: message.input ?? '' }).then(
+    ({ stdout, stderr }): CommandResult => ({ ok: true, stdout, stderr }),
+    (error: RunGitError): CommandResult => ({ ok: false, stdout: error.stdout ?? '', stderr: error.stderr || error.message || '',
       // A git killed at its bound says so: its stderr alone reads like any other failure.
       ...(error.killed && message.timeout ? { timedOut: true as const } : {}) }),
   );
+  if (result.timedOut && !await stopTimedOutChildren()) {
+    return { ...result, stderr: `${result.stderr}\nGit child processes of the timed-out command are still running`.trim() };
+  }
+  return result;
+}
+
+/** The PIDs in this keeper's process group other than itself; undefined where the host cannot list them. */
+async function groupMembers(): Promise<number[] | undefined> {
+  if (process.platform !== 'linux') return undefined;
+  const members: number[] = [];
+  for (const entry of await fs.readdir('/proc').catch(() => [] as string[])) {
+    if (!/^\d+$/.test(entry) || Number(entry) === process.pid) continue;
+    const stat = await fs.readFile(`/proc/${entry}/stat`, 'utf8').catch(() => '');
+    // Fields after the parenthesised command name: state, ppid, pgrp.
+    const pgrp = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2]);
+    if (pgrp === process.pid) members.push(Number(entry));
+  }
+  return members;
+}
+
+/**
+ * A timed-out git is killed alone; a child it started (the checkout of `worktree add`) can keep
+ * writing. Every Git child is in this keeper's process group (ADR 0003), and the keeper runs one
+ * command at a time, so the group's other members are that command's. Stop them before the caller
+ * sees the failure. False when some are still running after 10 s, where the host lets us see.
+ */
+async function stopTimedOutChildren(): Promise<boolean> {
+  if (process.platform === 'win32') return true;
+  // The keeper is in its own group too: it ignores this one signal until the wait ends.
+  const ignore = () => undefined;
+  process.on('SIGTERM', ignore);
+  try {
+    try { process.kill(-process.pid, 'SIGTERM'); } catch { /* no other member */ }
+    for (let waited = 0; waited < 10_000; waited += 50) {
+      const members = await groupMembers();
+      if (!members?.length) return true;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return false;
+  } finally { process.off('SIGTERM', ignore); }
 }
 
 export async function readMutationClaim(
@@ -116,11 +156,14 @@ async function waitForTurn(
   }
 }
 
-/** The claims queued ahead of a new ticket: every other visible claim, since the ticket is above all of theirs. */
-async function claimsAhead(directory: string, name: string, read: (entry: string) => Promise<Claim | undefined>): Promise<number> {
+/** The claims queued ahead of a ticket: those that can block it, a peer still choosing included.
+ * A peer that published a higher ticket before this count is behind it and does not count. */
+async function claimsAhead(directory: string, name: string, ticket: number, read: (entry: string) => Promise<Claim | undefined>): Promise<number> {
   let ahead = 0;
   for (const entry of await fs.readdir(directory)) {
-    if (entry.endsWith('.json') && entry !== name && await read(entry)) ahead += 1;
+    if (!entry.endsWith('.json') || entry === name) continue;
+    const claim = await read(entry);
+    if (claim && hasPriority(claim, ticket, entry, name)) ahead += 1;
   }
   return ahead;
 }
@@ -184,7 +227,7 @@ async function keepWorktreeLock(): Promise<void> {
     await write(0);
     const ticket = await selectTicket(directory, name, read);
     await write(ticket);
-    const budget = queuedWaitBudget(keeperWaitBudget(process.argv[3]), keeperPerClaimBudget(process.argv[4]), await claimsAhead(directory, name, read));
+    const budget = queuedWaitBudget(keeperWaitBudget(process.argv[3]), keeperPerClaimBudget(process.argv[4]), await claimsAhead(directory, name, ticket, read));
     const turn = await waitForTurn(directory, name, ticket, { read, isStopping: () => stopping, deadline: Date.now() + budget, wait });
     if (turn.turn === 'timeout') send({ kind: 'error', code: 'lock_timeout', error: 'timed out waiting for worktree mutation lock', ...(turn.holder ? { holder: turn.holder } : {}) });
     if (turn.turn !== 'ready') return; // finally withdraws ONLY this queued claim; no mutation was admitted
