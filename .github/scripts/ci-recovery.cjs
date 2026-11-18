@@ -6,7 +6,8 @@ const {execFileSync} = require('node:child_process');
 const {parseArgs: nodeParseArgs} = require('node:util');
 
 const QUEUED_BOUND_MS = 15 * 60 * 1000;
-const PEER_WINDOW_MS = 2 * 60 * 60 * 1000;
+// Peer runs within this distance of the failed run's creation, before or after it.
+const PEER_WINDOW_MS = 60 * 60 * 1000;
 const ABANDONED = /was never created \(abandoned\)/;
 const GATES = new Set(['Review preflight', 'Unit, build, E2E, and package']);
 
@@ -48,8 +49,8 @@ function diagnose(options, {request, now = Date.now()}) {
   if (!run) return {...base, kind: 'no-run'};
   const at = {...base, runId: run.id, attempt: run.run_attempt};
   if (run.conclusion === 'startup_failure') {
-    const since = new Date(now - PEER_WINDOW_MS).toISOString().replace(/\.\d+Z$/, 'Z');
-    const peers = request(`/repos/${options.repo}/actions/runs?event=pull_request_target&created=%3E%3D${since}&per_page=100`).workflow_runs;
+    const stamp = offset => new Date(Date.parse(run.created_at) + offset).toISOString().replace(/\.\d+Z$/, 'Z');
+    const peers = request(`/repos/${options.repo}/actions/runs?event=pull_request_target&created=${stamp(-PEER_WINDOW_MS)}..${stamp(PEER_WINDOW_MS)}&per_page=100`).workflow_runs;
     return {...at, kind: 'startup-failure', peers: peerStartup(peers, pr.head.sha)};
   }
   const jobs = request(`/repos/${options.repo}/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100`).jobs;
@@ -80,9 +81,9 @@ const NOTICES = {
 };
 
 function startupFailureCause({failed, total}) {
-  if (failed > 0) return `${failed} of ${total} other PR runs in the last ${minutes(PEER_WINDOW_MS) / 60} h also ended startup_failure: the cause is GitHub-side. Do not change the PR. Wait until another PR's run starts, then close and reopen this PR`;
-  if (total > 0) return `None of ${total} other PR runs in the last ${minutes(PEER_WINDOW_MS) / 60} h ended startup_failure: the cause is in this PR or a repository setting. Compare with the last PR run that started, then close and reopen this PR`;
-  return `No other PR ran in the last ${minutes(PEER_WINDOW_MS) / 60} h, so the cause is unknown. Close and reopen this PR once`;
+  if (failed > 0) return `${failed} of ${total} other PR runs within ${minutes(PEER_WINDOW_MS) / 60} h of it also ended startup_failure: the cause is GitHub-side. Do not change the PR. Wait until another PR's run starts, then close and reopen this PR`;
+  if (total > 0) return `None of ${total} other PR runs within ${minutes(PEER_WINDOW_MS) / 60} h of it ended startup_failure: the cause is in this PR or a repository setting. Compare with the last PR run that started, then close and reopen this PR`;
+  return `No other PR ran within ${minutes(PEER_WINDOW_MS) / 60} h of it, so the cause is unknown. Close and reopen this PR once`;
 }
 
 function startupNotice(d) {

@@ -76,16 +76,20 @@ test('startup_failure on other PRs is GitHub-side; on this PR alone it is not', 
   const peer = (conclusion, sha = 'other') => ({head_sha: sha, status: 'completed', conclusion});
   const github = diagnosed({runs: [failed], peers: [peer('startup_failure'), peer('success'), peer('startup_failure', head)]});
   assert.deepEqual(github.peers, {failed: 1, total: 2});
-  assert.match(recoveryNotice(github), /1 of 2 other PR runs in the last 2 h also ended startup_failure: the cause is GitHub-side\. Do not change the PR\./);
+  assert.match(recoveryNotice(github), /1 of 2 other PR runs within 1 h of it also ended startup_failure: the cause is GitHub-side\. Do not change the PR\./);
   assert.match(recoveryNotice(github), /gh pr close 7 --repo hearsay-tools\/squawk && gh pr reopen 7/);
-  assert.match(recoveryNotice(diagnosed({runs: [failed], peers: [peer('success')]})), /None of 1 other PR runs .* in this PR or a repository setting/);
-  assert.match(recoveryNotice(diagnosed({runs: [failed], peers: []})), /No other PR ran in the last 2 h, so the cause is unknown/);
+  assert.match(recoveryNotice(diagnosed({runs: [failed], peers: [peer('success')]})), /None of 1 other PR runs within 1 h of it ended startup_failure: the cause is in this PR or a repository setting/);
+  assert.match(recoveryNotice(diagnosed({runs: [failed], peers: []})), /No other PR ran within 1 h of it, so the cause is unknown/);
 });
 
-test('the peer query covers the last two hours of pull_request_target runs', () => {
-  const {request, calls} = fake({runs: [run({conclusion: 'startup_failure'})]});
-  diagnose({repo, pr: 7}, {request, now});
-  assert.ok(calls.includes(`/repos/${repo}/actions/runs?event=pull_request_target&created=%3E%3D2026-11-11T19:10:00Z&per_page=100`));
+test('the peer query covers the hour around the failed run, however late the diagnosis runs', () => {
+  const peers = `/repos/${repo}/actions/runs?event=pull_request_target&created=2026-11-11T19:07:18Z..2026-11-11T21:07:18Z&per_page=100`;
+  for (const at of [now, now + 7 * 24 * 60 * 60 * 1000]) {
+    const {request, calls} = fake({runs: [run({conclusion: 'startup_failure'})]});
+    const diagnosis = diagnose({repo, pr: 7}, {request, now: at});
+    assert.ok(calls.includes(peers), calls.join('\n'));
+    assert.equal(diagnosis.runId, 43093501386);
+  }
 });
 
 test('an ordinary failure keeps Re-run failed jobs, and the latest run decides', () => {
