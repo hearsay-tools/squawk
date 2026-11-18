@@ -6,8 +6,8 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { copyGitIndex } from '../git-index-copy.ts';
-import { delegationStateSchema, workerWorkspaceSchema } from '@open-mercato/cezar-contract/delegation';
-import type { WorkerDiff, WorkerWorkspace } from '@open-mercato/cezar-contract';
+import { delegationStateSchema, ownedWorkspaceSchema, ownsDirectory } from '@open-mercato/cezar-contract/delegation';
+import type { WorkerDiff, OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { branchFor, createWorktree, DIFF_CAP, worktreePathFor } from '../git-worktree.ts';
 import { resolveTaskDiffBase } from '../git-diff-base.ts';
 import { isSafeGitRef } from '../git-refs.ts';
@@ -22,7 +22,7 @@ export async function resolveWorkerBaseline(repoRoot: string, parentCwd: string,
     if (!isSafeGitRef(baseline) || baseline.length > 1024 || /[\0\r\n]/.test(baseline)) throw new Error('Invalid ref');
     if (await gitCommonDir(repoRoot) !== await gitCommonDir(parentCwd)) throw new Error('Parent is not in this repository');
     const ref = baseline === 'parent-head' ? 'HEAD' : baseline;
-    return workerWorkspaceSchema.shape.baselineSha.parse(await checkedGit(
+    return ownedWorkspaceSchema.shape.baselineSha.parse(await checkedGit(
       baseline === 'parent-head' ? parentCwd : repoRoot,
       ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`],
     ));
@@ -32,9 +32,9 @@ export async function resolveWorkerBaseline(repoRoot: string, parentCwd: string,
 }
 
 /** No resource side effects. Persist this exact reference/receipt before enqueueing. */
-export async function planOwnedWorkspace(repoRoot: string, workerId: string, baselineSha: string): Promise<WorkerWorkspace> {
+export async function planOwnedWorkspace(repoRoot: string, workerId: string, baselineSha: string): Promise<OwnedWorkerWorkspace> {
   const root = await realpath(repoRoot);
-  const workspace = workerWorkspaceSchema.parse({
+  const workspace = ownedWorkspaceSchema.parse({
     ownerRunId: workerId, resourceId: randomUUID(), kind: 'owned-isolated',
     path: worktreePathFor(root, workerId), branch: branchFor(workerId), baselineSha,
   });
@@ -42,14 +42,14 @@ export async function planOwnedWorkspace(repoRoot: string, workerId: string, bas
   return workspace;
 }
 
-function workerWorkspace(run: RunRecord): WorkerWorkspace {
+function workerWorkspace(run: RunRecord): OwnedWorkerWorkspace {
   const delegation = delegationStateSchema.parse(run.delegation);
-  if (delegation.role !== 'worker' || delegation.workspace.ownerRunId !== run.id) throw new Error('Missing worker ownership');
+  if (delegation.role !== 'worker' || delegation.workspace.ownerRunId !== run.id || !ownsDirectory(delegation.workspace)) throw new Error('Missing worker ownership');
   return delegation.workspace;
 }
 
 /** Fresh-only primitive. Runtime callers supply the already-durable preallocated intent. */
-export async function createOwnedWorkspace(repoRoot: string, workerId: string, baselineSha: string, intent?: WorkerWorkspace): Promise<WorkerWorkspace> {
+export async function createOwnedWorkspace(repoRoot: string, workerId: string, baselineSha: string, intent?: OwnedWorkerWorkspace): Promise<OwnedWorkerWorkspace> {
   const workspace = await validateIntent(repoRoot, intent ?? await planOwnedWorkspace(repoRoot, workerId, baselineSha));
   const refusal = fallbackProjectWriteError(workspace.path);
   if (refusal) throw new Error(refusal);
@@ -72,7 +72,7 @@ export async function createOwnedWorkspace(repoRoot: string, workerId: string, b
 }
 
 /** Resource identity only, not caller authorization or permission to delete a repurposed branch. */
-export async function verifyOwnedWorkspace(repoRoot: string, run: RunRecord): Promise<WorkerWorkspace> {
+export async function verifyOwnedWorkspace(repoRoot: string, run: RunRecord): Promise<OwnedWorkerWorkspace> {
   const workspace = await validateIntent(repoRoot, workerWorkspace(run));
   const receipt = await readReceipt(await receiptLocation(repoRoot, workspace));
   if (!receipt || JSON.stringify(receipt.workspace) !== JSON.stringify(workspace)) throw new Error('Owned workspace provisioning receipt missing or mismatched');
@@ -84,7 +84,7 @@ export async function verifyOwnedWorkspace(repoRoot: string, run: RunRecord): Pr
 }
 
 /** Reuse only proven resources. No reattachment/replacement after resource loss or ambiguous provisioning. */
-export async function ensureOwnedWorkspace(repoRoot: string, run: RunRecord): Promise<WorkerWorkspace> {
+export async function ensureOwnedWorkspace(repoRoot: string, run: RunRecord): Promise<OwnedWorkerWorkspace> {
   const workspace = await validateIntent(repoRoot, workerWorkspace(run));
   const refusal = fallbackProjectWriteError(workspace.path);
   if (refusal) throw new Error(refusal);

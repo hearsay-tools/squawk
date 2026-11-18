@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { makeRunRecord, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { runArtifactCommand } from '../artifacts/cli.ts';
 import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
@@ -34,7 +34,7 @@ import { buildMigrationProject, projectSnapshot, removeMigrationProject, TASK, t
  * an interrupted migration and its retry, and a task context the migration made stale.
  */
 
-async function checkpoint(root: string, workspace: WorkerWorkspace): Promise<void> {
+async function checkpoint(root: string, workspace: OwnedWorkerWorkspace): Promise<void> {
   await removeOwnedWorkspace(root, workspace, undefined, async () => { throw new Error('stopped after the checkpoint'); }).catch(() => undefined);
 }
 

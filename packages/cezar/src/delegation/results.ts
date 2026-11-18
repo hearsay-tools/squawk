@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import type { WorkerCollectedResult } from '@open-mercato/cezar-contract';
 import type { RunEvent, RunRecord, RunStore } from '../runs/store.ts';
 import { isAttachmentFileName, resolveAttachmentPath } from '../workflows/attachment-path.ts';
-import { workspaceKindOf } from './workspace-kinds.ts';
+import { workspaceDirectoryRemoved, workspaceKindOf } from './workspace-kinds.ts';
 import { artifactDirectory, listArtifacts, readArtifact } from '../artifacts/store.ts';
 
 export const workerRevision = (run: RunRecord): number => run.delegation?.role === 'worker' ? run.delegation.executionRevision ?? 0 : 0;
@@ -30,10 +30,11 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
   const events = allEvents.filter(event => event.seq > (delegation.executionStartSeq ?? -1));
   const summary = run.status === 'failed' && run.error?.trim() ? failureSummary(run.error, events) : latestAssistantSummary(events);
   const destroyed = delegation.destroy?.phase === 'complete';
-  const workspaceRemoved = !!delegation.destroy && !delegation.destroy.remaining.includes('worktree');
+  const workspaceRemoved = !!delegation.destroy && workspaceDirectoryRemoved(delegation.workspace, delegation.destroy.remaining);
   const { lastExecutionOutcome, settled } = executionOutcome(store, run);
   const head = await readWorkerHead(repoRoot, run, previous, workspaceRemoved);
   const { diff, diffSnapshot } = await readWorkerDiff(repoRoot, store, run, delegation, { destroyed, workspaceRemoved });
+  const changes = await workspaceKindOf(run).changeReport(store.sourceDataDir(run.id), run);
   const artifacts = await listWorkerArtifacts(store.sourceDataDir(run.id), run, delegation, allEvents);
   return { result: {
     workerId: run.id, parentRunId: delegation.parentRunId, revision: workerRevision(run), observedAt: new Date().toISOString(),
@@ -42,7 +43,7 @@ export async function collectWorkerEvidence(repoRoot: string, store: RunStore, r
     ...(run.error ? { error: run.error.slice(0, 2000) } : {}),
     ...(run.runner ? { backend: run.runner } : {}), ...(run.model ? { model: run.model } : {}),
     baselineSha: delegation.workspace.baselineSha, workspace: { ...delegation.workspace, state: workspaceRemoved ? 'deleted' : head.state === 'available' ? 'available' : 'unavailable' }, cleanup: delegation.destroy?.phase ?? 'retained',
-    summary, head, diff, artifacts,
+    summary, head, diff, ...(changes ? { changes } : {}), artifacts,
   }, ...(diffSnapshot === undefined ? {} : { diffSnapshot }) };
 }
 
@@ -87,6 +88,8 @@ type WorkerDelegation = Extract<NonNullable<RunRecord['delegation']>, { role: 'w
 
 /** The owned workspace's diff, or this revision's retained snapshot when the live read fails. */
 async function readWorkerDiff(repoRoot: string, store: RunStore, run: RunRecord, delegation: WorkerDelegation, cleanup: { destroyed: boolean; workspaceRemoved: boolean }): Promise<{ diff: WorkerCollectedResult['diff']; diffSnapshot: string | undefined }> {
+  const noDiff = workspaceKindOf(run).noDiff;
+  if (noDiff) return { diff: { state: 'unavailable', reason: 'unsupported', detail: noDiff }, diffSnapshot: undefined };
   let diff: WorkerCollectedResult['diff'] = { state: cleanup.workspaceRemoved ? 'deleted' : 'unavailable', reason: 'missing' };
   let diffSnapshot: string | undefined;
   try {

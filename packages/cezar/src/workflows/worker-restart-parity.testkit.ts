@@ -2,6 +2,7 @@ import { ABSENT_PROCESS_PID } from '../delegation/process-enumeration.testkit.ts
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { ownedWorkspace } from '@open-mercato/cezar-contract/delegation';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
@@ -105,7 +106,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       expect(recorded.processes.length).toBeGreaterThan(0);
       manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
       await Promise.all(executions.splice(0)); await Promise.all(bookkeeping.splice(0)); manager.dispose();
-      const workspace = w.delegation?.role === 'worker' ? w.delegation.workspace : undefined;
+      const workspace = w.delegation?.role === 'worker' ? ownedWorkspace(w.delegation.workspace) : undefined;
       if (!workspace) throw Error('missing workspace');
       const files = join(root, '.ai/cezar/runs');
       writeFileSync(join(files, `${w.id}.execution.json`), JSON.stringify(proof));
@@ -189,7 +190,7 @@ it.each(RESTART_RUNNERS.r60)('%s R60 cold terminal starting-proof recovery repai
       expect(recorded.processes.length).toBeGreaterThan(0);
       manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
       await Promise.all(executions.splice(0)); await Promise.all(bookkeeping.splice(0)); manager.dispose();
-      const workspace = w.delegation?.role === 'worker' ? w.delegation.workspace : undefined;
+      const workspace = w.delegation?.role === 'worker' ? ownedWorkspace(w.delegation.workspace) : undefined;
       if (!workspace) throw Error('missing workspace');
       const scratch = agentTmpDir(join(root, '.ai/cezar'), w.id);
       mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, 'retained'), 'scratch');
@@ -241,7 +242,7 @@ it.each(RESTART_RUNNERS.r47)('%s settles a same-boot crash as gone once recorded
     expect(recorded.processes.length).toBeGreaterThan(0);
     manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
     await Promise.all(executions.splice(0)); await Promise.all(bookkeeping.splice(0)); manager.dispose();
-    const workspace = w.delegation?.role === 'worker' ? w.delegation.workspace : undefined;
+    const workspace = w.delegation?.role === 'worker' ? ownedWorkspace(w.delegation.workspace) : undefined;
     if (!workspace) throw Error('missing workspace');
     const scratch = agentTmpDir(join(root, '.ai/cezar'), w.id);
     mkdirSync(scratch, { recursive: true }); writeFileSync(join(scratch, 'retained'), 'scratch');

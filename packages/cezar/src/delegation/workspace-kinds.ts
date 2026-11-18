@@ -1,11 +1,15 @@
 /** The worker workspace kinds: one definition per `workspace.kind`. Delegation code and the run
  *  engine's port ask the definition; they never call a kind's own functions directly. */
-import type { WorkerDestroy, WorkerDestroyResult, WorkerDiff, WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { WorkerChangeReport, WorkerDestroy, WorkerDestroyResult, WorkerDiff, WorkerWorkspace } from '@open-mercato/cezar-contract';
+import { ownedWorkspace, type WORKSPACE_CHOICES } from '@open-mercato/cezar-contract/delegation';
 import { runGit } from '../git-command.ts';
 import type { RunRecord } from '../runs/store.ts';
 import type { WorkerWorkspaceOpened, WorkerWorkspacePort, WorkerWorkspaceRequest } from '../workflows/run/worker-workspace-port.ts';
 import { placeWorkerAttachments, prepareWorkerContext, verifyWorkerContext } from './context.ts';
+import { DelegationPolicyError } from './policy.ts';
+import { SHARED_NO_DIFF, planSharedWorkspace, readSharedHead, sharedContextSources, verifySharedContext, verifySharedWorkspace } from './shared-workspace.ts';
 import { ensureOwnedWorkspace, planOwnedWorkspace, readOwnedDiff, verifyOwnedWorkspace } from './workspace.ts';
+import { clearWorkspaceEnd, recordWorkspaceEnd, recordWorkspaceStart, workspaceChangeReport } from './workspace-state.ts';
 
 export type WorkspaceResource = Exclude<WorkerDestroy['remaining'][number], 'process'>;
 
@@ -18,22 +22,34 @@ export type WorkspaceRemoval = {
   waitMs?: number;
 };
 
+/** A new worker's id and baseline, and the run that spawns it with the directory that run works in. */
+export type WorkspacePlanRequest = { repoRoot: string; workerId: string; baselineSha: string; hostRunId: string; hostDirectory: string };
+
 export interface WorkspaceKind {
   /** What a destroy removes besides the worker's processes. */
   readonly destroyResources: readonly WorkspaceResource[];
+  /** A sentence the worker's own prompt gains; left out when the kind needs none. */
+  readonly workerNotice?: string;
+  /** Why the kind has no diff of its own; left out when it has one. */
+  readonly noDiff?: string;
   /** The workspace record of a new worker. No resource side effects. */
-  plan(repoRoot: string, workerId: string, baselineSha: string): Promise<WorkerWorkspace>;
+  plan(request: WorkspacePlanRequest): Promise<WorkerWorkspace>;
   /** Snapshot a spawn's context inputs and name where the worker reads each one. */
   prepareContext(options: Parameters<typeof prepareWorkerContext>[0]): ReturnType<typeof prepareWorkerContext>;
   /** The verified workspace a launch runs in. A first launch also places the worker's context files. */
   openForLaunch(request: WorkerWorkspaceRequest & { firstLaunch: boolean }): Promise<WorkerWorkspaceOpened>;
   /** The verified directory a Continue runs in. Never creates or replaces it. */
   openForContinue(request: WorkerWorkspaceRequest): Promise<string>;
+  /** The worker's execution ended; called before it is recorded complete. Never throws. */
+  settle(request: Omit<WorkerWorkspaceRequest, 'parentCwd'>): Promise<void>;
   /** Throws, naming what is gone, when a fresh session could not restart from the workspace. */
   assertResumable(repoRoot: string, run: RunRecord): Promise<void>;
   /** The commit the verified workspace is at. */
   readHead(repoRoot: string, run: RunRecord): Promise<string>;
   readDiff(repoRoot: string, run: RunRecord): Promise<WorkerDiff>;
+  /** Whether the workspace's directory changed during the worker's run. Undefined for a kind whose
+   *  worker has the directory to itself: its diff says what it changed. */
+  changeReport(dataDir: string, run: RunRecord): Promise<WorkerChangeReport | undefined>;
   /** Runs `config`, the project's `worktreeTeardown` value, before a destroy. Returns why it failed, if it did. */
   teardown(repoRoot: string, config: unknown, workspace: WorkerWorkspace): Promise<string | undefined>;
   /** Removes the workspace's resources and reports the ones that remain. */
@@ -50,7 +66,7 @@ function workerDelegation(run: RunRecord): WorkerDelegation {
 /** A worker with its own worktree and branch, forked from the baseline commit. */
 const isolated: WorkspaceKind = {
   destroyResources: ['worktree', 'branch'],
-  plan: planOwnedWorkspace,
+  plan: ({ repoRoot, workerId, baselineSha }) => planOwnedWorkspace(repoRoot, workerId, baselineSha),
   prepareContext: prepareWorkerContext,
   async openForLaunch({ repoRoot, dataDir, run, parentCwd, firstLaunch }) {
     const workspace = await ensureOwnedWorkspace(repoRoot, run);
@@ -67,6 +83,7 @@ const isolated: WorkspaceKind = {
     await verifyWorkerContext({ dataDir, parentId: delegation.parentRunId, workspace: delegation.workspace, context: delegation.context, parentCwd });
     return path;
   },
+  async settle() {},
   async assertResumable(repoRoot, run) {
     const workspace = await verifyOwnedWorkspace(repoRoot, run);
     // The branch is the work a fresh session reads from (its notice says `git log`): prove its ref too.
@@ -78,20 +95,63 @@ const isolated: WorkspaceKind = {
     return (await runGit(['rev-parse', '--verify', 'HEAD^{commit}'], { cwd: workspace.path, timeout: 30_000, maxBuffer: 1024 })).stdout.trim();
   },
   readDiff: readOwnedDiff,
+  async changeReport() { return undefined; },
   // The teardown and removal modules load at the first destroy: a process that destroys no worker never loads them.
   async teardown(repoRoot, config, workspace) {
-    return (await import('./worktree-teardown.ts')).runWorktreeTeardown(repoRoot, config, workspace);
+    return (await import('./worktree-teardown.ts')).runWorktreeTeardown(repoRoot, config, ownedWorkspace(workspace));
   },
   async remove(repoRoot, workspace, { previewHost, assertCurrent, assertUnheld, waitMs }) {
-    return (await import('./owned-workspace-release.ts')).releaseThenRemoveOwnedWorkspace({ previewHost }, repoRoot, workspace, assertCurrent, assertUnheld,
+    return (await import('./owned-workspace-release.ts')).releaseThenRemoveOwnedWorkspace({ previewHost }, repoRoot, ownedWorkspace(workspace), assertCurrent, assertUnheld,
       waitMs === undefined ? {} : { waitMs });
   },
 };
 
-export const workspaceKinds: Readonly<Record<WorkerWorkspace['kind'], WorkspaceKind>> = { 'owned-isolated': isolated };
+/** A worker in its host run's directory, at the host's HEAD. It has no worktree and no branch, so
+ *  a destroy removes nothing and takes no worktree mutation lock. */
+const shared: WorkspaceKind = {
+  destroyResources: [],
+  noDiff: SHARED_NO_DIFF,
+  workerNotice: 'You share your parent\'s worktree: do not write there unless your task says so.',
+  plan: planSharedWorkspace,
+  prepareContext: options => prepareWorkerContext(options, sharedContextSources),
+  async openForLaunch({ repoRoot, dataDir, run, firstLaunch }) {
+    if (workerDelegation(run).destroy) throw new Error('Worker destruction has begun');
+    const workspace = await verifySharedWorkspace(repoRoot, run);
+    const delegation = workerDelegation(run);
+    await verifySharedContext({ repoRoot, dataDir, parentId: delegation.parentRunId, workspace, context: delegation.context });
+    // A failed read leaves no start state: the change report then says it is unavailable.
+    if (firstLaunch) await recordWorkspaceStart(dataDir, run.id, workspace.path).catch(() => undefined);
+    await clearWorkspaceEnd(dataDir, run.id);
+    return { path: workspace.path, baseBranch: workspace.baselineSha };
+  },
+  async openForContinue({ repoRoot, dataDir, run }) {
+    const workspace = await verifySharedWorkspace(repoRoot, run);
+    const delegation = workerDelegation(run);
+    await verifySharedContext({ repoRoot, dataDir, parentId: delegation.parentRunId, workspace, context: delegation.context });
+    await clearWorkspaceEnd(dataDir, run.id);
+    return workspace.path;
+  },
+  async settle({ dataDir, run }) {
+    await recordWorkspaceEnd(dataDir, run.id, workerDelegation(run).workspace.path).catch(() => undefined);
+  },
+  async assertResumable(repoRoot, run) { await verifySharedWorkspace(repoRoot, run); },
+  readHead: readSharedHead,
+  async readDiff() { throw new DelegationPolicyError('unavailable_diff', SHARED_NO_DIFF); },
+  async changeReport(dataDir, run) { return workspaceChangeReport(dataDir, run.id, workerDelegation(run).workspace.path); },
+  async teardown() { return undefined; },
+  async remove(_repoRoot, workspace) { return { workerId: workspace.ownerRunId, state: 'complete', deleted: [], remaining: [] }; },
+};
 
-/** The kind a spawn plans. */
-export const DEFAULT_WORKSPACE_KIND: WorkerWorkspace['kind'] = 'owned-isolated';
+export const workspaceKinds: Readonly<Record<WorkerWorkspace['kind'], WorkspaceKind>> = { 'owned-isolated': isolated, shared };
+
+/** Whether a destroy that left `remaining` removed the workspace's directory. A kind that removes
+ *  no directory never did. */
+export function workspaceDirectoryRemoved(workspace: Pick<WorkerWorkspace, 'kind'>, remaining: readonly WorkerDestroy['remaining'][number][]): boolean {
+  return workspaceKind(workspace).destroyResources.includes('worktree') && !remaining.includes('worktree');
+}
+
+/** The `--workspace` choice a spawn plans when it names none. */
+export const DEFAULT_WORKSPACE_CHOICE: keyof typeof WORKSPACE_CHOICES = 'isolated';
 
 /** The definition a workspace record names. */
 export function workspaceKind(workspace: Pick<WorkerWorkspace, 'kind'>): WorkspaceKind {
@@ -108,4 +168,5 @@ export function workspaceKindOf(run: RunRecord): WorkspaceKind {
 export const workerWorkspacePort: WorkerWorkspacePort = {
   openForLaunch: async request => workspaceKindOf(request.run).openForLaunch(request),
   openForContinue: async request => workspaceKindOf(request.run).openForContinue(request),
+  settle: async request => { try { await workspaceKindOf(request.run).settle(request); } catch { /* the port's settle never throws */ } },
 };

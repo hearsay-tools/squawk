@@ -63,6 +63,7 @@ import { TaskFileScope } from './task-file-scope'
 import { archiveInComposer, resumeHint, runActionFlags } from './run-actions'
 import { useWorkersLive } from './run-relationships'
 import { CompactParentTaskLink, ParentTaskLink } from './parent-task-link'
+import { ownsDirectory } from '@open-mercato/cezar-api-client/contract/delegation'
 
 /**
  * The run header (spec §"Task thread" → Header): editable title + status pill, the meta line,
@@ -699,7 +700,7 @@ function ConfirmDialog({ run, actions }: { run: ApiRun; actions: RunActions }) {
               <>
                 Delete “
                 <span className="font-medium text-foreground" title={runTitle(run)}>{runTitle(run)}</span>
-                ” and its transcript, worktree and branch. This cannot be undone.
+                ” and its transcript{run.delegation?.role === 'worker' && !ownsDirectory(run.delegation.workspace) ? '' : ', worktree and branch'}. This cannot be undone.
               </>
           </AlertDialogDescription>
         </AlertDialogHeader>

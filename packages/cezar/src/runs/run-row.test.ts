@@ -141,6 +141,12 @@ describe('encodeRunRow', () => {
     expect(encodeRunRow(record({ worktree: false })).branch).toBeNull();
   });
 
+  it("gives a worker in its host's directory no branch and no worktree column (hearsay-tools/squawk#3819)", () => {
+    const shared = { role: 'worker', parentRunId: 'parent-1',
+      workspace: { ownerRunId: ID, resourceId: 'r', kind: 'shared', path: '/repo/.ai/cezar/worktrees/host', hostRunId: 'parent-1', baselineSha: 'a'.repeat(40) } } as unknown as RunRecord['delegation'];
+    expect(encodeRunRow(record({ delegation: shared, baseBranch: 'a'.repeat(40) }))).toMatchObject({ branch: null, worktreePath: null, parentRunId: 'parent-1' });
+  });
+
   it("spells a worktree's task branch exactly as branchFor does, which it cannot import", () => {
     for (const id of [ID, 'short', 'ffffffff-ffff-4fff-8fff-ffffffffffff']) {
       expect(encodeRunRow(record({ id, worktreePath: '/w/t' })).branch).toBe(branchFor(id));

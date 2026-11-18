@@ -13,6 +13,8 @@ export interface WorkerWorkspacePort {
   openForLaunch(request: WorkerWorkspaceRequest & { firstLaunch: boolean }): Promise<WorkerWorkspaceOpened>;
   /** The verified directory a Continue runs in. Never creates or replaces it. */
   openForContinue(request: WorkerWorkspaceRequest): Promise<string>;
+  /** The worker's execution ended; called before it is recorded complete. Never throws. */
+  settle(request: Omit<WorkerWorkspaceRequest, 'parentCwd'>): Promise<void>;
 }
 
 /** A worker run with no registered port has no workspace: the caller fails the run. */

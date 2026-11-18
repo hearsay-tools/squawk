@@ -364,7 +364,7 @@ export function composeRunModules(context: RunModuleContext, host: FacadeHost, m
       settleOrphanedWorkerExecution: (id, opts) => host.settleOrphanedWorkerExecution(id, opts),
       reapTerminalScratch: id => modules.runSettlement.reapTerminalScratch(id), queueWaitWake: id => modules.wakeAdmission.queueWaitWake(id),
       retryWaitAdmission: id => modules.retries.retryWaitAdmission(id), releaseSlot: () => modules.line.releaseSlot(),
-      releaseRunMemory },
+      releaseRunMemory, workerWorkspaces: () => host.workerWorkspaces() },
     modules.memory,
   );
   modules.automationToolsSlot = new AutomationToolsSlot(context,

@@ -13,7 +13,7 @@ import { seedAgentConfigLocalLayer } from '../../agent-config/seed.ts';
 import { AgentTempDirError, agentTmpEnv } from '../../runs/agent-tmpdir.ts';
 import { resolveWorktreeSetup, runWorktreeSetup, worktreeSetupAgentNote, worktreeSetupEndNote, worktreeSetupEnv, worktreeSetupRecordError, worktreeSetupStartNote, type WorktreeSetupOutcome } from '../../worktree-setup.ts';
 import { taskModelIdentity } from './launch-settings.ts';
-import { executionBaseRef, openExecutionWorktree, executionSeedFiles } from './run-workspace.ts';
+import { executionBaseRef, openExecutionWorktree, executionSeedFiles, runOwnsDirectory } from './run-workspace.ts';
 import type { WorkerWorkspacePort } from './worker-workspace-port.ts';
 import { clearAutosaveTimer } from './input-timers.ts';
 import type { RunLine } from './run-line.ts';
@@ -128,7 +128,9 @@ export class StepLoop {
     } else if (repo || launch.owned) {
       emit({
         type: 'note',
-        message: `worktree on — using an isolated task worktree (${atTaskHead.worktree(input) === true ? 'explicit request' : 'default'})`,
+        message: runOwnsDirectory(launch.ownedRun)
+          ? `worktree on — using an isolated task worktree (${atTaskHead.worktree(input) === true ? 'explicit request' : 'default'})`
+          : 'shared workspace — running in the parent\'s worktree',
       });
       const base = await executionBaseRef(this.context.store, this.context.repoRoot, execution, repo, launch);
       return this.createExecutionWorktree(execution, launch, base);
@@ -147,31 +149,38 @@ export class StepLoop {
       if (this.host.workerExecutionStopped(runId)) { this.host.dropActive(runId); return false; }
       const wt = await openExecutionWorktree(this.context.store, this.context.repoRoot, this.context.dataDir, execution, launch, base, this.host.workerWorkspaces());
       state.liveSession.changeWorkingDirectory(wt.path);
+      const ownsDirectory = runOwnsDirectory(ownedRun);
       this.context.store.updateRun(runId, {
-        worktreePath: wt.path,
+        ...(ownsDirectory ? { worktreePath: wt.path } : {}),
         ...(wt.branch === undefined ? {} : { branch: wt.branch }),
         baseBranch: wt.baseBranch,
         ...(owned ? { worktree: undefined } : {}),
       });
-      emit({ type: 'note', message: `worktree ready — ${wt.branch === undefined ? '' : `branch ${wt.branch} `}(base ${wt.baseBranch})` });
-      // Seed from this manager's project root: each multi-project context has
-      // its own manager/repoRoot and must never copy another project's layer.
-      // A worker's explicit `--attach` files win over the main checkout's copy (hearsay-tools/cezarion#1149).
-      const attached = executionSeedFiles(ownedRun);
-      const seededConfig = await seedAgentConfigLocalLayer(this.context.repoRoot, state.liveSession.cwd, process.env, attached).catch(() => []);
-      if (seededConfig.length > 0) {
-        emit({ type: 'note', message: `seeded personal agent config: ${seededConfig.join(', ')}` });
-      }
+      emit({ type: 'note', message: ownsDirectory
+        ? `worktree ready — ${wt.branch === undefined ? '' : `branch ${wt.branch} `}(base ${wt.baseBranch})`
+        : `shared workspace ready — ${wt.path} (base ${wt.baseBranch})` });
+      if (ownsDirectory) await this.seedExecutionWorktree(execution, ownedRun);
       this.worktreeAutosave.armAutosave(runId, state);
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const error = `worktree creation failed: ${message}`;
+      const error = `${runOwnsDirectory(ownedRun) ? 'worktree creation failed' : 'shared workspace unavailable'}: ${message}`;
       emit({ type: 'note', message: `${error} — task stopped before workflow execution` });
       this.host.move(runId, 'fail-start', { error });
       emit({ type: 'lifecycle', message: `run failed — ${error}` });
       this.host.dropActive(runId);
       return false;
+    }
+  }
+
+  /** Seed from this manager's project root: each multi-project context has its own
+   *  manager/repoRoot and must never copy another project's layer. A worker's explicit `--attach`
+   *  files win over the main checkout's copy (hearsay-tools/cezarion#1149). */
+  private async seedExecutionWorktree({ state, emit }: Execution, ownedRun: RunRecord | undefined): Promise<void> {
+    const attached = executionSeedFiles(ownedRun);
+    const seededConfig = await seedAgentConfigLocalLayer(this.context.repoRoot, state.liveSession.cwd, process.env, attached).catch(() => []);
+    if (seededConfig.length > 0) {
+      emit({ type: 'note', message: `seeded personal agent config: ${seededConfig.join(', ')}` });
     }
   }
 
@@ -191,7 +200,7 @@ export class StepLoop {
     trigger: 'start' | 'rematerialized' | 'resume',
   ): Promise<string | undefined> {
     const record = this.context.store.getRun(runId);
-    if (!record || state.liveSession.cwd === this.context.repoRoot) return undefined;
+    if (!record || state.liveSession.cwd === this.context.repoRoot || !runOwnsDirectory(record)) return undefined;
     const plan = resolveWorktreeSetup(raw);
     const interrupted = record.worktreeSetup?.status === 'running';
     if (plan.kind === 'none') {

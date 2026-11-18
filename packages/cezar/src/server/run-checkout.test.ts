@@ -187,6 +187,40 @@ function claimedHost(state: State) {
   return { host, calls, release };
 }
 
+describe("a worker that runs in its parent's worktree (hearsay-tools/squawk#3819)", () => {
+  const id = '5b0c8d3a-41c5-4b0e-9c57-3f0a1c2d4e5f';
+  const shared = makeRunRecord({ id, status: RUN_STATUS.done, baseBranch: 'a'.repeat(40), delegation: { role: 'worker', permissions: [], parentRunId: baseRun.id,
+    workspace: { ownerRunId: id, resourceId: '0d0e7a51-7a35-4c53-8a5c-0c7f5f9d2b11', kind: 'shared', path: live, hostRunId: baseRun.id, baselineSha: 'a'.repeat(40) } } });
+  const refusal = (action: string) => ({ status: 409, body: { error: `this worker runs in its parent's worktree — ${action}` } });
+  function sharedHost(): RunCheckoutHost {
+    return { root, store: { getRun: vi.fn(() => shared), updateRun: vi.fn(), sourceDataDir: vi.fn(() => root), writeRefusal: vi.fn(() => undefined),
+      fallbackDeleteError: vi.fn(() => undefined), canDeleteRun: vi.fn(() => true) },
+      manager: { isActive: vi.fn(() => false), claimForPublish: vi.fn(() => () => undefined), claimWorktreeReclaim: vi.fn(() => () => undefined) } };
+  }
+
+  it('refuses commit, push, the pull request, worktree removal and reclaim in one text family, and claims nothing', () => {
+    const host = sharedHost();
+    vi.mocked(autosaveCleanupBlocker).mockReset();
+    expect(runCheckout(host, id, 'mutate')).toEqual(refusal('commit and push from the parent task'));
+    expect(runCheckout(host, id, 'publish')).toEqual(refusal('open the pull request from the parent task'));
+    expect(runCheckout(host, id, 'remove', { claim: 'publish', checksActive: true, deletion: 'worktree', nullClaimError: 'pending' }))
+      .toEqual(refusal('it has no worktree or branch to remove'));
+    expect(runCheckout(host, id, 'remove', { claim: 'reclaim', checksActive: false, deletion: 'inline', nullClaimError: 'in use' }))
+      .toEqual(refusal('it has no worktree or branch to remove'));
+    expect(runCheckout(host, id, 'read', { directory: 'working-directory' })).toEqual(refusal('its changes show in the parent task'));
+    expect(host.manager.claimForPublish).not.toHaveBeenCalled();
+    expect(host.manager.claimWorktreeReclaim).not.toHaveBeenCalled();
+    expect(host.store.updateRun).not.toHaveBeenCalled();
+  });
+
+  it('still admits history deletion, and reads no worktree of its own', () => {
+    const host = sharedHost();
+    expect(runCheckout(host, id, 'remove', { claim: 'publish', checksActive: true, deletion: 'record', nullClaimError: 'pending' }))
+      .toEqual({ run: shared, release: expect.any(Function) });
+    expect(runCheckout(host, id, 'read', { directory: 'existing-worktree' })).toMatchObject({ run: shared, directory: null });
+  });
+});
+
 function admitClaimed(host: RunCheckoutHost, route: typeof claimedRoutes[number]) {
   return route.intent === 'publish'
     ? runCheckout(host, baseRun.id, 'publish')

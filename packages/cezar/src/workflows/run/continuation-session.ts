@@ -45,7 +45,7 @@ import type { PendingContinuation, ContinuationOpening, OpeningAnswer, Continuat
 import { existsSync } from 'node:fs';
 import type { RunRecord, StepState } from '../../runs/store.ts';
 import { rematerializeReclaimedWorktree } from '../../runs/retention.ts';
-import { ownedContinuationWorkspace } from './run-workspace.ts';
+import { ownedContinuationWorkspace, runOwnsDirectory } from './run-workspace.ts';
 import type { WorkerWorkspacePort } from './worker-workspace-port.ts';
 import type { RunExitId, RunPatch } from '../../runs/run-exits.ts';
 import type { RunLine } from './run-line.ts';
@@ -150,7 +150,7 @@ export class ContinuationSession {
   /** The repository-root lease of a Continue that runs in the repository root. Returns undefined
    *  when no lease is needed, so that path does not yield, else whether the lease was granted. */
   private continuationRepoRootLease(runId: string, state: ActiveRun): Promise<boolean> | undefined {
-    if (state.liveSession.cwd !== this.context.repoRoot) return undefined;
+    if (state.liveSession.cwd !== this.context.repoRoot || !runOwnsDirectory(this.context.store.getRun(runId))) return undefined;
     if (this.host.repositoryRootLockDisabled()) {
       this.context.store.appendEvent(runId, {
         type: 'note',

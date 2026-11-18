@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { readArtifact, artifactDirectory } from '../artifacts/store.ts';
 import { verifyOwnedWorkspace } from '../delegation/workspace.ts';
 import { removeOwnedWorkspace } from '../delegation/workspace-removal.ts';
@@ -24,7 +24,7 @@ import {
  * Crash recovery, the durability invariant and the holder's duties have their own files.
  */
 /** A real cleanup checkpoint: the removal stops right after writing it, with the worktree in place. */
-async function checkpoint(root: string, workspace: WorkerWorkspace): Promise<void> {
+async function checkpoint(root: string, workspace: OwnedWorkerWorkspace): Promise<void> {
   await removeOwnedWorkspace(root, workspace, undefined, async () => { throw new Error('stopped after the checkpoint'); }).catch(() => undefined);
 }
 

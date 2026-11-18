@@ -3,12 +3,12 @@
  * looks for holders (hearsay-tools/squawk#914, hearsay-tools/squawk#1926). The app knows no tool here: a
  * holder the commands leave is named in the refusal and never signalled. */
 import { realpath } from 'node:fs/promises';
-import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { resolveWorktreeSetup, runWorktreeSetup, worktreeSetupEnv, worktreeSetupRecordError } from '../worktree-setup.ts';
 import { ownedWorktreePresent } from './workspace-removal.ts';
 
 /** Whether `workspace` is still the worktree destroy owns, and its path is its own real path. */
-async function proven(root: string, workspace: WorkerWorkspace): Promise<boolean> {
+async function proven(root: string, workspace: OwnedWorkerWorkspace): Promise<boolean> {
   return await ownedWorktreePresent(root, workspace) && await realpath(workspace.path).catch(() => undefined) === workspace.path;
 }
 
@@ -18,7 +18,7 @@ async function proven(root: string, workspace: WorkerWorkspace): Promise<boolean
  * redirected or replaced never runs the rest in another checkout. Undefined when nothing failed, or
  * when the worktree is not there to tear down; else why, so the caller records it and its next attempt
  * runs the teardown again. */
-export async function runWorktreeTeardown(root: string, raw: unknown, workspace: WorkerWorkspace): Promise<string | undefined> {
+export async function runWorktreeTeardown(root: string, raw: unknown, workspace: OwnedWorkerWorkspace): Promise<string | undefined> {
   const plan = resolveWorktreeSetup(raw);
   if (plan.kind === 'none') return undefined;
   if (plan.kind === 'invalid') return `invalid config: ${plan.issue}`;

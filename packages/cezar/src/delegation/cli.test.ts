@@ -1,6 +1,7 @@
 import { productIdentity } from '../home/identity.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';
+import { SHARED_ATTACH_REFUSAL, SHARED_BASELINE_REFUSAL } from '@open-mercato/cezar-contract/delegation';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -57,7 +58,7 @@ describe('bundled worker CLI', { timeout: 20_000 }, () => {
     const help = json();
     expect(help.code).toBe('invalid_input');
     expect(help.usage.operations).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'spawn', positionals: 1, required: expect.arrayContaining(['--baseline', '--request-id']) }),
+      expect.objectContaining({ name: 'spawn', positionals: 1, required: ['--request-id'], optional: expect.arrayContaining(['--baseline', '--workspace']) }),
       expect.objectContaining({ name: 'inspect', positionals: 1 }),
       expect.objectContaining({ name: 'collect', positionals: 1 }),
       expect.objectContaining({ name: 'wait' }),
@@ -316,6 +317,26 @@ describe('bundled worker CLI', { timeout: 20_000 }, () => {
     expect(json()).toMatchObject({ code: 'invalid_input', error: expect.stringContaining('missing') });
     await runWorkerCommand(['spawn', '--help'], {});
     expect(String(output.mock.calls.at(-1)?.[0])).toContain('--workflow');
+  });
+  it('spawns into a shared workspace with --workspace shared, and refuses --baseline or --attach with it (hearsay-tools/squawk#3819)', async () => {
+    const spawn = vi.spyOn(f.service, 'spawn');
+    expect(await runWorkerCommand(['spawn', '--workspace', 'shared', '--request-id', randomUUID(), 'review'], env)).toBe(0);
+    expect(spawn.mock.calls[0]?.[1]).toMatchObject({ workspace: 'shared', task: 'review' });
+    expect(spawn.mock.calls[0]?.[1].baseline).toBeUndefined();
+    expect(f.store.getRun(json().workerId)?.delegation).toMatchObject({ workspace: { kind: 'shared' } });
+    expect(await runWorkerCommand(['spawn', '--workspace', 'shared', '--baseline', 'parent-head', '--request-id', randomUUID(), 'review'], env)).toBe(1);
+    expect(json()).toEqual({ code: 'invalid_input', error: `spawn refused: ${SHARED_BASELINE_REFUSAL}` });
+    expect(await runWorkerCommand(['spawn', '--workspace', 'shared', '--attach', 'no-such-file', '--request-id', randomUUID(), 'review'], env)).toBe(1);
+    expect(json()).toEqual({ code: 'invalid_input', error: `spawn refused: ${SHARED_ATTACH_REFUSAL}` });
+    expect(await runWorkerCommand(['spawn', '--request-id', randomUUID(), 'work'], env)).toBe(1);
+    expect(json()).toEqual({ code: 'invalid_input', error: 'spawn is missing --baseline' });
+    expect(await runWorkerCommand(['spawn', '--workspace', 'nope', '--baseline', 'parent-head', '--request-id', randomUUID(), 'work'], env)).toBe(1);
+    expect(json()).toEqual({ code: 'invalid_input', error: 'spawn has invalid --workspace' });
+    expect(spawn).toHaveBeenCalledTimes(1);
+    await runWorkerCommand(['spawn', '--help'], {});
+    const help = String(output.mock.calls.at(-1)?.[0]);
+    expect(help).toContain('(--baseline <ref> | --workspace shared)');
+    expect(help).toContain('--workspace <isolated|shared>');
   });
   it('sends an explicit skill through the spawn transport', async () => {
     f.manager.setSkillCatalog(fixedSkillCatalog([{ id: 'worker-skill', name: 'Worker skill', scope: 'repo', path: join(f.root, '.agents/skills/worker-skill/SKILL.md') }]));

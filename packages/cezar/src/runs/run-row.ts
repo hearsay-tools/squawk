@@ -1,3 +1,4 @@
+import { ownsDirectory } from '@open-mercato/cezar-contract/delegation';
 import { toRunSummary } from '@open-mercato/cezar-contract/runs';
 
 import type { RunRowInput } from './run-database.ts';
@@ -72,7 +73,7 @@ export function encodeRunRow(run: RunRecord, data: string = JSON.stringify(run))
     clientRequestId: run.clientRequestId ?? null,
     groupId: run.groupId ?? null,
     worktreePath: materializedWorktreePath(run) ?? null,
-    branch: ownedBranch(run, worker?.workspace.branch),
+    branch: ownedBranch(run, worker && ownsDirectory(worker.workspace) ? worker.workspace.branch : undefined),
     baseBranch: run.baseBranch ?? null,
     data,
     summary: JSON.stringify(toRunSummary(run)),

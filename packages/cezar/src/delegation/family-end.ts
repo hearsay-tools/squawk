@@ -9,7 +9,7 @@
  */
 import { existsSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
-import type { WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
 import { projectPaths } from '../project-paths.ts';
 import { cleanupSafety, workerFamilyEnded } from '../runs/retention.ts';
 import { isLiveRecord } from '../runs/run-row.ts';
@@ -52,7 +52,7 @@ export async function releaseEndedWorkerBranches(repoRoot: string, store: Family
 
 /** Receipts live in the repository's shared Git directory: another checkout's are not this
  *  project's, and the read-only fallback directory's are left alone. */
-function inProject(repoRoot: string, workspace: WorkerWorkspace): boolean {
+function inProject(repoRoot: string, workspace: OwnedWorkerWorkspace): boolean {
   try {
     return workspace.path === join(projectPaths(realpathSync(repoRoot)).write, 'worktrees', workspace.ownerRunId);
   } catch { return false; }
@@ -61,7 +61,7 @@ function inProject(repoRoot: string, workspace: WorkerWorkspace): boolean {
 /** An orphan receipt's directory goes as an archived worker's does: only when it is clean, and only
  *  while still no run owns it. A process that works in it is not the worker's (ADR 0032). True once
  *  the directory is gone. */
-async function reclaimOrphanDirectory(repoRoot: string, store: FamilyEndStore, workspace: WorkerWorkspace): Promise<boolean> {
+async function reclaimOrphanDirectory(repoRoot: string, store: FamilyEndStore, workspace: OwnedWorkerWorkspace): Promise<boolean> {
   if (!existsSync(workspace.path)) return true;
   const assertOrphan = () => {
     if (store.getRun(workspace.ownerRunId)) throw new Error('The receipt has a run');
@@ -72,7 +72,7 @@ async function reclaimOrphanDirectory(repoRoot: string, store: FamilyEndStore, w
   return !existsSync(workspace.path);
 }
 
-async function releaseBranch(repoRoot: string, store: FamilyEndStore, workspace: WorkerWorkspace,
+async function releaseBranch(repoRoot: string, store: FamilyEndStore, workspace: OwnedWorkerWorkspace,
   run: RunRecord | undefined, claim: (runId: string) => (() => void) | null): Promise<boolean> {
   const release = run ? claim(run.id) : () => undefined;
   if (!release) return false;

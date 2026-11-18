@@ -1,4 +1,5 @@
 import type { LiveIndexCheck } from '../git-private-index.ts';
+import { SHARED_WORKSPACE_REFUSAL, ownsDirectory } from '@open-mercato/cezar-contract/delegation';
 import { engineOwnsRun } from '@open-mercato/cezar-contract/run-predicates';
 import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
 import { fallbackProjectWriteError } from '../project-paths.ts';
@@ -21,6 +22,17 @@ const workingDirectoryOf = (run: RunRecord, repoRoot: string): string | null =>
     ? repoRoot
     : worktreeOf(run);
 const NO_WORKTREE = 'no worktree — this task ran directly in the repo working tree';
+const SHARED_REFUSALS = {
+  read: `${SHARED_WORKSPACE_REFUSAL} — its changes show in the parent task`,
+  mutate: `${SHARED_WORKSPACE_REFUSAL} — commit and push from the parent task`,
+  publish: `${SHARED_WORKSPACE_REFUSAL} — open the pull request from the parent task`,
+  remove: `${SHARED_WORKSPACE_REFUSAL} — it has no worktree or branch to remove`,
+} as const;
+/** A worker that works in its parent's worktree has no checkout of its own to read, commit, publish or remove. */
+function sharedWorkspaceRefusal(run: RunRecord, intent: keyof typeof SHARED_REFUSALS): CheckoutRefusal | undefined {
+  if (run.delegation?.role !== 'worker' || ownsDirectory(run.delegation.workspace)) return undefined;
+  return { status: 409, body: { error: SHARED_REFUSALS[intent] } };
+}
 
 export type CheckoutIntent = 'read' | 'mutate' | 'publish' | 'remove' | 'open';
 export interface RunCheckoutHost {
@@ -86,15 +98,8 @@ export function runCheckout(
   const { root, store } = host;
   const run = store.getRun(id);
   if (!run) return { status: 404, body: { error: 'not found' } };
-  const refusal = intent === 'mutate' && run.worktreePath && fallbackProjectWriteError(run.worktreePath);
-  if (refusal) return { status: 409, body: { error: refusal } };
-  if (intent === 'mutate' && run.status === 'running') {
-    return { status: 409, body: { error: 'the agent is still working in this worktree' } };
-  }
-  if (intent === 'mutate') {
-    const blocker = autosaveCleanupBlocker(store.sourceDataDir(run.id), run.id);
-    if (blocker) return { status: 409, body: { error: blocker } };
-  }
+  const refusal = intent === 'mutate' ? mutateRefusal(store, run) : options.directory === 'working-directory' ? sharedWorkspaceRefusal(run, 'read') : undefined;
+  if (refusal) return refusal;
   if (options.directory === 'recorded-path-or-root') {
     return readCheckoutHandle(host, run, run.worktreePath ?? root);
   }
@@ -103,6 +108,15 @@ export function runCheckout(
     return { status: 409, body: { error: NO_WORKTREE } };
   }
   return intent === 'read' ? readCheckoutHandle(host, run, directory) : { run, directory };
+}
+
+/** Why a commit or push in the run's checkout is refused now. */
+function mutateRefusal(store: RunCheckoutHost['store'], run: RunRecord): CheckoutRefusal | undefined {
+  const shared = sharedWorkspaceRefusal(run, 'mutate');
+  if (shared) return shared;
+  const error = (run.worktreePath && fallbackProjectWriteError(run.worktreePath)) ||
+    (run.status === 'running' ? 'the agent is still working in this worktree' : autosaveCleanupBlocker(store.sourceDataDir(run.id), run.id));
+  return error ? { status: 409, body: { error } } : undefined;
 }
 
 function readCheckoutHandle(host: RunCheckoutHost, run: RunRecord, directory: string | null): ReadHandle<ReadDirectoryRule> & ReadActions {
@@ -117,6 +131,8 @@ function readCheckoutHandle(host: RunCheckoutHost, run: RunRecord, directory: st
 function publishCheckout({ store, manager }: RunCheckoutHost, id: string): CheckoutRefusal | ClaimedHandle {
   const held = store.getRun(id);
   if (!held) return { status: 404, body: { error: 'not found' } };
+  const shared = sharedWorkspaceRefusal(held, 'publish');
+  if (shared) return shared;
   const refusal = held.worktreePath && fallbackProjectWriteError(held.worktreePath);
   if (refusal) return { status: 409, body: { error: refusal } };
   if (manager.isActive(id)) return { status: 409, body: { error: 'run is still active — wait for the review gate' } };
@@ -158,6 +174,8 @@ function removeCheckout({ store, manager }: RunCheckoutHost, id: string, options
   const run = store.getRun(id);
   if (!run) return { status: 404, body: { error: 'not found' } };
   if (options.checksActive && manager.isActive(id)) return active;
+  const shared = options.deletion === 'record' ? undefined : sharedWorkspaceRefusal(run, 'remove');
+  if (shared) return shared;
   const refused = removalRefusal(store, run, id, options.deletion);
   if (refused) return { status: 409, body: { error: refused } };
   if (isUsageLimitHold(run)) return { status: 409, body: { error: 'run is waiting on a usage-limit hold — choose Don’t resume in the task’s usage-limit hint, then retry' } };
