@@ -161,7 +161,7 @@ export function subagentCells(runners: readonly RunnerId[]): void {
 export function subagentGuard(file: (runner: RunnerId) => string): void {
   describe('native subagent cells (hearsay-tools/cezarion#2431)', () => {
     it('runs every runner\'s subagent cells from its own file', () => {
-      for (const runner of RUNNER_IDS) expect(existsSync(new URL(`./${file(runner)}`, import.meta.url)), file(runner)).toBe(true);
+      for (const runner of RUNNER_IDS) expect(existsSync(new URL(`../runners/${runner}/${file(runner)}`, import.meta.url)), file(runner)).toBe(true);
     });
     it('exempts a runner from every row exactly when its wire reports no subagents to wait on', () => {
       for (const runner of RUNNER_IDS) {

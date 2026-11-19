@@ -11,7 +11,8 @@ export const OWNER_POLICIES: Record<string, OwnerPolicy> = {
     "ignores": [
       "packages/cezar/src/**/*.test.ts",
       "packages/cezar/src/**/*.testkit.ts",
-      "packages/cezar/src/core/**"
+      "packages/cezar/src/core/**",
+      "packages/cezar/src/runners/*/**"
     ]
   },
   "ask-requested-read-outside-projection": {
@@ -209,11 +210,6 @@ export const OWNER_POLICIES: Record<string, OwnerPolicy> = {
     ],
     "ignores": [
       "packages/cezar/src/runners/*/**",
-      "packages/cezar/src/core/claude-*",
-      "packages/cezar/src/core/codex-*",
-      "packages/cezar/src/core/omp-*",
-      "packages/cezar/src/core/opencode-*",
-      "packages/cezar/src/core/pi-*",
       "packages/cezar/src/**/*.test.ts",
       "packages/cezar/src/**/*.testkit.ts"
     ]

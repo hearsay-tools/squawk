@@ -46,7 +46,7 @@ export const runSearchFields = ownerRule(OWNER_POLICIES['run-search-field-list-o
 
 export const RUNNER_CLASSES = ['ClaudeCliRunner', 'CodexAppServerRunner', 'OmpRunner', 'OpencodeServerRunner', 'PiRunner'];
 export function concreteRunnerModule(specifier: string): boolean {
-  return /(^|\/)core\/[a-z0-9-]+-runner(\.ts|\.js)?$/.test(specifier) && !/\/agent-runner(\.ts|\.js)?$/.test(specifier);
+  return /(^|\/)(?:core|runners\/[a-z0-9-]+)\/[a-z0-9-]+-runner(\.ts|\.js)?$/.test(specifier) && !/\/agent-runner(\.ts|\.js)?$/.test(specifier);
 }
 const runnerSource = (node: EsNode | undefined) => concreteRunnerModule(literalString(node) ?? '');
 function allowedImportType(node: EsNode): boolean {

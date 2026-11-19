@@ -12,8 +12,9 @@ describe('harness parity part registration', () => {
   it('registers every criterion and runner exactly once across its part files', () => {
     const parts = Object.keys(HARNESS_PARITY_GROUPS) as HarnessParityPart[];
     const expectedFiles = RUNNER_IDS.flatMap(runner => parts.map(part => harnessParityFile(runner, part)));
-    const actualFiles = readdirSync(new URL('.', import.meta.url)).filter(file =>
-      RUNNER_IDS.some(runner => file.startsWith(`harness-${runner}-`) && file.endsWith('-parity.test.ts')));
+    const actualFiles = RUNNER_IDS.flatMap(runner =>
+      readdirSync(new URL(`../runners/${runner}/`, import.meta.url)).filter(file =>
+        file.startsWith(`harness-${runner}-`) && file.endsWith('-parity.test.ts')));
     expect(actualFiles.sort()).toEqual(expectedFiles.sort());
     for (const runner of RUNNER_IDS) {
       const all = harnessParityRegistrations(runner);

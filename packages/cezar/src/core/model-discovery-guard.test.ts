@@ -26,9 +26,11 @@ interface ModelDiscoveryExemption {
 export const MODEL_DISCOVERY_EXEMPTIONS: readonly ModelDiscoveryExemption[] = [];
 
 const here = dirname(fileURLToPath(import.meta.url));
+const runnersDir = join(here, '..', 'runners');
 const exempt = (runner: RunnerId): boolean => MODEL_DISCOVERY_EXEMPTIONS.some((e) => e.runner === runner);
 const required = RUNNER_IDS.filter((runner) => !exempt(runner));
 const adapterModule = (runner: RunnerId): string => `${runner}-model-catalog.ts`;
+const adapterPath = (runner: RunnerId): string => join(runnersDir, runner, adapterModule(runner));
 const discoverExport = (runner: RunnerId): string =>
   `discover${runner.charAt(0).toUpperCase()}${runner.slice(1)}Models`;
 
@@ -49,8 +51,9 @@ describe('host model discovery guard (AGENT_PROTOCOL.md §10)', () => {
 
   it.each(required)('%s ships a bounded catalog adapter module exporting discover<Runner>Models', async (runner) => {
     const file = adapterModule(runner);
-    expect(existsSync(join(here, file)), `packages/cezar/src/core/${file} is missing`).toBe(true);
-    const mod = (await import(/* @vite-ignore */ `./${file}`)) as Record<string, unknown>;
+    const path = adapterPath(runner);
+    expect(existsSync(path), `packages/cezar/src/runners/${runner}/${file} is missing`).toBe(true);
+    const mod = (await import(/* @vite-ignore */ `../runners/${runner}/${file}`)) as Record<string, unknown>;
     expect(typeof mod[discoverExport(runner)], `${file} must export ${discoverExport(runner)}`).toBe('function');
   });
 

@@ -1,4 +1,4 @@
 {
-  "$comment": "Branches on a runner id outside packages/cezar/src/core/, each with its count in that file and a reason (cez/runner-id-branch). The list only shrinks: npm run lint refuses a stale entry and CI refuses a new one.",
+  "$comment": "Branches on a runner id outside packages/cezar/src/core/ and packages/cezar/src/runners/, each with its count in that file and a reason (cez/runner-id-branch). The list only shrinks: npm run lint refuses a stale entry and CI refuses a new one.",
   "entries": []
 }
