@@ -51,8 +51,12 @@ describe('backend-detect handles an absent pi CLI', () => {
   beforeEach(() => {
     delete process.env.CEZ_DRY_RUN; // real probe, not the mock short-circuit
     process.env.CEZ_PI_BIN = join(tmpdir(), 'cez-pi-does-not-exist-xyz');
+    // `productEnv` reads the HSQ_* names first; clear them so the CEZ_* settings above decide.
+    vi.stubEnv('HSQ_DRY_RUN', undefined);
+    vi.stubEnv('HSQ_PI_BIN', undefined);
   });
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (saved.bin === undefined) delete process.env.CEZ_PI_BIN;
     else process.env.CEZ_PI_BIN = saved.bin;
     if (saved.dry === undefined) delete process.env.CEZ_DRY_RUN;

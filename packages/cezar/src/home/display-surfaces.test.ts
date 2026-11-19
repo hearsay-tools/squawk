@@ -35,6 +35,9 @@ it('uses the same identity in serve banners, subcommand help and the missing-bui
 it('uses the preferred dry-run setting name for every agent', async () => {
   vi.stubEnv('HSQ_DRY_RUN', '1');
   vi.stubEnv('CEZ_DRY_RUN', undefined);
+  // An explicit bin override outranks the Codex and OpenCode mocks, so it must not leak in.
+  vi.stubEnv('HSQ_CODEX_BIN', undefined);
+  vi.stubEnv('HSQ_OPENCODE_BIN', undefined);
   const checks = await detectEnvironment();
   expect(checks.filter(check => !['gh', 'git'].includes(check.name)).map(check => check.version))
     .toEqual(Array(RUNNER_IDS.length).fill('mock (HSQ_DRY_RUN=1)'));
