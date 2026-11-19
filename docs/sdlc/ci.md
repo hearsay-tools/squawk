@@ -80,13 +80,17 @@ wait discipline and stale entries). It also runs typecheck (not for a docs-only 
 spec statuses (`check-spec-status.cjs`), CI's function complexity ratchet and the
 [GitHub patch limits](#github-patch-limits). It reports the [test line budget](#test-line-budget)
 and never fails on it. Its exit code
-is non-zero on a failing test, a missing test result, a lint finding, a type error, a bare citation, a new clone,
+is non-zero on a failing test, a missing direct test result (below), a lint finding, a type error, a bare citation, a new clone,
 a spec without a valid status, a changed function that grew over the complexity limit,
 or a committed file diff over the per-file patch limit or with a NUL byte.
 
-- The Squeal wait is bounded at 2 minutes (`--wait-ms`). A changed file with no test result
-  when it ends fails the gate. The report names the files and the command that gets their
-  results. Get them, then run the gate again.
+- The Squeal wait is bounded at 2 minutes (`--wait-ms`). The gate waits first for the edited test
+  files and the test files that import or name a changed file directly, then for the rest of
+  Squeal's selection. It has two outcomes for a test file with no result when the wait ends: an
+  edited or direct test file fails the gate, and the report names it and the command that gets
+  its result; any other selected test file is a `pending` line that gives the count, the host
+  load and Squeal's causes, does not fail the gate, and leaves the file to CI
+  (hearsay-tools/squawk#3940).
 - When Squeal's lint has not finished for the changed files, or is off, the command runs
   `npm run lint` and takes its verdict.
 - The complexity check is CI's `complexity-gate.mjs` against the base. When the branch's
@@ -125,8 +129,9 @@ the worker tests (`packages/cezar/src/**/worker-*.test.ts`). It runs at `"pause"
 runs these files when the agent ends its turn, and their verdicts arrive with the next
 prompt. Between edits, no message about these files is not a pass, and
 `squeal status --wait` does not hold for them. `squeal run run-loop <path>... --wait 60000`
-runs the group's files that the paths select now. `npm run prepr` names these files
-as files with no result, and fails, when the agent has not paused since the change.
+runs the group's files that the paths select now. When the agent has not paused since
+the change, `npm run prepr` fails on these files if they are edited or read a changed file
+directly, and reports the rest as pending ([§ Before the PR](#before-the-pr)).
 This is a three-day trial (hearsay-tools/squawk#3551); revert the group to return to edit-time runs.
 
 The final six-command gate and full-suite runs belong in CI. Do not run the
@@ -171,11 +176,10 @@ not a final gate. `.ai/agentic.config.json` records CI's complete final command 
 
 **A wait for a verdict has a bound.** Squeal's skill says to wait again when
 `squeal status --wait` returns on timeout. In this repo, do not wait again. `npm run prepr`
-waits at most 2 minutes for the changed files, then names the files with no result (the
-first ten and a count when more) and fails. Lint that has not finished runs as `npm run lint`.
+waits at most 2 minutes, with the two outcomes [§ Before the PR](#before-the-pr) names.
 
-Get the named files' verdicts, then run `npm run prepr` again before the push. A missing
-verdict is not a pass, and CI's shards do not replace it before the push. To get one test file's verdict
+When it fails on files with no result, get their verdicts, then run `npm run prepr` again before
+the push. To get one test file's verdict
 now, run `squeal run tests <file> --wait 60000` (`run-loop` for a parity or worker file);
 for one test in it, `squeal status --wait 60000 <file> --check '<name>'`, and confirm it
 lists passed tests, not only skipped ones. With no daemon, run `squeal start` first.

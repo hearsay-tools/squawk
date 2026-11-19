@@ -3,10 +3,13 @@
 // § Before the PR). It reads Squeal's results for the changed files and for lint, and runs
 // what Squeal does not cover: repository lint checks, typecheck, citations, clones, spec statuses,
 // the complexity ratchet and GitHub's per-file patch limits, and reports the test line budget.
-// A Squeal result that is not complete is not a pass. CI runs everything else.
+// Edited test files and the test files that read a changed file directly need a current verdict;
+// the rest of the selection with no result is reported as pending, and CI decides it.
 import { spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { directImporters } from './direct-importers.mjs';
 import { nodeTestReaders } from './test-inputs.mjs';
 
 const require = createRequire(import.meta.url);
@@ -16,31 +19,34 @@ const { SECTION_LIMIT, countTestLines, requirement } = require('../.github/scrip
 
 export const SQUEAL_WAIT_MS = 120_000;
 
-/** Judge one `squeal status --wait <ms> <paths> --json` result (exit code and parsed stdout). */
-export function judgeSqueal(exitCode, status, ignorePath = () => false, lintExpected = false) {
+/**
+ * Judge one `squeal status --wait <ms> <paths> --json` result (exit code and parsed stdout). A
+ * file with no result is missing when `isDirect` holds for it, and pending otherwise.
+ */
+export function judgeSqueal(exitCode, status, ignorePath = () => false, lintExpected = false, isDirect = () => true) {
   const selection = status?.selection ?? {};
   // Browser specs are CI's: Squeal runs them only on request.
   const files = (selection.testFiles ?? []).filter(f => !f.path.endsWith('.e2e.ts'));
   const unmatched = (selection.unmatched ?? []).map(u => u?.path ?? String(u)).filter(p => !ignorePath(p));
   const failed = files.filter(f => f.state === 'current' && !['pass', 'skip'].includes(f.verdict)).map(f => f.path);
   const failures = selection.verdict?.failures ?? {};
-  const missing = missingResults(selection, files);
+  const notCurrent = files.filter(f => f.state !== 'current');
+  const missing = [...discoveryMissing(selection), ...notCurrent.filter(f => isDirect(f.path)).map(f => f.path)];
+  const pending = notCurrent.filter(f => !isDirect(f.path)).map(f => ({ path: f.path, reason: f.reason }));
   const lint = lintOf(status, lintExpected);
   // A failure keeps the files with no result and the unmatched paths, so the report names them too.
   if (exitCode === 1 || failed.length || failures.tests || failures.testFiles || failures.setups || lint.failing) {
-    return { state: 'fail', failed, missing, unmatched, lint };
+    return { state: 'fail', failed, missing, pending, unmatched, lint };
   }
   // Lint that has not finished is not judged here: prepr runs `npm run lint` for it.
-  return { state: missing.length || unmatched.length ? 'incomplete' : 'pass', failed: [], missing, unmatched, lint, count: files.length };
+  const state = missing.length || unmatched.length ? 'incomplete' : 'pass';
+  return { state, failed: [], missing, pending, unmatched, lint, count: files.length - pending.length };
 }
 
-/** What has no result yet: test discovery and the selected test files that are not current. */
-function missingResults(selection, files) {
-  // Before Squeal lists the revision's test files, current cached files are not the whole selection.
+/** Test discovery with no result yet: before Squeal lists the revision's test files, current cached files are not the whole selection. */
+function discoveryMissing(selection) {
   const unlisted = selection.verdict?.unlisted === true || (selection.result === 'none' && ['unlisted', 'unsynced'].includes(selection.reason));
-  return [
-    ...(unlisted ? [`test discovery: Squeal has not listed the test files of the current revision (${selection.reason ?? 'unlisted'})`] : []),
-    ...files.filter(f => f.state !== 'current').map(f => f.path)];
+  return unlisted ? [`test discovery: Squeal has not listed the test files of the current revision (${selection.reason ?? 'unlisted'})`] : [];
 }
 
 // lintExpected: a changed file is one Squeal lints, so a lint run that has not started is not a clean one.
@@ -95,22 +101,44 @@ export const realIo = {
   run,
   ...gitIo(),
   nodeTests: paths => nodeTestReaders(paths, process.cwd()),
+  directImporters: (testFiles, changed) => directImporters(process.cwd(), testFiles, changed),
+  load: () => ({ load: os.loadavg()[0], cpus: os.availableParallelism() }),
+  now: () => Date.now(),
 };
 
-export async function squealChecks(paths, waitMs, io = realIo) {
-  const lintExpected = paths.some(p => LINTED.test(p));
-  const ignore = p => p.endsWith('.e2e.ts') || isDocsPath(p);
-  const wait = await io.run('squeal', ['status', '--wait', String(waitMs), '--json', ...paths], { timeout: waitMs + KILL_GRACE_MS });
+/** One `squeal status --json` call, waiting up to `waitMs` when it is positive. `stop` is the result when it ends the check. */
+async function squealStatus(paths, waitMs, io) {
+  const wait = waitMs > 0 ? ['--wait', String(waitMs)] : [];
+  const r = await io.run('squeal', ['status', ...wait, '--json', ...paths], { timeout: waitMs + KILL_GRACE_MS });
   let status;
-  try { status = JSON.parse(wait.out); } catch { status = undefined; }
-  if (wait.code === 127) return { daemon: false };
+  try { status = JSON.parse(r.out); } catch { status = undefined; }
+  if (r.code === 127) return { stop: { daemon: false } };
   // Output that is not Squeal's JSON (a timeout kill, a crash) is an unknown result, not an absent daemon.
   if (status === undefined) {
     const lint = { failing: 0, unfinished: 0, unavailable: 'squeal status was unreadable' };
-    return { daemon: true, state: 'unreadable', exit: wait.code, output: tail(wait.out + wait.err, 5), lint };
+    return { stop: { daemon: true, state: 'unreadable', exit: r.code, output: tail(r.out + r.err, 5), lint } };
   }
-  if (!daemonAlive(status)) return { daemon: false };
-  return { daemon: true, ...judgeSqueal(wait.code, status, ignore, lintExpected) };
+  if (!daemonAlive(status)) return { stop: { daemon: false } };
+  return { code: r.code, status };
+}
+
+/**
+ * Squeal's verdict on the changed paths within `waitMs`. It first waits on the edited test files and
+ * the test files that read a changed file directly, then on the whole selection with the time left.
+ */
+export async function squealChecks(paths, waitMs, io = realIo) {
+  const lintExpected = paths.some(p => LINTED.test(p));
+  const ignore = p => p.endsWith('.e2e.ts') || isDocsPath(p);
+  const deadline = io.now() + waitMs;
+  const first = await squealStatus(paths, 0, io);
+  if (first.stop) return first.stop;
+  const selected = (first.status.selection?.testFiles ?? []).filter(f => !ignore(f.path));
+  const direct = new Set(io.directImporters(selected.map(f => f.path), paths));
+  const directWaiting = selected.filter(f => direct.has(f.path) && f.state !== 'current').map(f => f.path);
+  if (directWaiting.length) await squealStatus(directWaiting, Math.max(0, deadline - io.now()), io);
+  const last = await squealStatus(paths, Math.max(0, deadline - io.now()), io);
+  if (last.stop) return last.stop;
+  return { daemon: true, load: io.load(), ...judgeSqueal(last.code, last.status, ignore, lintExpected, p => direct.has(p)) };
 }
 
 /** True when Squeal's lint result does not cover every changed file: prepr then runs `npm run lint`. */
@@ -136,7 +164,7 @@ export const loweredNotes = out => out.split('\n').filter(line => line.startsWit
 export function squealLines(squeal, waitMs) {
   if (squeal.state === 'pass') {
     const lint = lintUnfinished(squeal.lint) ? '' : '; lint clean';
-    return [entry(true, `Squeal: ${squeal.count} affected test file(s) current and passing${lint}`)];
+    return [entry(true, `Squeal: ${squeal.count} affected test file(s) current and passing${lint}`), ...pendingLines(squeal)];
   }
   if (squeal.state === 'unreadable') {
     return [entry(false, `Squeal: \`squeal status --wait\` exited ${squeal.exit} without a readable result, so the test and lint results are unknown. Run \`squeal status\`, then prepr again.${squeal.output ? `\n${squeal.output}` : ''}`)];
@@ -148,14 +176,31 @@ export function squealLines(squeal, waitMs) {
     lines.push(entry(false, `Squeal: ${what} (\`squeal failures\`, \`squeal status\`)`));
   }
   if (squeal.missing?.length) {
-    lines.push(entry(false, `Squeal had no test result within ${Math.round(waitMs / 1000)} s for: ${names(squeal.missing)}. `
+    lines.push(entry(false, `Squeal had no result within ${Math.round(waitMs / 1000)} s for these edited test files or direct readers of a changed file: ${names(squeal.missing)}. `
       + 'Get the results with `squeal status --wait 60000 <paths>` (parity and worker tests: `squeal run run-loop <paths> --wait 60000`), then run prepr again.'));
   }
   if (squeal.unmatched?.length) {
     lines.push(entry(false, `these changed paths select no test file: ${names(squeal.unmatched)}. `
       + 'Waiting does not change that: add a test that reads each path, or declare its reader in `squeal.config.json` `inputs`.'));
   }
-  return lines;
+  return [...lines, ...pendingLines(squeal)];
+}
+
+const pendingLines = squeal => (squeal.pending?.length ? [{ ok: true, text: pendingLine(squeal.pending, squeal.load) }] : []);
+
+const CPU_WAIT = /^queued, waiting for CPU/;
+
+/** The non-failing line for transitively affected test files with no result, counted by Squeal's cause. */
+export function pendingLine(pending, { load, cpus } = {}) {
+  const causes = new Map();
+  for (const { reason } of pending) {
+    const cause = CPU_WAIT.test(reason ?? '')
+      ? `queued waiting for CPU at load ${Number.isFinite(load) ? load.toFixed(1) : 'unknown'} on ${cpus ?? 'unknown'} CPUs`
+      : (reason ?? 'no cause given').split(':')[0];
+    causes.set(cause, (causes.get(cause) ?? 0) + 1);
+  }
+  const counted = [...causes].map(([cause, n]) => `${n} ${cause}`).join('; ');
+  return `- pending: ${pending.length} transitively affected test file(s) have no result (${counted}); CI decides. \`squeal status --full\` gives each cause.`;
 }
 
 const names = list => [...list.slice(0, 10), ...(list.length > 10 ? [`and ${list.length - 10} more`] : [])].join(', ');

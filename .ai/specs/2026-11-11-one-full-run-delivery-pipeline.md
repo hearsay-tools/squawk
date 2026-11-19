@@ -66,9 +66,11 @@ Two facts decide the shape:
    stale entries), typecheck, citations, clones, spec statuses, CI's complexity ratchet and
    GitHub's per-file patch limits (hearsay-tools/cezarion#3338, hearsay-tools/squawk#3821).
    It runs before the PR opens and before every push after it opens.
-2. The Squeal wait bound in this command is 2 minutes. When the bound expires, a changed
-   file with no test result fails the command, which names it. Lint that has not finished
-   is run with `npm run lint` (hearsay-tools/squawk#3821).
+2. The Squeal wait bound in this command is 2 minutes. When the bound expires, an edited test
+   file or a test file that reads a changed file directly with no result fails the command,
+   which names it; any other selected test file with no result is reported as pending, and
+   CI decides it (hearsay-tools/squawk#3940). Lint that has not finished is run with
+   `npm run lint` (hearsay-tools/squawk#3821).
 3. Local `test:parity`, local browser specs and any coverage run outside the quality check
    leave the list of duties. CI runs them.
 4. The changed-function quality check (`.ai/skills/check-code-quality/`) runs beside the
