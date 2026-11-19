@@ -29,10 +29,12 @@ coverage to a separate issue. Where the fix lives decides where its row runs
   scenario runner shows one value of each. Every other declared value names the
   unit tests that drive shared code with it, in `FACT_VALUE_TESTS`. A fix whose
   behavior depends on such a value adds or extends one of those unit tests.
-- **A new runner** declares its facts in `runners/<id>/facts.ts`, its model data in
+- **A new runner** declares its facts in `runners/<id>/facts.ts`, its spec support in
+  `runners/<id>/spec-support.ts`, its host probe in `runners/<id>/detection.ts`, its terminal
+  command and install source in `runners/<id>/cli.ts`, its model data in
   `runners/<id>/models.ts`, its native config files in `runners/<id>/config-files.ts`, its
   definition in `runners/<id>/definition.ts` and one line in `runners/built-in.ts`; its cockpit facts in
-  `RUNNER_COCKPIT_FACTS` and its terminal command in `RUNNER_CLI`. When it adds a value
+  `RUNNER_COCKPIT_FACTS`. When it adds a value
   that no runner declared before, it also adds that value's unit tests to
   `FACT_VALUE_TESTS`.
 
@@ -206,7 +208,7 @@ Squawk is not married to one vendor. Every agent step runs through a single
 A bookkeeping call, such as the task namer, sets `AgentRunSpec.minimal`. The runner then
 turns off as much of the user's and the project's setup as it can: hooks, plugins, extensions,
 skills, context files, MCP servers and session saving. Auth and model selection stay. What each
-runner turns off differs. Its `*_SPEC_SUPPORT.minimal` row names its flags and what still loads:
+runner turns off differs. Its `*_SPEC_SUPPORT.minimal` row (`runners/<id>/spec-support.ts`) names its flags and what still loads:
 
 - **Claude Code:** `--safe-mode --disable-slash-commands --no-session-persistence`. Not
   `--bare`, which accepts only API-key auth.
