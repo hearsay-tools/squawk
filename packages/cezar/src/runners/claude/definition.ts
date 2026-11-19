@@ -2,6 +2,7 @@ import { defineRunner } from '../../core/runner-definition.ts';
 import { CLAUDE_FACTS } from './facts.ts';
 import { CLAUDE_MODELS } from './models.ts';
 import { CLAUDE_CONFIG_FILES } from './config-files.ts';
+import { CLAUDE_EXTRA_TOOLS } from './extra-tools.ts';
 
 /** The Claude runner. */
 export const claudeRunner = defineRunner({
@@ -15,5 +16,5 @@ export const claudeRunner = defineRunner({
   loadModelCatalog: async () => (await import('../../core/claude-model-catalog.ts')).discoverClaudeModels,
   loadSkillCatalog: async () => (await import('../../core/claude-skill-catalog.ts')).discoverClaudeSkills,
   configFiles: CLAUDE_CONFIG_FILES,
-  extraTools: [],
+  extraTools: CLAUDE_EXTRA_TOOLS,
 });

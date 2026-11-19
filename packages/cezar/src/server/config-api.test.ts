@@ -12,6 +12,9 @@ import type { RunManager } from '../workflows/run.ts';
 import { createApp } from './server.ts';
 import { disableRemoteSettings, enableRemoteSettings } from '../remote-settings.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 /**
  * `GET/PUT /api/v1/config` (R6 Step 1.5 — Settings → Agents). The contract under

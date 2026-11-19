@@ -2,6 +2,7 @@ import { defineRunner } from '../../core/runner-definition.ts';
 import { PI_FACTS } from './facts.ts';
 import { PI_MODELS } from './models.ts';
 import { PI_CONFIG_FILES } from './config-files.ts';
+import { PI_EXTRA_TOOLS } from './extra-tools.ts';
 
 /** The Pi runner. */
 export const piRunner = defineRunner({
@@ -15,8 +16,5 @@ export const piRunner = defineRunner({
   loadModelCatalog: async () => (await import('../../core/pi-model-catalog.ts')).discoverPiModels,
   loadSkillCatalog: async () => (await import('../../core/pi-skill-catalog.ts')).discoverPiSkills,
   configFiles: PI_CONFIG_FILES,
-  // The trio still marks the default list (hearsay-tools/cezarion#75). pi itself gets no --tools
-  // allowlist for it (hearsay-tools/cezarion#1305): the default-tools extension activates these
-  // names with the built-ins, so MCP and other extension tools stay callable.
-  extraTools: ['Subagent', 'SubagentSupervisor', 'SubagentWait'],
+  extraTools: PI_EXTRA_TOOLS,
 });

@@ -12,6 +12,9 @@ import { previewRefusal } from '../ci-wait/errors.ts';
 import { listAgentConfig } from '../agent-config/service.ts';
 import { RunStore } from '../runs/store.ts';
 import { createApp } from '../server/server.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 it('names the product in an API refusal and installer label without changing their contracts', async () => {
   const { displayName: name, command } = productIdentity();

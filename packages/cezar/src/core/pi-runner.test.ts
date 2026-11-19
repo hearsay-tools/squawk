@@ -31,6 +31,13 @@ import { squawkToolNames } from '../ci-wait/tools.js';
 import { appendTurnText } from '../workflows/run.js';
 import { allowedToolsForStep } from '../workflows/types.js';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
+import { registerRunner } from './runner-registry.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+
+registerRunner(piRunner);
+// A worker inherits the Claude step default from a Claude parent.
+registerRunner(claudeRunner);
 
 /**
  * The `pi` runner (#387): a new AgentBackend slotted into the runner seam as

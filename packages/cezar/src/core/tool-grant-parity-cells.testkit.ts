@@ -5,7 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { TOOL_GRANT_KINDS, type AgentEvent, type RunnerId, type ToolGrant } from './agent-runner.ts';
 import { driveSeam } from './harness-parity-core.testkit.ts';
-import { allowedToolsForStep } from '../workflows/types.ts';
+import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.ts';
+import { extraToolRows } from './runner-fact-rows.testkit.ts';
 
 /**
  * The Tool-list kinds case table (.ai/specs/TEMPLATE.md § Case tables) as cells on every runner's native
@@ -34,6 +35,9 @@ export type ToolGrantCase = {
 };
 
 const stepDefault = (backend: RunnerId): string[] => allowedToolsForStep(undefined, backend);
+/** Another runner's step default, from its data file: a per-runner test registers only its own
+ *  runner, so the registry cannot answer for the other one. */
+const otherStepDefault = (backend: RunnerId): string[] => [...DEFAULT_ALLOWED_TOOLS, ...extraToolRows()[backend]];
 
 export const TOOL_GRANT_CASES: readonly ToolGrantCase[] = [
   { id: 'unset', name: 'TG1 an unset grant', grant: () => ({ kind: 'unset' }) },
@@ -41,7 +45,7 @@ export const TOOL_GRANT_CASES: readonly ToolGrantCase[] = [
   {
     id: 'inherited',
     name: 'TG3 a list inherited from another runner\'s default',
-    grant: backend => ({ kind: 'inherited', tools: stepDefault(backend === 'claude' ? 'pi' : 'claude') }),
+    grant: backend => ({ kind: 'inherited', tools: otherStepDefault(backend === 'claude' ? 'pi' : 'claude') }),
   },
   { id: 'explicit-copy', name: 'TG4 a hand-written copy of the default', grant: backend => ({ kind: 'explicit', tools: stepDefault(backend) }) },
   { id: 'extra-built-in', name: 'TG5 the default plus a built-in', grant: backend => ({ kind: 'explicit', tools: [...stepDefault(backend), 'WebFetch'] }) },

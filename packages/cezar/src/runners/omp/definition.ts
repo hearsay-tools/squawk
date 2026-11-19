@@ -2,6 +2,7 @@ import { defineRunner } from '../../core/runner-definition.ts';
 import { OMP_FACTS } from './facts.ts';
 import { OMP_MODELS } from './models.ts';
 import { OMP_CONFIG_FILES } from './config-files.ts';
+import { OMP_EXTRA_TOOLS } from './extra-tools.ts';
 
 /** The OMP runner. */
 export const ompRunner = defineRunner({
@@ -18,7 +19,5 @@ export const ompRunner = defineRunner({
   loadModelCatalog: async () => (await import('../../core/omp-model-catalog.ts')).discoverOmpModels,
   loadSkillCatalog: async () => (await import('../../core/omp-skill-catalog.ts')).discoverOmpSkills,
   configFiles: OMP_CONFIG_FILES,
-  // R1 (rulings): find and ast_grep are gated behind settings that default off, and a --tools
-  // list naming an unavailable built-in exits 2, so they cannot be in the zero-config default.
-  extraTools: ['todo', 'lsp', 'ast_edit', 'task', 'wait'],
+  extraTools: OMP_EXTRA_TOOLS,
 });
