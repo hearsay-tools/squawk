@@ -152,6 +152,9 @@ describe('removeOwnedWorkspace verified retryable destruction', { timeout: WORKS
     expect(retry).toMatchObject({ state: 'incomplete', remaining: ['branch'], work: { uncommittedFiles: 0, commits: 1 } });
     expect(retry.error).toBe(describeWork(workspace.ownerRunId, { uncommittedFiles: 0, commits: 1 }));
     expect(git(root, 'rev-parse', workspace.branch)).toBe(tip);
+    // An allowed discard deletes it from the same checkpoint (hearsay-tools/squawk#3553).
+    expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, { discardWork: true })).toMatchObject({ state: 'complete', remaining: [] });
+    expect(git(root, 'branch', '--list', workspace.branch)).toBe('');
   });
 
   it('keeps a stranded branch reset to its baseline, whose reflog still records worker commits (hearsay-tools/cezarion#905)', async () => {

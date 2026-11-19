@@ -280,9 +280,9 @@ and no worker of the family is live or being destroyed. A worker at `review` cou
 settled once its family has ended. Explicit `worker destroy` of C or U work refuses and names
 the work in its result (`work`, with the uncommitted file and commit counts), before it stops the
 worker; `--discard-work` (the cockpit's **Discard work and clean up**) removes it
-(hearsay-tools/squawk#3553). Its cleanup checkpoint records that the destroy found no work in the
-present checkout or was allowed to discard it (`forced`), so a retry deletes the branch at the
-tip it recorded; a moved tip is refused.
+(hearsay-tools/squawk#3553). Its cleanup checkpoint records an allowed discard (`forced`), so a
+retry deletes the branch at the tip it recorded; a moved tip is refused. Without one, every
+branch delete proves again that other refs keep the commits.
 
 Safety invariant: never remove a worktree or a branch holding commits that no other ref reaches,
 nor a directory with uncommitted changes, and never delete a receipt before its branch is gone

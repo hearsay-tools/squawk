@@ -2,7 +2,7 @@
 // or unlanded commits, unless its caller allows the discard.
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { appendFile, writeFile } from 'node:fs/promises';
+import { appendFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createOwnedWorkspace } from './workspace.ts';
@@ -87,6 +87,35 @@ describe('explicit destroy of a worker that holds work', { timeout: WORKSPACE_TE
     expect(branchExists(root, workspace.branch)).toBe(true);
     expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, { discardWork: true }))
       .toMatchObject({ state: 'complete', remaining: [] });
+    expect(branchExists(root, workspace.branch)).toBe(false);
+  });
+});
+
+describe('explicit destroy retries after a failed branch delete', { timeout: WORKSPACE_TEST_TIMEOUT_MS }, () => {
+  async function removedWithKeeper() {
+    const { root, workspace } = await worker();
+    await writeFile(join(workspace.path, 'tracked.txt'), 'worker'); git(workspace.path, 'commit', '-qam', 'worker');
+    const tip = git(workspace.path, 'rev-parse', 'HEAD');
+    git(root, 'branch', 'keeper', tip);
+    // A held ref lock makes the branch delete fail after the checkout is gone.
+    const lock = join(root, '.git/refs/heads', `${workspace.branch}.lock`);
+    await writeFile(lock, 'held');
+    expect(await removeOwnedWorkspace(root, workspace)).toMatchObject({ state: 'incomplete', remaining: ['branch'] });
+    expect(existsSync(workspace.path)).toBe(false);
+    await rm(lock);
+    git(root, 'branch', '-D', 'keeper');
+    return { root, workspace, tip };
+  }
+
+  it('proves the keepers again when the first attempt found no work, and refuses once they are gone', async () => {
+    const { root, workspace, tip } = await removedWithKeeper();
+    expect(await removeOwnedWorkspace(root, workspace)).toMatchObject({ state: 'incomplete', remaining: ['branch'], work: { uncommittedFiles: 0, commits: 1 } });
+    expect(git(root, 'rev-parse', workspace.branch)).toBe(tip);
+  });
+
+  it('deletes the branch on a retry that allows the discard', async () => {
+    const { root, workspace } = await removedWithKeeper();
+    expect(await removeOwnedWorkspace(root, workspace, undefined, undefined, undefined, { discardWork: true })).toMatchObject({ state: 'complete', remaining: [] });
     expect(branchExists(root, workspace.branch)).toBe(false);
   });
 });

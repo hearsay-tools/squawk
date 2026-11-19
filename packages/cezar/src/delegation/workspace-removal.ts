@@ -200,13 +200,15 @@ export async function removeOwnedWorkspace(repoRoot: string, value: OwnedWorkerW
           refuse(`branch ${workspace.branch}'s tip or reflog changed since cleanup started`);
           return undefined;
         }
-        // Removing the checkout deletes its uncommitted changes, and the forced branch delete its
-        // unlanded commits: every attempt checks both again, after the worker stopped.
+        // Removing the checkout deletes its uncommitted changes, and the branch delete its unlanded
+        // commits: every attempt checks both again, after the worker stopped. Without an allowed
+        // discard the checkpoint is not forced, so each branch delete proves its keepers again.
         if (!options.discardWork) {
           const found = { uncommittedFiles: await uncommittedFiles(workspace.path), commits: await unlandedCommits(args => mutationGit(repoRoot, args), workspace, current) };
           if (found.uncommittedFiles || found.commits) { refuseWork(found); return undefined; }
         }
-        checkpoint ??= { workspace, gitDir: receipt.gitDir, sha: current.sha, logFile: current.log.file, logHash: hash(current.log.content), phase: 'prepared', forced: true };
+        checkpoint ??= { workspace, gitDir: receipt.gitDir, sha: current.sha, logFile: current.log.file, logHash: hash(current.log.content), phase: 'prepared',
+          ...(options.discardWork ? { forced: true as const } : {}) };
         return checkpoint;
       }
 
@@ -272,12 +274,12 @@ export async function removeOwnedWorkspace(repoRoot: string, value: OwnedWorkerW
         refuseWork({ uncommittedFiles: 0, commits: await unlandedCommits(args => mutationGit(repoRoot, args), workspace, branch) });
       }
 
-      /** The refs the branch delete verifies. Unless the destroy removed the present checkout itself
-       * (`forced`, bound to the unchanged tip), prove on every attempt that no work is lost
+      /** The refs the branch delete verifies. Unless a discard is allowed (`forced` on the checkpoint,
+       * bound to the unchanged tip, or `discardWork` on this attempt), prove on every attempt that no work is lost
        * (hearsay-tools/squawk#911); the proof takes several Git calls, so the branch and its reflog
        * are read once more, last. Undefined when the proof fails or the branch changed. */
       async function deletionWitnesses(receipt: Receipt, checkpoint: Cleanup, current: Awaited<ReturnType<typeof verifyBranch>>) {
-        if (checkpoint.forced) return [];
+        if (checkpoint.forced || options.discardWork) return [];
         const witnesses = await keepers(current);
         if (!witnesses) { await refuseStranded(current); return undefined; }
         const last = await verifyBranch(repoRoot, workspace, receipt);

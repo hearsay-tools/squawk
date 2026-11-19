@@ -17,9 +17,9 @@ export const RECEIPT_CAP = 16_384;
 const fileIdentitySchema = z.object({ dev: z.number(), ino: z.number(), birthtimeMs: z.number() }).strict();
 const branchIdentitySchema = z.object({ file: fileIdentitySchema, prefixBytes: z.number().int().min(1).max(4096), prefixHash: z.string().length(64) }).strict();
 const receiptSchema = z.object({ workspace: ownedWorkspaceSchema, gitDir: z.string().min(1), branchIdentity: branchIdentitySchema.optional() }).strict();
-// `forced`: the branch goes at `sha` whatever it holds (hearsay-tools/squawk#911). The destroy that
-// wrote it found no work in the present checkout, or its caller allowed the work's discard
-// (hearsay-tools/squawk#3553). Without it, every attempt proves no work is lost.
+// `forced`: the branch goes at `sha` whatever it holds (hearsay-tools/squawk#911): the destroy that
+// wrote it was allowed to discard the work (hearsay-tools/squawk#3553). Without it, every attempt
+// proves no work is lost.
 export const cleanupSchema = z.object({ workspace: ownedWorkspaceSchema, gitDir: z.string(), sha: ownedWorkspaceSchema.shape.baselineSha,
   logFile: fileIdentitySchema, logHash: z.string().length(64), phase: z.enum(['prepared', 'worktree-removed', 'complete']),
   forced: z.literal(true).optional() }).strict();
