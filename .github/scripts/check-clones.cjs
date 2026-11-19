@@ -82,15 +82,15 @@ function sourceText(node) {
   return undefined;
 }
 
-/** Each relative module source in a file: its string offsets and its text. Unparsable code has none. */
+/** Each relative module source in a file: its string offsets and its text; null when the file does not parse. */
 function relativeSources(name, text) {
   const extension = path.extname(name);
   const plugins = /^\.[mc]?ts$/.test(extension) ? ['typescript'] : extension === '.tsx' ? ['typescript', 'jsx'] : ['jsx'];
   let program;
   try {
-    program = parse(text, { sourceType: 'module', plugins, errorRecovery: true, allowReturnOutsideFunction: true }).program;
+    program = parse(text, { sourceType: 'module', plugins, allowReturnOutsideFunction: true }).program;
   } catch {
-    return [];
+    return null;
   }
   const found = [];
   const visit = (node) => {
@@ -117,22 +117,23 @@ function lineStart(text, line) {
 
 /**
  * Record on each clone the relative module sources inside its fragment, found by parsing the first
- * file the fragment was cut from. jscpd cuts the fragment from the start of the first file's start
- * line. Run it while the scanned tree is on disk.
+ * file the fragment was cut from, or null when the fragment cannot be placed in a parsed file. jscpd
+ * cuts the fragment from the start of the first file's start line and joins its lines with '\n', so
+ * the file is read with CRLF line ends as LF. Run it while the scanned tree is on disk.
  */
 function withModuleSources(scratch, clones) {
   const files = new Map();
   for (const clone of clones) {
     const name = relativeFile(scratch, clone.firstFile);
     if (!files.has(name)) {
-      const text = fs.readFileSync(path.join(scratch, name), 'utf8');
+      const text = fs.readFileSync(path.join(scratch, name), 'utf8').replaceAll('\r\n', '\n');
       files.set(name, { text, sources: relativeSources(name, text) });
     }
     const { text, sources } = files.get(name);
     const offset = lineStart(text, clone.firstFile.start);
-    const cut = typeof clone.fragment === 'string' && offset >= 0 && text.startsWith(clone.fragment, offset);
+    const cut = sources && typeof clone.fragment === 'string' && offset >= 0 && text.startsWith(clone.fragment, offset);
     clone.moduleSources = cut ? sources.filter(({ start, end }) => start >= offset && end <= offset + clone.fragment.length)
-      .map(({ start, end, value }) => ({ start: start - offset, end: end - offset, value })) : [];
+      .map(({ start, end, value }) => ({ start: start - offset, end: end - offset, value })) : null;
   }
   return clones;
 }
@@ -141,15 +142,18 @@ function withModuleSources(scratch, clones) {
 // another file or file pair hashes alike, so a move can be told from a new copy. Each relative
 // module source reads as the repository path it resolves to from the first file, marked so no other
 // string reads alike, so a moved file that still imports the same modules keeps its fingerprint.
+// A fragment with unresolved relative-looking text also hashes its first file: it never moves.
 function fingerprint(scratch, clone) {
   if (typeof clone.fragment !== 'string' || !Number.isSafeInteger(clone.tokens)) throw new Error('Invalid clone fragment');
-  const folder = path.posix.dirname(relativeFile(scratch, clone.firstFile));
+  const file = relativeFile(scratch, clone.firstFile);
+  const sources = Array.isArray(clone.moduleSources) ? clone.moduleSources : undefined;
+  const pinned = !sources && /['"`]\.\.?\//.test(clone.fragment) ? file : '';
   let resolved = clone.fragment;
-  for (const { start, end, value } of [...(clone.moduleSources ?? [])].sort((a, b) => b.start - a.start)) {
-    resolved = `${resolved.slice(0, start)}\0${JSON.stringify(path.posix.join(folder, value))}${resolved.slice(end)}`;
+  for (const { start, end, value } of [...(sources ?? [])].sort((a, b) => b.start - a.start)) {
+    resolved = `${resolved.slice(0, start)}\0${JSON.stringify(path.posix.join(path.posix.dirname(file), value))}${resolved.slice(end)}`;
   }
   const text = resolved.split('\n').map(line => line.trim()).filter(Boolean).join('\n');
-  return crypto.createHash('sha256').update(`${packageOf(scratch, clone.firstFile.name)}\0${clone.tokens}\0${text}`).digest('hex');
+  return crypto.createHash('sha256').update(`${packageOf(scratch, clone.firstFile.name)}\0${clone.tokens}\0${pinned}\0${text}`).digest('hex');
 }
 
 const pairKey = (scratch, clone) => JSON.stringify([relativeFile(scratch, clone.firstFile), relativeFile(scratch, clone.secondFile)].sort());

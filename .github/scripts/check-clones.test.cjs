@@ -310,11 +310,12 @@ test('only module sources resolve, from the file the fragment was cut from', () 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'clone-sources-'));
   let files = 0;
   // The fragment starts on line 3, after an import that is not part of the clone.
-  const clone = (folder, fragment, extension = 'ts') => {
+  // jscpd joins the fragment's lines with '\n' whatever the file's line ends are.
+  const clone = (folder, fragment, { extension = 'ts', eol = '\n', start = 3, file = fragment } = {}) => {
     const name = `packages/demo/src/${folder}/f${files += 1}.${extension}`;
     fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
-    fs.writeFileSync(path.join(root, name), `import { before } from './before-${files}.ts';\n\n${fragment}\nexport const after = 1;\n`);
-    const reported = { firstFile: { name: path.join(root, name), start: 3 }, secondFile: { name: path.join(root, 'packages/demo/src/z.ts'), start: 1 }, tokens: 60, isNew: true, fragment };
+    fs.writeFileSync(path.join(root, name), `import { before } from './before-${files}.ts';\n\n${file}\nexport const after = 1;\n`.replaceAll('\n', eol));
+    const reported = { firstFile: { name: path.join(root, name), start }, secondFile: { name: path.join(root, 'packages/demo/src/z.ts'), start: 1 }, tokens: 60, isNew: true, fragment };
     return withModuleSources(root, [reported])[0];
   };
   const carried = (base, head) => carryMoved(root, [base], [head]).head.length === 0;
@@ -328,7 +329,19 @@ test('only module sources resolve, from the file the fragment was cut from', () 
     assert.ok(carried(clone('a', imports('pkg/x.ts')), clone('b', imports('pkg/x.ts'))), 'a package source is kept as written');
     assert.ok(!carried(clone('a', imports('pkg/x.ts')), clone('b', imports('pkg/y.ts'))));
     const jsx = (source) => `import { View } from '${source}';\nexport const Page = () => <View label="./x.tsx" />;`;
-    assert.ok(carried(clone('a', jsx('./view.tsx'), 'tsx'), clone('b/c', jsx('../../a/view.tsx'), 'tsx')), 'a .tsx file parses with JSX');
+    assert.ok(carried(clone('a', jsx('./view.tsx'), { extension: 'tsx' }), clone('b/c', jsx('../../a/view.tsx'), { extension: 'tsx' })), 'a .tsx file parses with JSX');
+    const crlf = { eol: '\r\n' };
+    assert.ok(carried(clone('a', imports('./x.ts'), crlf), clone('b/c', imports('../../a/x.ts'), crlf)), 'a CRLF file moves with its modules');
+    assert.ok(!carried(clone('a', imports('./x.ts'), crlf), clone('b', imports('./x.ts'), crlf)), 'a CRLF file importing another x.ts');
+    // A fragment that cannot be placed in a parsed file keeps its relative text only within its own file.
+    for (const unresolved of [{ start: 1 }, { file: `${imports('./x.ts')}\nconst = ;` }]) {
+      const base = clone('a', imports('./x.ts'), unresolved);
+      assert.equal(base.moduleSources, null);
+      assert.ok(!carried(base, clone('b', imports('./x.ts'), unresolved)), 'unresolved relative text never moves');
+      assert.ok(!carried(base, clone('b/c', imports('../../a/x.ts'))));
+      assert.ok(carried(base, { ...clone('b', imports('./x.ts'), unresolved), firstFile: base.firstFile }), 'unresolved relative text stays carried in its own file');
+      assert.ok(carried(clone('a', 'const a = 1;', unresolved), clone('b', 'const a = 1;', unresolved)), 'a fragment without relative text moves');
+    }
     // Text that only looks like an import is a string or a comment: it stays as written.
     const lookalike = (source) => `const text = \`import "${source}"\`;\n// import { x } from '${source}';\nconst plain = 'from "${source}"';\nconst call = notRequire('${source}');`;
     const moved = clone('moved', lookalike('./x.ts'));
