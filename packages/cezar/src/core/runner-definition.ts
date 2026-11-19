@@ -6,6 +6,7 @@ import type { ModelOption } from './runner-model-catalog.ts';
 import type { SkillCatalog } from './runner-skill-catalog.ts';
 import type { SkillDiscoveryOptions } from './skill-probe.ts';
 import type { ConfigFileDef } from './runner-config-files.ts';
+import type { ProviderCommandResult, ProviderConnectionState } from './provider-auth.ts';
 
 /**
  * Everything Squawk knows about one runner, in one object (spec 2026-11-18-runner-definitions).
@@ -41,6 +42,16 @@ export interface RunnerDefinition {
   readonly configFiles: readonly ConfigFileDef[];
   /** Extra tools unioned onto the default when a step does not set allowedTools. */
   readonly extraTools: readonly string[];
+
+  // Login, accounts, home paths and environment (hearsay-tools/squawk#3894).
+  /** Login and auth-status data (the `login` part). */
+  readonly login: RunnerLogin;
+  /** Imports the runner's status parser (`runners/<id>/login-probe.ts`). */
+  loadLogin(): Promise<RunnerLoginStatus>;
+  /** Account folder layout, profile markers, home slot (the `accounts` part). */
+  readonly accounts: RunnerAccounts;
+  /** The environment allow-list prefixes (the `env` part). */
+  readonly env: RunnerEnv;
 }
 
 /** A runner's model data: plain data in `runners/<id>/models.ts`. */
@@ -97,6 +108,75 @@ export interface RunnerCli {
   readonly resumeArgs: (sessionId: string) => string;
   /** Where the installer gets the CLI: an npm package, a site the operator installs from, or nowhere it knows. */
   readonly installSource: { readonly npm: string } | { readonly site: string; readonly label: string } | null;
+}
+
+/** Login and auth status (the `login` part, spec 2026-11-18-runner-definitions): the data half of
+ *  a `DESCRIPTORS` entry from `core/provider-auth.ts`, read by `ProviderAuthService`. */
+export interface RunnerLoginData {
+  /** Args that ask the CLI whether it is logged in. */
+  readonly statusArgs: readonly string[];
+  /** Args that log the CLI in. */
+  readonly loginArgs: readonly string[];
+  /** Shown when the CLI is not installed. */
+  readonly installHint: string;
+  /** A larger output ceiling for a status command whose output grows with the user's setup. */
+  readonly maxBuffer?: number;
+}
+
+/** {@link RunnerLoginData} plus the code half: the executable resolution. */
+export interface RunnerLogin extends RunnerLoginData {
+  /** The auth probe's executable, honoring the runner's `HSQ_*_BIN` override. Code, not data:
+   *  it stays in the definition (`runners/<id>/definition.ts`) so its `productEnv` read keeps a
+   *  literal suffix (cez/product-env-read). */
+  executable(): string;
+}
+
+/** The code half of `login`: how a CLI's answer becomes a connection state. Loads from
+ *  `runners/<id>/login-probe.ts`, so a definition module imports no parser code. */
+export interface RunnerLoginStatus {
+  parse(result: ProviderCommandResult): ProviderConnectionState | null;
+}
+
+/** How one runner lays out an account, declared once per runner. Moved verbatim from
+ *  `core/agent-profiles.ts` (`AccountLayout`). */
+export interface AccountLayout {
+  /**
+   * The variable Squawk sets to the account folder so the CLI opens that login. null: the provider
+   * carries no named accounts.
+   */
+  readonly envVar: string | null;
+  /**
+   * Whether a worker binding of the default account pins its discovered home. false: the default
+   * spawns bare and follows the host env. A machine where the agent never ran has no home to pin.
+   */
+  readonly defaultBindsHome: boolean;
+  /**
+   * Where the login state file sits for the discovered home. `beside-home`: next to it (Claude's
+   * `.claude.json`, see `claudeStateFilePath`), so a worker binds the home the child env resolves
+   * and records that layout. `in-home`: inside the account folder.
+   */
+  readonly stateFile: 'in-home' | 'beside-home';
+}
+
+/** Account relocation, profile markers and the home slot (the `accounts` part, spec
+ *  2026-11-18-runner-definitions): the rows of `ACCOUNT_LAYOUT`, `PROFILE_DIR_MARKERS` and
+ *  `AGENT_HOME_SLOT`, moved from `core/agent-profiles.ts` and `paths.ts`. */
+export interface RunnerAccounts {
+  /** How this runner lays out an account. */
+  readonly layout: AccountLayout;
+  /** What the agent drops into its home on first login. Any one is enough. */
+  readonly dirMarkers: readonly string[];
+  /** The `AgentHomePaths` slot that holds this runner's account home. Typed `string` here because
+   *  core may not import the catalog's type; `runners/<id>/accounts.ts` checks the key against
+   *  `keyof AgentHomePaths`, and `agentHomeSlot` (paths.ts) returns that type. */
+  readonly homeSlot: string;
+}
+
+/** The environment allow-list prefixes (the `env` part, spec 2026-11-18-runner-definitions): the
+ *  runner's row of `BACKEND_ALLOW_PREFIXES`, moved from `core/agent-env.ts`. */
+export interface RunnerEnv {
+  /** Per-backend auth/config the runner genuinely needs, by prefix. */
+  readonly allowPrefixes: readonly string[];
 }
 
 /** Declare one runner. */

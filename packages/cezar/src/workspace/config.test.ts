@@ -16,6 +16,10 @@ import {
   workspaceConfigBackupPath,
   type WorkspaceConfig,
 } from './config.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// `agentDefaults.models` is a record keyed by registered id, and the cases use several runners' keys.
+registerBuiltInRunners();
 
 /**
  * `~/.cezar/config.json` house rules under test (spec
@@ -71,6 +75,16 @@ describe('workspace config', () => {
     expect(config.composerDefaults).toEqual({});
     expect(config.projects).toEqual([]);
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('loads a pre-record shape of agentDefaults.models and keeps a key for an unregistered runner', async () => {
+    // A config written before the runner-definitions slice, including a key no registered
+    // definition took, loads with the same values: the known keys parse, the unknown key is
+    // kept and ignored, as `.passthrough()` kept it.
+    write({ agentDefaults: { runner: 'codex', models: { claude: 'opus', ghost: 'gpt-x' } } });
+    const config = await loadWorkspaceConfig(testHome().workspaceConfig);
+    expect(config.agentDefaults.runner).toBe('codex');
+    expect(config.agentDefaults.models).toEqual({ claude: 'opus', ghost: 'gpt-x' });
   });
 
   it('salvages disabled provider preferences and preserves unknown top-level keys on merge', async () => {

@@ -8,6 +8,11 @@ import type { UiEvent } from './ui-events.ts';
 import { observationClock } from './observation-clock.testkit.ts';
 import { OPENCODE_LOST_WAKE_GRACE_MS, OpencodeServerRunner } from './opencode-server-runner.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
+import { registerRunner } from './runner-registry.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+
+// The runner builds its child env through the registry; every case drives OpenCode.
+registerRunner(opencodeRunner);
 
 const mockBin = fileURLToPath(new URL('../../scripts/mock-opencode-serve.mjs', import.meta.url));
 const waitUntil = async (cond: () => boolean) => {

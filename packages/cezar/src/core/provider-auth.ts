@@ -4,6 +4,8 @@ import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { profileEnv } from './agent-profiles.ts';
 import { withEnvPrefix } from './shell-env.ts';
+import type { RunnerLogin } from './runner-definition.ts';
+import { registeredRunners, runnerDefinition } from './runner-registry.ts';
 
 export const PROVIDER_IDS = RUNNER_IDS;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
@@ -69,17 +71,6 @@ export function providerAuthChecksDisabled(
   return productEnv('AGENT_MODELS_LOCKED', env) === '1';
 }
 
-interface ProviderDescriptor {
-  id: ProviderId;
-  executable: () => string;
-  statusArgs: readonly string[];
-  loginArgs: readonly string[];
-  installHint: string;
-  parse: (result: ProviderCommandResult) => ProviderConnectionState | null;
-  /** A larger output ceiling for a status command whose output grows with the user's setup. */
-  maxBuffer?: number;
-}
-
 const DEFAULT_MAX_BUFFER = 256 * 1024;
 
 const COMMAND_TIMEOUT_MS = 10_000;
@@ -117,7 +108,6 @@ const UNKNOWN_HINT = 'Authentication could not be verified. Try again.';
 const TIMEOUT_HINT = 'Authentication check timed out. Try again.';
 const RUNTIME_AUTH_HINT =
   'Authentication was rejected during a run. Reconnect, then try again.';
-const ANSI_SEQUENCE = /\u001B\[[0-?]*[ -/]*[@-~]/g;
 const RUNTIME_AUTH_FAILURE_PATTERNS = [
   /\b(?:failed to authenticate|authentication failed|unauthenticated|unauthorized)\b/i,
   /\bproviderautherror\b/i,
@@ -141,159 +131,6 @@ export function isRuntimeProviderAuthFailure(message: string): boolean {
   return [...RUNTIME_AUTH_FAILURE_PATTERNS, ...RUNTIME_API_KEY_FAILURE_PATTERNS]
     .some((pattern) => pattern.test(message));
 }
-
-function normalizedOutput(stdout: string): string {
-  return stdout.replace(ANSI_SEQUENCE, '').trim().toLowerCase();
-}
-
-function normalizedLines(...outputs: string[]): string[] {
-  return outputs.flatMap((output) => normalizedOutput(output).split(/\r?\n/))
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-function parseClaudeStatus(result: ProviderCommandResult): ProviderConnectionState | null {
-  try {
-    const value = JSON.parse(result.stdout) as { loggedIn?: unknown };
-    if (value.loggedIn === true && result.exitCode === 0) return 'connected';
-    if (value.loggedIn === false && result.exitCode === 1) return 'disconnected';
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function parseCodexStatus(result: ProviderCommandResult): ProviderConnectionState | null {
-  const answers = normalizedLines(result.stdout, result.stderr)
-    .map((line): ProviderConnectionState | null => {
-      if (
-        line === 'logged in using chatgpt'
-        || line === 'logged in using an api key'
-        || line === 'logged in using agent identity'
-        || line === 'logged in using access token'
-        || line === 'logged in using personal access token'
-        || line === 'logged in using amazon bedrock api key'
-        || /^logged in using an api key - (?:\*{3}|\S{8}\*{3}\S{5})$/.test(line)
-      ) {
-        return 'connected';
-      }
-      if (line === 'not logged in' || line === 'run codex login to authenticate') {
-        return 'disconnected';
-      }
-      return null;
-    })
-    .filter((answer): answer is ProviderConnectionState => answer !== null);
-  if (answers.length !== 1) return null;
-  if (answers[0] === 'connected' && result.exitCode === 0) return 'connected';
-  if (answers[0] === 'disconnected' && result.exitCode === 1) return 'disconnected';
-  return null;
-}
-
-function parseOpenCodeStatus(result: ProviderCommandResult): ProviderConnectionState | null {
-  if (result.exitCode !== 0) return null;
-  const lines = normalizedLines(result.stdout);
-  const storedSummaries = lines
-    .map((line) => line.match(/^[^a-z0-9]*(\d+)\s+credentials?$/)?.[1])
-    .filter((count): count is string => count !== undefined);
-  if (storedSummaries.length !== 1) return null;
-  const storedCount = Number(storedSummaries[0]);
-  if (!Number.isSafeInteger(storedCount)) return null;
-
-  const environmentSummaries = lines
-    .map((line) => line.match(/^[^a-z0-9]*(\d+)\s+environment\s+variables?$/)?.[1])
-    .filter((count): count is string => count !== undefined);
-  const hasEnvironmentBlock = lines.some((line) => /^[^a-z0-9]*environment$/.test(line));
-  if (environmentSummaries.length > 1) return null;
-  if (hasEnvironmentBlock !== (environmentSummaries.length === 1)) return null;
-  const environmentCount = environmentSummaries.length === 1
-    ? Number(environmentSummaries[0])
-    : 0;
-  if (!Number.isSafeInteger(environmentCount)) return null;
-
-  return storedCount > 0 || environmentCount > 0 ? 'connected' : 'disconnected';
-}
-
-function parsePiStatus(result: ProviderCommandResult): ProviderConnectionState | null {
-  if (result.exitCode !== 0) return null;
-  const lines = normalizedLines(result.stdout);
-  if (lines.some((line) => /^provider\s+model\s+context\s+max-out\s+thinking\s+images$/.test(line))) {
-    return 'connected';
-  }
-  if (
-    lines.some((line) => line.includes('no models available'))
-    && lines.some((line) => line.includes('/login'))
-  ) {
-    return 'disconnected';
-  }
-  return null;
-}
-
-/**
- * OMP (Oh My Pi) v18.4.11: `omp models --json` exits 0 and prints `{"models":[...]}` — an object
- * wrapping the array, not a bare array. With no credentials the array is empty; with any provider
- * key (stored login or an environment variable) it lists that provider's models. Like OpenCode's
- * environment count, a configured credential permits a run, so a non-empty list is `connected`;
- * a vendor rejection is still latched at runtime. Recorded from the real OMP v18.4.11 binary on
- * 2026-10-05 (`omp models --json`, no credentials, then with ANTHROPIC_API_KEY set); upstream is
- * `can1357/oh-my-pi` (tag v18.4.11, main @ 7318a70cf4ed), `docs/cli-reference.md` (models command).
- */
-function parseOmpStatus(result: ProviderCommandResult): ProviderConnectionState | null {
-  if (result.exitCode !== 0) return null;
-  try {
-    const value = JSON.parse(result.stdout) as { models?: unknown };
-    if (!Array.isArray(value?.models)) return null;
-    return value.models.length > 0 ? 'connected' : 'disconnected';
-  } catch {
-    return null;
-  }
-}
-
-const DESCRIPTORS: readonly ProviderDescriptor[] = [
-  {
-    id: 'claude',
-    executable: () => productEnv('CLAUDE_BIN') ?? 'claude',
-    statusArgs: ['auth', 'status', '--json'],
-    loginArgs: ['auth', 'login'],
-    installHint: 'Install Claude Code, then run `claude auth login`.',
-    parse: parseClaudeStatus,
-  },
-  {
-    id: 'codex',
-    executable: () => productEnv('CODEX_BIN') ?? 'codex',
-    statusArgs: ['login', 'status'],
-    loginArgs: ['login'],
-    installHint: 'Install the Codex CLI, then run `codex login`.',
-    parse: parseCodexStatus,
-  },
-  {
-    id: 'opencode',
-    executable: () => productEnv('OPENCODE_BIN') ?? 'opencode',
-    statusArgs: ['auth', 'list'],
-    loginArgs: ['auth', 'login'],
-    installHint: 'Install OpenCode, then run `opencode auth login`.',
-    parse: parseOpenCodeStatus,
-  },
-  {
-    id: 'pi',
-    executable: () => productEnv('PI_BIN') ?? 'pi',
-    statusArgs: ['--list-models'],
-    loginArgs: ['/login'],
-    installHint: 'Install pi, then run `pi /login`.',
-    parse: parsePiStatus,
-  },
-  {
-    id: 'omp',
-    executable: () => productEnv('OMP_BIN') ?? 'omp',
-    statusArgs: ['models', '--json'],
-    loginArgs: ['login'],
-    installHint: 'Install OMP (curl -fsSL https://omp.sh/install | sh), then run `omp login`.',
-    parse: parseOmpStatus,
-    // `omp models --json` lists every model of every configured provider at ~350 bytes each:
-    // OpenRouter alone is 561 models (~200 KB) on v18.4.11, and four keys pass 256 KiB. An
-    // overflow answers `unknown`, which hides a logged-in OMP from every picker (Ruling 19).
-    maxBuffer: 4 * 1024 * 1024,
-  },
-];
 
 function defaultRunProviderCommand(
   executable: string,
@@ -347,10 +184,9 @@ function profileCacheKey(provider: ProviderId, profileId: string): string {
   return `${provider}\u0000${profileId}`;
 }
 
-function descriptorFor(provider: ProviderId): ProviderDescriptor {
-  const descriptor = DESCRIPTORS.find(({ id }) => id === provider);
-  if (!descriptor) throw new Error(`Unknown provider: ${provider}`);
-  return descriptor;
+/** The login data of a registered runner (the definition's `login` part). */
+function loginFor(provider: ProviderId): RunnerLogin {
+  return runnerDefinition(provider).login;
 }
 
 interface RuntimeAuthFailure {
@@ -438,7 +274,7 @@ export class ProviderAuthService {
   status(options?: { refresh?: boolean }): Promise<ProviderStatusResponse> {
     if (productEnv('DRY_RUN') === '1' || providerAuthChecksDisabled()) {
       return Promise.resolve({
-        providers: PROVIDER_IDS.map((provider) => ({ provider, status: 'connected' })),
+        providers: registeredRunners().map(({ id }) => ({ provider: id, status: 'connected' })),
       });
     }
 
@@ -519,7 +355,7 @@ export class ProviderAuthService {
     let probed: ProviderStatus;
     try {
       this.lastRuntimeVerification.set(provider, this.now());
-      probed = await this.probe(descriptorFor(provider), profile?.configDir);
+      probed = await this.probe(provider, profile?.configDir);
     } finally {
       this.verifyingRuntimeFailures.delete(provider);
     }
@@ -611,14 +447,14 @@ export class ProviderAuthService {
    * wrong account is the failure this whole path exists to prevent.
    */
   loginCommand(provider: ProviderId, configDir?: string | null): string | null {
-    const descriptor = descriptorFor(provider);
-    const command = [quoteExecutable(descriptor.executable(), this.platform), ...descriptor.loginArgs].join(' ');
+    const login = loginFor(provider);
+    const command = [quoteExecutable(login.executable(), this.platform), ...login.loginArgs].join(' ');
     const env = configDir ? profileEnv(provider, configDir) : {};
     return withEnvPrefix(command, env, this.platform);
   }
 
   installHint(provider: ProviderId): string {
-    return descriptorFor(provider).installHint;
+    return loginFor(provider).installHint;
   }
 
   private withRuntimeFailures(response: ProviderStatusResponse): ProviderStatusResponse {
@@ -643,7 +479,7 @@ export class ProviderAuthService {
     visible: Promise<ProviderStatusResponse>;
   } {
     const generation = ++this.nextProbeGeneration;
-    const raw = Promise.all(DESCRIPTORS.map((descriptor) => this.probe(descriptor)))
+    const raw = Promise.all(registeredRunners().map(({ id }) => this.probe(id)))
       .then((providers) => {
         const response = { providers };
         if (!this.completed || generation >= this.completed.generation) {
@@ -682,7 +518,7 @@ export class ProviderAuthService {
     const pending = this.inFlightProfiles.get(key);
     if (pending) return pending;
     const generation = ++this.nextProbeGeneration;
-    const probe = this.probe(descriptorFor(provider), profile.configDir)
+    const probe = this.probe(provider, profile.configDir)
       .then((status) => {
         const stamped: ProviderStatus = { ...status, profileId: profile.id };
         const current = this.completedProfiles.get(key);
@@ -732,39 +568,41 @@ export class ProviderAuthService {
    *  no-spawn contract as {@link peekProfileStatus}. */
   peekStatus(): ProviderStatusResponse | undefined {
     if (productEnv('DRY_RUN') === '1') {
-      return { providers: PROVIDER_IDS.map((provider) => ({ provider, status: 'connected' })) };
+      return { providers: registeredRunners().map(({ id }) => ({ provider: id, status: 'connected' })) };
     }
     if (!this.completed) return undefined;
     return this.withRuntimeFailures(this.completed.response);
   }
 
-  private async probe(descriptor: ProviderDescriptor, configDir?: string | null): Promise<ProviderStatus> {
+  private async probe(provider: ProviderId, configDir?: string | null): Promise<ProviderStatus> {
+    const login = loginFor(provider);
     let result: ProviderCommandResult;
     // The default profile is probed with the SAME three-argument call it always was — no
     // trailing `undefined`. `runCommand` is an injected seam, and handing every existing
     // implementation an extra argument it never asked for would be a change in the zero-config
     // path for no gain.
-    const env = configDir ? profileEnv(descriptor.id, configDir) : undefined;
+    const env = configDir ? profileEnv(provider, configDir) : undefined;
     try {
-      result = await (descriptor.maxBuffer !== undefined
-        ? this.runCommand(descriptor.executable(), descriptor.statusArgs, COMMAND_TIMEOUT_MS, env, { maxBuffer: descriptor.maxBuffer })
+      result = await (login.maxBuffer !== undefined
+        ? this.runCommand(login.executable(), login.statusArgs, COMMAND_TIMEOUT_MS, env, { maxBuffer: login.maxBuffer })
         : env === undefined
-          ? this.runCommand(descriptor.executable(), descriptor.statusArgs, COMMAND_TIMEOUT_MS)
-          : this.runCommand(descriptor.executable(), descriptor.statusArgs, COMMAND_TIMEOUT_MS, env));
+          ? this.runCommand(login.executable(), login.statusArgs, COMMAND_TIMEOUT_MS)
+          : this.runCommand(login.executable(), login.statusArgs, COMMAND_TIMEOUT_MS, env));
     } catch {
-      return { provider: descriptor.id, status: 'unknown', hint: UNKNOWN_HINT };
+      return { provider, status: 'unknown', hint: UNKNOWN_HINT };
     }
     if (result.errorCode === 'ENOENT') {
-      return { provider: descriptor.id, status: 'not-installed', hint: descriptor.installHint };
+      return { provider, status: 'not-installed', hint: login.installHint };
     }
     if (result.timedOut) {
-      return { provider: descriptor.id, status: 'unknown', hint: TIMEOUT_HINT };
+      return { provider, status: 'unknown', hint: TIMEOUT_HINT };
     }
     if (result.errorCode) {
-      return { provider: descriptor.id, status: 'unknown', hint: UNKNOWN_HINT };
+      return { provider, status: 'unknown', hint: UNKNOWN_HINT };
     }
-    const status = descriptor.parse(result);
-    if (status !== null) return { provider: descriptor.id, status };
-    return { provider: descriptor.id, status: 'unknown', hint: UNKNOWN_HINT };
+    const { parse } = await runnerDefinition(provider).loadLogin();
+    const status = parse(result);
+    if (status !== null) return { provider, status };
+    return { provider, status: 'unknown', hint: UNKNOWN_HINT };
   }
 }

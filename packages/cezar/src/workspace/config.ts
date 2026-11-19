@@ -19,6 +19,7 @@ import {
 import { WEBHOOK_TRIGGERS, type WebhookTrigger } from '@open-mercato/cezar-contract/attention';
 import { projectWebhookUrlSchema } from '@open-mercato/cezar-contract/projects';
 import { PROVIDER_IDS, type ProviderId } from '../core/provider-auth.ts';
+import { registeredRunners } from '../core/runner-registry.ts';
 
 /**
  * `~/.cezar/config.json` — the per-user workspace config + project registry
@@ -202,6 +203,22 @@ const composerDefaultsSchema = z
   .passthrough();
 
 /**
+ * A record keyed by registered id, checked against the registry when the file loads. A key no
+ * registered runner took is kept and ignored, as `.passthrough()` kept it; a registered runner's
+ * value goes through `field` (give it its own `.catch` for per-key degradation). Shared by
+ * `agentDefaults.models` here and the account selections in `workspace/agent-accounts.ts`.
+ */
+export function registeredRunnerRecord(field: z.ZodType<string | undefined>) {
+  return z.record(z.string(), z.unknown()).transform((entries) => {
+    const out = { ...entries } as Record<string, string | undefined>;
+    for (const { id } of registeredRunners()) {
+      if (id in entries) out[id] = field.parse(entries[id]);
+    }
+    return out;
+  });
+}
+
+/**
  * What a repo that has said nothing runs (spec 2026-07-29-agent-profiles).
  *
  * The point is not to configure every checkout: a repo's own `.ai/cezar/config.json` still wins
@@ -215,15 +232,7 @@ const composerDefaultsSchema = z
 const agentDefaultsSchema = z
   .object({
     runner: z.enum(PROVIDER_IDS).optional().catch(undefined),
-    models: z
-      .object({
-        claude: z.string().trim().min(1).max(200).optional().catch(undefined),
-        codex: z.string().trim().min(1).max(200).optional().catch(undefined),
-        opencode: z.string().trim().min(1).max(200).optional().catch(undefined),
-        pi: z.string().trim().min(1).max(200).optional().catch(undefined),
-        omp: z.string().trim().min(1).max(200).optional().catch(undefined),
-      })
-      .passthrough()
+    models: registeredRunnerRecord(z.string().trim().min(1).max(200).optional().catch(undefined))
       .optional()
       .catch(undefined),
   })

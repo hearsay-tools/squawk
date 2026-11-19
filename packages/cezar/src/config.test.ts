@@ -7,6 +7,10 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { projectPaths } from './project-paths.ts';
 import { loadConfig, readRawConfig, resolveWorktreeRetention, updateConfigFile } from './config.ts';
+import { registerBuiltInRunners } from './runners/built-in.ts';
+
+// `defaultModels` is a record keyed by registered id, and the cases use several runners' keys.
+registerBuiltInRunners();
 
 /**
  * `config.json` schema roundtrips (R2 2.3: `systemPrompt?`). The invariants
@@ -103,6 +107,14 @@ describe('loadConfig systemPrompt', () => {
       const config = await loadConfig(repoRoot, testHome());
       expect(config.defaultModels).toBeUndefined();
       expect(config.maxParallel).toBe(6);
+    });
+
+    it('drops a key for a runner no registered definition took, keeping the rest', async () => {
+      // A config written before the runner-definitions slice, including a key no registered
+      // definition took, loads with the same values: the known keys parse, the unknown key is
+      // dropped, as the closed per-runner object dropped it.
+      write({ defaultModels: { claude: 'opus', ghost: 'gpt-x' } });
+      expect((await loadConfig(repoRoot, testHome())).defaultModels).toEqual({ claude: 'opus' });
     });
   });
 

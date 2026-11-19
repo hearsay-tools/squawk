@@ -15,6 +15,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agentAccountsPath, workspaceConfigPath } from '../paths.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The store's schema asks the registry which agents can carry an account; the cases use all five.
+registerBuiltInRunners();
 import { loadWorkspaceConfig, mergeWriteWorkspaceConfig } from './config.ts';
 import {
   defaultAgentAccountStore,
@@ -181,7 +185,7 @@ describe('agent accounts store', () => {
     });
 
     it('refuses an agent that cannot carry a second account — it would resolve to a lie', async () => {
-      // `PROFILE_ENV_VAR.opencode` is null, so `profileEnv` returns `{}` for it: the step would
+      // `profileEnvVar('opencode')` is null, so `profileEnv` returns `{}` for it: the step would
       // record this account, the UI would name it, and the CLI would run on the DEFAULT login
       // anyway — the exact "says Work, bills personal" failure this feature exists to prevent. The
       // route already refuses it, but this file is designed to survive hand edits, foreign writers
@@ -229,6 +233,15 @@ describe('agent accounts store', () => {
       const raw = JSON.parse(readFileSync(agentAccountsPath(testHome()), 'utf8')) as Record<string, any>;
       expect(raw.futureTopLevel).toEqual({ keep: true });
       expect(raw.accounts[0].futureRowKey).toBe(1);
+    });
+
+    it('keeps a selection key for a runner no registered definition took', async () => {
+      // A store written before the runner-definitions slice, including a key no registered
+      // definition took, loads with the same values: the known keys parse, the unknown key is
+      // kept and ignored, as `.passthrough()` kept it.
+      write({ accounts: [account('work')], selections: { '/a': { claude: 'work', ghost: 'other' } } });
+      const store = await loadAgentAccounts(testHome());
+      expect(store.selections['/a']).toEqual({ claude: 'work', ghost: 'other' });
     });
 
     it('salvages selections per entry and drops a malformed one', async () => {

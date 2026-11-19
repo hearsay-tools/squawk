@@ -6,6 +6,10 @@ import { runtimeHomes } from './runtime-isolation.testkit.ts';
 import { loadConfig, resolveWorktreeRetention } from '../config.ts';
 import { agentModelsLocked } from '../core/agent-model-policy.ts';
 import { resolveProfileEnvForRoot, resolveRuntimeAuthVerificationTarget } from '../workspace/agent-profiles.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The stores resolve Claude and Codex accounts and machine defaults through the registry.
+registerBuiltInRunners();
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { listProjects, registerProject, removeProject } from '../workspace/projects.ts';
 import { registryEntry } from '../workspace/registry-entry.ts';

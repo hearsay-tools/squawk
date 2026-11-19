@@ -10,6 +10,11 @@ import type { AgentEvent } from './agent-runner.ts';
 import { OpencodeServerRunner, SERVE_START_RETRY_DELAY_MS } from './opencode-server-runner.ts';
 import { sessionGroupOf } from './session-process.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
+import { registerRunner } from './runner-registry.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+
+// The runner builds its child env through the registry; every case drives OpenCode.
+registerRunner(opencodeRunner);
 
 /** `override` sees the 1-based spawn count; returning undefined spawns for real. */
 const spawnHook = vi.hoisted(() => ({ calls: 0, override: null as null | ((call: number) => unknown) }));

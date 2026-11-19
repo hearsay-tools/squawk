@@ -1,4 +1,5 @@
 import { defineRunner } from '../../core/runner-definition.ts';
+import { productEnv } from '../../core/product-env.ts';
 import { OMP_FACTS } from './facts.ts';
 import { OMP_MODELS } from './models.ts';
 import { OMP_CONFIG_FILES } from './config-files.ts';
@@ -6,6 +7,9 @@ import { OMP_EXTRA_TOOLS } from './extra-tools.ts';
 import { OMP_SPEC_SUPPORT } from './spec-support.ts';
 import { OMP_DETECTION } from './detection.ts';
 import { OMP_CLI } from './cli.ts';
+import { OMP_LOGIN } from './login.ts';
+import { OMP_ACCOUNTS } from './accounts.ts';
+import { OMP_ENV } from './env.ts';
 
 /** The OMP runner. */
 export const ompRunner = defineRunner({
@@ -26,4 +30,8 @@ export const ompRunner = defineRunner({
   loadSkillCatalog: async () => (await import('../../core/omp-skill-catalog.ts')).discoverOmpSkills,
   configFiles: OMP_CONFIG_FILES,
   extraTools: OMP_EXTRA_TOOLS,
+  login: { ...OMP_LOGIN, executable: () => productEnv('OMP_BIN') ?? 'omp' },
+  accounts: OMP_ACCOUNTS,
+  env: OMP_ENV,
+  loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseOmpStatus }),
 });

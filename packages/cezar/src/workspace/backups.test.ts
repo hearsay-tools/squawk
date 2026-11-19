@@ -13,6 +13,11 @@ import { mergeWriteWorkspaceConfig, loadWorkspaceConfig } from './config.ts';
 import { mergeWriteAgentAccounts, loadAgentAccounts } from './agent-accounts.ts';
 import { listBackups as allBackups, isValidRestore } from './backups.ts';
 import { runBackupCommand } from './backup-cli.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+
+// The account store parses selections through the registry; every case here drives a Claude account.
+registerRunner(claudeRunner);
 
 
 // Rotation retains P0's guarantees. The separate .bak is now also listed for restore.

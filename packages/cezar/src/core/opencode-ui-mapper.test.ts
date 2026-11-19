@@ -30,6 +30,11 @@ import {
   type OpencodeUiMapping,
 } from './opencode-ui-mapper.ts';
 import { OpencodeServerRunner } from './opencode-server-runner.ts';
+import { registerRunner } from './runner-registry.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+
+// The runner's session env reads opencode's registry data; this test drives only opencode.
+registerRunner(opencodeRunner);
 import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from './codex-ui-mapper.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 

@@ -10,6 +10,10 @@ import {
   type ProviderCommandResult,
   type RunProviderCommand,
 } from './provider-auth.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The service reads every provider's login data from the registry; this file probes all five.
+registerBuiltInRunners();
 
 /** One status probe runs one command per provider. */
 const ROSTER = PROVIDER_IDS.length;

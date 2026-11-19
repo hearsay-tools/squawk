@@ -7,6 +7,7 @@
 import type { AgentBackend } from './agent-runner.ts';
 import { productEnv } from './product-env.ts';
 import { SECRET_NAME_RE } from './secret-redaction.ts';
+import { runnerDefinition, runnerIdOf } from './runner-registry.ts';
 
 /**
  * Env var names are matched case-INSENSITIVELY (#427 review). Windows spells
@@ -188,8 +189,9 @@ const BASE_ALLOW_PREFIXES: readonly string[] = [
 ];
 
 /** The provider credentials a backend that selects models as `provider/model` may need — it can
- *  be pointed at any of them, so none can be pruned without breaking a legitimate model id. */
-const MULTI_PROVIDER_PREFIXES: readonly string[] = [
+ *  be pointed at any of them, so none can be pruned without breaking a legitimate model id.
+ *  Read by the `env` data of the OpenCode, pi and OMP definitions (`runners/<id>/env.ts`). */
+export const MULTI_PROVIDER_PREFIXES: readonly string[] = [
   'OPENAI_',
   'ANTHROPIC_',
   'AZURE_OPENAI_',
@@ -204,29 +206,6 @@ const MULTI_PROVIDER_PREFIXES: readonly string[] = [
   'TOGETHER_',
   'FIREWORKS_',
 ];
-
-/** Per-backend auth/config the runner genuinely needs, by prefix. */
-const BACKEND_ALLOW_PREFIXES: Record<AgentBackend, readonly string[]> = {
-  claude: ['ANTHROPIC_', 'CLAUDE_'],
-  'claude-cli': ['ANTHROPIC_', 'CLAUDE_'],
-  codex: ['OPENAI_', 'CODEX_', 'AZURE_OPENAI_'],
-  opencode: MULTI_PROVIDER_PREFIXES,
-  // pi selects models as `provider/model` (#387), so it needs both its own config and any
-  // provider a configured model id can name — the same set OpenCode gets, for the same reason.
-  // Deliberately NOT `CLAUDE_`: pi is not Claude Code and reads none of its variables, and the
-  // prefix is load-bearing below — it is what unlocks the Bedrock/Vertex cloud credentials, so
-  // granting it here handed pi the whole `AWS_*` / `GOOGLE_CLOUD_*` family on any host that had
-  // set `CLAUDE_CODE_USE_BEDROCK=1` for Claude Code, plus Claude's own config dir.
-  pi: ['PI_', ...MULTI_PROVIDER_PREFIXES],
-  // OMP (Oh My Pi) is pi's fork and selects models the same `provider/model` way, so it gets the
-  // same multi-provider set. Not `CLAUDE_`, for pi's reason above. `OMP_` is its own config and
-  // `PI_` is kept because OMP still reads `PI_CODING_AGENT_DIR` / `PI_CONFIG_DIR`
-  // (OMP v18.4.11; `can1357/oh-my-pi` `docs/environment-variables.md` at main @ 7318a70cf4ed).
-  // The reverse does not hold: pi gets no `OMP_`. Both prefixes also carry a host-exported
-  // `PI_CODING_AGENT_DIR` / `OMP_PROFILE` to every default-account session, which is how a host
-  // value moves the default account (`PROFILE_ENV_VAR` in `agent-profiles.ts`).
-  omp: ['OMP_', 'PI_', ...MULTI_PROVIDER_PREFIXES],
-};
 
 /** `gh` handoff (draft PRs) works in every backend — the one credential the
  *  project deliberately keeps in the environment (AGENTS.md "No secrets in
@@ -310,8 +289,10 @@ export function withoutHomeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
  * (the runner's `spec.env`) is applied last so per-run vars always win.
  */
 export function buildChildEnv(opts: BuildChildEnvOptions): NodeJS.ProcessEnv {
+  // A legacy id (`claude-cli`) and an unknown value resolve to the default runner, as the
+  // `BACKEND_ALLOW_PREFIXES[backend] ?? BACKEND_ALLOW_PREFIXES.claude` lookup did.
   return curateEnv(opts.source ?? process.env, opts.extraEnv ?? {}, {
-    backendPrefixes: BACKEND_ALLOW_PREFIXES[opts.backend] ?? BACKEND_ALLOW_PREFIXES.claude,
+    backendPrefixes: runnerDefinition(runnerIdOf(opts.backend)).env.allowPrefixes,
     gh: true,
     secretCez: true,
   });

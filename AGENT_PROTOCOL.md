@@ -363,9 +363,9 @@ force, or force only in part. The item numbers are stable: code cites them.
     environment, with bounds, and throws when it cannot read the model list. It never
     reads the CLI's config or cache files and never runs a model turn. Add the runner to
     `models-api.test.ts`, which also holds what a failure may report.
-12. **Credentials** — the runner's entry in `BACKEND_ALLOW_PREFIXES` (`core/agent-env.ts`)
-    lists a prefix for every provider that its model ids can name. Never widen another
-    backend's entry.
+12. **Credentials** — the runner's `env` allow-list prefixes (`runners/<id>/env.ts`, read through
+    the registry by `buildChildEnv`) list a prefix for every provider that its model ids can name.
+    Never widen another backend's entry.
 
 <a id="10a-removing-a-runner"></a>
 

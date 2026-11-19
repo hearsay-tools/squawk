@@ -16,6 +16,10 @@ import {
   selectProfile,
 } from './agent-profiles.ts';
 import { loadAgentAccounts } from './agent-accounts.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// Profile resolution reads each provider's account data from the registry; the cases use all five.
+registerBuiltInRunners();
 
 /**
  * Resolution rules from spec 2026-07-29-agent-profiles. The pair worth reading closely is the two

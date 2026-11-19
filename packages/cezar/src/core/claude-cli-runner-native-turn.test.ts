@@ -16,6 +16,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentEvent } from './agent-runner.ts';
 import { ClaudeCliRunner } from './claude-cli-runner.ts';
+import { registerRunner } from './runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+
+// The runner's session env reads claude's registry data; this test drives only claude.
+registerRunner(claudeRunner);
 import type { UiEvent } from './ui-events.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 

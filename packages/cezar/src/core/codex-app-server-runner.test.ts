@@ -7,6 +7,11 @@ import type { AgentEvent } from './agent-runner.js';
 import { KILL_GRACE_MS } from './runner-runtime.js';
 import { CodexAppServerRunner, codexTurnStartExtras } from './codex-app-server-runner.js';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
+import { registerRunner } from './runner-registry.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+
+// The runner's session env reads codex's registry data; this test drives only codex.
+registerRunner(codexRunner);
 
 /** Only the escalation tests below swap the child out; every other test in this
  *  file keeps spawning the real mock app-server through the untouched `spawn`. */

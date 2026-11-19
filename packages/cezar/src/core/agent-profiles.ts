@@ -1,54 +1,36 @@
 import type { ProviderId } from './provider-auth.ts';
+import type { AccountLayout } from './runner-definition.ts';
+import { registeredRunners, runnerDefinition } from './runner-registry.ts';
 
 /**
- * Pure native account-home mappings. Keep file-catalog knowledge separate from account
- * relocation. Workspace code resolves saved accounts; runners, auth and terminal handoff consume
- * this mapping.
+ * Pure native account-home mappings, read from the runner registry (spec
+ * 2026-11-18-runner-definitions: the `accounts` part of each definition, `runners/<id>/accounts.ts`).
+ * Keep file-catalog knowledge separate from account relocation. Workspace code resolves saved
+ * accounts; runners, auth and terminal handoff consume this mapping.
  */
 
-/** How one provider lays out an account, declared once per provider id. */
-export interface AccountLayout {
-  /**
-   * The variable Squawk sets to the account folder so the CLI opens that login. null: the provider
-   * carries no named accounts.
-   */
-  readonly envVar: string | null;
-  /**
-   * Whether a worker binding of the default account pins its discovered home. false: the default
-   * spawns bare and follows the host env. A machine where the agent never ran has no home to pin.
-   */
-  readonly defaultBindsHome: boolean;
-  /**
-   * Where the login state file sits for the discovered home. `beside-home`: next to it (Claude's
-   * `.claude.json`, see `claudeStateFilePath`), so a worker binds the home the child env resolves
-   * and records that layout. `in-home`: inside the account folder.
-   */
-  readonly stateFile: 'in-home' | 'beside-home';
+/** The account layout a registered runner declares (its definition's `accounts.layout`). */
+export function accountLayout(provider: ProviderId): AccountLayout {
+  return runnerDefinition(provider).accounts.layout;
 }
 
-/** Account relocation per provider. Host values define the default; named overrides apply last. */
-export const ACCOUNT_LAYOUT: Readonly<Record<ProviderId, AccountLayout>> = {
-  claude: { envVar: 'CLAUDE_CONFIG_DIR', defaultBindsHome: true, stateFile: 'beside-home' },
-  codex: { envVar: 'CODEX_HOME', defaultBindsHome: true, stateFile: 'in-home' },
-  opencode: { envVar: null, defaultBindsHome: false, stateFile: 'in-home' },
-  pi: { envVar: 'PI_CODING_AGENT_DIR', defaultBindsHome: false, stateFile: 'in-home' },
-  // omp selects a login by profile NAME under its own root, not by folder, so it carries no named
-  // accounts; a host `OMP_PROFILE` still moves its discovered default (`agentHomePaths`).
-  omp: { envVar: null, defaultBindsHome: false, stateFile: 'in-home' },
-};
+/** The variable that selects a named account for `provider`; null means named accounts are
+ *  unsupported. Was `PROFILE_ENV_VAR[provider]`, built at import from `ACCOUNT_LAYOUT`. */
+export function profileEnvVar(provider: ProviderId): string | null {
+  return runnerDefinition(provider).accounts.layout.envVar;
+}
 
-/** The variable that selects a named account per provider; null means named accounts are unsupported. */
-export const PROFILE_ENV_VAR = Object.fromEntries(
-  Object.entries(ACCOUNT_LAYOUT).map(([provider, layout]) => [provider, layout.envVar]),
-) as Readonly<Record<ProviderId, string | null>>;
-
-/** Providers that can carry more than one account — what the UI offers "Add account" for. */
-export const PROFILE_CAPABLE_PROVIDERS: readonly ProviderId[] = (
-  Object.keys(PROFILE_ENV_VAR) as ProviderId[]
-).filter((provider) => PROFILE_ENV_VAR[provider] !== null);
+/** Providers that can carry more than one account — what the UI offers "Add account" for. Was
+ *  `PROFILE_CAPABLE_PROVIDERS`, built at import; now the registered runners that declare an
+ *  account variable, in registration order. */
+export function profileCapableProviders(): ProviderId[] {
+  return registeredRunners()
+    .map(({ id }) => id)
+    .filter((id) => profileEnvVar(id) !== null);
+}
 
 export function supportsProfiles(provider: ProviderId): boolean {
-  return PROFILE_ENV_VAR[provider] !== null;
+  return profileEnvVar(provider) !== null;
 }
 
 /**
@@ -56,7 +38,7 @@ export function supportsProfiles(provider: ProviderId): boolean {
  * Never emit another provider’s variable.
  */
 export function profileEnv(provider: ProviderId, configDir: string | null | undefined): Record<string, string> {
-  const envVar = PROFILE_ENV_VAR[provider];
+  const envVar = profileEnvVar(provider);
   const dir = configDir?.trim();
   return envVar === null || !dir ? {} : { [envVar]: dir };
 }
@@ -72,20 +54,6 @@ export function profileEnv(provider: ProviderId, configDir: string | null | unde
  */
 export function looksLikeProfileDir(provider: ProviderId, entries: readonly string[]): boolean {
   const present = new Set(entries);
-  const markers = PROFILE_DIR_MARKERS[provider];
+  const markers = runnerDefinition(provider).accounts.dirMarkers;
   return markers.some((marker) => present.has(marker));
 }
-
-/** What each agent drops into its home on first login. Any one is enough. */
-const PROFILE_DIR_MARKERS: Record<ProviderId, readonly string[]> = {
-  // `.claude.json` sits INSIDE the dir once it is overridden (see `claudeStateFilePath`), which
-  // is exactly the case being probed here.
-  claude: ['.claude.json', 'settings.json', 'projects', 'sessions'],
-  codex: ['auth.json', 'config.toml'],
-  // OpenCode cannot carry profiles (`PROFILE_ENV_VAR.opencode === null`); the discovered config
-  // dir is probed, but nothing it holds marks a login.
-  opencode: [],
-  pi: ['auth.json', 'settings.json', 'models.json', 'sessions'],
-  // omp carries no named accounts; the discovered default is an agent dir.
-  omp: ['agent.db', 'config.yml', 'sessions'],
-};

@@ -7,6 +7,11 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentEvent } from './agent-runner.ts';
 import { AUTO_END_DELAY_MS } from './runner-runtime.ts';
 import { KILL_GRACE_MS, OpencodeServerRunner } from './opencode-server-runner.ts';
+import { registerRunner } from './runner-registry.ts';
+import { opencodeRunner } from '../runners/opencode/definition.ts';
+
+// The runner's session env reads opencode's registry data; this test drives only opencode.
+registerRunner(opencodeRunner);
 import type { UiEvent } from './ui-events.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import { rejectedAcknowledgement } from '../workflows/run/input-delivery.ts';

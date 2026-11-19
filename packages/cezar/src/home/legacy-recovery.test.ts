@@ -13,6 +13,11 @@ import { cleanStoreRoots, storeRoot } from './store.testkit.ts';
 import { digest, VersionLog } from './version-log.ts';
 import { listBackups } from '../workspace/backups.ts';
 import * as fs from 'node:fs';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+
+// The recovery parses account stores through the registry; every case here drives a Claude account.
+registerRunner(claudeRunner);
 
 vi.mock('node:fs', async original => {
   const actual = await original<typeof import('node:fs')>();

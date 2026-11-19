@@ -6,7 +6,7 @@ import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
 import { loadWorkspaceConfig, type WorkspaceConfig } from './workspace/config.ts';
 import { RUNNER_IDS } from './core/agent-runner.ts';
-import { DEFAULT_RUNNER_ID } from './core/runner-registry.ts';
+import { DEFAULT_RUNNER_ID, registeredRunners } from './core/runner-registry.ts';
 
 /**
  * Optional advanced config at `.ai/cezar/config.json`. Zero-config rule:
@@ -79,17 +79,19 @@ const configSchema = z.object({
    * Per-runner default model preset (Settings → Agents, redesign R6 1.5): the
    * model id the composer preselects for that runner. Missing = auto (the
    * runner decides). A capability (`model`), never a vendor config format.
-   * `.catch(undefined)` keeps the key additive-safe like `systemPrompt`: a
+   * A record keyed by registered id, checked against the registry when config
+   * loads: a key no registered runner took is dropped, as the closed
+   * per-runner object (no passthrough) dropped it, and a bad value for a
+   * registered runner refuses the whole key, as the object's `.catch(undefined)`
+   * did. `.catch(undefined)` keeps it additive-safe like `systemPrompt`: a
    * bad value degrades to unset without discarding the rest of the config.
    */
   defaultModels: z
-    .object({
-      claude: z.string().trim().min(1).max(200).optional(),
-      codex: z.string().trim().min(1).max(200).optional(),
-      opencode: z.string().trim().min(1).max(200).optional(),
-      pi: z.string().trim().min(1).max(200).optional(),
-      omp: z.string().trim().min(1).max(200).optional(),
-    })
+    .record(z.string(), z.unknown())
+    .transform((entries) => Object.fromEntries(
+      registeredRunners().filter(({ id }) => id in entries).map(({ id }) => [id, entries[id]]),
+    ))
+    .pipe(z.record(z.string(), z.string().trim().min(1).max(200).optional()))
     .optional()
     .catch(undefined),
   /**

@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { discoverClaudeSkills, parseClaudeSkills } from './claude-skill-catalog.ts';
+import { registerRunner } from './runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 import { buildClaudeArgs } from './claude-cli-runner.ts';
+
+// The catalog builds the Claude child env through the registry; every case drives Claude.
+registerRunner(claudeRunner);
 afterEach(() => vi.unstubAllEnvs());
 const capture = JSON.parse(readFileSync(new URL('./__fixtures__/claude/skill-list.json', import.meta.url), 'utf8'));
 describe('claude native skill metadata', () => {

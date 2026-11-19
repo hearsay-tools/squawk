@@ -13,6 +13,10 @@ import { discoverOmpSkills } from './omp-skill-catalog.ts';
 import { RunnerSkillCatalog, type SkillCatalogQuery } from './runner-skill-catalog.ts';
 import { skillProbe, type SkillDiscoveryOptions } from './skill-probe.ts';
 import { ignoreTermSource } from '../stubborn-child.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// Every case runs over each runner id; the probe builds each one's child env through the registry.
+registerBuiltInRunners();
 const discovers = { claude: discoverClaudeSkills, codex: discoverCodexSkills, opencode: discoverOpencodeSkills, pi: discoverPiSkills, omp: discoverOmpSkills };
 // The member reports readiness after installing its handlers; only then does its leader crash.
 const leaderFirst = `const { spawn } = require('node:child_process');

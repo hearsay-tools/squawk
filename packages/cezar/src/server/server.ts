@@ -228,7 +228,7 @@ import {
   sameProfileDir,
   type ResolvedAgentProfile,
 } from '../workspace/agent-profiles.ts';
-import { PROFILE_CAPABLE_PROVIDERS, profileEnv, supportsProfiles } from '../core/agent-profiles.ts';
+import { profileCapableProviders, profileEnv, supportsProfiles } from '../core/agent-profiles.ts';
 import { shellQuote, withEnvPrefix } from '../core/shell-env.ts';
 import { resumeCommand } from '../core/runner-cli.ts';
 import {
@@ -1512,7 +1512,7 @@ export function createApp(deps: ServerDeps) {
       return c.json({
         editable,
         profiles,
-        profileCapableProviders: [...PROFILE_CAPABLE_PROVIDERS],
+        profileCapableProviders: profileCapableProviders(),
         // Which account each project uses, keyed by repo root. Served here rather than on the
         // project registry because it lives in the same file as the accounts it names.
         selections: editable ? store.selections : {},

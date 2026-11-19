@@ -1,4 +1,5 @@
 import { defineRunner } from '../../core/runner-definition.ts';
+import { productEnv } from '../../core/product-env.ts';
 import { PI_FACTS } from './facts.ts';
 import { PI_MODELS } from './models.ts';
 import { PI_CONFIG_FILES } from './config-files.ts';
@@ -6,6 +7,9 @@ import { PI_EXTRA_TOOLS } from './extra-tools.ts';
 import { PI_SPEC_SUPPORT } from './spec-support.ts';
 import { PI_DETECTION } from './detection.ts';
 import { PI_CLI } from './cli.ts';
+import { PI_LOGIN } from './login.ts';
+import { PI_ACCOUNTS } from './accounts.ts';
+import { PI_ENV } from './env.ts';
 
 /** The Pi runner. */
 export const piRunner = defineRunner({
@@ -23,4 +27,8 @@ export const piRunner = defineRunner({
   loadSkillCatalog: async () => (await import('../../core/pi-skill-catalog.ts')).discoverPiSkills,
   configFiles: PI_CONFIG_FILES,
   extraTools: PI_EXTRA_TOOLS,
+  login: { ...PI_LOGIN, executable: () => productEnv('PI_BIN') ?? 'pi' },
+  accounts: PI_ACCOUNTS,
+  env: PI_ENV,
+  loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parsePiStatus }),
 });

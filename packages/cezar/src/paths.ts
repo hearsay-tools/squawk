@@ -2,6 +2,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { AgentHomePaths } from './core/runner-config-files.ts';
 import type { ProviderId } from './core/provider-auth.ts';
+import { runnerDefinition } from './core/runner-registry.ts';
 
 import { assertOutsideAccountHome } from './home/protected-roots.ts';
 import type { Home } from './home/home.ts';
@@ -126,10 +127,12 @@ export function serverLockPath(instance: string = DEFAULT_SERVER_INSTANCE, home:
  * `agentHomePathsForProfiles` instead — what this function answers is what the
  * host is configured for when nothing overrides it.
  */
-/** The slot of `AgentHomePaths` that holds each provider's account home. */
-export const AGENT_HOME_SLOT: Readonly<Record<ProviderId, keyof AgentHomePaths>> = {
-  claude: 'claude', codex: 'codex', opencode: 'opencodeConfig', pi: 'pi', omp: 'omp',
-};
+/** The slot of `AgentHomePaths` that holds each provider's account home. Was the
+ *  `AGENT_HOME_SLOT` table; the slot now lives in each definition's `accounts.homeSlot`
+ *  (`runners/<id>/accounts.ts`), checked there against `keyof AgentHomePaths`. */
+export function agentHomeSlot(provider: ProviderId): keyof AgentHomePaths {
+  return runnerDefinition(provider).accounts.homeSlot as keyof AgentHomePaths;
+}
 
 export function agentHomePaths(env: NodeJS.ProcessEnv = process.env): AgentHomePaths {
   const home = env.HOME || env.USERPROFILE || homedir();
@@ -152,7 +155,7 @@ export function agentHomePaths(env: NodeJS.ProcessEnv = process.env): AgentHomeP
  * - otherwise `PI_CODING_AGENT_DIR`, else `<root>/agent`;
  *
  * where `<root>` is `~/<PI_CONFIG_DIR or .omp>`. A host that exports a profile therefore moves the
- * DEFAULT account (see `PROFILE_ENV_VAR` in `core/agent-profiles.ts`). `default`, a blank value
+ * DEFAULT account (see `profileEnvVar` in `core/agent-profiles.ts`). `default`, a blank value
  * and a name omp would refuse select no profile.
  */
 function ompAgentDir(env: NodeJS.ProcessEnv, home: string): string {
@@ -193,7 +196,7 @@ function isOmpProfileName(name: string): boolean {
  *     `~/.claude` — the route refuses a dir that is already the discovered account's;
  *   - the DISCOVERED account is spawned with nothing added, so it sees the variable only when the
  *     Squawk process itself carries one — and it does reach the child, because `CLAUDE_` is in
- *     `BACKEND_ALLOW_PREFIXES`.
+ *     the runner's `env` allow-list (`runners/<id>/env.ts`).
  *
  * One case is worth naming because it looks like a bug and is not. Start Squawk with
  * `CLAUDE_CONFIG_DIR=/opt/work` and add `~/.claude` as a NAMED account (legal — the discovered

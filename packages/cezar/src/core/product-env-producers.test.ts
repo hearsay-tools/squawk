@@ -9,6 +9,11 @@ import { agentEnv } from '../workflows/run/launch-context.ts';
 import { worktreeSetupEnv } from '../worktree-setup.ts';
 import { withPreviewCdp } from '../preview/agent-address.ts';
 import { buildChildEnv } from './agent-env.ts';
+import { registerRunner } from './runner-registry.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+
+// buildChildEnv reads Codex's allow-list prefixes from the registry; every case drives Codex.
+registerRunner(codexRunner);
 import { squawkToolEnvNames } from '../ci-wait/tools.ts';
 import { systemdUnit } from '../server-install/platforms/ubuntu-vps.ts';
 import { squawkLaunchdPlist } from '../server-install/platforms/macosx-ngrok.ts';

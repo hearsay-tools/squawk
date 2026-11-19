@@ -29,6 +29,11 @@ import { ClaudeCliRunner } from './claude-cli-runner.ts';
 import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from './opencode-ui-mapper.ts';
 import { STATUS_MAP as CODEX_TOOL_STATUS_MAP, HOOK_STATUS as CODEX_HOOK_STATUS_MAP } from './codex-ui-mapper.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
+import { registerRunner } from './runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+
+// The runner builds its child env through the registry; every case drives Claude.
+registerRunner(claudeRunner);
 
 const TOOL_STATUS = z.enum([
   ...Object.values(OPENCODE_TOOL_STATUS_MAP),

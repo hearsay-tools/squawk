@@ -13,6 +13,10 @@ import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The server reads every registered runner (provider lists, login probes); register the built-ins.
+registerBuiltInRunners();
 
 /** Runner list requests share the server's catalog and the session's account resolution. */
 describe('runner-native skills API', () => {
