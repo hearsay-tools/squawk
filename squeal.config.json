@@ -98,6 +98,9 @@
     "packages/web/src/test/unit-wait-discipline.test.ts": [
       "packages/web/vitest.setup.ts"
     ],
+    "packages/cezar/src/lint/stubborn-test-child.test.ts": [
+      "scripts/*.test.mjs"
+    ],
     "packages/cezar/src/lint/run-history-reader.test.ts": [
       "packages/cezar/src/lint/run-history-readers.json"
     ],
