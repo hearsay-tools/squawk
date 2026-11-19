@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { SHARED_ATTACH_REFUSAL, SHARED_BASELINE_REFUSAL } from '@open-mercato/cezar-contract/delegation';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentRunResult, AgentRunSpec } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import * as runners from '../core/runner-registry.ts';
 import { clearAutosaveCleanup, retainAutosaveCleanup } from '../autosave-cleanup.ts';
 import '../core/every-runner.testkit.ts';

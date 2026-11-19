@@ -26,7 +26,7 @@ import type { UiEvent } from './ui-events.js';
 import { buildChildEnv } from './agent-env.js';
 import { detectEnvironment } from './backend-detect.js';
 import { buildPiArgs, PiRunner } from './pi-runner.js';
-import { PI_MINIMAL_ARGS } from './pi-args.ts';
+import { PI_MINIMAL_ARGS } from '../runners/pi/spec-support.ts';
 import { squawkToolNames } from '../ci-wait/tools.js';
 import { appendTurnText } from '../workflows/run.js';
 import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.js';

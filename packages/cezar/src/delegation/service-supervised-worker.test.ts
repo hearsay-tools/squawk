@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { RUN_STATUS, WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentRunResult, AgentRunSpec } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import * as runners from '../core/runner-registry.ts';
 import '../core/every-runner.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';

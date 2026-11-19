@@ -6,7 +6,7 @@ import { TrackedWork } from './run/tracked-work.ts';
 import type { RunModuleContext } from './run/types.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { join } from 'node:path';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import type { AgentSession, AgentRunResult } from '../core/agent-runner.ts';
 import { RUN_STATUS, STEP_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';

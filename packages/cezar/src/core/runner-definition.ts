@@ -1,4 +1,4 @@
-import type { AgentRunner, RunnerId } from './agent-runner.ts';
+import type { AgentRunner, AgentRunSpecSupport, RunnerId } from './agent-runner.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 import type { BackendModelMap } from './model-identity.ts';
 import type { AgentModelSettingsStrategy } from './runner-model-settings.ts';
@@ -21,6 +21,10 @@ export interface RunnerDefinition {
   readonly facts: RunnerFacts;
   /** Imports the adapter module and builds a new runner. */
   loadAdapter(): Promise<AgentRunner>;
+
+  // Facts, spec support, detection, CLI and install source (slice B1).
+  /** Which `AgentRunSpec` fields the runner's wire honors. The adapter class reads the same data file. */
+  readonly specSupport: AgentRunSpecSupport;
 
   // Models, skills, config files and extra tools (hearsay-tools/squawk#3895).
   /** The model presets, the model id map and the reader of the native default model. */

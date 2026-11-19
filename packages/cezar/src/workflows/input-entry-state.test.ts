@@ -1,6 +1,6 @@
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { randomUUID } from 'node:crypto';
 import type { AgentEvent } from '../core/agent-runner.ts';
 import type { AgentRunResult } from '../core/agent-runner.ts';

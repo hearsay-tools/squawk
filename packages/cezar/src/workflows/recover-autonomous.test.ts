@@ -2,7 +2,7 @@ import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import * as runners from '../core/runner-registry.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { fixtureWorkSettled } from './fixture-cleanup.testkit.ts';
 import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
 import { execFile } from 'node:child_process';

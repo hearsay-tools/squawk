@@ -13,7 +13,7 @@ import { RUNNER_IDS } from '../core/agent-runner.ts';
 import type { AgentRunResult, AgentRunSpec, AgentSession, AgentEvent } from '../core/agent-runner.ts';
 import * as runners from '../core/runner-registry.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { RunStore } from '../runs/store.ts';
 import { join } from 'node:path';
 import { fixture, waitForOwnedWork } from './service.testkit.ts';

@@ -21,7 +21,7 @@ import * as workflows from './load.ts';
 import * as configuration from '../config.ts';
 import * as profiles from '../workspace/agent-profiles.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { RunStore } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { runnerHook, waitForProduct } from './run-fixture.testkit.ts';

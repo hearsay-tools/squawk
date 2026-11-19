@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { AgentEvent, AgentRunResult, InputDelivery } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { createActiveRun } from './active-run.ts';
 import type { InputGroup } from './run/input-delivery.ts';
 import { commitBundledDelivery } from './run/input-receipts.ts';

@@ -6,7 +6,7 @@ import { createActiveRun, type ActiveRun } from './active-run.ts';
 import { TrackedWork } from './run/tracked-work.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { createFixtureManager, fixtureWorkSettled } from './fixture-cleanup.testkit.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import type { AgentSession, AgentRunResult } from '../core/agent-runner.ts';
 import type { RunManager } from './run.ts';
 import { RUN_STATUS, WAIT_KIND, STEP_STATUS, STEP_KIND, WAIT_PHASE, makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';

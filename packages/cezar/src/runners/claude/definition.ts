@@ -3,11 +3,13 @@ import { CLAUDE_FACTS } from './facts.ts';
 import { CLAUDE_MODELS } from './models.ts';
 import { CLAUDE_CONFIG_FILES } from './config-files.ts';
 import { CLAUDE_EXTRA_TOOLS } from './extra-tools.ts';
+import { CLAUDE_SPEC_SUPPORT } from './spec-support.ts';
 
 /** The Claude runner. */
 export const claudeRunner = defineRunner({
   id: 'claude',
   facts: CLAUDE_FACTS,
+  specSupport: CLAUDE_SPEC_SUPPORT,
   loadAdapter: async () => new (await import('../../core/claude-cli-runner.ts')).ClaudeCliRunner(),
   models: {
     ...CLAUDE_MODELS,

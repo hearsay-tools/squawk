@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type AgentRunResult, type AgentSession, type ContentBlock } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { RunStore } from '../runs/store.ts';
 import { seedWaits, setRunStatus } from '../runs/run-store.testkit.ts';
 import { RunMemory } from './run/run-memory.ts';

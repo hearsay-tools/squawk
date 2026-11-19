@@ -1,6 +1,6 @@
 import { beforeEach } from 'vitest';
 import type { AgentEvent, AgentRunResult, AgentSession } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import type { UiEvent } from '../core/ui-events.ts';
 import { runnerHook } from './run-fixture.testkit.ts';
 

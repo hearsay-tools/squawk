@@ -14,7 +14,7 @@ import { RunStore } from '../runs/store.ts';
 
 import * as worktrees from '../autosave-commit.ts';
 import * as runners from '../core/runner-registry.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { RunManager } from './run.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';
 import type { WorkflowDef } from './types.ts';

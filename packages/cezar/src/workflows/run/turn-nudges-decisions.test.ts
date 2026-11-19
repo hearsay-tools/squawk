@@ -20,7 +20,7 @@ import * as activeRuns from '../active-run.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from '../run-fixture.testkit.ts';
 import { createFixtureManager as createRunnerFixtureManager } from '../fixture-cleanup.testkit.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../../runners/claude/spec-support.ts';
 import type { AgentEvent, AgentRunResult, AgentSession } from '../../core/agent-runner.ts';
 import type { UiEvent } from '../../core/ui-events.ts';
 

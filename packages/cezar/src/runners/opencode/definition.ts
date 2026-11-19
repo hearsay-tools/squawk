@@ -3,11 +3,13 @@ import { OPENCODE_FACTS } from './facts.ts';
 import { OPENCODE_MODELS } from './models.ts';
 import { OPENCODE_CONFIG_FILES } from './config-files.ts';
 import { OPENCODE_EXTRA_TOOLS } from './extra-tools.ts';
+import { OPENCODE_SPEC_SUPPORT } from './spec-support.ts';
 
 /** The OpenCode runner. */
 export const opencodeRunner = defineRunner({
   id: 'opencode',
   facts: OPENCODE_FACTS,
+  specSupport: OPENCODE_SPEC_SUPPORT,
   loadAdapter: async () => new (await import('../../core/opencode-server-runner.ts')).OpencodeServerRunner(),
   models: {
     ...OPENCODE_MODELS,

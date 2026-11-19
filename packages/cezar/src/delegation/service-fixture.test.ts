@@ -3,7 +3,7 @@ import { expect, it, vi } from 'vitest';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { QUICK_TASK_WORKFLOW } from '../workflows/types.ts';
 import type { AgentRunResult } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import * as runners from '../core/runner-registry.ts';
 import '../core/every-runner.testkit.ts';
 import { fixture } from './service.testkit.ts';

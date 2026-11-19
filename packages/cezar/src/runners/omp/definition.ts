@@ -3,11 +3,13 @@ import { OMP_FACTS } from './facts.ts';
 import { OMP_MODELS } from './models.ts';
 import { OMP_CONFIG_FILES } from './config-files.ts';
 import { OMP_EXTRA_TOOLS } from './extra-tools.ts';
+import { OMP_SPEC_SUPPORT } from './spec-support.ts';
 
 /** The OMP runner. */
 export const ompRunner = defineRunner({
   id: 'omp',
   facts: OMP_FACTS,
+  specSupport: OMP_SPEC_SUPPORT,
   loadAdapter: async () => new (await import('../../core/omp-runner.ts')).OmpRunner(),
   models: {
     ...OMP_MODELS,

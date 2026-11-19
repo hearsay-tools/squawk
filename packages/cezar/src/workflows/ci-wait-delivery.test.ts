@@ -4,7 +4,7 @@ import { success, ciWaitOf, lastCiWaitOf, github, register, githubByPr, register
 import { QUICK_TASK_WORKFLOW } from './types.ts';
 import * as runners from '../core/runner-registry.ts';
 import type { AgentEvent, AgentRunResult, AgentRunner, AgentSession } from '../core/agent-runner.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
+import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
