@@ -275,3 +275,44 @@ test('a merge-base clone carries one head clone of the same fingerprint, in its 
   assert.deepEqual(kept([clone(a, other)], [clone(b, other)]), { base: 1, head: [other] });
   assert.throws(() => carryMoved(reportRoot, [], [reportedClone(a, b, 60)]), /Invalid clone fragment/);
 });
+
+// A move to another folder rewrites relative imports; resolved, they still name the same modules.
+test('a clone pair moved to other folders with rewritten relative imports passes; a new copy of it still fails', () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'clone-move-imports-'));
+  const git = (...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', ...args], { cwd: repo, encoding: 'utf8' }).trim();
+  const write = (name, content) => { fs.mkdirSync(path.dirname(path.join(repo, name)), { recursive: true }); fs.writeFileSync(path.join(repo, name), content); };
+  const scan = (base) => spawnSync(process.execPath, [script, '--base', base], { cwd: repo, encoding: 'utf8' });
+  const modules = ['discovery-options', 'product-env', 'probe-spawn', 'probe-teardown', 'model-catalog', 'effort-levels'];
+  const source = (prefix, name) => modules.map((module, i) => `import { value${i}, type Type${i} } from '${prefix}${module}.ts';`).join('\n')
+    + `\nimport { readFile } from 'node:fs/promises';\n\nexport const ${name} = [value0, value1, value2, value3, value4, value5, readFile];\n`;
+  try {
+    git('init', '--quiet');
+    write('packages/demo/src/core/first.ts', source('./', 'first'));
+    write('packages/demo/src/core/second.ts', source('./', 'second'));
+    git('add', '.'); git('commit', '-qm', 'clone pair');
+    const base = git('rev-parse', 'HEAD');
+    git('rm', '-q', 'packages/demo/src/core/first.ts', 'packages/demo/src/core/second.ts');
+    write('packages/demo/src/runners/first/first.ts', source('../../core/', 'first'));
+    write('packages/demo/src/runners/second/second.ts', source('../../core/', 'second'));
+    git('add', '.'); git('commit', '-qm', 'move with rewritten imports');
+    const moved = scan(base);
+    assert.equal(moved.status, 0, moved.stdout + moved.stderr);
+    write('packages/demo/src/runners/third/third.ts', source('../../core/', 'third'));
+    git('add', '.'); git('commit', '-qm', 'new copy');
+    const copied = scan(base);
+    assert.equal(copied.status, 1, copied.stdout + copied.stderr);
+    assert.match(copied.stdout, /runners\/third\/third\.ts/);
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+});
+
+test('relative imports of different modules with the same base name do not fingerprint alike', () => {
+  const { carryMoved } = require('./check-clones.cjs');
+  const imports = (source) => `import { value } from '${source}';\nexport { other } from "${source}";\nconst late = await import('${source}');\nconst old = require("${source}");`;
+  const clone = (first, source) => ({ ...reportedClone(first, 'packages/demo/src/z.ts', 60), fragment: imports(source) });
+  const carried = (base, head) => carryMoved(reportRoot, [base], [head]).head.length === 0;
+  assert.ok(carried(clone('packages/demo/src/a/f.ts', './x.ts'), clone('packages/demo/src/b/c/f.ts', '../../a/x.ts')), 'the same module from another folder');
+  assert.ok(!carried(clone('packages/demo/src/a/f.ts', './x.ts'), clone('packages/demo/src/b/f.ts', '../other/x.ts')), 'another x.ts');
+  assert.ok(!carried(clone('packages/demo/src/a/f.ts', './x.ts'), clone('packages/demo/src/b/f.ts', './x.ts')), 'the same text names another x.ts');
+  assert.ok(carried(clone('packages/demo/src/a/f.ts', 'pkg/x.ts'), clone('packages/demo/src/b/f.ts', 'pkg/x.ts')), 'a package source is kept as written');
+  assert.ok(!carried(clone('packages/demo/src/a/f.ts', 'pkg/x.ts'), clone('packages/demo/src/b/f.ts', 'pkg/y.ts')));
+});

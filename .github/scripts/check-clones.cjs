@@ -66,11 +66,18 @@ function relativeFile(scratch, file) {
   return path.relative(scratch, file.name).split(path.sep).join('/');
 }
 
+// A relative module source in an import, export, import() or require() call.
+const relativeSource = /(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)(['"])(\.\.?\/[^'"\n]*)\2/g;
+
 // The clone's code with its layout dropped, its token count and its package: the same clone in
-// another file or file pair hashes alike, so a move can be told from a new copy.
+// another file or file pair hashes alike, so a move can be told from a new copy. The fragment is the
+// first file's text; each relative module source in it reads as the repository path it resolves to
+// from that file, so a moved file that still imports the same modules keeps its fingerprint.
 function fingerprint(scratch, clone) {
   if (typeof clone.fragment !== 'string' || !Number.isSafeInteger(clone.tokens)) throw new Error('Invalid clone fragment');
-  const text = clone.fragment.split('\n').map(line => line.trim()).filter(Boolean).join('\n');
+  const folder = path.posix.dirname(relativeFile(scratch, clone.firstFile));
+  const text = clone.fragment.replace(relativeSource, (_, before, quote, source) => `${before}${quote}${path.posix.join(folder, source)}${quote}`)
+    .split('\n').map(line => line.trim()).filter(Boolean).join('\n');
   return crypto.createHash('sha256').update(`${packageOf(scratch, clone.firstFile.name)}\0${clone.tokens}\0${text}`).digest('hex');
 }
 
