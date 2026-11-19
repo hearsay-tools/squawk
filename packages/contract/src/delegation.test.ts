@@ -19,7 +19,9 @@ import {
   workerCollectedResultSchema,
   workerCompletionWaitSchema,
   workerContextSchema,
+  workerDestroyRequestSchema,
   workerDestroyResultSchema,
+  workerDestroySchema,
   workerDestroyViewSchema,
   workerDiffSchema,
   workerInputRecipeSchema,
@@ -498,6 +500,19 @@ describe('worker diff, stop, destroy and error answers', () => {
     for (const bad of [[...deleted, deleted[0]], [{ kind: 'worktree', path: 'p'.repeat(8193) }], [{ kind: 'branch', ref: 'r'.repeat(1025) }], [{ kind: 'branch', path: '/w' }]]) {
       refuses(workerDestroyResultSchema, { ...result, deleted: bad });
     }
+    // hearsay-tools/squawk#3553: the work a refusal names.
+    acceptsEach(workerDestroyResultSchema, { ...result, state: 'incomplete' }, 'work', [{ uncommittedFiles: 0, commits: 2 }, { uncommittedFiles: 3, commits: 0 }]);
+    for (const bad of [{ uncommittedFiles: -1, commits: 0 }, { uncommittedFiles: 1 }, { uncommittedFiles: 1, commits: 0, extra: 1 }]) {
+      refuses(workerDestroyResultSchema, { ...result, work: bad });
+    }
+  });
+
+  it('accepts a destroy request that allows or leaves out the discard of work (hearsay-tools/squawk#3553)', () => {
+    expect(workerDestroyRequestSchema.parse({})).toEqual({});
+    expect(workerDestroyRequestSchema.parse({ discardWork: true })).toEqual({ discardWork: true });
+    for (const bad of [{ discardWork: false }, { discardWork: 'yes' }, { force: true }]) refuses(workerDestroyRequestSchema, bad);
+    accepts(workerDestroySchema, { requestedAt: '2026-11-19T00:00:00.000Z', phase: 'incomplete', remaining: ['branch'], discardWork: true });
+    refuses(workerDestroySchema, { requestedAt: '2026-11-19T00:00:00.000Z', phase: 'incomplete', remaining: ['branch'], discardWork: false });
   });
 
   it('keeps every steer answer state', () => {

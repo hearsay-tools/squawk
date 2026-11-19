@@ -48,8 +48,12 @@ it('keeps owned-worker comparison explicit from spawn through collection, integr
   expect(readFileSync(join(f.root, 'approach.txt'), 'utf8')).toBe('minimal');
   // Choosing a commit alone does not erase the other worker's result.
   expect(existsSync(workers[1]!.path)).toBe(true);
+  // No ref reaches the commit the parent did not choose: a plain destroy names it, and the parent
+  // discards it (hearsay-tools/squawk#3553). The chosen one's cherry-pick may reproduce its SHA.
+  expect(await f.service.destroy(f.caller, { workerId: workers[1]!.id })).toMatchObject({ state: 'incomplete', work: { uncommittedFiles: 0, commits: 1 } });
+  expect(existsSync(workers[1]!.path)).toBe(true);
   for (const worker of workers) {
-    expect(await f.service.destroy(f.caller, { workerId: worker.id })).toMatchObject({ state: 'complete', remaining: [] });
+    expect(await f.service.destroy(f.caller, { workerId: worker.id }, { discardWork: true })).toMatchObject({ state: 'complete', remaining: [] });
     expect(existsSync(worker.path)).toBe(false);
     expect(f.store.getRun(worker.id)).toBeDefined();
   }

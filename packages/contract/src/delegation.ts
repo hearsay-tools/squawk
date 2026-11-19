@@ -118,6 +118,9 @@ export const workerDestroySchema = z.object({
   phase: z.enum(['requested', 'terminating', 'cleaning', 'complete', 'incomplete']),
   remaining: remainingSchema,
   error: errorSchema.optional(),
+  /** An explicit attempt of this destroy allowed it to delete uncommitted changes and unlanded
+   * commits, so every later attempt, automatic or explicit, may too (hearsay-tools/squawk#3553). */
+  discardWork: z.literal(true).optional(),
 }).strict();
 export type WorkerDestroy = z.infer<typeof workerDestroySchema>;
 /** A worker's destroy as inspection and relationships show it: the stored phase, plus its retry state. */
@@ -427,9 +430,25 @@ export const workerStopResultSchema = z.object({
 });
 export type WorkerStopResult = z.infer<typeof workerStopResultSchema>;
 
+/** Work a destroy would delete (hearsay-tools/squawk#3553): files with uncommitted changes in the
+ * worker directory (untracked included, ignored excluded), and commits on the worker branch, or
+ * only in its reflog, that no other branch or remote-tracking ref reaches. */
+export const workerDestroyWorkSchema = z.object({
+  uncommittedFiles: z.number().int().nonnegative(),
+  commits: z.number().int().nonnegative(),
+}).strict();
+export type WorkerDestroyWork = z.infer<typeof workerDestroyWorkSchema>;
+
+/** An explicit destroy's body. Without `discardWork`, a destroy that would delete work refuses
+ * and names it; with it, the work is deleted (hearsay-tools/squawk#3553). */
+export const workerDestroyRequestSchema = z.object({ discardWork: z.literal(true).optional() }).strict();
+export type WorkerDestroyRequest = z.infer<typeof workerDestroyRequestSchema>;
+
 export const workerDestroyResultSchema = z.object({
   workerId: z.uuid(),
   state: z.enum(['complete', 'incomplete']),
+  /** Set when the destroy refused because it would delete this work. */
+  work: workerDestroyWorkSchema.optional(),
   deleted: z.array(z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('worktree'), path: z.string().max(8192) }).strict(),
     z.object({ kind: z.literal('branch'), ref: z.string().max(1024) }).strict(),

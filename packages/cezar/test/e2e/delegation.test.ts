@@ -262,7 +262,8 @@ rl.on('close', () => queue.then(() => process.exit(0)));
       { kind: 'worktree', path: workspace.path }, { kind: 'branch', ref: `refs/heads/${workspace.branch}` },
     ] };
     try {
-      assert.deepEqual(await command(['destroy', workerId]), destroyed);
+      // The worker's commit is on no other ref, so the destroy discards it (hearsay-tools/squawk#3553).
+      assert.deepEqual(await command(['destroy', workerId, '--discard-work']), destroyed);
       assert.deepEqual(await command(['destroy', workerId]), destroyed);
       assert.equal(outsider.exitCode, null); assert.equal(outsider.signalCode, null);
     } finally { outsider.stdin.end(); await outsiderExit; }

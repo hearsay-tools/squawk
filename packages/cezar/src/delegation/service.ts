@@ -97,9 +97,13 @@ export type DelegationManager = Pick<RunManager,
 
 export type DelegationProject = { home: Home; id: string; root: string; store: RunStore; manager: DelegationManager };
 
+/** An explicit destroy's choices: `discardWork` deletes uncommitted changes and unlanded commits
+ *  instead of refusing to (hearsay-tools/squawk#3553). */
+export type DestroyOptions = { discardWork?: boolean | undefined };
+
 /** One registered project's destroy state and retry lifecycle, as `WorkerCleanup` (`worker-cleanup.ts`) implements it. */
 export type WorkerCleanupPort = {
-  request(workerId: string, check: () => RunRecord): Promise<WorkerDestroyResult>;
+  request(workerId: string, check: () => RunRecord, options?: DestroyOptions): Promise<WorkerDestroyResult>;
   armAfterRecovery(): void;
   detach(): void;
 };
@@ -810,12 +814,12 @@ export class DelegationService {
     }
     return { wait: project.manager.cancelWorkerWait(caller.runId, waitId) };
   }
-  async destroy(caller: Caller, params: WorkerParams) {
+  async destroy(caller: Caller, params: WorkerParams, options: DestroyOptions = {}) {
     const { project, worker } = this.target(caller, params, 'destroy');
-    return this.cleanupFor(project).request(worker.id, () => this.target(caller, params, 'destroy').worker);
+    return this.cleanupFor(project).request(worker.id, () => this.target(caller, params, 'destroy').worker, options);
   }
   /** Existing human HTTP authority, bound to its resolved project; never mint a pretend agent caller. */
-  async destroyForHuman(projectId: string, workerId: string) {
+  async destroyForHuman(projectId: string, workerId: string, options: DestroyOptions = {}) {
     const project = this.projects.get(projectId);
     if (!project) throw new DelegationPolicyError('denied_scope', 'Worker scope denied');
     const check = () => {
@@ -824,7 +828,7 @@ export class DelegationService {
       return worker;
     };
     check();
-    return this.cleanupFor(project).request(workerId, check);
+    return this.cleanupFor(project).request(workerId, check, options);
   }
 }
 

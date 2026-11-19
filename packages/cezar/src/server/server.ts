@@ -67,7 +67,7 @@ import { runRelationships } from './run-relationships.ts';
 import type { DelegationController } from '../delegation/provision.ts';
 import { delegationFailure } from '../delegation/routes.ts';
 import { githubItemParamsSchema } from '@open-mercato/cezar-contract/github';
-import { workerEmptyRequestSchema, runRelationshipsSchema } from '@open-mercato/cezar-contract/delegation';
+import { workerDestroyRequestSchema, workerEmptyRequestSchema, runRelationshipsSchema } from '@open-mercato/cezar-contract/delegation';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { AutomationStore } from '../automations/store.ts';
@@ -2865,11 +2865,11 @@ export function createApp(deps: ServerDeps) {
       if (!run) return c.json({ error: 'not found' }, 404);
       return c.json(runRelationshipsSchema.parse(runRelationships(store, run)));
     })
-    .post('/runs/:id/worker-destroy', queryZodValidator(workerEmptyRequestSchema, { code: 'invalid_input', message: 'Invalid cleanup query' }), paramZodValidator(runIdParamSchema, { code: 'invalid_input', message: 'Invalid worker ID' }), jsonZodValidator(workerEmptyRequestSchema, { absent: {}, malformed: null, code: 'invalid_input', message: 'Invalid cleanup input' }), async c => {
+    .post('/runs/:id/worker-destroy', queryZodValidator(workerEmptyRequestSchema, { code: 'invalid_input', message: 'Invalid cleanup query' }), paramZodValidator(runIdParamSchema, { code: 'invalid_input', message: 'Invalid worker ID' }), jsonZodValidator(workerDestroyRequestSchema, { absent: {}, malformed: null, code: 'invalid_input', message: 'Invalid cleanup input' }), async c => {
       const project = c.get('project');
       delegationService.registerProject(project);
       try {
-        const result = await delegationService.destroyForHuman(project.id, c.req.valid('param').id);
+        const result = await delegationService.destroyForHuman(project.id, c.req.valid('param').id, c.req.valid('json'));
         return result.state === 'incomplete' ? c.json(result, 409) : c.json(result, 200);
       } catch (error) { const failure = delegationFailure(error); return c.json(failure.body, failure.status); }
     })

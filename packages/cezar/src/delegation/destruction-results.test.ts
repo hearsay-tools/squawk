@@ -42,6 +42,9 @@ vi.mock('node:fs', async original => {
 
 // Git worktree teardown + a live RunManager contend under full-suite workers; cancel/dispose
 // without polling. Timeout matches the suite's 15s git/manager waits rather than the 5s default.
+// Each worker here holds an uncommitted `result.txt` whose evidence these tests follow, so every
+// destroy allows its discard (hearsay-tools/squawk#3553).
+const DISCARD = { discardWork: true };
 describe('verified destruction retains results through explicit history deletion', { timeout: 15_000 }, () => {
   let f: ReturnType<typeof fixture>;
   beforeEach(() => { onTestFinished(scopeFixtureProcesses()); f = fixture(workerCleanups()); });
@@ -78,7 +81,7 @@ describe('verified destruction retains results through explicit history deletion
     // presence through the ordinary query while keeping the live manager attached.
     vi.spyOn(f.store, 'hasFallbackRun').mockImplementation(id => id === workerId);
     expect(f.store.fallbackDeleteError(workerId)).toContain('.ai/squawk');
-    expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'complete' });
+    expect(await f.service.destroy(f.caller, { workerId }, DISCARD)).toMatchObject({ state: 'complete' });
     expect(existsSync(workspace.path)).toBe(false);
     expect(f.store.getRun(workerId)).toBeDefined();
     expect(readFileSync(join(directory, 'runs.db'))).toEqual(bytes);
@@ -87,7 +90,7 @@ describe('verified destruction retains results through explicit history deletion
   it('leaves worktree and branch intact when the parent result checkpoint fails', async () => {
     const { workerId, workspace } = await completed();
     vi.spyOn(f.store, 'commitWorkerResult').mockImplementation(() => { throw Error('snapshot disk failure'); });
-    await expect(f.service.destroy(f.caller, { workerId })).rejects.toThrow('snapshot disk failure');
+    await expect(f.service.destroy(f.caller, { workerId }, DISCARD)).rejects.toThrow('snapshot disk failure');
     expect(readFileSync(join(workspace.path, 'result.txt'), 'utf8')).toBe('retained patch');
     expect(execFileSync('git', ['rev-parse', `refs/heads/${workspace.branch}`], { cwd: f.root, encoding: 'utf8' }).trim()).toBe(f.sha);
   });
@@ -99,7 +102,7 @@ describe('verified destruction retains results through explicit history deletion
     f = fixture(workerCleanups({ backoff: { fastMs: 50, fastCount: 100, capMs: 50 } }));
     const { workerId, workspace } = await completed();
     execFileSync('git', ['worktree', 'lock', workspace.path], { cwd: f.root });
-    expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
+    expect(await f.service.destroy(f.caller, { workerId }, DISCARD)).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'] });
     expect(existsSync(workspace.path)).toBe(true);
     // Armed before the unlock, and no timer can fire between the destroy's return and here, so the
     // first scheduled attempt is the one that sees the lock gone.
@@ -117,7 +120,7 @@ describe('verified destruction retains results through explicit history deletion
   });
   it('preserves a settled summary and diff after destruction, child deletion and restart', async () => {
     const { workerId, workspace, generation, files } = await completed();
-    expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'complete', deleted: [
+    expect(await f.service.destroy(f.caller, { workerId }, DISCARD)).toMatchObject({ state: 'complete', deleted: [
       { kind: 'worktree', path: workspace.path }, { kind: 'branch', ref: `refs/heads/${workspace.branch}` },
     ] });
     expect(f.store.readWorkerExecution(workerId)).toMatchObject({ phase: 'complete', generation });
@@ -141,7 +144,7 @@ describe('verified destruction retains results through explicit history deletion
   });
   it('refuses child deletion without valid parent result bytes and current termination evidence', async () => {
     const { workerId, files } = await completed();
-    await f.service.destroy(f.caller, { workerId });
+    await f.service.destroy(f.caller, { workerId }, DISCARD);
     const path = join(files, `${workerId}.execution.json`); const proof = readFileSync(path, 'utf8');
     writeFileSync(path, JSON.stringify({ generation: randomUUID(), phase: 'starting' }));
     expect(f.store.deleteRun(workerId)).toBe(false); writeFileSync(path, proof);
@@ -153,7 +156,7 @@ describe('verified destruction retains results through explicit history deletion
     expect(existsSync(join(files, `${workerId}.ndjson`))).toBe(true);
   });
   it('checkpoints deletion before bytes and retries failed removal after reopening', async () => {
-    const { workerId, files } = await completed(); await f.service.destroy(f.caller, { workerId });
+    const { workerId, files } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD);
     const real = vi.mocked(rmSync).getMockImplementation()!;
     vi.mocked(rmSync).mockImplementation((path, options) => {
       if (path === join(files, `${workerId}-images`)) {
@@ -174,7 +177,7 @@ describe('verified destruction retains results through explicit history deletion
     expect(reopened.canDeleteRun(f.parent.id)).toBe(true); reopened.flush();
   });
   it('does not remove child history on a failed deletion metadata checkpoint', async () => {
-    const { workerId, files } = await completed(); await f.service.destroy(f.caller, { workerId });
+    const { workerId, files } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD);
     const fault = vi.spyOn(runPersistence(f.store), 'persist').mockImplementation(() => { throw Error('index disk failure'); });
     expect(f.store.deleteRun(workerId)).toBe(false);
     expect(existsSync(join(files, `${workerId}.ndjson`))).toBe(true);
@@ -188,15 +191,15 @@ describe('verified destruction retains results through explicit history deletion
       if (++calls === 2) throw Error('final result checkpoint failed');
       return original(...args);
     });
-    await expect(f.service.destroy(f.caller, { workerId })).rejects.toThrow('final result checkpoint failed');
+    await expect(f.service.destroy(f.caller, { workerId }, DISCARD)).rejects.toThrow('final result checkpoint failed');
     expect(f.store.canDeleteRun(workerId)).toBe(false);
     expect(f.store.readWorkerResultDiff(f.parent.id, workerId)).toContain('+retained patch');
     fault.mockRestore();
-    expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'complete' });
+    expect(await f.service.destroy(f.caller, { workerId }, DISCARD)).toMatchObject({ state: 'complete' });
     expect(f.store.readWorkerResultDiff(f.parent.id, workerId)).toContain('+retained patch');
   });
   it('collection and destroy cannot erase evidence during an interrupted child deletion', async () => {
-    const { workerId, files } = await completed(); await f.service.destroy(f.caller, { workerId });
+    const { workerId, files } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD);
     const original = runPersistence(f.store).persist;
     const fault = vi.spyOn(runPersistence(f.store), 'persist').mockImplementation((changes, transaction) => {
       if (changes.deletes.includes(workerId)) throw Error('final deletion checkpoint failed');
@@ -205,12 +208,12 @@ describe('verified destruction retains results through explicit history deletion
     expect(f.store.deleteRun(workerId)).toBe(false);
     expect(existsSync(join(files, `${workerId}.execution.json`))).toBe(false);
     expect(await f.service.collect(f.caller, { workerId })).toMatchObject({ summary: { state: 'available', text: 'Completed implementation' }, diff: { state: 'available' }, settled: true });
-    await expect(f.service.destroy(f.caller, { workerId })).rejects.toMatchObject({ code: 'incompatible_state' });
+    await expect(f.service.destroy(f.caller, { workerId }, DISCARD)).rejects.toMatchObject({ code: 'incompatible_state' });
     fault.mockRestore();
     expect(f.store.deleteRun(workerId)).toBe(true);
   });
   it('retries interrupted parent deletion after its snapshot directory was removed', async () => {
-    const { workerId, files } = await completed(); await f.service.destroy(f.caller, { workerId }); expect(f.store.deleteRun(workerId)).toBe(true);
+    const { workerId, files } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD); expect(f.store.deleteRun(workerId)).toBe(true);
     const original = runPersistence(f.store).persist;
     const fault = vi.spyOn(runPersistence(f.store), 'persist').mockImplementation((changes, transaction) => {
       if (changes.deletes.includes(f.parent.id)) throw Error('final parent checkpoint failed');
@@ -224,7 +227,7 @@ describe('verified destruction retains results through explicit history deletion
     expect(reopened.deleteRun(f.parent.id)).toBe(true); reopened.flush();
   });
   it.each(['missing', 'malformed'] as const)('does not let a %s parent authorize deletion of cleaned child history', async kind => {
-    const { workerId, files } = await completed(); await f.service.destroy(f.caller, { workerId });
+    const { workerId, files } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD);
     const records = f.store.listRuns();
     const parent = records.find(run => run.id === f.parent.id)!;
     f.store.close(); // a restart: the old store must not still own the parent's family
@@ -235,7 +238,7 @@ describe('verified destruction retains results through explicit history deletion
     expect(existsSync(join(files, `${workerId}.ndjson`))).toBe(true); reopened.flush();
   });
   it('keeps worker history and parent snapshots through ordinary run retention eviction', async () => {
-    const { workerId } = await completed(); await f.service.destroy(f.caller, { workerId });
+    const { workerId } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD);
     f.store.updateRun(workerId, { createdAt: '2000-01-01T00:00:00.000Z' });
     f.store.updateRun(f.parent.id, { createdAt: '2000-01-01T00:00:00.000Z' });
     const ordinary = f.store.createRun({ task: 'old', title: 'old', workflow: 'quick-task', steps: [] });
@@ -252,16 +255,16 @@ describe('verified destruction retains results through explicit history deletion
   it('reports branch-only cleanup failure while keeping the removed workspace and retained diff explicit on recollection', async () => {
     const { workerId, workspace } = await completed();
     const lock = join(f.root, '.git/refs/heads', `${workspace.branch}.lock`); writeFileSync(lock, 'locked');
-    expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'incomplete', remaining: ['branch'],
+    expect(await f.service.destroy(f.caller, { workerId }, DISCARD)).toMatchObject({ state: 'incomplete', remaining: ['branch'],
       error: expect.any(String), deleted: [{ kind: 'worktree', path: workspace.path }] });
     expect(await f.service.collect(f.caller, { workerId })).toMatchObject({ cleanup: 'incomplete', workspace: { state: 'deleted' },
       head: { state: 'deleted', sha: f.sha }, diff: { state: 'available' } });
     expect(f.store.deleteRun(workerId)).toBe(false);
-    rmSync(lock); expect(await f.service.destroy(f.caller, { workerId })).toMatchObject({ state: 'complete' });
+    rmSync(lock); expect(await f.service.destroy(f.caller, { workerId }, DISCARD)).toMatchObject({ state: 'complete' });
     expect(f.store.readWorkerResultDiff(f.parent.id, workerId)).toContain('+retained patch');
   });
   it('allows terminal finished parent deletion only after every child history has a complete deletion receipt', async () => {
-    const { workerId } = await completed(); await f.service.destroy(f.caller, { workerId });
+    const { workerId } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD);
     expect(f.store.deleteRun(workerId)).toBe(true);
     const parent = f.store.getRun(f.parent.id)!;
     if (parent.delegation?.role !== 'root') throw Error('fixture');
@@ -271,7 +274,7 @@ describe('verified destruction retains results through explicit history deletion
     expect(f.store.deleteRun(parent.id)).toBe(true);
   });
   it('denies parent deletion when a missing child has a result but no completed deletion receipt', async () => {
-    const { workerId } = await completed(); await f.service.destroy(f.caller, { workerId });
+    const { workerId } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD);
     f.store.close(); // a restart: the old store must not still own the parent's family
     seedRuns(join(f.root, '.ai/cezar'), f.store.listRuns().filter(run => run.id !== workerId));
     const reopened = RunStore.open(join(f.root, '.ai/cezar'), { keepLive: true });
@@ -293,7 +296,7 @@ describe('verified destruction retains results through explicit history deletion
     // Parked on the wait with no session, as the product holds it: a running run always has one.
     setRunStatus(f.store, parent.id, RUN_STATUS.waiting);
     const entry = () => f.store.getRun(parent.id)?.waits?.find(wait => wait.id === waitId);
-    await f.service.destroy(f.caller, { workerId }); expect(f.store.deleteRun(workerId)).toBe(true);
+    await f.service.destroy(f.caller, { workerId }, DISCARD); expect(f.store.deleteRun(workerId)).toBe(true);
     f.manager.reconcileWorkerWaits();
     expect(entry()).toMatchObject({ phase: WAIT_PHASE.open, outcomes: [{ workerId, revision: 1, status: WORKER_OUTCOME_STATUS.review }] });
     const retained = f.store.readWorkerResult(f.parent.id, workerId)!;
@@ -312,7 +315,7 @@ describe('verified destruction retains results through explicit history deletion
   });
 
   it('denies replacement evidence whose retained workspace names a different owner', async () => {
-    const { workerId } = await completed(); await f.service.destroy(f.caller, { workerId }); expect(f.store.deleteRun(workerId)).toBe(true);
+    const { workerId } = await completed(); await f.service.destroy(f.caller, { workerId }, DISCARD); expect(f.store.deleteRun(workerId)).toBe(true);
     const result = f.store.readWorkerResult(f.parent.id, workerId)!;
     if (result.diff.state !== 'available') throw Error('fixture diff');
     const file = JSON.parse(readFileSync(result.diff.path, 'utf8'));

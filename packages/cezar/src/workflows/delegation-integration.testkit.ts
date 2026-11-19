@@ -170,7 +170,7 @@ export function registerDelegationIntegrationGroup(group: 'reviewed-integration'
 
   const collect = (parentId: string, id: string) => command<WorkerCollectedResult>(parentId, ['collect', id]);
 
-  const destroy = (parentId: string, id: string, code = 0) => command<WorkerDestroyResult>(parentId, ['destroy', id], code);
+  const destroy = (parentId: string, id: string, code = 0, ...flags: string[]) => command<WorkerDestroyResult>(parentId, ['destroy', id, ...flags], code);
 
 if (group === 'reviewed-integration') {
 
@@ -244,12 +244,15 @@ if (group === 'reviewed-integration') {
     // Actual Git CAS failure after worktree removal, not a stubbed cleanup result.
     const branchLock = git(repo, 'rev-parse', '--git-path', `refs/heads/${ownedWorkspace(resultA.workspace).branch}.lock`);
     const lockPath = join(repo, branchLock); writeFileSync(lockPath, 'held by integration test');
-    expect(await destroy(p.id, a, 1)).toMatchObject({ state: 'incomplete', remaining: ['branch'], deleted: [{ kind: 'worktree', path: firstA.cwd }] });
+    // No ref reaches the commit the parent did not integrate: a plain destroy names it, and the
+    // parent discards it (hearsay-tools/squawk#3553). A's cherry-pick may reproduce its SHA.
+    expect(await destroy(p.id, b, 1)).toMatchObject({ state: 'incomplete', remaining: ['process', 'worktree', 'branch'], work: { uncommittedFiles: 0, commits: 1 } });
+    expect(await destroy(p.id, a, 1, '--discard-work')).toMatchObject({ state: 'incomplete', remaining: ['branch'], deleted: [{ kind: 'worktree', path: firstA.cwd }] });
     expect(existsSync(firstA.cwd)).toBe(false);
     expect(git(repo, 'rev-parse', `refs/heads/${ownedWorkspace(resultA.workspace).branch}`)).toBe(resultA.head.sha);
     expect(store.canDeleteRun(a)).toBe(false);
     expect(store.readWorkerResultDiff(p.id, a)).toContain('+alpha');
-    expect(await destroy(p.id, b)).toMatchObject({ state: 'complete', remaining: [] });
+    expect(await destroy(p.id, b, 0, '--discard-work')).toMatchObject({ state: 'complete', remaining: [] });
     expect(manager.finish(p.id)).toBe(true);
     await until(() => !manager.isActive(p.id), 'parent session closes at review');
     expect(store.getRun(p.id)?.status).toBe(RUN_STATUS.review);

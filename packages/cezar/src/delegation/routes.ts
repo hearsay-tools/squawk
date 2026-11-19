@@ -5,7 +5,7 @@ import { ZodError } from 'zod';
 import { z } from 'zod';
 import { discoveryRequestSchema } from '@open-mercato/cezar-contract/discovery';
 import { conversationSendRequestSchema, conversationInspectRequestSchema, conversationCancelRequestSchema, inboxReceiptRequestSchema, requestWaitRequestSchema } from '@open-mercato/cezar-contract/conversations';
-import { workerListQuerySchema, workerCancelWaitRequestSchema, workerSpawnRequestSchema, workerSteerRequestSchema, workerWaitRequestSchema, workerParamsSchema, workerEmptyRequestSchema, peerWaitRequestSchema } from '@open-mercato/cezar-contract/delegation';
+import { workerListQuerySchema, workerCancelWaitRequestSchema, workerSpawnRequestSchema, workerSteerRequestSchema, workerWaitRequestSchema, workerParamsSchema, workerEmptyRequestSchema, workerDestroyRequestSchema, peerWaitRequestSchema } from '@open-mercato/cezar-contract/delegation';
 import { jsonZodValidator, paramZodValidator, queryZodValidator } from '../server/validators.ts';
 import { isLoopbackHostHeader } from '../server/capabilities.ts';
 import { CredentialRegistry, type Caller } from './credentials.ts';
@@ -75,8 +75,8 @@ export function createDelegationRoutes(service: DelegationService, credentials: 
     .post('/:workerId/collect', paramZodValidator(workerParamsSchema, invalid), jsonZodValidator(workerEmptyRequestSchema, { ...invalid, absent: {}, malformed: null }), async c => c.json(await service.collect(c.get('caller'), c.req.valid('param')), 200))
     .post('/:workerId/steer', paramZodValidator(workerParamsSchema, invalid), jsonZodValidator(workerSteerRequestSchema, invalid), async c => c.json(await service.steer(c.get('caller'), c.req.valid('param'), c.req.valid('json')), 200))
     .post('/:workerId/stop', paramZodValidator(workerParamsSchema, invalid), jsonZodValidator(workerEmptyRequestSchema, { ...invalid, absent: {}, malformed: null }), async c => c.json(await service.stop(c.get('caller'), c.req.valid('param')), 200))
-    .post('/:workerId/destroy', paramZodValidator(workerParamsSchema, invalid), jsonZodValidator(workerEmptyRequestSchema, { ...invalid, absent: {}, malformed: null }), async c => {
-      const result = await service.destroy(c.get('caller'), c.req.valid('param'));
+    .post('/:workerId/destroy', paramZodValidator(workerParamsSchema, invalid), jsonZodValidator(workerDestroyRequestSchema, { ...invalid, absent: {}, malformed: null }), async c => {
+      const result = await service.destroy(c.get('caller'), c.req.valid('param'), c.req.valid('json'));
       return result.state === 'incomplete' ? c.json(result, 409) : c.json(result, 200);
     })
     .get('/:workerId/diff', paramZodValidator(workerParamsSchema, invalid), async c => c.json(await service.diff(c.get('caller'), c.req.valid('param')), 200));

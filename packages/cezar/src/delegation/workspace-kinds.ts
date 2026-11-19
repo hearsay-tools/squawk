@@ -1,6 +1,6 @@
 /** The worker workspace kinds: one definition per `workspace.kind`. Delegation code and the run
  *  engine's port ask the definition; they never call a kind's own functions directly. */
-import type { WorkerChangeReport, WorkerDestroy, WorkerDestroyResult, WorkerDiff, WorkerWorkspace } from '@open-mercato/cezar-contract';
+import type { WorkerChangeReport, WorkerDestroy, WorkerDestroyResult, WorkerDestroyWork, WorkerDiff, WorkerWorkspace } from '@open-mercato/cezar-contract';
 import { ownedWorkspace } from '@open-mercato/cezar-contract/delegation';
 import { runGit } from '../git-command.ts';
 import type { RunRecord } from '../runs/store.ts';
@@ -20,6 +20,8 @@ export type WorkspaceRemoval = {
   assertUnheld?: (() => void) | undefined;
   /** How long the removal may wait for a lock it needs. Left out: the kind's default wait. */
   waitMs?: number;
+  /** Delete the worker's uncommitted changes and unlanded commits instead of refusing (hearsay-tools/squawk#3553). */
+  discardWork?: boolean;
 };
 
 /** A new worker's id and baseline, and the run that spawns it with the directory that run works in. */
@@ -53,7 +55,11 @@ export interface WorkspaceKind {
   changeReport(dataDir: string, run: RunRecord, target: WorkspaceReportTarget): Promise<WorkerChangeReport | undefined>;
   /** Runs `config`, the project's `worktreeTeardown` value, before a destroy. Returns why it failed, if it did. */
   teardown(repoRoot: string, config: unknown, workspace: WorkerWorkspace): Promise<string | undefined>;
-  /** Removes the workspace's resources and reports the ones that remain. */
+  /** The work a destroy would delete, read without changing anything; undefined when there is none
+   *  or the kind deletes no work. Throws when it cannot be read. */
+  work(repoRoot: string, workspace: WorkerWorkspace): Promise<WorkerDestroyWork | undefined>;
+  /** Removes the workspace's resources and reports the ones that remain. Refuses, naming it, to
+   *  delete work unless `removal.discardWork` allows it. */
   remove(repoRoot: string, workspace: WorkerWorkspace, removal: WorkspaceRemoval): Promise<WorkerDestroyResult>;
 }
 
@@ -101,9 +107,12 @@ const isolated: WorkspaceKind = {
   async teardown(repoRoot, config, workspace) {
     return (await import('./worktree-teardown.ts')).runWorktreeTeardown(repoRoot, config, ownedWorkspace(workspace));
   },
-  async remove(repoRoot, workspace, { previewHost, assertCurrent, assertUnheld, waitMs }) {
+  async work(repoRoot, workspace) {
+    return (await import('./workspace-work.ts')).workspaceWork(repoRoot, ownedWorkspace(workspace));
+  },
+  async remove(repoRoot, workspace, { previewHost, assertCurrent, assertUnheld, waitMs, discardWork }) {
     return (await import('./owned-workspace-release.ts')).releaseThenRemoveOwnedWorkspace({ previewHost }, repoRoot, ownedWorkspace(workspace), assertCurrent, assertUnheld,
-      waitMs === undefined ? {} : { waitMs });
+      { ...(waitMs === undefined ? {} : { waitMs }), ...(discardWork ? { discardWork } : {}) });
   },
 };
 
@@ -140,6 +149,8 @@ const shared: WorkspaceKind = {
   async readDiff() { throw new DelegationPolicyError('unavailable_diff', SHARED_NO_DIFF); },
   async changeReport(dataDir, run, target) { return workspaceChangeReport(dataDir, run.id, workerDelegation(run).workspace.path, target); },
   async teardown() { return undefined; },
+  // The directory is the host's: a destroy deletes none of its work.
+  async work() { return undefined; },
   async remove(_repoRoot, workspace) { return { workerId: workspace.ownerRunId, state: 'complete', deleted: [], remaining: [] }; },
 };
 

@@ -1,5 +1,5 @@
 import type { WorkerDestroyResult, OwnedWorkerWorkspace } from '@open-mercato/cezar-contract';
-import { removeOwnedWorkspace } from './workspace-removal.ts';
+import { removeOwnedWorkspace, type RemovalOptions } from './workspace-removal.ts';
 import type { PreviewHostLike } from '../preview/registration.ts';
 
 /** A destroyed owned worker's checkout: the same rule as `releaseThenRemoveWorktree` (`git-worktree-release.ts`),
@@ -10,9 +10,9 @@ export async function releaseThenRemoveOwnedWorkspace(
   workspace: OwnedWorkerWorkspace,
   assertCurrent?: () => void,
   assertUnheld?: () => void,
-  lock: { waitMs?: number } = {},
+  options: RemovalOptions = {},
 ): Promise<WorkerDestroyResult> {
   return removeOwnedWorkspace(repoRoot, workspace, assertCurrent, async () => {
     await deps.previewHost?.release(workspace.ownerRunId).catch(() => undefined);
-  }, assertUnheld, lock);
+  }, assertUnheld, options);
 }
