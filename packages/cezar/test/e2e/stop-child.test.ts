@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import test from 'node:test';
 import { stopChild } from './stop-child.js';
+import { ignoreTermSource } from '../../src/stubborn-child.testkit.ts';
 
 test('stops a child that handles SIGTERM', async () => {
   const child = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => process.exit(0)); process.send('ready'); setInterval(() => {}, 1000);"],
@@ -32,7 +33,7 @@ test('the default bound lets a shutdown that blocks on synchronous disk work fin
 });
 
 test('kills and names a child that ignores SIGTERM', async () => {
-  const child = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); process.send('ready'); setInterval(() => {}, 1000);"],
+  const child = spawn(process.execPath, ['-e', `${ignoreTermSource()} process.send('ready'); setInterval(() => {}, 1000);`],
     { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
   try {
     await once(child, 'message');

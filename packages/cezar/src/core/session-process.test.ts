@@ -15,6 +15,7 @@ vi.mock('node:fs', async original => ({ ...await original<typeof import('node:fs
 
 import { leaderState, probeLeaderState, psLeaderState, forwardToSessionGroups, procStatExited, sessionGroupOf, signalSession, spawnSessionLeader } from './session-process.ts';
 import { requirePid } from '../pid-file.testkit.ts';
+import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 
 /** A zombie has exited; only its reaper's wait remains. */
 function alive(pid: number): boolean {
@@ -26,7 +27,7 @@ function alive(pid: number): boolean {
   } catch { return false; }
 }
 
-const IGNORES_TERM = "process.on('SIGTERM',()=>{}); setTimeout(()=>{},20000)";
+const IGNORES_TERM = `${ignoreTermSource()} setTimeout(()=>{},20000)`;
 const DEFAULT_TERM = 'setTimeout(()=>{},20000)';
 /** Ignores SIGTERM, leaving a receipt in its cwd that it got one. */
 const TERM_RECEIPT = "process.on('SIGTERM',()=>{require('fs').writeFileSync('member.term','')}); setTimeout(()=>{},20000)";
@@ -291,7 +292,7 @@ g.unref(); s.unref(); process.exit(0);`], { cwd, env: process.env, timings: { ki
 
   it('a child spawned in the group after its leader exits on its own is still ended', async () => {
     // The member starts the late child once the leader's exit closes its stdin pipe.
-    const member = `const { spawn } = require('child_process'); const fs = require('fs'); process.on('SIGTERM', () => {});
+    const member = `const { spawn } = require('child_process'); const fs = require('fs'); ${ignoreTermSource()}
 process.stdin.on('end', () => { const c = spawn(process.execPath, ['-e', ${JSON.stringify(IGNORES_TERM)}], { stdio: 'ignore' });
   fs.writeFileSync('late.pid.tmp', String(c.pid)); fs.renameSync('late.pid.tmp', 'late.pid'); });
 process.stdin.resume(); setTimeout(() => {}, 20000);`;

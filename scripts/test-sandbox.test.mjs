@@ -8,6 +8,7 @@ import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 import { OWNER_FILE, createTestSandbox, hideHostCommands, linkSharedOmpNatives, reapTestSandboxes, removeTestSandboxes, sandboxProcesses, sharedOmpNativesCache, stopSandboxProcesses } from './test-sandbox.mjs'
+import { ignoreTermSource } from '../packages/cezar/src/stubborn-child.testkit.ts'
 
 const preload = fileURLToPath(new URL('./test-git-env.mjs', import.meta.url))
 const helper = new URL('./test-sandbox.mjs', import.meta.url).href
@@ -168,7 +169,7 @@ test('stopSandboxProcesses kills what ignores SIGTERM once the grace ends', { sk
   const sandbox = join(root, 'cez-stop-stubborn')
   mkdirSync(sandbox)
   // A handler replaces SIGTERM's default action: this child outlives it.
-  const ignoring = spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); process.stdout.write("ready\\n"); setInterval(() => {}, 1000)'], {
+  const ignoring = spawn(process.execPath, ['-e', `${ignoreTermSource()} process.stdout.write("ready\\n"); setInterval(() => {}, 1000)`], {
     cwd: sandbox, stdio: ['ignore', 'pipe', 'inherit'],
   })
   t.after(() => ignoring.kill('SIGKILL'))
@@ -194,7 +195,7 @@ test('stopSandboxProcesses scans again after SIGKILL, so a writer forked after a
   const root = scratch(t)
   const sandbox = join(root, 'cez-stop-forked')
   mkdirSync(sandbox)
-  const holder = spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); process.stdout.write("ready\\n"); setInterval(() => {}, 1000)'], {
+  const holder = spawn(process.execPath, ['-e', `${ignoreTermSource()} process.stdout.write("ready\\n"); setInterval(() => {}, 1000)`], {
     cwd: sandbox, stdio: ['ignore', 'pipe', 'inherit'],
   })
   t.after(() => holder.kill('SIGKILL'))

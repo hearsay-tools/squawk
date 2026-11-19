@@ -12,10 +12,11 @@ import { discoverPiSkills } from './pi-skill-catalog.ts';
 import { discoverOmpSkills } from './omp-skill-catalog.ts';
 import { RunnerSkillCatalog, type SkillCatalogQuery } from './runner-skill-catalog.ts';
 import { skillProbe, type SkillDiscoveryOptions } from './skill-probe.ts';
+import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 const discovers = { claude: discoverClaudeSkills, codex: discoverCodexSkills, opencode: discoverOpencodeSkills, pi: discoverPiSkills, omp: discoverOmpSkills };
 // The member reports readiness after installing its handlers; only then does its leader crash.
 const leaderFirst = `const { spawn } = require('node:child_process');
-const member = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000); process.send('ready')"],
+const member = spawn(process.execPath, ['-e', ${JSON.stringify(`${ignoreTermSource()} setInterval(() => {}, 1000); process.send('ready')`)}],
   { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
 member.once('message', () => process.exit(1));`;
 
@@ -34,7 +35,7 @@ for (const runner of RUNNER_IDS) describe(`${runner} skill probe process cleanup
       }
       if (runner === 'pi') expect(args.some(a => a.endsWith('/pi-project-skills.mjs'))).toBe(true);
       child = spawnSessionLeader(process.execPath, ['-e', failure === 'hung'
-        ? "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"
+        ? `${ignoreTermSource()} setInterval(() => {}, 1000)`
         : failure === 'leader-first' ? leaderFirst : 'process.exit(1)'], { cwd, env });
       exit = once(child, 'exit');
       return child;

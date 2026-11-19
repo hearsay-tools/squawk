@@ -22,7 +22,7 @@ it('reaps the owned native watch child before returning a probe conflict', async
  directory = await mkdtemp(join(tmpdir(),'ci-conflict-process-'));
  const log=join(directory,'queries'), gate=join(directory,'conflicting');
  const github = new GithubCiClient({command:{file:process.execPath,args:[fileURLToPath(new URL('./fixtures/gh.mjs',import.meta.url))]},
-  env:{...process.env,CI_FIXTURE_MODE:'stubborn',CI_FIXTURE_LOG:log,CI_FIXTURE_CONFLICT_FILE:gate}});
+  env:{...process.env,CI_FIXTURE_MODE:'stubborn',CI_FIXTURE_OWNER:String(process.pid),CI_FIXTURE_LOG:log,CI_FIXTURE_CONFLICT_FILE:gate}});
  supervisor = new CiWatcherSupervisor({github});
  const controller = new AbortController();
  const pending = supervisor.watch({id:crypto.randomUUID(),generation:'g',turnId:'t',prUrl:'https://github.com/org/repo/pull/12',repository:'org/repo',prNumber:12,

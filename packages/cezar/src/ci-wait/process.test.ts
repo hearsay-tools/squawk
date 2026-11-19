@@ -18,7 +18,7 @@ it('kills the owned watcher when the controller dies without running cleanup',as
  const dir=await workspace();const log=join(dir,'log');
  // A real intermediate controller dies by SIGKILL, closing its pipe to the wrapper.
  const source=`const {spawn}=require('node:child_process'); const c=spawn(process.execPath,['-e',${JSON.stringify(CI_PROCESS_WRAPPER)},${JSON.stringify(JSON.stringify({file:process.execPath,args:[fixture,'pr','checks','12','--watch']}))}],{stdio:['pipe','ignore','ignore']});setInterval(()=>{},1000);`;
- const parent=spawn(process.execPath,['-e',source],{env:{...process.env,CI_FIXTURE_MODE:'stubborn',CI_FIXTURE_LOG:log},stdio:'ignore'});
+ const parent=spawn(process.execPath,['-e',source],{env:{...process.env,CI_FIXTURE_MODE:'stubborn',CI_FIXTURE_OWNER:String(process.pid),CI_FIXTURE_LOG:log},stdio:'ignore'});
  try {
   await vi.waitFor(async()=>expect((await calls(log)).length).toBe(1), { timeout: HANG_GUARD_MS });const pid=(await calls(log))[0]!.pid;parent.kill('SIGKILL');
   await vi.waitFor(async()=>{

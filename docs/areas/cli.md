@@ -101,7 +101,13 @@ runs (`jobRunsIn`): the task-end reap, archive and the startup sweep spare it, a
 that finds no job running removes it (hearsay-tools/squawk#3138). The end-time reap marks the end it
 kept the directory for, so later run events of that end, such as a read mark, keep it too
 (`jobHoldsScratch` in `workflows/run/run-settlement.ts`); once the run is archived, the mark holds
-nothing. The launch prompt's
+nothing. `hsq job stop <name>` ends
+the job's whole process group, which the supervisor leads (hearsay-tools/squawk#3941). After the
+supervisor has exited, it ends the members left in the group only where the record's start token
+proves this boot (Linux, the worker scope's rule in ADR 0032); elsewhere it reports them and
+signals nothing. Agents stop a job with it, never with
+`kill <pid>`: that signal reaches only the command, and a child that ignores SIGTERM keeps running.
+The launch prompt's
 "Long commands" part (`jobs/command.ts`) gives agents the full command; the `cezar_wait`
 description names it only as `hsq job start`, because the tool list also loads inside omp. A result is one JSON object on stdout and an error is one on stderr; `--help` prints text. The rules are in
 [the unified waits spec](../../.ai/specs/2026-10-17-unified-waits.md#the-job-command-2026-11-10).

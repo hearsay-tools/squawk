@@ -8,16 +8,19 @@ import { test } from 'node:test';
 
 import { down, parseUpArgs, up } from '../.ai/scripts/qa-fixture.mjs';
 import { identity } from '../.ai/scripts/test-env-lease.mjs';
+import { ignoreTermSource } from '../packages/cezar/src/stubborn-child.testkit.ts';
 
 // A stand-in for the e2e build: `dist/index.js` answers like `hsq serve` does for the checks
 // qa-fixture makes. It records its argv and environment, and keeps a child in its own process
 // group, so a test can see what reached the server and that `down` stops the whole group.
 // CEZ_STUB_MODE (passed through --server-env) picks a failure, or `hang`, a boot that never
 // prints its banner; CEZ_STUB_CHILD=stubborn makes
-// the child ignore SIGTERM, and CEZ_STUB_CHILD=zombie makes it leave the group without reaping
+// the child ignore SIGTERM until its owner, the pid in CEZ_STUB_OWNER, is gone (hearsay-tools/squawk#3941),
+// and CEZ_STUB_CHILD=zombie makes it leave the group without reaping
 // the process it forked, which then stays in the group as a zombie.
 const STUB_SERVER = `
 import { spawn } from 'node:child_process';
+import { ignoreTermSource } from ${JSON.stringify(new URL('../packages/cezar/src/stubborn-child.testkit.ts', import.meta.url).href)};
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
@@ -25,12 +28,14 @@ const args = process.argv.slice(2);
 const repo = realpathSync(args[args.indexOf('--repo') + 1]);
 const mode = process.env.CEZ_STUB_MODE ?? 'serve';
 if (mode === 'exit') process.exit(3);
-const childScript = (process.env.CEZ_STUB_CHILD === 'stubborn' ? 'process.on("SIGTERM", () => {}); ' : '') + 'setInterval(() => {}, 1000)';
+// Squawk creates its home on first write, as here. The stubborn child writes child-ready into it.
+mkdirSync(process.env.CEZ_HOME, { recursive: true });
+// A stubborn child says so once its SIGTERM handler is in place, so a test signals it only then.
+const ready = "require('node:fs').writeFileSync(require('node:path').join(process.env.CEZ_HOME, 'child-ready'), ''); ";
+const childScript = (process.env.CEZ_STUB_CHILD === 'stubborn' ? ignoreTermSource(Number(process.env.CEZ_STUB_OWNER)) + ' ' + ready : '') + 'setInterval(() => {}, 1000)';
 const child = process.env.CEZ_STUB_CHILD === 'zombie'
   ? spawn('sh', ['-c', 'true & exec setsid sleep 1000'], { stdio: 'ignore' })
   : spawn(process.execPath, ['-e', childScript], { stdio: 'ignore' });
-// Squawk creates its home on first write, as here.
-mkdirSync(process.env.CEZ_HOME, { recursive: true });
 writeFileSync(join(process.env.CEZ_HOME, 'stub.json'), JSON.stringify({ args, env: process.env, child: child.pid }));
 const projects = mode === 'unregistered' ? [] : [{ id: 'qa-repo', root: repo }];
 const server = createServer((req, res) => {
@@ -288,7 +293,7 @@ test('the watcher stops what is left of a server that exited on its own, then cl
 
 test('down kills a group member that outlives the server and ignores SIGTERM', async (t) => {
   const f = fixture(t);
-  await up(f.options({ args: ['--server-env=CEZ_STUB_CHILD=stubborn'] }));
+  await up(f.options({ args: ['--server-env=CEZ_STUB_CHILD=stubborn', `--server-env=CEZ_STUB_OWNER=${process.pid}`] }));
   const { root, server } = descriptor(f.worktree);
   const { child } = JSON.parse(readFileSync(join(root, 'home/stub.json'), 'utf8'));
   await down(f.options({ stdout: sink(), stopGraceMs: 300 }));
@@ -296,6 +301,29 @@ test('down kills a group member that outlives the server and ignores SIGTERM', a
   await until(() => !alive(child), 'the stubborn child to exit');
   assert.equal(alive(server.pid), false);
   assert.equal(existsSync(root), false);
+});
+
+// hearsay-tools/squawk#3941 AC2: a runner SIGKILLed before its cleanup, and a SIGTERM sweep that
+// takes the watcher and the server, must not strand the stubborn child. A stand-in owner plays the
+// test runner, so this test can SIGKILL it.
+test('the stubborn child ignores SIGTERM while its owner lives, and exits once the owner is SIGKILLed', async (t) => {
+  const f = fixture(t);
+  const owner = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+  await new Promise((done) => owner.once('spawn', done));
+  t.after(() => owner.kill('SIGKILL'));
+  await up(f.options({ args: ['--server-env=CEZ_STUB_CHILD=stubborn', `--server-env=CEZ_STUB_OWNER=${owner.pid}`] }));
+  const { root, server, watcher } = descriptor(f.worktree);
+  const { child } = JSON.parse(readFileSync(join(root, 'home/stub.json'), 'utf8'));
+  t.after(() => { if (alive(child)) process.kill(child, 'SIGKILL'); });
+  // up proves the server answers, not that the child has set its handler yet.
+  await until(() => existsSync(join(root, 'home/child-ready')), 'the stubborn child to set its SIGTERM handler');
+  process.kill(-watcher.pid, 'SIGTERM');
+  process.kill(-server.pid, 'SIGTERM');
+  await until(() => !alive(watcher.pid) && !alive(server.pid), 'the watcher and the server to exit');
+  assert.equal(alive(child), true, 'the child must still ignore SIGTERM while its owner lives');
+  owner.kill('SIGKILL');
+  // The guard checks its owner about once a second.
+  await until(() => !alive(child), 'the stubborn child to exit after its owner');
 });
 
 /** The state and process group of a process, from /proc (Linux only). */

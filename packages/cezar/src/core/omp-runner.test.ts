@@ -30,6 +30,7 @@ import { OMP_MINIMAL_ARGS, OMP_SPEC_SUPPORT } from '../runners/omp/spec-support.
 import { ompProviderErrorMessage } from './omp-ui-mapper.js';
 import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.js';
 import { readPids } from '../pid-file.testkit.js';
+import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 import { z } from 'zod';
 import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from './codex-ui-mapper.ts';
 import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from './opencode-ui-mapper.ts';
@@ -916,7 +917,7 @@ process.exit(2);
 
   it('tears the live child down when stdout fails, escalating to SIGKILL', async () => {
     const bin = join(cwd, 'stubborn-omp.mjs');
-    writeFileSync(bin, "#!/usr/bin/env node\nprocess.on('SIGTERM', () => {});\nprocess.stderr.write('ready\\n');\nsetTimeout(() => undefined, 20_000);\n", { mode: 0o755 });
+    writeFileSync(bin, `#!/usr/bin/env node\n${ignoreTermSource()}\nprocess.stderr.write('ready\\n');\nsetTimeout(() => undefined, 20_000);\n`, { mode: 0o755 });
     spawned.length = 0;
     const session = new OmpRunner({ bin, killGraceMs: 100 }).startSession(spec('x', { toolGrant: explicitToolGrant(['Read']) }), undefined, { autoEndAfterFirstTurn: false });
     const child = spawned.at(-1)!;

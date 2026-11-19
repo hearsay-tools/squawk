@@ -55,7 +55,7 @@ describe('bounded GitHub supervisor',()=>{
   // github.watch() starts only after a pending snapshot (three sequential fixture spawns),
   // so waiting on a fixed budget for the log line loses under load. Resolve the instant
   // the call itself happens; the log wait below then spans only the spawned fixture's boot.
-  const github=new GithubCiClient({command:{file:process.execPath,args:[fixture]},env:{...process.env,CI_FIXTURE_MODE:'stubborn',CI_FIXTURE_LOG:log}});
+  const github=new GithubCiClient({command:{file:process.execPath,args:[fixture]},env:{...process.env,CI_FIXTURE_MODE:'stubborn',CI_FIXTURE_OWNER:String(process.pid),CI_FIXTURE_LOG:log}});
   let onWatch!: ()=>void; const watchInvoked=new Promise<void>(resolve=>{onWatch=resolve;});
   const realWatch=github.watch.bind(github);
   github.watch=(pr,signal)=>{const pendingWatch=realWatch(pr,signal); onWatch(); return pendingWatch;};

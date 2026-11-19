@@ -225,6 +225,7 @@ it('cezar_wait advertises the process fields and tells the agent how to write th
   expect(description).toContain('`hsq job start <name> -- <command> [args...]` (your instructions give the full command for this session under "Long commands")');
   expect(description).toContain('pass the `pid` and `exitFile` it prints as `pid` and `exit_file`');
   expect(description).toContain(`the job outlives this session; Squawk does not stop it.`);
+  expect(description).toContain('To end a job early, run `hsq job stop <name>`; never `kill` its `pid`');
   expect(description).toContain(`Its files are in $TMPDIR, the task's temp directory, which Squawk keeps across its own restart and, after the task ends, while a job in it runs, so \`hsq job status <name>\` still finds the job after a Continue.`);
   expect(description).toContain('For files that must outlive the task, pass `--dir` with a directory you keep; a process wait accepts that job\'s `exitFile` too.');
   expect(description).toContain('Do not start a long command with `&`, `nohup`, `setsid` or your own background-task tool');

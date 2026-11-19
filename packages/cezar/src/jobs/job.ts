@@ -4,8 +4,11 @@ import { constants, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { JOB_EXIT_SUFFIX, JOB_NAME, JOB_RECORD_SUFFIX } from '../process-wait/job-exit-file.ts';
 import { DatabaseSync } from 'node:sqlite';
-import { recordedProcessLive } from '../delegation/process-liveness.ts';
-import { processStartToken, startOwnedGroup } from '../detached-process.ts';
+import { processPredatesCurrentBoot, recordedProcessLive } from '../delegation/process-liveness.ts';
+import { pidExists } from '../core/process-stat.ts';
+import { processGroupAlive } from '../core/session-process.ts';
+import { groupOwned } from '../worker-scope/groups.ts';
+import { processStartToken, startOwnedGroup, stopGroup } from '../detached-process.ts';
 import { ownCommand } from './command.ts';
 
 /**
@@ -130,6 +133,32 @@ export function jobRunsIn(dirs: readonly string[]): boolean {
       } catch { return true; }
     });
   });
+}
+
+export interface StoppedJob { name: string; pid: number; stopped: boolean }
+
+/**
+ * Ends the job's whole process group, which its supervisor leads: SIGTERM, then SIGKILL for what
+ * outlives `graceMs` (hearsay-tools/squawk#3941). A signal to the supervisor's PID alone reaches only
+ * its command, so a member that ignores SIGTERM, or a child the command started, keeps running. A
+ * group whose supervisor has already exited is still the job's while any member lives, so this also
+ * ends what such a signal left, where the record proves the group is still the job's. `stopped` is
+ * false when a member still runs, or when the group cannot be proved the job's and still runs: such a
+ * number may name another group now, and it is not signalled.
+ */
+export async function stopJob(dir: string, name: string, options: { graceMs?: number } = {}): Promise<StoppedJob> {
+  const record = readRecord(jobPaths(dir, name));
+  if (!record) throw new JobError(`No job named ${JSON.stringify(name)} in ${dir}.`);
+  const entry = { pid: record.pid, pgid: record.pid, ...(record.start === undefined ? {} : { startToken: record.start }) };
+  // A group whose supervisor is gone is the job's only where the record proves this boot, as for a
+  // worker's groups (ADR 0032): after a reboot its number can name another group. One the record
+  // cannot prove is never signalled; a record from an earlier boot proves the job's group ended.
+  if (!pidExists(record.pid) && !groupOwned(entry)) {
+    return { name, pid: record.pid, stopped: processPredatesCurrentBoot(entry) || !processGroupAlive(record.pid) };
+  }
+  const leader = record.start === undefined ? { pid: record.pid } : { pid: record.pid, start: record.start };
+  const stopped = await stopGroup(leader, options.graceMs === undefined ? {} : { graceMs: options.graceMs });
+  return { name, pid: record.pid, stopped };
 }
 
 /** What the supervisor tells its starter: it holds the name, or another supervisor does. */

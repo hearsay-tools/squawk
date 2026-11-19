@@ -7,6 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { readPid, requirePid } from './pid-file.testkit.ts';
+import { ignoreTermPython, ignoreTermSource } from './stubborn-child.testkit.ts';
 
 import {
   groupExists, groupRunning, leaderRunning, processStartToken, startAndForget, startOwnedGroup, stopGroup, watchGroup,
@@ -73,7 +74,7 @@ async function pidFrom(name: string): Promise<number> {
 const script = (body: string) => ['-e', `const out = (name) => require('node:path').join(${JSON.stringify(dir)}, name); ${body}`];
 const IDLE = 'setInterval(() => {}, 1000);';
 /** A member that ignores SIGTERM. It records its pid only once its handler is in place. */
-const MEMBER = `process.on('SIGTERM', () => {}); require('node:fs').writeFileSync(process.argv[1] + '.tmp', process.pid + '\\n'); require('node:fs').renameSync(process.argv[1] + '.tmp', process.argv[1]); ${IDLE}`;
+const MEMBER = `${ignoreTermSource()} require('node:fs').writeFileSync(process.argv[1] + '.tmp', process.pid + '\\n'); require('node:fs').renameSync(process.argv[1] + '.tmp', process.argv[1]); ${IDLE}`;
 /** Forks MEMBER into the leader's group, writing `member.pid`. */
 const STUBBORN_MEMBER = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(MEMBER)}, out('member.pid')], { stdio: 'ignore' });`;
 /** The leader exits once its member is ready, so the member outlives it. */
@@ -198,7 +199,7 @@ require('node:fs').writeFileSync(out('sleeper.pid.tmp'), sh.pid + '\\n'); requir
 /** A leader whose main thread exits while another thread keeps a listening port: `/proc` reads it Z. */
 const THREAD_HOLDS_PORT = [
   'import ctypes, os, signal, socket, sys, threading, time',
-  'signal.signal(signal.SIGTERM, signal.SIG_IGN)',
+  ignoreTermPython(),
   "s = socket.socket(); s.bind(('127.0.0.1', 0)); s.listen()",
   'threading.Thread(target=lambda: time.sleep(60)).start()',
   "with open(os.path.join(sys.argv[1], 'thread.port.tmp'), 'w') as port_file:",

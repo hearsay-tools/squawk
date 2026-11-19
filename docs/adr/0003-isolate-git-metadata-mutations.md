@@ -14,7 +14,11 @@ instead of using the real index (`fallbackProjectWriteError`).
 
 Worktree mutations use a separate cross-process lock keyed by the canonical Git common
 directory. A short-lived keeper owns the lock and its Git children until they exit, even if
-the caller disconnects. Task branches use `--no-track`; explicit base refs make upstream
+the caller disconnects. A git killed at its timeout leaves its children in the keeper's
+process group, so cleanup after a timeout proves the group has exited (Linux: the `/proc` member
+list, then the group probe) before it retries, rolls back or releases the claim; where it cannot
+prove that, the state is unknown and the claim stays, except on Windows, which has no group probe
+and releases it while skipping the rollback and retry (hearsay-tools/squawk#3941). Task branches use `--no-track`; explicit base refs make upstream
 configuration unnecessary and avoid a shared config write.
 
 ## Considered Options

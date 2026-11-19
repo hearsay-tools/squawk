@@ -1,4 +1,5 @@
 import { testHome } from '../home/test-home.testkit.ts';
+import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { createFixtureManager, fixtureWork } from './fixture-cleanup.testkit.ts';
@@ -184,7 +185,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       manager.enqueueOwnedRun(w.id); await until(() => store.getRun(w.id)?.status === 'waiting');
       manager.requestWorkerStop(w.id); expect(await manager.awaitRunTermination(w.id, 15_000)).toBe(true);
     }
-    const child = spawn(process.execPath, ['-e', "process.on('SIGTERM',()=>{}); console.log('ready'); setInterval(()=>{},1000)"], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, ['-e', `${ignoreTermSource()} console.log('ready'); setInterval(()=>{},1000)`], { stdio: ['ignore', 'pipe', 'pipe'] });
     const closed = new Promise<{ text: string; toolCalls: []; tokensUsed: number }>(resolve => child.once('close', () => resolve({ text: '', toolCalls: [], tokensUsed: 0 })));
     releases.push(() => child.kill('SIGKILL'));
     await new Promise<void>(resolve => child.stdout!.once('data', () => resolve()));
@@ -221,7 +222,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
   it.each(['live', 'parked'])('%s ignored SIGTERM and concurrent stop waiters cannot mistake cancelled/killed for exit', async phase => {
     const w = await worker(); let child: ReturnType<typeof spawn> | undefined; let ready = false;
     vi.spyOn(runners, 'createRunner').mockResolvedValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined, run: async () => { throw Error('unused'); }, startSession: (_spec, emit) => {
-      child = spawn(process.execPath, ['-e', "process.on('SIGTERM',()=>{}); console.log('ready'); setInterval(()=>{},1000)"], { stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawn(process.execPath, ['-e', `${ignoreTermSource()} console.log('ready'); setInterval(()=>{},1000)`], { stdio: ['ignore', 'pipe', 'pipe'] });
       child.stdout!.once('data', () => { ready = true; if (phase === 'parked') emit?.({ type: 'turn-end' }); });
       const result = new Promise<never>((_resolve, reject) => child!.once('close', () => reject(Error('stopped'))));
       return { pid: child.pid, result, open: true, sendMessage: () => false, sendAgentMessage: () => false, discardQueuedMessages: () => {}, holdsHumanInput: () => false, interrupt: () => { child!.kill('SIGTERM'); }, end: () => { child!.kill('SIGTERM'); } };
@@ -251,7 +252,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
       run: async () => { throw Error('unused'); }, startSession: () => {
         if (++launches > 1) return { result: Promise.resolve({ text: '', toolCalls: [], tokensUsed: 0 }), open: false,
           sendMessage: () => false, sendAgentMessage: () => false, discardQueuedMessages: () => {}, holdsHumanInput: () => false, interrupt() {}, end() {} };
-        child = spawn(process.execPath, ['-e', "process.on('SIGTERM',()=>{}); console.log('ready'); setInterval(()=>{},1000)"],
+        child = spawn(process.execPath, ['-e', `${ignoreTermSource()} console.log('ready'); setInterval(()=>{},1000)`],
           { cwd: workspace(w).path, stdio: ['ignore', 'pipe', 'pipe'] });
         child.stdout!.once('data', () => { ready = true; });
         const result = new Promise<{ text: string; toolCalls: []; tokensUsed: number }>(resolve => child!.once('close', () => resolve({ text: '', toolCalls: [], tokensUsed: 0 })));

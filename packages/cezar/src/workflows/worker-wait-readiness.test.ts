@@ -8,6 +8,7 @@ import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
 import { COMPLETION_WILL_WAIT } from './run.ts';
 import { fixtureUpdateRun, manager, parent, register, restart, root, store, until, useWorkerWaitFixture, waitOf, worker } from './worker-wait.testkit.ts';
 import { setRunStatus, readPersistedRuns } from '../runs/run-store.testkit.ts';
+import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 import { completionNudges, idleClose, observeIdleClose, sessionOf } from './worker-wait-readiness.testkit.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
@@ -84,7 +85,7 @@ it('readiness real stopped process wakes its parent only after actual exit and f
     let child: ReturnType<typeof spawn> | undefined; let ready = false;
     const runner = vi.spyOn(runnerFactory, 'createRunner').mockResolvedValue({ backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent', interrupt: async () => undefined,
       run: async () => { throw Error('unused'); }, startSession: () => {
-        child = spawn(process.execPath, ['-e', "process.on('SIGTERM',()=>{}); console.log('ready'); setInterval(()=>{},1000)"], { stdio: ['ignore', 'pipe', 'pipe'] });
+        child = spawn(process.execPath, ['-e', `${ignoreTermSource()} console.log('ready'); setInterval(()=>{},1000)`], { stdio: ['ignore', 'pipe', 'pipe'] });
         child.stdout!.once('data', () => { ready = true; });
         const result = new Promise<never>((_resolve, reject) => child!.once('close', () => reject(Error('stopped'))));
         return { pid: child.pid, result, open: true, sendMessage: () => false, sendAgentMessage: () => false, discardQueuedMessages: () => {}, holdsHumanInput: () => false,

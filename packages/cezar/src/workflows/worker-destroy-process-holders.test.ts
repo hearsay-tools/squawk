@@ -1,4 +1,5 @@
 import { testHome } from '../home/test-home.testkit.ts';
+import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { nonDumpableHolder } from '../delegation/non-dumpable.testkit.ts';
@@ -134,7 +135,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
      * still counts it after it is reparented. */
     async function groupedWorker(opts: { member: 'group' | 'setsid'; leader: 'stay' | 'exit' }) {
       const w = await worker();
-      const member = opts.member === 'setsid' ? "process.on('SIGTERM',()=>process.exit(42)); setInterval(()=>{},1000)" : "process.on('SIGTERM',()=>{}); setInterval(()=>{},1000)";
+      const member = opts.member === 'setsid' ? "process.on('SIGTERM',()=>process.exit(42)); setInterval(()=>{},1000)" : `${ignoreTermSource()} setInterval(()=>{},1000)`;
       const script = `const m = require('child_process').spawn(process.execPath, ['-e', ${JSON.stringify(member)}], { stdio: 'ignore', detached: ${opts.member === 'setsid'} });
 console.log(String(m.pid)); ${opts.leader === 'exit' ? "m.unref(); process.stdin.on('end', () => process.exit(0)).resume();" : 'setInterval(()=>{},1000);'}`;
       let leader: ChildProcessWithoutNullStreams | undefined; let ready!: (pid: number) => void;

@@ -11,6 +11,7 @@ import { acquireTestEnvLease } from '../../../../.ai/scripts/test-env-lease.mjs'
 import * as leaseDiagnostics from '../../../../.ai/scripts/test-env-lease.mjs';
 import { processStartToken } from '../../src/detached-process.ts';
 import { readPid, requirePid } from '../../src/pid-file.testkit.ts';
+import { ownerGuardShell } from '../../src/stubborn-child.testkit.ts';
 import { checkZombieGroupChurn } from './test-env-lease-churn.testkit.mjs';
 
 // A temporary checkout cannot join the daemon caller's lease in another checkout.
@@ -156,7 +157,7 @@ test('stop-app stops a group whose leader is an unreaped zombie, a member that i
   const root = mkdtempSync(join(tmpdir(), 'cez-env-zombie-'));
   // The outer shell execs into sleep, which never reaps, so the leader it forked stays a zombie.
   // setsid makes that leader a group of its own, and the member it forks ignores SIGTERM.
-  const parent = spawn('sh', ['-c', `setsid sh -c 'trap "" TERM; sleep 1000 & echo $! > member.pid.tmp; mv member.pid.tmp member.pid; echo $$ > leader.pid.tmp; mv leader.pid.tmp leader.pid' & exec sleep 1000`], { cwd: root, stdio: 'ignore' });
+  const parent = spawn('sh', ['-c', `setsid sh -c 'trap "" TERM; sleep 1000 & m=$!; ${ownerGuardShell('$m')} echo $m > member.pid.tmp; mv member.pid.tmp member.pid; echo $$ > leader.pid.tmp; mv leader.pid.tmp leader.pid' & exec sleep 1000`], { cwd: root, stdio: 'ignore' });
   let member: number | undefined;
   try {
     const deadline = Date.now() + 10_000; // bound: the shells start in milliseconds; this guards a hang

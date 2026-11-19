@@ -1,4 +1,5 @@
 import { testHome } from '../home/test-home.testkit.ts';
+import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA, WORKER_OUTCOME_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { WorkerOrphans } from './run/worker-orphans.ts';
@@ -35,7 +36,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
   beforeEach(() => { setHostScope({ backend: 'groups', reason: 'test' }); });
   afterEach(() => { setHostScope(undefined); });
   describe('orphaned generation after a controller crash (#469)', () => {
-    const TERM_IGNORING = "process.on('SIGTERM',()=>{}); console.log('ready'); setInterval(()=>{},1000)";
+    const TERM_IGNORING = `${ignoreTermSource()} console.log('ready'); setInterval(()=>{},1000)`;
     const spawnReady = async (cwd: string, script = TERM_IGNORING) => {
       const proc = spawn(process.execPath, ['-e', script], { cwd, stdio: ['ignore', 'pipe', 'ignore'] });
       releases.push(() => proc.kill('SIGKILL'));
