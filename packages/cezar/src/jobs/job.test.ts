@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, expect, it, vi } from 'vitest';
-import { groupRunning, processStartToken, startAndForget } from '../detached-process.ts';
+import { groupExists, groupRunning, processStartToken, startAndForget } from '../detached-process.ts';
 import { probeProcessWait } from '../process-wait/supervisor.ts';
 import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 import { runJobCommand } from './cli.ts';
@@ -268,7 +268,8 @@ it.runIf(posix)('stop of a job whose group has ended signals nothing and reports
   const job = await startJob({ name: 'done', dir, command: node('') });
   pids.push(job.pid);
   await written(job.exitFile);
-  await vi.waitFor(() => { if (groupRunning(leaderOf(job.pid))) throw new Error('the group still runs'); }, { timeout: 20_000, interval: 25 }); // bound: hang guard; the group ends with its last member
+  // Gone, not only stopped running: a group of unreaped zombies still exists, and stop signals it.
+  await vi.waitFor(() => { if (groupExists(leaderOf(job.pid))) throw new Error('the group still exists'); }, { timeout: 20_000, interval: 25 }); // bound: hang guard; the group ends once its last member is reaped
   const kill = vi.spyOn(process, 'kill');
   const log = vi.spyOn(console, 'log').mockImplementation(() => {});
   const error = vi.spyOn(console, 'error').mockImplementation(() => {});
