@@ -1,0 +1,732 @@
+[
+ {
+  "test": "packages/cezar/src/automations/task-template.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/automations/task-template.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/conversation-answer-delivery-registration.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/core/conversation-answer-delivery.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/harness-claude-pending-request-parity.test.ts",
+  "class": "B",
+  "group": "B-seam",
+  "modules": [
+   "packages/cezar/src/core/harness-parity-core.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/harness-omp-pending-request-parity.test.ts",
+  "class": "B",
+  "group": "B-seam",
+  "modules": [
+   "packages/cezar/src/core/harness-parity-core.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/harness-pi-pending-request-parity.test.ts",
+  "class": "B",
+  "group": "B-seam",
+  "modules": [
+   "packages/cezar/src/core/harness-parity-core.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/model-refusal-parity.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/core/harness-parity.testkit.ts",
+   "packages/cezar/src/core/claude-cli-runner.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/owned-input-delivery-port-collision.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/core/opencode-server-runner.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/parity-classes.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/core/parity-classes.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/skill-provision-continue-parity.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/core/runner-skill-reference.ts",
+   "packages/cezar/src/workflows/run/run-skills.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/skill-provision-recovery-parity.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/core/runner-skill-reference.ts",
+   "packages/cezar/src/workflows/run/run-skills.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/skill-provision-registration-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/core/parity-partition.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/skill-resume-registration-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/core/parity-partition.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/skill-resume-wire-and-fallback-parity.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": []
+ },
+ {
+  "test": "packages/cezar/src/core/workflow-ask-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/core/workflow-ask-cells.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/workflow-autonomous-registration-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/core/workflow-autonomous-parity.testkit.ts",
+   "packages/cezar/src/core/parity-partition.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/workflow-final-message-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/core/workflow-final-message-cells.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/workflow-final-message-silent-tail-parity.test.ts",
+  "class": "B",
+  "group": "B-seam",
+  "modules": [
+   "packages/cezar/src/core/harness-parity.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/workflow-followup-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/core/workflow-followup-cells.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/workflow-no-progress-registration-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/core/workflow-no-progress-parity.testkit.ts",
+   "packages/cezar/src/core/parity-partition.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/workflow-step-completion-registration-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/core/workflow-step-completion-parity.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/workflow-timeout-authored-and-standalone-parity.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/core/harness-parity-core.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/workflow-timeout-explicit-zero-parity.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/core/harness-parity-core.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/core/workflow-timeout-registration-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/core/workflow-timeout-parity.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/delegation/family-end.test.ts",
+  "class": "B",
+  "group": "B-teardown",
+  "modules": [
+   "packages/cezar/src/delegation/family-end.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/delegation/provision-matrix-registration.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/delegation/provision-workflows.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/delegation/scratch-cleanup.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/delegation/scratch-cleanup.ts",
+   "packages/cezar/src/runs/store.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/delegation/service-destroy-holder.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/delegation/worktree-teardown.ts",
+   "packages/cezar/src/delegation/worker-cleanup.ts",
+   "packages/cezar/src/delegation/service.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/delegation/workspace-destruction-bookkeeping.test.ts",
+  "class": "B",
+  "group": "B-teardown",
+  "modules": [
+   "packages/cezar/src/delegation/workspace-removal.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/delegation/workspace-destruction-gc.test.ts",
+  "class": "B",
+  "group": "B-teardown",
+  "modules": [
+   "packages/cezar/src/delegation/workspace-removal.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/delegation/workspace-destruction-identity.test.ts",
+  "class": "B",
+  "group": "B-teardown",
+  "modules": [
+   "packages/cezar/src/delegation/workspace-removal.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/delegation/workspace-destruction-recovery.test.ts",
+  "class": "B",
+  "group": "B-teardown",
+  "modules": [
+   "packages/cezar/src/delegation/workspace-removal.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/delegation/workspace-destruction-refs.test.ts",
+  "class": "B",
+  "group": "B-teardown",
+  "modules": [
+   "packages/cezar/src/delegation/workspace-removal.ts",
+   "packages/cezar/src/delegation/workspace-work.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/delegation/workspace-diff.test.ts",
+  "class": "B",
+  "group": "B-teardown",
+  "modules": [
+   "packages/cezar/src/delegation/workspace.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/delegation/workspace-generic-cleanup.test.ts",
+  "class": "B",
+  "group": "B-teardown",
+  "modules": [
+   "packages/cezar/src/git-worktree.ts",
+   "packages/cezar/src/delegation/workspace-removal.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/delegation/workspace-removal-witness.test.ts",
+  "class": "B",
+  "group": "B-teardown",
+  "modules": [
+   "packages/cezar/src/delegation/workspace-removal.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/delegation/workspace-removal-work.test.ts",
+  "class": "B",
+  "group": "B-teardown",
+  "modules": [
+   "packages/cezar/src/delegation/workspace-work.ts",
+   "packages/cezar/src/delegation/workspace-removal.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/delegation/workspace.test.ts",
+  "class": "B",
+  "group": "B-teardown",
+  "modules": [
+   "packages/cezar/src/delegation/workspace.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/runs/store-history-compression.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/runs/store.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/server/provider-action-gating.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/server/server-deps.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/server/worktrees-api.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/server/server.ts",
+   "packages/cezar/src/runs/retention.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/agent-profile-wiring.test.ts",
+  "class": "B",
+  "group": "B-idle",
+  "modules": [
+   "packages/cezar/src/workflows/run/launch-context.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/agent-webhooks-prompt.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/run/launch-context.ts",
+   "packages/cezar/src/webhooks/prompt.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/automation-tools.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/run/squawk-tools.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/autosave-report.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/worktree-autosave.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/ci-wait-conflict-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/workflows/ci-wait-conflict-parity.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/ci-wait-list-registration.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/run/wait-registry.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/ci-wait-registration.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/run/wait-registry.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/ci-wait-rerun-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/workflows/ci-wait-rerun-parity.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/completion-gate-entry.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/run/run-finish.ts",
+   "packages/cezar/src/workflows/run/turn-settler.ts",
+   "packages/cezar/src/workflows/run/completion-gate.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/context-completion-registration-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/workflows/session-context-cells.testkit.ts",
+   "packages/cezar/src/core/registration-coverage.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/continue-unarchive.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/run/continuation-acceptance.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/delegation-integration-cli.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/delegation-integration.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/delegation-integration-spawn-idempotency.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/delegation/cli.ts",
+   "packages/cezar/src/delegation/service.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/execution-account.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/execution-account.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/input-entry-state.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/run/input-delivery.ts",
+   "packages/cezar/src/workflows/run/inbox-claims.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/maintenance-claims.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/run/maintenance-claims.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/recover-followups.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/runs/store.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/resume-diagnostics-registration-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/core/parity-classes.testkit.ts",
+   "packages/cezar/src/workflows/resume-diagnostics.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run-continue-recovery.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/continuation-admission.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run-fixture.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run-fixture.testkit.ts",
+   "packages/cezar/src/core/runners-under-test.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run-settlement.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/run/run-settlement.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/boundary-family-reconciliation.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/family-reconciler.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/completion-wait-capacity.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/wait-registry.ts",
+   "packages/cezar/src/workflows/run/wake-admission.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/done-accepted.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/done-accepted.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/family-reconciler-scratch.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/family-reconciler.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/human-waits.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/human-waits.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/native-input-queue.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/input-delivery.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/run-settlement-branch-sweep.test.ts",
+  "class": "B",
+  "group": "B-idle",
+  "modules": [
+   "packages/cezar/src/workflows/run/run-settlement.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/session-fault.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/run/session-events.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/turn-boundary-adapter-order.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/turn-boundary.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/turn-boundary-input-order.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/input-delivery.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/turn-boundary-session-order.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/session-events.ts",
+   "packages/cezar/src/workflows/run/turn-boundary.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/turn-boundary-timer-order.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/turn-nudges.ts",
+   "packages/cezar/src/workflows/run/input-timers.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/turn-boundary-worker-order.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/turn-nudges.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/turn-boundary.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/turn-boundary.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/turn-settler.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/turn-settler.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/run/wait-engine.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/run/wait-engine.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/turn-path-fact-values.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/run/input-delivery.ts",
+   "packages/cezar/src/workflows/run/input-receipts.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/wait-registration-effects.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/run/wait-registry.ts",
+   "packages/cezar/src/workflows/run/wait-registration.ts",
+   "packages/cezar/src/ci-wait/client.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/waits-omp-subagents-parity.test.ts",
+  "class": "C",
+  "group": "C",
+  "modules": []
+ },
+ {
+  "test": "packages/cezar/src/workflows/waits-opencode-subagents-parity.test.ts",
+  "class": "C",
+  "group": "C",
+  "modules": []
+ },
+ {
+  "test": "packages/cezar/src/workflows/waits-pi-subagents-parity.test.ts",
+  "class": "C",
+  "group": "C",
+  "modules": []
+ },
+ {
+  "test": "packages/cezar/src/workflows/waits.testkit.test.ts",
+  "class": "B",
+  "group": "B-helper",
+  "modules": [
+   "packages/cezar/src/workflows/waits.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/worker-closed-recovery.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/run/run-recovery.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/worker-parent-attention.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/workflows/worker-parent-attention.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/worker-reboot-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/workflows/wait-row-coverage.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/worker-restart-parity.test.ts",
+  "class": "B",
+  "group": "B-tables",
+  "modules": [
+   "packages/cezar/src/workflows/worker-restart-parity.testkit.ts"
+  ]
+ },
+ {
+  "test": "packages/cezar/src/workflows/worker-wait-conversations.test.ts",
+  "class": "C",
+  "group": "C",
+  "modules": []
+ },
+ {
+  "test": "packages/cezar/src/workflows/worker-wait-fixture.test.ts",
+  "class": "B",
+  "group": "B-fake",
+  "modules": [
+   "packages/cezar/src/workflows/worker-wait-core.testkit.ts",
+   "packages/cezar/src/delegation/service.ts",
+   "packages/cezar/src/delegation/credentials.ts"
+  ]
+ }
+]
