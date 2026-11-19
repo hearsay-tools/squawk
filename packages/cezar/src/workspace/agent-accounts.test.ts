@@ -185,7 +185,7 @@ describe('agent accounts store', () => {
     });
 
     it('refuses an agent that cannot carry a second account — it would resolve to a lie', async () => {
-      // `PROFILE_ENV_VAR.opencode` is null, so `profileEnv` returns `{}` for it: the step would
+      // `profileEnvVar('opencode')` is null, so `profileEnv` returns `{}` for it: the step would
       // record this account, the UI would name it, and the CLI would run on the DEFAULT login
       // anyway — the exact "says Work, bills personal" failure this feature exists to prevent. The
       // route already refuses it, but this file is designed to survive hand edits, foreign writers

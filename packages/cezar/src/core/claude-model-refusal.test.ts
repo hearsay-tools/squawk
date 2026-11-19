@@ -8,6 +8,11 @@ import { ClaudeCliRunner } from './claude-cli-runner.ts';
 import type { AgentEvent, AgentSession } from './agent-runner.ts';
 import type { UiEvent } from './ui-events.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
+import { registerRunner } from './runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+
+// The runner builds its child env through the registry; every case drives Claude.
+registerRunner(claudeRunner);
 
 const bin = fileURLToPath(new URL('../../scripts/mock-claude.mjs', import.meta.url));
 const refusal = "There's an issue with the selected model (claude-test-model). It may not exist or you may not have access to it. Run --model to pick a different model.";

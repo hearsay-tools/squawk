@@ -6,6 +6,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentEvent, SessionOptions } from './agent-runner.ts';
 import { PiRunner } from './pi-runner.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
+import { registerRunner } from './runner-registry.ts';
+import { piRunner } from '../runners/pi/definition.ts';
+
+// The runner builds its child env through the registry; every case drives pi.
+registerRunner(piRunner);
 
 const mockBin = fileURLToPath(new URL('../../scripts/mock-pi-rpc.mjs', import.meta.url));
 const waitUntil = async (cond: () => boolean) => {

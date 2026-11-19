@@ -18,6 +18,13 @@ import { cleanStoreRoots, storeRoot } from './store.testkit.ts';
 import { planLegacyMigration } from './migration-plan.ts';
 import * as privateFiles from './private-files.ts';
 import * as migrationRecord from './migration-record.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
+
+// The migration parses account stores through the registry; the cases use Claude and Codex accounts.
+registerRunner(claudeRunner);
+registerRunner(codexRunner);
 
 afterEach(() => { vi.restoreAllMocks(); cleanStoreRoots(); });
 
