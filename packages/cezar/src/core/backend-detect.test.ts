@@ -2,7 +2,7 @@ import { productIdentity } from '../home/identity.ts';
 import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUNNER_IDS } from './agent-runner.ts';
 import { detectEnvironment, probeRunner } from './backend-detect.ts';
 import { runnerDefinition } from './runner-registry.ts';
@@ -13,6 +13,11 @@ registerBuiltInRunners();
 
 const probeOmp = () => probeRunner('omp', runnerDefinition('omp').detection);
 
+// `productEnv` reads each HSQ_* name before its CEZ_* twin, so a test that sets or clears a CEZ_*
+// setting also clears the twin, or a variable exported in the developer's shell wins.
+const hsqTwins = (...ids: string[]) => ['HSQ_DRY_RUN', ...ids.map((id) => `HSQ_${id}_BIN`)];
+const clearHsqTwins = (...ids: string[]) => { for (const key of hsqTwins(...ids)) vi.stubEnv(key, undefined); };
+
 describe('probeOmp', () => {
   const saved = { dry: process.env.CEZ_DRY_RUN, omp: process.env.CEZ_OMP_BIN, pi: process.env.CEZ_PI_BIN };
   let root: string;
@@ -20,9 +25,11 @@ describe('probeOmp', () => {
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'cez-probe-omp-'));
     delete process.env.CEZ_DRY_RUN;
+    clearHsqTwins('OMP', 'PI');
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     for (const [key, value] of [['CEZ_DRY_RUN', saved.dry], ['CEZ_OMP_BIN', saved.omp], ['CEZ_PI_BIN', saved.pi]] as const) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
     }
@@ -82,6 +89,7 @@ describe('detectEnvironment: codex and opencode probes', () => {
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'cez-probe-agents-'));
     delete process.env.CEZ_DRY_RUN;
+    clearHsqTwins('CODEX', 'OPENCODE', 'CLAUDE', 'PI', 'OMP');
     process.env.CEZ_CODEX_BIN = fakeCli('codex', 'codex-cli 9.9.9');
     process.env.CEZ_OPENCODE_BIN = fakeCli('opencode', '8.8.8');
     // Keep the other agent probes off the host's real CLIs.
@@ -91,6 +99,7 @@ describe('detectEnvironment: codex and opencode probes', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     for (const key of keys) {
       if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
     }
@@ -158,18 +167,16 @@ describe('detectEnvironment: codex and opencode probes', () => {
 });
 
 describe('probeRunner: the Claude version banner', () => {
-  const saved = { dry: process.env.CEZ_DRY_RUN, claude: process.env.CEZ_CLAUDE_BIN };
   let root: string;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'cez-probe-claude-'));
-    delete process.env.CEZ_DRY_RUN;
+    clearHsqTwins('CLAUDE');
+    for (const key of ['CEZ_DRY_RUN', 'CEZ_CLAUDE_BIN']) vi.stubEnv(key, undefined);
   });
 
   afterEach(() => {
-    for (const [key, value] of [['CEZ_DRY_RUN', saved.dry], ['CEZ_CLAUDE_BIN', saved.claude]] as const) {
-      if (value === undefined) delete process.env[key]; else process.env[key] = value;
-    }
+    vi.unstubAllEnvs();
     rmSync(root, { recursive: true, force: true });
   });
 
@@ -177,7 +184,7 @@ describe('probeRunner: the Claude version banner', () => {
     const bin = join(root, 'claude');
     writeFileSync(bin, `#!/bin/sh\necho '${banner}'\n`);
     chmodSync(bin, 0o755);
-    process.env.CEZ_CLAUDE_BIN = bin;
+    vi.stubEnv('CEZ_CLAUDE_BIN', bin);
     return probeRunner('claude', runnerDefinition('claude').detection);
   };
 
