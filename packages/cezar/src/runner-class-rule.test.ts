@@ -36,8 +36,8 @@ it('matches the module of every runner class, and not the interface module', () 
   expect(concreteRunnerModule('../core/runner-registry.ts')).toBe(false);
 });
 
-it('lets only a runner folder and the adapters\' current core/ home load a runner module', () => {
-  for (const file of ['runners/pi/definition.ts', 'core/pi-runner.ts', 'core/claude-cli-runner.ts']) {
+it('lets only a runner folder load a runner module', () => {
+  for (const file of ['runners/pi/definition.ts', 'runners/pi/pi-runner.ts', 'runners/claude/claude-cli-runner.ts']) {
     expect(runnerClass.applies(`packages/cezar/src/${file}`), file).toBe(false);
   }
   for (const file of ['runners/built-in.ts', 'core/runner-registry.ts', 'core/runner-facts.ts', 'workflows/run.ts']) {

@@ -1,5 +1,5 @@
 // `mock:subagent-background` on the Codex app-server wire (hearsay-tools/cezarion#2431). Frame
-// shapes follow src/core/__fixtures__/codex/background-subagent.ndjson, trimmed from a live
+// shapes follow src/runners/codex/__fixtures__/background-subagent.ndjson, trimmed from a live
 // codex-cli 0.164.0 capture: the parent turn completes while the spawned child thread runs; the
 // child's end is its own turn/completed (rootTurnId = the parent turn) and then a parent-thread
 // `subAgentActivity(kind: completed)` stamped with the already-completed parent turn id. Codex

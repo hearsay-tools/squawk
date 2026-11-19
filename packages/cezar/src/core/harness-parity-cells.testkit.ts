@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentInput } from '@open-mercato/cezar-contract';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { siblingImports } from './module-imports.testkit.ts';
+import { moduleImports } from './module-imports.testkit.ts';
 import { readMockRecords } from '../mock-records.testkit.ts';
 import { hasPendingAsk } from '../runs/run-store.testkit.ts';
 import { MONITORING_TURN_CRITERIA, MONITORING_ACK_CRITERIA, MONITORING_ORDER_CRITERIA } from '../workflows/monitoring-turn.testkit.ts';
@@ -313,13 +313,15 @@ function matrixGuards(r: HarnessRegistrar): void {
         expect(new Set(registeredGroups).size).toBe(registeredGroups.length);
         for (const backend of RUNNER_IDS) for (const part of Object.keys(HARNESS_PARITY_GROUPS) as HarnessParityPart[]) {
           const file = harnessParityFile(backend, part);
-          expect(existsSync(new URL(`./${file}`, import.meta.url)), file).toBe(true);
-          const source = readFileSync(new URL(`./${file}`, import.meta.url), 'utf8');
+          const url = new URL(`../runners/${backend}/${file}`, import.meta.url);
+          expect(existsSync(url), file).toBe(true);
+          const source = readFileSync(url, 'utf8');
           expect(source, file).toContain(`describeHarnessParity({ runner: '${backend}', part: '${part}' });`);
           expect(source.match(/describeHarnessParity\(/g), file).toHaveLength(1);
           // Each part file loads only its own part's cells (hearsay-tools/cezarion#3242).
-          expect(source, file).toContain(`import { describeHarnessParity } from './${harnessParityCellsFile(part)}';`);
-          expect(siblingImports(new URL(`./${file}`, import.meta.url), /^harness-parity-(?:[a-z-]+\.)?cells\.testkit\.ts$/), file)
+          const cells = `../../core/${harnessParityCellsFile(part)}`;
+          expect(source, file).toContain(`import { describeHarnessParity } from '${cells}';`);
+          expect(moduleImports(url, new URL('./', import.meta.url), /harness-parity-(?:[a-z-]+\.)?cells\.testkit\.ts$/), file)
             .toEqual([harnessParityCellsFile(part)]);
         }
       });

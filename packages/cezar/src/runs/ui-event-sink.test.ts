@@ -16,12 +16,12 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { UiEvent, UiItem, UiToolItem } from '../core/ui-events.ts';
-import { createCodexUiState, mapCodexNotification } from '../core/codex-ui-mapper.ts';
+import { createCodexUiState, mapCodexNotification } from '../runners/codex/codex-ui-mapper.ts';
 import { RunStore } from './store.ts';
 import { DELTA_FLUSH_MS, UiEventSink, isV2WireEventType } from './ui-event-sink.ts';
 import { z } from 'zod';
-import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from '../core/codex-ui-mapper.ts';
-import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from '../core/opencode-ui-mapper.ts';
+import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from '../runners/codex/codex-ui-mapper.ts';
+import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from '../runners/opencode/opencode-ui-mapper.ts';
 
 const TOOL_STATUS = z.enum([
   ...Object.values(CODEX_TOOL_STATUS_MAP),
@@ -35,7 +35,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  *  final snapshot carrying the full concatenation (reused, not duplicated). */
 function codexFixture(): UiEvent[] {
   return JSON.parse(
-    readFileSync(join(HERE, '../core/__fixtures__/codex/command-lifecycle.expected.json'), 'utf8'),
+    readFileSync(join(HERE, '../runners/codex/__fixtures__/command-lifecycle.expected.json'), 'utf8'),
   ) as UiEvent[];
 }
 
@@ -419,7 +419,7 @@ describe('reasoning text survives persist → replay (#528)', () => {
 
 
 it('persists one omp skill item for live and replay transcript readers', () => {
-  const events = JSON.parse(readFileSync(join(HERE, '../core/__fixtures__/omp/skill-trigger.expected.json'), 'utf8')) as UiEvent[];
+  const events = JSON.parse(readFileSync(join(HERE, '../runners/omp/__fixtures__/skill-trigger.expected.json'), 'utf8')) as UiEvent[];
   const { sink, persisted, wire } = recorder();
   for (const event of events) sink.handle(event);
   sink.flushAll();

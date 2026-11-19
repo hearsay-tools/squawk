@@ -51,7 +51,7 @@ test('Markdown under packages/ is docs-only unless it sits in a fixture director
   assert.equal(classifyPaths(['packages/api-client/README.md']), 'docs-only');
   assert.equal(classifyPaths(['packages/web/e2e/README.md', 'README.md', 'docs/guide.md']), 'docs-only');
   for (const fixture of [
-    'packages/cezar/src/core/__fixtures__/omp/README.md',
+    'packages/cezar/src/runners/omp/__fixtures__/README.md',
     'packages/web/e2e/fixtures/README.md',
     'packages/cezar/src/__snapshots__/notes.md',
   ]) assert.equal(classifyPaths([fixture]), 'full-matrix', fixture);

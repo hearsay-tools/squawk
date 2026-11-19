@@ -6,8 +6,8 @@ import { describe, expect, it } from 'vitest'
 
 import type { RunEvent, ToolStatus, UiToolItem } from '@open-mercato/cezar-api-client'
 
-import forkedCommand from '../../../../cezar/src/core/__fixtures__/claude/forked-command.expected.json'
-import forkedSkill from '../../../../cezar/src/core/__fixtures__/claude/forked-skill.expected.json'
+import forkedCommand from '../../../../cezar/src/runners/claude/__fixtures__/forked-command.expected.json'
+import forkedSkill from '../../../../cezar/src/runners/claude/__fixtures__/forked-skill.expected.json'
 
 import {
   collectSubagents,

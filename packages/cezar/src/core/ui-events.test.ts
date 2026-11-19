@@ -4,7 +4,7 @@
  * discriminant narrowing, and drift guards.
  */
 import { describe, expect, it } from 'vitest';
-import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from './codex-ui-mapper.ts';
+import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from '../runners/codex/codex-ui-mapper.ts';
 
 import type { RunnerId } from './agent-runner.ts';
 import type {

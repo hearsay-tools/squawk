@@ -3,18 +3,18 @@
   "fixedBy": "94f056195",
   "break": [
     {
-      "file": "packages/cezar/src/core/pi-runner.ts",
+      "file": "packages/cezar/src/runners/pi/pi-runner.ts",
       "find": "if (held && value.success === true && (!held.turnId || held.turnId !== piUi.turnId)) held.acked = true;",
       "replace": "if (false) held.acked = true;"
     },
     {
-      "file": "packages/cezar/src/core/omp-runner.ts",
+      "file": "packages/cezar/src/runners/omp/omp-runner.ts",
       "find": "if (value.success === true && runsAgent && (!held.turnId || held.turnId !== ompUi.turnId)) held.acked = true;",
       "replace": "if (false) held.acked = true;"
     }
   ],
   "tests": [
-    "packages/cezar/src/core/harness-pi-contract-parity.test.ts",
-    "packages/cezar/src/core/harness-omp-contract-parity.test.ts"
+    "packages/cezar/src/runners/pi/harness-pi-contract-parity.test.ts",
+    "packages/cezar/src/runners/omp/harness-omp-contract-parity.test.ts"
   ]
 }

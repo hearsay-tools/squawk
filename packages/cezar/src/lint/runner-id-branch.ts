@@ -8,11 +8,11 @@ import { visit } from './babel-walk.ts';
 import { repoRoot } from './source-rule.ts';
 
 /**
- * Only `packages/cezar/src/core/` branches on a runner id. Shared code reads what the runner
- * declares (`RUNNER_FACTS` in `core/runner-facts.ts`, hearsay-tools/cezarion#2991), so a new runner
- * needs one new row and no new branch.
+ * Only `packages/cezar/src/core/` and `packages/cezar/src/runners/` branch on a runner id. Shared
+ * code reads what the runner declares (`RUNNER_FACTS` in `core/runner-facts.ts`,
+ * hearsay-tools/cezarion#2991), so a new runner needs one new row and no new branch.
  *
- * Static scope: non-test TS and TSX source in `packages/cezar/src/` outside `core/`, and in
+ * Static scope: non-test TS and TSX source in `packages/cezar/src/` outside `core/` and `runners/`, and in
  * `packages/web/src/`. `packages/contract/` is not scanned: it declares `RUNNER_COCKPIT_FACTS`. The rule reports
  * - an equality comparison (`===`, `!==`, `==`, `!=`) with a runner-id string literal on one side;
  * - a `switch` with one or more runner-id `case` labels, as one site that names its labels.
@@ -34,7 +34,7 @@ import { repoRoot } from './source-rule.ts';
 const DEFINITION = 'packages/cezar/src/core/agent-runner.ts';
 /** Ids that old run records still carry; `RUNNER_IDS` does not list them. */
 const LEGACY_IDS = ['claude-cli'];
-const SEAM = 'packages/cezar/src/core/';
+const SEAMS = ['packages/cezar/src/core/', 'packages/cezar/src/runners/'];
 const OPERATORS = new Set(['===', '!==', '==', '!=']);
 
 export const runnerIdBranchesFile = 'packages/cezar/src/lint/runner-id-branch.baseline.json';
@@ -135,7 +135,7 @@ export function scanRunnerIdBranches(file: string, source: string, exceptions = 
 }
 
 const isTest = (file: string) => /\.(?:test|e2e)\.tsx?$|\.testkit\.tsx?$|\/test\//.test(file);
-const applies = (file: string) => /^packages\/(?:cezar|web)\/src\/.+\.tsx?$/.test(file) && !file.startsWith(SEAM) && !isTest(file);
+const applies = (file: string) => /^packages\/(?:cezar|web)\/src\/.+\.tsx?$/.test(file) && !SEAMS.some(seam => file.startsWith(seam)) && !isTest(file);
 
 /** Entries that allow more than the file still has, repeat another entry, or give no reason. */
 export function staleRunnerIdBranches(root = repoRoot): string[] {
@@ -154,7 +154,7 @@ export function staleRunnerIdBranches(root = repoRoot): string[] {
 
 export const runnerIdBranch: AstRule = {
   name: 'runner-id-branch',
-  description: 'Only packages/cezar/src/core/ branches on a runner id; shared code reads RUNNER_FACTS (hearsay-tools/cezarion#2991).',
+  description: 'Only packages/cezar/src/core/ and packages/cezar/src/runners/ branch on a runner id; shared code reads RUNNER_FACTS (hearsay-tools/cezarion#2991).',
   applies,
   create(report, { file, sourceCode }) {
     const ids = RUNNER_ID_SET();
@@ -173,7 +173,7 @@ export const runnerIdBranch: AstRule = {
       const count = (seen.get(site) ?? 0) + 1;
       seen.set(site, count);
       if (count <= ((listed ??= readRunnerIdBranchExceptions()).find(entry => entry.file === file && entry.site === site)?.count ?? 0)) return;
-      report(node, `${site}: only packages/cezar/src/core/ branches on a runner id. Read what the runner declares: RUNNER_FACTS in packages/cezar/src/core/runner-facts.ts, or add a fact there (hearsay-tools/cezarion#2991).`);
+      report(node, `${site}: only packages/cezar/src/core/ and packages/cezar/src/runners/ branch on a runner id. Read what the runner declares: RUNNER_FACTS in packages/cezar/src/core/runner-facts.ts, or add a fact there (hearsay-tools/cezarion#2991).`);
     };
     return {
       BinaryExpression(node) {

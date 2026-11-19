@@ -88,7 +88,7 @@ describe('input owed at cezar_done (hearsay-tools/squawk#2587)', () => {
     ]);
   });
 
-  // B1: an acknowledgement is not a read (core/opencode-steering.test.ts): an instruction the
+  // B1: an acknowledgement is not a read (runners/opencode/opencode-steering.test.ts): an instruction the
   // harness accepted and the model has not read is owed, in memory and on the saved row.
   it('owes delivered input the model has not read, also when only the saved row says so', () => {
     const unread = input({ deliveredAt: new Date().toISOString(), awaitingRead: true });

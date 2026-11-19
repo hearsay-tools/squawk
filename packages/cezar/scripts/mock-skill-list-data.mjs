@@ -1,4 +1,4 @@
-// Metadata excerpts from core/__fixtures__/<runner>/skill-list.json. No skill bodies.
+// Metadata excerpts from runners/<id>/__fixtures__/skill-list.json. No skill bodies.
 export const captures = {
   "claude": {
     "type": "control_response",

@@ -1,5 +1,5 @@
 import { parentWithWorker, sessionOf, retryClock, nudgeNotes, nativeWire, parkedOn, waitOfKind, fireTimer, settled, prompted, inputsFor, workerParent, turnEnds, blockedDone, blockingWorker, liveRefusal, agentWaits, humanOpen, gated, workerWaits, repliesDoneAgain, replyBlockedAgain, describeWaitCells } from './waits-parity-fixture.testkit.ts';
-import { siblingImports } from '../core/module-imports.testkit.ts';
+import { moduleImports } from '../core/module-imports.testkit.ts';
 import { COMPLETION_NUDGE_NOTE } from './run.ts';
 import { randomUUID } from 'node:crypto';
 import { readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
@@ -63,9 +63,19 @@ function foldTitles(runner: RunnerId, fold: WaitFold): string[] {
   return titles;
 }
 
+function waitParityFileUrl(file: string): URL {
+  const runner = RUNNER_IDS.find(id => file.startsWith(`waits-${id}-`));
+  if (!runner) throw new Error(`${file}: not a per-runner wait parity file`);
+  return new URL(`../runners/${runner}/${file}`, import.meta.url);
+}
+
 /** Each wait parity cells module a test file imports: the registry, a part's or a fold's. */
 function cellModules(file: string): string[] {
-  return siblingImports(new URL(`./${file}`, import.meta.url), /^waits-parity-(?:[a-z-]+-)?(?:cells|fold)\.testkit\.ts$/);
+  return moduleImports(
+    waitParityFileUrl(file),
+    new URL('./', import.meta.url),
+    /^waits-parity-(?:[a-z-]+-)?(?:cells|fold)\.testkit\.ts$/,
+  );
 }
 
 /** Whether a runner runs any cell of a part, after the wait family's class (hearsay-tools/cezarion#2991)
@@ -97,7 +107,7 @@ function partFiles(runner: RunnerId, part: WaitParityPart): Array<{ file: string
 function expectPartLeaf(runner: RunnerId, part: WaitParityPart): void {
   if (folded(runner)) return; // Its one file is checked below.
   for (const { file, scope } of partFiles(runner, part)) {
-    const source = readFileSync(new URL(`./${file}`, import.meta.url), 'utf8');
+    const source = readFileSync(waitParityFileUrl(file), 'utf8');
     expect(source.match(/describeWaitParity\([^;]+\)/g), file).toEqual([`describeWaitParity(${scope})`]);
     // It imports its part's module and no other cells module.
     expect(cellModules(file), file).toEqual([waitPartModule(part)]);
@@ -233,8 +243,9 @@ export function describeWaitParity(scope: 'once'): void {
   if (scope !== 'once') throw Error(`Import the module of the ${String(scope)} cells`);
   describeWaitCells(() => {
     it('runs every runner\'s cells from its own file', () => {
-      const files = readdirSync(new URL('.', import.meta.url)).filter(file =>
-        /^waits-.*-parity\.test\.ts$/.test(file) && readFileSync(new URL(`./${file}`, import.meta.url), 'utf8').includes('describeWaitParity('));
+      const files = RUNNER_IDS.flatMap(runner =>
+        readdirSync(new URL(`../runners/${runner}/`, import.meta.url)).filter(file =>
+          /^waits-.*-parity\.test\.ts$/.test(file) && readFileSync(new URL(`../runners/${runner}/${file}`, import.meta.url), 'utf8').includes('describeWaitParity(')));
       const parts = Object.keys(WAIT_PARITY_FILES) as WaitParityPart[];
       expect(files.sort()).toEqual(RUNNER_IDS.flatMap(runner => {
         if (folded(runner)) return (Object.keys(WAIT_FOLDS) as WaitFold[]).filter(fold => foldTitles(runner, fold).length > 0).map(fold => foldedWaitFile(runner, fold));
@@ -243,10 +254,10 @@ export function describeWaitParity(scope: 'once'): void {
       for (const runner of RUNNER_IDS) for (const part of parts) {
         const families = fileFamilies(part);
         const file = WAIT_PARITY_FILES[part](runner);
-        expect(existsSync(new URL(`./${file}`, import.meta.url)), file).toBe(!folded(runner) && families.length === 0 && partRuns(runner, part));
+        expect(existsSync(new URL(`../runners/${runner}/${file}`, import.meta.url)), file).toBe(!folded(runner) && families.length === 0 && partRuns(runner, part));
         for (const family of families) {
           const familyFile = waitFamilyFile(runner, part, family);
-          expect(existsSync(new URL(`./${familyFile}`, import.meta.url)), familyFile).toBe(!folded(runner) && familyRuns(runner, part, family));
+          expect(existsSync(new URL(`../runners/${runner}/${familyFile}`, import.meta.url)), familyFile).toBe(!folded(runner) && familyRuns(runner, part, family));
         }
       }
       for (const runner of FOLDED_WAIT_RUNNERS) {
@@ -258,7 +269,7 @@ export function describeWaitParity(scope: 'once'): void {
         expect(grouped.slice().sort(), `${runner}: each cell in exactly one group`).toEqual(all.slice().sort());
         for (const fold of Object.keys(WAIT_FOLDS) as WaitFold[]) {
           if (foldTitles(runner, fold).length === 0) continue;
-          const source = readFileSync(new URL(`./${foldedWaitFile(runner, fold)}`, import.meta.url), 'utf8');
+          const source = readFileSync(new URL(`../runners/${runner}/${foldedWaitFile(runner, fold)}`, import.meta.url), 'utf8');
           expect(source.match(/describeWaitParity\([^;]+\)/g), foldedWaitFile(runner, fold)).toEqual([`describeWaitParity({ runner: '${runner}', part: 'every-runner', fold: '${fold}' })`]);
           // It imports its fold's module and no other cells module.
           expect(cellModules(foldedWaitFile(runner, fold)), foldedWaitFile(runner, fold)).toEqual([waitFoldModule(fold)]);

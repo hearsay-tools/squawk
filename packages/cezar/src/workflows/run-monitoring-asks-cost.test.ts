@@ -294,7 +294,7 @@ describe('cezar_ask parks as waiting and emits ask.requested (#473)', () => {
     savedEnv.CEZ_OPENCODE_BIN = process.env.CEZ_OPENCODE_BIN;
     process.env.CEZ_OPENCODE_BIN = join(
       dirname(fileURLToPath(import.meta.url)),
-      '../core/__fixtures__/opencode/mock-opencode-serve.mjs',
+      '../runners/opencode/__fixtures__/mock-opencode-serve.mjs',
     );
     delete process.env.CEZ_DRY_RUN;
 

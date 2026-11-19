@@ -23,7 +23,7 @@ module.exports = [
   { path: '.ai/specs/2026-09-04-harness-parity-matrix.md', docs: false },
   // Markdown in a fixture or snapshot directory may be test data.
   { path: 'packages/web/e2e/fixtures/README.md', docs: false },
-  { path: 'packages/cezar/src/core/__fixtures__/omp/README.md', docs: false },
+  { path: 'packages/cezar/src/runners/omp/__fixtures__/README.md', docs: false },
   { path: 'packages/cezar/src/__snapshots__/notes.md', docs: false },
   // Only lowercase `.md`, like the root rule; never code or config.
   { path: 'packages/web/e2e/README.MD', docs: false },

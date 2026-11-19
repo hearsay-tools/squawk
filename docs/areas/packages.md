@@ -56,9 +56,8 @@ it, and the readers of the old path:
 
 Some guards key on a directory, not a file, so `--moved` does not find them:
 
-- `cez/runner-id-branch` allows a branch on a runner id only in `packages/cezar/src/core/`.
-- `runner-class-outside-factory` (`lint/owner-policies.ts`) ignores `packages/cezar/src/runners/*/`
-  and named `core/` runner files.
+- `cez/runner-id-branch` allows a branch on a runner id only in `packages/cezar/src/core/` and `packages/cezar/src/runners/`.
+- `runner-class-outside-factory` (`lint/owner-policies.ts`) ignores `packages/cezar/src/runners/*/**`.
 - `packages/cezar/src/core/runner-closure.test.ts` follows the static and dynamic imports of the
   runner modules.
 

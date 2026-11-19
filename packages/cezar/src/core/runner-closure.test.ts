@@ -12,14 +12,14 @@ import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 // mixed-runner chain, so a `harness-<runner>-owned-workflows` file also loads the next runner.
 const src = join(import.meta.dirname, '..');
 const ADAPTERS: Record<RunnerId, string> = {
-  claude: 'core/claude-cli-runner.ts', codex: 'core/codex-app-server-runner.ts', opencode: 'core/opencode-server-runner.ts',
-  pi: 'core/pi-runner.ts', omp: 'core/omp-runner.ts',
+  claude: 'runners/claude/claude-cli-runner.ts', codex: 'runners/codex/codex-app-server-runner.ts', opencode: 'runners/opencode/opencode-server-runner.ts',
+  pi: 'runners/pi/pi-runner.ts', omp: 'runners/omp/omp-runner.ts',
 };
 const PER_RUNNER = new RegExp(`^(?:harness|waits)-(${RUNNER_IDS.join('|')})-.*-parity\\.test\\.ts$`);
 
 function perRunnerFiles(): Array<{ file: string; runner: RunnerId }> {
-  return ['core', 'workflows'].flatMap(dir => readdirSync(join(src, dir)).flatMap(name => {
-    const runner = PER_RUNNER.exec(name)?.[1] as RunnerId | undefined;
+  return ['core', 'workflows', 'runners'].flatMap(dir => readdirSync(join(src, dir), { recursive: true, encoding: 'utf8' }).flatMap(name => {
+    const runner = PER_RUNNER.exec(name.split('/').at(-1) ?? '')?.[1] as RunnerId | undefined;
     return runner ? [{ file: `${dir}/${name}`, runner }] : [];
   }));
 }
@@ -45,7 +45,7 @@ describe('per-runner test closures', () => {
     const byEntry = await closures(files.map(entry => entry.file));
     const loaded = files.map(({ file, runner }) => {
       const closure = byEntry.get(file) ?? new Set();
-      const allowed = new Set<RunnerId>([runner, ...(file.startsWith('workflows/waits-') ? ['claude' as const] : []),
+      const allowed = new Set<RunnerId>([runner, ...(file.split('/').at(-1)?.startsWith('waits-') ? ['claude' as const] : []),
         ...(file.endsWith('-owned-workflows-parity.test.ts') ? [RUNNER_IDS[(RUNNER_IDS.indexOf(runner) + 1) % RUNNER_IDS.length]!] : [])]);
       const others = RUNNER_IDS.filter(id => !allowed.has(id));
       return { file, own: closure.has(ADAPTERS[runner]), others: [...others.filter(id => closure.has(ADAPTERS[id])),

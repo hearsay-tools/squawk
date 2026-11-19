@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { ClaudeCliRunner } from '../core/claude-cli-runner.ts';
+import { ClaudeCliRunner } from '../runners/claude/claude-cli-runner.ts';
 import { onlyRunner, useRunners } from '../core/runners-under-test.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';

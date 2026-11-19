@@ -1,0 +1,1370 @@
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { once } from 'node:events';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { ChildProcess } from 'node:child_process';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { explicitToolGrant, UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
+
+// Pass-through: every test spawns the real child; a test that needs the child's own streams
+// (to fail one) reads it from here.
+const spawned = vi.hoisted(() => [] as ChildProcess[]);
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    spawn: ((...args: Parameters<typeof actual.spawn>) => {
+      const child = actual.spawn(...args);
+      spawned.push(child);
+      return child;
+    }) as typeof actual.spawn,
+  };
+});
+
+import type { AgentEvent, AgentRunSpec, AgentSession } from '../../core/agent-runner.js';
+import type { UiEvent } from '../../core/ui-events.js';
+import { sessionGroupOf } from '../../core/session-process.js';
+import { buildOmpArgs, OMP_BUILTIN_TOOL_NAMES, OmpRunner, ompTools } from './omp-runner.js';
+import { OMP_MINIMAL_ARGS, OMP_SPEC_SUPPORT } from './spec-support.js';
+import { ompProviderErrorMessage } from './omp-ui-mapper.js';
+import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../../workflows/types.js';
+import { readPids } from '../../pid-file.testkit.js';
+import { ignoreTermSource } from '../../stubborn-child.testkit.ts';
+import { z } from 'zod';
+import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from '../codex/codex-ui-mapper.ts';
+import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from '../opencode/opencode-ui-mapper.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { ompRunner } from './definition.ts';
+
+registerRunner(ompRunner);
+
+const TOOL_STATUS = z.enum([
+  ...Object.values(CODEX_TOOL_STATUS_MAP),
+  ...Object.values(OPENCODE_TOOL_STATUS_MAP),
+]).enum;
+
+
+/** The OMP (Oh My Pi) runner (#595): argv, tool mapping, and the persistent RPC session. */
+
+const base: AgentRunSpec = { cwd: '/repo', userPrompt: 'task', toolGrant: explicitToolGrant(DEFAULT_ALLOWED_TOOLS) };
+const ciServer = { name: 'cezar', command: process.execPath, args: ['ci-wait.mjs'] };
+
+describe('ompTools', () => {
+  it('zero-config step tools map to code tools', () => {
+    expect(ompTools({ kind: 'step-default', tools: allowedToolsForStep(undefined, 'omp') }, {}).tools).toEqual([
+      'read', 'edit', 'write', 'grep', 'glob', 'bash', 'todo', 'lsp', 'ast_edit', 'task', 'wait',
+    ]);
+  });
+
+  // Ruling 20: OMP names an MCP tool `mcp__<server>_<tool>` (one underscore, lowercased and
+  // sanitized, v18.4.11 `qjn`) and validates `--tools` by exact name, so Claude's
+  // `mcp__<server>__<tool>` spelling is translated before it reaches the flag.
+  it.each([
+    ['mcp__github__create_issue', 'mcp__github_create_issue'],
+    ['mcp__My-Server__Do Thing', 'mcp__my_server_do_thing'],
+    ['mcp__github__github_search', 'mcp__github_search'],
+    ['mcp__a.b__c__d', 'mcp__a_b_c_d'],
+    ['mcp__srv_tool', 'mcp__srv_tool'],
+    ['mcp__srv__', 'mcp__srv__'],
+  ])('translates the Claude MCP spelling %s to %s', (name, expected) => {
+    expect(ompTools(explicitToolGrant([name]), {}).tools).toEqual([expected]);
+  });
+
+  it('collapses a Claude and an OMP spelling of one MCP tool into one name', () => {
+    expect(ompTools(explicitToolGrant(['mcp__github__create_issue', 'mcp__github_create_issue']), {}).tools).toEqual(['mcp__github_create_issue']);
+  });
+
+  it('maps Squawk names, keeps OMP built-ins and mcp__ names, drops the rest', () => {
+    expect(ompTools(explicitToolGrant(['Subagent', 'TodoWrite', 'WebFetch', 'lsp', 'mcp__srv_tool', 'NotebookEdit']), {})).toEqual({
+      flag: 'tools',
+      tools: ['task', 'todo', 'lsp', 'mcp__srv_tool'],
+      dropped: ['WebFetch', 'NotebookEdit'],
+    });
+    expect(ompTools(explicitToolGrant(['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob', 'Task', 'WebSearch']), {}).tools).toEqual([
+      'read', 'edit', 'write', 'bash', 'grep', 'glob', 'task', 'web_search',
+    ]);
+  });
+
+  it('WebFetch alone fails closed: OMP read would widen a web grant to local files', () => {
+    expect(ompTools(explicitToolGrant(['WebFetch']), {})).toEqual({ flag: 'no-tools', tools: [], dropped: ['WebFetch'] });
+  });
+
+  it('a bashAllowlist with no allowedTools names the default set without bash', () => {
+    const selection = ompTools({ kind: 'unset', bashAllowlist: ['git status'] }, {});
+    expect(selection.flag).toBe('tools');
+    expect(selection.tools).not.toContain('bash');
+    expect(selection.tools).toEqual(expect.arrayContaining(['read', 'edit', 'write', 'grep', 'glob']));
+  });
+
+  it('dedupes and never passes a name OMP would reject at startup', () => {
+    const selection = ompTools(explicitToolGrant(['Read', 'read', 'WebFetch', 'Lsp', 'fetch', 'goal', 'SubagentWait']), {});
+    expect(selection).toEqual({ flag: 'tools', tools: ['read'], dropped: ['WebFetch', 'Lsp', 'fetch', 'goal', 'SubagentWait'] });
+    for (const tool of ompTools(explicitToolGrant([...OMP_BUILTIN_TOOL_NAMES, 'Glob', 'TodoWrite']), {}).tools) {
+      expect(OMP_BUILTIN_TOOL_NAMES).toContain(tool);
+    }
+  });
+
+  it('never maps an inherited Object.prototype name', () => {
+    expect(ompTools(explicitToolGrant(['constructor', 'toString', 'valueOf', 'Read']), {})).toEqual({
+      flag: 'tools',
+      tools: ['read'],
+      dropped: ['constructor', 'toString', 'valueOf'],
+    });
+    expect(ompTools(explicitToolGrant(['constructor']), {})).toEqual({ flag: 'no-tools', tools: [], dropped: ['constructor'] });
+  });
+
+  it('exclude only removes names, and an empty remainder is --no-tools (Ruling 13)', () => {
+    expect(ompTools(explicitToolGrant(['Read', 'TodoWrite', 'lsp']), { exclude: ['todo', 'lsp'] })).toMatchObject({ flag: 'tools', tools: ['read'] });
+    expect(ompTools(explicitToolGrant(['TodoWrite']), { exclude: ['todo'] })).toMatchObject({ flag: 'no-tools', tools: [] });
+    expect(ompTools(explicitToolGrant(['Read']), { exclude: ['todo'] })).toMatchObject({ flag: 'tools', tools: ['read'] });
+    expect(ompTools(UNSET_TOOL_GRANT, { exclude: ['todo'] })).toEqual({ flag: null, tools: [], dropped: [] });
+  });
+
+  it('exclude narrows before the Squawk tools are appended, so it never turns --no-tools into a CI-only list', () => {
+    expect(ompTools(explicitToolGrant(['TodoWrite']), { squawkTools: true, exclude: ['todo'] })).toEqual({ flag: 'no-tools', tools: [], dropped: [] });
+    expect(ompTools(explicitToolGrant(['Read', 'TodoWrite']), { squawkTools: true, exclude: ['todo'] }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks']);
+  });
+
+  it('undefined passes no flag, [] passes --no-tools, all-dropped passes --no-tools', () => {
+    expect(ompTools(UNSET_TOOL_GRANT, {}).flag).toBeNull();
+    expect(ompTools(explicitToolGrant([]), {}).flag).toBe('no-tools');
+    expect(ompTools(explicitToolGrant(['NotebookEdit']), {})).toMatchObject({ flag: 'no-tools', dropped: ['NotebookEdit'] });
+  });
+
+  it('squawkTools admits the preview tools exactly when the extension registers it (CEZ_PREVIEW=1)', () => {
+    expect(ompTools(explicitToolGrant(['Read']), { squawkTools: true, env: { CEZ_PREVIEW: '1', CEZ_AUTOMATIONS: '0' } }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_preview_serve', 'cezar_preview_stop']);
+    expect(ompTools(explicitToolGrant(['Read']), { squawkTools: true, env: { CEZ_PREVIEW: '0' } }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks']);
+    expect(ompTools(explicitToolGrant(['Read']), { env: { CEZ_PREVIEW: '1' } }).tools).toEqual(['read']);
+  });
+
+  // hearsay-tools/cezarion#1465: the schedule tools are present by default and honor the opt-out.
+  it('squawkTools admits schedule tools by default and honors CEZ_AUTOMATIONS=0', () => {
+    expect(ompTools(explicitToolGrant(['Read']), { squawkTools: true, env: {} }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks']);
+    expect(ompTools(explicitToolGrant(['Read']), { squawkTools: true, env: { CEZ_AUTOMATIONS: '0' } }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done']);
+  });
+
+  it('bashAllowlist drops bash; squawkTools appends the Squawk tools', () => {
+    expect(ompTools(explicitToolGrant(['Read', 'Bash'], ['npm test']), {}).tools).toEqual(['read']);
+    expect(ompTools(explicitToolGrant(['Read', 'Bash'], []), {}).tools).toEqual(['read', 'bash']);
+    expect(ompTools(explicitToolGrant(['Read']), { squawkTools: true }).tools).toEqual(['read', 'cezar_wait', 'cezar_ask', 'cezar_cancel_wait', 'cezar_done', 'cezar_schedule_task', 'cezar_automation', 'cezar_scheduled_tasks']);
+  });
+
+  it('fails closed when every granted tool is narrowed away, and adds no Squawk tool to --no-tools', () => {
+    expect(ompTools(explicitToolGrant(['Bash'], ['npm test']), { squawkTools: true })).toEqual({ flag: 'no-tools', tools: [], dropped: [] });
+  });
+
+  // hearsay-tools/cezarion#2279: governed sessions keep OMP's subagent tools.
+  it('keeps task, wait and eval in a grant that names them, and sends no list for an unset grant', () => {
+    expect(ompTools(explicitToolGrant(['Read', 'Subagent', 'wait', 'eval']), {}).tools).toEqual(['read', 'task', 'wait', 'eval']);
+    expect(ompTools(UNSET_TOOL_GRANT, {})).toEqual({ flag: null, tools: [], dropped: [] });
+  });
+});
+
+describe('buildOmpArgs', () => {
+  it('fresh session', () => {
+    expect(
+      buildOmpArgs({ ...base, systemPrompt: 'S', model: 'anthropic/claude-x', effort: 'high', additionalDirectories: ['/a', '/b'] }),
+    ).toEqual([
+      '--mode', 'rpc',
+      '--append-system-prompt', 'S',
+      '--model', 'anthropic/claude-x',
+      '--thinking', 'high',
+      '--add-dir', '/a', '--add-dir', '/b',
+      '--tools', 'read,edit,write,grep,glob,bash',
+    ]);
+  });
+
+  it('resume uses --resume and never --session-id', () => {
+    const resumed = buildOmpArgs({ ...base, sessionId: '0199-abc', resume: true, restrictCrossSessionMessaging: true });
+    expect(resumed.slice(0, 4)).toEqual(['--mode', 'rpc', '--resume', '0199-abc']);
+    const fresh = buildOmpArgs({ ...base, sessionId: '0199-abc' });
+    expect(fresh).not.toContain('--resume');
+    expect(fresh).not.toContain('0199-abc');
+    for (const args of [resumed, fresh]) {
+      expect(args).not.toContain('--session-id');
+      expect(args).not.toContain('--session');
+    }
+  });
+
+  it('a minimal session adds the OMP minimal flags and nothing else', () => {
+    const args = buildOmpArgs({ ...base, minimal: true });
+    expect(args).toEqual(['--mode', 'rpc', ...OMP_MINIMAL_ARGS, ...buildOmpArgs(base).slice(2)]);
+    expect(buildOmpArgs(base)).not.toContain('--no-session');
+  });
+
+  it('sends the ordinary argv under restrictCrossSessionMessaging', () => {
+    for (const toolGrant of [explicitToolGrant(['Read', 'Subagent']), UNSET_TOOL_GRANT]) {
+      const args = buildOmpArgs({ ...base, toolGrant, restrictCrossSessionMessaging: true });
+      expect(args).toEqual(buildOmpArgs({ ...base, toolGrant }));
+    }
+  });
+
+  it('squawkTools adds --extension omp-ci-wait.mjs before other flags', () => {
+    expect(buildOmpArgs({ ...base, squawkTools: ciServer, systemPrompt: 'S' })).toEqual([
+      '--mode', 'rpc',
+      '--extension', expect.stringMatching(/scripts\/omp-ci-wait\.mjs$/),
+      '--append-system-prompt', 'S',
+      '--tools', 'read,edit,write,grep,glob,bash,cezar_wait,cezar_ask,cezar_cancel_wait,cezar_done,cezar_schedule_task,cezar_automation,cezar_scheduled_tasks',
+    ]);
+  });
+
+  it('passes no tools flag without allowedTools, --no-tools for an empty grant, and no auto effort', () => {
+    expect(buildOmpArgs({ toolGrant: UNSET_TOOL_GRANT, cwd: '/repo', userPrompt: 'task', effort: 'auto' })).toEqual(['--mode', 'rpc']);
+    expect(buildOmpArgs({ ...base, toolGrant: explicitToolGrant([]) })).toEqual(['--mode', 'rpc', '--no-tools']);
+  });
+});
+
+describe('OMP_SPEC_SUPPORT', () => {
+  it('honors every field, including the extra roots Pi drops', () => {
+    for (const [field, support] of Object.entries(OMP_SPEC_SUPPORT)) {
+      if (field === 'resumeFallbackSystemPrompt' || field === 'restrictCrossSessionMessaging') {
+        expect(support.honored).toBe(false);
+        continue;
+      }
+      expect(support.honored, field).toBe(true);
+    }
+    expect(OMP_SPEC_SUPPORT.additionalDirectories).toEqual({
+      honored: true,
+      via: '--add-dir per directory; an omp build that rejects --add-dir is respawned once without it, with a v1 note (Ruling 22)',
+    });
+    // irc reaches only agents inside the same OMP process (hearsay-tools/cezarion#2279).
+    expect(OMP_SPEC_SUPPORT.restrictCrossSessionMessaging).toMatchObject({ honored: false, reason: expect.stringContaining('irc') });
+  });
+});
+
+const MOCK = fileURLToPath(new URL('../../../scripts/mock-omp-rpc.mjs', import.meta.url));
+
+describe('OmpRunner session over the mock', () => {
+  let cwd: string;
+  beforeEach(() => {
+    for (const child of spawned) {
+      if (child.exitCode === null && child.signalCode === null) {
+        try { child.kill('SIGKILL'); } catch { /* already gone */ }
+      }
+    }
+    spawned.length = 0;
+    cwd = mkdtempSync(join(tmpdir(), 'cez-omp-run-'));
+  });
+  // Ruling 13 respawn (and any still-starting child) can write into `cwd` after the test
+  // body returns. Reap first, including a child spawned after the first kill, so `rmSync`
+  // cannot beat `pids.txt` (hearsay-tools/cezarion#973).
+  afterEach(async () => {
+    const waitExit = (child: ChildProcess): Promise<void> => new Promise(resolve => {
+      if (child.exitCode !== null || child.signalCode !== null) { resolve(); return; }
+      const done = (): void => resolve();
+      child.once('exit', done);
+      if (child.exitCode !== null || child.signalCode !== null) { child.off('exit', done); resolve(); return; }
+      const timer = setTimeout(() => { child.off('exit', done); resolve(); }, 2_000);
+      timer.unref?.();
+    });
+    const deadline = Date.now() + 2_000;
+    do {
+      const children = spawned.splice(0);
+      if (children.length === 0) break;
+      await Promise.all(children.map(async (child) => {
+        if (child.exitCode === null && child.signalCode === null) {
+          try { child.kill('SIGKILL'); } catch { /* already gone */ }
+        }
+        await waitExit(child);
+      }));
+    } while (spawned.length > 0 && Date.now() < deadline);
+    rmSync(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    vi.unstubAllEnvs();
+  });
+
+  const spec = (userPrompt: string, extra: Partial<AgentRunSpec> = {}): AgentRunSpec => ({
+    cwd,
+    userPrompt,
+    toolGrant: explicitToolGrant(DEFAULT_ALLOWED_TOOLS),
+    timeoutMs: 20_000,
+    ...extra,
+    env: {
+      CEZ_MOCK_OMP_COMMANDS_FILE: join(cwd, 'commands.ndjson'),
+      CEZ_MOCK_STDIN_FILE: join(cwd, 'stdin.ndjson'),
+      CEZ_MOCK_ARGS_FILE: join(cwd, 'args.ndjson'),
+      ...extra.env,
+    },
+  });
+  const lines = (name: string): Array<Record<string, unknown>> =>
+    existsSync(join(cwd, name))
+      ? readFileSync(join(cwd, name), 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line) as Record<string, unknown>)
+      : [];
+  /** One session to completion, with both streams recorded. */
+  async function runSession(
+    runSpec: AgentRunSpec,
+    drive: (event: AgentEvent, session: AgentSession) => void = () => undefined,
+    bin = MOCK,
+  ) {
+    const events: AgentEvent[] = [];
+    const ui: UiEvent[] = [];
+    let session: AgentSession;
+    session = new OmpRunner({ bin }).startSession(
+      runSpec,
+      (event) => { events.push(event); drive(event, session); },
+      { autoEndAfterFirstTurn: true, onUiEvent: (event) => ui.push(event) },
+    );
+    const result = await session.result;
+    return { events, ui, result };
+  }
+  const turnEnds = (events: AgentEvent[]) => events.filter(event => event.type === 'turn-end').length;
+
+  it('declares the omp backend, spec support and input delivery', () => {
+    const runner = new OmpRunner();
+    expect(runner.backend).toBe('omp');
+    expect(runner.specSupport).toBe(OMP_SPEC_SUPPORT);
+    expect(runner.inputDelivery).toMatchObject({ mode: 'steer', consumption: 'observable' });
+  });
+
+  it('startup writes get_state, set_steering_mode all, set_subagent_subscription events, set_event_filter delta, then prompt', async () => {
+    await runSession(spec('inspect the working tree'));
+    expect(lines('commands.ndjson').slice(0, 5)).toEqual([
+      { id: 'cezar-state', type: 'get_state' },
+      { id: 'cezar-steering', type: 'set_steering_mode', mode: 'all' },
+      { id: 'cezar-subagents', type: 'set_subagent_subscription', level: 'events' },
+      { id: 'cezar-event-filter', type: 'set_event_filter', events: null, messageUpdates: 'delta' },
+      { type: 'prompt', id: 'cezar-prompt-1', message: 'inspect the working tree' },
+    ]);
+  });
+
+  it('streams text, tools and one turn-end for the baseline turn', async () => {
+    const { events, ui, result } = await runSession(spec('inspect the working tree'));
+    expect(events.filter(event => event.type !== 'token-usage' && event.type !== 'cost')).toEqual([
+      { type: 'session', sessionId: '019a0000-0000-7000-8000-0000000000aa', resumed: false },
+      { type: 'text', text: 'Investigating: inspect the working tree' },
+      { type: 'tool-call', id: 'tool-1', tool: 'read', input: { path: 'README.md' } },
+      { type: 'tool-result', toolCallId: 'tool-1', result: 'mock file', isError: false },
+      { type: 'text', text: 'Done with the first pass.' },
+      { type: 'turn-end' },
+      { type: 'done' },
+    ]);
+    expect(events).toContainEqual({ type: 'token-usage', tokensUsed: 15 });
+    expect(events).toContainEqual({ type: 'cost', usd: 0.001 });
+    expect(result).toMatchObject({ text: 'Investigating: inspect the working tree\nDone with the first pass.', tokensUsed: 15, sessionId: '019a0000-0000-7000-8000-0000000000aa' });
+    expect(ui[0]).toEqual({ type: 'turn.started', turnId: 'turn_1' });
+    expect(ui).toContainEqual({ type: 'session.started', sessionId: '019a0000-0000-7000-8000-0000000000aa', backend: 'omp', model: 'claude-mock' });
+    expect(ui.filter(event => event.type === 'turn.completed')).toHaveLength(1);
+    expect(ui.at(-1)).toEqual({ type: 'session.ended', reason: 'end_turn' });
+  });
+
+  it('includes child spend in v1, v2 and the session result', async () => {
+    const { events, ui, result } = await runSession(spec('mock:subagent'));
+    expect(events.filter(event => event.type === 'token-usage').at(-1)).toEqual({ type: 'token-usage', tokensUsed: 60 });
+    expect(result.tokensUsed).toBe(60); // 15 parent + 20 + 10 + 100 * .1 + 4 * 1.25 child.
+    expect(events.filter(event => event.type === 'cost').map(event => event.usd)).toEqual([0.001, 0.002]);
+    expect(ui.filter(event => event.type === 'usage.updated').at(-1)).toEqual({
+      type: 'usage.updated', usage: { input: 30, output: 15, cacheRead: 100, cacheWrite: 4, total: 149 }, costUsd: 0.003,
+    });
+    expect(ui.filter(event => event.type === 'turn.completed')).toEqual([{
+      type: 'turn.completed', turnId: 'turn_1', stopReason: 'end_turn',
+      usage: { input: 30, output: 15, cacheRead: 100, cacheWrite: 4, total: 149 }, costUsd: 0.003,
+    }]);
+  });
+
+  it('warns once when a fresh step unexpectedly restores conversation history', async () => {
+    const { events, ui, result } = await runSession(spec('inspect the working tree', {
+      env: { CEZ_MOCK_OMP_AUTO_RESUME: '1' },
+    }));
+    const warnings = ui.filter(event => event.type === 'session.error');
+    expect(warnings).toEqual([{
+      type: 'session.error', fatal: false,
+      message: expect.stringMatching(/restored.*4.*autoResume/),
+    }]);
+    expect(events.filter(event => event.type === 'note')).toEqual([
+      { type: 'note', message: warnings[0]!.message },
+    ]);
+    expect(events.some(event => event.type === 'error')).toBe(false);
+    expect(ui).toContainEqual(expect.objectContaining({ type: 'turn.completed', stopReason: 'end_turn' }));
+    expect(result.sessionId).toBe('019a0000-0000-7000-8000-0000000000bb');
+    expect(result.text).toContain('Investigating:');
+  });
+
+  it.each([false, true])('explicit resume remains quiet with autoResume=%s', async (autoResume) => {
+    const { events, ui, result } = await runSession(spec('inspect the working tree', {
+      resume: true, sessionId: 'requested-session',
+      env: { CEZ_MOCK_OMP_AUTO_RESUME: autoResume ? '1' : '0' },
+    }));
+    expect(ui.some(event => event.type === 'session.error')).toBe(false);
+    expect(events.filter(event => event.type === 'note' || event.type === 'error')).toEqual([]);
+    expect(result.sessionId).toBe('requested-session');
+    expect(lines('args.ndjson')[0]).toEqual(expect.arrayContaining(['--resume', 'requested-session']));
+  });
+
+  it.each([undefined, null, 0, -1, '4', 4])('checks only the startup response once with messageCount=%s', async (messageCount) => {
+    const bin = join(cwd, 'mock-omp-state.mjs');
+    writeFileSync(bin, `#!/usr/bin/env node
+import readline from 'node:readline';
+const send = value => process.stdout.write(JSON.stringify(value) + '\\n');
+send({ type: 'ready' });
+readline.createInterface({ input: process.stdin }).on('line', line => {
+  const command = JSON.parse(line);
+  if (command.type === 'get_state') {
+    send({ id: 'unrelated-state', type: 'response', command: 'get_state', success: true,
+      data: { sessionId: 'state-test', messageCount: 4 } });
+    const startup = { id: command.id, type: 'response', command: 'get_state', success: true,
+      data: ${JSON.stringify({ sessionId: 'state-test', messageCount })} };
+    send(startup);
+    send(startup);
+    // A later state read sees this turn's history, not a startup auto-resume.
+    send({ id: 'later-state', type: 'response', command: 'get_state', success: true,
+      data: { sessionId: 'state-test', messageCount: 4 } });
+  }
+  if (command.type === 'prompt') {
+    send({ id: command.id, type: 'response', command: 'prompt', success: true });
+    send({ type: 'session_settled' });
+  }
+});
+`, { mode: 0o755 });
+    const { events, ui } = await runSession(spec('inspect'), undefined, bin);
+    const warnings = ui.filter(event => event.type === 'session.error');
+    expect(warnings).toHaveLength(messageCount === 4 ? 1 : 0);
+    expect(events.filter(event => event.type === 'note' && event.message.includes('autoResume')))
+      .toHaveLength(warnings.length);
+    expect(events.some(event => event.type === 'error')).toBe(false);
+  });
+
+  it('session_settled ends the turn; agent_end alone does not, nor an idle settle', async () => {
+    const bin = join(cwd, 'mock-omp-retry.mjs');
+    writeFileSync(bin, `#!/usr/bin/env node
+import readline from 'node:readline';
+const send = (v) => process.stdout.write(JSON.stringify(v) + '\\n');
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const text = (t) => {
+  send({ type: 'message_update', message: { role: 'assistant' }, assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: t } });
+  send({ type: 'message_update', message: { role: 'assistant' }, assistantMessageEvent: { type: 'text_end', contentIndex: 0, content: t } });
+};
+// Real OMP speaks first: the runner writes nothing until this frame arrives.
+send({ type: 'ready', protocolVersion: 1, supportedProtocolVersions: [1, 2] });
+for await (const line of readline.createInterface({ input: process.stdin })) {
+  const command = JSON.parse(line);
+  if (command.type === 'get_state') send({ id: command.id, type: 'response', command: 'get_state', success: true, data: { sessionId: 'retry' } });
+  else if (command.type === 'prompt') {
+    send({ id: command.id, type: 'response', command: 'prompt', success: true });
+    send({ type: 'agent_start' });
+    text('before the retry');
+    send({ type: 'message_end', message: { role: 'assistant', stopReason: 'error', errorMessage: 'overloaded', usage: { input: 1, output: 1 } } });
+    send({ type: 'agent_end', messages: [], isTerminal: false, yielded: false });
+    send({ type: 'agent_end', messages: [], isTerminal: true, yielded: true });
+    await sleep(150);
+    send({ type: 'auto_retry_start' });
+    send({ type: 'agent_start' });
+    text('after the retry');
+    send({ type: 'message_end', message: { role: 'assistant', stopReason: 'stop', usage: { input: 1, output: 1 } } });
+    send({ type: 'agent_end', messages: [], isTerminal: true, yielded: true });
+    send({ type: 'prompt_result', agentInvoked: true, status: 'completed', sessionSettled: true });
+    send({ type: 'session_settled' });
+    // A settle with no turn open ends nothing (and never the next turn).
+    send({ type: 'session_settled' });
+  } else if (command.type.startsWith('set_')) send({ id: command.id, type: 'response', command: command.type, success: true });
+}
+`, { mode: 0o755 });
+    const { events } = await runSession(spec('retry'), undefined, bin);
+    const kinds = events.map(event => event.type === 'text' ? `text:${event.text}` : event.type);
+    expect(turnEnds(events)).toBe(1);
+    expect(kinds.indexOf('text:after the retry')).toBeLessThan(kinds.indexOf('turn-end'));
+    // The failed attempt was recovered before the settle: no error surfaces (#256).
+    expect(events.filter(event => event.type === 'error')).toEqual([]);
+  });
+
+  /** A mock whose first prompt runs `turn`, then settles; `setAnswer` answers every `set_` command. */
+  const writeTurnMock = (
+    name: string,
+    turn: string,
+    setAnswer = "send({ id: command.id, type: 'response', command: command.type, success: true });",
+  ): string => {
+    const bin = join(cwd, name);
+    writeFileSync(bin, `#!/usr/bin/env node
+import readline from 'node:readline';
+const send = (v) => process.stdout.write(JSON.stringify(v) + '\\n');
+send({ type: 'ready', protocolVersion: 1, supportedProtocolVersions: [1, 2] });
+let prompts = 0;
+for await (const line of readline.createInterface({ input: process.stdin })) {
+  const command = JSON.parse(line);
+  if (command.type === 'get_state') send({ id: command.id, type: 'response', command: 'get_state', success: true, data: { sessionId: 'pins' } });
+  else if (command.type === 'prompt') {
+    prompts += 1;
+    send({ id: command.id, type: 'response', command: 'prompt', success: true });
+${turn}
+  } else if (command.type.startsWith('set_')) ${setAnswer}
+}
+`, { mode: 0o755 });
+    return bin;
+  };
+  /** The mock lines that end the turn: an assistant message_end with `stopReason`, then the settle. */
+  function settleTurn(stopReason = 'stop'): string {
+    return `      send({ type: 'message_end', message: { role: 'assistant', stopReason: '${stopReason}', errorMessage: 'Overloaded', usage: { input: 1, output: 1 } } });
+      send({ type: 'agent_end', messages: [], isTerminal: true, yielded: true });
+      send({ type: 'prompt_result', agentInvoked: true, status: 'completed', sessionSettled: true });
+      send({ type: 'session_settled' });`;
+  }
+
+  // Pins the Pi-family text and tool handling omp shares with pi (hearsay-tools/cezarion#1955).
+  it('completes text blocks without a snapshot or an index, and records only named tool calls', async () => {
+    const bin = writeTurnMock('mock-omp-text-tools.mjs', `    send({ type: 'agent_start' });
+    const update = (event) => send({ type: 'message_update', message: { role: 'assistant' }, assistantMessageEvent: event });
+    update({ type: 'text_delta', contentIndex: 0, delta: 'alpha ' });
+    update({ type: 'text_delta', contentIndex: 0, delta: 'beta' });
+    update({ type: 'text_end', contentIndex: 0 });
+    update({ type: 'text_delta', delta: 'anonymous' });
+    update({ type: 'text_end' });
+    send({ type: 'tool_execution_start', toolCallId: 'call-unnamed' });
+    send({ type: 'tool_execution_start', toolCallId: 'call-1', toolName: 'read', args: { path: 'a.txt' } });
+${settleTurn()}`);
+    const { events, result } = await runSession(spec('pins'), undefined, bin);
+    expect(events.filter(event => event.type === 'text')).toEqual([
+      { type: 'text', text: 'alpha beta' },
+      { type: 'text', text: 'anonymous' },
+    ]);
+    expect(events.filter(event => event.type === 'tool-call')).toEqual([
+      { type: 'tool-call', id: 'call-1', tool: 'read', input: { path: 'a.txt' } },
+    ]);
+    expect(result.toolCalls).toEqual([{ id: 'call-1', name: 'read', input: { path: 'a.txt' } }]);
+  });
+
+  it.each([
+    { stopReason: 'stop', consumed: [['input-1']] },
+    { stopReason: 'error', consumed: [] },
+  ])('a steer acknowledged before a later agent_start is read when that turn settles, unless it failed ($stopReason)', async ({ stopReason, consumed: expected }) => {
+    // The steer gets no user message_start: only the agent_start after its ack carries it.
+    const bin = writeTurnMock('mock-omp-carried.mjs', `    if (prompts === 1) {
+      send({ type: 'agent_start' });
+      send({ type: 'tool_execution_start', toolCallId: 'call-1', toolName: 'read', args: {} });
+    } else {
+      send({ type: 'agent_start' });
+${settleTurn(stopReason)}
+    }`);
+    const consumed: string[][] = [];
+    let acknowledged: Promise<void> | boolean | undefined;
+    let session: AgentSession;
+    const events: AgentEvent[] = [];
+    session = new OmpRunner({ bin }).startSession(
+      spec('carry'),
+      (event) => {
+        events.push(event);
+        if (event.type === 'tool-call') acknowledged = session.sendAgentMessage([{ type: 'text', text: 'worker reply' }], ['input-1']);
+      },
+      { autoEndAfterFirstTurn: true, onAgentInputConsumed: (ids) => consumed.push([...ids]) },
+    );
+    await session.result;
+    await expect(acknowledged).resolves.toBeUndefined();
+    expect(consumed).toEqual(expected);
+    expect(turnEnds(events)).toBe(1);
+  });
+
+  it('notes each refused set_ command, and reports any other failed command as an error', async () => {
+    const bin = writeTurnMock(
+      'mock-omp-refusals.mjs',
+      `    send({ type: 'agent_start' });
+    send({ type: 'response', command: 'compact', success: false, error: 'compact refused' });
+${settleTurn()}`,
+      "send({ id: command.id, type: 'response', command: command.type, success: false, error: 'not supported' });",
+    );
+    const { events } = await runSession(spec('refusals'), undefined, bin);
+    expect(events.filter(event => event.type === 'note' && event.message.endsWith('failed: not supported')).map(event => event.type === 'note' && event.message)).toEqual([
+      'omp: set_steering_mode failed: not supported',
+      'omp: set_subagent_subscription failed: not supported',
+      'omp: set_event_filter failed: not supported',
+    ]);
+    expect(events.filter(event => event.type === 'error')).toEqual([{ type: 'error', message: 'compact refused' }]);
+    expect(turnEnds(events)).toBe(1);
+  });
+
+  it('skips a non-object line, and notes extension errors and notices with their fallbacks', async () => {
+    const bin = writeTurnMock('mock-omp-notes.mjs', `    send({ type: 'agent_start' });
+    process.stdout.write('[1,2]\\n');
+    send({ type: 'extension_error', error: 'extension exploded' });
+    send({ type: 'extension_error', message: 'from the message field' });
+    send({ type: 'extension_error' });
+    send({ type: 'notice', message: 'heads up' });
+    send({ type: 'notice' });
+${settleTurn()}`);
+    const { events } = await runSession(spec('notes'), undefined, bin);
+    const notes = events.filter(event => event.type === 'note').map(event => event.type === 'note' && event.message);
+    expect(notes).toEqual(expect.arrayContaining(['extension exploded', 'from the message field', 'omp extension error', 'omp: heads up']));
+    expect(notes.filter(note => typeof note === 'string' && note.startsWith('omp: ') && !note.includes('failed'))).toEqual(['omp: heads up']);
+    expect(events.filter(event => event.type === 'error')).toEqual([]);
+    expect(turnEnds(events)).toBe(1);
+  });
+
+  it('a local prompt failure whose error is not an object still ends the turn with one v1 error', async () => {
+    const bin = writeTurnMock('mock-omp-local-error.mjs', `    send({ type: 'prompt_result', id: command.id, agentInvoked: false, status: 'error', error: 'plain text', sessionSettled: true });`);
+    const { events } = await runSession(spec('local error'), undefined, bin);
+    expect(events.filter(event => event.type === 'error')).toEqual([
+      { type: 'error', message: ompProviderErrorMessage({ provider: undefined, model: undefined, errorMessage: undefined }) },
+    ]);
+    expect(turnEnds(events)).toBe(1);
+  });
+
+  it('skips a tool result without an id, and reads a non-object result as empty text', async () => {
+    const bin = writeTurnMock('mock-omp-tool-results.mjs', `    send({ type: 'agent_start' });
+    send({ type: 'tool_execution_end', isError: false, result: { content: [{ type: 'text', text: 'orphan' }] } });
+    send({ type: 'tool_execution_end', toolCallId: 'call-2', isError: true, result: 'not a record' });
+${settleTurn()}`);
+    const { events } = await runSession(spec('tool results'), undefined, bin);
+    expect(events.filter(event => event.type === 'tool-result' || event.type === 'image')).toEqual([
+      { type: 'tool-result', toolCallId: 'call-2', result: '', isError: true },
+    ]);
+  });
+
+  it('a human steer read while its turn is open is no longer held when the turn ends', async () => {
+    // The steer's ack marks it read; its user message_start in the open turn drops it.
+    const bin = writeTurnMock('mock-omp-human-steer.mjs', `    if (prompts === 1) {
+      send({ type: 'agent_start' });
+      send({ type: 'tool_execution_start', toolCallId: 'call-1', toolName: 'read', args: {} });
+    } else {
+      send({ type: 'message_start', message: { role: 'user', content: command.message } });
+${settleTurn()}
+    }`);
+    let heldAtTurnEnd: number | undefined;
+    const { events } = await runSession(spec('steer'), (event, session) => {
+      if (event.type === 'tool-call') session.sendMessage([{ type: 'text', text: 'human steer' }]);
+      if (event.type === 'turn-end') heldAtTurnEnd = session.heldHumanInputCount?.();
+    }, bin);
+    expect(turnEnds(events)).toBe(1);
+    expect(heldAtTurnEnd).toBe(0);
+  });
+
+  it.each(['mock:local-command', 'mock:local-result'])('agentInvoked false ends the turn without session_settled (%s)', async (prompt) => {
+    const { events, ui } = await runSession(spec(prompt));
+    expect(turnEnds(events)).toBe(1);
+    expect(events.at(-1)).toEqual({ type: 'done' });
+    expect(ui.filter(event => event.type === 'turn.completed')).toHaveLength(1);
+    expect(events).not.toContainEqual(expect.objectContaining({ message: 'omp RPC session ended before session_settled' }));
+  });
+
+  it('activity after session_settled opens a new turn and ends it at the next settle', async () => {
+    const events: AgentEvent[] = [];
+    const ui: UiEvent[] = [];
+    let session: AgentSession;
+    session = new OmpRunner({ bin: MOCK }).startSession(
+      spec('mock:wake-after-settle'),
+      (event) => {
+        events.push(event);
+        if (event.type === 'turn-end' && turnEnds(events) === 2) session.end();
+      },
+      { onUiEvent: (event) => ui.push(event) },
+    );
+    await session.result;
+    expect(turnEnds(events)).toBe(2);
+    expect(events).toContainEqual({ type: 'text', text: 'woke after settle' });
+    expect(ui.filter(event => event.type === 'turn.started').map(event => event.type === 'turn.started' && event.turnId)).toEqual(['turn_1', 'turn_2']);
+    expect(ui.filter(event => event.type === 'turn.completed')).toHaveLength(2);
+  });
+
+  it('stream end without session_settled still ends the session and releases the latched error', async () => {
+    const { events, ui } = await runSession(spec('mock:no-settle'));
+    expect(events).toContainEqual({ type: 'error', message: 'omp: anthropic/claude-mock request failed: Overloaded' });
+    expect(events).toContainEqual({ type: 'note', message: 'omp RPC session ended before session_settled' });
+    expect(events.at(-1)).toEqual({ type: 'done' });
+    expect(turnEnds(events)).toBe(0);
+    expect(ui).toContainEqual({ type: 'session.error', message: 'omp: anthropic/claude-mock request failed: Overloaded', fatal: false });
+  });
+
+  it('a provider failure that settles is a v1 error before the turn-end', async () => {
+    const { events } = await runSession(spec('mock:provider-error'));
+    const error = events.findIndex(event => event.type === 'error');
+    expect(events[error]).toEqual({ type: 'error', message: 'omp: anthropic/claude-mock request failed: 400 {"type":"error","error":{"type":"invalid_request_error","message":"messages: text content blocks must be non-empty"}}' });
+    expect(error).toBeLessThan(events.findIndex(event => event.type === 'turn-end'));
+    expect(turnEnds(events)).toBe(1);
+  });
+
+  it('a tool denied by a no-UI approval prompt fails on its card and the turn still settles', async () => {
+    const { events, ui } = await runSession(spec('mock:approval-denied'));
+    const denial = 'Tool "bash" requires approval but no interactive UI available.';
+    const result = events.find(event => event.type === 'tool-result');
+    expect(result).toMatchObject({ type: 'tool-result', toolCallId: 'tool-denied', isError: true });
+    expect(result?.type === 'tool-result' && result.result).toContain(denial);
+    const failed = ui.find(event => event.type === 'item.completed' && event.item.kind === 'tool' && event.item.id === 'tool-denied');
+    expect(failed).toMatchObject({ item: { status: TOOL_STATUS.failed, error: expect.stringContaining(denial) } });
+    expect(events.filter(event => event.type === 'error')).toEqual([]);
+    expect(turnEnds(events)).toBe(1);
+    expect(events.findIndex(event => event.type === 'turn-end')).toBeGreaterThan(events.indexOf(result!));
+    expect(ui.filter(event => event.type === 'turn.completed')).toHaveLength(1);
+  });
+
+  it('a prompt that fails before the agent ran is one v1 error, then the turn-end', async () => {
+    const { events, ui } = await runSession(spec('mock:prompt-error'));
+    expect(events.filter(event => event.type === 'error')).toEqual([
+      { type: 'error', message: 'omp: anthropic/claude-missing request failed: Model not found: anthropic/claude-missing' },
+    ]);
+    expect(events).toContainEqual({ type: 'note', message: 'omp: prompt failed: Model not found: anthropic/claude-missing' });
+    expect(turnEnds(events)).toBe(1);
+    expect(ui).toContainEqual(expect.objectContaining({ type: 'turn.completed', stopReason: 'error' }));
+  });
+
+  it('a prompt_result error with no turn open is still a v1 note, as in v2', async () => {
+    const bin = join(cwd, 'mock-omp-idle-error.mjs');
+    writeFileSync(bin, `#!/usr/bin/env node
+import readline from 'node:readline';
+const send = (value) => process.stdout.write(JSON.stringify(value) + '\\n');
+send({ type: 'ready', protocolVersion: 1 });
+readline.createInterface({ input: process.stdin }).on('line', (line) => {
+  const command = JSON.parse(line);
+  if (command.type === 'get_state') send({ id: command.id, type: 'response', command: 'get_state', success: true, data: { sessionId: 'idle' } });
+  if (command.type !== 'prompt') return;
+  send({ id: command.id, type: 'response', command: 'prompt', success: true });
+  send({ type: 'agent_start' });
+  send({ type: 'prompt_result', id: command.id, agentInvoked: true, status: 'completed', sessionSettled: true });
+  send({ type: 'session_settled' });
+  send({ type: 'prompt_result', id: 'cezar-prompt-late', agentInvoked: false, status: 'error', error: { message: 'steer lost the race' } });
+});
+`, { mode: 0o755 });
+    const { events, ui } = await runSession(spec('idle error'), undefined, bin);
+    expect(turnEnds(events)).toBe(1);
+    expect(events).toContainEqual({ type: 'note', message: expect.stringContaining('steer lost the race') });
+    expect(events.filter(event => event.type === 'error')).toEqual([]);
+    expect(ui).toContainEqual(expect.objectContaining({ type: 'session.error', message: expect.stringContaining('steer lost the race') }));
+  });
+
+  it('the turn-opening prompt rejected before admission is a v1 error and the turn-end (Ruling 10)', async () => {
+    const { events, ui } = await runSession(spec('mock:prompt-rejected'));
+    expect(events.filter(event => event.type === 'error')).toEqual([
+      { type: 'error', message: 'omp: prompt failed: input hook rejected the prompt' },
+    ]);
+    const kinds = events.map(event => event.type);
+    expect(kinds.indexOf('error')).toBeLessThan(kinds.indexOf('turn-end'));
+    expect(turnEnds(events)).toBe(1);
+    expect(events.at(-1)).toEqual({ type: 'done' });
+    expect(events).not.toContainEqual(expect.objectContaining({ message: 'omp RPC session ended before session_settled' }));
+    expect(ui.filter(event => event.type === 'turn.completed' || event.type === 'session.error')).toEqual([
+      { type: 'session.error', message: 'omp: prompt failed: input hook rejected the prompt', fatal: false },
+      { type: 'turn.completed', turnId: 'turn_1', stopReason: 'error' },
+    ]);
+  });
+
+  it.each(['mock:steer-local', 'mock:steer-local-result', 'mock:steer-failed'])(
+    'a human steer OMP finishes without the agent keeps the running turn open (%s)',
+    async (steer) => {
+      const { events, ui } = await runSession(spec('mock:steer-tool'), (event, session) => {
+        if (event.type === 'tool-call' && event.id === 'tool-steer') session.sendMessage([{ type: 'text', text: steer }]);
+      });
+      expect(lines('commands.ndjson').filter(command => command.type === 'prompt').at(-1)).toEqual({
+        type: 'prompt', id: 'cezar-prompt-2', message: steer, streamingBehavior: 'steer',
+      });
+      const kinds = events.map(event => event.type === 'text' ? `text:${event.text}` : event.type);
+      expect(turnEnds(events)).toBe(1);
+      expect(kinds.indexOf('text:steer tool done')).toBeLessThan(kinds.indexOf('turn-end'));
+      expect(events.filter(event => event.type === 'error')).toEqual([]);
+      const completed = ui.filter(event => event.type === 'turn.completed');
+      expect(completed).toEqual([expect.objectContaining({ turnId: 'turn_1', stopReason: 'end_turn' })]);
+      const toolDone = ui.findIndex(event => event.type === 'item.completed' && event.item.id === 'tool-steer');
+      expect(toolDone).toBeGreaterThanOrEqual(0);
+      expect(toolDone).toBeLessThan(ui.indexOf(completed[0]!));
+    },
+  );
+
+  it('holdsHumanInput tracks humanAcks until the prompt response (#486)', async () => {
+    let held = false;
+    let countWhileHeld = 0;
+    let countAfter = -1;
+    const { events } = await runSession(spec('mock:steer-tool'), (event, session) => {
+      if (event.type === 'tool-call' && event.id === 'tool-steer') {
+        expect(session.sendMessage([{ type: 'text', text: 'human-ack-1' }])).toBe(true);
+        expect(session.sendMessage([{ type: 'text', text: 'human-ack-2' }])).toBe(true);
+        held = session.holdsHumanInput();
+        countWhileHeld = session.heldHumanInputCount?.() ?? 0;
+        expect(held).toBe(countWhileHeld > 0);
+      }
+      if (event.type === 'turn-end') {
+        countAfter = session.heldHumanInputCount?.() ?? 0;
+        expect(session.holdsHumanInput()).toBe(countAfter > 0);
+      }
+    });
+    expect(held).toBe(true);
+    expect(countWhileHeld).toBe(2);
+    expect(countAfter).toBe(0);
+    expect(events.some(e => e.type === 'turn-end')).toBe(true);
+  });
+
+  it('a mid-turn agent steer rejected before admission rejects only its submission', async () => {
+    let acknowledged: Promise<void> | boolean | undefined;
+    const consumed: string[][] = [];
+    const events: AgentEvent[] = [];
+    const ui: UiEvent[] = [];
+    let session: AgentSession;
+    session = new OmpRunner({ bin: MOCK }).startSession(
+      spec('mock:steer-tool'),
+      (event) => {
+        events.push(event);
+        if (event.type === 'tool-call' && acknowledged === undefined) {
+          acknowledged = session.sendAgentMessage([{ type: 'text', text: 'mock:steer-rejected' }], ['input-1']);
+          if (acknowledged instanceof Promise) acknowledged.catch(() => undefined);
+        }
+      },
+      { autoEndAfterFirstTurn: true, onAgentInputConsumed: (ids) => consumed.push([...ids]), onUiEvent: (event) => ui.push(event) },
+    );
+    await session.result;
+    expect(acknowledged).toBeInstanceOf(Promise);
+    await expect(acknowledged).rejects.toThrow('input hook rejected the steer');
+    expect(consumed).toEqual([]);
+    const kinds = events.map(event => event.type === 'text' ? `text:${event.text}` : event.type);
+    expect(turnEnds(events)).toBe(1);
+    expect(kinds.indexOf('text:steer tool done')).toBeLessThan(kinds.indexOf('turn-end'));
+    expect(events).toContainEqual({ type: 'note', message: 'omp: prompt failed: input hook rejected the steer' });
+    expect(events.filter(event => event.type === 'error')).toEqual([]);
+    expect(ui.filter(event => event.type === 'turn.completed')).toEqual([
+      expect.objectContaining({ turnId: 'turn_1', stopReason: 'end_turn' }),
+    ]);
+  });
+
+  it('a mid-turn sendAgentMessage goes out as a steer and resolves on its prompt ack', async () => {
+    let acknowledged: Promise<void> | boolean | undefined;
+    const consumed: string[][] = [];
+    const events: AgentEvent[] = [];
+    let session: AgentSession;
+    session = new OmpRunner({ bin: MOCK }).startSession(
+      spec('mock:steer-tool'),
+      (event) => {
+        events.push(event);
+        if (event.type === 'tool-call' && acknowledged === undefined) {
+          acknowledged = session.sendAgentMessage([{ type: 'text', text: 'worker reply' }], ['input-1']);
+        }
+      },
+      { autoEndAfterFirstTurn: true, onAgentInputConsumed: (ids) => consumed.push([...ids]) },
+    );
+    await session.result;
+    expect(acknowledged).toBeInstanceOf(Promise);
+    await expect(acknowledged).resolves.toBeUndefined();
+    expect(lines('commands.ndjson').filter(command => command.type === 'prompt').at(-1)).toEqual({
+      type: 'prompt', id: 'cezar-agent-1', message: 'worker reply', streamingBehavior: 'steer',
+    });
+    expect(consumed).toEqual([['input-1']]);
+    expect(turnEnds(events)).toBe(1);
+    expect(events).toContainEqual({ type: 'text', text: 'worker reply' });
+  });
+
+  it('interrupt sends abort then SIGTERM', async () => {
+    const { events } = await runSession(spec('mock:steer-tool'), (event, session) => {
+      if (event.type === 'tool-call') session.interrupt();
+    });
+    expect(lines('commands.ndjson').at(-1)).toEqual({ type: 'abort' });
+    expect(events.filter(event => event.type === 'error')).toEqual([]);
+    expect(events).toContainEqual({ type: 'note', message: expect.stringMatching(new RegExp(String.raw`terminated by Squawk \(code 143\)`)) });
+    expect(events.at(-1)).toEqual({ type: 'done' });
+  });
+
+  it('end closes stdin and OMP exits on its own', async () => {
+    const { events } = await runSession(spec('inspect the working tree'), (event, session) => {
+      if (event.type === 'turn-end') session.end();
+    });
+    expect(events.filter(event => event.type === 'error' || (event.type === 'note' && /terminated/.test(event.message)))).toEqual([]);
+    expect(events.at(-1)).toEqual({ type: 'done' });
+  });
+
+  it('timeoutMs kills the session as a timeout, not a crash', async () => {
+    // Keep real child IO, but let startup finish before spending the runner's budget.
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    const events: AgentEvent[] = [];
+    let ready!: () => void;
+    const childReady = new Promise<void>(resolve => { ready = resolve; });
+    const session = new OmpRunner({ bin: MOCK }).startSession(
+      spec('mock:hold', { timeoutMs: 150 }),
+      event => { events.push(event); if (event.type === 'session') ready(); },
+      { autoEndAfterFirstTurn: false },
+    );
+    try {
+      await childReady;
+      vi.advanceTimersByTime(149);
+      expect(session.open).toBe(true);
+      vi.advanceTimersByTime(1);
+      expect(session.open).toBe(false);
+      await session.result;
+      expect(events.filter(event => event.type === 'error')).toEqual([{ type: 'error', message: expect.stringMatching(/^omp CLI timed out after .* and was killed$/) }]);
+      expect(lines('commands.ndjson').at(-1)).toEqual({ type: 'abort' });
+      expect(events.at(-1)).toEqual({ type: 'done' });
+    } finally {
+      session.interrupt();
+      vi.useRealTimers();
+    }
+  });
+
+  /** A bin that exits 2 printing `text` on stderr and records each invocation's argv. */
+  const refusingBin = (text: string): string => {
+    const bin = join(cwd, 'refusing-omp.mjs');
+    writeFileSync(bin, `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+appendFileSync(${JSON.stringify(join(cwd, 'invocations.ndjson'))}, JSON.stringify(process.argv.slice(2)) + '\\n');
+process.stderr.write(${JSON.stringify(text)});
+process.exit(2);
+`, { mode: 0o755 });
+    return bin;
+  };
+
+  it('an unknown non-MCP --tools name stays fatal and surfaces OMP stderr in the thrown error', async () => {
+    const events: AgentEvent[] = [];
+    const bin = refusingBin('Error: Unknown tool in --tools: cezar_wait.\nBuilt-in tools: read.\n');
+    const failed = new OmpRunner({ bin }).run(spec('x', { toolGrant: explicitToolGrant(['Read']), squawkTools: { name: 'cezar', command: process.execPath, args: [] } }), event => events.push(event));
+    await expect(failed).rejects.toThrow('omp CLI exited with code 2 — Error: Unknown tool in --tools: cezar_wait.');
+    expect(events).toContainEqual({ type: 'note', message: expect.stringContaining('omp CLI stderr:\nError: Unknown tool in --tools: cezar_wait.') });
+    expect(invocations()).toHaveLength(1);
+  });
+
+  // Final review #13: a stream that throws before the first frame, with the child alive, used
+  // to leave the session open (a retry was still possible) while `result` rejected, so later
+  // input reported acceptance into an outbox nobody drained.
+  it('closes the session when stdout fails before the first frame', async () => {
+    const bin = join(cwd, 'silent-omp.mjs');
+    writeFileSync(bin, '#!/usr/bin/env node\nsetTimeout(() => undefined, 20_000);\n', { mode: 0o755 });
+    spawned.length = 0;
+    const session = new OmpRunner({ bin }).startSession(spec('x', { toolGrant: explicitToolGrant(['Read']) }), undefined, { autoEndAfterFirstTurn: false });
+    const child = spawned.at(-1)!;
+    child.stdout!.destroy(new Error('stdout broke'));
+    await expect(session.result).rejects.toThrow('stdout broke');
+    expect(session.open).toBe(false);
+    expect(session.sendMessage([{ type: 'text', text: 'late' }])).toBe(false);
+    child.kill('SIGKILL');
+  });
+
+  it('tears the live child down when stdout fails, escalating to SIGKILL', async () => {
+    const bin = join(cwd, 'stubborn-omp.mjs');
+    writeFileSync(bin, `#!/usr/bin/env node\n${ignoreTermSource()}\nprocess.stderr.write('ready\\n');\nsetTimeout(() => undefined, 20_000);\n`, { mode: 0o755 });
+    spawned.length = 0;
+    const session = new OmpRunner({ bin, killGraceMs: 100 }).startSession(spec('x', { toolGrant: explicitToolGrant(['Read']) }), undefined, { autoEndAfterFirstTurn: false });
+    const child = spawned.at(-1)!;
+    const exited = new Promise<NodeJS.Signals | null>((resolve) => child.once('exit', (_code, signal) => resolve(signal)));
+    // Wait until the stub has installed its SIGTERM handler; a fixed 300 ms sleep lost to it under load.
+    await once(child.stderr!, 'data');
+    child.stdout!.destroy(new Error('stdout broke'));
+    await expect(session.result).rejects.toThrow('stdout broke');
+    // The run is reported failed; the CLI must not keep running tools in the worktree.
+    expect(await exited).toBe('SIGKILL');
+  });
+
+  describe('an omp build that rejects --add-dir (Ruling 22)', () => {
+    it('respawns once without --add-dir and names the dropped directories', async () => {
+      const { events, result } = await runSession(spec('inspect the working tree', {
+        additionalDirectories: ['/srv/a', '/srv/b'],
+        env: { CEZ_MOCK_OMP_UNKNOWN_FLAGS: '--add-dir' },
+      }));
+      const argvs = lines('args.ndjson') as unknown as string[][];
+      expect(argvs).toHaveLength(2);
+      expect(argvs[0]).toEqual(expect.arrayContaining(['--add-dir', '/srv/a', '/srv/b']));
+      expect(argvs[1]).not.toContain('--add-dir');
+      expect(events.filter(event => event.type === 'note' && event.message.startsWith('omp: '))).toEqual([
+        { type: 'note', message: 'omp: this omp CLI does not accept --add-dir (update OMP); ran without the additional directories: /srv/a, /srv/b' },
+      ]);
+      expect(events.filter(event => event.type === 'error')).toEqual([]);
+      expect(turnEnds(events)).toBe(1);
+      expect(result.text).toBe('Investigating: inspect the working tree\nDone with the first pass.');
+    });
+
+    it('retries even when no --tools list was passed', async () => {
+      const { events } = await runSession(spec('inspect the working tree', {
+        toolGrant: UNSET_TOOL_GRANT,
+        additionalDirectories: ['/srv/a'],
+        env: { CEZ_MOCK_OMP_UNKNOWN_FLAGS: '--add-dir' },
+      }));
+      expect(lines('args.ndjson')).toHaveLength(2);
+      expect(turnEnds(events)).toBe(1);
+    });
+
+    it('a flag refusal and a later tool refusal each get their one retry', async () => {
+      const { events } = await runSession(spec('inspect the working tree', {
+        toolGrant: explicitToolGrant(['Read', 'TodoWrite']),
+        additionalDirectories: ['/srv/a'],
+        env: { CEZ_MOCK_OMP_UNKNOWN_FLAGS: '--add-dir', CEZ_MOCK_OMP_DISABLED_TOOLS: 'todo' },
+      }));
+      const argvs = lines('args.ndjson') as unknown as string[][];
+      expect(argvs).toHaveLength(3);
+      expect(argvs[2]).not.toContain('--add-dir');
+      expect(argvs[2]?.slice(-2)).toEqual(['--tools', 'read']);
+      expect(turnEnds(events)).toBe(1);
+    });
+
+    it('any other unknown flag stays fatal, with no retry', async () => {
+      await expect(new OmpRunner({ bin: MOCK }).run(spec('x', {
+        effort: 'high',
+        env: { CEZ_MOCK_OMP_UNKNOWN_FLAGS: '--thinking' },
+      }))).rejects.toThrow('omp CLI exited with code 2 — Error: unknown flag: --thinking');
+      expect(lines('args.ndjson')).toHaveLength(1);
+    });
+  });
+
+  describe('MCP tools OMP has not registered (Ruling 20)', () => {
+    it('respawns once without the passed MCP names OMP did not know, with one v1 note', async () => {
+      const { events, ui, result } = await runSession(spec('inspect the working tree', {
+        toolGrant: explicitToolGrant(['Read', 'mcp__github__create_issue', 'mcp__slow_server__query']),
+        env: { CEZ_MOCK_OMP_MCP_TOOLS: 'mcp__github_create_issue' },
+      }));
+      const argvs = lines('args.ndjson') as unknown as string[][];
+      expect(argvs).toHaveLength(2);
+      expect(argvs[0]?.slice(-2)).toEqual(['--tools', 'read,mcp__github_create_issue,mcp__slow_server_query']);
+      expect(argvs[1]?.slice(-2)).toEqual(['--tools', 'read,mcp__github_create_issue']);
+      expect(events.filter(event => event.type === 'note' && event.message.startsWith('omp: '))).toEqual([
+        { type: 'note', message: 'omp: MCP tools OMP has not registered were dropped: mcp__slow_server_query' },
+      ]);
+      expect(events.filter(event => event.type === 'error')).toEqual([]);
+      expect(result.text).toBe('Investigating: inspect the working tree\nDone with the first pass.');
+      expect(ui.filter(event => event.type === 'turn.started')).toHaveLength(1);
+    });
+
+    it('drops settings-disabled built-ins and unregistered MCP names reported in one exit with one respawn', async () => {
+      const { events } = await runSession(spec('inspect the working tree', {
+        toolGrant: explicitToolGrant(['Read', 'TodoWrite', 'mcp__slow__query']),
+        env: { CEZ_MOCK_OMP_DISABLED_TOOLS: 'todo' },
+      }));
+      const argvs = lines('args.ndjson') as unknown as string[][];
+      expect(argvs).toHaveLength(2);
+      expect(argvs[1]?.slice(-2)).toEqual(['--tools', 'read']);
+      expect(events.filter(event => event.type === 'note' && event.message.startsWith('omp: '))).toEqual([
+        { type: 'note', message: 'omp: tools disabled by your OMP settings were dropped: todo; MCP tools OMP has not registered were dropped: mcp__slow_query' },
+      ]);
+      expect(events.at(-1)).toEqual({ type: 'done' });
+    });
+
+    it('never retries when an unknown name is not an MCP name it passed', async () => {
+      await expect(new OmpRunner({ bin: refusingBin('Error: Unknown tools in --tools: mcp__x_y, goal.\n') })
+        .run(spec('x', { toolGrant: explicitToolGrant(['Read', 'mcp__x_y']) })))
+        .rejects.toThrow('Error: Unknown tools in --tools: mcp__x_y, goal.');
+      expect(invocations()).toHaveLength(1);
+      rmSync(join(cwd, 'invocations.ndjson'));
+      await expect(new OmpRunner({ bin: refusingBin('Error: Unknown tool in --tools: mcp__other_tool.\n') })
+        .run(spec('x', { toolGrant: explicitToolGrant(['Read', 'mcp__x_y']) })))
+        .rejects.toThrow('Error: Unknown tool in --tools: mcp__other_tool.');
+      expect(invocations()).toHaveLength(1);
+    });
+
+    it('a second refusal of a remaining MCP name is surfaced, never a third spawn', async () => {
+      const events: AgentEvent[] = [];
+      const failed = new OmpRunner({ bin: refusingBin('Error: Unknown tool in --tools: mcp__x_y.\n') })
+        .run(spec('x', { toolGrant: explicitToolGrant(['Read', 'mcp__x_y']) }), event => events.push(event));
+      // The respawn drops mcp__x_y; the fake refuses again with a name it no longer passed.
+      await expect(failed).rejects.toThrow('omp CLI exited with code 2 — Error: Unknown tool in --tools: mcp__x_y.');
+      expect(invocations()).toHaveLength(2);
+      expect(invocations()[1]?.slice(-2)).toEqual(['--tools', 'read']);
+    });
+  });
+
+  /** A bin that exits 2 with OMP's gated-tool text; `names` is one entry per invocation. */
+  const gatedBin = (names: string[]): string => {
+    const bin = join(cwd, 'gated-omp.mjs');
+    writeFileSync(bin, `#!/usr/bin/env node
+import { appendFileSync, readFileSync, existsSync } from 'node:fs';
+const countFile = ${JSON.stringify(join(cwd, 'invocations.ndjson'))};
+appendFileSync(countFile, JSON.stringify(process.argv.slice(2)) + '\\n');
+const n = readFileSync(countFile, 'utf8').split('\\n').filter(Boolean).length;
+const names = ${JSON.stringify(names)};
+const name = names[Math.min(n, names.length) - 1];
+process.stderr.write('Error: Built-in tool unavailable in this session: ' + name + '.\\n');
+process.exit(2);
+`, { mode: 0o755 });
+    return bin;
+  };
+  const invocations = (): string[][] => lines('invocations.ndjson') as unknown as string[][];
+
+  describe('tools disabled by the user\'s OMP settings (Ruling 13)', () => {
+    it.each([
+      ['one tool', ['Read', 'TodoWrite'], 'todo', ['--tools', 'read,todo'], ['--tools', 'read'], 'todo'],
+      ['two tools', ['Read', 'TodoWrite', 'lsp'], 'todo,lsp', ['--tools', 'read,todo,lsp'], ['--tools', 'read'], 'todo, lsp'],
+      ['every tool', ['TodoWrite'], 'todo', ['--tools', 'todo'], ['--no-tools'], 'todo'],
+    ])('respawns once without the names OMP refused: %s', async (_label, allowedTools, disabled, first, second, named) => {
+      const { events, ui, result } = await runSession(spec('inspect the working tree', {
+        toolGrant: explicitToolGrant(allowedTools),
+        env: { CEZ_MOCK_OMP_DISABLED_TOOLS: disabled },
+      }));
+      const argvs = lines('args.ndjson') as unknown as string[][];
+      expect(argvs).toHaveLength(2);
+      expect(argvs[0]?.slice(-2)).toEqual(first);
+      expect(argvs[1]?.slice(-second.length)).toEqual(second);
+      expect(events.filter(event => event.type === 'note' && event.message.includes('tools disabled by your OMP settings'))).toEqual([
+        { type: 'note', message: `omp: tools disabled by your OMP settings were dropped: ${named}` },
+      ]);
+      expect(events.filter(event => event.type === 'error')).toEqual([]);
+      expect(events.some(event => event.type === 'note' && event.message.includes('omp CLI stderr'))).toBe(false);
+      expect(turnEnds(events)).toBe(1);
+      expect(events.at(-1)).toEqual({ type: 'done' });
+      expect(result.text).toBe('Investigating: inspect the working tree\nDone with the first pass.');
+      // The refused spawn leaves nothing in v2: one turn, as if the first spawn never happened.
+      expect(ui.filter(event => event.type === 'turn.started')).toHaveLength(1);
+      expect(ui.filter(event => event.type === 'turn.completed')).toHaveLength(1);
+      expect(lines('commands.ndjson').filter(command => command.type === 'prompt')).toHaveLength(1);
+    });
+
+    it('the respawn gets only the time left on the original deadline', async () => {
+      const bin = join(cwd, 'slow-refusal-omp.mjs');
+      writeFileSync(bin, `#!/usr/bin/env node
+import { appendFileSync, readFileSync } from 'node:fs';
+const countFile = ${JSON.stringify(join(cwd, 'invocations.ndjson'))};
+appendFileSync(countFile, JSON.stringify(process.argv.slice(2)) + '\\n');
+if (readFileSync(countFile, 'utf8').split('\\n').filter(Boolean).length === 1) {
+  // The parent advances its clock only after this child is ready to refuse.
+  process.stdin.resume();
+  process.stderr.write('ready to refuse\\n');
+  await new Promise((resolve) => process.stdin.once('data', resolve));
+  process.stderr.write('Error: Built-in tool unavailable in this session: todo.\\n');
+  process.exit(2);
+}
+await import(${JSON.stringify(MOCK)});
+`, { mode: 0o755 });
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+      const events: AgentEvent[] = [];
+      let ready!: () => void;
+      const retryReady = new Promise<void>(resolve => { ready = resolve; });
+      const session = new OmpRunner({ bin }).startSession(
+        spec('mock:hold', { toolGrant: explicitToolGrant(['Read', 'TodoWrite']), timeoutMs: 700 }),
+        event => { events.push(event); if (event.type === 'session') ready(); },
+        { autoEndAfterFirstTurn: false },
+      );
+      const firstChild = spawned.at(-1)!;
+      try {
+        await once(firstChild.stderr!, 'data');
+        vi.advanceTimersByTime(400);
+        firstChild.stdin!.write('refuse\n');
+        await retryReady;
+        expect(invocations()).toHaveLength(2);
+        // The retry has 300 ms left, irrespective of either child's real startup time.
+        vi.advanceTimersByTime(299);
+        expect(session.open).toBe(true);
+        vi.advanceTimersByTime(1);
+        expect(session.open).toBe(false);
+        await session.result;
+        expect(events.some(event => event.type === 'error' && event.message.startsWith('omp CLI timed out'))).toBe(true);
+      } finally {
+        session.interrupt();
+        vi.useRealTimers();
+      }
+    });
+
+    it('a second refusal is surfaced as today, never a third spawn', async () => {
+      const events: AgentEvent[] = [];
+      const failed = new OmpRunner({ bin: gatedBin(['todo', 'read']) })
+        .run(spec('x', { toolGrant: explicitToolGrant(['Read', 'TodoWrite']) }), event => events.push(event));
+      await expect(failed).rejects.toThrow('omp CLI exited with code 2 — Error: Built-in tool unavailable in this session: read.');
+      expect(invocations()).toHaveLength(2);
+      expect(invocations()[1]?.slice(-2)).toEqual(['--tools', 'read']);
+      expect(events.filter(event => event.type === 'error')).toHaveLength(1);
+    });
+
+    it('never retries for a name it did not pass, or when no tool list was passed', async () => {
+      await expect(new OmpRunner({ bin: gatedBin(['find']) }).run(spec('x', { toolGrant: explicitToolGrant(['Read']) })))
+        .rejects.toThrow('Error: Built-in tool unavailable in this session: find.');
+      expect(invocations()).toHaveLength(1);
+      rmSync(join(cwd, 'invocations.ndjson'));
+      await expect(new OmpRunner({ bin: gatedBin(['todo']) }).run(spec('x', { toolGrant: UNSET_TOOL_GRANT })))
+        .rejects.toThrow('Error: Built-in tool unavailable in this session: todo.');
+      expect(invocations()).toHaveLength(1);
+    });
+  });
+
+  describe('input accepted before the first frame, across a Ruling 13 respawn', () => {
+    /** CI under `--maxWorkers=4` can take well over vitest's 1s waitFor default to refuse, respawn and speak. */
+    const waitForChild = (assert: () => void) => vi.waitFor(assert, { timeout: 10_000 });
+    /** Always interrupt: a timed-out waitFor used to skip teardown and let the next afterEach delete `cwd` under a live child. */
+    async function withOpenSession<T>(session: AgentSession, body: (session: AgentSession) => Promise<T>): Promise<T> {
+      try {
+        return await body(session);
+      } finally {
+        session.interrupt();
+        await session.result.catch(() => undefined);
+      }
+    }
+    /** The mock behind a wrapper that records each child's pid, so a test knows which child it talks to. */
+    const pidBin = (): string => {
+      const dir = cwd;
+      const bin = join(dir, 'pid-omp.mjs');
+      writeFileSync(bin, `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+appendFileSync(${JSON.stringify(join(dir, 'pids.txt'))}, process.pid + '\\n');
+await import(${JSON.stringify(MOCK)});
+`, { mode: 0o755 });
+      return bin;
+    };
+    const pids = (): number[] => readPids(join(cwd, 'pids.txt'));
+    const refused = (prompt: string, extra: Partial<AgentRunSpec> = {}): AgentRunSpec =>
+      spec(prompt, { toolGrant: explicitToolGrant(['Read', 'TodoWrite']), ...extra, env: { CEZ_MOCK_OMP_DISABLED_TOOLS: 'todo', ...extra.env } });
+    const prompts = () => lines('commands.ndjson').filter(command => command.type === 'prompt');
+
+    it('a human message sent right after start survives the respawn and reaches the second child once, in order', async () => {
+      const events: AgentEvent[] = [];
+      await withOpenSession(
+        new OmpRunner({ bin: pidBin() }).startSession(
+          refused('mock:hold'), event => events.push(event), { autoEndAfterFirstTurn: false },
+        ),
+        async session => {
+          // run.ts flushDeferred does exactly this, synchronously after startSession returns.
+          expect(session.sendMessage([{ type: 'text', text: 'while starting' }])).toBe(true);
+          expect(session.sendMessage([{ type: 'text', text: 'second one' }])).toBe(true);
+          await waitForChild(() => expect(prompts()).toHaveLength(3));
+          expect(pids()).toHaveLength(2);
+          expect(prompts().map(command => [command.id, command.message, command.streamingBehavior])).toEqual([
+            ['cezar-prompt-1', 'mock:hold', undefined],
+            ['cezar-prompt-2', 'while starting', 'steer'],
+            ['cezar-prompt-3', 'second one', 'steer'],
+          ]);
+          // The startup commands precede the first prompt, as for an unrefused child.
+          expect(lines('commands.ndjson').slice(0, 4).map(command => command.type)).toEqual([
+            'get_state', 'set_steering_mode', 'set_subagent_subscription', 'set_event_filter',
+          ]);
+          session.interrupt();
+          await session.result.catch(() => undefined);
+          expect(prompts()).toHaveLength(3);
+        },
+      );
+    });
+
+    it('keeps the opener ack pending, so an agent message offered before the first frame is refused', async () => {
+      await withOpenSession(
+        new OmpRunner({ bin: pidBin() }).startSession(refused('mock:hold'), undefined, { autoEndAfterFirstTurn: false }),
+        async session => {
+          expect(session.sendAgentMessage([{ type: 'text', text: 'carried' }], ['in-1'])).toBe(false);
+          await waitForChild(() => expect(prompts()).toHaveLength(1));
+        },
+      );
+    });
+
+    it('a human message accepted before the first frame is written only once the child speaks', async () => {
+      await withOpenSession(
+        new OmpRunner({ bin: pidBin() }).startSession(
+          spec('mock:hold', { toolGrant: explicitToolGrant(['Read']) }), undefined, { autoEndAfterFirstTurn: false },
+        ),
+        async session => {
+          expect(session.sendMessage([{ type: 'text', text: 'early' }])).toBe(true);
+          await waitForChild(() => expect(prompts().map(command => command.message)).toEqual(['mock:hold', 'early']));
+        },
+      );
+    });
+
+    it('pid is the live child after a respawn, and onPidChange reports it', async () => {
+      const changes: number[] = [];
+      const ui: UiEvent[] = [];
+      await withOpenSession(
+        new OmpRunner({ bin: pidBin() }).startSession(
+          refused('mock:hold'), undefined,
+          { autoEndAfterFirstTurn: false, onUiEvent: event => ui.push(event), onPidChange: pid => changes.push(pid) },
+        ),
+        async session => {
+          const first = session.pid;
+          await waitForChild(() => {
+            expect(ui.length).toBeGreaterThan(0);
+            expect(pids()).toHaveLength(2);
+          });
+          const [firstChild, secondChild] = pids();
+          expect(first).toBe(firstChild);
+          expect(session.pid).toBe(secondChild);
+          expect(session.pid).not.toBe(first);
+          expect(changes).toEqual([secondChild]);
+          // hearsay-tools/cezarion#890: the respawned child leads its own process group too.
+          if (process.platform !== 'win32') expect(sessionGroupOf(session.pid!)).toBe(session.pid);
+        },
+      );
+    });
+
+    it('interrupt after a respawn aborts and kills the second child', async () => {
+      const ui: UiEvent[] = [];
+      await withOpenSession(
+        new OmpRunner({ bin: pidBin() }).startSession(
+          refused('mock:hold'), undefined, { autoEndAfterFirstTurn: false, onUiEvent: event => ui.push(event) },
+        ),
+        async session => {
+          await waitForChild(() => {
+            expect(ui.length).toBeGreaterThan(0);
+            expect(pids()).toHaveLength(2);
+          });
+          const second = pids()[1]!;
+          session.interrupt();
+          await session.result.catch(() => undefined);
+          expect(lines('commands.ndjson').at(-1)).toEqual({ type: 'abort' });
+          expect(() => process.kill(second, 0)).toThrow();
+          expect(session.open).toBe(false);
+        },
+      );
+    });
+
+    it('end after a respawn closes the second child and finishes the run', async () => {
+      const ui: UiEvent[] = [];
+      const events: AgentEvent[] = [];
+      await withOpenSession(
+        new OmpRunner({ bin: pidBin() }).startSession(
+          refused('mock:hold'), event => events.push(event), { autoEndAfterFirstTurn: false, onUiEvent: event => ui.push(event) },
+        ),
+        async session => {
+          await waitForChild(() => {
+            expect(ui.length).toBeGreaterThan(0);
+            expect(pids()).toHaveLength(2);
+          });
+          const second = pids()[1]!;
+          session.end();
+          await session.result.catch(() => undefined);
+          expect(() => process.kill(second, 0)).toThrow();
+          expect(session.open).toBe(false);
+          expect(events.filter(event => event.type === 'error')).toEqual([]);
+        },
+      );
+    });
+  });
+
+  it('an unauthenticated omp surfaces its no-models reason, not the setup hints after it', async () => {
+    const events: AgentEvent[] = [];
+    const failed = new OmpRunner({ bin: MOCK }).run(spec('x', { env: { CEZ_MOCK_OMP_NO_AUTH: '1' } }), event => events.push(event));
+    await expect(failed).rejects.toThrow(
+      'omp CLI exited with code 1 — No models available. Use /login or set an API key environment variable. Then use /model to select a model.',
+    );
+    expect(events).toContainEqual({ type: 'note', message: expect.stringContaining('ANTHROPIC_API_KEY, OPENAI_API_KEY') });
+  });
+
+  it('a child killed by a signal Squawk did not send fails the run', async () => {
+    await expect(new OmpRunner({ bin: MOCK }).run(spec('mock:self-kill'))).rejects.toThrow(/omp CLI was killed by signal SIGKILL/);
+  });
+
+  // The killed-by-signal branch also checks !terminatedBySquawk; the teardown branch before it
+  // already takes every signal exit Squawk caused (hearsay-tools/cezarion#2002 pin).
+  it('a SIGKILL Squawk sent is a teardown note, never an error', async () => {
+    const started = Date.now();
+    const events: AgentEvent[] = [];
+    const session = new OmpRunner({ bin: MOCK, killGraceMs: 100 }).startSession(
+      spec('mock:linger'), event => events.push(event), { autoEndAfterFirstTurn: true },
+    );
+    await expect(session.result).resolves.toBeDefined();
+    expect(turnEnds(events)).toBe(1);
+    // Two grace periods and auto-end must beat the mock's 12 s backstop.
+    expect(Date.now() - started).toBeLessThan(8_000);
+    expect(events.filter(event => event.type === 'note' && event.message.includes(`terminated by Squawk`))).toEqual([
+      { type: 'note', message: `omp CLI did not exit on its own after close; terminated by Squawk (SIGKILL)` },
+    ]);
+    expect(events.filter(event => event.type === 'error')).toEqual([]);
+    expect(events.at(-1)).toEqual({ type: 'done' });
+  });
+
+  it('a non-zero exit with empty stderr fails with the bare exit code and no stderr note', async () => {
+    const bin = join(cwd, 'mock-omp-exit-3.mjs');
+    writeFileSync(bin, '#!/usr/bin/env node\nprocess.exit(3);\n', { mode: 0o755 });
+    const events: AgentEvent[] = [];
+    await expect(new OmpRunner({ bin }).startSession(spec('exit'), event => events.push(event)).result)
+      .rejects.toThrow(/^omp CLI exited with code 3$/);
+    expect(events.filter(event => event.type === 'error')).toEqual([{ type: 'error', message: 'omp CLI exited with code 3' }]);
+    expect(events.some(event => event.type === 'note' && event.message.startsWith('omp CLI stderr'))).toBe(false);
+  });
+
+  it('ENOENT names omp and omp login', async () => {
+    await expect(new OmpRunner({ bin: join(cwd, 'omp-does-not-exist') }).run(spec('x')))
+      .rejects.toThrow(/omp-does-not-exist` not found on PATH: install OMP .* and run `omp login`/);
+  });
+
+  it('discovered session id is emitted once and reused with --resume on the next session', async () => {
+    const first = await runSession(spec('inspect the working tree'));
+    expect(first.events.filter(event => event.type === 'session')).toEqual([{ type: 'session', sessionId: '019a0000-0000-7000-8000-0000000000aa', resumed: false }]);
+    const second = await runSession(spec('continue', { sessionId: first.result.sessionId, resume: true }));
+    // Every adapter start reports whether it resumed, even when the id is unchanged.
+    expect(second.events.filter(event => event.type === 'session')).toEqual([{ type: 'session', sessionId: first.result.sessionId, resumed: true }]);
+    expect(second.result.sessionId).toBe('019a0000-0000-7000-8000-0000000000aa');
+    const [firstArgs, secondArgs] = lines('args.ndjson') as unknown as string[][];
+    expect(firstArgs).not.toContain('--resume');
+    expect(secondArgs).toEqual(expect.arrayContaining(['--resume', '019a0000-0000-7000-8000-0000000000aa']));
+  });
+
+  it('notes the tools with no OMP equivalent once, at start', async () => {
+    const { events } = await runSession(spec('inspect the working tree', { toolGrant: explicitToolGrant(['Read', 'NotebookEdit', 'SubagentWait']) }));
+    expect(events[0]).toEqual({ type: 'note', message: 'omp: dropped tools with no OMP equivalent: NotebookEdit, SubagentWait' });
+    expect(events.filter(event => event.type === 'note' && event.message.startsWith('omp: dropped'))).toHaveLength(1);
+    expect(lines('args.ndjson')[0]).toEqual(expect.arrayContaining(['--tools', 'read']));
+  });
+
+  it('dry-run selects the bundled mock and ends with done', async () => {
+    vi.stubEnv('CEZ_DRY_RUN', '1');
+    vi.stubEnv('CEZ_OMP_BIN', undefined);
+    const events: AgentEvent[] = [];
+    await new OmpRunner().run({ toolGrant: UNSET_TOOL_GRANT, cwd, userPrompt: 'investigate the login redirect bug', timeoutMs: 20_000 }, event => events.push(event));
+    expect(events.map(event => event.type)).toEqual(expect.arrayContaining(['text', 'tool-call', 'tool-result', 'turn-end']));
+    expect(events.at(-1)).toEqual({ type: 'done' });
+  });
+});

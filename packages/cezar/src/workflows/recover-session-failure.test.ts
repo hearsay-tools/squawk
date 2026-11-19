@@ -14,7 +14,7 @@ import { RunStore } from '../runs/store.ts';
 const run = promisify(execFile);
 const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
 const HERE = dirname(fileURLToPath(import.meta.url));
-const MOCK_CODEX = join(HERE, '..', 'core', '__fixtures__', 'codex', 'mock-codex-app-server.mjs');
+const MOCK_CODEX = join(HERE, '..', 'runners', 'codex', '__fixtures__', 'mock-codex-app-server.mjs');
 
 describe('recover() contains backend session failures (#562)', () => {
   let repoRoot: string;

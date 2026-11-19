@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { toolDisplay } from '@open-mercato/cezar-api-client/contract/tool-display'
 import type { UiToolItem } from '@open-mercato/cezar-api-client'
 
-import bashAndScreenshot from '../../../../cezar/src/core/__fixtures__/claude/bash-and-screenshot.expected.json'
-import commandLifecycle from '../../../../cezar/src/core/__fixtures__/codex/command-lifecycle.expected.json'
+import bashAndScreenshot from '../../../../cezar/src/runners/claude/__fixtures__/bash-and-screenshot.expected.json'
+import commandLifecycle from '../../../../cezar/src/runners/codex/__fixtures__/command-lifecycle.expected.json'
 import { ToolCard } from './thread-items'
 
 afterEach(cleanup)

@@ -82,6 +82,7 @@ describe('runner-id-branch (hearsay-tools/cezarion#2991)', () => {
     ['packages/web/src/routes/new-task-form.ts', true],
     ['packages/web/src/routes/settings/dialog.tsx', true],
     ['packages/cezar/src/core/runner-registry.ts', false],
+    ['packages/cezar/src/runners/pi/pi-runner.ts', false],
     ['packages/cezar/src/server/server.test.ts', false],
     ['packages/cezar/src/workflows/cells.testkit.ts', false],
     ['packages/web/src/test/render.tsx', false],
@@ -98,7 +99,7 @@ describe('runner-id-branch (hearsay-tools/cezarion#2991)', () => {
     expect(scanRunnerIdBranches(file, source, exceptions).map(({ site }) => site)).toEqual(["runner === 'opencode'", "runner === 'omp'"]);
     expect(scanRunnerIdBranches('packages/cezar/src/server/other.ts', source, exceptions)).toHaveLength(3);
     expect(checkRule(runnerIdBranch, file, "\nif (runner === 'opencode') a();")).toEqual([
-      { line: 2, message: expect.stringMatching(/^runner === 'opencode': only packages\/cezar\/src\/core\/ branches on a runner id\..+RUNNER_FACTS.+hearsay-tools\/cezarion#2991/) },
+      { line: 2, message: expect.stringMatching(/^runner === 'opencode': only packages\/cezar\/src\/core\/ and packages\/cezar\/src\/runners\/ branch on a runner id\..+RUNNER_FACTS.+hearsay-tools\/cezarion#2991/) },
     ]);
   });
 

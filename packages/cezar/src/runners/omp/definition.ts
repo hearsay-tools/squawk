@@ -18,7 +18,7 @@ export const ompRunner = defineRunner({
   specSupport: OMP_SPEC_SUPPORT,
   detection: OMP_DETECTION,
   cli: OMP_CLI,
-  loadAdapter: async () => new (await import('../../core/omp-runner.ts')).OmpRunner(),
+  loadAdapter: async () => new (await import('./omp-runner.ts')).OmpRunner(),
   models: {
     ...OMP_MODELS,
     // OMP's native default model (its model roles) is not read: no native-default strategy, by the
@@ -26,8 +26,8 @@ export const ompRunner = defineRunner({
     // model roles apply.
     loadSettings: async () => ({ runner: 'omp', async read() { return {}; } }),
   },
-  loadModelCatalog: async () => (await import('../../core/omp-model-catalog.ts')).discoverOmpModels,
-  loadSkillCatalog: async () => (await import('../../core/omp-skill-catalog.ts')).discoverOmpSkills,
+  loadModelCatalog: async () => (await import('./omp-model-catalog.ts')).discoverOmpModels,
+  loadSkillCatalog: async () => (await import('./omp-skill-catalog.ts')).discoverOmpSkills,
   configFiles: OMP_CONFIG_FILES,
   extraTools: OMP_EXTRA_TOOLS,
   login: { ...OMP_LOGIN, executable: () => productEnv('OMP_BIN') ?? 'omp' },

@@ -26,7 +26,7 @@ import { performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 import { randomUUID } from 'node:crypto';
-import { ClaudeCliRunner } from '../src/core/claude-cli-runner.ts';
+import { ClaudeCliRunner } from '../src/runners/claude/claude-cli-runner.ts';
 import { installWindowsIdentityStore } from '../src/delegation/windows-identity-store.ts';
 import { registerBuiltInRunners } from '../src/runners/built-in.ts';
 

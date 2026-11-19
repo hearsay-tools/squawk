@@ -13,11 +13,11 @@ import { humanInputDeliveredEventSchema } from '@open-mercato/cezar-api-client/c
 import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
 import type { UiMessageItem, UiToolItem } from '@open-mercato/cezar-api-client'
 
-import bashAndScreenshot from '../../../../cezar/src/core/__fixtures__/claude/bash-and-screenshot.expected.json'
-import failedAndDenied from '../../../../cezar/src/core/__fixtures__/claude/failed-and-denied.expected.json'
-import claudeHooks from '../../../../cezar/src/core/__fixtures__/claude/hooks.expected.json'
-import textTurn from '../../../../cezar/src/core/__fixtures__/claude/text-turn.expected.json'
-import thinkingEditWriteTodo from '../../../../cezar/src/core/__fixtures__/claude/thinking-edit-write-todo.expected.json'
+import bashAndScreenshot from '../../../../cezar/src/runners/claude/__fixtures__/bash-and-screenshot.expected.json'
+import failedAndDenied from '../../../../cezar/src/runners/claude/__fixtures__/failed-and-denied.expected.json'
+import claudeHooks from '../../../../cezar/src/runners/claude/__fixtures__/hooks.expected.json'
+import textTurn from '../../../../cezar/src/runners/claude/__fixtures__/text-turn.expected.json'
+import thinkingEditWriteTodo from '../../../../cezar/src/runners/claude/__fixtures__/thinking-edit-write-todo.expected.json'
 import {
   latestPlanEntries,
   reduceThread,
@@ -28,7 +28,7 @@ import {
 
 /**
  * The reducer, table-driven against REAL event sequences:
- *  - the golden claude fixtures (`src/core/__fixtures__/claude/*.expected.json`) — the exact v2
+ *  - the golden claude fixtures (`src/runners/claude/__fixtures__/*.expected.json`) — the exact v2
  *    streams the R2 mappers are pinned to;
  *  - verbatim lines from actual NDJSON transcripts (a pre-v2 run and an R2 dry-run mixed file),
  *    because the v1 fallback and the mixed-file dedup rule are claims about what is really on

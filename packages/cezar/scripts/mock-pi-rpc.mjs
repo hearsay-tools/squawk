@@ -213,7 +213,7 @@ function respondState(command) {
 
 function respondProviderError(command) {
   // An assistant `message_end` whose stopReason is `error` — the wire shape of
-  // `src/core/__fixtures__/pi/provider-error.ndjson`, with a 400 detail instead
+  // `src/runners/pi/__fixtures__/provider-error.ndjson`, with a 400 detail instead
   // of its transport diagnostic (hearsay-tools/squawk#3337). #54: this arrived
   // before `agent_settled` and the run parked as "Needs You" instead of
   // failing (harness parity S7).

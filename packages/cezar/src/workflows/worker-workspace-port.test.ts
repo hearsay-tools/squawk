@@ -1,6 +1,6 @@
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import '../core/claude-runner.testkit.ts';
+import '../runners/claude/claude-runner.testkit.ts';
 import { fixedSkillCatalog } from '../core/runner-skill-fixture.testkit.ts';
 import { runnersUnderTest } from '../core/runners-under-test.testkit.ts';
 import { acquireInertCiResources } from '../ci-wait/inert-ci-resources.testkit.ts';

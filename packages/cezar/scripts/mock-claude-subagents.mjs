@@ -1,6 +1,6 @@
 // `mock:subagent-background` (hearsay-tools/cezarion#2431, hearsay-tools/cezarion#1512): a
 // backgrounded native Agent that outlives the parent's turn. Frame shapes follow
-// src/core/__fixtures__/claude/background-agent.ndjson, reconstructed from a live CLI 2.1.303
+// src/runners/claude/__fixtures__/background-agent.ndjson, reconstructed from a live CLI 2.1.303
 // transcript. Prompt tokens:
 // - `parity-release=<path>` (required): the child's end waits until this file exists;
 // - `subagents=<n>`: spawn n children, abg01…abg0n, whose notifications follow in order;

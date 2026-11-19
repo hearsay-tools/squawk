@@ -7,11 +7,11 @@ import { activityToolSchema } from '@open-mercato/cezar-contract/activity';
 import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
 import type { UiEvent } from '../core/ui-events.ts';
 import { z } from 'zod';
-import { createOpencodeUiState, mapOpencodeEvent, opencodeSessionStarted, opencodeTurnStarted, STATUS_MAP as OPENCODE_TOOL_STATUS_MAP, type OpencodeUiMapperState } from '../core/opencode-ui-mapper.ts';
+import { createOpencodeUiState, mapOpencodeEvent, opencodeSessionStarted, opencodeTurnStarted, STATUS_MAP as OPENCODE_TOOL_STATUS_MAP, type OpencodeUiMapperState } from '../runners/opencode/opencode-ui-mapper.ts';
 import { UiEventSink } from '../runs/ui-event-sink.ts';
 import { ToolActivityTracker } from './tool-activity.ts';
 
-const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'core', '__fixtures__');
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'runners');
 const NOW = Date.parse('2026-11-05T12:00:00.000Z');
 const AT = new Date(NOW).toISOString();
 /** The contract's tool statuses, named through the schema. */
@@ -26,13 +26,13 @@ const WIRE_TOOL_STATUS = z.enum(Object.keys(OPENCODE_TOOL_STATUS_MAP)).enum;
  */
 const CASES: Record<RunnerId, { fixture: string; calls: number; latest: Omit<ActivityTool, 'startedAt' | 'endedAt'> }> = {
   // The denied call is first seen at its completion.
-  claude: { fixture: 'claude/failed-and-denied', calls: 2, latest: { title: 'Ran rm -rf node_modules', toolKind: 'execute', status: TOOL_STATUS.declined } },
-  codex: { fixture: 'codex/command-lifecycle', calls: 2, latest: { title: 'Ran bash -lc npm run lint', toolKind: 'execute', status: TOOL_STATUS.failed } },
+  claude: { fixture: 'claude/__fixtures__/failed-and-denied', calls: 2, latest: { title: 'Ran rm -rf node_modules', toolKind: 'execute', status: TOOL_STATUS.declined } },
+  codex: { fixture: 'codex/__fixtures__/command-lifecycle', calls: 2, latest: { title: 'Ran bash -lc npm run lint', toolKind: 'execute', status: TOOL_STATUS.failed } },
   // A pending → running update replaces the title.
-  opencode: { fixture: 'opencode/tool-lifecycle', calls: 2, latest: { title: 'Fetch https://example.com/docs', toolKind: 'fetch', status: TOOL_STATUS.failed } },
-  pi: { fixture: 'pi/rpc-lifecycle', calls: 4, latest: { title: 'Ran npm test', toolKind: 'execute', status: TOOL_STATUS.failed } },
+  opencode: { fixture: 'opencode/__fixtures__/tool-lifecycle', calls: 2, latest: { title: 'Fetch https://example.com/docs', toolKind: 'fetch', status: TOOL_STATUS.failed } },
+  pi: { fixture: 'pi/__fixtures__/rpc-lifecycle', calls: 4, latest: { title: 'Ran npm test', toolKind: 'execute', status: TOOL_STATUS.failed } },
   // Two edits take their final title only at completion.
-  omp: { fixture: 'omp/rpc-edit-todo', calls: 7, latest: { title: 'Update plan', toolKind: 'plan', status: TOOL_STATUS.completed } },
+  omp: { fixture: 'omp/__fixtures__/rpc-edit-todo', calls: 7, latest: { title: 'Update plan', toolKind: 'plan', status: TOOL_STATUS.completed } },
 };
 
 function events(fixture: string): UiEvent[] {
@@ -63,7 +63,7 @@ describe('tool activity from each runner’s mapper output', () => {
 
   it('omp: an edit’s final title arrives with its completion', () => {
     const tracker = new ToolActivityTracker({ now: () => NOW });
-    const all = events('omp/rpc-edit-todo');
+    const all = events('omp/__fixtures__/rpc-edit-todo');
     const end = all.findIndex((event) => event.type === 'item.completed' && event.item.id === 'toolu_edit_1');
     for (const event of all.slice(0, end + 1)) tracker.observe('run-1', event, (text) => text);
     expect(tracker.read('run-1', NOW)?.tool).toMatchObject({ title: 'Edit src/greet.ts', status: TOOL_STATUS.completed });

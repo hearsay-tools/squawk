@@ -10,7 +10,7 @@ describe('RunManager waiting publication', () => {
     { name: 'Codex app-server', runner: 'codex' as const, task: 'plain markerless Codex turn' },
   ])('$name publishes and persists a complete waiting record before yielding', async ({ runner, task }) => {
     if (runner === 'codex') {
-      process.env.CEZ_CODEX_BIN = join(import.meta.dirname, '../core/__fixtures__/codex/mock-codex-app-server.mjs');
+      process.env.CEZ_CODEX_BIN = join(import.meta.dirname, '../runners/codex/__fixtures__/mock-codex-app-server.mjs');
     }
     const record = fixture.manager.startRun(SINGLE_STEP, { task, ...(runner ? { runner } : {}), worktree: false });
     fixture.currentId = record.id;

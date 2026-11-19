@@ -1,0 +1,2467 @@
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import { createServer, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { PassThrough } from 'node:stream';
+import { describe, expect, it, vi } from 'vitest';
+import type { AgentEvent } from '../../core/agent-runner.ts';
+import { AUTO_END_DELAY_MS } from '../../core/runner-runtime.ts';
+import { KILL_GRACE_MS, OpencodeServerRunner } from './opencode-server-runner.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { opencodeRunner } from './definition.ts';
+
+// The runner's session env reads opencode's registry data; this test drives only opencode.
+registerRunner(opencodeRunner);
+import type { UiEvent } from '../../core/ui-events.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
+import { rejectedAcknowledgement } from '../../workflows/run/input-delivery.ts';
+
+const spawnHook = vi.hoisted(() => ({ override: null as null | (() => unknown) }));
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    spawn: (...args: Parameters<typeof actual.spawn>) =>
+      spawnHook.override ? spawnHook.override() : actual.spawn(...args),
+  };
+});
+
+/**
+ * #858 — the OpenCode half of #844. `opencode serve` installs its own SIGTERM handler, so the
+ * teardown watchdog must decide "is it dead?" from a real exit, never from `ChildProcess.killed`,
+ * which Node flips the moment a signal is *delivered*. Gating on the flag made the SIGKILL
+ * unreachable for exactly the server it exists for: one leaked process per teardown, and — because
+ * every teardown path here is followed by `await this.exited` — a session result that never settles.
+ */
+describe('SIGTERM→SIGKILL escalation for an opencode server that survives SIGTERM', () => {
+  function signallableChild(): {
+    child: ChildProcessWithoutNullStreams;
+    signals: NodeJS.Signals[];
+    exit: (code: number) => void;
+  } {
+    const signals: NodeJS.Signals[] = [];
+    const emitter = new EventEmitter();
+    const child = Object.assign(emitter, {
+      stdin: new PassThrough(),
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      killed: false,
+      pid: 5150,
+      // Node's semantics: delivery flips `killed` whether or not the child dies.
+      kill: (signal: NodeJS.Signals) => {
+        signals.push(signal);
+        Object.assign(child, { killed: true });
+        return true;
+      },
+    }) as unknown as ChildProcessWithoutNullStreams;
+    const exit = (code: number) => {
+      Object.assign(child, { exitCode: code });
+      emitter.emit('exit', code, null);
+    };
+    return { child, signals, exit };
+  }
+
+  function withFakeChild(run: (fake: ReturnType<typeof signallableChild>) => void): void {
+    const fake = signallableChild();
+    spawnHook.override = () => fake.child;
+    vi.useFakeTimers();
+    try {
+      run(fake);
+    } finally {
+      vi.useRealTimers();
+      spawnHook.override = null;
+    }
+  }
+
+  /** No wall-clock deadline; the test drives the teardown itself. */
+  function startSession(timeoutMs: number) {
+    const session = new OpencodeServerRunner({ bin: 'opencode', timeoutMs }).startSession({ toolGrant: UNSET_TOOL_GRANT,
+      userPrompt: 'do it',
+      cwd: process.cwd(),
+    });
+    // The server never comes up behind a fake child, so the result rejects/settles on its own path.
+    void session.result.catch(() => undefined);
+    return session;
+  }
+
+  it('escalates after end() even once Node flagged the server as killed', () => {
+    withFakeChild((fake) => {
+      const session = startSession(0);
+
+      session.end();
+      expect(fake.signals).toEqual(['SIGTERM']);
+      // Delivered, not dead — the state that used to disable the escalation.
+      expect(fake.child.killed).toBe(true);
+      expect(fake.child.exitCode).toBeNull();
+
+      vi.advanceTimersByTime(KILL_GRACE_MS);
+      expect(fake.signals).toEqual(['SIGTERM', 'SIGKILL']);
+    });
+  });
+
+  it('escalates on the wall-clock timeout path', () => {
+    withFakeChild((fake) => {
+      startSession(20);
+
+      vi.advanceTimersByTime(20);
+      expect(fake.signals).toEqual(['SIGTERM']);
+
+      vi.advanceTimersByTime(KILL_GRACE_MS);
+      expect(fake.signals).toEqual(['SIGTERM', 'SIGKILL']);
+    });
+  });
+
+  it('stops escalating once the server really exits after SIGTERM', () => {
+    withFakeChild((fake) => {
+      const session = startSession(0);
+
+      session.end();
+      expect(fake.signals).toEqual(['SIGTERM']);
+      fake.exit(143);
+
+      vi.advanceTimersByTime(KILL_GRACE_MS);
+      expect(fake.signals).toEqual(['SIGTERM']);
+    });
+  });
+
+  it('sends one SIGTERM per session however many teardown paths run', () => {
+    withFakeChild((fake) => {
+      const session = startSession(0);
+
+      // `interrupt()` on the deadline and the result promise's `finally` both
+      // reach terminate() for the same session; the escalation is armed once.
+      session.interrupt();
+      session.end();
+      session.interrupt();
+      expect(fake.signals).toEqual(['SIGTERM']);
+
+      vi.advanceTimersByTime(KILL_GRACE_MS);
+      expect(fake.signals).toEqual(['SIGTERM', 'SIGKILL']);
+    });
+  });
+
+  it('does not signal at all when the server exited before the teardown', () => {
+    withFakeChild((fake) => {
+      const session = startSession(0);
+      fake.exit(0);
+
+      session.end();
+      vi.advanceTimersByTime(KILL_GRACE_MS);
+      expect(fake.signals).toEqual([]);
+    });
+  });
+});
+
+/**
+ * #4 (upstream #897) — the runner used to long-poll `POST /session/:id/message`
+ * and synthesize v1 `turn-end` from that response's settlement, so undici's
+ * default 300s headers timeout ended any longer turn with `prompt failed:
+ * fetch failed` and Squawk parked a healthy run. The turn now starts with
+ * `POST /session/:id/prompt_async` and ends from the SSE `session.idle` —
+ * the same signal the v2 mapper already uses.
+ */
+describe('turn lifecycle over prompt_async + session.idle', { timeout: 15_000 }, () => {
+  interface MockServerOptions {
+    promptStatus?: number;
+    /** Hold every prompt acknowledgement after the first until `acknowledgeFollowups()`. */
+    holdFollowupPrompt?: boolean;
+    /** Answer every prompt after the first with this status, and hold its body until `acknowledgeFollowups()`. */
+    followupErrorStatus?: number;
+    refuseSse?: boolean;
+    sseStatus?: number;
+    questionReplyStatus?: number;
+    /** Hold every question reply answer until `releaseQuestionReplies()`; the status is read at
+     *  release. A test that asserts what the runner does while a reply is in flight holds it here:
+     *  a reply delayed on a timer lands mid-assertion on a loaded host (hearsay-tools/cezarion#1314). */
+    holdQuestionReplies?: boolean;
+    questionGetDelayMs?: number;
+    /** Hold question lookups until the test releases their response. */
+    holdQuestionGets?: boolean;
+    /** `GET /config` body; `'fail'` answers 500 (hearsay-tools/cezarion#1266). */
+    config?: unknown;
+    configDelayMs?: number;
+    /** Hold every `GET /config` answer until `releaseConfig()`. */
+    holdConfig?: boolean;
+    permissionReplyStatus?: number;
+    /** Hold every permission reply answer until `releasePermissionReplies()`; the status is read at release. */
+    holdPermissionReplies?: boolean;
+  }
+
+  /** In-process stand-in for `opencode serve`: just the endpoints the runner
+   *  touches, with the test driving the SSE bus frame by frame. */
+  async function startMockServer(opts: MockServerOptions = {}) {
+    const clients: ServerResponse[] = [];
+    const promptPosts: string[] = [];
+    const heldAcknowledgements: Array<() => void> = [];
+    const promptBodies: unknown[] = [];
+    const questionGets: number[] = [];
+    const questionReplies: Array<{ path: string; body: unknown }> = [];
+    const questionRejects: Array<{ path: string; body: unknown }> = [];
+    const pendingQuestions: unknown[] = [];
+    const configGets: number[] = [];
+    const permissionReplies: Array<{ path: string; body: unknown }> = [];
+    const heldConfig: Array<() => void> = [];
+    const heldQuestionReplies: Array<() => void> = [];
+    const heldQuestionGets: Array<() => void> = [];
+    const heldPermissionReplies: Array<() => void> = [];
+    let permissionReplyStatus = opts.permissionReplyStatus ?? 200;
+    const answerPrompt = (res: ServerResponse, followup: boolean): void => {
+      const acknowledge = () => {
+        res.writeHead(opts.promptStatus ?? 200, { 'content-type': 'application/json' });
+        res.end('{}');
+      };
+      if (followup && opts.followupErrorStatus) {
+        res.writeHead(opts.followupErrorStatus, { 'content-type': 'application/json' });
+        res.flushHeaders();
+        heldAcknowledgements.push(() => res.end('{"error":"provider"}'));
+      } else if (followup && opts.holdFollowupPrompt) heldAcknowledgements.push(acknowledge);
+      else acknowledge();
+    };
+    let questionReplyStatus = opts.questionReplyStatus ?? 200;
+    const server = createServer((req, res) => {
+      const url = req.url ?? '';
+      if (req.method === 'GET' && url.startsWith('/event')) {
+        if (opts.refuseSse) {
+          res.destroy();
+          return;
+        }
+        if (opts.sseStatus) {
+          res.writeHead(opts.sseStatus, { 'content-type': 'application/json' });
+          res.end('{}');
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        // Flush the headers now — the runner awaits the SSE connection before
+        // its first prompt, and Node holds headers back until the first write.
+        res.flushHeaders();
+        clients.push(res);
+        return;
+      }
+      if (req.method === 'GET' && url === '/question') {
+        questionGets.push(Date.now());
+        res.writeHead(200, { 'content-type': 'application/json' });
+        const answer = () => res.end(JSON.stringify(pendingQuestions));
+        if (opts.holdQuestionGets) heldQuestionGets.push(answer);
+        else if (opts.questionGetDelayMs) setTimeout(answer, opts.questionGetDelayMs);
+        else answer();
+        return;
+      }
+      if (req.method === 'GET' && url === '/config') {
+        configGets.push(Date.now());
+        const answer = () => {
+          res.writeHead(opts.config === 'fail' ? 500 : 200, { 'content-type': 'application/json' });
+          res.end(opts.config === 'fail' ? '{}' : JSON.stringify(opts.config ?? {}));
+        };
+        if (opts.holdConfig) heldConfig.push(answer);
+        else if (opts.configDelayMs) setTimeout(answer, opts.configDelayMs);
+        else answer();
+        return;
+      }
+      let body = '';
+      req.on('data', (chunk: Buffer) => {
+        body += chunk.toString();
+      });
+      req.on('end', () => {
+        if (req.method === 'POST' && url === '/session') {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ id: 'ses_test' }));
+          return;
+        }
+        if (req.method === 'POST' && /^\/session\/ses_test\/(prompt_async|message)$/.test(url)) {
+          promptPosts.push(url);
+          promptBodies.push(JSON.parse(body || '{}'));
+          answerPrompt(res, promptPosts.length > 1);
+          return;
+        }
+        if (req.method === 'POST' && /^\/question\/[^/]+\/reply$/.test(url)) {
+          questionReplies.push({ path: url, body: JSON.parse(body || '{}') });
+          const reply = () => {
+            res.writeHead(questionReplyStatus, { 'content-type': 'application/json' });
+            res.end('{}');
+          };
+          if (opts.holdQuestionReplies) heldQuestionReplies.push(reply);
+          else reply();
+          return;
+        }
+        if (req.method === 'POST' && /^\/permission\/[^/]+\/reply$/.test(url)) {
+          permissionReplies.push({ path: url, body: JSON.parse(body || '{}') });
+          const answer = () => {
+            res.writeHead(permissionReplyStatus, { 'content-type': 'application/json' });
+            res.end('{}');
+          };
+          if (opts.holdPermissionReplies) heldPermissionReplies.push(answer);
+          else answer();
+          return;
+        }
+        if (req.method === 'POST' && /^\/question\/[^/]+\/reject$/.test(url)) {
+          questionRejects.push({ path: url, body: JSON.parse(body || '{}') });
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end('{}');
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end('{}');
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    return {
+      url: `http://127.0.0.1:${port}`,
+      promptPosts,
+      acknowledgeFollowups: () => heldAcknowledgements.splice(0).forEach(ack => ack()),
+      promptBodies,
+      questionGets,
+      questionReplies,
+      questionRejects,
+      pendingQuestions,
+      configGets,
+      permissionReplies,
+      releaseConfig: () => heldConfig.splice(0).forEach(answer => answer()),
+      releaseQuestionGets: () => heldQuestionGets.splice(0).forEach(answer => answer()),
+      releaseQuestionReplies: () => heldQuestionReplies.splice(0).forEach(reply => reply()),
+      releasePermissionReplies: () => heldPermissionReplies.splice(0).forEach(answer => answer()),
+      setPermissionReplyStatus(status: number): void {
+        permissionReplyStatus = status;
+      },
+      setQuestionReplyStatus(status: number): void {
+        questionReplyStatus = status;
+      },
+      send(event: unknown): void {
+        for (const c of clients) if (!c.destroyed) c.write(`data: ${JSON.stringify(event)}\n\n`);
+      },
+      dropSse(): void {
+        for (const c of clients) c.destroy();
+        clients.length = 0;
+      },
+      async close(): Promise<void> {
+        // Keep-alive sockets from the runner's fetch pool would otherwise
+        // block `server.close` forever.
+        server.closeAllConnections();
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      },
+    };
+  }
+
+  /** Fake `opencode serve` child: prints the mock server's URL like the real
+   *  binary, and dies immediately on any teardown signal. */
+  function servedChild(url: string): ChildProcessWithoutNullStreams {
+    const emitter = new EventEmitter();
+    const stdout = new PassThrough();
+    const child = Object.assign(emitter, {
+      stdin: new PassThrough(),
+      stdout,
+      stderr: new PassThrough(),
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      killed: false,
+      pid: 4242,
+      kill: () => {
+        Object.assign(child, { exitCode: 0, killed: true });
+        emitter.emit('exit', 0, null);
+        (child.stdout as PassThrough).end();
+        (child.stderr as PassThrough).end();
+        emitter.emit('close', 0, null);
+        return true;
+      },
+    }) as unknown as ChildProcessWithoutNullStreams;
+    stdout.write(`opencode server listening on ${url}\n`);
+    return child;
+  }
+
+  /** Fake spawn failure: the process never started, so the runner only ever
+   *  sees the ENOENT `error` event plus the immediate death (the shape node
+   *  produces for a binary that is not on PATH). */
+  function enoentChild({ exit = true }: { exit?: boolean } = {}): ChildProcessWithoutNullStreams {
+    const emitter = new EventEmitter();
+    const child = Object.assign(emitter, {
+      stdin: new PassThrough(),
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      killed: false,
+      pid: undefined,
+      kill: () => false,
+    }) as unknown as ChildProcessWithoutNullStreams;
+    const err = Object.assign(new Error('spawn opencode ENOENT'), {
+      code: 'ENOENT',
+      errno: -2,
+      path: 'opencode',
+    });
+    process.nextTick(() => {
+      emitter.emit('error', err);
+      if (exit) {
+        Object.assign(child, { exitCode: 1 });
+        emitter.emit('exit', 1, null);
+      }
+      (child.stdout as PassThrough).end();
+      (child.stderr as PassThrough).end();
+      emitter.emit('close', exit ? 1 : -2, null);
+    });
+    return child;
+  }
+
+  // Generous: under a fully loaded suite run these tests share the machine
+  // with hundreds of files, and a tight bound here is a flake, not a check.
+  async function waitFor(cond: () => boolean, ms = 10_000): Promise<void> {
+    const start = Date.now();
+    while (!cond()) {
+      if (Date.now() - start > ms) throw new Error('waitFor timed out');
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  }
+
+  let barrierId = 0;
+  // One SSE stream handles frames in order: this receipt follows every frame sent before it.
+  async function flushFrames(mock: Harness['mock'], events: AgentEvent[]): Promise<void> {
+    const id = `wait-barrier-${++barrierId}`;
+    const before = events.length;
+    mock.send({ type: 'message.updated', properties: { info: {
+      id, sessionID: 'ses_test', role: 'assistant', cost: 1,
+    } } });
+    // bound: the native cost receipt proves the runner handled this stream's preceding frames.
+    await vi.waitFor(() => expect(events.slice(before).some(event => event.type === 'cost')).toBe(true), { timeout: 10_000 });
+    const index = events.findIndex((event, i) => i >= before && event.type === 'cost');
+    expect(events[index]).toEqual({ type: 'cost', usd: 1 });
+    events.splice(index, 1);
+  }
+  const count = (events: AgentEvent[], type: string) => events.filter((e) => e.type === type).length;
+  /** An answer can only be routed once the runner holds the pending question, and `ask.requested`
+   *  is emitted at exactly that point — it is what a user answers. `mock.questionGets` only says
+   *  the mock SERVED the GET: answering then raced the runner still reading the response, and the
+   *  answer was queued as plain text (#899). The tests that answer also hold that response for
+   *  QUESTION_GET_DELAY_MS, so the old order fails every run instead of under load. */
+  const waitForAsk = (uiEvents: UiEvent[], n = 1) =>
+    waitFor(() => uiEvents.filter((e) => e.type === 'ask.requested').length === n);
+  const QUESTION_GET_DELAY_MS = 150;
+
+  interface Harness {
+    child: ChildProcessWithoutNullStreams;
+    events: AgentEvent[];
+    uiEvents: UiEvent[];
+    mock: Awaited<ReturnType<typeof startMockServer>>;
+    session: ReturnType<OpencodeServerRunner['startSession']>;
+    /** How many question reply answers the runner has read. A reply that succeeds while the turn
+     *  runs emits nothing, so this is what a test waits on before it sends the turn's idle. The
+     *  runner acts on the answer in the microtasks that follow the read, so a `waitFor` poll that
+     *  sees the count also sees that action. */
+    questionReplyReads: () => number;
+    questionGetReads: () => number;
+    httpStarts: (path: string) => number;
+    httpReads: (path: string) => number;
+    /** Requests whose response headers the runner has received. */
+    httpResponses: (path: string) => number;
+  }
+
+  /** Tracks synchronous HTTP starts and completed body reads through `fetch`. */
+  function trackHttpResponses() {
+    const realFetch = globalThis.fetch;
+    let reads = 0;
+    let getReads = 0;
+    const starts: string[] = [];
+    const completedReads: string[] = [];
+    const responses: string[] = [];
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      // Record before fetch yields: an SSE barrier can expose an unwanted request
+      // even when its network delivery and response are delayed.
+      starts.push(path);
+      const res = await realFetch(input, init);
+      responses.push(path);
+      const isGet = String(input).endsWith('/question');
+      const isReply = /\/question\/[^/]+\/reply$/.test(String(input));
+      const text = res.text.bind(res);
+      Object.defineProperty(res, 'text', {
+        value: async () => {
+          try {
+            return await text();
+          } finally {
+            completedReads.push(path);
+            if (isGet) getReads += 1;
+            else if (isReply) reads += 1;
+          }
+        },
+      });
+      return res;
+    });
+    return { reads: () => reads, getReads: () => getReads,
+      starts: (path: string) => starts.filter(value => value === path).length,
+      completedReads: (path: string) => completedReads.filter(value => value === path).length,
+      responses: (path: string) => responses.filter(value => value === path).length,
+      restore: () => spy.mockRestore() };
+  }
+
+  async function withSession(
+    opts: MockServerOptions & {
+      onUiEvent?: (event: UiEvent) => void;
+      onAgentInputReady?: () => void;
+      autoEndAfterFirstTurn?: boolean;
+      effort?: string;
+      model?: string;
+      /** Start the session without a v2 channel, as a headless caller does. */
+      noUi?: boolean;
+    },
+    run: (h: Harness) => Promise<void>,
+  ): Promise<void> {
+    const mock = await startMockServer(opts);
+    const child = servedChild(mock.url);
+    spawnHook.override = () => child;
+    const events: AgentEvent[] = [];
+    const uiEvents: UiEvent[] = [];
+    const replyReads = trackHttpResponses();
+    const session = new OpencodeServerRunner({ bin: 'opencode', timeoutMs: 30_000 }).startSession(
+      { toolGrant: UNSET_TOOL_GRANT, userPrompt: 'go', cwd: process.cwd(), effort: opts.effort, model: opts.model },
+      (e) => events.push(e),
+      {
+        autoEndAfterFirstTurn: opts.autoEndAfterFirstTurn,
+        onAgentInputReady: opts.onAgentInputReady,
+        ...(opts.noUi ? {} : {
+          onUiEvent: (e: UiEvent) => {
+            uiEvents.push(e);
+            opts.onUiEvent?.(e);
+          },
+        }),
+      },
+    );
+    try {
+      await run({ child, events, uiEvents, mock, session, questionReplyReads: replyReads.reads, questionGetReads: replyReads.getReads, httpStarts: replyReads.starts, httpReads: replyReads.completedReads, httpResponses: replyReads.responses });
+    } finally {
+      vi.useRealTimers();
+      spawnHook.override = null;
+      session.end();
+      await session.result.catch(() => undefined);
+      await mock.close();
+      replyReads.restore();
+    }
+  }
+
+  it('retains buffered stderr delivered between child exit and pipe close', async () => {
+    await withSession({}, async ({ child, events, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      let settled = false;
+      void session.result.then(() => { settled = true; });
+      Object.assign(child, { exitCode: 1 });
+      child.emit('exit', 1, null);
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(settled).toBe(false);
+      const stderr = 'Error: write EPIPE\n    at finalWrite (runner.js:1:1)\nNode.js v24.20.0\n';
+      (child.stderr as PassThrough).end(stderr);
+      (child.stdout as PassThrough).end();
+      child.emit('close', 1, null);
+      await session.result;
+      expect(events.filter(e => e.type === 'error')).toEqual([
+        { type: 'error', message: 'opencode serve exited with code 1 — Error: write EPIPE' },
+      ]);
+      expect(events.filter(e => e.type === 'note')).toContainEqual({ type: 'note', message: `opencode serve stderr:\n${stderr}` });
+    });
+  });
+
+  function sendQuestion(
+    mock: Harness['mock'],
+    input: unknown,
+    id = 'tool_question',
+    status = 'running',
+  ): void {
+    mock.send({
+      type: 'message.part.updated',
+      properties: {
+        part: {
+          id,
+          sessionID: 'ses_test',
+          type: 'tool',
+          tool: 'question',
+          state: { status, input },
+        },
+      },
+    });
+  }
+
+  it('posts the prompt to prompt_async and ends the turn on session.idle, not on the POST response', async () => {
+    await withSession({}, async ({ httpReads, events, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      expect(mock.promptPosts[0]).toBe('/session/ses_test/prompt_async');
+
+      await waitFor(() => httpReads('/session/ses_test/prompt_async') === 1);
+      // The POST has resolved; the turn must still be open.
+      await flushFrames(mock, events);
+      expect(count(events, 'turn-end')).toBe(0);
+
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+    });
+  });
+
+  it('adds OpenCode message costs while deduplicating updates to each message', async () => {
+    await withSession({}, async ({ events, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      for (const [id, cost] of [
+        ['msg-one', 0.01], ['msg-one', 0.02], ['msg-one', 0.02], ['msg-two', 0.005],
+      ] as const) {
+        mock.send({
+          type: 'message.updated',
+          properties: { info: {
+            id, sessionID: 'ses_test', role: 'assistant', cost,
+            tokens: { input: 1, output: 1, reasoning: 0, cache: { read: 1000, write: 100 } },
+          } },
+        });
+      }
+      mock.send({
+        type: 'message.updated',
+        properties: { info: {
+          id: 'msg-unpriced', sessionID: 'ses_test', role: 'assistant',
+          tokens: { input: 1, output: 1, reasoning: 0, cache: { read: 1000, write: 100 } },
+        } },
+      });
+      await waitFor(() => events.filter((event) => event.type === 'cost').length >= 2);
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+      expect(events.filter((event) => event.type === 'cost').map((event) => event.usd))
+        .toEqual([0.01, 0.01, 0.005]);
+    });
+  });
+
+  it('posts a canonical effort pin as variant and omits it when unset (#45)', async () => {
+    await withSession({ effort: 'high' }, async ({ mock }) => {
+      await waitFor(() => mock.promptBodies.length === 1);
+      expect(mock.promptBodies[0]).toMatchObject({ variant: 'high' });
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+    });
+    await withSession({}, async ({ mock }) => {
+      await waitFor(() => mock.promptBodies.length === 1);
+      expect(mock.promptBodies[0]).not.toHaveProperty('variant');
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+    });
+  });
+
+  it('ignores session.idle from another session and ends the turn once on repeats', async () => {
+    await withSession({}, async ({ events, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_other' } });
+      await flushFrames(mock, events);
+      expect(count(events, 'turn-end')).toBe(0);
+
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') >= 1);
+      await flushFrames(mock, events);
+      expect(count(events, 'turn-end')).toBe(1);
+    });
+  });
+
+  it('surfaces a note and ends the turn exactly once when the prompt POST fails', async () => {
+    await withSession({ promptStatus: 500 }, async ({ events, mock, session }) => {
+      await waitFor(() => count(events, 'turn-end') === 1);
+      const notes = events.filter(
+        (e) => e.type === 'note' && e.message.startsWith('opencode: prompt failed:'),
+      );
+      expect(notes).toHaveLength(1);
+
+      // A stray idle afterwards must not end the already-ended turn again.
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await session.result;
+      expect(count(events, 'turn-end')).toBe(1);
+
+      // A first prompt that never posted is a failed session, not an empty
+      // successful one — run.ts records failure from v1 `error` only.
+      await waitFor(() => count(events, 'error') >= 1);
+      await session.result;
+      expect(count(events, 'error')).toBe(1);
+      expect(events.find(e => e.type === 'error')?.message).toContain('POST /session/ses_test/prompt_async → 500');
+      expect(events.findIndex(e => e.type === 'error')).toBeLessThan(events.findIndex(e => e.type === 'turn-end'));
+      expect(session.open).toBe(false);
+    });
+  });
+
+  it('drops SSE parts belonging to another session', async () => {
+    await withSession({}, async ({ events, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+
+      mock.send({
+        type: 'message.updated',
+        properties: { info: { id: 'msg_f', sessionID: 'ses_other', role: 'assistant' } },
+      });
+      mock.send({
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            id: 'prt_f',
+            messageID: 'msg_f',
+            sessionID: 'ses_other',
+            type: 'text',
+            text: 'foreign',
+            time: { start: 1, end: 2 },
+          },
+        },
+      });
+      mock.send({
+        type: 'message.updated',
+        properties: { info: { id: 'msg_m', sessionID: 'ses_test', role: 'assistant' } },
+      });
+      mock.send({
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            id: 'prt_m',
+            messageID: 'msg_m',
+            sessionID: 'ses_test',
+            type: 'text',
+            text: 'ours',
+            time: { start: 1, end: 2 },
+          },
+        },
+      });
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+
+      const texts = events.filter((e) => e.type === 'text').map((e) => e.text);
+      expect(texts).toContain('ours');
+      expect(texts.join('\n')).not.toContain('foreign');
+    });
+  });
+
+  for (const { issue, path, message } of [
+    { issue: 'hearsay-tools/cezarion#723', path: '/skills/pen-design/SKILL.md', message: 'Failed to parse skill /skills/pen-design/SKILL.md' },
+    { issue: 'hearsay-tools/cezarion#1265', path: '/skills/bad4/SKILL.md',
+      message: '/skills/bad4/SKILL.md: Failed to parse YAML frontmatter: unexpected end of the stream within a double quoted scalar at line 6, column 1:\n    \n    ^' },
+  ]) it(`skill diagnostics bypass the agent ACK barrier and leave subsequent input usable (${issue})`, async () => {
+    await withSession({ holdFollowupPrompt: true }, async ({ events, uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+      let acknowledged = false;
+      const ack = session.sendAgentMessage([{ type: 'text', text: 'follow-up' }]);
+      expect(ack).not.toBe(false);
+      if (!ack) return;
+      void ack.then(() => { acknowledged = true; }, () => undefined);
+      await waitFor(() => mock.promptPosts.length === 2);
+      mock.send({ type: 'session.error', properties: { error: { name: 'UnknownError', data: { message } } } });
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 2);
+      expect(acknowledged).toBe(false);
+      expect(events.filter(e => e.type === 'error')).toEqual([]);
+      expect(events).toContainEqual(expect.objectContaining({ type: 'note', message: expect.stringContaining(path) }));
+      expect(uiEvents.filter(e => e.type === 'turn.completed').map(e => e.stopReason)).toEqual(['end_turn', 'end_turn']);
+      mock.acknowledgeFollowups();
+      await ack;
+      const next = session.sendAgentMessage([{ type: 'text', text: 'still usable' }]);
+      expect(next).not.toBe(false);
+      await waitFor(() => mock.promptPosts.length === 3);
+      mock.acknowledgeFollowups();
+      if (next) await next;
+    });
+  });
+
+  it('forwards a session.error into the v1 error stream before the terminal idle', async () => {
+    await withSession({}, async ({ events, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+
+      // Provider/auth failures arrive ONLY as `session.error` frames now that
+      // the prompt POST returns before the turn runs — dropping them would
+      // let the terminal idle file a failed turn as a successful step.
+      mock.send({
+        type: 'session.error',
+        properties: { sessionID: 'ses_other', error: { name: 'X', data: { message: 'not ours' } } },
+      });
+      mock.send({
+        type: 'session.error',
+        properties: {
+          sessionID: 'ses_test',
+          error: { name: 'ProviderAuthError', data: { message: 'API key expired' } },
+        },
+      });
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+
+      const errors = events.filter((e) => e.type === 'error').map((e) => e.message);
+      expect(errors).toEqual(['opencode: provider request failed: API key expired']);
+    });
+  });
+
+  // #53 — an upstream provider outage arrived as a bare `Not Found`, and
+  // `opencode: Not Found` read exactly like a missing executable. The runner
+  // is the only place that knows the selected provider/model, so it names
+  // them and keeps any structured upstream status or code.
+  it('identifies the provider and model in a runtime provider error', async () => {
+    await withSession({ model: 'openai/gpt-5.6-sol' }, async ({ events, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+
+      mock.send({
+        type: 'session.error',
+        properties: {
+          sessionID: 'ses_test',
+          error: { name: 'AI_APICallError', message: 'Not Found' },
+        },
+      });
+      await waitFor(() => count(events, 'error') === 1);
+
+      const message = events.find((e) => e.type === 'error')!.message;
+      expect(message).toBe('opencode: provider openai/gpt-5.6-sol request failed: Not Found');
+      // A runtime failure must never read like the spawn-failure guidance.
+      expect(message).not.toMatch(/not found on PATH/i);
+    });
+  });
+
+  it('keeps the structured upstream status or code in a forwarded provider error', async () => {
+    await withSession({ model: 'openai/gpt-5.6-sol' }, async ({ events, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+
+      mock.send({
+        type: 'session.error',
+        properties: {
+          sessionID: 'ses_test',
+          error: { name: 'AI_APICallError', message: 'Not Found', statusCode: 404 },
+        },
+      });
+      mock.send({
+        type: 'session.error',
+        properties: {
+          sessionID: 'ses_test',
+          error: {
+            name: 'ProviderError',
+            message: 'quota exhausted',
+            data: { code: 'insufficient_quota' },
+          },
+        },
+      });
+      await waitFor(() => count(events, 'error') === 2);
+
+      const messages = events.filter((e) => e.type === 'error').map((e) => e.message);
+      expect(messages[0]).toBe(
+        'opencode: provider openai/gpt-5.6-sol request failed: Not Found (HTTP 404)',
+      );
+      expect(messages[1]).toBe(
+        'opencode: provider openai/gpt-5.6-sol request failed: quota exhausted (code insufficient_quota)',
+      );
+    });
+  });
+
+  it('still separates a provider Not Found from a missing binary when no model is set', async () => {
+    await withSession({}, async ({ events, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+
+      mock.send({
+        type: 'session.error',
+        properties: { sessionID: 'ses_test', error: { message: 'Not Found' } },
+      });
+      await waitFor(() => count(events, 'error') === 1);
+
+      expect(events.find((e) => e.type === 'error')!.message).toBe(
+        'opencode: provider request failed: Not Found',
+      );
+    });
+  });
+
+  // The other half of #53: a genuinely missing executable keeps its explicit
+  // PATH + installation guidance, distinct from any provider runtime error.
+  it('keeps PATH and installation guidance for a missing binary', async () => {
+    const child = enoentChild();
+    spawnHook.override = () => child;
+    const events: AgentEvent[] = [];
+    try {
+      const session = new OpencodeServerRunner({ bin: 'opencode', timeoutMs: 30_000 }).startSession({ toolGrant: UNSET_TOOL_GRANT,
+        userPrompt: 'go',
+        cwd: process.cwd(),
+        model: 'openai/gpt-5.6-sol',
+      }, event => events.push(event));
+      await expect(session.result).rejects.toThrow(/`opencode` not found on PATH/);
+      await expect(session.result).rejects.toThrow(/https:\/\/opencode\.ai/);
+      const errors = events.filter(event => event.type === 'error');
+      expect(errors).toHaveLength(1);
+      expect(errors[0]!.message).toContain('`opencode` not found on PATH');
+      expect(errors[0]!.message).toContain('https://opencode.ai');
+      await expect(session.result).rejects.toThrow(errors[0]!.message);
+      expect(events.at(-1)?.type).toBe('error');
+      expect(events.some(event => event.type === 'turn-end' || event.type === 'done')).toBe(false);
+    } finally {
+      spawnHook.override = null;
+    }
+  });
+
+  // hearsay-tools/cezarion#2991: a follow-up is held from sendMessage, before the server is ready, and a
+  // start that fails releases it: it can never post, so no hold may outlive the start.
+  it('holds a follow-up sent before the server is ready and releases it when the start fails', async () => {
+    const child = enoentChild();
+    spawnHook.override = () => child;
+    try {
+      const session = new OpencodeServerRunner({ bin: 'opencode', timeoutMs: 30_000 })
+        .startSession({ toolGrant: UNSET_TOOL_GRANT, userPrompt: 'go', cwd: process.cwd() });
+      expect(session.sendMessage([{ type: 'text', text: 'follow-up before ready' }])).toBe(true);
+      expect(session.holdsHumanInput()).toBe(true);
+      expect(session.heldHumanInputCount?.()).toBe(1);
+      await expect(session.result).rejects.toThrow(/`opencode` not found on PATH/);
+      // bound: the rejected start releases the waiter on its own settlement, a few ticks later.
+      await vi.waitFor(() => expect(session.heldHumanInputCount?.()).toBe(0), { timeout: 10_000 });
+      expect(session.holdsHumanInput()).toBe(false);
+    } finally {
+      spawnHook.override = null;
+    }
+  });
+
+  // hearsay-tools/cezarion#895: node reports a missing binary with `error` and `close` only, never
+  // `exit`. The server URL wait must end on that, not on its start timeout.
+  it('reports a missing binary without waiting for the server start timeout', async () => {
+    const child = enoentChild({ exit: false });
+    spawnHook.override = () => child;
+    const events: AgentEvent[] = [];
+    try {
+      const session = new OpencodeServerRunner({ bin: 'opencode', timeoutMs: 600_000, serverStartTimeoutMs: 600_000 })
+        .startSession({ toolGrant: UNSET_TOOL_GRANT, userPrompt: 'go', cwd: process.cwd() }, event => events.push(event));
+      const hung = new Promise<'hung'>(resolve => setTimeout(() => resolve('hung'), 5_000).unref()); // bound: hang guard; the fix settles on the next ticks
+      const outcome = await Promise.race([session.result.then(() => 'resolved', (err: Error) => err), hung]);
+      expect(outcome).toBeInstanceOf(Error);
+      expect((outcome as Error).message).toContain('`opencode` not found on PATH');
+      expect(events.filter(event => event.type === 'error')).toHaveLength(1);
+      expect(events.some(event => event.type === 'note' && /retrying/.test(event.message))).toBe(false);
+    } finally {
+      spawnHook.override = null;
+    }
+  });
+
+  it('queues a follow-up prompt until the current turn ends', async () => {
+    await withSession({}, async ({ httpStarts, events, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+
+      // Mid-turn steering: opencode gets the next prompt only once the
+      // current turn's idle has closed it, so each turn gets its own idle
+      // and its own turn-end instead of the first idle closing the second.
+      session.sendMessage([{ type: 'text', text: 'follow-up-a' }]);
+      session.sendMessage([{ type: 'text', text: 'follow-up-b' }]);
+      await flushFrames(mock, events);
+      expect(httpStarts('/session/ses_test/prompt_async')).toBe(1);
+      expect(mock.promptPosts).toHaveLength(1);
+      expect(session.heldHumanInputCount?.()).toBe(2);
+      expect(session.holdsHumanInput()).toBe(true);
+      expect(session.holdsHumanInput()).toBe((session.heldHumanInputCount?.() ?? 0) > 0);
+      session.discardQueuedMessages();
+      expect(session.holdsHumanInput()).toBe(false);
+      expect(session.heldHumanInputCount?.()).toBe(0);
+
+      session.sendMessage([{ type: 'text', text: 'follow-up' }]);
+      await flushFrames(mock, events);
+      expect(httpStarts('/session/ses_test/prompt_async')).toBe(1);
+      expect(mock.promptPosts).toHaveLength(1);
+      expect(session.heldHumanInputCount?.()).toBe(1);
+      expect(session.holdsHumanInput()).toBe(true);
+
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => mock.promptPosts.length === 2);
+      expect(session.holdsHumanInput()).toBe(false);
+      expect(session.heldHumanInputCount?.()).toBe(0);
+      expect(count(events, 'turn-end')).toBe(1);
+
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 2);
+    });
+  });
+
+  // hearsay-tools/squawk#3508: only the abort that end() fires is a session close. A provider
+  // error whose body end() cuts off stays a delivery failure.
+  describe('an acknowledgement end() cuts off', () => {
+    const reads = { current: () => true, sessionFault: () => undefined, inputFault: () => undefined };
+    const rejection = async (ack: false | Promise<void>): Promise<unknown> => {
+      expect(ack).not.toBe(false);
+      return (ack as Promise<void>).then(() => { throw new Error('the acknowledgement resolved'); }, (error: unknown) => error);
+    };
+
+    it('is a closed-session delivery failure when no response arrived', async () => {
+      await withSession({ holdFollowupPrompt: true }, async ({ events, mock, session }) => {
+        await waitFor(() => mock.promptPosts.length === 1);
+        const ack = session.sendAgentMessage([{ type: 'text', text: 'agent-origin' }], ['in-1']);
+        await waitFor(() => mock.promptPosts.length === 2);
+        session.end();
+        expect(rejectedAcknowledgement(reads, await rejection(ack))).toBe('closed');
+        expect(events.filter(event => event.type === 'error')).toEqual([]);
+      });
+    });
+
+    it('stays a delivery failure when the provider answered an error status', async () => {
+      await withSession({ followupErrorStatus: 500 }, async ({ httpResponses, mock, session }) => {
+        await waitFor(() => mock.promptPosts.length === 1);
+        const ack = session.sendAgentMessage([{ type: 'text', text: 'agent-origin' }], ['in-1']);
+        // The error status arrived; its body is still held when the session closes.
+        await waitFor(() => httpResponses('/session/ses_test/prompt_async') === 2);
+        session.end();
+        const error = await rejection(ack);
+        expect(String(error)).toContain('POST /session/ses_test/prompt_async → 500');
+        expect(rejectedAcknowledgement(reads, error)).toBe('failed');
+      });
+    });
+  });
+
+  it('does not count an agent-origin waiter as held human input (#486)', async () => {
+    await withSession({}, async ({ mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      const ack = session.sendAgentMessage([{ type: 'text', text: 'agent-origin' }], ['in-1']);
+      expect(ack).not.toBe(false);
+      expect(session.holdsHumanInput()).toBe(false);
+      expect(session.heldHumanInputCount?.()).toBe(0);
+      expect(session.holdsHumanInput()).toBe((session.heldHumanInputCount?.() ?? 0) > 0);
+      session.interrupt();
+      await (ack as Promise<void>).catch(() => undefined);
+    });
+  });
+
+  it('holdsHumanInput is true while queuedQuestionMessages is nonempty (#486)', async () => {
+    await withSession({ holdQuestionReplies: true }, async ({ uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.pendingQuestions.push({ id: 'q_queued', sessionID: 'ses_test' });
+      sendQuestion(mock, {
+        questions: [{ header: 'Library', question: 'Which test library?', options: [{ label: 'Vitest' }, { label: 'Node test' }] }],
+      }, 'tool_question', 'pending');
+      await waitFor(() => uiEvents.some(event => event.type === 'ask.requested'));
+      expect(session.sendMessage([{ type: 'text', text: 'Library: Vitest' }])).toBe(true);
+      expect(session.sendMessage([{ type: 'text', text: 'queued-while-reply' }])).toBe(true);
+      expect(session.sendMessage([{ type: 'text', text: 'queued-while-reply-2' }])).toBe(true);
+      expect(session.heldHumanInputCount?.()).toBe(2);
+      expect(session.holdsHumanInput()).toBe(true);
+      expect(session.holdsHumanInput()).toBe((session.heldHumanInputCount?.() ?? 0) > 0);
+      session.discardQueuedMessages();
+      expect(session.holdsHumanInput()).toBe(false);
+      expect(session.heldHumanInputCount?.()).toBe(0);
+      expect(session.holdsHumanInput()).toBe((session.heldHumanInputCount?.() ?? 0) > 0);
+    });
+  });
+
+  it('drops a mid-turn queued prompt when discardQueuedMessages runs before idle', async () => {
+    await withSession({}, async ({ httpStarts, events, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+
+      session.sendMessage([{ type: 'text', text: 'follow-up' }]);
+      await flushFrames(mock, events);
+      expect(httpStarts('/session/ses_test/prompt_async')).toBe(1);
+      expect(mock.promptPosts).toHaveLength(1);
+      expect(session.holdsHumanInput()).toBe(true);
+      expect(session.heldHumanInputCount?.()).toBe(1);
+      expect(session.holdsHumanInput()).toBe((session.heldHumanInputCount?.() ?? 0) > 0);
+
+      session.discardQueuedMessages();
+      expect(session.holdsHumanInput()).toBe(false);
+      expect(session.heldHumanInputCount?.()).toBe(0);
+
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await flushFrames(mock, events);
+      expect(httpStarts('/session/ses_test/prompt_async')).toBe(1);
+      expect(mock.promptPosts).toHaveLength(1);
+      expect(count(events, 'turn-end')).toBe(1);
+
+      session.sendMessage([{ type: 'text', text: 'after ask' }]);
+      await waitFor(() => mock.promptPosts.length === 2);
+      expect(mock.promptBodies[1]).toEqual({ parts: [{ type: 'text', text: 'after ask' }] });
+    });
+  });
+
+  it('maps a native question to ask.requested and sends selected answers to its reply endpoint', async () => {
+    await withSession({}, async ({ events, uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.pendingQuestions.push({ id: 'q_test', sessionID: 'ses_test' });
+
+      const input = {
+        questions: [
+          {
+            header: 'Architecture decisions',
+            question: 'Which test framework?',
+            options: [
+              { label: 'Vitest', description: 'Use the existing suite' },
+              { label: 'Node test', description: 'Use node:test' },
+            ],
+            multiple: true,
+          },
+        ],
+      };
+      sendQuestion(mock, input, 'tool_question', 'pending');
+      sendQuestion(mock, input, 'tool_question', 'pending');
+
+      await waitFor(() => uiEvents.some((event) => event.type === 'ask.requested'));
+      expect(uiEvents.filter((event) => event.type === 'ask.requested')).toEqual([
+        {
+          type: 'ask.requested',
+          requestId: 'q_test',
+          questions: [
+            {
+              header: 'Architecture',
+              question: 'Which test framework?',
+              options: [
+                { label: 'Vitest', description: 'Use the existing suite' },
+                { label: 'Node test', description: 'Use node:test' },
+              ],
+              multiSelect: true,
+            },
+          ],
+        },
+      ]);
+
+      session.sendMessage([{ type: 'text', text: 'Architecture: Vitest, Node test' }]);
+      await waitFor(() => mock.questionReplies.length === 1);
+      expect(mock.questionReplies).toEqual([
+        {
+          path: '/question/q_test/reply',
+          body: { answers: [['Vitest', 'Node test']] },
+        },
+      ]);
+      expect(mock.promptPosts).toHaveLength(1);
+
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+      session.sendMessage([{ type: 'text', text: 'continue normally' }]);
+      await waitFor(() => mock.promptPosts.length === 2);
+    });
+  });
+
+  it('caps native question fields and options and uses plain text for the first answer', async () => {
+    await withSession({}, async ({ uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.pendingQuestions.push({ id: 'q_caps', sessionID: 'ses_test' });
+      sendQuestion(mock, {
+        questions: [
+          {
+            header: `  ${'H'.repeat(20)}  `,
+            question: `  ${'Q'.repeat(420)}  `,
+            options: [
+              { label: `  ${'A'.repeat(70)}  `, description: 'D'.repeat(300) },
+              { label: 'Beta', description: 'Second' },
+              { label: 'Gamma', description: 'Third' },
+              { label: 'Delta', description: 'Fourth' },
+              { label: 'Ignored', description: 'Fifth' },
+            ],
+          },
+          {
+            header: 'Deploy',
+            question: 'Which environment?',
+            options: [{ label: 'Staging' }, { label: 'Production' }],
+          },
+        ],
+      });
+
+      await waitFor(() => uiEvents.some((event) => event.type === 'ask.requested'));
+      const ask = uiEvents.find((event) => event.type === 'ask.requested');
+      expect(ask).toEqual({
+        type: 'ask.requested',
+        requestId: 'q_caps',
+        questions: [
+          {
+            header: 'HHHHHHHHHHHH',
+            question: 'Q'.repeat(400),
+            options: [
+              { label: 'A'.repeat(60), description: 'D'.repeat(280) },
+              { label: 'Beta', description: 'Second' },
+              { label: 'Gamma', description: 'Third' },
+              { label: 'Delta', description: 'Fourth' },
+            ],
+          },
+          {
+            header: 'Deploy',
+            question: 'Which environment?',
+            options: [{ label: 'Staging' }, { label: 'Production' }],
+          },
+        ],
+      });
+
+      session.sendMessage([{ type: 'text', text: '  Use sensible defaults  ' }]);
+      await waitFor(() => mock.questionReplies.length === 1);
+      expect(mock.questionReplies[0]).toEqual({
+        path: '/question/q_caps/reply',
+        body: { answers: [['Use sensible defaults'], []] },
+      });
+      expect(mock.promptPosts).toHaveLength(1);
+    });
+  });
+
+  it('routes repeated Header lines to matching questions in order', async () => {
+    await withSession({}, async ({ uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.pendingQuestions.push({ id: 'q_repeated', sessionID: 'ses_test' });
+      sendQuestion(mock, {
+        questions: [
+          {
+            header: 'Choice',
+            question: 'Which database?',
+            options: [{ label: 'One' }, { label: 'Two' }],
+          },
+          {
+            header: 'Choice',
+            question: 'Which cache?',
+            options: [{ label: 'One' }, { label: 'Two' }],
+          },
+        ],
+      });
+      await waitFor(() => uiEvents.some((event) => event.type === 'ask.requested'));
+
+      session.sendMessage([{ type: 'text', text: 'Choice: One\nChoice: Two' }]);
+      await waitFor(() => mock.questionReplies.length === 1);
+      expect(mock.questionReplies[0]).toEqual({
+        path: '/question/q_repeated/reply',
+        body: { answers: [['One'], ['Two']] },
+      });
+    });
+  });
+
+  it('contains an onUiEvent exception while emitting a native ask', async () => {
+    await withSession(
+      {
+        onUiEvent: (event) => {
+          if (event.type === 'ask.requested') throw new Error('consumer failed');
+        },
+      },
+      async ({ events, uiEvents, mock, session }) => {
+        await waitFor(() => mock.promptPosts.length === 1);
+        mock.pendingQuestions.push({ id: 'q_throw', sessionID: 'ses_test' });
+        sendQuestion(mock, {
+          questions: [
+            {
+              header: 'Choice',
+              question: 'Which option?',
+              options: [{ label: 'One' }, { label: 'Two' }],
+            },
+          ],
+        });
+        await waitFor(() => uiEvents.some((event) => event.type === 'ask.requested'));
+
+        session.sendMessage([{ type: 'text', text: 'Choice: One' }]);
+        await waitFor(() => mock.questionReplies.length === 1);
+        expect(mock.questionReplies[0]).toEqual({
+          path: '/question/q_throw/reply',
+          body: { answers: [['One']] },
+        });
+        expect(events.some((event) => event.type === 'error')).toBe(false);
+      },
+    );
+  });
+
+  it('keeps and re-emits a native ask when its reply POST fails so the user can retry', async () => {
+    await withSession({ questionReplyStatus: 500 }, async ({ events, uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.pendingQuestions.push({ id: 'q_retry', sessionID: 'ses_test' });
+      sendQuestion(mock, {
+        questions: [
+          {
+            header: 'Choice',
+            question: 'Which option?',
+            options: [{ label: 'One' }, { label: 'Two' }],
+          },
+        ],
+      });
+      await waitFor(() => uiEvents.filter((event) => event.type === 'ask.requested').length === 1);
+
+      session.sendMessage([{ type: 'text', text: 'Choice: One' }]);
+      await waitFor(() =>
+        events.some(
+          (event) =>
+            event.type === 'note' &&
+            event.message === 'opencode: question reply failed: POST /question/q_retry/reply → 500 {}',
+        ),
+      );
+      await waitFor(() => uiEvents.filter((event) => event.type === 'ask.requested').length === 2);
+      expect(uiEvents.filter((event) => event.type === 'ask.requested').map((event) => event.requestId)).toEqual([
+        'q_retry',
+        'q_retry',
+      ]);
+      expect(mock.promptPosts).toHaveLength(1);
+
+      mock.setQuestionReplyStatus(200);
+      session.sendMessage([{ type: 'text', text: 'Choice: Two' }]);
+      await waitFor(() => mock.questionReplies.length === 2);
+      expect(mock.questionReplies.map((reply) => reply.body)).toEqual([
+        { answers: [['One']] },
+        { answers: [['Two']] },
+      ]);
+      expect(mock.promptPosts).toHaveLength(1);
+    });
+  });
+
+  it('does not recapture or prompt while a native question reply is in flight', async () => {
+    await withSession({ holdQuestionReplies: true }, async ({ httpStarts, events, uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.pendingQuestions.push({ id: 'q_delayed', sessionID: 'ses_test' });
+      const input = {
+        questions: [
+          {
+            header: 'Choice',
+            question: 'Which option?',
+            options: [{ label: 'One' }, { label: 'Two' }],
+          },
+        ],
+      };
+      sendQuestion(mock, input);
+      await waitFor(() => uiEvents.filter((event) => event.type === 'ask.requested').length === 1);
+
+      session.sendMessage([{ type: 'text', text: 'Choice: One' }]);
+      await waitFor(() => mock.questionReplies.length === 1);
+      sendQuestion(mock, input);
+      session.sendMessage([{ type: 'text', text: 'must not become a prompt' }]);
+      await flushFrames(mock, events);
+
+      expect(uiEvents.filter((event) => event.type === 'ask.requested')).toHaveLength(1);
+      expect(httpStarts('/question')).toBe(1);
+      expect(mock.questionGets).toHaveLength(1);
+      expect(mock.questionReplies).toHaveLength(1);
+      expect(httpStarts('/session/ses_test/prompt_async')).toBe(1);
+      expect(mock.promptPosts).toHaveLength(1);
+    });
+  });
+
+  it('never recaptures a handled question part but captures a different part in a later turn', async () => {
+    await withSession({}, async ({ httpStarts, questionReplyReads, events, uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.pendingQuestions.push({ id: 'q_once', sessionID: 'ses_test' });
+      const input = {
+        questions: [
+          {
+            header: 'Choice',
+            question: 'Which option?',
+            options: [{ label: 'One' }, { label: 'Two' }],
+          },
+        ],
+      };
+      sendQuestion(mock, input, 'part_once');
+      await waitFor(() => uiEvents.filter((event) => event.type === 'ask.requested').length === 1);
+
+      session.sendMessage([{ type: 'text', text: 'Choice: One' }]);
+      await waitFor(() => mock.questionReplies.length === 1);
+      // bound: the reply body receipt precedes clearing the pending question.
+      await waitFor(() => questionReplyReads() === 1);
+      sendQuestion(mock, input, 'part_once', 'completed');
+      await flushFrames(mock, events);
+
+      expect(uiEvents.filter((event) => event.type === 'ask.requested')).toHaveLength(1);
+      expect(httpStarts('/question')).toBe(1);
+      expect(mock.questionGets).toHaveLength(1);
+
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+      session.sendMessage([{ type: 'text', text: 'continue' }]);
+      await waitFor(() => mock.promptPosts.length === 2);
+      mock.pendingQuestions.splice(0, 1, { id: 'q_later', sessionID: 'ses_test' });
+      sendQuestion(mock, input, 'part_later');
+      await waitFor(() => uiEvents.filter((event) => event.type === 'ask.requested').length === 2);
+      expect(mock.questionGets).toHaveLength(2);
+      expect(uiEvents.filter((event) => event.type === 'ask.requested')[1]).toMatchObject({
+        requestId: 'q_later',
+      });
+    });
+  });
+
+  it('waits for a valid later snapshot of the same pending question part', async () => {
+    await withSession({}, async ({ httpStarts, events, uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.pendingQuestions.push({ id: 'q_parsed_later', sessionID: 'ses_test' });
+      const input = {
+        questions: [
+          {
+            header: 'Choice',
+            question: 'Which option?',
+            options: [{ label: 'One' }, { label: 'Two' }],
+          },
+        ],
+      };
+
+      sendQuestion(mock, {}, 'part_parsed_later', 'pending');
+      await flushFrames(mock, events);
+      expect(httpStarts('/question')).toBe(0);
+      expect(mock.questionGets).toEqual([]);
+      expect(mock.questionRejects).toEqual([]);
+      expect(uiEvents.filter((event) => event.type === 'ask.requested')).toEqual([]);
+
+      sendQuestion(mock, input, 'part_parsed_later', 'running');
+      await waitFor(() => uiEvents.some((event) => event.type === 'ask.requested'));
+      expect(httpStarts('/question')).toBe(1);
+      expect(mock.questionGets).toHaveLength(1);
+      expect(mock.questionRejects).toEqual([]);
+      expect(uiEvents.find((event) => event.type === 'ask.requested')).toEqual({
+        type: 'ask.requested',
+        requestId: 'q_parsed_later',
+        questions: [
+          {
+            header: 'Choice',
+            question: 'Which option?',
+            options: [{ label: 'One' }, { label: 'Two' }],
+          },
+        ],
+      });
+
+      session.sendMessage([{ type: 'text', text: 'Choice: Two' }]);
+      await waitFor(() => mock.questionReplies.length === 1);
+      expect(mock.questionReplies[0]).toEqual({
+        path: '/question/q_parsed_later/reply',
+        body: { answers: [['Two']] },
+      });
+    });
+  });
+
+  it('queues messages sent during a successful question reply and prompts in order after idle', async () => {
+    await withSession({ holdQuestionReplies: true, questionGetDelayMs: QUESTION_GET_DELAY_MS }, async ({ events, uiEvents, mock, session, questionReplyReads }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.pendingQuestions.push({ id: 'q_queue', sessionID: 'ses_test' });
+      sendQuestion(mock, {
+        questions: [
+          {
+            header: 'Choice',
+            question: 'Which option?',
+            options: [{ label: 'One' }, { label: 'Two' }],
+          },
+        ],
+      });
+      await waitForAsk(uiEvents);
+
+      session.sendMessage([{ type: 'text', text: 'Choice: One' }]);
+      await waitFor(() => mock.questionReplies.length === 1);
+      session.sendMessage([{ type: 'text', text: 'first queued prompt' }]);
+      session.sendMessage([{ type: 'text', text: 'second queued prompt' }]);
+      mock.releaseQuestionReplies();
+      await waitFor(() => questionReplyReads() === 1);
+      // The reply succeeded mid-turn: both texts now wait for the turn to end, none was posted.
+      expect(session.heldHumanInputCount?.()).toBe(2);
+      expect(mock.promptPosts).toHaveLength(1);
+
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => mock.promptPosts.length === 2);
+      expect(mock.promptBodies[1]).toEqual({ parts: [{ type: 'text', text: 'first queued prompt' }] });
+      expect(count(events, 'turn-end')).toBe(1);
+
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => mock.promptPosts.length === 3);
+      expect(mock.promptBodies[2]).toEqual({ parts: [{ type: 'text', text: 'second queued prompt' }] });
+    });
+  });
+
+  it('keeps queued text through a failed reply until a later explicit answer succeeds', async () => {
+    await withSession(
+      { questionReplyStatus: 500, holdQuestionReplies: true, questionGetDelayMs: QUESTION_GET_DELAY_MS },
+      async ({ events, uiEvents, mock, session, questionReplyReads }) => {
+        await waitFor(() => mock.promptPosts.length === 1);
+        mock.pendingQuestions.push({ id: 'q_queue_retry', sessionID: 'ses_test' });
+        sendQuestion(mock, {
+          questions: [
+            {
+              header: 'Choice',
+              question: 'Which option?',
+              options: [{ label: 'One' }, { label: 'Two' }],
+            },
+          ],
+        });
+        await waitForAsk(uiEvents);
+
+        session.sendMessage([{ type: 'text', text: 'Choice: One' }]);
+        await waitFor(() => mock.questionReplies.length === 1);
+        session.sendMessage([{ type: 'text', text: 'queued after failed answer' }]);
+        mock.releaseQuestionReplies();
+        await waitFor(() =>
+          events.some(
+            (event) => event.type === 'note' && event.message.includes('question reply failed'),
+          ),
+        );
+        expect(mock.promptPosts).toHaveLength(1);
+        expect(mock.questionReplies).toHaveLength(1);
+
+        mock.setQuestionReplyStatus(200);
+        session.sendMessage([{ type: 'text', text: 'Choice: Two' }]);
+        await waitFor(() => mock.questionReplies.length === 2);
+        mock.releaseQuestionReplies();
+        await waitFor(() => questionReplyReads() === 2);
+        expect(mock.questionReplies.map((reply) => reply.body)).toEqual([
+          { answers: [['One']] },
+          { answers: [['Two']] },
+        ]);
+        expect(session.heldHumanInputCount?.()).toBe(1);
+        expect(mock.promptPosts).toHaveLength(1);
+
+        mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+        await waitFor(() => mock.promptPosts.length === 2);
+        expect(mock.promptBodies[1]).toEqual({
+          parts: [{ type: 'text', text: 'queued after failed answer' }],
+        });
+      },
+    );
+  });
+
+  it('hints readiness after an idle human prompt receives its late HTTP acknowledgement', async () => {
+    let ready = 0;
+    await withSession({ holdFollowupPrompt: true, onAgentInputReady: () => { ready++; } }, async ({ events, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+      session.sendMessage([{ type: 'text', text: 'human next turn' }]);
+      await waitFor(() => mock.promptPosts.length === 2);
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 2);
+      expect(session.sendAgentMessage([{ type: 'text', text: 'agent later turn' }])).toBe(false);
+      expect(ready).toBe(0);
+      mock.acknowledgeFollowups();
+      await waitFor(() => ready === 1);
+      const sent = session.sendAgentMessage([{ type: 'text', text: 'agent later turn' }]);
+      await waitFor(() => mock.promptPosts.length === 3);
+      mock.acknowledgeFollowups();
+      await expect(sent).resolves.toBeUndefined();
+    });
+  });
+
+  it('does not let non-human input overtake queued human turns at SSE idle', async () => {
+    await withSession({}, async ({ events, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      session.sendMessage([{ type: 'text', text: 'human next turn' }]);
+      // The v1 callback is the manager's drain boundary: run it synchronously,
+      // before promise waiters can begin the already queued human prompt.
+      const push = events.push.bind(events);
+      let attempted: false | Promise<void> | undefined;
+      events.push = (...incoming) => {
+        const length = push(...incoming);
+        if (incoming.some(event => event.type === 'turn-end') && attempted === undefined) {
+          attempted = session.sendAgentMessage([{ type: 'text', text: 'agent later turn' }]);
+        }
+        return length;
+      };
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => attempted !== undefined);
+      expect(attempted).toBe(false);
+      await waitFor(() => mock.promptPosts.length === 2);
+      expect(mock.promptBodies[1]).toEqual({ parts: [{ type: 'text', text: 'human next turn' }] });
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 2);
+      await expect(session.sendAgentMessage([{ type: 'text', text: 'agent later turn' }])).resolves.toBeUndefined();
+      await waitFor(() => mock.promptPosts.length === 3);
+      expect(mock.promptBodies[2]).toEqual({ parts: [{ type: 'text', text: 'agent later turn' }] });
+    });
+  });
+
+  it('hints non-human readiness only after a successful late reply retry, never on failure', async () => {
+    let ready = 0;
+    await withSession({ holdQuestionReplies: true, questionReplyStatus: 500, onAgentInputReady: () => { ready++; } }, async ({ events, uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.pendingQuestions.push({ id: 'q_agent_retry', sessionID: 'ses_test' });
+      sendQuestion(mock, { questions: [{ header: 'Choice', question: 'Which option?', options: [{ label: 'One' }, { label: 'Two' }] }] });
+      await waitFor(() => uiEvents.some(event => event.type === 'ask.requested'));
+      session.sendMessage([{ type: 'text', text: 'Choice: One' }]);
+      await waitFor(() => mock.questionReplies.length === 1);
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+      expect(session.sendAgentMessage([{ type: 'text', text: 'agent instruction' }])).toBe(false);
+      mock.releaseQuestionReplies();
+      await waitFor(() => uiEvents.filter(event => event.type === 'ask.requested').length === 2);
+      expect(ready).toBe(0);
+      mock.setQuestionReplyStatus(200);
+      session.sendMessage([{ type: 'text', text: 'Choice: Two' }]);
+      await waitFor(() => mock.questionReplies.length === 2);
+      expect(ready).toBe(0);
+      mock.releaseQuestionReplies();
+      await waitFor(() => ready === 1);
+      await expect(session.sendAgentMessage([{ type: 'text', text: 'agent instruction' }])).resolves.toBeUndefined();
+      await waitFor(() => mock.promptPosts.length === 2);
+      expect(mock.promptBodies[1]).toEqual({ parts: [{ type: 'text', text: 'agent instruction' }] });
+      expect(mock.questionReplies).toHaveLength(2);
+    });
+  });
+
+  it('keeps post-idle messages queued until a delayed reply succeeds and drains them FIFO', async () => {
+    await withSession({ holdQuestionReplies: true, questionGetDelayMs: QUESTION_GET_DELAY_MS }, async ({ httpStarts, events, uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.pendingQuestions.push({ id: 'q_idle_success', sessionID: 'ses_test' });
+      sendQuestion(mock, {
+        questions: [
+          {
+            header: 'Choice',
+            question: 'Which option?',
+            options: [{ label: 'One' }, { label: 'Two' }],
+          },
+        ],
+      });
+      await waitForAsk(uiEvents);
+
+      session.sendMessage([{ type: 'text', text: 'Choice: One' }]);
+      await waitFor(() => mock.questionReplies.length === 1);
+      session.sendMessage([{ type: 'text', text: 'queued A' }]);
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+      session.sendMessage([{ type: 'text', text: 'queued B' }]);
+      await flushFrames(mock, events);
+      expect(httpStarts('/session/ses_test/prompt_async')).toBe(1);
+      expect(mock.promptPosts).toHaveLength(1);
+
+      mock.releaseQuestionReplies();
+      await waitFor(() => mock.promptPosts.length === 2);
+      expect(mock.promptBodies[1]).toEqual({ parts: [{ type: 'text', text: 'queued A' }] });
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => mock.promptPosts.length === 3);
+      expect(mock.promptBodies[2]).toEqual({ parts: [{ type: 'text', text: 'queued B' }] });
+    });
+  });
+
+  it('restores an ask after an early-idle reply failure and retains queued text through retry', async () => {
+    await withSession(
+      { questionReplyStatus: 500, holdQuestionReplies: true },
+      async ({ httpStarts, events, uiEvents, mock, session }) => {
+        await waitFor(() => mock.promptPosts.length === 1);
+        mock.pendingQuestions.push({ id: 'q_idle_retry', sessionID: 'ses_test' });
+        sendQuestion(mock, {
+          questions: [
+            {
+              header: 'Choice',
+              question: 'Which option?',
+              options: [{ label: 'One' }, { label: 'Two' }],
+            },
+          ],
+        });
+        await waitFor(() => uiEvents.filter((event) => event.type === 'ask.requested').length === 1);
+
+        session.sendMessage([{ type: 'text', text: 'Choice: One' }]);
+        await waitFor(() => mock.questionReplies.length === 1);
+        session.sendMessage([{ type: 'text', text: 'queued A' }]);
+        mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+        await waitFor(() => count(events, 'turn-end') === 1);
+        mock.releaseQuestionReplies();
+        await waitFor(() => uiEvents.filter((event) => event.type === 'ask.requested').length === 2);
+        expect(httpStarts('/session/ses_test/prompt_async')).toBe(1);
+        expect(mock.promptPosts).toHaveLength(1);
+
+        mock.setQuestionReplyStatus(200);
+        session.sendMessage([{ type: 'text', text: 'Choice: Two' }]);
+        await waitFor(() => mock.questionReplies.length === 2);
+        await flushFrames(mock, events);
+        expect(httpStarts('/session/ses_test/prompt_async')).toBe(1);
+        expect(mock.promptPosts).toHaveLength(1);
+        expect(mock.questionReplies.map((reply) => reply.body)).toEqual([
+          { answers: [['One']] },
+          { answers: [['Two']] },
+        ]);
+
+        mock.releaseQuestionReplies();
+        await waitFor(() => mock.promptPosts.length === 2);
+        expect(mock.promptBodies[1]).toEqual({ parts: [{ type: 'text', text: 'queued A' }] });
+      },
+    );
+  });
+
+  it('defers auto-end while an early-idle reply still owns queued prompt delivery', async () => {
+    await withSession(
+      { autoEndAfterFirstTurn: true, holdQuestionReplies: true, questionGetDelayMs: 75 },
+      async ({ events, uiEvents, mock, session }) => {
+        await waitFor(() => mock.promptPosts.length === 1);
+        mock.pendingQuestions.push({ id: 'q_idle_auto_end', sessionID: 'ses_test' });
+        sendQuestion(mock, {
+          questions: [
+            {
+              header: 'Choice',
+              question: 'Which option?',
+              options: [{ label: 'One' }, { label: 'Two' }],
+            },
+          ],
+        });
+        await waitFor(() => uiEvents.some(event => event.type === 'ask.requested'));
+        expect(mock.questionGets).toHaveLength(1);
+        // Receiving GET is not receiving its response: a human can answer only after
+        // the runner publishes the question, including over a delayed local response.
+        expect(uiEvents.find(event => event.type === 'ask.requested')).toMatchObject({ requestId: 'q_idle_auto_end' });
+
+        session.sendMessage([{ type: 'text', text: 'Choice: One' }]);
+        await waitFor(() => mock.questionReplies.length === 1);
+        session.sendMessage([{ type: 'text', text: 'queued after idle' }]);
+        vi.useFakeTimers();
+        mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+        // bound: wait for the idle frame to close this turn before crossing auto-end.
+        await vi.waitFor(() => expect(count(events, 'turn-end')).toBe(1), { timeout: 10_000 });
+        await vi.advanceTimersByTimeAsync(AUTO_END_DELAY_MS + 60);
+        vi.useRealTimers();
+
+        expect(session.open).toBe(true);
+        expect(mock.promptPosts).toHaveLength(1);
+        mock.releaseQuestionReplies();
+        await waitFor(() => mock.promptPosts.length === 2);
+        expect(mock.promptBodies[1]).toEqual({
+          parts: [{ type: 'text', text: 'queued after idle' }],
+        });
+      },
+    );
+  });
+
+  it('rejects malformed-first native input without shifting the valid second question', async () => {
+    await withSession({}, async ({ events, uiEvents, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.pendingQuestions.push({ id: 'q_malformed_first', sessionID: 'ses_test' });
+      sendQuestion(mock, {
+        questions: [
+          {
+            header: 'Broken',
+            question: 'Cannot represent this?',
+            options: [{ label: 'Only one' }],
+          },
+          {
+            header: 'Valid',
+            question: 'Must not shift?',
+            options: [{ label: 'Yes' }, { label: 'No' }],
+          },
+        ],
+      });
+
+      await waitFor(() =>
+        events.some(
+          (event) =>
+            event.type === 'note' &&
+            event.message === 'opencode: unsupported native question rejected',
+        ),
+      );
+      expect(uiEvents.filter((event) => event.type === 'ask.requested')).toEqual([]);
+      expect(mock.questionReplies).toEqual([]);
+      expect(mock.questionRejects).toEqual([
+        { path: '/question/q_malformed_first/reject', body: {} },
+      ]);
+      expect(events).toContainEqual({
+        type: 'note',
+        message: 'opencode: unsupported native question rejected',
+      });
+    });
+  });
+
+  it.each([
+    ['empty list', { questions: [] }],
+    [
+      'more than four questions',
+      {
+        questions: Array.from({ length: 5 }, (_, index) => ({
+          header: `Q${index}`,
+          question: `Question ${index}?`,
+          options: [{ label: 'Yes' }, { label: 'No' }],
+        })),
+      },
+    ],
+    [
+      'malformed question',
+      {
+        questions: [null],
+      },
+    ],
+    [
+      'fewer than two usable options',
+      {
+        questions: [
+          {
+            header: 'Choice',
+            question: 'Which option?',
+            options: [{ label: 'One' }, { label: '  ' }, null],
+          },
+        ],
+      },
+    ],
+    [
+      'schema uniqueness failure',
+      {
+        questions: [
+          {
+            header: 'Choice',
+            question: 'Which option?',
+            options: [{ label: 'Same' }, { label: 'Same' }],
+          },
+        ],
+      },
+    ],
+  ])('rejects invalid native input with a found ID: %s', async (_label, input) => {
+    await withSession({}, async ({ events, uiEvents, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.pendingQuestions.push({ id: 'q_invalid', sessionID: 'ses_test' });
+      sendQuestion(mock, input);
+
+      await waitFor(() =>
+        events.some(
+          (event) =>
+            event.type === 'note' &&
+            event.message === 'opencode: unsupported native question rejected',
+        ),
+      );
+      expect(mock.questionGets).toHaveLength(1);
+      expect(mock.questionReplies).toEqual([]);
+      expect(uiEvents.filter((event) => event.type === 'ask.requested')).toEqual([]);
+      expect(events).toContainEqual({
+        type: 'note',
+        message: 'opencode: unsupported native question rejected',
+      });
+      expect(count(events, 'turn-end')).toBe(0);
+    });
+  });
+
+  it('terminates the turn and session when an invalid native request ID cannot be found', async () => {
+    await withSession({}, async ({ events, uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendQuestion(mock, { questions: [] });
+
+      await waitFor(() => !session.open);
+      expect(mock.questionGets).toHaveLength(8);
+      expect(mock.questionRejects).toEqual([]);
+      expect(uiEvents.filter((event) => event.type === 'ask.requested')).toEqual([]);
+      expect(events).toContainEqual({
+        type: 'error',
+        message: 'opencode: unsupported native question could not be rejected: no pending question id',
+      });
+      expect(count(events, 'turn-end')).toBe(1);
+    });
+  });
+
+  it('does not post a prompt when all pending-question ID lookups fail', async () => {
+    await withSession({}, async ({ events, uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendQuestion(mock, {
+        questions: [
+          {
+            header: 'Choice',
+            question: 'Which option?',
+            options: [{ label: 'One' }, { label: 'Two' }],
+          },
+        ],
+      });
+
+      await waitFor(() => uiEvents.some((event) => event.type === 'ask.requested'));
+      expect(mock.questionGets).toHaveLength(8);
+      expect(uiEvents.find((event) => event.type === 'ask.requested')).toEqual({
+        type: 'ask.requested',
+        requestId: expect.stringMatching(/^opencode-/),
+        questions: [
+          {
+            header: 'Choice',
+            question: 'Which option?',
+            options: [{ label: 'One' }, { label: 'Two' }],
+          },
+        ],
+      });
+
+      session.sendMessage([{ type: 'text', text: 'One' }]);
+      await waitFor(() => mock.questionGets.length === 9);
+      await waitFor(() =>
+        events.some(
+          (event) =>
+            event.type === 'note' &&
+            event.message === 'opencode: question reply failed: no pending question id',
+        ),
+      );
+      expect(mock.questionReplies).toEqual([]);
+      expect(mock.promptPosts).toHaveLength(1);
+      const asks = uiEvents.filter((event) => event.type === 'ask.requested');
+      expect(asks).toHaveLength(2);
+      expect(asks[1]).toEqual(asks[0]);
+
+      mock.pendingQuestions.push({ id: 'q_late', sessionID: 'ses_test' });
+      session.sendMessage([{ type: 'text', text: 'Two' }]);
+      await waitFor(() => mock.questionReplies.length === 1);
+      expect(mock.questionGets).toHaveLength(10);
+      expect(mock.questionReplies[0]).toEqual({
+        path: '/question/q_late/reply',
+        body: { answers: [['Two']] },
+      });
+      expect(mock.promptPosts).toHaveLength(1);
+    });
+  });
+
+  it('discards a question capture that completes after its turn ended', async () => {
+    await withSession({ holdQuestionGets: true }, async ({ events, uiEvents, mock, session, questionGetReads }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendQuestion(mock, {
+        questions: [
+          {
+            header: 'Stale',
+            question: 'Should this survive?',
+            options: [{ label: 'Yes' }, { label: 'No' }],
+          },
+        ],
+      });
+      await waitFor(() => mock.questionGets.length === 1);
+
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+      mock.pendingQuestions.push({ id: 'q_too_late', sessionID: 'ses_test' });
+      mock.releaseQuestionGets();
+      // The lookup must complete after idle before absence of a late ask is meaningful.
+      await waitFor(() => questionGetReads() === 1);
+      expect(uiEvents.filter((event) => event.type === 'ask.requested')).toEqual([]);
+
+      session.sendMessage([{ type: 'text', text: 'a later prompt' }]);
+      await waitFor(() => mock.promptPosts.length === 2);
+      expect(mock.questionReplies).toEqual([]);
+    });
+  });
+
+  it('ends the turn and the session when the event stream drops mid-turn', async () => {
+    await withSession({}, async ({ events, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+
+      // The bus is the only source of `session.idle` now — losing it must not
+      // park the turn forever.
+      mock.dropSse();
+      await waitFor(() => count(events, 'turn-end') === 1);
+      // An error, not a note — a turn whose output was cut off must fail the
+      // step, and run.ts records failure from v1 `error` only.
+      const errors = events.filter(
+        (e) => e.type === 'error' && e.message.includes('event stream'),
+      );
+      expect(errors).toHaveLength(1);
+      await session.result;
+      expect(session.open).toBe(false);
+    });
+  });
+
+  it('fails the session loudly when the event stream answers with an error status', async () => {
+    await withSession({ sseStatus: 500 }, async ({ events, session }) => {
+      await waitFor(() => count(events, 'error') >= 1);
+      await session.result;
+      expect(count(events, 'turn-end')).toBe(0);
+      expect(session.open).toBe(false);
+    });
+  });
+
+  it('fails the session loudly when the event stream cannot connect', async () => {
+    await withSession({ refuseSse: true }, async ({ events, session }) => {
+      await waitFor(() => count(events, 'error') >= 1);
+      await session.result;
+      // The prompt never posts into a session that cannot hear its events.
+      expect(count(events, 'turn-end')).toBe(0);
+    });
+  });
+
+  // ---- native permission asks (hearsay-tools/cezarion#1266) ---------------
+
+  type PermissionRequested = Extract<UiEvent, { type: 'permission.requested' }>;
+  const permissionAsk = (id: string, permission: string, extra: Record<string, unknown> = {}) => ({
+    id, sessionID: 'ses_test', permission, patterns: ['*'], metadata: {}, always: ['*'], ...extra,
+  });
+  const sendPermission = (mock: Harness['mock'], props: unknown) =>
+    mock.send({ type: 'permission.asked', properties: props });
+  const permissionRequests = (uiEvents: UiEvent[]) =>
+    uiEvents.filter((e): e is PermissionRequested => e.type === 'permission.requested');
+  const permissionResolutions = (uiEvents: UiEvent[]) => uiEvents.filter((e) => e.type === 'permission.resolved');
+  const notes = (events: AgentEvent[]) => events.flatMap((e) => e.type === 'note' ? [e.message] : []);
+  const optionNamed = (request: PermissionRequested, label: string) => request.options.find((o) => o.label === label)!.id;
+  const configured = { config: { permission: { skill: 'ask' } } };
+
+  it('answers an OpenCode default ask once without surfacing it', async () => {
+    await withSession({ config: {} }, async ({ events, uiEvents, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'external_directory', { patterns: ['/outside/*'] }));
+      sendPermission(mock, permissionAsk('per_2', 'doom_loop'));
+      await waitFor(() => mock.permissionReplies.length === 2 && notes(events).some((n) => /built-in permission asks/.test(n)));
+      expect(mock.permissionReplies).toEqual([
+        { path: '/permission/per_1/reply', body: { reply: 'once' } },
+        { path: '/permission/per_2/reply', body: { reply: 'once' } },
+      ]);
+      expect(permissionRequests(uiEvents)).toEqual([]);
+      expect(notes(events).filter((n) => /built-in permission asks/.test(n))).toHaveLength(1);
+      expect(mock.configGets).toHaveLength(1);
+    });
+  });
+
+  it('bridges a user-configured ask and replies with the chosen option', async () => {
+    await withSession(configured, async ({ uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'skill', { patterns: ['brainstorming'] }));
+      await waitFor(() => permissionRequests(uiEvents).length === 1);
+      const [request] = permissionRequests(uiEvents);
+      expect(request!.options.map((o) => o.label)).toEqual(['Allow once', 'Allow always', 'Reject']);
+      expect(session.sendAgentMessage([{ type: 'text', text: 'x' }])).toBe(false);
+      const rejectId = optionNamed(request!, 'Reject');
+      expect(session.respondPermission!(request!.requestId, rejectId)).toBe(true);
+      // The card resolves once OpenCode accepted the reply, not when the choice is made.
+      await waitFor(() => permissionResolutions(uiEvents).length === 1);
+      expect(mock.permissionReplies.at(-1)).toEqual({ path: '/permission/per_1/reply', body: { reply: 'reject' } });
+      expect(permissionResolutions(uiEvents)).toEqual([{ type: 'permission.resolved', requestId: request!.requestId, optionId: rejectId }]);
+      expect(session.respondPermission!(request!.requestId, rejectId)).toBe(false);
+    });
+  });
+
+  it('bridges every ask when the OpenCode config cannot be read', async () => {
+    await withSession({ config: 'fail' }, async ({ events, uiEvents, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'external_directory', { patterns: ['/outside/*'] }));
+      await waitFor(() => permissionRequests(uiEvents).length === 1);
+      expect(mock.permissionReplies).toEqual([]);
+      expect(notes(events).some((n) => /could not read the OpenCode config/.test(n))).toBe(true);
+    });
+  });
+
+  it('rejects a configured ask when no permission UI is attached', async () => {
+    await withSession({ ...configured, noUi: true }, async ({ mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'skill'));
+      await waitFor(() => mock.permissionReplies.length === 1);
+      expect(mock.permissionReplies).toEqual([{
+        path: '/permission/per_1/reply',
+        body: { reply: 'reject', message: 'no permission UI is attached to this session' },
+      }]);
+    });
+  });
+
+  it('expires a pending permission when the turn ends', async () => {
+    await withSession(configured, async ({ events, uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'skill'));
+      await waitFor(() => permissionRequests(uiEvents).length === 1);
+      const [request] = permissionRequests(uiEvents);
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+      expect(permissionResolutions(uiEvents)).toEqual([{ type: 'permission.resolved', requestId: request!.requestId, reason: 'turn ended' }]);
+      expect(session.respondPermission!(request!.requestId, optionNamed(request!, 'Allow once'))).toBe(false);
+      expect(mock.permissionReplies).toEqual([]);
+    });
+  });
+
+  it('expires a pending permission on interrupt', async () => {
+    await withSession(configured, async ({ uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'skill'));
+      await waitFor(() => permissionRequests(uiEvents).length === 1);
+      const [request] = permissionRequests(uiEvents);
+      session.interrupt();
+      await session.result;
+      expect(permissionResolutions(uiEvents)).toEqual([{ type: 'permission.resolved', requestId: request!.requestId, reason: 'session ended' }]);
+      expect(session.respondPermission!(request!.requestId, optionNamed(request!, 'Allow once'))).toBe(false);
+      expect(mock.permissionReplies).toEqual([]);
+    });
+  });
+
+  it('resolves a pending permission that OpenCode reports replied', async () => {
+    await withSession(configured, async ({ uiEvents, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'skill'));
+      await waitFor(() => permissionRequests(uiEvents).length === 1);
+      const [request] = permissionRequests(uiEvents);
+      mock.send({ type: 'permission.replied', properties: { sessionID: 'ses_test', requestID: 'per_1', reply: 'once' } });
+      await waitFor(() => permissionResolutions(uiEvents).length === 1);
+      expect(permissionResolutions(uiEvents)).toEqual([{ type: 'permission.resolved', requestId: request!.requestId, reason: 'resolved by OpenCode' }]);
+    });
+  });
+
+  it('falls back to the cockpit when the automatic reply fails', async () => {
+    await withSession({ config: {}, permissionReplyStatus: 500 }, async ({ uiEvents, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'external_directory', { patterns: ['/outside/*'] }));
+      await waitFor(() => permissionRequests(uiEvents).length === 1);
+      expect(mock.permissionReplies).toEqual([{ path: '/permission/per_1/reply', body: { reply: 'once' } }]);
+    });
+  });
+
+  it('classifies asks that arrive during the config read in order', async () => {
+    let mockRef: Harness['mock'] | undefined;
+    const repliesAtBridge: number[] = [];
+    const onUiEvent = (e: UiEvent) => { if (e.type === 'permission.requested') repliesAtBridge.push(mockRef!.permissionReplies.length); };
+    // The delayed config read is what this test exercises: both asks arrive while it is in flight.
+    await withSession({ ...configured, configDelayMs: 200, onUiEvent }, async ({ uiEvents, mock }) => {
+      mockRef = mock;
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'external_directory', { patterns: ['/outside/*'] }));
+      sendPermission(mock, permissionAsk('per_2', 'skill'));
+      await waitFor(() => permissionRequests(uiEvents).length === 1);
+      expect(mock.configGets).toHaveLength(1);
+      expect(mock.permissionReplies).toEqual([{ path: '/permission/per_1/reply', body: { reply: 'once' } }]);
+      expect(repliesAtBridge).toEqual([1]);
+      expect(JSON.parse(permissionRequests(uiEvents)[0]!.details!)).toMatchObject({ permission: 'skill' });
+    });
+  });
+
+  it('handles each native ask id once', async () => {
+    await withSession(configured, async ({ uiEvents, mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'skill', { patterns: ['first'] }));
+      sendPermission(mock, permissionAsk('per_1', 'skill', { patterns: ['first'] }));
+      // Asks are handled in arrival order, so a later distinct ask's card proves the duplicate was handled.
+      sendPermission(mock, permissionAsk('per_2', 'skill', { patterns: ['later'] }));
+      await waitFor(() => permissionRequests(uiEvents).some((r) => r.details!.includes('later')));
+      expect(permissionRequests(uiEvents).filter((r) => r.details!.includes('first'))).toHaveLength(1);
+    });
+  });
+
+  it('answers default asks from a child session', async () => {
+    await withSession({ config: {} }, async ({ mock }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'external_directory', { sessionID: 'ses_child', patterns: ['/outside/*'] }));
+      await waitFor(() => mock.permissionReplies.length === 1);
+      expect(mock.permissionReplies).toEqual([{ path: '/permission/per_1/reply', body: { reply: 'once' } }]);
+    });
+  });
+
+  // ---- review round 1: the barrier holds from receipt until OpenCode settles the ask ----
+
+  const text = (t: string) => [{ type: 'text' as const, text: t }];
+  /** Input the runner accepted posts a prompt; await it so a teardown abort is never unhandled. */
+  async function expectAccepted(session: Harness['session'], t = 'steer'): Promise<void> {
+    const accepted = session.sendAgentMessage(text(t));
+    expect(accepted).not.toBe(false);
+    await accepted;
+  }
+  const detailsOf = (request: PermissionRequested) => JSON.parse(request.details!) as { patterns: string[] };
+  /** Asks are handled one at a time in arrival order: a later ask's card proves every earlier one settled. */
+  async function sendMarkerAsk(mock: Harness['mock'], uiEvents: UiEvent[]): Promise<void> {
+    sendPermission(mock, permissionAsk('per_marker', 'skill', { patterns: ['marker'] }));
+    await waitFor(() => permissionRequests(uiEvents).some((r) => detailsOf(r).patterns.includes('marker')));
+  }
+
+  it('refuses agent input while the OpenCode config read classifies an ask', async () => {
+    await withSession({ ...configured, holdConfig: true }, async ({ uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'skill'));
+      await waitFor(() => mock.configGets.length === 1);
+      expect(session.sendAgentMessage(text('x'))).toBe(false);
+      expect(mock.promptPosts).toHaveLength(1);
+      mock.releaseConfig();
+      await waitFor(() => permissionRequests(uiEvents).length === 1);
+      expect(session.sendAgentMessage(text('x'))).toBe(false);
+      expect(mock.promptPosts).toHaveLength(1);
+    });
+  });
+
+  it('retires an ask OpenCode reports replied while the config read is in flight', async () => {
+    let inputReady = 0;
+    await withSession({ ...configured, holdConfig: true, onAgentInputReady: () => { inputReady += 1; } }, async ({ uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'skill', { patterns: ['first'] }));
+      await waitFor(() => mock.configGets.length === 1);
+      expect(session.sendAgentMessage(text('x'))).toBe(false);
+      const before = inputReady;
+      mock.send({ type: 'permission.replied', properties: { sessionID: 'ses_test', requestID: 'per_1', reply: 'once' } });
+      await waitFor(() => inputReady > before);
+      await expectAccepted(session);
+      mock.releaseConfig();
+      await sendMarkerAsk(mock, uiEvents);
+      expect(permissionRequests(uiEvents).filter((r) => detailsOf(r).patterns.includes('first'))).toEqual([]);
+      expect(permissionResolutions(uiEvents)).toEqual([]);
+      expect(mock.permissionReplies).toEqual([]);
+    });
+  });
+
+  it('retires an ask whose turn ends while the config read is in flight', async () => {
+    await withSession({ ...configured, holdConfig: true }, async ({ events, uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'skill', { patterns: ['first'] }));
+      await waitFor(() => mock.configGets.length === 1);
+      expect(session.sendAgentMessage(text('x'))).toBe(false);
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+      mock.releaseConfig();
+      await sendMarkerAsk(mock, uiEvents);
+      expect(permissionRequests(uiEvents).filter((r) => detailsOf(r).patterns.includes('first'))).toEqual([]);
+      expect(mock.permissionReplies).toEqual([]);
+    });
+  });
+
+  it('holds input through an automatic reply and never falls back after OpenCode replied', async () => {
+    let inputReady = 0;
+    await withSession({ config: {}, holdPermissionReplies: true, permissionReplyStatus: 500, onAgentInputReady: () => { inputReady += 1; } }, async ({ uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'external_directory', { patterns: ['/outside/*'] }));
+      await waitFor(() => mock.permissionReplies.length === 1);
+      expect(session.sendAgentMessage(text('x'))).toBe(false);
+      const before = inputReady;
+      mock.send({ type: 'permission.replied', properties: { sessionID: 'ses_test', requestID: 'per_1', reply: 'once' } });
+      await waitFor(() => inputReady > before);
+      await expectAccepted(session);
+      // The held reply now fails: the ask is settled, so no card stands in for it.
+      mock.releasePermissionReplies();
+      await sendMarkerAsk(mock, uiEvents);
+      expect(permissionRequests(uiEvents).filter((r) => detailsOf(r).patterns.includes('/outside/*'))).toEqual([]);
+      expect(mock.permissionReplies).toEqual([{ path: '/permission/per_1/reply', body: { reply: 'once' } }]);
+    });
+  });
+
+  it('never falls back to a card when the turn ended during a failed automatic reply', async () => {
+    await withSession({ config: {}, holdPermissionReplies: true, permissionReplyStatus: 500 }, async ({ events, uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'external_directory', { patterns: ['/outside/*'] }));
+      await waitFor(() => mock.permissionReplies.length === 1);
+      expect(session.sendAgentMessage(text('x'))).toBe(false);
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+      mock.releasePermissionReplies();
+      await sendMarkerAsk(mock, uiEvents);
+      expect(permissionRequests(uiEvents).filter((r) => detailsOf(r).patterns.includes('/outside/*'))).toEqual([]);
+      expect(permissionResolutions(uiEvents)).toEqual([]);
+    });
+  });
+
+  it('keeps an answerable card when the human reply fails', async () => {
+    let sessionRef: Harness['session'] | undefined;
+    let answered = false;
+    let inputReady = 0;
+    const refusedAt: Array<false | Promise<void>> = [];
+    // Probe the barrier at every permission event after the choice: it never opens before success.
+    const onUiEvent = (e: UiEvent) => {
+      if (answered && e.type.startsWith('permission.')) refusedAt.push(sessionRef!.sendAgentMessage(text('x')));
+    };
+    await withSession({ ...configured, permissionReplyStatus: 500, onUiEvent, onAgentInputReady: () => { inputReady += 1; } }, async ({ events, uiEvents, mock, session }) => {
+      sessionRef = session;
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'skill'));
+      await waitFor(() => permissionRequests(uiEvents).length === 1);
+      const [first] = permissionRequests(uiEvents);
+      const before = inputReady;
+      answered = true;
+      expect(session.respondPermission!(first!.requestId, optionNamed(first!, 'Allow once'))).toBe(true);
+      await waitFor(() => permissionRequests(uiEvents).length === 2 && permissionResolutions(uiEvents).length === 1);
+      const fresh = permissionRequests(uiEvents)[1]!;
+      expect(fresh.requestId).not.toBe(first!.requestId);
+      // The fresh card comes first, so the run's pending set never empties in between.
+      expect(uiEvents.indexOf(fresh)).toBeLessThan(uiEvents.findIndex((e) => e.type === 'permission.resolved'));
+      expect(permissionResolutions(uiEvents)).toEqual([{ type: 'permission.resolved', requestId: first!.requestId, reason: 'permission reply failed' }]);
+      expect(notes(events).some((n) => /permission reply failed/.test(n))).toBe(true);
+      expect(refusedAt).toEqual([false, false]);
+      expect(session.sendAgentMessage(text('x'))).toBe(false);
+      expect(inputReady).toBe(before);
+      expect(session.respondPermission!(first!.requestId, optionNamed(first!, 'Allow once'))).toBe(false);
+      answered = false;
+      mock.setPermissionReplyStatus(200);
+      expect(session.respondPermission!(fresh.requestId, optionNamed(fresh, 'Allow once'))).toBe(true);
+      await waitFor(() => permissionResolutions(uiEvents).length === 2);
+      expect(permissionResolutions(uiEvents)[1]).toEqual({ type: 'permission.resolved', requestId: fresh.requestId, optionId: optionNamed(fresh, 'Allow once') });
+      expect(mock.permissionReplies).toEqual([
+        { path: '/permission/per_1/reply', body: { reply: 'once' } },
+        { path: '/permission/per_1/reply', body: { reply: 'once' } },
+      ]);
+      await expectAccepted(session);
+    });
+  });
+
+  it('refuses a second choice and holds input while the human reply is in flight', async () => {
+    let inputReady = 0;
+    await withSession({ ...configured, holdPermissionReplies: true, onAgentInputReady: () => { inputReady += 1; } }, async ({ uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'skill'));
+      await waitFor(() => permissionRequests(uiEvents).length === 1);
+      const [request] = permissionRequests(uiEvents);
+      const allowId = optionNamed(request!, 'Allow once');
+      const before = inputReady;
+      expect(session.respondPermission!(request!.requestId, allowId)).toBe(true);
+      await waitFor(() => mock.permissionReplies.length === 1);
+      expect(session.respondPermission!(request!.requestId, optionNamed(request!, 'Reject'))).toBe(false);
+      expect(session.respondPermission!(request!.requestId, allowId)).toBe(false);
+      expect(session.sendAgentMessage(text('x'))).toBe(false);
+      expect(permissionResolutions(uiEvents)).toEqual([]);
+      expect(inputReady).toBe(before);
+      mock.releasePermissionReplies();
+      await waitFor(() => permissionResolutions(uiEvents).length === 1);
+      expect(permissionResolutions(uiEvents)).toEqual([{ type: 'permission.resolved', requestId: request!.requestId, optionId: allowId }]);
+      expect(mock.permissionReplies).toEqual([{ path: '/permission/per_1/reply', body: { reply: 'once' } }]);
+      await expectAccepted(session);
+    });
+  });
+
+  it('reports the human choice when OpenCode settles the ask before the reply POST answers', async () => {
+    await withSession({ ...configured, holdPermissionReplies: true }, async ({ uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'skill'));
+      await waitFor(() => permissionRequests(uiEvents).length === 1);
+      const [request] = permissionRequests(uiEvents);
+      const rejectId = optionNamed(request!, 'Reject');
+      expect(session.respondPermission!(request!.requestId, rejectId)).toBe(true);
+      await waitFor(() => mock.permissionReplies.length === 1);
+      // OpenCode publishes `permission.replied` before it answers the reply route.
+      mock.send({ type: 'permission.replied', properties: { sessionID: 'ses_test', requestID: 'per_1', reply: 'reject' } });
+      await waitFor(() => permissionResolutions(uiEvents).length === 1);
+      expect(permissionResolutions(uiEvents)).toEqual([{ type: 'permission.resolved', requestId: request!.requestId, optionId: rejectId }]);
+      expect(session.respondPermission!(request!.requestId, rejectId)).toBe(false);
+      mock.releasePermissionReplies();
+    });
+  });
+
+  it('rejects a malformed ask whose id it can read', async () => {
+    await withSession(configured, async ({ events, uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, { id: 'per_bad', sessionID: 'ses_test', permission: 'skill', patterns: 'x' });
+      await waitFor(() => mock.permissionReplies.length === 1);
+      expect(mock.permissionReplies).toEqual([{
+        path: '/permission/per_bad/reply',
+        body: { reply: 'reject', message: 'cezar could not read this permission request' },
+      }]);
+      expect(notes(events).some((n) => /could not read/.test(n))).toBe(true);
+      await sendMarkerAsk(mock, uiEvents);
+      expect(permissionRequests(uiEvents)).toHaveLength(1);
+      expect(session.open).toBe(true);
+    });
+  });
+
+  it('ends the session on a malformed ask with no id', async () => {
+    await withSession(configured, async ({ events, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, { sessionID: 'ses_test', permission: 'skill', patterns: ['*'] });
+      await waitFor(() => !session.open);
+      expect(events.filter((e) => e.type === 'error')).toEqual([
+        { type: 'error', message: 'opencode: unsupported permission request could not be rejected: no request id' },
+      ]);
+      expect(mock.permissionReplies).toEqual([]);
+    });
+  });
+
+  it('ends the session when a malformed ask cannot be rejected', async () => {
+    await withSession({ ...configured, permissionReplyStatus: 500 }, async ({ events, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, { id: 'per_bad', sessionID: 'ses_test', permission: 'skill', patterns: 'x' });
+      await waitFor(() => !session.open);
+      expect(events.filter((e) => e.type === 'error').map((e) => e.type === 'error' && e.message)).toEqual([
+        expect.stringMatching(/^opencode: permission rejection failed: POST \/permission\/per_bad\/reply → 500/),
+      ]);
+    });
+  });
+
+  it('ends the session when a configured ask cannot be rejected without a permission UI', async () => {
+    await withSession({ ...configured, noUi: true, permissionReplyStatus: 500 }, async ({ events, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'skill'));
+      await waitFor(() => !session.open);
+      expect(mock.permissionReplies).toHaveLength(1);
+      expect(events.some((e) => e.type === 'error' && /permission rejection failed/.test(e.message))).toBe(true);
+    });
+  });
+
+  describe('auto-end after a permission that arrived once the turn ended', () => {
+    const turnStarts = (uiEvents: UiEvent[]) => uiEvents.filter((e) => e.type === 'turn.started').length;
+    /** `session.idle` arms the auto-end; the ask lands inside its delay. OpenCode asks only from a
+     *  running session loop, so the ask reopens the turn, and that run's own idle closes it. */
+    async function idleThenAsk(mock: Harness['mock'], uiEvents: UiEvent[], events: AgentEvent[], sessionID = 'ses_test'): Promise<PermissionRequested> {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      sendPermission(mock, permissionAsk('per_1', 'skill', { sessionID }));
+      await waitFor(() => permissionRequests(uiEvents).length === 1);
+      expect(count(events, 'turn-end')).toBe(1);
+      return permissionRequests(uiEvents)[0]!;
+    }
+    async function idleEnds(mock: Harness['mock'], events: AgentEvent[], session: Harness['session']): Promise<void> {
+      expect(session.open).toBe(true);
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => !session.open);
+      expect(count(events, 'turn-end')).toBe(2);
+    }
+
+    it('ends after the reopened turn once OpenCode reports the ask replied', async () => {
+      await withSession({ ...configured, autoEndAfterFirstTurn: true }, async ({ events, uiEvents, mock, session }) => {
+        const request = await idleThenAsk(mock, uiEvents, events);
+        expect(turnStarts(uiEvents)).toBe(2);
+        mock.send({ type: 'permission.replied', properties: { sessionID: 'ses_test', requestID: 'per_1', reply: 'once' } });
+        await waitFor(() => permissionResolutions(uiEvents).length === 1);
+        expect(permissionResolutions(uiEvents)).toEqual([{ type: 'permission.resolved', requestId: request.requestId, reason: 'resolved by OpenCode' }]);
+        await idleEnds(mock, events, session);
+      });
+    });
+
+    it('ends after the reopened turn once the human answer is accepted', async () => {
+      await withSession({ ...configured, autoEndAfterFirstTurn: true }, async ({ events, uiEvents, mock, session }) => {
+        const request = await idleThenAsk(mock, uiEvents, events);
+        const allowId = optionNamed(request, 'Allow once');
+        expect(session.respondPermission!(request.requestId, allowId)).toBe(true);
+        await waitFor(() => permissionResolutions(uiEvents).length === 1);
+        expect(permissionResolutions(uiEvents)).toEqual([{ type: 'permission.resolved', requestId: request.requestId, optionId: allowId }]);
+        await idleEnds(mock, events, session);
+      });
+    });
+
+    it('ends after the reopened turn once a card the UI could not show is rejected', async () => {
+      const onUiEvent = (e: UiEvent) => { if (e.type === 'permission.requested') throw new Error('ui down'); };
+      await withSession({ ...configured, autoEndAfterFirstTurn: true, onUiEvent }, async ({ events, uiEvents, mock, session }) => {
+        const request = await idleThenAsk(mock, uiEvents, events);
+        await waitFor(() => mock.permissionReplies.length === 1);
+        expect(mock.permissionReplies).toEqual([{ path: '/permission/per_1/reply', body: { reply: 'reject', message: 'permission UI unavailable' } }]);
+        expect(permissionResolutions(uiEvents)).toEqual([{ type: 'permission.resolved', requestId: request.requestId, reason: 'permission UI unavailable' }]);
+        await idleEnds(mock, events, session);
+      });
+    });
+
+    it('ends after the reopened turn once a configured ask is rejected for want of a permission UI', async () => {
+      await withSession({ ...configured, autoEndAfterFirstTurn: true, noUi: true }, async ({ events, mock, session }) => {
+        await waitFor(() => mock.promptPosts.length === 1);
+        mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+        sendPermission(mock, permissionAsk('per_1', 'skill'));
+        await waitFor(() => mock.permissionReplies.length === 1);
+        expect(mock.permissionReplies).toEqual([{
+          path: '/permission/per_1/reply',
+          body: { reply: 'reject', message: 'no permission UI is attached to this session' },
+        }]);
+        await idleEnds(mock, events, session);
+      });
+    });
+
+    it('leaves the main turn closed for a child session ask and ends once it is answered', async () => {
+      await withSession({ ...configured, autoEndAfterFirstTurn: true }, async ({ events, uiEvents, mock, session }) => {
+        const request = await idleThenAsk(mock, uiEvents, events, 'ses_child');
+        expect(turnStarts(uiEvents)).toBe(1);
+        expect(session.respondPermission!(request.requestId, optionNamed(request, 'Allow once'))).toBe(true);
+        await waitFor(() => !session.open);
+        expect(count(events, 'turn-end')).toBe(1);
+      });
+    });
+  });
+
+  // The close after an accepted done (hearsay-tools/squawk#1680): Squawk calls endWhenQuiet at the
+  // turn end, and OpenCode can still raise a permission request from a run it starts after the idle.
+  describe('endWhenQuiet after an accepted done', () => {
+    async function idleTurnEnd(mock: Harness['mock'], events: AgentEvent[]): Promise<void> {
+      await waitFor(() => mock.promptPosts.length === 1);
+      mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+      await waitFor(() => count(events, 'turn-end') === 1);
+    }
+
+    it('takes no input at once and ends after the auto-end delay when no request arrives', async () => {
+      await withSession({}, async ({ child, events, mock, session }) => {
+        await idleTurnEnd(mock, events);
+        vi.useFakeTimers();
+        session.endWhenQuiet!();
+        expect(session.open).toBe(false);
+        expect(session.closingQuietly).toBe(true);
+        expect(session.sendMessage([{ type: 'text', text: 'late human' }])).toBe(false);
+        expect(session.sendAgentMessage([{ type: 'text', text: 'late agent' }])).toBe(false);
+        await vi.advanceTimersByTimeAsync(AUTO_END_DELAY_MS - 1);
+        expect(child.killed).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(child.killed).toBe(true);
+        expect(session.closingQuietly).toBe(false);
+        expect(mock.promptPosts).toHaveLength(1);
+      });
+    });
+
+    it('reports a human prompt queued behind the turn whose done closes the session as not delivered', async () => {
+      let closeOnDone: (() => void) | undefined;
+      const onUiEvent = (event: UiEvent) => { if (event.type === 'turn.completed') closeOnDone?.(); };
+      await withSession({ onUiEvent }, async ({ child, events, mock, session }) => {
+        await waitFor(() => mock.promptPosts.length === 1);
+        expect(session.sendMessage([{ type: 'text', text: 'queued behind the turn' }])).toBe(true);
+        closeOnDone = () => session.endWhenQuiet!();
+        vi.useFakeTimers();
+        mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+        // bound: wait for the idle frame to end this turn before crossing the quiet close.
+        await vi.waitFor(() => expect(count(events, 'turn-end')).toBe(1), { timeout: 10_000 });
+        await vi.advanceTimersByTimeAsync(AUTO_END_DELAY_MS);
+        expect(child.killed).toBe(true);
+        expect(mock.promptPosts).toHaveLength(1);
+        expect(notes(events)).toContain('opencode: message not delivered: the session closed after the agent\'s done. Send it again with Continue.');
+        expect(session.holdsHumanInput()).toBe(false);
+      });
+    });
+
+    it('shows a request that arrives inside the delay, takes its answer, and ends after the turn it reopened', async () => {
+      await withSession(configured, async ({ child, events, uiEvents, mock, session }) => {
+        await idleTurnEnd(mock, events);
+        session.endWhenQuiet!();
+        sendPermission(mock, permissionAsk('per_late', 'skill', { sessionID: 'ses_test' }));
+        await waitFor(() => permissionRequests(uiEvents).length === 1);
+        const [request] = permissionRequests(uiEvents);
+        expect(session.open).toBe(false);
+        vi.useFakeTimers();
+        await vi.advanceTimersByTimeAsync(AUTO_END_DELAY_MS * 4);
+        vi.useRealTimers();
+        expect(child.killed).toBe(false);
+        expect(session.respondPermission!(request!.requestId, optionNamed(request!, 'Allow once'))).toBe(true);
+        await waitFor(() => permissionResolutions(uiEvents).length === 1);
+        expect(mock.permissionReplies).toEqual([{ path: '/permission/per_late/reply', body: { reply: 'once' } }]);
+        expect(child.killed).toBe(false);
+        mock.send({ type: 'session.idle', properties: { sessionID: 'ses_test' } });
+        await waitFor(() => child.killed);
+        expect(count(events, 'turn-end')).toBe(2);
+      });
+    });
+  });
+
+  it('bridges and answers a configured ask from a child session', async () => {
+    await withSession(configured, async ({ uiEvents, mock, session }) => {
+      await waitFor(() => mock.promptPosts.length === 1);
+      sendPermission(mock, permissionAsk('per_1', 'skill', { sessionID: 'ses_child' }));
+      await waitFor(() => permissionRequests(uiEvents).length === 1);
+      const [request] = permissionRequests(uiEvents);
+      const allowId = optionNamed(request!, 'Allow once');
+      expect(session.respondPermission!(request!.requestId, allowId)).toBe(true);
+      await waitFor(() => permissionResolutions(uiEvents).length === 1);
+      expect(permissionResolutions(uiEvents)).toEqual([{ type: 'permission.resolved', requestId: request!.requestId, optionId: allowId }]);
+      expect(mock.permissionReplies).toEqual([{ path: '/permission/per_1/reply', body: { reply: 'once' } }]);
+    });
+  });
+});

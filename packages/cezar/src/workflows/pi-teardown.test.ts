@@ -31,7 +31,7 @@ describe('Pi provider failure survives teardown (#73)', () => {
     execFileSync('git', ['config', 'maintenance.auto', 'false'], { cwd: root });
     execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@local', 'commit', '--allow-empty', '-qm', 'base'], { cwd: root });
     vi.stubEnv('CEZ_DRY_RUN', '1');
-    vi.stubEnv('CEZ_PI_BIN', new URL('../core/__fixtures__/pi/stub-sigterm.mjs', import.meta.url).pathname);
+    vi.stubEnv('CEZ_PI_BIN', new URL('../runners/pi/__fixtures__/stub-sigterm.mjs', import.meta.url).pathname);
     store = RunStore.open(join(root, '.ai/cezar'));
     manager = new RunManager(store, root, { skillCatalog: fixedSkillCatalog(), acquireCiResources: acquireInertCiResources, createRunner, home: testHome() });
   });

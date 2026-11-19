@@ -1,4 +1,4 @@
-// Native captures from core/__fixtures__/<runner>/skill-trigger.json. See slice2-evidence.md.
+// Native captures from runners/<id>/__fixtures__/skill-trigger.json. See slice2-evidence.md.
 export const captures = {
   "claude": [
     {

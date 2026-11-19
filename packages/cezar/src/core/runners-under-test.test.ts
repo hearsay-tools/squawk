@@ -8,7 +8,7 @@ import { claudeRunner } from '../runners/claude/definition.ts';
 type Kit = 'every-runner' | 'claude-runner' | 'no-runner';
 const KIT_MODULES: Record<Kit, () => Promise<unknown>> = {
   'every-runner': () => import('./every-runner.testkit.ts'),
-  'claude-runner': () => import('./claude-runner.testkit.ts'),
+  'claude-runner': () => import('../runners/claude/claude-runner.testkit.ts'),
   'no-runner': () => import('./no-runner.testkit.ts'),
 };
 

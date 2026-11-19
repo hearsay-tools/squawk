@@ -36,11 +36,6 @@
       "worktree-setup.ts"
     ],
     "runner": [
-      "core/claude-*",
-      "core/codex-*",
-      "core/omp-*",
-      "core/opencode-*",
-      "core/pi-*",
       "runners/"
     ],
     "shell": [

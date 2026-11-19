@@ -1,5 +1,5 @@
 // Test-only external process. Claude stream-json and Codex app-server envelopes
-// follow core/__fixtures__; every turn waits on a file so tests choose ordering,
+// follow runners/<id>/__fixtures__; every turn waits on a file so tests choose ordering,
 // never provider latency. Production runners, transport and process proof stay real.
 import { createInterface } from 'node:readline';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';

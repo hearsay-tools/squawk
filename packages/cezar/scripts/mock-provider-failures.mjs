@@ -14,7 +14,7 @@ export const CLAUDE_FAILURES = {
 };
 
 // Codex fails the turn with the provider's JSON envelope as its error message. The 400 is the
-// 0.147 rollout's (core/__fixtures__/codex/provider-error.md); the others use its envelope.
+// 0.147 rollout's (runners/codex/__fixtures__/provider-error.md); the others use its envelope.
 export const CODEX_FAILURES = {
   provider: { status: 400, type: 'invalid_request_error', message: "The 'gpt-6-astra' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again." },
   unavailable: { status: 503, type: 'server_error', message: 'Service Unavailable' },

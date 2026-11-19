@@ -4,11 +4,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { toolDisplay } from '@open-mercato/cezar-api-client/contract/tool-display'
 import type { UiToolItem } from '@open-mercato/cezar-api-client'
 
-import claudeBackgroundAgent from '../../../../cezar/src/core/__fixtures__/claude/background-agent.expected.json'
-import claudeTask from '../../../../cezar/src/core/__fixtures__/claude/subagent-task.expected.json'
-import codexCollab from '../../../../cezar/src/core/__fixtures__/codex/collab-agent-tool-call.expected.json'
-import ompSubagents from '../../../../cezar/src/core/__fixtures__/omp/rpc-subagents.expected.json'
-import opencodeSubtask from '../../../../cezar/src/core/__fixtures__/opencode/subtask-nested.expected.json'
+import claudeBackgroundAgent from '../../../../cezar/src/runners/claude/__fixtures__/background-agent.expected.json'
+import claudeTask from '../../../../cezar/src/runners/claude/__fixtures__/subagent-task.expected.json'
+import codexCollab from '../../../../cezar/src/runners/codex/__fixtures__/collab-agent-tool-call.expected.json'
+import ompSubagents from '../../../../cezar/src/runners/omp/__fixtures__/rpc-subagents.expected.json'
+import opencodeSubtask from '../../../../cezar/src/runners/opencode/__fixtures__/subtask-nested.expected.json'
 import { ToolCard } from './thread-items'
 
 afterEach(cleanup)

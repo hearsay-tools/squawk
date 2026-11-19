@@ -58,7 +58,7 @@ describe('the scenario runner and the fact-value unit tests (docs/adr/0063-one-s
 });
 
 describe('the parity classification table (hearsay-tools/cezarion#2991)', () => {
-  const parityFiles = ['core', 'workflows', 'server'].flatMap(dir => readdirSync(join(src, dir))
+  const parityFiles = ['core', 'workflows', 'server', 'runners'].flatMap(dir => readdirSync(join(src, dir), { recursive: dir === 'runners', encoding: 'utf8' })
     // A parity test file: `<family>-parity.test.ts`, a server `contract-parity.<area>.test.ts`, the harness closure
     // guard and the monitoring-turn files. A testkit's own unit test is not one.
     .filter(file => /-parity(?:\.[a-z]+|-closure)?\.test\.ts$/.test(file) && !file.endsWith('.testkit.test.ts')
