@@ -1,16 +1,14 @@
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
-import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
 import { RunSettlement } from './run/run-settlement.ts';
 import { createActiveRun, type ActiveRun } from './active-run.ts';
 import { TrackedWork } from './run/tracked-work.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-import { createFixtureManager, fixtureWorkSettled } from './fixture-cleanup.testkit.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
-import type { AgentSession, AgentRunResult } from '../core/agent-runner.ts';
-import type { RunManager } from './run.ts';
-import { RUN_STATUS, WAIT_KIND, STEP_STATUS, STEP_KIND, WAIT_PHASE, makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { randomUUID } from 'node:crypto';
+import { unused } from './unused.testkit.ts';
+import { liveStatuses, oldFinish, preservedStatuses, seedSettlementRun } from './run-settlement.testkit.ts';
+import { RUN_STATUS, STEP_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore, type StepState } from '../runs/store.ts';
@@ -22,64 +20,28 @@ vi.mock('../git-worktree.ts', async importOriginal => ({
   worktreeDiff: vi.fn(async () => 'a changed file'),
 }));
 
-function unused<T extends object>(name: string, values: Partial<T> = {}): T {
-  return new Proxy(values, { get(target, key) {
-    if (key in target) return Reflect.get(target, key);
-    throw new Error(`unused collaborator ${name}.${String(key)}`);
-  } }) as T;
-}
-
-const oldFinish = '2026-07-01T12:00:00.000Z';
-const liveStatuses = ['waiting', 'running'] as const;
-const preservedStatuses = ['done', 'failed', 'cancelled', 'skipped', 'pending'] as const;
-
+/** What RunSettlement.settleSuccess does to a run's steps around its diff I/O. Paths that need the
+ *  manager (Finish deferral, usage-limit holds, disposal) are in `run-settlement-engine.test.ts`. */
 describe('successful run settlement (#473)', () => {
   let root: string;
   let store: RunStore;
-  const f = setupMonitoringFixture();
-  let manager: RunManager;
   let settle: (id: string, durable?: boolean) => Promise<void>;
 
   beforeEach(() => {
-    root = f.repoRoot;
-    store = f.store;
-    manager = f.manager;
-    runnerHook.runner = { backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
-      run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: async () => {},
-      startSession: () => ({ open: false, result: Promise.resolve({ text: '', toolCalls: [], tokensUsed: 0 }),
-        sendMessage: () => false, sendAgentMessage: () => false, end: () => {}, interrupt: () => {},
-        discardQueuedMessages: () => {}, holdsHumanInput: () => false }),
-    };
-    settle = async (id, durable) => {
-      if (durable) expect(manager.finish(id)).toBe(true);
-      else expect(manager.continueRun(id, { text: 'complete', runner: 'claude' })).toMatchObject({ ok: true });
-      await fixtureWorkSettled(root);
-    };
+    root = mkdtempSync(join(tmpdir(), 'cez-settlement-'));
+    store = RunStore.open(join(root, '.ai/cezar'));
+    settle = (id, durable) => policy(new Map(), false, true).settleSuccess(id, durable);
     vi.mocked(worktreeDiff).mockResolvedValue('a changed file');
     vi.stubEnv('CEZ_REVIEW_GATE', '0');
   });
 
-  afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+  afterEach(() => {
+    vi.useRealTimers(); vi.unstubAllEnvs(); vi.restoreAllMocks();
+    store.flush();
+    rmSync(root, { recursive: true, force: true });
+  });
 
-  function seed(durable = false) {
-    const record = store.createRun({ title: 'settlement', task: 'finish', workflow: 'quick-task', workflowDef: { name: 'quick-task', source: 'file', steps: [{ id: 'waiting-false', prompt: 'work' }] }, steps: [] });
-    for (const status of [...liveStatuses, ...preservedStatuses]) {
-      for (const stamped of [false, true]) {
-        const id = `${status}-${stamped}`;
-        store.addStep(record.id, { id, name: id, kind: STEP_KIND.agent, synthetic: 'continuation' });
-        store.updateStep(record.id, id, { status, startedAt: oldFinish, ...(stamped ? { finishedAt: oldFinish } : {}) });
-      }
-    }
-    {
-      const { status: fixtureStatus, ...fixtureExtras }: NonNullable<Parameters<typeof setRunStatus>[3]> & { status: Parameters<typeof setRunStatus>[2] } = { status: RUN_STATUS.waiting, currentStepId: 'waiting-false', worktreePath: root,
-      ...(durable ? { delegation: { role: 'root' as const, permissions: [], receipts: [] } } : {}),
-    };
-      setRunStatus(store, record.id, fixtureStatus, fixtureExtras);
-    }
-    store.updateStep(record.id, 'waiting-false', { sessionId: 'seed-session', backend: 'claude' });
-    if (durable) store.commitRootFinishIntent(record.id);
-    return record.id;
-  }
+  const seed = (durable = false) => seedSettlementRun(store, root, durable);
 
   for (const durable of [false, true]) {
     for (const status of ['done', 'review'] as const) {
@@ -123,91 +85,6 @@ describe('successful run settlement (#473)', () => {
       expect(store.readEvents(id).some(event => event.type === 'lifecycle' && event.message === 'run finished')).toBe(false);
     });
   }
-
-  it.each(['before diff', 'during diff'])('parent attention deferral %s leaves live steps untouched', async timing => {
-    const id = seed(true);
-    const steps = structuredClone(store.getRun(id)!.steps);
-    const ask = () => store.appendEvent(id, { type: 'ask.requested', requestId: randomUUID(), questions: [{
-      header: 'Choice', question: 'Which option?', options: [{ label: 'One' }, { label: 'Two' }],
-    }] });
-    const family = () => store.commitDelegation([{ id, delegation: { role: 'root', permissions: [], receipts: [{ requestId: randomUUID(), workerId: randomUUID(), requestHash: 'b'.repeat(64) }] } }]);
-    if (timing === 'before diff') ask();
-    // The question holds completion only for a root with workers (hearsay-tools/cezarion#2784).
-    else vi.mocked(worktreeDiff).mockImplementationOnce(async () => { family(); ask(); return 'changed'; });
-    if (timing === 'before diff') { family(); expect(manager.finish(id)).toBe(false); }
-    else await settle(id, true);
-    expect(store.getRun(id)?.status).toBe('waiting');
-    expect(store.getRun(id)?.finishedAt).toBeUndefined();
-    expect(store.getRun(id)?.steps).toEqual(steps);
-  });
-
-  async function usageLimitFailure(late: boolean) {
-    manager.dispose();
-    const semaphore = new WorkspaceSemaphore({ home: testHome() });
-    manager = createFixtureManager(store, root, { home: testHome(), semaphore });
-    f.manager = manager;
-    let fail!: (error: Error) => void;
-    let finish!: (result: AgentRunResult) => void;
-    const tools = vi.spyOn(manager, 'squawkToolHandlers');
-    let started = false;
-    const startSession = vi.fn<NonNullable<typeof runnerHook.runner>['startSession']>((_spec, onEvent) => {
-      const session: AgentSession = { open: true, result: new Promise((resolve, reject) => { finish = resolve; fail = reject; }),
-        sendMessage: () => true, sendAgentMessage: () => false, discardQueuedMessages: () => {}, holdsHumanInput: () => false,
-        end: () => finish({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: () => finish({ text: '', toolCalls: [], tokensUsed: 0 }) };
-      started = true;
-      queueMicrotask(() => onEvent?.({ type: 'session', sessionId: 'limited', resumed: false }));
-      return session;
-    });
-    runnerHook.runner = { backend: 'claude', specSupport: CLAUDE_SPEC_SUPPORT, systemPromptOnResume: 'resent',
-      run: async () => ({ text: '', toolCalls: [], tokensUsed: 0 }), interrupt: async () => {}, startSession };
-    const record = manager.startRun(f.SINGLE_STEP, { task: 'wait', runner: 'claude', worktree: false });
-    f.currentId = record.id;
-    await waitForProduct(manager, store, () => started);
-    const handlers = tools.mock.results.find(result => result.type === 'return')!.value;
-    expect((await handlers.registerWait({ kind: WAIT_KIND.timer, seconds: 3600 }, 'cezar_wait', new AbortController().signal)).answer.ok).toBe(true);
-    const reset = Math.floor(Date.now() / 1000) + 3600;
-    store.commitAgentInputs(record.id, [{ id: randomUUID(), parentRunId: record.id, source: 'lifecycle',
-      text: 'pending', createdAt: new Date().toISOString() }]);
-    let raced = false;
-    let heldSnapshot: ReturnType<RunStore['getRun']>;
-    const lateWait = makeTimerWait({ id: randomUUID(), registeredAt: new Date().toISOString(),
-      deadline: new Date(Date.now() + 3_600_000).toISOString() });
-    const commitLateWait = ({ runId, event }: { runId: string; event: { type: string; message?: string } }) => {
-      if (!late || runId !== record.id || event.type !== 'lifecycle' || !event.message?.startsWith('usage limit reached') || raced) return;
-      raced = true;
-      store.commitWait(record.id, lateWait);
-      heldSnapshot = structuredClone(store.getRun(record.id));
-    };
-    store.on('event', commitLateWait);
-    const releaseSlot = semaphore.release.bind(semaphore);
-    const release = vi.spyOn(semaphore, 'release').mockImplementation(() => {
-      expect(store.getRun(record.id)?.autoResumeAt).toEqual(expect.any(String));
-      return releaseSlot();
-    });
-    try {
-      fail(new Error(`Claude AI usage limit reached|${reset}`));
-      await waitForProduct(manager, store, () => !!store.getRun(record.id)?.autoResumeAt && !manager.isActive(record.id));
-      await fixtureWorkSettled(root);
-      expect(raced).toBe(late);
-      // The hold is the failure's own write (hearsay-tools/squawk#3337): a wait committed as it lands
-      // stays open on the held run, and the retry delivers it (hold.wait-resolves).
-      if (late) {
-        expect(heldSnapshot).toMatchObject({ status: RUN_STATUS.waiting, autoResumeAt: expect.any(String),
-          waits: expect.arrayContaining([expect.objectContaining({ id: lateWait.id, phase: WAIT_PHASE.open })]) });
-        expect(store.getRun(record.id)?.waits).toContainEqual(expect.objectContaining({ id: lateWait.id, phase: WAIT_PHASE.open }));
-      }
-      expect(startSession).toHaveBeenCalledOnce();
-      expect(release).toHaveBeenCalled();
-      expect(store.getRun(record.id)).toMatchObject({ status: RUN_STATUS.waiting, autoResumeAt: expect.any(String) });
-      expect(store.readEvents(record.id).filter(event => String(event.message).includes('continu'))).toEqual([]);
-    } finally {
-      store.off('event', commitLateWait);
-    }
-
-  }
-
-  it('publishes a usage-limit resume before releasing a failed run', () => usageLimitFailure(false));
-  it('a timer wait committed as the run holds stays open without queuing a wake', () => usageLimitFailure(true));
 
   it('uses current step statuses after diff I/O, retaining a concurrent failure', async () => {
     const id = seed();
@@ -278,22 +155,5 @@ describe('successful run settlement (#473)', () => {
   it.each(['none', 'finish', 'cancel'] as const)('disposal during diff I/O preserves explicit terminal intent: %s', intent => {
     const original = fakeState(intent === 'finish', intent === 'cancel');
     expect(policy(new Map(), true).successSuperseded('run', RUN_STATUS.waiting, original, undefined)).toBe(intent === 'none');
-  });
-
-  it.each(['finish', 'cancel'] as const)('public %s survives disposal during success diff I/O', async intent => {
-    const id = seed(true);
-    vi.mocked(worktreeDiff).mockImplementationOnce(async () => {
-      if (intent === 'cancel') {
-        expect(manager.cancel(id)).toBe(true);
-        expect(store.getRun(id)?.status).toBe(RUN_STATUS.cancelled);
-      }
-      manager.dispose();
-      return 'changed';
-    });
-    await settle(id, true);
-    const completed = store.getRun(id)!;
-    expect(completed.status).toBe(intent === 'cancel' ? RUN_STATUS.cancelled : RUN_STATUS.done);
-    expect(completed.finishedAt).toBeDefined();
-    expect(completed.steps.some(step => step.status === 'running' || step.status === 'waiting')).toBe(false);
   });
 });
