@@ -285,9 +285,11 @@ retry deletes the branch at the tip it recorded; a moved tip is refused. Without
 branch delete proves again that other refs keep the commits.
 
 Safety invariant: never remove a worktree or a branch holding commits that no other ref reaches,
-nor a directory with uncommitted changes, and never delete a receipt before its branch is gone
-(hearsay-tools/cezarion#2272). The compare-and-swap proves on every attempt, never from an earlier
-checkpoint, that the branch tip and every reflog entry are the baseline or on another ref, and
+nor a directory with uncommitted changes, except under an explicit `discardWork`, which a
+`forced` checkpoint records for the tip it recorded (hearsay-tools/squawk#3553); and never delete a
+receipt before its branch is gone (hearsay-tools/cezarion#2272). Except under that `forced`
+checkpoint or an attempt's own `discardWork`, the compare-and-swap proves on every attempt, never
+from an earlier checkpoint, that the branch tip and every reflog entry are the baseline or on another ref, and
 fails closed when one ref is seen at two tips; one ref transaction then verifies the tip and those
 refs. The Git view releases a receipt-owned branch only under the same reflog proof, and its
 delete verifies those refs too.

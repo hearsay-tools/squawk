@@ -220,7 +220,8 @@ export async function removeOwnedWorkspace(repoRoot: string, value: OwnedWorkerW
         await beforeRemove?.();
         assertCurrent?.();
         assertUnheld?.();
-        const removed = await mutationGit(repoRoot, ['worktree', 'remove', '--force', workspace.path]);
+        const removed = await removeCheckout();
+        if (!removed) return false;
         if (!removed.ok) {
           // Windows refuses while another process holds a file open there; that process is never
           // signalled (ADR 0032), so the refusal names the path and Git's reason.
@@ -229,6 +230,18 @@ export async function removeOwnedWorkspace(repoRoot: string, value: OwnedWorkerW
         }
         remaining = ['branch'];
         return true;
+      }
+
+      /** Without an allowed discard, Git refuses a checkout that became dirty after the work check;
+       * that refusal names the work and returns undefined. A clean checkout Git still refuses (a
+       * submodule, a lock) gets the forced removal, as with an allowed discard. */
+      async function removeCheckout() {
+        if (options.discardWork) return mutationGit(repoRoot, ['worktree', 'remove', '--force', workspace.path]);
+        const removed = await mutationGit(repoRoot, ['worktree', 'remove', workspace.path]);
+        if (removed.ok) return removed;
+        const files = await uncommittedFiles(workspace.path);
+        if (files) { refuseWork({ uncommittedFiles: files, commits: 0 }); return undefined; }
+        return mutationGit(repoRoot, ['worktree', 'remove', '--force', workspace.path]);
       }
 
       async function prepareMissingWorktree(receipt: Receipt): Promise<Cleanup | undefined> {

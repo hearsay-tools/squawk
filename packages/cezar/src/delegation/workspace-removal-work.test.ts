@@ -46,6 +46,15 @@ describe('explicit destroy of a worker that holds work', { timeout: WORKSPACE_TE
     expect(await removeOwnedWorkspace(root, workspace)).toMatchObject({ state: 'incomplete', work: expected });
   });
 
+  it('refuses, naming it, a file written after the work check and before the removal', async () => {
+    const { root, workspace } = await worker();
+    const late = () => writeFile(join(workspace.path, 'late.txt'), 'late');
+    expect(await removeOwnedWorkspace(root, workspace, undefined, late)).toMatchObject({ state: 'incomplete', remaining: ['worktree', 'branch'],
+      work: { uncommittedFiles: 1, commits: 0 } });
+    expect(existsSync(join(workspace.path, 'late.txt'))).toBe(true);
+    expect(branchExists(root, workspace.branch)).toBe(true);
+  });
+
   it('deletes uncommitted changes and unlanded commits when the discard is allowed', async () => {
     const { root, workspace } = await worker();
     await writeFile(join(workspace.path, 'tracked.txt'), 'worker'); git(workspace.path, 'commit', '-qam', 'worker');
