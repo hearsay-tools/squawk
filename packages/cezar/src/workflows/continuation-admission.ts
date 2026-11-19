@@ -10,7 +10,7 @@ import { DEFAULT_AGENT_ACCOUNT_ID } from '../workspace/agent-accounts.ts';
 import type { PastedContent } from './run/types.ts';
 import { hasRegisteredRunProcess } from '../core/process-usage.ts';
 import { WorkerIdentityError, removedRunnerStepAfter } from '../delegation/execution-identity.ts';
-import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { removedRunnerMessage } from '@open-mercato/cezar-contract/runner';
 
 /** What a Continue may carry (`RunManager.continueRun`). */

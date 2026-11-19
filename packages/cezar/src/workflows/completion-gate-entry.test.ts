@@ -5,7 +5,7 @@ import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixtur
 import { createFixtureManager } from './fixture-cleanup.testkit.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import type { AgentEvent, AgentRunResult } from '../core/agent-runner.ts';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';
 import {
   RUN_STATUS,

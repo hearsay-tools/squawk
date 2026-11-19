@@ -1,5 +1,5 @@
 import { waitSchema, waitRegistrationReceiptSchema, type Wait, type WaitRegistrationReceipt } from '@open-mercato/cezar-contract/waits';
-import { agentInputSchema, type AgentInput } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema, type AgentInput } from '@open-mercato/cezar-contract/agent-input';
 import { assertWaitCapacity } from './wait-capacity.ts';
 import { checkWaitWrite } from './wait-phases.ts';
 import type { RunRecord } from './store.ts';

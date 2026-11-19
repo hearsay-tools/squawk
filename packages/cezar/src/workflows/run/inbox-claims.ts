@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentSession } from '../../core/agent-runner.ts';
 import { hasLiveInboxClaim } from '../../delegation/input.ts';
-import type { InboxClaim } from '@open-mercato/cezar-contract/delegation';
+import type { InboxClaim } from '@open-mercato/cezar-contract/agent-input';
 import type { RunRecord } from '../../runs/store.ts';
 import type { ActiveRun } from '../active-run.ts';
 import { historyDeletionPending } from './run-guards.ts';

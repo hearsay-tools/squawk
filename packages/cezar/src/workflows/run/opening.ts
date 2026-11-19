@@ -1,5 +1,5 @@
 import { atContinue, atStepOpen } from './launch-read-resolver.ts';
-import type { AgentInput } from '@open-mercato/cezar-contract/delegation';
+import type { AgentInput } from '@open-mercato/cezar-contract/agent-input';
 import type { ContentBlock } from '../../core/agent-runner.ts';
 import type { PersistedAttachment } from '../pasted-content.ts';
 import type { QuestionAnswerSource } from './worker-questions.ts';

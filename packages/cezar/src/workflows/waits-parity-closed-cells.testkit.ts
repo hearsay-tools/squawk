@@ -1,5 +1,5 @@
 import { waitPartDescribers, prompted, workerWaits, parkedOn, viaOf, gated, retryAtOnce, parentWithWorker, sessionOf, nudgeNotes, retryClock, silenceRefusals, noReplyNotes, humanOpen, nativeWire, asks, delivered, ASK_CONTEXT, questions, settled } from './waits-parity-fixture.testkit.ts';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { MAX_WAKE_DELIVERY_ATTEMPTS, WAKE_SESSION_CLOSED_ERROR, WAKE_DELIVERY_CAP_NOTE, COMPLETION_NUDGE_NOTE, REFUSAL_DISCARDED_NOTE, WORKER_FALLBACK_QUESTION, NO_WAIT_NUDGE_NOTE, WORKER_FALLBACK_HEADER, WORKER_FALLBACK_REPLY_NOTE, MAX_AUTO_CONTINUES } from './run.ts';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';

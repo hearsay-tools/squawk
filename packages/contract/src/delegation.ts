@@ -1,9 +1,13 @@
 import { z } from 'zod';
-import { conversationAttributionSchema, conversationStateSchema, requestOutcomeSchema } from './conversations.ts';
+import { conversationStateSchema, requestOutcomeSchema } from './conversations.ts';
 import { effortFieldSchema } from './effort.ts';
 import { runStatusSchema } from './run-status.ts';
 import { runnerSchema } from './runner.ts';
+import { workerOutcomeSchema, workerWaitModeSchema } from './worker-outcome.ts';
 import { modelChoicesSchema } from './workspace.ts';
+
+export { agentInputSchema, inboxClaimSchema, type AgentInput, type InboxClaim } from './agent-input.ts';
+export { workerOutcomeSchema, workerWaitModeSchema, type WorkerOutcome } from './worker-outcome.ts';
 
 /** Owned workers (spec 2026-09-06). No import from runs: runs embeds this metadata. */
 export const workerOperationSchema = z.enum(['spawn', 'inspect', 'steer', 'stop', 'destroy', 'diff', 'wait']);
@@ -73,17 +77,6 @@ export const spawnGrantSchema = z.strictObject({
   get children() { return spawnGrantSchema.optional(); },
 });
 export type SpawnGrant = z.infer<typeof spawnGrantSchema>;
-
-export const workerOutcomeSchema = z.object({
-  workerId: z.uuid(),
-  status: z.enum(['review', 'done', 'failed', 'cancelled']),
-  observedAt: z.iso.datetime(),
-  summary: z.string().max(4_000).optional(),
-  revision: z.number().int().nonnegative().optional(),
-}).strict();
-export type WorkerOutcome = z.infer<typeof workerOutcomeSchema>;
-
-export const workerWaitModeSchema = z.enum(['one', 'any', 'all']);
 
 export const workerWaitSchema = z.object({
   id: z.uuid(),
@@ -369,40 +362,6 @@ export const workerWaitRequestSchema = z.object({
 }).strict().refine(request => request.mode !== 'one' || request.workerIds.length === 1, { message: 'one mode requires exactly one worker' });
 export type WorkerWaitRequest = z.infer<typeof workerWaitRequestSchema>;
 
-export const inboxClaimSchema = z.object({
-  receiptId: z.uuid(), generation: z.uuid(), expiresAt: z.iso.datetime(), acknowledgedAt: z.iso.datetime().optional(),
-  /** Optional on read for receipts persisted before member manifests existed. */
-  memberIds: z.array(z.uuid()).min(1).max(32).refine(ids => new Set(ids).size === ids.length).optional(),
-}).strict();
-export type InboxClaim = z.infer<typeof inboxClaimSchema>;
-
-export const agentInputSchema = z.object({
-  conversation: conversationAttributionSchema.optional(),
-  id: z.uuid(),
-  source: z.enum(['agent', 'lifecycle']),
-  parentRunId: z.uuid(),
-  text: z.string().min(1).max(100_000),
-  createdAt: z.iso.datetime(),
-  deliveredAt: z.iso.datetime().optional(),
-  /** The model received it, when the harness can show that (#505). Absent on
-   * unobservable backends and on records written before #505. */
-  consumedAt: z.iso.datetime().optional(),
-  /** Accepted by a harness that reports reading, and not read yet. A restart replays
-   * such input; records written before #505 never carry it, so nothing historical replays. */
-  awaitingRead: z.literal(true).optional(),
-  inboxClaim: inboxClaimSchema.optional(),
-  /** A completion refusal Squawk queued for a closed session (hearsay-tools/cezarion#1301): its
-   * delivery is the nudge's turn, bounded by the nudge's reply bound, and a session that closes
-   * before it is a failed delivery. `undelivered-question` is Squawk's answer to a worker question
-   * that could not reach its live parent (hearsay-tools/cezarion#2410). Absent on every other input
-   * and on records written before. */
-  purpose: z.enum(['completion-refusal', 'undelivered-question']).optional(),
-  /** A peer message's own hash and request deadline (hearsay-tools/cezarion#1990): the sender's
-   *  ledger can be deleted before the recipient reads it. Absent on family and lifecycle inputs. */
-  requestHash: z.string().regex(/^[0-9a-f]{64}$/).optional(),
-  deadline: z.iso.datetime().optional(),
-}).strict();
-export type AgentInput = z.infer<typeof agentInputSchema>;
 
 export const workerInspectionSchema = z.object({
   workerId: z.uuid(),

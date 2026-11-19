@@ -1,4 +1,4 @@
-import { agentInputSchema, type AgentInput } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema, type AgentInput } from '@open-mercato/cezar-contract/agent-input';
 import type { RunRecord } from '../runs/store.ts';
 import { DelegationPolicyError } from './policy.ts';
 

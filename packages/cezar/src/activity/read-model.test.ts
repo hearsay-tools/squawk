@@ -3,13 +3,13 @@ import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import type { AttentionRung } from '@open-mercato/cezar-contract';
 import { activitySnapshotSchema, activityToolSchema } from '@open-mercato/cezar-contract/activity';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
 import {
   makeHumanWait, makePeerWait, makePrWait, makeProcessWait, makeSubagentWait, makeTimerWait, makeWorkerRequestWait, makeWorkerWait,
   RUN_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA, WORKER_OUTCOME_STATUS,
 } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { computeWaitingOn } from '@open-mercato/cezar-contract/waits';
+import { computeWaitingOn } from '@open-mercato/cezar-contract/waiting-on';
 import type { RunRecord } from '../runs/store.ts';
 import { addRequest, fakeStore, iso, makeRoot, makeWorker, NOW, rootOf, type FakeStoreOptions } from './activity.testkit.ts';
 import { buildActivityProject, buildActivitySnapshot, unreadableLogger, type ActivityDeps } from './read-model.ts';

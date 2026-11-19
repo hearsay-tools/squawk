@@ -7,7 +7,7 @@ import { familyWorkers } from '../../runs/supervised.ts';
 import { familyRecordIdOf, supervisedReceipts, supervisorIdOf } from '../../runs/task-rights.ts';
 import type { ConversationState, RequestOutcome } from '@open-mercato/cezar-contract';
 import type { ConversationMessage } from '@open-mercato/cezar-contract/conversations';
-import type { AgentInput } from '@open-mercato/cezar-contract/delegation';
+import type { AgentInput } from '@open-mercato/cezar-contract/agent-input';
 import type { HumanWaitEntry, WaitVia } from '@open-mercato/cezar-contract/waits';
 import type { AskRequest } from '../../core/ask.ts';
 import { askRequestOf } from '@open-mercato/cezar-contract/pending-ask';

@@ -1,7 +1,8 @@
 import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
 import type { WorkerStopResult, WorkerWait } from '@open-mercato/cezar-contract/delegation';
-import { workerWaitEntryToLegacy, isUsageLimitHold, type DeadlinedWorkerWaitEntry } from '@open-mercato/cezar-contract/waits';
+import { workerWaitEntryToLegacy, type DeadlinedWorkerWaitEntry } from '@open-mercato/cezar-contract/waits';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { DelegationPolicyError } from '../../delegation/policy.ts';
 import type { RunRecord, RunStore } from '../../runs/store.ts';
 import type { ActiveRun } from '../active-run.ts';

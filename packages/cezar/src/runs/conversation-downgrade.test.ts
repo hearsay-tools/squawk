@@ -10,13 +10,19 @@ vi.mock('@open-mercato/cezar-contract/delegation', async importOriginal => {
   const actual = await importOriginal<typeof import('@open-mercato/cezar-contract/delegation')>();
   const conversation = await import('@open-mercato/cezar-contract/conversations');
   const { z } = await import('zod');
-  const attribution = conversation.conversationAttributionSchema.omit({ relationship: true });
   const message = conversation.conversationMessageSchema.omit({ relationship: true });
   const outcome = conversation.requestOutcomeSchema.extend({ status: conversation.requestOutcomeSchema.shape.status.exclude(['deleted']) });
   const ledger = z.object({ messages: z.array(message).max(1024), outcomes: z.array(outcome).max(1024) }).strict();
   const [root, worker, invalid] = actual.delegationStateSchema.options;
   return { ...actual,
     delegationStateSchema: z.discriminatedUnion('role', [root.extend({ conversation: ledger.optional() }), worker, invalid]),
+  };
+});
+vi.mock('@open-mercato/cezar-contract/agent-input', async importOriginal => {
+  const actual = await importOriginal<typeof import('@open-mercato/cezar-contract/agent-input')>();
+  const conversation = await import('@open-mercato/cezar-contract/conversations');
+  const attribution = conversation.conversationAttributionSchema.omit({ relationship: true });
+  return { ...actual,
     agentInputSchema: actual.agentInputSchema.omit({ requestHash: true, deadline: true }).extend({ conversation: attribution.optional() }),
   };
 });

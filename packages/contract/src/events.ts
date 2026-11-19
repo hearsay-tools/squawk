@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { conversationMessageSchema, requestOutcomeSchema } from './conversations.ts';
-import { agentInputSchema, workerOutcomeSchema } from './delegation.ts';
+import { agentInputSchema } from './agent-input.ts';
+import { workerOutcomeSchema } from './worker-outcome.ts';
 
 /**
  * SSE frame payloads — the only shapes in this contract that are NOT derived from a route.

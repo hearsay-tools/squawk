@@ -1,13 +1,57 @@
 import { z } from 'zod';
 import { askContextSchema, askRequestSchema } from './ask-schema.ts';
 import { ciPrIdentitySchema, ciWaitErrorCodeSchema, ciWaitRequestSchema, ciWaitResultSchema, prWaitUntilSchema } from './ci-wait.ts';
-import { peerWaitResultSchema, refinePeerWaitResult, workerIdsSchema, workerOutcomeSchema, workerWaitModeSchema } from './delegation.ts';
-import type { DelegationState, PeerWaitView, RunDelegationSummary, WorkerCompletionWait, WorkerWait } from './delegation.ts';
-import { requestOutcomeSchema, type ConversationMessage } from './conversations.ts';
+import { peerWaitResultSchema, refinePeerWaitResult, workerIdsSchema } from './delegation.ts';
+import { workerOutcomeSchema, workerWaitModeSchema } from './worker-outcome.ts';
+import type { PeerWaitView, WorkerCompletionWait, WorkerWait } from './delegation.ts';
+import { requestOutcomeSchema } from './conversations.ts';
 import type { RunRecord } from './runs.ts';
 import { isUsageLimitHold } from './usage-limit-hold.ts';
+import {
+  WAIT_LIMIT,
+  LAST_WAITS_LIMIT,
+  TIMER_MIN_SECONDS,
+  TIMER_MAX_SECONDS,
+  PROCESS_TIMEOUT_DEFAULT_SECONDS,
+  PROCESS_TIMEOUT_MAX_SECONDS,
+  PROCESS_EXIT_FILE_MAX,
+  PEER_WAIT_DEFAULT_SECONDS,
+  PEER_WAIT_MAX_SECONDS,
+  SUBAGENT_WAIT_DEADLINE_SECONDS,
+  SUBAGENT_WAIT_GRACE_SECONDS,
+  SUBAGENT_WAIT_CHILD_LIMIT,
+  WAIT_MESSAGE_MAX,
+} from './wait-limits.ts';
+import { asksHuman } from './waiting-on.ts';
 
-export { isUsageLimitHold };
+export {
+  withRootLedger,
+  requestsToPeers,
+  workerWaitTargets,
+  computeWaitingOn,
+  asksHuman,
+  asksQuestion,
+  hasResolvedWait,
+  resolveWaitingOn,
+  type WaitingOnInput,
+  type WorkerWaitTarget,
+} from './waiting-on.ts';
+export {
+  isUsageLimitHold,
+  WAIT_LIMIT,
+  LAST_WAITS_LIMIT,
+  TIMER_MIN_SECONDS,
+  TIMER_MAX_SECONDS,
+  PROCESS_TIMEOUT_DEFAULT_SECONDS,
+  PROCESS_TIMEOUT_MAX_SECONDS,
+  PROCESS_EXIT_FILE_MAX,
+  PEER_WAIT_DEFAULT_SECONDS,
+  PEER_WAIT_MAX_SECONDS,
+  SUBAGENT_WAIT_DEADLINE_SECONDS,
+  SUBAGENT_WAIT_GRACE_SECONDS,
+  SUBAGENT_WAIT_CHILD_LIMIT,
+  WAIT_MESSAGE_MAX,
+};
 
 /**
  * The wait list (spec `.ai/specs/2026-10-17-unified-waits.md`; phase 1 is
@@ -27,23 +71,7 @@ export { isUsageLimitHold };
  * running, with a safety deadline.
  */
 
-export const WAIT_LIMIT = 16;
-export const LAST_WAITS_LIMIT = 16;
-export const TIMER_MIN_SECONDS = 60;
-export const TIMER_MAX_SECONDS = 7200;
 const NOTE_MAX = 512;
-/** A process wait's bounds (hearsay-tools/cezarion#1446): the CI wait's timeout range. */
-export const PROCESS_TIMEOUT_DEFAULT_SECONDS = 1800;
-export const PROCESS_TIMEOUT_MAX_SECONDS = 7200;
-export const PROCESS_EXIT_FILE_MAX = 4096;
-/** A peer wait's deadline, and a request or worker wait's (hearsay-tools/cezarion#1995). */
-export const PEER_WAIT_DEFAULT_SECONDS = 600;
-export const PEER_WAIT_MAX_SECONDS = 7200;
-/** A subagent wait (hearsay-tools/cezarion#2431): its safety deadline after the last child event,
- *  the grace after the last child ends before Squawk wakes the parent, and its child bound. */
-export const SUBAGENT_WAIT_DEADLINE_SECONDS = 1800;
-export const SUBAGENT_WAIT_GRACE_SECONDS = 15;
-export const SUBAGENT_WAIT_CHILD_LIMIT = 32;
 const pidSchema = z.number().int().min(2);
 
 /** `open` → `resolved` (its event fired or its deadline passed) → `delivered`, or `cancelled`. */
@@ -332,8 +360,6 @@ export const waitErrorCodeSchema = z.enum([...ciWaitErrorCodeSchema.options, 'ti
   'messaging_off']);
 export type WaitErrorCode = z.infer<typeof waitErrorCodeSchema>;
 
-/** The bound on every wait and done refusal's `message`; the run manager fits its own to it. */
-export const WAIT_MESSAGE_MAX = 4096;
 const message = z.string().max(WAIT_MESSAGE_MAX);
 
 export const waitRegistrationReceiptSchema = z.object({
@@ -508,123 +534,6 @@ export const waitingOnSchema = z.preprocess(
   waitingOnUnionSchema,
 );
 export type WaitingOn = z.infer<typeof waitingOnSchema>;
-
-/** Full records carry the full delegation state; summaries and index rows the slim projection. */
-export type WaitingOnInput = Partial<Pick<RunRecord, 'status' | 'waits' | 'autoResumeAt'>> & {
-  delegation?: DelegationState | RunDelegationSummary | undefined;
-};
-
-/** The requests a root sent to peer tasks, read from its own ledger: a request wait on one of them
- *  is not a wait on workers (hearsay-tools/cezarion#1995). A summary's slim delegation has none. */
-function peerRequestIds(delegation: WaitingOnInput['delegation']): Set<string> {
-  const conversation = delegation?.role === 'root' && 'conversation' in delegation ? delegation.conversation : undefined;
-  // `toRunSummary` passes an unparsed ledger: a malformed one marks nothing and never throws.
-  const messages: unknown[] = Array.isArray(conversation?.messages) ? conversation.messages : [];
-  return new Set(messages.flatMap((message) => {
-    const entry = message && typeof message === 'object' ? message as Partial<ConversationMessage> : undefined;
-    return entry?.relationship === 'peer' && entry.kind === 'request' && typeof entry.id === 'string' ? [entry.id] : [];
-  }));
-}
-
-/** A summary's slim root delegation with the root's own ledger, which the slim one drops, so
- *  `computeWaitingOn` still marks a wait on a peer's reply (hearsay-tools/cezarion#1995). The ledger
- *  is unparsed; `peerRequestIds` reads it defensively. */
-export function withRootLedger(slim: RunDelegationSummary | undefined, raw: unknown): WaitingOnInput['delegation'] {
-  const ledger = raw && typeof raw === 'object' ? raw as { role?: unknown; conversation?: unknown } : undefined;
-  return slim?.role === 'root' && ledger?.role === 'root' ? { ...slim, conversation: ledger.conversation } as WaitingOnInput['delegation'] : slim;
-}
-
-/** Whether one of these requests went to a peer task: its wait reads "waiting on replies", never
- *  "worker replies" (hearsay-tools/cezarion#1995). */
-export function requestsToPeers(delegation: WaitingOnInput['delegation'], requestIds: readonly string[] | undefined): boolean {
-  const toPeers = peerRequestIds(delegation);
-  return !!requestIds?.some((id) => toPeers.has(id));
-}
-
-/** One target of a worker entry: a request when the entry waits on replies, else a worker. Its key
- *  names the kind, so every count over several entries (`computeWaitingOn`, the activity view)
- *  counts each target once with the same keys (hearsay-tools/cezarion#2588). */
-export interface WorkerWaitTarget { key: string; settled: boolean }
-
-export function workerWaitTargets(wait: Pick<WorkerWaitEntry, 'requestIds' | 'requestOutcomes' | 'workerIds' | 'outcomes'>): WorkerWaitTarget[] {
-  if (wait.requestIds) {
-    const answered = new Set(wait.requestOutcomes?.map((outcome) => outcome.requestId));
-    return wait.requestIds.map((id) => ({ key: `request:${id}`, settled: answered.has(id) }));
-  }
-  const reported = new Set(wait.outcomes?.map((outcome) => outcome.workerId));
-  return (wait.workerIds ?? []).map((id) => ({ key: `worker:${id}`, settled: reported.has(id) }));
-}
-
-/** The distinct workers and requests still owed over every open worker entry; undefined when there
- *  is none. A worker in two open waits counts once (hearsay-tools/cezarion#2588). */
-function workersOwed(open: readonly Wait[]): number | undefined {
-  const entries = open.filter((wait): wait is WorkerWaitEntry => wait.kind === 'worker');
-  if (!entries.length) return undefined;
-  return new Set(entries.flatMap((wait) => workerWaitTargets(wait).filter((target) => !target.settled).map((target) => target.key))).size;
-}
-
-function earliest<T extends PrWaitEntry | TimerWaitEntry | ProcessWaitEntry>(waits: readonly T[]): T | undefined {
-  let best: T | undefined;
-  for (const wait of waits) {
-    if (!best || Date.parse(wait.deadline) < Date.parse(best.deadline)) best = wait;
-  }
-  return best;
-}
-
-/** Reads only `open` waits; among several of one kind the earliest deadline wins. */
-export function computeWaitingOn(run: WaitingOnInput): WaitingOn | undefined {
-  // `Array.isArray`: the cockpit also projects streamed records, whose shape only `id` was checked on.
-  const open = (Array.isArray(run.waits) ? run.waits : []).filter((wait) => wait?.phase === 'open');
-  const human = open.filter((wait) => wait.kind === 'human');
-  if (human.length) return human.some((wait) => wait.askSeq !== undefined) ? { kind: 'human', shown: true } : { kind: 'human' };
-  if (isUsageLimitHold(run)) return { kind: 'usage-limit', at: run.autoResumeAt };
-  const workers = workersOwed(open);
-  if (workers !== undefined) {
-    const entries = open.filter((wait): wait is WorkerWaitEntry => wait.kind === 'worker');
-    const replies = entries.every((wait) => wait.requestIds !== undefined);
-    const peers = replies && entries.some((wait) => requestsToPeers(run.delegation, wait.requestIds));
-    return { kind: 'workers', count: workers, ...(replies ? { replies: true as const } : {}), ...(peers ? { peers: true as const } : {}) };
-  }
-  const peerWaits = open.filter((wait): wait is PeerWaitEntry => wait.kind === 'peer');
-  if (peerWaits.length) return { kind: 'peers', count: new Set(peerWaits.flatMap((wait) => wait.peerIds)).size };
-  const subagentWaits = open.filter((wait): wait is SubagentWaitEntry => wait.kind === 'subagent');
-  // Each running child once, however many open entries name it (hearsay-tools/cezarion#2588).
-  if (subagentWaits.length) return { kind: 'subagents', count: new Set(subagentWaits.flatMap((wait) => wait.children.filter((child) => child.status === 'running').map((child) => child.id))).size };
-  const pr = earliest(open.filter((wait): wait is PrWaitEntry => wait.kind === 'pr'));
-  if (pr) {
-    return { kind: 'pr', until: pr.until, waitId: pr.id, prUrl: pr.prUrl, repository: pr.repository, prNumber: pr.prNumber, deadline: pr.deadline };
-  }
-  const process = earliest(open.filter((wait): wait is ProcessWaitEntry => wait.kind === 'process'));
-  if (process) return { kind: 'process', waitId: process.id, pid: process.pid, deadline: process.deadline, ...(process.note === undefined ? {} : { note: process.note }) };
-  const timer = earliest(open.filter((wait): wait is TimerWaitEntry => wait.kind === 'timer'));
-  if (timer) return { kind: 'timer', waitId: timer.id, at: timer.deadline, ...(timer.note === undefined ? {} : { note: timer.note }) };
-  return undefined;
-}
-
-/** Whether the run waits on the user: an open human wait (phase 4b, hearsay-tools/cezarion#1236). */
-export function asksHuman(run: Pick<WaitingOnInput, 'waits'>): boolean {
-  return Array.isArray(run.waits) && run.waits.some((wait) => wait?.kind === 'human' && wait.phase === 'open');
-}
-
-/** Whether a question waits on the user: an open human wait the agent opened, or one of Squawk's
- *  that carries a card (a worker's fallback question to its parent). Squawk's other waits
- *  (`no-wait`, `budget`, `completion`) wait for the user without a question. */
-export function asksQuestion(run: Pick<WaitingOnInput, 'waits'>): boolean {
-  return Array.isArray(run.waits) && run.waits.some((wait) => wait?.kind === 'human' && wait.phase === 'open' && (wait.source === 'agent' || !!wait.questions?.length));
-}
-
-/** A resolved wait is a wake owed to the agent: its result is in, its turn has not started.
- *  Rung 10 of the attention ladder ("waiting for capacity"); a summary carries it as
- *  `waitWakePending`. */
-export function hasResolvedWait(run: { waitWakePending?: true | undefined } & Pick<WaitingOnInput, 'waits'>): boolean {
-  if (run.waitWakePending) return true;
-  return Array.isArray(run.waits) && run.waits.some((wait) => wait?.phase === 'resolved');
-}
-
-/** A summary's `waitingOn` when it has one; a full or stream-patched record computes it. */
-export function resolveWaitingOn(run: { waitingOn?: WaitingOn | undefined } & WaitingOnInput): WaitingOn | undefined {
-  return run.waitingOn ?? computeWaitingOn(run);
-}
 
 /**
  * A run's worker wait in the old `WorkerWait` shape, for views that still show one: the newest

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { computeWaitingOn, type WaitingOnInput, type WorkerWaitEntry } from './waits.ts';
+import type { WorkerWaitEntry } from './waits.ts';
+import { computeWaitingOn, type WaitingOnInput } from './waiting-on.ts';
 import { ATTENTION_RANK, ATTENTION_RUNGS, attentionOfRung, deriveAttention, deriveWebhookState, needsYou, rungNeedsYou, WEBHOOK_TRIGGERS, workerWaitLabel, workersWaitingLabel, type Attention, type AttentionInput, type AttentionRung } from './attention.ts';
 import { runStatusSchema } from './run-status.ts';
 import type { RunStatus } from './runs.ts';

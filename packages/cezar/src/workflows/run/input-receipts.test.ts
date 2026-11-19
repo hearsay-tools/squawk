@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { projectConversationEvents } from '../../delegation/conversations.ts';
 import { RunStore } from '../../runs/store.ts';
 import { readPersistedRuns } from '../../runs/run-store.testkit.ts';

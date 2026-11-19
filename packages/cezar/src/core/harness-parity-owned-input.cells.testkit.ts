@@ -1,7 +1,7 @@
 import type { RunnerId } from './agent-runner.ts';
 import type { HarnessParityPart } from './harness-parity-parts.testkit.ts';
 import { describeHarnessPart, type HarnessGroup, type HarnessRegistrar, type HarnessRegistration } from './harness-parity-registrar.testkit.ts';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import type { AgentInput } from '@open-mercato/cezar-contract';
 import { agentInputEventSchema } from '@open-mercato/cezar-contract/events';
 import { WAIT_KIND, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';

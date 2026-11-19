@@ -1,5 +1,5 @@
 import { waitPartDescribers, settled, inputsFor, parentWithWorker, sessionOf, prompted, workerWake, conversingParent, parentTurn, parkedOn, workerWaits, observeAdmissionRetries, retryAtOnce, delivered, retryClock, expectAdmissionRetryCleared, idleClock } from './waits-parity-fixture.testkit.ts';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { WAKE_RETRY_BACKOFF } from '../delegation/retry-backoff.ts';
 import { MAX_WAKE_DELIVERY_ATTEMPTS, WAKE_DELIVERY_CAP_NOTE } from './run.ts';
 import { randomUUID } from 'node:crypto';

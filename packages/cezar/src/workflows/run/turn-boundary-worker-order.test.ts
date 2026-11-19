@@ -2,7 +2,7 @@ import { seedWaits } from '../../runs/run-store.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
 import { makeHumanWait, makeTimerWait, RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { WAIT_LIMIT } from '@open-mercato/cezar-contract/waits';
+import { WAIT_LIMIT } from '@open-mercato/cezar-contract/wait-limits';
 import { observationClock } from '../../core/observation-clock.testkit.ts';
 import { unused } from '../fixture-no-runner.testkit.ts';
 import { boundaryOrderFixture } from './boundary-order.testkit.ts';

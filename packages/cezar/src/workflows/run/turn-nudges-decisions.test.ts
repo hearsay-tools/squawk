@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RUN_STATUS, STEP_STATUS, STEP_KIND, WAIT_VIA, makeTimerWait } from '@open-mercato/cezar-contract/test-factories.testkit';
-import type { AgentInput } from '@open-mercato/cezar-contract/delegation';
+import type { AgentInput } from '@open-mercato/cezar-contract/agent-input';
 import { RunStore } from '../../runs/store.ts';
 import { setRunStatus } from '../../runs/run-store.testkit.ts';
 import { WorkspaceSemaphore } from '../../workspace/semaphore.ts';
