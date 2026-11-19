@@ -1,8 +1,8 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { pathToFileURL } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
-import { ignoreTermPython, ignoreTermShell, ignoreTermSource, ownerGuardSource } from './stubborn-child.testkit.ts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ignoreTermPython, ignoreTermShell, ignoreTermSource, ownerGuardShell, ownerGuardSource } from './stubborn-child.testkit.ts';
 
 const started: ChildProcess[] = [];
 afterEach(() => {
@@ -61,6 +61,23 @@ describe.runIf(posix)('an owner-death guard (hearsay-tools/squawk#3941)', () => 
 
   it('ends a shell child the same way', async () => {
     await proveGuard(pid => ['sh', ['-c', `${ignoreTermShell(pid)} echo ready; while read -r line; do echo pong; done; sleep 60`]]);
+  }, BOUND_MS);
+
+  it('keeps a shell guard watching through a SIGTERM to its whole group, when the shell itself does not ignore TERM', async () => {
+    const stand = await owner();
+    // A stubborn member started by a shell with no trap of its own, as in check-stop-kill's fixture.
+    const script = `sh -c 'trap "" TERM; echo ready; exec sleep 60' & member=$!; ${ownerGuardShell('$member', stand.pid!)} echo "member $member"; wait`;
+    const child = spawn('sh', ['-c', script], { stdio: ['ignore', 'pipe', 'inherit'], detached: true });
+    started.push(child);
+    let out = '';
+    child.stdout!.on('data', (chunk: Buffer) => { out += String(chunk); });
+    await vi.waitFor(() => { if (!/ready/.test(out) || !/member \d+/.test(out)) throw new Error('not started yet'); }, { timeout: 10_000, interval: 25 }); // bound: two shell starts
+    const member = Number(/member (\d+)/.exec(out)![1]);
+    try {
+      process.kill(-child.pid!, 'SIGTERM');
+      stand.kill('SIGKILL');
+      await vi.waitFor(() => { try { process.kill(member, 0); } catch { return; } throw new Error('the stubborn member still runs'); }, { timeout: 10_000, interval: 50 }); // bound: the guard checks its owner once a second
+    } finally { try { process.kill(-child.pid!, 'SIGKILL'); } catch { /* the group ended */ } }
   }, BOUND_MS);
 
   it.runIf(python)('ends a Python child the same way', async () => {
