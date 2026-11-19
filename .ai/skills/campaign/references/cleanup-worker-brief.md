@@ -67,8 +67,9 @@ Before the PR, in this order:
    and end your turn. One round has a total time limit of one hour, counted
    from the spawn; the limit is this brief's rule, not a Squawk timeout.
    Within it, register the wait again after a wake on a message or a
-   deadline. When the hour has passed and the reviewer has not settled: run
-   worker stop <id>, then worker destroy <id>, and count a failed round.
+   deadline, with a --timeout-seconds of at most the time left. When the
+   hour has passed and the reviewer has not settled: run worker stop <id>,
+   then worker destroy <id>, and count a failed round.
    A round is valid only when all three hold: worker collect <id> says
    settled true and partial false; the reviewer's full report has arrived as
    a message (the collected summary is not the report); and changes says
@@ -85,8 +86,9 @@ Before the PR, in this order:
    native subagent of your runner, and say in the PR body that the round ran
    that way. worker spawn --help lists the flags; docs/workers.md § Run a
    review round from a worker has the commands and the detail.
-9. Release request: send the coordinator the reviewed head from
-   git rev-parse HEAD, the round's result and the readiness evidence. Push
+9. Release request: git rev-parse HEAD must still print the head SHA that
+   the round's task named; else run the round on the new commits. Send the
+   coordinator that SHA, the round's result and the readiness evidence. Push
    and open the PR only after its reply for that head (PR-opening gate above).
 Read auto-merge before opening the PR. The campaign's owner-merge control
 requires owner review; leave automatic merging off in that case. Workers

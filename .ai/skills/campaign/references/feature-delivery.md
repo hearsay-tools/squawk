@@ -63,9 +63,10 @@ and to send the full report to its parent and then call cezar_done. Do not
 edit the worktree while the round runs. Register worker wait <id> and end your
 turn. One round has a total time limit of one hour, counted from the spawn;
 the limit is this brief's rule, not a Squawk timeout. Within it, register the
-wait again after a wake on a message or a deadline. When the hour has passed
-and the reviewer has not settled: run worker stop <id>, then worker destroy
-<id>, and count a failed round.
+wait again after a wake on a message or a deadline, with a --timeout-seconds
+of at most the time left. When the hour has passed and the reviewer has not
+settled: run worker stop <id>, then worker destroy <id>, and count a failed
+round.
 A round is valid only when all three hold: worker collect <id> says settled
 true and partial false; the reviewer's full report has arrived as a message
 (the collected summary is not the report); and changes says unchanged. A
@@ -78,11 +79,12 @@ Findings scored 4 or lower do not block; list them in the PR body
 (.ai/skills/auto-merge/SKILL.md § Arm it only after the review). When the
 spawn is refused or after two failed rounds, run the same prompt in a native
 subagent of your runner and say so in the PR body. docs/workers.md § Run a
-review round from a worker has the commands and the detail. Then send the
-release request for the reviewed head; push and open the PR only after the
-coordinator's reply. Run the round again on the new commits after any later
-code change. Commit attribution follows your runner's own prompt; this brief
-adds none.
+review round from a worker has the commands and the detail. git rev-parse
+HEAD must still print the head SHA that the round's task named; else run the
+round on the new commits. Then send the release request for that SHA; push and
+open the PR only after the coordinator's reply. Run the round again on the new
+commits after any later code change. Commit attribution follows your runner's
+own prompt; this brief adds none.
 
 Deliver: <acceptance criteria and evidence checks>.
 Preserve: <existing guarantees>.
