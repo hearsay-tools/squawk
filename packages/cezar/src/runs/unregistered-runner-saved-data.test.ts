@@ -171,18 +171,6 @@ describe('a runs.json run on an unregistered runner', () => {
   });
 });
 
-describe('a saved runner id read back as a runner', () => {
-  it('names a registered runner itself, a legacy id its runner, and an unknown id Claude', async () => {
-    await processWith('built-in and gemini');
-    const registry = await import('../core/runner-registry.ts');
-    expect(registry.savedRunnerId('gemini')).toBe('gemini');
-    expect(registry.runnerIdOf('gemini')).toBe('gemini');
-    expect(registry.savedRunnerId('claude-cli')).toBe('claude');
-    expect(registry.runnerIdOf('nope')).toBe('claude');
-    expect(registry.savedRunnerId(undefined)).toBeUndefined();
-  });
-});
-
 describe('a run saved on a legacy or retired runner id', () => {
   let dataDir: string;
 

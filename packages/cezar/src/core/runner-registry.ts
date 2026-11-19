@@ -17,18 +17,16 @@ export const DEFAULT_RUNNER_ID = 'claude' satisfies RunnerId;
 export const LEGACY_RUNNER_IDS: ReadonlyMap<string, RunnerId> = new Map([['claude-cli', 'claude']]);
 
 /**
- * The runner a backend value names. A built-in or registered id names itself and a legacy id maps
- * to its runner; undefined and an unknown value map to the default runner (`claude`), as
- * `createRunner` does. It never throws: an empty registry leaves the built-in ids.
+ * The runner a backend value names. A legacy id maps to its runner; undefined and an unknown value
+ * map to the default runner (`claude`), as `createRunner` does.
  */
 export function runnerIdOf(backend: string | undefined): RunnerId {
   if (backend === undefined) return DEFAULT_RUNNER_ID;
-  if (isRunnerId(backend) || registry.has(backend as RunnerId)) return backend as RunnerId;
-  return LEGACY_RUNNER_IDS.get(backend) ?? DEFAULT_RUNNER_ID;
+  return isRunnerId(backend) ? backend : LEGACY_RUNNER_IDS.get(backend) ?? DEFAULT_RUNNER_ID;
 }
 
-/** A runner id read back from saved data (a run, a workflow file), which the read checked: a
- *  registered id or a built-in one. Undefined stays undefined. */
+/** A runner id read back from saved data (a run, a workflow file), mapped as `runnerIdOf` maps it.
+ *  Undefined stays undefined. */
 export function savedRunnerId(id: string | undefined): RunnerId | undefined {
   return id === undefined ? undefined : runnerIdOf(id);
 }
