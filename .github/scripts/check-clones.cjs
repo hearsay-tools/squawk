@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { parse } = require('@babel/parser');
 
 const git = (cwd, args, options = {}) => execFileSync('git', args, { cwd, encoding: 'utf8', ...options });
 const eligible = (name) => /^packages\/[^/]+\/src\//.test(name) || name.startsWith('packages/cezar/scripts/');
@@ -66,12 +67,93 @@ function relativeFile(scratch, file) {
   return path.relative(scratch, file.name).split(path.sep).join('/');
 }
 
+// A module source: the string or plain template of an import, export, import(), import type,
+// import = require() or require() call. Only these nodes name a module; other strings never do.
+function sourceOf(node) {
+  if (/^(?:Import|ExportNamed|ExportAll)Declaration$|^(?:ImportExpression|TSImportType)$/.test(node.type)) return node.source;
+  if (node.type === 'TSExternalModuleReference') return node.expression;
+  if (node.type === 'CallExpression' && node.callee?.type === 'Identifier' && node.callee.name === 'require') return node.arguments[0];
+  return undefined;
+}
+
+function sourceText(node) {
+  if (node?.type === 'StringLiteral') return node.value;
+  if (node?.type === 'TemplateLiteral' && node.expressions.length === 0) return node.quasis[0].value.cooked;
+  return undefined;
+}
+
+/** Each relative module source in a file: its string offsets and its text; null when the file does not parse. */
+function relativeSources(name, text) {
+  const extension = path.extname(name);
+  const plugins = /^\.[mc]?ts$/.test(extension) ? ['typescript'] : extension === '.tsx' ? ['typescript', 'jsx'] : ['jsx'];
+  let program;
+  try {
+    program = parse(text, { sourceType: 'module', plugins, allowReturnOutsideFunction: true }).program;
+  } catch {
+    return null;
+  }
+  const found = [];
+  const visit = (node) => {
+    if (Array.isArray(node)) return node.forEach(visit);
+    if (!node || typeof node.type !== 'string') return;
+    const source = sourceOf(node);
+    const value = sourceText(source);
+    if (value !== undefined && /^\.\.?\//.test(value)) found.push({ start: source.start, end: source.end, value });
+    for (const [key, child] of Object.entries(node)) if (key !== 'loc' && child && typeof child === 'object') visit(child);
+  };
+  visit(program);
+  return found;
+}
+
+function lineStart(text, line) {
+  let offset = 0;
+  for (let current = 1; current < line; current += 1) {
+    const end = text.indexOf('\n', offset);
+    if (end < 0) return -1;
+    offset = end + 1;
+  }
+  return offset;
+}
+
+/**
+ * Record on each clone the relative module sources inside its fragment, found by parsing the first
+ * file the fragment was cut from, or null when the fragment cannot be placed in a parsed file. jscpd
+ * cuts the fragment from the start of the first file's start line and joins its lines with '\n', so
+ * the file is read with CRLF line ends as LF. Run it while the scanned tree is on disk.
+ */
+function withModuleSources(scratch, clones) {
+  const files = new Map();
+  for (const clone of clones) {
+    const name = relativeFile(scratch, clone.firstFile);
+    if (!files.has(name)) {
+      const text = fs.readFileSync(path.join(scratch, name), 'utf8').replaceAll('\r\n', '\n');
+      files.set(name, { text, sources: relativeSources(name, text) });
+    }
+    const { text, sources } = files.get(name);
+    const offset = lineStart(text, clone.firstFile.start);
+    const cut = sources && typeof clone.fragment === 'string' && offset >= 0 && text.startsWith(clone.fragment, offset);
+    clone.moduleSources = cut ? sources.filter(({ start, end }) => start >= offset && end <= offset + clone.fragment.length)
+      .map(({ start, end, value }) => ({ start: start - offset, end: end - offset, value })) : null;
+  }
+  return clones;
+}
+
 // The clone's code with its layout dropped, its token count and its package: the same clone in
-// another file or file pair hashes alike, so a move can be told from a new copy.
+// another file or file pair hashes alike, so a move can be told from a new copy. Each relative
+// module source reads as the repository path it resolves to from the first file, marked so no other
+// string reads alike, so a moved file that still imports the same modules keeps its fingerprint.
+// A fragment whose sources were not resolved also hashes its first file: it never moves.
 function fingerprint(scratch, clone) {
   if (typeof clone.fragment !== 'string' || !Number.isSafeInteger(clone.tokens)) throw new Error('Invalid clone fragment');
-  const text = clone.fragment.split('\n').map(line => line.trim()).filter(Boolean).join('\n');
-  return crypto.createHash('sha256').update(`${packageOf(scratch, clone.firstFile.name)}\0${clone.tokens}\0${text}`).digest('hex');
+  const file = relativeFile(scratch, clone.firstFile);
+  const sources = Array.isArray(clone.moduleSources) ? clone.moduleSources : undefined;
+  const pinned = sources ? '' : file;
+  let resolved = clone.fragment;
+  for (const { start, end, value } of [...(sources ?? [])].sort((a, b) => b.start - a.start)) {
+    resolved = `${resolved.slice(0, start)}\0${JSON.stringify(path.posix.join(path.posix.dirname(file), value))}${resolved.slice(end)}`;
+  }
+  const text = resolved.split('\n').map(line => line.trim()).filter(Boolean).join('\n');
+  return crypto.createHash('sha256').update(`${packageOf(scratch, clone.firstFile.name)}\0${clone.tokens}\0${pinned}\0${text}`).digest('hex');
 }
 
 const pairKey = (scratch, clone) => JSON.stringify([relativeFile(scratch, clone.firstFile), relativeFile(scratch, clone.secondFile)].sort());
@@ -158,9 +240,9 @@ function check({ repo = process.cwd(), base = 'origin/main', head = 'HEAD' } = {
     // Both scans use the same trusted paths and options; candidate config never runs.
     fs.writeFileSync(path.join(scratch, 'trusted-config.json'), '{}');
     materialize(repo, mergeBase, scratch);
-    const baseClones = scan(scratch, true);
+    const baseClones = withModuleSources(scratch, scan(scratch, true));
     materialize(repo, headSha, scratch);
-    const kept = carryMoved(scratch, baseClones, scan(scratch, false));
+    const kept = carryMoved(scratch, baseClones, withModuleSources(scratch, scan(scratch, false)));
     const baseline = summarize(scratch, kept.baseline);
     const headReport = summarize(scratch, kept.head);
     const failures = compare(baseline, headReport);
@@ -181,4 +263,4 @@ if (require.main === module) {
   }
   process.exitCode = check(options);
 }
-module.exports = { check, eligible, summarize, compare, carryMoved };
+module.exports = { check, eligible, summarize, compare, carryMoved, withModuleSources };

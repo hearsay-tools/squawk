@@ -263,7 +263,7 @@ test('a file moved with its same-file clone passes; a further copy of it still f
 
 test('a merge-base clone carries one head clone of the same fingerprint, in its own pair first, never across packages', () => {
   const { carryMoved } = require('./check-clones.cjs');
-  const clone = (first, second, fragment = 'a\nb', tokens = 60) => ({ ...reportedClone(first, second, tokens), fragment });
+  const clone = (first, second, fragment = 'a\nb', tokens = 60) => ({ ...reportedClone(first, second, tokens), fragment, moduleSources: [] });
   const a = 'packages/demo/src/a.ts'; const b = 'packages/demo/src/b.ts'; const c = 'packages/demo/src/c.ts'; const other = 'packages/web/src/x.ts';
   const kept = (base, head) => {
     const result = carryMoved(reportRoot, base, head);
@@ -274,4 +274,84 @@ test('a merge-base clone carries one head clone of the same fingerprint, in its 
   assert.deepEqual(kept([clone(a, b)], [clone(a, c, 'a\nb', 61)]), { base: 1, head: [c] }, 'another token count is another clone');
   assert.deepEqual(kept([clone(a, other)], [clone(b, other)]), { base: 1, head: [other] });
   assert.throws(() => carryMoved(reportRoot, [], [reportedClone(a, b, 60)]), /Invalid clone fragment/);
+});
+
+// A move to another folder rewrites relative imports; resolved, they still name the same modules.
+test('a clone pair moved to other folders with rewritten relative imports passes; a new copy of it still fails', () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'clone-move-imports-'));
+  const git = (...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', ...args], { cwd: repo, encoding: 'utf8' }).trim();
+  const write = (name, content) => { fs.mkdirSync(path.dirname(path.join(repo, name)), { recursive: true }); fs.writeFileSync(path.join(repo, name), content); };
+  const scan = (base) => spawnSync(process.execPath, [script, '--base', base], { cwd: repo, encoding: 'utf8' });
+  const modules = ['discovery-options', 'product-env', 'probe-spawn', 'probe-teardown', 'model-catalog', 'effort-levels'];
+  const source = (prefix, name) => modules.map((module, i) => `import { value${i}, type Type${i} } from '${prefix}${module}.ts';`).join('\n')
+    + `\nimport { readFile } from 'node:fs/promises';\n\nexport const ${name} = [value0, value1, value2, value3, value4, value5, readFile];\n`;
+  try {
+    git('init', '--quiet');
+    write('packages/demo/src/core/first.ts', source('./', 'first'));
+    write('packages/demo/src/core/second.ts', source('./', 'second'));
+    git('add', '.'); git('commit', '-qm', 'clone pair');
+    const base = git('rev-parse', 'HEAD');
+    git('rm', '-q', 'packages/demo/src/core/first.ts', 'packages/demo/src/core/second.ts');
+    write('packages/demo/src/runners/first/first.ts', source('../../core/', 'first'));
+    write('packages/demo/src/runners/second/second.ts', source('../../core/', 'second'));
+    git('add', '.'); git('commit', '-qm', 'move with rewritten imports');
+    const moved = scan(base);
+    assert.equal(moved.status, 0, moved.stdout + moved.stderr);
+    write('packages/demo/src/runners/third/third.ts', source('../../core/', 'third'));
+    git('add', '.'); git('commit', '-qm', 'new copy');
+    const copied = scan(base);
+    assert.equal(copied.status, 1, copied.stdout + copied.stderr);
+    assert.match(copied.stdout, /runners\/third\/third\.ts/);
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+});
+
+test('only module sources resolve, from the file the fragment was cut from', () => {
+  const { carryMoved, withModuleSources } = require('./check-clones.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'clone-sources-'));
+  let files = 0;
+  // The fragment starts on line 3, after an import that is not part of the clone.
+  // jscpd joins the fragment's lines with '\n' whatever the file's line ends are.
+  const clone = (folder, fragment, { extension = 'ts', eol = '\n', start = 3, file = fragment } = {}) => {
+    const name = `packages/demo/src/${folder}/f${files += 1}.${extension}`;
+    fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
+    fs.writeFileSync(path.join(root, name), `import { before } from './before-${files}.ts';\n\n${file}\nexport const after = 1;\n`.replaceAll('\n', eol));
+    const reported = { firstFile: { name: path.join(root, name), start }, secondFile: { name: path.join(root, 'packages/demo/src/z.ts'), start: 1 }, tokens: 60, isNew: true, fragment };
+    return withModuleSources(root, [reported])[0];
+  };
+  const carried = (base, head) => carryMoved(root, [base], [head]).head.length === 0;
+  const imports = (source) => `import { value } from '${source}';\nexport { other } from /* keep */ "${source}";\nexport * from '${source}';\nimport '${source}';\n`
+    + `const late = await import(\`${source}\`);\nconst old = require("${source}");\nimport legacy = require('${source}');\ntype Late = import('${source}').Late;`;
+  try {
+    assert.equal(clone('a', imports('./x.ts')).moduleSources.length, 8, 'every module source form inside the fragment, none before it');
+    assert.ok(carried(clone('a', imports('./x.ts')), clone('b/c', imports('../../a/x.ts'))), 'the same modules from another folder');
+    assert.ok(!carried(clone('a', imports('./x.ts')), clone('b', imports('../other/x.ts'))), 'another x.ts');
+    assert.ok(!carried(clone('a', imports('./x.ts')), clone('b', imports('./x.ts'))), 'the same text names another x.ts');
+    assert.ok(carried(clone('a', imports('pkg/x.ts')), clone('b', imports('pkg/x.ts'))), 'a package source is kept as written');
+    assert.ok(!carried(clone('a', imports('pkg/x.ts')), clone('b', imports('pkg/y.ts'))));
+    const jsx = (source) => `import { View } from '${source}';\nexport const Page = () => <View label="./x.tsx" />;`;
+    assert.ok(carried(clone('a', jsx('./view.tsx'), { extension: 'tsx' }), clone('b/c', jsx('../../a/view.tsx'), { extension: 'tsx' })), 'a .tsx file parses with JSX');
+    const crlf = { eol: '\r\n' };
+    assert.ok(carried(clone('a', imports('./x.ts'), crlf), clone('b/c', imports('../../a/x.ts'), crlf)), 'a CRLF file moves with its modules');
+    assert.ok(!carried(clone('a', imports('./x.ts'), crlf), clone('b', imports('./x.ts'), crlf)), 'a CRLF file importing another x.ts');
+    // A fragment that cannot be placed in a parsed file is carried only within its own file.
+    const escaped = `import { value } from '\\x2e/x.ts';\nconst late = await import("\\u002e/x.ts");`;
+    for (const unresolved of [{ start: 1 }, { file: `${imports('./x.ts')}\nconst = ;` }]) {
+      for (const fragment of [imports('./x.ts'), escaped, 'const a = 1;']) {
+        const base = clone('a', fragment, unresolved);
+        assert.equal(base.moduleSources, null);
+        assert.ok(!carried(base, clone('b', fragment, unresolved)), `unresolved fragment never moves: ${fragment}`);
+        assert.ok(carried(base, { ...clone('b', fragment, unresolved), firstFile: base.firstFile }), 'an unresolved fragment stays carried in its own file');
+      }
+      assert.ok(!carried(clone('a', imports('./x.ts'), unresolved), clone('b/c', imports('../../a/x.ts'))));
+    }
+    assert.deepEqual(clone('a', escaped).moduleSources.map(({ value }) => value), ['./x.ts', './x.ts'], 'an escaped source resolves when the file parses');
+    assert.ok(!carried(clone('a', escaped), clone('b', escaped)), 'an escaped source names another x.ts from another folder');
+    // Text that only looks like an import is a string or a comment: it stays as written.
+    const lookalike = (source) => `const text = \`import "${source}"\`;\n// import { x } from '${source}';\nconst plain = 'from "${source}"';\nconst call = notRequire('${source}');`;
+    const moved = clone('moved', lookalike('./x.ts'));
+    assert.deepEqual(moved.moduleSources, []);
+    assert.ok(carried(clone('a', lookalike('./x.ts')), moved), 'an unchanged clone moved with its strings');
+    assert.ok(!carried(clone('a', lookalike('./x.ts')), clone('a', lookalike('./nested/../x.ts'))), 'two different strings stay two clones');
+    assert.ok(!carried(clone('a', imports('packages/demo/src/a/x.ts')), clone('a', imports('./x.ts'))), 'a resolved source never reads as written text');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
