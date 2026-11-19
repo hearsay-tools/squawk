@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { RunnerSkillList, runnerSkillsQuerySchema } from '@open-mercato/cezar-contract/runner-skills';
 import type { RunnerId } from '../core/agent-runner.ts';
+import { registeredRunnerId } from '../core/runner-registry.ts';
 import type { RunnerSkillCatalog } from '../core/runner-skill-catalog.ts';
 import { portableRunnerSkillList } from '../core/runner-skill-reference.ts';
 import type { Home } from '../home/home.ts';
@@ -14,7 +15,8 @@ export async function readRunnerSkills(
   catalog: RunnerSkillCatalog,
   resolveAccount: (runner: RunnerId, account: string) => Promise<{ profile: ResolvedAgentProfile } | { error: string }>,
 ): Promise<RunnerSkillList | { error: string }> {
-  const { runner, account, refresh } = input;
+  const { account, refresh } = input;
+  const runner = registeredRunnerId(input.runner);
   if (account !== undefined) {
     const selected = await resolveAccount(runner, account);
     if ('error' in selected) return selected;

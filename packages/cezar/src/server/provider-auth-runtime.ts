@@ -11,7 +11,7 @@ import {
   resolveRuntimeAuthVerificationTarget,
   type RuntimeAuthVerificationTarget,
 } from '../workspace/agent-profiles.ts';
-import { DEFAULT_RUNNER_ID } from '../core/runner-registry.ts';
+import { DEFAULT_RUNNER_ID, runnerIdOf } from '../core/runner-registry.ts';
 
 const AUTH_ERROR_EVENT_TYPES = new Set(['error', 'session.error', 'note']);
 
@@ -46,7 +46,7 @@ export function watchProviderRuntimeAuthFailures(
     const step = typeof event.stepId === 'string'
       ? run.steps.find(({ id }) => id === event.stepId)
       : undefined;
-    const provider: ProviderId = sessionRunner(step, run);
+    const provider: ProviderId = runnerIdOf(sessionRunner(step, run));
     // The run-level profile belongs to the run's RUNNER: a mixed-backend step failing on another
     // backend ran under THAT backend's own default login, and asking the resolver for the runner's
     // profile under the wrong provider can only mis-answer the check or stall it unresolved.

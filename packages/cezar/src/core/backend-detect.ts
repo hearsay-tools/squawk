@@ -10,7 +10,8 @@ import { runGit } from '../git-command.ts';
 const exec = promisify(execFile);
 
 export interface BackendCheck {
-  name: RunnerId | 'gh' | 'git';
+  /** A runner id, `gh` or `git`. */
+  name: string;
   available: boolean;
   version?: string;
   hint?: string;

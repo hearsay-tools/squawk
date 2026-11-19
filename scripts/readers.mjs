@@ -55,6 +55,7 @@ export const RUNNER_ID_READERS = [
   { reader: 'Usage-limit account holds: the account of the next turn', file: 'packages/cezar/src/workflows/execution-account.ts', anchor: 'latestSession(run)' },
   { reader: 'Queued and interrupted revival', file: 'packages/cezar/src/workflows/run/queued-revival.ts', anchor: 'run.removedRunner' },
   { reader: 'Scheduling of queued runs', file: 'packages/cezar/src/workflows/run-scheduling.ts', anchor: 'run.removedRunner' },
+  { reader: 'Queue watchdog: a run on an unregistered runner waits', file: 'packages/cezar/src/workflows/run/run-line.ts', anchor: 'waitsForUnregisteredRunner(' },
   { reader: 'Start and resume of a saved run', file: 'packages/cezar/src/workflows/run.ts', anchor: 'removedRunner' },
   { reader: 'Continue admission', file: 'packages/cezar/src/workflows/continuation-admission.ts', anchor: 'removedRunnerStepAfter(' },
   { reader: 'Continue provenance by start time', file: 'packages/cezar/src/workflows/run/launch-read-resolver.ts', anchor: 'removedRunnerStepAfter(' },

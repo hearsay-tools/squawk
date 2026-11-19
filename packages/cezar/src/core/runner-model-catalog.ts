@@ -1,5 +1,5 @@
 import type { EffortLevel } from '@open-mercato/cezar-contract';
-import { runnerModelListName } from '@open-mercato/cezar-contract/runner-facts';
+import { runnerDefinition } from './runner-registry.ts';
 import type { RunnerId } from './agent-runner.ts';
 
 export interface ModelOption {
@@ -12,7 +12,8 @@ export interface ModelOption {
 export type ModelCatalogSource = 'live' | 'cache' | 'unavailable';
 
 export interface RunnerModelCatalogResult {
-  runner: RunnerId;
+  /** The runner id as the wire sends it: a string. */
+  runner: string;
   models: ModelOption[];
   source: ModelCatalogSource;
   stale: boolean;
@@ -115,5 +116,5 @@ export class RunnerModelCatalog {
 }
 
 function unavailableReason(runner: RunnerId): string {
-  return `${runnerModelListName(runner)} model discovery is temporarily unavailable`;
+  return `${runnerDefinition(runner).display.modelListName} model discovery is temporarily unavailable`;
 }

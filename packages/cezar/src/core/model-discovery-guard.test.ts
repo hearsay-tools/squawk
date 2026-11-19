@@ -1,7 +1,7 @@
 /**
  * Host model discovery guard — AGENT_PROTOCOL.md §10, "Host model discovery".
  *
- * `modelDiscoveryRunnerSchema` is `runnerSchema`, so every runner is a discovery runner, but
+ * `modelDiscoveryRunnerSchema` is the open `runnerSchema`, so every runner is a discovery runner, but
  * `RunnerModelCatalog` takes a `Partial` adapter map. A runner added without its adapter
  * therefore fails nowhere — the picker just shows presets again. This suite makes that a red
  * test. A runner whose CLI has no model-listing surface at all is recorded in
@@ -10,7 +10,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MODEL_DISCOVERY_RUNNERS } from '@open-mercato/cezar-contract/workspace';
+import { modelDiscoveryRunnerSchema } from '@open-mercato/cezar-contract/workspace';
 import { describe, expect, it } from 'vitest';
 import { RUNNER_IDS, type RunnerId } from './agent-runner.ts';
 import { exemptionReasonProblem } from './exemption-reason.testkit.ts';
@@ -45,8 +45,8 @@ describe('host model discovery guard (AGENT_PROTOCOL.md §10)', () => {
     expect(required.length).toBeGreaterThan(0);
   });
 
-  it.each(required)('%s is a member of the contract enum modelDiscoveryRunnerSchema', (runner) => {
-    expect(MODEL_DISCOVERY_RUNNERS).toContain(runner);
+  it.each(required)('%s is accepted by the contract schema modelDiscoveryRunnerSchema', (runner) => {
+    expect(modelDiscoveryRunnerSchema.safeParse(runner).success).toBe(true);
   });
 
   it.each(required)('%s ships a bounded catalog adapter module exporting discover<Runner>Models', async (runner) => {
@@ -62,13 +62,4 @@ describe('host model discovery guard (AGENT_PROTOCOL.md §10)', () => {
     expect(adapters[runner], `hostModelCatalogAdapters() has no ${runner} entry`).toBeDefined();
   });
 
-  it('advertises discovery only for runners that exist', () => {
-    // The contract enum must not name a runner RUNNER_IDS no longer has, and an exempt runner
-    // must not be advertised as discoverable either — the picker would ask for a catalog that
-    // can never answer.
-    for (const runner of MODEL_DISCOVERY_RUNNERS) {
-      expect(RUNNER_IDS).toContain(runner);
-      expect(exempt(runner as RunnerId), `${runner} is exempt but still in modelDiscoveryRunnerSchema`).toBe(false);
-    }
-  });
 });

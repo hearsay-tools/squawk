@@ -1,6 +1,7 @@
 import type { Context, Env, MiddlewareHandler } from 'hono';
 import { validator } from 'hono/validator';
-import type { z } from 'zod';
+import { z } from 'zod';
+import { runnerFieldIssues, type RunnerFields } from '../core/runner-fields.ts';
 
 /**
  * Route-middleware validators for JSON, params and queries. Preserve typed input/output and the
@@ -12,6 +13,8 @@ type ErrorOptions = {
   message?: string;
   /** Stable typed code for the dedicated delegation API. */
   code?: 'invalid_input';
+  /** Runner ids in the input, which the route refuses unless a runner registered them (runner-fields.ts). */
+  runners?: RunnerFields;
 };
 
 type JsonOptions = ErrorOptions & {
@@ -50,6 +53,14 @@ function reject(c: Context, error: z.ZodError, override: string | undefined, cod
   return c.json({ error: override ?? detail, ...(code ? { code } : {}) }, 400);
 }
 
+/** The input `schema` parsed, then its runner ids checked against the registry. */
+function parseWithRunners(schema: z.ZodType, input: unknown, runners: RunnerFields | undefined) {
+  const parsed = schema.safeParse(input);
+  if (!parsed.success || !runners) return parsed;
+  const issues = runnerFieldIssues(parsed.data, runners);
+  return issues.length === 0 ? parsed : { success: false as const, error: new z.ZodError(issues) };
+}
+
 /**
  * The request/response split, spelled out rather than inferred.
  *
@@ -83,10 +94,10 @@ export function jsonZodValidator<
   // these; a `= null` default would silently overwrite an explicitly absent value.
   const absent = 'absent' in options ? options.absent : null;
   const malformed = 'malformed' in options ? options.malformed : absent;
-  const { message, code, invalid } = options;
+  const { message, code, invalid, runners } = options;
   const check = (input: unknown, c: Context) => {
     const resolved = typeof schema === 'function' ? schema() : schema;
-    const parsed = resolved.safeParse(input);
+    const parsed = parseWithRunners(resolved, input, runners);
     if (parsed.success) return { ok: true, data: parsed.data as z.infer<S> } as const;
     return { ok: false, response: invalid ? invalid(c, parsed.error, input) : reject(c, parsed.error, message, code) } as const;
   };
@@ -128,17 +139,17 @@ export function jsonZodValidator<
  * content-type to gate on and no malformed-input path — Hono's own behaviour is already right.
  * The schema receives the whole param object (`{ provider: 'codex' }`), not a single value.
  */
-export function paramZodValidator<S extends z.ZodType>(schema: S, { message, code }: ErrorOptions = {}) {
+export function paramZodValidator<S extends z.ZodType>(schema: S, { message, code, runners }: ErrorOptions = {}) {
   return validator('param', (value, c) => {
-    const parsed = schema.safeParse(value);
+    const parsed = parseWithRunners(schema, value, runners);
     return parsed.success ? (parsed.data as z.infer<S>) : reject(c, parsed.error, message, code);
   });
 }
 
 /** Query string, on the same terms as {@link paramZodValidator}. */
-export function queryZodValidator<S extends z.ZodType>(schema: S, { message, code }: ErrorOptions = {}) {
+export function queryZodValidator<S extends z.ZodType>(schema: S, { message, code, runners }: ErrorOptions = {}) {
   return validator('query', (value, c) => {
-    const parsed = schema.safeParse(value);
+    const parsed = parseWithRunners(schema, value, runners);
     return parsed.success ? (parsed.data as z.infer<S>) : reject(c, parsed.error, message, code);
   });
 }

@@ -1,4 +1,4 @@
-import { isRunnerId, type AgentBackend, type AgentRunner, type RunnerId } from './agent-runner.ts';
+import { isRunnerId, RUNNER_IDS, type AgentBackend, type AgentRunner, type RunnerId } from './agent-runner.ts';
 import type { RunnerDefinition } from './runner-definition.ts';
 
 /**
@@ -23,6 +23,12 @@ export const LEGACY_RUNNER_IDS: ReadonlyMap<string, RunnerId> = new Map([['claud
 export function runnerIdOf(backend: string | undefined): RunnerId {
   if (backend === undefined) return DEFAULT_RUNNER_ID;
   return isRunnerId(backend) ? backend : LEGACY_RUNNER_IDS.get(backend) ?? DEFAULT_RUNNER_ID;
+}
+
+/** A runner id read back from saved data (a run, a workflow file), which the read checked: a
+ *  registered id or a built-in one. Undefined stays undefined. */
+export function savedRunnerId(id: string | undefined): RunnerId | undefined {
+  return id === undefined ? undefined : runnerIdOf(id);
 }
 
 /**
@@ -54,9 +60,37 @@ export function registeredRunners(): RunnerDefinition[] {
 }
 
 /** Whether a runner with this id is registered. */
-export function isRegisteredRunner(id: string): boolean {
+export function isRegisteredRunner(id: string): id is RunnerId {
   assertRegistered();
   return registry.has(id as RunnerId);
+}
+
+/**
+ * A runner id that its source has checked: a request that the route's runner check
+ * (`server/runner-fields.ts`) admitted, or a saved setting. Throws when no runner registered it.
+ */
+export function registeredRunnerId(id: string): RunnerId {
+  if (!isRegisteredRunner(id)) throw new Error(`Runner ${id} is not registered.`);
+  return id;
+}
+
+/**
+ * Whether a runner with this id is registered, or undefined when no runner is registered. Only the
+ * read of saved runs uses it (`runs/legacy-run-rows.ts`): a process that registered no runner keeps
+ * the read it had before runner ids were open. Every other read throws on an empty registry.
+ */
+export function savedRunnerRegistration(id: string): boolean | undefined {
+  return registry.size === 0 ? undefined : registry.has(id as RunnerId);
+}
+
+/**
+ * The runner ids this process knows: the registered ids, or, in a process that registered no
+ * runner, the built-in ids, which is what such a process knew before runner ids were open. Saved
+ * data (runs, workflow files, automation definitions) and the CLI's own checks of a runner id read
+ * it. Never throws, like `savedRunnerRegistration`.
+ */
+export function knownRunnerIds(): readonly string[] {
+  return registry.size === 0 ? RUNNER_IDS : [...registry.keys()];
 }
 
 /** The registered definition of a runner. */

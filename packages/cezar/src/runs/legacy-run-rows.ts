@@ -2,6 +2,7 @@ import type { parseRunRecords } from './store.ts';
 import type { RunRowInput } from './run-database.ts';
 import { encodeRunRow } from './run-row.ts';
 import { upgradeLegacyWaits } from './legacy-waits.ts';
+import { LEGACY_RUNNER_IDS, knownRunnerIds, savedRunnerRegistration } from '../core/runner-registry.ts';
 
 /** The read-time upgrades of a stored record, in place, before the schema reads it. */
 export function upgradeLegacyRunRow(row: Record<string, unknown>): void {
@@ -13,10 +14,49 @@ export function upgradeLegacyRunRow(row: Record<string, unknown>): void {
 
 /** Runners Squawk no longer ships (hearsay-tools/squawk#3715). A run saved on one still opens,
  *  lists and shows its transcript. */
-const REMOVED_RUNNER_IDS: readonly string[] = ['cursor'];
+export const REMOVED_RUNNER_IDS: readonly string[] = ['cursor'];
 
-function isRemovedRunner(value: unknown): value is string {
-  return typeof value === 'string' && REMOVED_RUNNER_IDS.includes(value);
+/**
+ * How a saved runner id reads in this process. `retired`: a runner Squawk no longer ships; its fold
+ * is stored. `unregistered`: an id that no runner of this process registered (a runner of a newer
+ * build or one that did not load); its fold is undone by the next write and by a later process that
+ * registers it. Undefined: a readable id. With no runner registered, no id is `unregistered`.
+ */
+type Removal = 'retired' | 'unregistered';
+
+function removalOf(value: unknown): Removal | undefined {
+  if (typeof value !== 'string') return undefined;
+  if (REMOVED_RUNNER_IDS.includes(value)) return 'retired';
+  return LEGACY_RUNNER_IDS.has(value) || savedRunnerRegistration(value) !== false ? undefined : 'unregistered';
+}
+
+/** Whether a run's `removedRunner` names a runner that this process did not register, not a retired
+ *  one: such a run waits, untouched, for a process that registers its runner. */
+export function waitsForUnregisteredRunner(run: { removedRunner?: string | undefined }): boolean {
+  return run.removedRunner !== undefined && !REMOVED_RUNNER_IDS.includes(run.removedRunner);
+}
+
+/** Whether a saved runner id parses: a legacy id, a registered id, or, in a process that registered
+ *  no runner, a built-in id. */
+export function readableSavedRunner(id: string): boolean {
+  return LEGACY_RUNNER_IDS.has(id) || knownRunnerIds().includes(id);
+}
+
+/** A removed field of an unregistered runner and where it was. */
+interface KeptField { path: (string | number)[]; value: unknown }
+
+/** The fields each fold of an unregistered runner removed, keyed by the row it read. */
+const keptFields = new WeakMap<object, KeptField[]>();
+
+/** Whether a removed runner id that a row stored names a runner this process registered. */
+function registeredAgain(value: unknown): value is string {
+  return typeof value === 'string' && !REMOVED_RUNNER_IDS.includes(value) && savedRunnerRegistration(value) === true;
+}
+
+/** A `removedRunner` or `removedBackend` that names a runner registered again reads as before. */
+function clearRegisteredAgain(row: Record<string, unknown>): void {
+  if (registeredAgain(row.removedRunner)) delete row.removedRunner;
+  for (const step of records(row.steps)) if (registeredAgain(step.removedBackend)) delete step.removedBackend;
 }
 
 /**
@@ -24,41 +64,75 @@ function isRemovedRunner(value: unknown): value is string {
  * `removedRunner`; a removed `runner` is cleared. Its steps on that runner keep no backend and no
  * session, only `removedBackend`, so a Continue knows that step holds the latest work and opens a
  * new session for it. A definition step on that runner keeps its prompt, skill and checks, and
- * loses the runner and the model, effort and account that belonged to it. The next write of the
- * row stores the fold.
+ * loses the runner and the model, effort and account that belonged to it. For a retired runner the
+ * next write of the row stores the fold; for an unregistered one it puts the removed fields back
+ * (`withKeptFields`), where the write has not set them.
  */
 export function upgradeRemovedRunner(row: Record<string, unknown>): void {
-  let removed = isRemovedRunner(row.runner) ? row.runner : undefined;
-  if (removed !== undefined) delete row.runner;
-  for (const step of records(row.steps)) {
-    if (!isRemovedRunner(step.backend)) continue;
-    removed ??= step.backend;
+  clearRegisteredAgain(row);
+  const kept: KeptField[] = [];
+  const drop = (target: Record<string, unknown>, keys: readonly string[], path: (string | number)[], removal: Removal) => {
+    for (const key of keys) {
+      if (target[key] === undefined) continue;
+      if (removal === 'unregistered') kept.push({ path: [...path, key], value: target[key] });
+      delete target[key];
+    }
+  };
+  const rowRemoval = removalOf(row.runner);
+  let removed = rowRemoval ? row.runner as string : undefined;
+  if (rowRemoval) drop(row, ['runner'], [], rowRemoval);
+  records(row.steps).forEach((step, index) => {
+    const removal = removalOf(step.backend);
+    if (!removal) return;
+    removed ??= step.backend as string;
     step.removedBackend = step.backend;
-    delete step.backend;
-    delete step.sessionId;
-    delete step.sessionTransport;
-  }
+    drop(step, ['backend', 'sessionId', 'sessionTransport'], ['steps', index], removal);
+  });
   const definition = row.workflowDef;
-  for (const step of records(definition && typeof definition === 'object' ? (definition as Record<string, unknown>).steps : undefined)) {
-    if (!isRemovedRunner(step.runner)) continue;
-    removed ??= step.runner;
-    for (const key of ['runner', 'model', 'effort', 'agentProfile']) delete step[key];
-  }
+  records(definition && typeof definition === 'object' ? (definition as Record<string, unknown>).steps : undefined).forEach((step, index) => {
+    const removal = removalOf(step.runner);
+    if (!removal) return;
+    removed ??= step.runner as string;
+    drop(step, ['runner', 'model', 'effort', 'agentProfile'], ['workflowDef', 'steps', index], removal);
+  });
   if (removed !== undefined && row.removedRunner === undefined) row.removedRunner = removed;
+  if (kept.length > 0) keptFields.set(row, kept);
 }
 
-/** A settled row's stored summary skips the record parse; it folds the same way. */
+/**
+ * `raw` with the fields that the fold of an unregistered runner removed put back, for the raw
+ * extras of its row (raw-record.ts): the next write keeps them unless it sets them itself. `raw`
+ * itself when no such fold ran.
+ */
+export function withKeptFields(raw: unknown): unknown {
+  const kept = raw && typeof raw === 'object' ? keptFields.get(raw) : undefined;
+  if (!kept) return raw;
+  const copy = structuredClone(raw) as Record<string, unknown>;
+  for (const { path, value } of kept) {
+    let target: unknown = copy;
+    for (const key of path.slice(0, -1)) target = target && typeof target === 'object' ? (target as Record<string | number, unknown>)[key] : undefined;
+    if (target && typeof target === 'object') (target as Record<string | number, unknown>)[path.at(-1)!] = value;
+  }
+  return copy;
+}
+
+/** A settled row's stored summary skips the record parse; it folds the same way, and a runner that
+ *  is registered again reads as before. */
 export function upgradeRemovedRunnerSummary(row: Record<string, unknown>): void {
-  if (isRemovedRunner(row.currentStepBackend)) delete row.currentStepBackend;
-  if (!isRemovedRunner(row.runner)) return;
+  if (row.runner === undefined && registeredAgain(row.removedRunner)) {
+    row.runner = row.removedRunner;
+    delete row.removedRunner;
+  }
+  if (removalOf(row.currentStepBackend)) delete row.currentStepBackend;
+  if (!removalOf(row.runner)) return;
   if (row.removedRunner === undefined) row.removedRunner = row.runner;
   delete row.runner;
 }
 
-/** A saved worker-result snapshot names the runner the worker ran on; a removed one is dropped. */
+/** A saved worker-result snapshot names the runner the worker ran on; a retired one is dropped. */
 export function upgradeRemovedRunnerResult(file: unknown): unknown {
   const result = file && typeof file === 'object' ? (file as Record<string, unknown>).result : undefined;
-  if (result && typeof result === 'object' && isRemovedRunner((result as Record<string, unknown>).backend)) {
+  if (result && typeof result === 'object' && removalOf((result as Record<string, unknown>).backend) === 'retired') {
     delete (result as Record<string, unknown>).backend;
   }
   return file;

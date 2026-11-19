@@ -4,11 +4,13 @@ import {
   type ProviderStatus,
   type ProviderStatusResponse,
 } from './provider-auth.ts';
+import type { ProviderStatusResponse as WireProviderStatusResponse } from '@open-mercato/cezar-contract/workspace';
 
+/** The discovered rows with each one's enablement, as the wire sends them: runner ids are strings. */
 export function applyProviderEnablement(
   response: ProviderStatusResponse,
   disabledProviders: readonly ProviderId[],
-): ProviderStatusResponse {
+): WireProviderStatusResponse {
   const disabled = new Set(
     providerAuthChecksDisabled() ? [] : disabledProviders,
   );

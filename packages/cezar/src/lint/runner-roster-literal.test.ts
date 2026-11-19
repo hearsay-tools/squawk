@@ -2,7 +2,6 @@ import { checkRule } from './ast-rule.testkit.ts';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { runnerSchema } from '@open-mercato/cezar-contract/runner';
 import { afterEach, describe, expect, it } from 'vitest';
 import { RUNNER_IDS } from '../core/agent-runner.ts';
 import {
@@ -29,7 +28,7 @@ describe('runner-roster-literal (open-mercato/cezar#387)', () => {
   ])('refuses %s', (_case, source) => {
     expect(runnerRosters(file, `\n${source}`)).toHaveLength(1);
     expect(checkRule(runnerRosterLiteral, file, `\n${source}`)).toEqual([
-      { line: 2, message: expect.stringMatching(/RUNNER_IDS or isRunnerId\(\).+runnerSchema\.options.+open-mercato\/cezar#387/) },
+      { line: 2, message: expect.stringMatching(/RUNNER_IDS or isRunnerId\(\).+GET \/api\/v1\/runners.+open-mercato\/cezar#387/) },
     ]);
   });
 
@@ -83,9 +82,10 @@ describe('runner-roster-literal (open-mercato/cezar#387)', () => {
     expect(new Set(entries.map(entry => entry.file)).size).toBe(entries.length);
   });
 
-  // The contract cannot import the service, so its roster is a listed exception: this holds it equal.
-  it('holds the contract roster equal to RUNNER_IDS', () => {
-    expect(runnerSchema.options).toEqual([...RUNNER_IDS]);
+  // A runner id is an open string in the contract (spec 2026-11-18-runner-definitions), so no file
+  // keeps a roster.
+  it('lists no file that keeps a roster', () => {
+    expect(readRunnerRosterExceptions()).toEqual([]);
   });
 
   it('names an entry that is stale, repeated, unreasoned or out of scope', () => {
