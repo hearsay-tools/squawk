@@ -61,6 +61,7 @@ export const waitToolDefinition = {
     'kind "process" wakes you when a background command ends. To start one yourself, run ' +
     '`hsq job start <name> -- <command> [args...]` (your instructions give the full command for this session under "Long commands") ' +
     'and pass the `pid` and `exitFile` it prints as `pid` and `exit_file`, so the wake reports the exit code. ' +
+    'To end a job early, run `hsq job stop <name>`; never `kill` its `pid`, which leaves its children running. ' +
     `It writes the command's output to the \`log\` file it prints, refuses a name that still runs, and the job outlives this session; Squawk does not stop it. ` +
     `Its files are in $TMPDIR, the task's temp directory, which Squawk keeps across its own restart and, after the task ends, while a job in it runs, so \`hsq job status <name>\` still finds the job after a Continue. ` +
     'For files that must outlive the task, pass `--dir` with a directory you keep; a process wait accepts that job\'s `exitFile` too. ' +

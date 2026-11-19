@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { JOB_EXIT_SUFFIX, JOB_NAME, JOB_RECORD_SUFFIX } from '../process-wait/job-exit-file.ts';
 import { DatabaseSync } from 'node:sqlite';
 import { recordedProcessLive } from '../delegation/process-liveness.ts';
-import { processStartToken, startOwnedGroup } from '../detached-process.ts';
+import { processStartToken, startOwnedGroup, stopGroup } from '../detached-process.ts';
 import { ownCommand } from './command.ts';
 
 /**
@@ -130,6 +130,24 @@ export function jobRunsIn(dirs: readonly string[]): boolean {
       } catch { return true; }
     });
   });
+}
+
+export interface StoppedJob { name: string; pid: number; stopped: boolean }
+
+/**
+ * Ends the job's whole process group, which its supervisor leads: SIGTERM, then SIGKILL for what
+ * outlives `graceMs` (hearsay-tools/squawk#3941). A signal to the supervisor's PID alone reaches only
+ * its command, so a member that ignores SIGTERM, or a child the command started, keeps running. A
+ * group whose supervisor has already exited is still the job's while any member lives, so this also
+ * ends what such a signal left. `stopped` is false when a member still runs, or when the record holds
+ * no start identity and the PID runs: such a PID may name another process now, and it is not signalled.
+ */
+export async function stopJob(dir: string, name: string, options: { graceMs?: number } = {}): Promise<StoppedJob> {
+  const record = readRecord(jobPaths(dir, name));
+  if (!record) throw new JobError(`No job named ${JSON.stringify(name)} in ${dir}.`);
+  const leader = record.start === undefined ? { pid: record.pid } : { pid: record.pid, start: record.start };
+  const stopped = await stopGroup(leader, options.graceMs === undefined ? {} : { graceMs: options.graceMs });
+  return { name, pid: record.pid, stopped };
 }
 
 /** What the supervisor tells its starter: it holds the name, or another supervisor does. */

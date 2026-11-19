@@ -6,11 +6,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, expect, it, vi } from 'vitest';
-import { processStartToken, startAndForget } from '../detached-process.ts';
+import { groupRunning, processStartToken, startAndForget } from '../detached-process.ts';
 import { probeProcessWait } from '../process-wait/supervisor.ts';
 import { runJobCommand } from './cli.ts';
 import { jobInstructions, ownCommand } from './command.ts';
-import { claimJob, jobPaths, jobRunsIn, jobStatus, startJob, superviseJob } from './job.ts';
+import { claimJob, jobPaths, jobRunsIn, jobStatus, startJob, stopJob, superviseJob } from './job.ts';
 
 const run = promisify(execFile);
 const dirs: string[] = [];
@@ -30,6 +30,9 @@ async function written(path: string): Promise<void> {
 const posix = process.platform !== 'win32';
 // The command exactly as the launch prompt gives it to the agent.
 const startCommand = /start it with (.+ job start) <name>/.exec(jobInstructions())![1]!;
+it('the launch prompt names stop for ending a job, never kill <pid>', () => {
+  expect(jobInstructions()).toContain('or with `stop` to end it and every process it started; never `kill` its `pid`');
+});
 const node = (script: string) => [process.execPath, '-e', script];
 
 it.runIf(posix)('a job started by a CLI process that has ended reports its real exit code to a process wait', async () => {
@@ -215,7 +218,7 @@ it('answers usage errors as JSON on stderr with exit 1, and help with exit 0', a
   expect(await runJobCommand(['start', 'no-command', '--dir', dir], {})).toBe(1);
   expect(await runJobCommand(['start', '../escape', '--dir', dir, '--', 'true'], {})).toBe(1);
   expect(await runJobCommand(['status', 'absent', '--dir', dir], {})).toBe(1);
-  expect(await runJobCommand(['stop', 'x'], {})).toBe(1);
+  expect(await runJobCommand(['kill', 'x'], {})).toBe(1);
   expect(error.mock.calls.map(call => JSON.parse(String(call[0])).error)).toEqual([
     expect.stringContaining('after "--"'), expect.stringContaining('Invalid job name'), expect.stringContaining('No job named "absent"'), expect.stringContaining(`Usage: ${productIdentity().command} job start`),
   ]);
@@ -224,3 +227,53 @@ it('answers usage errors as JSON on stderr with exit 1, and help with exit 0', a
   // A `--help` after `--` belongs to the command, not to `cez job`.
   expect(await runJobCommand(['status', 'absent', '--dir', dir, '--', '--help'], {})).toBe(1);
 });
+
+/** A job whose command starts a grandchild that ignores SIGTERM, as a test runner's workers or a
+ *  fixture can; resolves once the grandchild has set its handler and written its pid. */
+async function stubbornJob(dir: string, name: string): Promise<{ pid: number; exitFile: string; grandchild: number }> {
+  const marker = join(dir, `${name}.grandchild`);
+  const grandchild = `process.on('SIGTERM', () => {}); require('fs').writeFileSync(${JSON.stringify(marker)}, String(process.pid)); setInterval(() => {}, 1000)`;
+  const job = await startJob({ name, dir, command: ['sh', '-c', '"$0" -e "$1" & wait', process.execPath, grandchild] });
+  pids.push(job.pid);
+  await written(marker);
+  return { pid: job.pid, exitFile: job.exitFile, grandchild: Number(readFileSync(marker, 'utf8')) };
+}
+
+const leaderOf = (pid: number) => ({ pid, start: processStartToken(pid) });
+
+it.runIf(posix)('stop ends the whole group of a running job, a grandchild that ignores SIGTERM included', async () => {
+  const dir = scratch();
+  const job = await stubbornJob(dir, 'suite');
+  const leader = leaderOf(job.pid);
+  expect(await stopJob(dir, 'suite', { graceMs: 300 })).toEqual({ name: 'suite', pid: job.pid, stopped: true });
+  expect(groupRunning(leader)).toBe(false);
+}, 30_000);
+
+it.runIf(posix)('stop ends what a job left in its group after its supervisor was killed by PID', async () => {
+  const dir = scratch();
+  const job = await stubbornJob(dir, 'bench');
+  const leader = leaderOf(job.pid);
+  process.kill(job.pid, 'SIGTERM');
+  await written(job.exitFile);
+  // What `kill <pid>` leaves: the job reads as exited while its grandchild still runs.
+  expect(jobStatus(dir, 'bench')).toMatchObject({ state: 'exited' });
+  expect(groupRunning(leader)).toBe(true);
+  expect(await stopJob(dir, 'bench', { graceMs: 300 })).toEqual({ name: 'bench', pid: job.pid, stopped: true });
+  expect(groupRunning(leader)).toBe(false);
+}, 30_000);
+
+it.runIf(posix)('stop of a job whose group has ended signals nothing and reports it stopped; an unknown name refuses', async () => {
+  const dir = scratch();
+  const job = await startJob({ name: 'done', dir, command: node('') });
+  pids.push(job.pid);
+  await written(job.exitFile);
+  await vi.waitFor(() => { if (groupRunning(leaderOf(job.pid))) throw new Error('the group still runs'); }, { timeout: 20_000, interval: 25 }); // bound: hang guard; the group ends with its last member
+  const kill = vi.spyOn(process, 'kill');
+  const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+  expect(await runJobCommand(['stop', 'done', '--dir', dir], {})).toBe(0);
+  expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({ name: 'done', pid: job.pid, stopped: true });
+  expect(kill.mock.calls.filter(([, signal]) => signal !== 0 && signal !== undefined)).toEqual([]);
+  expect(await runJobCommand(['stop', 'absent', '--dir', dir], {})).toBe(1);
+  expect(JSON.parse(String(error.mock.calls[0]?.[0])).error).toContain('No job named "absent"');
+}, 30_000);

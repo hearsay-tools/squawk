@@ -1512,7 +1512,9 @@ depend on the runner's shell, so the omp reason for the `sh -c` wrapper no longe
 | Command ended by a signal | The signal | The exit file holds 128 plus the signal number. |
 | Command cannot be run | The spawn error | The log names the reason and the exit file holds 127. |
 | Supervisor gets SIGTERM or SIGINT | The signal's sender | The supervisor passes it to the command and then records the command's exit as above. |
-| Supervisor gets SIGKILL, or the host reboots | The kernel | No exit file. The command keeps running until it ends or is stopped by hand. `status` answers `exited` without a code once the supervisor is gone, and a process wait reports `exited, code unknown`. |
+| `cez job stop <name>` | The agent or a human (hearsay-tools/squawk#3941) | SIGTERM to the supervisor's whole process group, then SIGKILL after 10 s to what still runs. The supervisor records the command's exit as above unless the SIGKILL ends it first. `stop` prints `stopped: true` once no member runs. |
+| A process in the job's group outlives the command (a grandchild that ignores SIGTERM, or one left by `kill <pid>`) | `cez job stop <name>` | `status` answers `exited` once the supervisor is gone, while the group still runs. `stop` ends the group: a group outlives its leader while any member lives, and the recorded start identity proves it is still the job's. |
+| Supervisor gets SIGKILL, or the host reboots | The kernel | No exit file. The command keeps running until it ends or `stop` ends it. `status` answers `exited` without a code once the supervisor is gone, and a process wait reports `exited, code unknown`. |
 | Starter interrupted (SIGINT or SIGKILL) before the supervisor starts | The interrupt | No job and no record: the starter writes nothing. |
 | Starter interrupted after the supervisor starts | Nothing stops the job | The supervisor claims the name and runs the command without a starter. No PID was printed: `status` gives it. A retry is refused and names the PID. |
 | Several starts of one name at once | Nothing | One supervisor claims the name. The others exit without running the command, and their starts are refused with the claimant's PID. |
@@ -1524,7 +1526,7 @@ depend on the runner's shell, so the omp reason for the `sh -c` wrapper no longe
 | Record unreadable, not a database, another program's database, or without its job row (damaged or forged) | Nothing | `start` and `status` refuse and name the file; nothing is replaced. A human deletes it after checking that no process of the job runs. |
 | Record names a PID that another process has reused | Nothing | With a start identity the job reads as ended. Without one (Windows) the name reads as running until that process ends. |
 
-No command signals a job. The start identity cases (unreadable, reused, zombie) are held by the
+Only `stop` signals a job, and only the group its record names with a matching start identity: a record without one (Windows) whose PID runs is reported, never signalled. The start identity cases (unreadable, reused, zombie) are held by the
 tests of `detached-process.ts` and `delegation/process-liveness.ts`.
 
 `cez job start <name> [--dir <dir>] -- <command> [args...]` is a task command. The agent runs it
