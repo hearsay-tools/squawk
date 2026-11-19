@@ -1,0 +1,58 @@
+import type { RunnerMock } from '../../core/runner-definition.ts';
+import { MOCK_BASELINE_PROMPT } from '../mock-prompts.ts';
+
+/** The codex runner's native mock and its scenario adapter (the `mock` part). Data only. */
+export const CODEX_MOCK = {
+  askResumeCases: [{ kind: 'item/tool/requestUserInput', scenario: 'ask-resume', answer: 'Library: Vitest' }],
+  binEnv: 'CEZ_CODEX_BIN',
+  script: 'mock-codex-app-server.mjs',
+  approvalDecisions: [
+    { pick: 'decline', echo: 'Approval response: {"decision":"decline"}' },
+    { pick: 'cancel', echo: 'Approval response: {"decision":"cancel"}' },
+  ],
+  malformedApprovalEcho: 'Approval error: -32602',
+  scenarios: {
+    approval: 'mock:approval',
+    'approval-resolved': 'mock:approval-resolved',
+    'approval-turn-end': 'mock:approval-turn-end',
+    'approval-malformed': 'mock:approval-malformed',
+    'mcp-approval': 'mock:mcp-approval',
+    'input-closed-live': 'mock:no-progress-input-closed',
+    'multi-pr-refs': 'mock:multi-pr-refs',
+    'turn-messages': 'mock:turn-messages',
+    'missing-binary': MOCK_BASELINE_PROMPT,
+    autonomous: 'mock:autonomous',
+    'autonomous-cap': 'mock:autonomous-cap',
+    'autonomous-silent': 'mock:autonomous-silent',
+    'autonomous-cezar-ask-cap': 'mock:autonomous-cezar-ask-cap',
+    'silent-tail': 'mock:silent-tail',
+    'silent-tail-no-reply': 'mock:silent-tail-no-reply',
+    'silent-tail-late-reply': 'mock:silent-tail-late-reply',
+    'silent-tail-late-turn-start': 'mock:silent-tail-late-turn-start',
+    'silent-tail-slow-done': 'mock:silent-tail-slow-done',
+    baseline: MOCK_BASELINE_PROMPT,
+    'no-progress-ack-only': MOCK_BASELINE_PROMPT,
+    'crash-stderr-pre-ack': 'mock:crash-stderr-pre-ack',
+    'crash-stderr-held-pipe': 'mock:crash-stderr-held-pipe',
+    'shutdown-stderr': 'mock:crash-stderr-clean',
+    'crash-stderr': 'mock:crash-stderr',
+    'crash-stderr-single': 'mock:crash-stderr-single',
+    'cezar-done': 'mock:cezar-done',
+    hold: 'mock:hold', 'hold-gated': 'mock:hold-gated', 'hold-cezar-done': 'mock:hold-cezar-done', 'hold-cezar-ask': 'mock:hold-cezar-ask', 'no-progress': 'mock:no-progress', 'no-progress-ignore-term': 'mock:no-progress-ignore-term', 'no-progress-held-pipe': 'mock:no-progress-held-pipe', 'no-progress-leftover': 'mock:no-progress-leftover', 'busy-progress': 'mock:busy-progress',
+    // #83: 0.147 reports provider rejection on turn/completed with turn.error.
+    'provider-error': 'mock:provider-error', 'provider-error-controlled': 'mock:provider-error',
+    'provider-unavailable': 'mock:stream-retry',
+    'provider-rate-limit': 'mock:provider-rate-limit', 'provider-not-found': 'mock:provider-not-found', 'provider-credit': 'mock:provider-credit',
+    'post-success-refusal': 'mock:provider-error',
+    ask: 'mock:native-codex-ask',
+    'ask-resume': 'mock:native-codex-ask mock:resume-cezar-done',
+    'ask-reply-late': 'mock:native-codex-ask',
+    'ask-bad': 'mock:ask-bad',
+    // #600's repro: a child thread's own turn/completed must not end the parent.
+    subagent: 'mock:child-turn',
+    'subagent-after-park': 'mock:subagent-after-park',
+    'hook-after-park': 'mock:hook-after-park',
+    'steer-tool': 'mock:steer-tool',
+    'steer-late': 'mock:steer-late',
+  },
+} as const satisfies RunnerMock;

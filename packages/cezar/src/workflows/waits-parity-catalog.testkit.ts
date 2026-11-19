@@ -1,5 +1,6 @@
 import type { it as registerTest } from 'vitest';
 import { RUNNER_IDS, type RunnerId } from '../core/agent-runner.ts';
+import type { RunnerDefinition } from '../core/runner-definition.ts';
 import { familyCells, SHARED_RUNNERS } from '../core/parity-classes.testkit.ts';
 
 // The catalog of the wait parity cells: their parts, files, row families and folds. It loads no
@@ -70,8 +71,8 @@ export const foldedWaitFile = (runner: RunnerId, fold: WaitFold): string => `wai
 export const folded = (runner: RunnerId): boolean => FOLDED_WAIT_RUNNERS.includes(runner);
 /** The module of each fold's parts. A folded runner's file imports the one of its fold. */
 export const waitFoldModule = (fold: WaitFold): string => `waits-parity-${fold}-fold.testkit.ts`;
-export type WaitPartScope = { runner: RunnerId; part: WaitParityPart; family?: RowFamily };
-export type WaitFoldScope = { runner: RunnerId; part: 'every-runner'; fold: WaitFold };
+export type WaitPartScope = { runner: RunnerDefinition; part: WaitParityPart; family?: RowFamily };
+export type WaitFoldScope = { runner: RunnerDefinition; part: 'every-runner'; fold: WaitFold };
 
 /** Register a folded runner's cells of one group, each row only where its class runs it. */
 export function foldCells(runner: RunnerId, fold: WaitFold, cells: Partial<Record<WaitParityPart, WaitCells>>, register: typeof registerTest): void {

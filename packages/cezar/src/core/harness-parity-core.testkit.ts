@@ -31,6 +31,8 @@ import { WAIT_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { RUNNER_IDS, type AgentRunSpec, type AgentEvent, type AgentRunResult, type AgentSession, type RunnerId, type SessionOptions } from './agent-runner.ts';
 import { runnersUnderTest } from './runners-under-test.testkit.ts';
 import type { RunnerFacts } from './runner-facts.ts';
+import type { RunnerDefinition } from './runner-definition.ts';
+import { isRegisteredRunner, registeredRunners, runnerDefinition } from './runner-registry.ts';
 import { factsWhere } from './runner-fact-rows.testkit.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import type { UiEvent } from './ui-events.ts';
@@ -331,17 +333,6 @@ export interface HarnessAdapter {
   readonly malformedApprovalEcho?: string;
 }
 
-/** Resolved from this file, not the cwd, so the paths hold wherever vitest runs. */
-const CLAUDE_MOCK = join(HERE, '..', '..', 'scripts', 'mock-claude.mjs');
-const PI_MOCK = join(HERE, '..', '..', 'scripts', 'mock-pi-rpc.mjs');
-/** Created by the OMP runner's mock task; HARNESS_ADAPTERS.omp stays red until it exists. */
-const OMP_MOCK = join(HERE, '..', '..', 'scripts', 'mock-omp-rpc.mjs');
-const CODEX_MOCK = join(HERE, '..', '..', 'scripts', 'mock-codex-app-server.mjs');
-const OPENCODE_MOCK = join(HERE, '..', '..', 'scripts', 'mock-opencode-serve.mjs');
-
-/** No marker: every mock's default branch answers this with its scripted turn. */
-const BASELINE_PROMPT = 'inspect the working tree';
-
 /** `mock:cezar-tool` (scripts/mock-ci-tool.mjs) calls one Squawk tool over the session's own wire,
  *  then `mock:then` ends the turn with that text. Every mock answers it the same way, on a fresh
  *  turn and on a resumed one, so `cezar-ask` and `cezar-wait` are one prompt for every runner. */
@@ -380,255 +371,44 @@ export function seedOpencodeMockSession(
   }));
 }
 
-export const HARNESS_ADAPTERS: Readonly<Record<RunnerId, HarnessAdapter>> = {
-  claude: {
-    backend: 'claude',
-    askResumeCases: [{ kind: 'cezar_ask', scenario: 'ask-resume', answer: 'Library: Vitest' }],
-    binEnv: 'CEZ_CLAUDE_BIN',
-    mockBin: CLAUDE_MOCK,
-    scenarios: {
-      ...SQUAWK_TOOL_SCENARIOS,
-      'input-closed-live': 'mock:no-progress-input-closed',
-      'multi-pr-refs': 'mock:multi-pr-refs',
-      'turn-messages': 'mock:turn-messages',
-      'missing-binary': BASELINE_PROMPT,
-      autonomous: 'mock:autonomous',
-      'autonomous-cap': 'mock:autonomous-cap',
-      'autonomous-silent': 'mock:autonomous-silent',
-      'autonomous-cezar-ask-cap': 'mock:autonomous-cezar-ask-cap',
-      'silent-tail': 'mock:silent-tail',
-      'silent-tail-no-reply': 'mock:silent-tail-no-reply',
-      'silent-tail-late-reply': 'mock:silent-tail-late-reply',
-      'silent-tail-slow-done': 'mock:silent-tail-slow-done',
-      baseline: BASELINE_PROMPT,
-      'no-progress-ack-only': BASELINE_PROMPT,
-      'crash-stderr-pre-ack': 'mock:crash-stderr-pre-ack',
-      'crash-stderr-held-pipe': 'mock:crash-stderr-held-pipe',
-      'shutdown-stderr': 'mock:crash-stderr-clean',
-      'crash-stderr': 'mock:crash-stderr',
-      'crash-stderr-single': 'mock:crash-stderr-single',
-      'cezar-done': 'mock:cezar-done',
-      hold: 'mock:hold', 'hold-gated': 'mock:hold-gated', 'hold-cezar-done': 'mock:hold-cezar-done', 'hold-cezar-ask': 'mock:hold-cezar-ask', 'no-progress': 'mock:no-progress', 'no-progress-ignore-term': 'mock:no-progress-ignore-term', 'no-progress-held-pipe': 'mock:no-progress-held-pipe', 'no-progress-leftover': 'mock:no-progress-leftover', 'busy-progress': 'mock:busy-progress',
-      // `mock:auth-error` is a gated failure-control prompt; the control's provider failure is a 400.
-      'provider-error': 'mock:request-error', 'provider-error-controlled': 'mock:auth-error',
-      'provider-unavailable': 'mock:provider-unavailable',
-      'provider-rate-limit': 'mock:provider-rate-limit', 'provider-not-found': 'mock:provider-not-found', 'provider-credit': 'mock:provider-credit',
-      'post-success-refusal': 'mock:model-refusal:always',
-      ask: 'mock:cezar-ask',
-      'ask-resume': 'mock:cezar-ask mock:resume-cezar-done',
-      'ask-reply-late': 'mock:cezar-ask',
-      subagent: 'mock:subagents',
-      'subagent-after-park': 'mock:subagent-after-park',
-      'forked-skill': 'mock:forked-skill',
-      'hook-after-park': 'mock:hook-after-park',
-      'steer-tool': 'mock:steer-tool',
-      // A line written after the last model call runs as the CLI's next queued turn.
-      'steer-late': 'mock:hold',
-    },
-  },
-  codex: {
-    backend: 'codex',
-    askResumeCases: [{ kind: 'item/tool/requestUserInput', scenario: 'ask-resume', answer: 'Library: Vitest' }],
-    binEnv: 'CEZ_CODEX_BIN',
-    mockBin: CODEX_MOCK,
-    approvalDecisions: [
-      { pick: 'decline', echo: 'Approval response: {"decision":"decline"}' },
-      { pick: 'cancel', echo: 'Approval response: {"decision":"cancel"}' },
-    ],
-    malformedApprovalEcho: 'Approval error: -32602',
-    scenarios: {
-      ...SQUAWK_TOOL_SCENARIOS,
-      approval: 'mock:approval',
-      'approval-resolved': 'mock:approval-resolved',
-      'approval-turn-end': 'mock:approval-turn-end',
-      'approval-malformed': 'mock:approval-malformed',
-      'mcp-approval': 'mock:mcp-approval',
-      'input-closed-live': 'mock:no-progress-input-closed',
-      'multi-pr-refs': 'mock:multi-pr-refs',
-      'turn-messages': 'mock:turn-messages',
-      'missing-binary': BASELINE_PROMPT,
-      autonomous: 'mock:autonomous',
-      'autonomous-cap': 'mock:autonomous-cap',
-      'autonomous-silent': 'mock:autonomous-silent',
-      'autonomous-cezar-ask-cap': 'mock:autonomous-cezar-ask-cap',
-      'silent-tail': 'mock:silent-tail',
-      'silent-tail-no-reply': 'mock:silent-tail-no-reply',
-      'silent-tail-late-reply': 'mock:silent-tail-late-reply',
-      'silent-tail-late-turn-start': 'mock:silent-tail-late-turn-start',
-      'silent-tail-slow-done': 'mock:silent-tail-slow-done',
-      baseline: BASELINE_PROMPT,
-      'no-progress-ack-only': BASELINE_PROMPT,
-      'crash-stderr-pre-ack': 'mock:crash-stderr-pre-ack',
-      'crash-stderr-held-pipe': 'mock:crash-stderr-held-pipe',
-      'shutdown-stderr': 'mock:crash-stderr-clean',
-      'crash-stderr': 'mock:crash-stderr',
-      'crash-stderr-single': 'mock:crash-stderr-single',
-      'cezar-done': 'mock:cezar-done',
-      hold: 'mock:hold', 'hold-gated': 'mock:hold-gated', 'hold-cezar-done': 'mock:hold-cezar-done', 'hold-cezar-ask': 'mock:hold-cezar-ask', 'no-progress': 'mock:no-progress', 'no-progress-ignore-term': 'mock:no-progress-ignore-term', 'no-progress-held-pipe': 'mock:no-progress-held-pipe', 'no-progress-leftover': 'mock:no-progress-leftover', 'busy-progress': 'mock:busy-progress',
-      // #83: 0.147 reports provider rejection on turn/completed with turn.error.
-      'provider-error': 'mock:provider-error', 'provider-error-controlled': 'mock:provider-error',
-      'provider-unavailable': 'mock:stream-retry',
-      'provider-rate-limit': 'mock:provider-rate-limit', 'provider-not-found': 'mock:provider-not-found', 'provider-credit': 'mock:provider-credit',
-      'post-success-refusal': 'mock:provider-error',
-      ask: 'mock:native-codex-ask',
-      'ask-resume': 'mock:native-codex-ask mock:resume-cezar-done',
-      'ask-reply-late': 'mock:native-codex-ask',
-      'ask-bad': 'mock:ask-bad',
-      // #600's repro: a child thread's own turn/completed must not end the parent.
-      subagent: 'mock:child-turn',
-      'subagent-after-park': 'mock:subagent-after-park',
-      'hook-after-park': 'mock:hook-after-park',
-      'steer-tool': 'mock:steer-tool',
-      'steer-late': 'mock:steer-late',
-    },
-  },
-  opencode: {
-    backend: 'opencode',
-    askResumeCases: [{ kind: 'question.asked', scenario: 'ask-resume', answer: 'Library: Vitest' }],
-    binEnv: 'CEZ_OPENCODE_BIN',
-    mockBin: OPENCODE_MOCK,
-    approvalDecisions: [
-      { pick: 'reject', echo: 'Approval response: {"reply":"reject"}' },
-      { pick: 'allow once', echo: 'Approval response: {"reply":"once"}' },
-    ],
-    malformedApprovalEcho: 'Approval response: {"reply":"reject"}',
-    scenarios: {
-      ...SQUAWK_TOOL_SCENARIOS,
-      approval: 'mock:approval',
-      'permission-default': 'mock:permission-default',
-      'approval-resolved': 'mock:approval-resolved',
-      'approval-turn-end': 'mock:approval-turn-end',
-      'approval-reply-fails': 'mock:approval-reply-fails',
-      'approval-malformed': 'mock:permission-malformed',
-      'permission-classify': 'mock:permission-classify',
-      'permission-late': 'mock:permission-late',
-      'input-closed-live': 'mock:no-progress-input-closed',
-      'skill-warning': 'mock:skill-warning mock:cezar-done',
-      'multi-pr-refs': 'mock:multi-pr-refs', 'turn-messages': 'mock:turn-messages',
-      'missing-binary': BASELINE_PROMPT,
-      // The failing start is set by driveSeam's env (no prompt exists before listening).
-      'serve-start-exit': BASELINE_PROMPT,
-      autonomous: 'mock:autonomous',
-      'autonomous-cap': 'mock:autonomous-cap',
-      'autonomous-silent': 'mock:autonomous-silent',
-      'autonomous-cezar-ask-cap': 'mock:autonomous-cezar-ask-cap',
-      'silent-tail': 'mock:silent-tail',
-      'silent-tail-ack-delay': 'mock:silent-tail f7-delay-ack',
-      'silent-tail-no-reply': 'mock:silent-tail-no-reply',
-      'silent-tail-late-reply': 'mock:silent-tail-late-reply',
-      'silent-tail-slow-done': 'mock:silent-tail-slow-done',
-      baseline: BASELINE_PROMPT,
-      'no-progress-ack-only': BASELINE_PROMPT,
-      'crash-stderr-pre-ack': 'mock:crash-stderr-pre-ack',
-      'crash-stderr-held-pipe': 'mock:crash-stderr-held-pipe',
-      'shutdown-stderr': 'mock:crash-stderr-clean',
-      'crash-stderr': 'mock:crash-stderr',
-      'crash-stderr-single': 'mock:crash-stderr-single',
-      'cezar-done': 'mock:cezar-done',
-      hold: 'mock:hold', 'hold-gated': 'mock:hold-gated', 'hold-cezar-done': 'mock:hold-cezar-done', 'hold-cezar-ask': 'mock:hold-cezar-ask', 'no-progress': 'mock:no-progress', 'no-progress-ignore-term': 'mock:no-progress-ignore-term', 'no-progress-held-pipe': 'mock:no-progress-held-pipe', 'no-progress-leftover': 'mock:no-progress-leftover', 'busy-progress': 'mock:busy-progress',
-      'provider-error': 'mock:provider-error', 'provider-error-controlled': 'mock:provider-error',
-      'provider-unavailable': 'mock:provider-unavailable',
-      'provider-rate-limit': 'mock:provider-rate-limit', 'provider-not-found': 'mock:provider-not-found', 'provider-credit': 'mock:provider-credit',
-      'post-success-refusal': 'mock:provider-error',
-      ask: 'mock:ask',
-      'ask-resume': 'mock:ask mock:resume-cezar-done',
-      'ask-reply-late': 'mock:ask-reply-late',
-      'ask-bad': 'mock:ask-bad',
-      subagent: 'mock:subagent',
-      'subagent-after-park': 'mock:subagent-after-park',
-      'steer-tool': 'mock:steer-tool',
-      'steer-late': 'mock:steer-late',
-    },
-  },
-  pi: {
-    backend: 'pi',
-    askResumeCases: [{ kind: 'cezar_ask', scenario: 'ask-resume', answer: 'Library: Vitest' }],
-    binEnv: 'CEZ_PI_BIN',
-    mockBin: PI_MOCK,
-    scenarios: {
-      ...SQUAWK_TOOL_SCENARIOS,
-      'input-closed-live': 'mock:no-progress-input-closed',
-      'multi-pr-refs': 'mock:multi-pr-refs',
-      'turn-messages': 'mock:turn-messages',
-      'missing-binary': BASELINE_PROMPT,
-      autonomous: 'mock:autonomous',
-      'autonomous-cap': 'mock:autonomous-cap',
-      'autonomous-silent': 'mock:autonomous-silent',
-      'autonomous-cezar-ask-cap': 'mock:autonomous-cezar-ask-cap',
-      'silent-tail': 'mock:silent-tail',
-      'silent-tail-no-reply': 'mock:silent-tail-no-reply',
-      baseline: BASELINE_PROMPT,
-      'no-progress-ack-only': BASELINE_PROMPT,
-      'crash-stderr-pre-ack': 'mock:crash-stderr-pre-ack',
-      'crash-stderr-held-pipe': 'mock:crash-stderr-held-pipe',
-      'shutdown-stderr': 'mock:crash-stderr-clean',
-      'crash-stderr': 'mock:crash-stderr',
-      'crash-stderr-single': 'mock:crash-stderr-single',
-      'cezar-done': 'mock:cezar-done',
-      hold: 'mock:hold', 'hold-gated': 'mock:hold-gated', 'no-progress': 'mock:no-progress', 'no-progress-ignore-term': 'mock:no-progress-ignore-term', 'no-progress-held-pipe': 'mock:no-progress-held-pipe', 'no-progress-leftover': 'mock:no-progress-leftover', 'busy-progress': 'mock:busy-progress',
-      'provider-error': 'mock:provider-error', 'provider-error-controlled': 'mock:provider-error',
-      'provider-unavailable': 'mock:provider-unavailable',
-      'provider-rate-limit': 'mock:provider-rate-limit', 'provider-not-found': 'mock:provider-not-found', 'provider-credit': 'mock:provider-credit',
-      'post-success-refusal': 'mock:provider-error',
-      ask: 'mock:cezar-ask',
-      'ask-resume': 'mock:cezar-ask mock:resume-cezar-done',
-      'ask-reply-late': 'mock:cezar-ask',
-      'steer-tool': 'mock:steer-tool',
-      'steer-late': 'mock:steer-late',
-      'hold-cezar-done': 'mock:hold-cezar-done',
-      'hold-cezar-ask': 'mock:hold-cezar-ask',
-      'silent-tail-late-reply': 'mock:silent-tail-late-reply',
-      'silent-tail-slow-done': 'mock:silent-tail-slow-done',
-      // No `subagent`: see the S9 and R12 entries in PARITY_EXEMPTIONS.
-    },
-  },
-  // OMP is pi's fork on the same RPC wire, so it answers pi's scenario map, plus the two
-  // subagent scenarios pi is exempt from: OMP's `task` tool surfaces subagent events natively.
-  omp: {
-    backend: 'omp',
-    askResumeCases: [{ kind: 'cezar_ask', scenario: 'ask-resume', answer: 'Library: Vitest' }],
-    binEnv: 'CEZ_OMP_BIN',
-    mockBin: OMP_MOCK,
-    scenarios: {
-      ...SQUAWK_TOOL_SCENARIOS,
-      'input-closed-live': 'mock:no-progress-input-closed',
-      'closed-input': 'mock:closed-input',
-      'auto-resumed': BASELINE_PROMPT,
-      'hold-cezar-done': 'mock:hold-cezar-done',
-      'hold-cezar-ask': 'mock:hold-cezar-ask',
-      'multi-pr-refs': 'mock:multi-pr-refs', 'turn-messages': 'mock:turn-messages',
-      'missing-binary': BASELINE_PROMPT,
-      autonomous: 'mock:autonomous',
-      'autonomous-cap': 'mock:autonomous-cap',
-      'autonomous-silent': 'mock:autonomous-silent',
-      'autonomous-cezar-ask-cap': 'mock:autonomous-cezar-ask-cap',
-      'silent-tail': 'mock:silent-tail',
-      'silent-tail-no-reply': 'mock:silent-tail-no-reply',
-      'silent-tail-late-reply': 'mock:silent-tail-late-reply',
-      'silent-tail-slow-done': 'mock:silent-tail-slow-done',
-      baseline: BASELINE_PROMPT,
-      'no-progress-ack-only': BASELINE_PROMPT,
-      'crash-stderr-pre-ack': 'mock:crash-stderr-pre-ack',
-      'crash-stderr-held-pipe': 'mock:crash-stderr-held-pipe',
-      'shutdown-stderr': 'mock:crash-stderr-clean',
-      'crash-stderr': 'mock:crash-stderr',
-      'crash-stderr-single': 'mock:crash-stderr-single',
-      'cezar-done': 'mock:cezar-done',
-      hold: 'mock:hold', 'hold-gated': 'mock:hold-gated', 'no-progress': 'mock:no-progress', 'no-progress-ignore-term': 'mock:no-progress-ignore-term', 'no-progress-held-pipe': 'mock:no-progress-held-pipe', 'no-progress-leftover': 'mock:no-progress-leftover', 'busy-progress': 'mock:busy-progress',
-      'provider-error': 'mock:provider-error', 'provider-error-controlled': 'mock:provider-error',
-      'provider-unavailable': 'mock:provider-unavailable',
-      'provider-rate-limit': 'mock:provider-rate-limit', 'provider-not-found': 'mock:provider-not-found', 'provider-credit': 'mock:provider-credit',
-      'post-success-refusal': 'mock:provider-error',
-      ask: 'mock:cezar-ask',
-      'ask-resume': 'mock:cezar-ask mock:resume-cezar-done',
-      'ask-reply-late': 'mock:cezar-ask',
-      'steer-tool': 'mock:steer-tool',
-      'steer-late': 'mock:steer-late',
-      subagent: 'mock:subagent',
-      'subagent-after-park': 'mock:subagent-after-park',
-    },
-  },
-};
+/** The adapter of each runner, read once from its definition's `mock` part. */
+const adapters = new WeakMap<RunnerDefinition, HarnessAdapter>();
+
+/**
+ * The adapter a runner's `mock` part declares (`runners/<id>/mock.ts`). The kit adds the
+ * `cezar-ask` and `cezar-wait` prompts, which every mock answers the same way.
+ */
+export function harnessAdapter(definition: RunnerDefinition): HarnessAdapter {
+  let adapter = adapters.get(definition);
+  if (!adapter) {
+    const { mock } = definition;
+    adapter = {
+      backend: definition.id,
+      askResumeCases: mock.askResumeCases,
+      binEnv: mock.binEnv,
+      mockBin: join(HERE, '..', '..', 'scripts', mock.script),
+      scenarios: { ...SQUAWK_TOOL_SCENARIOS, ...mock.scenarios },
+      ...(mock.approvalDecisions ? { approvalDecisions: mock.approvalDecisions } : {}),
+      ...(mock.malformedApprovalEcho !== undefined ? { malformedApprovalEcho: mock.malformedApprovalEcho } : {}),
+    };
+    adapters.set(definition, adapter);
+  }
+  return adapter;
+}
+
+/**
+ * Each registered runner's adapter, by runner id. A read goes to the registry: a test registers the
+ * runners it drives (`useRunners` and `onlyRunner`), and reading a runner that is not registered
+ * throws. `Object.values` lists the registered runners.
+ */
+export const HARNESS_ADAPTERS: Readonly<Record<RunnerId, HarnessAdapter>> = new Proxy({} as Record<RunnerId, HarnessAdapter>, {
+  get: (_target, key) => typeof key === 'string' && (isRegisteredRunner(key) || (RUNNER_IDS as readonly string[]).includes(key))
+    ? harnessAdapter(runnerDefinition(key as RunnerId)) : undefined,
+  has: (_target, key) => typeof key === 'string' && isRegisteredRunner(key),
+  ownKeys: () => registeredRunners().map(definition => definition.id),
+  getOwnPropertyDescriptor: (_target, key) => typeof key === 'string' && isRegisteredRunner(key)
+    ? { enumerable: true, configurable: true, value: harnessAdapter(runnerDefinition(key as RunnerId)) } : undefined,
+});
 
 /** The prompt text that drives one backend's mock into one shared scenario. */
 export function promptFor(backend: RunnerId, scenario: ScenarioName): string {

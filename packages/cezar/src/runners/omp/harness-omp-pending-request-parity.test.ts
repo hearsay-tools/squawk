@@ -5,4 +5,4 @@ import { ompRunner } from './definition.ts';
 
 useRunners(onlyRunner(ompRunner, () => new OmpRunner()));
 
-describeHarnessParity({ runner: 'omp', part: 'pending-request' });
+describeHarnessParity({ runner: ompRunner, part: 'pending-request' });

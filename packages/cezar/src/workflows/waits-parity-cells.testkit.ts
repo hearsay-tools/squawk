@@ -99,9 +99,9 @@ function familyRuns(runner: RunnerId, part: WaitParityPart, family: RowFamily): 
  *  names: one file, or one per row family with cells for a part in `FAMILY_FILE_PARTS`. */
 function partFiles(runner: RunnerId, part: WaitParityPart): Array<{ file: string; scope: string }> {
   const families = fileFamilies(part);
-  if (families.length === 0) return partRuns(runner, part) ? [{ file: WAIT_PARITY_FILES[part](runner), scope: `{ runner: '${runner}', part: '${part}' }` }] : [];
+  if (families.length === 0) return partRuns(runner, part) ? [{ file: WAIT_PARITY_FILES[part](runner), scope: `{ runner: ${runner}Runner, part: '${part}' }` }] : [];
   return families.filter(family => familyRuns(runner, part, family))
-    .map(family => ({ file: waitFamilyFile(runner, part, family), scope: `{ runner: '${runner}', part: '${part}', family: '${family}' }` }));
+    .map(family => ({ file: waitFamilyFile(runner, part, family), scope: `{ runner: ${runner}Runner, part: '${part}', family: '${family}' }` }));
 }
 
 function expectPartLeaf(runner: RunnerId, part: WaitParityPart): void {
@@ -270,7 +270,7 @@ export function describeWaitParity(scope: 'once'): void {
         for (const fold of Object.keys(WAIT_FOLDS) as WaitFold[]) {
           if (foldTitles(runner, fold).length === 0) continue;
           const source = readFileSync(new URL(`../runners/${runner}/${foldedWaitFile(runner, fold)}`, import.meta.url), 'utf8');
-          expect(source.match(/describeWaitParity\([^;]+\)/g), foldedWaitFile(runner, fold)).toEqual([`describeWaitParity({ runner: '${runner}', part: 'every-runner', fold: '${fold}' })`]);
+          expect(source.match(/describeWaitParity\([^;]+\)/g), foldedWaitFile(runner, fold)).toEqual([`describeWaitParity({ runner: ${runner}Runner, part: 'every-runner', fold: '${fold}' })`]);
           // It imports its fold's module and no other cells module.
           expect(cellModules(foldedWaitFile(runner, fold)), foldedWaitFile(runner, fold)).toEqual([waitFoldModule(fold)]);
         }
