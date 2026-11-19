@@ -8,6 +8,7 @@ import { detectEnvironment, probeRunner } from './backend-detect.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
+// DetectEnvironment probes every registered runner.
 registerBuiltInRunners();
 
 const probeOmp = () => probeRunner('omp', runnerDefinition('omp').detection);

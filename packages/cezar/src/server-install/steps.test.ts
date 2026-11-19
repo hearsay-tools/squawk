@@ -7,6 +7,7 @@ import type { BackendCheck } from '../core/backend-detect.ts';
 import type { CommandResult, InstallContext, Runner, Ui } from './types.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
+// The installer table covers every runner.
 registerBuiltInRunners();
 
 function makeCtx(over: {

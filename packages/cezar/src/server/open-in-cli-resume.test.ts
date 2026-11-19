@@ -19,6 +19,7 @@ import { openInTerminal } from './open-in-terminal.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
+// The cases span the Claude, Codex, OpenCode and OMP take-over commands.
 registerBuiltInRunners();
 
 // The terminal launcher actually spawns a process (osascript/cmd/x-terminal-emulator) — mocked

@@ -9,6 +9,10 @@ import { createApp, WorkspaceEventBus, type ServerDeps } from './server.ts';
 import type { SocketHub, TopicPublisher } from './ws.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { disableRemoteSettings, enableRemoteSettings } from '../remote-settings.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+// The health payload holds a probe row for every runner.
+registerBuiltInRunners();
 
 /**
  * The LIVE-SERVER health path (spec `2026-07-23-websocket-subscriptions.md`).

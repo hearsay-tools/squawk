@@ -5,6 +5,7 @@ import { runnerDefinition } from './runner-registry.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 import { commands as goldenCommands, sessionId, unsafeSessionIds } from '../../test/fixtures/resume-commands.ts';
 
+// The golden take-over commands cover every runner.
 registerBuiltInRunners();
 
 describe('resume commands — shared golden parity across RUNNER_IDS', () => {

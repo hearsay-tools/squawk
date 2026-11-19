@@ -3,6 +3,7 @@ import { RUNNER_IDS } from './agent-runner.ts';
 import { runnerDefinition } from './runner-registry.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
+// The test reads every runner definition.
 registerBuiltInRunners();
 
 // The definition and the adapter class read one data file, so the registry and the class cannot

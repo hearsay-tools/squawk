@@ -12,6 +12,12 @@ import * as agentProfiles from '../workspace/agent-profiles.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
 import { createApp } from './server.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
+import { ompRunner } from '../runners/omp/definition.ts';
+
+registerRunner(claudeRunner);
+registerRunner(ompRunner);
 
 // Route-level guard cases for the extracted handlers. Inject launchers so this suite never
 // opens a GUI or a real coding-agent session, and own all account and provider state.
