@@ -132,12 +132,17 @@ export async function squealChecks(paths, waitMs, io = realIo) {
   const deadline = io.now() + waitMs;
   const first = await squealStatus(paths, 0, io);
   if (first.stop) return first.stop;
-  const selected = (first.status.selection?.testFiles ?? []).filter(f => !ignore(f.path));
-  const direct = new Set(io.directImporters(selected.map(f => f.path), paths));
-  const directWaiting = selected.filter(f => direct.has(f.path) && f.state !== 'current').map(f => f.path);
+  const directOf = status => {
+    const selected = (status.selection?.testFiles ?? []).filter(f => !ignore(f.path));
+    return { selected, direct: new Set(io.directImporters(selected.map(f => f.path), paths)) };
+  };
+  const early = directOf(first.status);
+  const directWaiting = early.selected.filter(f => early.direct.has(f.path) && f.state !== 'current').map(f => f.path);
   if (directWaiting.length) await squealStatus(directWaiting, Math.max(0, deadline - io.now()), io);
   const last = await squealStatus(paths, Math.max(0, deadline - io.now()), io);
   if (last.stop) return last.stop;
+  // The first snapshot may come before discovery lists every test file: the final selection decides what is direct.
+  const { direct } = directOf(last.status);
   return { daemon: true, load: io.load(), ...judgeSqueal(last.code, last.status, ignore, lintExpected, p => direct.has(p)) };
 }
 

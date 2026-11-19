@@ -184,6 +184,16 @@ test('squealChecks waits on the direct readers first, then on the selection with
   assert.deepEqual(io.calls.at(-1).slice(1), ['status', '--json', 'src/a.ts'], 'no time left: a snapshot, not a wait');
 });
 
+test('a direct reader that discovery lists only after the first snapshot still fails without a result', async () => {
+  const unlisted = JSON.stringify({ available: true, daemon: { state: 'alive' }, selection: { testFiles: [], result: 'none', reason: 'unlisted' }, lint: doneLint });
+  const io = fakeIo({ direct: files => files.filter(f => f === 'src/a.test.ts'), responses: {
+    'squeal status --json': ok(unlisted),
+    'squeal status --wait': { code: 3, out: live([cpuQueued('src/a.test.ts'), cpuQueued('src/b.test.ts')], doneLint), err: '' },
+  } });
+  const r = await squealChecks(['src/a.ts'], 120_000, io);
+  assert.deepEqual([r.state, r.missing, r.pending.map(p => p.path)], ['incomplete', ['src/a.test.ts'], ['src/b.test.ts']]);
+});
+
 test('the pending line counts unknown load as unknown', () => {
   assert.match(pendingLine([cpuQueued('a.test.ts')]), /1 queued waiting for CPU at load unknown on unknown CPUs/);
 });
