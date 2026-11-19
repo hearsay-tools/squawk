@@ -46,13 +46,14 @@ describe('restart recovery of a closed waiting worker', () => {
     return w.id;
   }
 
-  /** The restart: a new store reads the saved rows, and recovery runs over it. */
+  /** The restart: a new store reads the saved rows, and recovery runs over it. Returns the plain
+   *  pair, because a promise that resolves to the host proxy would read its `then`. */
   async function restart() {
     store.close();
     store = RunStore.open(dataDir, { keepLive: true });
     const recovered = recoveryOver(store);
     await recovered.recovery.recover();
-    return recovered.host;
+    return recovered;
   }
 
   it('fails a worker whose ask cannot be shown, and keeps its waiting step', async () => {
@@ -66,7 +67,7 @@ describe('restart recovery of a closed waiting worker', () => {
 
   it('settles any other closed worker done, its step with it', async () => {
     const id = closedWorker(false);
-    const host = await restart();
+    const { host } = await restart();
     // Settlement itself is RunSettlement's: recovery hands the worker to it once.
     expect(host.settleSuccess).toHaveBeenCalledExactlyOnceWith(id);
     expect(store.getRun(id)?.steps.map(step => step.status)).toEqual([STEP_STATUS.done]);
