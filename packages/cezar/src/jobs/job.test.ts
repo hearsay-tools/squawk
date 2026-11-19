@@ -1,5 +1,5 @@
 import { productIdentity } from '../home/identity.ts';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
@@ -278,3 +278,19 @@ it.runIf(posix)('stop of a job whose group has ended signals nothing and reports
   expect(await runJobCommand(['stop', 'absent', '--dir', dir], {})).toBe(1);
   expect(JSON.parse(String(error.mock.calls[0]?.[0])).error).toContain('No job named "absent"');
 }, 30_000);
+
+it.runIf(process.platform === 'linux')('stop never signals a leaderless group the record cannot prove is the job\'s, such as one from another boot', async () => {
+  const dir = scratch();
+  // A group whose leader has exited while a member runs: what a reused number can name after a reboot.
+  const leader = spawn('sh', ['-c', 'sleep 60 & exit 0'], { detached: true, stdio: 'ignore' });
+  pids.push(leader.pid!);
+  await new Promise(done => leader.once('exit', done));
+  expect(groupRunning({ pid: leader.pid! })).toBe(true);
+  const otherBoot = '00000000-0000-4000-8000-000000000000:1';
+  claimJob(jobPaths(dir, 'old'), { name: 'old', pid: leader.pid!, start: otherBoot, command: ['true'], startedAt: new Date().toISOString(), log: join(dir, 'old.log'), exitFile: join(dir, 'old.exit') });
+  const kill = vi.spyOn(process, 'kill');
+  // The recorded boot has ended, so every group of the job ended with it.
+  expect(await stopJob(dir, 'old', { graceMs: 300 })).toEqual({ name: 'old', pid: leader.pid, stopped: true });
+  expect(kill.mock.calls.filter(([, signal]) => signal !== 0 && signal !== undefined)).toEqual([]);
+  expect(groupRunning({ pid: leader.pid! })).toBe(true);
+});
