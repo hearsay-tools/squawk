@@ -10,8 +10,9 @@ const CODE = /\.(?:[cm]?[jt]s|tsx|jsx)$/;
 /**
  * The paths in `testFiles` that are changed themselves, or whose own string literals (import
  * specifiers, or paths the test resolves against its directory) name a changed file or a directory
- * that holds one. A deleted changed file counts by the path the literal would name. A file reached
- * only through a re-export, an `index.ts` or a declared `squeal.config.json` input is not direct.
+ * that holds one. Any changed path the literal may name counts, so a deleted file and a module beside
+ * a same-name directory are direct too. A file reached only through a re-export, an `index.ts` or a
+ * declared `squeal.config.json` input is not direct.
  */
 export function directImporters(root, testFiles, changed) {
   const changedSet = new Set(changed);
@@ -20,8 +21,9 @@ export function directImporters(root, testFiles, changed) {
     if (changedSet.has(file)) return true;
     if (!CODE.test(file) || !existsSync(join(root, file))) return false;
     return stringLiterals(readFileSync(join(root, file), 'utf8')).some(literal => {
+      if (literalCandidates(file, literal).some(path => changedSet.has(path))) return true;
       const target = resolveLiteral(root, file, literal);
-      return target === null ? literalCandidates(file, literal).some(path => changedSet.has(path)) : names(target);
+      return target !== null && names(target);
     });
   });
 }
