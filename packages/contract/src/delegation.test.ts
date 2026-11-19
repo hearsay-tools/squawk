@@ -325,6 +325,10 @@ describe('delegation state', () => {
   it('refuses a repeated receipt request, receipt worker or result worker', () => {
     refuses(delegationStateSchema, { ...root, receipts: [receipt(U1, U2), receipt(U1, U3)] });
     refuses(delegationStateSchema, { ...root, receipts: [receipt(U1, U2), receipt(U3, U2)] });
+    // A request ID is unique for one supervisor: another supervisor's same ID is its own receipt.
+    accepts(delegationStateSchema, { ...root, receipts: [receipt(U1, U2), { ...receipt(U1, U3), supervisorRunId: U2 }] });
+    refuses(delegationStateSchema, { ...root, receipts: [{ ...receipt(U1, U3), supervisorRunId: U2 }, { ...receipt(U1, U4), supervisorRunId: U2 }] });
+    accepts(delegationStateSchema, { ...worker, supervisorRunId: U2 });
     refuses(delegationStateSchema, { ...root, results: [resultRef(U2), resultRef(U2)] });
     refuses(delegationStateSchema, { ...root, receipts: [{ ...receipt(U1, U2), requestHash: SHA40 }] });
   });
@@ -439,6 +443,7 @@ describe('worker inspection, list and relationships', () => {
   it('keeps every list entry field and refuses an inspection-only field', () => {
     accepts(workerListResultSchema, { workers: [entry, { ...entry, workerId: U3 }] });
     accepts(workerListEntrySchema, { ...entry, destroy: undefined });
+    accepts(workerListEntrySchema, { ...entry, supervisorRunId: U2 });
     refuses(workerListEntrySchema, { ...entry, model: 'm1' });
     refuses(workerListResultSchema, { workers: [entry], extra: true });
   });
@@ -467,6 +472,7 @@ describe('worker inspection, list and relationships', () => {
     const relationships = { parentRunId: U2, workers: [inspection], titles: [title, { id: 's', title: 'Other' }],
       capacity: { outstanding: 1, limit: 32, created: 2, creationLimit: 1024 } };
     accepts(runRelationshipsSchema, relationships);
+    accepts(runRelationshipsSchema, { ...relationships, supervisorRunId: U2, workers: [{ ...relationships.workers[0], supervisorRunId: U2 }] });
     acceptsEach(relatedRunTitleSchema, title, 'titleOrigin', ['user', 'auto', 'marker']);
     refuses(workerCapacitySchema, { ...relationships.capacity, extra: 0 });
     refuses(workerCapacitySchema, { ...relationships.capacity, limit: -1 });

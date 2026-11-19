@@ -1,3 +1,4 @@
+import { commandText } from '../home/command.ts';
 import { productIdentity } from '../home/identity.ts';
 import type { AskErrorCode, DoneErrorCode, WaitErrorCode, Wait } from '@open-mercato/cezar-contract/waits';
 import { TIMER_MAX_SECONDS, TIMER_MIN_SECONDS } from '@open-mercato/cezar-contract/wait-limits';
@@ -104,6 +105,7 @@ const askMessages: Record<AskErrorCode, string> = {
   worker_wait_pending: 'A worker wait is still pending, including any result awaiting delivery. End your turn to receive its result, then ask again if you still need the user.',
   worker_execution_stopped: 'Worker execution has stopped. Ask the parent to resume the worker before asking.',
   root_finish_pending: 'The parent is finishing. End your turn; the parent completes that transition.',
+  supervisor_is_worker: commandText('A worker started this task, so no question card reaches it. Send your question to that worker with cez message request, then wait for its reply with cez message wait --request.'),
 };
 
 export function askErrorMessage(code: AskErrorCode): string {

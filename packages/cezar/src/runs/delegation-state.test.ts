@@ -76,12 +76,12 @@ describe('delegation schemas', () => {
     expect(workerWaitRequestSchema.parse({ workerIds: [workerId], timeoutSeconds: 7200 }).timeoutSeconds).toBe(7200);
   });
 
-  it('requires a bounded spawn task, explicit baseline and UUID retry ID with no elevation fields', () => {
+  it('requires a bounded spawn task and baseline and a UUID retry ID with no elevation fields', () => {
     const spawn = { task: 'fix tests', requestId, baseline: 'parent-head' };
     expect(workerSpawnRequestSchema.parse(spawn)).toEqual(spawn);
     expect(workerSpawnRequestSchema.safeParse({ task: 'fix tests', requestId, baseline: 'parent-head', parentRunId: workerId }).success).toBe(false);
     for (const patch of [
-      { requestId: 'bad' }, { baseline: undefined }, { baseline: '' }, { baseline: 'x'.repeat(1025) },
+      { requestId: 'bad' }, { baseline: '' }, { baseline: 'x'.repeat(1025) },
       { task: '' }, { task: 'x'.repeat(100001) }, { requestHash }, { env: {} },
       { path: '/tmp' }, { permissions: ['spawn'] }, { worktree: false }, { runner: 'codex' },
     ]) expect(workerSpawnRequestSchema.safeParse({ ...spawn, ...patch }).success).toBe(false);
@@ -147,8 +147,9 @@ describe('delegation schemas', () => {
   it('takes a workspace choice on spawn (hearsay-tools/squawk#3819)', () => {
     expect(workerSpawnRequestSchema.parse({ task: 't', requestId, workspace: 'shared' })).toEqual({ task: 't', requestId, workspace: 'shared' });
     expect(workerSpawnRequestSchema.safeParse({ task: 't', requestId, baseline: 'HEAD', workspace: 'isolated' }).success).toBe(true);
-    expect(workerSpawnRequestSchema.safeParse({ task: 't', requestId }).success).toBe(false);
-    expect(workerSpawnRequestSchema.safeParse({ task: 't', requestId, workspace: 'isolated' }).success).toBe(false);
+    // An absent workspace depends on the caller's grant, so the service refuses a missing baseline, not the schema.
+    expect(workerSpawnRequestSchema.safeParse({ task: 't', requestId }).success).toBe(true);
+    expect(workerSpawnRequestSchema.safeParse({ task: 't', requestId, workspace: 'isolated' }).success).toBe(true);
     expect(workerSpawnRequestSchema.safeParse({ task: 't', requestId, baseline: 'HEAD', workspace: 'owned-isolated' }).success).toBe(false);
   });
 
@@ -632,7 +633,7 @@ describe('RunStore durable delegation', () => {
     }
     store.close();
     store = openTestRunStore(dataDir, { keepLive: true });
-    const blockers = parentReadiness(store.getRun(run.id)!, ids.map(id => ({ workerId: id, run: store.getRun(id), terminated: false })));
+    const blockers = parentReadiness(store.getRun(run.id)!, run.id, ids.map(id => ({ workerId: id, run: store.getRun(id), terminated: false })));
     expect(blockers).toHaveLength(33);
     expect(blockers.at(-1)).toEqual({ workerId: ids[32], reason: 'outstanding' });
   });

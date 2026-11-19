@@ -112,6 +112,10 @@ describe('parent discovery and model admission', () => {
     expect(await rejected.json()).toMatchObject({ code: 'invalid_input', modelChoices: { runner: 'codex', requestedModel: 'gpt-retired', availableModels: [{ id: 'gpt-current', effortLevels: ['low', 'high'] }], otherRunners: ['claude'] } });
     const child = await spawn({ model: 'gpt-current' });
     const token = f.credentials.issue('project', child.workerId, randomUUID());
+    // hearsay-tools/squawk#3819: discovery goes with the spawn grant. This worker holds one and is queued: its session is not active.
+    expect((await request({ kind: 'runners' }, token)).status).toBe(409);
+    const { spawnGrant: _grant, ...ungranted } = f.store.getRun(child.workerId)!.delegation as Record<string, unknown>;
+    f.store.commitDelegation([{ id: child.workerId, delegation: ungranted as never }]);
     expect((await request({ kind: 'runners' }, token)).status).toBe(403);
   });
 });

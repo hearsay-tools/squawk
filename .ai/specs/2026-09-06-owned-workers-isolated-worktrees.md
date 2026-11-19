@@ -14,8 +14,13 @@ with `--workspace shared` is the exception: it runs in its parent's worktree
 and owns none (hearsay-tools/squawk#3819, 2026-11-18; `docs/workers.md` § Shared
 workspace).
 
-Stage 1 supports one generation and parent-to-worker steering. Worker terminal
-outcomes are lifecycle notifications, not conversational replies. No recursive
+A root's worker may start one shared-workspace worker of its own; that worker
+starts none (hearsay-tools/squawk#3819, 2026-11-18; until then Stage 1 supported
+one generation). The family stays flat: the root holds every receipt, and each
+worker names the task that started it as its supervisor (`docs/workers.md` §
+A worker that starts a worker). Steering goes from a supervisor to the workers
+it started. Worker terminal
+outcomes are lifecycle notifications, not conversational replies. No deeper
 delegation, peer messaging, dirty snapshots, automatic merge, or automatic review
 acceptance. Shared workspaces were excluded here until 2026-11-18; one kind,
 `shared`, now exists (hearsay-tools/squawk#3819). Issues hearsay-tools/cezarion#112–hearsay-tools/cezarion#115 own subsequent stages.
@@ -480,7 +485,7 @@ in the accessibility tree. Ordinary runs render as before.
 | --- | --- |
 | Full parent lifecycle | Service and packaged-CLI tests exercise spawn, inspect, steer, stop, destroy, diff and wait with ordinary manager runs. |
 | Server-derived identity | Invalid/missing/stale tokens, forged identity fields, wrong-project and unrelated-run targets rejected across every agent route; no secrets on public responses/events. |
-| One generation/parent-only | Worker credentials cannot spawn or operate on peers; root cannot target another parent's workers; per-parent limits survive destroy/restart. |
+| Grants/supervisor-only | A worker's credentials spawn only what its spawn grant holds (a root's worker: one shared worker; that worker: none) and operate only on workers it started; a root cannot target another parent's workers; per-parent limits and each supervisor's own limit survive destroy/restart (hearsay-tools/squawk#3819, 2026-11-18; before: one generation, parent-only). |
 | Committed isolation | Parent HEAD and explicit ref pinning, ref movement while queued, dirty edits excluded/unmodified, non-Git/bad ref rejection, creation collision/failure, worker-only diffs. |
 | Capacity and wake | maxParallel=1 with queued child; terminal-before-register/park races; failed/cancelled/review workers; deadline; scheduler fairness; parent cancellation; shutdown vs terminal; restart and duplicate wake receipts. |
 | Durable safe destroy | Queued/starting/live/parked/terminal paths; slow SIGTERM/kill escalation; repeated/concurrent requests; interrupted cleanup; path/branch ownership mismatch; a branch reflog rewritten by `git gc` before or during cleanup; missing resources; a worktree removed outside cezar that left its branch at or beyond the baseline; human continuation/deletion and retention races. |

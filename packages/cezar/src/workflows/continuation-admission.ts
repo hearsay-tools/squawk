@@ -272,6 +272,12 @@ export class ContinuationChecks {
     const status = this.reads.parentStatus(parentId);
     const error = status && settledParentRefusalError(parentId, status);
     if (error) return { ok: false, error };
+    // A worker another worker started works in that worker's directory: it continues only beside it.
+    const supervisorId = run.delegation.supervisorRunId;
+    const supervisor = supervisorId === undefined ? undefined : this.reads.parentStatus(supervisorId);
+    if (supervisorId !== undefined && (!supervisor || !['queued', 'running', 'waiting'].includes(supervisor))) {
+      return { ok: false, error: `Worker ${supervisorId}, which started this worker, is ${supervisor ?? 'gone'}; continue it before this worker.` };
+    }
   }
 
   private checkIdentity(run: RunRecord) {

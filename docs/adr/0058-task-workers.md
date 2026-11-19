@@ -87,6 +87,29 @@ settings off per task.
 - **Gate family messages with the messaging setting.** Rejected: a worker reports and asks its
   questions through them, so existing workers would stop working.
 
+## Amendment (2026-11-18): a flat family with supervisors, grants as data
+
+hearsay-tools/squawk#3819. A worker may start a worker. What a task may spawn, operate and message
+is data on its record and a relation read from two records
+([task-rights.ts](../../packages/cezar/src/runs/task-rights.ts)); no code tests a role or a depth.
+
+- **Spawn grant.** A root's default is both workspace kinds, 32 outstanding workers, and for each
+  worker it starts: `shared` only, 1 outstanding. Squawk writes a worker's grant when it creates
+  the worker, from its supervisor's grant; that worker's own workers get none. A saved worker
+  record without the field has no grant. No flag and no config key changes a grant.
+- **Supervisor.** Every worker's `parentRunId` stays the root, which holds every receipt, the
+  conversation ledger and the family limits. A worker that another worker started also names that
+  worker as `supervisorRunId`. Messages, waits, the collected result's reader, the done gate and
+  the endings follow the supervisor. The root keeps inspect, wait, collect, stop and destroy for
+  every worker of its family.
+- **The two per-task settings are unchanged** and are read from the root for every member.
+
+**Why not full recursion.** hearsay-tools/squawk#113 (full recursive delegation) is closed as not
+planned. A tree of families would need limits, cascades and ledgers at each level, and a human
+could no longer see or bound in one place what one task started. A flat family keeps one place for receipts, limits and
+cleanup, and one grant level is enough for the case that asked for it: a worker that starts its
+own review round.
+
 Implementation: [policy.ts](../../packages/cezar/src/delegation/policy.ts),
 [service.ts](../../packages/cezar/src/delegation/service.ts),
 [conversation-send.ts](../../packages/cezar/src/delegation/conversation-send.ts),

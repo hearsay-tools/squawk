@@ -2,6 +2,7 @@ import type { ConversationState } from '@open-mercato/cezar-contract';
 import type { RunRecord } from '../runs/store.ts';
 import { reservedReplies } from '../delegation/questions.ts';
 import { inboxSlotsUsed } from '../delegation/conversations.ts';
+import { supervisedByFamilyRecord } from '../runs/task-rights.ts';
 
 /** Where a worker's question goes (hearsay-tools/cezarion#2410). It has one addressee, its parent:
  *  the conversation that admits it, a close when either end has stopped, or the reason a live parent
@@ -12,6 +13,8 @@ export type WorkerQuestionRouting =
   | { undeliverable: string };
 
 const LIVE = ['queued', 'running', 'waiting'];
+/** Why a question of a worker that another worker started is not delivered. */
+export const SUPERVISOR_IS_WORKER = 'a worker started this task, so no question card reaches it; send the question as a request message instead';
 
 export function workerQuestionRouting(worker: RunRecord, root: RunRecord | undefined, reads: {
   unreadable(id: string): boolean; parentEnding(root: RunRecord): boolean;
@@ -19,6 +22,9 @@ export function workerQuestionRouting(worker: RunRecord, root: RunRecord | undef
   // Recovery can find a question that never left a worker which has since stopped.
   if (!LIVE.includes(worker.status) || worker.stopping) return { close: 'worker-stopped' };
   const parentId = worker.delegation?.role === 'worker' ? worker.delegation.parentRunId : undefined;
+  // A question card reaches the task that holds the family record. A worker another worker started
+  // has no such line: Squawk answers, and the worker asks its supervisor by message.
+  if (!supervisedByFamilyRecord(worker)) return { undeliverable: SUPERVISOR_IS_WORKER };
   if (root?.delegation?.role !== 'root') {
     return parentId !== undefined && reads.unreadable(parentId) ? { undeliverable: 'the parent record cannot be read' } : { close: 'parent-stopped' };
   }

@@ -3,6 +3,7 @@ import { atTaskHead } from './launch-read-resolver.ts';
 import { createWorktree, resolveBaseRef } from '../../git-worktree.ts';
 import { getRepoInfo } from '../../server/git.ts';
 import type { RunRecord, RunStore } from '../../runs/store.ts';
+import { recordedDirectory } from '../../runs/shared-hosts.ts';
 import type { Execution, ExecutionLaunch, WorkerDelegationRecord } from './types.ts';
 import { requireWorkerWorkspaces, type WorkerWorkspaceOpened, type WorkerWorkspacePort } from './worker-workspace-port.ts';
 
@@ -18,9 +19,9 @@ export function runOwnsDirectory(run: RunRecord | undefined): boolean {
   return run?.delegation?.role !== 'worker' || ownsDirectory(run.delegation.workspace);
 }
 
-/** The directory a worker's parent works in: its worktree, else the repository root. */
+/** The directory the task that started a worker works in. */
 function parentCwd(store: RunStore, repoRoot: string, delegation: WorkerDelegationRecord): string {
-  return store.getRun(delegation.parentRunId)?.worktreePath ?? repoRoot;
+  return recordedDirectory(store.getRun(delegation.supervisorRunId ?? delegation.parentRunId), repoRoot);
 }
 
 /** Verify an owned worker's Continue workspace without recreating it. The caller settles refusal. */

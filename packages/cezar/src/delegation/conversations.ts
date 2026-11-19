@@ -7,6 +7,9 @@ import { DelegationPolicyError } from './policy.ts';
 import { reservedReplies } from './questions.ts';
 
 /**
+ * A request settles by its two participants, read from the message itself: its sender closed or
+ * finishing, or its recipient closed, destroyed or deleted. The run that stores the ledger decides
+ * nothing: a request between two live workers stays open when the ledger's holder has ended.
  * First durable request settlement wins, with the defined late-reply timeout amendment handled
  * by send. Review is not completion for a worker, which its parent can resume; a peer recipient at
  * review settles `completed-without-reply` at once, because no peer can resume it, and a deleted
@@ -25,7 +28,7 @@ export function reconcileConversationState(root: RunRecord, lookup: (id: string)
     const closed = (run: RunRecord | undefined) => run && ['done', 'failed', 'cancelled'].includes(run.status) && isSettled(run);
     const sender = lookup(request.senderRunId);
     const humanFinished = finishing(sender);
-    const settled = (humanFinished ? 'sender-closed' : status) ?? (closed(root) || closed(lookup(request.senderRunId)) ? 'sender-closed'
+    const settled = (humanFinished ? 'sender-closed' : status) ?? (closed(sender) ? 'sender-closed'
       : request.deadline && request.deadline <= now ? 'timed-out' : undefined);
     if (settled) outcomes.push({ requestId: request.id, status: settled, observedAt: now });
   }
