@@ -5,54 +5,54 @@
     "root": "packages/web/e2e",
     "runs": [
       {
-        "id": 44304109761,
-        "headSha": "1bf3503b0330e53155c405c63f8aff40172794f3",
+        "id": 44524553482,
+        "headSha": "f607026418eb348af5610297385023d36c2951d5",
         "jobs": [
-          134801211664,
-          134801211702,
-          134801211719,
-          134801211775,
-          134801211794,
-          134801211802,
-          134801211841,
-          134801211960
+          135561725861,
+          135561725917,
+          135561725919,
+          135561725936,
+          135561726013,
+          135561726036,
+          135561726085,
+          135561726233
         ]
       },
       {
-        "id": 44304018610,
-        "headSha": "5035f8c9d8bd39485ee2c7e3ff3f6f259a137fc4",
+        "id": 44524495292,
+        "headSha": "e328b51aa8cc9a698318a694e18b8d219aaefbde",
         "jobs": [
-          134800903625,
-          134800903669,
-          134800903722,
-          134800903724,
-          134800903752,
-          134800903760,
-          134800903771,
-          134800903974
+          135561551534,
+          135561551593,
+          135561551641,
+          135561551690,
+          135561551738,
+          135561551809,
+          135561551900,
+          135561552755
         ]
       },
       {
-        "id": 44274156696,
-        "headSha": "535ce2bddc768d26fc8231b841ec4d88d10539d3",
+        "id": 44523145498,
+        "headSha": "fb7a22361be7ffeffa57d682f282fa31880b60cb",
         "jobs": [
-          134698040497,
-          134698040513,
-          134698040521,
-          134698040552,
-          134698040569,
-          134698040590,
-          134698040833,
-          134698040920
+          135556895740,
+          135556895760,
+          135556895762,
+          135556895815,
+          135556895819,
+          135556895821,
+          135556895851,
+          135556895899
         ]
       }
     ],
     "estimatedFiles": [],
-    "baselineCommit": "1bf3503b0330e53155c405c63f8aff40172794f3",
+    "baselineCommit": "f607026418eb348af5610297385023d36c2951d5",
     "updatedFiles": [
-      "composer.e2e.ts",
       "live-preview.e2e.ts",
-      "review-gate.e2e.ts"
+      "new-task.e2e.ts",
+      "task-list-virtualization.e2e.ts"
     ],
     "remainingChanges": 0
   },
@@ -90,14 +90,14 @@
     "index-workload.e2e.ts": 24319,
     "ios-sweep.e2e.ts": 14275,
     "issue-linked-tasks.e2e.ts": 6296,
-    "live-preview.e2e.ts": 15109,
+    "live-preview.e2e.ts": 22613,
     "markdown-preview.e2e.ts": 8727,
     "mobile-projects.e2e.ts": 14052,
     "mobile-tab-bar.e2e.ts": 26652,
     "mobile-task-controls.e2e.ts": 27270,
     "new-task-hierarchy.e2e.ts": 51825,
     "new-task-picker-layout.e2e.ts": 33396,
-    "new-task.e2e.ts": 22351,
+    "new-task.e2e.ts": 16487,
     "page-headings.e2e.ts": 11209,
     "peer-conversation.e2e.ts": 8345,
     "pending-question.e2e.ts": 35490,
@@ -139,7 +139,7 @@
     "task-files.e2e.ts": 13596,
     "task-github-items.e2e.ts": 13607,
     "task-handoff.e2e.ts": 12886,
-    "task-list-virtualization.e2e.ts": 171220,
+    "task-list-virtualization.e2e.ts": 118322,
     "task-list-workload.e2e.ts": 28812,
     "task-pr-collection.e2e.ts": 24058,
     "task-status-groups.e2e.ts": 11763,
