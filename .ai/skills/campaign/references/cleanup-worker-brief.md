@@ -172,7 +172,9 @@ At the end: git checkout cez/<your 8-char id>; squeal stop in this worktree;
    write tests from the issue's FAIL lines; do not wait idle for the baseline.
    mutants-file.cjs measures the committed HEAD: commit the tests before the
    final measurement. Start the final run with --out <final.json> independently
-   of the baseline. Once both finish, run:
+   of the baseline. Runs on one host queue: the later run prints its position
+   and starts when the earlier one ends; take no lock of your own. Once both
+   finish, run:
    node .github/scripts/mutants-file.cjs --compare-results <baseline.json> <final.json>
    Cite the final result's PASS lines and the measured HEAD in the PR.
    Progress appears every 30 seconds; an unknown count means preparation or
@@ -182,4 +184,7 @@ At the end: git checkout cez/<your 8-char id>; squeal stop in this worktree;
    Rescore requires scoring evidence from the current command; older stored
    results remain comparable but need a new measurement for exact rescoring.
    A rescore does not rerun tests or prove the current HEAD passes.
+   Rescore a result made before a targets.json or equivalent.json change
+   before you read any guard from it.
+   If the initial test run times out, add --dry-run-timeout-minutes <n>.
 ```

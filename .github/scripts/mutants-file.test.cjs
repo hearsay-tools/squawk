@@ -127,6 +127,7 @@ function fakeDeps(file = 'packages/contract/src/sample.ts') {
     ranges: () => [], read: file => file.endsWith('equivalent.json') ? '[]' : "import { x } from '@open-mercato/cezar-contract/sample';",
     readJson: () => ({ vitest: { configFile: 'vitest.stryker.config.ts', pool: 'forks' }, reporters: ['json'], inPlace: true, timeoutMS: 30000 }), write: (file, text) => calls.push(['write', file, text]),
     removeScratch: dir => calls.push(['remove-scratch', dir]), log: text => calls.push(['log', text]),
+    queue: async (queued, signal, log) => { calls.push(['queue', queued, typeof log]); return () => calls.push(['leave-queue']); },
   };
   return { deps, calls };
 }
@@ -192,7 +193,7 @@ test('command installs, builds, measures own tests then consumers, writes versio
   assert.ok(calls.indexOf(ownWrite) < calls.findIndex(c => c[0] === 'stryker'));
   const configWrite = calls.find(c => c[0] === 'write' && c[1].endsWith('stryker.mutants-consumers.config.json'));
   assert.deepEqual(JSON.parse(configWrite[2]), { ...deps.readJson(), ignoreStatic: true, plugins: ['./cezar-mutation-progress.cjs'], reporters: ['json', 'cezar-progress'], vitest: { pool: 'forks', configFile: 'vitest.mutants-consumers.config.ts' } });
-  assert.deepEqual(calls.slice(-1), [['remove-scratch', '/cache/scratch']]);
+  assert.deepEqual(calls.slice(-2), [['remove-scratch', '/cache/scratch'], ['leave-queue']]);
   assert.deepEqual(result.targets, []);
   assert.match(m.summary(result), /Tier: none: no entry in \.github\/mutants\/targets\.json, so no target/);
 });
@@ -276,7 +277,7 @@ test('install, build, Stryker and report failures all remove the scratch checkou
     if (stage === 'stryker') deps.stryker = async () => ({ outcome: 'exited', code: 1 });
     if (stage === 'report') deps.readReport = () => { throw new Error('report'); };
     await assert.rejects(m.runMeasurement(m.parseArgs(['packages/contract/src/sample.ts']), deps));
-    assert.deepEqual(calls.slice(-1), [['remove-scratch', '/cache/scratch']]);
+    assert.deepEqual(calls.slice(-2), [['remove-scratch', '/cache/scratch'], ['leave-queue']]);
   }
 });
 
@@ -307,7 +308,7 @@ test('signal during setup cleans after the command settles, before starting Stry
   deps.command = async (bin, args, cwd, signal) => { events.emit('SIGINT'); signal.throwIfAborted(); };
   assert.equal(await m.cli(['packages/contract/src/sample.ts'], deps, events), 130);
   assert.equal(calls.some(c => c[0] === 'stryker'), false);
-  assert.deepEqual(calls.at(-1), ['remove-scratch', '/cache/scratch']);
+  assert.deepEqual(calls.slice(-2), [['remove-scratch', '/cache/scratch'], ['leave-queue']]);
 });
 
 test('measurement records source slices, function names and raw counts; compare is printed', () => {
@@ -429,7 +430,7 @@ test('failed consumer pass writes own-package result and failing names, prints F
   assert.match(result.consumers.reason, /Suite fails one; Suite fails two/);
   assert.doesNotMatch(result.consumers.reason, /expected undefined/);
   assert.match(calls.find(c => c[0] === 'log' && c[1].startsWith('File:'))[1], /FAIL: consumer tests: failed/);
-  assert.deepEqual(calls.at(-1), ['remove-scratch', '/cache/scratch']);
+  assert.deepEqual(calls.slice(-2), [['remove-scratch', '/cache/scratch'], ['leave-queue']]);
 });
 
 test('missing consumer report keeps own-package result and records the exit or read reason', async () => {
@@ -571,4 +572,41 @@ test('identical prefixes on separate lines still report multiple matches', () =>
   data.files[file].mutants.push({ ...first, id: 'twin', location: { start: { line: 2, column: 17 }, end: { line: 2, column: 21 } } });
   const result = m.measure(data, file, 'sha', [], {}, [equivalentEntry({ site: 'const value = ' })]);
   assert.equal(result.multipleEquivalent[0].matchCount, 2);
+});
+
+test('--dry-run-timeout-minutes reaches the Stryker config of both passes; without it the shared value stays', async () => {
+  const file = 'packages/contract/src/sample.ts';
+  assert.equal(m.parseArgs([file, '--dry-run-timeout-minutes', '60']).dryRunTimeoutMinutes, 60);
+  for (const value of ['0', '601', '1.5', 'x']) assert.throws(() => m.parseArgs([file, '--dry-run-timeout-minutes', value]), /from 1 to 600/);
+  assert.throws(() => m.parseArgs([file, '--dry-run-timeout-minutes']), /incomplete option/);
+  const configs = calls => calls.filter(c => c[0] === 'write' && /stryker\.mutants-(file|consumers)\.config\.json$/.test(c[1])).map(c => JSON.parse(c[2]).dryRunTimeoutMinutes);
+  const raised = fakeDeps();
+  await m.runMeasurement(m.parseArgs([file, '--dry-run-timeout-minutes', '60']), raised.deps);
+  assert.deepEqual(configs(raised.calls), [60, 60]);
+  const plain = fakeDeps();
+  plain.deps.readJson = () => ({ vitest: { configFile: 'vitest.stryker.config.ts' }, reporters: ['json'], dryRunTimeoutMinutes: 25 });
+  await m.runMeasurement(m.parseArgs([file]), plain.deps);
+  assert.deepEqual(configs(plain.calls), [25, 25]);
+});
+
+test('a measurement waits in the host queue before its scratch checkout and leaves it after removal', async () => {
+  const { deps, calls } = fakeDeps('packages/cezar/src/sample.ts');
+  let scratchAt;
+  deps.scratch = () => { scratchAt = calls.length; return '/cache/scratch'; };
+  await m.runMeasurement(m.parseArgs(['packages/cezar/src/sample.ts']), deps);
+  assert.deepEqual(calls.find(c => c[0] === 'queue'), ['queue', 'packages/cezar/src/sample.ts', 'function']);
+  assert.ok(calls.findIndex(c => c[0] === 'queue') < scratchAt);
+  const failing = fakeDeps('packages/cezar/src/sample.ts');
+  failing.deps.command = async () => { throw new Error('install failed'); };
+  await assert.rejects(m.runMeasurement(m.parseArgs(['packages/cezar/src/sample.ts']), failing.deps), /install failed/);
+  assert.deepEqual(failing.calls.at(-1), ['leave-queue']);
+});
+
+test('the summary lists Timeout mutants by function with their lines', async () => {
+  const file = 'packages/cezar/src/sample.ts';
+  const { deps, calls } = fakeDeps(file);
+  deps.readReport = () => report(file, [wireMutant('Timeout'), wireMutant('Killed', { location: location(2) })]);
+  await m.runMeasurement(m.parseArgs([file]), deps);
+  const text = calls.filter(c => c[0] === 'log').map(c => c[1]).join('\n');
+  assert.match(text, /Timeouts in \(module\):\n {2}L1 Condition \/ BooleanLiteral: true -> false/);
 });

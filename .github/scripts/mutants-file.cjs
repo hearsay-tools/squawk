@@ -13,6 +13,7 @@ const { namedRanges, functionRanges, functionOf, duplicateNames } = require('./m
 const TARGETS = require('../mutants/targets.json');
 const { USAGE, sourceFile, storedArgs, preflight, validateOutput, scoringEvidence } = require('./mutants-file-results.cjs');
 const { startProgress, progressConfig, PLUGIN_FILE } = require('./mutants-file-progress.cjs');
+const { enterQueue } = require('./mutants-file-queue.cjs');
 const REPORT = 'reports/mutation/mutation.json';
 // Version 2 counts static rows (hearsay-tools/cezarion#2363); --compare refuses version 1 results.
 const RESULT_VERSION = 2;
@@ -109,6 +110,10 @@ function compareResults(before, after) {
     added: after.survivors.filter(m => !oldKeys.has(survivorKey(m))), removed: before.survivors.filter(m => !newKeys.has(survivorKey(m))) };
 }
 
+const VALUE_FLAGS = { '--compare': 'compare', '--out': 'out', '--concurrency': 'concurrency', '--dry-run-timeout-minutes': 'dryRunTimeoutMinutes' };
+/** Stryker's limit for the initial test run: the flag's value, else the one in stryker.config.json. */
+const withDryRunTimeout = (config, opts) => opts.dryRunTimeoutMinutes === undefined ? config : { ...config, dryRunTimeoutMinutes: opts.dryRunTimeoutMinutes };
+
 function parseArgs(argv) {
   if (['--rescore', '--compare-results'].includes(argv[0])) return storedArgs(argv);
   const [file, ...rest] = argv;
@@ -121,12 +126,16 @@ function parseArgs(argv) {
       while (rest[i + 1] && !rest[i + 1].startsWith('--')) opts.tests.push(rest[++i]);
       if (i < start) throw new Error('--tests needs at least one test file');
     } else {
-      if (!['--compare', '--out', '--concurrency'].includes(flag) || !rest[i + 1] || rest[i + 1].startsWith('--')) throw new Error(`Unknown or incomplete option: ${flag}`);
-      opts[flag.slice(2)] = rest[++i];
+      if (!Object.hasOwn(VALUE_FLAGS, flag) || !rest[i + 1] || rest[i + 1].startsWith('--')) throw new Error(`Unknown or incomplete option: ${flag}`);
+      opts[VALUE_FLAGS[flag]] = rest[++i];
     }
   }
   opts.concurrency = Number(opts.concurrency);
   if (!Number.isInteger(opts.concurrency) || opts.concurrency < 1 || opts.concurrency > 8) throw new Error('--concurrency must be an integer from 1 to 8');
+  if (opts.dryRunTimeoutMinutes !== undefined) {
+    opts.dryRunTimeoutMinutes = Number(opts.dryRunTimeoutMinutes);
+    if (!Number.isInteger(opts.dryRunTimeoutMinutes) || opts.dryRunTimeoutMinutes < 1 || opts.dryRunTimeoutMinutes > 600) throw new Error('--dry-run-timeout-minutes must be an integer from 1 to 600');
+  }
   if (opts.tests.length && file.split('/')[1] !== 'contract') throw new Error('--tests is supported only for contract files');
   return opts;
 }
@@ -207,6 +216,12 @@ function measure(report, file, head, ranges, targets = TARGETS, entries = []) {
     ...evaluate(kept, target, ranges, mutants), rawCounts, rawScore: scoreOf(rawCounts), staleEquivalent, ambiguousEquivalent, multipleEquivalent };
 }
 
+/** One `<title> in <function>:` heading per function, then one line per mutant. */
+function byFunction(title, mutants) {
+  return [...new Set(mutants.map(m => m.function))].flatMap(name => [`${title} in ${name}:`,
+    ...mutants.filter(m => m.function === name).map(m => `  L${m.line} ${m.kind} / ${m.mutator}: ${flat(m.original)} -> ${flat(m.replacement)}`)]);
+}
+
 function summary(result) {
   const lines = [`File: ${result.file}`, `HEAD: ${result.head}`, `Tier: ${result.tier === UNDECLARED ? 'none: no entry in .github/mutants/targets.json, so no target' : result.tier}`, `Counts: ${JSON.stringify(result.counts)}`, `Counted score: ${result.score.toFixed(1)}%`];
   if (result.rescored) lines.push('Rescored stored outcomes under current counting; tests were not rerun.');
@@ -216,11 +231,8 @@ function summary(result) {
   lines.push(`Static mutants at module scope: ${result.moduleLevelCount}; measured with import-time activation and counted.`);
   lines.push(`Static mutants inside functions: ${result.staticFunctions.reduce((total, f) => total + f.count, 0)}; counted: ${result.staticFunctions.map(f => `${f.name} (${f.count})`).join(', ') || 'none'}.`);
   lines.push(`Not-covered lines: ${[...new Set(result.survivors.filter(m => m.status === 'NoCoverage').map(m => m.line))].join(', ') || 'none'}`);
-  const names = [...new Set(result.survivors.map(m => m.function))];
-  for (const name of names) {
-    lines.push(`Survivors in ${name}:`);
-    for (const m of result.survivors.filter(m => m.function === name)) lines.push(`  L${m.line} ${m.kind} / ${m.mutator}: ${flat(m.original)} -> ${flat(m.replacement)}`);
-  }
+  // A Timeout counts as detected; under load it can hide a survivor, so each one is listed.
+  lines.push(...byFunction('Survivors', result.survivors), ...byFunction('Timeouts', result.mutants.filter(m => m.status === 'Timeout')));
   for (const guard of result.guards) lines.push(`Guard ${guard.name}: ${guard.found ? `${guard.survivors.length} undetected, ${guard.staticCount} static` : 'NOT FOUND'}`);
   lines.push(`Guards with static mutants: ${result.guards.filter(g => g.staticCount > 0).map(g => g.name).join(', ') || 'none'}`);
   for (const target of result.targets) lines.push(`${target.pass ? 'PASS' : 'FAIL'}: ${target.name}`);
@@ -269,6 +281,15 @@ async function runMeasurement(opts, deps, signal = new AbortController().signal)
   const [baseline] = preflight(opts, deps);
   const head = deps.git(['rev-parse', 'HEAD']).trim();
   const source = deps.git(['rev-parse', '--show-toplevel']).trim();
+  const leaveQueue = await deps.queue(opts.file, signal, deps.log);
+  try {
+    return await measureInScratch(opts, deps, signal, { baseline, head, source });
+  } finally {
+    leaveQueue();
+  }
+}
+
+async function measureInScratch(opts, deps, signal, { baseline, head, source }) {
   const scratch = deps.scratch();
   const cwd = path.join(scratch, 'checkout');
   const env = isolatedEnv(deps.env, path.join(scratch, 'cez-home'));
@@ -283,7 +304,7 @@ async function runMeasurement(opts, deps, signal = new AbortController().signal)
     const ranges = deps.ranges(opts.file, cwd);
     const config = deps.readJson(path.join(cwd, 'stryker.config.json'));
     deps.write(path.join(cwd, PLUGIN_FILE), fs.readFileSync(path.join(__dirname, 'mutants-file-progress.cjs'), 'utf8'));
-    deps.write(path.join(cwd, OWN_CONFIG), `${JSON.stringify(progressConfig({ ...config, ignoreStatic: false }), null, 2)}\n`);
+    deps.write(path.join(cwd, OWN_CONFIG), `${JSON.stringify(progressConfig(withDryRunTimeout({ ...config, ignoreStatic: false }, opts)), null, 2)}\n`);
     finish();
     deps.log('Own-package pass starting');
     const first = await strykerReport(deps, cwd, opts, opts.file.split('/')[1], [OWN_CONFIG], signal, undefined, env);
@@ -310,7 +331,7 @@ async function runConsumers(opts, deps, cwd, first, signal, env) {
   const config = deps.readJson(path.join(cwd, 'stryker.config.json'));
   // Static mutants stay ignored here: with ignoreStatic off, each would run every consumer test
   // file, over three hours for waits.ts. The own-package pass has already measured them.
-  const scratchConfig = progressConfig({ ...config, ignoreStatic: true, vitest: { ...config.vitest, configFile: 'vitest.mutants-consumers.config.ts' } });
+  const scratchConfig = progressConfig(withDryRunTimeout({ ...config, ignoreStatic: true, vitest: { ...config.vitest, configFile: 'vitest.mutants-consumers.config.ts' } }, opts));
   deps.write(path.join(cwd, 'stryker.mutants-consumers.config.json'), `${JSON.stringify(scratchConfig, null, 2)}\n`);
   deps.log('Consumer pass starting');
   let output = '';
@@ -353,6 +374,7 @@ function defaultDeps() {
     write: (file, text) => fs.writeFileSync(file, text),
     removeScratch: cwd => fs.rmSync(cwd, { recursive: true, force: true }),
     log: text => console.log(text),
+    queue: (file, signal, log) => enterQueue({ file, signal, log }),
   };
 }
 

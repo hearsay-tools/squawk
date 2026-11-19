@@ -128,6 +128,12 @@ the live repository or cockpit. Contract files also run their direct server and 
 mutants (code that runs at import) and counts them; the consumer pass skips them. The command measures the committed HEAD, including committed tests, rather than uncommitted edits.
 It prints phase changes and progress every 30 seconds: completed/total mutants and elapsed time.
 Preparation and the initial test run show an unknown count until Stryker has a mutation plan.
+Whole-file runs on one host run one at a time: a run waits in a queue under
+`~/.cache/cez/mutants/queue` before its scratch checkout, prints its position when it changes, and
+starts when the runs before it end. A run that was killed leaves an entry that the next run removes.
+Stryker stops the initial test run after the `dryRunTimeoutMinutes` value in `stryker.config.json`
+(25). For a file that many tests import, add `--dry-run-timeout-minutes <n>` (1 to 600) to raise it.
+The summary lists the survivors and the Timeout mutants of each function with their lines.
 It validates `--compare` inputs and the `--out` destination before creating the scratch checkout.
 For measurement, the managed `~/.cache/cez/mutants` output parent is created when absent;
 validation does not reserve the destination, so a later filesystem change can still make the write fail.
@@ -143,6 +149,8 @@ node .github/scripts/mutants-file.cjs --rescore final.json --out rescored.json
 These stored-result modes run no installs, builds, tests or mutants. Rescore applies the current
 counting rules, targets and equivalent entries to the original outcomes and source evidence;
 it preserves the measured HEAD and consumer failures and marks the output as rescored.
+A result made before a change to `.github/mutants/targets.json` or `.github/mutants/equivalent.json` is
+rescored with `--rescore` before any guard is read from it.
 New version-2 results include the complete scoring evidence. Older results without that evidence
 can still be compared, but rescore rejects them with a request to measure again. Rescore does not
 prove that current tests pass. Without `--out`, stored modes print their result only. Output must

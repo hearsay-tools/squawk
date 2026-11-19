@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const USAGE = 'Usage: mutants-file.cjs packages/<pkg>/src/<file>.ts [--tests <files>] [--compare <json>] [--out <json>] [--concurrency <n>]\n  measures the committed HEAD\n  mutants-file.cjs --rescore <result.json> [--out <new.json>]\n  mutants-file.cjs --compare-results <before.json> <after.json> [--out <delta.json>]';
+const USAGE = 'Usage: mutants-file.cjs packages/<pkg>/src/<file>.ts [--tests <files>] [--compare <json>] [--out <json>] [--concurrency <n>] [--dry-run-timeout-minutes <n>]\n  measures the committed HEAD; runs on one host wait in a queue\n  mutants-file.cjs --rescore <result.json> [--out <new.json>]\n  mutants-file.cjs --compare-results <before.json> <after.json> [--out <delta.json>]';
 const sourceFile = file => typeof file === 'string' && /^packages\/[^/]+\/src\/.+\.tsx?$/.test(file) && !file.split('/').includes('..');
 const keys = ['killed', 'timeout', 'survived', 'noCoverage', 'error', 'ignored'];
 function validCounts(counts) {
