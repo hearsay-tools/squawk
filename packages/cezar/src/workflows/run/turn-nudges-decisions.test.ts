@@ -306,6 +306,26 @@ describe('the acknowledgement bound of a submitted autonomous nudge', () => {
   // hearsay-tools/squawk#3741: an ACK means the transport took the nudge, not that a turn started.
   const answerNotes = (id: string) => f.store.readEvents(id).filter(e => e.type === 'note' && e.message === AUTONOMOUS_NO_REPLY_NOTE);
 
+  it('an acknowledged nudge that gets no turn closes the run after the answer bound, heartbeats or not', async () => {
+    const { id, session: nudged } = await startNudged();
+    await vi.advanceTimersByTimeAsync(BOUND_MS - 1);
+    acknowledge();
+    await vi.advanceTimersByTimeAsync(0);
+    for (let tick = 0; tick < 4; tick++) {
+      await vi.advanceTimersByTimeAsync(BOUND_MS / 4 - 1);
+      heartbeat();
+    }
+    expect(nudged.end).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(4);
+    expect(nudged.end).toHaveBeenCalledOnce();
+    expect(answerNotes(id)).toHaveLength(1);
+    expect(boundNotes(id)).toEqual([]);
+    await waitForProduct(f.manager, f.store, () => !f.manager.isActive(id));
+    expect(f.store.getRun(id)?.status).toBe(RUN_STATUS.waiting);
+    expect(f.store.getRun(id)?.steps.at(-1)?.status).toBe(STEP_STATUS.waiting);
+    expect(f.store.getRun(id)?.waits ?? []).toEqual([]);
+  });
+
   it('a turn start the send emits is no answer: the acknowledged nudge still closes the run after the bound', async () => {
     startsTurnOnSend = true;
     const { id, session: nudged } = await startNudged();

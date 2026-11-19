@@ -3,7 +3,7 @@ import { runnerHook, run, GIT_ID, waitForProduct, setupMonitoringFixture, FINISH
 import { createFixtureManager, drainFixtureManagers } from './fixture-cleanup.testkit.ts';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type AgentRunResult, type AgentSession } from '../core/agent-runner.ts';
 import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
@@ -14,6 +14,7 @@ import { type WorkflowDef } from './types.ts';
 import { RUN_STATUS, WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { monitoringTimerWait, monitoringWakeOf } from './waits.testkit.ts';
 import { deriveAttention } from '@open-mercato/cezar-contract/attention';
+import { fileURLToPath } from 'node:url';
 
 describe('RunManager reported cost accounting', () => {
   let repoRoot: string;
@@ -288,6 +289,35 @@ describe('cezar_ask parks as waiting and emits ask.requested (#473)', () => {
     expect(questions[0]!.options).toHaveLength(2);
   }, 30_000);
 
+
+  it('a mid-turn follow-up does not resume past a cezar_ask park', async () => {
+    savedEnv.CEZ_OPENCODE_BIN = process.env.CEZ_OPENCODE_BIN;
+    process.env.CEZ_OPENCODE_BIN = join(
+      dirname(fileURLToPath(import.meta.url)),
+      '../runners/opencode/__fixtures__/mock-opencode-serve.mjs',
+    );
+    delete process.env.CEZ_DRY_RUN;
+
+    const record = manager.startRun(SINGLE_STEP, {
+      task: 'mock:hold-cezar-ask choose',
+      runner: 'opencode',
+      worktree: false,
+    });
+    currentId = record.id;
+    await waitFor(record.id, () => {
+      try {
+        return readEvents(record.id).some((e) => e.type === 'turn.started');
+      } catch {
+        return false;
+      }
+    });
+    expect(manager.sendMessage(record.id, [{ type: 'text', text: 'just resolve it' }])).toBe(true);
+    await waitFor(record.id, (r) => r?.status === 'waiting');
+
+    const events = readEvents(record.id);
+    expect(events.filter((e) => e.type === 'ask.requested')).toHaveLength(1);
+    expect(events.filter((e) => e.type === 'turn.started')).toHaveLength(1);
+  }, 30_000);
 
   // `runContinuation`'s turn end must raise the card as `runAgentStep`'s does: AGENTS.md's standing
   // warning that a lifecycle change applied to one of them ships half a fix.
