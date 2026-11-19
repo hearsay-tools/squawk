@@ -35,24 +35,13 @@ export interface RunnerDefinition {
   readonly extraTools: readonly string[];
 }
 
-/** One model the picker suggests. `id: ''` is auto: the runner picks. */
-export interface RunnerModelPreset {
-  readonly id: string;
-  readonly label: string;
-  readonly desc: string;
-}
-
 /** A runner's model data: plain data in `runners/<id>/models.ts`. */
 export interface RunnerModelData {
-  /** The picker presets, as the cockpit's `MODELS_BY_RUNNER` lists them until C2 reads these. */
-  readonly suggested: readonly RunnerModelPreset[];
   /**
    * Known preset ids, for mismatch checks (`core/model-presets.ts`). This is not a whitelist:
    * unknown custom ids remain valid. OpenCode uses native discovery plus a structural guard.
    */
   readonly known: readonly string[];
-  /** Retired dated ids this runner served. Another runner still refuses them as known foreign ids. */
-  readonly retired: readonly string[];
   /** How a model id maps to a provider and to the wire (`core/model-identity.ts`). */
   readonly idMap: BackendModelMap;
 }
