@@ -58,3 +58,11 @@ test('a test that reads or imports a deleted changed file is direct', t => {
   const deleted = ['src/fixtures/data.json', 'src/gone.ts'];
   assert.deepEqual(directImporters(root, ['src/reads.test.ts', 'src/imports.test.ts', 'src/other.test.ts'], deleted), ['src/reads.test.ts', 'src/imports.test.ts']);
 });
+
+test('a test that reads a directory whose last file was deleted is direct', t => {
+  const root = tree(t, {
+    'src/dir.test.ts': "readdirSync(new URL('./fixtures/', import.meta.url));\n",
+    'src/root.test.ts': "const r = resolve(import.meta.dirname, '..');\n",
+  });
+  assert.deepEqual(directImporters(root, ['src/dir.test.ts', 'src/root.test.ts'], ['src/fixtures/last.json']), ['src/dir.test.ts']);
+});
