@@ -22,6 +22,7 @@ import { MobileRunBarSlotContext } from '@/components/mobile-run-bar'
 
 import { RunHeader, visibleItemTabs, type RunTab } from './run-header'
 import { PreviewPaneContext, type PreviewPane } from './preview/preview-state'
+import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 afterEach(() => {
   act(() => resetToasts())
@@ -83,6 +84,7 @@ function stubFetch(overrides: Record<string, () => Response> = {}): SentRequest[
       const override = overrides[path]
       if (override) return override()
       if (method === 'GET' && path.endsWith('/run-summaries')) return jsonResponse([])
+      if (method === 'GET' && path === RUNNERS_PATH) return jsonResponse(RUNNERS_RESPONSE)
       if (method === 'GET' && path === '/api/v1/providers/status') {
         return jsonResponse({
           providers: [

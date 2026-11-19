@@ -5,9 +5,9 @@ import { useEffect, useId, useRef, useState, type ComponentPropsWithoutRef, type
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ZoomableImage } from '@/components/zoomable-image'
 import { Link } from '@/lib/project-router'
+import { runnerDisplayName, useRunners } from '@/api/runners'
 import { resolveApiUrl } from '@open-mercato/cezar-api-client/utils/project-scope'
 import { isImageAttachmentName } from '@open-mercato/cezar-api-client/contract/attachments'
-import { runnerDisplayName } from '@open-mercato/cezar-api-client/contract/runner-facts'
 import type { FileDiff, ToolKind, UiHookItem, UiToolItem } from '@open-mercato/cezar-api-client'
 import { toolDetailText, toolDisplay } from '@open-mercato/cezar-api-client/contract/tool-display'
 import { cn } from '@/lib/utils'
@@ -422,13 +422,16 @@ export function NoteLine({ note }: { note: ThreadNote }) {
   )
 }
 
-/** Persisted recovery guidance for an authoritative runtime authentication rejection. */
+/** Persisted recovery guidance for an authoritative runtime authentication rejection. It renders
+ *  once the runners list has answered, so it names the runner. */
 export function ProviderAuthRequiredCard({
   incident,
 }: {
   incident: ThreadProviderAuthRequired
 }) {
-  const label = runnerDisplayName(incident.provider)
+  const runners = useRunners().data
+  if (!runners) return null
+  const label = runnerDisplayName(runners, incident.provider)
   return (
     <div
       role="alert"

@@ -8,6 +8,7 @@ import { createQueryClient } from '@/api/query-client'
 import { AppearanceProvider } from '@/components/appearance-provider'
 import { ThemeProvider } from '@/components/theme-provider'
 import { AppRoutes } from '@/routes'
+import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 /**
  * The Settings shell + Appearance section (R6 Step 1.3): registry rendering,
@@ -47,6 +48,7 @@ function serve(uiState: Record<string, unknown> = {}) {
       if (url === '/api/v1/ui-state' && method === 'PUT')
         return json({ ...projectUiState, ...(body as Record<string, unknown>) })
       if (url === '/api/v1/config') return json(AGENTS_CONFIG)
+      if (url === RUNNERS_PATH) return json(RUNNERS_RESPONSE)
       if (url === '/api/v1/providers/status')
         return json({
           providers: [

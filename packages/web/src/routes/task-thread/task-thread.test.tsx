@@ -40,6 +40,7 @@ import { resetActivityDisclosureForTests } from './run-activity-dock'
 import { TaskThreadRoute, ThreadView } from './task-thread'
 import { buildTranscriptRows, mainTranscriptSections } from './session-transcript'
 import { reduceThread } from './thread-state'
+import { RUNNERS_PATH, RUNNERS_RESPONSE, seedRunners } from '@/test/runners.testkit'
 
 const TOOL_STATUS = Object.fromEntries(TOOL_STATUSES.map(status => [status, status])) as { [Status in (typeof TOOL_STATUSES)[number]]: Status }
 const PLAN_STATUS = Object.fromEntries(PLAN_STATUSES.map(status => [status, status])) as { [Status in (typeof PLAN_STATUSES)[number]]: Status }
@@ -75,6 +76,7 @@ function renderView(
         path === '/api/v1/models?runner=claude' ? { runner: 'claude', models: [], source: 'unavailable', stale: false }
         : path === '/api/v1/models?runner=codex' ? { runner: 'codex', models: [], source: 'unavailable', stale: false }
         : path === '/api/v1/providers/status' ? providerStatus
+        : path === RUNNERS_PATH ? RUNNERS_RESPONSE
         : path === '/api/v1/health' ? health
         : path.endsWith('/permissions') ? { delivered: true }
         : path.endsWith('/relationships') ? { workers: [] }
@@ -88,8 +90,9 @@ function renderView(
     }),
   )
   // The client is handed back so a test can await a specific query landing in the cache —
-  // the only honest barrier for asserting that something is absent *after* data arrived.
-  const queryClient = createQueryClient()
+  // the only honest barrier for asserting that something is absent *after* data arrived. The
+  // runners list is already cached, as the app shell leaves it.
+  const queryClient = seedRunners(createQueryClient())
   return {
     ...render(
       <QueryClientProvider client={queryClient}>
@@ -1158,6 +1161,7 @@ function stubPendingDetailGets(id = 'r1') {
     const body = history !== undefined ? history
       : init.method === 'POST' && path.endsWith('/cancel') ? { cancelled: true }
       : path === '/api/v1/providers/status' ? { providers: [] }
+      : path === RUNNERS_PATH ? RUNNERS_RESPONSE
       : path === '/api/v1/run-summaries' ? [] : {}
     return Promise.resolve(new Response(JSON.stringify(body), {
       status: 200, headers: { 'content-type': 'application/json' },
@@ -1331,6 +1335,7 @@ describe('TaskThreadRoute — read receipts', () => {
         if (history !== undefined) return Promise.resolve(jsonResponse(history))
         if (path === `/api/v1/runs/${initial.id}`) return Promise.resolve(jsonResponse(current))
         if (path === '/api/v1/run-summaries') return Promise.resolve(jsonResponse([]))
+        if (path === RUNNERS_PATH) return Promise.resolve(jsonResponse(RUNNERS_RESPONSE))
         if (path === '/api/v1/providers/status') {
           return Promise.resolve(
             jsonResponse({
@@ -1747,6 +1752,7 @@ describe('the composer action row (#281)', () => {
                 ],
               }
             : path === '/api/v1/health' ? {}
+            : path === RUNNERS_PATH ? RUNNERS_RESPONSE
             : path.endsWith('/permissions') ? { delivered: true }
         : path.endsWith('/relationships') ? { workers: [] }
             : []

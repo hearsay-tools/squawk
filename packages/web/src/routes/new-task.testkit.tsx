@@ -7,7 +7,9 @@ import { expect, vi } from 'vitest'
 import { createQueryClient } from '@/api/query-client'
 import type { AgentProfilesResponse, ConfigResponse, HealthResponse, ProviderStatusResponse, RepoResponse, WorkspaceConfigResponse, WorkflowsResponse } from '@open-mercato/cezar-api-client'
 import { Toaster } from '@/components/ui/toaster'
+import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 import { answerFixture, answerFromRoutes, jsonResponse, type FetchRoute } from '@/test/fetch-routes'
+import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 import { readDraft, writeDraft } from './new-task-draft'
 import { NewTaskRoute } from './new-task'
 import { TaskPreviewLayout } from './task-thread/preview/task-preview-layout'
@@ -179,6 +181,8 @@ export function deferredJson<T>() {
 
 export function serve(overrides: {
   health?: HealthResponse | (() => Promise<Response>)
+  /** `GET /api/v1/runners`, or a delayed answer for the pickers' loading state. */
+  runners?: RunnersResponse | (() => Promise<Response>)
   /** Active project's scoped config; health may describe a different boot project. */
   config?: Partial<ConfigResponse> | (() => Promise<Response>)
   workspaceConfig?: WorkspaceConfigResponse
@@ -208,6 +212,7 @@ export function serve(overrides: {
 } = {}) {
   const data = {
     health: HEALTH,
+    runners: RUNNERS_RESPONSE,
     config: CONFIG,
     workspaceConfig: WORKSPACE_CONFIG,
     providerStatus: PROVIDERS_CONNECTED,
@@ -235,6 +240,7 @@ export function serve(overrides: {
   // `agentProfiles` answer `undefined` until a test sets them, which falls through to the 404.
   const routes: FetchRoute<Recorded>[] = [
     { path: '/api/v1/health', respond: () => answerFixture(data.health) },
+    { path: RUNNERS_PATH, respond: () => answerFixture(data.runners) },
     { path: '/api/v1/providers/status', respond: () => answerFixture(data.providerStatus, data.providerStatusStatus) },
     { path: '/api/v1/models?runner=claude', respond: () => jsonResponse({ runner: 'claude', models: [], source: 'unavailable', stale: false }) },
     { path: '/api/v1/models?runner=codex', respond: () => jsonResponse(data.models) },

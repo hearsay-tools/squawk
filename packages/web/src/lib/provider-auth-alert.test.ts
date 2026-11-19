@@ -8,6 +8,7 @@ import {
   providerAuthDismissals,
   visibleProviderAuthIncidents,
 } from './provider-auth-alert'
+import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 const STATUS: ProviderStatusResponse = {
   providers: [
@@ -35,23 +36,29 @@ describe('visibleProviderAuthIncidents', () => {
       ],
     }
 
-    expect(visibleProviderAuthIncidents(status, {})).toEqual([
+    expect(visibleProviderAuthIncidents(status, {}, RUNNERS_RESPONSE)).toEqual([
       { provider: 'claude', label: 'Claude Code', authFailureId: 'claude-1' },
       { provider: 'opencode', label: 'OpenCode', authFailureId: 'open-1' },
     ])
   })
 
   it('hides only the matching incident and resurfaces a different id', () => {
-    expect(visibleProviderAuthIncidents(STATUS, { claude: 'claude-1' })).toEqual([])
-    expect(visibleProviderAuthIncidents(NEW_STATUS, { claude: 'claude-1' })).toEqual([
+    expect(visibleProviderAuthIncidents(STATUS, { claude: 'claude-1' }, RUNNERS_RESPONSE)).toEqual([])
+    expect(visibleProviderAuthIncidents(NEW_STATUS, { claude: 'claude-1' }, RUNNERS_RESPONSE)).toEqual([
       { provider: 'claude', label: 'Claude Code', authFailureId: 'claude-2' },
     ])
   })
 
   it('ignores stale dismissal ids for a current incident', () => {
-    expect(visibleProviderAuthIncidents(STATUS, { claude: 'stale-id' })).toEqual([
+    expect(visibleProviderAuthIncidents(STATUS, { claude: 'stale-id' }, RUNNERS_RESPONSE)).toEqual([
       { provider: 'claude', label: 'Claude Code', authFailureId: 'claude-1' },
     ])
+  })
+})
+
+describe('visibleProviderAuthIncidents before the runners list', () => {
+  it('lists no incident until the runners list answers', () => {
+    expect(visibleProviderAuthIncidents(STATUS, {}, undefined)).toEqual([])
   })
 })
 
@@ -62,9 +69,9 @@ describe('providerAuthDismissals', () => {
       codex: '',
       opencode: 'a'.repeat(129),
       future: 'future-1',
-    })).toEqual({ claude: 'claude-1' })
-    expect(providerAuthDismissals(null)).toEqual({})
-    expect(providerAuthDismissals(['claude-1'])).toEqual({})
+    }, RUNNERS_RESPONSE)).toEqual({ claude: 'claude-1' })
+    expect(providerAuthDismissals(null, RUNNERS_RESPONSE)).toEqual({})
+    expect(providerAuthDismissals(['claude-1'], RUNNERS_RESPONSE)).toEqual({})
   })
 })
 

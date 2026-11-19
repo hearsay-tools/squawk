@@ -1,9 +1,9 @@
 import { resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
+import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 
 import { waitForSettledSample } from './visual-ready'
-import { AgentBrowser, readTestEnv } from './agent-browser'
+import { AgentBrowser, getJson, readTestEnv } from './agent-browser'
 import {
   applyContrastQaVariant,
   type ContrastSample,
@@ -34,9 +34,12 @@ const AA_NORMAL_TEXT = 4.5
 
 let browser: AgentBrowser
 let baseUrl: string
+/** The server's runner ids, in display order (`GET /api/v1/runners`). */
+let runnerIds: string[]
 
-beforeAll(() => {
+beforeAll(async () => {
   baseUrl = readTestEnv().baseUrl
+  runnerIds = (await getJson<RunnersResponse>(`${baseUrl}/api/v1/runners`)).runners.map((entry) => entry.id)
   browser = AgentBrowser.open(sessionId)
   browser.setViewport(1440, 900)
 })
@@ -60,7 +63,7 @@ const contrastOf = (selector: string) => browser.evaluate(contrastSampleExpressi
 describe('settings → agent config: the Pi pane', () => {
   it('offers a Pi tab after the other three and lists Pi’s catalogued files under it', () => {
     gotoAgentConfig()
-    expect(browser.evaluate(`[...document.querySelectorAll(${JSON.stringify(TABS)})].map((el) => el.dataset.agent)`)).toEqual([...runnerSchema.options])
+    expect(browser.evaluate(`[...document.querySelectorAll(${JSON.stringify(TABS)})].map((el) => el.dataset.agent)`)).toEqual(runnerIds)
     browser.click(PI_TAB)
     browser.waitForFunction(`document.querySelector(${JSON.stringify(PI_MCP_EMPTY)}) !== null`)
     // Catalog order inside each group: settings (user → project), then memory (global, shared).

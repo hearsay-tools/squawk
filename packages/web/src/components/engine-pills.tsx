@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { CpuIcon, GaugeIcon, TerminalIcon } from '@/components/design-icons'
 import { hasAccountChoice, useAgentAccounts } from '@/api/agent-accounts'
 import { useConfig, useProviderStatus, useRunnerModels } from '@/api/queries'
+import { useRunners } from '@/api/runners'
 import type { CreateRunInput, Runner } from '@open-mercato/cezar-api-client'
 import { PickerPill, PickerPillGroup, RunnerPill, type RunnerAccountChoice } from '@/components/picker-pill'
 import { usableRunners } from '@/lib/provider-status'
@@ -79,7 +80,8 @@ export interface ResolvedEngine {
 export function useResolvedEngine(pick: EnginePick): ResolvedEngine {
   const providers = useProviderStatus()
   const config = useConfig()
-  const runners = usableRunners(providers.data)
+  const registered = useRunners()
+  const runners = usableRunners(providers.data, registered.data)
   // `/api/health` is deliberately boot-project-only. Runner policy is per project, so every
   // scoped start surface must read the active project's `/api/config` instead (#699).
   const defaultRunner = config.data?.defaultRunner
@@ -98,10 +100,11 @@ export function useResolvedEngine(pick: EnginePick): ResolvedEngine {
   const model = resolveModel(
     modelsLocked ? null : pick.model,
     runner,
+    registered.data,
     config.data?.defaultModels,
     catalog.data,
   )
-  const effortOptions = effortOptionsForModel(runner, model, catalog.data)
+  const effortOptions = effortOptionsForModel(model, catalog.data)
   return {
     runner,
     runnerExplicit: pick.runner !== null,
@@ -218,8 +221,9 @@ export function EnginePills({
   const resolved = useResolvedEngine(pick)
   const { runner, model, effort, effortOptions, runners, canRun, modelsLocked } = resolved
   const config = useConfig()
+  const registered = useRunners()
   const catalog = useRunnerModels(runner)
-  const models = modelsForRunner(runner, catalog.data, [pick.model, config.data?.defaultModels?.[runner]])
+  const models = modelsForRunner(runner, registered.data, catalog.data, [pick.model, config.data?.defaultModels?.[runner]])
   const unavailable = disabled || !canRun
   const accountChoices = accounts ? resolved.accounts : []
   // Shown when there is a choice to make: more than one runner, or — where accounts are offered —
@@ -267,7 +271,7 @@ export function EnginePills({
       readOnly={modelsLocked === true}
       disabledHint={modelsLocked ? 'Model selection is locked to native coding-agent settings.' : undefined}
       onPick={(next) => {
-        const nextOptions = effortOptionsForModel(runner, next, catalog.data)
+        const nextOptions = effortOptionsForModel(next, catalog.data)
         onChange({
           ...pick,
           model: next,
@@ -275,7 +279,7 @@ export function EnginePills({
         })
       }}
       options={models.map((m) => ({ value: m.id, label: m.label, desc: m.desc }))}
-      status={modelCatalogStatus(runner, catalog.data, catalog.isError, catalog.isFetching)}
+      status={modelCatalogStatus(runner, registered.data, catalog.data, catalog.isError, catalog.isFetching)}
     />
   )
   const effortPill = (

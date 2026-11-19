@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
+import { RUNNER_IDS } from '@/test/runners.testkit'
 import type { AgentConfigFile } from '@open-mercato/cezar-api-client'
 import { AGENT_DESCRIPTORS, descriptorFor } from './agent-descriptors'
 
@@ -31,10 +31,10 @@ function fileOf(over: Partial<AgentConfigFile> & Pick<AgentConfigFile, 'id'>): A
 
 describe('AGENT_DESCRIPTORS', () => {
   // The guard #322 asked for: a runner shipped without a Settings → Agent config pane fails here,
-  // the way a runner without a catalog adapter fails #321's. `runnerSchema` is the contract's
-  // mirror of `RUNNER_IDS`, which the web package cannot import directly.
+  // the way a runner without a catalog adapter fails #321's. `RUNNER_IDS` is the fixture of the
+  // server's `GET /api/v1/runners` answer.
   it('has exactly one entry per runner id, in runner order — a new runner must ship a descriptor', () => {
-    expect(AGENT_DESCRIPTORS.map((d) => d.id)).toEqual([...runnerSchema.options])
+    expect(AGENT_DESCRIPTORS.map((d) => d.id)).toEqual(RUNNER_IDS)
   })
 
   it('gives every agent settings/mcp/memory groups in stable order, each MCP group saying where servers live', () => {

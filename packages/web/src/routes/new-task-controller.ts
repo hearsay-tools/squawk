@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject }
 
 import { createRun, postPlan, putUiState } from '@/api/client'
 import { useAgentAccounts } from '@/api/agent-accounts'
+import { useRunners } from '@/api/runners'
 import {
   queryKeys,
   useConfig,
@@ -183,25 +184,33 @@ export function usePromptTemplates(input: {
 /** Runner, model and effort: the effective picker values (rules in new-task-form.ts). */
 export function useEngineSelection(draft: NewTaskDraft, config: ConfigQuery) {
   const providers = useProviderStatus()
-  const runners = usableRunners(providers.data)
+  const registered = useRunners()
+  const runners = usableRunners(providers.data, registered.data)
   const defaultRunner = config.data?.defaultRunner
   const preferredRunner = defaultRunner ?? 'claude'
   const runner = runners.length > 0 ? resolveRunner(draft.runner, runners, preferredRunner) : null
   const displayRunner = runner ?? preferredRunner
   const providersReady = providers.isSuccess && runners.length > 0
+  // The pickers read the provider status and the runners list: either one pending or failed
+  // holds them the same way.
+  const providerState = {
+    isPending: providers.isPending || registered.isPending,
+    isError: providers.isError || registered.isError,
+  }
   const catalog = useRunnerModels(displayRunner)
   const modelsLocked = config.data?.modelsLocked === true
   const defaultModels = config.data?.defaultModels
   const models = runner === null
     ? []
-    : modelsForRunner(runner, catalog.data, [draft.model, defaultModels?.[runner]])
+    : modelsForRunner(runner, registered.data, catalog.data, [draft.model, defaultModels?.[runner]])
   const model = runner === null
     ? ''
-    : resolveModel(modelsLocked ? null : draft.model, runner, defaultModels, catalog.data)
-  const effortOptions = effortOptionsForModel(displayRunner, model, catalog.data)
+    : resolveModel(modelsLocked ? null : draft.model, runner, registered.data, defaultModels, catalog.data)
+  const effortOptions = effortOptionsForModel(model, catalog.data)
   const effort = modelsLocked ? '' : resolveEffort(draft.effort, effortOptions)
   return {
-    providers,
+    providers: providerState,
+    registered,
     runners,
     defaultRunner,
     runner,

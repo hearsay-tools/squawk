@@ -5,6 +5,7 @@ import { workspaceQueryKeys } from '@/api/queries'
 import type { HealthResponse } from '@open-mercato/cezar-api-client'
 import { resetToasts } from '@/components/ui/toaster'
 import { readDraft, resetDraft, writeDraft } from './new-task-draft'
+import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 beforeAll(() => {
   // cmdk scrolls the selected item into view; jsdom has no scrollIntoView.
@@ -237,6 +238,22 @@ describe('picker data flows', () => {
     await startTask()
     expect(postedBody()).toMatchObject({ runner: 'codex', model: 'gpt-lean' })
     expect((postedBody() as { effort?: string | undefined }).effort).toBeUndefined()
+  })
+
+  it('keeps the agent pickers disabled until the runners list answers', async () => {
+    const runners = deferredJson<typeof RUNNERS_RESPONSE>()
+    serve({ health: HEALTH_MULTI, providerStatus: PROVIDERS_MULTI, runners: runners.fetch })
+    const { client } = renderNewTask()
+    const modelPill = () => document.querySelector<HTMLButtonElement>('[data-slot="model-pill"]')
+    // Provider status has answered, so only the runners list holds the pickers.
+    await waitFor(() => expect(client.getQueryData(workspaceQueryKeys.providerStatus)).toBeDefined())
+    await waitFor(() => expect(requests.some((r) => r.url === '/api/v1/runners')).toBe(true))
+    expect(modelPill()?.disabled).toBe(true)
+    expect(document.querySelector('[data-slot="runner-pill"]')).toBeNull()
+
+    act(() => runners.release(RUNNERS_RESPONSE))
+    await waitFor(() => expect(modelPill()?.disabled).toBe(false))
+    expect(document.querySelector('[data-slot="runner-pill"]')).not.toBeNull()
   })
 
   it('shows the runner pill with >1 backend, and switching runner swaps the model presets', async () => {

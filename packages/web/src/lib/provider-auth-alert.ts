@@ -3,10 +3,7 @@ import type {
   ProviderStatusResponse,
   WorkspaceUiState,
 } from '@open-mercato/cezar-api-client'
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
-import { runnerDisplayName } from '@open-mercato/cezar-api-client/contract/runner-facts'
-
-const PROVIDERS: readonly ProviderId[] = runnerSchema.options
+import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 
 export interface ProviderAuthIncident {
   provider: ProviderId
@@ -18,11 +15,15 @@ export type ProviderAuthDismissals = NonNullable<
   WorkspaceUiState['dismissedProviderAuthFailures']
 >
 
-export function providerAuthDismissals(value: unknown): ProviderAuthDismissals {
+/** The stored dismissals of the registered runners whose ids are valid. */
+export function providerAuthDismissals(
+  value: unknown,
+  runners: RunnersResponse | undefined,
+): ProviderAuthDismissals {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return {}
   const record = value as Record<string, unknown>
   const dismissals: ProviderAuthDismissals = {}
-  for (const provider of PROVIDERS) {
+  for (const { id: provider } of runners?.runners ?? []) {
     const id = record[provider]
     if (typeof id === 'string' && id.length > 0 && id.length <= 128) {
       dismissals[provider] = id
@@ -31,13 +32,16 @@ export function providerAuthDismissals(value: unknown): ProviderAuthDismissals {
   return dismissals
 }
 
+/** The undismissed incidents, in the runners list's display order. None until both the status
+ *  and the runners list have answered. */
 export function visibleProviderAuthIncidents(
   status: ProviderStatusResponse | undefined,
   dismissals: ProviderAuthDismissals,
+  runners: RunnersResponse | undefined,
 ): ProviderAuthIncident[] {
-  if (!status) return []
+  if (!status || !runners) return []
   const rows = new Map(status.providers.map((row) => [row.provider, row]))
-  return PROVIDERS.flatMap((provider) => {
+  return runners.runners.flatMap(({ id: provider, displayName }) => {
     const row = rows.get(provider)
     if (
       row?.status !== 'disconnected'
@@ -46,7 +50,7 @@ export function visibleProviderAuthIncidents(
     ) return []
     return [{
       provider,
-      label: runnerDisplayName(provider),
+      label: displayName,
       authFailureId: row.authFailureId,
     }]
   })

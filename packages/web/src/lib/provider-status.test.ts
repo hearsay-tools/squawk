@@ -11,6 +11,7 @@ import {
   providerStatusFor,
   usableRunners,
 } from './provider-status'
+import { RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 const CONNECTED: ProviderStatusResponse = {
   providers: [
@@ -23,7 +24,7 @@ const CONNECTED: ProviderStatusResponse = {
 describe('provider-status runner order', () => {
   it('lists OMP last and accepts its SSE rows', () => {
     const rows = ['omp', 'claude', 'pi'].map((provider) => ({ provider, status: 'connected' as const, enabled: true }))
-    expect(usableRunners({ providers: rows as ProviderStatusResponse['providers'] })).toEqual(['claude', 'pi', 'omp'])
+    expect(usableRunners({ providers: rows as ProviderStatusResponse['providers'] }, RUNNERS_RESPONSE)).toEqual(['claude', 'pi', 'omp'])
     expect(parseProviderStatusEventRow({ provider: 'omp', status: 'disconnected' })).toEqual({
       provider: 'omp',
       status: 'disconnected',
@@ -49,7 +50,7 @@ describe('provider-status SSE rows', () => {
 
   it.each([
     null,
-    { provider: 'future', status: 'disconnected' },
+    { provider: '', status: 'disconnected' },
     { provider: 'claude', status: 'future' },
     { provider: 'claude', status: 'disconnected', hint: 1 },
     { provider: 'claude', status: 'disconnected', authFailureId: 1 },
@@ -207,7 +208,7 @@ describe('complete provider-status responses', () => {
 })
 
 describe('parseProviderStatusResponse', () => {
-  it('normalizes valid rows to canonical order and public fields only', () => {
+  it('keeps the row order the server sent and public fields only', () => {
     expect(
       parseProviderStatusResponse({
         ignored: 'private top-level value',
@@ -219,9 +220,9 @@ describe('parseProviderStatusResponse', () => {
       }),
     ).toEqual({
       providers: [
+        { provider: 'opencode', status: 'unknown', enabled: true, hint: 'Try again.' },
         { provider: 'claude', status: 'connected', enabled: true },
         { provider: 'codex', status: 'disconnected', enabled: false },
-        { provider: 'opencode', status: 'unknown', enabled: true, hint: 'Try again.' },
       ],
     })
   })
@@ -295,7 +296,7 @@ describe('parseProviderStatusResponse', () => {
 })
 
 describe('usableRunners', () => {
-  it('returns only enabled connected providers in canonical order', () => {
+  it('returns only enabled connected providers in the order of the runners list', () => {
     const status: ProviderStatusResponse = {
       providers: [
         { provider: 'opencode', status: 'connected', enabled: false },
@@ -304,23 +305,41 @@ describe('usableRunners', () => {
       ],
     }
 
-    expect(usableRunners(status)).toEqual(['claude'])
+    expect(usableRunners(status, RUNNERS_RESPONSE)).toEqual(['claude'])
+  })
+
+  it('returns [] until the runners list answers', () => {
+    expect(usableRunners(CONNECTED, undefined)).toEqual([])
+  })
+
+  it('drops a provider the runners list does not name', () => {
+    const status: ProviderStatusResponse = {
+      providers: [
+        { provider: 'future', status: 'connected', enabled: true },
+        { provider: 'codex', status: 'connected', enabled: true },
+      ],
+    }
+    expect(parseProviderStatusEventRow({ provider: 'future', status: 'disconnected' })).toEqual({
+      provider: 'future',
+      status: 'disconnected',
+    })
+    expect(usableRunners(status, RUNNERS_RESPONSE)).toEqual(['codex'])
   })
 
   it('returns [] for undefined/pending status', () => {
-    expect(usableRunners(undefined)).toEqual([])
+    expect(usableRunners(undefined, RUNNERS_RESPONSE)).toEqual([])
   })
 
   it('degrades a malformed successful response to no verified providers', () => {
-    expect(usableRunners({} as ProviderStatusResponse)).toEqual([])
-    expect(usableRunners({ providers: [null] } as unknown as ProviderStatusResponse)).toEqual([])
+    expect(usableRunners({} as ProviderStatusResponse, RUNNERS_RESPONSE)).toEqual([])
+    expect(usableRunners({ providers: [null] } as unknown as ProviderStatusResponse, RUNNERS_RESPONSE)).toEqual([])
     expect(usableRunners({
       providers: [{ provider: 'claude', status: 'connected' }],
-    } as unknown as ProviderStatusResponse)).toEqual([])
+    } as unknown as ProviderStatusResponse, RUNNERS_RESPONSE)).toEqual([])
   })
 
   it('does not fall back to claude when none is connected', () => {
-    expect(usableRunners({ providers: [] })).toEqual([])
+    expect(usableRunners({ providers: [] }, RUNNERS_RESPONSE)).toEqual([])
   })
 
   it('excludes disconnected, not-installed, and unknown rows', () => {
@@ -332,7 +351,7 @@ describe('usableRunners', () => {
       ],
     }
 
-    expect(usableRunners(status)).toEqual([])
+    expect(usableRunners(status, RUNNERS_RESPONSE)).toEqual([])
   })
 })
 

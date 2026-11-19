@@ -17,6 +17,7 @@ import { AppShellContainer, repoChipOf } from '@/components/app-shell-container'
 import { ThemeProvider } from '@/components/theme-provider'
 import { ProjectRouteMatcherContext } from '@/lib/project-route-matcher'
 import { PROJECT_RAIL_COLLAPSED_WIDTH } from '@/lib/project-rail-expanded'
+import { RUNNERS_PATH, RUNNERS_RESPONSE } from '@/test/runners.testkit'
 
 const fetchMock = vi.fn<typeof fetch>()
 
@@ -82,7 +83,9 @@ function serve(routes: Record<string, unknown>): void {
         ? (routes[path] ?? PROVIDERS)
         : path === '/api/v1/workspace/ui-state'
           ? (routes[path] ?? {})
-          : routes[path]
+          : path === RUNNERS_PATH
+            ? (routes[path] ?? RUNNERS_RESPONSE)
+            : routes[path]
     if (response === undefined) return new Response(JSON.stringify({ error: 'not found' }), { status: 404 })
     if (response instanceof Response) return response
     return new Response(JSON.stringify(response), {

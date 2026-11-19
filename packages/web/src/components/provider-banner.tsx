@@ -1,6 +1,7 @@
 import { XIcon } from 'lucide-react'
 
 import type { ProviderStatusResponse } from '@open-mercato/cezar-api-client'
+import type { RunnersResponse } from '@open-mercato/cezar-api-client/contract/runners'
 import { Link } from '@/lib/project-router'
 import {
   type ProviderAuthDismissals,
@@ -13,6 +14,8 @@ import { StatusDot } from './status-dot'
 
 interface ProviderBannerProps {
   status: ProviderStatusResponse | undefined
+  /** The runners list: incidents name their runner, so they wait for it. */
+  runners: RunnersResponse | undefined
   pending: boolean
   error: boolean
   dismissals: ProviderAuthDismissals
@@ -21,6 +24,7 @@ interface ProviderBannerProps {
 
 export function ProviderBanner({
   status,
+  runners,
   pending,
   error,
   dismissals,
@@ -34,7 +38,7 @@ export function ProviderBanner({
     return null
   }
 
-  const incidents = visibleProviderAuthIncidents(normalized, dismissals)
+  const incidents = visibleProviderAuthIncidents(normalized, dismissals, runners)
   if (incidents.length > 0) {
     return (
       <div

@@ -12,7 +12,7 @@ import type {
   RepoResponse,
   Runner,
 } from '@open-mercato/cezar-api-client'
-import { runnerSchema } from '@open-mercato/cezar-api-client/contract/runner'
+import { RUNNER_IDS, seedRunners } from '@/test/runners.testkit'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { AppRoutes } from '@/routes'
 
@@ -220,6 +220,7 @@ function gateSeededClient() {
     queries: { ...client.getDefaultOptions().queries, retry: false },
   })
   client.setQueryData(queryKeys.health, { bootProject: 'boot' })
+  seedRunners(client)
   // Seeded WITH the boot project, not an empty list: the client's staleTime is 5 minutes, so an
   // empty seed is never refetched and `project` stays undefined for the whole test — which renders
   // the Account picker disabled and let its assertions pass only because `fireEvent` ignores
@@ -445,7 +446,7 @@ describe('the agents form', () => {
     await waitFor(() => expect(form()).not.toBeNull())
     expect(
       [...document.querySelectorAll('[data-slot="agents-model"]')].map((el) => el.getAttribute('data-runner')),
-    ).toEqual([...runnerSchema.options])
+    ).toEqual(RUNNER_IDS)
   })
 
   it('offers each runner the models its own host CLI reports (#794)', async () => {
@@ -589,7 +590,7 @@ describe('the agents form', () => {
       await waitFor(() => expect(form()).not.toBeNull())
       // Settled: the default-models field below it has rendered, so the pane is not mid-load.
       await screen.findByLabelText('Default model for claude')
-      expect(rows().map((r) => r.getAttribute('data-value'))).toEqual([...runnerSchema.options])
+      expect(rows().map((r) => r.getAttribute('data-value'))).toEqual(RUNNER_IDS)
     })
 
     it('splits ONLY the agent that has a second login, and names each folder', async () => {
@@ -600,7 +601,7 @@ describe('the agents form', () => {
       expect(rows().map((r) => `${r.getAttribute('data-value')}:${r.getAttribute('data-account')}`)).toEqual([
         'claude:',
         'claude:klaudiusz',
-        ...runnerSchema.options.filter((id) => id !== 'claude').map((id) => `${id}:`),
+        ...RUNNER_IDS.filter((id) => id !== 'claude').map((id) => `${id}:`),
       ])
       expect(rowFor('claude', '')?.querySelector('[data-slot="agents-account-dir"]')?.textContent).toBe('/home/u/.claude')
       expect(rowFor('claude', 'klaudiusz')?.querySelector('[data-slot="agents-account-dir"]')?.textContent).toBe('~/.claude-klaudiusz')

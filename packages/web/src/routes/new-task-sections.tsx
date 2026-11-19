@@ -111,14 +111,14 @@ function ModelPill({ engine, draftEffort, update }: { engine: Engine; draftEffor
       readOnly={engine.modelsLocked}
       disabledHint={engine.modelsLocked ? 'Model selection is locked to native coding-agent settings.' : undefined}
       onPick={(next) => {
-        const nextOptions = effortOptionsForModel(displayRunner, next, catalog.data)
+        const nextOptions = effortOptionsForModel(next, catalog.data)
         update({
           model: next,
           effort: draftEffort === null ? null : resolveEffort(draftEffort, nextOptions),
         })
       }}
       options={engine.models.map((m) => ({ value: m.id, label: m.label, desc: m.desc }))}
-      status={modelCatalogStatus(displayRunner, catalog.data, catalog.isError, catalog.isFetching)}
+      status={modelCatalogStatus(displayRunner, engine.registered.data, catalog.data, catalog.isError, catalog.isFetching)}
     />
   )
 }
