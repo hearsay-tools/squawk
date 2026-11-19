@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunStore } from '../runs/store.ts';
 import { readPid, requirePid } from '../pid-file.testkit.ts';
+import { ignoreTermShell, ownerGuardShell } from '../stubborn-child.testkit.ts';
 
 
 // These fixtures exercise checks and Git, never the auxiliary LLM namer.
@@ -50,7 +51,7 @@ describe('Stop on a workflow check (#496)', () => {
   it('kills a check that ignores SIGTERM and confirms the group is gone', async () => {
     const f = fixture();
     const pidFile = join(f.root, 'pid');
-    const id = startCheck(f, `trap '' TERM; echo $$ > ${pidFile}.tmp; mv ${pidFile}.tmp ${pidFile}; while true; do sleep 0.1; done`);
+    const id = startCheck(f, `${ignoreTermShell()} echo $$ > ${pidFile}.tmp; mv ${pidFile}.tmp ${pidFile}; while true; do sleep 0.1; done`);
     await waitFor(() => readPid(pidFile) !== undefined, 'check start');
     const pid = pidOf(pidFile);
     const t0 = Date.now();
@@ -65,7 +66,7 @@ describe('Stop on a workflow check (#496)', () => {
   it('kills descendants that hold the output pipes open', async () => {
     const f = fixture();
     const pidFile = join(f.root, 'child');
-    const id = startCheck(f, `(trap '' TERM; while true; do sleep 0.1; done) & echo $! > ${pidFile}.tmp; mv ${pidFile}.tmp ${pidFile}; wait`);
+    const id = startCheck(f, `(trap '' TERM; while true; do sleep 0.1; done) & member=$!; ${ownerGuardShell('$member')} echo $member > ${pidFile}.tmp; mv ${pidFile}.tmp ${pidFile}; wait`);
     await waitFor(() => readPid(pidFile) !== undefined, 'child start');
     const child = pidOf(pidFile);
     f.manager.cancel(id);

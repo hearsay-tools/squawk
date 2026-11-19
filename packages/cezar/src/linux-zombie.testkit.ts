@@ -2,6 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { connect } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
+import { ignoreTermPython } from './stubborn-child.testkit.ts';
 
 export const hasLinuxPython = process.platform === 'linux' && spawnSync('python3', ['-I', '-c', 'import ctypes'], { stdio: 'ignore' }).status === 0;
 
@@ -9,7 +10,7 @@ export const hasLinuxPython = process.platform === 'linux' && spawnSync('python3
 export async function threadHoldingPort() {
   const child = spawn('python3', ['-I', '-c', `
 import ctypes, signal, socket, threading, time
-signal.signal(signal.SIGTERM, signal.SIG_IGN)
+${ignoreTermPython()}
 s = socket.socket(); s.bind(('127.0.0.1', 0)); s.listen()
 print(s.getsockname()[1], flush=True)
 threading.Thread(target=lambda: time.sleep(60)).start()

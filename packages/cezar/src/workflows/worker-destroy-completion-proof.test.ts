@@ -2,6 +2,7 @@ import { testHome } from '../home/test-home.testkit.ts';
 import { RUN_STATUS, STEP_KIND } from '@open-mercato/cezar-contract/test-factories.testkit';
 
 import { readPid, requirePid } from '../pid-file.testkit.ts';
+import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -119,7 +120,7 @@ describe('worker termination barrier', { timeout: 30_000 }, () => {
 
   it('keeps workflow checks inside the termination barrier until the check process closes', async () => {
     const script = join(root, 'controlled-check.cjs');
-    writeFileSync(script, "process.on('SIGTERM',()=>{}); const fs = require('node:fs'); fs.writeFileSync('check.pid.tmp', String(process.pid)); fs.renameSync('check.pid.tmp', 'check.pid'); setInterval(()=>{},1000);");
+    writeFileSync(script, `${ignoreTermSource()} const fs = require('node:fs'); fs.writeFileSync('check.pid.tmp', String(process.pid)); fs.renameSync('check.pid.tmp', 'check.pid'); setInterval(()=>{},1000);`);
     const workflow: WorkflowDef = { name: 'check barrier fixture', source: 'built-in', steps: [{ id: 'task', command: `exec '${process.execPath}' '${script}'` }] };
     const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
     const owned = await planOwnedWorkspace(root, randomUUID(), sha);

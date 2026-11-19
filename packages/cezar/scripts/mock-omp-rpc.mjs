@@ -525,7 +525,7 @@ async function prompt(command, sent = command.message) {
   if (message.includes('mock:linger')) {
     linger = true;
     process.removeAllListeners('SIGTERM');
-    process.on('SIGTERM', () => {});
+    process.on('SIGTERM', () => {}); // stubborn-child: the backstop below ends it after 12 s
     // Test-cleanup backstop, deliberately longer than the asserted teardown bound.
     setTimeout(() => process.exit(0), 12_000).unref?.();
     setInterval(() => {}, 1_000);

@@ -2,6 +2,7 @@
 // gh 2.100.0 (installed 2026-09-22): https://github.com/cli/cli/blob/v2.100.0/pkg/cmd/pr/checks/checks.go
 // JSON fields/buckets and empty-check diagnostic pinned to that upstream implementation.
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { ignoreTermUntilOwnerExits } from '../../stubborn-child.testkit.ts';
 const args = process.argv.slice(2);
 const mode = process.env.CI_FIXTURE_MODE || 'passed';
 if (process.env.CI_FIXTURE_LOG) appendFileSync(process.env.CI_FIXTURE_LOG, JSON.stringify({args,pid:process.pid})+'\n');
@@ -22,7 +23,8 @@ if (args[0] === 'api') {
 } else if (args.includes('--watch')) {
  if(mode.startsWith('watch_')) { writeFileSync(process.env.CI_FIXTURE_COUNTER,'done'); process.exit(mode === 'watch_failed' ? 1 : 0); }
  if (mode === 'pending' || mode === 'stubborn') {
-   if (mode === 'stubborn') process.on('SIGTERM',()=>{});
+   // The test that asks for a stubborn watcher names itself the owner (hearsay-tools/squawk#3941).
+   if (mode === 'stubborn') ignoreTermUntilOwnerExits(Number(process.env.CI_FIXTURE_OWNER));
    setInterval(()=>process.stdout.write('redraw\n'), 20);
  } else process.exit(mode === 'failed' ? 1 : 0);
 } else {
