@@ -83,7 +83,8 @@ describe('a run saved on an unregistered runner', () => {
     expect(run?.titleSummary).toBe('renamed');
     expect(run?.runner).toBe('gemini');
     expect(run?.removedRunner).toBeUndefined();
-    expect(run?.steps[1]).toMatchObject({ backend: 'gemini', sessionId: 'gem-sess', sessionTransport: 'gem-wire' });
+    // `sessionTransport` is not in the step schema: the store keeps it as a raw extra, checked above.
+    expect(run?.steps[1]).toMatchObject({ backend: 'gemini', sessionId: 'gem-sess' });
     expect(run?.steps[1]).not.toHaveProperty('removedBackend');
     expect(run?.workflowDef?.steps[1]).toMatchObject({ runner: 'gemini', model: 'g-1', effort: 'high', agentProfile: 'work' });
     store.close();
