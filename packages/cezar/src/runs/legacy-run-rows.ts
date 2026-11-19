@@ -78,13 +78,17 @@ export function upgradeRemovedRunner(row: Record<string, unknown>): void {
       delete target[key];
     }
   };
+  // Runners whose fold a write already stored on a step: see the step loop below.
+  const stored = new Set(records(row.steps).map(step => step.removedBackend));
   const rowRemoval = removalOf(row.runner);
   let removed = rowRemoval ? row.runner as string : undefined;
   if (rowRemoval) drop(row, ['runner'], [], rowRemoval);
   records(row.steps).forEach((step, index) => {
     const removal = removalOf(step.backend);
     if (!removal) return;
-    removed ??= step.backend as string;
+    // A step that a write already stored as folded marks no run: a Continue on another runner
+    // cleared the run's mark, as it clears it for a retired runner, whose fold leaves no backend.
+    if (removal === 'retired' || !stored.has(step.backend)) removed ??= step.backend as string;
     step.removedBackend = step.backend;
     drop(step, ['backend', 'sessionId', 'sessionTransport'], ['steps', index], removal);
   });
@@ -92,7 +96,7 @@ export function upgradeRemovedRunner(row: Record<string, unknown>): void {
   records(definition && typeof definition === 'object' ? (definition as Record<string, unknown>).steps : undefined).forEach((step, index) => {
     const removal = removalOf(step.runner);
     if (!removal) return;
-    removed ??= step.runner as string;
+    if (removal === 'retired' || !stored.has(step.runner)) removed ??= step.runner as string;
     drop(step, ['runner', 'model', 'effort', 'agentProfile'], ['workflowDef', 'steps', index], removal);
   });
   if (removed !== undefined && row.removedRunner === undefined) row.removedRunner = removed;

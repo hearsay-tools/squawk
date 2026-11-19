@@ -106,6 +106,32 @@ describe('a run saved on an unregistered runner', () => {
     store.close();
   });
 
+  it('reads as continued, like a cursor run, after a Continue on another runner in a process still without it', async () => {
+    const first = (await processWith('built-in')).open(dataDir);
+    first.updateRun('gem', { runner: 'claude', removedRunner: undefined });
+    first.close();
+    const store = (await processWith('built-in')).open(dataDir);
+    const run = store.getRun('gem');
+    expect(run?.runner).toBe('claude');
+    expect(run?.removedRunner).toBeUndefined();
+    expect(run?.steps[1]?.removedBackend).toBe('gemini');
+    expect(run?.steps[1]).not.toHaveProperty('sessionId');
+    store.close();
+  });
+
+  it('lets a session that a later write starts on a folded step keep its own runner and id', async () => {
+    const without = (await processWith('built-in')).open(dataDir);
+    without.updateRun('gem', { runner: 'codex', removedRunner: undefined });
+    without.updateStep('gem', 'build', { backend: 'codex', sessionId: 'codex-sess' });
+    without.close();
+    for (const registration of ['built-in', 'built-in and gemini'] as const) {
+      const store = (await processWith(registration)).open(dataDir);
+      expect(store.getRun('gem')?.steps[1]).toMatchObject({ backend: 'codex', sessionId: 'codex-sess' });
+      expect(store.getRun('gem')?.removedRunner).toBeUndefined();
+      store.close();
+    }
+  });
+
   it('stays unreadable, and untouched, in a process that registered no runner', async () => {
     const store = (await processWith('none')).open(dataDir);
     expect(store.getRun('gem')).toBeUndefined();
