@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -138,6 +138,48 @@ describe('a run saved on an unregistered runner', () => {
     expect(store.getRun('gem')).toBeUndefined();
     store.close();
     expect(readPersistedRuns(dataDir)[0]).toMatchObject({ runner: 'gemini', steps: [{ id: 'plan' }, { id: 'build', sessionId: 'gem-sess' }] });
+  });
+});
+
+describe('a runs.json run on an unregistered runner', () => {
+  let dataDir: string;
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'cez-unregistered-import-'));
+    writeFileSync(join(dataDir, 'runs.json'), JSON.stringify([SAVED]), 'utf8');
+  });
+
+  afterEach(() => {
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('keeps its sessions and step settings through the import, for a process that registers the runner', async () => {
+    const importing = (await processWith('built-in')).open(dataDir);
+    expect(importing.getRun('gem')?.removedRunner).toBe('gemini');
+    importing.close();
+    expect(readPersistedRuns(dataDir)[0]).toMatchObject({ runner: 'gemini',
+      steps: [{ id: 'plan' }, { id: 'build', backend: 'gemini', sessionId: 'gem-sess', sessionTransport: 'gem-wire' }],
+      workflowDef: { steps: [{ id: 'plan' }, { id: 'build', runner: 'gemini', model: 'g-1', effort: 'high', agentProfile: 'work' }] } });
+
+    const store = (await processWith('built-in and gemini')).open(dataDir);
+    const run = store.getRun('gem');
+    expect(run?.runner).toBe('gemini');
+    expect(run?.removedRunner).toBeUndefined();
+    expect(run?.steps[1]).toMatchObject({ backend: 'gemini', sessionId: 'gem-sess' });
+    expect(run?.workflowDef?.steps[1]).toMatchObject({ runner: 'gemini', model: 'g-1', effort: 'high', agentProfile: 'work' });
+    store.close();
+  });
+});
+
+describe('a saved runner id read back as a runner', () => {
+  it('names a registered runner itself, a legacy id its runner, and an unknown id Claude', async () => {
+    await processWith('built-in and gemini');
+    const registry = await import('../core/runner-registry.ts');
+    expect(registry.savedRunnerId('gemini')).toBe('gemini');
+    expect(registry.runnerIdOf('gemini')).toBe('gemini');
+    expect(registry.savedRunnerId('claude-cli')).toBe('claude');
+    expect(registry.runnerIdOf('nope')).toBe('claude');
+    expect(registry.savedRunnerId(undefined)).toBeUndefined();
   });
 });
 

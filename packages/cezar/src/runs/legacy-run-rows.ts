@@ -104,14 +104,15 @@ export function upgradeRemovedRunner(row: Record<string, unknown>): void {
 }
 
 /**
- * `raw` with the fields that the fold of an unregistered runner removed put back, for the raw
- * extras of its row (raw-record.ts): the next write keeps them unless it sets them itself. `raw`
+ * `onto` (by default `raw` itself) with the fields that the fold of `raw`, an unregistered runner's
+ * row, removed put back: for the raw extras of its row (raw-record.ts), so the next write keeps
+ * them unless it sets them itself, and for the stored JSON of an imported `runs.json` entry. `onto`
  * itself when no such fold ran.
  */
-export function withKeptFields(raw: unknown): unknown {
+export function withKeptFields(raw: unknown, onto: unknown = raw): unknown {
   const kept = raw && typeof raw === 'object' ? keptFields.get(raw) : undefined;
-  if (!kept) return raw;
-  const copy = structuredClone(raw) as Record<string, unknown>;
+  if (!kept) return onto;
+  const copy = structuredClone(onto) as Record<string, unknown>;
   for (const { path, value } of kept) {
     let target: unknown = copy;
     for (const key of path.slice(0, -1)) target = target && typeof target === 'object' ? (target as Record<string | number, unknown>)[key] : undefined;
@@ -210,7 +211,8 @@ export function legacyIndexRows(bytes: Buffer, parse: typeof parseRunRecords): {
       continue;
     }
     const run = parsed.data[0]!;
-    rows.set(run.id, encodeRunRow(run, JSON.stringify(stored)));
+    // The shallow copy shares nested steps with the parsed entry: put back what the fold removed.
+    rows.set(run.id, encodeRunRow(run, JSON.stringify(withKeptFields(entry, stored))));
   }
   return { rows: [...rows.values()], skipped, total: raw.length };
 }
