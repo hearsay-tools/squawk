@@ -219,24 +219,36 @@ describe('a worker that supervises a worker (hearsay-tools/squawk#3819)', { time
       .toMatchObject({ outcome: { requestId: question, status: 'replied', replyId: answer } });
   });
 
-  // A scheduled attempt holds the project's retry key, and a child's own retry takes the child's key
-  // before that one: the supervisor's scheduled attempt must never wait for the child's key.
-  it('lets a scheduled destroy of the worker end while the child\'s key is held, and leaves the child to its own retry', async () => {
+  // Lock order (worker-cleanup.ts): a scheduled tick takes its worker's key, then the project's
+  // `destroy-retries` key. A supervisor's tick that then waited for its child's key would wait on
+  // the child's tick, which holds that key and waits for the project key.
+  it('finishes a supervisor retry and a child retry that run at the same time', { timeout: 30_000 }, async () => {
     const W = await supervisor();
     const C = await child(W.w);
     const cleanup = [...workerCleanupInternals(f.service)][0]!;
     const project = (Reflect.get(f.service, 'projects') as Map<string, Parameters<typeof cleanup.destroyAttempt>[0]>).get('project')!;
-    const serialized = (Reflect.get(f.service, 'serialized') as <T>(key: string, operation: () => Promise<T>) => Promise<T>).bind(f.service);
-    let release!: () => void;
-    const childKeyHeld = serialized(`worker:project:${C.id}`, () => new Promise<void>(done => { release = done; }));
-    const pending = (id: string) => () => f.store.getRun(id)!;
-    const attempt = await cleanup.destroyAttempt(project, W.id, pending(W.id), 'scheduled');
-    expect(attempt).toMatchObject({ state: 'incomplete', error: `Worker ${C.id}, which this worker started, is not destroyed yet: its cleanup retries on its own` });
+    const tick = (id: string) => (Reflect.get(cleanup, 'destroyTick') as (project: unknown, workerId: string) => Promise<void>).call(cleanup, project, id);
+    const destroyOf = (id: string) => { const record = run(id).delegation; return record?.role === 'worker' ? record.destroy : undefined; };
+    // Both destroys are pending, as after a restart during an incomplete cleanup.
+    for (const [id, remaining] of [[W.id, ['process', 'worktree', 'branch']], [C.id, ['process']]] as const) {
+      f.store.commitDelegation([{ id, delegation: { ...run(id).delegation!, destroy: { requestedAt: new Date().toISOString(), phase: 'requested', remaining: [...remaining] } } as never }]);
+    }
+    await Promise.all([tick(W.id), tick(C.id)]);
+    expect(destroyOf(C.id)).toMatchObject({ phase: 'complete', remaining: [] });
+    // The supervisor's attempt did not wait for the child: it reported itself incomplete and retries.
+    expect(destroyOf(W.id)).toMatchObject({ phase: 'incomplete', error: `Worker ${C.id}, which this worker started, is not destroyed yet: its cleanup retries on its own` });
+    await tick(W.id);
+    expect(destroyOf(W.id)).toMatchObject({ phase: 'complete', remaining: [] });
+  });
+
+  it('records the destroy of a child that has none when the supervisor\'s retry runs first', async () => {
+    const W = await supervisor();
+    const C = await child(W.w);
+    const cleanup = [...workerCleanupInternals(f.service)][0]!;
+    const project = (Reflect.get(f.service, 'projects') as Map<string, Parameters<typeof cleanup.destroyAttempt>[0]>).get('project')!;
+    expect(await cleanup.destroyAttempt(project, W.id, () => f.store.getRun(W.id)!, 'scheduled')).toMatchObject({ state: 'incomplete' });
     const requested = run(C.id).delegation;
     expect(requested?.role === 'worker' && requested.destroy).toMatchObject({ phase: 'requested', remaining: ['process'] });
-    release(); await childKeyHeld;
-    expect(await cleanup.destroyAttempt(project, C.id, pending(C.id), 'scheduled')).toMatchObject({ state: 'complete', remaining: [] });
-    expect(await cleanup.destroyAttempt(project, W.id, pending(W.id), 'scheduled')).toMatchObject({ state: 'complete', remaining: [] });
   });
 
   it('destroys the child before the worker, and deletes the worker\'s history only after the child\'s', async () => {
