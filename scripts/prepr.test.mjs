@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { complexityRun, daemonAlive, fallbackLines, focusedTests, gitIo, judgeSqueal, lintFallbackLine, loweredNotes, lintUnfinished, patchLimitLines, prepr, SQUEAL_WAIT_MS, squealChecks, squealLines, testBudgetLines } from './prepr.mjs';
+import { complexityRun, daemonAlive, fallbackLines, focusedTests, gitIo, judgeSqueal, lintFallbackLine, loweredNotes, lintUnfinished, patchLimitLines, pendingLine, prepr, SQUEAL_WAIT_MS, squealChecks, squealLines, testBudgetLines } from './prepr.mjs';
 
 const { GITHUB_PATCH_LIMITS, numstatRows } = createRequire(import.meta.url)('../.github/scripts/missing-patches.cjs');
 
@@ -96,10 +96,13 @@ const ok = out => ({ code: 0, out, err: '' });
 const live = (testFiles, lint) => JSON.stringify({ available: true, daemon: { state: 'alive' }, selection: { testFiles }, lint });
 const doneLint = { failing: 0, pending: 0, stale: 0, unknown: 0 };
 
-function fakeIo({ responses = {}, files = 'scripts/x.mjs\0', numstat = '1\t0\tscripts/x.mjs\0', nameStatus = 'M\0scripts/x.mjs\0', patch = 'diff --git a/scripts/x.mjs b/scripts/x.mjs\n+small\n', noBase = false, nodeTests = { argv: [], files: [] } } = {}) {
+function fakeIo({ responses = {}, files = 'scripts/x.mjs\0', numstat = '1\t0\tscripts/x.mjs\0', nameStatus = 'M\0scripts/x.mjs\0', patch = 'diff --git a/scripts/x.mjs b/scripts/x.mjs\n+small\n', noBase = false, nodeTests = { argv: [], files: [] }, direct = files => files } = {}) {
   const calls = [];
   return {
     calls,
+    directImporters: direct,
+    load: () => ({ load: 31.5, cpus: 24 }),
+    now: () => 0,
     run: async (cmd, args) => {
       calls.push([cmd, ...args]);
       const key = [cmd, args[0], args[1]].join(' ');
@@ -129,13 +132,70 @@ test('squealChecks returns a passing verdict from one wait', async () => {
   const io = fakeIo({ responses: { squeal: ok(live([file('a.test.ts', 'current', 'pass')], doneLint)) } });
   const r = await squealChecks(['a.ts'], 1000, io);
   assert.equal(r.state, 'pass');
-  assert.deepEqual(io.calls[0].slice(0, 4), ['squeal', 'status', '--wait', '1000']);
+  assert.deepEqual(io.calls.map(c => c.slice(0, 4)), [['squeal', 'status', '--json', 'a.ts'], ['squeal', 'status', '--wait', '1000']]);
 });
 
-test('squealChecks waits once and does not poll lint that has not finished', async () => {
+test('squealChecks waits once on the selection and does not poll lint that has not finished', async () => {
   const io = fakeIo({ responses: { squeal: ok(live([], { failing: 0, linting: { done: 0, total: 0 } })) } });
   const r = await squealChecks(['packages/a/src/x.ts'], 10_000, io);
-  assert.deepEqual([r.state, lintUnfinished(r.lint), io.calls.length], ['pass', true, 1]);
+  assert.deepEqual([r.state, lintUnfinished(r.lint), io.calls.filter(c => c.includes('--wait')).length], ['pass', true, 1]);
+});
+
+// hearsay-tools/squawk#3940: edited tests and direct readers must pass; the rest is pending under load.
+const cpuQueued = path => ({ path, state: 'pending', reason: 'queued, waiting for CPU since 10:00: the host is busy (24 of 24 cores in use; Squeal\'s daemons hold 8 of 8 test slots)' });
+const directIo = (testFiles, direct, code = 3) => fakeIo({ direct: () => direct, responses: { squeal: { code, out: live(testFiles, doneLint), err: '' } } });
+
+test('a direct reader of a changed file with no result fails prepr and is named', async () => {
+  const io = directIo([cpuQueued('src/a.test.ts'), cpuQueued('src/far.test.ts')], ['src/a.test.ts']);
+  const r = await prepr({ io, waitMs: 120_000 });
+  assert.equal(r.failed, true);
+  assert.match(r.report, /- FAIL: Squeal had no result within 120 s for these edited test files or direct readers of a changed file: src\/a\.test\.ts\./);
+  assert.doesNotMatch(r.report, /FAIL[^\n]*far\.test\.ts/);
+  assert.match(r.report, /- pending: 1 transitively affected/);
+});
+
+test('only transitive files queued for CPU pass prepr with the pending line, its count and the load', async () => {
+  const io = directIo([file('src/a.test.ts', 'current', 'pass'), cpuQueued('src/b.test.ts'), cpuQueued('src/c.test.ts'), { path: 'src/d.test.ts', state: 'unknown', reason: 'no result: never run at this key' }], ['src/a.test.ts']);
+  const r = await prepr({ io, waitMs: 120_000 });
+  assert.equal(r.failed, false, r.report);
+  assert.match(r.report, /- pass: Squeal: 1 affected test file\(s\) current and passing/);
+  assert.match(r.report, /- pending: 3 transitively affected test file\(s\) have no result \(2 queued waiting for CPU at load 31\.5 on 24 CPUs; 1 no result\); CI decides\. `squeal status --full` gives each cause\./);
+});
+
+test('a red direct reader fails prepr as before, with transitive files pending beside it', async () => {
+  const io = directIo([file('src/a.test.ts', 'current', 'fail'), cpuQueued('src/b.test.ts')], ['src/a.test.ts'], 1);
+  const r = await prepr({ io, waitMs: 120_000 });
+  assert.equal(r.failed, true);
+  assert.match(r.report, /- FAIL: Squeal: failing test files: src\/a\.test\.ts/);
+});
+
+test('squealChecks waits on the direct readers first, then on the selection with the time left', async () => {
+  let now = 0;
+  const io = directIo([cpuQueued('src/a.test.ts'), cpuQueued('src/b.test.ts')], ['src/a.test.ts']);
+  io.now = () => now;
+  const run = io.run;
+  io.run = async (cmd, args, options) => { if (args.includes('--wait')) now += 70_000; return run(cmd, args, options); };
+  await squealChecks(['src/a.ts'], 120_000, io);
+  assert.deepEqual(io.calls.map(c => c.slice(1).join(' ')), ['status --json src/a.ts', 'status --wait 120000 --json src/a.test.ts', 'status --wait 50000 --json src/a.ts']);
+  now = 0;
+  io.calls.length = 0;
+  io.run = async (cmd, args, options) => { if (args.includes('--wait')) now += 130_000; return run(cmd, args, options); };
+  await squealChecks(['src/a.ts'], 120_000, io);
+  assert.deepEqual(io.calls.at(-1).slice(1), ['status', '--json', 'src/a.ts'], 'no time left: a snapshot, not a wait');
+});
+
+test('a direct reader that discovery lists only after the first snapshot still fails without a result', async () => {
+  const unlisted = JSON.stringify({ available: true, daemon: { state: 'alive' }, selection: { testFiles: [], result: 'none', reason: 'unlisted' }, lint: doneLint });
+  const io = fakeIo({ direct: files => files.filter(f => f === 'src/a.test.ts'), responses: {
+    'squeal status --json': ok(unlisted),
+    'squeal status --wait': { code: 3, out: live([cpuQueued('src/a.test.ts'), cpuQueued('src/b.test.ts')], doneLint), err: '' },
+  } });
+  const r = await squealChecks(['src/a.ts'], 120_000, io);
+  assert.deepEqual([r.state, r.missing, r.pending.map(p => p.path)], ['incomplete', ['src/a.test.ts'], ['src/b.test.ts']]);
+});
+
+test('the pending line counts unknown load as unknown', () => {
+  assert.match(pendingLine([cpuQueued('a.test.ts')]), /1 queued waiting for CPU at load unknown on unknown CPUs/);
 });
 
 test('focusedTests skips a full or unreadable selection and runs a narrow one', async () => {
@@ -156,7 +216,7 @@ test('squealLines words each state', () => {
   const missing = Array.from({ length: 12 }, (_, i) => `f${i}.test.ts`);
   const inc = squealLines({ state: 'incomplete', missing, lint: { unfinished: 3 } }, 120_000)[0];
   assert.equal(inc.ok, false);
-  assert.match(inc.text, /^- FAIL: Squeal had no test result within 120 s for: f0\.test\.ts.*f9\.test\.ts, and 2 more\. .*squeal run run-loop/);
+  assert.match(inc.text, /^- FAIL: Squeal had no result within 120 s for these edited test files or direct readers of a changed file: f0\.test\.ts.*f9\.test\.ts, and 2 more\. .*squeal run run-loop/);
   assert.match(squealLines({ state: 'pass', count: 4, failed: [], missing: [], lint }, 1000)[0].text, /4 affected test file\(s\) current and passing; lint clean$/);
   assert.doesNotMatch(squealLines({ state: 'pass', count: 4, failed: [], missing: [], lint: { unfinished: 2 } }, 1000)[0].text, /lint clean/);
 });
@@ -227,7 +287,7 @@ test('squealChecks passes a process timeout to the wait', async () => {
   const io = fakeIo({ responses: { squeal: ok(live([], doneLint)) } });
   let options;
   const run = io.run;
-  io.run = async (cmd, args, o) => { options ??= o; return run(cmd, args, o); };
+  io.run = async (cmd, args, o) => { if (args.includes('--wait')) options ??= o; return run(cmd, args, o); };
   await squealChecks(['a.ts'], 1000, io);
   assert.equal(options.timeout, 11_000);
 });
@@ -442,7 +502,7 @@ test('prepr fails on a missing test result and names the file', async () => {
   const r = await prepr({ io, waitMs: 120_000 });
   assert.equal(r.failed, true);
   assert.match(r.report, /^prepr: FAIL/);
-  assert.match(r.report, /- FAIL: Squeal had no test result within 120 s for: a\.test\.ts/);
+  assert.match(r.report, /- FAIL: Squeal had no result within 120 s for these edited test files or direct readers of a changed file: a\.test\.ts/);
 });
 
 test('prepr runs npm run lint when Squeal lint has not finished, and fails on its finding', async () => {
@@ -528,9 +588,9 @@ test('a failing Squeal result still names the files with no result and the unmat
   const r = judgeSqueal(1, st);
   assert.deepEqual([r.state, r.missing, r.unmatched], ['fail', ['b.test.ts'], ['src/x.ts']]);
   const text = squealLines(r, 1000).map(l => l.text).join('\n');
-  assert.match(text, /failing test files: a\.test\.ts[^]*no test result within 1 s for: b\.test\.ts[^]*select no test file: src\/x\.ts/);
+  assert.match(text, /failing test files: a\.test\.ts[^]*no result within 1 s for these edited test files or direct readers of a changed file: b\.test\.ts[^]*select no test file: src\/x\.ts/);
   const lintFail = judgeSqueal(0, status([file('c.test.ts', 'pending')], { lint: { failing: 2 } }));
-  assert.match(squealLines(lintFail, 1000).map(l => l.text).join('\n'), /2 lint finding[^]*for: c\.test\.ts/);
+  assert.match(squealLines(lintFail, 1000).map(l => l.text).join('\n'), /2 lint finding[^]*changed file: c\.test\.ts/);
 });
 
 test('prepr reports an unreadable squeal status and runs npm run lint for the unknown lint result', async () => {

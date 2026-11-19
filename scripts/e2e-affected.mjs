@@ -140,6 +140,15 @@ function aliasBase(from, literal) {
   return null;
 }
 
+/** The repository paths a string literal in `from` may name, in resolution order, whether they exist or not. */
+export function literalCandidates(from, literal) {
+  if (!/^[\w@.~/-]+$/.test(literal) || !/[\w~-]/.test(literal) || literal.startsWith('/')) return [];
+  const base = aliasBase(from, literal) ?? posix.join(posix.dirname(from), literal);
+  if (base.startsWith('../') || base.split('/').includes('node_modules')) return [];
+  const stem = base.replace(/\.(?:m?js|jsx)$/, '');
+  return [base, `${stem}.ts`, `${stem}.tsx`, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`];
+}
+
 /**
  * The repository file or directory a string literal in `from` names: an import specifier, or a
  * path such as `'fixtures/thread-run.ndjson'` that a spec resolves against its own directory.
@@ -147,11 +156,7 @@ function aliasBase(from, literal) {
  * names the repository root, not something the file reads.
  */
 export function resolveLiteral(root, from, literal) {
-  if (!/^[\w@.~/-]+$/.test(literal) || !/[\w~-]/.test(literal) || literal.startsWith('/')) return null;
-  const base = aliasBase(from, literal) ?? posix.join(posix.dirname(from), literal);
-  if (base.startsWith('../') || base.split('/').includes('node_modules')) return null;
-  const stem = base.replace(/\.(?:m?js|jsx)$/, '');
-  for (const candidate of [base, `${stem}.ts`, `${stem}.tsx`, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`]) {
+  for (const candidate of literalCandidates(from, literal)) {
     const path = join(root, candidate);
     if (!existsSync(path)) continue;
     if (!statSync(path).isDirectory()) return candidate;
