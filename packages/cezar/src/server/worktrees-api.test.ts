@@ -1,14 +1,9 @@
 import { Home } from '../home/home.ts';
-import { useTestHome } from '../home/test-home.testkit.ts';
 import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
-import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { scopeFixtureProcesses } from '../delegation/process-scope.testkit.ts';
-import { createFixtureManager, drainFixtureManagers } from '../workflows/fixture-claude.testkit.ts';
+import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
-import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 
 vi.mock('node:fs/promises', async importOriginal => {
@@ -16,9 +11,8 @@ vi.mock('node:fs/promises', async importOriginal => {
   return { ...actual, mkdtemp: vi.fn(actual.mkdtemp) };
 });
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 import type { Hono } from 'hono';
-import { onTestFinished, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { autosaveCleanupBlocker } from '../autosave-cleanup.ts';
 import { processStartToken } from '../delegation/process-liveness.ts';
 import { createOwnedWorkspace } from '../delegation/workspace.ts';
@@ -28,15 +22,15 @@ import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { createApp } from './server.ts';
 import { apiRequest } from './loopback-request.testkit.ts';
-
-const run = promisify(execFile);
-const GIT_ID = ['-c', 'user.name=test', '-c', 'user.email=test@local'];
+import { claimsManager, executedWorker, GIT_ID, removeWorktreesRepo, run, seedWorktreeRun, worktreesRepo } from './worktrees-api.testkit.ts';
 
 /**
  * The worktree management panel API (#483 Phase 2). `GET /api/v1/worktrees` lists
  * materialized worktrees with disk usage + retention state; `POST
  * /api/v1/worktrees/reclaim` force-runs the enforcer. Both additive and
- * best-effort — never error.
+ * best-effort — never error. The routes claim through the manager's maintenance claims, here the
+ * real `MaintenanceClaims` behind a manager that runs nothing; the cases that Continue a run are in
+ * worktrees-api-engine.test.ts.
  */
 // Every case drives real git worktrees. Measured 2026-10-14: the slowest take 0.7-1.1 s alone, and the
 // dirty owned-worker reclaim passed 5 s in a Squeal warmup at load ~38 on 24 cores.
@@ -49,45 +43,18 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
   const savedHome = process.env.CEZ_HOME;
 
   beforeEach(async () => {
-    onTestFinished(scopeFixtureProcesses());
-    // `keep` now falls back to the workspace default, so pin CEZ_HOME at an
-    // empty temp dir — the suite must never read the developer's real ~/.cezar.
-    cezHome = mkdtempSync(join(tmpdir(), 'cez-wtapi-home-'));
-    useTestHome(cezHome ? Home.sandbox(cezHome) : undefined);
-    repoRoot = mkdtempSync(join(tmpdir(), 'cez-wtapi-'));
-    await run('git', ['init', '-q', '-b', 'main'], { cwd: repoRoot });
-    await run('git', ['config', 'gc.auto', '0'], { cwd: repoRoot });
-    await run('git', ['config', 'maintenance.auto', 'false'], { cwd: repoRoot });
-    writeFileSync(join(repoRoot, 'base.txt'), 'base\n');
-    await run('git', ['add', '-A'], { cwd: repoRoot });
-    await run('git', [...GIT_ID, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
-    mkdirSync(join(repoRoot, '.ai/cezar'), { recursive: true });
+    ({ repoRoot, cezHome } = await worktreesRepo());
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
-    // A real manager: the reclaim routes claim through it, the same claim Continue is refused by.
-    manager = createFixtureManager(store, repoRoot);
+    manager = claimsManager(store);
     app = createApp({ home: testHome(), repoRoot, store, manager, version: '0.0.0-test' });
   });
 
-  afterEach(async () => {
-    await drainFixtureManagers(repoRoot);
-    manager.dispose();
+  afterEach(() => {
     store.flush();
-    if (savedHome === undefined) useTestHome(undefined);
-    else useTestHome(savedHome ? Home.sandbox(savedHome) : undefined);
-    rmSync(repoRoot, { recursive: true, force: true });
-    rmSync(cezHome, { recursive: true, force: true });
+    removeWorktreesRepo({ repoRoot, cezHome }, savedHome);
   });
 
-  async function seed(
-    id: string,
-    status: 'done' | 'review' | 'running',
-    finishedAt?: string,
-  ): Promise<string> {
-    const wt = await createWorktree(repoRoot, id, 'main');
-    const rec = store.createRun({ title: `run ${id.slice(0, 4)}`, workflow: 'w', task: 't', steps: [] });
-    setRunStatus(store, rec.id, status, { finishedAt, worktreePath: wt.path, branch: wt.branch });
-    return rec.id;
-  }
+  const seed = (id: string, status: 'done' | 'review' | 'running', finishedAt?: string) => seedWorktreeRun(repoRoot, store, id, status, finishedAt);
 
   const getWorktrees = async () =>
     (await (
@@ -211,6 +178,7 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
       { role: 'worker', parentRunId: parent.id, permissions: [], workspace: newWorkspace }, 'b'.repeat(64));
     setRunStatus(store, oldWorker.id, RUN_STATUS.done, { finishedAt: '2026-07-01T00:00:00Z', worktreePath: oldWorkspace.path, branch: oldWorkspace.branch });
     setRunStatus(store, newWorker.id, RUN_STATUS.done, { finishedAt: '2026-07-09T00:00:00Z', worktreePath: newWorkspace.path, branch: newWorkspace.branch });
+    for (const id of [oldWorker.id, newWorker.id]) executedWorker(store, id);
 
     const listed = await getWorktrees();
     const byRun = Object.fromEntries(listed.worktrees.map((w) => [w.runId, w]));
@@ -238,6 +206,7 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
       const rec = store.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', steps: [] }, parent.id, randomUUID(),
         { role: 'worker', parentRunId: parent.id, permissions: [], workspace }, seal);
       setRunStatus(store, rec.id, RUN_STATUS.done, { finishedAt: '2026-07-01T00:00:00Z', worktreePath: workspace.path, branch: workspace.branch });
+      executedWorker(store, rec.id);
       return rec.id;
     };
     const dirtyId = worker(dirty, 'c'.repeat(64));
@@ -268,26 +237,6 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
     const byRun = Object.fromEntries(listed.worktrees.map((w) => [w.runId, w]));
     expect(byRun[worker.id]?.reclaimable).toBe(false);
     expect(listed.worktrees.map((w) => w.runId)).not.toContain(parent.id);
-  });
-
-  it('human deletion and worktree removal preserve worker and parent ownership evidence', async () => {
-    const parent = store.createRun({ title: 'parent', task: 'parent', workflow: 'quick-task', steps: [] });
-    setRunStatus(store, parent.id, RUN_STATUS.done, { delegation: { role: 'root', permissions: ['spawn'], receipts: [] } });
-    const sha = (await run('git', ['rev-parse', 'HEAD'], { cwd: repoRoot })).stdout.trim();
-    const workspace = await createOwnedWorkspace(repoRoot, randomUUID(), sha);
-    const worker = store.createOwnedRun({ title: 'worker', task: 'worker', workflow: 'quick-task', steps: [] }, parent.id, randomUUID(),
-      { role: 'worker', parentRunId: parent.id, permissions: [], workspace }, 'a'.repeat(64));
-    setRunStatus(store, worker.id, RUN_STATUS.cancelled, { worktreePath: workspace.path, branch: workspace.branch });
-    store.appendEvent(worker.id, { type: 'note', message: 'preserved worker history' });
-    for (const id of [worker.id, parent.id]) {
-      expect((await apiRequest(app, `/api/v1/runs/${id}`, { method: 'DELETE' })).status).toBe(409);
-      expect((await apiRequest(app, `/api/v1/runs/${id}/remove-worktree`, { method: 'POST' })).status).toBe(409);
-    }
-    expect(existsSync(workspace.path)).toBe(true);
-    expect(store.readEvents(worker.id)).toEqual(expect.arrayContaining([expect.objectContaining({ message: 'preserved worker history' })]));
-    store.updateRun(worker.id, { delegation: { role: 'invalid' } });
-    expect((await apiRequest(app, `/api/v1/runs/${worker.id}`, { method: 'DELETE' })).status).toBe(409);
-    expect(existsSync(workspace.path)).toBe(true);
   });
 
   describe('POST /worktrees/:runId/reclaim (issue 08 §B4)', () => {
@@ -323,14 +272,6 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
       expect((await reclaimOne(randomUUID())).status).toBe(404);
     });
 
-    /** A finished run with an agent session, so Continue is admissible (the bundled mock serves it). */
-    const resumable = async () => {
-      const wt = await createWorktree(repoRoot, randomUUID(), 'main');
-      const rec = store.createRun({ title: 'resumable', workflow: 'w', task: 't', steps: [{ id: 'task', name: 'Task', kind: STEP_KIND.agent }] });
-      store.updateStep(rec.id, 'task', { status: STEP_STATUS.done, sessionId: 'sess-1', backend: 'claude' });
-      setRunStatus(store, rec.id, RUN_STATUS.done, { finishedAt: '2026-07-01T00:00:00Z', worktreePath: wt.path, branch: wt.branch });
-      return rec.id;
-    };
     const savedDryRun = process.env.CEZ_DRY_RUN;
     beforeEach(() => { process.env.CEZ_DRY_RUN = '1'; });
     afterEach(() => {
@@ -407,26 +348,6 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
       expect(existsSync(path)).toBe(false);
     });
 
-    it('holds Continue off for the whole removal, and admits it again once the directory is gone', async () => {
-      const id = await resumable();
-      // Continue arrives the moment the handler holds its claim, while the removal is still awaiting.
-      const claimed = new Promise<void>((resolve) => {
-        const claim = manager.claimWorktreeReclaim.bind(manager);
-        vi.spyOn(manager, 'claimWorktreeReclaim').mockImplementation((runId) => {
-          const release = claim(runId);
-          resolve();
-          return release;
-        });
-      });
-      const pending = reclaimOne(id);
-      await claimed;
-      expect(manager.continueRun(id, { text: 'go on' })).toEqual({ ok: false, error: expect.stringContaining('being cleaned up') });
-      expect((await pending).status).toBe(200);
-      expect(existsSync(store.getRun(id)!.worktreePath!)).toBe(false);
-      // Released: the next Continue is admitted, and re-materializes the reclaimed tree.
-      expect(manager.continueRun(id, { text: 'go on' }).ok).toBe(true);
-    });
-
     it('a reclaimed task can still open its draft PR: the checkout is restored first', async () => {
       // The checkout under the run's OWN id, as a real task has it — what re-materializing rebuilds.
       const id = store.createRun({ title: 'reclaimed', workflow: 'w', task: 't', steps: [] }).id;
@@ -471,31 +392,6 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
       expect(store.getRun(id)?.worktreeReclaimedAt).toBeUndefined();
     });
 
-    it('holds reclaim off a restored checkout for as long as its draft PR is publishing', async () => {
-      const id = await seed(randomUUID(), 'done', '2026-07-01T00:00:00Z');
-      // Restored and unstamped, this is exactly what the PR route has just re-materialized.
-      const release = manager.claimForPublish(id)!;
-      expect((await reclaimOne(id)).status).toBe(409);
-      expect(manager.claimForBranchCleanup([id])).toBeNull();
-      expect(manager.continueRun(id, { text: 'go on' })).toMatchObject({ ok: false });
-      expect(existsSync(store.getRun(id)!.worktreePath!)).toBe(true);
-      release();
-      expect((await reclaimOne(id)).status).toBe(200);
-
-      // And the route holds that claim from before the restore until it answers.
-      const spy = vi.spyOn(manager, 'claimForPublish');
-      const other = await seed(randomUUID(), 'done', '2026-07-02T00:00:00Z');
-      await apiRequest(app, `/api/v1/runs/${other}/pr`, { method: 'POST' });
-      expect(spy).toHaveBeenCalledWith(other);
-      expect(manager.claimForPublish(other)).not.toBeNull(); // released afterwards
-    });
-
-    it('409s while a run is being Continued, and leaves its directory alone', async () => {
-      const id = await resumable();
-      expect(manager.continueRun(id, { text: 'go on' }).ok).toBe(true);
-      expect((await reclaimOne(id)).status).toBe(409);
-      expect(existsSync(store.getRun(id)!.worktreePath!)).toBe(true);
-    });
   });
 
   it.each(['remove-worktree', 'history'] as const)('refuses %s while a settled run retains its maintenance hold', async operation => {
@@ -512,32 +408,6 @@ describe('the worktrees API', { timeout: 30_000 }, () => {
     } finally { release(); }
   });
 
-  it('a replacement manager refuses reuse and deletion under persisted autosave cleanup', async () => {
-    const id = await seed(randomUUID(), 'done');
-    const path = store.getRun(id)!.worktreePath!;
-    const evidence = join(repoRoot, '.ai/cezar/runs', `${id}.autosave-cleanup.json`);
-    writeFileSync(evidence, JSON.stringify({
-      version: 1, cwd: path, controller: { pid: process.pid, startToken: processStartToken(process.pid) },
-      processes: [], groups: [], uncertain: false, message: 'cleanup pending',
-    }));
-    manager.dispose(); store.close();
-    store = RunStore.open(join(repoRoot, '.ai/cezar'), { keepLive: true });
-    manager = createFixtureManager(store, repoRoot);
-    app = createApp({ home: testHome(), repoRoot, store, manager, version: '0.0.0-test' });
-    expect(manager.continueRun(id, { text: 'continue' }).ok).toBe(false);
-    expect(manager.claimForPublish(id)).toBeNull();
-    expect(manager.claimWorktreeReclaim(id)).toBeNull();
-    expect(manager.claimForBranchCleanup([id])).toBeNull();
-    expect(store.canDeleteRun(id)).toBe(false);
-    for (const [suffix, method] of [['/remove-worktree', 'POST'], ['', 'DELETE'], ['/git/commit', 'POST'], ['/git/push', 'POST']] as const) {
-      expect((await apiRequest(app, `/api/v1/runs/${id}${suffix}`, {
-        method, ...(suffix === '/git/commit' ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: 'unsafe' }) } : {}),
-      })).status).toBe(409);
-    }
-    expect(existsSync(path)).toBe(true);
-    rmSync(evidence);
-    const release = manager.claimForPublish(id); expect(release).not.toBeNull(); release?.();
-  });
 
   it.each([false, true])('reads under autosave evidence with scratch allocation failing: %s', async noScratch => {
     const id = await seed(randomUUID(), 'done');
