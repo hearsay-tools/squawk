@@ -17,7 +17,7 @@ import { startServer } from './start-server.ts';
 import { createApp, type ServerDeps } from './server.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-// These routes read runner data through the registry; register the built-ins.
+// The server reads every registered runner (provider lists, login probes); register the built-ins.
 registerBuiltInRunners();
 import { TaskWebhooks } from '../runs/webhook.ts';
 import { taskWebhooks } from '../workspace/webhooks.ts';

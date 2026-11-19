@@ -8,7 +8,7 @@ import type { RunManager } from '../workflows/run.ts';
 import { createApp, WorkspaceEventBus, type ServerDeps } from './server.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-// These routes read runner data through the registry; register the built-ins.
+// The server reads every registered runner (provider lists, login probes); register the built-ins.
 registerBuiltInRunners();
 import type { SocketHub, TopicPublisher } from './ws.ts';
 import { apiRequest } from './loopback-request.testkit.ts';

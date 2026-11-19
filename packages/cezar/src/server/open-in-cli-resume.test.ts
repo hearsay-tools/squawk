@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProviderAuthService, type ProviderId } from '../core/provider-auth.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-// The routes read provider login data through the registry; register the built-ins.
+// The server reads every registered runner (provider lists, login probes); register the built-ins.
 registerBuiltInRunners();
 import type { RunnerId } from '../core/agent-runner.ts';
 import { runnerDisplayName } from '@open-mercato/cezar-contract/runner-facts';

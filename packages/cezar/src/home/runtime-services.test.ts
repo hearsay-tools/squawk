@@ -10,7 +10,7 @@ import { ProviderRuntimeAuthObserver } from '../server/provider-auth-runtime.ts'
 import { ProviderAuthService } from '../core/provider-auth.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-// The runtime services probe provider logins through the registry.
+// The runtime services probe every registered provider's login, and the cases use Claude and Codex.
 registerBuiltInRunners();
 import { createApp } from '../server/server.ts';
 import type { RunManager } from '../workflows/run.ts';

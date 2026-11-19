@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { buildChildEnv, buildCommandEnv } from './agent-env.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-// buildChildEnv reads the backend's allow-list prefixes from the registry.
+// Every case runs over each runner id; buildChildEnv reads each one's allow-list prefixes from the registry.
 registerBuiltInRunners();
 import { RUNNER_IDS } from './agent-runner.ts';
 

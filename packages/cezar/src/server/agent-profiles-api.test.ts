@@ -16,7 +16,7 @@ import { PROVIDER_IDS, ProviderAuthService } from '../core/provider-auth.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 import { createApp, type ServerDeps } from './server.ts';
 
-// The routes probe every provider's login through the registry; register the built-ins.
+// The server reads every registered runner (provider lists, login probes); register the built-ins.
 registerBuiltInRunners();
 
 /** Hang guard for the waits below: each ends the moment its condition holds, so the bound only ends a hang. */

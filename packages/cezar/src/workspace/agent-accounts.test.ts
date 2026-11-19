@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agentAccountsPath, workspaceConfigPath } from '../paths.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-// The store's schema asks the registry which agents can carry an account.
+// The store's schema asks the registry which agents can carry an account; the cases use all five.
 registerBuiltInRunners();
 import { loadWorkspaceConfig, mergeWriteWorkspaceConfig } from './config.ts';
 import {

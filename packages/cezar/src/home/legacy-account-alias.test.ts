@@ -5,10 +5,12 @@ import { Home } from './home.ts';
 import { migrateLegacyHome } from './migrate.ts';
 import { getHomeRecovery, importHomeRecovery } from './recovery.ts';
 import { cleanStoreRoots, storeRoot } from './store.testkit.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from '../core/runner-registry.ts';
+import { claudeRunner } from '../runners/claude/definition.ts';
 
-// The migration parses account stores through the registry.
-registerBuiltInRunners();
+// The migration parses account stores through the registry; every case here drives a Claude
+// account, so claude is the only runner this file registers.
+registerRunner(claudeRunner);
 
 afterEach(cleanStoreRoots);
 

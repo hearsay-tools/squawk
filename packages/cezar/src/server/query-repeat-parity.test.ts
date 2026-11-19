@@ -10,7 +10,7 @@ import type { RunManager } from '../workflows/run.ts'
 import { createApp } from './server.ts'
 import { apiRequest } from './loopback-request.testkit.ts'
 
-// The providers status route probes every registered runner's login; register the built-ins.
+// The server reads every registered runner (provider lists, login probes); register the built-ins.
 registerBuiltInRunners()
 
 /**

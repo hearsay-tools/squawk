@@ -7,7 +7,7 @@ import { MODEL_DISCOVERY_RUNNERS } from '@open-mercato/cezar-contract/workspace'
 import { ProviderAuthService } from '../core/provider-auth.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-// The routes read provider login data through the registry; register the built-ins.
+// The server reads every registered runner (provider lists, login probes); register the built-ins.
 registerBuiltInRunners();
 import { RunnerModelCatalog } from '../core/runner-model-catalog.ts';
 import { RunStore } from '../runs/store.ts';

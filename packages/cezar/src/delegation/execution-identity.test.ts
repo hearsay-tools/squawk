@@ -10,7 +10,7 @@ import {
 import type { ResolvedAgentProfile } from '../workspace/agent-profiles.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-// The binding schema and capture read each provider's account layout from the registry.
+// The cases bind accounts of several providers; the schema reads each one's account layout from the registry.
 registerBuiltInRunners();
 
 const claude = { provider: 'claude' as const, profileId: 'default', homePath: '/home/x/.claude', claudeLayout: { kind: 'relocated' as const } };

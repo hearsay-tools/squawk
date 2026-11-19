@@ -18,7 +18,7 @@ import {
 } from './config.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-// `agentDefaults.models` is a record keyed by registered id; register the built-ins.
+// `agentDefaults.models` is a record keyed by registered id, and the cases use several runners' keys.
 registerBuiltInRunners();
 
 /**

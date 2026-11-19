@@ -9,10 +9,11 @@ import {
   parsePiModels,
   spawnPi,
 } from './pi-model-catalog.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from './runner-registry.ts';
+import { piRunner } from '../runners/pi/definition.ts';
 
-// The spawn and account paths read the runner's env and account data through the registry.
-registerBuiltInRunners();
+// The spawn path reads pi's env and account data through the registry; every case drives pi.
+registerRunner(piRunner);
 
 /**
  * A stand-in for the `pi --list-models` child: write its stdout, then close with a code.

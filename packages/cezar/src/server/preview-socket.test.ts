@@ -17,7 +17,7 @@ import { startServer } from './start-server.ts';
 import { verifyWsUpgrade } from './server.ts';
 import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-// These routes read runner data through the registry; register the built-ins.
+// The server reads every registered runner (provider lists, login probes); register the built-ins.
 registerBuiltInRunners();
 import { attachUpgradeRouter } from './upgrade-router.ts';
 import { CockpitOwnership } from './cockpit-ownership.ts';

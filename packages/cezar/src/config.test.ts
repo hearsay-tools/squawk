@@ -9,7 +9,7 @@ import { projectPaths } from './project-paths.ts';
 import { loadConfig, readRawConfig, resolveWorktreeRetention, updateConfigFile } from './config.ts';
 import { registerBuiltInRunners } from './runners/built-in.ts';
 
-// `defaultModels` is a record keyed by registered id; register the built-ins.
+// `defaultModels` is a record keyed by registered id, and the cases use several runners' keys.
 registerBuiltInRunners();
 
 /**

@@ -14,7 +14,7 @@ import { RunStore } from '../runs/store.ts';
 import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import type { RuntimeAuthProfileResolver } from './provider-auth-runtime.ts';
 
-// The self-check probes a provider's login through the registry; register the built-ins.
+// The self-check probes every registered provider's login, and the cases use all five.
 registerBuiltInRunners();
 import {
   ProviderRuntimeAuthObserver,

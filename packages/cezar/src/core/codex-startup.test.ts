@@ -4,10 +4,11 @@ import { PassThrough } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent, AgentSession } from './agent-runner.ts';
 import { CodexAppServerRunner } from './codex-app-server-runner.ts';
-import { registerBuiltInRunners } from '../runners/built-in.ts';
+import { registerRunner } from './runner-registry.ts';
+import { codexRunner } from '../runners/codex/definition.ts';
 
-// The catalog and startup paths build the runner's child env through the registry.
-registerBuiltInRunners();
+// The startup path builds the Codex child env through the registry; every case drives Codex.
+registerRunner(codexRunner);
 import type { UiEvent } from './ui-events.ts';
 import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
 import { z } from 'zod';
