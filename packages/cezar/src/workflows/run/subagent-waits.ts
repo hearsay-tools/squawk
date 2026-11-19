@@ -2,10 +2,12 @@ import type { WaitEngine } from './wait-engine.ts';
 import { WAIT_KINDS } from './wait-kinds.ts';
 import { transitionTurnBoundary } from './turn-boundary.ts';
 import { ReadonlyMapView } from './readonly-collections.ts';
+import type { SubagentChild, SubagentWaitEntry } from '@open-mercato/cezar-contract/waits';
 import {
-  SUBAGENT_WAIT_CHILD_LIMIT, SUBAGENT_WAIT_DEADLINE_SECONDS, SUBAGENT_WAIT_GRACE_SECONDS,
-  type SubagentChild, type SubagentWaitEntry,
-} from '@open-mercato/cezar-contract/waits';
+  SUBAGENT_WAIT_CHILD_LIMIT,
+  SUBAGENT_WAIT_DEADLINE_SECONDS,
+  SUBAGENT_WAIT_GRACE_SECONDS,
+} from '@open-mercato/cezar-contract/wait-limits';
 import type { UiEvent, UiToolItem } from '../../core/ui-events.ts';
 import type { AgentSession, RunnerId } from '../../core/agent-runner.ts';
 import { RUNNER_FACTS } from '../../core/runner-facts.ts';

@@ -1,4 +1,4 @@
-import { WAIT_LIMIT } from '@open-mercato/cezar-contract/waits';
+import { WAIT_LIMIT } from '@open-mercato/cezar-contract/wait-limits';
 import type { RunRecord } from './store.ts';
 
 export class WaitCapacityError extends Error {

@@ -53,10 +53,15 @@
     "tier": "logic",
     "guards": [
       "workerWaitView",
+      "oneModeTakesOneId"
+    ]
+  },
+  "packages/contract/src/waiting-on.ts": {
+    "tier": "logic",
+    "guards": [
       "computeWaitingOn",
       "workerWaitTargets",
-      "workersOwed",
-      "oneModeTakesOneId"
+      "workersOwed"
     ]
   },
   "packages/web/src/routes/task-thread/run-relationships.tsx": {

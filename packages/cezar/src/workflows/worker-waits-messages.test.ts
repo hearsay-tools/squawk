@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factories.testkit';
 import * as processes from '../core/process-usage.ts';
 import { hasPendingAsk } from '../runs/run-store.testkit.ts';

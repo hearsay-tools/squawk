@@ -1,6 +1,7 @@
 import type { WorkerWait } from './delegation.ts';
 import type { RunIndexEntry, RunRecord, RunSummary } from './runs.ts';
-import { hasResolvedWait, resolveWaitingOn, type WaitingOn } from './waits.ts';
+import type { WaitingOn } from './waits.ts';
+import { hasResolvedWait, resolveWaitingOn } from './waiting-on.ts';
 
 /**
  * Canonical Node-free attention classification for browser and CLI. Map run facts to bucket,

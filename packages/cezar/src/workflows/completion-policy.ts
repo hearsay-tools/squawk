@@ -1,7 +1,7 @@
 import { commandText } from '../home/command.ts';
 import { transitionTurnBoundary } from './run/turn-boundary.ts';
 import type { SquawkDoneAnswer, ConversationMessage } from '@open-mercato/cezar-contract';
-import { WAIT_MESSAGE_MAX } from '@open-mercato/cezar-contract/waits';
+import { WAIT_MESSAGE_MAX } from '@open-mercato/cezar-contract/wait-limits';
 import type { RunRecord, RunStore } from '../runs/store.ts';
 import { rootsAwaitingPeer } from '../delegation/conversations.ts';
 import { retiredFinishPatch } from '../runs/run-exits.ts';

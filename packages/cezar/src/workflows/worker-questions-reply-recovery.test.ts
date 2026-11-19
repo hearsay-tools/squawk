@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { eventCheckpoint, manager, restart, root, store, until } from './worker-wait-claude.testkit.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations';
 import { conversationOf, closedAs, noHumanCard, askedPair, answered, said, expectSettledParentRefusal, useWorkerQuestionsFixture } from './worker-questions.testkit.ts';
 

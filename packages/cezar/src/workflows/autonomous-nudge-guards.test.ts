@@ -2,7 +2,7 @@ import { testHome } from '../home/test-home.testkit.ts';
 import { transitionTurnBoundary } from './run/turn-boundary.ts';
 import { InputFlight } from './run/input-delivery.ts';
 import { runnerHook, setupMonitoringFixture, waitForProduct } from './run-fixture.testkit.ts';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import {
   RUN_STATUS,
   STEP_KIND,

@@ -1,5 +1,6 @@
 import { productIdentity } from '../home/identity.ts';
-import { TIMER_MAX_SECONDS, TIMER_MIN_SECONDS, type AskErrorCode, type DoneErrorCode, type WaitErrorCode, type Wait } from '@open-mercato/cezar-contract/waits';
+import type { AskErrorCode, DoneErrorCode, WaitErrorCode, Wait } from '@open-mercato/cezar-contract/waits';
+import { TIMER_MAX_SECONDS, TIMER_MIN_SECONDS } from '@open-mercato/cezar-contract/wait-limits';
 import { MESSAGING_OFF } from '../delegation/policy.ts';
 import { ASK_LIMITS } from '@open-mercato/cezar-contract/ask-schema';
 import type { CiWaitErrorCode, PreviewResultCode, PreviewServeResult } from '@open-mercato/cezar-contract';

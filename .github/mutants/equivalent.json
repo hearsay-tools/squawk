@@ -299,7 +299,7 @@
     "site": "}).strict().superRefine(({ artifacts = "
   },
   {
-    "file": "packages/contract/src/waits.ts",
+    "file": "packages/contract/src/waiting-on.ts",
     "function": "computeWaitingOn",
     "mutator": "ArrayDeclaration",
     "original": "[]",

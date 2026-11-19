@@ -1,4 +1,4 @@
-import { workerOutcomeSchema } from './delegation.ts';
+import { workerOutcomeSchema } from './worker-outcome.ts';
 import type { RunEvent } from './events.ts';
 import { runStatusSchema, stepKindSchema, stepStatusSchema } from './run-status.ts';
 import type { RunRecord, StepState } from './runs.ts';

@@ -1,4 +1,4 @@
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { CLAUDE_SPEC_SUPPORT } from '../core/claude-cli-runner.ts';
 import { randomUUID } from 'node:crypto';

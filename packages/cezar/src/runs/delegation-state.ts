@@ -1,4 +1,5 @@
-import { delegationStateSchema, type WorkerDestroyView, type WorkerOutcome } from '@open-mercato/cezar-contract/delegation';
+import { delegationStateSchema, type WorkerDestroyView } from '@open-mercato/cezar-contract/delegation';
+import type { WorkerOutcome } from '@open-mercato/cezar-contract/worker-outcome';
 import type { RunRecord } from './store.ts';
 import type { WorkerExecution } from './worker-execution.ts';
 

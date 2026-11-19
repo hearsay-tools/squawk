@@ -4,7 +4,7 @@ import { WAIT_KIND, WAIT_PHASE } from '@open-mercato/cezar-contract/test-factori
 import { ClaudeCliRunner } from '../core/claude-cli-runner.ts';
 import { onlyRunner, useRunners } from '../core/runners-under-test.testkit.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { enqueueAgentInput } from '../delegation/input.ts';
 import { blockedDone, blockingWorker, describeWaitCells, gated, github, nativeWire, parentTurn, pr, prompted } from './waits-parity-fixture.testkit.ts';
 import { manager, parent, restart, store, terminal, timeline, until } from './worker-wait-core.testkit.ts';

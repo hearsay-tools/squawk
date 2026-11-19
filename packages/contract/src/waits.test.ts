@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RunRecord } from './runs.ts';
 import {
-  asksQuestion,
   squawkAskAnswerSchema,
   squawkAskRequestSchema,
   squawkCancelWaitAnswerSchema,
@@ -10,18 +9,14 @@ import {
   squawkCancelWaitRequestSchema,
   squawkWaitAnswerSchema,
   squawkWaitRequestSchema,
-  computeWaitingOn,
   processWaitEntrySchema,
   hasWorkerDeadline,
-  resolveWaitingOn,
   runningSubagents,
   waitingOnSchema,
   waitSchema,
   completionWaitView,
   completionWaitEntry,
   workerCompletionWaitProjection,
-  requestsToPeers,
-  withRootLedger,
   workerWaitView,
   workerWaitEntrySchema,
   workerWaitEntryToLegacy,
@@ -35,6 +30,7 @@ import {
   type TimerWaitEntry,
   type WorkerWaitEntry,
 } from './waits.ts';
+import { asksQuestion, computeWaitingOn, resolveWaitingOn, requestsToPeers, withRootLedger } from './waiting-on.ts';
 import { peerWaitViewSchema, workerCompletionWaitSchema, workerInspectionSchema, workerWaitSchema } from './delegation.ts';
 import {
   makePeerWait,

@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentInput, Wait } from '@open-mercato/cezar-contract';
-import { agentInputSchema, workerOutcomeSchema } from '@open-mercato/cezar-contract/delegation';
+import { workerOutcomeSchema } from '@open-mercato/cezar-contract/worker-outcome';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { makeHumanWait, makePeerWait, makePrWait, makeProcessWait, makeRunEvent, makeRunRecord, makeSubagentWait, makeTimerWait, makeWorkerRequestWait, makeWorkerWait, RUN_STATUS, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import type { AgentSession } from '../../core/agent-runner.ts';
 import { createActiveRun } from '../active-run.ts';

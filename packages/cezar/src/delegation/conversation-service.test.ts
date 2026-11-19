@@ -30,7 +30,8 @@ import {
   inboxReceiptResultSchema,
   inboxReserveResultSchema,
 } from '@open-mercato/cezar-contract/conversations';
-import { inboxClaimSchema, ownedWorkspace } from '@open-mercato/cezar-contract/delegation';
+import { inboxClaimSchema } from '@open-mercato/cezar-contract/agent-input';
+import { ownedWorkspace } from '@open-mercato/cezar-contract/delegation';
 import { readPersistedText } from '../runs/run-store.testkit.ts';
 
 const INVALID_PENDING_RECEIPT_STATUS = 'pending';
