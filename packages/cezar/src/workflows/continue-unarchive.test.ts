@@ -1,36 +1,22 @@
-import { fakeRunnerFactory } from '../core/fake-runner-factory.testkit.ts';
-import { useRunners } from '../core/runners-under-test.testkit.ts';
-import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS, STEP_KIND, STEP_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { createFixtureManager, drainFixtureManagers } from './fixture-manager.testkit.ts';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AgentRunSpec } from '../core/agent-runner.ts';
 import { RunStore } from '../runs/store.ts';
-import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-import type { RunManager } from './run.ts';
+import { acceptanceOver } from './continuation-acceptance-fakes.testkit.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
 
-const captured = vi.hoisted(() => ({ specs: [] as AgentRunSpec[], release: undefined as (() => void) | undefined }));
-useRunners(fakeRunnerFactory(() => ({
-  backend: 'claude', systemPromptOnResume: 'resent' as const, interrupt: async () => {},
-  startSession: (spec: AgentRunSpec) => {
-    captured.specs.push(spec);
-    return { result: new Promise(resolve => { captured.release = () => resolve({ text: 'ok', toolCalls: [], tokensUsed: 0 }); }),
-      sendMessage: () => true, discardQueuedMessages: () => {}, holdsHumanInput: () => false, end: () => {}, interrupt: () => {}, open: true };
-  },
-})));
+// Session affinity and model presets read the runner definitions, as the engine fixture registered them.
+registerBuiltInRunners();
 
 const roots: string[] = [];
-const managers: RunManager[] = [];
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'cez-unarchive-')); roots.push(root);
   const store = RunStore.open(join(root, '.ai/cezar'));
-  const manager = createFixtureManager(store, root, { home: testHome(), semaphore: new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 0 } }) });
-  managers.push(manager);
+  const manager = acceptanceOver(store, root);
   return { store, manager };
 }
 
@@ -45,12 +31,8 @@ function archivedFinished(store: RunStore) {
   return run;
 }
 
-afterEach(async () => {
-  captured.release?.(); captured.release = undefined;
-  for (const root of roots) await drainFixtureManagers(root);
-  managers.length = 0;
+afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
-  captured.specs.length = 0;
 });
 
 describe('continueRun unarchives', () => {
@@ -113,6 +95,8 @@ describe('continueRun unarchives', () => {
     });
 
     expect(manager.continueRun(worker.id, { text: 'keep going' })).toMatchObject({ ok: false });
+    // The refusal is the checkpoint's, after admission passed.
+    expect(commit).toHaveBeenCalledOnce();
     expect(store.getRun(worker.id)?.archived).toBe(true);
     expect(store.getRun(worker.id)?.archivedAt).toBeDefined();
     commit.mockRestore();
