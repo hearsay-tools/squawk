@@ -41,6 +41,10 @@ import { resolveCodexExecutable } from '../../packages/cezar/src/core/codex-app-
 import type { UiEvent } from '../../packages/cezar/src/core/ui-events.ts';
 import { CiToolController, type SquawkToolHandlers, type WaitRegistration } from '../../packages/cezar/src/ci-wait/controller.ts';
 import { agentHomePaths } from '../../packages/cezar/src/paths.ts';
+import { registerBuiltInRunners } from '../../packages/cezar/src/runners/built-in.ts';
+
+// The Codex session's child env reads the runner registry; register the built-ins first.
+registerBuiltInRunners();
 
 type Frame = Record<string, unknown>;
 type Toml = { parse(text: string): Frame; stringify(value: Frame): string };
