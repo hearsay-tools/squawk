@@ -51,6 +51,7 @@ it, and the readers of the old path:
 | `packages/cezar/src/lint/layer-import.baseline.json` | Core-to-feature imports, by `file` and `target` |
 | `packages/cezar/src/lint/layers.json` | The layer of each path |
 | `packages/cezar/src/lint/*.baseline.json` and the other `*.baseline.json` files | Lint and wait-discipline allowances, by file |
+| `packages/web/src/test/search-params-discipline.baseline.json`, `card-2-contrast.baseline.json` | Cockpit allowances, by the path below `packages/web/src/` |
 | `packages/cezar/src/lint/resume-time-readers.json`, `run-history-readers.json` and `reader-matrix/*.json` | Allowed readers of a run fact, by file |
 
 Some guards key on a directory, not a file, so `--moved` does not find them:

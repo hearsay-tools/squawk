@@ -150,7 +150,10 @@ export function formatRunnerReaders(readers) {
 /** The JSON files that name a path: mutant targets and equivalents, the baselines and the lint lists.
  *  Each pins a file, or a function by its file, so a move rewrites them. */
 export function searchPins(root, path) {
-  return parseHits(grep(root, [path], '*.json'));
+  // A pin may name the file below a directory, as the cockpit baselines do (`routes/x.tsx`).
+  const segments = path.split('/');
+  const tails = segments.slice(0, -1).map((_, k) => segments.slice(k).join('/'));
+  return parseHits(grep(root, tails.length ? tails : [path], '*.json'));
 }
 
 export function formatPins({ from, to }, hits) {

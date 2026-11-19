@@ -142,3 +142,16 @@ test('a moved-file sweep lists every JSON pin that names the old path, and its r
   assert.match(report, /packages\/cezar\/src\/reader\.ts:1 \[specifier\]/);
   assert.throws(() => parseArgs(['--moved', old]), /--moved needs <old-path> <new-path>/);
 });
+
+test('a moved-file sweep finds a pin that names the file below a shared directory', (t) => {
+  const old = 'packages/web/src/routes/task-git/task-files.tsx';
+  const root = fixtureRepo(t, {
+    'packages/web/src/test/search-params-discipline.baseline.json': JSON.stringify({ sites: [{ file: 'routes/task-git/task-files.tsx' }] }, null, 2),
+    'packages/web/src/test/card-2-contrast.baseline.json': JSON.stringify(['task-git/task-files.tsx: <Button>'], null, 2),
+    'packages/web/src/test/other.baseline.json': JSON.stringify(['task-files.tsx']),
+  });
+  assert.deepEqual([...new Set(searchPins(root, old).map(hit => hit.file))].sort(), [
+    'packages/web/src/test/card-2-contrast.baseline.json',
+    'packages/web/src/test/search-params-discipline.baseline.json',
+  ]);
+});

@@ -7,14 +7,14 @@ function object(value) {
 
 const stays = () => false;
 
-// Arrays are multisets: each head entry must fit a distinct base entry. Matching
-// can reassign a prior choice so reordered duplicate sites with different counts
-// do not report growth. Object keys and numeric limits may only shrink.
-function arrayFits(before, after, moved) {
+// Match each head item to a distinct base item it fits. Matching can reassign a prior
+// choice, so the order of the items never decides whether a one-for-one match exists.
+// Returns the head items left without one.
+function unmatched(before, after, fits) {
   const owners = new Map();
   function assign(index, seen) {
     for (let i = 0; i < before.length; i++) {
-      if (seen.has(i) || compareBaseline(before[i], after[index], '$', moved).length) continue;
+      if (seen.has(i) || !fits(before[i], after[index])) continue;
       seen.add(i);
       if (!owners.has(i) || assign(owners.get(i), seen)) {
         owners.set(i, index);
@@ -23,16 +23,14 @@ function arrayFits(before, after, moved) {
     }
     return false;
   }
-  return after.every((_, i) => assign(i, new Set()));
+  return after.filter((_, i) => !assign(i, new Set()));
 }
 
-// A key the head adds takes over one key the head dropped, when `moved` says the file moved
-// and the value fits the old one: a pin keyed by the path of a moved file.
-function relocatedKey(before, after, key, taken, moved) {
-  const origin = Object.keys(before).find(old => !taken.has(old) && !Object.hasOwn(after, old)
-    && moved(old, key) && !compareBaseline(before[old], after[key], '$', moved).length);
-  if (origin !== undefined) taken.add(origin);
-  return origin;
+// Arrays are multisets: each head entry must fit a distinct base entry, so reordered
+// duplicate sites with different counts do not report growth. Object keys and numeric
+// limits may only shrink.
+function arrayFits(before, after, moved) {
+  return !unmatched(before, after, (old, entry) => !compareBaseline(old, entry, '$', moved).length).length;
 }
 
 /**
@@ -47,20 +45,48 @@ function compareBaseline(before, after, location = '$', moved = stays) {
     return arrayFits(before, after, moved) ? [] : [`${location}: added or enlarged an entry`];
   }
   if (object(before) && object(after)) {
-    const taken = new Set();
-    return Object.keys(after).filter(key => key !== '$comment').flatMap(key =>
-      Object.hasOwn(before, key)
-        ? compareBaseline(before[key], after[key], `${location}.${key}`, moved)
-        : relocatedKey(before, after, key, taken, moved) === undefined ? [`${location}.${key}: added an entry`] : []);
+    const keys = Object.keys(after).filter(key => key !== '$comment');
+    // A key the head adds may take over one key the head dropped: a pin keyed by the path of a moved file.
+    const dropped = Object.keys(before).filter(key => !Object.hasOwn(after, key));
+    const added = unmatched(dropped, keys.filter(key => !Object.hasOwn(before, key)),
+      (old, key) => moved(old, key) && !compareBaseline(before[old], after[key], '$', moved).length);
+    return keys.flatMap(key => Object.hasOwn(before, key)
+      ? compareBaseline(before[key], after[key], `${location}.${key}`, moved)
+      : added.includes(key) ? [`${location}.${key}: added an entry`] : []);
   }
   if (typeof before === 'string' && typeof after === 'string' && moved(before, after)) return [];
   return before === after ? [] : [`${location}: changed an entry or its type`];
 }
 
-// A relocation: the head no longer has the old path, and the change added the new one.
+const PATH = /[\w.@-]+(?:\/[\w.@-]+)*/g;
+
+/**
+ * Whether `after` is `before` with one path it names moved: the old file is gone from the head and
+ * the change added the new one. A baseline may name a file by its full path or by its path below a
+ * directory both files share (`routes/x.tsx` under `packages/web/src/`), alone or inside a longer
+ * string (`routes/x.tsx: <source>`).
+ */
 function movedBetween(baseFiles, headFiles) {
   const base = new Set(baseFiles), head = new Set(headFiles);
-  return (oldPath, newPath) => oldPath !== newPath && base.has(oldPath) && !head.has(oldPath) && head.has(newPath) && !base.has(newPath);
+  const added = new Set(headFiles.filter(file => !base.has(file)));
+  const gone = new Map(); // Each tail of a removed path, with the directory above it.
+  for (const file of baseFiles.filter(file => !head.has(file))) {
+    const segments = file.split('/');
+    for (let k = 0; k < segments.length; k++) {
+      const tail = segments.slice(k).join('/');
+      gone.set(tail, [...(gone.get(tail) ?? []), segments.slice(0, k).join('/')]);
+    }
+  }
+  return (before, after) => {
+    if (before === after) return false;
+    for (const { 0: tail, index } of before.matchAll(PATH)) {
+      const rest = before.length - index - tail.length;
+      if (after.slice(0, index) !== before.slice(0, index) || after.slice(after.length - rest) !== before.slice(before.length - rest)) continue;
+      const tailAfter = after.slice(index, after.length - rest);
+      if ((gone.get(tail) ?? []).some(dir => added.has(dir ? `${dir}/${tailAfter}` : tailAfter))) return true;
+    }
+    return false;
+  };
 }
 
 function git(cwd, ...args) {

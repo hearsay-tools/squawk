@@ -253,3 +253,12 @@ test('a copy is still new: one origin serves one move, and a rewritten original 
   assert.deepEqual(rows(result.moved), []);
   assert.deepEqual(result.files.flatMap(file => file.functions.map(fn => [file.file, fn.change])), [['a.ts', 'modified'], ['b.ts', 'added']]);
 });
+
+test('a move that adds decision points in its signature is not verbatim', t => {
+  const f = repo(t);
+  const base = commitAll(f, { 'a.ts': `export function work(x, y) ${branchy}` }, 'base');
+  const head = commitAll(f, { 'a.ts': null, 'b.ts': `export function work(x = 0, y) ${branchy}` }, 'move with a default value');
+  const result = scanChanges(base, f.cwd, { head });
+  assert.deepEqual(result.moved, []);
+  assert.deepEqual(result.files.flatMap(file => file.functions.map(fn => [file.file, fn.name, fn.change, fn.complexity])), [['b.ts', 'work', 'added', 4]]);
+});

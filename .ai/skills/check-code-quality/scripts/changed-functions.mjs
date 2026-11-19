@@ -134,7 +134,8 @@ const withoutDetails = fn => Object.fromEntries(Object.entries(fn).filter(([key]
 const place = ({ file, name, line, column, complexity }) => ({ file, name, line, column, complexity });
 
 /**
- * Pair each added function with a merge-base function of identical own body: a verbatim move or rename.
+ * Pair each added function with a merge-base function of identical own body and equal complexity: a
+ * verbatim move or rename.
  * The origin is a function the change removed, or one whose same-place successor the change rewrote
  * and left at or under the complexity limit, such as a delegator that now calls the moved body. That
  * limit keeps two copies of a long function from both passing. One origin serves one pair, so a copy
@@ -146,7 +147,8 @@ export function pairVerbatimMoves(changed, removed, limit = thresholds.complexit
   const free = new Set([...removed, ...rewritten]);
   const moved = new Map();
   for (const fn of changed.filter(item => item.change === 'added')) {
-    const origin = [...free].find(item => item.bodyHash === fn.bodyHash);
+    // A changed signature can add decision points (a default value) that the body hash leaves out.
+    const origin = [...free].find(item => item.bodyHash === fn.bodyHash && item.complexity === fn.complexity);
     if (!origin) continue;
     free.delete(origin);
     moved.set(fn, origin);

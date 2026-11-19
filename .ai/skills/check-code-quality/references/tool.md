@@ -38,7 +38,7 @@ The change scanner compares function source, excluding nested bodies from the
 parent. Comments and whitespace inside a function count as edits. A function
 moved or renamed without edits is not a change: the scanner lists it under
 `moved` with the function it came from, and not under `files`. Its origin is a
-removed function with an identical body, or one whose same-named successor in
+removed function with an identical body and equal complexity, or one whose same-named successor in
 the old place now stays at or under complexity 20, such as a delegator. A
 function moved with edits appears as added. Duplicate identities can have an
 unknown baseline. Inspect the diff and baseline for these cases before deciding origin.

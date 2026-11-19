@@ -593,7 +593,8 @@ fails because a function it does not touch is long. A changed function that is l
 over 20 passes; the job and the pre-PR check (`check-code-quality`), which runs the same script,
 list it as a notice. A moved or renamed function is compared with
 the function it came from: first one with an identical body, then the one same-named function that
-shares the most of its body lines, at least half of them. A function with an identical body may
+shares the most of its body lines, at least half of them. A function with an identical body and equal
+complexity may
 also come from a function whose same-named successor in the old place the change rewrote to at or
 under 20, such as a delegator that now calls the moved body; a successor still over 20 keeps its
 origin, so the copy is new. A copy of a long function is still new, and

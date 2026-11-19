@@ -284,3 +284,20 @@ test('git comparison accepts a pin that only follows its moved file, with no lab
   r.write('pins.baseline.json', '{"files":{"src/new.ts":1201},"entries":[{"file":"src/new.ts","count":2}]}');
   assert.match(checkBaselineGrowth({ cwd: r.cwd, base, head: r.commit() }).join('\n'), /files\.src\/new\.ts: added an entry/);
 });
+
+test('relocated keys match one for one whatever their order', () => {
+  const moved = movedBetween(['a.ts', 'b.ts'], ['c.ts', 'd.ts']);
+  assert.deepEqual(compareBaseline({ files: { 'a.ts': 1200, 'b.ts': 1100 } }, { files: { 'c.ts': 1100, 'd.ts': 1200 } }, '$', moved), []);
+  assert.ok(compareBaseline({ files: { 'a.ts': 1200, 'b.ts': 1100 } }, { files: { 'c.ts': 1200, 'd.ts': 1200 } }, '$', moved).length);
+});
+
+test('a pin that names its file below a shared directory, or inside a longer string, follows the move', () => {
+  const moved = movedBetween(['packages/web/src/routes/task-git/task-files.tsx', 'packages/web/src/routes/kept.tsx'],
+    ['packages/web/src/routes/task-git/moved-files.tsx', 'packages/web/src/routes/kept.tsx', 'packages/web/src/other/moved-files.tsx']);
+  const site = { file: 'routes/task-git/task-files.tsx', site: 'useSearchParams()', reason: 'r' };
+  assert.deepEqual(compareBaseline({ sites: [site] }, { sites: [{ ...site, file: 'routes/task-git/moved-files.tsx' }] }, '$', moved), []);
+  assert.deepEqual(compareBaseline(['routes/task-git/task-files.tsx: <Button>'], ['routes/task-git/moved-files.tsx: <Button>'], '$', moved), []);
+  assert.ok(compareBaseline(['routes/task-git/task-files.tsx: <Button>'], ['routes/task-git/moved-files.tsx: <Link>'], '$', moved).length);
+  assert.ok(compareBaseline({ sites: [site] }, { sites: [{ ...site, file: 'routes/kept.tsx' }] }, '$', moved).length, 'a file that stayed');
+  assert.ok(compareBaseline({ sites: [site] }, { sites: [{ ...site, file: 'other/missing.tsx' }] }, '$', moved).length, 'a path the change did not add');
+});
