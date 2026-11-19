@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentBackend } from './agent-runner.ts';
+import { LEGACY_RUNNER_IDS, registeredRunners } from './runner-registry.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
 import {
-  BACKEND_MODEL_MAP,
   ModelIdentityError,
   formatModelIdentity,
   normalizeModelForBackend,
@@ -9,6 +10,8 @@ import {
   resolveModelIdentity,
   toBackendModel,
 } from './model-identity.ts';
+
+registerBuiltInRunners();
 
 /**
  * The canonical provider/model identity (#405): one shared parser/normaliser
@@ -51,7 +54,7 @@ describe('formatModelIdentity', () => {
 
 describe('resolveModelIdentity — empty / auto', () => {
   it('is undefined for empty/whitespace on every backend (the backend picks)', () => {
-    for (const backend of Object.keys(BACKEND_MODEL_MAP) as AgentBackend[]) {
+    for (const backend of [...registeredRunners().map(runner => runner.id), ...LEGACY_RUNNER_IDS.keys()] as AgentBackend[]) {
       expect(resolveModelIdentity(backend, undefined)).toBeUndefined();
       expect(resolveModelIdentity(backend, '')).toBeUndefined();
       expect(resolveModelIdentity(backend, '   ')).toBeUndefined();

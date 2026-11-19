@@ -1,5 +1,6 @@
 import type { RunnerId } from './agent-runner.ts';
-import { BACKEND_MODEL_MAP, parseModelIdentity } from './model-identity.ts';
+import { backendModelMap, parseModelIdentity } from './model-identity.ts';
+import { isRegisteredRunner, registeredRunners, runnerDefinition } from './runner-registry.ts';
 
 /**
  * The vendor prefixes this module treats as evidence of a mis-paired model. Deliberately local
@@ -11,32 +12,12 @@ import { BACKEND_MODEL_MAP, parseModelIdentity } from './model-identity.ts';
 const KNOWN_PROVIDERS = ['anthropic', 'openai', 'google', 'openrouter'] as const;
 
 /**
- * Known per-runner picker presets, mirrored for mismatch checks. This is not a whitelist:
- * unknown custom ids remain valid. OpenCode uses native discovery plus a structural guard.
+ * The runner's known picker presets: its definition's `models.known`, mirrored for mismatch
+ * checks. An id that no runner registered has none.
  */
-export const KNOWN_PRESETS_BY_RUNNER: Record<RunnerId, readonly string[]> = {
-  claude: [
-    'opus',
-    'sonnet',
-    'haiku',
-    'claude-fable-5',
-    'claude-opus-4-8',
-    'claude-sonnet-5',
-    'claude-haiku-4-5',
-  ],
-  codex: ['gpt-5.1-codex', 'gpt-5.1-codex-mini', 'gpt-5-codex'],
-  opencode: [],
-  // pi lists nothing for the same reason OpenCode does (#794), plus one of its own: it picks a
-  // model with the canonical `provider/model` convention and has no default provider, so the
-  // structural check in {@link modelConflictsWithRunner} already guards it without vendor
-  // knowledge. Listing pi's composer presets here would actively break OpenCode — the ids
-  // overlap (`anthropic/claude-sonnet-5`), and a shared id present in pi's list but absent from
-  // OpenCode's empty one would read as "another runner's preset" and be refused.
-  pi: [],
-  // omp lists nothing for pi's reason: `provider/model` ids with no default provider, so the
-  // structural check in {@link modelConflictsWithRunner} guards it without vendor knowledge.
-  omp: [],
-};
+function knownPresets(runner: RunnerId): readonly string[] | undefined {
+  return isRegisteredRunner(runner) ? runnerDefinition(runner).models.known : undefined;
+}
 
 /**
  * True when the `provider/` prefix on `model` names a provider Squawk knows that this
@@ -49,7 +30,7 @@ export const KNOWN_PRESETS_BY_RUNNER: Record<RunnerId, readonly string[]> = {
  * vendor is evidence enough to refuse the pairing up front.
  */
 function namesAnotherKnownProvider(model: string, runner: RunnerId): boolean {
-  const map = BACKEND_MODEL_MAP[runner];
+  const map = backendModelMap(runner);
   // Nothing to contradict: OpenCode spans providers (no default of its own), and Claude Code
   // accepts explicit gateway/custom provider ids by design.
   if (map?.defaultProvider === undefined || map.allowExplicitProvider) return false;
@@ -63,12 +44,12 @@ function namesAnotherKnownProvider(model: string, runner: RunnerId): boolean {
  *  serve. `''`/unknown/custom ids never conflict. */
 export function modelConflictsWithRunner(model: string, runner: RunnerId): boolean {
   if (!model) return false;
-  if (KNOWN_PRESETS_BY_RUNNER[runner]?.includes(model)) return false;
+  if (knownPresets(runner)?.includes(model)) return false;
   // The provider half of the guard needs no vendor model knowledge, so — unlike the preset
   // lists — it keeps holding for models that do not exist yet. That is what lets OpenCode's
-  // entry above be empty (#794) without losing the protection it used to provide.
+  // `models.known` be empty (#794) without losing the protection it used to provide.
   if (namesAnotherKnownProvider(model, runner)) return true;
-  return Object.entries(KNOWN_PRESETS_BY_RUNNER).some(
-    ([other, presets]) => other !== runner && presets.includes(model),
+  return registeredRunners().some(
+    (other) => other.id !== runner && other.models.known.includes(model),
   );
 }

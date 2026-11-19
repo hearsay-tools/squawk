@@ -1,5 +1,7 @@
 import type { AgentRunner, RunnerId } from './agent-runner.ts';
 import type { RunnerFacts } from './runner-facts.ts';
+import type { BackendModelMap } from './model-identity.ts';
+import type { AgentModelSettingsStrategy } from './runner-model-settings.ts';
 
 /**
  * Everything Squawk knows about one runner, in one object (spec 2026-11-18-runner-definitions).
@@ -15,6 +17,38 @@ export interface RunnerDefinition {
   readonly facts: RunnerFacts;
   /** Imports the adapter module and builds a new runner. */
   loadAdapter(): Promise<AgentRunner>;
+
+  // Models, skills, config files and extra tools (hearsay-tools/squawk#3895).
+  /** The model presets, the model id map and the reader of the native default model. */
+  readonly models: RunnerModels;
+}
+
+/** One model the picker suggests. `id: ''` is auto: the runner picks. */
+export interface RunnerModelPreset {
+  readonly id: string;
+  readonly label: string;
+  readonly desc: string;
+}
+
+/** A runner's model data: plain data in `runners/<id>/models.ts`. */
+export interface RunnerModelData {
+  /** The picker presets, as the cockpit's `MODELS_BY_RUNNER` lists them until C2 reads these. */
+  readonly suggested: readonly RunnerModelPreset[];
+  /**
+   * Known preset ids, for mismatch checks (`core/model-presets.ts`). This is not a whitelist:
+   * unknown custom ids remain valid. OpenCode uses native discovery plus a structural guard.
+   */
+  readonly known: readonly string[];
+  /** Retired dated ids this runner served. Another runner still refuses them as known foreign ids. */
+  readonly retired: readonly string[];
+  /** How a model id maps to a provider and to the wire (`core/model-identity.ts`). */
+  readonly idMap: BackendModelMap;
+}
+
+/** A runner's `models` part: its model data and the reader of its native default model. */
+export interface RunnerModels extends RunnerModelData {
+  /** Imports the runner's native-settings policy: vendor precedence, environment and provider. */
+  loadSettings(): Promise<AgentModelSettingsStrategy>;
 }
 
 /** Declare one runner. */

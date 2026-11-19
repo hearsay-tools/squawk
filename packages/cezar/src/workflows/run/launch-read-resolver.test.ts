@@ -18,6 +18,10 @@ import { retryPrompt } from './auto-resume.ts';
 import { TrackedWork } from './tracked-work.ts';
 import type { RunModuleContext } from './types.ts';
 import { noRunners } from '../../core/runners-under-test.testkit.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { claudeRunner } from '../../runners/claude/definition.ts';
+
+registerRunner(claudeRunner);
 
 let root: string;
 let store: RunStore;

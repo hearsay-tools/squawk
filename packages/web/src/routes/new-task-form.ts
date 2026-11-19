@@ -150,7 +150,7 @@ const RETIRED_MODEL_IDS: Partial<Record<Runner, readonly string[]>> = {
  * A runner whose `modelIdScope` is `provider-spanning` serves ids of every provider, so its ids
  * belong to no runner alone and never conflict with another runner. This is the cockpit's half of the rule the server
  * states structurally: a runner with no default provider cannot be contradicted, which is why
- * `KNOWN_PRESETS_BY_RUNNER.pi` is empty in `packages/cezar/src/core/model-presets.ts`. */
+ * the pi definition's `models.known` is empty in `packages/cezar/src/runners/pi/models.ts`. */
 export function modelConflictsWithRunner(model: string, runner: Runner): boolean {
   if (!model || MODELS_BY_RUNNER[runner].some((preset) => preset.id === model)) return false
   const foreign = (other: string) => other !== runner
