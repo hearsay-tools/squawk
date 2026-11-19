@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { type WorkerWait, agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import type { WorkerWait } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { type RunRecord } from '../runs/store.ts';
 import { fixtureUpdateRun, manager, parent, register, restart, root, store, terminal, until, useWorkerWaitFixture, waitOf, worker } from './worker-wait-claude.testkit.ts';
 import { readPersistedRuns } from '../runs/run-store.testkit.ts';

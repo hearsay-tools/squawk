@@ -1,4 +1,4 @@
-import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { parseUsageLimit } from '../../core/usage-limit.ts';
 import { classifyProviderError, PROVIDER_ERROR_LABELS } from '../../core/provider-error.ts';
 import { noJitter, PROVIDER_RETRY_BACKOFF, retryDelayMs } from '../../delegation/retry-backoff.ts';

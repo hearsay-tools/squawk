@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import { GITHUB_COMMAND_TIMEOUT_MS, HISTORY_REQUEST_CAP, TIMELINE_PAGE_CAP } from '../core/github-request-limits.ts';
+import { githubRequestGate, type GithubRequestGate } from '../server/forge/github-request-gate.ts';
 import type { AutomationEvent, AutomationRuntimeState, GithubAutomationDefinition } from './types.ts';
 
 const execFileAsync = promisify(execFile);
@@ -62,6 +63,8 @@ export interface GithubPollResult {
 
 export interface GithubPollerOptions {
   run?: (executable: string, args: readonly string[]) => Promise<string>;
+  /** Every request goes through this gate; the default is the process-wide one the pollers share. */
+  gate?: GithubRequestGate;
 }
 
 export interface GithubPollOptions {
@@ -80,10 +83,13 @@ export class GithubPoller {
   private readonly run: NonNullable<GithubPollerOptions['run']>;
 
   constructor(options: GithubPollerOptions = {}) {
-    this.run = options.run ?? (async (executable, args) => (await execFileAsync(executable, [...args], {
+    const run = options.run ?? (async (executable, args) => (await execFileAsync(executable, [...args], {
       maxBuffer: 4 * 1024 * 1024,
       timeout: GITHUB_COMMAND_TIMEOUT_MS,
     })).stdout);
+    const gate = options.gate ?? githubRequestGate;
+    // During a rate-limit pause a check refuses at once; the scheduler moves it to the pause's end.
+    this.run = (executable, args) => gate.run(() => run(executable, args), { whenPaused: 'throw' });
   }
 
   /** Opt-in launch eligibility: require an open item and fresh labels, preserving historical events. */

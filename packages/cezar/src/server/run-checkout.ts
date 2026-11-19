@@ -1,7 +1,7 @@
 import type { LiveIndexCheck } from '../git-private-index.ts';
 import { SHARED_WORKSPACE_REFUSAL, ownsDirectory } from '@open-mercato/cezar-contract/delegation';
 import { engineOwnsRun } from '@open-mercato/cezar-contract/run-predicates';
-import { isUsageLimitHold } from '@open-mercato/cezar-contract/waits';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { fallbackProjectWriteError } from '../project-paths.ts';
 import { rematerializeReclaimedWorktree } from '../runs/retention.ts';
 import { hostsLiveSharedWorker, SHARED_HOST_REFUSAL } from '../runs/shared-hosts.ts';

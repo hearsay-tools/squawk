@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { AgentInput, RunRecord } from '@open-mercato/cezar-contract';
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
-import { WAIT_LIMIT } from '@open-mercato/cezar-contract/waits';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
+import { WAIT_LIMIT } from '@open-mercato/cezar-contract/wait-limits';
 import { makePeerWait, makeRunRecord, makeTimerWait, RUN_STATUS, WAIT_KIND, WAIT_PHASE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { DelegationPolicyError, MessagingOffError } from '../delegation/policy.ts';
 import { delegationWaitRefusal, peerWaitEntry, peerWaitOf, peerWaitResult, runsAwaitingPeer, workerListTarget } from './wait-scope.ts';

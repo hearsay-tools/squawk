@@ -1,7 +1,8 @@
 import { commandText } from '../../home/command.ts';
 import type { WaitResult, resolvedWaits } from '../waits.ts';
 import type { CiWaitResult, ProcessWaitResult, PeerWaitResult, SubagentWaitResult } from '@open-mercato/cezar-contract';
-import { runningSubagents, SUBAGENT_WAIT_DEADLINE_SECONDS, TIMER_MIN_SECONDS, TIMER_MAX_SECONDS } from '@open-mercato/cezar-contract/waits';
+import { runningSubagents } from '@open-mercato/cezar-contract/waits';
+import { SUBAGENT_WAIT_DEADLINE_SECONDS, TIMER_MIN_SECONDS, TIMER_MAX_SECONDS } from '@open-mercato/cezar-contract/wait-limits';
 import { randomUUID } from 'node:crypto';
 import type { CiWatcherSupervisor } from '../../ci-wait/supervisor.ts';
 import type { TimerWaitEntry, PrWaitEntry, ProcessWaitEntry, PeerWaitEntry, WorkerWaitEntry, HumanWaitEntry, SquawkWaitRequestInput, WaitVia, SubagentWaitEntry, SubagentChild } from '@open-mercato/cezar-contract';

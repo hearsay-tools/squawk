@@ -2,7 +2,8 @@ import { requestOutcomeSchema } from '@open-mercato/cezar-contract/conversations
 import { WAIT_KIND, WAIT_PHASE, WAIT_SOURCE, WAIT_VIA } from '@open-mercato/cezar-contract/test-factories.testkit';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { workerWaitRequestSchema, type WorkerOutcome } from '@open-mercato/cezar-contract/delegation';
+import { workerWaitRequestSchema } from '@open-mercato/cezar-contract/delegation';
+import type { WorkerOutcome } from '@open-mercato/cezar-contract/worker-outcome';
 import type { DeadlinedWorkerWaitEntry } from '@open-mercato/cezar-contract/waits';
 import { reconcileWorkerEntry } from './wait.ts';
 

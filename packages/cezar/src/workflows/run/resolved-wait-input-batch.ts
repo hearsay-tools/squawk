@@ -1,4 +1,4 @@
-import type { AgentInput } from '@open-mercato/cezar-contract/delegation';
+import type { AgentInput } from '@open-mercato/cezar-contract/agent-input';
 import type { RunRecord } from '../../runs/store.ts';
 import { agentInputBatch } from '../../delegation/input.ts';
 import { resolvedWaits, waitInputId, waitResultText } from '../waits.ts';

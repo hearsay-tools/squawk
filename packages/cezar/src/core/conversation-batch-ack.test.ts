@@ -1,4 +1,4 @@
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { runnersWhere } from './runner-facts.ts';

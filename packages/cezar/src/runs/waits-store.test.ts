@@ -1,4 +1,4 @@
-import { agentInputSchema } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema } from '@open-mercato/cezar-contract/agent-input';
 import { setRunStatus } from './run-store.testkit.ts';
 import { crashAfterNextCommit, openTestRunStore } from './run-store-open.testkit.ts';
 import { randomUUID } from 'node:crypto';
@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LAST_WAITS_LIMIT, WAIT_LIMIT, type Wait } from '@open-mercato/cezar-contract/waits';
+import type { Wait } from '@open-mercato/cezar-contract/waits';
+import { LAST_WAITS_LIMIT, WAIT_LIMIT } from '@open-mercato/cezar-contract/wait-limits';
 import type { AgentInput, CiWaitResult } from '@open-mercato/cezar-contract';
 import {
   RUN_STATUS,

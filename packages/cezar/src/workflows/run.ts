@@ -54,12 +54,8 @@ import { seedHandoffFile } from '../handoff.ts';
 // Contract VALUES, like `workspaceUiStateSchema` in workspace/migrations.ts: the attachment
 // vocabulary the routes validate with is the same one the engine stores and re-reads by, so the
 // wire and the disk can never disagree about what counts as an image (#950).
-import {
-  type AgentInput,
-  type WorkerStopResult,
-  type WorkerWait,
-  type WorkerWaitRequest,
-} from '@open-mercato/cezar-contract/delegation';
+import type { WorkerStopResult, WorkerWait, WorkerWaitRequest } from '@open-mercato/cezar-contract/delegation';
+import type { AgentInput } from '@open-mercato/cezar-contract/agent-input';
 import {
   type RequestWaitRequest,
 } from '@open-mercato/cezar-contract/conversations';

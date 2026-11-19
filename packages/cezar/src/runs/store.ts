@@ -24,12 +24,11 @@ import { scopeRecordSchema, type ScopeRecord, type SpawnScope } from '../worker-
 import { WorkerScopes } from '../worker-scope/worker-scopes.ts';
 import { readPrivateRecord, writePrivateRecord } from './private-record-file.ts';
 import {
-  agentInputSchema,
-  inboxClaimSchema,
   delegationStateSchema,
   workerResultFileSchema,
   workerDestroyRetrySchema,
 } from '@open-mercato/cezar-contract/delegation';
+import { agentInputSchema, inboxClaimSchema } from '@open-mercato/cezar-contract/agent-input';
 import {
   automationIdOf,
   stepStateSchema as contractStepStateSchema,
@@ -40,11 +39,8 @@ import {
 } from '@open-mercato/cezar-contract/runs';
 import { queuedMessageSchema } from '@open-mercato/cezar-contract/queued-messages';
 import { previewServerSchema } from '@open-mercato/cezar-contract/preview';
-import {
-  isUsageLimitHold,
-  waitSchema,
-  type WaitRegistrationReceipt,
-} from '@open-mercato/cezar-contract/waits';
+import { waitSchema, type WaitRegistrationReceipt } from '@open-mercato/cezar-contract/waits';
+import { isUsageLimitHold } from '@open-mercato/cezar-contract/usage-limit-hold';
 import { isSweepable, UNREAD_RUN_RULE, SWEEPABLE_RUN_RULE, RETENTION_RUN_RULE, REFERENCED_RUN_RULE } from '@open-mercato/cezar-contract/run-predicates';
 import type { ArchiveFinishedScope, ArchivedRunsResponse, ArchivePullRequestIdentity, ConversationState, AgentInput, InboxClaim, DelegationState, MergedPullRequest, RunPullRequest, RunSummary, Wait, WorkerCollectedResult, WorkerDestroyRetry } from '@open-mercato/cezar-contract';
 import { matchesRunSearch, sqlPrefilterTokens, type AutomationNames } from '@open-mercato/cezar-contract/run-search';

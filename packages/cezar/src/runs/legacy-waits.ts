@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { ciWaitSchema } from '@open-mercato/cezar-contract/ci-wait';
 import { workerWaitSchema } from '@open-mercato/cezar-contract/delegation';
-import { LAST_WAITS_LIMIT, TIMER_MAX_SECONDS, TIMER_MIN_SECONDS } from '@open-mercato/cezar-contract/waits';
+import { LAST_WAITS_LIMIT, TIMER_MAX_SECONDS, TIMER_MIN_SECONDS } from '@open-mercato/cezar-contract/wait-limits';
 import type { CiWait, PrWaitEntry, RunRecord, Wait, WorkerWait, WorkerWaitEntry } from '@open-mercato/cezar-contract';
 import { applyExit } from './run-exits.ts';
 

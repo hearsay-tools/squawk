@@ -10,6 +10,24 @@
 
 Must degrade gracefully: no `gh`, no remote, offline all return `{ available: false, reason }` — never an error. `gh … --json` output is zod-validated at the boundary. `GITHUB_TOKEN` is the fallback when `gh` isn't authenticated. `createDraftPr` never throws; failures map to one-line human errors. `HSQ_DRY_RUN=1` (`CEZ_DRY_RUN` fallback) fakes the PR URL.
 
+## One request gate for the pollers
+
+Three pollers ask GitHub about pull requests: the PR wait (`ci-wait/github.ts`),
+automations (`automations/github-poller.ts`) and archive-on-merge
+(`lookupMergedPullRequests` in `server/forge/github.ts`). Their `gh` requests go through
+one gate, `githubRequestGate` in `server/forge/github-request-gate.ts`. It needs no setting.
+
+- At most `GITHUB_REQUEST_LIMIT` (4) requests run at once across the three pollers. The
+  PR wait's long `gh pr checks --watch` and its progress reads take no permit.
+- A rate-limit reply (HTTP 429, or the `rate limit` text of gh's 403) pauses all three
+  pollers. The pause is 60 s, doubles for each further rate limit up to 15 min, and goes
+  back to 60 s after any other reply. A plain 403 is an access error.
+- During a pause, the PR wait waits for its end. Automations and archive-on-merge refuse at
+  once and treat it as a pause, not a failure: archive-on-merge sets no blocker and no
+  failure backoff.
+- Each poller keeps its own interval, retry schedule, owner and storage. The cockpit's own
+  forge reads and the other `gh` call sites do not use the gate.
+
 ## Task completion controls
 
 Tasks and automation templates have two optional switches. Both default to off.

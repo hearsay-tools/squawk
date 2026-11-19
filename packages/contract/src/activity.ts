@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ATTENTION_RUNGS } from './attention.ts';
 import { prWaitUntilSchema } from './ci-wait.ts';
 import { requestOutcomeSchema } from './conversations.ts';
-import { workerWaitModeSchema } from './delegation.ts';
+import { workerWaitModeSchema } from './worker-outcome.ts';
 import { runnerSchema } from './runner.ts';
 import { PROJECT_ID_PATTERN } from './project-limits.ts';
 import { runStatusSchema } from './run-status.ts';

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { agentInputSchema, delegationStateSchema, runDelegationSummarySchema, workerDestroyRetrySchema } from './delegation.ts';
+import { agentInputSchema } from './agent-input.ts';
+import { delegationStateSchema, runDelegationSummarySchema, workerDestroyRetrySchema } from './delegation.ts';
 import { runnerSchema } from './runner.ts';
 import { runStatusSchema, stepKindSchema, stepStatusSchema } from './run-status.ts';
 import { referenceStatusSchema } from './github.ts';
@@ -11,7 +12,8 @@ import { continuationMessageSchema, queuedMessageSchema } from './queued-message
 // The chain shapes belong to the workflows family; the run record embeds one, so this file
 // consumes them rather than redeclaring. One-way on purpose — see the header of `./workflows.ts`.
 import { workflowDefSchema, workflowStepDefSchema } from './workflows.ts';
-import { computeWaitingOn, hasResolvedWait, waitingOnSchema, waitSchema, waitRegistrationReceiptSchema, withRootLedger } from './waits.ts';
+import { waitingOnSchema, waitSchema, waitRegistrationReceiptSchema } from './waits.ts';
+import { computeWaitingOn, hasResolvedWait, withRootLedger } from './waiting-on.ts';
 import { handoffRecordsSchema } from './handoff.ts';
 import { completionControlsShape, taskAccessShape } from './task-options.ts';
 
