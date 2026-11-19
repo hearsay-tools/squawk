@@ -16,7 +16,7 @@ import { relativeIn } from '@/lib/automation-format'
 import { useNow } from '@/lib/use-now'
 
 import { ActivityRow } from './run-activity-row'
-import { ownsDirectory } from '@open-mercato/cezar-api-client/contract/delegation'
+import { listsWorkers as recordListsWorkers, ownsDirectory } from '@open-mercato/cezar-api-client/contract/delegation'
 
 /** The run's own delegation metadata, and the wait note's half of it — read off `ApiRun` so the
  *  Workers section and dock header never drift from whichever schema the record actually carries. */
@@ -25,8 +25,7 @@ type DelegationWait = NonNullable<Exclude<Delegation, { role: 'invalid' }>['wait
 
 /** Whether the run's page has a Workers section: a root, and a worker that holds a spawn grant. */
 export function listsWorkers(run: ApiRun): boolean {
-  const metadata = run.delegation
-  return metadata?.role === 'root' || (metadata?.role === 'worker' && !!metadata.spawnGrant?.kinds.length)
+  return recordListsWorkers(run.delegation)
 }
 
 /** The worker ids this run is known to link, newest receipts first — the durable list that survives a

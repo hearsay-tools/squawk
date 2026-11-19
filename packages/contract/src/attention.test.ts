@@ -131,7 +131,9 @@ describe('rung ids', () => {
     ['waiting-on-workers', 'waiting on 2 workers', { status: RUN_STATUS.waiting, waitingOn: { kind: 'workers', count: 2 } }],
     ['waiting-on-workers', 'waiting on workers', { status: RUN_STATUS.waiting, waitingOn: { kind: 'workers', count: 0 } }],
     ['waiting-on-workers', 'waiting on worker replies', { status: RUN_STATUS.waiting, waitingOn: { kind: 'workers', count: 1, replies: true } }],
-    ['waiting-on-workers', 'waiting on parent reply', { status: RUN_STATUS.waiting, delegation: { role: 'worker' }, waitingOn: { kind: 'workers', count: 1 } } as AttentionInput],
+    ['waiting-on-workers', 'waiting on parent reply', { status: RUN_STATUS.waiting, delegation: { role: 'worker' }, waitingOn: { kind: 'workers', count: 1, replies: true } } as AttentionInput],
+    // hearsay-tools/squawk#3819: a worker that waits on a worker it started says so.
+    ['waiting-on-workers', 'waiting on 1 worker', { status: RUN_STATUS.waiting, delegation: { role: 'worker' }, waitingOn: { kind: 'workers', count: 1 } } as AttentionInput],
     // hearsay-tools/cezarion#1995: a peer request's reply, and named peer tasks.
     ['waiting-on-workers', 'waiting on replies', { status: RUN_STATUS.waiting, waitingOn: { kind: 'workers', count: 1, replies: true, peers: true } }],
     ['waiting-on-workers', 'waiting on 2 tasks', { status: RUN_STATUS.waiting, waitingOn: { kind: 'peers', count: 2 } }],
@@ -480,8 +482,8 @@ describe('computeWaitingOn and worker entries', () => {
       .toMatchObject({ shape: 'workers', label: 'waiting on worker replies' });
     expect(deriveAttention({ status: RUN_STATUS.waiting, waits: [request], delegation: { role: 'worker' } } as unknown as AttentionInput))
       .toEqual({ rung: 'waiting-on-workers', bucket: 'none', tone: 'running', shape: 'ring', pulse: false, label: 'waiting on parent reply' });
-    // A summary has no entries: a worker still reads as waiting on its parent.
-    expect(deriveAttention({ status: RUN_STATUS.waiting, waitingOn: { kind: 'workers', count: 1 }, delegation: { role: 'worker' } } as unknown as AttentionInput).label)
+    // A summary has no entries: a worker still reads as waiting on its parent, by `waitingOn.replies`.
+    expect(deriveAttention({ status: RUN_STATUS.waiting, waitingOn: { kind: 'workers', count: 1, replies: true }, delegation: { role: 'worker' } } as unknown as AttentionInput).label)
       .toBe('waiting on parent reply');
     // A root's summary says so through `waitingOn.replies`, which only request entries set.
     const waitingOn = computeWaitingOn({ waits: [request], delegation: { role: 'root' } } as unknown as WaitingOnInput);

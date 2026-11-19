@@ -630,6 +630,10 @@ describe('deadline-less cezar worker entries (hearsay-tools/cezarion#1301)', () 
     // A deadlined entry, an upgraded completion wait included, is the legacy view's.
     expect(completionWaitView({ waits: [workerWaitEntrySchema.parse(workerBase(targets))], delegation: root })).toBeUndefined();
     expect(completionWaitView({ waits: [bare] })).toBeUndefined();
+    // hearsay-tools/squawk#3819: a worker that holds a spawn grant lists workers too; one with none does not.
+    const worker = { role: 'worker', spawnGrant: { kinds: ['shared'], live: 1 } } as never;
+    expect(completionWaitView({ status: RUN_STATUS.waiting, waits: [bare], delegation: worker })).toMatchObject({ id: bare.id, phase: 'parked', workerIds: [W1] });
+    expect(completionWaitView({ waits: [bare], delegation: { role: 'worker' } as never })).toBeUndefined();
     // The projection carries no deadline, and the legacy shape keeps requiring one.
     expect(workerCompletionWaitSchema.safeParse({ ...view, deadline: '2026-10-19T10:10:00.000Z' }).success).toBe(false);
     const inspection = { workerId: W1, parentRunId: WORKER_WAIT_ID, settled: false, status: RUN_STATUS.running,

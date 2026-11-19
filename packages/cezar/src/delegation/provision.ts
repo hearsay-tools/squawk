@@ -9,7 +9,7 @@ import { CredentialRegistry } from './credentials.ts';
 import { messagingAllowed, workersAllowed } from '@open-mercato/cezar-contract/task-options';
 import { DelegationService, rootDelegation, type DelegationProject, type WorkerCleanupFactory } from './service.ts';
 import { WORKERS_OFF } from './policy.ts';
-import { maySpawn, supervisorIdOf } from '../runs/task-rights.ts';
+import { maySpawn, supervisedByFamilyRecord, supervisorIdOf } from '../runs/task-rights.ts';
 import { workspaceKind } from './workspace-kinds.ts';
 import { openCompletionRequests } from '../workflows/completion-policy.ts';
 import { createDelegationRoutes } from './routes.ts';
@@ -127,7 +127,7 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
     `Review is a human gate.`,
     `Destruction may be incomplete; inspect remaining resources and retry explicitly.`,
     `Credentials are supplied only in the environment: never read, echo, forward or include them in commands, messages, prompts, events or files.`,
-    `A worker may start one shared-workspace worker of its own at a time. Workers cannot message peers.`,
+    `A worker may start one shared-workspace worker of its own at a time. Message, steer and diff apply to workers you started yourself; a worker that one of your workers started is reached through that worker. Workers cannot message peers.`,
     `This is cooperative local supervision, not process isolation.`,
   ] : [
     `Use native subagents for research, code reading and focused analysis.`,
@@ -149,7 +149,9 @@ export function provisionDelegationSession(options: { projectId: string; runId: 
         ...(workspaceKind(run.delegation.workspace).workerNotice ? [workspaceKind(run.delegation.workspace).workerNotice!] : []),
         conversationGuidance,
         `${maySpawn(run) ? `You may start one shared-workspace Squawk worker at a time; destroy it before you start the next. Run ${invocation} spawn --help first.` : `You cannot spawn Squawk workers.`} You cannot control peers, merge automatically, or accept your own review.`,
-        commandText(`Follow your assigned task and selected input context. Ask your parent with cez message request; any question you raise goes to your parent too, never to a human. Your parent answers or asks the human itself; do not wait for a human.`),
+        commandText(supervisedByFamilyRecord(run)
+          ? `Follow your assigned task and selected input context. Ask your parent with cez message request; any question you raise goes to your parent too, never to a human. Your parent answers or asks the human itself; do not wait for a human.`
+          : `Follow your assigned task and selected input context. Send every question to your parent as a request with cez message request and wait for its reply: no question card reaches your parent or a human. Do not wait for a human.`),
         `You may use native subagents for research, code reading and focused analysis.`,
         subagentMessaging,
         `Commit reviewed work before your parent deliberately integrates it; report the summary, commits, tests and remaining concerns.`,

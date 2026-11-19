@@ -296,6 +296,13 @@ export const delegationStateSchema = z.discriminatedUnion('role', [
 ]);
 export type DelegationState = z.infer<typeof delegationStateSchema>;
 
+/** Whether a task with this record can have workers to list: the task that holds the family's
+ *  receipts, and a worker that holds a spawn grant. The cockpit's Workers section, its verdict and
+ *  the completion wait's view all ask this. */
+export function listsWorkers(delegation: Pick<DelegationState, 'role'> & { spawnGrant?: SpawnGrant | undefined } | null | undefined): boolean {
+  return delegation?.role === 'root' || (delegation?.role === 'worker' && !!delegation.spawnGrant?.kinds.length);
+}
+
 /** Slim list/palette projection. Never copies resource paths, permissions or receipts. */
 export const runDelegationSummarySchema = z.discriminatedUnion('role', [
   delegationStateSchema.options[0].pick({ role: true }).strip().extend({

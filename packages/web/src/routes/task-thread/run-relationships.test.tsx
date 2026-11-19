@@ -161,6 +161,15 @@ it('shows a parent parked on Cezar\'s completion wait, which has no deadline', (
   expect(screen.queryByText(/Deadline:/)).toBeNull();
 });
 
+// hearsay-tools/squawk#3819: a worker that started a worker parks on the same wait and shows the same note.
+it('shows a supervising worker parked on the completion wait', () => {
+  setup({ ...child, status: RUN_STATUS.waiting, delegation: { ...child.delegation!, spawnGrant: { kinds: ['shared'], live: 1 } } as ApiRun['delegation'], waits: [{
+    kind: WAIT_KIND.worker, id: '10000000-0000-4000-8000-000000000003', source: WAIT_SOURCE.cezar, via: WAIT_VIA.completion, registeredAt: at,
+    phase: WAIT_PHASE.open, turnId: 'turn-1', mode: 'all', workerIds: [parentId], revisions: [], outcomes: [],
+  }] });
+  expect(screen.getByText(/^Waiting on 1 worker\. No deadline: Squawk wakes this task when they have all settled\.$/)).toBeTruthy();
+});
+
 // hearsay-tools/cezarion#2588: waits [A, B] and [A] are two pending workers, as the Activity row says.
 it('counts each pending worker once across overlapping open waits', () => {
   const otherWorker = '10000000-0000-4000-8000-000000000009'

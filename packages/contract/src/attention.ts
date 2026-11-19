@@ -157,7 +157,8 @@ function owesWorkerWake(run: AttentionInput): boolean {
  * A worker waits outside itself on its parent (ring); a root waits on its own workers (robot). */
 function workerAttention(run: Pick<AttentionInput, 'delegation'>, waitingOn: Extract<WaitingOn, { kind: 'workers' }>): Attention {
   const attention = attentionOfRung('waiting-on-workers');
-  if (run.delegation?.role === 'worker') return { ...attention, shape: 'ring', label: 'waiting on parent reply' };
+  // A worker waits on a reply to its own request, or on the workers it started.
+  if (run.delegation?.role === 'worker' && (waitingOn.replies || !waitingOn.count)) return { ...attention, shape: 'ring', label: 'waiting on parent reply' };
   if (waitingOn.replies) return { ...attention, label: waitingOn.peers ? 'waiting on replies' : 'waiting on worker replies' };
   const count = waitingOn.count;
   return { ...attention, label: count ? `waiting on ${count} worker${count === 1 ? '' : 's'}` : attention.label };
