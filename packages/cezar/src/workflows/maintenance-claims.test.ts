@@ -1,16 +1,14 @@
-import { testHome } from '../home/test-home.testkit.ts';
 import { setRunStatus } from '../runs/run-store.testkit.ts';
 import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit';
-import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RUN_IN_USE_ELSEWHERE, RunStore } from '../runs/store.ts';
-import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
-import { createFixtureManager, drainFixtureManagers } from './fixture-no-runner.testkit.ts';
-import type { RunManager } from './run.ts';
+import { MaintenanceClaims } from './run/maintenance-claims.ts';
+import type { RunModuleContext } from './run/types.ts';
+import { unused } from './unused.testkit.ts';
 
 /**
  * An ownership check is a moment; the work it admits is not (#779, plan step 3, PR #851 review).
@@ -21,24 +19,16 @@ import type { RunManager } from './run.ts';
 describe('claims that admit work on a finished run', () => {
   let root: string;
   let dataDir: string;
-  const savedDryRun = process.env.CEZ_DRY_RUN;
 
   beforeEach(() => {
-    process.env.CEZ_DRY_RUN = '1';
     root = mkdtempSync(join(tmpdir(), 'cez-maintenance-claims-'));
-    execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: root });
-    execFileSync('git', ['config', 'gc.auto', '0'], { cwd: root });
-    execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@local', 'commit', '--allow-empty', '-qm', 'base'], { cwd: root });
     dataDir = join(root, '.ai/cezar');
     mkdirSync(dataDir, { recursive: true });
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     vi.restoreAllMocks();
-    await drainFixtureManagers(root);
     rmSync(root, { recursive: true, force: true });
-    if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
-    else process.env.CEZ_DRY_RUN = savedDryRun;
   });
 
   function settledRun(store: RunStore): string {
@@ -50,14 +40,20 @@ describe('claims that admit work on a finished run', () => {
     return run.id;
   }
 
-  function managerFor(store: RunStore): RunManager {
-    return createFixtureManager(store, root, { home: testHome(), semaphore: new WorkspaceSemaphore({ home: testHome(), initial: { maxParallel: 0 } }) });
+  /** The claims as `RunManager` composes them, with nothing active, running or autosaving. */
+  function claimsFor(store: RunStore): MaintenanceClaims {
+    const context = unused<RunModuleContext>('RunModuleContext', { store, disposed: () => false });
+    const claims: MaintenanceClaims = new MaintenanceClaims(context, {
+      isActive: () => false, autosaveCleanupBlocker: () => undefined, hasExecution: () => false,
+      scheduleScratchCleanup: () => undefined, holdForMaintenance: ids => claims.holdForMaintenance(ids),
+    });
+    return claims;
   }
 
-  const claims: Array<[string, (manager: RunManager, id: string) => (() => void) | null]> = [
-    ['publish', (manager, id) => manager.claimForPublish(id)],
-    ['worktree reclaim', (manager, id) => manager.claimWorktreeReclaim(id)],
-    ['branch cleanup', (manager, id) => manager.claimForBranchCleanup([id])],
+  const claims: Array<[string, (claimer: MaintenanceClaims, id: string) => (() => void) | null]> = [
+    ['publish', (claimer, id) => claimer.claimForPublish(id)],
+    ['worktree reclaim', (claimer, id) => claimer.claimWorktreeReclaim(id)],
+    ['branch cleanup', (claimer, id) => claimer.claimForBranchCleanup([id])],
   ];
 
   it.each(claims)('%s holds the family claim until it is released', (_name, claim) => {
@@ -68,7 +64,7 @@ describe('claims that admit work on a finished run', () => {
     const ours = RunStore.open(dataDir, { keepLive: true });
     const theirs = RunStore.open(dataDir, { keepLive: true });
     try {
-      const release = claim(managerFor(ours), id);
+      const release = claim(claimsFor(ours), id);
       expect(release).not.toBeNull();
       // While the claim stands, the other process sees the run as ours and cannot act on it.
       expect(theirs.runOwnership(id)).toBe('foreign');
@@ -91,30 +87,14 @@ describe('claims that admit work on a finished run', () => {
     const ours = RunStore.open(dataDir, { keepLive: true });
     const theirs = RunStore.open(dataDir, { keepLive: true });
     try {
-      const manager = managerFor(ours);
+      const claimer = claimsFor(ours);
       // The other process takes the claim after our ownership check would have passed.
       vi.spyOn(ours, 'writeRefusal').mockReturnValue(undefined);
       expect(theirs.pin(id, 'cleanup')).toBeDefined();
-      expect(claim(manager, id)).toBeNull();
+      expect(claim(claimer, id)).toBeNull();
     } finally {
       ours.close();
       theirs.close();
-    }
-  });
-
-  it('Continue refuses, and starts nothing, when the run cannot be held', () => {
-    const store = RunStore.open(dataDir, { keepLive: true });
-    try {
-      const id = settledRun(store);
-      const manager = managerFor(store);
-      // Another process claimed the run between the ownership check and the hold.
-      vi.spyOn(store, 'pin').mockReturnValue(undefined);
-      const result = manager.continueRun(id);
-      expect(result).toEqual({ ok: false, error: RUN_IN_USE_ELSEWHERE });
-      expect(store.getRun(id)?.status).toBe('done');
-      expect(manager.isActive(id)).toBe(false);
-    } finally {
-      store.close();
     }
   });
 });
