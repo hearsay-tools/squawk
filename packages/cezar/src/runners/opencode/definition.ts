@@ -6,6 +6,7 @@ import { OPENCODE_EXTRA_TOOLS } from './extra-tools.ts';
 import { OPENCODE_SPEC_SUPPORT } from './spec-support.ts';
 import { OPENCODE_DETECTION } from './detection.ts';
 import { OPENCODE_CLI } from './cli.ts';
+import { OPENCODE_LOGIN } from './login.ts';
 
 /** The OpenCode runner. */
 export const opencodeRunner = defineRunner({
@@ -23,4 +24,6 @@ export const opencodeRunner = defineRunner({
   loadSkillCatalog: async () => (await import('../../core/opencode-skill-catalog.ts')).discoverOpencodeSkills,
   configFiles: OPENCODE_CONFIG_FILES,
   extraTools: OPENCODE_EXTRA_TOOLS,
+  login: OPENCODE_LOGIN,
+  loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseOpenCodeStatus }),
 });

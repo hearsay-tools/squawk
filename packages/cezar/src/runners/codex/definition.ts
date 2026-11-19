@@ -6,6 +6,7 @@ import { CODEX_EXTRA_TOOLS } from './extra-tools.ts';
 import { CODEX_SPEC_SUPPORT } from './spec-support.ts';
 import { CODEX_DETECTION } from './detection.ts';
 import { CODEX_CLI } from './cli.ts';
+import { CODEX_LOGIN } from './login.ts';
 
 /** The Codex runner. */
 export const codexRunner = defineRunner({
@@ -23,4 +24,6 @@ export const codexRunner = defineRunner({
   loadSkillCatalog: async () => (await import('../../core/codex-skill-catalog.ts')).discoverCodexSkills,
   configFiles: CODEX_CONFIG_FILES,
   extraTools: CODEX_EXTRA_TOOLS,
+  login: CODEX_LOGIN,
+  loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseCodexStatus }),
 });

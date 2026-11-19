@@ -6,6 +6,7 @@ import { OMP_EXTRA_TOOLS } from './extra-tools.ts';
 import { OMP_SPEC_SUPPORT } from './spec-support.ts';
 import { OMP_DETECTION } from './detection.ts';
 import { OMP_CLI } from './cli.ts';
+import { OMP_LOGIN } from './login.ts';
 
 /** The OMP runner. */
 export const ompRunner = defineRunner({
@@ -26,4 +27,6 @@ export const ompRunner = defineRunner({
   loadSkillCatalog: async () => (await import('../../core/omp-skill-catalog.ts')).discoverOmpSkills,
   configFiles: OMP_CONFIG_FILES,
   extraTools: OMP_EXTRA_TOOLS,
+  login: OMP_LOGIN,
+  loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseOmpStatus }),
 });

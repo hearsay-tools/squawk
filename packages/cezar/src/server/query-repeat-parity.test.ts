@@ -4,10 +4,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ProviderAuthService } from '../core/provider-auth.ts'
+import { registerBuiltInRunners } from '../runners/built-in.ts'
 import { RunStore } from '../runs/store.ts'
 import type { RunManager } from '../workflows/run.ts'
 import { createApp } from './server.ts'
 import { apiRequest } from './loopback-request.testkit.ts'
+
+// The providers status route probes every registered runner's login; register the built-ins.
+registerBuiltInRunners()
 
 /**
  * Moving the query string onto `queryZodValidator` changed one thing on the wire that nothing

@@ -6,6 +6,7 @@ import { PI_EXTRA_TOOLS } from './extra-tools.ts';
 import { PI_SPEC_SUPPORT } from './spec-support.ts';
 import { PI_DETECTION } from './detection.ts';
 import { PI_CLI } from './cli.ts';
+import { PI_LOGIN } from './login.ts';
 
 /** The Pi runner. */
 export const piRunner = defineRunner({
@@ -23,4 +24,6 @@ export const piRunner = defineRunner({
   loadSkillCatalog: async () => (await import('../../core/pi-skill-catalog.ts')).discoverPiSkills,
   configFiles: PI_CONFIG_FILES,
   extraTools: PI_EXTRA_TOOLS,
+  login: PI_LOGIN,
+  loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parsePiStatus }),
 });

@@ -6,6 +6,7 @@ import type { ModelOption } from './runner-model-catalog.ts';
 import type { SkillCatalog } from './runner-skill-catalog.ts';
 import type { SkillDiscoveryOptions } from './skill-probe.ts';
 import type { ConfigFileDef } from './runner-config-files.ts';
+import type { ProviderCommandResult, ProviderConnectionState } from './provider-auth.ts';
 
 /**
  * Everything Squawk knows about one runner, in one object (spec 2026-11-18-runner-definitions).
@@ -41,6 +42,13 @@ export interface RunnerDefinition {
   readonly configFiles: readonly ConfigFileDef[];
   /** Extra tools unioned onto the default when a step does not set allowedTools. */
   readonly extraTools: readonly string[];
+
+  // ---- login (hearsay-tools/squawk#3894) ----
+
+  /** Login and auth-status data (the `login` part). */
+  readonly login: RunnerLogin;
+  /** Imports the runner's status parser (`runners/<id>/login-probe.ts`). */
+  loadLogin(): Promise<RunnerLoginStatus>;
 }
 
 /** A runner's model data: plain data in `runners/<id>/models.ts`. */
@@ -97,6 +105,27 @@ export interface RunnerCli {
   readonly resumeArgs: (sessionId: string) => string;
   /** Where the installer gets the CLI: an npm package, a site the operator installs from, or nowhere it knows. */
   readonly installSource: { readonly npm: string } | { readonly site: string; readonly label: string } | null;
+}
+
+/** Login and auth status (the `login` part, spec 2026-11-18-runner-definitions): the data half of
+ *  a `DESCRIPTORS` entry from `core/provider-auth.ts`, read by `ProviderAuthService`. */
+export interface RunnerLogin {
+  /** The auth probe's executable: `productEnv(env) ?? fallback` (e.g. `HSQ_CLAUDE_BIN`). */
+  readonly executable: { readonly env: string; readonly fallback: string };
+  /** Args that ask the CLI whether it is logged in. */
+  readonly statusArgs: readonly string[];
+  /** Args that log the CLI in. */
+  readonly loginArgs: readonly string[];
+  /** Shown when the CLI is not installed. */
+  readonly installHint: string;
+  /** A larger output ceiling for a status command whose output grows with the user's setup. */
+  readonly maxBuffer?: number;
+}
+
+/** The code half of `login`: how a CLI's answer becomes a connection state. Loads from
+ *  `runners/<id>/login-probe.ts`, so a definition module imports no parser code. */
+export interface RunnerLoginStatus {
+  parse(result: ProviderCommandResult): ProviderConnectionState | null;
 }
 
 /** Declare one runner. */

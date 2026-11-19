@@ -9,9 +9,13 @@ import {
   type ProviderId,
   type RunProviderCommand,
 } from '../core/provider-auth.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
 import { RunStore } from '../runs/store.ts';
 import { mergeWriteAgentAccounts } from '../workspace/agent-accounts.ts';
 import type { RuntimeAuthProfileResolver } from './provider-auth-runtime.ts';
+
+// The self-check probes a provider's login through the registry; register the built-ins.
+registerBuiltInRunners();
 import {
   ProviderRuntimeAuthObserver,
   recoverWithProviderRuntimeAuthObservation,

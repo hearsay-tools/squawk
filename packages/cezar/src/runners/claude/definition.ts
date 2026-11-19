@@ -6,6 +6,7 @@ import { CLAUDE_EXTRA_TOOLS } from './extra-tools.ts';
 import { CLAUDE_SPEC_SUPPORT } from './spec-support.ts';
 import { CLAUDE_DETECTION } from './detection.ts';
 import { CLAUDE_CLI } from './cli.ts';
+import { CLAUDE_LOGIN } from './login.ts';
 
 /** The Claude runner. */
 export const claudeRunner = defineRunner({
@@ -23,4 +24,6 @@ export const claudeRunner = defineRunner({
   loadSkillCatalog: async () => (await import('../../core/claude-skill-catalog.ts')).discoverClaudeSkills,
   configFiles: CLAUDE_CONFIG_FILES,
   extraTools: CLAUDE_EXTRA_TOOLS,
+  login: CLAUDE_LOGIN,
+  loadLogin: async () => ({ parse: (await import('./login-probe.ts')).parseClaudeStatus }),
 });
