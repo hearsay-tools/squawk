@@ -9,6 +9,7 @@ import { RunStore } from '../runs/store.ts';
 import { setRunStatus, seedRuns } from '../runs/run-store.testkit.ts';
 import { ArchiveOnMergeCoordinator } from './archive-on-merge.ts';
 import { fetchMergedPullRequests } from './forge/github.ts';
+import { GithubRateLimitedError } from './forge/github-request-gate.ts';
 
 const dirs: string[] = [], stores: RunStore[] = [];
 afterEach(() => { stores.splice(0).forEach(s => s.close()); dirs.splice(0).forEach(d => rmSync(d, { recursive: true, force: true })); });
@@ -51,6 +52,17 @@ it('defers missing or wrong-repository observations and retries after an outage'
   await f.coordinator.tick(); expect(f.store.getRun(f.id)?.archived).toBe(false);
   f.lookup.mockRejectedValueOnce(new Error('offline'));
   await f.coordinator.tick(); expect(f.store.getRun(f.id)?.archived).toBe(false);
+});
+
+it('treats a GitHub rate limit as a pause: no blocker and no failure backoff', async () => {
+  const f = fixture();
+  f.lookup.mockRejectedValueOnce(new GithubRateLimitedError(Date.now() + 60_000));
+  await f.coordinator.tick();
+  expect(f.store.getRun(f.id)?.archiveBlocker).toBeUndefined();
+  // An outage would hold the project for a minute; after a rate limit the gate alone decides when lookups run.
+  await f.coordinator.tick();
+  expect(f.lookup).toHaveBeenCalledTimes(2);
+  expect(f.store.getRun(f.id)?.archived).toBe(true);
 });
 
 it('archives a merged family when a different family declares a nonexistent PR', async () => {

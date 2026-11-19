@@ -8,6 +8,7 @@ import { AutomationStore } from './store.ts';
 import { AutomationCandidateChangedError, GithubPoller, type GithubCandidate, type GithubPollOptions, type GithubPollResult } from './github-poller.ts';
 import type { GithubAutomationDefinition, ScheduleAutomationDefinition } from './types.ts';
 import * as scheduleRunner from './schedule-runner.ts';
+import { GithubRateLimitedError } from '../server/forge/github-request-gate.ts';
 import { type ProjectAutomationHandle, LeaseHeldError, ProjectAutomationScheduler, WORKSPACE_TIMER_CAP_MS, WorkspaceAutomationScheduler } from './scheduler.ts';
 
 const dirs: string[] = [];
@@ -329,6 +330,31 @@ describe('ProjectAutomationScheduler', () => {
     await expect(scheduler.check(definition)).rejects.toThrow('rate limited');
     expect(store.state(definition.id)?.cursor?.timestamp).toBe('2026-07-26T01:00:00.000Z');
     expect(store.state(definition.id)).toMatchObject({ consecutiveFailures: 1, backoffUntil: expect.any(String) });
+  });
+
+  it('treats a GitHub rate limit as a pause: no failure count, no doubled delay, next check at the pause end', async () => {
+    const { store, definition } = await setup();
+    const until = Date.now() + 60_000;
+    const scheduler = new ProjectAutomationScheduler({ projectId: 'p', store, timeZone: 'UTC', github: { owner: 'acme', repo: 'demo', poller: { poll: async () => { throw new GithubRateLimitedError(until); } } as never }, launch: async () => ({ runId: 'unused' }) });
+    await expect(scheduler.check(definition)).rejects.toBeInstanceOf(GithubRateLimitedError);
+    const state = store.state(definition.id);
+    expect(state?.nextCheckAt).toBe(new Date(until).toISOString());
+    expect(state?.consecutiveFailures ?? 0).toBe(0);
+    expect(state?.backoffUntil).toBeUndefined();
+    expect(state?.lastError).toBeUndefined();
+    expect(store.logs({ automationId: definition.id })).toContainEqual(expect.objectContaining({ result: 'rate-limited', reason: expect.stringContaining('GitHub rate limit') }));
+  });
+
+  it('releases the receipt when a rate-limit pause stops the launch, so the next check launches the item', async () => {
+    const { store, definition } = await setup();
+    const poller = { poll: async () => ({ candidates: [candidate], truncated: false, pages: 1 }) } as never;
+    const launch = vi.fn().mockRejectedValueOnce(new GithubRateLimitedError(Date.now() + 60_000)).mockResolvedValueOnce({ runId: 'after-pause' });
+    const scheduler = new ProjectAutomationScheduler({ projectId: 'p', store, timeZone: 'UTC', github: { owner: 'acme', repo: 'demo', poller }, launch });
+    await expect(scheduler.check(definition)).rejects.toBeInstanceOf(GithubRateLimitedError);
+    expect([...store.latestReceipts().values()]).toEqual([expect.objectContaining({ status: 'released', eventId: candidate.eventId })]);
+    await scheduler.check(definition);
+    expect(launch).toHaveBeenCalledTimes(2);
+    expect(store.logs({ automationId: definition.id })).toContainEqual(expect.objectContaining({ result: 'launched', runId: 'after-pause' }));
   });
 
   it('launches nothing and counts no failure while the project\'s run store cannot open (#779)', async () => {
