@@ -7,7 +7,7 @@
  * before its children run.
  */
 
-import type { UiEvent, UiToolItem } from './ui-events.ts';
+import type { UiEvent, UiToolItem } from '../../core/ui-events.ts';
 
 const FORKED_COMMAND_PREFIX = 'forked-command-';
 

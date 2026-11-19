@@ -2,8 +2,8 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PINNED_SESSION_ID, seedOpencodeMockSession } from './harness-parity-core.testkit.ts';
-import { driveSeam } from './harness-parity.testkit.ts';
+import { PINNED_SESSION_ID, seedOpencodeMockSession } from '../../core/harness-parity-core.testkit.ts';
+import { driveSeam } from '../../core/harness-parity.testkit.ts';
 import { OPENCODE_MINIMAL_ENV, OPENCODE_MINIMAL_PROMPT_TOOLS, OPENCODE_MINIMAL_SESSION_PERMISSION, opencodeMinimalEnv } from './opencode-minimal.ts';
 
 const directories: string[] = [];

@@ -1,10 +1,10 @@
-import type { ModelDiscoveryOptions } from './model-discovery-options.ts';
-import { productEnv } from './product-env.ts';
+import type { ModelDiscoveryOptions } from '../../core/model-discovery-options.ts';
+import { productEnv } from '../../core/product-env.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { spawnModelProbe, type ModelProbeSpawnImpl } from './model-probe-spawn.ts';
+import { spawnModelProbe, type ModelProbeSpawnImpl } from '../../core/model-probe-spawn.ts';
 import { effortLevelSchema, type EffortLevel } from '@open-mercato/cezar-contract/effort';
-import { modelProbeTeardown } from './model-probe-teardown.ts';
-import type { ModelOption } from './runner-model-catalog.ts';
+import { modelProbeTeardown } from '../../core/model-probe-teardown.ts';
+import type { ModelOption } from '../../core/runner-model-catalog.ts';
 
 export type OmpModelDiscoveryOptions = ModelDiscoveryOptions;
 

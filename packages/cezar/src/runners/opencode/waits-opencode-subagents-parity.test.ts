@@ -1,7 +1,7 @@
-import { subagentCells } from './waits-subagents-parity-cells.testkit.ts';
-import { OpencodeServerRunner } from '../core/opencode-server-runner.ts';
-import { onlyRunner, useRunners } from '../core/runners-under-test.testkit.ts';
-import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { subagentCells } from '../../workflows/waits-subagents-parity-cells.testkit.ts';
+import { OpencodeServerRunner } from './opencode-server-runner.ts';
+import { onlyRunner, useRunners } from '../../core/runners-under-test.testkit.ts';
+import { opencodeRunner } from './definition.ts';
 
 useRunners(onlyRunner(opencodeRunner, () => new OpencodeServerRunner()));
 

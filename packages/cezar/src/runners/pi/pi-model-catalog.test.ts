@@ -9,8 +9,8 @@ import {
   parsePiModels,
   spawnPi,
 } from './pi-model-catalog.ts';
-import { registerRunner } from './runner-registry.ts';
-import { piRunner } from '../runners/pi/definition.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { piRunner } from './definition.ts';
 
 // The spawn path reads pi's env and account data through the registry; every case drives pi.
 registerRunner(piRunner);

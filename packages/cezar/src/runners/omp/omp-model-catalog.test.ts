@@ -9,8 +9,8 @@ import {
   resolveOmpExecutable,
   spawnOmp,
 } from './omp-model-catalog.ts';
-import { registerRunner } from './runner-registry.ts';
-import { ompRunner } from '../runners/omp/definition.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { ompRunner } from './definition.ts';
 
 // The spawn path reads omp's env and account data through the registry; every case drives omp.
 registerRunner(ompRunner);

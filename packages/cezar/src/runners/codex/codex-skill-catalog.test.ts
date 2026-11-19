@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseCodexSkills } from './codex-skill-catalog.ts';
-const capture = JSON.parse(readFileSync(new URL('./__fixtures__/codex/skill-list.json', import.meta.url), 'utf8'));
+const capture = JSON.parse(readFileSync(new URL('./__fixtures__/skill-list.json', import.meta.url), 'utf8'));
 const cwd = '/tmp/skill-list-probe/repo';
 describe('codex native skill metadata', () => {
   it('maps the real recorded response without skill bodies', () => {

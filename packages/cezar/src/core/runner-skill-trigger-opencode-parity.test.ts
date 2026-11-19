@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { driveSeam } from './harness-parity-core.testkit.ts';
-import { OpencodeServerRunner } from './opencode-server-runner.ts';
+import { OpencodeServerRunner } from '../runners/opencode/opencode-server-runner.ts';
 import { onlyRunner, useRunners } from './runners-under-test.testkit.ts';
 import { describeNativeSkillTriggers } from './runner-skill-trigger.testkit.ts';
 import { opencodeRunner } from '../runners/opencode/definition.ts';

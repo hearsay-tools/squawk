@@ -21,5 +21,5 @@ it.each([
   vi.stubEnv('HSQ_DRY_RUN', preferredDryRun);
   vi.stubEnv('CEZ_DRY_RUN', legacyDryRun);
   expect(resolveClaudeExecutable(override)).toBe(expected === 'mock'
-    ? fileURLToPath(new URL('../../scripts/mock-claude.mjs', import.meta.url)) : expected);
+    ? fileURLToPath(new URL('../../../scripts/mock-claude.mjs', import.meta.url)) : expected);
 });

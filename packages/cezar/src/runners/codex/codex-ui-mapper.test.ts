@@ -15,17 +15,17 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import type { AgentEvent } from './agent-runner.ts';
-import type { UiEvent, UiItem } from './ui-events.ts';
+import type { AgentEvent } from '../../core/agent-runner.ts';
+import type { UiEvent, UiItem } from '../../core/ui-events.ts';
 import { STATUS_MAP as CODEX_TOOL_STATUS_MAP, HOOK_STATUS as CODEX_HOOK_STATUS_MAP, codexSessionStarted, createCodexUiState, mapCodexNotification } from './codex-ui-mapper.ts';
-import { registerRunner } from './runner-registry.ts';
-import { codexRunner } from '../runners/codex/definition.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { codexRunner } from './definition.ts';
 
 // The runner's session env reads codex's registry data; this test drives only codex.
 registerRunner(codexRunner);
 import { CodexAppServerRunner } from './codex-app-server-runner.ts';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import { PLAN_STATUSES } from './ui-events.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
+import { PLAN_STATUSES } from '../../core/ui-events.ts';
 import { CODEX_TURN_STATUSES } from './codex-turn-outcome.ts';
 
 const PLAN_STATUS = z.enum(PLAN_STATUSES).enum;
@@ -37,7 +37,7 @@ const PROTOTYPE_KEYS = ['toString', 'constructor', '__proto__'] as const;
 const WIRE_HOOK_STATUS = z.enum(Object.keys(CODEX_HOOK_STATUS_MAP)).enum;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const FIXTURES = join(HERE, '__fixtures__', 'codex');
+const FIXTURES = join(HERE, '__fixtures__');
 
 /** Replay a fixture exactly as the runner drives the mapper: every parsed
  *  JSONL frame is folded in order, unparseable lines are skipped. (The
@@ -1207,7 +1207,7 @@ describe('codex reasoning text survives replay (#528)', () => {
 
 
 it('recovers from recorded retry errors through the real app-server transport (#550)', async () => {
-  const runner = new CodexAppServerRunner({ bin: join(HERE, '../../scripts/mock-codex-app-server.mjs'), timeoutMs: 0 });
+  const runner = new CodexAppServerRunner({ bin: join(HERE, '../../../scripts/mock-codex-app-server.mjs'), timeoutMs: 0 });
   const v1: AgentEvent[] = []; const v2: UiEvent[] = [];
   const session = runner.startSession({ toolGrant: UNSET_TOOL_GRANT, userPrompt: 'mock:stream-retry recover', cwd: process.cwd() },
     event => v1.push(event), { autoEndAfterFirstTurn: true, onUiEvent: event => v2.push(event) });

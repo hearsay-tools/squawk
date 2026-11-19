@@ -12,7 +12,7 @@ import type {
   UiMessageItem,
   UiReasoningItem,
   UiToolItem,
-} from './ui-events.js';
+} from '../../core/ui-events.js';
 import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
 import { contentText, isRecord, number, piRpcError as rpcError, string } from './pi-rpc-wire.ts';
 

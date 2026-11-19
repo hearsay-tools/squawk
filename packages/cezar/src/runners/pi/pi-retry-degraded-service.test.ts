@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 
 function adapt(message: Record<string, unknown>): Record<string, unknown> | undefined {
-  const extensionUrl = new URL('../../scripts/pi-retry-degraded-service.mjs', import.meta.url);
+  const extensionUrl = new URL('../../../scripts/pi-retry-degraded-service.mjs', import.meta.url);
   const source = `
     import register from ${JSON.stringify(extensionUrl.href)};
     let handler;

@@ -4,17 +4,17 @@ import { createServer, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentEvent } from './agent-runner.ts';
-import { AUTO_END_DELAY_MS } from './runner-runtime.ts';
+import type { AgentEvent } from '../../core/agent-runner.ts';
+import { AUTO_END_DELAY_MS } from '../../core/runner-runtime.ts';
 import { KILL_GRACE_MS, OpencodeServerRunner } from './opencode-server-runner.ts';
-import { registerRunner } from './runner-registry.ts';
-import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { opencodeRunner } from './definition.ts';
 
 // The runner's session env reads opencode's registry data; this test drives only opencode.
 registerRunner(opencodeRunner);
-import type { UiEvent } from './ui-events.ts';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import { rejectedAcknowledgement } from '../workflows/run/input-delivery.ts';
+import type { UiEvent } from '../../core/ui-events.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
+import { rejectedAcknowledgement } from '../../workflows/run/input-delivery.ts';
 
 const spawnHook = vi.hoisted(() => ({ override: null as null | (() => unknown) }));
 

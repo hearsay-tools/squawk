@@ -1,4 +1,4 @@
-import type { RawUsage } from './usage.ts';
+import type { RawUsage } from '../../core/usage.ts';
 
 // Claude stream-json frames and the pure predicates the Claude runner reads them with.
 // Only `claude-cli-runner.ts` imports this module (hearsay-tools/cezarion#1954).

@@ -22,9 +22,9 @@ import {
 } from './event-history.ts';
 import { compressHistory } from './history-file.ts';
 import { z } from 'zod';
-import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from '../core/codex-ui-mapper.ts';
-import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from '../core/opencode-ui-mapper.ts';
-import { PLAN_STATUSES } from '../core/opencode-ui-mapper.ts';
+import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from '../runners/codex/codex-ui-mapper.ts';
+import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from '../runners/opencode/opencode-ui-mapper.ts';
+import { PLAN_STATUSES } from '../runners/opencode/opencode-ui-mapper.ts';
 
 const TOOL_STATUS = z.enum([
   ...Object.values(CODEX_TOOL_STATUS_MAP),

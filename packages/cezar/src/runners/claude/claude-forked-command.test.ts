@@ -9,13 +9,13 @@ import { describe, expect, it } from 'vitest';
 
 import { z } from 'zod';
 
-import type { UiEvent } from './ui-events.ts';
+import type { UiEvent } from '../../core/ui-events.ts';
 import { claudeTurnStarted, createClaudeUiState, mapClaudeMessage, type ClaudeUiMapperState } from './claude-ui-mapper.ts';
-import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from './codex-ui-mapper.ts';
-import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from './opencode-ui-mapper.ts';
+import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from '../codex/codex-ui-mapper.ts';
+import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from '../opencode/opencode-ui-mapper.ts';
 
 const TOOL_STATUS = z.enum([...Object.values(OPENCODE_TOOL_STATUS_MAP), ...Object.values(CODEX_TOOL_STATUS_MAP)]).enum;
-const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), '__fixtures__', 'claude', 'forked-command.ndjson');
+const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), '__fixtures__', 'forked-command.ndjson');
 const FORK_ID = 'forked-command-fxfork';
 
 const fixtureLines = (): Array<Record<string, unknown>> =>

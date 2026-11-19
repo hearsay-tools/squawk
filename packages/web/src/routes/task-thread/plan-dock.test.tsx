@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { PlanEntry } from '@open-mercato/cezar-api-client'
 
-import thinkingEditWriteTodo from '../../../../cezar/src/core/__fixtures__/claude/thinking-edit-write-todo.expected.json'
+import thinkingEditWriteTodo from '../../../../cezar/src/runners/claude/__fixtures__/thinking-edit-write-todo.expected.json'
 import { PlanList, planCounts } from './plan-dock'
 
 const PLAN_STATUS = Object.fromEntries(PLAN_STATUSES.map(status => [status, status])) as { [Status in (typeof PLAN_STATUSES)[number]]: Status }

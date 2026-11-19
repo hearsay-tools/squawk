@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import type { UiEvent, UiMessageItem } from './ui-events.js';
+import type { UiEvent, UiMessageItem } from '../../core/ui-events.js';
 import {
   createPiUiState,
   mapPiRpcMessage,
@@ -13,7 +13,7 @@ import {
 } from './pi-ui-mapper.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const FIXTURES = join(HERE, '__fixtures__', 'pi');
+const FIXTURES = join(HERE, '__fixtures__');
 
 function replay(fixture: string): UiEvent[] {
   const lines = readFileSync(join(FIXTURES, `${fixture}.ndjson`), 'utf8').trim().split('\n');

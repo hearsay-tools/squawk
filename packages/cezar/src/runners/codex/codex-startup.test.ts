@@ -2,15 +2,15 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentEvent, AgentSession } from './agent-runner.ts';
+import type { AgentEvent, AgentSession } from '../../core/agent-runner.ts';
 import { CodexAppServerRunner } from './codex-app-server-runner.ts';
-import { registerRunner } from './runner-registry.ts';
-import { codexRunner } from '../runners/codex/definition.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { codexRunner } from './definition.ts';
 
 // The startup path builds the Codex child env through the registry; every case drives Codex.
 registerRunner(codexRunner);
-import type { UiEvent } from './ui-events.ts';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
+import type { UiEvent } from '../../core/ui-events.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
 import { z } from 'zod';
 import { CODEX_TURN_STATUSES } from './codex-turn-outcome.ts';
 

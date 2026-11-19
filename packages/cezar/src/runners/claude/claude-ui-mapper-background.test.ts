@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import type { UiEvent, UiToolItem } from './ui-events.ts';
+import type { UiEvent, UiToolItem } from '../../core/ui-events.ts';
 import { createClaudeUiState, mapClaudeMessage, type ClaudeUiMapperState } from './claude-ui-mapper.ts';
 
 function fold(frames: readonly unknown[], start: ClaudeUiMapperState = createClaudeUiState()): { events: UiEvent[]; state: ClaudeUiMapperState } {

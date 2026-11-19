@@ -1,12 +1,12 @@
-import { openingContent, claudeSkillContent } from './skill-trigger.ts';
-import { productEnv } from './product-env.ts';
-import { summarizeRunnerStderr } from './runner-stderr.ts';
+import { openingContent, claudeSkillContent } from '../../core/skill-trigger.ts';
+import { productEnv } from '../../core/product-env.ts';
+import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
 import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { parseEffort } from '@open-mercato/cezar-contract/effort';
 import { resolveClaudeExecutable } from './claude-executable.ts';
 import { claudeSettingSourceArgs } from './claude-setting-sources.ts';
-import { AUTO_END_DELAY_MS, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS, type RunnerTimings } from './runner-runtime.ts';
+import { AUTO_END_DELAY_MS, boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS, type RunnerTimings } from '../../core/runner-runtime.ts';
 import type {
   AgentEvent,
   AgentRunResult,
@@ -18,19 +18,19 @@ import type {
   SessionOptions,
   InputDelivery,
   ToolGrant,
-} from './agent-runner.ts';
-import { CLAUDE_FACTS } from '../runners/claude/facts.ts';
-import { CLAUDE_SPEC_SUPPORT } from '../runners/claude/spec-support.ts';
+} from '../../core/agent-runner.ts';
+import { CLAUDE_FACTS } from './facts.ts';
+import { CLAUDE_SPEC_SUPPORT } from './spec-support.ts';
 
 // Re-exported for backends and the run manager that still import them from here.
-export type { AgentSession, SessionOptions } from './agent-runner.ts';
-import { isSignalTerminationExit, SessionEndedBeforeAcknowledgement, trackChildExit, unknownToolGrant } from './agent-runner.ts';
-import { signalSession, spawnSessionLeader, waitForEofExit } from './session-process.ts';
-import { buildChildEnv } from './agent-env.ts';
-import { squawkToolEnvNames, squawkToolNames } from '../ci-wait/tool-catalog.ts';
-import { costWeightedTokens } from './usage.ts';
-import { readNdjson } from './ndjson.ts';
-import { InputSubmissions } from './input-submissions.ts';
+export type { AgentSession, SessionOptions } from '../../core/agent-runner.ts';
+import { isSignalTerminationExit, SessionEndedBeforeAcknowledgement, trackChildExit, unknownToolGrant } from '../../core/agent-runner.ts';
+import { signalSession, spawnSessionLeader, waitForEofExit } from '../../core/session-process.ts';
+import { buildChildEnv } from '../../core/agent-env.ts';
+import { squawkToolEnvNames, squawkToolNames } from '../../ci-wait/tool-catalog.ts';
+import { costWeightedTokens } from '../../core/usage.ts';
+import { readNdjson } from '../../core/ndjson.ts';
+import { InputSubmissions } from '../../core/input-submissions.ts';
 import {
   claudeFrameDidWork,
   isParentAssistantFrame,

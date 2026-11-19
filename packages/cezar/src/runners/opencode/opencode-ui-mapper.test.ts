@@ -17,8 +17,8 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-import type { AgentEvent } from './agent-runner.ts';
-import type { UiEvent } from './ui-events.ts';
+import type { AgentEvent } from '../../core/agent-runner.ts';
+import type { UiEvent } from '../../core/ui-events.ts';
 import {
   STATUS_MAP as OPENCODE_TOOL_STATUS_MAP,
   PLAN_STATUSES,
@@ -30,13 +30,13 @@ import {
   type OpencodeUiMapping,
 } from './opencode-ui-mapper.ts';
 import { OpencodeServerRunner } from './opencode-server-runner.ts';
-import { registerRunner } from './runner-registry.ts';
-import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { opencodeRunner } from './definition.ts';
 
 // The runner's session env reads opencode's registry data; this test drives only opencode.
 registerRunner(opencodeRunner);
-import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from './codex-ui-mapper.ts';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
+import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from '../codex/codex-ui-mapper.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
 
 const TOOL_STATUS = z.enum([
   ...Object.values(OPENCODE_TOOL_STATUS_MAP),
@@ -47,7 +47,7 @@ const WIRE_TOOL_STATUS = z.enum(Object.keys(OPENCODE_TOOL_STATUS_MAP)).enum;
 const PLAN_STATUS = z.enum(PLAN_STATUSES).enum;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const FIXTURES = join(HERE, '__fixtures__', 'opencode');
+const FIXTURES = join(HERE, '__fixtures__');
 
 /** The main-session id every fixture uses (opencode has no wire-level
  *  session-start — the runner gets the id from its POST /session). */

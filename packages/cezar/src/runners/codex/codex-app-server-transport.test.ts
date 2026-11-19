@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EOF_KILL_GRACE_MS, EOF_TERM_GRACE_MS } from './runner-runtime.js';
+import { EOF_KILL_GRACE_MS, EOF_TERM_GRACE_MS } from '../../core/runner-runtime.js';
 import {
   buildCodexAppServerEnv,
   CodexAppServerRpc,
@@ -10,8 +10,8 @@ import {
   resolveCodexExecutable,
   waitForCodexAppServerExit,
 } from './codex-app-server-transport.ts';
-import { registerRunner } from './runner-registry.ts';
-import { codexRunner } from '../runners/codex/definition.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { codexRunner } from './definition.ts';
 
 // The transport's child-env sanitizer reads Codex's allow-list from the registry; every case drives Codex.
 registerRunner(codexRunner);

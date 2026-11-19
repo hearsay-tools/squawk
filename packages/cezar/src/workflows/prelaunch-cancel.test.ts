@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
 import { CiToolController } from '../ci-wait/controller.ts';
-import { ClaudeCliRunner } from '../core/claude-cli-runner.ts';
+import { ClaudeCliRunner } from '../runners/claude/claude-cli-runner.ts';
 import { RunStore, type RunRecord, type RunStatus } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import type { RunManager } from './run.ts';

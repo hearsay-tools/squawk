@@ -1,6 +1,6 @@
 import { ClaudeCliRunner } from './claude-cli-runner.ts';
-import { offerRunners, onlyRunner, RUNNER_OFFER } from './runners-under-test.testkit.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
+import { offerRunners, onlyRunner, RUNNER_OFFER } from '../../core/runners-under-test.testkit.ts';
+import { claudeRunner } from './definition.ts';
 
 // Importing this module makes the Claude CLI runner the test file's only runner. `createRunner`
 // gives Claude to `claude`, `claude-cli` and a task with no backend, and so does `onlyRunner`; any

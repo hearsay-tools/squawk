@@ -1,7 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OPENCODE_TASK_SCOPE_PLUGIN, opencodeTaskScopeEnv } from './opencode-task-scope.ts';
-import { SquawkTaskScope } from '../../scripts/opencode-task-scope.mjs';
+import { SquawkTaskScope } from '../../../scripts/opencode-task-scope.mjs';
 
 type Sessions = Record<string, string | null>;
 

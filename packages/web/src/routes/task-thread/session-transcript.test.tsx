@@ -8,10 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ApiRun, RunEvent, UiToolItem } from '@open-mercato/cezar-api-client'
 
-import claudeSubagent from '../../../../cezar/src/core/__fixtures__/claude/subagent-task.expected.json'
-import ompSkillTrigger from '../../../../cezar/src/core/__fixtures__/omp/skill-trigger.expected.json'
-import codexReview from '../../../../cezar/src/core/__fixtures__/codex/review-mode.expected.json'
-import opencodeSubtask from '../../../../cezar/src/core/__fixtures__/opencode/subtask-nested.expected.json'
+import claudeSubagent from '../../../../cezar/src/runners/claude/__fixtures__/subagent-task.expected.json'
+import ompSkillTrigger from '../../../../cezar/src/runners/omp/__fixtures__/skill-trigger.expected.json'
+import codexReview from '../../../../cezar/src/runners/codex/__fixtures__/review-mode.expected.json'
+import opencodeSubtask from '../../../../cezar/src/runners/opencode/__fixtures__/subtask-nested.expected.json'
 
 import {
   PENDING_ASK_SECTION_ID,

@@ -5,7 +5,7 @@
  * `CodexUiMapperState`.
  */
 
-import type { TokenUsage, UiToolItem } from './ui-events.ts';
+import type { TokenUsage, UiToolItem } from '../../core/ui-events.ts';
 
 /** The two reasoning delta channels, accumulated separately — see
  *  `CodexUiMapperState.reasonings`. */

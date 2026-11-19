@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { PLAN_STATUSES } from './claude-ui-mapper.ts';
+import { PLAN_STATUSES } from '../runners/claude/claude-ui-mapper.ts';
 
 import { toolDisplay, type ToolDisplay } from '@open-mercato/cezar-contract/tool-display';
 

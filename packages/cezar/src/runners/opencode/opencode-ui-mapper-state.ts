@@ -5,7 +5,7 @@
  */
 
 import type { MessageUsage } from './opencode-usage.ts';
-import type { ToolStatus, UiEvent } from './ui-events.ts';
+import type { ToolStatus, UiEvent } from '../../core/ui-events.ts';
 
 interface SubtaskScope {
   readonly id: string;

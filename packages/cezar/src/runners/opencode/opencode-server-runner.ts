@@ -1,9 +1,9 @@
 import { opencodeHttp } from './opencode-http.ts';
-import { openingInput, skillOf, validSkillMessage } from './skill-trigger.ts';
-import { productEnv } from './product-env.ts';
-import { uiAskQuestions } from './ask.ts';
+import { openingInput, skillOf, validSkillMessage } from '../../core/skill-trigger.ts';
+import { productEnv } from '../../core/product-env.ts';
+import { uiAskQuestions } from '../../core/ask.ts';
 import { opencodeSkillWarning, sessionErrorDetail, sessionErrorText } from './opencode-session-error.ts';
-import { summarizeRunnerStderr } from './runner-stderr.ts';
+import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
 import { finished } from 'node:stream/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -15,17 +15,17 @@ import {
   type AgentEvent, type AgentRunResult, type AgentRunSpec, type AgentRunner, type AgentToolCallRecord,
   type ContentBlock,
   type InputDelivery, type AgentSession, type SessionOptions, isAbortError, isSignalTerminationExit, prependSystemPrompt, SessionEndedBeforeAcknowledgement, trackChildExit,
-} from './agent-runner.ts';
-import { OPENCODE_FACTS } from '../runners/opencode/facts.ts';
-import { OPENCODE_SPEC_SUPPORT } from '../runners/opencode/spec-support.ts';
-import { InputSubmissions } from './input-submissions.ts';
-import { signalSession, spawnSessionLeader } from './session-process.ts';
+} from '../../core/agent-runner.ts';
+import { OPENCODE_FACTS } from './facts.ts';
+import { OPENCODE_SPEC_SUPPORT } from './spec-support.ts';
+import { InputSubmissions } from '../../core/input-submissions.ts';
+import { signalSession, spawnSessionLeader } from '../../core/session-process.ts';
 import { OPENCODE_MINIMAL_PROMPT_TOOLS, OPENCODE_MINIMAL_SESSION_PERMISSION, opencodeServeLaunch, opencodeSessionBody } from './opencode-minimal.ts';
-import type { AskQuestion } from './ask.ts';
+import type { AskQuestion } from '../../core/ask.ts';
 import { toSquawkQuestions, questionAnswers } from './opencode-questions.ts';
-import { boundOutputDrainAfterExit, AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS } from './runner-runtime.ts';
-import { formatModelIdentity, parseModelIdentity } from './model-identity.ts';
-import { V1TextCoalescer } from './v1-text-coalescer.ts';
+import { boundOutputDrainAfterExit, AUTO_END_DELAY_MS, DEFAULT_RUNNER_TIMINGS } from '../../core/runner-runtime.ts';
+import { formatModelIdentity, parseModelIdentity } from '../../core/model-identity.ts';
+import { V1TextCoalescer } from '../../core/v1-text-coalescer.ts';
 import {
   isOpencodeDefaultAsk,
   opencodePermissionAskSchema,
@@ -146,7 +146,7 @@ export class OpencodeServerRunner implements AgentRunner {
 
   constructor(opts: OpencodeRunnerOptions = {}) {
     this.bin = opts.bin ?? productEnv('OPENCODE_BIN') ?? (productEnv('DRY_RUN') === '1'
-      ? fileURLToPath(new URL('../../scripts/mock-opencode-serve.mjs', import.meta.url)) : 'opencode');
+      ? fileURLToPath(new URL('../../../scripts/mock-opencode-serve.mjs', import.meta.url)) : 'opencode');
     this.timeoutMs = opts.timeoutMs;
     this.serverStartTimeoutMs = opts.serverStartTimeoutMs ?? SERVER_START_TIMEOUT_MS;
   }

@@ -6,16 +6,16 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AgentEvent } from './agent-runner.ts';
-import { isSignalTerminationExit, prependSystemPrompt, SessionEndedBeforeAcknowledgement } from './agent-runner.ts';
+import type { AgentEvent } from '../../core/agent-runner.ts';
+import { isSignalTerminationExit, prependSystemPrompt, SessionEndedBeforeAcknowledgement } from '../../core/agent-runner.ts';
 import { buildClaudeArgs, ClaudeCliRunner, claudeHelpFeatures } from './claude-cli-runner.ts';
-import { AUTO_END_DELAY_MS, EOF_KILL_GRACE_MS, EOF_TERM_GRACE_MS, KILL_GRACE_MS } from './runner-runtime.ts';
-import { autoEndObservationClock } from './observation-clock.testkit.ts';
-import type { UiEvent } from './ui-events.ts';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import { TOOL_GRANT_CASES } from './tool-grant-parity-cells.testkit.ts';
-import { registerRunner } from './runner-registry.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
+import { AUTO_END_DELAY_MS, EOF_KILL_GRACE_MS, EOF_TERM_GRACE_MS, KILL_GRACE_MS } from '../../core/runner-runtime.ts';
+import { autoEndObservationClock } from '../../core/observation-clock.testkit.ts';
+import type { UiEvent } from '../../core/ui-events.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
+import { TOOL_GRANT_CASES } from '../../core/tool-grant-parity-cells.testkit.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { claudeRunner } from './definition.ts';
 
 registerRunner(claudeRunner);
 
@@ -270,7 +270,7 @@ describe('isSignalTerminationExit', () => {
 
 describe('a teardown Squawk initiated', () => {
   const stubBin = fileURLToPath(
-    new URL('./__fixtures__/claude/stub-ignores-eof-exits-143.mjs', import.meta.url),
+    new URL('./__fixtures__/stub-ignores-eof-exits-143.mjs', import.meta.url),
   );
 
   it('settles the session instead of failing it when the CLI exits 143', async () => {
@@ -463,7 +463,7 @@ describe('prependSystemPrompt (codex/opencode delivery)', () => {
 
 describe('ClaudeCliRunner token usage', () => {
   it('forwards a reported zero-dollar result even when Claude reports an error', async () => {
-    const mockBin = fileURLToPath(new URL('../../scripts/mock-claude.mjs', import.meta.url));
+    const mockBin = fileURLToPath(new URL('../../../scripts/mock-claude.mjs', import.meta.url));
     const events: AgentEvent[] = [];
     const cwd = mkdtempSync(join(tmpdir(), 'cez-claude-zero-cost-'));
     try {
@@ -478,7 +478,7 @@ describe('ClaudeCliRunner token usage', () => {
   });
 
   it('counts the aggregate result usage without re-adding assistant-frame snapshots', async () => {
-    const mockBin = fileURLToPath(new URL('../../scripts/mock-claude.mjs', import.meta.url));
+    const mockBin = fileURLToPath(new URL('../../../scripts/mock-claude.mjs', import.meta.url));
     const runner = new ClaudeCliRunner({ bin: mockBin, timeoutMs: 60_000 });
     const events: AgentEvent[] = [];
     const cwd = mkdtempSync(join(tmpdir(), 'cez-claude-token-usage-'));
@@ -515,7 +515,7 @@ it('steers non-human input behind a queued human turn', async () => {
   // workflow's to hold (`InputDelivery.admitsAgentInput`), not the runner's.
   // bound: waitFor defaults to 10s; Vitest's 5s testTimeout cut this cell off before
   // (hearsay-tools/cezarion#976).
-  const { driveSeam, waitFor } = await import('./harness-parity.testkit.ts');
+  const { driveSeam, waitFor } = await import('../../core/harness-parity.testkit.ts');
   await driveSeam('claude', 'hold', {
     whileOpen: async (session, { v1 }) => {
       expect(session.sendMessage([{ type: 'text', text: 'mock:cezar-ask' }])).toBe(true);
@@ -711,7 +711,7 @@ describe('Claude auto-end with a prompt turn still pending (#146)', () => {
   });
 
   it('real mock binary: a follow-up written before the opening result finishes before stdin closes', async () => {
-    const mockBin = fileURLToPath(new URL('../../scripts/mock-claude.mjs', import.meta.url));
+    const mockBin = fileURLToPath(new URL('../../../scripts/mock-claude.mjs', import.meta.url));
     const runner = new ClaudeCliRunner({ bin: mockBin, timeoutMs: 60_000 });
     const events: AgentEvent[] = [];
     const cwd = mkdtempSync(join(tmpdir(), 'cez-claude-queued-turn-'));
@@ -760,7 +760,7 @@ describe('Claude auto-end with a prompt turn still pending (#146)', () => {
 });
 
 describe('agent input steering (#505)', () => {
-  const mockBin = fileURLToPath(new URL('../../scripts/mock-claude.mjs', import.meta.url));
+  const mockBin = fileURLToPath(new URL('../../../scripts/mock-claude.mjs', import.meta.url));
   const waitUntil = async (cond: () => boolean) => {
     const start = Date.now();
     while (!cond()) { if (Date.now() - start > 10_000) throw new Error('waitUntil timed out'); await new Promise(r => setTimeout(r, 10)); }
@@ -824,7 +824,7 @@ describe('agent input steering (#505)', () => {
 });
 
 describe('agent input written after the last model call (#505)', () => {
-  const mockBin = fileURLToPath(new URL('../../scripts/mock-claude.mjs', import.meta.url));
+  const mockBin = fileURLToPath(new URL('../../../scripts/mock-claude.mjs', import.meta.url));
   it('reports a line the CLI ran as its next queued turn as consumed then', async () => {
     const events: AgentEvent[] = []; const consumed: string[][] = []; const ui: UiEvent[] = [];
     const session = new ClaudeCliRunner({ bin: mockBin, timeoutMs: 0 }).startSession(
@@ -966,7 +966,7 @@ describe('Claude result coverage prefers the lines it names (#505 review)', () =
 });
 
 describe('Claude failed result (#505 review)', () => {
-  const mockBin = fileURLToPath(new URL('../../scripts/mock-claude.mjs', import.meta.url));
+  const mockBin = fileURLToPath(new URL('../../../scripts/mock-claude.mjs', import.meta.url));
   it('never marks a line read by an error result', async () => {
     const events: AgentEvent[] = []; const consumed: string[][] = [];
     const session = new ClaudeCliRunner({ bin: mockBin, timeoutMs: 0 }).startSession(
@@ -1022,7 +1022,7 @@ console.log(JSON.stringify({ type: 'result', subtype: 'success', result: 'ok', u
 });
 
 describe('Claude queued-turn announcement with a synchronous follow-up (#505 local review)', () => {
-  const mockBin = fileURLToPath(new URL('../../scripts/mock-claude.mjs', import.meta.url));
+  const mockBin = fileURLToPath(new URL('../../../scripts/mock-claude.mjs', import.meta.url));
   it('announces a turn submitted from the turn-end callback exactly once', async () => {
     const ui: UiEvent[] = []; let ends = 0;
     let session!: ReturnType<ClaudeCliRunner['startSession']>;

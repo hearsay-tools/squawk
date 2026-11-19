@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { reasoningSummary } from '../../src/core/codex-app-server-runner.js';
+import { reasoningSummary } from '../../src/runners/codex/codex-app-server-runner.js';
 
 test('reasoningSummary defaults to auto so codex reasoning is visible out of the box', () => {
   assert.equal(reasoningSummary({}), 'auto');

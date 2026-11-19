@@ -3,12 +3,12 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentEvent } from './agent-runner.js';
-import { KILL_GRACE_MS } from './runner-runtime.js';
+import type { AgentEvent } from '../../core/agent-runner.js';
+import { KILL_GRACE_MS } from '../../core/runner-runtime.js';
 import { CodexAppServerRunner, codexTurnStartExtras } from './codex-app-server-runner.js';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import { registerRunner } from './runner-registry.ts';
-import { codexRunner } from '../runners/codex/definition.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { codexRunner } from './definition.ts';
 
 // The runner's session env reads codex's registry data; this test drives only codex.
 registerRunner(codexRunner);
@@ -34,7 +34,7 @@ vi.mock('node:child_process', async (importOriginal) => {
  */
 describe('a teardown Squawk initiated (codex app-server)', () => {
   const mockBin = fileURLToPath(
-    new URL('./__fixtures__/codex/mock-codex-app-server.mjs', import.meta.url),
+    new URL('./__fixtures__/mock-codex-app-server.mjs', import.meta.url),
   );
 
   it('settles the session instead of failing it when the app-server exits 143', async () => {

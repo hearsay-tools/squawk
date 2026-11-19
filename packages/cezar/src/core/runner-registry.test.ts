@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { RUNNER_IDS } from './agent-runner.ts';
-import { ClaudeCliRunner } from './claude-cli-runner.ts';
-import { CodexAppServerRunner } from './codex-app-server-runner.ts';
-import { OmpRunner } from './omp-runner.ts';
-import { OpencodeServerRunner } from './opencode-server-runner.ts';
-import { PiRunner } from './pi-runner.ts';
+import { ClaudeCliRunner } from '../runners/claude/claude-cli-runner.ts';
+import { CodexAppServerRunner } from '../runners/codex/codex-app-server-runner.ts';
+import { OmpRunner } from '../runners/omp/omp-runner.ts';
+import { OpencodeServerRunner } from '../runners/opencode/opencode-server-runner.ts';
+import { PiRunner } from '../runners/pi/pi-runner.ts';
 import { defineRunner } from './runner-definition.ts';
 import { createRunner, DEFAULT_RUNNER_ID, isRegisteredRunner, LEGACY_RUNNER_IDS, registeredRunners, registerRunner, runnerDefinition } from './runner-registry.ts';
 import { BUILT_IN_RUNNERS, registerBuiltInRunners } from '../runners/built-in.ts';

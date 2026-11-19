@@ -1,8 +1,8 @@
-import { buildChildEnv } from './agent-env.ts';
-import type { AgentRunSpec } from './agent-runner.ts';
+import { buildChildEnv } from '../../core/agent-env.ts';
+import type { AgentRunSpec } from '../../core/agent-runner.ts';
 import { ciOpenCodeEnv, isObject, suppliedOpenCodeConfig } from './opencode-runtime-config.ts';
 import { opencodeTaskScopeEnv } from './opencode-task-scope.ts';
-import { opencodeToolGrantFields } from './runner-tool-grants.ts';
+import { opencodeToolGrantFields } from '../../core/runner-tool-grants.ts';
 
 /** `opencode serve` flags for a minimal session (`AgentRunSpec.minimal`): no external plugins. */
 export const OPENCODE_MINIMAL_SERVE_ARGS = ['--pure'] as const;

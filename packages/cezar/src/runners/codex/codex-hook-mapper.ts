@@ -5,10 +5,10 @@
  */
 
 import type { CodexUiMapperState } from './codex-ui-mapper-state.ts';
-import { hookEventName, isVisibleHookItem } from './hook-items.ts';
-import { ownLookup } from './own-lookup.ts';
-import { isRecord, number as num } from './pi-rpc-wire.ts';
-import type { HookEntryKind, HookStatus, UiEvent, UiHookItem } from './ui-events.ts';
+import { hookEventName, isVisibleHookItem } from '../../core/hook-items.ts';
+import { ownLookup } from '../../core/own-lookup.ts';
+import { isRecord, number as num } from '../pi/pi-rpc-wire.ts';
+import type { HookEntryKind, HookStatus, UiEvent, UiHookItem } from '../../core/ui-events.ts';
 
 export const HOOK_STATUS: Readonly<Record<string, HookStatus>> = {
   completed: 'completed',

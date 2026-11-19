@@ -1,10 +1,10 @@
 import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { z } from 'zod';
-import { trackChildExit } from './agent-runner.ts';
-import { buildChildEnv } from './agent-env.ts';
-import { readNdjson } from './ndjson.ts';
+import { trackChildExit } from '../../core/agent-runner.ts';
+import { buildChildEnv } from '../../core/agent-env.ts';
+import { readNdjson } from '../../core/ndjson.ts';
 import { resolveClaudeExecutable } from './claude-executable.ts';
-import type { ModelOption } from './runner-model-catalog.ts';
+import type { ModelOption } from '../../core/runner-model-catalog.ts';
 
 export interface ClaudeModelDiscoveryOptions {
   cwd: string;

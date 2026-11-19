@@ -13,14 +13,14 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CodexAppServerRunner } from './codex-app-server-runner.ts';
-import { registerRunner } from './runner-registry.ts';
-import { codexRunner } from '../runners/codex/definition.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { codexRunner } from './definition.ts';
 
 // The runner's session env reads codex's registry data; this test drives only codex.
 registerRunner(codexRunner);
 import { createCodexUiState, mapCodexNotification, type CodexUiMapperState } from './codex-ui-mapper.ts';
-import type { UiEvent, UiToolItem } from './ui-events.ts';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
+import type { UiEvent, UiToolItem } from '../../core/ui-events.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -92,7 +92,7 @@ describe('codex background sub-agents (hearsay-tools/cezarion#2431)', () => {
 });
 
 describe('codex background sub-agents on the mock wire (hearsay-tools/cezarion#2431)', () => {
-  const mockBin = join(HERE, '__fixtures__', 'codex', 'mock-codex-app-server.mjs');
+  const mockBin = join(HERE, '__fixtures__', 'mock-codex-app-server.mjs');
 
   async function driveMock(tokens: string): Promise<UiEvent[]> {
     const dir = mkdtempSync(join(tmpdir(), 'cez-codex-bg-'));

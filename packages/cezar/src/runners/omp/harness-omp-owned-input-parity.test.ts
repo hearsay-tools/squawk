@@ -1,7 +1,7 @@
-import { describeHarnessParity } from './harness-parity-owned-input.cells.testkit.ts';
+import { describeHarnessParity } from '../../core/harness-parity-owned-input.cells.testkit.ts';
 import { OmpRunner } from './omp-runner.ts';
-import { onlyRunner, useRunners } from './runners-under-test.testkit.ts';
-import { ompRunner } from '../runners/omp/definition.ts';
+import { onlyRunner, useRunners } from '../../core/runners-under-test.testkit.ts';
+import { ompRunner } from './definition.ts';
 
 useRunners(onlyRunner(ompRunner, () => new OmpRunner()));
 

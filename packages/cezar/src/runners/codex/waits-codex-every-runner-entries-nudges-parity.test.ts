@@ -1,7 +1,7 @@
-import { describeWaitParity } from './waits-parity-entries-nudges-fold.testkit.ts';
-import { CodexAppServerRunner } from '../core/codex-app-server-runner.ts';
-import { onlyRunner, useRunners } from '../core/runners-under-test.testkit.ts';
-import { codexRunner } from '../runners/codex/definition.ts';
+import { describeWaitParity } from '../../workflows/waits-parity-entries-nudges-fold.testkit.ts';
+import { CodexAppServerRunner } from './codex-app-server-runner.ts';
+import { onlyRunner, useRunners } from '../../core/runners-under-test.testkit.ts';
+import { codexRunner } from './definition.ts';
 
 useRunners(onlyRunner(codexRunner, () => new CodexAppServerRunner()));
 

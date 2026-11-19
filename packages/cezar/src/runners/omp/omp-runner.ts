@@ -1,10 +1,10 @@
-import { openingContent, skillOf, validSkillMessage } from './skill-trigger.ts';
-import { productEnv } from './product-env.ts';
+import { openingContent, skillOf, validSkillMessage } from '../../core/skill-trigger.ts';
+import { productEnv } from '../../core/product-env.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseEffort } from '@open-mercato/cezar-contract/effort';
-import { isRecord, parseRpcLine, ompRpcError as rpcError, string, toPiPrompt, truncate, waitForExit } from './pi-rpc-wire.ts';
+import { isRecord, parseRpcLine, ompRpcError as rpcError, string, toPiPrompt, truncate, waitForExit } from '../pi/pi-rpc-wire.ts';
 import {
   adoptRpcSessionId,
   armEndWatchdog,
@@ -15,7 +15,7 @@ import {
   type PiTurnMessages,
   type PiSkillSubmission,
   settlePiFamilyExit,
-} from './pi-rpc-turn.ts';
+} from '../pi/pi-rpc-turn.ts';
 import type {
   AgentEvent,
   AgentRunResult,
@@ -27,17 +27,17 @@ import type {
   ContentBlock,
   SessionOptions,
   ToolGrant,
-} from './agent-runner.js';
-import { SessionEndedBeforeAcknowledgement } from './agent-runner.ts';
-import { OMP_FACTS } from '../runners/omp/facts.js';
-import { OMP_SPEC_SUPPORT, OMP_MINIMAL_ARGS } from '../runners/omp/spec-support.js';
-import { ompRequestedTools } from './runner-tool-grants.ts';
-import { ownLookup } from './own-lookup.ts';
-import { signalSession, spawnSessionLeader } from './session-process.js';
-import { buildChildEnv } from './agent-env.js';
-import type { SkillInputIdentity, UiEvent } from './ui-events.js';
-import { squawkToolNames } from '../ci-wait/tool-catalog.js';
-import { readNdjson } from './ndjson.js';
+} from '../../core/agent-runner.js';
+import { SessionEndedBeforeAcknowledgement } from '../../core/agent-runner.ts';
+import { OMP_FACTS } from './facts.js';
+import { OMP_SPEC_SUPPORT, OMP_MINIMAL_ARGS } from './spec-support.js';
+import { ompRequestedTools } from '../../core/runner-tool-grants.ts';
+import { ownLookup } from '../../core/own-lookup.ts';
+import { signalSession, spawnSessionLeader } from '../../core/session-process.js';
+import { buildChildEnv } from '../../core/agent-env.js';
+import type { SkillInputIdentity, UiEvent } from '../../core/ui-events.js';
+import { squawkToolNames } from '../../ci-wait/tool-catalog.js';
+import { readNdjson } from '../../core/ndjson.js';
 import {
   createOmpUiState,
   mapOmpRpcMessage,
@@ -46,8 +46,8 @@ import {
   ompProviderErrorMessage,
   ompTurnStarted,
 } from './omp-ui-mapper.js';
-import { summarizeRunnerStderr } from './runner-stderr.ts';
-import { boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } from './runner-runtime.js';
+import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
+import { boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } from '../../core/runner-runtime.js';
 
 /**
  * OMP's built-in tool names at the pinned version (`src/tools/builtin-names.ts`, oh-my-pi
@@ -187,7 +187,7 @@ export function buildOmpArgs(
 }
 
 function ompScriptPath(name: string): string {
-  return fileURLToPath(new URL(`../../scripts/${name}`, import.meta.url));
+  return fileURLToPath(new URL(`../../../scripts/${name}`, import.meta.url));
 }
 
 export interface OmpRunnerOptions {
@@ -837,7 +837,7 @@ function wrapSpawnError(error: NodeJS.ErrnoException, bin: string): Error {
 /** Path to the bundled mock (`scripts/mock-omp-rpc.mjs`), for CEZ_DRY_RUN=1; as pi-runner.ts `mockPiPath`. */
 function mockOmpPath(): string {
   const here = dirname(fileURLToPath(import.meta.url));
-  // here = <pkg>/dist/core (built) or <pkg>/src/core (tsx dev).
-  return resolvePath(here, '..', '..', 'scripts', 'mock-omp-rpc.mjs');
+  // here = <pkg>/dist/runners/omp (built) or <pkg>/src/runners/omp (tsx dev).
+  return resolvePath(here, '..', '..', '..', 'scripts', 'mock-omp-rpc.mjs');
 }
 

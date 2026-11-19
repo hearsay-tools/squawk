@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import type { SkillInputIdentity, UiEvent, UiItem, UiToolItem } from './ui-events.js';
+import type { SkillInputIdentity, UiEvent, UiItem, UiToolItem } from '../../core/ui-events.js';
 import {
   createOmpUiState,
   mapOmpRpcMessage,
@@ -14,9 +14,9 @@ import {
   type OmpUiMapping,
 } from './omp-ui-mapper.js';
 import { z } from 'zod';
-import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from './codex-ui-mapper.ts';
-import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from './opencode-ui-mapper.ts';
-import { PLAN_STATUSES } from './ui-events.ts';
+import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from '../codex/codex-ui-mapper.ts';
+import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from '../opencode/opencode-ui-mapper.ts';
+import { PLAN_STATUSES } from '../../core/ui-events.ts';
 
 const TOOL_STATUS = z.enum([
   ...Object.values(CODEX_TOOL_STATUS_MAP),
@@ -25,7 +25,7 @@ const TOOL_STATUS = z.enum([
 const PLAN_STATUS = z.enum(PLAN_STATUSES).enum;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const FIXTURES = join(HERE, '__fixtures__', 'omp');
+const FIXTURES = join(HERE, '__fixtures__');
 const GOLDEN_FIXTURES = ['rpc-lifecycle', 'rpc-edit-todo', 'rpc-subagents', 'rpc-retry'] as const;
 
 function frames(fixture: string): unknown[] {

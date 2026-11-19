@@ -14,15 +14,15 @@ import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentEvent } from './agent-runner.ts';
+import type { AgentEvent } from '../../core/agent-runner.ts';
 import { ClaudeCliRunner } from './claude-cli-runner.ts';
-import { registerRunner } from './runner-registry.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { claudeRunner } from './definition.ts';
 
 // The runner's session env reads claude's registry data; this test drives only claude.
 registerRunner(claudeRunner);
-import type { UiEvent } from './ui-events.ts';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
+import type { UiEvent } from '../../core/ui-events.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
 
 const spawnHook = vi.hoisted(() => ({ override: null as null | (() => unknown) }));
 
@@ -172,7 +172,7 @@ describe('Claude native parent turns (hearsay-tools/cezarion#1512)', () => {
 });
 
 describe('Claude native parent turns on the mock wire (hearsay-tools/cezarion#1512)', () => {
-  const mockBin = fileURLToPath(new URL('../../scripts/mock-claude.mjs', import.meta.url));
+  const mockBin = fileURLToPath(new URL('../../../scripts/mock-claude.mjs', import.meta.url));
 
   async function driveMock(tokens: string): Promise<UiEvent[]> {
     const dir = mkdtempSync(join(tmpdir(), 'cez-native-turn-'));

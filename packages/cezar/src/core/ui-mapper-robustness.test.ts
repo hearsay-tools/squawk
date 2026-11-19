@@ -24,16 +24,16 @@ import { describe, expect, it } from 'vitest';
 
 import { RUNNER_IDS } from './agent-runner.ts';
 import type { RunnerId } from './agent-runner.ts';
-import { claudeTurnStarted, createClaudeUiState, mapClaudeMessage } from './claude-ui-mapper.ts';
-import { createCodexUiState, mapCodexNotification } from './codex-ui-mapper.ts';
-import { createOmpUiState, mapOmpRpcMessage, ompTurnStarted } from './omp-ui-mapper.ts';
+import { claudeTurnStarted, createClaudeUiState, mapClaudeMessage } from '../runners/claude/claude-ui-mapper.ts';
+import { createCodexUiState, mapCodexNotification } from '../runners/codex/codex-ui-mapper.ts';
+import { createOmpUiState, mapOmpRpcMessage, ompTurnStarted } from '../runners/omp/omp-ui-mapper.ts';
 import {
   createOpencodeUiState,
   mapOpencodeEvent,
   opencodeSessionStarted,
   opencodeTurnStarted,
-} from './opencode-ui-mapper.ts';
-import { createPiUiState, mapPiRpcMessage, piTurnStarted } from './pi-ui-mapper.ts';
+} from '../runners/opencode/opencode-ui-mapper.ts';
+import { createPiUiState, mapPiRpcMessage, piTurnStarted } from '../runners/pi/pi-ui-mapper.ts';
 import type { UiEvent } from './ui-events.ts';
 
 /** One runner's mapper with its state type erased, so one loop can drive all of them. */
@@ -62,7 +62,7 @@ const MAPPERS: Record<RunnerId, Mapper> = {
   omp: mapper(() => ompTurnStarted(createOmpUiState(), 'p').state, mapOmpRpcMessage),
 };
 
-const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '__fixtures__');
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'runners');
 
 /** Real frames folded after each broken frame. This is the one bound on the corpus: folding the
  *  whole rest of each fixture makes three times the calls and takes five times as long. */
@@ -113,7 +113,7 @@ interface Frame {
 }
 
 function fixtureFrames(runner: RunnerId): Frame[][] {
-  const dir = join(FIXTURES, runner);
+  const dir = join(FIXTURES, runner, '__fixtures__');
   return readdirSync(dir)
     .filter((file) => file.endsWith('.ndjson'))
     .sort()

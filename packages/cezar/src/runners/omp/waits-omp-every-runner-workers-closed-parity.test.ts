@@ -1,7 +1,7 @@
-import { describeWaitParity } from './waits-parity-workers-closed-fold.testkit.ts';
-import { OmpRunner } from '../core/omp-runner.ts';
-import { onlyRunner, useRunners } from '../core/runners-under-test.testkit.ts';
-import { ompRunner } from '../runners/omp/definition.ts';
+import { describeWaitParity } from '../../workflows/waits-parity-workers-closed-fold.testkit.ts';
+import { OmpRunner } from './omp-runner.ts';
+import { onlyRunner, useRunners } from '../../core/runners-under-test.testkit.ts';
+import { ompRunner } from './definition.ts';
 
 useRunners(onlyRunner(ompRunner, () => new OmpRunner()));
 

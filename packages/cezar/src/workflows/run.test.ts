@@ -604,7 +604,7 @@ describe('RunManager waiting recovery', () => {
   const { SINGLE_STEP, waitFor } = fixture;
   it('does not Continue or Finish an inactive wait without durable idle-close proof', async () => {
     process.env.CEZ_DRY_RUN = '0';
-    process.env.CEZ_CODEX_BIN = join(import.meta.dirname, '../core/__fixtures__/codex/mock-codex-app-server.mjs');
+    process.env.CEZ_CODEX_BIN = join(import.meta.dirname, '../runners/codex/__fixtures__/mock-codex-app-server.mjs');
     const record = fixture.manager.startRun(SINGLE_STEP, { task: 'plain markerless turn', runner: 'codex', worktree: false });
     fixture.currentId = record.id;
     await waitFor(record.id, candidate => candidate?.status === 'waiting');
@@ -619,7 +619,7 @@ describe('RunManager waiting recovery', () => {
 
   it('does not answer an inactive pending ask while its disposed session process is still registered', async () => {
     process.env.CEZ_DRY_RUN = '0';
-    process.env.CEZ_CODEX_BIN = join(import.meta.dirname, '../core/__fixtures__/codex/mock-codex-app-server.mjs');
+    process.env.CEZ_CODEX_BIN = join(import.meta.dirname, '../runners/codex/__fixtures__/mock-codex-app-server.mjs');
     const record = fixture.manager.startRun(SINGLE_STEP, { task: 'plain markerless turn', runner: 'codex', worktree: false });
     fixture.currentId = record.id;
     await waitFor(record.id, candidate => candidate?.status === 'waiting');
@@ -1510,7 +1510,7 @@ describe('native Codex requestUserInput parks and resumes the run (#565)', () =>
     delete process.env.CEZ_DRY_RUN;
     // Resolved from this file, not the cwd: the fixture is a sibling of the source under test,
     // so the path holds wherever vitest is invoked from and survives the tree moving.
-    process.env.CEZ_CODEX_BIN = join(import.meta.dirname, '../core/__fixtures__/codex/mock-codex-app-server.mjs');
+    process.env.CEZ_CODEX_BIN = join(import.meta.dirname, '../runners/codex/__fixtures__/mock-codex-app-server.mjs');
     await run('git', ['init', '-q', '-b', 'main'], { cwd: repoRoot });
     await run('git', ['config', 'gc.auto', '0'], { cwd: repoRoot });
     await run('git', ['config', 'maintenance.auto', 'false'], { cwd: repoRoot });

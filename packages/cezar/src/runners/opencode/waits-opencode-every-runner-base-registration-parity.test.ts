@@ -1,7 +1,7 @@
-import { describeWaitParity } from './waits-parity-base-registration-fold.testkit.ts';
-import { OpencodeServerRunner } from '../core/opencode-server-runner.ts';
-import { onlyRunner, useRunners } from '../core/runners-under-test.testkit.ts';
-import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { describeWaitParity } from '../../workflows/waits-parity-base-registration-fold.testkit.ts';
+import { OpencodeServerRunner } from './opencode-server-runner.ts';
+import { onlyRunner, useRunners } from '../../core/runners-under-test.testkit.ts';
+import { opencodeRunner } from './definition.ts';
 
 useRunners(onlyRunner(opencodeRunner, () => new OpencodeServerRunner()));
 

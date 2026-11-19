@@ -1,4 +1,4 @@
-import type { StopReason } from './ui-events.ts';
+import type { StopReason } from '../../core/ui-events.ts';
 
 export const CODEX_TURN_STATUSES = ['interrupted', 'failed'] as const;
 export type CodexTurnStatus = (typeof CODEX_TURN_STATUSES)[number];

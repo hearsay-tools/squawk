@@ -3,10 +3,10 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { resolveCodexExecutable } from './codex-app-server-transport.ts';
+import { resolveCodexExecutable } from '../runners/codex/codex-app-server-transport.ts';
 import { driveSeam } from './harness-parity.testkit.ts';
-import { OpencodeServerRunner } from './opencode-server-runner.ts';
-import { OmpRunner } from './omp-runner.ts';
+import { OpencodeServerRunner } from '../runners/opencode/opencode-server-runner.ts';
+import { OmpRunner } from '../runners/omp/omp-runner.ts';
 
 afterEach(() => vi.unstubAllEnvs());
 it('selects bundled Codex, OpenCode and OMP mocks in dry runs without host binaries', () => {

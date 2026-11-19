@@ -46,12 +46,12 @@ import type {
   UiMessageItem,
   UiReasoningItem,
   UiToolItem,
-} from './ui-events.ts';
+} from '../../core/ui-events.ts';
 import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
 import { EMPTY_MESSAGE_USAGE, addUsage, emitUsage, maxCost, tokensToUsage, usageForMessages } from './opencode-usage.ts';
 import type { MessageUsage } from './opencode-usage.ts';
 import type { OpencodeUiMapperState, OpencodeUiMapping, SubtaskScope } from './opencode-ui-mapper-state.ts';
-import { ownLookup } from './own-lookup.ts';
+import { ownLookup } from '../../core/own-lookup.ts';
 
 export type { OpencodeUiMapperState, OpencodeUiMapping } from './opencode-ui-mapper-state.ts';
 

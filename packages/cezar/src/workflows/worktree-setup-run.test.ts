@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import '../core/claude-runner.testkit.ts';
+import '../runners/claude/claude-runner.testkit.ts';
 import { withOwnedInputRun } from '../core/workflow-parity-core.testkit.ts';
 import { readPid, requirePid } from '../pid-file.testkit.ts';
 import { ignoreTermShell } from '../stubborn-child.testkit.ts';

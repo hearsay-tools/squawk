@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { claudeSettingSourceArgs } from './claude-setting-sources.ts';
-import type { SkillCatalog } from './runner-skill-catalog.ts';
-import { skillLines, skillProbe, type SkillDiscoveryOptions } from './skill-probe.ts';
+import type { SkillCatalog } from '../../core/runner-skill-catalog.ts';
+import { skillLines, skillProbe, type SkillDiscoveryOptions } from '../../core/skill-probe.ts';
 
 const responseSchema = z.object({ skills: z.array(z.object({
   name: z.string(), display_name: z.string().optional(), description: z.string().optional(), source: z.string(),

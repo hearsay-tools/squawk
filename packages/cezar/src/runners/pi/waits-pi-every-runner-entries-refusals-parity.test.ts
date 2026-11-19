@@ -1,7 +1,7 @@
-import { describeWaitParity } from './waits-parity-entries-refusals-fold.testkit.ts';
-import { PiRunner } from '../core/pi-runner.ts';
-import { onlyRunner, useRunners } from '../core/runners-under-test.testkit.ts';
-import { piRunner } from '../runners/pi/definition.ts';
+import { describeWaitParity } from '../../workflows/waits-parity-entries-refusals-fold.testkit.ts';
+import { PiRunner } from './pi-runner.ts';
+import { onlyRunner, useRunners } from '../../core/runners-under-test.testkit.ts';
+import { piRunner } from './definition.ts';
 
 useRunners(onlyRunner(piRunner, () => new PiRunner()));
 

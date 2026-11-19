@@ -1,7 +1,7 @@
-import { describeHarnessParity } from './harness-parity-provider.cells.testkit.ts';
+import { describeHarnessParity } from '../../core/harness-parity-provider.cells.testkit.ts';
 import { CodexAppServerRunner } from './codex-app-server-runner.ts';
-import { onlyRunner, useRunners } from './runners-under-test.testkit.ts';
-import { codexRunner } from '../runners/codex/definition.ts';
+import { onlyRunner, useRunners } from '../../core/runners-under-test.testkit.ts';
+import { codexRunner } from './definition.ts';
 
 useRunners(onlyRunner(codexRunner, () => new CodexAppServerRunner()));
 

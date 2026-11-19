@@ -1,7 +1,7 @@
-import { describeWaitParity } from './waits-parity-closed-cells.testkit.ts';
-import { ClaudeCliRunner } from '../core/claude-cli-runner.ts';
-import { onlyRunner, useRunners } from '../core/runners-under-test.testkit.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
+import { describeWaitParity } from '../../workflows/waits-parity-closed-cells.testkit.ts';
+import { ClaudeCliRunner } from './claude-cli-runner.ts';
+import { onlyRunner, useRunners } from '../../core/runners-under-test.testkit.ts';
+import { claudeRunner } from './definition.ts';
 
 useRunners(onlyRunner(claudeRunner, () => new ClaudeCliRunner()));
 

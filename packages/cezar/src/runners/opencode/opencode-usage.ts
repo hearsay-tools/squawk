@@ -6,7 +6,7 @@
  */
 
 import type { OpencodeUiMapperState, OpencodeUiMapping } from './opencode-ui-mapper-state.ts';
-import type { TokenUsage, UiUsageUpdatedEvent } from './ui-events.ts';
+import type { TokenUsage, UiUsageUpdatedEvent } from '../../core/ui-events.ts';
 
 /** Per-message telemetry: `message.updated` snapshots (cumulative per
  *  message) and summed `step-finish` increments are tracked separately —

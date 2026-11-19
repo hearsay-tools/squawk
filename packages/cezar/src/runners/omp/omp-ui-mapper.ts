@@ -24,9 +24,9 @@ import type {
   SkillInputIdentity,
   UiReasoningItem,
   UiToolItem,
-} from './ui-events.js';
+} from '../../core/ui-events.js';
 import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
-import { contentText, isRecord, number, ompSkillPrompt, ompRpcError as rpcError, string } from './pi-rpc-wire.ts';
+import { contentText, isRecord, number, ompSkillPrompt, ompRpcError as rpcError, string } from '../pi/pi-rpc-wire.ts';
 import { childScope, lifecycleStatus, ompToolPlan, singleFormSubagent, startSubagentEntry, withSubagent } from './omp-subagent-rows.ts';
 
 /** One stream of text/reasoning blocks: the parent turn's, or one sub-agent's. */

@@ -24,7 +24,7 @@ describe('native runner skills list parity', () => {
         expect(result.skills.some(s => s.scope === 'user')).toBe(true);
         expect(result.skills.some(s => s.plugin)).toBe(true);
         // Only these native list surfaces report per-skill problems.
-        const capture = JSON.parse(await readFile(new URL(`./__fixtures__/${runner}/skill-list.json`, import.meta.url), 'utf8'));
+        const capture = JSON.parse(await readFile(new URL(`../runners/${runner}/__fixtures__/skill-list.json`, import.meta.url), 'utf8'));
         const problemCount = runner === 'codex' ? capture.result.data[0].errors.length
           : runner === 'omp' ? capture.warnings.length : 0;
         expect(result.problems).toHaveLength(problemCount);

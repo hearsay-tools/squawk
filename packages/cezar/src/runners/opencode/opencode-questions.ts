@@ -1,4 +1,4 @@
-import { parseAskRequest, type AskQuestion } from './ask.ts';
+import { parseAskRequest, type AskQuestion } from '../../core/ask.ts';
 
 export function toSquawkQuestions(value: unknown): AskQuestion[] | null {
   if (!isRecord(value) || !Array.isArray(value.questions)) return null;

@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { RUNNER_IDS } from './agent-runner.ts';
-import { HARNESS_ADAPTERS, exemptionFor, driveSeam, promptFor, waitFor } from './harness-parity.testkit.ts';
+import { RUNNER_IDS } from '../../core/agent-runner.ts';
+import { HARNESS_ADAPTERS, exemptionFor, driveSeam, promptFor, waitFor } from '../../core/harness-parity.testkit.ts';
 
 describe('OMP native input pipe', () => {
   it('fails queued-before-ready writes even when the child would exit zero', async () => {

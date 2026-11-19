@@ -37,7 +37,7 @@ const BACKENDS = RUNNER_IDS;
 
 /** Every event across every golden fixture of one backend. */
 function fixtureEvents(backend: RunnerId): UiEvent[] {
-  const dir = join(HERE, '__fixtures__', backend);
+  const dir = join(HERE, '..', 'runners', backend, '__fixtures__');
   const events: UiEvent[] = [];
   for (const file of readdirSync(dir).sort()) {
     if (!file.endsWith('.expected.json')) continue;

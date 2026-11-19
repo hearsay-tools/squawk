@@ -3,16 +3,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { AgentEvent, SessionOptions } from './agent-runner.ts';
+import type { AgentEvent, SessionOptions } from '../../core/agent-runner.ts';
 import { PiRunner } from './pi-runner.ts';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import { registerRunner } from './runner-registry.ts';
-import { piRunner } from '../runners/pi/definition.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { piRunner } from './definition.ts';
 
 // The runner builds its child env through the registry; every case drives pi.
 registerRunner(piRunner);
 
-const mockBin = fileURLToPath(new URL('../../scripts/mock-pi-rpc.mjs', import.meta.url));
+const mockBin = fileURLToPath(new URL('../../../scripts/mock-pi-rpc.mjs', import.meta.url));
 const waitUntil = async (cond: () => boolean) => {
   const start = Date.now();
   while (!cond()) { if (Date.now() - start > 10_000) throw new Error('waitUntil timed out'); await new Promise(r => setTimeout(r, 10)); }

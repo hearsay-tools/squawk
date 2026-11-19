@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ChildProcess } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { explicitToolGrant, UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
+import { explicitToolGrant, UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
 
 // Pass-through: every test spawns the real child; a test that needs the child's own streams
 // (to fail one) reads it from here.
@@ -22,20 +22,20 @@ vi.mock('node:child_process', async (importOriginal) => {
   };
 });
 
-import type { AgentEvent, AgentRunSpec, AgentSession } from './agent-runner.js';
-import type { UiEvent } from './ui-events.js';
-import { sessionGroupOf } from './session-process.js';
+import type { AgentEvent, AgentRunSpec, AgentSession } from '../../core/agent-runner.js';
+import type { UiEvent } from '../../core/ui-events.js';
+import { sessionGroupOf } from '../../core/session-process.js';
 import { buildOmpArgs, OMP_BUILTIN_TOOL_NAMES, OmpRunner, ompTools } from './omp-runner.js';
-import { OMP_MINIMAL_ARGS, OMP_SPEC_SUPPORT } from '../runners/omp/spec-support.js';
+import { OMP_MINIMAL_ARGS, OMP_SPEC_SUPPORT } from './spec-support.js';
 import { ompProviderErrorMessage } from './omp-ui-mapper.js';
-import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.js';
-import { readPids } from '../pid-file.testkit.js';
-import { ignoreTermSource } from '../stubborn-child.testkit.ts';
+import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../../workflows/types.js';
+import { readPids } from '../../pid-file.testkit.js';
+import { ignoreTermSource } from '../../stubborn-child.testkit.ts';
 import { z } from 'zod';
-import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from './codex-ui-mapper.ts';
-import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from './opencode-ui-mapper.ts';
-import { registerRunner } from './runner-registry.ts';
-import { ompRunner } from '../runners/omp/definition.ts';
+import { STATUS_MAP as CODEX_TOOL_STATUS_MAP } from '../codex/codex-ui-mapper.ts';
+import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from '../opencode/opencode-ui-mapper.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { ompRunner } from './definition.ts';
 
 registerRunner(ompRunner);
 
@@ -233,7 +233,7 @@ describe('OMP_SPEC_SUPPORT', () => {
   });
 });
 
-const MOCK = fileURLToPath(new URL('../../scripts/mock-omp-rpc.mjs', import.meta.url));
+const MOCK = fileURLToPath(new URL('../../../scripts/mock-omp-rpc.mjs', import.meta.url));
 
 describe('OmpRunner session over the mock', () => {
   let cwd: string;

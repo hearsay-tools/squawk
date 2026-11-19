@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CODEX_MINIMAL_CONFIG } from './codex-thread-config.ts';
-import { driveSeam, waitFor } from './harness-parity.testkit.ts';
+import { driveSeam, waitFor } from '../../core/harness-parity.testkit.ts';
 
 const directories: string[] = [];
 afterEach(() => { vi.unstubAllEnvs(); for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true }); });

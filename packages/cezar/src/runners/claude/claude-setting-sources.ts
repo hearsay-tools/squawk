@@ -1,4 +1,4 @@
-import { productEnv } from './product-env.ts';
+import { productEnv } from '../../core/product-env.ts';
 
 /** A probe and a session must discover the same configured skill sources. */
 export function claudeSettingSourceArgs(env: NodeJS.ProcessEnv = process.env): string[] {

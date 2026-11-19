@@ -3,16 +3,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { AgentEvent, SessionOptions } from './agent-runner.ts';
+import type { AgentEvent, SessionOptions } from '../../core/agent-runner.ts';
 import { CodexAppServerRunner } from './codex-app-server-runner.ts';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import { registerRunner } from './runner-registry.ts';
-import { codexRunner } from '../runners/codex/definition.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { codexRunner } from './definition.ts';
 
 // The runner builds its child env through the registry; every case drives Codex.
 registerRunner(codexRunner);
 
-const mockBin = fileURLToPath(new URL('../../scripts/mock-codex-app-server.mjs', import.meta.url));
+const mockBin = fileURLToPath(new URL('../../../scripts/mock-codex-app-server.mjs', import.meta.url));
 const waitUntil = async (cond: () => boolean) => {
   const start = Date.now();
   while (!cond()) { if (Date.now() - start > 10_000) throw new Error('waitUntil timed out'); await new Promise(r => setTimeout(r, 10)); }

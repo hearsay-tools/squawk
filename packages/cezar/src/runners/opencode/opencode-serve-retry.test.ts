@@ -6,12 +6,12 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AgentEvent } from './agent-runner.ts';
+import type { AgentEvent } from '../../core/agent-runner.ts';
 import { OpencodeServerRunner, SERVE_START_RETRY_DELAY_MS } from './opencode-server-runner.ts';
-import { sessionGroupOf } from './session-process.ts';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import { registerRunner } from './runner-registry.ts';
-import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { sessionGroupOf } from '../../core/session-process.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { opencodeRunner } from './definition.ts';
 
 // The runner builds its child env through the registry; every case drives OpenCode.
 registerRunner(opencodeRunner);
@@ -30,7 +30,7 @@ vi.mock('node:child_process', async (importOriginal) => {
   };
 });
 
-const mockBin = fileURLToPath(new URL('../../scripts/mock-opencode-serve.mjs', import.meta.url));
+const mockBin = fileURLToPath(new URL('../../../scripts/mock-opencode-serve.mjs', import.meta.url));
 const dirs: string[] = [];
 afterEach(() => {
   vi.useRealTimers();

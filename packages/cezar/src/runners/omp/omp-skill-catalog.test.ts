@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseOmpSkills } from './omp-skill-catalog.ts';
-const capture = JSON.parse(readFileSync(new URL('./__fixtures__/omp/skill-list.json', import.meta.url), 'utf8'));
+const capture = JSON.parse(readFileSync(new URL('./__fixtures__/skill-list.json', import.meta.url), 'utf8'));
 describe('omp native skill metadata', () => {
   it('maps the real recorded response without skill bodies', () => {
     const result = parseOmpSkills(capture);

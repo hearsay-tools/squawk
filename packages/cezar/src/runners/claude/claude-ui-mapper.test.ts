@@ -15,8 +15,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import type { AgentEvent } from './agent-runner.ts';
-import type { UiEvent } from './ui-events.ts';
+import type { AgentEvent } from '../../core/agent-runner.ts';
+import type { UiEvent } from '../../core/ui-events.ts';
 import {
   PLAN_STATUSES,
   claudeTurnStarted,
@@ -26,11 +26,11 @@ import {
   type ClaudeUiMapping,
 } from './claude-ui-mapper.ts';
 import { ClaudeCliRunner } from './claude-cli-runner.ts';
-import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from './opencode-ui-mapper.ts';
-import { STATUS_MAP as CODEX_TOOL_STATUS_MAP, HOOK_STATUS as CODEX_HOOK_STATUS_MAP } from './codex-ui-mapper.ts';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import { registerRunner } from './runner-registry.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
+import { STATUS_MAP as OPENCODE_TOOL_STATUS_MAP } from '../opencode/opencode-ui-mapper.ts';
+import { STATUS_MAP as CODEX_TOOL_STATUS_MAP, HOOK_STATUS as CODEX_HOOK_STATUS_MAP } from '../codex/codex-ui-mapper.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { claudeRunner } from './definition.ts';
 
 // The runner builds its child env through the registry; every case drives Claude.
 registerRunner(claudeRunner);
@@ -46,7 +46,7 @@ const OBSOLETE_TASK_RUNNING_STATUS = 'running';
 const PLAN_STATUS = z.enum(PLAN_STATUSES).enum;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const FIXTURES = join(HERE, '__fixtures__', 'claude');
+const FIXTURES = join(HERE, '__fixtures__');
 
 /** Replay a fixture exactly as the runner drives the mapper: the seed user
  *  message is sent (turn start) BEFORE the first stdout line is read, and
@@ -776,7 +776,7 @@ describe('mapClaudeMessage edge cases', () => {
 });
 
 describe('ClaudeCliRunner v2 wiring (against the bundled mock CLI)', () => {
-  const mockBin = join(HERE, '..', '..', 'scripts', 'mock-claude.mjs');
+  const mockBin = join(HERE, '..', '..', '..', 'scripts', 'mock-claude.mjs');
 
   it('preserves an is_error result message as an authoritative v1 error signal', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'cez-claude-auth-error-'));

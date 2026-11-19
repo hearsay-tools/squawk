@@ -1,5 +1,5 @@
-import { parseConfigContent } from '../agent-config/model-settings/shared.ts';
-import type { AgentRunSpec } from './agent-runner.ts';
+import { parseConfigContent } from '../../agent-config/model-settings/shared.ts';
+import type { AgentRunSpec } from '../../core/agent-runner.ts';
 
 /**
  * The OpenCode runtime config a session already carries (`OPENCODE_CONFIG_CONTENT`), read from

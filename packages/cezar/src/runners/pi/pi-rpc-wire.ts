@@ -1,6 +1,6 @@
-import { skillOf, slashSkillPrompt } from './skill-trigger.ts';
+import { skillOf, slashSkillPrompt } from '../../core/skill-trigger.ts';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import type { AgentEvent, ContentBlock } from './agent-runner.js';
+import type { AgentEvent, ContentBlock } from '../../core/agent-runner.js';
 
 /**
  * Wire helpers that the Pi-family RPC runners share: pi (`pi-runner.ts`) and its fork omp

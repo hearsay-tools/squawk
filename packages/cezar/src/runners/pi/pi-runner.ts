@@ -1,6 +1,6 @@
 import { piBaseArgs } from './pi-args.ts';
-import { openingContent, validSkillMessage } from './skill-trigger.ts';
-import { productEnv } from './product-env.ts';
+import { openingContent, validSkillMessage } from '../../core/skill-trigger.ts';
+import { productEnv } from '../../core/product-env.ts';
 import { dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseEffort } from '@open-mercato/cezar-contract/effort';
@@ -15,7 +15,7 @@ import {
   type PiTurnMessages,
   settlePiFamilyExit,
 } from './pi-rpc-turn.ts';
-import { summarizeRunnerStderr } from './runner-stderr.ts';
+import { summarizeRunnerStderr } from '../../core/runner-stderr.ts';
 import type {
   AgentEvent,
   AgentRunResult,
@@ -27,16 +27,16 @@ import type {
   ContentBlock,
   SessionOptions,
   ToolGrant,
-} from './agent-runner.js';
-import { PI_FACTS } from '../runners/pi/facts.js';
-import { PI_SPEC_SUPPORT, PI_MINIMAL_ARGS } from '../runners/pi/spec-support.js';
-import { SessionEndedBeforeAcknowledgement, unknownToolGrant } from './agent-runner.js';
-import { signalSession, spawnSessionLeader, waitForEofExit } from './session-process.js';
-import { buildChildEnv } from './agent-env.js';
-import { squawkToolNames } from '../ci-wait/tool-catalog.js';
-import { readNdjson } from './ndjson.js';
+} from '../../core/agent-runner.js';
+import { PI_FACTS } from './facts.js';
+import { PI_SPEC_SUPPORT, PI_MINIMAL_ARGS } from './spec-support.js';
+import { SessionEndedBeforeAcknowledgement, unknownToolGrant } from '../../core/agent-runner.js';
+import { signalSession, spawnSessionLeader, waitForEofExit } from '../../core/session-process.js';
+import { buildChildEnv } from '../../core/agent-env.js';
+import { squawkToolNames } from '../../ci-wait/tool-catalog.js';
+import { readNdjson } from '../../core/ndjson.js';
 import { createPiUiState, mapPiRpcMessage, piFlushProviderError, piProviderErrorMessage, piTurnStarted } from './pi-ui-mapper.js';
-import { boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } from './runner-runtime.js';
+import { boundOutputDrainAfterExit, DEFAULT_RUNNER_TIMINGS } from '../../core/runner-runtime.js';
 
 export interface PiRunnerOptions {
   /** Override the binary name/path; defaults to `pi` on PATH (`CEZ_PI_BIN`). */
@@ -463,7 +463,7 @@ export function buildPiArgs(spec: AgentRunSpec): string[] {
   // extension offers them to an untrusted one without trusting it (hearsay-tools/cezarion#1295).
   const args = piBaseArgs({ projectSkills: !spec.minimal });
   if (spec.minimal) args.push(...PI_MINIMAL_ARGS);
-  if (spec.squawkTools) args.push('--extension', fileURLToPath(new URL('../../scripts/pi-ci-wait.mjs', import.meta.url)));
+  if (spec.squawkTools) args.push('--extension', fileURLToPath(new URL('../../../scripts/pi-ci-wait.mjs', import.meta.url)));
   if (spec.sessionId) args.push(spec.resume ? '--session' : '--session-id', spec.sessionId);
   if (spec.systemPrompt) args.push('--append-system-prompt', spec.systemPrompt);
   if (spec.model) args.push('--model', spec.model);
@@ -514,7 +514,7 @@ function piToolArgs(spec: AgentRunSpec, allowedTools: readonly string[], bashAll
 }
 
 function piDefaultToolsExtensionPath(): string {
-  return fileURLToPath(new URL('../../scripts/pi-default-tools.mjs', import.meta.url));
+  return fileURLToPath(new URL('../../../scripts/pi-default-tools.mjs', import.meta.url));
 }
 
 /** Native message types that end a text block; a prompt or response ack is not one. */
@@ -585,6 +585,6 @@ function mockPiPath(): string {
   // Resolved the same way `mockClaudePath` is, rather than through `new URL().pathname`:
   // on Windows that yields a leading-slash `/C:/…` which `spawn` cannot execute.
   const here = dirname(fileURLToPath(import.meta.url));
-  // here = <pkg>/dist/core (built) or <pkg>/src/core (tsx dev).
-  return resolvePath(here, '..', '..', 'scripts', 'mock-pi-rpc.mjs');
+  // here = <pkg>/dist/runners/pi (built) or <pkg>/src/runners/pi (tsx dev).
+  return resolvePath(here, '..', '..', '..', 'scripts', 'mock-pi-rpc.mjs');
 }

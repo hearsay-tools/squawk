@@ -41,9 +41,9 @@ import type {
   UiToolItem,
   UiTurnCompletedEvent,
   UiUsageUpdatedEvent,
-} from './ui-events.ts';
-import { hookEventName, isVisibleHookItem } from './hook-items.ts';
-import { editWriteKey } from './edit-write-key.ts';
+} from '../../core/ui-events.ts';
+import { hookEventName, isVisibleHookItem } from '../../core/hook-items.ts';
+import { editWriteKey } from '../../core/edit-write-key.ts';
 import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
 import {
   adoptForkedCommand,

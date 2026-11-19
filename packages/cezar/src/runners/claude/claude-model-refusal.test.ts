@@ -5,16 +5,16 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ClaudeCliRunner } from './claude-cli-runner.ts';
-import type { AgentEvent, AgentSession } from './agent-runner.ts';
-import type { UiEvent } from './ui-events.ts';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import { registerRunner } from './runner-registry.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
+import type { AgentEvent, AgentSession } from '../../core/agent-runner.ts';
+import type { UiEvent } from '../../core/ui-events.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { claudeRunner } from './definition.ts';
 
 // The runner builds its child env through the registry; every case drives Claude.
 registerRunner(claudeRunner);
 
-const bin = fileURLToPath(new URL('../../scripts/mock-claude.mjs', import.meta.url));
+const bin = fileURLToPath(new URL('../../../scripts/mock-claude.mjs', import.meta.url));
 const refusal = "There's an issue with the selected model (claude-test-model). It may not exist or you may not have access to it. Run --model to pick a different model.";
 const isRetry = (event: AgentEvent) => event.type === 'note' && /retrying.*\/2/.test(event.message);
 async function until(predicate: () => boolean) {

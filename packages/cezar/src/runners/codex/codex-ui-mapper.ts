@@ -38,10 +38,10 @@ import type {
   UiMessageItem,
   UiReasoningItem,
   UiToolItem,
-} from './ui-events.ts';
+} from '../../core/ui-events.ts';
 import { toolDisplay } from '@open-mercato/cezar-contract/tool-display';
 import { codexTurnOutcome } from './codex-turn-outcome.ts';
-import { ownLookup } from './own-lookup.ts';
+import { ownLookup } from '../../core/own-lookup.ts';
 
 export type { CodexUiMapperState, ReasoningAccumulator } from './codex-ui-mapper-state.ts';
 export { HOOK_STATUS } from './codex-hook-mapper.ts';

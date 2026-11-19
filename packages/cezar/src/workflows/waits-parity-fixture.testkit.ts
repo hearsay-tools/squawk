@@ -10,7 +10,7 @@ import { WAIT_PHASE, WAIT_KIND } from '@open-mercato/cezar-contract/test-factori
 import type { CiWaitResult, ProcessWaitResult, Wait, HumanWaitEntry, WorkerWaitEntry, ConversationMessage, RunRecord } from '@open-mercato/cezar-contract';
 import type { RunnerId, RunnerFactory } from '../core/agent-runner.ts';
 import { useRunners, runnersUnderTest } from '../core/runners-under-test.testkit.ts';
-import { ClaudeCliRunner } from '../core/claude-cli-runner.ts';
+import { ClaudeCliRunner } from '../runners/claude/claude-cli-runner.ts';
 import { HARNESS_ADAPTERS } from '../core/harness-parity-core.testkit.ts';
 import { familyCells } from '../core/parity-classes.testkit.ts';
 import { CiWatcherSupervisor } from '../ci-wait/supervisor.ts';

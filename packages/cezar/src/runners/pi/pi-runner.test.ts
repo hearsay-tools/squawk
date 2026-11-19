@@ -21,21 +21,21 @@ vi.mock('node:child_process', async (original) => {
   }) as typeof actual.spawn };
 });
 
-import type { AgentEvent, AgentSession } from './agent-runner.js';
-import type { UiEvent } from './ui-events.js';
-import { buildChildEnv } from './agent-env.js';
-import { detectEnvironment } from './backend-detect.js';
+import type { AgentEvent, AgentSession } from '../../core/agent-runner.js';
+import type { UiEvent } from '../../core/ui-events.js';
+import { buildChildEnv } from '../../core/agent-env.js';
+import { detectEnvironment } from '../../core/backend-detect.js';
 import { buildPiArgs, PiRunner } from './pi-runner.js';
-import { PI_MINIMAL_ARGS } from '../runners/pi/spec-support.ts';
-import { squawkToolNames } from '../ci-wait/tools.js';
-import { appendTurnText } from '../workflows/run.js';
-import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../workflows/types.js';
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import { registerRunner } from './runner-registry.ts';
-import { piRunner } from '../runners/pi/definition.ts';
-import { opencodeRunner } from '../runners/opencode/definition.ts';
-import { claudeRunner } from '../runners/claude/definition.ts';
-import { extraToolRows } from './runner-fact-rows.testkit.ts';
+import { PI_MINIMAL_ARGS } from './spec-support.ts';
+import { squawkToolNames } from '../../ci-wait/tools.js';
+import { appendTurnText } from '../../workflows/run.js';
+import { allowedToolsForStep, DEFAULT_ALLOWED_TOOLS } from '../../workflows/types.js';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { piRunner } from './definition.ts';
+import { opencodeRunner } from '../opencode/definition.ts';
+import { claudeRunner } from '../claude/definition.ts';
+import { extraToolRows } from '../../core/runner-fact-rows.testkit.ts';
 
 // The runner's child env reads each backend's allow-list from the registry; the env tests below
 // drive pi, OpenCode (the `provider/model` control) and Claude.
@@ -1194,7 +1194,7 @@ describe('pi spawns under pi credentials, not another runner', () => {
 
 
 describe('Pi signal teardown (#73)', () => {
-  const bin = new URL('./__fixtures__/pi/stub-sigterm.mjs', import.meta.url).pathname;
+  const bin = new URL('./__fixtures__/stub-sigterm.mjs', import.meta.url).pathname;
   it.each(['interrupt', 'end'] as const)('%s settles exit 143 with a note and no startup stderr', async (action) => {
     const events: AgentEvent[] = [];
     const ui: UiEvent[] = [];

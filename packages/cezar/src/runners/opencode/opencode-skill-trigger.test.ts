@@ -3,20 +3,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { AgentEvent, AgentSession } from './agent-runner.ts';
-import { SessionEndedBeforeAcknowledgement } from './agent-runner.ts';
-import { waitFor } from './harness-parity-core.testkit.ts';
-import { observationClock } from './observation-clock.testkit.ts';
+import type { AgentEvent, AgentSession } from '../../core/agent-runner.ts';
+import { SessionEndedBeforeAcknowledgement } from '../../core/agent-runner.ts';
+import { waitFor } from '../../core/harness-parity-core.testkit.ts';
+import { observationClock } from '../../core/observation-clock.testkit.ts';
 import { OpencodeServerRunner } from './opencode-server-runner.ts';
-import { registerRunner } from './runner-registry.ts';
-import { opencodeRunner } from '../runners/opencode/definition.ts';
+import { registerRunner } from '../../core/runner-registry.ts';
+import { opencodeRunner } from './definition.ts';
 
 // The runner's session env reads opencode's registry data; this test drives only opencode.
 registerRunner(opencodeRunner);
-import { UNSET_TOOL_GRANT } from './tool-grant.testkit.ts';
-import type { UiEvent } from './ui-events.ts';
+import { UNSET_TOOL_GRANT } from '../../core/tool-grant.testkit.ts';
+import type { UiEvent } from '../../core/ui-events.ts';
 
-const bin = fileURLToPath(new URL('../../scripts/mock-opencode-serve.mjs', import.meta.url));
+const bin = fileURLToPath(new URL('../../../scripts/mock-opencode-serve.mjs', import.meta.url));
 const owned: { dir: string; session: AgentSession }[] = [];
 afterEach(async () => {
   vi.restoreAllMocks();

@@ -2,7 +2,7 @@ import { RUN_STATUS } from '@open-mercato/cezar-contract/test-factories.testkit'
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import '../core/claude-runner.testkit.ts';
+import '../runners/claude/claude-runner.testkit.ts';
 import { answerAsParent } from '../core/workflow-parity-core.testkit.ts';
 import { grantSteer, eventCheckpoint, timeline, controlledWire, fixtureUpdateRun, manager, parent, register, restart, root, store, until, waitOf, worker, work } from './worker-wait-claude.testkit.ts';
 import { setRunStatus, readPersistedRuns, hasPendingAsk } from '../runs/run-store.testkit.ts';

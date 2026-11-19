@@ -454,7 +454,7 @@ describe('provider availability preserves existing execution', () => {
     // so the path holds wherever vitest is invoked from and survives the tree moving.
     process.env.CEZ_CODEX_BIN = join(
       import.meta.dirname,
-      '../core/__fixtures__/codex/mock-codex-app-server.mjs',
+      '../runners/codex/__fixtures__/mock-codex-app-server.mjs',
     );
     repoRoot = mkdtempSync(join(tmpdir(), 'cez-provider-continuity-'));
     store = RunStore.open(join(repoRoot, '.ai/cezar'));

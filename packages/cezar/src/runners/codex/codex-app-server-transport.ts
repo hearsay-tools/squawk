@@ -1,12 +1,12 @@
-import { productEnv } from './product-env.ts';
+import { productEnv } from '../../core/product-env.ts';
 import { fileURLToPath } from 'node:url';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { spawn as nodeSpawn } from 'node:child_process';
-import { trackChildExit } from './agent-runner.ts';
-import { probeLeaderState, type LeaderState, signalSession, spawnSessionLeader } from './session-process.ts';
-import { buildChildEnv } from './agent-env.ts';
-import { DEFAULT_RUNNER_TIMINGS, type RunnerTimings } from './runner-runtime.ts';
-import type { SpawnScope } from '../worker-scope/scope.ts';
+import { trackChildExit } from '../../core/agent-runner.ts';
+import { probeLeaderState, type LeaderState, signalSession, spawnSessionLeader } from '../../core/session-process.ts';
+import { buildChildEnv } from '../../core/agent-env.ts';
+import { DEFAULT_RUNNER_TIMINGS, type RunnerTimings } from '../../core/runner-runtime.ts';
+import type { SpawnScope } from '../../worker-scope/scope.ts';
 
 export interface CodexAppServerMessage {
   id?: number | string;
@@ -23,7 +23,7 @@ interface PendingRequest {
 
 export function resolveCodexExecutable(override?: string): string {
   return override ?? productEnv('CODEX_BIN') ?? (productEnv('DRY_RUN') === '1'
-    ? fileURLToPath(new URL('../../scripts/mock-codex-app-server.mjs', import.meta.url)) : 'codex');
+    ? fileURLToPath(new URL('../../../scripts/mock-codex-app-server.mjs', import.meta.url)) : 'codex');
 }
 
 export function buildCodexAppServerEnv(extraEnv?: Record<string, string>): NodeJS.ProcessEnv {
