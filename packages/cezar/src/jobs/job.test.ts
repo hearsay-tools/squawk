@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { afterEach, expect, it, vi } from 'vitest';
 import { groupRunning, processStartToken, startAndForget } from '../detached-process.ts';
 import { probeProcessWait } from '../process-wait/supervisor.ts';
+import { ignoreTermSource } from '../stubborn-child.testkit.ts';
 import { runJobCommand } from './cli.ts';
 import { jobInstructions, ownCommand } from './command.ts';
 import { claimJob, jobPaths, jobRunsIn, jobStatus, startJob, stopJob, superviseJob } from './job.ts';
@@ -232,7 +233,7 @@ it('answers usage errors as JSON on stderr with exit 1, and help with exit 0', a
  *  fixture can; resolves once the grandchild has set its handler and written its pid. */
 async function stubbornJob(dir: string, name: string): Promise<{ pid: number; exitFile: string; grandchild: number }> {
   const marker = join(dir, `${name}.grandchild`);
-  const grandchild = `process.on('SIGTERM', () => {}); require('fs').writeFileSync(${JSON.stringify(marker)}, String(process.pid)); setInterval(() => {}, 1000)`;
+  const grandchild = `${ignoreTermSource()} require('fs').writeFileSync(${JSON.stringify(marker)}, String(process.pid)); setInterval(() => {}, 1000)`;
   const job = await startJob({ name, dir, command: ['sh', '-c', '"$0" -e "$1" & wait', process.execPath, grandchild] });
   pids.push(job.pid);
   await written(marker);
