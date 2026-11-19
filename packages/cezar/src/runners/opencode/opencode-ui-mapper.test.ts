@@ -1,6 +1,6 @@
 /**
  * Golden tests for the opencode SSE-bus → v2 mapper: each fixture in
- * `__fixtures__/opencode/` is a wire-faithful `{type, properties}` bus-event
+ * `__fixtures__/` is a wire-faithful `{type, properties}` bus-event
  * transcript (shapes from `.ai/analysis/cockpit-ui-redesign/agent-event-protocols.md`
  * §4); its `.expected.json` is the EXACT `UiEvent` sequence the mapper must
  * produce. Plus edge cases (never-throw, cursor/delta correctness, the

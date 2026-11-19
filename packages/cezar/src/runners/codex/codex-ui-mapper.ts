@@ -6,7 +6,7 @@
  *
  * Contract: `.ai/analysis/cockpit-ui-redesign/agent-event-protocols.md` §3
  * (wire format) and §7.1 "Codex (app-server)" (the mapping). Golden fixtures
- * replaying wire-faithful frame sequences live in `__fixtures__/codex/`.
+ * replaying wire-faithful frame sequences live in `__fixtures__/`.
  *
  * Robustness rule: input is untrusted wire data — the mapper never throws;
  * responses, server→client requests (handled by the session transport) and

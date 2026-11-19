@@ -5,7 +5,7 @@ import type { RunnerFacts } from '../../core/runner-facts.ts';
 export const PI_FACTS = {
   skillTriggerMidTurn: true, skillUnknownName: 'silent', skillsSeenBySession: 'at-start',
   // childWork: Pi RPC has no child session; a task tool is a plain tool call on the parent
-  // session (__fixtures__/pi/rpc-lifecycle.expected.json).
+  // session (__fixtures__/rpc-lifecycle.expected.json).
   // hookEvents: Pi 1.0.4 runs extensions in-process; its RPC wire reports only extension_error.
   // nativePermission: Pi RPC carries no tool approval request; tool admission is --tools.
   // transport: pi --mode rpc over stdio.

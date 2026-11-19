@@ -5,7 +5,7 @@
  *
  * Contract: `.ai/analysis/cockpit-ui-redesign/agent-event-protocols.md` §1
  * (wire format) and §7.1 "Claude (stream-json)" (the mapping). Golden
- * fixtures replaying real wire shapes live in `__fixtures__/claude/`.
+ * fixtures replaying real wire shapes live in `__fixtures__/`.
  *
  * Robustness rule: input is untrusted wire data — the mapper never throws;
  * unknown message/block types map to zero events.

@@ -28,7 +28,7 @@ import {
 
 /**
  * The reducer, table-driven against REAL event sequences:
- *  - the golden claude fixtures (`src/core/__fixtures__/claude/*.expected.json`) — the exact v2
+ *  - the golden claude fixtures (`src/runners/claude/__fixtures__/*.expected.json`) — the exact v2
  *    streams the R2 mappers are pinned to;
  *  - verbatim lines from actual NDJSON transcripts (a pre-v2 run and an R2 dry-run mixed file),
  *    because the v1 fallback and the mixed-file dedup rule are claims about what is really on

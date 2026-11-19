@@ -182,7 +182,7 @@ async function replyWithParkedHook(userText, uuid) {
 }
 
 // hearsay-tools/cezarion#1284: a `context: fork` skill through the Skill tool, from
-// __fixtures__/claude/forked-skill.ndjson (CLI 2.1.303). Real Claude starts the fork
+// src/runners/claude/__fixtures__/forked-skill.ndjson (CLI 2.1.303). Real Claude starts the fork
 // whatever --disallowedTools denies, so this branch ignores the argv too.
 async function replyWithForkedSkill(userText, uuid) {
   const skill = `toolu_skill_fork_${turn}`;

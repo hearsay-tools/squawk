@@ -9,7 +9,7 @@ import { opencodeSkillWarning } from './opencode-session-error.ts';
  * Contract: `.ai/analysis/cockpit-ui-redesign/agent-event-protocols.md` §4
  * (wire format: Message/Part model, ToolState lifecycle) and §7.1
  * "OpenCode (SSE)" (the mapping). Golden fixtures replaying wire-faithful
- * bus-event sequences live in `__fixtures__/opencode/`.
+ * bus-event sequences live in `__fixtures__/`.
  *
  * Robustness rule: input is untrusted wire data — the mapper never throws;
  * unknown event/part types map to zero events.

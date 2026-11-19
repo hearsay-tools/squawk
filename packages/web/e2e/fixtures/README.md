@@ -37,7 +37,7 @@ invented:
 
 - Two `TodoWrite` sequences (`item.started` → `plan.updated` → v1 `tool-call` twin →
   `item.completed` → v1 `tool-result` twin), one per turn, shaped exactly like the golden
-  `src/core/__fixtures__/claude/thinking-edit-write-todo.*` pair (the R2 mapper's pinned
+  `src/runners/claude/__fixtures__/thinking-edit-write-todo.*` pair (the R2 mapper's pinned
   output, including the mapper's item-then-plan emission order). The second snapshot
   supersedes the first — the latest-plan-wins path the dock asserts.
 - A `verify` check step after the agent step: `step-start` (kind `check`) → the `$ npm test`

@@ -8,7 +8,7 @@ import { registerRunner } from './runner-registry.ts';
  *  Two kinds of call choose it. `useRunners` is explicit: it always replaces the factory, so the
  *  last explicit call wins. `core/every-runner.testkit.ts` makes one at import, and a test body
  *  that calls it after its imports still wins. `offerRunners` is a default: it replaces only a
- *  weaker offer, and never an explicit choice. `core/claude-runner.testkit.ts` offers
+ *  weaker offer, and never an explicit choice. `runners/claude/claude-runner.testkit.ts` offers
  *  `RUNNER_OFFER.claude` and `core/no-runner.testkit.ts` offers `RUNNER_OFFER.none`. So when one
  *  test file's closure holds several of these kits, every-runner beats claude, and claude beats
  *  none, whatever the import order (hearsay-tools/cezarion#3242). */
@@ -35,7 +35,7 @@ export function offerRunners(factory: RunnerFactory, rank: number): void {
 export function runnersUnderTest(): RunnerFactory {
   if (!current) {
     throw new Error('No runner factory for this test file: call useRunners() with the runner it drives, '
-      + 'or import core/claude-runner.testkit.ts, core/no-runner.testkit.ts or core/every-runner.testkit.ts.');
+      + 'or import runners/claude/claude-runner.testkit.ts, core/no-runner.testkit.ts or core/every-runner.testkit.ts.');
   }
   return current;
 }

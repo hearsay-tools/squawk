@@ -412,7 +412,7 @@ function replyToPermission(req, res, url, body) {
 }
 
 async function replyWithSubagent(body) {
-  // Wire shape from `__fixtures__/opencode/subtask-nested.ndjson`: a
+  // Wire shape from `src/runners/opencode/__fixtures__/subtask-nested.ndjson`: a
   // `subtask` part on the parent message, then a child message whose info
   // carries `parentID`, its parts, and the CHILD's own `session.idle`.
   // That child idle arrives first on purpose — the parent turn has to

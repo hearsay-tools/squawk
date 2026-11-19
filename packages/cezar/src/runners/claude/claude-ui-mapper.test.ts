@@ -1,6 +1,6 @@
 /**
  * Golden tests for the claude stream-json → v2 mapper: each fixture in
- * `__fixtures__/claude/` is a wire-faithful NDJSON stdout transcript
+ * `__fixtures__/` is a wire-faithful NDJSON stdout transcript
  * (shapes from `.ai/analysis/cockpit-ui-redesign/agent-event-protocols.md`
  * §1 and the dry-run mock `scripts/mock-claude.mjs`); its `.expected.json`
  * is the EXACT `UiEvent` sequence the mapper must produce. Plus edge cases

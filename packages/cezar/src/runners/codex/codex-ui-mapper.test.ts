@@ -1,6 +1,6 @@
 /**
  * Golden tests for the codex app-server → v2 mapper: each fixture in
- * `__fixtures__/codex/` is a JSONL frame transcript (shapes from
+ * `__fixtures__/` is a JSONL frame transcript (shapes from
  * `.ai/analysis/cockpit-ui-redesign/agent-event-protocols.md` §3); its
  * `.expected.json` is the EXACT `UiEvent` sequence the mapper must produce.
  * All are wire-faithful except `todo-list`, which pins the tolerance arm for

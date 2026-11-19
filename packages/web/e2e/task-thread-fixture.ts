@@ -54,7 +54,7 @@ export const STEP_RUN = ({
   ],
 } satisfies Partial<RunRecord>)
 // #961: the same transcript with two hook items after the Bash card — Squeal's context and a
-// failed Stop hook — as the Claude mapper emits them (`__fixtures__/claude/hooks.expected.json`).
+// failed Stop hook — as the Claude mapper emits them (`src/runners/claude/__fixtures__/hooks.expected.json`).
 export const HOOK_RUN = ({ ...RUN, id: 'hook-entries', titleSummary: 'Hook entries' } satisfies Partial<RunRecord>)
 const HOOK_LINES = [
   { type: 'item.completed', ts: '2026-07-14T20:27:40.000Z', stepId: 'task', item: { kind: 'hook', id: 'hook_ctx', event: 'PostToolBatch', status: 'completed',

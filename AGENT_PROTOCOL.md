@@ -52,19 +52,19 @@ reason), use the ACP name.
 
 ## 4. Per-backend mapping (summary)
 
-Each backend's mapper is `packages/cezar/src/core/<backend>-ui-mapper.ts`. Its golden
+Each backend's mapper is `packages/cezar/src/runners/<id>/<id>-ui-mapper.ts`. Its golden
 fixtures (§8) are the wire-to-event table.
 
 <a id="codex-managed-permissions-708"></a>
 
 ### Codex managed permissions
 
-`packages/cezar/src/core/codex-permissions.test.ts` holds the rules: when Squawk selects its
+`packages/cezar/src/runners/codex/codex-permissions.test.ts` holds the rules: when Squawk selects its
 own sandbox, and when Codex's managed permissions stay.
 
 ### Codex approval routing
 
-`packages/cezar/src/core/codex-approvals.test.ts`, `codex-permission-recovery.test.ts` and
+`packages/cezar/src/runners/codex/codex-approvals.test.ts`, `packages/cezar/src/runners/codex/codex-permission-recovery.test.ts` and
 `packages/cezar/src/workflows/permissions.test.ts` hold who can answer a native approval and
 what recovery does with one.
 
@@ -203,8 +203,8 @@ Owners. Paths are relative to `packages/cezar/src/`.
 - **Row classes, the scenario runner and the fact-value unit tests:** `PARITY_FAMILIES`,
   `SCENARIO_RUNNER` and `FACT_VALUE_TESTS` in `core/parity-classes.testkit.ts`.
 - **Spec-support rows:** `SPEC_FIELD_PROBES` in `core/harness-parity-cells.testkit.ts`.
-- **Per-runner files:** `core/harness-<runner>-<part>-parity.test.ts`
-  (`harnessParityFile`) and `workflows/waits-<runner>-<part>-parity.test.ts`
+- **Per-runner files:** `runners/<id>/harness-<id>-<part>-parity.test.ts`
+  (`harnessParityFile`) and `runners/<id>/waits-<id>-<part>-parity.test.ts`
   (`WAIT_PARITY_FILES`, `FAMILY_FILE_PARTS`, `WAIT_FOLDS` in
   `workflows/waits-parity-catalog.testkit.ts`). A part in `FAMILY_FILE_PARTS` runs one
   `waits-<runner>-<part>-<family>-parity.test.ts` file per row family.
@@ -275,14 +275,14 @@ Squawk changes no MCP server, plugin or tool setting of the user.
 
 ### Codex retrying stream errors
 
-`core/codex-startup.test.ts` holds the retry rules, and
-`core/__fixtures__/codex/stream-retry.md` records the probe.
+`runners/codex/codex-startup.test.ts` holds the retry rules, and
+`runners/codex/__fixtures__/stream-retry.md` records the probe.
 
 ---
 
 ## 8. The golden-fixture testing contract
 
-`packages/cezar/src/core/__fixtures__/<backend>/` holds pairs: `<name>.ndjson` is the
+`packages/cezar/src/runners/<id>/__fixtures__/` holds pairs: `<name>.ndjson` is the
 backend's wire output, and `<name>.expected.json` is the exact `UiEvent[]` that its mapper
 must produce. `<backend>-ui-mapper.test.ts` replays each pair the way the runner drives the
 mapper. §6 reads the same expected files.
@@ -308,13 +308,13 @@ it. A Squawk-owned event such as
 ## 10. Adding a new runner (the open-mercato/cezar#387 `pi` checklist)
 
 A new backend is one class behind the seam, its mapper, its fixtures and its rows in both
-parity matrices. No backend-specific type leaves `packages/cezar/src/core/`.
+parity matrices. No backend-specific type leaves `packages/cezar/src/runners/`.
 
 Add the id to `RUNNER_IDS` (`agent-runner.ts`) first. The compiler and the guard tests
 then name most of the missing pieces. The items below are the steps that they do not
 force, or force only in part. The item numbers are stable: code cites them.
 
-1. **Runner** — `core/<runner>-runner.ts` implements `AgentRunner` / `AgentSession`.
+1. **Runner** — `runners/<id>/<id>-runner.ts` implements `AgentRunner` / `AgentSession`.
    Declare `specSupport` (`runners/<id>/spec-support.ts`) and its facts (`runners/<id>/facts.ts`) from what the wire does, not from a
    similar runner. Probe mid-turn input live for `inputDelivery`. Probe a resumed session
    for `systemPromptOnResume`; when you cannot, declare `resent`. A wire that can raise a
@@ -332,7 +332,7 @@ force, or force only in part. The item numbers are stable: code cites them.
 3. **Detection** — declare the runner's `detection` (`runners/<id>/detection.ts`): its PATH name,
    its `*_BIN` override, what dry-run reports and its hints. `core/backend-detect.ts` runs the probe
    from it. An absent CLI never fails the boot.
-4. **Mapper** — `core/<runner>-ui-mapper.ts` emits the v2 stream (§4).
+4. **Mapper** — `runners/<id>/<id>-ui-mapper.ts` emits the v2 stream (§4).
 5. **v1 alongside v2** — emit v2 through `SessionOptions.onUiEvent` and keep the v1
    stream.
 6. **Golden fixtures** — follow §8, and cover every §6 capability that the wire supports.
@@ -435,5 +435,5 @@ Saved runs keep their NDJSON events on disk, so an upgrade must still read every
   `.ai/analysis/cockpit-ui-redesign/agent-event-protocols.md` — design record of protocol
   v2.
 - `.ai/specs/2026-10-02-omp-runner.md` and
-  `packages/cezar/src/core/__fixtures__/omp/README.md` — OMP design record and wire
+  `packages/cezar/src/runners/omp/__fixtures__/README.md` — OMP design record and wire
   evidence.
