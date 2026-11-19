@@ -80,10 +80,12 @@ export const automationTaskSchema = createRunInputBaseSchema
   });
 export type AutomationTask = z.infer<typeof automationTaskSchema>;
 
-/** Remove a saved-only field before building a write request; never apply to caller input. */
+const WRITABLE_TASK_KEYS: ReadonlySet<string> = new Set(Object.keys(automationTaskSchema.shape).filter((key) => key !== 'variants'));
+
+/** Keep only the keys a write request accepts. A stored task may carry retired keys such as
+ *  `variants` or `generateFollowups`; never apply to caller input. */
 export function writableAutomationTask<T extends object>(task: T): Omit<T, 'variants'> {
-  const { variants: _variants, ...writable } = task as T & { variants?: unknown };
-  return writable;
+  return Object.fromEntries(Object.entries(task).filter(([key]) => WRITABLE_TASK_KEYS.has(key))) as Omit<T, 'variants'>;
 }
 
 /**
