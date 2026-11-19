@@ -166,9 +166,8 @@ const APPROVED: Record<string, string> = {
   // layer-import: a runner definition that loads its adapter, and a shell file that imports a feature.
   'packages/cezar/src/runners/pi/definition.ts': "const load = () => import('./pi-runner.ts');\n",
   'packages/cezar/src/server/layer-shell.ts': "import { listAutomations } from '../automations/store.ts';\n",
-  // runner-roster-literal: the definition, a listed roster, a subset and a derived list.
+  // runner-roster-literal: the definition, a subset and a derived list. No file keeps a listed roster.
   'packages/cezar/src/core/agent-runner.ts': `export const RUNNER_IDS = [${ROSTER}] as const;\n`,
-  'packages/contract/src/runner.ts': `export const runnerSchema = z.enum([${ROSTER}]);\n`,
   'packages/web/src/lib/runner-subset.ts': "const some = ['codex', 'pi'];\nconst stored = [...RUNNER_IDS, 'claude-cli'];\n",
   // undocumented-env-name: a documented name, a mock control, and a test.
   'packages/cezar/src/j.ts': "process.env.CEZ_DRY_RUN = '1'; env.CEZ_MOCK_ANYTHING = '1';\n",
