@@ -14,4 +14,6 @@ export const ompRunner = defineRunner({
     // model roles apply.
     loadSettings: async () => ({ runner: 'omp', async read() { return {}; } }),
   },
+  loadModelCatalog: async () => (await import('../../core/omp-model-catalog.ts')).discoverOmpModels,
+  loadSkillCatalog: async () => (await import('../../core/omp-skill-catalog.ts')).discoverOmpSkills,
 });

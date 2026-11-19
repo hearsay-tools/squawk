@@ -11,4 +11,6 @@ export const codexRunner = defineRunner({
     ...CODEX_MODELS,
     loadSettings: async () => (await import('../../agent-config/model-settings/codex.ts')).codexModelSettingsStrategy,
   },
+  loadModelCatalog: async () => (await import('../../core/codex-model-catalog.ts')).discoverCodexModels,
+  loadSkillCatalog: async () => (await import('../../core/codex-skill-catalog.ts')).discoverCodexSkills,
 });

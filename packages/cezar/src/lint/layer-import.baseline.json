@@ -38,36 +38,6 @@
       "reason": "feature:workers: the run engine calls delegation (workers and messages) directly. A later step puts workers behind the plugin API; no removal is planned yet"
     },
     {
-      "file": "packages/cezar/src/core/host-model-catalog.ts",
-      "target": "packages/cezar/src/core/claude-model-catalog.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
-      "file": "packages/cezar/src/core/host-model-catalog.ts",
-      "target": "packages/cezar/src/core/codex-model-catalog.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
-      "file": "packages/cezar/src/core/host-model-catalog.ts",
-      "target": "packages/cezar/src/core/omp-model-catalog.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
-      "file": "packages/cezar/src/core/host-model-catalog.ts",
-      "target": "packages/cezar/src/core/opencode-model-catalog.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
-      "file": "packages/cezar/src/core/host-model-catalog.ts",
-      "target": "packages/cezar/src/core/pi-model-catalog.ts",
-      "count": 1,
-      "reason": "runner: the core reaches one runner directly. Only core/runner-factory.ts builds runners; move this behind the factory or a runner fact"
-    },
-    {
       "file": "packages/cezar/src/core/provider-auth.ts",
       "target": "packages/cezar/src/core/agent-profiles.ts",
       "count": 1,

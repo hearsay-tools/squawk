@@ -7,6 +7,9 @@ import { HARNESS_ADAPTERS } from './harness-parity-core.testkit.ts';
 import { parityRunners } from './parity-classes.testkit.ts';
 import { hostSkillCatalogAdapters } from './host-skill-catalog.ts';
 import { RunnerSkillCatalog } from './runner-skill-catalog.ts';
+import { registerBuiltInRunners } from '../runners/built-in.ts';
+
+registerBuiltInRunners();
 
 describe('native runner skills list parity', () => {
   for (const runner of parityRunners('runner-skills', 'list')) {

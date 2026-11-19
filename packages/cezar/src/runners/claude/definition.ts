@@ -11,4 +11,6 @@ export const claudeRunner = defineRunner({
     ...CLAUDE_MODELS,
     loadSettings: async () => (await import('../../agent-config/model-settings/claude.ts')).claudeModelSettingsStrategy,
   },
+  loadModelCatalog: async () => (await import('../../core/claude-model-catalog.ts')).discoverClaudeModels,
+  loadSkillCatalog: async () => (await import('../../core/claude-skill-catalog.ts')).discoverClaudeSkills,
 });

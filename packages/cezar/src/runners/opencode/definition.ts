@@ -11,4 +11,6 @@ export const opencodeRunner = defineRunner({
     ...OPENCODE_MODELS,
     loadSettings: async () => (await import('../../agent-config/model-settings/opencode.ts')).opencodeModelSettingsStrategy,
   },
+  loadModelCatalog: async () => (await import('../../core/opencode-model-catalog.ts')).discoverOpencodeModels,
+  loadSkillCatalog: async () => (await import('../../core/opencode-skill-catalog.ts')).discoverOpencodeSkills,
 });

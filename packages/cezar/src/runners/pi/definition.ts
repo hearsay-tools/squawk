@@ -11,4 +11,6 @@ export const piRunner = defineRunner({
     ...PI_MODELS,
     loadSettings: async () => (await import('../../agent-config/model-settings/pi.ts')).piModelSettingsStrategy,
   },
+  loadModelCatalog: async () => (await import('../../core/pi-model-catalog.ts')).discoverPiModels,
+  loadSkillCatalog: async () => (await import('../../core/pi-skill-catalog.ts')).discoverPiSkills,
 });

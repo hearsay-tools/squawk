@@ -2,6 +2,9 @@ import type { AgentRunner, RunnerId } from './agent-runner.ts';
 import type { RunnerFacts } from './runner-facts.ts';
 import type { BackendModelMap } from './model-identity.ts';
 import type { AgentModelSettingsStrategy } from './runner-model-settings.ts';
+import type { ModelOption } from './runner-model-catalog.ts';
+import type { SkillCatalog } from './runner-skill-catalog.ts';
+import type { SkillDiscoveryOptions } from './skill-probe.ts';
 
 /**
  * Everything Squawk knows about one runner, in one object (spec 2026-11-18-runner-definitions).
@@ -21,6 +24,10 @@ export interface RunnerDefinition {
   // Models, skills, config files and extra tools (hearsay-tools/squawk#3895).
   /** The model presets, the model id map and the reader of the native default model. */
   readonly models: RunnerModels;
+  /** Imports the runner's model catalog adapter, which lists the models its CLI offers. */
+  loadModelCatalog(): Promise<(options: { cwd: string }) => Promise<ModelOption[]>>;
+  /** Imports the runner's skill list adapter, which lists the skills its CLI sees. */
+  loadSkillCatalog(): Promise<(options: SkillDiscoveryOptions) => Promise<SkillCatalog>>;
 }
 
 /** One model the picker suggests. `id: ''` is auto: the runner picks. */
