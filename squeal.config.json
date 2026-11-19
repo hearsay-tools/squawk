@@ -24,6 +24,7 @@
   "checks": [
     {
       "name": "run-loop",
+      "description": "The run-loop parity and worker tests.",
       "runner": "vitest",
       "tests": [
         "packages/cezar/src/**/*parity*.test.ts",
@@ -33,6 +34,7 @@
     },
     {
       "name": "browser",
+      "description": "The browser end-to-end tests.",
       "runner": "vitest",
       "project": "e2e",
       "tests": ["packages/web/e2e/*.e2e.ts"],
